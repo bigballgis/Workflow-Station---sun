@@ -1,0 +1,4 @@
+# Dockerfile only copies the fat JAR and the entrypoint script — keep the build context minimal.
+*
+!target/*.jar
+!docker-entrypoint.sh

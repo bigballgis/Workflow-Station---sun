@@ -964,3 +964,43 @@
     移除 Multi-Instance Access 后 GET /processes/definitions 仅返回 MCY。
     Deploy 后 Access 清空：import 同版本覆盖时 deleteByFunctionUnitId(access) + 新版本 catalog id 未继承旧 Access；
     修复：overwrite 保留 Access；新版本 import 后 copyAccessFromSiblingVersions（同 code 最高版本有 Access 的行）。
+- id: "1469"
+  status: fixed
+  fixed_at: "2026-07-03"
+  severity: major
+  category: bug
+  summary: "Portal lookup Fixed Filters 无数据（rt_table_access 零授权被守卫拒绝）+ 过滤仅支持文本精确匹配"
+  file: "backend/user-portal/src/main/java/com/portal/service/PortalRelationTableServiceImpl.java"
+  note: |
+    症状：DW 为 lookup 配 Fixed Filters（Heigh=123、Sex=true）后，Portal 流程发起页 Host lookup 下拉恒 No Data。
+    根因一（直接）：2c7f8d12 的 RT 权限级别功能把 per-role rt_table_access 守卫也套在了 searchForLookup 上，
+    而 rt_table_access 从未配置过任何授权 → 所有用户 lookup 全拒（日志 "Lookup search denied ... on table N"）。
+    先为 Test 角色补授权修通李娜后，developer(role-manager) 复发同症 → 最终修法：searchForLookup 移除该守卫
+    （lookup 是开发者配置的表单数据源，回填本就需整行；rt_table_access 继续管 Relation Tables 浏览/导出/写入），
+    浏览页 queryTableData/exportCsv/addData 等守卫不变。
+    根因二（功能缺口）：过滤条件只做 data->>'f' = ? 文本精确比较，不按字段类型匹配、无模糊匹配。
+    修复：①DW LookupBindingSelect 按 rt 字段 dataType 渲染值编辑器（boolean=True/False select、数值=input-number、
+    date/datetime=picker）+ 每行 matchType（Exact/Contains/StartsWith/EndsWith，boolean 仅 Exact），新公共工具
+    frontend/*/src/utils/lookupFilterConditions.ts（DW 端 4 单测过）；②LookupPreview 复用 applyLookupFixedFilters；
+    ③后端 appendLookupFilterPredicate 按 rt_field_definitions.data_type 生成谓词：numeric 用 CASE 正则守卫内
+    ::numeric 等值（123 命中 123.00、坏数据不炸 cast）、boolean LOWER 归一、模糊 CAST(expr AS TEXT) ILIKE；
+    旧配置无 matchType 默认 eq 向后兼容。
+    验证：Playwright 截图 user-portal/verification-screenshots/2026-07-03_lookup-fixed-filters-portal{,-developer,-e2e_lina}.png
+    （developer 与 e2e_lina 均出全部 251 行过滤数据）+ developer-workstation/verification-screenshots/2026-07-03_lookup-fixed-filters-dw-panel.png。
+- id: "1470"
+  status: fixed
+  fixed_at: "2026-07-03"
+  severity: minor
+  category: bug
+  summary: "Portal lookup 下拉最多加载 200 行（前端 limit=200 + 后端 normalizeLimit 硬顶 + SQL 无分页）"
+  file: "frontend/user-portal/src/components/lookup/LookupField.vue"
+  note: |
+    症状：lookup 字段下拉有条数限制，表数据 >200 行时后面的行不出现。
+    根因三层：LookupField.loadAllData 单次请求 limit=200；服务端 normalizeLimit 上限 200；
+    searchForLookup SQL 只有 LIMIT 无 OFFSET，客户端无法翻页。
+    修复：searchForLookup 全链路加 offset（controller/service/impl，JSONB 与 sys_users 两条路径
+    LIMIT ? OFFSET ?）；前端 fetchAllLookupRows 以 200/批循环翻页直至批量不满即止，安全上限
+    10000 行（超限 console.warn 截断）。服务端单次 200 上限保留。
+    验证：造 250 行满足 Fixed Filters 的 bulk 数据（共 251 行匹配），Playwright 断言下拉
+    .el-table__row=251 含 zhang san；截图 user-portal/verification-screenshots/2026-07-03_lookup-fixed-filters-portal.png。
+    附注：PortalRelationTablePropertyTest "Property 18 CSV export" 失败为遗留基线（HEAD 上 stash 验证同样失败），非本次引入。

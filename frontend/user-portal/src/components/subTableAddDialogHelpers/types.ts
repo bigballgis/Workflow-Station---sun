@@ -97,6 +97,8 @@ export type SubListViewColumn = {
   [key: string]: unknown
 }
 
+import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
+
 export type ParsedLookupConfig = {
   bindingId?: number
   tableId?: number | null
@@ -105,6 +107,6 @@ export type ParsedLookupConfig = {
   displayFields?: string[]
   selectedDisplayField?: string
   displayField?: string
-  filterConditions?: Array<{ fieldName: string; value: string }>
+  filterConditions?: LookupFilterCondition[]
   showBackfillView?: boolean
 }

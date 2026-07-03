@@ -1,6 +1,5 @@
 import { relationTableApi } from '@/api/relationTable'
-
-export type LookupFilterCondition = { fieldName: string; value: string }
+import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
 
 const resolved = new Map<string, Record<string, any> | null>()
 const inflight = new Map<string, Promise<Record<string, any> | null>>()
@@ -34,7 +33,10 @@ export async function fetchLookupRowByPrimaryKey(
 
   const promise = (async () => {
     try {
-      const filters: LookupFilterCondition[] = [...(options.filterConditions || []), { fieldName: pk, value: sv }]
+      const filters: LookupFilterCondition[] = [
+        ...(options.filterConditions || []),
+        { fieldName: pk, value: sv, matchType: 'eq' },
+      ]
       const res = await relationTableApi.searchForLookup(tableId, {
         keyword: '',
         searchFields: options.searchFields || [],

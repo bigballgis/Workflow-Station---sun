@@ -73,6 +73,7 @@ import { Close } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
 import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
 import { getLookupSelectedDisplayFieldFromProps, resolveLookupCellTagText } from '../subTableAddDialogHelpers'
+import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
 
 export interface LookupViewField {
   fieldName: string
@@ -80,11 +81,6 @@ export interface LookupViewField {
   columnWidth?: number
   sortOrder: number
   visible: boolean
-}
-
-export interface LookupFilterCondition {
-  fieldName: string
-  value: string
 }
 
 const props = defineProps<{
@@ -155,24 +151,42 @@ const filteredResults = computed(() => {
   })
 })
 
+// Server caps each page at 200; page through until exhausted so the dropdown
+// holds the full table. The hard stop only guards against runaway tables.
+const LOOKUP_PAGE_SIZE = 200
+const LOOKUP_MAX_ROWS = 10000
+
+async function fetchAllLookupRows(): Promise<Record<string, any>[]> {
+  const rows: Record<string, any>[] = []
+  for (let offset = 0; offset < LOOKUP_MAX_ROWS; offset += LOOKUP_PAGE_SIZE) {
+    const res = await relationTableApi.searchForLookup(props.tableId, {
+      keyword: '',
+      searchFields: props.searchFields || [],
+      displayField: props.displayField || '',
+      filterConditions: props.filterConditions || [],
+      limit: LOOKUP_PAGE_SIZE,
+      offset
+    })
+    const batch = res.data || []
+    rows.push(...batch)
+    if (batch.length < LOOKUP_PAGE_SIZE) return rows
+  }
+  console.warn(`[LookupField] table ${props.tableId} exceeds ${LOOKUP_MAX_ROWS} rows; dropdown truncated`)
+  return rows
+}
+
 async function loadAllData() {
   if (!props.tableId || dataLoaded.value) return
   loading.value = true
   try {
     // Load data and view fields in parallel
-    const [dataRes, vfRes] = await Promise.all([
-      relationTableApi.searchForLookup(props.tableId, {
-        keyword: '',
-        searchFields: props.searchFields || [],
-        displayField: props.displayField || '',
-        filterConditions: props.filterConditions || [],
-        limit: 200
-      }),
+    const [dataRows, vfRes] = await Promise.all([
+      fetchAllLookupRows(),
       (!effectiveViewFields.value.length)
         ? relationTableApi.getViewFields(props.tableId)
         : Promise.resolve({ data: [] })
     ])
-    allRows.value = dataRes.data || []
+    allRows.value = dataRows
     if (vfRes.data?.length) {
       loadedViewFields.value = vfRes.data as LookupViewField[]
       emit('viewFieldsLoaded', loadedViewFields.value)

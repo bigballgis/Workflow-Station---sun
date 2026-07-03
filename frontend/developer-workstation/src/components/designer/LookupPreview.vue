@@ -109,6 +109,10 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import { Search, Close } from '@element-plus/icons-vue'
+import {
+  applyLookupFixedFilters,
+  type LookupFilterCondition,
+} from '@/utils/lookupFilterConditions'
 
 interface ViewField {
   fieldName: string
@@ -123,11 +127,7 @@ interface FieldDef {
   dataType?: string
   comment?: string
   description?: string
-}
-
-interface LookupFilterCondition {
-  fieldName: string
-  value: string
+  displayName?: string
 }
 
 const props = withDefaults(defineProps<{
@@ -216,7 +216,7 @@ const mockRows = computed(() => {
 
 const filteredResults = computed(() => {
   const kw = searchKeyword.value?.trim().toLowerCase()
-  const fixedFilteredRows = applyFixedFilters(mockRows.value)
+  const fixedFilteredRows = applyLookupFixedFilters(mockRows.value, props.filterConditions)
   if (!kw) return fixedFilteredRows
   const fields = props.searchFields?.length ? props.searchFields : []
   if (fields.length === 0) return fixedFilteredRows
@@ -224,14 +224,6 @@ const filteredResults = computed(() => {
     fields.some(f => row[f] != null && String(row[f]).toLowerCase().includes(kw))
   )
 })
-
-function applyFixedFilters(rows: Record<string, any>[]) {
-  const conditions = props.filterConditions?.filter(condition => condition.fieldName && condition.value !== '') || []
-  if (conditions.length === 0) return rows
-  return rows.filter(row =>
-    conditions.every(condition => String(row[condition.fieldName] ?? '') === String(condition.value))
-  )
-}
 
 function getMockValue(dataType: string, index: number): string {
   const type = (dataType || '').toUpperCase()

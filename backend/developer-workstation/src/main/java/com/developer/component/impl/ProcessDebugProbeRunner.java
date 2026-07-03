@@ -133,12 +133,18 @@ public class ProcessDebugProbeRunner {
             }
             String rawValue = condition.get("value") == null ? "" : String.valueOf(condition.get("value"));
             String resolved = resolveTemplate(rawValue, runtimeVariables);
-            predicates.add("data->>'" + sanitizeIdentifier(fieldName) + "' = ?");
-            params.add(resolved);
+            if (resolved.isBlank()) {
+                continue;
+            }
+            String matchType = condition.get("matchType") == null
+                    ? "eq"
+                    : String.valueOf(condition.get("matchType"));
+            appendDebugLookupFilterPredicate(predicates, params, sanitizeIdentifier(fieldName), resolved, matchType);
 
             Map<String, Object> filterEntry = new LinkedHashMap<>();
             filterEntry.put("fieldName", fieldName);
             filterEntry.put("value", resolved);
+            filterEntry.put("matchType", normalizeDebugLookupFilterMatchType(matchType));
             appliedFilters.add(filterEntry);
         }
 
@@ -318,6 +324,43 @@ public class ProcessDebugProbeRunner {
                     "invalid field name: " + identifier);
         }
         return identifier;
+    }
+
+    private void appendDebugLookupFilterPredicate(List<String> predicates,
+                                                  List<Object> params,
+                                                  String fieldName,
+                                                  String value,
+                                                  String matchType) {
+        String normalized = normalizeDebugLookupFilterMatchType(matchType);
+        String fieldExpr = "data->>'" + fieldName + "'";
+        switch (normalized) {
+            case "contains" -> {
+                predicates.add(fieldExpr + " ILIKE ?");
+                params.add("%" + value + "%");
+            }
+            case "startsWith" -> {
+                predicates.add(fieldExpr + " ILIKE ?");
+                params.add(value + "%");
+            }
+            case "endsWith" -> {
+                predicates.add(fieldExpr + " ILIKE ?");
+                params.add("%" + value);
+            }
+            default -> {
+                predicates.add(fieldExpr + " = ?");
+                params.add(value);
+            }
+        }
+    }
+
+    private String normalizeDebugLookupFilterMatchType(String matchType) {
+        if (matchType == null || matchType.isBlank()) {
+            return "eq";
+        }
+        return switch (matchType.trim()) {
+            case "contains", "startsWith", "endsWith" -> matchType.trim();
+            default -> "eq";
+        };
     }
 
     private String resolveTemplate(String raw, Map<String, Object> runtimeVariables) {

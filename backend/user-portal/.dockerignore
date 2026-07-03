@@ -1,0 +1,3 @@
+# Dockerfile only copies the fat JAR — keep the build context minimal.
+*
+!target/*.jar

@@ -3,17 +3,24 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { lookupStore } from './lookupStore'
 import { relationTableBindingApi } from '@/api/relationTable'
+import {
+  type LookupFilterCondition,
+  getLookupFilterMatchOptions,
+  isBooleanDataType,
+  isDateDataType,
+  isNumericDataType,
+  isTimestampDataType,
+  normalizeLookupFilterCondition,
+  normalizeLookupFilterMatchType,
+  serializeLookupFilterValue,
+} from '@/utils/lookupFilterConditions'
 
 interface FieldInfo {
   fieldName: string
   dataType: string
   isPrimaryKey: boolean
   displayName?: string
-}
-
-interface LookupFilterCondition {
-  fieldName: string
-  value: string
+  scale?: number
 }
 
 const props = defineProps<{
@@ -60,6 +67,7 @@ const availableFields = computed<FieldInfo[]>(() => {
         dataType: f.dataType,
         isPrimaryKey: f.isPrimaryKey ?? false,
         displayName: f.displayName || '',
+        scale: f.scale,
       }))
     }
   }
@@ -103,11 +111,8 @@ function parseModelValue() {
     selectedDisplayField.value = cfg.selectedDisplayField || cfg.displayField || ''
     filterConditions.value = Array.isArray(cfg.filterConditions)
       ? cfg.filterConditions
-        .filter((condition: any) => condition?.fieldName)
-        .map((condition: any) => ({
-          fieldName: String(condition.fieldName),
-          value: condition.value == null ? '' : String(condition.value),
-        }))
+        .map((condition: unknown) => normalizeLookupFilterCondition(condition))
+        .filter((condition): condition is LookupFilterCondition => condition != null)
       : []
     showBackfillView.value = cfg.showBackfillView !== false
   } catch {
@@ -134,6 +139,7 @@ function emitUpdate() {
       .map(condition => ({
         fieldName: condition.fieldName,
         value: condition.value,
+        matchType: normalizeLookupFilterMatchType(condition.matchType),
       })),
     showBackfillView: showBackfillView.value,
   }
@@ -199,9 +205,38 @@ function handleSelectedDisplayFieldChange(val: string) {
   emitUpdate()
 }
 
+function getFieldInfo(fieldName: string): FieldInfo | undefined {
+  return availableFields.value.find(f => f.fieldName === fieldName)
+}
+
+function getMatchOptionsForField(fieldName: string) {
+  return getLookupFilterMatchOptions(getFieldInfo(fieldName)?.dataType)
+}
+
 function addFilterCondition() {
-  filterConditions.value.push({ fieldName: '', value: '' })
+  filterConditions.value.push({ fieldName: '', value: '', matchType: 'eq' })
   emitUpdate()
+}
+
+function handleFilterFieldChange(condition: LookupFilterCondition) {
+  const field = getFieldInfo(condition.fieldName)
+  const allowed = getLookupFilterMatchOptions(field?.dataType).map(option => option.value)
+  if (!allowed.includes(normalizeLookupFilterMatchType(condition.matchType))) {
+    condition.matchType = 'eq'
+  }
+  condition.value = ''
+  handleFilterConditionChange()
+}
+
+function parseFilterNumberValue(raw: string): number | undefined {
+  if (raw.trim() === '') return undefined
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function getNumericPrecision(field?: FieldInfo): number {
+  const dt = (field?.dataType || '').toUpperCase()
+  return dt.includes('DECIMAL') || dt.includes('NUMERIC') ? (field?.scale ?? 2) : 0
 }
 
 function removeFilterCondition(index: number) {
@@ -350,7 +385,7 @@ watch(selectedBindingId, (val) => {
           v-if="filterConditions.length === 0"
           class="lookup-empty-hint"
         >
-          Optional: pre-filter rows by exact field value before lookup search.
+          Optional: pre-filter rows by field value (exact or fuzzy) before lookup search.
         </div>
         <div
           v-for="(condition, index) in filterConditions"
@@ -363,7 +398,7 @@ watch(selectedBindingId, (val) => {
             clearable
             placeholder="Field"
             :loading="fieldsLoading"
-            @change="handleFilterConditionChange"
+            @change="handleFilterFieldChange(condition)"
           >
             <el-option
               v-for="f in availableFields"
@@ -372,10 +407,67 @@ watch(selectedBindingId, (val) => {
               :label="getFieldLabel(f)"
             />
           </el-select>
+          <el-select
+            v-model="condition.matchType"
+            placeholder="Match"
+            :disabled="!condition.fieldName"
+            @change="handleFilterConditionChange"
+          >
+            <el-option
+              v-for="option in getMatchOptionsForField(condition.fieldName)"
+              :key="option.value"
+              :value="option.value"
+              :label="option.label"
+            />
+          </el-select>
+          <el-select
+            v-if="condition.fieldName && isBooleanDataType(getFieldInfo(condition.fieldName)?.dataType)"
+            v-model="condition.value"
+            clearable
+            placeholder="Value"
+            @change="handleFilterConditionChange"
+          >
+            <el-option
+              label="True"
+              value="true"
+            />
+            <el-option
+              label="False"
+              value="false"
+            />
+          </el-select>
+          <el-input-number
+            v-else-if="condition.fieldName && isNumericDataType(getFieldInfo(condition.fieldName)?.dataType)"
+            :model-value="parseFilterNumberValue(condition.value)"
+            :precision="getNumericPrecision(getFieldInfo(condition.fieldName))"
+            controls-position="right"
+            style="width: 100%"
+            @update:model-value="(val: number | undefined) => { condition.value = serializeLookupFilterValue(val); handleFilterConditionChange() }"
+          />
+          <el-date-picker
+            v-else-if="condition.fieldName && isDateDataType(getFieldInfo(condition.fieldName)?.dataType)"
+            v-model="condition.value"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="Value"
+            style="width: 100%"
+            @change="handleFilterConditionChange"
+          />
+          <el-date-picker
+            v-else-if="condition.fieldName && isTimestampDataType(getFieldInfo(condition.fieldName)?.dataType)"
+            v-model="condition.value"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="Value"
+            style="width: 100%"
+            @change="handleFilterConditionChange"
+          />
           <el-input
+            v-else
             v-model="condition.value"
             placeholder="Value"
             clearable
+            :disabled="!condition.fieldName"
             @input="handleFilterConditionChange"
           />
           <el-button
@@ -426,7 +518,7 @@ watch(selectedBindingId, (val) => {
 }
 .lookup-filter-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
   margin-bottom: 6px;

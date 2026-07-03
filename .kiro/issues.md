@@ -3,13 +3,13 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-07-01)
+## 统计 (截至 2026-07-03)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
 | 🔓 Open | **10** | `index.yaml` |
 | ⏸️ Wontfix | **1** | `index.yaml` |
-| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1468 等） |
+| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1469 等） |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
 

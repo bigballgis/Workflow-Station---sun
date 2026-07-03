@@ -275,28 +275,28 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     public List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                       List<String> searchFields, String displayField,
                                                       String filterConditions,
-                                                      int limit) {
+                                                      int limit, int offset) {
         try {
             int safeLimit = normalizeLimit(limit);
+            int safeOffset = Math.max(0, offset);
             if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
                 List<LookupFilterCondition> filters = parseLookupFilterConditions(
                         filterConditions, SYSTEM_USER_FIELD_NAMES);
-                return searchSystemUsersForLookup(keyword, searchFields, filters, safeLimit);
+                return searchSystemUsersForLookup(keyword, searchFields, filters, safeLimit, safeOffset);
             }
 
             if (!isDeployedRelationTable(tableId)) {
                 return Collections.emptyList();
             }
 
-            // Read access guard: only roles granted access to the table may resolve lookups against it.
-            String currentUserId = SecurityContextUtils.getCurrentUserId().orElse(null);
-            if (currentUserId != null && !hasAccess(tableId, getUserRoleIds(currentUserId))) {
-                log.warn("Lookup search denied for user {} on table {}", currentUserId, tableId);
-                return Collections.emptyList();
-            }
-
+            // No per-role rt_table_access guard here: a lookup is a developer-configured data
+            // source on a form, and backfill requires full rows for anyone who can open that
+            // form — a table-level grant adds no protection there while making every lookup
+            // return "No Data" until Admin Center grants each role. rt_table_access still
+            // gates the Relation Tables browse/export/write endpoints.
             List<String> allowedFields = getFieldNames(tableId);
             List<LookupFilterCondition> filters = parseLookupFilterConditions(filterConditions, allowedFields);
+            Map<String, String> fieldDataTypes = getFieldDataTypes(tableId);
             List<String> predicates = new ArrayList<>();
             List<Object> params = new ArrayList<>();
             params.add(tableId);
@@ -305,8 +305,12 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 if (!allowedFields.contains(filter.fieldName())) {
                     continue;
                 }
-                predicates.add("data->>'" + sanitizeIdentifier(filter.fieldName()) + "' = ?");
-                params.add(filter.value());
+                appendLookupFilterPredicate(
+                        predicates,
+                        params,
+                        "data->>'" + sanitizeIdentifier(filter.fieldName()) + "'",
+                        filter,
+                        fieldDataTypes.get(filter.fieldName()));
             }
 
             if (keyword != null && !keyword.isBlank() && searchFields != null && !searchFields.isEmpty()) {
@@ -328,9 +332,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             }
 
             params.add(safeLimit);
+            params.add(safeOffset);
             String sql = "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?"
                     + (predicates.isEmpty() ? "" : " AND " + String.join(" AND ", predicates))
-                    + " ORDER BY id LIMIT ?";
+                    + " ORDER BY id LIMIT ? OFFSET ?";
             return jdbcTemplate.query(sql, (rs, rowNum) -> parseJsonRow(rs.getString("data")), params.toArray());
         } catch (Exception e) {
             log.warn("Failed to search for lookup in tableId {}: {}", tableId, e.getMessage());
@@ -437,7 +442,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     private List<Map<String, Object>> searchSystemUsersForLookup(String keyword,
                                                                  List<String> searchFields,
                                                                  List<LookupFilterCondition> filters,
-                                                                 int limit) {
+                                                                 int limit, int offset) {
         String columns = SYSTEM_USER_FIELD_NAMES.stream()
                 .map(this::sanitizeIdentifier)
                 .collect(Collectors.joining(", "));
@@ -448,15 +453,21 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         predicates.add("status = 'ACTIVE'");
 
         for (LookupFilterCondition filter : filters) {
-            predicates.add(sanitizeIdentifier(filter.fieldName()) + " = ?");
-            params.add(filter.value());
+            // sys_users lookup columns are all text-typed; no relation-table field metadata applies.
+            appendLookupFilterPredicate(
+                    predicates,
+                    params,
+                    sanitizeIdentifier(filter.fieldName()),
+                    filter,
+                    null);
         }
 
         if (keyword == null || keyword.isBlank()) {
             String sql = "SELECT " + columns + " FROM " + SYSTEM_USER_TABLE_NAME
                     + " WHERE " + String.join(" AND ", predicates)
-                    + " ORDER BY username LIMIT ?";
+                    + " ORDER BY username LIMIT ? OFFSET ?";
             params.add(limit);
+            params.add(offset);
             return jdbcTemplate.queryForList(sql, params.toArray());
         }
 
@@ -470,10 +481,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         String likePattern = "%" + keyword + "%";
         sanitizedFields.forEach(ignored -> params.add(likePattern));
         params.add(limit);
+        params.add(offset);
 
         String sql = "SELECT " + columns + " FROM " + SYSTEM_USER_TABLE_NAME
                 + " WHERE " + String.join(" AND ", predicates) + " AND ("
-                + whereClause + ") ORDER BY username LIMIT ?";
+                + whereClause + ") ORDER BY username LIMIT ? OFFSET ?";
         return jdbcTemplate.queryForList(sql, params.toArray());
     }
 
@@ -487,6 +499,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                     .stream()
                     .filter(condition -> condition.fieldName() != null
                             && condition.value() != null
+                            && !condition.value().isBlank()
                             && allowed.contains(condition.fieldName()))
                     .toList();
         } catch (Exception e) {
@@ -495,7 +508,84 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         }
     }
 
-    private record LookupFilterCondition(String fieldName, String value) {}
+    private record LookupFilterCondition(String fieldName, String value, String matchType) {}
+
+    private static final java.util.regex.Pattern NUMERIC_FILTER_VALUE =
+            java.util.regex.Pattern.compile("^-?\\d+(\\.\\d+)?$");
+
+    private void appendLookupFilterPredicate(List<String> predicates,
+                                             List<Object> params,
+                                             String fieldExpression,
+                                             LookupFilterCondition filter,
+                                             String dataType) {
+        String matchType = normalizeLookupFilterMatchType(filter.matchType());
+        // Boolean fields only support exact matching regardless of the configured matchType.
+        if (isBooleanFilterDataType(dataType) || "eq".equals(matchType)) {
+            appendLookupEqPredicate(predicates, params, fieldExpression, filter.value(), dataType);
+            return;
+        }
+        String pattern = switch (matchType) {
+            case "startsWith" -> filter.value() + "%";
+            case "endsWith" -> "%" + filter.value();
+            default -> "%" + filter.value() + "%";
+        };
+        predicates.add("CAST(" + fieldExpression + " AS TEXT) ILIKE ?");
+        params.add(pattern);
+    }
+
+    /** Exact match honouring the field's declared data type (numeric 123 == 123.00, boolean case-insensitive). */
+    private void appendLookupEqPredicate(List<String> predicates,
+                                         List<Object> params,
+                                         String fieldExpression,
+                                         String value,
+                                         String dataType) {
+        if (isBooleanFilterDataType(dataType)) {
+            predicates.add("LOWER(CAST(" + fieldExpression + " AS TEXT)) = ?");
+            params.add(normalizeBooleanFilterValue(value));
+            return;
+        }
+        if (isNumericFilterDataType(dataType) && NUMERIC_FILTER_VALUE.matcher(value.trim()).matches()) {
+            // CASE guard inside the same expression keeps rows holding non-numeric legacy
+            // values from failing the cast (AND predicates have no evaluation-order guarantee).
+            predicates.add("CAST(CASE WHEN CAST(" + fieldExpression + " AS TEXT) ~ '^-?[0-9]+(\\.[0-9]+)?$'"
+                    + " THEN CAST(" + fieldExpression + " AS TEXT) END AS NUMERIC) = CAST(? AS NUMERIC)");
+            params.add(value.trim());
+            return;
+        }
+        predicates.add(fieldExpression + " = ?");
+        params.add(value);
+    }
+
+    private boolean isBooleanFilterDataType(String dataType) {
+        return "BOOLEAN".equalsIgnoreCase(dataType);
+    }
+
+    private boolean isNumericFilterDataType(String dataType) {
+        if (dataType == null) return false;
+        return switch (dataType.toUpperCase()) {
+            case "INTEGER", "BIGINT", "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE" -> true;
+            default -> false;
+        };
+    }
+
+    private String normalizeBooleanFilterValue(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase();
+        return switch (normalized) {
+            case "1", "yes" -> "true";
+            case "0", "no" -> "false";
+            default -> normalized;
+        };
+    }
+
+    private String normalizeLookupFilterMatchType(String matchType) {
+        if (matchType == null || matchType.isBlank()) {
+            return "eq";
+        }
+        return switch (matchType.trim()) {
+            case "contains", "startsWith", "endsWith" -> matchType.trim();
+            default -> "eq";
+        };
+    }
 
     private List<String> systemUserSearchFields(List<String> searchFields) {
         if (searchFields == null || searchFields.isEmpty()) {
@@ -899,6 +989,16 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         }
         String sql = "SELECT field_name FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
         return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("field_name"), tableId);
+    }
+
+    /** field_name -> declared data type (e.g. INTEGER/BOOLEAN/VARCHAR) for lookup filter typing. */
+    private Map<String, String> getFieldDataTypes(Long tableId) {
+        Map<String, String> types = new java.util.HashMap<>();
+        jdbcTemplate.query(
+                "SELECT field_name, data_type FROM rt_field_definitions WHERE table_id = ?",
+                rs -> { types.put(rs.getString("field_name"), rs.getString("data_type")); },
+                tableId);
+        return types;
     }
 
     /**

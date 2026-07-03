@@ -134,7 +134,7 @@ export function useSubTableLookupCells(props: SubTableFieldProps, rows: Ref<any[
           fetchLookupRowByPrimaryKey(Number(tableId), raw, {
             searchFields: (col.props?.searchFields as string[]) || [],
             displayField: (col.props?.displayField as string) || '',
-            filterConditions: (col.props?.filterConditions as { fieldName: string; value: string }[]) || [],
+            filterConditions: (col.props?.filterConditions as import('@/utils/lookupFilterConditions').LookupFilterCondition[]) || [],
             primaryKeyField: pk,
           }).then(loaded => {
             if (loaded) resolvedScalars[ck] = loaded

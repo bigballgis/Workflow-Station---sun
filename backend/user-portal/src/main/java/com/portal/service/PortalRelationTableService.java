@@ -30,12 +30,12 @@ public interface PortalRelationTableService {
     String exportCsv(Long tableId, String userId, int maxRows);
 
     /**
-     * Lookup 搜索
+     * Lookup 搜索（limit+offset 分页；客户端按批翻页可拉全量）
      */
     List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                List<String> searchFields, String displayField,
                                                String filterConditions,
-                                               int limit);
+                                               int limit, int offset);
 
     /**
      * 获取表单的 Lookup 配置列表

@@ -18,6 +18,9 @@ param(
     # Prefer a domestic mirror so builds do not depend on Docker Hub metadata during docker build.
     [string]$JavaBaseImage = "docker.m.daocloud.io/library/eclipse-temurin:17-jre",
     [switch]$SkipTests = $false,
+    # Skip "mvn clean": incremental compile, much faster for repeat release builds.
+    # All jars are still re-packaged and all images still built & pushed.
+    [switch]$NoClean = $false,
     [switch]$SkipFrontend = $false,
     [switch]$SkipBackend = $false,
     [switch]$PushOnly = $false,
@@ -104,8 +107,10 @@ if (-not $SkipBackend -and -not $PushOnly) {
 
     $modules = "backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging," + (($selectedBackend | ForEach-Object { $_.Dir }) -join ",")
     # -T 1C builds independent modules in parallel (one thread per CPU core)
-    $mvnArgs = @("clean", "package", "-T", "1C", "-pl", $modules, "-am")
-    if ($SkipTests) { $mvnArgs += "-DskipTests" }
+    $goals = if ($NoClean) { @("package") } else { @("clean", "package") }
+    $mvnArgs = $goals + @("-T", "1C", "-pl", $modules, "-am")
+    # -Dmaven.test.skip=true skips compiling tests too (plain -DskipTests still compiles them)
+    if ($SkipTests) { $mvnArgs += "-Dmaven.test.skip=true" }
 
     Push-Location $ProjectRoot
     & mvn @mvnArgs
@@ -121,9 +126,9 @@ if (-not $SkipBackend) {
     $backendJobs = foreach ($svc in $selectedBackend) {
         Start-ThreadJob -ThrottleLimit $MaxParallel -Name $svc.Name -ArgumentList @(
             $svc.Name, (Join-Path $ProjectRoot $svc.Dir), "$Registry/$($svc.Name):$Tag",
-            "$Registry/$($svc.Name):latest", $JavaBaseImage, [bool]$PushOnly, [bool]$NoPush
+            $JavaBaseImage, [bool]$PushOnly, [bool]$NoPush
         ) -ScriptBlock {
-            param($Name, $ContextDir, $ImageName, $LatestName, $JavaBaseImage, $PushOnly, $NoPush)
+            param($Name, $ContextDir, $ImageName, $JavaBaseImage, $PushOnly, $NoPush)
             # Use a native PowerShell array (not a generic List) so this runs under
             # Constrained Language Mode, where [System.Collections.Generic.List[...]]::new() is blocked.
             $log = @()
@@ -131,13 +136,11 @@ if (-not $SkipBackend) {
                 $log += ">> [$Name] docker build"
                 docker build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" --pull=false -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "build"; Log = $log } }
-                docker tag $ImageName $LatestName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
             }
             if (-not $NoPush) {
                 $log += ">> [$Name] docker push"
                 docker push $ImageName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "push"; Log = $log } }
-                docker push $LatestName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
             }
             return @{ Name = $Name; Ok = $true; Log = $log }
         }
@@ -157,9 +160,9 @@ if (-not $SkipFrontend) {
     $frontendJobs = foreach ($svc in $selectedFrontend) {
         Start-ThreadJob -ThrottleLimit $MaxParallel -Name $svc.Name -ArgumentList @(
             $svc.Name, (Join-Path $ProjectRoot $svc.Dir), "$Registry/$($svc.Name):$Tag",
-            "$Registry/$($svc.Name):latest", [bool]$PushOnly, [bool]$NoPush
+            [bool]$PushOnly, [bool]$NoPush
         ) -ScriptBlock {
-            param($Name, $ContextDir, $ImageName, $LatestName, $PushOnly, $NoPush)
+            param($Name, $ContextDir, $ImageName, $PushOnly, $NoPush)
             # Use a native PowerShell array (not a generic List) so this runs under
             # Constrained Language Mode, where [System.Collections.Generic.List[...]]::new() is blocked.
             $log = @()
@@ -190,14 +193,12 @@ if (-not $SkipFrontend) {
                 $log += ">> [$Name] docker build (Dockerfile.local)"
                 docker build -f "$ContextDir/Dockerfile.local" -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "docker build"; Log = $log } }
-                docker tag $ImageName $LatestName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
             }
 
             if (-not $NoPush) {
                 $log += ">> [$Name] docker push"
                 docker push $ImageName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "push"; Log = $log } }
-                docker push $LatestName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
             }
             return @{ Name = $Name; Ok = $true; Log = $log }
         }

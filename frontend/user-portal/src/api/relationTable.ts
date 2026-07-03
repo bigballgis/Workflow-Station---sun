@@ -1,4 +1,5 @@
 import { request } from './request'
+import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
 
 // ==================== 类型定义 ====================
 
@@ -64,19 +65,21 @@ export const relationTableApi = {
       responseType: 'blob'
     }),
 
-  /** Lookup 搜索 */
+  /** Lookup 搜索（limit+offset 服务端分页） */
   searchForLookup: (tableId: number, params: {
     keyword: string
     searchFields: string[]
     displayField: string
-    filterConditions?: Array<{ fieldName: string; value: string }>
+    filterConditions?: LookupFilterCondition[]
     limit?: number
+    offset?: number
   }) => {
     const query = new URLSearchParams()
     if (params.keyword) query.append('keyword', params.keyword)
     if (params.displayField) query.append('displayField', params.displayField)
     if (params.filterConditions?.length) query.append('filterConditions', JSON.stringify(params.filterConditions))
     if (params.limit) query.append('limit', String(params.limit))
+    if (params.offset) query.append('offset', String(params.offset))
     params.searchFields?.forEach(f => query.append('searchFields', f))
     return request.get<{ data: Record<string, any>[] }>(`/relation-tables/${tableId}/search?${query.toString()}`)
   },
