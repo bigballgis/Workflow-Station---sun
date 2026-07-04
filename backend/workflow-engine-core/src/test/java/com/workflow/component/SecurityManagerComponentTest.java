@@ -70,6 +70,12 @@ class SecurityManagerComponentTest {
             testEncryptionKey
         );
         securityManager.initializeDefaultRolePermissions();
+
+        // Seed stored credential hashes (replaces the removed hardcoded admin/user backdoor, SAST #1472).
+        when(valueOperations.get("security:user:admin:password"))
+            .thenReturn(securityManager.hashPassword("admin123"));
+        when(valueOperations.get("security:user:user:password"))
+            .thenReturn(securityManager.hashPassword("user123"));
     }
 
     @Nested

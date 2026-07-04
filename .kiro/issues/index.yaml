@@ -1004,3 +1004,54 @@
     验证：造 250 行满足 Fixed Filters 的 bulk 数据（共 251 行匹配），Playwright 断言下拉
     .el-table__row=251 含 zhang san；截图 user-portal/verification-screenshots/2026-07-03_lookup-fixed-filters-portal.png。
     附注：PortalRelationTablePropertyTest "Property 18 CSV export" 失败为遗留基线（HEAD 上 stash 验证同样失败），非本次引入。
+- id: "1471"
+  status: fixed
+  fixed_at: "2026-07-04"
+  severity: major
+  category: security
+  summary: "Cyberflows SAST 整改：XXE / 点击劫持(Frameable Login) / SMTP AUTH 凭据与邮箱 PII 日志泄露"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/util/BpmnDeployEnhancer.java"
+  note: |
+    来源：8.cyberflow_sast漏洞扫描结果/sast漏洞扫描结果.md（Checkmarx）。本轮修复三处真实可利用漏洞：
+    ① XXE（Improper Restriction of XXE Ref）：BpmnDeployEnhancer.enhance 解析客户端 BPMN 前
+       hardenAgainstXxe —— disallow-doctype-decl、禁用 external general/parameter entities、
+       load-external-dtd=false、ACCESS_EXTERNAL_DTD/SCHEMA=""、XIncludeAware/ExpandEntityReferences=false。
+    ② Frameable Login Page（点击劫持）：user-portal/admin-center/developer-workstation/workflow-engine-core
+       四个 SecurityConfig 统一 headers —— frameOptions().sameOrigin() + CSP frame-ancestors 'self'（始终生效，
+       不再仅 hstsEnabled 时才配 headers）；HSTS 仍按 hsts.enabled 生产开关。
+    ③ Privacy Violation：EmailSenderService 将 JavaMail session.setDebug 全量 SMTP 会话（含 AUTH LOGIN
+       base64 用户名/口令）在 INFO/ERROR 明文落日志 —— 新增 scrubSmtpTrace 脱敏 AUTH 行与独立 base64 行，
+       成功路径改 DEBUG 且脱敏；EmailSenderService + SendEmailTaskDelegate 收件人/抄送/发件人邮箱
+       改用 platform-common StringUtils.maskEmail（保留域名便于诊断）。
+    评估为已缓解/误报（未改，均已符合整改建议）：LDAP Injection（LdapClient.escapeFilterValue RFC4515 已全量转义）；
+    ReDoS（ProcessDebugProbeRunner.extractNodeBlock 已 Pattern.quote，actionIds 为静态线性正则）；
+    Second Order/SQL Injection 代表汇点 PostgresPhysicalTablePrimaryKeys（SAFE_IDENTIFIER 白名单 + 参数绑定表名 + PK 列名再校验）；
+    Cleartext Submission（DspTokenClient client secret 走 X-Client-Secret header 非 URL query）；
+    Client Web Storage（前端 token 已迁 HttpOnly cookie，localStorage 无 token）；
+    JWT Sensitive Info（roles/permissions/username claims 为无状态鉴权刻意设计，各服务 JwtAuthenticationFilter 依赖之，
+       且无任何日志打印 token 值）。
+    架构级大类（Parameter Tampering 452 / SSRF 228 / Unsafe Object Binding 151）对内部 Kong+JwtFilter 网关架构
+       与固定内部 service client 多为误报，需专项设计（DTO 边界 + 服务层 ownership/BU/Role guard + egress 白名单），
+       不在本轮做 800+ 处高风险盲改。
+    验证：mvn clean compile -pl platform-common,workflow-engine-core -am BUILD SUCCESS；
+       增量编译 5 业务模块 BUILD SUCCESS；无新增 lint 错误。
+- id: "1472"
+  status: fixed
+  fixed_at: "2026-07-04"
+  severity: critical
+  category: security
+  summary: "workflow-engine-core SecurityManagerComponent.validateCredentials 硬编码后门账号 admin/admin123、user/user123（已移除，fail-closed）"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/SecurityManagerComponent.java"
+  note: |
+    排查 SAST #1471 时发现：validateCredentials 在 Redis 无该用户口令时以明文比较放行硬编码后门账号
+    admin/admin123、user/user123。经确认 authenticate()/validateCredentials() 仅被引擎内测试调用
+    （无生产 Controller 装配；生产登录走 platform-security BCryptPasswordEncoder），但仍属危险死代码。
+    修复：移除两处硬编码账号，validateCredentials 改为 fail-closed —— username/password 为 null 或
+    Redis 无 security:user:{username}:password 时一律返回 false；仅凭存储口令哈希 verifyPassword。
+    配套更新 4 个测试（SecurityManagerComponentTest、ComponentIntegrationTest、EndToEndIntegrationTest、
+    PerformanceIntegrationTest）：在 setUp 里用 mock valueOperations 预置
+    security:user:admin:password = hashPassword("admin123")、user 同理，保持原有认证成功/失败断言不变。
+    关于 SAST "One Way Hash without a Salt"（SecurityCryptoHelper.hashPassword 无盐 SHA-256）：该方法同时被
+    SecurityTokenManager 用作 JWT 签名、黑名单 key，及 DataMaskingProcessor 用作确定性脱敏摘要，换 BCrypt 会破坏
+    签名/掩码；且此口令路径非生产登录（生产用 BCrypt），故保留 SHA-256 作确定性摘要并在 Javadoc 标注用途，不改。
+    验证：mvn -pl workflow-engine-core -am test（4 类共 53 tests）Tests run: 53, Failures: 0, Errors: 0 BUILD SUCCESS。

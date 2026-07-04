@@ -122,4 +122,35 @@ public final class StringUtils {
         if (str == null || str.length() <= 4) return "****";
         return str.substring(0, 2) + "****" + str.substring(str.length() - 2);
     }
+
+    /**
+     * Mask an email address (or comma/semicolon separated list) for safe logging:
+     * keeps the first character of the local part and the full domain, e.g.
+     * {@code john.doe@example.com -> j***@example.com}. Non-email tokens fall back to {@link #mask}.
+     */
+    public static String maskEmail(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        String[] parts = value.split("[,;]");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            String token = parts[i].trim();
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            int at = token.indexOf('@');
+            if (at <= 0) {
+                sb.append(mask(token));
+            } else {
+                String local = token.substring(0, at);
+                String domain = token.substring(at);
+                sb.append(local.length() <= 1 ? "*" : local.charAt(0) + "***").append(domain);
+            }
+        }
+        return sb.toString();
+    }
 }

@@ -3140,3 +3140,629 @@ BEGIN
 END
 $widen_full_msg$;
 
+
+-- =============================================================================
+-- 32-add-dw-form-table-binding-subview-columns.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\32-add-dw-form-table-binding-subview-columns.sql
+-- =============================================================================
+-- =====================================================
+-- Developer Workstation: Form table binding extra columns
+-- =====================================================
+-- Fixes runtime 500 when developer-workstation queries dw_form_table_bindings
+-- with columns that are present in JPA entity but missing in init schema:
+--   - sub_list_view_id
+--   - sub_mode
+--
+-- Keep idempotent via IF NOT EXISTS.
+-- =====================================================
+
+ALTER TABLE dw_form_table_bindings
+  ADD COLUMN IF NOT EXISTS sub_list_view_id BIGINT;
+
+ALTER TABLE dw_form_table_bindings
+  ADD COLUMN IF NOT EXISTS sub_mode VARCHAR(20);
+
+CREATE INDEX IF NOT EXISTS idx_dw_form_table_bindings_sub_list_view
+  ON dw_form_table_bindings(sub_list_view_id);
+
+
+-- =============================================================================
+-- 33-dw-sub-table-view-tables.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\33-dw-sub-table-view-tables.sql
+-- =============================================================================
+-- =====================================================
+-- Developer Workstation: sub-table list view storage
+-- =====================================================
+-- JPA entities: SubTableViewConfig / SubTableViewField
+--
+-- Mirrors Flyway V311 (backend/.../V311__create_sub_table_view_tables.sql).
+-- Docker Compose dev disables Flyway by default — these tables MUST exist in
+-- init scripts or INSERT/SELECT on create SUB binding + FULL mode will fail with:
+--   ERROR: relation "dw_sub_table_view_configs" does not exist
+-- and poison the enclosing transaction ("current transaction is aborted").
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS dw_sub_table_view_configs (
+    id BIGSERIAL PRIMARY KEY,
+    binding_id BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_table_view_configs_binding_id
+    ON dw_sub_table_view_configs(binding_id);
+
+CREATE TABLE IF NOT EXISTS dw_sub_table_view_fields (
+    id BIGSERIAL PRIMARY KEY,
+    view_config_id BIGINT NOT NULL,
+    field_name VARCHAR(100) NOT NULL,
+    display_label VARCHAR(200),
+    column_width INTEGER,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    visible BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- FK with ON DELETE CASCADE: without it, deleting a form-table binding (e.g. on re-import or FU delete)
+-- orphans the config row, and the orphan's unique binding_id later collides with a new binding's id.
+-- Clean any pre-existing orphans first so the constraint can be added on legacy/seeded DBs.
+DELETE FROM dw_sub_table_view_fields f
+ WHERE NOT EXISTS (SELECT 1 FROM dw_sub_table_view_configs c WHERE c.id = f.view_config_id)
+    OR f.view_config_id IN (
+       SELECT c.id FROM dw_sub_table_view_configs c
+        WHERE NOT EXISTS (SELECT 1 FROM dw_form_table_bindings b WHERE b.id = c.binding_id));
+DELETE FROM dw_sub_table_view_configs c
+ WHERE NOT EXISTS (SELECT 1 FROM dw_form_table_bindings b WHERE b.id = c.binding_id);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sub_view_config_binding') THEN
+        ALTER TABLE dw_sub_table_view_configs
+            ADD CONSTRAINT fk_sub_view_config_binding
+            FOREIGN KEY (binding_id) REFERENCES dw_form_table_bindings(id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sub_view_field_config') THEN
+        ALTER TABLE dw_sub_table_view_fields
+            ADD CONSTRAINT fk_sub_view_field_config
+            FOREIGN KEY (view_config_id) REFERENCES dw_sub_table_view_configs(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_dw_sub_table_view_fields_config_id
+    ON dw_sub_table_view_fields(view_config_id);
+
+CREATE INDEX IF NOT EXISTS idx_dw_sub_table_view_fields_sort_order
+    ON dw_sub_table_view_fields(view_config_id, sort_order);
+
+
+-- =============================================================================
+-- 34-dw-link-form-components.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\34-dw-link-form-components.sql
+-- =============================================================================
+-- =====================================================
+-- Developer Workstation: Link Form Components
+-- =====================================================
+-- Mirrors Flyway migration
+--   backend/developer-workstation/.../V312__add_sub_mode_and_link_components.sql
+-- so the schema is present in dev where Flyway is disabled
+-- (see docker-compose.dev.yml -> SPRING_FLYWAY_ENABLED=false; init-scripts are the
+-- source of truth in dev per docs/schema-and-migration.md).
+--
+-- Fixes runtime 500 from
+--   GET /api/v1/function-units/{id}/link-form-components
+-- when the developer-workstation backend tries to query
+-- dw_link_form_components but the table is absent.
+--
+-- The `sub_mode` column added by V312 is already provided by
+-- 32-add-dw-form-table-binding-subview-columns.sql, so this script
+-- focuses on the two link-form tables only.
+--
+-- All operations are idempotent.
+-- =====================================================
+
+-- Curated Link Form component definitions (functionUnit-scoped).
+CREATE TABLE IF NOT EXISTS dw_link_form_components (
+    id BIGSERIAL PRIMARY KEY,
+    function_unit_id BIGINT NOT NULL,
+    component_name VARCHAR(200) NOT NULL,
+    linked_form_id BIGINT NOT NULL,
+    display_field VARCHAR(100),
+    link_text VARCHAR(200) DEFAULT '详情',
+    column_label VARCHAR(200),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    config_json JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_form_components_function_unit
+    ON dw_link_form_components(function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_link_form_components_sort_order
+    ON dw_link_form_components(function_unit_id, sort_order);
+
+-- Per-row data captured by Link Form widgets (one row per sub-table row).
+CREATE TABLE IF NOT EXISTS dw_link_form_data (
+    id BIGSERIAL PRIMARY KEY,
+    component_id BIGINT NOT NULL,
+    sub_table_row_id BIGINT NOT NULL,
+    form_data JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_form_data_component_row
+    ON dw_link_form_data(component_id, sub_table_row_id);
+CREATE INDEX IF NOT EXISTS idx_link_form_data_row
+    ON dw_link_form_data(sub_table_row_id);
+
+COMMENT ON TABLE dw_link_form_components IS
+    'Designer-curated Link Form widget definitions (function-unit scoped). '
+    'Negative componentIds on list-view columns are GENERIC, not from this table; '
+    'positive ids reference rows here.';
+COMMENT ON TABLE dw_link_form_data IS
+    'Per-row Link Form data captured at runtime, keyed by component_id + sub_table_row_id.';
+
+
+-- =============================================================================
+-- 34-extend-function-unit-status-check.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\34-extend-function-unit-status-check.sql
+-- =============================================================================
+-- Extend sys_function_units.status CHECK to support ARCHIVED (soft delete)
+-- Note: INIT was removed in 35-drop-init-function-unit-status.sql; use DRAFT for import/restore.
+ALTER TABLE sys_function_units DROP CONSTRAINT IF EXISTS chk_func_unit_status;
+ALTER TABLE sys_function_units ADD CONSTRAINT chk_func_unit_status
+    CHECK (status IN ('DRAFT', 'VALIDATED', 'DEPLOYED', 'DEPRECATED', 'ARCHIVED'));
+
+COMMENT ON COLUMN sys_function_units.status IS 'Lifecycle: DRAFT (imported/restored), VALIDATED, DEPLOYED, DEPRECATED, ARCHIVED (removed from portal)';
+
+
+-- =============================================================================
+-- 35-drop-init-function-unit-status.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\35-drop-init-function-unit-status.sql
+-- =============================================================================
+-- Consolidate INIT into DRAFT for function unit lifecycle
+UPDATE sys_function_units SET status = 'DRAFT' WHERE status = 'INIT';
+
+ALTER TABLE sys_function_units DROP CONSTRAINT IF EXISTS chk_func_unit_status;
+ALTER TABLE sys_function_units ADD CONSTRAINT chk_func_unit_status
+    CHECK (status IN ('DRAFT', 'VALIDATED', 'DEPLOYED', 'DEPRECATED', 'ARCHIVED'));
+
+COMMENT ON COLUMN sys_function_units.status IS 'Lifecycle: DRAFT (imported/restored), VALIDATED, DEPLOYED, DEPRECATED, ARCHIVED (removed from portal)';
+
+
+-- =============================================================================
+-- 36-sys-function-units-description.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\36-sys-function-units-description.sql
+-- =============================================================================
+-- Rename sys_function_units.display_name → description (align with admin-center FunctionUnit entity)
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'sys_function_units'
+          AND column_name = 'display_name'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'sys_function_units'
+          AND column_name = 'description'
+    ) THEN
+        ALTER TABLE sys_function_units RENAME COLUMN display_name TO description;
+    END IF;
+END
+$$;
+
+COMMENT ON COLUMN sys_function_units.description IS 'Function unit description imported from Developer Workstation manifest';
+
+
+-- =============================================================================
+-- 37-sys-action-definitions-description.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\37-sys-action-definitions-description.sql
+-- =============================================================================
+-- Rename sys_action_definitions.display_name → description (align with admin-center ActionDefinition entity)
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'sys_action_definitions'
+          AND column_name = 'display_name'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'sys_action_definitions'
+          AND column_name = 'description'
+    ) THEN
+        ALTER TABLE sys_action_definitions RENAME COLUMN display_name TO description;
+    END IF;
+END
+$$;
+
+COMMENT ON COLUMN sys_action_definitions.description IS 'Action description imported from Developer Workstation';
+
+
+-- =============================================================================
+-- 38-dw-main-table-view-tables.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\38-dw-main-table-view-tables.sql
+-- =============================================================================
+-- Main Table View configs (one default view per table: MAIN + SUB)
+CREATE TABLE IF NOT EXISTS dw_main_table_view_configs (
+    id BIGSERIAL PRIMARY KEY,
+    function_unit_id BIGINT NOT NULL REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    main_table_id BIGINT NOT NULL REFERENCES dw_table_definitions(id) ON DELETE CASCADE,
+    view_name VARCHAR(200) NOT NULL,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_config JSONB,
+    filter_config JSONB,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_main_table_view_configs_fu ON dw_main_table_view_configs(function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_main_table_view_configs_table ON dw_main_table_view_configs(main_table_id);
+-- Default view is now per-table (MAIN + SUB), not per-function-unit.
+-- Drop the legacy per-FU unique index explicitly so already-running databases are converted
+-- (snapshot-style CREATE IF NOT EXISTS does not replace an existing index).
+DROP INDEX IF EXISTS idx_main_table_view_configs_fu_default;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mtv_configs_table_default
+    ON dw_main_table_view_configs(main_table_id) WHERE is_default = TRUE;
+
+CREATE TABLE IF NOT EXISTS dw_main_table_view_fields (
+    id BIGSERIAL PRIMARY KEY,
+    view_config_id BIGINT NOT NULL REFERENCES dw_main_table_view_configs(id) ON DELETE CASCADE,
+    field_name VARCHAR(100) NOT NULL,
+    display_label VARCHAR(200),
+    column_width INTEGER,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    visible BOOLEAN NOT NULL DEFAULT TRUE,
+    is_system_field BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_main_table_view_fields_config ON dw_main_table_view_fields(view_config_id, sort_order);
+
+
+-- =============================================================================
+-- 39-add-request-id-config-to-table-definitions.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\39-add-request-id-config-to-table-definitions.sql
+-- =============================================================================
+-- Migration: Add request_id_config column to dw_table_definitions
+-- JPA entity TableDefinition.requestIdConfig was added but existing DBs lack the column.
+
+ALTER TABLE dw_table_definitions
+    ADD COLUMN IF NOT EXISTS request_id_config JSONB;
+
+COMMENT ON COLUMN dw_table_definitions.request_id_config IS 'Request ID generation configuration for auto-generated IDs';
+
+
+-- =============================================================================
+-- 40-superset-schema.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\40-superset-schema.sql
+-- =============================================================================
+-- =====================================================
+-- Superset BI — schema only (idempotent)
+-- Tables/roles/data are managed by Superset's own CLI:
+--   superset db upgrade   (incremental, never drops data)
+--   superset init          (idempotent, skips existing)
+-- =====================================================
+CREATE SCHEMA IF NOT EXISTS superset;
+
+
+-- =============================================================================
+-- 41-dw-function-unit-tags.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\41-dw-function-unit-tags.sql
+-- =============================================================================
+-- Align with Flyway V322: custom tags on function units (no seed data — tags are user-defined only)
+ALTER TABLE dw_function_units
+    ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN dw_function_units.tags IS 'User-defined tags for filtering (JSON string array)';
+
+-- PostgreSQL helper: check if a JSONB array contains ALL elements from a text array.
+-- Used by server-side tag filter (AND semantics).
+CREATE OR REPLACE FUNCTION jsonb_exists_all(data jsonb, keys text[])
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT
+AS 'SELECT data ?& keys';
+
+
+-- =============================================================================
+-- 44-ac-ldap-sync-audit.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\44-ac-ldap-sync-audit.sql
+-- =============================================================================
+-- =====================================================
+-- Admin Center: LDAP 同步审计表 ac_ldap_sync_audit
+-- =====================================================
+-- 对应 Flyway admin-center V212（建表）+ V213（扩展 Hermes AD Group 同步审计字段）
+-- 幂等：IF NOT EXISTS，可重复执行。
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS ac_ldap_sync_audit (
+    id            VARCHAR(64)   NOT NULL,
+    sync_type     VARCHAR(20)   NOT NULL,           -- FULL / INCREMENTAL / HERMES_AD_GROUP / HERMES_AD_INCR
+    status        VARCHAR(20)   NOT NULL,           -- RUNNING / SUCCESS / FAILED
+    total_fetched INTEGER,
+    upserted      INTEGER,
+    failed        INTEGER,
+    message       VARCHAR(1000),                    -- 失败原因/摘要（脱敏）
+    snapshot_at   TIMESTAMP,                        -- 本次同步开始时刻，作为下次增量水位
+    started_at    TIMESTAMP     NOT NULL,
+    finished_at   TIMESTAMP,
+    -- V213 Hermes AD Group 同步扩展列（幂等：手动 DO 块检查）
+    high_water_mark   VARCHAR(1000),
+    groups            VARCHAR(2000),
+    success_count     INTEGER,
+    skipped_missing_key INTEGER,
+    insert_count      INTEGER,
+    update_count      INTEGER,
+    duration_ms       BIGINT,
+    CONSTRAINT pk_ac_ldap_sync_audit PRIMARY KEY (id)
+);
+
+-- 按 (sync_type, status, started_at) 查询最近一次成功的增量/全量
+CREATE INDEX IF NOT EXISTS idx_ac_ldap_sync_audit_type_status_started
+    ON ac_ldap_sync_audit (sync_type, status, started_at DESC);
+
+-- 列表分页
+CREATE INDEX IF NOT EXISTS idx_ac_ldap_sync_audit_started
+    ON ac_ldap_sync_audit (started_at DESC);
+
+
+-- =============================================================================
+-- 45-dw-email-connections.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\45-dw-email-connections.sql
+-- =============================================================================
+-- Align with Flyway V5 (developer-workstation): SMTP connections per function unit
+CREATE TABLE IF NOT EXISTS dw_email_connections (
+    id BIGSERIAL PRIMARY KEY,
+    connection_uid VARCHAR(64) NOT NULL UNIQUE,
+    function_unit_id BIGINT NOT NULL REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    connection_type VARCHAR(30) NOT NULL DEFAULT 'SMTP',
+    host VARCHAR(255) NOT NULL,
+    port INTEGER NOT NULL DEFAULT 587,
+    username VARCHAR(255),
+    password_encrypted TEXT,
+    from_email VARCHAR(255) NOT NULL,
+    from_name VARCHAR(100),
+    use_tls BOOLEAN DEFAULT TRUE,
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(function_unit_id, name)
+);
+
+-- Inbound IMAP endpoint (nullable; used when direction is INBOUND/BOTH). Align with Flyway V8.
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS imap_host VARCHAR(255);
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS imap_port INTEGER;
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS imap_use_ssl BOOLEAN DEFAULT TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_dw_email_conn_fu ON dw_email_connections(function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_email_conn_uid ON dw_email_connections(connection_uid);
+
+COMMENT ON TABLE dw_email_connections IS 'Per–Function Unit SMTP/IMAP connections (design-time source for email Send Tasks and inbound monitor)';
+
+
+-- =============================================================================
+-- 46-sys-email-connections.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\46-sys-email-connections.sql
+-- =============================================================================
+-- Align with Flyway V2 (admin-center): synced email connections for runtime credential lookup
+CREATE TABLE IF NOT EXISTS sys_email_connections (
+    id VARCHAR(64) PRIMARY KEY,
+    function_unit_id VARCHAR(64) NOT NULL REFERENCES sys_function_units(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    connection_type VARCHAR(30) NOT NULL DEFAULT 'SMTP',
+    host VARCHAR(255) NOT NULL,
+    port INTEGER NOT NULL DEFAULT 587,
+    username VARCHAR(255),
+    password_encrypted TEXT,
+    from_email VARCHAR(255) NOT NULL,
+    from_name VARCHAR(100),
+    use_tls BOOLEAN DEFAULT TRUE,
+    enabled BOOLEAN DEFAULT TRUE,
+    synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(function_unit_id, name)
+);
+
+-- Inbound IMAP endpoint (nullable; synced from developer-workstation). Align with admin Flyway V215.
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS imap_host VARCHAR(255);
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS imap_port INTEGER;
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS imap_use_ssl BOOLEAN DEFAULT TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_sys_email_conn_fu ON sys_email_connections(function_unit_id);
+
+COMMENT ON TABLE sys_email_connections IS 'SMTP/IMAP connections synced from developer workstation on Function Unit import/deploy';
+
+
+-- =============================================================================
+-- 47-dw-email-templates.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\47-dw-email-templates.sql
+-- =============================================================================
+-- Align with Flyway V6 (developer-workstation): email templates per function unit
+CREATE TABLE IF NOT EXISTS dw_email_templates (
+    id BIGSERIAL PRIMARY KEY,
+    function_unit_id BIGINT NOT NULL REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    subject VARCHAR(500),
+    body_html TEXT,
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(function_unit_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_email_tpl_fu ON dw_email_templates(function_unit_id);
+
+COMMENT ON TABLE dw_email_templates IS 'Per–Function Unit email templates (HTML body + variable placeholders for Send Tasks)';
+
+
+-- =============================================================================
+-- 48-dw-email-monitor-rules.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\48-dw-email-monitor-rules.sql
+-- =============================================================================
+-- Align with Flyway V7 (developer-workstation): inbound email monitoring
+-- (1) Extend dw_email_connections with OAuth inbound fields; (2) per-FU monitor rules.
+
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS direction VARCHAR(20) NOT NULL DEFAULT 'OUTBOUND';
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(20);
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS oauth_refresh_token_encrypted TEXT;
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS oauth_access_token_encrypted TEXT;
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMP;
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS mailbox_address VARCHAR(255);
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS oauth_scopes TEXT;
+
+-- host is NOT NULL for SMTP; inbound OAuth connections have no SMTP host. Relax to allow inbound rows.
+ALTER TABLE dw_email_connections ALTER COLUMN host DROP NOT NULL;
+ALTER TABLE dw_email_connections ALTER COLUMN from_email DROP NOT NULL;
+
+CREATE TABLE IF NOT EXISTS dw_email_monitor_rules (
+    id BIGSERIAL PRIMARY KEY,
+    rule_uid VARCHAR(64) NOT NULL UNIQUE,
+    function_unit_id BIGINT NOT NULL REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    enabled BOOLEAN DEFAULT TRUE,
+    connection_uid VARCHAR(64) NOT NULL,
+    process_definition_key VARCHAR(255),
+    start_event_id VARCHAR(255),
+    folder_label VARCHAR(255) DEFAULT 'INBOX',
+    filter_from VARCHAR(255),
+    filter_subject VARCHAR(500),
+    action_type VARCHAR(30) NOT NULL DEFAULT 'START_PROCESS',
+    target_form_id BIGINT,
+    target_binding_id VARCHAR(64),
+    system_initiator_user_id VARCHAR(64),
+    extraction_rules JSONB,
+    correlation JSONB,
+    poll_interval_seconds INTEGER NOT NULL DEFAULT 60,
+    review_on_missing BOOLEAN DEFAULT TRUE,
+    last_sync_cursor TEXT,
+    last_synced_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(function_unit_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_email_monitor_fu ON dw_email_monitor_rules(function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_email_monitor_uid ON dw_email_monitor_rules(rule_uid);
+
+COMMENT ON TABLE dw_email_monitor_rules IS 'Per–Function Unit inbound email monitor rules: trigger + no-code extraction rules (design-time source)';
+COMMENT ON COLUMN dw_email_monitor_rules.extraction_rules IS 'Visual-pick/AI-assist extractionRules JSON consumed by the workflow-engine interpreter';
+
+
+-- =============================================================================
+-- 49-sys-email-monitor-rules.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\49-sys-email-monitor-rules.sql
+-- =============================================================================
+-- Align with Flyway V3 (admin-center): runtime-synced inbound email monitor rules.
+-- (1) Extend sys_email_connections with OAuth inbound fields; (2) synced monitor rules.
+
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS direction VARCHAR(20) NOT NULL DEFAULT 'OUTBOUND';
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS oauth_provider VARCHAR(20);
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS oauth_refresh_token_encrypted TEXT;
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS oauth_access_token_encrypted TEXT;
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMP;
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS mailbox_address VARCHAR(255);
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS oauth_scopes TEXT;
+
+ALTER TABLE sys_email_connections ALTER COLUMN host DROP NOT NULL;
+ALTER TABLE sys_email_connections ALTER COLUMN from_email DROP NOT NULL;
+
+CREATE TABLE IF NOT EXISTS sys_email_monitor_rules (
+    id VARCHAR(64) PRIMARY KEY,
+    function_unit_id VARCHAR(64) NOT NULL REFERENCES sys_function_units(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    enabled BOOLEAN DEFAULT TRUE,
+    connection_uid VARCHAR(64) NOT NULL,
+    process_definition_key VARCHAR(255),
+    start_event_id VARCHAR(255),
+    folder_label VARCHAR(255) DEFAULT 'INBOX',
+    filter_from VARCHAR(255),
+    filter_subject VARCHAR(500),
+    action_type VARCHAR(30) NOT NULL DEFAULT 'START_PROCESS',
+    target_form_id VARCHAR(64),
+    target_binding_id VARCHAR(64),
+    system_initiator_user_id VARCHAR(64),
+    extraction_rules JSONB,
+    correlation JSONB,
+    poll_interval_seconds INTEGER NOT NULL DEFAULT 60,
+    review_on_missing BOOLEAN DEFAULT TRUE,
+    last_sync_cursor TEXT,
+    last_synced_at TIMESTAMP,
+    synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(function_unit_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sys_email_monitor_fu ON sys_email_monitor_rules(function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_sys_email_monitor_enabled ON sys_email_monitor_rules(enabled);
+
+COMMENT ON TABLE sys_email_monitor_rules IS 'Inbound email monitor rules synced from developer workstation on Function Unit import/deploy';
+
+
+-- =============================================================================
+-- 50-we-email-inbound.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\50-we-email-inbound.sql
+-- =============================================================================
+-- Workflow-engine inbound email bookkeeping (engine has ddl-auto=none + no Flyway; init-scripts authoritative).
+-- Idempotency ledger: one row per (rule_uid, message_id) ensures an email triggers a process at most once.
+
+CREATE TABLE IF NOT EXISTS we_email_processed_messages (
+    id BIGSERIAL PRIMARY KEY,
+    rule_uid VARCHAR(64) NOT NULL,
+    message_id VARCHAR(512) NOT NULL,
+    process_instance_id VARCHAR(64),
+    status VARCHAR(30) NOT NULL DEFAULT 'STARTED',
+    error_message TEXT,
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(rule_uid, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_we_email_processed_rule ON we_email_processed_messages(rule_uid);
+CREATE INDEX IF NOT EXISTS idx_we_email_processed_status ON we_email_processed_messages(status);
+
+COMMENT ON TABLE we_email_processed_messages IS 'Idempotency + audit ledger for inbound emails consumed by the monitor scheduler (STARTED/REVIEW/FAILED)';
+
+
+-- =============================================================================
+-- 51-add-login-platform-to-audit.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\51-add-login-platform-to-audit.sql
+-- =============================================================================
+-- =====================================================
+-- Add login_platform column to sys_login_audit
+-- Supports tracking which app (ADMIN_CENTER/USER_PORTAL/DEVELOPER_WORKSTATION) the login event originated from.
+-- =====================================================
+ALTER TABLE sys_login_audit ADD COLUMN IF NOT EXISTS login_platform VARCHAR(32);
+
+
+-- =============================================================================
+-- 51-dw-main-table-view-access.sql
+-- Source file: deploy\k8s\init-data\init-platform-schema\51-dw-main-table-view-access.sql
+-- =============================================================================
+-- Main Table View access control (BU + Role visibility, data involvement flag)
+
+ALTER TABLE dw_main_table_view_configs
+    ADD COLUMN IF NOT EXISTS restrict_to_involved_users BOOLEAN NOT NULL DEFAULT FALSE;
+
+COMMENT ON COLUMN dw_main_table_view_configs.restrict_to_involved_users IS
+    'When true, portal row data is limited to users involved in each process (initiator, assignee, MI participant).';
+
+CREATE TABLE IF NOT EXISTS dw_main_table_view_access (
+    id              BIGSERIAL PRIMARY KEY,
+    view_config_id  BIGINT NOT NULL REFERENCES dw_main_table_view_configs(id) ON DELETE CASCADE,
+    target_type     VARCHAR(20) NOT NULL,
+    target_id       VARCHAR(64) NOT NULL,
+    CONSTRAINT chk_mtv_access_target_type CHECK (target_type IN ('ROLE', 'BUSINESS_UNIT'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mtv_access_view_target
+    ON dw_main_table_view_access(view_config_id, target_type, target_id);
+
+CREATE INDEX IF NOT EXISTS idx_mtv_access_view_config
+    ON dw_main_table_view_access(view_config_id);
+
+COMMENT ON TABLE dw_main_table_view_access IS 'Per-view BU/Role visibility rules for User Portal main-table views';
+

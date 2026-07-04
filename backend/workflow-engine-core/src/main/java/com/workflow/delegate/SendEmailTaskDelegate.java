@@ -113,8 +113,12 @@ public class SendEmailTaskDelegate implements JavaDelegate {
                     resolvedFrom,
                     resolvedFromName
             );
-            log.info("[SEND-EMAIL-TASK] activity={} connectionId={} functionUnitId={} to={} cc={} bcc={} from={} subject={}",
-                    activityId, connectionId, functionUnitId, resolvedTo, resolvedCc, resolvedBcc, resolvedFrom, resolvedSubject);
+            log.info("[SEND-EMAIL-TASK] activity={} connectionId={} functionUnitId={} to={} cc={} bcc={} from={}",
+                    activityId, connectionId, functionUnitId,
+                    com.platform.common.util.StringUtils.maskEmail(resolvedTo),
+                    com.platform.common.util.StringUtils.maskEmail(resolvedCc),
+                    com.platform.common.util.StringUtils.maskEmail(resolvedBcc),
+                    com.platform.common.util.StringUtils.maskEmail(resolvedFrom));
             emailSenderService.send(credentialsOpt.get(), options);
             execution.setVariable("emailSendResult", Map.of(
                     "success", true,

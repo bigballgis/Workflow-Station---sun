@@ -72,14 +72,18 @@ public class SecurityConfig {
             .addFilterAfter(serviceCallAuthenticationFilter(), JwtAuthenticationFilter.class)
             .addFilterAfter(auditContextEnrichmentFilter(), ServiceCallAuthenticationFilter.class);
 
-        // HSTS: only enabled in production (HTTPS). Setting on HTTP dev env breaks browser access.
-        if (hstsEnabled) {
-            http.headers(headers -> headers
-                .httpStrictTransportSecurity(hsts -> hsts
-                    .maxAgeInSeconds(31536000)
-                    .includeSubDomains(true)
-                    .preload(false)));
-        }
+        // Anti-clickjacking (Frameable Login Page): allow same-origin framing only.
+        // HSTS: only enabled in production (HTTPS); setting it on HTTP dev env breaks browser access.
+        http.headers(headers -> {
+            headers.frameOptions(frame -> frame.sameOrigin());
+            headers.contentSecurityPolicy(csp -> csp.policyDirectives("frame-ancestors 'self'"));
+            if (hstsEnabled) {
+                headers.httpStrictTransportSecurity(hsts -> hsts
+                        .maxAgeInSeconds(31536000)
+                        .includeSubDomains(true)
+                        .preload(false));
+            }
+        });
 
         return http.build();
     }

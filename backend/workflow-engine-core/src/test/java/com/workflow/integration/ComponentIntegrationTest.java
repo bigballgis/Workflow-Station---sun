@@ -66,6 +66,12 @@ class ComponentIntegrationTest {
             testJwtSecret, 86400000L, 604800000L, testEncryptionKey
         );
         securityManagerComponent.initializeDefaultRolePermissions();
+
+        // Seed stored credential hashes (replaces the removed hardcoded admin/user backdoor, SAST #1472).
+        when(valueOperations.get("security:user:admin:password"))
+            .thenReturn(securityManagerComponent.hashPassword("admin123"));
+        when(valueOperations.get("security:user:user:password"))
+            .thenReturn(securityManagerComponent.hashPassword("user123"));
     }
 
     @Nested

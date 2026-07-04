@@ -33,8 +33,11 @@ public class EmailSenderService {
         String host = (String) credentials.get("host");
         Object port = credentials.get("port");
         Object useTls = credentials.get("useTls");
-        log.info("[SMTP-SEND] begin host={} port={} useTls={} to={} cc={} from={} subject={}",
-                host, port, useTls, options.to(), options.cc(), options.fromEmail(), options.subject());
+        log.info("[SMTP-SEND] begin host={} port={} useTls={} to={} cc={} from={}",
+                host, port, useTls,
+                com.platform.common.util.StringUtils.maskEmail(options.to()),
+                com.platform.common.util.StringUtils.maskEmail(options.cc()),
+                com.platform.common.util.StringUtils.maskEmail(options.fromEmail()));
 
         Session session = buildSession(credentials);
 
@@ -47,15 +50,33 @@ public class EmailSenderService {
             MimeMessage message = buildMessage(session, credentials, options);
             Transport.send(message);
             debugOut.flush();
-            log.info("[SMTP-SEND] SUCCESS host={} to={}\n----- JavaMail trace -----\n{}--------------------------",
-                    host, options.to(), debugBuf.toString(StandardCharsets.UTF_8));
+            log.info("[SMTP-SEND] SUCCESS host={} to={}",
+                    host, com.platform.common.util.StringUtils.maskEmail(options.to()));
+            if (log.isDebugEnabled()) {
+                log.debug("[SMTP-SEND] JavaMail trace:\n{}", scrubSmtpTrace(debugBuf.toString(StandardCharsets.UTF_8)));
+            }
         } catch (Exception e) {
             debugOut.flush();
             log.error("[SMTP-SEND] FAILED host={} port={} useTls={} | causeChain={} | rootCause={}\n----- JavaMail trace -----\n{}--------------------------",
                     host, port, useTls, MailDiagnostics.causeChain(e), MailDiagnostics.rootCause(e),
-                    debugBuf.toString(StandardCharsets.UTF_8), e);
+                    scrubSmtpTrace(debugBuf.toString(StandardCharsets.UTF_8)), e);
             throw e;
         }
+    }
+
+    /**
+     * Removes SMTP AUTH credential material from a JavaMail protocol trace before it is logged,
+     * so that base64-encoded username/password and message payloads never reach the logs.
+     */
+    static String scrubSmtpTrace(String trace) {
+        if (trace == null || trace.isEmpty()) {
+            return trace;
+        }
+        return trace
+                // AUTH command and its inline argument (AUTH PLAIN <base64>, AUTH LOGIN, XOAUTH2 ...)
+                .replaceAll("(?im)^(.*\\bAUTH\\b\\s+\\S+).*$", "$1 [credentials redacted]")
+                // Standalone base64 lines (credential challenge responses / encoded payload)
+                .replaceAll("(?m)^\\s*[A-Za-z0-9+/]{16,}={0,2}\\s*$", "[redacted]");
     }
 
     private Session buildSession(Map<String, Object> credentials) {

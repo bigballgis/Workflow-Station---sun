@@ -443,25 +443,24 @@ public class SecurityManagerComponent {
     // ==================== 私有辅助方法 ====================
 
     /**
-     * 验证用户凭证
+     * 验证用户凭证。
+     *
+     * <p>凭证来源为 {@code security:user:{username}:password} 中存储的口令哈希；
+     * 未命中时 <strong>fail-closed 返回 false</strong>，不再放行任何硬编码默认账号
+     * （历史上的 {@code admin/admin123}、{@code user/user123} 后门已移除，见 SAST #1472）。</p>
+     *
+     * <p>注意：生产环境的用户登录由 platform-security 的 {@code BCryptPasswordEncoder} 负责；
+     * 本方法及其配套的 {@code authenticate} 仅用于引擎内的令牌流转与相关测试。</p>
      */
     private boolean validateCredentials(String username, String password) {
-        // 简化实现：从缓存或数据库验证
-        // 实际应用中应该从用户数据库验证
-        String cacheKey = "security:user:" + username + ":password";
-        String storedPassword = stringRedisTemplate.opsForValue().get(cacheKey);
-
-        if (storedPassword == null) {
-            // 默认测试用户
-            if ("admin".equals(username) && "admin123".equals(password)) {
-                return true;
-            }
-            if ("user".equals(username) && "user123".equals(password)) {
-                return true;
-            }
+        if (username == null || password == null) {
             return false;
         }
-
+        String cacheKey = "security:user:" + username + ":password";
+        String storedPassword = stringRedisTemplate.opsForValue().get(cacheKey);
+        if (storedPassword == null) {
+            return false;
+        }
         return verifyPassword(password, storedPassword);
     }
 
