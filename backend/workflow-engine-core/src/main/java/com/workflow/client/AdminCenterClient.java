@@ -1,5 +1,6 @@
 package com.workflow.client;
 
+import com.platform.common.util.SafeUrlInput;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,7 +39,7 @@ public class AdminCenterClient {
      */
     public boolean isUserInVirtualGroup(String userId, String groupId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId + "/members";
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + SafeUrlInput.requirePathToken(groupId) + "/members";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -71,7 +72,7 @@ public class AdminCenterClient {
      */
     public List<String> getUserVirtualGroupIds(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/virtual-groups";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/virtual-groups";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -111,7 +112,7 @@ public class AdminCenterClient {
     @SuppressWarnings("unchecked")
     public List<String> getUserRoles(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -173,7 +174,7 @@ public class AdminCenterClient {
     public Map<String, Object> getUserInfo(String userId) {
         try {
             // 首先尝试通过ID查询
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId;
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -190,7 +191,7 @@ public class AdminCenterClient {
         
         // 尝试通过用户名搜索
         try {
-            String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + userId + "&size=1";
+            String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + SafeUrlInput.encodeQueryValue(userId) + "&size=1";
             ResponseEntity<Map<String, Object>> searchResponse = restTemplate.exchange(
                     searchUrl,
                     HttpMethod.GET,
@@ -225,7 +226,7 @@ public class AdminCenterClient {
      */
     public String getUserBusinessUnitId(String userId, String activeBusinessUnitId) {
         try {
-            String base = adminCenterUrl + "/api/v1/admin/task-assignment/users/" + userId + "/business-unit";
+            String base = adminCenterUrl + "/api/v1/admin/task-assignment/users/" + SafeUrlInput.requirePathToken(userId) + "/business-unit";
             String url = base;
             if (activeBusinessUnitId != null && !activeBusinessUnitId.isBlank()) {
                 url = base + "?activeBusinessUnitId=" + java.net.URLEncoder.encode(activeBusinessUnitId, java.nio.charset.StandardCharsets.UTF_8);
@@ -295,7 +296,7 @@ public class AdminCenterClient {
      */
     public String getParentBusinessUnitId(String businessUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + businessUnitId + "/parent";
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/parent";
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -326,7 +327,7 @@ public class AdminCenterClient {
      */
     public List<String> getUsersByBusinessUnitAndRole(String businessUnitId, String roleId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + businessUnitId + "/roles/" + roleId + "/users";
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/roles/" + SafeUrlInput.requirePathToken(roleId) + "/users";
             ResponseEntity<List<String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -371,7 +372,7 @@ public class AdminCenterClient {
      */
     public List<String> getUsersByUnboundedRole(String roleId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/task-assignment/roles/" + roleId + "/users";
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/roles/" + SafeUrlInput.requirePathToken(roleId) + "/users";
             ResponseEntity<List<String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -421,7 +422,7 @@ public class AdminCenterClient {
      */
     public List<String> getEligibleRoleIds(String businessUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + businessUnitId + "/eligible-roles";
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/eligible-roles";
             ResponseEntity<List<String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -446,7 +447,7 @@ public class AdminCenterClient {
      */
     public boolean isEligibleRole(String businessUnitId, String roleId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + businessUnitId + "/roles/" + roleId + "/eligible";
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/roles/" + SafeUrlInput.requirePathToken(roleId) + "/eligible";
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -521,7 +522,7 @@ public class AdminCenterClient {
      */
     public Map<String, Object> getN8nConfig(String configId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/n8n-config/" + configId + "/internal";
+            String url = adminCenterUrl + "/api/v1/admin/n8n-config/" + SafeUrlInput.requirePathToken(configId) + "/internal";
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,

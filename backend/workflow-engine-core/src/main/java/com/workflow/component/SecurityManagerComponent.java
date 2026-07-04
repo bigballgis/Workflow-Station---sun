@@ -55,6 +55,12 @@ public class SecurityManagerComponent {
     // 加密配置 - 从环境变量/配置文件读取
     private final String encryptionKey;
 
+    // 本地/开发联调测试账号（配置注入，默认关闭；生产不得开启，见 validateCredentials Javadoc）
+    @Value("${workflow.security.test-users.enabled:false}")
+    private boolean testUsersEnabled;
+    @Value("${workflow.security.test-users.accounts:}")
+    private String testUsersAccounts;
+
     // 协作类：Spring 环境下由 @Lazy @Autowired 注入（破循环依赖）；
     // 单元测试（无 Spring 上下文）下构造器直接 new，accessor 提供 null 兜底。
     @Lazy
@@ -446,8 +452,14 @@ public class SecurityManagerComponent {
      * 验证用户凭证。
      *
      * <p>凭证来源为 {@code security:user:{username}:password} 中存储的口令哈希；
-     * 未命中时 <strong>fail-closed 返回 false</strong>，不再放行任何硬编码默认账号
-     * （历史上的 {@code admin/admin123}、{@code user/user123} 后门已移除，见 SAST #1472）。</p>
+     * 未命中时默认 <strong>fail-closed 返回 false</strong>——代码中不再有任何硬编码默认账号
+     * （历史上的硬编码 {@code admin/admin123}、{@code user/user123} 后门已移除，见 SAST #1472）。</p>
+     *
+     * <p>本地/开发联调需要的测试账号改为<strong>配置注入</strong>：
+     * {@code workflow.security.test-users.enabled=true} 且
+     * {@code workflow.security.test-users.accounts=admin:admin123,user:user123}（环境变量
+     * {@code WORKFLOW_TEST_USERS_ENABLED} / {@code WORKFLOW_TEST_USERS}）时，Redis 未命中的
+     * 用户名可回退到配置账号。默认关闭；生产环境不得设置这两个变量。</p>
      *
      * <p>注意：生产环境的用户登录由 platform-security 的 {@code BCryptPasswordEncoder} 负责；
      * 本方法及其配套的 {@code authenticate} 仅用于引擎内的令牌流转与相关测试。</p>
@@ -459,9 +471,34 @@ public class SecurityManagerComponent {
         String cacheKey = "security:user:" + username + ":password";
         String storedPassword = stringRedisTemplate.opsForValue().get(cacheKey);
         if (storedPassword == null) {
-            return false;
+            return matchesConfiguredTestUser(username, password);
         }
         return verifyPassword(password, storedPassword);
+    }
+
+    /**
+     * 配置驱动的本地测试账号校验（默认关闭，fail-closed）。
+     * 口令比较用 {@link java.security.MessageDigest#isEqual} 常量时间比较，防时序攻击。
+     */
+    private boolean matchesConfiguredTestUser(String username, String password) {
+        if (!testUsersEnabled || testUsersAccounts == null || testUsersAccounts.isBlank()) {
+            return false;
+        }
+        for (String pair : testUsersAccounts.split(",")) {
+            int sep = pair.indexOf(':');
+            if (sep <= 0 || sep == pair.length() - 1) {
+                continue;
+            }
+            String configuredUser = pair.substring(0, sep).trim();
+            String configuredPassword = pair.substring(sep + 1).trim();
+            if (configuredUser.equals(username) && java.security.MessageDigest.isEqual(
+                    configuredPassword.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    password.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+                log.warn("Test-user login accepted for '{}' via workflow.security.test-users (local/dev only)", username);
+                return true;
+            }
+        }
+        return false;
     }
 
     // ==================== 包内协作（供同包协作类委托回门面共享能力）====================

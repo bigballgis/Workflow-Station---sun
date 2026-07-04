@@ -3,6 +3,7 @@ package com.portal.component;
 import com.portal.entity.ProcessDraft;
 import com.portal.repository.ProcessDraftRepository;
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -121,7 +122,7 @@ public class ProcessDraftComponent {
     private String resolveFunctionUnitName(String processDefinitionKey) {
         try {
             String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(processDefinitionKey);
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitId) + "/content";
 
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);

@@ -123,11 +123,15 @@ data:
   # 非敏感配置；bind 密码 / DSP client secret / keystore 口令放 workflow-platform-secrets。
   # env 名为本仓库 admin-center 实际读取名（与源项目映射表有差异，见 deploy/environments/uat/.env 注释）。
   ADMIN_DEV_BYPASS_ROLE_CHECK: "false"
+  # 引擎本地测试账号开关：UAT/生产必须为 false（accounts 变量不设置）
+  WORKFLOW_TEST_USERS_ENABLED: "false"
   LDAP_ENABLED: "true"
   LDAP_PROVIDER_URL: "ldaps://aa-lds-prod.hk.hsbc:3269"
   LDAP_BASE_DN: "OU=HSBCPeople,DC=InfoDir,DC=Prod,DC=HSBC"
   LDAP_BIND_DN: "CN=HK-SVCA-HERMES,OU=Service Accounts,DC=InfoDir,DC=Prod,DC=HSBC"
   LDAP_TLS: "true"
+  # 明文 ldap:// 且 TLS=false 时启动 fail-fast；仅本地 mock 才可置 true
+  LDAP_ALLOW_INSECURE: "false"
   LDAP_CONNECT_TIMEOUT_MS: "5000"
   LDAP_READ_TIMEOUT_MS: "10000"
   LDAP_PAGE_SIZE: "500"

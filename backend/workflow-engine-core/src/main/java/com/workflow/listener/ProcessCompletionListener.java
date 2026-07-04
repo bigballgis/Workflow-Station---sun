@@ -1,5 +1,6 @@
 package com.workflow.listener;
 
+import com.platform.common.util.SafeUrlInput;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
 import org.flowable.common.engine.api.delegate.event.FlowableEvent;
@@ -69,7 +70,7 @@ public class ProcessCompletionListener implements FlowableEventListener {
                         // Short delay to ensure completeTask transaction has committed
                         Thread.sleep(500);
                         
-                        String url = userPortalUrl + "/api/portal/processes/" + processInstanceId + "/complete";
+                        String url = userPortalUrl + "/api/portal/processes/" + SafeUrlInput.requirePathToken(processInstanceId) + "/complete";
                         log.info("Async notifying user-portal about process completion: {}", url);
                         
                         Map<String, Object> request = new HashMap<>();

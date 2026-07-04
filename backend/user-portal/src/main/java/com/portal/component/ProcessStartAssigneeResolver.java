@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -380,7 +381,7 @@ public class ProcessStartAssigneeResolver {
     private String getEntityManager(String initiatorId) {
         try {
             // Try user ID first
-            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
+            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(initiatorId);
             log.info("Fetching user info for entity manager from: {}", userUrl);
 
             Map<String, Object> userInfo = null;
@@ -394,7 +395,7 @@ public class ProcessStartAssigneeResolver {
 
             // If lookup by ID fails, try username
             if (userInfo == null || userInfo.get("entityManagerId") == null) {
-                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
+                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + SafeUrlInput.encodeQueryValue(initiatorId) + "&size=1";
                 log.info("Searching user by username from: {}", searchUrl);
                 try {
                     @SuppressWarnings("unchecked")
@@ -404,7 +405,7 @@ public class ProcessStartAssigneeResolver {
                             : Collections.emptyList();
                     if (!users.isEmpty()) {
                         String foundUserId = (String) users.get(0).get("id");
-                        String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
+                        String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(foundUserId);
                         @SuppressWarnings("unchecked")
                         Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
                         userInfo = ApiResponseBodyUnwrap.unwrapDataMap(detailResponse);
@@ -435,7 +436,7 @@ public class ProcessStartAssigneeResolver {
     private String getFunctionManager(String initiatorId) {
         try {
             // Try user ID first
-            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
+            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(initiatorId);
             log.info("Fetching user info for function manager from: {}", userUrl);
 
             Map<String, Object> userInfo = null;
@@ -449,7 +450,7 @@ public class ProcessStartAssigneeResolver {
 
             // If lookup by ID fails, try username
             if (userInfo == null || userInfo.get("functionManagerId") == null) {
-                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
+                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + SafeUrlInput.encodeQueryValue(initiatorId) + "&size=1";
                 log.info("Searching user by username from: {}", searchUrl);
                 try {
                     @SuppressWarnings("unchecked")
@@ -459,7 +460,7 @@ public class ProcessStartAssigneeResolver {
                             : Collections.emptyList();
                     if (!users.isEmpty()) {
                         String foundUserId = (String) users.get(0).get("id");
-                        String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
+                        String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(foundUserId);
                         @SuppressWarnings("unchecked")
                         Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
                         userInfo = ApiResponseBodyUnwrap.unwrapDataMap(detailResponse);

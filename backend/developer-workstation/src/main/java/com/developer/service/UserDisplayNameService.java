@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -46,7 +47,7 @@ public class UserDisplayNameService {
             return cached;
         }
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId;
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId);
             Map<String, Object> raw = restTemplate.getForObject(url, Map.class);
             Map<String, Object> userInfo = raw != null ? ApiResponseBodyUnwrap.unwrapDataMap(raw) : null;
             if (userInfo != null && !userInfo.isEmpty()) {

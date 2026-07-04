@@ -52,9 +52,24 @@ public class LdapClient {
     /**
      * 启动时配置自定义 LDAPS truststore（含 HSBC CA 根证书）。
      * 设置 JVM 级 trustStore 系统属性；未配置则沿用 JVM 默认信任库。
+     *
+     * <p>传输安全 fail-fast：simple bind 会把服务账号与用户口令原文发给 LDAP 服务器，
+     * 因此除非显式 {@code ldap.allow-insecure=true}（仅本地 mock OpenLDAP 联调），
+     * 连接必须为 ldaps:// 或 {@code ldap.tls=true}，否则启动即失败，防止生产误配明文过网。</p>
      */
     @PostConstruct
     void configureTrustStore() {
+        String url = props.getProviderUrl() == null ? "" : props.getProviderUrl().trim().toLowerCase(java.util.Locale.ROOT);
+        boolean cleartext = url.startsWith("ldap://") && !props.isTls();
+        if (cleartext && !props.isAllowInsecure()) {
+            throw new IllegalStateException(
+                    "LDAP is configured with cleartext transport (ldap:// and ldap.tls=false). "
+                            + "Credentials would cross the network unencrypted. Use ldaps:// / LDAP_TLS=true, "
+                            + "or set ldap.allow-insecure=true explicitly for local mock testing only.");
+        }
+        if (cleartext) {
+            log.warn("LDAP cleartext transport explicitly allowed (ldap.allow-insecure=true) — local/mock use only");
+        }
         if (StringUtils.hasText(props.getKeystorePath())) {
             System.setProperty("javax.net.ssl.trustStore", props.getKeystorePath());
             if (StringUtils.hasText(props.getKeystorePassword())) {

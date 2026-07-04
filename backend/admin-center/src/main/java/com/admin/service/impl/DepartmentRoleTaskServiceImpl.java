@@ -6,6 +6,7 @@ import com.admin.dto.response.GroupTaskInfo;
 import com.admin.entity.*;
 import com.admin.enums.TaskActionType;
 import com.admin.enums.TaskAssignmentType;
+import com.platform.common.util.SafeUrlInput;
 import com.platform.security.model.UserStatus;
 import com.platform.security.entity.User;
 import com.platform.security.entity.Role;
@@ -210,7 +211,7 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
         
         String groupId = businessUnitId + "_" + roleId;
         try {
-            String url = workflowEngineUrl + "/api/v1/tasks?groupIds=" + groupId;
+            String url = workflowEngineUrl + "/api/v1/tasks?groupIds=" + SafeUrlInput.encodeQueryValue(groupId);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url, HttpMethod.GET, null,
@@ -258,7 +259,7 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
         log.info("Claiming task {} for user {} in workflow engine", taskId, userId);
         
         try {
-            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/claim";
+            String url = workflowEngineUrl + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/claim";
             
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("claimedBy", userId);

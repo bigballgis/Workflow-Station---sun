@@ -2,6 +2,7 @@ package com.portal.client;
 
 import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -134,7 +135,7 @@ public class WorkflowEngineProcessClient {
             return false;
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/instances/" + processInstanceId + "/purge";
+            String url = engine.engineUrl() + "/api/v1/processes/instances/" + SafeUrlInput.requirePathToken(processInstanceId) + "/purge";
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
@@ -160,7 +161,7 @@ public class WorkflowEngineProcessClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/" + processInstanceId + "/status";
+            String url = engine.engineUrl() + "/api/v1/processes/" + SafeUrlInput.requirePathToken(processInstanceId) + "/status";
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
@@ -183,7 +184,7 @@ public class WorkflowEngineProcessClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/monitoring/processes/" + processInstanceId + "/current-activity";
+            String url = engine.engineUrl() + "/api/v1/monitoring/processes/" + SafeUrlInput.requirePathToken(processInstanceId) + "/current-activity";
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
@@ -207,7 +208,7 @@ public class WorkflowEngineProcessClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/history/processes/" + processInstanceId;
+            String url = engine.engineUrl() + "/api/v1/history/processes/" + SafeUrlInput.requirePathToken(processInstanceId);
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
@@ -230,7 +231,7 @@ public class WorkflowEngineProcessClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/workflow/multi-instance/" + processInstanceId + "/status";
+            String url = engine.engineUrl() + "/api/v1/workflow/multi-instance/" + SafeUrlInput.requirePathToken(processInstanceId) + "/status";
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
@@ -251,7 +252,7 @@ public class WorkflowEngineProcessClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/instances/" + processInstanceId;
+            String url = engine.engineUrl() + "/api/v1/processes/instances/" + SafeUrlInput.requirePathToken(processInstanceId);
 
             HttpHeaders headers = new HttpHeaders();
             engine.forwardInboundAuthorization(headers);
@@ -280,7 +281,7 @@ public class WorkflowEngineProcessClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/instances/" + processInstanceId;
+            String url = engine.engineUrl() + "/api/v1/processes/instances/" + SafeUrlInput.requirePathToken(processInstanceId);
 
             Map<String, Object> request = new HashMap<>();
             request.put("reason", reason != null ? reason : "User withdrawn");
@@ -313,7 +314,7 @@ public class WorkflowEngineProcessClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/processes/definitions/" + processDefinitionKey + "/bpmn";
+            String url = engine.engineUrl() + "/api/v1/processes/definitions/" + SafeUrlInput.requirePathToken(processDefinitionKey) + "/bpmn";
             HttpHeaders headers = new HttpHeaders();
             engine.forwardInboundAuthorization(headers);
             HttpEntity<Void> entity = new HttpEntity<>(headers);

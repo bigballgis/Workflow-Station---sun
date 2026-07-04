@@ -278,6 +278,9 @@ services:
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       PORTAL_INTERNAL_API_TOKEN: ${PORTAL_INTERNAL_API_TOKEN:-dev-portal-internal-token-change-me}
+      # 本地测试账号（仅 dev；生产/K8s 严禁设置，代码默认 fail-closed）
+      WORKFLOW_TEST_USERS_ENABLED: ${WORKFLOW_TEST_USERS_ENABLED:-true}
+      WORKFLOW_TEST_USERS: ${WORKFLOW_TEST_USERS:-admin:admin123,user:user123}
     networks:
       - platform-dev-network
     restart: unless-stopped
@@ -358,6 +361,8 @@ services:
       LDAP_BIND_DN: ${LDAP_BIND_DN:-cn=admin,dc=example,dc=org}
       LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:-admin}
       LDAP_TLS: ${LDAP_TLS:-false}
+      # 本地 mock OpenLDAP 无 TLS：显式允许明文（生产/K8s 默认 false，明文配置会启动 fail-fast）
+      LDAP_ALLOW_INSECURE: ${LDAP_ALLOW_INSECURE:-true}
       LDAP_CONNECT_TIMEOUT_MS: ${LDAP_CONNECT_TIMEOUT_MS:-5000}
       LDAP_READ_TIMEOUT_MS: ${LDAP_READ_TIMEOUT_MS:-10000}
       LDAP_PAGE_SIZE: ${LDAP_PAGE_SIZE:-500}

@@ -1,6 +1,7 @@
 package com.developer.security;
 
 import lombok.RequiredArgsConstructor;
+import com.platform.common.util.SafeUrlInput;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -51,7 +52,7 @@ public class DeveloperPermissionChecker {
         
         try {
             // admin-center 的 context-path 是 /api/v1/admin
-            String url = adminCenterUrl + "/api/v1/admin/developer-permissions/user/" + userId;
+            String url = adminCenterUrl + "/api/v1/admin/developer-permissions/user/" + SafeUrlInput.requirePathToken(userId);
             log.info("Calling admin-center API: {}", url);
             
             ResponseEntity<List<String>> response = restTemplate.exchange(

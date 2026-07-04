@@ -3,6 +3,7 @@ package com.portal.controller;
 import com.portal.component.TaskProcessComponent;
 import com.portal.client.WorkflowEngineClient;
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 import com.portal.component.TaskQueryComponent;
 import com.platform.common.dto.ApiResponse;
 import com.portal.dto.*;
@@ -205,7 +206,7 @@ public class TaskController {
     public ApiResponse<List<Map<String, Object>>> searchUsers(
             @RequestParam(required = false, defaultValue = "") String keyword) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users?keyword=" + keyword + "&size=20";
+            String url = adminCenterUrl + "/api/v1/admin/users?keyword=" + SafeUrlInput.encodeQueryValue(keyword) + "&size=20";
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url, HttpMethod.GET, null,
                     new ParameterizedTypeReference<Map<String, Object>>() {});

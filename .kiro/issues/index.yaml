@@ -1040,7 +1040,7 @@
   fixed_at: "2026-07-04"
   severity: critical
   category: security
-  summary: "workflow-engine-core SecurityManagerComponent.validateCredentials 硬编码后门账号 admin/admin123、user/user123（已移除，fail-closed）"
+  summary: "workflow-engine-core SecurityManagerComponent.validateCredentials 硬编码后门账号 admin/admin123、user/user123（已移除；本地测试账号改配置注入 WORKFLOW_TEST_USERS）"
   file: "backend/workflow-engine-core/src/main/java/com/workflow/component/SecurityManagerComponent.java"
   note: |
     排查 SAST #1471 时发现：validateCredentials 在 Redis 无该用户口令时以明文比较放行硬编码后门账号
@@ -1055,6 +1055,13 @@
     SecurityTokenManager 用作 JWT 签名、黑名单 key，及 DataMaskingProcessor 用作确定性脱敏摘要，换 BCrypt 会破坏
     签名/掩码；且此口令路径非生产登录（生产用 BCrypt），故保留 SHA-256 作确定性摘要并在 Javadoc 标注用途，不改。
     验证：mvn -pl workflow-engine-core -am test（4 类共 53 tests）Tests run: 53, Failures: 0, Errors: 0 BUILD SUCCESS。
+    追加（用户要求保留本地 admin/admin123 测试登录）：改为「配置注入」而非恢复硬编码 ——
+    workflow.security.test-users.enabled（WORKFLOW_TEST_USERS_ENABLED，默认 false）+
+    workflow.security.test-users.accounts（WORKFLOW_TEST_USERS，格式 user:pass,user2:pass2）。
+    validateCredentials 在 Redis 未命中时回退 matchesConfiguredTestUser（MessageDigest.isEqual 常量时间比较 +
+    命中打 WARN 日志）。dev compose 默认开启并注入 admin:admin123,user:user123；
+    K8s uat/preprod configmap 显式 WORKFLOW_TEST_USERS_ENABLED=false 且不设 accounts。
+    代码中无任何明文口令 → SAST 硬编码凭证告警不复发；本地登录体验与原后门一致。
 - id: "1473"
   status: fixed
   fixed_at: "2026-07-04"
@@ -1093,3 +1100,16 @@
     且 request.setTaskId(path) 服务端回填。Checkmarx 把每个 @PathVariable/@RequestBody 视作污点、不追既有 guard，
     故报 PT/UOB。结论：不宜对已鉴权路径盲目再加 guard（既是 churn 又可能改坏 getProcessFormData 等合法跨用户/只读
     访问模型，且计数不会降）。建议：逐条 triage 标 not-exploitable + 少量真实缺口单独修，而非全量授权重构。
+    SSRF 第二批（覆盖全部剩余 URL 拼接 sink，共 13 文件 ~50 处）：user-portal VirtualGroupAccessComponent(20)、
+    UserPermissionController(5)、ProcessStartAssigneeResolver(6)、WorkflowEngineProcessClient(8)、
+    ProcessComponent(3)、ProcessDraftComponent、WorkflowEngineClient、TaskController(keyword)、
+    WorkflowEngineTaskClient(rowId 补漏)；workflow-engine AdminCenterClient(13)、ProcessCompletionListener；
+    developer-workstation UserDisplayNameService、DeveloperPermissionChecker、DeploymentComponentImpl(2)；
+    admin-center DepartmentRoleTaskServiceImpl(2)。全部 path 段 requirePathToken、query 值 encodeQueryValue。
+    LDAP 明文传输（Cleartext）：LdapClient simple bind 会把服务账号+用户口令原文发给 LDAP 服务器，
+    生产/UAT/SIT 均为 ldaps://:3269 + LDAP_TLS=true（无隐患）；仅 dev compose 本地 mock OpenLDAP 用
+    ldap://test-ldap:389 + TLS=false。加固：新增 ldap.allow-insecure（LDAP_ALLOW_INSECURE，默认 false），
+    LdapClient @PostConstruct 检测「ldap:// 且 tls=false」时 fail-fast 拒绝启动，仅显式 allow-insecure=true
+    才放行并打 WARN；dev compose 显式置 true，K8s uat/preprod configmap 显式置 false。
+    验证：mvn compile admin-center+user-portal+workflow-engine-core+developer-workstation BUILD SUCCESS；
+    SecurityManagerComponentTest 通过。

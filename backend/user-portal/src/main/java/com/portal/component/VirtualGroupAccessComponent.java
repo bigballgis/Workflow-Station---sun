@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 import com.platform.security.util.SecurityContextUtils;
 
 import java.util.*;
@@ -53,7 +54,7 @@ public class VirtualGroupAccessComponent {
      */
     public Map<String, Object> getVirtualGroupById(String groupId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId;
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + SafeUrlInput.requirePathToken(groupId);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -77,7 +78,7 @@ public class VirtualGroupAccessComponent {
             return Optional.empty();
         }
         try {
-            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId + "/role";
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + SafeUrlInput.requirePathToken(groupId) + "/role";
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -105,7 +106,7 @@ public class VirtualGroupAccessComponent {
      */
     public List<Map<String, Object>> getUserVirtualGroups(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/virtual-groups";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/virtual-groups";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -130,7 +131,7 @@ public class VirtualGroupAccessComponent {
      */
     public boolean addUserToVirtualGroup(String userId, String groupId, String reason) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId + "/members";
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + SafeUrlInput.requirePathToken(groupId) + "/members";
             
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("userId", userId);
@@ -164,7 +165,7 @@ public class VirtualGroupAccessComponent {
      */
     public List<Map<String, Object>> getVirtualGroupMembers(String groupId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId + "/members";
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + SafeUrlInput.requirePathToken(groupId) + "/members";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -285,7 +286,7 @@ public class VirtualGroupAccessComponent {
      */
     public Map<String, Object> getBusinessUnitById(String businessUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/business-units/" + businessUnitId;
+            String url = adminCenterUrl + "/api/v1/admin/business-units/" + SafeUrlInput.requirePathToken(businessUnitId);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -306,7 +307,7 @@ public class VirtualGroupAccessComponent {
      */
     public List<Map<String, Object>> getBusinessUnitBoundRoles(String businessUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/business-units/" + businessUnitId + "/roles";
+            String url = adminCenterUrl + "/api/v1/admin/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/roles";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -325,7 +326,7 @@ public class VirtualGroupAccessComponent {
      */
     public List<Map<String, Object>> getUserBusinessUnits(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-units";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/business-units";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -363,7 +364,7 @@ public class VirtualGroupAccessComponent {
      */
     public boolean addUserToBusinessUnit(String userId, String businessUnitId, String reason) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/business-units/" + businessUnitId + "/members";
+            String url = adminCenterUrl + "/api/v1/admin/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/members";
             
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("userId", userId);
@@ -396,7 +397,7 @@ public class VirtualGroupAccessComponent {
      */
     public boolean assignUserBusinessUnitRole(String userId, String businessUnitId, String roleId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/business-unit-roles";
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("businessUnitId", businessUnitId);
             requestBody.put("roleId", roleId);
@@ -428,8 +429,8 @@ public class VirtualGroupAccessComponent {
      */
     public boolean isApproverForVirtualGroup(String userId, String groupId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/approvers/check?userId=" + userId 
-                    + "&targetType=VIRTUAL_GROUP&targetId=" + groupId;
+            String url = adminCenterUrl + "/api/v1/admin/approvers/check?userId=" + SafeUrlInput.encodeQueryValue(userId)
+                    + "&targetType=VIRTUAL_GROUP&targetId=" + SafeUrlInput.encodeQueryValue(groupId);
             ResponseEntity<Boolean> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -448,8 +449,8 @@ public class VirtualGroupAccessComponent {
      */
     public boolean isApproverForBusinessUnit(String userId, String businessUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/approvers/check?userId=" + userId 
-                    + "&targetType=BUSINESS_UNIT&targetId=" + businessUnitId;
+            String url = adminCenterUrl + "/api/v1/admin/approvers/check?userId=" + SafeUrlInput.encodeQueryValue(userId)
+                    + "&targetType=BUSINESS_UNIT&targetId=" + SafeUrlInput.encodeQueryValue(businessUnitId);
             ResponseEntity<Boolean> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -468,7 +469,7 @@ public class VirtualGroupAccessComponent {
      */
     public List<String> getApproverVirtualGroupIds(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/approvers/user/" + userId + "/virtual-groups";
+            String url = adminCenterUrl + "/api/v1/admin/approvers/user/" + SafeUrlInput.requirePathToken(userId) + "/virtual-groups";
             ResponseEntity<List<String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -487,7 +488,7 @@ public class VirtualGroupAccessComponent {
      */
     public List<String> getApproverBusinessUnitIds(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/approvers/user/" + userId + "/business-units";
+            String url = adminCenterUrl + "/api/v1/admin/approvers/user/" + SafeUrlInput.requirePathToken(userId) + "/business-units";
             ResponseEntity<List<String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -506,7 +507,7 @@ public class VirtualGroupAccessComponent {
      */
     public List<Map<String, Object>> listAllUserBusinessUnitRoles(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/business-unit-roles";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -535,7 +536,7 @@ public class VirtualGroupAccessComponent {
      */
     public boolean removeUserFromVirtualGroup(String userId, String groupId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId + "/members/" + userId;
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + SafeUrlInput.requirePathToken(groupId) + "/members/" + SafeUrlInput.requirePathToken(userId);
             ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.DELETE, null, Void.class);
             return response.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
@@ -574,8 +575,8 @@ public class VirtualGroupAccessComponent {
      */
     public List<Map<String, Object>> listUserBusinessUnitRolesInBusinessUnit(String userId, String businessUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId
-                    + "/business-unit-roles/by-business-unit/" + businessUnitId;
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId)
+                    + "/business-unit-roles/by-business-unit/" + SafeUrlInput.requirePathToken(businessUnitId);
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -602,8 +603,8 @@ public class VirtualGroupAccessComponent {
      */
     public boolean removeUserBusinessUnitRole(String userId, String businessUnitId, String roleId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles/"
-                    + businessUnitId + "/" + roleId;
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/business-unit-roles/"
+                    + SafeUrlInput.requirePathToken(businessUnitId) + "/" + SafeUrlInput.requirePathToken(roleId);
             ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.DELETE, null, Void.class);
             return response.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
@@ -619,7 +620,7 @@ public class VirtualGroupAccessComponent {
      */
     public boolean exitBusinessUnit(String userId, String businessUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/exit/business-units/" + businessUnitId + "/users/" + userId;
+            String url = adminCenterUrl + "/api/v1/admin/exit/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/users/" + SafeUrlInput.requirePathToken(userId);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(), headers);
@@ -640,7 +641,7 @@ public class VirtualGroupAccessComponent {
      */
     public boolean isAnyApprover(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/approvers/user/" + userId + "/is-any";
+            String url = adminCenterUrl + "/api/v1/admin/approvers/user/" + SafeUrlInput.requirePathToken(userId) + "/is-any";
             ResponseEntity<Boolean> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,

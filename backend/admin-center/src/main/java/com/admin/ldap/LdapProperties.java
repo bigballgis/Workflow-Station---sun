@@ -40,6 +40,13 @@ public class LdapProperties {
     /** 是否使用 SSL/TLS（ldaps）。 */
     private boolean tls = true;
 
+    /**
+     * 显式允许明文 LDAP（{@code ldap://} 且 {@code tls=false}）。默认 {@code false}：
+     * 非加密传输会在启动时 fail-fast，防止生产误配导致用户口令明文过网。
+     * 仅供本地 mock OpenLDAP 联调时经环境变量开启（见 docker-compose.dev.yml）。
+     */
+    private boolean allowInsecure = false;
+
     /** 连接超时（毫秒）。 */
     private int connectTimeoutMs = 5000;
 

@@ -98,6 +98,14 @@ file-service:
 activepieces:
   webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://localhost:8086}
 
+# 本地/开发联调测试账号（默认关闭 fail-closed；生产严禁设置这两个变量）
+# accounts 格式：user1:pass1,user2:pass2 —— 仅在 Redis 无该用户口令时回退匹配
+workflow:
+  security:
+    test-users:
+      enabled: ${WORKFLOW_TEST_USERS_ENABLED:false}
+      accounts: ${WORKFLOW_TEST_USERS:}
+
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}

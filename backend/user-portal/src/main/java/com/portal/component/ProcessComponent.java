@@ -14,6 +14,7 @@ import com.portal.repository.ActionDefinitionRepository;
 import com.portal.service.ProcessAssigneeSnapshot;
 import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -469,7 +470,7 @@ public class ProcessComponent {
         }
 
         try {
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitId) + "/content";
             log.info("Fetching function unit content from: {}", url);
 
             @SuppressWarnings("unchecked")
@@ -520,7 +521,7 @@ public class ProcessComponent {
                 return cached.payload();
             }
 
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitId) + "/content";
             log.info("Fetching function unit content from: {}", url);
 
             @SuppressWarnings("unchecked")
@@ -632,7 +633,7 @@ public class ProcessComponent {
             log.info("Resolved function unit ID: {}", functionUnitId);
 
             // Use generic /content endpoint for all content
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitId) + "/content";
             log.info("Fetching function unit content from: {}", url);
 
             @SuppressWarnings("unchecked")

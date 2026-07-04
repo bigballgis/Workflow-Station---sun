@@ -369,6 +369,8 @@ ldap:
   bind-dn: ${LDAP_BIND_DN:}
   bind-password: ${LDAP_BIND_PASSWORD:}
   tls: ${LDAP_TLS:true}
+  # 明文 ldap:// 且 tls=false 时必须显式开启，否则启动 fail-fast（防生产误配明文传输口令）
+  allow-insecure: ${LDAP_ALLOW_INSECURE:false}
   connect-timeout-ms: ${LDAP_CONNECT_TIMEOUT_MS:5000}
   read-timeout-ms: ${LDAP_READ_TIMEOUT_MS:10000}
   page-size: ${LDAP_PAGE_SIZE:500}

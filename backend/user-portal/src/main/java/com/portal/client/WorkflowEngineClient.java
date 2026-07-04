@@ -2,6 +2,7 @@ package com.portal.client;
 
 import com.platform.common.constant.PlatformConstants;
 import com.platform.common.i18n.I18nService;
+import com.platform.common.util.SafeUrlInput;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -499,7 +500,7 @@ public class WorkflowEngineClient {
             return Optional.empty();
         }
         try {
-            String url = workflowEngineUrl + "/api/v1/history/process-statistics?userId=" + userId;
+            String url = workflowEngineUrl + "/api/v1/history/process-statistics?userId=" + SafeUrlInput.encodeQueryValue(userId);
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, authorizedGetEntity(),

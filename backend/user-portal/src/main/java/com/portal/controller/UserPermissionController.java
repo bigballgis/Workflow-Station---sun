@@ -1,6 +1,7 @@
 package com.portal.controller;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
@@ -157,7 +158,7 @@ public class UserPermissionController {
         log.info("Setting don't remind preference for user: {}", effectiveUserId);
 
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + effectiveUserId + "/preferences";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(effectiveUserId) + "/preferences";
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("key", "dont_remind_bu_application");
@@ -280,7 +281,7 @@ public class UserPermissionController {
 
     private List<Map<String, Object>> getUserRoles(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?profileContext=PORTAL";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles?profileContext=PORTAL";
             HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 url, HttpMethod.GET, entity,
@@ -295,7 +296,7 @@ public class UserPermissionController {
 
     private List<Map<String, Object>> getUserBusinessUnits(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-units?profileContext=PORTAL";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/business-units?profileContext=PORTAL";
             HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 url, HttpMethod.GET, entity,
@@ -313,7 +314,7 @@ public class UserPermissionController {
      */
     private List<Map<String, Object>> fetchUserBusinessUnitRoles(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/business-unit-roles";
             HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 url, HttpMethod.GET, entity,
@@ -328,7 +329,7 @@ public class UserPermissionController {
 
     private boolean getDontRemindPreference(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/preferences/dont_remind_bu_application";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/preferences/dont_remind_bu_application";
             HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, entity,

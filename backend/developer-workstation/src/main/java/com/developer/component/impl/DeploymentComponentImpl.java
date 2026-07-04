@@ -17,6 +17,7 @@ import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.DeploymentJobService;
 import com.platform.common.constant.PlatformConstants;
 import com.platform.common.i18n.I18nService;
+import com.platform.common.util.SafeUrlInput;
 import com.platform.security.config.JwtProperties;
 import com.platform.security.util.SecurityContextUtils;
 import jakarta.servlet.http.Cookie;
@@ -278,7 +279,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
 
             updateStep(steps, i18nService.getMessage("deploy.step.validate"), "RUNNING", null);
-            String validateUrl = targetUrl + "/api/v1/admin/function-units/" + importedId + "/validate";
+            String validateUrl = targetUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(importedId) + "/validate";
             HttpHeaders validateHeaders = new HttpHeaders();
             applyOutboundAdminHeaders(validateHeaders, authorizationHeader, adminUserId);
             HttpEntity<Void> validateEntity = new HttpEntity<>(validateHeaders);
@@ -301,7 +302,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
 
             updateStep(steps, i18nService.getMessage("deploy.step.deploy"), "RUNNING", null);
-            String deployUrl = targetUrl + "/api/v1/admin/function-units-import/" + importedId + "/deploy";
+            String deployUrl = targetUrl + "/api/v1/admin/function-units-import/" + SafeUrlInput.requirePathToken(importedId) + "/deploy";
             Map<String, Object> deployBody = new HashMap<>();
             deployBody.put("environment", request.getEnvironment() != null
                     ? request.getEnvironment().name() : "PRODUCTION");
