@@ -39,7 +39,17 @@ public final class BpmnDeployEnhancer {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
-            hardenAgainstXxe(factory);
+            // XXE hardening — inlined immediately before parse so it is recognized as the
+            // controlling sanitizer for the untrusted BPMN XML. Legitimate BPMN 2.0 never
+            // relies on DOCTYPE / external entities.
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            factory.setXIncludeAware(false);
+            factory.setExpandEntityReferences(false);
+            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
             Document doc = factory.newDocumentBuilder()
                     .parse(new ByteArrayInputStream(bpmnXml.getBytes(StandardCharsets.UTF_8)));
 
@@ -64,33 +74,6 @@ public final class BpmnDeployEnhancer {
         } catch (Exception e) {
             log.warn("BpmnDeployEnhancer failed, deploying original XML: {}", e.getMessage());
             return bpmnXml;
-        }
-    }
-
-    /**
-     * Disables DTDs and external entity/schema resolution to prevent XXE when parsing
-     * client-supplied BPMN XML. Legitimate BPMN 2.0 never relies on DOCTYPE/external entities.
-     */
-    private static void hardenAgainstXxe(DocumentBuilderFactory factory) {
-        setFeatureQuietly(factory, "http://apache.org/xml/features/disallow-doctype-decl", true);
-        setFeatureQuietly(factory, "http://xml.org/sax/features/external-general-entities", false);
-        setFeatureQuietly(factory, "http://xml.org/sax/features/external-parameter-entities", false);
-        setFeatureQuietly(factory, "http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
-        factory.setXIncludeAware(false);
-        factory.setExpandEntityReferences(false);
-        try {
-            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
-            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
-        } catch (IllegalArgumentException ignored) {
-            // Attribute not supported by this parser implementation; feature flags above still apply.
-        }
-    }
-
-    private static void setFeatureQuietly(DocumentBuilderFactory factory, String feature, boolean value) {
-        try {
-            factory.setFeature(feature, value);
-        } catch (javax.xml.parsers.ParserConfigurationException ignored) {
-            // Feature not supported by this parser implementation; remaining hardening still applies.
         }
     }
 

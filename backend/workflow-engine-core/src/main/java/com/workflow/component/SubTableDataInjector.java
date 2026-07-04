@@ -2,6 +2,7 @@ package com.workflow.component;
 
 import com.platform.common.i18n.I18nService;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.jdbc.SqlIdentifiers;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
@@ -114,9 +115,9 @@ public class SubTableDataInjector {
             String sql = String.format(
                     "SELECT %s, %s, row_version FROM %s WHERE %s = ?",
                     pkSelect,
-                    assigneeField,
-                    subTableName,
-                    foreignKeyField
+                    SqlIdentifiers.requireIdentifier(assigneeField),
+                    SqlIdentifiers.requireQualifiedName(subTableName),
+                    SqlIdentifiers.requireIdentifier(foreignKeyField)
             );
 
             log.debug("Executing sub-table query: sql={}, mainRecordId={}", sql, mainRecordId);

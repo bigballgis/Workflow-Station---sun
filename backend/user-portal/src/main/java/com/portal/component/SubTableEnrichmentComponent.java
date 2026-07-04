@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.jdbc.SqlIdentifiers;
 import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.portal.component.MiOverlaySupport.MiRowProgress;
@@ -250,7 +251,7 @@ public class SubTableEnrichmentComponent {
                         long __tsel = System.nanoTime();
                         ENRICH_SQL_STATS.get()[0]++;
                         List<Map<String, Object>> dbRows = jdbcTemplate.query(
-                                "SELECT * FROM " + safeTableName + " WHERE " + where,
+                                "SELECT * FROM " + SqlIdentifiers.requireQualifiedName(safeTableName) + " WHERE " + where,
                                 (rs, i) -> {
                                     java.sql.ResultSetMetaData meta = rs.getMetaData();
                                     Map<String, Object> m = new HashMap<>();

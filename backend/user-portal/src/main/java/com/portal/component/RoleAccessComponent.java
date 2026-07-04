@@ -9,10 +9,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 import com.portal.dto.PageResponse;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -55,7 +54,7 @@ public class RoleAccessComponent {
      */
     public List<Map<String, Object>> getUserRoles(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -77,7 +76,7 @@ public class RoleAccessComponent {
     public List<Map<String, Object>> getUserBusinessRoles(String userId) {
         try {
             // Get all user roles (no type filter - let frontend handle filtering)
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -103,9 +102,10 @@ public class RoleAccessComponent {
      */
     public boolean assignRoleToUser(String userId, String roleId, String operatedBy, String reason) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/roles/" + roleId + "/members/" + userId;
+            String url = adminCenterUrl + "/api/v1/admin/roles/" + SafeUrlInput.requirePathToken(roleId)
+                    + "/members/" + SafeUrlInput.requirePathToken(userId);
             if (reason != null && !reason.isEmpty()) {
-                url += "?reason=" + reason;
+                url += "?reason=" + SafeUrlInput.encodeQueryValue(reason);
             }
             
             HttpHeaders headers = new HttpHeaders();
@@ -133,7 +133,7 @@ public class RoleAccessComponent {
      */
     public Map<String, Object> getRoleById(String roleId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/roles/" + roleId;
+            String url = adminCenterUrl + "/api/v1/admin/roles/" + SafeUrlInput.requirePathToken(roleId);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -154,7 +154,7 @@ public class RoleAccessComponent {
      */
     public Map<String, Object> getUserById(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId;
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -181,7 +181,7 @@ public class RoleAccessComponent {
             StringBuilder url = new StringBuilder(adminCenterUrl + "/api/v1/admin/users?status=ACTIVE&page=")
                     .append(p).append("&size=").append(s);
             if (keyword != null && !keyword.isBlank()) {
-                url.append("&keyword=").append(URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8));
+                url.append("&keyword=").append(SafeUrlInput.encodeQueryValue(keyword.trim()));
             }
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url.toString(),

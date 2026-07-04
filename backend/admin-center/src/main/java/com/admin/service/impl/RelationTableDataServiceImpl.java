@@ -18,6 +18,7 @@ import com.platform.common.dto.RelationTableDataRowDTO;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationPermissionLevel;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.jdbc.SqlIdentifiers;
 import com.platform.common.relationtable.RelationCsvValueFormatter;
 import com.platform.common.relationtable.RelationRowValidator;
 import com.platform.common.relationtable.RelationTableTemplateService;
@@ -616,7 +617,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         }
         String searchPattern = "%" + escapeLikePattern(search) + "%";
         String conditions = searchableFields.stream()
-                .map(f -> "data->>'" + f + "' ILIKE ? ESCAPE '\\'")
+                .map(f -> "data->>'" + SqlIdentifiers.requireIdentifier(f) + "' ILIKE ? ESCAPE '\\'")
                 .collect(Collectors.joining(" OR "));
         // index-accelerated broad guard (trgm GIN) first, then exact per-field filter for correctness
         params.add(searchPattern);

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -116,7 +117,7 @@ public class FunctionUnitAccessComponent {
         
         try {
             // Try fetching by ID first
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitIdOrCode;
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitIdOrCode);
             log.info("Fetching function unit info from: {}", url);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -153,7 +154,7 @@ public class FunctionUnitAccessComponent {
         // Note: Flowable 7.0 processDefinitionId is also in UUID format and cannot be directly used as a function unit ID
         if (functionUnitIdOrCode != null && functionUnitIdOrCode.matches(LOWERCASE_UUID_REGEX)) {
             try {
-                String verifyUrl = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitIdOrCode;
+                String verifyUrl = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitIdOrCode);
                 ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                         verifyUrl, HttpMethod.GET, null,
                         new ParameterizedTypeReference<Map<String, Object>>() {}
@@ -385,7 +386,7 @@ public class FunctionUnitAccessComponent {
         }
         
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?" + USER_BUSINESS_ROLES_QUERY;
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles?" + USER_BUSINESS_ROLES_QUERY;
             log.info("Fetching user roles from: {}", url);
             
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
@@ -423,7 +424,7 @@ public class FunctionUnitAccessComponent {
      */
     private Set<String> getUserRoleCodesForProfile(String userId, String profileContext) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?profileContext="
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles?profileContext="
                     + profileContext;
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
@@ -464,7 +465,7 @@ public class FunctionUnitAccessComponent {
         }
 
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?" + USER_BUSINESS_ROLES_QUERY;
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles?" + USER_BUSINESS_ROLES_QUERY;
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -504,7 +505,7 @@ public class FunctionUnitAccessComponent {
         log.info("Getting allowed roles for function unit: {}", functionUnitId);
 
         try {
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/access";
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitId) + "/access";
             log.info("Fetching function unit access from: {}", url);
 
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
@@ -546,7 +547,7 @@ public class FunctionUnitAccessComponent {
     public Set<String> getFunctionUnitAllowedRoleCodes(String functionUnitId) {
         // Access config is always fetched live: Admin may add or remove roles at any time.
         try {
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/access";
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + SafeUrlInput.requirePathToken(functionUnitId) + "/access";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,

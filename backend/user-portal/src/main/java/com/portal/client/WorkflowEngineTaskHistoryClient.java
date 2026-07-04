@@ -1,6 +1,7 @@
 package com.portal.client;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +40,7 @@ public class WorkflowEngineTaskHistoryClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/history/tasks?processInstanceId=" + processInstanceId;
+            String url = engine.engineUrl() + "/api/v1/history/tasks?processInstanceId=" + SafeUrlInput.encodeQueryValue(processInstanceId);
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
@@ -70,7 +71,7 @@ public class WorkflowEngineTaskHistoryClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/process/" + processInstanceId + "/history";
+            String url = engine.engineUrl() + "/api/v1/tasks/process/" + SafeUrlInput.requirePathToken(processInstanceId) + "/history";
             log.debug("Calling workflow engine URL: {}", url);
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
@@ -98,7 +99,7 @@ public class WorkflowEngineTaskHistoryClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/history";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/history";
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
@@ -124,7 +125,7 @@ public class WorkflowEngineTaskHistoryClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/user-permissions?userId=" + userId;
+            String url = engine.engineUrl() + "/api/v1/tasks/user-permissions?userId=" + SafeUrlInput.encodeQueryValue(userId);
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
@@ -148,7 +149,7 @@ public class WorkflowEngineTaskHistoryClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/check-permission?userId=" + userId;
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/check-permission?userId=" + SafeUrlInput.encodeQueryValue(userId);
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),

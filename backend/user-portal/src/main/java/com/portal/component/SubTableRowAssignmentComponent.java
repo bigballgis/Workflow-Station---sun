@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.platform.common.jdbc.SqlIdentifiers;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.ProcessInstance;
@@ -122,6 +123,7 @@ public class SubTableRowAssignmentComponent {
     }
 
     private Long resolveParticipantRowIdByIdentity(String participantTable, String email, String name, String department) {
+        participantTable = SqlIdentifiers.requireQualifiedName(participantTable);
         String em = email != null ? email.trim() : "";
         String nm = name != null ? name.trim() : "";
         String dept = department != null ? department.trim() : "";
@@ -176,6 +178,7 @@ public class SubTableRowAssignmentComponent {
                                                String topic,
                                                String location,
                                                String organizerName) {
+        participantTable = SqlIdentifiers.requireQualifiedName(participantTable);
         Long meetingId = resolveMeetingId(task, topic, location, organizerName);
         if (meetingId == null && columnExists(participantTable, "meeting_id")) {
             meetingId = createMeetingRecordFromVariables(task, topic, location, organizerName);
@@ -275,6 +278,7 @@ public class SubTableRowAssignmentComponent {
         if (meetingTable == null) {
             return null;
         }
+        meetingTable = SqlIdentifiers.requireQualifiedName(meetingTable);
         try {
             java.sql.Timestamp meetingTimestamp = null;
             if (mt != null) {
@@ -327,6 +331,7 @@ public class SubTableRowAssignmentComponent {
             if (!tableExists(table)) {
                 continue;
             }
+            table = SqlIdentifiers.requireQualifiedName(table);
             boolean hasTopicCol = columnExists(table, "topic");
             boolean hasMeetingTimeCol = columnExists(table, "meeting_time");
             boolean hasLocationCol = columnExists(table, "location");
@@ -488,6 +493,7 @@ public class SubTableRowAssignmentComponent {
         if (rowId == null || assigneeId == null || assigneeId.isBlank()) {
             return;
         }
+        participantTable = SqlIdentifiers.requireQualifiedName(participantTable);
         if (!columnExists(participantTable, "assignee_display_name")) {
             return;
         }
@@ -523,6 +529,7 @@ public class SubTableRowAssignmentComponent {
     }
 
     private Long createParticipantRowWithoutMeetingId(String participantTable, String name, String email, String department, String assigneeId) {
+        participantTable = SqlIdentifiers.requireQualifiedName(participantTable);
         ensureParticipantsIdentityColumns(participantTable);
         String nm = name != null ? name.trim() : "";
         String em = email != null ? email.trim() : "";

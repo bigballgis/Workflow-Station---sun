@@ -1,6 +1,7 @@
 package com.portal.client;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.common.util.SafeUrlInput;
 import com.platform.security.util.SecurityContextUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -144,7 +145,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId;
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId);
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
@@ -167,7 +168,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/workflow/multi-instance/tasks/" + taskId + "/sub-table-data/all";
+            String url = engine.engineUrl() + "/api/v1/workflow/multi-instance/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/sub-table-data/all";
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                     url, HttpMethod.GET, engine.authorizedGetEntity(),
                     new ParameterizedTypeReference<Map<String, Object>>() {});
@@ -214,7 +215,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/complete";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/complete";
 
             Map<String, Object> request = new HashMap<>();
             request.put("userId", userId);
@@ -254,7 +255,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/claim";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/claim";
 
             Map<String, Object> request = new HashMap<>();
             request.put("claimedBy", userId);
@@ -286,7 +287,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/delegate";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/delegate";
 
             Map<String, Object> request = new HashMap<>();
             request.put("delegatedBy", delegatorId);
@@ -319,7 +320,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/unclaim";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/unclaim";
 
             Map<String, Object> request = new HashMap<>();
             request.put("userId", userId);
@@ -351,7 +352,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/transfer";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/transfer";
 
             Map<String, Object> request = new HashMap<>();
             request.put("fromUserId", fromUserId);
@@ -392,7 +393,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/sub-table-rows/" + rowId + "/assign";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/sub-table-rows/" + rowId + "/assign";
 
             Map<String, Object> request = new HashMap<>();
             request.put("assigneeId", assigneeId);
@@ -453,7 +454,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/return";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/return";
 
             Map<String, Object> request = new HashMap<>();
             // Engine validates @NotBlank taskId on the request body before binding @PathVariable,
@@ -492,7 +493,7 @@ public class WorkflowEngineTaskClient {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/" + taskId + "/returnable-activities";
+            String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/returnable-activities";
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),
