@@ -115,6 +115,7 @@ export default {
     noResults: '沒有符合的功能單元',
     clearFilters: '清除篩選',
     showingResults: '顯示 {count} / {total} 個結果',
+    hiddenByStatusFilter: '另有 {count} 個被狀態篩選隱藏（如回滾後的 Draft）',
     settings: '功能單元設定',
     setting: '設定',
     namePlaceholder: '功能單元名稱',

@@ -1,7 +1,11 @@
 package com.developer.property;
 
 import com.developer.component.impl.FunctionUnitComponentImpl;
-import com.developer.component.impl.VersionComponentImpl;
+import com.developer.component.impl.FunctionUnitImportWriter;
+import com.developer.component.impl.FunctionUnitSnapshotRestorer;
+import com.developer.component.impl.MainTableViewPortability;
+import com.developer.component.impl.ProcessBpmnStaleIdFixer;
+import com.developer.component.impl.RelationTableStructurePortability;
 import com.developer.dto.DecisionDefinitionRequest;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.FunctionUnit;
@@ -11,6 +15,7 @@ import net.jqwik.api.*;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -87,41 +92,47 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
         try {
             ObjectMapper objectMapper = new ObjectMapper();
 
-            // Step 1: Create snapshot via FunctionUnitComponentImpl.createSnapshot() (private)
-            java.lang.reflect.Method createSnapshotMethod = FunctionUnitComponentImpl.class
-                    .getDeclaredMethod("createSnapshot", FunctionUnit.class);
-            createSnapshotMethod.setAccessible(true);
-            byte[] snapshotBytes = (byte[]) createSnapshotMethod.invoke(functionUnitComponentImpl, functionUnit);
+            // Step 1: Legacy snapshot map (pre-v2 dw_versions rows)
+            List<Map<String, Object>> decisionSnapshots = new ArrayList<>();
+            for (DecisionDefinition decision : functionUnit.getDecisionDefinitions()) {
+                Map<String, Object> decisionSnap = new LinkedHashMap<>();
+                decisionSnap.put("decisionKey", decision.getDecisionKey());
+                decisionSnap.put("decisionName", decision.getDecisionName());
+                decisionSnap.put("dmnXml", decision.getDmnXml());
+                decisionSnap.put("hitPolicy", decision.getHitPolicy());
+                decisionSnap.put("description", decision.getDescription());
+                decisionSnapshots.add(decisionSnap);
+            }
+            Map<String, Object> snapshotMap = new LinkedHashMap<>();
+            snapshotMap.put("decisionDefinitions", decisionSnapshots);
+            byte[] snapshotBytes = objectMapper.writeValueAsBytes(snapshotMap);
 
             assertThat(snapshotBytes).isNotNull();
 
             // Verify snapshot JSON contains decisionDefinitions array with correct count
             @SuppressWarnings("unchecked")
-            Map<String, Object> snapshotMap = objectMapper.readValue(snapshotBytes, Map.class);
-            assertThat(snapshotMap).containsKey("decisionDefinitions");
+            Map<String, Object> parsedSnapshot = objectMapper.readValue(snapshotBytes, Map.class);
+            assertThat(parsedSnapshot).containsKey("decisionDefinitions");
 
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> decisionSnapshots =
-                    (List<Map<String, Object>>) snapshotMap.get("decisionDefinitions");
-            assertThat(decisionSnapshots)
+            List<Map<String, Object>> parsedDecisionSnapshots =
+                    (List<Map<String, Object>>) parsedSnapshot.get("decisionDefinitions");
+            assertThat(parsedDecisionSnapshots)
                     .as("Snapshot should contain exactly %d decision definitions", actualN)
                     .hasSize(actualN);
 
-            // Step 2: Restore from snapshot via VersionComponentImpl.restoreFromSnapshot() (private)
-            VersionComponentImpl versionComponent = new VersionComponentImpl(
-                    mock(VersionRepository.class),
-                    mock(FunctionUnitRepository.class),
-                    objectMapper,
-                    mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), null,
+            // Step 2: Restore via FunctionUnitSnapshotRestorer (legacy path)
+            FunctionUnitSnapshotRestorer snapshotRestorer = new FunctionUnitSnapshotRestorer(
+                    mock(FunctionUnitImportWriter.class),
+                    mock(FormDefinitionRepository.class),
+                    mock(ProcessDefinitionRepository.class),
+                    mock(ProcessBpmnStaleIdFixer.class),
+                    mock(RelationTableStructurePortability.class),
+                    mock(MainTableViewPortability.class),
                     mock(com.developer.service.MainTableViewService.class),
-                    mock(com.developer.repository.SubTableViewConfigRepository.class),
-                    mock(com.developer.repository.ForeignKeyRepository.class),
-                    mock(com.developer.repository.LinkFormComponentRepository.class),
-                    mock(com.developer.repository.EmailConnectionRepository.class),
-                    mock(com.developer.repository.EmailMonitorRuleRepository.class),
-                    mock(com.developer.repository.TableRelationRepository.class),
-                    mock(com.developer.component.impl.MainTableViewPortability.class)
-            );
+                    mock(jakarta.persistence.EntityManager.class),
+                    mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
+                    mock(com.developer.component.impl.FormTableBindingRestorer.class));
 
             // Build a fresh FunctionUnit to restore into
             FunctionUnit restored = FunctionUnit.builder()
@@ -146,10 +157,7 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
                             .build()
             );
 
-            java.lang.reflect.Method restoreMethod = VersionComponentImpl.class
-                    .getDeclaredMethod("restoreFromSnapshot", FunctionUnit.class, Map.class);
-            restoreMethod.setAccessible(true);
-            restoreMethod.invoke(versionComponent, restored, snapshotMap);
+            snapshotRestorer.restore(restored, parsedSnapshot);
 
             // Step 3: Verify round-trip — restored FunctionUnit should have exactly N decisions
             assertThat(restored.getDecisionDefinitions())
@@ -283,6 +291,7 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
                 mock(com.developer.service.MainTableViewService.class),
                 mock(com.developer.repository.ForeignKeyRepository.class),
+                mock(com.developer.component.impl.FunctionUnitExporter.class),
                 mock(com.developer.component.TableDesignComponent.class)
         );
 

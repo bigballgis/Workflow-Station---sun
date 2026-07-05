@@ -115,6 +115,7 @@ export default {
     noResults: '没有匹配的功能单元',
     clearFilters: '清除筛选',
     showingResults: '显示 {count} / {total} 个结果',
+    hiddenByStatusFilter: '另有 {count} 个被状态筛选隐藏（如回滚后的 Draft）',
     settings: '功能单元设置',
     setting: '设置',
     namePlaceholder: '功能单元名称',

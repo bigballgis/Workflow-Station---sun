@@ -115,6 +115,7 @@ export default {
     noResults: 'No matching function units',
     clearFilters: 'Clear Filters',
     showingResults: 'Showing {count} / {total} results',
+    hiddenByStatusFilter: '{count} hidden by status filter (e.g. Draft after rollback)',
     settings: 'Function Unit Settings',
     setting: 'Settings',
     namePlaceholder: 'Function unit name',

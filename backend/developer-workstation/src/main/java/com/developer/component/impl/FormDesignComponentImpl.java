@@ -66,6 +66,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private static final Set<String> ALWAYS_VALID_AUDIT_FIELDS = Set.of(
             "created_at", "created_by", "updated_at", "updated_by");
 
+    private final FormTableBindingRestorer formTableBindingRestorer;
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -191,6 +192,11 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     public FormDefinition getById(Long id) {
         FormDefinition form = formDefinitionRepository.findByIdWithBindings(id)
                 .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", id));
+        if (form.getTableBindings() == null || form.getTableBindings().isEmpty()) {
+            formTableBindingRestorer.repairFunctionUnitForms(form.getFunctionUnit().getId());
+            form = formDefinitionRepository.findByIdWithBindings(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", id));
+        }
         repairFormConfigBindingKeysIfNeeded(form);
         return form;
     }
@@ -198,6 +204,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Override
     @Transactional(readOnly = true)
     public List<FormDefinition> getByFunctionUnitId(Long functionUnitId) {
+        formTableBindingRestorer.repairFunctionUnitForms(functionUnitId);
         List<FormDefinition> forms = formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
         forms.forEach(this::repairFormConfigBindingKeysIfNeeded);
         return forms;

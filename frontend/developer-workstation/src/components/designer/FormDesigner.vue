@@ -115,10 +115,7 @@
             :class="{ 'is-active': activeTabGroup === 'sub' }"
           >
             <el-tag type="success" size="small" class="nav-tag">{{ t('tableBinding.subTableType') }}</el-tag>
-            <span class="nav-label">
-              <span v-if="activeTabGroup === 'sub'">{{ activeBindingLabel }}</span>
-              <span v-else>{{ designerSubBindingsGrouped.length }} {{ t('form.tabGroupTables') }}</span>
-            </span>
+            <span class="nav-label">{{ subBindingsNavLabel }}</span>
             <el-icon class="nav-arrow"><ArrowDown /></el-icon>
           </button>
           <template #dropdown>
@@ -154,10 +151,7 @@
             :class="{ 'is-active': activeTabGroup === 'relation' }"
           >
             <el-tag type="warning" size="small" class="nav-tag">{{ t('tableBinding.relationTableType') }}</el-tag>
-            <span class="nav-label">
-              <span v-if="activeTabGroup === 'relation'">{{ activeBindingLabel }}</span>
-              <span v-else>{{ designerRelationBindingsGrouped.length }} {{ t('form.tabGroupTables') }}</span>
-            </span>
+            <span class="nav-label">{{ relationBindingsNavLabel }}</span>
             <el-icon class="nav-arrow"><ArrowDown /></el-icon>
           </button>
           <template #dropdown>
@@ -859,7 +853,28 @@ const activeTabGroup = computed<'main' | 'sub' | 'relation' | null>(() => {
 const activeBindingLabel = computed(() => {
   const id = Number(activeDesignerTab.value)
   const b = designerSubBindings.value.find(b => b.bindingId === id)
-  return b?.tableName ?? ''
+  return b?.tableDisplayName || b?.tableName || ''
+})
+
+function formatBindingGroupNavLabel(
+  bindings: Array<{ tableName: string; tableDisplayName?: string }>,
+): string {
+  if (bindings.length === 0) return ''
+  const names = bindings.map(b => b.tableDisplayName || b.tableName).filter(Boolean)
+  if (names.length <= 3) {
+    return names.join(' · ')
+  }
+  return `${names.length} ${t('form.tabGroupTables')}`
+}
+
+const subBindingsNavLabel = computed(() => {
+  if (activeTabGroup.value === 'sub') return activeBindingLabel.value
+  return formatBindingGroupNavLabel(designerSubBindingsGrouped.value)
+})
+
+const relationBindingsNavLabel = computed(() => {
+  if (activeTabGroup.value === 'relation') return activeBindingLabel.value
+  return formatBindingGroupNavLabel(designerRelationBindingsGrouped.value)
 })
 
 function switchToMain() {

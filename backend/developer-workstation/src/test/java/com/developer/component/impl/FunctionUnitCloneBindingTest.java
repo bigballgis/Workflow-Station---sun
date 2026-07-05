@@ -79,6 +79,7 @@ class FunctionUnitCloneBindingTest {
                 sequenceSynchronizer,
                 mock(com.developer.service.MainTableViewService.class),
                 mock(com.developer.repository.ForeignKeyRepository.class),
+                mock(com.developer.component.impl.FunctionUnitExporter.class),
                 tableDesignComponent);
     }
 

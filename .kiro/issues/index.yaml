@@ -1004,3 +1004,45 @@
     验证：造 250 行满足 Fixed Filters 的 bulk 数据（共 251 行匹配），Playwright 断言下拉
     .el-table__row=251 含 zhang san；截图 user-portal/verification-screenshots/2026-07-03_lookup-fixed-filters-portal.png。
     附注：PortalRelationTablePropertyTest "Property 18 CSV export" 失败为遗留基线（HEAD 上 stash 验证同样失败），非本次引入。
+- id: "1471"
+  status: fixed
+  fixed_at: "2026-07-03"
+  severity: major
+  category: bug
+  summary: "View Design 保存（含改名）时 access rules 重复 INSERT 触发 idx_mtv_access_view_target"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/impl/MainTableViewServiceImpl.java"
+  note: |
+    症状：配置了 BU+Role 的 View 点 Save（仅改 view name 也会失败），500 duplicate key idx_mtv_access_view_target。
+    根因：replaceAccessRules 只 clear 内存 collection；access 行通过 JDBC 读取未 JOIN FETCH，旧 DB 行未 DELETE 即 INSERT 新行。
+    修复：replaceAccessRules 先 mainTableViewAccessRepository.deleteByViewConfigId 再重建。
+    验证：MainTableViewServiceImplTest updateView_canRenameViewWithExistingAccessRulesInDb + deleteByViewConfigId 断言。
+    补充(2026-07-05)：delete 后须 flush 再 clear accessRules，否则 lazy 集合 reload 旧行 → idx_mtv_access_view_target（Rollback 后 View Design 保存 500）。
+- id: "1472"
+  status: fixed
+  fixed_at: "2026-07-05"
+  severity: major
+  category: bug
+  summary: "Rollback 后 dw_form_table_bindings 丢失，Form Design 子表显示 subTablePlaceholderStale"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FormTableBindingRestorer.java"
+  note: |
+    症状：Rollback 后 Form Design 子表占位符 stale，Sub Table Binding 仍显示旧 id（如 271），
+    dw_form_table_bindings / dw_table_relations 为 0。
+    根因：回滚到 legacy 或 bindings 已丢失的 v2 快照时只恢复 configJson，未恢复 binding 行；
+    后续快照 tableBindings 为空，rollback 循环放大损坏。
+    修复：FormTableBindingRestorer 从 configJson（rule/_bindingId、subListViews、relationViews）
+    推断表并重建 binding + 子表 list view，remap configJson；在 snapshot restore 与 Form Design 加载时自动执行。
+    验证：FormTableBindingRestorerTest；MCY FU48 API GET /forms 后 bindings 11 行，configJson _bindingId 50110/50111。
+- id: "1473"
+  status: fixed
+  fixed_at: "2026-07-05"
+  severity: major
+  category: bug
+  summary: "Rollback 失败 SubTableViewConfig#50062 Hibernate NonUniqueObjectException"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/VersionComponentImpl.java"
+  note: |
+    症状：Version Management Rollback 报 A different object with the same identifier value was already
+    associated with the session : [SubTableViewConfig#50062]。
+    根因：createSnapshot 加载 SubTableViewConfig 进 persistence context；clearChildCollections 用 native DELETE
+    未清 session；sequence sync 后 restore INSERT 复用同 id → 冲突。
+    修复：clear 后 entityManager.flush()+clear() 并重载 FunctionUnit；SubTableViewConfig delete 加 flushAutomatically。
+    验证：MCY FU48 rollback 至 1.0.148 成功（v1.0.151）。

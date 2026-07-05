@@ -6,6 +6,7 @@ import com.developer.enums.FunctionUnitStatus;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.VersionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,7 +46,37 @@ class VersionComponentImplTest {
 
     @Mock
     private com.developer.util.DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
-    
+
+    @Mock
+    private FunctionUnitExporter functionUnitExporter;
+
+    @Mock
+    private FunctionUnitSnapshotRestorer snapshotRestorer;
+
+    @Mock
+    private com.developer.service.MainTableViewService mainTableViewService;
+
+    @Mock
+    private com.developer.repository.SubTableViewConfigRepository subTableViewConfigRepository;
+
+    @Mock
+    private com.developer.repository.ForeignKeyRepository foreignKeyRepository;
+
+    @Mock
+    private com.developer.repository.LinkFormComponentRepository linkFormComponentRepository;
+
+    @Mock
+    private com.developer.repository.EmailConnectionRepository emailConnectionRepository;
+
+    @Mock
+    private com.developer.repository.EmailMonitorRuleRepository emailMonitorRuleRepository;
+
+    @Mock
+    private com.developer.repository.TableRelationRepository tableRelationRepository;
+
+    @Mock
+    private EntityManager entityManager;
+
     @InjectMocks
     private VersionComponentImpl versionComponent;
     
@@ -85,6 +116,7 @@ class VersionComponentImplTest {
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
         when(versionRepository.save(any(Version.class))).thenReturn(savedVersion);
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenReturn(functionUnit);
+        when(functionUnitExporter.buildVersionSnapshotPayload(anyLong())).thenReturn(Collections.emptyMap());
         when(objectMapper.writeValueAsBytes(any())).thenReturn(new byte[0]);
         
         // When: 调用创建版本方法
@@ -124,6 +156,7 @@ class VersionComponentImplTest {
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
         when(versionRepository.save(any(Version.class))).thenReturn(savedVersion);
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenReturn(functionUnit);
+        when(functionUnitExporter.buildVersionSnapshotPayload(anyLong())).thenReturn(Collections.emptyMap());
         when(objectMapper.writeValueAsBytes(any())).thenReturn(new byte[0]);
         
         // When: 调用创建版本方法
@@ -166,8 +199,8 @@ class VersionComponentImplTest {
         
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
         when(versionRepository.findById(2L)).thenReturn(Optional.of(targetVersion));
-        when(versionRepository.save(any(Version.class))).thenReturn(mock(Version.class));
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenReturn(functionUnit);
+        when(functionUnitExporter.buildVersionSnapshotPayload(anyLong())).thenReturn(Collections.emptyMap());
         when(objectMapper.writeValueAsBytes(any())).thenReturn(new byte[0]);
         when(objectMapper.readValue(any(byte[].class), eq(java.util.Map.class))).thenReturn(Collections.emptyMap());
         
@@ -176,7 +209,7 @@ class VersionComponentImplTest {
         
         // Then: 验证回滚成功，并且使用了 "system" 作为操作者
         assertNotNull(result);
-        verify(versionRepository, times(2)).save(any(Version.class)); // 备份版本 + 回滚版本
+        verify(versionRepository, times(2)).saveAndFlush(any(Version.class)); // 备份版本 + 回滚版本
         verify(functionUnitRepository).save(functionUnit);
     }
     
@@ -209,6 +242,7 @@ class VersionComponentImplTest {
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
         when(versionRepository.save(any(Version.class))).thenReturn(savedVersion);
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenReturn(functionUnit);
+        when(functionUnitExporter.buildVersionSnapshotPayload(anyLong())).thenReturn(Collections.emptyMap());
         when(objectMapper.writeValueAsBytes(any())).thenReturn(new byte[0]);
         
         // When: 调用创建版本方法

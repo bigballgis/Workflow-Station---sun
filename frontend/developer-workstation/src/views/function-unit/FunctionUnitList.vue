@@ -61,6 +61,12 @@
           >
             {{ t('functionUnit.showingResults', { count: filteredList.length, total: store.list.length }) }}
           </span>
+          <span
+            v-if="hiddenByStatusCount > 0"
+            class="result-count result-count--hint"
+          >
+            {{ t('functionUnit.hiddenByStatusFilter', { count: hiddenByStatusCount }) }}
+          </span>
         </div>
         <div class="filter-actions">
           <el-button
@@ -350,6 +356,7 @@ const {
   searchForm,
   availableTags,
   filteredList,
+  hiddenByStatusCount,
   getItemTags,
   handleSearch,
   clearFilters,
