@@ -8,6 +8,15 @@ import java.util.Properties;
 /**
  * Applies SMTP transport settings from explicit host/port/TLS flags (no provider presets).
  * Port 465 uses implicit SSL; other ports use STARTTLS when {@code useTls} is true.
+ *
+ * <p>When TLS is enabled, the configured SMTP host is added to {@code mail.smtp.ssl.trust}
+ * so internal relays signed by a corporate CA (not in the JVM cacerts) can still connect.
+ * Optional env overrides:
+ * <ul>
+ *   <li>{@code SMTP_SSL_TRUST} — extra comma-separated hostnames (appended to configured host)</li>
+ *   <li>{@code SMTP_SSL_CHECK_SERVER_IDENTITY=false} — disable hostname/CN check when the cert
+ *       subject does not match the connection host (internal relay only)</li>
+ * </ul>
  */
 public final class SmtpTransportProperties {
 
@@ -15,6 +24,12 @@ public final class SmtpTransportProperties {
 
     /** Allow both TLS 1.2 and 1.3 so servers that only accept one still negotiate. */
     private static final String SSL_PROTOCOLS = "TLSv1.2 TLSv1.3";
+
+    /** Env: extra trusted SMTP hostnames (comma-separated), merged with configured host. */
+    static final String ENV_SSL_TRUST = "SMTP_SSL_TRUST";
+
+    /** Env: set to {@code false} to disable {@code mail.smtp.ssl.checkserveridentity}. */
+    static final String ENV_SSL_CHECK_SERVER_IDENTITY = "SMTP_SSL_CHECK_SERVER_IDENTITY";
 
     private SmtpTransportProperties() {
     }
@@ -41,13 +56,70 @@ public final class SmtpTransportProperties {
             props.put("mail.smtp.socketFactory.port", "465");
             props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
             props.put("mail.smtp.socketFactory.fallback", "false");
-            log.info("[SMTP-CFG] host={} port={} mode=SSL auth={} protocols={}", host, port, auth, SSL_PROTOCOLS);
+            applyInternalSslTrust(props, host);
+            log.info("[SMTP-CFG] host={} port={} mode=SSL auth={} protocols={} sslTrust={} checkIdentity={}",
+                    host, port, auth, SSL_PROTOCOLS, props.get("mail.smtp.ssl.trust"),
+                    props.getOrDefault("mail.smtp.ssl.checkserveridentity", "true"));
         } else {
             props.put("mail.smtp.starttls.enable", "true");
             props.put("mail.smtp.starttls.required", "true");
             props.put("mail.smtp.ssl.enable", "false");
-            log.info("[SMTP-CFG] host={} port={} mode=STARTTLS auth={} protocols={}", host, port, auth, SSL_PROTOCOLS);
+            applyInternalSslTrust(props, host);
+            log.info("[SMTP-CFG] host={} port={} mode=STARTTLS auth={} protocols={} sslTrust={} checkIdentity={}",
+                    host, port, auth, SSL_PROTOCOLS, props.get("mail.smtp.ssl.trust"),
+                    props.getOrDefault("mail.smtp.ssl.checkserveridentity", "true"));
         }
+    }
+
+    /**
+     * Trust the configured relay host for TLS/STARTTLS when the server cert chain is signed by
+     * an internal CA not present in the JVM truststore (avoids SunCertPathBuilderException).
+     */
+    static void applyInternalSslTrust(Properties props, String host) {
+        applyInternalSslTrust(props, host, System.getenv(ENV_SSL_TRUST), System.getenv(ENV_SSL_CHECK_SERVER_IDENTITY));
+    }
+
+    static void applyInternalSslTrust(
+            Properties props, String host, String extraTrustEnv, String checkIdentityEnv) {
+        String trustHosts = resolveSslTrustHosts(host, extraTrustEnv);
+        if (trustHosts.isBlank()) {
+            return;
+        }
+        props.put("mail.smtp.ssl.trust", trustHosts);
+        props.put("mail.smtps.ssl.trust", trustHosts);
+        if (!sslCheckServerIdentityEnabled(checkIdentityEnv)) {
+            props.put("mail.smtp.ssl.checkserveridentity", "false");
+            props.put("mail.smtps.ssl.checkserveridentity", "false");
+            log.warn("[SMTP-CFG] ssl.checkserveridentity=false via {}; use only for internal relays with CN mismatch",
+                    ENV_SSL_CHECK_SERVER_IDENTITY);
+        }
+    }
+
+    static String resolveSslTrustHosts(String host) {
+        return resolveSslTrustHosts(host, System.getenv(ENV_SSL_TRUST));
+    }
+
+    static String resolveSslTrustHosts(String host, String extraTrustEnv) {
+        String trimmedHost = host != null ? host.trim() : "";
+        if (extraTrustEnv == null || extraTrustEnv.isBlank()) {
+            return trimmedHost;
+        }
+        String trimmedExtra = extraTrustEnv.trim();
+        if (trimmedHost.isBlank()) {
+            return trimmedExtra;
+        }
+        return trimmedHost + "," + trimmedExtra;
+    }
+
+    static boolean sslCheckServerIdentityEnabled() {
+        return sslCheckServerIdentityEnabled(System.getenv(ENV_SSL_CHECK_SERVER_IDENTITY));
+    }
+
+    static boolean sslCheckServerIdentityEnabled(String envValue) {
+        if (envValue == null || envValue.isBlank()) {
+            return true;
+        }
+        return !"false".equalsIgnoreCase(envValue.trim());
     }
 
     /** Human-readable transport mode for logging / diagnostics. */
