@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -89,7 +90,11 @@ public class ChangeHistoryComponent {
     private final ThreadLocal<Set<String>> dedupSeenKeys = ThreadLocal.withInitial(HashSet::new);
 
     /** Fallback row-id field names when the canonical {@code id} column is absent. */
-    private static final String[] ROW_ID_FALLBACK_FIELDS = {"id_idw", "rowId", "_rowKey", "rowKey"};
+    private static final String[] ROW_ID_FALLBACK_FIELDS = {"row_id", "rowId", "rowID", "id_idw", "_rowKey", "rowKey"};
+    private static final Set<String> SUB_TABLE_ROW_METADATA_FIELDS = Set.of(
+            "id", "row_id", "rowid", "rowkey", "id_idw", "_rowkey",
+            "created_at", "created_by", "updated_at", "updated_by", "case_row_id"
+    );
 
     /**
      * Record field changes.
@@ -474,9 +479,36 @@ public class ChangeHistoryComponent {
         if (trimmed.matches("\\d+")) {
             return null;
         }
-        return trimmed.toLowerCase();
+        return trimmed.toLowerCase()
+                .replaceAll("[^a-z0-9]+", "_")
+                .replaceAll("_+", "_")
+                .replaceAll("^_|_$", "");
     }
 
+    @SuppressWarnings("unchecked")
+    static Map<String, List<Map<String, Object>>> normalizeSubTableRowsByHistoryName(Object subTablesObj) {
+        if (!(subTablesObj instanceof Map<?, ?> rawMap)) {
+            return Map.of();
+        }
+        Map<String, List<Map<String, Object>>> rowsByName = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            String normalizedName = normalizeSubTableNameForHistory(stringOrNull(entry.getKey()));
+            if (normalizedName == null) {
+                continue;
+            }
+            if (!(entry.getValue() instanceof List<?> rawRows)) {
+                continue;
+            }
+            List<Map<String, Object>> rows = rowsByName.computeIfAbsent(normalizedName, ignored -> new ArrayList<>());
+            for (Object rawRow : rawRows) {
+                if (rawRow instanceof Map<?, ?> row) {
+                    rows.add((Map<String, Object>) row);
+                }
+            }
+        }
+        return rowsByName;
+    }
+    
     /**
      * Resolves a human-readable row identifier from a sub-table row map.
      * Tries {@code id}, then common fallback fields ({@code id_idw}, {@code rowId}, …),
@@ -510,5 +542,12 @@ public class ChangeHistoryComponent {
             }
         }
         return null;
+    }
+    
+    static boolean isSubTableRowMetadataField(String fieldName) {
+        if (fieldName == null || fieldName.isBlank()) {
+            return true;
+        }
+        return SUB_TABLE_ROW_METADATA_FIELDS.contains(fieldName.trim().toLowerCase());
     }
 }
