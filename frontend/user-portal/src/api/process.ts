@@ -142,8 +142,12 @@ export const processApi = {
   },
   
   // 获取功能单元完整内容（BPMN、表单等）
-  getFunctionUnitContent(functionUnitId: string) {
-    return request.get<FunctionUnitContent>(`/processes/function-units/${functionUnitId}/content`)
+  // taskId：任务参与人（处理人/候选人/发起人）凭任务放行，无需持有该功能单元的可发起角色
+  getFunctionUnitContent(functionUnitId: string, taskId?: string) {
+    return request.get<FunctionUnitContent>(
+      `/processes/function-units/${functionUnitId}/content`,
+      taskId ? { params: { taskId } } : undefined,
+    )
   },
   
   // 获取功能单元特定类型的内容
@@ -187,14 +191,16 @@ export const processApi = {
     return request.get('/processes/actions', { params: { ids: ids.join(',') } })
   },
 
-  /** Allocate PK for sub-table add-row (PRD S5) */
+  /** Allocate PK for sub-table add-row (PRD S5); taskId 同 getFunctionUnitContent（任务参与人放行） */
   allocatePrimaryKeys(
     functionUnitId: string,
     payload: { tableId: number; fieldName: string; count?: number; scopeKey?: string },
+    taskId?: string,
   ) {
     return request.post<{ values: string[] }>(
       `/processes/function-units/${functionUnitId}/tables/primary-keys/allocate`,
       payload,
+      taskId ? { params: { taskId } } : undefined,
     )
   },
 }

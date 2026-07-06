@@ -61,7 +61,7 @@ export function useSubTableRowDialog(
   function createAllocatePrimaryKeysFn(): AllocatePrimaryKeysFn | undefined {
     if (!props.functionUnitId || props.tableId == null) return undefined
     return async (payload) => {
-      const res = await processApi.allocatePrimaryKeys(props.functionUnitId!, payload)
+      const res = await processApi.allocatePrimaryKeys(props.functionUnitId!, payload, props.taskId)
       const body = unwrapPortalApiPayload(res) as { values?: string[] }
       return body?.values ?? []
     }

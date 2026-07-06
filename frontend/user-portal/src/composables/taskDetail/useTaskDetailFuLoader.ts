@@ -91,7 +91,9 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
       // Check module-level cache first (avoids re-parsing when navigating between tasks of same process)
       let content: any = prefetchedContent ?? getCachedFuContent(processKey)
       if (!content) {
-        content = await processApi.getFunctionUnitContent(processKey).then(r => (r as any).data || r)
+        // taskId grants task participants (assignee/candidate/initiator) content access even
+        // when they lack the FU's start-access roles (backend falls back to the role gate).
+        content = await processApi.getFunctionUnitContent(processKey, ctx.taskId).then(r => (r as any).data || r)
         if (content && !content.error) {
           setCachedFuContent(processKey, content)
         }

@@ -1046,3 +1046,42 @@
     未清 session；sequence sync 后 restore INSERT 复用同 id → 冲突。
     修复：clear 后 entityManager.flush()+clear() 并重载 FunctionUnit；SubTableViewConfig delete 加 flushAutomatically。
     验证：MCY FU48 rollback 至 1.0.148 成功（v1.0.151）。
+- id: "1474"
+  status: fixed
+  fixed_at: "2026-07-06"
+  severity: minor
+  category: bug
+  summary: "Admin 新授业务角色后 Portal New Requests 5 分钟内不可见，重新登录也不刷新"
+  file: "backend/user-portal/src/main/java/com/portal/controller/AuthController.java"
+  note: |
+    症状：Admin Center 给 FU(ATM) 配好 HMDC_Index_Role 并经 BU 工作台授予用户后，
+    该用户登录 User Portal，New Requests 仍看不到该 FU。
+    根因：FunctionUnitAccessComponent.userRoleCodesCache 对用户业务角色 code 集合缓存 5 分钟；
+    授权发生在 admin-center（跨服务）无法失效 portal 本地缓存，clearUserRolesCache 原本无任何调用方，
+    重新登录也不清 → 刚授权后最长 5 分钟交集为空，FU 被过滤。
+    修复：AuthController.login 与 AuthSsoExchangeController.exchange 在签发会话前调用
+    functionUnitAccessComponent.clearUserRolesCache(userId)，使"重新登录立即生效"。
+    验证：dev compose 重建 user-portal 后 API 实测——撤销 UBR 行后旧 token 仍见 ATM（TTL 内预期），
+    重新登录立即不见；恢复 UBR 后重新登录立即可见。数据已原样恢复。
+- id: "1475"
+  status: fixed
+  fixed_at: "2026-07-06"
+  severity: major
+  category: bug
+  summary: "任务处理人无 FU 可发起角色时任务详情整页不可用（流程图/表单 403），改为凭 taskId 放行"
+  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  note: |
+    症状：ATM 流程 Transaction Assignment 分派给 HMDC_Assign_Role 的李娜，任务详情页 Basic Info 正常但
+    流程图区显示 "You do not have permission to access this task" + "No process definition"，表单/子表全不加载。
+    根因：任务详情页加载 FU 内容走 GET /processes/function-units/{key}/content，该接口套"可发起流程"的
+    业务角色准入（sys_function_unit_access 交集）；ATM 访问表只配 HMDC_Index_Role（发起角色），
+    中途接任务的 Assign/Approver/Operator 角色与其无交集 → 403 → BPMN+表单全挂。
+    修复：content/contents/primary-keys-allocate 三接口加可选 taskId——任务属于该 FU
+    （processDefinitionKey 直等或 resolveFunctionUnitId 双侧解析相等）且 canViewTaskForm 通过则放行；
+    仅绕过角色门槛，禁用检查经 requireEnabledFunctionUnit 保留；无 taskId / 任务不匹配 / 非参与人回落原角色门槛。
+    前端 processApi.getFunctionUnitContent/allocatePrimaryKeys 加 taskId 形参，任务详情
+    (useTaskDetailFuLoader/useTaskDetailLoader)、动作弹窗 (customActionFormPopup)、子表加行
+    (useSubTableRowDialog/useTaskDetailMiLinkChild) 传入；发起页 start.vue 不传维持原策略。
+    验证：ProcessControllerTaskContentAccessTest 6 用例；Playwright（e2e_lina/HMDC_Assign_Role）
+    frontend/user-portal/verification-screenshots/2026-07-06_task-assignee-fu-content-access.png
+    图/表单/操作按钮全渲染；API 三断言：无 taskId=403、本任务 taskId=200、真 taskId+他人 FU(50005)=403。

@@ -273,10 +273,26 @@ public class FunctionUnitAccessComponent {
      * @throws FunctionUnitDisabledException if the function unit is disabled
      */
     public void checkFunctionUnitAccess(String userId, String functionUnitIdOrCode) {
-        // First resolve the function unit ID
+        String functionUnitId = requireEnabledFunctionUnit(userId, functionUnitIdOrCode);
+
+        // Then check user permissions
+        if (!canAccessFunctionUnit(userId, functionUnitId)) {
+            log.warn("User {} does not have access to function unit {}", userId, functionUnitId);
+            throw new FunctionUnitAccessDeniedException("You do not have permission to access this function unit");
+        }
+    }
+
+    /**
+     * Resolve the function unit and verify it is enabled, without the role-based access check.
+     * Used by task-participant content access, where assignees may lack the FU's start-access
+     * roles but the disabled gate must still apply.
+     *
+     * @return the resolved function unit ID
+     * @throws FunctionUnitDisabledException if the function unit is disabled
+     */
+    public String requireEnabledFunctionUnit(String userId, String functionUnitIdOrCode) {
         String functionUnitId = resolveFunctionUnitId(functionUnitIdOrCode);
 
-        // First check if the function unit is enabled
         if (!isFunctionUnitEnabled(functionUnitId)) {
             // Resolved results for processDefinitionKey / catalog code are cached in processKeyCache (TTL 5min).
             // After an admin disables an old catalog entry and enables a new version, the cache may still point to the disabled ID, causing false "disabled" errors in task views.
@@ -293,12 +309,7 @@ public class FunctionUnitAccessComponent {
             log.warn("Function unit {} is disabled, access denied for user {}", functionUnitId, userId);
             throw new FunctionUnitDisabledException("Function unit is disabled");
         }
-        
-        // Then check user permissions
-        if (!canAccessFunctionUnit(userId, functionUnitId)) {
-            log.warn("User {} does not have access to function unit {}", userId, functionUnitId);
-            throw new FunctionUnitAccessDeniedException("You do not have permission to access this function unit");
-        }
+        return functionUnitId;
     }
     
     /**
