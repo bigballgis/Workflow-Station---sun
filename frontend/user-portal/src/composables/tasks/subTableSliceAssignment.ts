@@ -101,6 +101,11 @@ function countNonMetaRowKeys(row: unknown): number {
  * {@link mergeRowsFromSoleUnclaimedNumericSlice} yields nothing when 2+ numeric keys remain unclaimed.
  * For bindings that still have no rows, take the richest unclaimed slice, preferring the slice whose
  * {@code bindingTableById} tid matches {@code selfTidRaw} when that is known.
+ * When {@code selfTidRaw} is known, a non-matching slice is NEVER pulled — otherwise a binding with a real
+ * tableId (e.g. ATM_Comment 50326) absorbs an unrelated RELATED slice such as the {@code sys_users}
+ * virtual table ({@code tableId = -1000000001}) that pools every case sub-table row, surfacing "-" ghost
+ * rows in My Request. Only when {@code selfTidRaw} is unknown (copied form dropped its tableId) do we fall
+ * back to the richest slice regardless of tid. Mirrors {@link mergeRowsFromSoleUnclaimedNumericSlice}.
  */
 export function mergeRowsFromRichestUnclaimedNumericSlice(
   b: { bindingId: number },
@@ -128,7 +133,11 @@ export function mergeRowsFromRichestUnclaimedNumericSlice(
   const tidOk =
     selfTidRaw != null && Number.isFinite(selfTidRaw) && !Number.isNaN(selfTidRaw)
   const matched = tidOk ? all.filter(c => c.otid != null && c.otid === selfTidRaw) : []
-  const pool = matched.length > 0 ? matched : all
+  // When this binding's relation table is known, never fall back to a tid-mismatched slice: a real
+  // tableId must not absorb an unrelated slice (e.g. sys_users RELATED tid=-1000000001 that pools every
+  // case sub-table row). Only tableId-less copied-form bindings may take the richest slice regardless.
+  const pool = tidOk ? matched : all
+  if (pool.length === 0) return []
   pool.sort((a, b) => b.score - a.score || b.val.length - a.val.length)
   const pick = pool[0]
   return pick ? [...pick.val] : []
