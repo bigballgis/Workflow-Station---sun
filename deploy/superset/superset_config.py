@@ -24,6 +24,22 @@ SQLALCHEMY_DATABASE_URI = os.getenv(
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
 
 # ==============================================================================
+# Subpath hosting (single-FQDN + path routing)
+# ------------------------------------------------------------------------------
+# Superset 6.0 NATIVELY reads the SUPERSET_APP_ROOT env var (see superset/app.py)
+# and sets APPLICATION_ROOT from it, mounting the whole app under that prefix —
+# routes, static-asset URLs, and redirects all carry it. So to serve Superset at
+# e.g. http://<host>/bi (same FQDN as /admin, /portal, /dev) we ONLY set that env
+# var (compose/k8s); the edge forwards /bi/* unchanged (no prefix stripping).
+# Here we merely enable ProxyFix so Superset honors the edge's X-Forwarded-Proto/
+# Host when building absolute URLs (correct https scheme for guest-token/embedded
+# links in prod). Do NOT set STATIC_ASSETS_PREFIX: APPLICATION_ROOT already
+# prefixes assets, so adding it would double the prefix (/bi/bi/static).
+# ==============================================================================
+if os.getenv("SUPERSET_APP_ROOT", "").rstrip("/"):
+    ENABLE_PROXY_FIX = True
+
+# ==============================================================================
 # Feature Flags
 # ==============================================================================
 FEATURE_FLAGS = {

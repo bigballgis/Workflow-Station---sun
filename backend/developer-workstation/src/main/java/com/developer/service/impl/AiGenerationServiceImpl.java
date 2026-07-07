@@ -61,13 +61,17 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     private final ObjectMapper objectMapper;
     private final int maxContextSizeBytes;
 
-    @Value("${n8n.ai-generation.webhook-url:http://localhost:5678/webhook/ai-function-unit-gen}")
+    // AI 生成 webhook 目标:已从旧的 n8n 迁移到 Activepieces 同步 webhook
+    // (POST <base>/api/v1/webhooks/<flowId>/sync,响应契约不变)。
+    // 优先读新键 activepieces.ai-generation.webhook-url,回退到旧键,再回退到 AP dev 默认。
+    // 字段名保留 n8nWebhookUrl 以兼容既有测试(ReflectionTestUtils 按此名注入)。
+    @Value("${activepieces.ai-generation.webhook-url:${n8n.ai-generation.webhook-url:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}}")
     private String n8nWebhookUrl;
 
-    @Value("${n8n.ai-generation.timeout-seconds:120}")
+    @Value("${activepieces.ai-generation.timeout-seconds:${n8n.ai-generation.timeout-seconds:120}}")
     private int n8nTimeoutSeconds;
 
-    @Value("${ssrf.allowed-hosts:localhost,n8n}")
+    @Value("${ssrf.allowed-hosts:localhost,activepieces}")
     private List<String> ssrfAllowedHosts;
 
     /** Cached N8N RestTemplate (initialized at startup via @PostConstruct) */
@@ -384,6 +388,23 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 构建"仅历史"对话记录:与 {@link #buildConversationHistory} 相同,但剔除末尾那条正是本轮
+     * 用户消息的记录(它已由 message 字段单独下发),避免 Activepieces agent 看到当前消息两次。
+     */
+    @Transactional(readOnly = true)
+    protected List<Map<String, String>> buildPriorConversationHistory(UUID sessionId, String currentMessage) {
+        List<Map<String, String>> history = new ArrayList<>(buildConversationHistory(sessionId));
+        if (!history.isEmpty()) {
+            Map<String, String> last = history.get(history.size() - 1);
+            if ("user".equals(last.get("role")) && currentMessage != null
+                    && currentMessage.equals(last.get("content"))) {
+                history.remove(history.size() - 1);
+            }
+        }
+        return history;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<Map<String, String>> getLatestDocuments(Long functionUnitId, AiPhase phase, AiMode mode) {
@@ -434,8 +455,13 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                                                FunctionUnitContextDTO context, Long functionUnitId,
                                                List<Map<String, String>> existingDocuments,
                                                String regenerateScope) {
+        // Activepieces 的 sync webhook 每次调用都是全新一次 agent 运行,不像旧 n8n 有 Postgres 对话记忆。
+        // 因此每次都把完整对话历史一并带上,保证多轮连续性。saveMessage 已在调用本方法前持久化本轮用户消息,
+        // 故构建后剔除末尾这条"当前用户消息",避免与单独传的 message 字段重复。
+        List<Map<String, String>> priorHistory = buildPriorConversationHistory(sessionId, message);
+
         Map<String, Object> requestBody = buildN8NRequestBody(sessionId, message, phase, mode,
-                context, functionUnitId, existingDocuments, null, regenerateScope);
+                context, functionUnitId, existingDocuments, priorHistory, regenerateScope);
 
         Map<String, Object> response = doCallN8NWebhookWithRetry(requestBody);
 

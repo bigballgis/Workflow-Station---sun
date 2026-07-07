@@ -313,7 +313,7 @@ import SubTableFormDialog from './SubTableFormDialog.vue'
 import LookupPreview from './LookupPreview.vue'
 import { getFilenameFromUrl, isUploadColumn } from './uploadFieldUtils'
 import { PREVIEW_SUBTABLE_DIALOG_KEY, PREVIEW_MY_REQUESTS_ACTIVE_KEY } from './previewSubTableDialog'
-import type { SubTableConfig } from '@/composables/designerSubTableField/types'
+import type { SubTableConfig, ColumnConfig } from '@/composables/designerSubTableField/types'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import { useSubTableData } from '@/composables/designerSubTableField/useSubTableData'
 import { useSubTableUploadCells } from '@/composables/designerSubTableField/useSubTableUploadCells'
@@ -476,15 +476,31 @@ function handleImportFile(event: Event) {
   input.value = ''
 }
 
+// A lookup cell holds either the primary-key scalar directly or a full row snapshot.
+// Export the PK scalar so re-import can rehydrate the cell via the lookup preview.
+function lookupExportScalar(col: ColumnConfig, raw: unknown): string {
+  if (raw == null || raw === '') return ''
+  if (typeof raw !== 'object') return String(raw)
+  const snapshot = raw as Record<string, unknown>
+  const pkField =
+    (typeof col.props?.primaryKeyField === 'string' && col.props.primaryKeyField.trim())
+    || (Array.isArray(col.props?.searchFields) && typeof col.props.searchFields[0] === 'string' && col.props.searchFields[0])
+    || 'id'
+  const v = snapshot[pkField] ?? snapshot.id
+  return v == null ? '' : String(v)
+}
+
 function handleExport() {
-  const cols = displayColumns.value.filter(c => c.type !== 'linkForm' && c.type !== 'lookup')
+  // linkForm columns hold no cell value (a runtime FK-resolved link) \u2014 still excluded.
+  // lookup columns are exported as their primary-key scalar so they round-trip on import.
+  const cols = displayColumns.value.filter(c => c.type !== 'linkForm')
   const headers = cols.map(c => c.field)
   // BOM for Excel UTF-8 compatibility
   let csv = '\uFEFF' + headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n'
   // Append data rows
   for (const row of tableData.value) {
     const values = cols.map(c => {
-      const v = row[c.field]
+      const v = c.type === 'lookup' ? lookupExportScalar(c, row[c.field]) : row[c.field]
       if (v == null || v === '') return ''
       return `"${String(v).replace(/"/g, '""')}"`
     })

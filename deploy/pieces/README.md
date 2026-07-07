@@ -23,44 +23,71 @@ fail-closed 的 `NPM_CONFIG_REGISTRY`（见 `deploy/ACTIVEPIECES_INTEGRATION.md`
 
 ## 首次执行（Quick Start）
 
-> 仓库里已含全部产物（tarballs / metadata / seed SQL），**首次执行不需要外网**，
-> 只有改 `pieces.json` 换白名单时才需要重新 fetch（见「新增 / 升级」一节）。
+**分工原则（为什么是两台机器）**：`Dockerfile` 的预装步骤在 **docker build 时**跑
+`bun install`（要访问 npm registry），所以**自定义镜像只能在有外网的电脑上构建**；
+断网环境只做三件事：导入镜像 → 起服务（首启自动建表）→ 跑 seed SQL + 重启。
+仓库自带的 seed SQL / tarballs / metadata 都是现成文件，断网可用。
 
-**dev（本机 docker compose）——两步：**
+### 场景 A：外部电脑（有外网）——构建并导出镜像
 
 ```sh
-# 1. 构建自定义 AP 镜像（≈1-2 分钟，bun 装包在 build 时发生，机器需能访问 npm）
-cd deploy/environments/dev
-docker compose -f docker-compose.dev.yml build activepieces
-docker compose -f docker-compose.dev.yml up -d activepieces
+cd <repo>/deploy/pieces
 
-# 2. 导入 piece 元数据 + 重启（重启不能省，见下方"注意"：registry 缓存在进程内存）
-docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_dev \
-  < ../../pieces/metadata/pieces-seed.sql
-docker restart platform-activepieces-dev
+# 0.（可选）只有要改白名单时才需要：编辑 pieces.json → 重新拉取 → 重新生成 seed → git 提交
+sh fetch-pieces.sh
+node generate-metadata-seed.js
+
+# 1. 构建自定义镜像（≈1-2 分钟；本地场景用公网基础镜像即可）
+docker build -t activepieces:0.84.0-pieces .
+
+# 2. 导出成 tar 文件带进内网（镜像 GB 级，gzip 压一下）
+docker save activepieces:0.84.0-pieces | gzip > activepieces-0.84.0-pieces.tar.gz
 ```
 
-验证：`curl` 或浏览器打开 AP → 设计器里能看到 12 个 piece；或
-`docker exec platform-activepieces-dev node -e "require('http').get('http://127.0.0.1:80/api/v1/pieces',r=>{let d='';r.on('data',c=>d+=c);r.on('end',()=>console.log(JSON.parse(d).length))})"`
-应输出 `12`。浏览器要**硬刷新**（Cmd+Shift+R），否则可能吃到旧 JS 缓存。
-
-**k8s / IKP 集群（uat、prod）——四步：**
+若外部电脑能直连 nexus3，可跳过 tar，直接构建成 nexus3 tag 并 push（把「带文件」换成「推仓库」）：
 
 ```sh
-# 1. 在有外网的机器上构建（基础镜像用 nexus3 的 mirror）并推 nexus3
 docker build --build-arg BASE_IMAGE=nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0 \
-  -t nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-pieces \
-  deploy/pieces
+  -t nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-pieces .
 docker push nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-pieces
-
-# 2. deploy/k8s/activepieces.yaml 的 image: 改成 :0.84.0-pieces，kubectl apply
-# 3. 对该环境的共享库执行 metadata/pieces-seed.sql（DBA / 发布流程）
-# 4. kubectl rollout restart deployment/activepieces   # 同样因为内存缓存
 ```
 
-集群前置检查：configmap 里 `ACTIVEPIECES_NPM_REGISTRY` 保持 fail-closed 的 `.invalid` 值即可
-（pieces 已预装进镜像，运行时不会用到 registry）；`AP_PIECES_SOURCE=DB`、`AP_PIECES_SYNC_MODE=NONE`
-已在 activepieces.yaml 里，无需另配。
+### 场景 B：公司完全断网环境——导入并初始化
+
+前提：能 docker pull 内部 mirror 的 `activepieces:0.84.0` 没用上——**自定义镜像自身**
+要么从 nexus3 拉（场景 A 已 push），要么用 tar 导入：
+
+```sh
+# 1. 导入镜像（二选一）
+docker load < activepieces-0.84.0-pieces.tar.gz                # tar 方式
+# 或 docker pull nexus3.../workflow-station2/activepieces:0.84.0-pieces   # nexus3 方式
+
+# 2. 起 AP（首启自动建 piece_metadata 等表；等 healthcheck 变绿）
+#    compose 环境：docker compose up -d activepieces
+#    k8s：activepieces.yaml 的 image: 改成 :0.84.0-pieces 后 kubectl apply
+
+# 3. 对该环境共享库执行 seed（文件在仓库里，无需外网）
+psql -h <db-host> -U <user> -d <database> < deploy/pieces/metadata/pieces-seed.sql
+#    （dev compose 写法：docker exec -i platform-postgres-dev psql -U platform_dev \
+#      -d workflow_platform_dev < deploy/pieces/metadata/pieces-seed.sql）
+
+# 4. 重启 AP —— 不能省，registry 缓存在进程内存（见「注意」）
+#    compose：docker restart platform-activepieces-dev
+#    k8s：kubectl rollout restart deployment/activepieces
+```
+
+验证（应输出 `12`；浏览器要**硬刷新** Cmd+Shift+R，否则吃旧 JS 缓存）：
+
+```sh
+docker exec <ap容器> node -e "require('http').get('http://127.0.0.1:80/api/v1/pieces',r=>{let d='';r.on('data',c=>d+=c);r.on('end',()=>console.log(JSON.parse(d).length))})"
+```
+
+断网环境前置检查：configmap 里 `ACTIVEPIECES_NPM_REGISTRY` 保持 fail-closed 的 `.invalid` 值
+（pieces 已预装进镜像，运行时不会碰 registry）；`AP_PIECES_SOURCE=DB`、`AP_PIECES_SYNC_MODE=NONE`
+已在 activepieces.yaml / compose 里，无需另配。
+
+> dev 本机（有外网）不用走 tar：`cd deploy/environments/dev && docker compose build activepieces
+> && docker compose up -d activepieces`，然后同样跑第 3、4 步。
 
 ## 原理（为什么运行时不联网）
 
@@ -107,6 +134,13 @@ docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_d
 
 幂等（按 name+version 先删后插），重复执行安全。`piece_metadata` 里有什么，
 设计器就只显示什么——这张表就是白名单本身。
+
+数据库侧**只需要跑这一个文件**，但有三个配套条件：
+1. **顺序**：`piece_metadata` 表由 AP 首启自动建（TypeORM 迁移）。全新环境必须
+   先起一次 AP（建表）→ 跑 seed → 重启 AP；空库上直接跑会报表不存在。
+2. **跑完必须重启 AP**（见下）。
+3. seed 只增删自己清单里的 name+version，**不清理表里其它行**。若目标库有历史
+   实验残留的外部元数据，先一次性 `DELETE FROM piece_metadata;` 清场再跑 seed。
 
 **导入后必须重启 AP**（dev：`docker restart platform-activepieces-dev`；k8s：
 `kubectl rollout restart deployment/activepieces`）。AP 把 piece registry 缓存在**进程内存**

@@ -185,15 +185,17 @@ management:
     redis:
       enabled: true
 
-# N8N AI Generation Configuration
-n8n:
+# AI Generation webhook — migrated from n8n to Activepieces (sync webhook).
+# The backend POSTs to <base>/api/v1/webhooks/<flowId>/sync; the response contract is unchanged
+# ({reply, document, documentType, phaseComplete, generatedData}). flowId is environment-specific.
+activepieces:
   ai-generation:
-    webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://localhost:5678/webhook/ai-function-unit-gen}
-    timeout-seconds: ${N8N_AI_GENERATION_TIMEOUT:120}
+    webhook-url: ${AI_GENERATION_WEBHOOK_URL:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
+    timeout-seconds: ${AI_GENERATION_TIMEOUT:120}
 
-# Trusted hostnames for configured outbound webhooks (localhost for local n8n, n8n for Docker)
+# Trusted hostnames for configured outbound webhooks (localhost for local dev, activepieces for Docker)
 ssrf:
-  allowed-hosts: ${SSRF_ALLOWED_HOSTS:localhost,n8n}
+  allowed-hosts: ${SSRF_ALLOWED_HOSTS:localhost,activepieces}
 
 # AI Generation Lock Configuration
 ai-generation:

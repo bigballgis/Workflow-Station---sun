@@ -11,6 +11,7 @@
 <!-- BEGIN cursor-rules:auto -->
 @../.cursor/rules/deployment-infra.mdc
 @../.cursor/rules/docker-k8s-config-sync.mdc
+@../.cursor/rules/init-scripts-append-only.mdc
 <!-- END cursor-rules:auto -->
 
 > 关键提醒：前端用 `Dockerfile.local`、不用多阶段构建；`.sh`/`.sql` 必须 LF；

@@ -8,24 +8,33 @@
 
 ## 1. 架构
 
-同一个 Superset 实例，开**两个访问入口 + 封掉裸端口**：
+同一个 Superset 实例，作者鉴权 + 嵌入不鉴权两类流量共存 + 封掉裸端口。区分方式在 **dev 与 prod 不同**：
+
+- **dev（已收敛到单 FQDN + path，2026-07）**：作者 UI 与嵌入都挂在 `http://localhost:3000/bi`（和 `/admin`、`/portal`、`/dev` 同一个边缘、同一个模型），用**路径**区分——**只 gate `/bi/login/`**（注入 X-Remote-*），其余路径一律放行（剥离伪造头）。
+- **prod（仍双子域，待收敛到 /bi）**：作者与嵌入分两个 host（下方 ASCII），用**主机名**区分。※ IKP 生产 FQDN 只给一个固定域名、子域难落地，故 prod 亦应比照 dev 收敛到 `INGRESS_HOST/bi`（见 §6）。
 
 ```
-            ┌─ 作者 UI（JWT 门禁）  dev :8087 / prod hermes-workflow-superset-author.*
-            │    nginx auth_request（dev edge :8087 / prod superset-author-proxy Deployment）
-            │      ※ 不用 Istio ext_authz——provider 需注册 meshConfig(mesh 管理员)，公司策略卡
-浏览器 ─────┤      → admin-center /internal/bi/superset/authorize
-            │      → 校验平台 JWT，查 bi_rbac_mapping，注入 X-Remote-User / X-Remote-Roles
-            │      → Superset REMOTE_USER 登录（自定义 SecurityManager，JIT 建号 + 角色同步）
-            │
-            └─ 嵌入（不鉴权，guest token）  dev :8089 / prod hermes-workflow-superset-internal-proxy.*
+dev（单 FQDN + path）
+  浏览器 → http://localhost:3000/bi/...  (nginx-edge :80)
+            ├─ /bi/login/           → auth_request 到 admin-center /internal/bi/superset/authorize
+            │                          → 校验平台 JWT，查 bi_rbac_mapping，注入 X-Remote-* → REMOTE_USER 登录
+            └─ 其余 /bi/*（含 /embedded、/api、/static）→ 放行、剥离伪造 X-Remote-*
+                                       （嵌入 guest token 自证；已登录作者靠 Superset session cookie）
+
+prod（双子域，待改）
+            ┌─ 作者 UI（JWT 门禁）  hermes-workflow-superset-author.*
+            │    nginx 反代 Deployment superset-author-proxy（不用 Istio ext_authz——provider 需注册
+浏览器 ─────┤    meshConfig(mesh 管理员)，公司策略卡）→ admin-center authorize → 注入 → REMOTE_USER 登录
+            └─ 嵌入（不鉴权，guest token）  hermes-workflow-superset-internal-proxy.*
                  = SUPERSET_PUBLIC_HOST，user-portal iframe 用；剥离客户端伪造的 X-Remote-*
 
 裸 Superset 端口 8088：关闭（容器内 expose，不对外发布）。
-两个入口都剥离客户端 X-Remote-*；只有作者入口经鉴权后注入校验过的值。
+所有入口都剥离客户端 X-Remote-*；只有经鉴权后（dev 的 /bi/login/、prod 的作者 host）才注入校验过的值。
 ```
 
 **关键点**：Superset 在 `AUTH_REMOTE_USER` 下「只要带 X-Remote-User 头就认你」——所以裸端口**必须**封死，否则任何人 `curl -H "X-Remote-User: admin"` 就能冒充登录。
+
+**子路径怎么实现的（dev /bi 的核心）**：Superset 6.0 **原生读环境变量 `SUPERSET_APP_ROOT`**（见镜像内 `/app/superset/app.py`），把它赋给 `APPLICATION_ROOT`，自己把整个应用挂到 `/bi` 下——路由、静态资源、重定向全部带 `/bi` 前缀。所以 edge **原样透传** `/bi/*`（不剥前缀、不需 `X-Forwarded-Prefix`、更不要设 `STATIC_ASSETS_PREFIX`，否则变成 `/bi/bi/static` 双前缀）。这样 Superset 的 `/static`、`/api` 不会再和边缘上的 n8n `/static`、kong `/api` 撞车。
 
 **角色映射**：平台角色 → `ac_bi_rbac_mappings`(实体表 `bi_rbac_mapping`) → Superset 角色名 → `X-Remote-Roles`。用户在映射表里**没有角色 → authorize 返回 403**（不是作者，拒绝；避免账号泛滥）。
 
@@ -38,9 +47,9 @@
 | 文件 | 改动 |
 |---|---|
 | `Dockerfile` | 删除焊死的弱密钥 `ENV SUPERSET_SECRET_KEY=replace_…`；`COPY superset_security_manager.py` |
-| `superset_config.py` | `SECRET_KEY` 改为 fail-closed 读 env；CORS `*`→门户白名单(`SUPERSET_CORS_ORIGINS`)；`X-Frame-Options: ALLOWALL`→CSP `frame-ancestors`；`AUTH_TYPE=AUTH_REMOTE_USER` + `CUSTOM_SECURITY_MANAGER`；`RECAPTCHA_PUBLIC_KEY/PRIVATE_KEY`；`LOGOUT_REDIRECT_URL` |
+| `superset_config.py` | `SECRET_KEY` 改为 fail-closed 读 env；CORS `*`→门户白名单(`SUPERSET_CORS_ORIGINS`)；`X-Frame-Options: ALLOWALL`→CSP `frame-ancestors`；`AUTH_TYPE=AUTH_REMOTE_USER` + `CUSTOM_SECURITY_MANAGER`；`RECAPTCHA_PUBLIC_KEY/PRIVATE_KEY`；`LOGOUT_REDIRECT_URL`；**子路径部署**：`SUPERSET_APP_ROOT` 非空时开 `ENABLE_PROXY_FIX`（供 prod https 下正确 scheme）——`APPLICATION_ROOT` 本身由 Superset 6.0 原生读该 env 设置，故**不设** `STATIC_ASSETS_PREFIX`（会双前缀） |
 | `superset_security_manager.py` 🆕 | 自定义 `PlatformRemoteUserSecurityManager`：`register_views()` 完整镜像 Superset 逻辑但把 `/login` 换成 REMOTE_USER 子类；`auth_user_remote_user()` JIT 建号 + 每次登录同步**角色 + email + 姓名**（firstname 用 `unquote_plus` 解码，匹配 Java URLEncoder 的 `+`=空格）；**重写 `sync_role_definitions()` 自愈钩子**：每次 `superset init` 给 `GUEST_ROLE_NAME`(Gamma) 补 `can_read on CurrentUserRestApi`（嵌入 SDK 调 /me/roles 需要），扛 init 重置 / 新库 / 升级 |
-| `author-proxy/` 🆕（Dockerfile + default.conf.template） | **prod 作者网关镜像 `superset-author-proxy`**（`FROM nginx:alpine`）= dev `nginx-edge :8087` 那道门的 k8s 版，替代 Istio ext_authz。stock nginx 的 envsubst 启动时渲染 `${INGRESS_HOST}`/`${POD_NAMESPACE}`（`NGINX_ENVSUBST_FILTER` 锁死只这俩，不动 nginx `$变量`）。逻辑同 dev：auth_request→admin-center authorize、注入 X-Remote-*、`Origin ""` 修复、401→302 登录、403→拒 |
+| `author-proxy/` 🆕（Dockerfile + default.conf.template） | **prod 作者网关镜像 `superset-author-proxy`**（`FROM nginx:alpine`）= dev `nginx-edge` 里那道作者门（dev 现为 `/bi/login/`）的 k8s 版，替代 Istio ext_authz。stock nginx 的 envsubst 启动时渲染 `${INGRESS_HOST}`/`${POD_NAMESPACE}`（`NGINX_ENVSUBST_FILTER` 锁死只这俩，不动 nginx `$变量`）。逻辑同 dev：auth_request→admin-center authorize、注入 X-Remote-*、`Origin ""` 修复、401→302 登录、403→拒 |
 
 ### 2.2 后端 admin-center `backend/admin-center/`
 
@@ -55,15 +64,17 @@
 
 | 文件 | 改动 |
 |---|---|
-| `src/views/sso/SsoCallback.vue` | 加 `SSO_EXTERNAL_RETURNS` 白名单：当 `state=superset-author` 时，换码种 cookie 后 `window.location` 跳回 Superset（`VITE_SUPERSET_AUTHOR_URL` 或 dev `http://localhost:8087/`），实现作者一步登录 |
+| `src/views/sso/SsoCallback.vue` | 加 `SSO_EXTERNAL_RETURNS` 白名单：当 `state=superset-author` 时，换码种 cookie 后 `window.location` 跳回 Superset（`VITE_SUPERSET_AUTHOR_URL` 或 dev 回退 `http://localhost:3000/bi/`），实现作者一步登录 |
 
 ### 2.4 dev 本地 `deploy/environments/dev/`
 
+> **2026-07 收敛到 `http://localhost:3000/bi`**：作者 UI + 嵌入都挂在共享边缘的 `/bi` 子路径下（和 `/admin`、`/portal`、`/dev` 同模型），原独立端口 `:8087`（作者）/`:8089`（嵌入源）已退休。
+
 | 文件 | 改动 |
 |---|---|
-| `nginx-edge.conf` | 新增 `upstream superset_upstream` / `admin_center_api_upstream`；**作者网关 server :8087**（`auth_request` + 注入/剥离 `X-Remote-*` + **`proxy_set_header Origin ""`** + 401→带 SSO 参数的登录跳转 + 403→拒绝）；**嵌入源 server :8089**（不鉴权 + 剥离 `X-Remote-*`）；`/superset/` 跳转改指 :8087 |
-| `docker-compose.dev.yml` | superset 封裸 8088（`expose` 不 `ports`）；edge 暴露 8087/8089；admin-center 注入 `SUPERSET_PUBLIC_HOST=:8089`、`APP_SECURITY_LOGOUT_REDIRECT_TARGET` |
-| `.env` | 加 `SUPERSET_SECRET_KEY`(dev真值)、`SUPERSET_CORS_ORIGINS`；`SUPERSET_PUBLIC_HOST`→:8089；删除无用的 `BI_SUPERSET_ADMIN_*`（保留实际使用的 `BI_SUPERSET_USERNAME/PASSWORD`） |
+| `nginx-edge.conf` | 在 `:80` server 内加 `/bi` 路由：`= /_superset_authz`（内部 auth_request 到 admin-center authorize，含 **`proxy_set_header Origin ""`**）；**`^~ /bi/login/`** 门禁（注入 X-Remote-* + `error_page 401→@superset_login`(带 SSO 参数)/`403→@superset_forbidden`）；**`^~ /bi/`** 放行（剥离伪造 X-Remote-*）；两者都**原样透传**给 `superset_upstream`（不剥 `/bi` 前缀，Superset 原生在 `/bi` 下）；`location = /bi` 加 `absolute_redirect off`（308 补斜杠不掉端口）；legacy `/superset` → `/bi/`。**删除**原 `:8087`/`:8089` 两个 server。 |
+| `docker-compose.dev.yml` | superset 封裸 8088（`expose` 不 `ports`）；**superset 加 `SUPERSET_APP_ROOT=/bi`**；superset healthcheck 由 `wget`（镜像里没有→一直 unhealthy）改用镜像自带 `/app/.venv/bin/python`；admin-center 注入 `SUPERSET_PUBLIC_HOST=http://localhost:3000/bi`、`APP_SECURITY_LOGOUT_REDIRECT_TARGET`；edge **删除** 8087/8089 端口映射 |
+| `.env` | `SUPERSET_PUBLIC_HOST`→`http://localhost:3000/bi`；**加 `SUPERSET_APP_ROOT=/bi`**；`SUPERSET_SECRET_KEY`(dev真值)、`SUPERSET_CORS_ORIGINS` 保留 |
 
 ### 2.5 k8s 生产 `deploy/k8s/`
 
@@ -87,6 +98,7 @@
 |---|:---:|---|---|---|
 | `SUPERSET_SECRET_KEY` | ✅ | `dev-superset-secret-key-…`（.env） | Secret，真值（勿用占位符） | Flask `SECRET_KEY` + guest token 签名；**fail-closed**，缺失则启动失败 |
 | `SUPERSET_CORS_ORIGINS` | ✅ | `http://localhost:3000,http://127.0.0.1:3000` | `https://__INGRESS_HOST__,http://__INGRESS_HOST__,…` | CORS 白名单 + CSP `frame-ancestors`（谁能调 API / iframe 嵌入） |
+| `SUPERSET_APP_ROOT` | 否 | `/bi` | 未设（prod 仍 root+双子域；收敛后设 `/bi`，见 §6） | **Superset 6.0 原生读**→`APPLICATION_ROOT`，把整个应用挂到该子路径（单 FQDN + path）。空=root 服务。设了别再设 `STATIC_ASSETS_PREFIX`（双前缀） |
 | `SUPERSET_RECAPTCHA_PUBLIC_KEY` | 否 | `""`（默认） | `""` | 不设会导致嵌入视图 500（见 bug 表）；置空即可 |
 | `SUPERSET_RECAPTCHA_PRIVATE_KEY` | 否 | `""` | `""` | 同上 |
 | `SUPERSET_LOGOUT_REDIRECT_URL` | 否 | 默认 `http://localhost:3000/api/v1/admin/auth/logout-redirect` | `https://__INGRESS_HOST__/api/v1/admin/auth/logout-redirect` | Superset Logout 跳向的平台登出端点（k8s 默认 `/login/`） |
@@ -103,20 +115,19 @@
 | 变量 | dev 值 | prod 值 | 用途 |
 |---|---|---|---|
 | `SUPERSET_HOST` | `http://superset-final:8088` | `http://hase-hermes-workflow-superset.__NAMESPACE__:80` | **内部** Superset 地址（后端→Superset 调 API 铸 guest token） |
-| `SUPERSET_PUBLIC_HOST` | `http://localhost:8089` | `http://hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__/` | **浏览器**侧嵌入域名，回给 portal iframe（= 嵌入入口） |
+| `SUPERSET_PUBLIC_HOST` | `http://localhost:3000/bi` | `http://hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__/`（收敛后 `https://__INGRESS_HOST__/bi`） | **浏览器**侧嵌入基址，回给 portal iframe。embedded SDK 拼 `${supersetDomain}/embedded/<id>`，故 dev 走 `.../bi/embedded/<id>` |
 | `SUPERSET_DB_SCHEMA` | `superset` | `superset` | 元数据 schema（`bi.superset.db-schema`） |
 | `BI_SUPERSET_USERNAME` | `adama` | Secret，真实 Superset 管理账号 | guest token 铸造用的 Superset 服务账号（**注意：app 读这个，不是 `BI_SUPERSET_ADMIN_USERNAME`**） |
 | `BI_SUPERSET_PASSWORD` | `admin123` | Secret | 同上密码 |
-| `APP_SECURITY_LOGOUT_REDIRECT_TARGET` | `/login/?client_id=admin&redirect_uri=…8087…callback…&state=superset-author`（URL编码） | 同结构，`redirect_uri` 用 `__INGRESS_HOST__` | `/auth/logout-redirect` 清完 cookie 后跳的登录页（带 SSO 参数，能再登） |
+| `APP_SECURITY_LOGOUT_REDIRECT_TARGET` | `/login/?client_id=admin&redirect_uri=…/admin/sso/callback&state=superset-author`（URL编码） | 同结构，`redirect_uri` 用 `__INGRESS_HOST__` | `/auth/logout-redirect` 清完 cookie 后跳的登录页（带 SSO 参数，能再登；state 命中后 SsoCallback 跳回 `/bi/`） |
 
 **C. dev 端口 / 镜像 / 前端构建**
 
 | 变量 | 默认 | 用途 |
 |---|---|---|
-| `SUPERSET_GATE_PORT` | `8087` | dev edge 作者网关宿主端口 |
-| `SUPERSET_EMBED_PORT` | `8089` | dev edge 嵌入源宿主端口（8086 被 activepieces 占用） |
+| ~~`SUPERSET_GATE_PORT`~~ / ~~`SUPERSET_EMBED_PORT`~~ | ~~8087/8089~~ | **已退休**（2026-07 收敛到 `/bi`，不再有独立端口） |
 | `SUPERSET_BASE_IMAGE` | nexus 镜像引用 | 部署用 Superset 镜像 |
-| `VITE_SUPERSET_AUTHOR_URL` | dev 回退 `http://localhost:8087/` | admin **前端构建参数**：作者一步登录跳回的 Superset 地址（prod 设为作者 host） |
+| `VITE_SUPERSET_AUTHOR_URL` | dev 回退 `http://localhost:3000/bi/` | admin **前端构建参数**：作者一步登录跳回的 Superset 地址（prod 设为作者 host 或收敛后 `.../bi/`） |
 
 > **已删除（无用，勿再用）**：`BI_SUPERSET_ADMIN_USERNAME` / `BI_SUPERSET_ADMIN_PASSWORD` —— application.yml 实际绑定的是 `BI_SUPERSET_USERNAME/PASSWORD`，ADMIN 变体全仓库无引用，已清理。
 
@@ -128,31 +139,34 @@
 |---|---|---|---|
 | **嵌入 500 黑屏** | 看板 iframe 显示 Superset「Internal server error 500」 | Superset 6.0 嵌入视图 `common_bootstrap_payload` 无条件读 `RECAPTCHA_PUBLIC_KEY`，原配置没设 → `KeyError` | `superset_config.py` + k8s configmap 加 `RECAPTCHA_PUBLIC_KEY/PRIVATE_KEY=""` |
 | **List Users 空白页** | Settings 菜单出现「List Users」，点开空白 | 自定义 SM 的 `register_views` 跳过了 Superset 的逻辑（Superset 6.0 本应移除遗留 FAB user/role/group 视图+菜单） | `register_views` 完整镜像 Superset 逻辑，只把 `/login` 换成 REMOTE_USER 子类。注意 `superset.views.auth` 须**惰性导入**（配置加载极早，顶层导入会 "App not initialized yet"） |
-| **登录后「Unexpected error」** | 作者登入 Superset 弹错误 toast（对**所有**用户、与角色无关） | Superset 前端埋点 POST `/superset/log/` 带 `Origin: http://localhost:8087`；auth_request 子请求把 Origin 转发给 admin-center → CORS 白名单无 :8087 → admin-center 返回 403 → 网关拦下 | `_superset_authz` 加 `proxy_set_header Origin ""`（内部调用不需 Origin）。**prod 现也走 nginx 反代，同样靠此修复**（故 author-proxy 的 conf 也带 `Origin ""`）；旧 Istio ext_authz 方案才不转发 Origin |
+| **登录后「Unexpected error」** | 作者登入 Superset 弹错误 toast（对**所有**用户、与角色无关） | Superset 前端埋点 POST `/superset/log/` 带 `Origin`（dev 现为 `http://localhost:3000`）；auth_request 子请求把 Origin 转发给 admin-center → CORS 白名单不含该源 → admin-center 返回 403 → 网关拦下 | `_superset_authz` 加 `proxy_set_header Origin ""`（内部调用不需 Origin）。**prod nginx 反代同样靠此修复**（author-proxy conf 也带 `Origin ""`）；旧 Istio ext_authz 方案才不转发 Origin |
+| **superset 一直 unhealthy**（dev） | compose 里 superset 容器长期 `unhealthy` | healthcheck 用 `wget`，但 `apache/superset:6.0.0` 镜像**没有 wget/curl** | healthcheck 改用镜像自带 `/app/.venv/bin/python -c "urllib.request…/health"` |
+| **`/bi/login/` 500 `relation "themes" does not exist`**（dev） | 切 `/bi` 后作者登录 500 | 元数据库停在旧 schema，Superset 6.0 的 `themes` 等表没建（日志 `Pending database migrations`） | `docker exec … superset db upgrade` + `superset init`（后者也触发自定义 SM 的 Gamma 权限自愈钩子） |
 | **`BI_SUPERSET_ADMIN_*` 死变量** | — | app 实际读 `BI_SUPERSET_USERNAME`（application.yml），`BI_SUPERSET_ADMIN_*` 无人引用；且 k8s 只有 ADMIN 名、缺真正读的名 → 生产 guest token 凭据失效 | dev 删除、k8s 改名为 `BI_SUPERSET_USERNAME/PASSWORD` |
 | **嵌入「embedded authentication」失败** | guest token 已签发但嵌入报认证失败（**生产换新库后出现，dev 不复现**） | embed SDK 拿到 guest token 后调 `/api/v1/me/roles`(CurrentUserRestApi.can_read) 做会话校验；新库 `superset init` 出来的 Gamma 默认无此权限 → 403。dev 6.0.0 该端点权限项没生成、未设防 → 侥幸 200，所以 dev 看不到 | SM `sync_role_definitions()` 自愈钩子：每次 init 给 Gamma 补 `can_read on CurrentUserRestApi`（比一次性 SQL 稳——init 会重置 Gamma，钩子紧跟着重授）|
 | **登出回不去** | Superset Logout 无效 / 登出后落到裸 `/login` 登不回 | 网关 SSO 下 Superset 自带登出无效（cookie 还在会被登回）；裸 `/login` 缺 SSO 参数无法提交 | 新增 `/auth/logout-redirect`(清 cookie)；`LOGOUT_REDIRECT_URL` 指向它；登出目标设为带 SSO 参数的登录页 |
 
 ---
 
-## 4. 登录 / 登出流程（dev）
+## 4. 登录 / 登出流程（dev，`http://localhost:3000/bi`）
 
 **作者登录（一步到位）**
 ```
-:8087 (无会话) → 网关 401 → 302 /login/?client_id=admin&redirect_uri=…&state=superset-author
-  → developer/password → /admin/sso/callback（换码种 ac_access_token cookie）
-  → SsoCallback 识别 state=superset-author → window.location 跳回 :8087
-  → 网关 authz 200 + 注入 X-Remote-* → Superset REMOTE_USER 登录 → /superset/welcome/
+/bi/ (无会话) → 放行 → Superset 302 → /bi/login/ → 网关 auth_request 401（无 JWT）
+  → 302 /login/?client_id=admin&redirect_uri=…/admin/sso/callback&state=superset-author
+  → admin/admin123 → /admin/sso/callback（换码种 ac_access_token cookie）
+  → SsoCallback 识别 state=superset-author → window.location 跳回 http://localhost:3000/bi/
+  → /bi/login/ 网关 authz 200 + 注入 X-Remote-* → Superset REMOTE_USER 登录 → /bi/superset/welcome/
 ```
 
 **登出**
 ```
-Superset Settings → Logout → /logout/（清 Superset 会话）
+Superset Settings → Logout → /bi/logout/（清 Superset 会话）
   → 302 LOGOUT_REDIRECT_URL = /api/v1/admin/auth/logout-redirect
   → 清 ac_access_token cookie + 拉黑 → 302 带 SSO 参数的 /login/（可直接再登）
 ```
 
-**嵌入查看（不变）**：user-portal iframe → guest token（后端用 `BI_SUPERSET_USERNAME` 服务账号铸造）→ 经嵌入源 :8089 加载。
+**嵌入查看**：user-portal iframe → guest token（后端用 `BI_SUPERSET_USERNAME` 服务账号铸造）→ embedded SDK 用 `SUPERSET_PUBLIC_HOST=http://localhost:3000/bi` 拼 `/bi/embedded/<id>` 加载（走 `/bi/` 放行路径，不经门禁）。
 
 ---
 
@@ -164,10 +178,13 @@ Superset Settings → Logout → /logout/（清 Superset 会话）
 - ✅ 一步登录 + 登出 + 再登入闭环
 - ✅ 嵌入看板渲染（`2026-06-25_superset-embed-c2-rendered.png`）
 - ✅ List Users 不再空白、`/superset/log/` 不再 403
+- ✅ **单 FQDN + path 收敛（2026-07）**：`/bi/login/` 无 JWT→302 统一登录；`/bi/`→302 `/bi/superset/welcome/`；`/bi/static/*` 200 而裸 `/static` 404（不撞 n8n）；注入 `X-Remote-User` 直连 → REMOTE_USER 登录 200+session，登录态 HTML 22 处 `/bi/static`、0 处裸 `/static`/`/api/v1`，bootstrap `application_root":"/bi"`
 
 ---
 
 ## 6. 生产部署待办（详见 runbook）
+
+> **⚠️ 建议 prod 也收敛到 `INGRESS_HOST/bi`（同 dev）**：现 k8s manifest 仍是双子域（`superset-author.*` / `-internal-proxy.*`），而 **IKP 生产 FQDN 只给一个固定域名、子域难落地——这正是 dev 已解决、prod 待办的冲突**。收敛做法：把 `deploy/k8s/workflow-station-superset.yaml` 的两个 Gateway/VirtualService 改成复用主 `workflow-platform-ingress-gateway` + 一条 `/bi` prefix 路由到 `superset-author-proxy`（proxy 内只 gate `/bi/login/`、其余放行），configmap 加 `SUPERSET_APP_ROOT=/bi`、`SUPERSET_PUBLIC_HOST=https://__INGRESS_HOST__/bi`，`author-proxy/default.conf.template` 比照 dev nginx-edge 的 `/bi` 段（原样透传、不剥前缀）。收敛后不再需要作者/嵌入两个 DNS/TLS。防绕过 `action:DENY` 策略 + mTLS 前提不变。
 
 1. **重建并推送镜像**（含本仓库改动，建议同 tag）：`superset`（新 SM/config）、`admin-center`（authorize 端点 + logout-redirect）、`admin-center-frontend`（SsoCallback）、**`superset-author-proxy` 🆕**（nginx 作者网关，源 `deploy/superset/author-proxy/`）。
 2. **确认命名空间 mTLS = STRICT**（防绕过 DENY 策略按来源 SA 匹配，无 mTLS 则 source principal 为空、规则失效）。〔已不再需要运维在 meshConfig 注册 ext_authz provider〕
