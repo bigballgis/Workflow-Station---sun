@@ -6,6 +6,7 @@ import com.admin.dto.sso.SsoLoginResponse;
 import com.admin.service.PlatformSsoService;
 import com.admin.sso.dsp.DspPasswordlessRequest;
 import com.admin.sso.dsp.DspSsoService;
+import com.admin.util.ClientIpResolver;
 import com.platform.common.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -37,9 +38,12 @@ public class SsoAuthController {
     private final PlatformSsoProperties ssoProperties;
 
     @PostMapping("/login")
-    public ResponseEntity<SsoLoginResponse> login(@Valid @RequestBody SsoLoginRequest request) {
+    public ResponseEntity<SsoLoginResponse> login(@Valid @RequestBody SsoLoginRequest request,
+                                                  HttpServletRequest httpRequest) {
         try {
-            return ResponseEntity.ok(platformSsoService.loginAndIssueCode(request));
+            String ip = ClientIpResolver.resolve(httpRequest);
+            String userAgent = httpRequest.getHeader("User-Agent");
+            return ResponseEntity.ok(platformSsoService.loginAndIssueCode(request, ip, userAgent));
         } catch (IllegalArgumentException e) {
             log.warn("SSO login failed: {}", e.getMessage());
             return ResponseEntity.badRequest().build();

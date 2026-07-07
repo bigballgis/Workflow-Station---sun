@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.admin.util.ClientIpResolver;
 
 import java.io.IOException;
 import java.util.Base64;
@@ -67,12 +68,7 @@ public class AuditRequestFilter extends OncePerRequestFilter {
             }
 
             // Client IP
-            String ip = req.getHeader("X-Forwarded-For");
-            if (ip != null && !ip.isBlank()) {
-                ip = ip.split(",")[0].trim();
-            } else {
-                ip = req.getRemoteAddr();
-            }
+            String ip = ClientIpResolver.resolve(req);
             ctx.setIpAddress(ip);
             ctx.setUserAgent(req.getHeader("User-Agent"));
             ctx.setRequestMethod(req.getMethod());
