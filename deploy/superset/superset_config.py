@@ -38,6 +38,13 @@ SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
 # ==============================================================================
 if os.getenv("SUPERSET_APP_ROOT", "").rstrip("/"):
     ENABLE_PROXY_FIX = True
+    # NOTE on the top-left brand logo under a subpath: Superset 6.0 renders it from
+    # Ant-Design THEME tokens whose defaults ignore APPLICATION_ROOT — brandLogoHref="/"
+    # (logo click -> bare root) and brandLogoUrl="/static/…" (bare -> 404). The active
+    # theme here is the legacy HSBC THEME_OVERRIDES (which can't carry those Ant tokens),
+    # and a DB-stored theme can override config anyway — so this is fixed reliably at the
+    # edge instead (nginx-edge.conf: bare "/" with a /bi referer -> /bi/superset/welcome/,
+    # and the bare logo image path -> /bi/static/…). See SUPERSET_SSO_INTEGRATION.md §3.
 
 # ==============================================================================
 # Feature Flags
@@ -121,3 +128,77 @@ HTTP_HEADERS = {
 WTF_CSRF_EXEMPT_LIST = [
     "superset.security.api",
 ]
+
+# ==============================================================================
+# HSBC Brand Theme
+# ------------------------------------------------------------------------------
+# Primary: HSBC Red #DB0011  |  Dark: #B3000E
+# Text:    #333333            |  Background: #FFFFFF / #F5F5F5
+# ==============================================================================
+
+# Chart color palette — HSBC red as primary, complementary business colors
+EXTRA_CATEGORICAL_COLORS = [
+    "#DB0011",  # HSBC Red
+    "#333333",  # HSBC Dark Gray
+    "#7A0010",  # Deep Red
+    "#0066CC",  # Trust Blue
+    "#E85D2C",  # Warm Orange
+    "#2D8C4A",  # Forest Green
+    "#8C5A9E",  # Rich Purple
+    "#CC6600",  # Amber
+    "#006B6B",  # Teal
+    "#B3000E",  # Dark HSBC Red
+    "#555555",  # Mid Gray
+    "#E6007E",  # Magenta
+]
+
+EXTRA_SEQUENTIAL_COLORS = [
+    "#FFF5F5", "#F5D5D9", "#EBAAB3", "#E07F8D",
+    "#D65467", "#CC2A41", "#C2001B", "#B8000A",
+    "#990000", "#7A0000",
+]
+
+THEME_OVERRIDES = {
+    "borderRadius": 4,
+    "colors": {
+        "primary": {
+            "base": "#DB0011",
+            "dark1": "#B3000E",
+            "dark2": "#8A000B",
+            "light1": "#F5D5D9",
+            "light2": "#FDE8EA",
+        },
+        "secondary": {
+            "base": "#333333",
+            "dark1": "#222222",
+            "dark2": "#111111",
+            "light1": "#E8E8E8",
+            "light2": "#F5F5F5",
+        },
+        "grayscale": {
+            "base": "#666666",
+            "dark1": "#333333",
+            "dark2": "#111111",
+            "light1": "#CCCCCC",
+            "light2": "#F5F5F5",
+            "light3": "#FAFAFA",
+            "light4": "#FFFFFF",
+            "light5": "#FFFFFF",
+        },
+        "error": {
+            "base": "#DB0011",
+        },
+        "warning": {
+            "base": "#E85D2C",
+        },
+        "success": {
+            "base": "#2D8C4A",
+        },
+        "info": {
+            "base": "#0066CC",
+        },
+    },
+    "typography": {
+        "family": "'Helvetica Neue', Helvetica, Arial, sans-serif",
+    },
+}
