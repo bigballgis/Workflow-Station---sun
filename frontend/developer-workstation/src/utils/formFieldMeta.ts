@@ -2,6 +2,7 @@ import type { FieldDefinition, RequestIdConfig } from '@/api/functionUnit'
 import { getRuleChildren } from '@/utils/formDesigner'
 import { parsePkGeneration } from '@/utils/pkGenerationConfig'
 import { isFkHidden, isFkReadonly, type FieldFkMeta } from '@/utils/tableFkRuntime'
+import { isTableAuditField } from '@/utils/tableAuditFields'
 
 export type TaskFieldPermission = 'EDITABLE' | 'READONLY'
 
@@ -75,9 +76,10 @@ function toFkMeta(field: FieldDefinition): FieldFkMeta {
   }
 }
 
-/** Hidden structural FK: omit from form canvas; runtime still fills via fieldDefinitions. */
+/** Hidden structural FK or platform audit fields: omit from form canvas auto-import; List View catalog still shows them. */
 export function shouldIncludeFieldOnFormCanvas(field: FieldDefinition): boolean {
   if (!field?.fieldName?.trim()) return false
+  if (isTableAuditField(field.fieldName)) return false
   if (field.isForeignKey && isFkHidden(toFkMeta(field))) return false
   return true
 }
@@ -169,6 +171,10 @@ function syncRuleNode(rule: unknown, fieldByName: Map<string, FieldDefinition>):
   const r = rule as Record<string, unknown>
   const fieldName = typeof r.field === 'string' ? r.field : ''
   const field = fieldName ? fieldByName.get(fieldName) : undefined
+
+  if (fieldName && isTableAuditField(fieldName)) {
+    return null
+  }
 
   if (field && !shouldIncludeFieldOnFormCanvas(field)) {
     return null

@@ -1454,11 +1454,12 @@ async function handleBindingAdded(payload: { tableId: number; bindingType: strin
       defaultValue: f.defaultValue,
       displayName: f.displayName || f.fieldName,
     }))
-    const baseColumns = getSubTableListViewBaseColumns(bindingId)
-    const mergedViewFields = appendSubTableListFieldColumns(baseColumns, subFields)
     subTableViewState.value = {
       ...subTableViewState.value,
-      [bindingId]: { allFields: subFields, viewFields: mergedViewFields },
+      [bindingId]: {
+        allFields: subFields,
+        viewFields: getSubTableListViewBaseColumns(bindingId),
+      },
     } as typeof subTableViewState.value
 
   } else if (bindingType === 'RELATED') {
@@ -1478,7 +1479,7 @@ async function handleBindingAdded(payload: { tableId: number; bindingType: strin
     }))
     relationViewState.value = {
       ...relationViewState.value,
-      [bindingId]: { allFields: viewFields, viewFields },
+      [bindingId]: { allFields: viewFields, viewFields: [] },
     }
   }
 }

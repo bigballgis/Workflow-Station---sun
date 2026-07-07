@@ -79,11 +79,11 @@
     >
       <!-- Toolbar with Preview and Clear -->
       <div
-        v-if="displayViewFields.length > 0"
+        v-if="viewFields.length > 0"
         class="grid-toolbar"
       >
         <div class="toolbar-left">
-          <span class="field-count">{{ displayViewFields.length }} columns</span>
+          <span class="field-count">{{ viewFields.length }} columns</span>
         </div>
         <div class="toolbar-right">
           <el-button
@@ -105,11 +105,11 @@
 
       <!-- Column rows (draggable) -->
       <div
-        v-if="displayViewFields.length > 0"
+        v-if="viewFields.length > 0"
         class="column-rows"
       >
         <div
-          v-for="(field, index) in displayViewFields"
+          v-for="(field, index) in viewFields"
           :key="field.fieldName"
           class="column-row"
           :class="{ 'drag-over': dragOverIndex === index }"
@@ -136,7 +136,7 @@
       </div>
 
       <el-empty
-        v-if="displayViewFields.length === 0 && !loadingFields"
+        v-if="viewFields.length === 0 && !loadingFields"
         description="No fields imported"
       />
     </div>
@@ -215,41 +215,11 @@ const viewFields = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
-/** Shown columns: persisted viewFields, or all available fields until configured. */
-const displayViewFields = computed(() => {
-  const configured = viewFields.value
-  return configured.length > 0 ? configured : allFields.value
-})
-
-function resolveViewFieldsForMutate(): RelationFieldDTO[] {
-  return viewFields.value.length > 0 ? [...viewFields.value] : [...allFields.value]
-}
-
 // Drag state
 const dragSourceField = ref<string | null>(null)
 const dragColIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
 const isDraggingFromPanel = ref(false)
-
-// Track if we've auto-initialized the view (to avoid re-initializing)
-const autoInitialized = ref(false)
-
-function seedViewFieldsIfEmpty(fields: RelationFieldDTO[]) {
-  if (!fields.length || autoInitialized.value) return
-  if ((props.modelValue?.length ?? 0) > 0) {
-    autoInitialized.value = true
-    return
-  }
-  emit('update:modelValue', [...fields])
-  autoInitialized.value = true
-}
-
-watch(
-  () => props.binding?.bindingId,
-  () => {
-    autoInitialized.value = false
-  },
-)
 
 async function loadFields() {
   if (!props.formId || !props.binding?.bindingId) return
@@ -259,7 +229,6 @@ async function loadFields() {
     const fields: RelationFieldDTO[] = res.data || []
     localAvailableFields.value = fields
     emit('update:availableFields', fields)
-    seedViewFieldsIfEmpty(fields)
   } catch (e) {
     console.error('[RelationTableView] failed to load fields:', e)
   } finally {
@@ -271,20 +240,13 @@ async function loadFields() {
 onMounted(() => {
   if (!props.availableFields?.length) {
     loadFields()
-  } else {
-    seedViewFieldsIfEmpty(props.availableFields)
   }
 })
-
-// Watch for allFields changes - if view is empty and fields are loaded, auto-add all
-watch(() => allFields.value, (fields) => {
-  seedViewFieldsIfEmpty(fields)
-}, { immediate: true })
 
 const filteredAvailableFields = computed(() => {
   const kw = fieldSearchKeyword.value.trim().toLowerCase()
   // Only show fields NOT already in the view
-  const inView = new Set(displayViewFields.value.map(f => f.fieldName))
+  const inView = new Set(viewFields.value.map(f => f.fieldName))
   let list = allFields.value.filter(f => !inView.has(f.fieldName))
   if (kw) {
     list = list.filter(f => f.fieldName.toLowerCase().includes(kw) || (f.displayName || '').toLowerCase().includes(kw))
@@ -292,7 +254,7 @@ const filteredAvailableFields = computed(() => {
   return list
 })
 
-const isFieldInView = (fieldName: string) => displayViewFields.value.some(f => f.fieldName === fieldName)
+const isFieldInView = (fieldName: string) => viewFields.value.some(f => f.fieldName === fieldName)
 
 const getFieldIcon = (dataType: string) => {
   const type = (dataType || '').toUpperCase()
@@ -317,16 +279,16 @@ const getMockValue = (field: RelationFieldDTO): string => {
 }
 
 const previewRows = computed(() => {
-  if (displayViewFields.value.length === 0) return []
+  if (viewFields.value.length === 0) return []
   const row: Record<string, any> = {}
-  for (const f of displayViewFields.value) {
+  for (const f of viewFields.value) {
     row[f.fieldName] = getMockValue(f)
   }
   return [row]
 })
 
 const previewFieldRows = computed(() => {
-  return displayViewFields.value.map(f => ({
+  return viewFields.value.map(f => ({
     label: f.displayName || f.fieldName,
     value: getMockValue(f)
   }))
@@ -335,12 +297,12 @@ const previewFieldRows = computed(() => {
 // --- Field operations ---
 const addFieldToView = (field: RelationFieldDTO) => {
   if (!isFieldInView(field.fieldName)) {
-    emit('update:modelValue', [...resolveViewFieldsForMutate(), field])
+    emit('update:modelValue', [...viewFields.value, field])
   }
 }
 
 const removeField = (index: number) => {
-  emit('update:modelValue', resolveViewFieldsForMutate().filter((_, i) => i !== index))
+  emit('update:modelValue', viewFields.value.filter((_, i) => i !== index))
 }
 
 const handlePreview = () => { showPreview.value = true }
@@ -373,7 +335,7 @@ const onGridDrop = (e: DragEvent) => {
   const fieldName = e.dataTransfer!.getData('text/plain')
   const field = allFields.value.find(f => f.fieldName === fieldName)
   if (field && !isFieldInView(fieldName)) {
-    emit('update:modelValue', [...resolveViewFieldsForMutate(), field])
+    emit('update:modelValue', [...viewFields.value, field])
   }
   dragSourceField.value = null
   isDraggingFromPanel.value = false
@@ -397,7 +359,7 @@ const onColDragLeave = () => { dragOverIndex.value = null }
 
 const onColDrop = (_e: DragEvent, targetIndex: number) => {
   if (dragColIndex.value !== null && dragColIndex.value !== targetIndex) {
-    const arr = resolveViewFieldsForMutate()
+    const arr = [...viewFields.value]
     const [moved] = arr.splice(dragColIndex.value, 1)
     arr.splice(targetIndex, 0, moved)
     emit('update:modelValue', arr)
@@ -413,7 +375,7 @@ const onColDragEnd = () => {
 
 // --- Expose for parent (getters for save) ---
 defineExpose({
-  getViewFields: () => displayViewFields.value,
+  getViewFields: () => viewFields.value,
   getAllFields: () => allFields.value,
 })
 </script>

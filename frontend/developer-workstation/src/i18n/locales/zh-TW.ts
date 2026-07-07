@@ -302,6 +302,8 @@ export default {
     fkSettings: '外鍵設定',
     fkConfigure: '配置',
     fieldsHint: '點擊 PK/FK 標籤設定主鍵生成策略與外鍵引用。',
+    systemField: '系統',
+    auditFieldLocked: '稽核欄位（建立/更新時間與操作人）由平台自動維護，不可編輯或刪除。',
     pkGenerationStrategy: '生成策略',
     pkGenerationScope: '作用域',
     pkGenerationStartValue: '起始值',

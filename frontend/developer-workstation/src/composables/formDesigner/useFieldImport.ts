@@ -373,11 +373,12 @@ export function useFieldImport(options: UseFieldImportOptions) {
         }
 
         if (bindingId) {
-          const baseColumns = getSubTableListViewBaseColumns(bindingId)
-          const mergedViewFields = appendSubTableListFieldColumns(baseColumns, subFields)
           subTableViewState.value = {
             ...subTableViewState.value,
-            [bindingId]: { allFields: allSubFields, viewFields: mergedViewFields }
+            [bindingId]: {
+              allFields: allSubFields,
+              viewFields: getSubTableListViewBaseColumns(bindingId),
+            },
           }
         }
 

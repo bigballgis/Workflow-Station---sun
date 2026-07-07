@@ -32,11 +32,12 @@ describe('resolveBindingKeyedEntry', () => {
     expect(resolveRelationViewEntry(map, 50035, bindings)?.viewFields).toHaveLength(1)
   })
 
-  it('falls back viewFields from allFields when viewFields missing', () => {
+  it('keeps viewFields empty when designer has not selected columns', () => {
     const map = {
       '300': { allFields: [{ fieldName: 'username' }], viewFields: [] },
     }
     const bindings = [{ id: 50035, bindingType: 'RELATED' as const, sortOrder: 2 }]
-    expect(resolveRelationViewEntry(map, 50035, bindings)?.viewFields).toHaveLength(1)
+    expect(resolveRelationViewEntry(map, 50035, bindings)?.viewFields).toHaveLength(0)
+    expect(resolveRelationViewEntry(map, 50035, bindings)?.allFields).toHaveLength(1)
   })
 })

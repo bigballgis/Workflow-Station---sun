@@ -62,8 +62,6 @@ export function resolveRelationViewEntry(
   if (!entry || typeof entry !== 'object') return undefined
   const rec = entry as Record<string, unknown>
   const allFields = Array.isArray(rec.allFields) ? rec.allFields : []
-  const viewFields = Array.isArray(rec.viewFields) && rec.viewFields.length > 0
-    ? rec.viewFields
-    : allFields
+  const viewFields = Array.isArray(rec.viewFields) ? rec.viewFields : []
   return { allFields, viewFields }
 }

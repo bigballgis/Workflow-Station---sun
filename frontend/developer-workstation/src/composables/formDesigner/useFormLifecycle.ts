@@ -313,13 +313,6 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
             : { allFields: [], viewFields: [] },
         }
       }
-      const state = relationViewState.value[bindingId]
-      if (state && state.allFields.length > 0 && state.viewFields.length === 0) {
-        relationViewState.value = {
-          ...relationViewState.value,
-          [bindingId]: { ...state, viewFields: [...state.allFields] },
-        }
-      }
       return
     }
 
