@@ -293,8 +293,8 @@
           {{ t('user.loginHistory') }}
         </div>
         <el-table
-          v-if="user.loginHistory?.length"
-          :data="user.loginHistory"
+          v-if="successfulLoginHistory.length"
+          :data="successfulLoginHistory"
           border
           size="small"
           max-height="200"
@@ -308,11 +308,6 @@
               {{ formatDate(row.loginTime) }}
             </template>
           </el-table-column>
-          <el-table-column
-            prop="ipAddress"
-            :label="t('user.ipAddress')"
-            width="140"
-          />
           <el-table-column
             prop="loginPlatform"
             :label="t('user.loginPlatform')"
@@ -337,10 +332,6 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="failureReason"
-            :label="t('user.failureReason')"
-          />
         </el-table>
         <el-empty
           v-else
@@ -428,7 +419,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, toRef } from 'vue'
+import { watch, toRef, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserDetail } from '@/composables/modules/useUserDetail'
 
@@ -452,6 +443,10 @@ const { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, plat
   getPlatformRoleTagType, statusType, statusText, formatDate,
   loadDetail, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole, resetPassword,
 } = useUserDetail(toRef(props, 'userId'))
+
+const successfulLoginHistory = computed(() =>
+  (user.value?.loginHistory ?? []).filter((row) => row.success),
+)
 
 watch(() => props.modelValue, async (val) => {
   if (val && props.userId) { detailActiveTab.value = 'portal'; await loadDetail() }

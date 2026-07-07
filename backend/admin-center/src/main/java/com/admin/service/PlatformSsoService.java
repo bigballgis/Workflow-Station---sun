@@ -7,9 +7,11 @@ import com.admin.dto.sso.SsoRedeemRequest;
 import com.admin.dto.sso.SsoRedeemResponse;
 import com.admin.ldap.LdapAuthenticator;
 import com.admin.ldap.LdapConstants;
+import com.admin.repository.LoginAuditQueryRepository;
 import com.admin.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.security.entity.LoginAudit;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import lombok.RequiredArgsConstructor;
@@ -38,24 +40,39 @@ public class PlatformSsoService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final LoginAuditQueryRepository loginAuditQueryRepository;
     /** LDAP 认证器仅 {@code ldap.enabled=true} 时存在，故用 ObjectProvider 可选注入。 */
     private final ObjectProvider<LdapAuthenticator> ldapAuthenticatorProvider;
 
     public SsoLoginResponse loginAndIssueCode(SsoLoginRequest request) {
+        return loginAndIssueCode(request, null, null);
+    }
+    public SsoLoginResponse loginAndIssueCode(SsoLoginRequest request, String ipAddress, String userAgent) {
         validateRedirectUri(request.getClientId(), request.getRedirectUri());
 
         // LDAP 为权威源：统一登录页同样优先走 LDAP bind（成功即 JIT 回写 sys_users），
         // 仅在 LDAP 关闭 / 用户不在 LDAP / LDAP 不可用时回退本地账号密码。
-        User user = authenticate(request.getUsername(), request.getPassword());
-
+        User user = authenticateWithFailureAudit(request.getUsername(), request.getPassword(), ipAddress, userAgent);
         if (user.getStatus() == UserStatus.LOCKED) {
+            recordLoginAuditFailure(request.getUsername(), ipAddress, userAgent, "Account is locked");
             throw new IllegalArgumentException("Account is locked");
         }
         if (user.getStatus() == UserStatus.INACTIVE) {
+            recordLoginAuditFailure(request.getUsername(), ipAddress, userAgent, "Account is disabled");
             throw new IllegalArgumentException("Account is disabled");
         }
-
         return buildCode(user.getId(), request.getClientId(), request.getRedirectUri(), request.getState());
+    }
+
+    /** 仅认证失败（口令/用户）记登录审计；redirect 校验与 code 签发失败不记，避免误报。 */
+    private User authenticateWithFailureAudit(String username, String password,
+                                              String ipAddress, String userAgent) {
+        try {
+            return authenticate(username, password);
+        } catch (RuntimeException e) {
+            recordLoginAuditFailure(username, ipAddress, userAgent, e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -189,7 +206,32 @@ public class PlatformSsoService {
             throw new IllegalArgumentException("redirectUri not allowed");
         }
     }
-
+    private void recordLoginAuditFailure(String username, String ipAddress, String userAgent, String reason) {
+        try {
+            Optional<User> userOpt = userRepository.findByUsername(username);
+            LoginAudit audit = LoginAudit.builder()
+                    .userId(userOpt.map(User::getId).orElse(null))
+                    .username(userOpt.map(User::getUsername).orElse(username))
+                    .action(LoginAudit.AuditAction.LOGIN)
+                    .ipAddress(ipAddress)
+                    .userAgent(truncateUserAgent(userAgent))
+                    .loginPlatform(LoginAudit.LoginPlatform.ADMIN_CENTER)
+                    .success(false)
+                    .failureReason(reason != null && reason.length() > 255
+                            ? reason.substring(0, 255) : reason)
+                    .build();
+            loginAuditQueryRepository.save(audit);
+            log.debug("Recorded SSO login failure audit for user: {}, reason: {}", username, reason);
+        } catch (Exception e) {
+            log.error("Failed to record SSO login failure audit: {}", e.getMessage());
+        }
+    }
+    private String truncateUserAgent(String userAgent) {
+        if (userAgent == null) {
+            return null;
+        }
+        return userAgent.length() > 500 ? userAgent.substring(0, 500) : userAgent;
+    }
     private record Payload(String userId, String clientId, String state) {
     }
 }
