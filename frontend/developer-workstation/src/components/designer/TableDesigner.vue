@@ -272,16 +272,17 @@
             stripe
             row-key="__uid"
             class="table-fields-grid"
+            :row-class-name="auditFieldRowClassName"
           >
             <el-table-column
               width="36"
               align="center"
               class-name="col-order"
             >
-              <template #default="{ $index }">
+              <template #default="{ row, $index }">
                 <div class="field-order-btns">
                   <el-button
-                    v-if="$index > 0"
+                    v-if="$index > 0 && !isTableAuditField(row.fieldName)"
                     link
                     size="small"
                     class="order-btn"
@@ -290,7 +291,7 @@
                     <el-icon><CaretTop /></el-icon>
                   </el-button>
                   <el-button
-                    v-if="$index < selectedTable.fieldDefinitions.length - 1"
+                    v-if="$index < selectedTable.fieldDefinitions.length - 1 && !isTableAuditField(row.fieldName) && !isTableAuditField(selectedTable.fieldDefinitions[$index + 1]?.fieldName)"
                     link
                     size="small"
                     class="order-btn"
@@ -307,11 +308,24 @@
               min-width="128"
             >
               <template #default="{ row, $index }">
-                <el-input
-                  v-model="row.displayName"
-                  size="small"
-                  @update:model-value="onFieldDisplayNameInput(row, $index)"
-                />
+                <div class="field-display-cell">
+                  <el-input
+                    v-model="row.displayName"
+                    size="small"
+                    :disabled="isTableAuditField(row.fieldName)"
+                    @update:model-value="onFieldDisplayNameInput(row, $index)"
+                  />
+                  <el-tag
+                    v-if="isTableAuditField(row.fieldName)"
+                    size="small"
+                    type="info"
+                    effect="plain"
+                    round
+                    class="audit-field-tag"
+                  >
+                    {{ t('table.systemField') }}
+                  </el-tag>
+                </div>
               </template>
             </el-table-column>
             <el-table-column
@@ -323,6 +337,7 @@
                 <el-input
                   v-model="row.fieldName"
                   size="small"
+                  :disabled="isTableAuditField(row.fieldName)"
                   @input="onFieldNameManualInput(row)"
                 />
               </template>
@@ -336,6 +351,7 @@
                 <el-select
                   v-model="row.dataType"
                   size="small"
+                  :disabled="isTableAuditField(row.fieldName)"
                 >
                   <el-option
                     label="VARCHAR"
@@ -386,6 +402,7 @@
                   v-model="row.length"
                   size="small"
                   :min="0"
+                  :disabled="isTableAuditField(row.fieldName)"
                   controls-position="right"
                   class="compact-number length-number"
                 />
@@ -397,7 +414,10 @@
               align="center"
             >
               <template #default="{ row }">
-                <el-checkbox v-model="row.nullable" />
+                <el-checkbox
+                  v-model="row.nullable"
+                  :disabled="isTableAuditField(row.fieldName)"
+                />
               </template>
             </el-table-column>
             <el-table-column
@@ -410,10 +430,11 @@
                 <div class="constraint-cell">
                   <el-checkbox
                     v-model="row.isPrimaryKey"
+                    :disabled="isTableAuditField(row.fieldName)"
                     @change="(val: boolean) => onPrimaryKeyChange(row, val)"
                   />
                   <PkGenerationEditor
-                    v-if="row.isPrimaryKey"
+                    v-if="row.isPrimaryKey && !isTableAuditField(row.fieldName)"
                     v-model="row.pkGeneration"
                     :enabled="true"
                     variant="popover"
@@ -428,6 +449,7 @@
             >
               <template #default="{ row }">
                 <FieldForeignKeyEditor
+                  v-if="!isTableAuditField(row.fieldName)"
                   :is-foreign-key="row.isForeignKey"
                   :ref-table-id="row.refTableId"
                   :ref-primary-key-fields="row.refPrimaryKeyFields"
@@ -437,6 +459,10 @@
                   @update:ref-table-id="row.refTableId = $event"
                   @update:ref-primary-key-fields="row.refPrimaryKeyFields = $event"
                 />
+                <span
+                  v-else
+                  class="text-muted"
+                >—</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -449,6 +475,7 @@
                 <el-input
                   v-model="row.defaultValue"
                   size="small"
+                  :disabled="isTableAuditField(row.fieldName)"
                   :placeholder="t('common.inputPlaceholder')"
                 />
               </template>
@@ -466,6 +493,7 @@
                   size="small"
                   :min="1"
                   :max="38"
+                  :disabled="isTableAuditField(row.fieldName)"
                   controls-position="right"
                   class="compact-number"
                 />
@@ -488,6 +516,7 @@
                   size="small"
                   :min="0"
                   :max="20"
+                  :disabled="isTableAuditField(row.fieldName)"
                   controls-position="right"
                   class="compact-number"
                 />
@@ -505,8 +534,9 @@
               <template #header>
                 <span class="col-header-short">&nbsp;</span>
               </template>
-              <template #default="{ $index }">
+              <template #default="{ row, $index }">
                 <el-tooltip
+                  v-if="!isTableAuditField(row.fieldName)"
                   :content="t('table.delete')"
                   placement="top"
                 >
@@ -713,7 +743,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh, InfoFilled, WarningFilled, CaretTop, CaretBottom, Delete } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import { type TableDefinition, type ForeignKeyDTO, type RequestIdConfig } from '@/api/functionUnit'
+import { type TableDefinition, type FieldDefinition, type ForeignKeyDTO, type RequestIdConfig } from '@/api/functionUnit'
 import RelationDiagramEditor from '@/components/designer/RelationDiagramEditor.vue'
 import RequestIdConfigDialog from '@/components/designer/RequestIdConfigDialog.vue'
 import PkGenerationEditor from '@/components/designer/PkGenerationEditor.vue'
@@ -725,6 +755,7 @@ import { useTableEditor } from '@/composables/tableDesigner/useTableEditor'
 import { useTableCreate } from '@/composables/tableDesigner/useTableCreate'
 import { useTableTemplate } from '@/composables/tableDesigner/useTableTemplate'
 import { useTableTools } from '@/composables/tableDesigner/useTableTools'
+import { isTableAuditField } from '@/utils/tableAuditFields'
 
 interface TableRelation {
   id?: number
@@ -768,6 +799,10 @@ function onRequestIdConfirm(cfg: RequestIdConfig | null) {
   if (selectedTable.value) {
     selectedTable.value.requestIdConfig = cfg
   }
+}
+
+function auditFieldRowClassName({ row }: { row: FieldDefinition }) {
+  return isTableAuditField(row.fieldName) ? 'audit-field-row' : ''
 }
 
 // Shared technical-name primitives (validation + availability check).
@@ -1125,6 +1160,25 @@ onMounted(loadTables)
       padding-right: 24px;
     }
   }
+
+  :deep(tr.audit-field-row) {
+    background-color: var(--el-fill-color-lighter);
+  }
+
+  :deep(tr.audit-field-row:hover > td.el-table__cell) {
+    background-color: var(--el-fill-color-light);
+  }
+}
+
+.field-display-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.audit-field-tag {
+  flex-shrink: 0;
 }
 
 .constraint-cell {

@@ -30,6 +30,25 @@ describe('formFieldMeta', () => {
     expect(shouldIncludeFieldOnFormCanvas(fk)).toBe(false)
   })
 
+  it('omits platform audit fields from canvas import', () => {
+    for (const name of ['created_at', 'created_by', 'updated_at', 'updated_by']) {
+      expect(shouldIncludeFieldOnFormCanvas(field({ fieldName: name, dataType: 'TIMESTAMP' }))).toBe(false)
+    }
+  })
+
+  it('removes audit field rules when syncing canvas with table metadata', () => {
+    const fields = [field({ fieldName: 'name' })]
+    const synced = syncFormRulesWithTableFields(
+      [
+        { field: 'name', type: 'input', props: {} },
+        { field: 'created_at', type: 'input', props: {} },
+      ],
+      fields,
+    ) as Array<Record<string, unknown>>
+    expect(synced).toHaveLength(1)
+    expect(synced[0].field).toBe('name')
+  })
+
   it('marks readonly FK and auto PK on imported rules', () => {
     const fk = field({
       fieldName: 'main_id',

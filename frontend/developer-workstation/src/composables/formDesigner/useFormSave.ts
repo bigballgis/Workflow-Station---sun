@@ -19,6 +19,7 @@ import {
 import { walkRulesApplyTableFieldDefaultsToPersistedRules } from '@/utils/formCreateRuleDefaults'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdRule } from '@/utils/formFieldMeta'
+import { TABLE_AUDIT_FIELD_NAMES } from '@/utils/tableAuditFields'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 import type { PortalViewsValue } from './useSubTablePortalViews'
 
@@ -75,7 +76,7 @@ export function useFormSave(options: UseFormSaveOptions) {
    * Standard audit fields auto-appended to every new table by TableDesignComponentImpl.
    * Always valid in form rules even before the table backfill runs.
    */
-  const ALWAYS_VALID_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', '__request_id'])
+  const ALWAYS_VALID_FIELDS = new Set([...TABLE_AUDIT_FIELD_NAMES, '__request_id'])
 
   /** Validate field names against Data_Table columns */
   function validateFieldNames(fieldNames: string[]): string[] {
@@ -213,15 +214,6 @@ export function useFormSave(options: UseFormSaveOptions) {
               options: serializeFormCreateOptionsForPersist(existing.options),
             }
           }
-        }
-      })
-
-      // Incrementally add sub-form fields to list view columns (preserve link/lookup columns).
-      designerSubBindings.value.forEach((binding) => {
-        if (binding.bindingType !== 'SUB') return
-        const subForm = subForms[binding.bindingId]
-        if (subForm?.rule?.length) {
-          syncSubTableListViewFromFormRules(binding.bindingId, subForm.rule)
         }
       })
 

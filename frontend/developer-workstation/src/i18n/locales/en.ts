@@ -265,6 +265,8 @@ export default {
     fkSettings: 'Foreign key settings',
     fkConfigure: 'Configure',
     fieldsHint: 'Click PK/FK tags to configure generation strategy and references.',
+    systemField: 'System',
+    auditFieldLocked: 'Audit fields (created/updated at/by) are managed by the platform and cannot be edited or removed.',
     pkGenerationStrategy: 'Strategy',
     pkGenerationScope: 'Scope',
     pkGenerationStartValue: 'Start value',

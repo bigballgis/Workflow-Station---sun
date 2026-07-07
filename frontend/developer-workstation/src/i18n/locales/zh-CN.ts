@@ -302,6 +302,8 @@ export default {
     fkSettings: '外键设置',
     fkConfigure: '配置',
     fieldsHint: '点击 PK/FK 标签配置主键生成策略与外键引用。',
+    systemField: '系统',
+    auditFieldLocked: '审计字段（创建/更新时间与操作人）由平台自动维护，不可编辑或删除。',
     pkGenerationStrategy: '生成策略',
     pkGenerationScope: '作用域',
     pkGenerationStartValue: '起始值',
