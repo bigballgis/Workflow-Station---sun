@@ -23,6 +23,8 @@ export interface SubTableBinding {
   tableType: string
   tableDescription: string
   columns: Column[]
+  /** Form-design canvas columns for Add/Edit dialog. */
+  dialogColumns?: Column[]
   /** Designer PK field names (from admin tableBindings); preferred over hardcoded id/rowId. */
   primaryKeyFields?: string[]
   data: any[]
@@ -34,6 +36,8 @@ export interface SubTableBinding {
 export interface SubTableFieldProps {
   title: string
   columns: Column[]
+  /** Form-design canvas columns for Add/Edit row dialog (Designer parity). */
+  dialogColumns?: Column[]
   modelValue?: any[]
   editable?: boolean
   loading?: boolean

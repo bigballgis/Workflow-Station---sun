@@ -20,6 +20,8 @@ type DialogT = (key: string) => string
 interface FormProps {
   visible: boolean
   columns: DialogColumn[]
+  /** List-view columns used to auto-fill audit fields on save (may include fields hidden from the dialog). */
+  auditColumns?: DialogColumn[]
   mode: 'add' | 'edit'
   initialData?: Record<string, any>
   rowFormulas?: RowFormulaRule[]
@@ -181,9 +183,9 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     // Audit fields are generated at real save time (never when the dialog opens):
     // add fills created_* + updated_*, edit refreshes updated_* only.
     if (props.mode === 'add') {
-      applyAuditFieldDefaults(row, props.columns)
+      applyAuditFieldDefaults(row, props.auditColumns ?? props.columns)
     } else {
-      applyEditAuditDefaults(row, props.columns)
+      applyEditAuditDefaults(row, props.auditColumns ?? props.columns)
     }
     saving.value = true
     try {

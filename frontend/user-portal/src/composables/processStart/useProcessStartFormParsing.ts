@@ -37,7 +37,7 @@ export function createProcessStartFormParsing(deps: {
   } = deps
 
   const { extractFieldsRecursive } = createFieldExtractor({ lookupDbConfigs, relationViewConfigs })
-  const { deriveColumnsFromBinding } = createSubTableColumnDeriver({ lookupDbConfigs, relationViewConfigs })
+  const { deriveColumnsFromBinding, deriveDialogColumnsFromBinding } = createSubTableColumnDeriver({ lookupDbConfigs, relationViewConfigs })
 
   // 解析表单配置 - 将 form-create 规则转换为 FormRenderer 字段
   const parseFormConfig = (configStr: string) => {
@@ -85,6 +85,7 @@ export function createProcessStartFormParsing(deps: {
     extractFieldsRecursive,
     convertFormCreateRule,
     deriveColumnsFromBinding,
+    deriveDialogColumnsFromBinding,
     isSyntheticLookupField,
     isAssigneeLikeLabel,
   }

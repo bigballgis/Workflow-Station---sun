@@ -362,7 +362,7 @@ const {
 } = state
 
 // 表单解析（form-create 规则 → 字段、子表列推导）
-const { parseFormConfig, deriveColumnsFromBinding } = createProcessStartFormParsing({
+const { parseFormConfig, deriveColumnsFromBinding, deriveDialogColumnsFromBinding } = createProcessStartFormParsing({
   lookupDbConfigs,
   relationViewConfigs,
   formConfigJson,
@@ -544,6 +544,7 @@ const loadFunctionUnitContent = async () => {
           ?? subTablePortalViewsPayload[String(b.bindingId)]
           ?? null
         const columns = resolveSubTableBindingColumnsForStart(b, subForms, formConfigForPk)
+        const dialogColumns = deriveDialogColumnsFromBinding(b, subForms)
         bindings.push({
           bindingId: b.bindingId,
           tableId: tid != null ? Number(tid) : null,
@@ -558,6 +559,7 @@ const loadFunctionUnitContent = async () => {
             formConfigForPk
           ),
           columns,
+          ...(dialogColumns.length > 0 ? { dialogColumns } : {}),
           portalViews: bindingPortalViews,
           fieldDefinitions: resolveBindingFieldDefinitions(
             { tableId: tid, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
@@ -577,6 +579,8 @@ const loadFunctionUnitContent = async () => {
           const bindingId = Number(bindingIdStr)
           if (!subForm || !Array.isArray((subForm as any).rule)) continue
           const fakeBinding = { bindingId, subFormConfig: subForm }
+          const listCols = resolveSubTableBindingColumnsForStart(fakeBinding, subForms, formConfigForPk)
+          const dialogCols = deriveDialogColumnsFromBinding(fakeBinding, subForms)
           bindings.push({
             bindingId,
             tableId: null,
@@ -586,7 +590,8 @@ const loadFunctionUnitContent = async () => {
             tableType: 'SUB',
             tableDescription: '',
             primaryKeyFields: undefined,
-            columns: resolveSubTableBindingColumnsForStart(fakeBinding, subForms, formConfigForPk),
+            columns: listCols,
+            ...(dialogCols.length > 0 ? { dialogColumns: dialogCols } : {}),
             fieldDefinitions: [],
             data: []
           })

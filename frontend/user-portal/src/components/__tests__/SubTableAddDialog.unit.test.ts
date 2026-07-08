@@ -123,6 +123,24 @@ describe('audit field timing (save-time fill, no open-time prefill)', () => {
     expect(row.name).toBe('')
   })
 
+  it('applyAuditFieldDefaults uses list-view columns when dialog omits audit fields (#canvas-dialog)', () => {
+    const dialogColumns: DialogColumn[] = [
+      { field: 'id', label: 'id', type: 'text' },
+      { field: 'main_id', label: 'main_id', type: 'text' },
+      { field: 'testinfo', label: 'testinfo', type: 'text' },
+    ]
+    const listColumns: DialogColumn[] = [
+      ...dialogColumns,
+      { field: 'created_at', label: 'Created At', type: 'datetime' },
+      { field: 'updated_at', label: 'Updated At', type: 'datetime' },
+    ]
+    const row = buildInitialRow(dialogColumns)
+    applyAuditFieldDefaults(row, listColumns)
+    expect(row.created_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(row.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(row.testinfo).toBe('')
+  })
+
   it('applyEditAuditDefaults refreshes only updated_* on edit-save', () => {
     const row: Record<string, unknown> = {
       created_at: '2020-01-01 00:00:00',

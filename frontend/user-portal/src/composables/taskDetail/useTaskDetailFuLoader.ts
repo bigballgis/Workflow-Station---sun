@@ -29,6 +29,7 @@ import {
   inferColumnTypeFromFieldAndValue,
   buildRelationTableFieldIndexFromDataTables,
   isAuditField,
+  resolveSubFormDialogColumnsForBinding,
 } from '@/components/subTableAddDialogHelpers'
 import { createFuContentCache } from './fuContentCache'
 import {
@@ -264,6 +265,10 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
             if (isAuditField(col.field)) (col as any).readonly = true
           }
           const subFormDesign = ctx.resolveSubFormDesign(b, subForms)
+          const dialogColumns = resolveSubFormDialogColumnsForBinding(b, subForms, {
+            lookupDbConfigs: lookupDbConfigs.value,
+            relationViewConfigs: relationViewConfigs.value,
+          })
           // Per-binding portalViews lookup tolerates both numeric and string keys
           // (JSON.parse always yields strings, but designer code may have stored numeric keys).
           const bindingPortalViews =
@@ -279,6 +284,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
             tableType: b.tableType,
             tableDescription: b.tableDescription,
             columns,
+            ...(dialogColumns.length > 0 ? { dialogColumns } : {}),
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
             portalViews: bindingPortalViews,

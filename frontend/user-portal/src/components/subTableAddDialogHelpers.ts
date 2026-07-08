@@ -68,3 +68,11 @@ export {
 
 // Table cell display value resolution
 export { resolveDisplayValue } from './subTableAddDialogHelpers/displayValue'
+
+// Form-design canvas columns (Add/Edit dialog — excludes list-view-only audit columns)
+export {
+  mapSubFormRuleToDialogColumns,
+  resolveSubFormDialogColumnsForBinding,
+  resolveSubFormRuleForBinding,
+  type SubFormColumnLookupContext,
+} from './subTableAddDialogHelpers/subFormCanvasColumns'
