@@ -37,14 +37,25 @@ export function useSubTableRowDialog(
   const editingRowIndex = ref<number | null>(null)
   const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
 
+  const dialogSourceColumns = computed(() =>
+    (props.dialogColumns?.length ? props.dialogColumns : props.columns),
+  )
+
   const editableColumns = computed(() =>
     normalizeSubTableColumns(
-      props.columns.filter(col => col.type !== 'linkForm'),
+      dialogSourceColumns.value.filter(col => col.type !== 'linkForm'),
       rows.value,
     ),
   )
 
   const dialogAddColumns = ref<DialogColumn[] | null>(null)
+
+  const listViewColumnsForAudit = computed(() =>
+    normalizeSubTableColumns(
+      props.columns.filter(col => col.type !== 'linkForm'),
+      rows.value,
+    ),
+  )
 
   const subTableDialogColumns = computed(() => {
     if (dialogAddColumns.value) return dialogAddColumns.value
@@ -205,6 +216,7 @@ export function useSubTableRowDialog(
     editingRowIndex,
     dialogInitialData,
     subTableDialogColumns,
+    listViewColumnsForAudit,
     handleAdd,
     openEditDialog,
     handleDialogSave,

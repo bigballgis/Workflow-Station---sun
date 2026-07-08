@@ -23,6 +23,8 @@ export interface ProcessStartSubTableBinding {
   /** Designer PK columns from tableBindings (admin-center); avoids hardcoding id/rowId. */
   primaryKeyFields?: string[]
   columns: Array<{ field: string; label: string; type?: string }>
+  /** Form-design canvas columns for Add/Edit dialog (excludes list-view-only fields). */
+  dialogColumns?: Array<{ field: string; label: string; type?: string }>
   portalViews?: Partial<SubTablePortalViews> | null
   data: any[]
   fieldDefinitions?: BindingFieldDefinition[]

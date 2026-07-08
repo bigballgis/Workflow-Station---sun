@@ -367,6 +367,7 @@
     <SubTableAddDialog
       :visible="dialogVisible"
       :columns="subTableDialogColumns"
+      :audit-columns="listViewColumnsForAudit"
       :mode="dialogMode"
       :initial-data="dialogInitialData"
       :row-formulas="rowFormulas"
@@ -559,6 +560,8 @@ const { t } = useI18n()
 const props = withDefaults(defineProps<{
   title: string
   columns: Column[]
+  /** Form-design canvas columns for Add/Edit row dialog (excludes list-view-only audit fields). */
+  dialogColumns?: Column[]
   modelValue?: any[]
   editable?: boolean
   loading?: boolean
@@ -882,6 +885,7 @@ const {
   editingRowIndex,
   dialogInitialData,
   subTableDialogColumns,
+  listViewColumnsForAudit,
   handleAdd,
   openEditDialog,
   handleDialogSave,
