@@ -534,6 +534,7 @@ import type { RowFormulaRule, SubTableValidationConfig } from './formRendererHel
 import { calculateSummary } from './businessLogicEngine'
 import FieldRenderer from './FieldRenderer.vue'
 import PortalFormFields from './PortalFormFields.vue'
+import dayjs from 'dayjs'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import type { Column, SubTableBinding } from '@/composables/subTableField/subTableFieldTypes'
 import { sanitizeHtml } from '@/composables/subTableField/subTableHtmlSanitize'
@@ -749,6 +750,22 @@ function handleImportFile(event: Event) {
   input.value = ''
 }
 
+// Normalize a date/datetime cell to ISO 8601 for export.
+// Handles the app's stored formats (YYYY-MM-DD / YYYY-MM-DD HH:mm:ss), Java LocalDateTime
+// arrays ([y,mo,d,h,mi,s]), epoch numbers, Date objects and locale strings (e.g. 7/7/2026).
+// Unparseable values are passed through untouched rather than dropped.
+function toIsoDateCell(raw: unknown, withTime: boolean): string {
+  if (raw == null || raw === '') return ''
+  const outFmt = withTime ? 'YYYY-MM-DDTHH:mm:ss' : 'YYYY-MM-DD'
+  if (Array.isArray(raw)) {
+    const [y, mo = 1, d = 1, h = 0, mi = 0, s = 0] = raw as number[]
+    const dt = dayjs(new Date(y, mo - 1, d, h, mi, s))
+    return dt.isValid() ? dt.format(outFmt) : String(raw)
+  }
+  const dt = dayjs(raw as string | number | Date)
+  return dt.isValid() ? dt.format(outFmt) : String(raw)
+}
+
 // A lookup cell holds either the primary-key scalar directly or a full row snapshot.
 // Export the PK scalar so re-import can rehydrate the cell via fetchLookupRowByPrimaryKey.
 function lookupExportScalar(col: Column, raw: unknown): string {
@@ -773,7 +790,11 @@ function handleExport() {
   // Append data rows
   for (const row of rows.value) {
     const values = cols.map(c => {
-      const v = c.type === 'lookup' ? lookupExportScalar(c, row[c.field]) : row[c.field]
+      let v: unknown
+      if (c.type === 'lookup') v = lookupExportScalar(c, row[c.field])
+      else if (c.type === 'date') v = toIsoDateCell(row[c.field], false)
+      else if (c.type === 'datetime') v = toIsoDateCell(row[c.field], true)
+      else v = row[c.field]
       if (v == null || v === '') return ''
       return `"${String(v).replace(/"/g, '""')}"`
     })
