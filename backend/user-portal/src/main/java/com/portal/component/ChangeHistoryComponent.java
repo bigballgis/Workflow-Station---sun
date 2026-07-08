@@ -176,12 +176,30 @@ public class ChangeHistoryComponent {
         for (SubTableChange change : changes) {
             ChangeType changeType = mapSubTableChangeType(change.getChangeType());
 
-            // Dedup: same (processInstanceId + normalized name + changeType + rowId) → skip
+            // Dedup: same (processInstanceId + normalized name + changeType + rowId) within this batch
             String dedupKey = context.getProcessInstanceId() + "|" + normalizedName + "|"
                     + change.getChangeType() + "|" + change.getRowIdentifier();
             if (!seen.add(dedupKey)) {
-                log.debug("Skipping duplicate sub-table change record: {}", dedupKey);
+                log.debug("Skipping duplicate sub-table change record (in-batch): {}", dedupKey);
                 continue;
+            }
+
+            String newVal = toDisplayString(change.getNewValues());
+            String oldVal = toDisplayString(change.getOldValues());
+
+            // Dedup across saves: skip if the last persisted record for this row is identical
+            if (changeType == ChangeType.SUB_TABLE_ROW_UPDATE) {
+                ChangeHistory lastRecord = changeHistoryRepository
+                        .findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndChangeTypeOrderByTimestampDesc(
+                                context.getProcessInstanceId(), normalizedName,
+                                change.getRowIdentifier(), ChangeType.SUB_TABLE_ROW_UPDATE);
+                if (lastRecord != null
+                        && Objects.equals(lastRecord.getOldValue(), oldVal)
+                        && Objects.equals(lastRecord.getNewValue(), newVal)) {
+                    log.debug("Skipping duplicate sub-table change record (cross-save): process={}, table={}, row={}",
+                            context.getProcessInstanceId(), normalizedName, change.getRowIdentifier());
+                    continue;
+                }
             }
 
             ChangeHistory record = ChangeHistory.builder()
@@ -191,8 +209,8 @@ public class ChangeHistoryComponent {
                     .userId(context.getUserId())
                     .timestamp(now)
                     .fieldName(normalizedName)
-                    .oldValue(toDisplayString(change.getOldValues()))
-                    .newValue(toDisplayString(change.getNewValues()))
+                    .oldValue(oldVal)
+                    .newValue(newVal)
                     .changeType(changeType)
                     .subTableName(normalizedName)
                     .rowIdentifier(change.getRowIdentifier())
