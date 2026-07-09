@@ -51,7 +51,13 @@ public class BusinessUnitRoleService {
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         
         validateBusinessRole(role);
-        
+
+        // 验证角色必须为启用状态
+        if (!"ACTIVE".equals(role.getStatus())) {
+            throw new AdminBusinessException("ROLE_INACTIVE",
+                    "Cannot bind an inactive role: " + role.getName());
+        }
+
         // 检查是否已绑定
         if (businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(businessUnitId, roleId)) {
             throw new AdminBusinessException("ALREADY_BOUND", i18nService.getMessage("admin.role_already_bound"));
