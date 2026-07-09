@@ -193,6 +193,15 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     } else {
       bindingForm.value.bindingMode = 'READONLY'
     }
+    // Re-derive the link field from the newly selected table (a field name from the previous table may
+    // not exist here). Only on user table change — handleEdit sets tableId programmatically without this.
+    if (bt === 'SUB') {
+      if (bindingForm.value.bindingLinkMode === 'miParticipantRow') {
+        suggestParticipantRowField()
+      } else if (bindingForm.value.bindingLinkMode === 'structuralFk') {
+        bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
+      }
+    }
   }
 
   // Edit binding
@@ -229,31 +238,20 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     }
   })
 
-  watch(
-    () => bindingForm.value.bindingLinkMode,
-    (mode) => {
-      if (bindingForm.value.bindingType !== 'SUB') return
-      if (mode === 'miParticipantRow' && !bindingForm.value.foreignKeyField) {
-        suggestParticipantRowField()
-      }
-      if (mode === 'structuralFk') {
-        bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
-      }
-    },
-  )
-
-  watch(
-    () => bindingForm.value.tableId,
-    () => {
-      if (bindingForm.value.bindingType !== 'SUB') return
-      if (bindingForm.value.bindingLinkMode === 'miParticipantRow' && !bindingForm.value.foreignKeyField) {
-        suggestParticipantRowField()
-      }
-      if (bindingForm.value.bindingLinkMode === 'structuralFk') {
-        bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
-      }
-    },
-  )
+  /**
+   * User clicked the Link Mode radio. MI Participant Row auto-fills Participant Row Field with the table
+   * PK (the field that identifies each MI participant) — always, so switching from Structural FK replaces
+   * the carried-over FK value. Only fires on user interaction (not on programmatic {@link handleEdit} load,
+   * which must keep the persisted value). Mirrors the structuralFk reset.
+   */
+  function handleBindingLinkModeChange(mode: BindingLinkMode | string | number | boolean | undefined) {
+    if (bindingForm.value.bindingType !== 'SUB') return
+    if (mode === 'miParticipantRow') {
+      suggestParticipantRowField()
+    } else if (mode === 'structuralFk') {
+      bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
+    }
+  }
 
   return {
     submitting,
@@ -274,6 +272,7 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     bindingLinkModeLabel,
     isTableBound,
     handleBindingTypeChange,
+    handleBindingLinkModeChange,
     loadDeployedRelationTables,
     handleTableSelect,
     handleEdit,

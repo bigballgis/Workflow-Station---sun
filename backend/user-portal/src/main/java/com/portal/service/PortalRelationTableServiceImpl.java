@@ -748,7 +748,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     /** Load full field definitions for a deployed relation table (for validation / import / edit form). */
     private List<RelationFieldDTO> loadFields(Long tableId) {
         String sql = "SELECT field_name, data_type, length, precision_value, scale, nullable, "
-                + "is_primary_key, default_value, display_name, sort_order, pk_generation_json::text AS pk_json "
+                + "is_primary_key, default_value, display_name, sort_order, pk_generation_json::text AS pk_json, "
+                + "lookup_config::text AS lookup_json, is_foreign_key, ref_table_id, "
+                + "ref_primary_key_fields::text AS ref_pk_json, fk_display_mode "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
         return jdbcTemplate.query(sql, (rs, n) -> RelationFieldDTO.builder()
                 .fieldName(rs.getString("field_name"))
@@ -762,6 +764,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 .displayName(rs.getString("display_name"))
                 .sortOrder((Integer) rs.getObject("sort_order"))
                 .pkGeneration(parsePkGeneration(rs.getString("pk_json")))
+                .lookupConfig(parsePkGeneration(rs.getString("lookup_json")))
+                .isForeignKey((Boolean) rs.getObject("is_foreign_key"))
+                .refTableId((Long) rs.getObject("ref_table_id"))
+                .refPrimaryKeyFields(parseStringList(rs.getString("ref_pk_json")))
+                .fkDisplayMode(rs.getString("fk_display_mode"))
                 .build(), tableId);
     }
 
@@ -770,6 +777,15 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         if (json == null || json.isBlank()) return null;
         try {
             return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<String> parseStringList(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
         } catch (Exception e) {
             return null;
         }

@@ -69,6 +69,7 @@ public class RelationTableResponse {
         private List<String> refPrimaryKeyFields;
         private Map<String, Object> pkGeneration;
         private String fkDisplayMode;
+        private Map<String, Object> lookupConfig;
 
         /**
          * 从字段定义实体转换
@@ -94,6 +95,7 @@ public class RelationTableResponse {
                     .refPrimaryKeyFields(entity.getRefPrimaryKeyFields())
                     .pkGeneration(entity.getPkGenerationJson())
                     .fkDisplayMode(entity.getFkDisplayMode())
+                    .lookupConfig(entity.getLookupConfig())
                     .build();
         }
     }

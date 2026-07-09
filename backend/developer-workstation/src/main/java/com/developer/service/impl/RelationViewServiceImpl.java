@@ -70,7 +70,8 @@ public class RelationViewServiceImpl implements RelationViewService {
         return jdbcTemplate.query(sql, (rs, rowNum) -> RelationFieldDTO.builder()
                 .id(rs.getLong("id"))
                 .fieldName(rs.getString("field_name"))
-                .dataType(RelationDataType.valueOf(rs.getString("data_type")))
+                // fromCode (not valueOf): tolerate unknown data types (e.g. LOOKUP) without 500.
+                .dataType(RelationDataType.fromCode(rs.getString("data_type")))
                 .length(rs.getObject("length", Integer.class))
                 .precision(rs.getObject("precision_value", Integer.class))
                 .scale(rs.getObject("scale", Integer.class))

@@ -82,4 +82,34 @@ public class RelationFieldDTO implements Serializable {
      * Only meaningful when {@link #isPrimaryKey} is true; null otherwise.
      */
     private java.util.Map<String, Object> pkGeneration;
+
+    /**
+     * LOOKUP field configuration. Only meaningful when {@link #dataType} is
+     * {@link RelationDataType#LOOKUP}. Carries refTableId, searchFields,
+     * displayFields, selectedDisplayField, filterConditions, showBackfillView,
+     * multiple, and the derivedFrom block (parentField + join columns) that
+     * drives derived auto-fill / cascade filtering between two lookup columns.
+     */
+    private java.util.Map<String, Object> lookupConfig;
+
+    /**
+     * Whether this column is a foreign-key reference to another Relation Table.
+     * Carried through the deploy snapshot so FK config survives deployment.
+     */
+    private Boolean isForeignKey;
+
+    /**
+     * Target Relation Table id when {@link #isForeignKey} is true.
+     */
+    private Long refTableId;
+
+    /**
+     * Referenced table's primary-key field names when {@link #isForeignKey} is true.
+     */
+    private java.util.List<String> refPrimaryKeyFields;
+
+    /**
+     * FK display mode: {@code readonly | hidden | editable}. Null when not an FK.
+     */
+    private String fkDisplayMode;
 }

@@ -151,6 +151,12 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         .defaultValue(f.getDefaultValue())
                         .displayName(f.getDisplayName())
                         .sortOrder(f.getSortOrder())
+                        .pkGeneration(f.getPkGeneration())
+                        .lookupConfig(f.getLookupConfig())
+                        .isForeignKey(f.getIsForeignKey())
+                        .refTableId(f.getRefTableId())
+                        .refPrimaryKeyFields(f.getRefPrimaryKeyFields())
+                        .fkDisplayMode(f.getFkDisplayMode())
                         .build())
                 .collect(Collectors.toList());
         return RelationTableResponse.builder()
@@ -204,6 +210,159 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 dataParams.toArray());
 
         return new PageImpl<>(dtoList, pageable, total);
+    }
+
+    private static final int LOOKUP_MAX_LIMIT = 200;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
+                                                     List<String> searchFields, String displayField,
+                                                     String filterConditions, int limit, int offset) {
+        try {
+            int safeLimit = Math.min(Math.max(1, limit), LOOKUP_MAX_LIMIT);
+            int safeOffset = Math.max(0, offset);
+
+            RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
+            List<RelationFieldDTO> fields = getDeployedFields(tableDef);
+            Set<String> allowedFields = fields.stream()
+                    .map(RelationFieldDTO::getFieldName)
+                    .filter(this::isSafeFieldName)
+                    .collect(Collectors.toSet());
+            Map<String, String> fieldDataTypes = fields.stream()
+                    .filter(f -> f.getDataType() != null)
+                    .collect(Collectors.toMap(RelationFieldDTO::getFieldName, f -> f.getDataType().name(), (a, b) -> a));
+
+            List<String> predicates = new ArrayList<>();
+            List<Object> params = new ArrayList<>();
+            params.add(tableId);
+
+            for (LookupFilterCondition filter : parseLookupFilterConditions(filterConditions, allowedFields)) {
+                appendLookupFilterPredicate(predicates, params,
+                        "data->>'" + filter.fieldName() + "'", filter, fieldDataTypes.get(filter.fieldName()));
+            }
+
+            if (keyword != null && !keyword.isBlank() && searchFields != null && !searchFields.isEmpty()) {
+                List<String> sanitized = searchFields.stream()
+                        .filter(allowedFields::contains)
+                        .collect(Collectors.toList());
+                if (!sanitized.isEmpty()) {
+                    String keywordClause = sanitized.stream()
+                            .map(f -> "data->>'" + f + "' ILIKE ?")
+                            .collect(Collectors.joining(" OR "));
+                    String likePattern = "%" + keyword + "%";
+                    predicates.add("data::text ILIKE ?");
+                    params.add(likePattern);
+                    predicates.add("(" + keywordClause + ")");
+                    sanitized.forEach(ignored -> params.add(likePattern));
+                }
+            }
+
+            params.add(safeLimit);
+            params.add(safeOffset);
+            String sql = "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?"
+                    + (predicates.isEmpty() ? "" : " AND " + String.join(" AND ", predicates))
+                    + " ORDER BY id LIMIT ? OFFSET ?";
+            return jdbcTemplate.query(sql, (rs, rowNum) -> parseRowData(rs.getString("data")), params.toArray());
+        } catch (Exception e) {
+            log.warn("Failed to search for lookup in tableId {}: {}", tableId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getViewFields(Long tableId) {
+        try {
+            RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
+            List<RelationFieldDTO> fields = getDeployedFields(tableDef);
+            List<Map<String, Object>> out = new ArrayList<>();
+            int order = 0;
+            for (RelationFieldDTO f : fields) {
+                if (SYSTEM_ROW_FIELDS.contains(f.getFieldName())) continue;
+                Map<String, Object> vf = new LinkedHashMap<>();
+                vf.put("fieldName", f.getFieldName());
+                vf.put("displayLabel", f.getDisplayName() != null && !f.getDisplayName().isBlank()
+                        ? f.getDisplayName() : f.getFieldName());
+                vf.put("sortOrder", order++);
+                vf.put("visible", true);
+                out.add(vf);
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("Failed to load view fields for tableId {}: {}", tableId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private static final Set<String> SYSTEM_ROW_FIELDS =
+            Set.of("created_at", "created_by", "updated_at", "updated_by", "status");
+
+    private record LookupFilterCondition(String fieldName, String value, String matchType) {}
+
+    private static final java.util.regex.Pattern NUMERIC_FILTER_VALUE =
+            java.util.regex.Pattern.compile("^-?\\d+(\\.\\d+)?$");
+
+    private List<LookupFilterCondition> parseLookupFilterConditions(String raw, Set<String> allowedFields) {
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<List<LookupFilterCondition>>() {})
+                    .stream()
+                    .filter(c -> c.fieldName() != null && c.value() != null && !c.value().isBlank()
+                            && allowedFields.contains(c.fieldName()))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("Ignoring invalid lookup filter conditions: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private void appendLookupFilterPredicate(List<String> predicates, List<Object> params,
+                                             String fieldExpression, LookupFilterCondition filter, String dataType) {
+        String matchType = filter.matchType() == null ? "eq" : filter.matchType();
+        boolean isBoolean = "BOOLEAN".equalsIgnoreCase(dataType);
+        if (isBoolean || "eq".equals(matchType)) {
+            if (isBoolean) {
+                predicates.add("LOWER(CAST(" + fieldExpression + " AS TEXT)) = ?");
+                params.add(normalizeBooleanFilterValue(filter.value()));
+                return;
+            }
+            if (isNumericFilterDataType(dataType) && NUMERIC_FILTER_VALUE.matcher(filter.value().trim()).matches()) {
+                predicates.add("CAST(CASE WHEN CAST(" + fieldExpression + " AS TEXT) ~ '^-?[0-9]+(\\.[0-9]+)?$'"
+                        + " THEN CAST(" + fieldExpression + " AS TEXT) END AS NUMERIC) = CAST(? AS NUMERIC)");
+                params.add(filter.value().trim());
+                return;
+            }
+            predicates.add(fieldExpression + " = ?");
+            params.add(filter.value());
+            return;
+        }
+        String pattern = switch (matchType) {
+            case "startsWith" -> filter.value() + "%";
+            case "endsWith" -> "%" + filter.value();
+            default -> "%" + filter.value() + "%";
+        };
+        predicates.add("CAST(" + fieldExpression + " AS TEXT) ILIKE ?");
+        params.add(pattern);
+    }
+
+    private boolean isNumericFilterDataType(String dataType) {
+        if (dataType == null) return false;
+        return switch (dataType.toUpperCase()) {
+            case "INTEGER", "BIGINT", "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE" -> true;
+            default -> false;
+        };
+    }
+
+    private String normalizeBooleanFilterValue(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase();
+        return switch (normalized) {
+            case "1", "yes" -> "true";
+            case "0", "no" -> "false";
+            default -> normalized;
+        };
     }
 
     @Override
@@ -519,7 +678,9 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             }
         }
         List<RelationFieldDTO> fields = jdbcTemplate.query(
-                "SELECT id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, display_name, sort_order, pk_generation_json::text AS pk_json "
+                "SELECT id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, display_name, sort_order, "
+                + "pk_generation_json::text AS pk_json, lookup_config::text AS lookup_json, "
+                + "is_foreign_key, ref_table_id, ref_primary_key_fields::text AS ref_pk_json, fk_display_mode "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC",
                 (rs, rowNum) -> RelationFieldDTO.builder()
                         .id(rs.getLong("id"))
@@ -534,6 +695,11 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         .displayName(rs.getString("display_name"))
                         .sortOrder(rs.getInt("sort_order"))
                         .pkGeneration(parsePkGenerationJson(rs.getString("pk_json")))
+                        .lookupConfig(parsePkGenerationJson(rs.getString("lookup_json")))
+                        .isForeignKey(rs.getObject("is_foreign_key", Boolean.class))
+                        .refTableId(rs.getObject("ref_table_id", Long.class))
+                        .refPrimaryKeyFields(parseStringListJson(rs.getString("ref_pk_json")))
+                        .fkDisplayMode(rs.getString("fk_display_mode"))
                         .build(),
                 tableDef.getId());
         if (fields.isEmpty()) {
@@ -569,6 +735,17 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         }
         try {
             return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<String> parseStringListJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
         } catch (Exception e) {
             return null;
         }
@@ -655,7 +832,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
      */
     private boolean isTextType(RelationFieldDTO field) {
         return switch (field.getDataType()) {
-            case VARCHAR, TEXT -> true;
+            case VARCHAR, TEXT, LOOKUP -> true;
             default -> false;
         };
     }

@@ -113,10 +113,9 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useZIndex } from 'element-plus'
 import { Close, Check } from '@element-plus/icons-vue'
-import { relationTableApi } from '@/api/relationTable'
+import { relationTableDataApi, type LookupFilterCondition } from '@/api/relationTable'
 import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
-import { getLookupSelectedDisplayFieldFromProps, resolveLookupCellTagText } from '../subTableAddDialogHelpers'
-import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
+import { resolveLookupCellTagText } from './lookupHelpers'
 
 export interface LookupViewField {
   fieldName: string
@@ -206,7 +205,7 @@ const LOOKUP_MAX_ROWS = 10000
 async function fetchAllLookupRows(): Promise<Record<string, any>[]> {
   const rows: Record<string, any>[] = []
   for (let offset = 0; offset < LOOKUP_MAX_ROWS; offset += LOOKUP_PAGE_SIZE) {
-    const res = await relationTableApi.searchForLookup(props.tableId, {
+    const res = await relationTableDataApi.searchForLookup(props.tableId, {
       keyword: '',
       searchFields: props.searchFields || [],
       displayField: props.displayField || '',
@@ -214,7 +213,7 @@ async function fetchAllLookupRows(): Promise<Record<string, any>[]> {
       limit: LOOKUP_PAGE_SIZE,
       offset
     })
-    const batch = res.data || []
+    const batch = res || []
     rows.push(...batch)
     if (batch.length < LOOKUP_PAGE_SIZE) return rows
   }
@@ -230,12 +229,12 @@ async function loadAllData() {
     const [dataRows, vfRes] = await Promise.all([
       fetchAllLookupRows(),
       (!effectiveViewFields.value.length)
-        ? relationTableApi.getViewFields(props.tableId)
-        : Promise.resolve({ data: [] })
+        ? relationTableDataApi.getViewFields(props.tableId)
+        : Promise.resolve([] as LookupViewField[])
     ])
     allRows.value = dataRows
-    if (vfRes.data?.length) {
-      loadedViewFields.value = vfRes.data as LookupViewField[]
+    if (vfRes?.length) {
+      loadedViewFields.value = vfRes as LookupViewField[]
       emit('viewFieldsLoaded', loadedViewFields.value)
     }
     dataLoaded.value = true
@@ -249,36 +248,6 @@ async function loadAllData() {
 
 const { nextZIndex } = useZIndex()
 const dropdownZIndex = ref(3000)
-
-// Absolute floor: keep the dropdown above the base app chrome even if no overlay is present.
-const LOOKUP_DROPDOWN_Z_FLOOR = 3000
-// Safety margin above the current top overlay so the dropdown clears not just the overlay
-// but its own popper children (el-scrollbar, tooltips) that Element Plus stacks a few above it.
-const LOOKUP_DROPDOWN_Z_OFFSET = 10
-
-// Highest z-index among the currently active dialogs / overlays / poppers on the page.
-// The lookup is teleported to <body>, so it competes directly with these for stacking; a single
-// nextZIndex() is not enough because Element Plus can hand later overlays (or their poppers) a
-// higher counter value, re-covering the dropdown after it opened.
-function currentTopLayerZIndex(): number {
-  const SELECTOR = '.el-overlay, .el-overlay-dialog, .el-dialog, .el-popper, .el-picker__popper, .el-select__popper'
-  let top = 0
-  document.querySelectorAll<HTMLElement>(SELECTOR).forEach(node => {
-    // Skip our own dropdown so re-computation doesn't chase its own z-index upward.
-    if (node === dropdownRef.value) return
-    const z = parseInt(window.getComputedStyle(node).zIndex, 10)
-    if (Number.isFinite(z) && z > top) top = z
-  })
-  return top
-}
-
-// Resolve the dropdown's z-index against the live stacking context: above the current top overlay
-// + margin, never below the absolute floor. `base` seeds the lower bound — at open we pass a fresh
-// nextZIndex() (bumps EP's shared counter once); on scroll/resize we pass the current value so the
-// dropdown never drops below where it already sits and we don't burn the counter per scroll tick.
-function resolveDropdownZIndex(base: number): number {
-  return Math.max(base, currentTopLayerZIndex() + LOOKUP_DROPDOWN_Z_OFFSET, LOOKUP_DROPDOWN_Z_FLOOR)
-}
 
 // Position the teleported dropdown under the field using its viewport rect.
 function updateDropdownPosition() {
@@ -296,10 +265,10 @@ function updateDropdownPosition() {
 
 function handleFocus() {
   if (props.readonly) return
-  // Compute the z-index against the current top overlay so the dropdown sits above it — critical
-  // when the lookup is rendered inside an el-dialog (e.g. Add ATM Transaction), whose overlay
-  // z-index would otherwise cover a fixed-z dropdown.
-  dropdownZIndex.value = resolveDropdownZIndex(nextZIndex())
+  // Take a fresh z-index from Element Plus's shared counter so the dropdown sits above the current
+  // top overlay — critical when the lookup is rendered inside an el-dialog (Add Record), whose
+  // overlay z-index would otherwise cover a fixed-z dropdown.
+  dropdownZIndex.value = nextZIndex()
   dropdownVisible.value = true
   updateDropdownPosition()
   loadAllData()
@@ -384,7 +353,7 @@ function initFromModelValue(val: any) {
     selectedRow.value = scalarRow
     searchKeyword.value = String(getDisplayValue(scalarRow) || '')
     emit('select', scalarRow)
-    void hydrateScalarFromRelationTable(val)
+    void hydrateScalarFromRelationTable(String(val))
     return
   }
   if (typeof val === 'string') {
@@ -479,10 +448,6 @@ async function hydrateScalarFromRelationTable(scalar: string | number) {
   }
 }
 
-function primaryDisplayField(): string {
-  return getLookupSelectedDisplayFieldFromProps(props)
-}
-
 function refreshSearchKeywordFromSelectedRow() {
   if (!selectedRow.value) return
   searchKeyword.value = String(getDisplayValue(selectedRow.value) ?? '')
@@ -544,11 +509,8 @@ function onClickOutside(e: MouseEvent) {
 }
 
 // Keep the floating dropdown aligned while it's open; close on far scroll is acceptable but we just reposition.
-// Also re-resolve the z-index: scrolling/resizing the host dialog can raise a sibling overlay above us,
-// so refresh stacking together with position to avoid the dropdown slipping back under the dialog.
 function onViewportChange() {
   if (dropdownVisible.value) {
-    dropdownZIndex.value = resolveDropdownZIndex(dropdownZIndex.value)
     updateDropdownPosition()
   }
 }
@@ -560,9 +522,9 @@ onMounted(() => {
 
   // Eagerly load view fields so LookupViewDisplay can show them after selection
   if (props.tableId && !effectiveViewFields.value.length) {
-    relationTableApi.getViewFields(props.tableId).then(res => {
-      if (res.data?.length) {
-        loadedViewFields.value = res.data as LookupViewField[]
+    relationTableDataApi.getViewFields(props.tableId).then(res => {
+      if (res?.length) {
+        loadedViewFields.value = res as LookupViewField[]
         emit('viewFieldsLoaded', loadedViewFields.value)
       }
     }).catch(() => {})

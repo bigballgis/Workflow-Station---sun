@@ -330,6 +330,8 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             case TIME -> "TIME";
             case BYTEA -> "BYTEA";
             case FILE -> "VARCHAR(" + (field.getLength() != null ? field.getLength() : 500) + ")";
+            // Stores the referenced row's PK (scalar) or a JSON array of PKs (multi-value) as text.
+            case LOOKUP -> "TEXT";
         };
     }
 
@@ -347,6 +349,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             case TIME -> "'00:00:00'::time";
             case BYTEA -> "''::bytea";
             case FILE -> "''";
+            case LOOKUP -> "''";
         };
     }
 
@@ -572,6 +575,12 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
                         .defaultValue(f.getDefaultValue())
                         .displayName(f.getDisplayName())
                         .sortOrder(f.getSortOrder())
+                        .pkGeneration(f.getPkGenerationJson())
+                        .lookupConfig(f.getLookupConfig())
+                        .isForeignKey(f.getIsForeignKey())
+                        .refTableId(f.getRefTableId())
+                        .refPrimaryKeyFields(f.getRefPrimaryKeyFields())
+                        .fkDisplayMode(f.getFkDisplayMode())
                         .build())
                 .collect(Collectors.toList());
 

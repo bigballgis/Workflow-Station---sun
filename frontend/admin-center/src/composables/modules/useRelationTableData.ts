@@ -7,7 +7,8 @@
 
 import { ref, computed } from 'vue'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
-import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse, type RelationImportResult } from '@/api/relationTable'
+import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse, type RelationImportResult, type LookupConfig, type LookupFilterCondition } from '@/api/relationTable'
+import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, type FieldLike } from '@/components/lookup/useLookupBehaviors'
 
 export function useRelationTableData() {
   const tableListLoading = ref(false)
@@ -32,6 +33,9 @@ export function useRelationTableData() {
   const formData = ref<Record<string, any>>({})
 
   const localStatusMap = ref<Record<string, string>>({})
+
+  // Selected lookup rows keyed by field name — feeds the backfill panel and derived cascade.
+  const lookupSelectedData = ref<Record<string, Record<string, any> | null>>({})
 
   const SYSTEM_COLUMNS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
 
@@ -140,10 +144,11 @@ export function useRelationTableData() {
     dialogMode.value = 'add'
     editingRowId.value = null
     formData.value = {}
+    lookupSelectedData.value = {}
     for (const f of fieldColumns.value) {
       if (f.isForeignKey && f.fkDisplayMode === 'hidden') continue
       ;(formData.value as Record<string, unknown>)[f.fieldName] =
-        f.defaultValue ?? (f.dataType === 'BOOLEAN' ? false : null)
+        f.defaultValue ?? (f.dataType === 'BOOLEAN' ? false : (f.dataType === 'LOOKUP' && f.lookupConfig?.multiple ? [] : null))
     }
     try {
       for (const f of fieldColumns.value) {
@@ -166,16 +171,78 @@ export function useRelationTableData() {
 
   const openEditDialog = (row: RelationTableDataRow) => {
     dialogMode.value = 'edit'; editingRowId.value = row.rowId; formData.value = {}
+    lookupSelectedData.value = {}
     fieldColumns.value.forEach(f => { (formData.value as Record<string, unknown>)[f.fieldName] = row.data?.[f.fieldName] ?? null })
     dialogVisible.value = true
+  }
+
+  // ---- LOOKUP fields ----
+  const fieldsAsLike = (): FieldLike[] =>
+    fieldColumns.value.map(f => ({ fieldName: f.fieldName, dataType: f.dataType, lookupConfig: f.lookupConfig }))
+
+  const isLookupField = (f: FieldDefinitionResponse) => f.dataType === 'LOOKUP'
+
+  /** Effective filter conditions for a lookup field, incl. cascade from its parent's selected row. */
+  const lookupFilterConditionsFor = (field: FieldDefinitionResponse): LookupFilterCondition[] => {
+    const cfg = field.lookupConfig
+    const base = cfg?.filterConditions || []
+    const parent = cfg?.derivedFrom?.parentField
+    if (!parent) return base
+    return buildDerivedFilterConditions(base, cfg, lookupSelectedData.value[parent])
+  }
+
+  /** When a lookup value is picked: store the row (for backfill) and drive any dependent lookups. */
+  const onLookupSelect = async (field: FieldDefinitionResponse, row: Record<string, any> | null) => {
+    lookupSelectedData.value = { ...lookupSelectedData.value, [field.fieldName]: row }
+    // Resolve every dependent lookup whose parent is this field (autofill mode).
+    for (const dep of fieldColumns.value) {
+      if (dep.dataType !== 'LOOKUP') continue
+      if (dep.lookupConfig?.derivedFrom?.parentField !== field.fieldName) continue
+      const res = await resolveDerivedLookup(
+        { fieldName: dep.fieldName, dataType: dep.dataType, lookupConfig: dep.lookupConfig },
+        row,
+        fieldsAsLike(),
+      )
+      if (!res.skip) {
+        ;(formData.value as Record<string, unknown>)[dep.fieldName] = res.value
+      }
+    }
+  }
+
+  const onLookupClear = (field: FieldDefinitionResponse) => {
+    lookupSelectedData.value = { ...lookupSelectedData.value, [field.fieldName]: null }
+    // Clear dependents' derived values.
+    for (const dep of fieldColumns.value) {
+      if (dep.dataType === 'LOOKUP' && dep.lookupConfig?.derivedFrom?.parentField === field.fieldName
+          && dep.lookupConfig?.derivedFrom?.derivedMode === 'autofill') {
+        ;(formData.value as Record<string, unknown>)[dep.fieldName] = dep.lookupConfig?.multiple ? [] : null
+      }
+    }
+  }
+
+  const lookupViewFieldsFor = (field: FieldDefinitionResponse) => {
+    const cfg = field.lookupConfig
+    return (cfg?.displayFields || []).map((fn, i) => ({ fieldName: fn, displayLabel: fn, sortOrder: i, visible: true }))
   }
 
   const handleSaveRecord = async () => {
     if (!selectedTableId.value) return
     saving.value = true
     try {
+      // Map lookup field name → its config so we can normalize row objects → stored PKs.
+      const lookupCfgByField = new Map<string, LookupConfig>()
+      for (const f of fieldColumns.value) {
+        if (f.dataType === 'LOOKUP' && f.lookupConfig) lookupCfgByField.set(f.fieldName, f.lookupConfig)
+      }
       const cleanData: Record<string, unknown> = {}
       for (const [key, val] of Object.entries(formData.value)) {
+        if (lookupCfgByField.has(key)) {
+          const pk = normalizeLookupValueForSave(val, lookupCfgByField.get(key))
+          if (pk !== null && pk !== undefined && pk !== '' && !(Array.isArray(pk) && pk.length === 0)) {
+            cleanData[key] = pk
+          }
+          continue
+        }
         if (val !== null && val !== undefined && val !== '') cleanData[key] = val
       }
       if (dialogMode.value === 'add') {
@@ -310,6 +377,7 @@ export function useRelationTableData() {
     fetchDataError, dialogVisible, dialogMode, editingRowId, formData,
     selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
     isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
+    lookupSelectedData, isLookupField, lookupFilterConditionsFor, onLookupSelect, onLookupClear, lookupViewFieldsFor,
     fetchTables, fetchData, handleSelectTable, handlePageChange, handleSizeChange,
     openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
     formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, init, refresh,
