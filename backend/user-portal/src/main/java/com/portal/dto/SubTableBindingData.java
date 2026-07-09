@@ -26,4 +26,6 @@ public class SubTableBindingData {
     private Long subListViewId;
     private List<Map<String, Object>> columns;
     private List<Map<String, Object>> data;
+    /** Primary key field names from dw_field_definitions.is_primary_key. */
+    private List<String> primaryKeyFields;
 }

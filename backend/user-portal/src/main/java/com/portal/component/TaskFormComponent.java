@@ -359,6 +359,19 @@ public class TaskFormComponent {
 
             Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
             updatedVariables.putAll(editableData);
+
+            // Store initial __subTables__ baseline on first save so completion can produce a
+            // single consolidated change history record instead of one per save.
+            String baselineKey = "_baseline_subTables_" + taskInfo.taskDefinitionKey;
+            if (!updatedVariables.containsKey(baselineKey)) {
+                Object subTables = currentVariables.get("__subTables__");
+                if (subTables != null) {
+                    updatedVariables.put(baselineKey, subTables);
+                    log.info("Stored sub-table baseline for task {}: key={}, rowCount={}",
+                            taskId, baselineKey,
+                            subTables instanceof Map ? ((Map<?, ?>) subTables).size() : "?");
+                }
+            }
             // System audit fields: refresh updated_at/updated_by at the real update (key present
             // only when the field is on the form); created_* is preserved from the insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
@@ -373,6 +386,7 @@ public class TaskFormComponent {
 
         /*
          * Change history runs after the write TransactionTemplate commits so failures cannot mark it rollback-only.
+         * Sub-table change history is deferred to task completion for consolidated recording.
          */
         ChangeHistoryContext context = ChangeHistoryContext.builder()
                 .processInstanceId(taskInfo.processInstanceId)
@@ -395,10 +409,8 @@ public class TaskFormComponent {
                 changeHistoryComponent.recordConcurrentModificationWarning(
                         taskInfo.processInstanceId, field, "unknown", userId);
             }
+            // Record field-level changes (top-level form fields only; sub-table changes deferred to completion)
             changeHistoryComponent.recordFieldChanges(context, snapshotOldVars, editableData);
-            subTableChangeRecorder().recordSubTableChangeHistory(context,
-                    snapshotOldVars.get("__subTables__"),
-                    editableData.get("__subTables__"));
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
         }
