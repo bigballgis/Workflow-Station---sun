@@ -27,9 +27,11 @@ public class ChangeHistoryController {
     @GetMapping("/{processInstanceId}/change-history")
     @Operation(summary = "获取流程变更历史")
     public ApiResponse<List<ChangeHistoryRecord>> getChangeHistory(
-            @PathVariable String processInstanceId) {
-        log.debug("GET /processes/{}/change-history", processInstanceId);
-        List<ChangeHistoryRecord> history = changeHistoryComponent.getChangeHistory(processInstanceId);
+            @PathVariable String processInstanceId,
+            @RequestParam(required = false) String rowIdentifier,
+            @RequestParam(required = false) String taskId) {
+        log.debug("GET /processes/{}/change-history, rowIdentifier={}, taskId={}", processInstanceId, rowIdentifier, taskId);
+        List<ChangeHistoryRecord> history = changeHistoryComponent.getChangeHistory(processInstanceId, rowIdentifier, taskId);
         return ApiResponse.success(history);
     }
 }

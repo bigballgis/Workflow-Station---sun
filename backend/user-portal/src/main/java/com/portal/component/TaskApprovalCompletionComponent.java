@@ -18,9 +18,12 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Approval (APPROVE/REJECT) completion path: builds outcome variables, injects the MI collection,
@@ -118,6 +121,10 @@ public class TaskApprovalCompletionComponent {
         log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})",
                 taskId, userId, action, variables.get("approvalStatus"));
 
+        // Capture sub-table baseline stored on first save for consolidated change history
+        String baselineKey = "_baseline_subTables_" + task.getTaskDefinitionKey();
+        AtomicReference<Object> baselineSubTablesRef = new AtomicReference<>();
+
         // Sync approval variables to local ProcessInstance for Completed Tasks / My Requests
         // Must copy into a new HashMap; in-place edit breaks Hibernate JSON dirty detection
         // Same reference makes Hibernate dirty-check think unchanged and skip UPDATE
@@ -127,11 +134,16 @@ public class TaskApprovalCompletionComponent {
             if (syncOpt.isPresent()) {
                 ProcessInstance syncInstance = syncOpt.get();
                 Map<String, Object> existingVars = syncInstance.getVariables();
+                baselineSubTablesRef.set(existingVars != null ? existingVars.get(baselineKey) : null);
+                log.debug("Sub-table baseline for task {}: key={}, found={}",
+                        taskId, baselineKey, baselineSubTablesRef.get() != null);
                 Map<String, Object> mergedVars = new HashMap<>();
                 if (existingVars != null) {
                     mergedVars.putAll(existingVars);
                 }
                 mergedVars.putAll(variables);
+                // Clean up the baseline key so it does not persist in process variables
+                mergedVars.remove(baselineKey);
                 taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
                         taskId, userId, task.getTaskDefinitionKey(), mergedVars);
                 // Prevent geometric __subTables__ bloat: collapse deep nested copies to the canonical
@@ -184,11 +196,11 @@ public class TaskApprovalCompletionComponent {
                             .build();
                     // Record top-level field changes
                     changeHistoryComponent.recordFieldChanges(chContext, chOldVars, chSubmitted);
-                    // Record sub-table changes
-                    Object chOldSubTables = chOldVars.get("__subTables__");
+                    // Record sub-table changes using the pre-saves baseline so all
+                    // incremental saves are consolidated into one change per row.
                     Object chNewSubTables = chSubmitted.get("__subTables__");
                     if (chNewSubTables != null) {
-                        recordSubTableChangeHistory(chContext, chOldSubTables, chNewSubTables);
+                        recordSubTableChangeHistory(chContext, baselineSubTablesRef.get(), chNewSubTables);
                     }
                 }
             }
@@ -312,25 +324,116 @@ public class TaskApprovalCompletionComponent {
                                               Object oldSubTablesObj,
                                               Object newSubTablesObj) {
         if (newSubTablesObj == null) {
+            log.debug("Sub-table change history skipped: newSubTablesObj is null");
             return;
         }
         try {
             Map<String, List<Map<String, Object>>> oldRowsByTable =
                     ChangeHistoryComponent.normalizeSubTableRowsByHistoryName(oldSubTablesObj);
-            Map<String, List<Map<String, Object>>> newRowsByTable =
+
+            // Build newRows from ALL keys (including numeric binding IDs that normalizeSubTableRowsByHistoryName skips).
+            Map<String, List<Map<String, Object>>> newRowsByTable = new HashMap<>();
+            // First pass: use the normal normalization (text-key aliases)
+            Map<String, List<Map<String, Object>>> normalizedNew =
                     ChangeHistoryComponent.normalizeSubTableRowsByHistoryName(newSubTablesObj);
+            newRowsByTable.putAll(normalizedNew);
+
+            // Collect rows from numeric (binding ID) keys
+            Map<String, List<Map<String, Object>>> numericNewRows = new HashMap<>();
+            if (newSubTablesObj instanceof Map<?, ?> rawNew) {
+                for (Map.Entry<?, ?> entry : rawNew.entrySet()) {
+                    String key = entry.getKey() != null ? entry.getKey().toString() : "";
+                    if (!key.matches("\\d+")) continue;
+                    if (!(entry.getValue() instanceof List<?> rows)) continue;
+                    for (Object row : rows) {
+                        if (!(row instanceof Map<?, ?> rowMap)) continue;
+                        numericNewRows.computeIfAbsent(key, k -> new ArrayList<>())
+                                .add((Map<String, Object>) rowMap);
+                    }
+                }
+            }
+
+            if (!numericNewRows.isEmpty()) {
+                if (oldRowsByTable.isEmpty()) {
+                    // Both old and new only have numeric keys — merge all into one comparison
+                    // to avoid duplicates from the same rows appearing under different binding IDs.
+                    log.debug("Both old and new are numeric-only: merging all binding IDs into one comparison");
+                    List<Map<String, Object>> mergedOldRows = new ArrayList<>();
+                    List<Map<String, Object>> mergedNewRows = new ArrayList<>();
+                    Set<Object> seenOld = new HashSet<>();
+                    Set<Object> seenNew = new HashSet<>();
+
+                    // Collect old numeric rows (dedup by rowId)
+                    if (oldSubTablesObj instanceof Map<?, ?> rawOld) {
+                        for (Map.Entry<?, ?> entry : rawOld.entrySet()) {
+                            String key = entry.getKey() != null ? entry.getKey().toString() : "";
+                            if (!key.matches("\\d+")) continue;
+                            if (!(entry.getValue() instanceof List<?> rows)) continue;
+                            for (Object row : rows) {
+                                if (!(row instanceof Map<?, ?> rowMap)) continue;
+                                Object rowId = ChangeHistoryComponent.resolveRowIdentifier((Map<String, Object>) rowMap);
+                                if (rowId != null && seenOld.add(rowId)) {
+                                    mergedOldRows.add((Map<String, Object>) rowMap);
+                                }
+                            }
+                        }
+                    }
+
+                    // Collect new numeric rows (dedup by rowId)
+                    for (Map.Entry<String, List<Map<String, Object>>> entry : numericNewRows.entrySet()) {
+                        for (Map<String, Object> row : entry.getValue()) {
+                            Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
+                            if (rowId != null && seenNew.add(rowId)) {
+                                mergedNewRows.add(row);
+                            }
+                        }
+                    }
+
+                    // Use the binding ID as a single virtual table name for recording
+                    String virtualTable = numericNewRows.keySet().iterator().next();
+                    oldRowsByTable = Map.of(virtualTable, mergedOldRows);
+                    newRowsByTable = Map.of(virtualTable, mergedNewRows);
+                } else {
+                    // Match numeric-key rows to old table groups by row ID
+                    for (Map.Entry<String, List<Map<String, Object>>> entry : numericNewRows.entrySet()) {
+                        for (Map<String, Object> row : entry.getValue()) {
+                            Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
+                            if (rowId == null) continue;
+                            for (Map.Entry<String, List<Map<String, Object>>> oldEntry : oldRowsByTable.entrySet()) {
+                                for (Map<String, Object> oldRow : oldEntry.getValue()) {
+                                    if (java.util.Objects.equals(rowId, ChangeHistoryComponent.resolveRowIdentifier(oldRow))) {
+                                        newRowsByTable.computeIfAbsent(oldEntry.getKey(), k -> new ArrayList<>()).add(row);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                log.debug("Merged numeric-key rows: old tables={}, new tables={}",
+                        oldRowsByTable.keySet(), newRowsByTable.keySet());
+            }
+
+            log.debug("Sub-table comparison: old tables={}, new tables={}",
+                    oldRowsByTable.keySet(), newRowsByTable.keySet());
+            int totalChanges = 0;
             for (Map.Entry<String, List<Map<String, Object>>> subTableEntry : newRowsByTable.entrySet()) {
                 String subTableKey = subTableEntry.getKey();
                 List<Map<String, Object>> newRows = subTableEntry.getValue();
                 List<Map<String, Object>> oldRows = oldRowsByTable.getOrDefault(subTableKey, List.of());
                 List<SubTableChange> changes = computeSubTableRowChanges(oldRows, newRows);
+                log.debug("  table={}: oldRows={}, newRows={}, changes={}",
+                        subTableKey, oldRows.size(), newRows.size(), changes.size());
+                totalChanges += changes.size();
                 if (!changes.isEmpty()) {
-                    changeHistoryComponent.recordSubTableChanges(
+                    // Use pre-normalized name to bypass the numeric-key skip in recordSubTableChanges
+                    changeHistoryComponent.recordSubTableChangesWithName(
                             context, subTableKey, changes);
                 }
             }
+            log.debug("Sub-table change history recorded: {} total changes", totalChanges);
         } catch (Exception e) {
-            log.warn("Failed to record sub-table changes during task completion: {}", e.getMessage());
+            log.warn("Failed to record sub-table changes during task completion: {}", e.getMessage(), e);
         }
     }
 
@@ -355,10 +458,13 @@ public class TaskApprovalCompletionComponent {
             }
         }
 
+        log.debug("  computeRows: oldIds={}, newIds={}", oldRowMap.keySet(), newRowMap.keySet());
+
         // Detect ROW_ADD (in new but not in old)
         for (Map.Entry<Object, Map<String, Object>> entry : newRowMap.entrySet()) {
             Object rowId = entry.getKey();
             if (!oldRowMap.containsKey(rowId)) {
+                log.debug("    -> ROW_ADD rowId={}", rowId);
                 changes.add(SubTableChange.builder()
                         .changeType("ROW_ADD")
                         .rowIdentifier(String.valueOf(rowId))
@@ -386,19 +492,29 @@ public class TaskApprovalCompletionComponent {
             Object rowId = entry.getKey();
             Map<String, Object> oldRow = oldRowMap.get(rowId);
             if (oldRow != null) {
+                log.debug("    -> comparing rowId={}, oldFields={}, newFields={}",
+                        rowId, oldRow.keySet(), entry.getValue().keySet());
                 Map<String, Object> newRow = entry.getValue();
                 Map<String, Object> changedFields = new HashMap<>();
                 Map<String, Object> oldChangedFields = new HashMap<>();
                 boolean hasChanges = false;
                 // Compare business fields only; row identity and audit metadata are noisy for user-visible history.
                 for (Map.Entry<String, Object> field : newRow.entrySet()) {
-                    if (ChangeHistoryComponent.isSubTableRowMetadataField(field.getKey())) continue;
-                    Object oldFieldVal = oldRow.get(field.getKey());
+                    String fieldKey = field.getKey();
+                    if (ChangeHistoryComponent.isSubTableRowMetadataField(fieldKey)) continue;
+                    Object oldFieldVal = oldRow.get(fieldKey);
                     if (!java.util.Objects.equals(oldFieldVal, field.getValue())) {
-                        changedFields.put(field.getKey(), field.getValue());
-                        oldChangedFields.put(field.getKey(), oldFieldVal);
+                        log.debug("      FIELD_DIFF: {}, old={}, new={}",
+                                fieldKey,
+                                oldFieldVal == null ? "null" : "present",
+                                field.getValue() == null ? "null" : "present");
+                        changedFields.put(fieldKey, field.getValue());
+                        oldChangedFields.put(fieldKey, oldFieldVal);
                         hasChanges = true;
                     }
+                }
+                if (hasChanges) {
+                    log.debug("    -> ROW_UPDATE rowId={}, fields={}", rowId, changedFields.keySet());
                 }
                 if (hasChanges) {
                     changes.add(SubTableChange.builder()

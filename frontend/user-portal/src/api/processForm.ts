@@ -100,6 +100,11 @@ export function getCompletedTaskFormData(taskId: string) {
   return request.get<{ data: CompletedTaskFormData }>(`/tasks/${taskId}/completed-form`)
 }
 
-export function getChangeHistory(processInstanceId: string) {
-  return request.get<{ data: ChangeHistoryRecord[] }>(`/processes/${processInstanceId}/change-history`)
+export function getChangeHistory(processInstanceId: string, rowIdentifier?: string, taskId?: string) {
+  const query: string[] = []
+  if (rowIdentifier) query.push('rowIdentifier=' + encodeURIComponent(rowIdentifier))
+  if (taskId) query.push('taskId=' + encodeURIComponent(taskId))
+  const url = `/processes/${processInstanceId}/change-history` + (query.length > 0 ? '?' + query.join('&') : '')
+  console.warn('[changeHistory] API call: ', url)
+  return request.get<{ data: ChangeHistoryRecord[] }>(url)
 }
