@@ -55,8 +55,14 @@ public class VirtualGroupRoleService {
         // 验证角色存在且为业务角色
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
-        
+
         validateBusinessRole(role);
+
+        // 验证角色必须为启用状态
+        if (!"ACTIVE".equals(role.getStatus())) {
+            throw new AdminBusinessException("ROLE_INACTIVE",
+                    "Cannot bind an inactive role: " + role.getName());
+        }
         
         // 检查是否已有绑定，如果有则删除（单角色绑定，替换现有绑定）
         if (virtualGroupRoleRepository.countByVirtualGroupId(virtualGroupId) > 0) {
