@@ -102,9 +102,12 @@ class TaskProcessProperties {
         MockitoAnnotations.openMocks(this);
         com.portal.component.RequestIdEnricher requestIdEnricher =
             org.mockito.Mockito.mock(com.portal.component.RequestIdEnricher.class);
+        com.portal.component.EngineSubTableHydrator engineSubTableHydrator =
+            new com.portal.component.EngineSubTableHydrator(workflowEngineClient);
         taskQueryComponent = new TaskQueryComponent(
             processInstanceRepository,
             workflowEngineClient,
+            engineSubTableHydrator,
             taskActionService,
             new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
             new WorkspaceTaskFilterComponent(
@@ -121,6 +124,7 @@ class TaskProcessProperties {
             new MiCollectionVariableBuilder(workflowEngineClient, jdbcTemplate);
         TaskApprovalCompletionComponent taskApprovalCompletionComponent = new TaskApprovalCompletionComponent(
             workflowEngineClient,
+            engineSubTableHydrator,
             processInstanceRepository,
             changeHistoryComponent,
             taskFormComponent,

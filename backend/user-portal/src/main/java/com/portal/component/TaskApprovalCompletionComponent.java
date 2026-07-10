@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class TaskApprovalCompletionComponent {
 
     private final WorkflowEngineClient workflowEngineClient;
+    private final EngineSubTableHydrator engineSubTableHydrator;
     private final ProcessInstanceRepository processInstanceRepository;
     private final ChangeHistoryComponent changeHistoryComponent;
     private final TaskFormComponent taskFormComponent;
@@ -98,6 +99,11 @@ public class TaskApprovalCompletionComponent {
         // If MI sub-process prerequisite, read collection variable and assignee field from BPMN and build collection
         miCollectionVariableBuilder.injectMiCollectionFromBpmn(
                 task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables);
+
+        // Guard against wiping a service task's output: a bare/empty approval (e.g. an action button that
+        // never loaded or edited the grid) can carry an empty __subTables__ slice which, sent to Flowable,
+        // overwrites populated engine rows with []. Fill empty outbound slices from the live engine first.
+        preserveEngineSubTablesOnComplete(task.getProcessInstanceId(), variables);
 
         log.info("Variables before calling workflowEngineClient: {}", variables);
 
@@ -315,6 +321,38 @@ public class TaskApprovalCompletionComponent {
                     taskId, e.getMessage());
             ProcessInstanceSyncComponent.rethrowIfRollbackOnlyAfterCatch(e, taskId);
         }
+    }
+
+    /**
+     * Prevents a task completion from wiping a service task's sub-table output. When the outbound
+     * {@code variables} carry a {@code __subTables__} with an empty slice (e.g. a bare approval that
+     * never loaded or edited the grid), sending it to Flowable would overwrite the populated engine
+     * rows with {@code []}. Fills only those empty/missing slices from the live engine's {@code __subTables__};
+     * non-empty slices (real user edits, including deletions) are left untouched. Best-effort — a failed
+     * engine round-trip leaves {@code variables} unchanged. Shares the fill-empty merge with the
+     * read paths via {@link EngineSubTableHydrator}; the {@code hasEmptySlice} pre-check keeps this
+     * write path from making the engine round-trip when there is nothing to protect.
+     */
+    @SuppressWarnings("unchecked")
+    void preserveEngineSubTablesOnComplete(String processInstanceId, Map<String, Object> variables) {
+        if (processInstanceId == null || variables == null) {
+            return;
+        }
+        // Only a populated __subTables__ can overwrite the engine; if absent, Flowable keeps its own value.
+        if (!(variables.get("__subTables__") instanceof Map<?, ?> outMap) || outMap.isEmpty()) {
+            return;
+        }
+        boolean hasEmptySlice = outMap.values().stream()
+                .anyMatch(v -> !(v instanceof List<?> l) || l.isEmpty());
+        if (!hasEmptySlice) {
+            return; // every outbound slice already carries rows — nothing to protect, skip the round-trip
+        }
+        engineSubTableHydrator.mergeFromEngine(processInstanceId, (Map<String, Object>) outMap)
+                .ifPresent(result -> {
+                    variables.put("__subTables__", result.mergedSubTables());
+                    log.info("[MI] Preserved engine __subTables__ slices on completion for process {} "
+                            + "(filled empty outbound slice(s) to avoid overwriting service-task output)", processInstanceId);
+                });
     }
 
     // ========== Sub-table change history helpers ==========

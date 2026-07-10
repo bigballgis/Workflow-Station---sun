@@ -26,7 +26,7 @@ import java.util.UUID;
 public class FileUploadComponentImpl implements FileUploadComponent {
 
     private static final List<String> ALLOWED_EXTENSIONS =
-            Arrays.asList(".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx");
+            Arrays.asList(".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt");
 
     private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
 

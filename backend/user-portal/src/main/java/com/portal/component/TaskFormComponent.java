@@ -171,6 +171,32 @@ public class TaskFormComponent {
                         "Process instance not found: " + processInstanceId));
     }
 
+    /**
+     * Fills {@code target} with process variables that live only in the Flowable engine (e.g. a service
+     * task's {@code __subTables__} output) and are absent from the portal's own {@code up_process_instance}
+     * store. Gap-fill only: values already present win, so portal form submissions and user edits are never
+     * overwritten. Best-effort — a failed engine round-trip leaves the portal-store values untouched.
+     */
+    private void mergeEngineOnlyVariables(String processInstanceId, Map<String, Object> target) {
+        if (workflowEngineClient == null || processInstanceId == null) {
+            return;
+        }
+        try {
+            workflowEngineClient.getProcessInstance(processInstanceId).ifPresent(row -> {
+                Object raw = row.get("variables");
+                if (raw instanceof Map<?, ?> engineVars) {
+                    engineVars.forEach((k, v) -> {
+                        if (k != null && v != null && !target.containsKey(String.valueOf(k))) {
+                            target.put(String.valueOf(k), v);
+                        }
+                    });
+                }
+            });
+        } catch (RuntimeException e) {
+            log.debug("mergeEngineOnlyVariables skipped for {}: {}", processInstanceId, e.getMessage());
+        }
+    }
+
     @Value("${developer-workstation.url:http://localhost:8091}")
     private String developerWorkstationUrl;
 
@@ -200,6 +226,10 @@ public class TaskFormComponent {
                 ? processInstance.getVariables()
                 : Collections.emptyMap();
         Map<String, Object> hydratedVariables = new HashMap<>(allVariables);
+        // Service-task outputs (e.g. an Activepieces task that sets __subTables__) live in the Flowable
+        // engine but never reach the portal's up_process_instance store, which is only written on portal
+        // form submissions. Gap-fill from the live engine variables so task forms render those results.
+        mergeEngineOnlyVariables(taskInfo.processInstanceId, hydratedVariables);
         if (processComponent != null) {
             __t = System.nanoTime();
             processComponent.enrichSubTablesVariablesFromPhysicalTables(taskInfo.processInstanceId, hydratedVariables);

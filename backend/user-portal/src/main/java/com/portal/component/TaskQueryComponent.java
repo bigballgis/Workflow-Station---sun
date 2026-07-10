@@ -53,6 +53,7 @@ public class TaskQueryComponent {
 
     private final ProcessInstanceRepository processInstanceRepository;
     private final WorkflowEngineClient workflowEngineClient;
+    private final EngineSubTableHydrator engineSubTableHydrator;
     private final TaskActionService taskActionService;
     private final DelegatedTaskQueryComponent delegatedTaskQueryComponent;
     private final WorkspaceTaskFilterComponent workspaceTaskFilter;
@@ -446,6 +447,33 @@ public class TaskQueryComponent {
     /**
      * Get task details by ID.
      */
+    /**
+     * Fills {@code merged} sub-table slices ({@code __subTables__}) that exist only in the live Flowable
+     * engine (a service task's output the portal store never received) and persists them onto the store row
+     * so a subsequent task completion carries the rows. Fill-only: existing non-empty slices win. Best-effort.
+     */
+    @SuppressWarnings("unchecked")
+    private void hydrateEngineSubTablesIntoMerged(String processInstanceId, ProcessInstance pi, Map<String, Object> merged) {
+        if (workflowEngineClient == null || !workflowEngineClient.isAvailable()) {
+            return; // engine known-down: skip the read-path round-trip
+        }
+        Map<String, Object> current = merged.get("__subTables__") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : null;
+        engineSubTableHydrator.mergeFromEngine(processInstanceId, current).ifPresent(result -> {
+            Map<String, Object> cur = result.mergedSubTables();
+            merged.put("__subTables__", cur);
+            if (result.rowCount() != null && merged.get("rowCount") == null) {
+                merged.put("rowCount", result.rowCount());
+            }
+            // Persist only the __subTables__ addition onto the store row (not the enriched merged view).
+            Map<String, Object> storeVars = pi.getVariables() != null
+                    ? new HashMap<>(pi.getVariables()) : new HashMap<>();
+            storeVars.put("__subTables__", cur);
+            pi.setVariables(storeVars);
+            processInstanceRepository.save(pi);
+        });
+    }
+
     public Optional<TaskInfo> getTaskById(String taskId) {
         log.debug("getTaskById called with taskId: {}", taskId);
 
@@ -497,6 +525,11 @@ public class TaskQueryComponent {
                                 long __tPart = System.nanoTime();
                                 miParticipantEnricher.enrichParticipantAssignmentData(merged);
                                 log.info("[PERF] detail.enrichParticipantAssignmentData took {} ms", (System.nanoTime() - __tPart) / 1_000_000L);
+                                // Service-task outputs (e.g. an Activepieces task's __subTables__) live only in the
+                                // Flowable engine and are absent from the portal store until a form submission writes
+                                // them. The To-Do task detail grid reads these variables, so fill missing/empty
+                                // sub-table slices from the live engine and persist them (so completion carries the rows).
+                                hydrateEngineSubTablesIntoMerged(processInstanceId, pi, merged);
                                 taskInfo.setVariables(merged);
                                 log.debug("Merged variables from local DB for process {}, keys: {}",
                                     processInstanceId, merged.keySet());
