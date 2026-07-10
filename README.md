@@ -33,7 +33,7 @@ Enterprise low-code workflow platform for HSBC, providing visual process design,
                     └───────────┘
 ```
 
-浏览器访问 API 的推荐路径为 **前端 nginx → Kong → 后端**（见 [docs/architecture-diagram.md](docs/architecture-diagram.md)）；上图为逻辑组件关系，未画出 Kong 跳线。
+浏览器访问 API 的推荐路径为 **前端 nginx → Kong → 后端**（见 [docs/architecture-diagram.md](docs/architecture/architecture-diagram.md)）；上图为逻辑组件关系，未画出 Kong 跳线。
 
 ## Tech Stack
 
@@ -165,9 +165,9 @@ cd deploy/k8s
 - [BUILD_GUIDE.md](BUILD_GUIDE.md) — 构建与多环境部署
 - [deploy/README.md](deploy/README.md) — `deploy/` 目录说明
 - [docs/README.md](docs/README.md) — **文档索引**（技术栈、架构、Schema/Flyway、Demo 约定、门户/设计器 RBAC）
-- [技术栈（中文）](docs/tech-stack.md) · [Tech stack (EN)](docs/tech-stack-en.md)
-- [架构示意](docs/architecture-diagram.md) · [Schema 与迁移](docs/schema-and-migration.md) · [Demo 数据约定](docs/demo-data-requirements.md)
-- [功能单元开发指南](documentation/function-unit-development-guide.md)（深度）
+- [技术栈（中文）](docs/architecture/tech-stack.md) · [Tech stack (EN)](docs/architecture/tech-stack-en.md)
+- [架构示意](docs/architecture/architecture-diagram.md) · [Schema 与迁移](docs/schema-and-migration.md) · [Demo 数据约定](docs/demo-data-requirements.md)
+- [功能单元开发指南](docs/guides/function-unit-development-guide.md)（深度）
 - 设计规格目录：[.kiro/specs/](.kiro/specs/)
 
 ## License

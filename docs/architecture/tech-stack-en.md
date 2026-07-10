@@ -30,4 +30,4 @@ The parent `pom.xml` imports the **Spring Cloud BOM** for dependency alignment o
 - Kubernetes: `deploy/k8s/` — default **excludes** `developer-workstation` for SIT/UAT/PROD; optional YAMLs exist for lab use.
 - Edge: Kong (`deploy/kong/`, `deployment-kong.yaml`)
 
-For demo language and seed data conventions, see [demo-data-requirements.md](./demo-data-requirements.md).
+For demo language and seed data conventions, see [demo-data-requirements.md](../demo-data-requirements.md).

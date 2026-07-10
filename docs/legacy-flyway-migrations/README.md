@@ -4,7 +4,7 @@
 
 ## 为什么归档
 
-实测确认（见 [../schema-single-source-init-scripts-plan.md](../schema-single-source-init-scripts-plan.md)）：
+实测确认（见 [../schema-single-source-init-scripts-plan.md](../database/schema-single-source-init-scripts-plan.md)）：
 - **Flyway 在所有环境都是关的**：dev `docker-compose.dev.yml`、preprod、uat 的 configmap 都
   `SPRING_FLYWAY_ENABLED=false`；live 库有 179 张表但 **0 张 `flyway_schema_history`**。
 - 后端迁移**从未在任何部署中执行过**（workflow-engine-core 甚至没装 flyway 依赖，其
@@ -32,7 +32,7 @@ git 历史 + 本目录可完整恢复：把对应 `<svc>/` 移回 `backend/<svc>
 恢复 3 个服务 pom 的 flyway 依赖与根 pom 的版本/插件、把 `application.yml` 的 `flyway.enabled` 改回。
 但需先解决既有问题：重复版本号（admin V206×2、dw V321/V322×2）、缺基础表 baseline、
 跨服务版本号冲突（platform-security V210 ↔ admin-center V210）。详见
-[../flyway-unification-plan.md](../flyway-unification-plan.md)。
+[../flyway-unification-plan.md](../database/flyway-unification-plan.md)。
 
 ## 目录
 

@@ -1,7 +1,7 @@
 # 功能单元 (Function Unit) 完整开发文档
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
-> **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
+> **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../design/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../schema-and-migration.md)。  
 > 最后更新: 2026-04-10（含 §7 各控制器表格路径统一为“接在基础路径后”的相对片段）
 
 ---
@@ -1063,7 +1063,7 @@ GET /function-units/{id}/dev-groups
     └── 返回 virtualGroupId 列表
 ```
 
-详见 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)。
+详见 [docs/developer-workstation-workspace-rbac.md](../design/developer-workstation-workspace-rbac.md)。
 
 ---
 
@@ -1681,7 +1681,7 @@ management:
   - developer-workstation: 300+
   - user-portal: 400+（示例：`V405__...`）
 - **本仓库** `workflow-engine-core` **未**使用 Flyway；引擎表结构依赖 `deploy/init-scripts` 等。
-- **Dev Docker Compose** 对 admin-center / user-portal / developer-workstation 常设置 **`SPRING_FLYWAY_ENABLED=false`**，与默认 `application.yml` 不同，见 [docs/schema-and-migration.md](../docs/schema-and-migration.md) §2.1。
+- **Dev Docker Compose** 对 admin-center / user-portal / developer-workstation 常设置 **`SPRING_FLYWAY_ENABLED=false`**，与默认 `application.yml` 不同，见 [docs/schema-and-migration.md](../schema-and-migration.md) §2.1。
 - `.sql` 文件必须使用 LF 换行 (`.gitattributes` 已配置)
 
 ### 核心表清单
