@@ -250,6 +250,7 @@ async function loadAllData() {
 const { nextZIndex } = useZIndex()
 const dropdownZIndex = ref(3000)
 
+// ---- z-index hardening (admin-center LookupField carries a copy — keep the two in sync). ----
 // Absolute floor: keep the dropdown above the base app chrome even if no overlay is present.
 const LOOKUP_DROPDOWN_Z_FLOOR = 3000
 // Safety margin above the current top overlay so the dropdown clears not just the overlay

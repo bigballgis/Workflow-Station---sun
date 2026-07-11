@@ -249,6 +249,37 @@ async function loadAllData() {
 const { nextZIndex } = useZIndex()
 const dropdownZIndex = ref(3000)
 
+// ---- z-index hardening ported from user-portal LookupField (keep the two copies in sync). ----
+// Absolute floor: keep the dropdown above the base app chrome even if no overlay is present.
+const LOOKUP_DROPDOWN_Z_FLOOR = 3000
+// Safety margin above the current top overlay so the dropdown clears not just the overlay
+// but its own popper children (el-scrollbar, tooltips) that Element Plus stacks a few above it.
+const LOOKUP_DROPDOWN_Z_OFFSET = 10
+
+// Highest z-index among the currently active dialogs / overlays / poppers on the page.
+// The lookup is teleported to <body>, so it competes directly with these for stacking; a single
+// nextZIndex() is not enough because Element Plus can hand later overlays (or their poppers) a
+// higher counter value, re-covering the dropdown after it opened.
+function currentTopLayerZIndex(): number {
+  const SELECTOR = '.el-overlay, .el-overlay-dialog, .el-dialog, .el-popper, .el-picker__popper, .el-select__popper'
+  let top = 0
+  document.querySelectorAll<HTMLElement>(SELECTOR).forEach(node => {
+    // Skip our own dropdown so re-computation doesn't chase its own z-index upward.
+    if (node === dropdownRef.value) return
+    const z = parseInt(window.getComputedStyle(node).zIndex, 10)
+    if (Number.isFinite(z) && z > top) top = z
+  })
+  return top
+}
+
+// Resolve the dropdown's z-index against the live stacking context: above the current top overlay
+// + margin, never below the absolute floor. `base` seeds the lower bound — at open we pass a fresh
+// nextZIndex() (bumps EP's shared counter once); on scroll/resize we pass the current value so the
+// dropdown never drops below where it already sits and we don't burn the counter per scroll tick.
+function resolveDropdownZIndex(base: number): number {
+  return Math.max(base, currentTopLayerZIndex() + LOOKUP_DROPDOWN_Z_OFFSET, LOOKUP_DROPDOWN_Z_FLOOR)
+}
+
 // Position the teleported dropdown under the field using its viewport rect.
 function updateDropdownPosition() {
   const el = wrapperRef.value
@@ -265,10 +296,10 @@ function updateDropdownPosition() {
 
 function handleFocus() {
   if (props.readonly) return
-  // Take a fresh z-index from Element Plus's shared counter so the dropdown sits above the current
-  // top overlay — critical when the lookup is rendered inside an el-dialog (Add Record), whose
-  // overlay z-index would otherwise cover a fixed-z dropdown.
-  dropdownZIndex.value = nextZIndex()
+  // Compute the z-index against the current top overlay so the dropdown sits above it — critical
+  // when the lookup is rendered inside an el-dialog (Add Record), whose overlay z-index would
+  // otherwise cover a fixed-z dropdown.
+  dropdownZIndex.value = resolveDropdownZIndex(nextZIndex())
   dropdownVisible.value = true
   updateDropdownPosition()
   loadAllData()
@@ -509,8 +540,11 @@ function onClickOutside(e: MouseEvent) {
 }
 
 // Keep the floating dropdown aligned while it's open; close on far scroll is acceptable but we just reposition.
+// Also re-resolve the z-index: scrolling/resizing the host dialog can raise a sibling overlay above us,
+// so refresh stacking together with position to avoid the dropdown slipping back under the dialog.
 function onViewportChange() {
   if (dropdownVisible.value) {
+    dropdownZIndex.value = resolveDropdownZIndex(dropdownZIndex.value)
     updateDropdownPosition()
   }
 }
