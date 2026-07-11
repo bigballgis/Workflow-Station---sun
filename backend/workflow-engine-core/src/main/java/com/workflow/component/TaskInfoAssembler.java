@@ -25,8 +25,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -109,6 +111,54 @@ public class TaskInfoAssembler {
     }
 
     // ==================== Task Info Builders ====================
+
+    /**
+     * 在逐行组装之前，把整页会用到的用户信息一次性灌进 {@link AdminCenterClient} 的缓存。
+     *
+     * <p>不这么做的话，每行任务都会为 initiator + assignee 各打一次 HTTP，一页 20 行就是
+     * 几十次串行远程调用——这是 To Do 接口压测崩掉的主因。这里只做"预热"而不改变
+     * {@link #buildTaskInfoFromFlowableTask} 的语义：后者照常调 resolveUserDisplayName，
+     * 只是全部命中缓存。
+     */
+    public void prewarmUserDisplayNames(List<Task> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return;
+        }
+        Set<String> userIds = new LinkedHashSet<>();
+        Set<String> processInstanceIds = new LinkedHashSet<>();
+        for (Task t : tasks) {
+            if (StringUtils.hasText(t.getAssignee())) {
+                userIds.add(t.getAssignee().trim());
+            }
+            if (StringUtils.hasText(t.getProcessInstanceId())) {
+                processInstanceIds.add(t.getProcessInstanceId());
+            }
+        }
+
+        if (!processInstanceIds.isEmpty()) {
+            try {
+                runtimeService.createProcessInstanceQuery()
+                    .processInstanceIds(processInstanceIds)
+                    .list()
+                    .forEach(pi -> {
+                        if (StringUtils.hasText(pi.getStartUserId())) {
+                            userIds.add(pi.getStartUserId().trim());
+                        }
+                    });
+            } catch (Exception e) {
+                log.debug("Prewarm: batch process-instance query failed, falling back to per-row: {}",
+                        e.getMessage());
+            }
+        }
+
+        if (!userIds.isEmpty()) {
+            try {
+                adminCenterClient.getUserInfoBatch(userIds);
+            } catch (Exception e) {
+                log.debug("Prewarm: batch user lookup failed, falling back to per-row: {}", e.getMessage());
+            }
+        }
+    }
 
     /** Lightweight converter for To Do list — skips full variable bag. */
     public TaskListResult.TaskInfo convertFlowableTaskToTaskInfo(Task task) {

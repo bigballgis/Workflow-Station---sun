@@ -12,6 +12,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -417,10 +419,106 @@ class AdminCenterClientTest {
                     isNull(),
                     any(ParameterizedTypeReference.class)
             )).thenThrow(new RestClientException("Not found"));
-            
+
             Map<String, Object> result = client.getUserInfo(USER_ID);
-            
+
             assertThat(result).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("getUserInfo caching Tests")
+    class GetUserInfoCachingTests {
+
+        private void stubUserLookup(Map<String, Object> userInfo) {
+            when(restTemplate.exchange(
+                    eq(ADMIN_CENTER_URL + "/api/v1/admin/users/" + USER_ID),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenReturn(new ResponseEntity<>(userInfo, HttpStatus.OK));
+        }
+
+        @Test
+        @DisplayName("Should hit admin-center only once for repeated lookups of the same user")
+        void shouldCacheHit() {
+            stubUserLookup(Map.of("id", USER_ID, "fullName", "Test User"));
+
+            for (int i = 0; i < 5; i++) {
+                assertThat(client.getUserInfo(USER_ID)).isNotNull();
+            }
+
+            verify(restTemplate, times(1)).exchange(
+                    anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
+        }
+
+        @Test
+        @DisplayName("Should cache negative lookups so misses do not re-hit admin-center")
+        void shouldCacheNegativeResult() {
+            when(restTemplate.exchange(
+                    anyString(),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenThrow(new RestClientException("boom"));
+
+            assertThat(client.getUserInfo(USER_ID)).isNull();
+            assertThat(client.getUserInfo(USER_ID)).isNull();
+
+            verify(restTemplate, times(1)).exchange(
+                    anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
+        }
+
+        @Test
+        @DisplayName("Should not fall back to keyword search on timeout/5xx (only on 404)")
+        void shouldNotFallBackOnNonNotFoundError() {
+            when(restTemplate.exchange(
+                    anyString(),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenThrow(new ResourceAccessException("Read timed out"));
+
+            assertThat(client.getUserInfo(USER_ID)).isNull();
+
+            // 关键：超时时只允许打一次，绝不能再补一次 keyword 搜索给 admin-center 雪上加霜。
+            verify(restTemplate, times(1)).exchange(
+                    anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
+        }
+
+        @Test
+        @DisplayName("Should fall back to keyword search when user id is genuinely 404")
+        void shouldFallBackOnNotFound() {
+            when(restTemplate.exchange(
+                    eq(ADMIN_CENTER_URL + "/api/v1/admin/users/" + USER_ID),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenThrow(HttpClientErrorException.create(
+                    HttpStatus.NOT_FOUND, "Not Found", null, null, null));
+
+            Map<String, Object> found = Map.of("id", "42", "username", USER_ID);
+            when(restTemplate.exchange(
+                    contains("keyword="),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenReturn(new ResponseEntity<>(Map.of("content", List.of(found)), HttpStatus.OK));
+
+            assertThat(client.getUserInfo(USER_ID)).containsEntry("id", "42");
+        }
+
+        @Test
+        @DisplayName("Batch lookup should de-duplicate repeated user ids")
+        void shouldDeduplicateBatch() {
+            stubUserLookup(Map.of("id", USER_ID, "fullName", "Test User"));
+
+            Map<String, Map<String, Object>> result =
+                    client.getUserInfoBatch(List.of(USER_ID, USER_ID, USER_ID));
+
+            assertThat(result).hasSize(1);
+            verify(restTemplate, times(1)).exchange(
+                    anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
         }
     }
 }

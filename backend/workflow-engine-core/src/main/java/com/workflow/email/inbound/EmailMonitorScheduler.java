@@ -8,6 +8,7 @@ import com.workflow.email.inbound.repository.SysEmailConnectionRepository;
 import com.workflow.email.inbound.repository.SysEmailMonitorRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -22,8 +23,8 @@ import java.util.List;
  *
  * <p>The mailbox provider and credentials are entirely connection-determined: IMAP host comes
  * from the connection type preset, and the app password is decrypted from the synced connection.
- * Per-rule poll cadence is throttled by {@code pollIntervalSeconds}; idempotency and cross-instance
- * safety are handled in the processor's ledger.
+ * Per-rule poll cadence is throttled by {@code pollIntervalSeconds}; idempotency is guaranteed by
+ * the processor's ledger, and multi-replica polling is serialized by {@code @SchedulerLock}.
  */
 @Slf4j
 @Component
@@ -41,7 +42,20 @@ public class EmailMonitorScheduler {
     @Value("${workflow.email.monitor.enabled:true}")
     private boolean enabled;
 
+    /**
+     * 多副本下只让抢到锁的节点轮询邮箱。
+     *
+     * <p>重复处理本身已被 {@code we_email_processed_messages} 的 {@code UNIQUE(rule_uid, message_id)}
+     * 挡住（见 {@link EmailMonitorProcessor}），所以这把锁不是为了正确性，而是为了避免
+     * N 个副本对同一邮箱并发建 IMAP 连接（Gmail/Exchange 会限流甚至封连接），
+     * 以及 {@code lastSyncedAt} 游标的后写覆盖。
+     *
+     * <p>{@code lockAtMostFor} 取 5 分钟：远大于一次轮询的正常耗时（20 封 × IMAP fetch），
+     * 又能保证节点崩溃后锁最迟 5 分钟自动释放。{@code lockAtLeastFor} 取 10 秒，
+     * 防止轮询很快返回时锁瞬间释放、另一副本立刻重复轮询。
+     */
     @Scheduled(fixedDelayString = "${workflow.email.monitor.poll-delay-ms:30000}")
+    @SchedulerLock(name = "EmailMonitor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT10S")
     public void poll() {
         if (!enabled) {
             return;

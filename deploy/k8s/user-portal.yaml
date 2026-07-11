@@ -156,6 +156,18 @@ spec:
     - workflow-station-backend-user-portal.__BASE_DOMAIN__
 ---
 # P0-2: 按 CPU 自动扩缩(基于 requests.cpu=500m 的百分比)。需集群已装 metrics-server。
+#
+# maxReplicas 上限由**数据库连接数**决定，不是由流量决定：
+#   Postgres max_connections=100 - 3(超级用户保留) - 约 6(n8n/activepieces/superset/运维) = 91
+#   固定开销: workflow-engine 20 + admin-center 20 + developer-workstation 10 = 50
+#   留给 user-portal: 41 → 每副本 Hikari maximum-pool-size=20 → 最多 2 副本
+# 想调大 maxReplicas，必须**先**把各服务的 maximum-pool-size 降下来
+# (推荐经 ConfigMap 注入 SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE)，否则扩容会打爆 Postgres。
+# 根治方案是 PgBouncer(transaction pooling)，可拆掉「副本数 × 每副本池」这个乘法。
+#
+# 另注: user-portal 是 IO 等待型服务(转发到 workflow-engine 后阻塞等响应)，线程阻塞时不吃 CPU。
+# 因此 CPU 指标对它并不敏感——真正需要扩容的场景(线程池耗尽)未必触发本 HPA。
+# 若将来确认需要弹性，应换成 QPS / P95 延迟等自定义指标(已有 Prometheus + Istio)。
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -169,7 +181,7 @@ spec:
     kind: Deployment
     name: user-portal
   minReplicas: 2
-  maxReplicas: 6
+  maxReplicas: 2
   metrics:
   - type: Resource
     resource:
