@@ -271,6 +271,7 @@ public class TaskController {
             case "404" -> HttpStatus.NOT_FOUND.value();
             case "403" -> HttpStatus.FORBIDDEN.value();
             case "400" -> HttpStatus.BAD_REQUEST.value();
+            case "503" -> HttpStatus.SERVICE_UNAVAILABLE.value();
             default -> HttpStatus.INTERNAL_SERVER_ERROR.value();
         };
         response.setStatus(statusCode);

@@ -190,9 +190,15 @@ public class SendEmailTaskDelegate implements JavaDelegate {
         if (value.contains("@")) {
             return value;
         }
-        Map<String, Object> userInfo = adminCenterClient.getUserInfo(value);
-        if (userInfo != null && userInfo.get("email") != null) {
-            return userInfo.get("email").toString();
+        try {
+            Map<String, Object> userInfo = adminCenterClient.getUserInfo(value);
+            if (userInfo != null && userInfo.get("email") != null) {
+                return userInfo.get("email").toString();
+            }
+        } catch (com.workflow.exception.AdminCenterUnavailableException e) {
+            // FALLBACK(external): 收件人解析故障时按原值继续（后续发送可能失败并走邮件重试），
+            // 不能让 admin-center 抖动打断整个流程节点执行。
+            log.warn("admin-center unavailable resolving email recipient {}: {}", value, e.getMessage());
         }
         return value;
     }

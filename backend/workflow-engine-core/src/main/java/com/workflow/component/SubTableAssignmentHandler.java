@@ -406,9 +406,10 @@ public class SubTableAssignmentHandler {
                 }
             }
         } catch (Exception e) {
+            // FALLBACK(external): 展示名降级为 userId（含 AdminCenterUnavailableException）。
             log.warn("Failed to get user display name, using user ID: assigneeId={}", assigneeId, e);
         }
-        
+
         return assigneeId; // Fallback: return user ID
     }
     

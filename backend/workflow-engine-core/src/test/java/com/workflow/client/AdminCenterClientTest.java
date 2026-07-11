@@ -1,5 +1,6 @@
 package com.workflow.client;
 
+import com.workflow.exception.AdminCenterUnavailableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -20,6 +21,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -89,18 +91,31 @@ class AdminCenterClientTest {
         }
         
         @Test
-        @DisplayName("Should return null when API throws exception")
-        void shouldReturnNullOnException() {
+        @DisplayName("Should throw AdminCenterUnavailableException on transport failure (not null)")
+        void shouldThrowOnTransportFailure() {
             when(restTemplate.exchange(
                     anyString(),
                     eq(HttpMethod.GET),
                     isNull(),
                     any(ParameterizedTypeReference.class)
             )).thenThrow(new RestClientException("Connection refused"));
-            
-            String result = client.getUserBusinessUnitId(USER_ID);
-            
-            assertThat(result).isNull();
+
+            assertThatThrownBy(() -> client.getUserBusinessUnitId(USER_ID))
+                    .isInstanceOf(AdminCenterUnavailableException.class);
+        }
+
+        @Test
+        @DisplayName("Should return null (no data) on genuine 404")
+        void shouldReturnNullOnNotFound() {
+            when(restTemplate.exchange(
+                    anyString(),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenThrow(HttpClientErrorException.create(
+                    HttpStatus.NOT_FOUND, "Not Found", null, null, null));
+
+            assertThat(client.getUserBusinessUnitId(USER_ID)).isNull();
         }
     }
     
@@ -182,18 +197,17 @@ class AdminCenterClientTest {
         }
         
         @Test
-        @DisplayName("Should return empty list on exception")
-        void shouldReturnEmptyListOnException() {
+        @DisplayName("Should throw AdminCenterUnavailableException on transport failure")
+        void shouldThrowOnTransportFailure() {
             when(restTemplate.exchange(
                     anyString(),
                     eq(HttpMethod.GET),
                     isNull(),
                     any(ParameterizedTypeReference.class)
             )).thenThrow(new RestClientException("Connection refused"));
-            
-            List<String> result = client.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID);
-            
-            assertThat(result).isEmpty();
+
+            assertThatThrownBy(() -> client.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID))
+                    .isInstanceOf(AdminCenterUnavailableException.class);
         }
     }
     
@@ -219,18 +233,17 @@ class AdminCenterClientTest {
         }
         
         @Test
-        @DisplayName("Should return empty list on exception")
-        void shouldReturnEmptyListOnException() {
+        @DisplayName("Should throw AdminCenterUnavailableException on transport failure")
+        void shouldThrowOnTransportFailure() {
             when(restTemplate.exchange(
                     anyString(),
                     eq(HttpMethod.GET),
                     isNull(),
                     any(ParameterizedTypeReference.class)
             )).thenThrow(new RestClientException("Connection refused"));
-            
-            List<String> result = client.getUsersByUnboundedRole(ROLE_ID);
-            
-            assertThat(result).isEmpty();
+
+            assertThatThrownBy(() -> client.getUsersByUnboundedRole(ROLE_ID))
+                    .isInstanceOf(AdminCenterUnavailableException.class);
         }
     }
     
@@ -297,18 +310,17 @@ class AdminCenterClientTest {
         }
         
         @Test
-        @DisplayName("Should return false on exception")
-        void shouldReturnFalseOnException() {
+        @DisplayName("Should throw AdminCenterUnavailableException on transport failure (never a silent false)")
+        void shouldThrowOnTransportFailure() {
             when(restTemplate.exchange(
                     anyString(),
                     eq(HttpMethod.GET),
                     isNull(),
                     any(ParameterizedTypeReference.class)
             )).thenThrow(new RestClientException("Connection refused"));
-            
-            boolean result = client.isEligibleRole(BU_ID, ROLE_ID);
-            
-            assertThat(result).isFalse();
+
+            assertThatThrownBy(() -> client.isEligibleRole(BU_ID, ROLE_ID))
+                    .isInstanceOf(AdminCenterUnavailableException.class);
         }
     }
     
@@ -411,18 +423,37 @@ class AdminCenterClientTest {
         }
         
         @Test
-        @DisplayName("Should return null when user not found")
-        void shouldReturnNullWhenUserNotFound() {
+        @DisplayName("Should throw AdminCenterUnavailableException on transport failure (unknown != not-found)")
+        void shouldThrowOnTransportFailure() {
             when(restTemplate.exchange(
                     anyString(),
                     eq(HttpMethod.GET),
                     isNull(),
                     any(ParameterizedTypeReference.class)
-            )).thenThrow(new RestClientException("Not found"));
+            )).thenThrow(new RestClientException("Connection refused"));
 
-            Map<String, Object> result = client.getUserInfo(USER_ID);
+            assertThatThrownBy(() -> client.getUserInfo(USER_ID))
+                    .isInstanceOf(AdminCenterUnavailableException.class);
+        }
 
-            assertThat(result).isNull();
+        @Test
+        @DisplayName("Should return null when user genuinely not found (404 + empty keyword search)")
+        void shouldReturnNullWhenUserNotFound() {
+            when(restTemplate.exchange(
+                    eq(ADMIN_CENTER_URL + "/api/v1/admin/users/" + USER_ID),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenThrow(HttpClientErrorException.create(
+                    HttpStatus.NOT_FOUND, "Not Found", null, null, null));
+            when(restTemplate.exchange(
+                    contains("keyword="),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenReturn(new ResponseEntity<>(Map.of("content", List.of()), HttpStatus.OK));
+
+            assertThat(client.getUserInfo(USER_ID)).isNull();
         }
     }
 
@@ -453,25 +484,33 @@ class AdminCenterClientTest {
         }
 
         @Test
-        @DisplayName("Should cache negative lookups so misses do not re-hit admin-center")
+        @DisplayName("Should cache genuine not-found (404 + empty search) so misses do not re-hit admin-center")
         void shouldCacheNegativeResult() {
             when(restTemplate.exchange(
-                    anyString(),
+                    eq(ADMIN_CENTER_URL + "/api/v1/admin/users/" + USER_ID),
                     eq(HttpMethod.GET),
                     isNull(),
                     any(ParameterizedTypeReference.class)
-            )).thenThrow(new RestClientException("boom"));
+            )).thenThrow(HttpClientErrorException.create(
+                    HttpStatus.NOT_FOUND, "Not Found", null, null, null));
+            when(restTemplate.exchange(
+                    contains("keyword="),
+                    eq(HttpMethod.GET),
+                    isNull(),
+                    any(ParameterizedTypeReference.class)
+            )).thenReturn(new ResponseEntity<>(Map.of("content", List.of()), HttpStatus.OK));
 
             assertThat(client.getUserInfo(USER_ID)).isNull();
             assertThat(client.getUserInfo(USER_ID)).isNull();
 
-            verify(restTemplate, times(1)).exchange(
+            // 首次 = id 查询(404) + keyword 搜索共 2 次；第二次命中"查无此人"缓存，不再打 HTTP。
+            verify(restTemplate, times(2)).exchange(
                     anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
         }
 
         @Test
-        @DisplayName("Should not fall back to keyword search on timeout/5xx (only on 404)")
-        void shouldNotFallBackOnNonNotFoundError() {
+        @DisplayName("Transport failure must NOT be cached: next lookup retries admin-center")
+        void shouldNotCacheTransportFailure() {
             when(restTemplate.exchange(
                     anyString(),
                     eq(HttpMethod.GET),
@@ -479,10 +518,13 @@ class AdminCenterClientTest {
                     any(ParameterizedTypeReference.class)
             )).thenThrow(new ResourceAccessException("Read timed out"));
 
-            assertThat(client.getUserInfo(USER_ID)).isNull();
+            assertThatThrownBy(() -> client.getUserInfo(USER_ID))
+                    .isInstanceOf(AdminCenterUnavailableException.class);
+            assertThatThrownBy(() -> client.getUserInfo(USER_ID))
+                    .isInstanceOf(AdminCenterUnavailableException.class);
 
-            // 关键：超时时只允许打一次，绝不能再补一次 keyword 搜索给 admin-center 雪上加霜。
-            verify(restTemplate, times(1)).exchange(
+            // 每次都真实重试（失败不落缓存）；且超时不做 keyword 补偿查询——一次调用只打一次。
+            verify(restTemplate, times(2)).exchange(
                     anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
         }
 

@@ -1,6 +1,8 @@
 package com.workflow.component;
 
 import com.workflow.client.AdminCenterClient;
+import com.workflow.exception.AdminCenterUnavailableException;
+import com.workflow.listener.TaskAssignmentListener;
 import com.workflow.util.AssigneeRoleIdsSupport;
 import com.workflow.util.InitiatorOrphanRepairEligibility;
 
@@ -157,9 +159,28 @@ public class TaskOrphanRepairService {
                     }
                     log.info("Repaired orphan BU_ROLE task {} with {} candidate users", t.getId(), userList.size());
                 }
+                clearAssignmentFailureTrace(t.getId());
+            } catch (AdminCenterUnavailableException ex) {
+                // 服务不可用时继续逐条重试只会放大对 admin-center 的压力，中止本轮，等下一轮限频窗口。
+                log.error("admin-center unavailable during orphan BU_ROLE repair; aborting this run: {}",
+                        ex.getMessage());
+                return;
             } catch (Exception ex) {
                 log.warn("Repair orphan BU_ROLE task {} failed: {}", t.getId(), ex.getMessage());
             }
+        }
+    }
+
+    /**
+     * 修复成功后清除 TaskAssignmentListener 留下的分派失败痕迹（若有）。
+     * 清痕失败只影响可观测性，不回滚已完成的修复。
+     */
+    private void clearAssignmentFailureTrace(String taskId) {
+        try {
+            taskService.removeVariableLocal(taskId, TaskAssignmentListener.VAR_ASSIGNMENT_FAILURE);
+            taskService.removeVariableLocal(taskId, TaskAssignmentListener.VAR_ASSIGNMENT_FAILURE_KIND);
+        } catch (Exception e) {
+            log.debug("Could not clear assignment failure trace for task {}: {}", taskId, e.getMessage());
         }
     }
 
@@ -205,6 +226,7 @@ public class TaskOrphanRepairService {
                 taskService.setAssignee(t.getId(), assigneeId);
                 log.info("Repaired orphan MI task {} assigned to {} (defKey={})",
                         t.getId(), assigneeId, defKey);
+                clearAssignmentFailureTrace(t.getId());
             } catch (Exception ex) {
                 log.warn("Repair orphan MI task {} failed: {}", t.getId(), ex.getMessage());
             }
@@ -288,6 +310,7 @@ public class TaskOrphanRepairService {
                     continue;
                 }
                 taskService.setAssignee(t.getId(), userId);
+                clearAssignmentFailureTrace(t.getId());
                 Task refreshed = taskService.createTaskQuery().taskId(t.getId()).singleResult();
                 if (refreshed != null) {
                     taskMap.putIfAbsent(refreshed.getId(), refreshed);
@@ -348,8 +371,16 @@ public class TaskOrphanRepairService {
         if (!StringUtils.hasText(businessUnitId) || adminCenterClient == null) {
             return businessUnitId;
         }
-        String code = adminCenterClient.getBusinessUnitCodeById(businessUnitId.trim());
-        return StringUtils.hasText(code) ? code : businessUnitId;
+        try {
+            String code = adminCenterClient.getBusinessUnitCodeById(businessUnitId.trim());
+            return StringUtils.hasText(code) ? code : businessUnitId;
+        } catch (AdminCenterUnavailableException e) {
+            // FALLBACK(external): 任务列表读路径。故障期间退回原始 id 比对（legacy 语义），
+            // 最坏是 FIXED_BU_ROLE 池任务暂时不可见（功能变少），直接分派的任务不受影响。
+            log.warn("admin-center unavailable mapping BU id {} to code; using raw id: {}",
+                    businessUnitId, e.getMessage());
+            return businessUnitId;
+        }
     }
 
     private boolean fixedBuRoleVisibleForActiveWorkspace(Task t, String activeBu, String queryUserId) {

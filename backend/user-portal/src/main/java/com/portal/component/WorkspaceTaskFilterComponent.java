@@ -4,6 +4,7 @@ import com.platform.security.entity.BusinessUnit;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
+import com.portal.exception.PortalException;
 import com.portal.repository.BusinessUnitRepository;
 import com.portal.service.PortalWorkspaceAuthService;
 import lombok.RequiredArgsConstructor;
@@ -214,9 +215,12 @@ public class WorkspaceTaskFilterComponent {
         }
         Optional<String> activeBu = SecurityContextUtils.getCurrentActiveBusinessUnitId();
         if (activeBu.isEmpty()) {
+            // 非 workspace 模式（JWT 无 activeBusinessUnitId）：设计语义，不做 BU 过滤。
             return groupIds;
         }
         if (portalWorkspaceAuthService.listWorkspaceContexts(userId).isEmpty()) {
+            // FALLBACK(migration): 部分环境 UBR 数据与工作台切换器脱同步，UBR 为空时若仍过滤
+            // 会把用户所有候选组任务全部隐藏。删除条件：全环境 UBR 数据与工作台来源统一后收紧。
             return groupIds;
         }
         List<String> kept = new ArrayList<>();
@@ -243,6 +247,10 @@ public class WorkspaceTaskFilterComponent {
      * portal→engine→admin-center triple-hop ({@link WorkflowEngineClient#getUserTaskPermissions}) costing
      * ~0.3-1s. Cache the result per user for a short TTL so repeated list/statistics queries reuse it; an
      * admin membership change becomes effective within the TTL.
+     *
+     * <p>失败语义：查询失败<b>不写缓存</b>（否则一次抖动=用户 30 秒看不到候选组任务）。
+     * 有过期缓存时降级复用（last-known-good：旧成员关系好于错误的"零候选组"）；
+     * 连缓存都没有（冷启动+故障叠加）则抛 503——让用户知道服务异常，而不是误以为"没有待办"。</p>
      */
     public List<String> getUserVirtualGroups(String userId) {
         if (userId == null || userId.isBlank()) {
@@ -252,30 +260,39 @@ public class WorkspaceTaskFilterComponent {
         if (hit != null && System.currentTimeMillis() - hit.timestampMs() < VIRTUAL_GROUPS_CACHE_TTL_MS) {
             return hit.groupIds();
         }
-        List<String> resolved = fetchUserVirtualGroups(userId);
-        virtualGroupsCache.put(userId, new VirtualGroupsCacheEntry(resolved, System.currentTimeMillis()));
-        return resolved;
+        Optional<List<String>> resolved = fetchUserVirtualGroups(userId);
+        if (resolved.isPresent()) {
+            virtualGroupsCache.put(userId, new VirtualGroupsCacheEntry(resolved.get(), System.currentTimeMillis()));
+            return resolved.get();
+        }
+        if (hit != null) {
+            // FALLBACK(external): 引擎/admin-center 暂不可用，复用过期的成员关系快照。
+            log.warn("Virtual-group fetch failed for user {}; reusing stale cache from {} ms ago",
+                    userId, System.currentTimeMillis() - hit.timestampMs());
+            return hit.groupIds();
+        }
+        throw new PortalException("503",
+                "Task permission service is temporarily unavailable, please retry");
     }
 
     /**
-     * Get virtual groups the user belongs to.
-     * Retrieved via workflow-engine-core calling admin-center.
+     * Get virtual groups the user belongs to (via workflow-engine → admin-center).
+     *
+     * @return present = 查询成功（可能是空列表 = 用户确实无组）；empty = 查询失败（引擎不可达或降级），
+     *         调用方决定降级策略，<b>不得</b>把失败当"无组"。
      */
     @SuppressWarnings("unchecked")
-    private List<String> fetchUserVirtualGroups(String userId) {
+    private Optional<List<String>> fetchUserVirtualGroups(String userId) {
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
             if (result.isPresent()) {
-                Map<String, Object> data = result.get();
-                List<String> groupIds = (List<String>) data.get("virtualGroupIds");
-                if (groupIds != null && !groupIds.isEmpty()) {
-                    return groupIds;
-                }
+                List<String> groupIds = (List<String>) result.get().get("virtualGroupIds");
+                return Optional.of(groupIds != null ? groupIds : Collections.emptyList());
             }
         } catch (Exception e) {
             log.warn("Failed to get user virtual groups from workflow engine: {}", e.getMessage());
         }
-        // Return empty list; do not use mock data
-        return Collections.emptyList();
+        // WorkflowEngineTaskClient 对传输故障降级为 Optional.empty，此处统一视为"查询失败"。
+        return Optional.empty();
     }
 }
