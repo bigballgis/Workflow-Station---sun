@@ -1,0 +1,57 @@
+---
+description: init-scripts SQL 只增不改——变更一律新建文件，禁止编辑已有 .sql
+globs: deploy/init-scripts/**
+alwaysApply: false
+---
+
+# init-scripts — Append-Only SQL（只增不改）
+
+**自 2026-07 起生效：** 凡需改动 `deploy/init-scripts/` 下数据库初始化/种子 SQL，**禁止**直接编辑已有 `.sql` 文件；**必须**新建独立脚本承载变更。
+
+## 绝对禁止
+
+| 禁止 | 说明 |
+|---|---|
+| 改已有 `.sql` 内容 | 含 DDL、DML、种子数据、注释中的业务语义 |
+| 在旧文件里「补一行」 | 即使只有 `ALTER TABLE` / `INSERT` 一行也不行 |
+| 删改旧文件里的语句 | 撤销/回滚也写新文件，不要从历史脚本里删 |
+
+## 正确做法
+
+1. **新建文件**，命名带递增序号 + 简短 slug：
+   - Schema：`00-schema/52-your-change-slug.sql`（取当前最大编号 +1，见目录内 `NN-*.sql`）
+   - Admin 种子：`01-admin/06-your-change.sql`
+   - Demo/种子包：在同目录用下一个 `NN-*.sql`（如 `17-Multi-Instance-Subtask-Demo/04-*.sql`）
+   - 维护/对齐：`99-maintenance/` 或 `90-post-seed/` 同样只追加新文件
+2. **幂等写法**：`IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` / `ON CONFLICT DO NOTHING|UPDATE` / 条件 `DO $$ … IF … END $$;`
+3. **注册执行顺序**：新脚本若需 Docker 首次 init 自动跑，在 `00-init-all.sh` **追加** glob 或 `$PSQL -f` 行（只增不改已有步骤逻辑，除非必须把新编号纳入现有 for 循环范围）。
+4. **LF 换行**：`.sql` 必须 LF，禁止 CRLF。
+
+## 示例
+
+```sql
+-- ✅ 00-schema/52-add-foo-column.sql（新文件）
+ALTER TABLE dw_foo ADD COLUMN IF NOT EXISTS bar VARCHAR(64);
+COMMENT ON COLUMN dw_foo.bar IS '…';
+```
+
+```sql
+-- ❌ 禁止 — 打开 04-developer-workstation-schema.sql 追加 ALTER
+```
+
+## 已有库如何应用
+
+- **全新 Docker 卷**：Postgres entrypoint 跑 `00-init-all.sh`，新文件随 init 自动执行。
+- **已有 dev 库**：手工 `docker exec … psql -f /docker-entrypoint-initdb.d/…/52-….sql`，或删卷重建（见 `BUILD_GUIDE.md` / `deployment-infra.mdc`）。
+
+## 变更检查清单
+
+- [ ] 未修改任何已有 `.sql`（仅新增文件 + 必要时改 `00-init-all.sh`）
+- [ ] 新脚本可重复执行不报错（幂等）
+- [ ] `00-schema` 编号未与现有文件冲突
+- [ ] 需要自动 init 时已更新 `00-init-all.sh`
+
+## 参考
+
+- Schema 单一来源：`deployment-infra.mdc` §Schema 管理
+- 编排入口：`deploy/init-scripts/00-init-all.sh`

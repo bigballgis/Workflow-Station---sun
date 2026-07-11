@@ -82,6 +82,14 @@ public class RelationFieldDefinition {
     @Builder.Default
     private String fkDisplayMode = "readonly";
 
+    /**
+     * LOOKUP field configuration (JSONB). Only meaningful when
+     * {@link #dataType} is {@link RelationDataType#LOOKUP}.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "lookup_config", columnDefinition = "jsonb")
+    private Map<String, Object> lookupConfig;
+
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
 }

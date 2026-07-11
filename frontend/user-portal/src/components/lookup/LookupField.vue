@@ -4,9 +4,40 @@
     class="lookup-field"
     :class="{ readonly }"
   >
-    <!-- Selected value: input container with inner tag -->
+    <!-- Multi-select: multiple removable tags + an input row that opens the dropdown. -->
     <div
-      v-if="selectedRow"
+      v-if="multiple"
+      class="lookup-selected-wrapper lookup-multi-wrapper"
+      :class="{ 'is-readonly': readonly }"
+      @click="!readonly && handleFocus()"
+    >
+      <span
+        v-for="(row, i) in selectedRows"
+        :key="i"
+        class="lookup-selected-tag"
+      >
+        <span class="lookup-selected-text">{{ tagTextFor(row) }}</span>
+        <el-icon
+          v-if="!readonly"
+          class="lookup-selected-close"
+          @click.stop="removeSelectedAt(i)"
+        ><Close /></el-icon>
+      </span>
+      <input
+        v-if="!readonly"
+        v-model="searchKeyword"
+        class="lookup-multi-input"
+        :placeholder="selectedRows.length ? '' : (placeholder || 'Click to search')"
+        @focus="handleFocus"
+      >
+      <span
+        v-if="readonly && !selectedRows.length"
+        class="lookup-readonly-empty"
+      >-</span>
+    </div>
+    <!-- Single-select: input container with inner tag -->
+    <div
+      v-else-if="selectedRow"
       class="lookup-selected-wrapper"
       :class="{ 'is-readonly': readonly }"
     >
@@ -53,6 +84,18 @@
           @row-click="handleSelect"
         >
           <el-table-column
+            v-if="multiple"
+            width="40"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-icon
+                v-if="isRowSelected(row)"
+                class="lookup-check"
+              ><Check /></el-icon>
+            </template>
+          </el-table-column>
+          <el-table-column
             v-for="col in visibleColumns"
             :key="col.prop"
             :prop="col.prop"
@@ -69,7 +112,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useZIndex } from 'element-plus'
-import { Close } from '@element-plus/icons-vue'
+import { Close, Check } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
 import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
 import { getLookupSelectedDisplayFieldFromProps, resolveLookupCellTagText } from '../subTableAddDialogHelpers'
@@ -95,6 +138,8 @@ const props = defineProps<{
   viewFields?: LookupViewField[]
   placeholder?: string
   readonly?: boolean
+  /** Multi-select: value is an array of PKs; multiple tags; dropdown toggles rows. */
+  multiple?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -112,6 +157,8 @@ const dropdownVisible = ref(false)
 const dropdownStyle = ref<Record<string, string>>({})
 const searchKeyword = ref('')
 const selectedRow = ref<Record<string, any> | null>(null)
+// Multi-select: the picked rows (order preserved). modelValue is an array of their PKs.
+const selectedRows = ref<Record<string, any>[]>([])
 const allRows = ref<Record<string, any>[]>([])
 const loading = ref(false)
 const dataLoaded = ref(false)
@@ -203,6 +250,36 @@ async function loadAllData() {
 const { nextZIndex } = useZIndex()
 const dropdownZIndex = ref(3000)
 
+// Absolute floor: keep the dropdown above the base app chrome even if no overlay is present.
+const LOOKUP_DROPDOWN_Z_FLOOR = 3000
+// Safety margin above the current top overlay so the dropdown clears not just the overlay
+// but its own popper children (el-scrollbar, tooltips) that Element Plus stacks a few above it.
+const LOOKUP_DROPDOWN_Z_OFFSET = 10
+
+// Highest z-index among the currently active dialogs / overlays / poppers on the page.
+// The lookup is teleported to <body>, so it competes directly with these for stacking; a single
+// nextZIndex() is not enough because Element Plus can hand later overlays (or their poppers) a
+// higher counter value, re-covering the dropdown after it opened.
+function currentTopLayerZIndex(): number {
+  const SELECTOR = '.el-overlay, .el-overlay-dialog, .el-dialog, .el-popper, .el-picker__popper, .el-select__popper'
+  let top = 0
+  document.querySelectorAll<HTMLElement>(SELECTOR).forEach(node => {
+    // Skip our own dropdown so re-computation doesn't chase its own z-index upward.
+    if (node === dropdownRef.value) return
+    const z = parseInt(window.getComputedStyle(node).zIndex, 10)
+    if (Number.isFinite(z) && z > top) top = z
+  })
+  return top
+}
+
+// Resolve the dropdown's z-index against the live stacking context: above the current top overlay
+// + margin, never below the absolute floor. `base` seeds the lower bound — at open we pass a fresh
+// nextZIndex() (bumps EP's shared counter once); on scroll/resize we pass the current value so the
+// dropdown never drops below where it already sits and we don't burn the counter per scroll tick.
+function resolveDropdownZIndex(base: number): number {
+  return Math.max(base, currentTopLayerZIndex() + LOOKUP_DROPDOWN_Z_OFFSET, LOOKUP_DROPDOWN_Z_FLOOR)
+}
+
 // Position the teleported dropdown under the field using its viewport rect.
 function updateDropdownPosition() {
   const el = wrapperRef.value
@@ -219,22 +296,63 @@ function updateDropdownPosition() {
 
 function handleFocus() {
   if (props.readonly) return
-  // Take a fresh z-index from Element Plus's shared counter so the dropdown sits above the current
-  // top overlay — critical when the lookup is rendered inside an el-dialog (Add Record), whose
-  // overlay z-index would otherwise cover a fixed-z dropdown.
-  dropdownZIndex.value = nextZIndex()
+  // Compute the z-index against the current top overlay so the dropdown sits above it — critical
+  // when the lookup is rendered inside an el-dialog (e.g. Add ATM Transaction), whose overlay
+  // z-index would otherwise cover a fixed-z dropdown.
+  dropdownZIndex.value = resolveDropdownZIndex(nextZIndex())
   dropdownVisible.value = true
   updateDropdownPosition()
   loadAllData()
 }
 
+function pkField(): string {
+  return String(props.searchFields?.[0] || 'id').trim() || 'id'
+}
+
+function rowPk(row: Record<string, any>): any {
+  const pk = pkField()
+  return row?.[pk] ?? row?.id
+}
+
+function isRowSelected(row: Record<string, any>): boolean {
+  const pk = rowPk(row)
+  return selectedRows.value.some(r => String(rowPk(r)) === String(pk))
+}
+
+function tagTextFor(row: Record<string, any>): string {
+  return String(getDisplayValue(row) ?? '')
+}
+
+function emitMultiModel() {
+  emit('update:modelValue', selectedRows.value.map(r => rowPk(r)))
+}
+
 function handleSelect(row: Record<string, any>) {
+  if (props.multiple) {
+    const pk = rowPk(row)
+    const idx = selectedRows.value.findIndex(r => String(rowPk(r)) === String(pk))
+    if (idx >= 0) {
+      selectedRows.value.splice(idx, 1)
+    } else {
+      selectedRows.value.push(row)
+    }
+    searchKeyword.value = ''
+    emitMultiModel()
+    emit('select', row)
+    // Keep the dropdown open for further picks.
+    return
+  }
   const displayVal = getDisplayValue(row)
   searchKeyword.value = String(displayVal ?? '')
   selectedRow.value = row
   emit('update:modelValue', row)
   emit('select', row)
   dropdownVisible.value = false
+}
+
+function removeSelectedAt(i: number) {
+  selectedRows.value.splice(i, 1)
+  emitMultiModel()
 }
 
 function handleClear() {
@@ -252,6 +370,10 @@ function clearLookupSelectionFromModel(emitClearEvent = true) {
 }
 
 function initFromModelValue(val: any) {
+  if (props.multiple) {
+    initMultiFromModelValue(val)
+    return
+  }
   if (val == null || val === '') {
     clearLookupSelectionFromModel()
     return
@@ -283,6 +405,52 @@ function initFromModelValue(val: any) {
     const displayVal = getDisplayValue(val)
     searchKeyword.value = String(displayVal ?? '')
     emit('select', val)
+  }
+}
+
+/** Multi-select init: modelValue is an array of PKs (or a JSON-array string). */
+function initMultiFromModelValue(val: any) {
+  let pks: any[] = []
+  if (Array.isArray(val)) {
+    pks = val
+  } else if (typeof val === 'string' && val.trim() !== '') {
+    // Tolerate a persisted JSON-array string or a single scalar.
+    try {
+      const parsed = JSON.parse(val)
+      pks = Array.isArray(parsed) ? parsed : [val]
+    } catch {
+      pks = [val]
+    }
+  } else if (val != null && val !== '') {
+    pks = [val]
+  }
+  pks = pks.filter(p => p != null && String(p).trim() !== '')
+  if (!pks.length) {
+    selectedRows.value = []
+    searchKeyword.value = ''
+    return
+  }
+  // Seed synthetic rows immediately so tags render, then hydrate each to a full row.
+  selectedRows.value = pks.map(p => buildSyntheticLookupRow(p))
+  pks.forEach((p, idx) => void hydrateMultiRowAt(idx, p))
+}
+
+async function hydrateMultiRowAt(index: number, scalar: any) {
+  if (!props.tableId) return
+  try {
+    const row = await fetchLookupRowByPrimaryKey(props.tableId, scalar, {
+      searchFields: props.searchFields || [],
+      displayField: props.displayField || '',
+      filterConditions: props.filterConditions || []
+    })
+    if (!row || !Object.keys(row).length) return
+    // Only replace if the slot still holds the same PK (guard against races/edits).
+    const cur = selectedRows.value[index]
+    if (cur && String(rowPk(cur)) === String(scalar)) {
+      selectedRows.value.splice(index, 1, row)
+    }
+  } catch {
+    /* keep synthetic row */
   }
 }
 
@@ -376,8 +544,11 @@ function onClickOutside(e: MouseEvent) {
 }
 
 // Keep the floating dropdown aligned while it's open; close on far scroll is acceptable but we just reposition.
+// Also re-resolve the z-index: scrolling/resizing the host dialog can raise a sibling overlay above us,
+// so refresh stacking together with position to avoid the dropdown slipping back under the dialog.
 function onViewportChange() {
   if (dropdownVisible.value) {
+    dropdownZIndex.value = resolveDropdownZIndex(dropdownZIndex.value)
     updateDropdownPosition()
   }
 }
@@ -473,6 +644,28 @@ defineExpose({ effectiveViewFields })
     }
   }
 
+  .lookup-multi-wrapper {
+    flex-wrap: wrap;
+    gap: 4px;
+    cursor: text;
+
+    .lookup-selected-tag {
+      background: var(--el-color-primary-light-9, #ecf5ff);
+      color: var(--el-color-primary, #409eff);
+    }
+  }
+
+  .lookup-multi-input {
+    flex: 1;
+    min-width: 60px;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 13px;
+    line-height: 24px;
+    color: #606266;
+  }
+
   .lookup-readonly-empty {
     color: #606266;
     line-height: 32px;
@@ -493,5 +686,9 @@ defineExpose({ effectiveViewFields })
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+
+  .lookup-check {
+    color: var(--el-color-primary, #409eff);
+  }
 }
 </style>

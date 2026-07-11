@@ -5,7 +5,6 @@ import com.portal.dto.SubTableChange;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,20 +32,14 @@ public class TaskFormSubTableChangeRecorder {
             return;
         }
         try {
-            Map<String, Object> oldMap = oldSubTablesObj instanceof Map
-                    ? (Map<String, Object>) oldSubTablesObj
-                    : Collections.emptyMap();
-            Map<String, Object> newMap = (Map<String, Object>) newSubTablesObj;
-
-            for (Map.Entry<String, Object> subTableEntry : newMap.entrySet()) {
+            Map<String, List<Map<String, Object>>> oldRowsByTable =
+                    ChangeHistoryComponent.normalizeSubTableRowsByHistoryName(oldSubTablesObj);
+            Map<String, List<Map<String, Object>>> newRowsByTable =
+                    ChangeHistoryComponent.normalizeSubTableRowsByHistoryName(newSubTablesObj);
+            for (Map.Entry<String, List<Map<String, Object>>> subTableEntry : newRowsByTable.entrySet()) {
                 String subTableKey = subTableEntry.getKey();
-                List<Map<String, Object>> newRows = subTableEntry.getValue() instanceof List
-                        ? (List<Map<String, Object>>) subTableEntry.getValue()
-                        : Collections.emptyList();
-                List<Map<String, Object>> oldRows = oldMap.get(subTableKey) instanceof List
-                        ? (List<Map<String, Object>>) oldMap.get(subTableKey)
-                        : Collections.emptyList();
-
+                List<Map<String, Object>> newRows = subTableEntry.getValue();
+                List<Map<String, Object>> oldRows = oldRowsByTable.getOrDefault(subTableKey, Collections.emptyList());
                 List<SubTableChange> changes = computeSubTableRowChanges(oldRows, newRows);
                 if (!changes.isEmpty()) {
                     changeHistoryComponent.recordSubTableChanges(
@@ -64,8 +57,7 @@ public class TaskFormSubTableChangeRecorder {
             List<Map<String, Object>> oldRows,
             List<Map<String, Object>> newRows) {
         List<SubTableChange> changes = new ArrayList<>();
-
-        // Build row lookup maps by row id (fallback: id_idw, rowId, _rowKey, rowKey, first non-internal value)
+        // Build row lookup maps by row id (fallback: row_id, rowId, id_idw, _rowKey, rowKey, first non-internal value)
         Map<Object, Map<String, Object>> oldRowMap = new HashMap<>();
         for (Map<String, Object> row : oldRows) {
             Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
@@ -116,9 +108,9 @@ public class TaskFormSubTableChangeRecorder {
                 Map<String, Object> changedFields = new HashMap<>();
                 Map<String, Object> oldChangedFields = new HashMap<>();
                 boolean hasChanges = false;
-                // Compare all fields except 'id' (the row key)
+                // Compare business fields only; row identity and audit metadata are noisy for user-visible history.
                 for (Map.Entry<String, Object> field : newRow.entrySet()) {
-                    if ("id".equals(field.getKey())) continue;
+                    if (ChangeHistoryComponent.isSubTableRowMetadataField(field.getKey())) continue;
                     Object oldFieldVal = oldRow.get(field.getKey());
                     if (!Objects.equals(oldFieldVal, field.getValue())) {
                         changedFields.put(field.getKey(), field.getValue());
@@ -139,4 +131,5 @@ public class TaskFormSubTableChangeRecorder {
 
         return changes;
     }
+
 }

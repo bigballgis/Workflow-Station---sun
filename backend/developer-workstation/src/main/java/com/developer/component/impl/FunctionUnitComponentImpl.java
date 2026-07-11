@@ -60,6 +60,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final VersionComponent versionComponent;
     private final MainTableViewService mainTableViewService;
     private final ForeignKeyRepository foreignKeyRepository;
+    private final FunctionUnitExporter functionUnitExporter;
+    private final ObjectMapper objectMapper;
 
     // 鍗忎綔绫伙紙闂ㄩ潰鍐呴儴鏋勫缓锛屼緷璧栨潵鑷瀯閫犳敞鍏ョ殑浠撳簱/鏈嶅姟锛?
     private final FunctionUnitCodeGenerator codeGenerator;
@@ -89,6 +91,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
             MainTableViewService mainTableViewService,
             ForeignKeyRepository foreignKeyRepository,
+            FunctionUnitExporter functionUnitExporter,
             com.developer.component.TableDesignComponent tableDesignComponent) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
@@ -100,6 +103,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.versionComponent = versionComponent;
         this.mainTableViewService = mainTableViewService;
         this.foreignKeyRepository = foreignKeyRepository;
+        this.functionUnitExporter = functionUnitExporter;
+        this.objectMapper = objectMapper;
 
         // 鏋勫缓鍗忎綔绫伙細鍦?Spring 涓庢祴璇?new 涓ゆ潯璺緞涓嬭涓轰竴鑷淬€?
         this.codeGenerator = new FunctionUnitCodeGenerator(functionUnitRepository);
@@ -511,11 +516,11 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
 
     /**
-     * 濮旀墭缁?{@link FunctionUnitSnapshotFactory#createSnapshot(FunctionUnit)}銆?
-     * 淇濈暀姝ょ鏈夋柟娉曚互鍏煎閫氳繃鍙嶅皠璋冪敤 createSnapshot 鐨勬棦鏈夋祴璇曘€?
+     * Uses export-format serializers so Publish snapshots match Rollback restore parity.
      */
     private byte[] createSnapshot(FunctionUnit functionUnit) throws Exception {
-        return snapshotFactory.createSnapshot(functionUnit);
+        Map<String, Object> payload = functionUnitExporter.buildVersionSnapshotPayload(functionUnit.getId());
+        return objectMapper.writeValueAsBytes(payload);
     }
 
     @Override

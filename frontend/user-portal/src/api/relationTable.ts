@@ -16,6 +16,33 @@ export interface RelationTableDTO {
   permissionLevel?: 'READONLY' | 'READ_WRITE'
 }
 
+/** 派生带出 / 级联的一条关联列 */
+export interface LookupJoin {
+  fromColumn: string
+  toColumn: string
+  matchType?: 'eq' | 'contains' | 'startsWith' | 'endsWith'
+}
+
+/** 派生带出 / 级联配置 */
+export interface LookupDerivedFrom {
+  parentField: string
+  joins: LookupJoin[]
+  derivedMode: 'autofill' | 'filter'
+}
+
+/** LOOKUP 字段配置（来自 rt_field_definitions.lookup_config） */
+export interface LookupConfig {
+  refTableId?: number
+  refTableName?: string
+  searchFields?: string[]
+  displayFields?: string[]
+  selectedDisplayField?: string
+  filterConditions?: LookupFilterCondition[]
+  showBackfillView?: boolean
+  multiple?: boolean
+  derivedFrom?: LookupDerivedFrom
+}
+
 export interface RelationFieldDef {
   fieldName: string
   dataType: string
@@ -27,6 +54,7 @@ export interface RelationFieldDef {
   displayName?: string
   sortOrder?: number
   pkGeneration?: Record<string, any>
+  lookupConfig?: LookupConfig
 }
 
 export interface RelationImportResult {

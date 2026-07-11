@@ -14,8 +14,8 @@ interface UseFunctionUnitFiltersOptions {
 export function useFunctionUnitFilters(options: UseFunctionUnitFiltersOptions) {
   const { list, allTags, resetPage, reload } = options
 
-  // Default to PUBLISHED status filter instead of showing all statuses
-  const searchForm = reactive({ name: '', status: 'PUBLISHED', tags: [] as string[] })
+  // Default: show all statuses so rollback/import drafts are not hidden from the home list.
+  const searchForm = reactive({ name: '', status: '', tags: [] as string[] })
 
   // 下拉选项来自服务端返回的全部 tag（跨所有功能单元），确保新建 tag 首次出现即可选
   const availableTags = computed(() => {
@@ -54,15 +54,23 @@ export function useFunctionUnitFilters(options: UseFunctionUnitFiltersOptions) {
 
   function clearFilters() {
     searchForm.name = ''
-    searchForm.status = 'PUBLISHED'
+    searchForm.status = ''
     searchForm.tags = []
     handleSearch()
   }
+
+  const hiddenByStatusCount = computed(() => {
+    if (!searchForm.status) {
+      return 0
+    }
+    return list.value.filter(item => item.status !== searchForm.status).length
+  })
 
   return {
     searchForm,
     availableTags,
     filteredList,
+    hiddenByStatusCount,
     getItemTags,
     handleSearch,
     clearFilters,

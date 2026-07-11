@@ -59,7 +59,7 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
   function getTableFieldDefinitionsByTableId(tableId?: number | null): FieldDefinition[] {
     if (!tableId) return []
     const table = store.tables.find(t => t.id === tableId)
-    return table?.fieldDefinitions ?? []
+    return table?.fieldDefinitions ? [...table.fieldDefinitions] : []
   }
 
   /** Canvas load: Table Design default overrides stale rule.value from last form save. */
@@ -101,8 +101,7 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
    * Convert database field type to form-create rule
    */
   function getTableFieldDefinitions(tableId: number): FieldDefinition[] {
-    const table = store.tables.find(t => t.id === tableId)
-    return table?.fieldDefinitions ? [...table.fieldDefinitions] : []
+    return getTableFieldDefinitionsByTableId(tableId)
   }
 
   function mergeTaskPermissionsForFields(fields: FieldDefinition[]) {

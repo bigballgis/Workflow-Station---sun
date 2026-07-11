@@ -180,7 +180,7 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
     const allocateFn: AllocatePrimaryKeysFn | null =
       shouldAllocate && fuId && String(fuId).trim()
         ? async payload => {
-            const res = await processApi.allocatePrimaryKeys(fuId, payload)
+            const res = await processApi.allocatePrimaryKeys(fuId, payload, ctx.taskId)
             const data = (res as { data?: { values?: string[] }; values?: string[] }).data ?? res
             return data?.values ?? []
           }

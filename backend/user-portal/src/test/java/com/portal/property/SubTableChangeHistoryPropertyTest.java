@@ -3,6 +3,7 @@ package com.portal.property;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
+import com.portal.component.TaskFormSubTableChangeRecorder;
 import com.portal.dto.ChangeHistoryContext;
 import com.platform.security.repository.UserRepository;
 import com.portal.dto.SubTableChange;
@@ -18,7 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -105,6 +106,63 @@ public class SubTableChangeHistoryPropertyTest {
                 assertThat(record.getTimestamp()).isNotNull();
             }
         }
+    }
+
+    @Example
+    @Label("Sub-table row identity prefers row_id over display fields")
+    void rowIdentifierPrefersRowIdOverDisplayFields() {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("arn", "1");
+        row.put("row_id", "ATM-DC-PW-TRANS-000010");
+        row.put("card_number", "12");
+        assertThat(ChangeHistoryComponent.resolveRowIdentifier(row))
+                .isEqualTo("ATM-DC-PW-TRANS-000010");
+    }
+    @Example
+    @Label("Sub-table diff treats space and underscore aliases as one table")
+    void subTableDiffMatchesAliasesByNormalizedNameAndRowId() {
+        ChangeHistoryComponent mockedHistory = mock(ChangeHistoryComponent.class);
+        TaskFormSubTableChangeRecorder recorder = new TaskFormSubTableChangeRecorder(mockedHistory);
+        ChangeHistoryContext context = ChangeHistoryContext.builder()
+                .processInstanceId("process-1")
+                .taskInstanceId("task-1")
+                .stageId("stage-1")
+                .userId("45455063")
+                .build();
+        Map<String, Object> oldRow = new LinkedHashMap<>();
+        oldRow.put("arn", "1");
+        oldRow.put("row_id", "ATM-DC-PW-TRANS-000010");
+        oldRow.put("card_number", "1");
+        oldRow.put("merchant_name", "2");
+        oldRow.put("updated_at", "2026-07-06 14:16:33");
+        oldRow.put("updated_by", "Liam L Li");
+        Map<String, Object> newRow = new LinkedHashMap<>();
+        newRow.put("arn", "1");
+        newRow.put("row_id", "ATM-DC-PW-TRANS-000010");
+        newRow.put("card_number", "12");
+        newRow.put("merchant_name", "23");
+        newRow.put("updated_at", "2026-07-06 14:22:21");
+        newRow.put("updated_by", "Liam L Li");
+        Map<String, Object> oldSubTables = Map.of("atm transaction", List.of(oldRow));
+        Map<String, Object> newSubTables = Map.of("atm_transaction", List.of(newRow));
+        recorder.recordSubTableChangeHistory(context, oldSubTables, newSubTables);
+        ArgumentCaptor<String> tableNameCaptor = ArgumentCaptor.forClass(String.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<SubTableChange>> changesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mockedHistory, times(1)).recordSubTableChanges(eq(context), tableNameCaptor.capture(), changesCaptor.capture());
+        assertThat(tableNameCaptor.getValue()).isEqualTo("atm_transaction");
+        assertThat(changesCaptor.getValue()).hasSize(1);
+        SubTableChange change = changesCaptor.getValue().get(0);
+        assertThat(change.getChangeType()).isEqualTo("ROW_UPDATE");
+        assertThat(change.getRowIdentifier()).isEqualTo("ATM-DC-PW-TRANS-000010");
+        assertThat(change.getOldValues())
+                .containsEntry("card_number", "1")
+                .containsEntry("merchant_name", "2");
+        assertThat(change.getNewValues())
+                .containsEntry("card_number", "12")
+                .containsEntry("merchant_name", "23");
+        assertThat(change.getOldValues()).doesNotContainKeys("row_id", "updated_at", "updated_by");
+        assertThat(change.getNewValues()).doesNotContainKeys("row_id", "updated_at", "updated_by");
     }
 
     // ========== Data class ==========

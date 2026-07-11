@@ -3,6 +3,7 @@ import { processApi } from '@/api/process'
 import {
   buildRelationTableFieldIndexFromDataTables,
   isAuditField,
+  resolveSubFormDialogColumnsForBinding,
 } from '@/components/subTableAddDialogHelpers'
 import {
   resolveSubTablePrimaryKeyFields,
@@ -236,6 +237,10 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           }
           if (columns.length === 0) continue
           const subFormDesign = ctx.resolveSubFormDesign(b, subFormsPayload)
+          const dialogColumns = resolveSubFormDialogColumnsForBinding(b, subFormsPayload, {
+            lookupDbConfigs: ctx.lookupDbConfigs.value,
+            relationViewConfigs: ctx.relationViewConfigs.value,
+          })
           const bindingPortalViews =
             subTablePortalViewsPayload[b.bindingId]
             ?? subTablePortalViewsPayload[String(b.bindingId)]
@@ -251,6 +256,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             tableType: b.tableType,
             tableDescription: b.tableDescription,
             columns,
+            ...(dialogColumns.length > 0 ? { dialogColumns } : {}),
             data: [],
             subMode: b.subMode,
             formFields: subFormDesign.formFields,

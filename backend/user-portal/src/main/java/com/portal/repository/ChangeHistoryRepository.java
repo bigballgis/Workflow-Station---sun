@@ -1,6 +1,7 @@
 package com.portal.repository;
 
 import com.portal.entity.ChangeHistory;
+import com.portal.enums.ChangeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -27,4 +28,11 @@ public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Lo
     @Modifying
     @Query("DELETE FROM ChangeHistory c WHERE c.processInstanceId IN :processInstanceIds")
     void deleteByProcessInstanceIdIn(@Param("processInstanceIds") List<String> processInstanceIds);
+
+    /**
+     * Find the most recent change record for a specific sub-table row change,
+     * ordered by timestamp descending. Used for deduplication on re-save.
+     */
+    ChangeHistory findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndChangeTypeOrderByTimestampDesc(
+            String processInstanceId, String subTableName, String rowIdentifier, ChangeType changeType);
 }

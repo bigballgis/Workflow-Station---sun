@@ -253,14 +253,34 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
         )
         continue
       }
-      const fromVariables = useAllSlices
-        ? mergeSubTableRowsByRowId(allSlicesMerged, bindingSaved ?? [], pk)
-        : (bindingSaved ?? [])
+      // Only MI dashboard bindings pull the global all-slices merge (it carries cross-slice MI status rows).
+      // A plain structuralFk shared sub-table (e.g. ATM_Comment / ATM_Attachment keyed by case_row_id) must
+      // use ONLY its own slice: allSlicesMerged pools every case sub-table row (including the sys_users
+      // RELATED slice and the MI transaction rows), which surfaced as "-" ghost rows in My Request.
+      const isMiDash = isMiDashboardSubTableBinding(
+        b as { columns?: Array<{ field?: string }> | null; tableName?: string },
+      )
+      const fromVariables =
+        useAllSlices && isMiDash
+          ? mergeSubTableRowsByRowId(allSlicesMerged, bindingSaved ?? [], pk)
+          : (bindingSaved ?? [])
       if (fromVariables.length === 0 && !(Array.isArray(b.data) && b.data.length > 0)) continue
       // Variables (backend MI overlay) win over binding rows polluted by enrich.
-      b.data = dropSubsumedSubTableRows(
-        mergeSubTableRowsByRowId(Array.isArray(b.data) ? b.data : [], fromVariables, pk)
-      )
+      let mergedRows = mergeSubTableRowsByRowId(Array.isArray(b.data) ? b.data : [], fromVariables, pk)
+      if (!isMiDash) {
+        // Drop rows that leaked in from other tables' slices (transaction/attachment rows in a comment grid).
+        mergedRows = filterRowsForSharedProcessSubTableBinding(
+          mergedRows,
+          b as {
+            columns?: Array<{ field?: string }> | null
+            foreignKeyField?: string | null
+            tableName?: string
+            physicalTableName?: string
+            tableId?: number | null
+          },
+        )
+      }
+      b.data = dropSubsumedSubTableRows(mergedRows)
     }
   }
 

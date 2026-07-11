@@ -77,6 +77,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         .refTableId(fieldReq.getRefTableId())
                         .refPrimaryKeyFields(fieldReq.getRefPrimaryKeyFields())
                         .fkDisplayMode(fieldReq.getFkDisplayMode() != null ? fieldReq.getFkDisplayMode() : "readonly")
+                        .lookupConfig(fieldReq.getLookupConfig())
                         .sortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i)
                         .build();
                 fieldDefinitions.add(field);
@@ -293,6 +294,9 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         existing.setRefPrimaryKeyFields(null);
                     }
                 }
+                // LOOKUP config: keep only for LOOKUP columns, clear when switched away.
+                existing.setLookupConfig(
+                        RelationDataType.LOOKUP.equals(existing.getDataType()) ? fieldReq.getLookupConfig() : null);
                 existing.setSortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i);
                 updatedFields.add(existing);
             } else {
@@ -313,6 +317,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         .refTableId(fieldReq.getRefTableId())
                         .refPrimaryKeyFields(fieldReq.getRefPrimaryKeyFields())
                         .fkDisplayMode(fieldReq.getFkDisplayMode() != null ? fieldReq.getFkDisplayMode() : "readonly")
+                        .lookupConfig(fieldReq.getLookupConfig())
                         .sortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i)
                         .build();
                 updatedFields.add(newField);

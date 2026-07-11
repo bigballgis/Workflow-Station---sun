@@ -103,11 +103,12 @@ logging:
     com.developer: INFO
     org.hibernate.SQL: WARN
 
-# N8N AI Generation Configuration (Docker)
-n8n:
+# AI Generation webhook (Docker) — Activepieces sync webhook (migrated from n8n).
+# flowId is environment-specific; override via AI_GENERATION_WEBHOOK_URL per environment.
+activepieces:
   ai-generation:
-    webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://n8n:5678/webhook/ai-function-unit-gen}
+    webhook-url: ${AI_GENERATION_WEBHOOK_URL:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
 
 # Docker Compose service hostnames resolve to private IPs; allow trusted internal targets only.
 ssrf:
-  allowed-hosts: ${SSRF_ALLOWED_HOSTS:n8n}
+  allowed-hosts: ${SSRF_ALLOWED_HOSTS:activepieces}

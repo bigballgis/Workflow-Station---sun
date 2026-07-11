@@ -1006,110 +1006,82 @@
     附注：PortalRelationTablePropertyTest "Property 18 CSV export" 失败为遗留基线（HEAD 上 stash 验证同样失败），非本次引入。
 - id: "1471"
   status: fixed
-  fixed_at: "2026-07-04"
+  fixed_at: "2026-07-03"
   severity: major
-  category: security
-  summary: "Cyberflows SAST 整改：XXE / 点击劫持(Frameable Login) / SMTP AUTH 凭据与邮箱 PII 日志泄露"
-  file: "backend/workflow-engine-core/src/main/java/com/workflow/util/BpmnDeployEnhancer.java"
+  category: bug
+  summary: "View Design 保存（含改名）时 access rules 重复 INSERT 触发 idx_mtv_access_view_target"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/impl/MainTableViewServiceImpl.java"
   note: |
-    来源：8.cyberflow_sast漏洞扫描结果/sast漏洞扫描结果.md（Checkmarx）。本轮修复三处真实可利用漏洞：
-    ① XXE（Improper Restriction of XXE Ref）：BpmnDeployEnhancer.enhance 解析客户端 BPMN 前
-       hardenAgainstXxe —— disallow-doctype-decl、禁用 external general/parameter entities、
-       load-external-dtd=false、ACCESS_EXTERNAL_DTD/SCHEMA=""、XIncludeAware/ExpandEntityReferences=false。
-    ② Frameable Login Page（点击劫持）：user-portal/admin-center/developer-workstation/workflow-engine-core
-       四个 SecurityConfig 统一 headers —— frameOptions().sameOrigin() + CSP frame-ancestors 'self'（始终生效，
-       不再仅 hstsEnabled 时才配 headers）；HSTS 仍按 hsts.enabled 生产开关。
-    ③ Privacy Violation：EmailSenderService 将 JavaMail session.setDebug 全量 SMTP 会话（含 AUTH LOGIN
-       base64 用户名/口令）在 INFO/ERROR 明文落日志 —— 新增 scrubSmtpTrace 脱敏 AUTH 行与独立 base64 行，
-       成功路径改 DEBUG 且脱敏；EmailSenderService + SendEmailTaskDelegate 收件人/抄送/发件人邮箱
-       改用 platform-common StringUtils.maskEmail（保留域名便于诊断）。
-    评估为已缓解/误报（未改，均已符合整改建议）：LDAP Injection（LdapClient.escapeFilterValue RFC4515 已全量转义）；
-    ReDoS（ProcessDebugProbeRunner.extractNodeBlock 已 Pattern.quote，actionIds 为静态线性正则）；
-    Second Order/SQL Injection 代表汇点 PostgresPhysicalTablePrimaryKeys（SAFE_IDENTIFIER 白名单 + 参数绑定表名 + PK 列名再校验）；
-    Cleartext Submission（DspTokenClient client secret 走 X-Client-Secret header 非 URL query）；
-    Client Web Storage（前端 token 已迁 HttpOnly cookie，localStorage 无 token）；
-    JWT Sensitive Info（roles/permissions/username claims 为无状态鉴权刻意设计，各服务 JwtAuthenticationFilter 依赖之，
-       且无任何日志打印 token 值）。
-    架构级大类（Parameter Tampering 452 / SSRF 228 / Unsafe Object Binding 151）对内部 Kong+JwtFilter 网关架构
-       与固定内部 service client 多为误报，需专项设计（DTO 边界 + 服务层 ownership/BU/Role guard + egress 白名单），
-       不在本轮做 800+ 处高风险盲改。
-    验证：mvn clean compile -pl platform-common,workflow-engine-core -am BUILD SUCCESS；
-       增量编译 5 业务模块 BUILD SUCCESS；无新增 lint 错误。
+    症状：配置了 BU+Role 的 View 点 Save（仅改 view name 也会失败），500 duplicate key idx_mtv_access_view_target。
+    根因：replaceAccessRules 只 clear 内存 collection；access 行通过 JDBC 读取未 JOIN FETCH，旧 DB 行未 DELETE 即 INSERT 新行。
+    修复：replaceAccessRules 先 mainTableViewAccessRepository.deleteByViewConfigId 再重建。
+    验证：MainTableViewServiceImplTest updateView_canRenameViewWithExistingAccessRulesInDb + deleteByViewConfigId 断言。
+    补充(2026-07-05)：delete 后须 flush 再 clear accessRules，否则 lazy 集合 reload 旧行 → idx_mtv_access_view_target（Rollback 后 View Design 保存 500）。
 - id: "1472"
   status: fixed
-  fixed_at: "2026-07-04"
-  severity: critical
-  category: security
-  summary: "workflow-engine-core SecurityManagerComponent.validateCredentials 硬编码后门账号 admin/admin123、user/user123（已移除；本地测试账号改配置注入 WORKFLOW_TEST_USERS）"
-  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/SecurityManagerComponent.java"
+  fixed_at: "2026-07-05"
+  severity: major
+  category: bug
+  summary: "Rollback 后 dw_form_table_bindings 丢失，Form Design 子表显示 subTablePlaceholderStale"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FormTableBindingRestorer.java"
   note: |
-    排查 SAST #1471 时发现：validateCredentials 在 Redis 无该用户口令时以明文比较放行硬编码后门账号
-    admin/admin123、user/user123。经确认 authenticate()/validateCredentials() 仅被引擎内测试调用
-    （无生产 Controller 装配；生产登录走 platform-security BCryptPasswordEncoder），但仍属危险死代码。
-    修复：移除两处硬编码账号，validateCredentials 改为 fail-closed —— username/password 为 null 或
-    Redis 无 security:user:{username}:password 时一律返回 false；仅凭存储口令哈希 verifyPassword。
-    配套更新 4 个测试（SecurityManagerComponentTest、ComponentIntegrationTest、EndToEndIntegrationTest、
-    PerformanceIntegrationTest）：在 setUp 里用 mock valueOperations 预置
-    security:user:admin:password = hashPassword("admin123")、user 同理，保持原有认证成功/失败断言不变。
-    关于 SAST "One Way Hash without a Salt"（SecurityCryptoHelper.hashPassword 无盐 SHA-256）：该方法同时被
-    SecurityTokenManager 用作 JWT 签名、黑名单 key，及 DataMaskingProcessor 用作确定性脱敏摘要，换 BCrypt 会破坏
-    签名/掩码；且此口令路径非生产登录（生产用 BCrypt），故保留 SHA-256 作确定性摘要并在 Javadoc 标注用途，不改。
-    验证：mvn -pl workflow-engine-core -am test（4 类共 53 tests）Tests run: 53, Failures: 0, Errors: 0 BUILD SUCCESS。
-    追加（用户要求保留本地 admin/admin123 测试登录）：改为「配置注入」而非恢复硬编码 ——
-    workflow.security.test-users.enabled（WORKFLOW_TEST_USERS_ENABLED，默认 false）+
-    workflow.security.test-users.accounts（WORKFLOW_TEST_USERS，格式 user:pass,user2:pass2）。
-    validateCredentials 在 Redis 未命中时回退 matchesConfiguredTestUser（MessageDigest.isEqual 常量时间比较 +
-    命中打 WARN 日志）。dev compose 默认开启并注入 admin:admin123,user:user123；
-    K8s uat/preprod configmap 显式 WORKFLOW_TEST_USERS_ENABLED=false 且不设 accounts。
-    代码中无任何明文口令 → SAST 硬编码凭证告警不复发；本地登录体验与原后门一致。
+    症状：Rollback 后 Form Design 子表占位符 stale，Sub Table Binding 仍显示旧 id（如 271），
+    dw_form_table_bindings / dw_table_relations 为 0。
+    根因：回滚到 legacy 或 bindings 已丢失的 v2 快照时只恢复 configJson，未恢复 binding 行；
+    后续快照 tableBindings 为空，rollback 循环放大损坏。
+    修复：FormTableBindingRestorer 从 configJson（rule/_bindingId、subListViews、relationViews）
+    推断表并重建 binding + 子表 list view，remap configJson；在 snapshot restore 与 Form Design 加载时自动执行。
+    验证：FormTableBindingRestorerTest；MCY FU48 API GET /forms 后 bindings 11 行，configJson _bindingId 50110/50111。
 - id: "1473"
   status: fixed
-  fixed_at: "2026-07-04"
+  fixed_at: "2026-07-05"
   severity: major
-  category: security
-  summary: "第二轮 Checkmarx：SSRF（内部 client URL 拼接）+ XXE 未被识别 —— 改为 inline 可识别 sanitizer（SafeUrlInput）"
-  file: "backend/platform-common/src/main/java/com/platform/common/util/SafeUrlInput.java"
+  category: bug
+  summary: "Rollback 失败 SubTableViewConfig#50062 Hibernate NonUniqueObjectException"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/VersionComponentImpl.java"
   note: |
-    第二轮扫描（2.sast第二轮漏洞扫描结果.md，986 行 finding）显示 #1471 的修复计数未下降，
-    根因：Checkmarx taint 分析基本是过程内（intraprocedural），#1471 把 XXE 加固放在 helper
-    方法 hardenAgainstXxe 且吞掉 ParserConfigurationException，扫描器不认其为 sanitizer；
-    XXE 汇点行号从 42→44 恰好与本仓库编辑后一致，证明扫描确含本仓库改动却仍报警。
-    修复本轮（取数/边界层，不改业务语义）：
-    ① XXE：BpmnDeployEnhancer.enhance 把 setFeature(disallow-doctype-decl 等) 内联到 parse 前，
-       不再走 helper、不吞异常（try 内直接抛，沿用原 catch 兜底）。
-    ② 新增 platform-common SafeUrlInput：requirePathToken(allowlist [A-Za-z0-9._:@-]，非法即抛)
-       + encodeQueryValue(URLEncoder)。inline 于每个 URL 拼接点且使用其返回值，打断 taint。
-    ③ 应用于 SSRF 增量最大的内部 client/component：RoleAccessComponent、FunctionUnitAccessComponent、
-       WorkflowEngineTaskClient、WorkflowEngineTaskHistoryClient、AdminCenterClient（path 段 ID 用
-       requirePathToken；keyword/reason/status 等 query 值用 encodeQueryValue）。非法 ID 落入原
-       try/catch → 与原「调用失败」降级一致，合法 UUID/数字/Test-000060/HMDC_ 码不受影响。
-    验证：mvn install platform-common BUILD SUCCESS；user-portal、workflow-engine-core compile BUILD SUCCESS。
-    SQLi/二阶（本轮）：新增 platform-common SqlIdentifiers（requireIdentifier/requireQualifiedName 白名单）；
-    修复 SubTableDataInjector.querySubTableData 真实未净化拼接（subTableName/assigneeField/foreignKeyField
-    原为裸 String.format）；SubTableRowAssignmentComponent 每个动态表名方法入口内联校验；
-    SubTableEnrichmentComponent、admin RelationTableDataServiceImpl 在 sink 处内联校验。
-    关键结论（务必知会安全团队）：绝大多数 SQLi/二阶/LDAP/ReDoS 告警所在代码「本就已正确防护」——
-    SubTableAssignmentHandler/MultiInstanceDataResolver 已 inline requireSafeIdentifier；PortalRelationTableServiceImpl
-    已 allowlist+sanitizeIdentifier；LdapClient 全部 escapeFilterValue(RFC4515)；ProcessDebugProbeRunner 已 Pattern.quote。
-    Checkmarx 不认识这些「自定义 sanitizer」（且不认「校验后原样返回」的方法），故计数不降。根治应在
-    Checkmarx preset 里把这些校验器登记为 sanitizer / 或做 not-exploitable triage，而非继续加代码。
-    Parameter Tampering 456 / Unsafe Object Binding 151（抽样核实后判断为「以假阳性为主」）：user-portal
-    controller 已普遍遵循正确模式—— 身份用 @CurrentUserId（认证态派生、非请求参数，不可篡改）；下游有
-    canViewTaskForm/ownership 403 校验（见 ProcessFormComponent.submitProcessFormUpdate L197 initiator-only、
-    TaskController.getReturnableActivities L119 canViewTaskForm）；请求体用 @Valid 专用 DTO（TaskCompleteRequest）
-    且 request.setTaskId(path) 服务端回填。Checkmarx 把每个 @PathVariable/@RequestBody 视作污点、不追既有 guard，
-    故报 PT/UOB。结论：不宜对已鉴权路径盲目再加 guard（既是 churn 又可能改坏 getProcessFormData 等合法跨用户/只读
-    访问模型，且计数不会降）。建议：逐条 triage 标 not-exploitable + 少量真实缺口单独修，而非全量授权重构。
-    SSRF 第二批（覆盖全部剩余 URL 拼接 sink，共 13 文件 ~50 处）：user-portal VirtualGroupAccessComponent(20)、
-    UserPermissionController(5)、ProcessStartAssigneeResolver(6)、WorkflowEngineProcessClient(8)、
-    ProcessComponent(3)、ProcessDraftComponent、WorkflowEngineClient、TaskController(keyword)、
-    WorkflowEngineTaskClient(rowId 补漏)；workflow-engine AdminCenterClient(13)、ProcessCompletionListener；
-    developer-workstation UserDisplayNameService、DeveloperPermissionChecker、DeploymentComponentImpl(2)；
-    admin-center DepartmentRoleTaskServiceImpl(2)。全部 path 段 requirePathToken、query 值 encodeQueryValue。
-    LDAP 明文传输（Cleartext）：LdapClient simple bind 会把服务账号+用户口令原文发给 LDAP 服务器，
-    生产/UAT/SIT 均为 ldaps://:3269 + LDAP_TLS=true（无隐患）；仅 dev compose 本地 mock OpenLDAP 用
-    ldap://test-ldap:389 + TLS=false。加固：新增 ldap.allow-insecure（LDAP_ALLOW_INSECURE，默认 false），
-    LdapClient @PostConstruct 检测「ldap:// 且 tls=false」时 fail-fast 拒绝启动，仅显式 allow-insecure=true
-    才放行并打 WARN；dev compose 显式置 true，K8s uat/preprod configmap 显式置 false。
-    验证：mvn compile admin-center+user-portal+workflow-engine-core+developer-workstation BUILD SUCCESS；
-    SecurityManagerComponentTest 通过。
+    症状：Version Management Rollback 报 A different object with the same identifier value was already
+    associated with the session : [SubTableViewConfig#50062]。
+    根因：createSnapshot 加载 SubTableViewConfig 进 persistence context；clearChildCollections 用 native DELETE
+    未清 session；sequence sync 后 restore INSERT 复用同 id → 冲突。
+    修复：clear 后 entityManager.flush()+clear() 并重载 FunctionUnit；SubTableViewConfig delete 加 flushAutomatically。
+    验证：MCY FU48 rollback 至 1.0.148 成功（v1.0.151）。
+- id: "1474"
+  status: fixed
+  fixed_at: "2026-07-06"
+  severity: minor
+  category: bug
+  summary: "Admin 新授业务角色后 Portal New Requests 5 分钟内不可见，重新登录也不刷新"
+  file: "backend/user-portal/src/main/java/com/portal/controller/AuthController.java"
+  note: |
+    症状：Admin Center 给 FU(ATM) 配好 HMDC_Index_Role 并经 BU 工作台授予用户后，
+    该用户登录 User Portal，New Requests 仍看不到该 FU。
+    根因：FunctionUnitAccessComponent.userRoleCodesCache 对用户业务角色 code 集合缓存 5 分钟；
+    授权发生在 admin-center（跨服务）无法失效 portal 本地缓存，clearUserRolesCache 原本无任何调用方，
+    重新登录也不清 → 刚授权后最长 5 分钟交集为空，FU 被过滤。
+    修复：AuthController.login 与 AuthSsoExchangeController.exchange 在签发会话前调用
+    functionUnitAccessComponent.clearUserRolesCache(userId)，使"重新登录立即生效"。
+    验证：dev compose 重建 user-portal 后 API 实测——撤销 UBR 行后旧 token 仍见 ATM（TTL 内预期），
+    重新登录立即不见；恢复 UBR 后重新登录立即可见。数据已原样恢复。
+- id: "1475"
+  status: fixed
+  fixed_at: "2026-07-06"
+  severity: major
+  category: bug
+  summary: "任务处理人无 FU 可发起角色时任务详情整页不可用（流程图/表单 403），改为凭 taskId 放行"
+  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  note: |
+    症状：ATM 流程 Transaction Assignment 分派给 HMDC_Assign_Role 的李娜，任务详情页 Basic Info 正常但
+    流程图区显示 "You do not have permission to access this task" + "No process definition"，表单/子表全不加载。
+    根因：任务详情页加载 FU 内容走 GET /processes/function-units/{key}/content，该接口套"可发起流程"的
+    业务角色准入（sys_function_unit_access 交集）；ATM 访问表只配 HMDC_Index_Role（发起角色），
+    中途接任务的 Assign/Approver/Operator 角色与其无交集 → 403 → BPMN+表单全挂。
+    修复：content/contents/primary-keys-allocate 三接口加可选 taskId——任务属于该 FU
+    （processDefinitionKey 直等或 resolveFunctionUnitId 双侧解析相等）且 canViewTaskForm 通过则放行；
+    仅绕过角色门槛，禁用检查经 requireEnabledFunctionUnit 保留；无 taskId / 任务不匹配 / 非参与人回落原角色门槛。
+    前端 processApi.getFunctionUnitContent/allocatePrimaryKeys 加 taskId 形参，任务详情
+    (useTaskDetailFuLoader/useTaskDetailLoader)、动作弹窗 (customActionFormPopup)、子表加行
+    (useSubTableRowDialog/useTaskDetailMiLinkChild) 传入；发起页 start.vue 不传维持原策略。
+    验证：ProcessControllerTaskContentAccessTest 6 用例；Playwright（e2e_lina/HMDC_Assign_Role）
+    frontend/user-portal/verification-screenshots/2026-07-06_task-assignee-fu-content-access.png
+    图/表单/操作按钮全渲染；API 三断言：无 taskId=403、本任务 taskId=200、真 taskId+他人 FU(50005)=403。

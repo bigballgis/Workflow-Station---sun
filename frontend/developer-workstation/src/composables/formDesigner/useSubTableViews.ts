@@ -112,10 +112,9 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
 
   function updateRelationViewAllFields(bindingId: number, fields: any[]) {
     const existing = relationViewState.value[bindingId] || { allFields: [], viewFields: [] }
-    const viewFields = existing.viewFields?.length ? existing.viewFields : fields
     relationViewState.value = {
       ...relationViewState.value,
-      [bindingId]: { allFields: fields, viewFields },
+      [bindingId]: { ...existing, allFields: fields },
     }
   }
 
@@ -190,8 +189,8 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
       const fieldsRes = await subTableViewApi.getAvailableFields(selectedForm.value.id, bindingId)
       const availableFields: SubTableFieldDTO[] = fieldsRes.data || []
 
-      // Merge view config with available fields
-      let viewFields: SubTableFieldDTO[] = config.viewFields
+      // Only columns explicitly saved in dw view config (designer picks from catalog).
+      const viewFields: SubTableFieldDTO[] = config.viewFields
         .filter(f => f.visible !== false)
         .sort((a, b) => a.sortOrder - b.sortOrder)
         .map(f => {
@@ -202,9 +201,6 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
             displayName: f.displayLabel || f.fieldName,
           } as SubTableFieldDTO
         })
-      if (viewFields.length === 0 && availableFields.length > 0) {
-        viewFields = availableFields.map(field => ({ ...field, columnType: 'field' as const }))
-      }
 
       const savedListDesigner = (selectedForm.value.configJson?.subListViews || {})[bindingId] || {}
       const liveColumns = subTableViewState.value[bindingId]?.viewFields

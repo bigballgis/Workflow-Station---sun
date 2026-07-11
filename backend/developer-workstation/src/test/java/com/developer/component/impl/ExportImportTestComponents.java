@@ -106,6 +106,7 @@ public final class ExportImportTestComponents {
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
                 Mockito.mock(EmailConnectionRepository.class),
+                Mockito.mock(EmailMonitorRuleRepository.class),
                 formTableBindingRepository,
                 Mockito.mock(LinkFormComponentRepository.class),
                 tableRelationRepository,

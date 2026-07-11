@@ -189,6 +189,7 @@ public final class RelationRowValidator {
             case JSON:
             case FILE:
             case BYTEA:
+            case LOOKUP:
             default:
                 if (field.getLength() != null && field.getLength() > 0 && text.length() > field.getLength()) {
                     result.addError(name, "Exceeds max length " + field.getLength());

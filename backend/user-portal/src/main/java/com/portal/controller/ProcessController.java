@@ -2,6 +2,9 @@ package com.portal.controller;
 
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
+import com.portal.component.TaskProcessComponent;
+import com.portal.component.TaskQueryComponent;
+import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.dto.ApiResponse;
 import com.portal.dto.*;
 import com.portal.exception.PortalException;
@@ -34,6 +37,8 @@ public class ProcessController {
     private final I18nService i18nService;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final com.portal.component.PortalPrimaryKeyAllocationComponent portalPrimaryKeyAllocationComponent;
+    private final TaskQueryComponent taskQueryComponent;
+    private final TaskProcessComponent taskProcessComponent;
 
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
@@ -57,22 +62,25 @@ public class ProcessController {
     }
     
     @GetMapping("/function-units/{functionUnitId}/content")
-    @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的 BPMN、表单等完整内容；需登录且满足功能单元业务角色访问策略（与可发起列表一致）")
+    @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的 BPMN、表单等完整内容；需登录且满足功能单元业务角色访问策略（与可发起列表一致）；"
+            + "任务参与人（处理人/候选人/发起人）可通过 taskId 放行，无需持有可发起角色")
     public ApiResponse<Map<String, Object>> getFunctionUnitContent(
             @CurrentUserId String userId,
-            @PathVariable String functionUnitId) {
-        requireFunctionUnitContentAccess(userId, functionUnitId);
+            @PathVariable String functionUnitId,
+            @RequestParam(required = false) String taskId) {
+        requireFunctionUnitContentAccess(userId, functionUnitId, taskId);
         Map<String, Object> content = processComponent.getFunctionUnitContent(functionUnitId);
         return ApiResponse.success(content);
     }
-    
+
     @GetMapping("/function-units/{functionUnitId}/contents")
     @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
     public ApiResponse<List<Map<String, Object>>> getFunctionUnitContentsByType(
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
-            @RequestParam String contentType) {
-        requireFunctionUnitContentAccess(userId, functionUnitId);
+            @RequestParam String contentType,
+            @RequestParam(required = false) String taskId) {
+        requireFunctionUnitContentAccess(userId, functionUnitId, taskId);
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
         return ApiResponse.success(contents);
     }
@@ -83,8 +91,9 @@ public class ProcessController {
     public ApiResponse<com.portal.dto.AllocatePrimaryKeyResponse> allocatePrimaryKeys(
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
+            @RequestParam(required = false) String taskId,
             @Valid @RequestBody com.portal.dto.AllocatePrimaryKeyRequest request) {
-        requireFunctionUnitContentAccess(userId, functionUnitId);
+        requireFunctionUnitContentAccess(userId, functionUnitId, taskId);
         return ApiResponse.success(portalPrimaryKeyAllocationComponent.allocate(functionUnitId, request));
     }
     
@@ -119,10 +128,66 @@ public class ProcessController {
     }
 
     private void requireFunctionUnitContentAccess(String userId, String functionUnitIdOrCode) {
+        requireFunctionUnitContentAccess(userId, functionUnitIdOrCode, null);
+    }
+
+    private void requireFunctionUnitContentAccess(String userId, String functionUnitIdOrCode, String taskId) {
         if (userId == null || userId.isBlank()) {
             throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("Please login first before accessing function unit content");
         }
+        // Task participants (assignee/candidate/initiator) may lack the FU's start-access roles
+        // (e.g. a mid-flow approver role not in the FU access list) but still need BPMN + form
+        // content to view and process their task.
+        if (taskGrantsFunctionUnitContentAccess(userId, functionUnitIdOrCode, taskId)) {
+            return;
+        }
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
+    }
+
+    /**
+     * Task-scoped grant for FU content: the task must belong to the requested function unit and the
+     * user must pass {@code canViewTaskForm} for it. Only the role gate is bypassed — the disabled
+     * gate still applies via {@link FunctionUnitAccessComponent#requireEnabledFunctionUnit}.
+     */
+    private boolean taskGrantsFunctionUnitContentAccess(String userId, String functionUnitIdOrCode, String taskId) {
+        if (taskId == null || taskId.isBlank()) {
+            return false;
+        }
+        try {
+            TaskInfo task = taskQueryComponent.getTaskById(taskId).orElse(null);
+            if (task == null || !taskBelongsToFunctionUnit(task, functionUnitIdOrCode)) {
+                return false;
+            }
+            functionUnitAccessComponent.requireEnabledFunctionUnit(userId, functionUnitIdOrCode);
+            boolean allowed = taskProcessComponent.canViewTaskForm(task, userId,
+                    SecurityContextUtils.getCurrentUsername().orElse(null));
+            if (allowed) {
+                log.info("Granting function unit {} content access to user {} via task {}",
+                        functionUnitIdOrCode, userId, taskId);
+            }
+            return allowed;
+        } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Task-based function unit content access check failed (task {}): {}", taskId, e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean taskBelongsToFunctionUnit(TaskInfo task, String functionUnitIdOrCode) {
+        String taskProcessKey = task.getProcessDefinitionKey();
+        if (taskProcessKey == null || taskProcessKey.isBlank()
+                || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+            return false;
+        }
+        // Task detail passes the task's own processDefinitionKey, so a direct match is the hot path.
+        if (taskProcessKey.trim().equals(functionUnitIdOrCode.trim())) {
+            return true;
+        }
+        // Other callers may pass the FU catalog id/code — resolve both sides to catalog IDs.
+        String requested = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode.trim());
+        String owning = functionUnitAccessComponent.resolveFunctionUnitId(taskProcessKey.trim());
+        return requested != null && requested.equals(owning);
     }
     
     /**

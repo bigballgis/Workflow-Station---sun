@@ -82,50 +82,19 @@ public class SubTableViewServiceImpl implements SubTableViewService {
             return viewConfigRepository.findByBindingId(bindingId).orElseThrow();
         }
 
-        // Get table ID from binding
+        // Get table ID from binding (fields loaded separately via getAvailableFieldsByBinding).
         Long tableId = binding.getTableId();
         if (tableId == null) {
             throw new IllegalArgumentException("Binding has no table: " + bindingId);
         }
-
-        // Get all fields from the table using JPA
-        TableDefinition table = tableDefinitionRepository.findById(tableId)
+        tableDefinitionRepository.findById(tableId)
                 .orElseThrow(() -> new IllegalArgumentException("Table not found: " + tableId));
-        List<RelationFieldDTO> availableFields = table.getFieldDefinitions().stream()
-                .map(f -> RelationFieldDTO.builder()
-                        .id(f.getId())
-                        .fieldName(f.getFieldName())
-                        .dataType(toRelationDataType(f.getDataType()))
-                        .length(f.getLength())
-                        .precision(f.getPrecision())
-                        .scale(f.getScale())
-                        .nullable(f.getNullable())
-                        .isPrimaryKey(f.getIsPrimaryKey())
-                        .defaultValue(f.getDefaultValue())
-                        .displayName(f.getDisplayName())
-                        .sortOrder(f.getSortOrder())
-                        .build())
-                .collect(java.util.stream.Collectors.toList());
 
-        // Create view config
+        // Create view config with no pre-selected columns — designer picks from the field catalog.
         SubTableViewConfig config = SubTableViewConfig.builder()
                 .binding(binding)
                 .viewFields(new ArrayList<>())
                 .build();
-
-        // Add all fields to the view
-        int sortOrder = 0;
-        for (RelationFieldDTO field : availableFields) {
-            SubTableViewField viewField = SubTableViewField.builder()
-                    .viewConfig(config)
-                    .fieldName(field.getFieldName())
-                    .displayLabel(field.getDisplayName() != null ? field.getDisplayName() : field.getFieldName())
-                    .columnWidth(150)
-                    .sortOrder(sortOrder++)
-                    .visible(true)
-                    .build();
-            config.getViewFields().add(viewField);
-        }
 
         config = viewConfigRepository.save(config);
 

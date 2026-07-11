@@ -40,6 +40,7 @@ public class FormDesignPropertyTest {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         SubTableViewService subTableViewService = mock(SubTableViewService.class);
         FormDesignComponent component = new FormDesignComponentImpl(
+                mock(com.developer.component.impl.FormTableBindingRestorer.class),
                 repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository,
                 subTableViewConfigRepository, objectMapper, i18nService, jdbcTemplate, subTableViewService);
         

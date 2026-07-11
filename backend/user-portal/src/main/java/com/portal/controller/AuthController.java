@@ -8,6 +8,7 @@ import com.platform.security.model.UserStatus;
 import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.UserRoleService;
 import com.platform.common.i18n.I18nService;
+import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.dto.ChangePasswordRequest;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
@@ -69,6 +70,7 @@ public class AuthController {
     private final PortalSessionIssuerService portalSessionIssuerService;
     private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final JwtProperties jwtProperties;
+    private final FunctionUnitAccessComponent functionUnitAccessComponent;
     
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -132,6 +134,11 @@ public class AuthController {
 
             // Record successful login audit
             recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
+
+            // Role grants happen in admin-center and cannot invalidate this portal-local cache,
+            // so login is the refresh point: without this, a freshly granted role stays invisible
+            // in New Requests until the 5-minute role-code cache expires.
+            functionUnitAccessComponent.clearUserRolesCache(user.getId());
 
             return portalSessionIssuerService.issuePortalSession(user, request, httpRequest, httpResponse);
         } catch (RuntimeException e) {

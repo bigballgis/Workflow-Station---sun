@@ -19,6 +19,7 @@ import {
 import { walkRulesApplyTableFieldDefaultsToPersistedRules } from '@/utils/formCreateRuleDefaults'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdRule } from '@/utils/formFieldMeta'
+import { TABLE_AUDIT_FIELD_NAMES } from '@/utils/tableAuditFields'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 import type { PortalViewsValue } from './useSubTablePortalViews'
 
@@ -85,7 +86,7 @@ export function useFormSave(options: UseFormSaveOptions) {
    * SystemAuditFields and portal frontend subTableAddDialogHelpers/rowInit.ts;
    * any change to the matching rule must update all three places.
    */
-  const ALWAYS_VALID_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', '__request_id'])
+  const ALWAYS_VALID_FIELDS = new Set([...TABLE_AUDIT_FIELD_NAMES, '__request_id'])
 
   /** Validate field names against Data_Table columns */
   function validateFieldNames(fieldNames: string[]): string[] {
@@ -251,15 +252,6 @@ export function useFormSave(options: UseFormSaveOptions) {
         }
         if (collected) {
           subForms[binding.bindingId] = collected
-        }
-      })
-
-      // Incrementally add sub-form fields to list view columns (preserve link/lookup columns).
-      designerSubBindings.value.forEach((binding) => {
-        if (binding.bindingType !== 'SUB') return
-        const subForm = subForms[binding.bindingId]
-        if (subForm?.rule?.length) {
-          syncSubTableListViewFromFormRules(binding.bindingId, subForm.rule)
         }
       })
 

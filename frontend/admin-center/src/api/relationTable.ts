@@ -16,6 +16,56 @@ export type RelationDataType =
   | 'DATE'
   | 'TIMESTAMP'
   | 'TEXT'
+  | 'LOOKUP'
+
+/** Lookup 固定过滤 / 派生 join 匹配类型 */
+export type LookupMatchType = 'eq' | 'contains' | 'startsWith' | 'endsWith'
+
+/** Lookup 固定过滤条件 */
+export interface LookupFilterCondition {
+  fieldName: string
+  value: string
+  matchType?: LookupMatchType
+}
+
+/** 派生带出 / 级联的一条关联列 */
+export interface LookupJoin {
+  /** 父 lookup 引用表里的列（取父所选行该列的值） */
+  fromColumn: string
+  /** 本 lookup 引用表里的列（用该值去匹配本表的行） */
+  toColumn: string
+  matchType?: LookupMatchType
+}
+
+/** 派生带出 / 级联配置 */
+export interface LookupDerivedFrom {
+  /** 本表里作为父的另一个 LOOKUP 字段名 */
+  parentField: string
+  joins: LookupJoin[]
+  /** autofill=命中行自动填入本字段；filter=仅收窄本字段候选 */
+  derivedMode: 'autofill' | 'filter'
+}
+
+/** LOOKUP 字段配置（存于 lookup_config JSONB） */
+export interface LookupConfig {
+  /** 被引用的关联表 id */
+  refTableId?: number
+  refTableName?: string
+  /** 下拉搜索的列；searchFields[0] 视为存储值(PK)列 */
+  searchFields?: string[]
+  /** 下拉表格展示的列 */
+  displayFields?: string[]
+  /** 选中后 tag 标签取的列 */
+  selectedDisplayField?: string
+  /** 固定预过滤 */
+  filterConditions?: LookupFilterCondition[]
+  /** 是否展示只读带出面板 */
+  showBackfillView?: boolean
+  /** 是否多选（值存 PK 数组） */
+  multiple?: boolean
+  /** 派生带出 / 级联 */
+  derivedFrom?: LookupDerivedFrom
+}
 
 /** 审计操作类型枚举 */
 export type RelationAuditAction = 'ADD' | 'UPDATE' | 'DELETE' | 'STATUS_CHANGE'
@@ -38,6 +88,7 @@ export interface FieldDefinitionResponse {
   refPrimaryKeyFields?: string[]
   pkGeneration?: Record<string, unknown>
   fkDisplayMode?: string
+  lookupConfig?: LookupConfig
 }
 
 /** 表定义响应 */
@@ -124,6 +175,7 @@ export interface CreateFieldDefinitionRequest {
   refTableId?: number
   refPrimaryKeyFields?: string[]
   fkDisplayMode?: string
+  lookupConfig?: LookupConfig
 }
 
 /** 创建表请求 */
@@ -152,6 +204,7 @@ export interface UpdateFieldDefinitionRequest {
   refTableId?: number
   refPrimaryKeyFields?: string[]
   fkDisplayMode?: string
+  lookupConfig?: LookupConfig
 }
 
 /** 更新表请求 */
@@ -281,6 +334,30 @@ export const relationTableDataApi = {
   /** 分配主键值（非 manual 策略） */
   allocatePrimaryKeys: (tableId: number, payload: { fieldName: string; count?: number; scopeKey?: string }) =>
     post<{ values: string[] }>(`/relation-tables/data/${tableId}/primary-keys/allocate`, payload),
+
+  /** Lookup 搜索（供 LOOKUP 字段下拉 + 派生带出）。返回原始行 Map 列表。 */
+  searchForLookup: (tableId: number, params: {
+    keyword: string
+    searchFields: string[]
+    displayField: string
+    filterConditions?: LookupFilterCondition[]
+    limit?: number
+    offset?: number
+  }) => {
+    const query = new URLSearchParams()
+    if (params.keyword) query.append('keyword', params.keyword)
+    if (params.displayField) query.append('displayField', params.displayField)
+    if (params.filterConditions?.length) query.append('filterConditions', JSON.stringify(params.filterConditions))
+    if (params.limit) query.append('limit', String(params.limit))
+    if (params.offset) query.append('offset', String(params.offset))
+    params.searchFields?.forEach(f => query.append('searchFields', f))
+    return get<Record<string, unknown>[]>(`/relation-tables/data/${tableId}/search?${query.toString()}`)
+  },
+
+  /** 获取 Relation Table 的 View 字段配置（带出面板列） */
+  getViewFields: (tableId: number) =>
+    get<Array<{ fieldName: string; displayLabel: string; columnWidth?: number; sortOrder: number; visible: boolean }>>(
+      `/relation-tables/data/${tableId}/view-fields`),
 
   /** 下载导入模板 (csv|xlsx) */
   downloadTemplate: (tableId: number, format: 'csv' | 'xlsx' = 'csv') =>

@@ -227,8 +227,30 @@
           :label="field.displayName || field.fieldName"
           :required="field.nullable === false || field.isPrimaryKey"
         >
+          <template v-if="field.dataType === 'LOOKUP'">
+            <LookupField
+              :model-value="formData[field.fieldName]"
+              :table-id="field.lookupConfig?.refTableId || 0"
+              :search-fields="field.lookupConfig?.searchFields || []"
+              :display-field="field.lookupConfig?.displayFields?.[0] || ''"
+              :display-fields="field.lookupConfig?.displayFields || []"
+              :selected-display-field="field.lookupConfig?.selectedDisplayField"
+              :filter-conditions="lookupFilterConditionsFor(field)"
+              :view-fields="lookupViewFieldsFor(field)"
+              :multiple="field.lookupConfig?.multiple"
+              :lookup-config="JSON.stringify(field.lookupConfig || {})"
+              @update:model-value="formData[field.fieldName] = $event"
+              @select="onLookupSelect(field, $event)"
+              @clear="onLookupClear(field)"
+            />
+            <LookupViewDisplay
+              v-if="field.lookupConfig?.showBackfillView !== false && lookupSelectedData[field.fieldName]"
+              :selected-data="lookupSelectedData[field.fieldName]"
+              :view-fields="lookupViewFieldsFor(field)"
+            />
+          </template>
           <el-switch
-            v-if="field.dataType === 'BOOLEAN'"
+            v-else-if="field.dataType === 'BOOLEAN'"
             v-model="formData[field.fieldName]"
             :disabled="isPkDisabled(field)"
           />
@@ -371,7 +393,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Search, Download, Plus, Upload, ArrowDown, Expand, Fold } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { relationTableApi, type RelationTableDTO, type RelationFieldDef, type RelationImportResult } from '@/api/relationTable'
+import { relationTableApi, type RelationTableDTO, type RelationFieldDef, type RelationImportResult, type LookupConfig } from '@/api/relationTable'
+import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
+import LookupField from '@/components/lookup/LookupField.vue'
+import LookupViewDisplay from '@/components/lookup/LookupViewDisplay.vue'
+import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, type FieldLike } from '@/components/lookup/useLookupBehaviors'
 
 const SYSTEM_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
 
@@ -412,6 +438,8 @@ const dialogMode = ref<'add' | 'edit'>('add')
 const saving = ref(false)
 const editingRowId = ref<string | null>(null)
 const formData = ref<Record<string, any>>({})
+// Selected lookup rows keyed by field name — feeds the backfill panel + derived cascade.
+const lookupSelectedData = ref<Record<string, Record<string, any> | null>>({})
 
 const exportingTemplate = ref(false)
 const importDialogVisible = ref(false)
@@ -590,13 +618,55 @@ const isPkDisabled = (f: RelationFieldDef): boolean => {
   return pkStrategy(f) !== 'manual'
 }
 
+// ---- LOOKUP fields ----
+const fieldsAsLike = (): FieldLike[] =>
+  editableFields.value.map(f => ({ fieldName: f.fieldName, dataType: f.dataType, lookupConfig: f.lookupConfig }))
+
+/** Effective filter conditions for a lookup field, incl. cascade from its parent's selected row. */
+const lookupFilterConditionsFor = (field: RelationFieldDef): LookupFilterCondition[] => {
+  const cfg = field.lookupConfig
+  const base = cfg?.filterConditions || []
+  const parent = cfg?.derivedFrom?.parentField
+  if (!parent) return base
+  return buildDerivedFilterConditions(base, cfg, lookupSelectedData.value[parent])
+}
+
+const lookupViewFieldsFor = (field: RelationFieldDef) =>
+  (field.lookupConfig?.displayFields || []).map((fn, i) => ({ fieldName: fn, displayLabel: fn, sortOrder: i, visible: true }))
+
+/** On lookup pick: store the row (backfill) + drive dependent lookups (derived auto-fill). */
+const onLookupSelect = async (field: RelationFieldDef, row: Record<string, any> | null) => {
+  lookupSelectedData.value = { ...lookupSelectedData.value, [field.fieldName]: row }
+  for (const dep of editableFields.value) {
+    if (dep.dataType !== 'LOOKUP') continue
+    if (dep.lookupConfig?.derivedFrom?.parentField !== field.fieldName) continue
+    const res = await resolveDerivedLookup(
+      { fieldName: dep.fieldName, dataType: dep.dataType, lookupConfig: dep.lookupConfig },
+      row,
+      fieldsAsLike(),
+    )
+    if (!res.skip) formData.value[dep.fieldName] = res.value
+  }
+}
+
+const onLookupClear = (field: RelationFieldDef) => {
+  lookupSelectedData.value = { ...lookupSelectedData.value, [field.fieldName]: null }
+  for (const dep of editableFields.value) {
+    if (dep.dataType === 'LOOKUP' && dep.lookupConfig?.derivedFrom?.parentField === field.fieldName
+        && dep.lookupConfig?.derivedFrom?.derivedMode === 'autofill') {
+      formData.value[dep.fieldName] = dep.lookupConfig?.multiple ? [] : null
+    }
+  }
+}
+
 const openAddDialog = async () => {
   if (!selectedTableId.value) return
   dialogMode.value = 'add'
   editingRowId.value = null
+  lookupSelectedData.value = {}
   const fd: Record<string, any> = {}
   for (const f of editableFields.value) {
-    fd[f.fieldName] = f.dataType === 'BOOLEAN' ? false : null
+    fd[f.fieldName] = f.dataType === 'BOOLEAN' ? false : (f.dataType === 'LOOKUP' && f.lookupConfig?.multiple ? [] : null)
   }
   formData.value = fd
   dialogVisible.value = true
@@ -616,6 +686,7 @@ const openAddDialog = async () => {
 const openEditDialog = (row: Record<string, any>) => {
   dialogMode.value = 'edit'
   editingRowId.value = rowId(row)
+  lookupSelectedData.value = {}
   const fd: Record<string, any> = {}
   for (const f of editableFields.value) {
     fd[f.fieldName] = row[f.fieldName] ?? null
@@ -628,8 +699,17 @@ const handleSaveRecord = async () => {
   if (!selectedTableId.value) return
   saving.value = true
   try {
+    const lookupCfgByField = new Map<string, LookupConfig>()
+    for (const f of editableFields.value) {
+      if (f.dataType === 'LOOKUP' && f.lookupConfig) lookupCfgByField.set(f.fieldName, f.lookupConfig)
+    }
     const clean: Record<string, any> = {}
     for (const [k, v] of Object.entries(formData.value)) {
+      if (lookupCfgByField.has(k)) {
+        const pk = normalizeLookupValueForSave(v, lookupCfgByField.get(k))
+        if (pk !== null && pk !== undefined && pk !== '' && !(Array.isArray(pk) && pk.length === 0)) clean[k] = pk
+        continue
+      }
       if (v !== null && v !== undefined && v !== '') clean[k] = v
     }
     if (dialogMode.value === 'add') {

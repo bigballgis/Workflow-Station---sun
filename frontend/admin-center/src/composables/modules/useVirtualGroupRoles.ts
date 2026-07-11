@@ -22,7 +22,9 @@ export function useVirtualGroupRoles(group: Ref<VirtualGroup | null>) {
   const availableRoles = computed(() =>
     allRoles.value.filter(r => {
       const rt = r.type as string
-      return (rt === 'BU_BOUNDED' || rt === 'BU_UNBOUNDED' || rt === 'BUSINESS') && r.id !== boundRole.value?.roleId
+      return r.status === 'ACTIVE'
+        && (rt === 'BU_BOUNDED' || rt === 'BU_UNBOUNDED' || rt === 'BUSINESS')
+        && r.id !== boundRole.value?.roleId
     })
   )
 

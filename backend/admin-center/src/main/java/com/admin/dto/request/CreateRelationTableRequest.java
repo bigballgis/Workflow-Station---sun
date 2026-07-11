@@ -76,5 +76,8 @@ public class CreateRelationTableRequest {
 
         /** readonly | hidden */
         private String fkDisplayMode;
+
+        /** LOOKUP field configuration; only meaningful when dataType == LOOKUP. */
+        private Map<String, Object> lookupConfig;
     }
 }

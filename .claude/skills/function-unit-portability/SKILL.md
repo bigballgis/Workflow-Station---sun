@@ -23,6 +23,8 @@ description: >-
 | **Clone** | `FunctionUnitCloner` | `MainTableViewService.cloneViewsForFunctionUnit` |
 | **Version snapshot / rollback** | `VersionComponentImpl` | snapshot `mainTableViews` ← `MainTableViewService.snapshotViewsForFunctionUnit` + `MainTableViewPortability.importAll` |
 
+**Rollback 完整还原契约（含缺口矩阵、测试）：** `.cursor/skills/function-unit-version-rollback/SKILL.md`
+
 新增 FU 级配置时 **三条路径都要补**，并在下方清单打勾。
 
 ---

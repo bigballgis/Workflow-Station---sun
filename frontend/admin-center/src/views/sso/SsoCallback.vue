@@ -25,14 +25,15 @@ function isAdminAccessDenied(error: unknown) {
 }
 
 // Cross-origin SSO return targets, keyed by a fixed `state` marker. The Superset
-// author gate (a different origin/port) bounces unauthenticated users to login
-// with state=superset-author; after the cookie is set we jump back there.
-// Values are a HARDCODED allowlist (never derived from untrusted input) so this
-// cannot be abused as an open redirect.
+// author gate bounces unauthenticated users to login with state=superset-author;
+// after the cookie is set we jump back there. Under the single-FQDN + path model the
+// author UI is the /bi subpath on the same origin (dev fallback below); prod overrides
+// via VITE_SUPERSET_AUTHOR_URL. Values are a HARDCODED allowlist (never derived from
+// untrusted input) so this cannot be abused as an open redirect.
 // (AP uses a dedicated state=ap-bridge branch below — it needs an async server-side
 //  mint, not a static URL.)
 const SSO_EXTERNAL_RETURNS: Record<string, string> = {
-  'superset-author': import.meta.env.VITE_SUPERSET_AUTHOR_URL || 'http://localhost:8087/',
+  'superset-author': import.meta.env.VITE_SUPERSET_AUTHOR_URL || 'http://localhost:3000/bi/',
 }
 
 onMounted(async () => {

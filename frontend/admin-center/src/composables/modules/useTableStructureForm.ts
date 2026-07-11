@@ -4,7 +4,7 @@
 import { ref, reactive, computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifySuccess, notifyError, notifyWarning } from '@/utils/notify'
-import { relationTableStructureApi, type RelationDataType, type CreateFieldDefinitionRequest, type UpdateFieldDefinitionRequest, type RelationTableResponse } from '@/api/relationTable'
+import { relationTableStructureApi, type RelationDataType, type CreateFieldDefinitionRequest, type UpdateFieldDefinitionRequest, type RelationTableResponse, type LookupConfig } from '@/api/relationTable'
 import { suggestFieldName, suggestTableName } from '@/utils/fieldNameSlug'
 import { serializePkGeneration } from '@/utils/pkGenerationConfig'
 
@@ -24,6 +24,7 @@ interface FieldRow {
   refTableId?: number
   refPrimaryKeyFields?: string[]
   fkDisplayMode?: string
+  lookupConfig?: LookupConfig
 }
 
 export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: Ref<boolean> }) {
@@ -31,7 +32,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   const { t } = useI18n()
 
   const submitting = ref(false)
-  const dataTypes: RelationDataType[] = ['VARCHAR', 'INTEGER', 'BIGINT', 'DECIMAL', 'BOOLEAN', 'DATE', 'TIMESTAMP', 'TEXT']
+  const dataTypes: RelationDataType[] = ['VARCHAR', 'INTEGER', 'BIGINT', 'DECIMAL', 'BOOLEAN', 'DATE', 'TIMESTAMP', 'TEXT', 'LOOKUP']
   const AUDIT_FIELD_NAMES = new Set(['created_at', 'created_by', 'updated_at', 'updated_by'])
 
   // Foreign Key 候选表：仅可引用其他 *已部署* 的 Relation Table（排除当前正在编辑的表）
@@ -163,6 +164,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
         refTableId: f.refTableId,
         refPrimaryKeyFields: f.refPrimaryKeyFields || [],
         fkDisplayMode: f.fkDisplayMode || 'readonly',
+        lookupConfig: f.lookupConfig || undefined,
       }))
       const names = new Set(form.fieldDefinitions.map(f => f.fieldName))
       for (const af of createAuditFields()) {
@@ -202,6 +204,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           refTableId: f.isForeignKey ? f.refTableId : undefined,
           refPrimaryKeyFields: f.isForeignKey ? f.refPrimaryKeyFields : undefined,
           fkDisplayMode: f.isForeignKey ? (f.fkDisplayMode || 'readonly') : undefined,
+          lookupConfig: f.dataType === 'LOOKUP' ? f.lookupConfig : undefined,
         }))
         await relationTableStructureApi.update(tableId.value, {
           displayName: form.displayName || undefined,
@@ -224,6 +227,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           refTableId: f.isForeignKey ? f.refTableId : undefined,
           refPrimaryKeyFields: f.isForeignKey ? f.refPrimaryKeyFields : undefined,
           fkDisplayMode: f.isForeignKey ? (f.fkDisplayMode || 'readonly') : undefined,
+          lookupConfig: f.dataType === 'LOOKUP' ? f.lookupConfig : undefined,
         }))
         await relationTableStructureApi.create({
           tableName: form.tableName,

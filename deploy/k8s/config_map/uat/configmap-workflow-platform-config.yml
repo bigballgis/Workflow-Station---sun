@@ -99,6 +99,12 @@ data:
   JWT_COOKIE_DOMAIN: ".__BASE_DOMAIN__"
   ACTIVEPIECES_BRIDGE_ENABLED: "true"
   ACTIVEPIECES_INTERNAL_URL: "http://activepieces-service:80"
+  # AI Generate 对话(developer-workstation)已从 n8n 迁移到 Activepieces 同步 webhook。
+  # flowId 每环境不同:先把 deploy/ap-flows/ai-function-unit-gen.json 经 Jenkins 导入本环境 AP,
+  # 再把 ap-import 打印出的 flowId 回填 __AI_GEN_FLOW_ID__。
+  AI_GENERATION_WEBHOOK_URL: "http://activepieces-service:80/api/v1/webhooks/__AI_GEN_FLOW_ID__/sync"
+  # developer-workstation 出站 SSRF 白名单(仅该服务读取 ssrf.allowed-hosts)。
+  SSRF_ALLOWED_HOSTS: "localhost,activepieces-service"
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
   # npm registry for AP runtime piece installs (bun honors NPM_CONFIG_REGISTRY).
   # REPLACE with the internal Nexus npm repo URL before provisioning pieces.

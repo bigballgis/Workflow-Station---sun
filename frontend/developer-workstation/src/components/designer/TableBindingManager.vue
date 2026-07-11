@@ -282,7 +282,10 @@
           :label="t('tableBinding.linkMode')"
           prop="bindingLinkMode"
         >
-          <el-radio-group v-model="bindingForm.bindingLinkMode">
+          <el-radio-group
+            v-model="bindingForm.bindingLinkMode"
+            @change="handleBindingLinkModeChange"
+          >
             <el-radio :value="'structuralFk'">
               {{ t('tableBinding.linkModeStructuralFk') }}
             </el-radio>
@@ -430,6 +433,7 @@ const {
   bindingLinkModeLabel,
   isTableBound,
   handleBindingTypeChange,
+  handleBindingLinkModeChange,
   handleTableSelect,
   handleEdit,
   resetForm,

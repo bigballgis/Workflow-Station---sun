@@ -1,11 +1,11 @@
 import type { Ref } from 'vue'
-import { isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
-import { isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
 import {
   buildLookupColumnProps,
   enrichLookupColumnPropsFromSubFormRule,
+  mapSubFormRuleToDialogColumns,
   mergeListViewFieldColumn,
   parseLookupConfig,
+  resolveSubFormDialogColumnsForBinding,
   resolveSubListViewColumnsForBinding,
   type DialogColumn,
 } from '@/components/subTableAddDialogHelpers'
@@ -30,6 +30,18 @@ export function createSubTableColumnDeriver(deps: {
 }) {
   const { lookupDbConfigs, relationViewConfigs } = deps
 
+  const lookupCtx = () => ({
+    lookupDbConfigs: lookupDbConfigs.value,
+    relationViewConfigs: relationViewConfigs.value,
+  })
+
+  /** Form-design canvas columns for Add/Edit dialog (DW Form Preview parity). */
+  const deriveDialogColumnsFromBinding = (
+    binding: any,
+    subForms?: Record<string, any>,
+  ): DialogColumn[] =>
+    resolveSubFormDialogColumnsForBinding(binding, subForms, lookupCtx())
+
   // Derive display columns for a sub-table binding based on table type
   const deriveColumnsFromBinding = (
     binding: any,
@@ -43,109 +55,7 @@ export function createSubTableColumnDeriver(deps: {
 
     const subFormColumns: DialogColumn[] =
       subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
-        ? subFormRule.map((r: any): DialogColumn => {
-          const rProps = r.props || {}
-          let type: string | undefined
-
-          if (r.type === 'input') {
-            if (rProps.type === 'textarea') type = 'textarea'
-            else if (rProps.type === 'password') type = 'password'
-            else type = 'text'
-          } else if (r.type === 'inputNumber') {
-            type = 'number'
-          } else if (r.type === 'select') {
-            type = 'select'
-          } else if (r.type === 'radio') {
-            type = 'radio'
-          } else if (r.type === 'switch') {
-            type = 'switch'
-          } else if (r.type === 'datePicker') {
-            type = rProps.type === 'datetime' ? 'datetime' : 'date'
-          } else if (r.type === 'timePicker') {
-            type = rProps.isRange === true ? 'timerange' : 'time'
-          } else if (r.type === 'treeSelect' || r.type === 'elTreeSelect') {
-            type = 'treeselect'
-          } else if (r.type === 'tree') {
-            type = 'tree'
-          } else if (r.type === 'upload') {
-            type = 'upload'
-          } else if (r.type === 'userSelect' || r.type === 'user') {
-            type = 'user'
-          } else if (r.type === 'departmentSelect' || r.type === 'department') {
-            type = 'department'
-          } else if (r.type === 'colorPicker') {
-            type = 'colorPicker'
-          } else if (r.type === 'rate') {
-            type = 'rate'
-          } else if (r.type === 'slider') {
-            type = 'slider'
-          } else if (r.type === 'editor') {
-            type = 'editor'
-          } else if (r.type === 'signature') {
-            type = 'signature'
-          } else if (r.type === 'transfer') {
-            type = 'transfer'
-          } else if (r.type === 'cascader') {
-            type = 'cascader'
-          } else if (r.type === 'lookup') {
-            type = 'lookup'
-          } else {
-            type = r.type as any
-          }
-
-          const rawOptions = r.options || rProps.options
-          const options = rawOptions
-            ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
-            : undefined
-
-          const passProps: Record<string, any> = {}
-          const propKeys = [
-            'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
-            'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-            'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
-            'boundSubTableBindingId',
-          ]
-          for (const key of propKeys) {
-            if (rProps[key] !== undefined) passProps[key] = rProps[key]
-          }
-          if (rProps.data !== undefined) passProps.treeData = rProps.data
-          if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
-          if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
-          if (rProps.props !== undefined) passProps.labelProps = rProps.props
-          if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
-
-          if (type === 'lookup') {
-            const dbCfg = lookupDbConfigs.value[r.field]
-            const lookupCfg = parseLookupConfig(rProps.lookupConfig)
-            const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
-            Object.assign(
-              passProps,
-              buildLookupColumnProps(rProps.lookupConfig || '{}', {
-                dbCfg,
-                relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
-              }),
-            )
-            if (typeof rProps.selectedDisplayField === 'string' && rProps.selectedDisplayField.trim() !== '') {
-              passProps.selectedDisplayField = rProps.selectedDisplayField.trim()
-              passProps._lookupSelectedDisplayField = rProps.selectedDisplayField.trim()
-            }
-          }
-
-          if (options) passProps.options = options
-
-          const required = isFormCreateRuleRequired(r as Record<string, unknown>)
-          const readonly = isFormCreateRuleReadonly(r)
-
-          return {
-            field: r.field,
-            label: r.title || r.field,
-            type: type as DialogColumn['type'],
-            required,
-            ...(readonly ? { readonly } : {}),
-            ...(options ? { options } : {}),
-            ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
-          }
-        })
+        ? mapSubFormRuleToDialogColumns(subFormRule, lookupCtx())
         : []
 
     const config = formConfig || {}
@@ -233,5 +143,5 @@ export function createSubTableColumnDeriver(deps: {
     return enrichLookupColumnPropsFromSubFormRule(subFormColumns, subFormRule)
   }
 
-  return { deriveColumnsFromBinding }
+  return { deriveColumnsFromBinding, deriveDialogColumnsFromBinding }
 }

@@ -66,7 +66,10 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
             List<RelationFieldDTO> fields = jdbcTemplate.query(fieldSql, (rs, rowNum) -> RelationFieldDTO.builder()
                     .id(rs.getLong("id"))
                     .fieldName(rs.getString("field_name"))
-                    .dataType(RelationDataType.valueOf(rs.getString("data_type")))
+                    // fromCode (not valueOf): tolerate data types this service's enum doesn't know yet
+                    // (e.g. LOOKUP added in platform-common) so one unknown column doesn't 500 the
+                    // whole getAvailableTables call and blank every table's field dropdowns.
+                    .dataType(RelationDataType.fromCode(rs.getString("data_type")))
                     .length(rs.getObject("length", Integer.class))
                     .precision(rs.getObject("precision_value", Integer.class))
                     .scale(rs.getObject("scale", Integer.class))

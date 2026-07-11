@@ -21,7 +21,7 @@ export function useBusinessUnitRoles(businessUnit: Ref<BusinessUnit | null>) {
 
   const availableRoles = computed(() => {
     const boundIds = new Set(boundRoles.value.map((r: any) => r.id))
-    return allRoles.value.filter(r => r.type === 'BU_BOUNDED' && !boundIds.has(r.id))
+    return allRoles.value.filter(r => r.status === 'ACTIVE' && r.type === 'BU_BOUNDED' && !boundIds.has(r.id))
   })
 
   const fetchRoles = async () => {

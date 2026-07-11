@@ -107,6 +107,109 @@ public class FunctionUnitExporter {
         return "system";
     }
 
+    /** Snapshot schema version written to {@code dw_versions.snapshot_data} (export-format parity). */
+    public static final int VERSION_SNAPSHOT_SCHEMA = 2;
+
+    /**
+     * Builds a version rollback snapshot payload using the same serializers as ZIP export.
+     * Internal callers (Version Management / Publish) do not re-check workspace access.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> buildVersionSnapshotPayload(Long functionUnitId) {
+        FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
+                .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
+
+        List<TableDefinition> tables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
+        List<FormDefinition> forms = formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
+        List<ActionDefinition> actions = actionDefinitionRepository.findByFunctionUnitId(functionUnitId);
+        List<DecisionDefinition> decisions = decisionDefinitionRepository.findByFunctionUnitId(functionUnitId);
+        List<TableRelation> tableRelations = tableRelationRepository.findByFunctionUnitId(functionUnitId);
+        Map<Long, String> tableIdToName = tables.stream()
+                .collect(Collectors.toMap(TableDefinition::getId, TableDefinition::getTableName));
+        Map<Long, List<FormStageBinding>> stageBindingsByFormId = new HashMap<>();
+        for (FormDefinition form : forms) {
+            stageBindingsByFormId.put(form.getId(), formStageBindingRepository.findByFormId(form.getId()));
+        }
+        ProcessDefinition processDefinition = functionUnit.getProcessDefinition();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("snapshotSchemaVersion", VERSION_SNAPSHOT_SCHEMA);
+        payload.put("name", functionUnit.getName());
+        payload.put("code", functionUnit.getCode());
+        payload.put("description", functionUnit.getDisplayName());
+        payload.put("status", functionUnit.getStatus() != null ? functionUnit.getStatus().name() : null);
+
+        if (processDefinition != null) {
+            payload.put("process", XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml()));
+        }
+
+        payload.put("tables", tables.stream()
+                .map(table -> serializeTable(table, tableIdToName))
+                .toList());
+
+        if (!tableRelations.isEmpty()) {
+            payload.put("tableRelations", tableRelations.stream()
+                    .map(rel -> serializeTableRelation(rel, tableIdToName))
+                    .toList());
+        }
+
+        payload.put("forms", forms.stream()
+                .map(form -> serializeForm(form, stageBindingsByFormId.getOrDefault(form.getId(), List.of())))
+                .toList());
+
+        List<Long> relationTableIds = forms.stream()
+                .filter(f -> f.getTableBindings() != null)
+                .flatMap(f -> f.getTableBindings().stream())
+                .map(FormTableBinding::getRelationTableId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        List<Map<String, Object>> relationTableStructures = relationTablePortability.exportByIds(relationTableIds);
+        if (!relationTableStructures.isEmpty()) {
+            payload.put("relationTables", relationTableStructures);
+        }
+
+        List<Map<String, Object>> mainTableViews = mainTableViewPortability.export(functionUnitId, tableIdToName);
+        if (!mainTableViews.isEmpty()) {
+            payload.put("mainTableViews", mainTableViews);
+        }
+
+        List<LinkFormComponent> linkFormComponents =
+                linkFormComponentRepository.findByFunctionUnitIdOrderBySortOrderAsc(functionUnitId);
+        if (!linkFormComponents.isEmpty()) {
+            Map<Long, String> formIdToName = forms.stream()
+                    .collect(Collectors.toMap(FormDefinition::getId, FormDefinition::getFormName));
+            payload.put("linkFormComponents", linkFormComponents.stream()
+                    .map(c -> serializeLinkFormComponent(c, formIdToName))
+                    .toList());
+        }
+
+        payload.put("actions", actions.stream().map(this::serializeAction).toList());
+
+        List<Map<String, Object>> connections = emailConnectionRepository
+                .findByFunctionUnitIdOrderByNameAsc(functionUnitId).stream()
+                .map(this::serializeConnection)
+                .toList();
+        if (!connections.isEmpty()) {
+            payload.put("connections", connections);
+        }
+
+        List<Map<String, Object>> monitors = emailMonitorRuleRepository
+                .findByFunctionUnitIdOrderByNameAsc(functionUnitId).stream()
+                .map(this::serializeMonitorRule)
+                .toList();
+        if (!monitors.isEmpty()) {
+            payload.put("emailMonitors", monitors);
+        }
+
+        payload.put("decisions", decisions.stream()
+                .map(DecisionDefinition::getDmnXml)
+                .filter(xml -> xml != null && !xml.isBlank())
+                .toList());
+
+        return payload;
+    }
+
     @Transactional(readOnly = true)
     public byte[] exportFunctionUnit(Long functionUnitId) {
         functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);

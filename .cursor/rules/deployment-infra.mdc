@@ -53,7 +53,7 @@ envsubst < template > default.conf
 
 | 规则 | 说明 |
 |------|------|
-| 新增/改表 | 只改 `deploy/init-scripts/00-schema/`（必要时同步 `01-admin/`、种子目录） |
+| 新增/改表 | 在 `deploy/init-scripts/00-schema/` **新建**递增编号 `.sql`（禁止改已有文件，见 `init-scripts-append-only.mdc`） |
 | Flyway 已清退（2026-06） | 后端 **不再有** `db/migration`；历史归档于 `docs/legacy-flyway-migrations/` |
 | 禁止双轨 | **不要**再写 Flyway 迁移，也 **不要**做「Flyway ↔ init-scripts 双轨同步」 |
 | Dev Compose | `docker-compose.dev.yml` 三服务 `SPRING_FLYWAY_ENABLED=false`；Postgres 首次启动跑 `00-init-all.sh` |
@@ -61,6 +61,7 @@ envsubst < template > default.conf
 
 ### init-scripts 编写注意
 
+- **只增不改（强制）**：禁止编辑已有 `.sql`；任何 DDL/DML/种子变更 **必须新建** 递增编号脚本。详见 [init-scripts-append-only.mdc](init-scripts-append-only.mdc)。
 - **`.sh` / `.sql` 必须 LF**（CRLF 会导致 Linux 容器 init 失败）。
 - **`init-scripts/` 根目录的宿主机脚本**（如 `superset-init.sh`、`superset-db-upgrade.sh`）会在 Postgres 首次 init 时被 entrypoint 自动执行——脚本内 **必须** 检测 `docker` 是否可用，容器内应 skip；仅设计为 **宿主机** `docker exec` 调用。
 - **`dw_table_definitions` upsert**：约束为全局 `UNIQUE(table_name)`（V320）；seed 脚本用 `ON CONFLICT (table_name)`，**禁止** `ON CONFLICT (function_unit_id, table_name)`。
