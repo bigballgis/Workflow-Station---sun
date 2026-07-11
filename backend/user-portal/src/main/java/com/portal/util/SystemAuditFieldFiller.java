@@ -1,5 +1,7 @@
 package com.portal.util;
 
+import com.platform.common.audit.SystemAuditFields;
+
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -19,15 +21,16 @@ import java.util.Map;
  *       only updated_at / updated_by; created_* is preserved.</li>
  * </ul>
  *
- * <p>Values mirror the portal sub-table convention ({@code rowInit.ts}): timestamps are
+ * <p>字段名判定唯一来源 = {@link SystemAuditFields}（platform-common）。
+ * Values mirror the portal sub-table convention ({@code rowInit.ts}): timestamps are
  * {@code yyyy-MM-dd HH:mm:ss} strings in UTC+8, user fields carry the display name.</p>
  */
 public final class SystemAuditFieldFiller {
 
-    public static final String CREATED_AT = "created_at";
-    public static final String CREATED_BY = "created_by";
-    public static final String UPDATED_AT = "updated_at";
-    public static final String UPDATED_BY = "updated_by";
+    public static final String CREATED_AT = SystemAuditFields.CREATED_AT;
+    public static final String CREATED_BY = SystemAuditFields.CREATED_BY;
+    public static final String UPDATED_AT = SystemAuditFields.UPDATED_AT;
+    public static final String UPDATED_BY = SystemAuditFields.UPDATED_BY;
 
     private static final ZoneId AUDIT_ZONE = ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter AUDIT_TS_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");

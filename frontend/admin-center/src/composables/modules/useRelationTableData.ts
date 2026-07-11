@@ -114,6 +114,9 @@ export function useRelationTableData() {
   const handleSizeChange = (size: number) => { pageSize.value = size; currentPage.value = 1; fetchData() }
 
   // ---- CRUD ----
+  // FK readonly/hidden semantics (fkDisplayMode null/'readonly' => readonly; 'hidden' => hidden)
+  // must match portal/DW utils/tableFkRuntime.ts isFkReadonly/isFkHidden — admin-center has no
+  // copy of that util, so the rule is inlined here; keep the three in sync when it changes.
   const visibleFieldColumns = computed(() =>
     fieldColumns.value.filter(f => !(f.isForeignKey && f.fkDisplayMode === 'hidden')),
   )

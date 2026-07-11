@@ -156,9 +156,14 @@ public class ExceptionHandlerComponent {
     }
 
     public ExceptionSeverity determineSeverity(Exception exception) {
+        // admin-center 传输故障 = 分派链路中断，任务会静默无主直到自动修复；
+        // 必须走 HIGH 告警通道（sendAlert 只响 CRITICAL/HIGH），否则留痕只能靠人翻库。
+        if (exception instanceof com.workflow.exception.AdminCenterUnavailableException) {
+            return ExceptionSeverity.HIGH;
+        }
         String className = exception.getClass().getName().toLowerCase();
         String message = exception.getMessage() != null ? exception.getMessage().toLowerCase() : "";
-        
+
         if (className.contains("outofmemory") || className.contains("stackoverflow") ||
             className.contains("systemerror") || message.contains("system failure") ||
             message.contains("critical")) {

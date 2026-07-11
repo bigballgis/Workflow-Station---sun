@@ -522,6 +522,7 @@ export default {
     manageBindings: '管理表綁定',
     importTableFields: '匯入表欄位',
     closeButton: '關閉',
+    tabGroupTables: '張表',
     boundTableLabel: '綁定表',
     readOnly: '唯讀',
     inputBox: '輸入框',
