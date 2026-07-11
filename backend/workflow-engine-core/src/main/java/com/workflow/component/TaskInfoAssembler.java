@@ -86,6 +86,7 @@ public class TaskInfoAssembler {
             String resolved = pickDisplayNameFromUserInfo(userInfo, userId);
             return resolved != null ? resolved : userId;
         } catch (Exception e) {
+            // FALLBACK(external): 展示列降级为显示原始 userId（含 AdminCenterUnavailableException）。
             log.warn("Failed to resolve user display name for {}: {}", userId, e.getMessage());
         }
         return userId;
