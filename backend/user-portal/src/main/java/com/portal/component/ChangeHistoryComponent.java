@@ -153,6 +153,88 @@ public class ChangeHistoryComponent {
     }
 
     /**
+     * Record sub-table changes with a pre-normalized table name (bypasses normalization
+     * so that numeric binding IDs can be persisted when text-key aliases are absent).
+     * Used by task completion to record consolidated change history.
+     */
+    public void recordSubTableChangesWithName(ChangeHistoryContext context,
+                                              String normalizedName,
+                                              List<SubTableChange> changes) {
+        if (normalizedName == null || normalizedName.isBlank()) {
+            return;
+        }
+        Instant now = Instant.now();
+        List<ChangeHistory> records = new ArrayList<>();
+        Set<String> seen = dedupSeenKeys.get();
+
+        for (SubTableChange change : changes) {
+            ChangeType changeType = mapSubTableChangeType(change.getChangeType());
+            String dedupKey = context.getProcessInstanceId() + "|" + normalizedName + "|"
+                    + change.getChangeType() + "|" + change.getRowIdentifier();
+            if (!seen.add(dedupKey)) {
+                log.debug("Skipping duplicate sub-table change record (in-batch): {}", dedupKey);
+                continue;
+            }
+
+            String newVal = toDisplayString(change.getNewValues());
+            String oldVal = toDisplayString(change.getOldValues());
+
+            if (changeType == ChangeType.SUB_TABLE_ROW_UPDATE) {
+                ChangeHistory lastRecord = changeHistoryRepository
+                        .findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndChangeTypeOrderByTimestampDesc(
+                                context.getProcessInstanceId(), normalizedName,
+                                change.getRowIdentifier(), ChangeType.SUB_TABLE_ROW_UPDATE);
+                if (lastRecord != null
+                        && Objects.equals(lastRecord.getOldValue(), oldVal)
+                        && Objects.equals(lastRecord.getNewValue(), newVal)) {
+                    log.debug("Skipping duplicate sub-table change record (cross-save): process={}, table={}, row={}",
+                            context.getProcessInstanceId(), normalizedName, change.getRowIdentifier());
+                    continue;
+                }
+            }
+
+            log.debug("  -> RECORDING: type={}, table={}, row={}, old={}, new={}",
+                    changeType, normalizedName, change.getRowIdentifier(),
+                    oldVal != null ? oldVal.substring(0, Math.min(60, oldVal.length())) : "null",
+                    newVal != null ? newVal.substring(0, Math.min(60, newVal.length())) : "null");
+
+            ChangeHistory record = ChangeHistory.builder()
+                    .processInstanceId(context.getProcessInstanceId())
+                    .taskInstanceId(context.getTaskInstanceId())
+                    .stageId(context.getStageId())
+                    .userId(context.getUserId())
+                    .timestamp(now)
+                    .fieldName(normalizedName)
+                    .oldValue(oldVal)
+                    .newValue(newVal)
+                    .changeType(changeType)
+                    .subTableName(normalizedName)
+                    .rowIdentifier(change.getRowIdentifier())
+                    .build();
+            records.add(record);
+        }
+
+        if (seen.size() > 500) {
+            seen.clear();
+        }
+        if (records.isEmpty()) {
+            return;
+        }
+
+        requiresNewTx.executeWithoutResult(status -> {
+            try {
+                changeHistoryRepository.saveAll(records);
+                log.debug("Recorded {} sub-table change(s) for process {}, table {}",
+                        records.size(), context.getProcessInstanceId(), normalizedName);
+            } catch (Exception e) {
+                log.warn("Failed to record sub-table changes for process {}, table {}: {}",
+                        context.getProcessInstanceId(), normalizedName, e.getMessage());
+                status.setRollbackOnly();
+            }
+        });
+    }
+
+    /**
      * Record sub-table changes.
      * <p>
      * Normalizes sub-table names: skips pure-numeric binding-ID keys and lowercases to merge case variants
@@ -193,14 +275,24 @@ public class ChangeHistoryComponent {
                         .findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndChangeTypeOrderByTimestampDesc(
                                 context.getProcessInstanceId(), normalizedName,
                                 change.getRowIdentifier(), ChangeType.SUB_TABLE_ROW_UPDATE);
+                log.debug("  dedup check: row={}, change={}, lastRecord={}, match={}",
+                        change.getRowIdentifier(), changeType,
+                        lastRecord != null ? lastRecord.getId() : "null",
+                        lastRecord != null && Objects.equals(lastRecord.getOldValue(), oldVal)
+                                && Objects.equals(lastRecord.getNewValue(), newVal));
                 if (lastRecord != null
                         && Objects.equals(lastRecord.getOldValue(), oldVal)
                         && Objects.equals(lastRecord.getNewValue(), newVal)) {
-                    log.debug("Skipping duplicate sub-table change record (cross-save): process={}, table={}, row={}",
+                    log.debug("  -> SKIPPED (duplicate): process={}, table={}, row={}",
                             context.getProcessInstanceId(), normalizedName, change.getRowIdentifier());
                     continue;
                 }
             }
+
+            log.debug("  -> RECORDING: type={}, table={}, row={}, old={}, new={}",
+                    changeType, normalizedName, change.getRowIdentifier(),
+                    oldVal != null ? oldVal.substring(0, Math.min(60, oldVal.length())) : "null",
+                    newVal != null ? newVal.substring(0, Math.min(60, newVal.length())) : "null");
 
             ChangeHistory record = ChangeHistory.builder()
                     .processInstanceId(context.getProcessInstanceId())
@@ -241,9 +333,9 @@ public class ChangeHistoryComponent {
     }
 
     /**
-     * Query change history.
+     * Query change history, optionally filtered to a specific sub-table row.
      */
-    public List<ChangeHistoryRecord> getChangeHistory(String processInstanceId) {
+    public List<ChangeHistoryRecord> getChangeHistory(String processInstanceId, String rowIdentifier) {
         List<ChangeHistory> entities = changeHistoryRepository
                 .findByProcessInstanceIdOrderByTimestampAsc(processInstanceId);
 
@@ -252,6 +344,15 @@ public class ChangeHistoryComponent {
                 .filter(e -> !isInternalField(e.getFieldName()))
                 .toList();
 
+        // When a row identifier is given (e.g. from a multi-instance Todo task),
+        // keep only records for that specific row plus top-level field changes.
+        if (rowIdentifier != null && !rowIdentifier.isBlank()) {
+            entities = entities.stream()
+                    .filter(e -> e.getRowIdentifier() == null
+                            || rowIdentifier.equals(e.getRowIdentifier()))
+                    .toList();
+        }
+
         Map<String, String> userDisplayById = resolveUserDisplayNames(entities);
         StageNameMaps stageNames = resolveStageNames(processInstanceId);
         Map<String, String> fieldLabels = resolveFieldLabels(processInstanceId);
@@ -259,6 +360,46 @@ public class ChangeHistoryComponent {
         return entities.stream()
                 .map(e -> toRecord(e, userDisplayById, stageNames, fieldLabels))
                 .toList();
+    }
+
+    /**
+     * Query change history, optionally filtered by task ID.
+     * For multi-instance sub-tasks, resolves the specific row identifier from task variables.
+     */
+    public List<ChangeHistoryRecord> getChangeHistory(String processInstanceId, String rowIdentifier, String taskId) {
+        String resolvedRowId = rowIdentifier;
+        if ((resolvedRowId == null || resolvedRowId.isBlank()) && taskId != null && !taskId.isBlank()) {
+            resolvedRowId = resolveRowIdFromTask(taskId);
+        }
+        return getChangeHistory(processInstanceId, resolvedRowId);
+    }
+
+    /** Query change history for the whole process (no row filter). */
+    public List<ChangeHistoryRecord> getChangeHistory(String processInstanceId) {
+        return getChangeHistory(processInstanceId, null, null);
+    }
+
+    /** Resolve the row identifier from a multi-instance task's variables via the workflow engine. */
+    private String resolveRowIdFromTask(String taskId) {
+        try {
+            return workflowEngineClient.getTaskById(taskId)
+                    .map(task -> {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> variables = (Map<String, Object>) task.get("variables");
+                        if (variables != null) {
+                            Object currentItem = variables.get("_currentItem");
+                            if (currentItem instanceof Map<?, ?> item) {
+                                Object rowId = item.get("rowId");
+                                return rowId != null ? rowId.toString() : null;
+                            }
+                        }
+                        return null;
+                    })
+                    .orElse(null);
+        } catch (Exception e) {
+            log.debug("Could not resolve rowId from task {}: {}", taskId, e.getMessage());
+        }
+        return null;
     }
 
     /**
@@ -493,7 +634,8 @@ public class ChangeHistoryComponent {
             return null;
         }
         String trimmed = rawName.trim();
-        // Skip pure-numeric keys — these are internal binding IDs, not user-visible table names
+        // Skip pure-numeric keys in the general path — these are internal binding IDs that
+        // duplicate text-key aliases. Callers that need numeric-key support must bypass this.
         if (trimmed.matches("\\d+")) {
             return null;
         }

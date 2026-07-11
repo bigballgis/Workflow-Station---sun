@@ -41,6 +41,7 @@ import java.util.Map;
 public class ProcessController {
 
     private final ProcessEngineComponent processEngineComponent;
+    private final org.flowable.engine.RuntimeService runtimeService;
 
     /**
      * 部署流程定义
@@ -135,8 +136,24 @@ public class ProcessController {
             result.put("status", instance.getState());
             result.put("startTime", instance.getStartTime());
             result.put("startUserId", instance.getStartUserId());
+            // Merge the full live variable set so service-task outputs (e.g. an Activepieces task
+            // setting __subTables__) are visible to callers. The query-projected instance.getVariables()
+            // only carries a curated subset; runtimeService holds the complete, current values.
+            Map<String, Object> mergedVars = new HashMap<>();
             if (instance.getVariables() != null) {
-                result.put("variables", instance.getVariables());
+                mergedVars.putAll(instance.getVariables());
+            }
+            try {
+                Map<String, Object> liveVars = runtimeService.getVariables(processInstanceId);
+                if (liveVars != null) {
+                    mergedVars.putAll(liveVars);
+                }
+            } catch (RuntimeException ex) {
+                // Instance already ended (no runtime scope) — fall back to the projected subset.
+                log.debug("runtimeService.getVariables unavailable for {}: {}", processInstanceId, ex.getMessage());
+            }
+            if (!mergedVars.isEmpty()) {
+                result.put("variables", mergedVars);
             }
             return ResponseEntity.ok(ApiResponse.success(result));
         } else {

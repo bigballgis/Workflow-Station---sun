@@ -40,5 +40,5 @@
 
 ## 4. 相关文档
 
-- [function-unit-development-guide.md](../documentation/function-unit-development-guide.md) §16 Flyway 约定
+- [function-unit-development-guide.md](./guides/function-unit-development-guide.md) §16 Flyway 约定
 - `.cursor/rules/project-context.mdc`（Schema 管理摘要）

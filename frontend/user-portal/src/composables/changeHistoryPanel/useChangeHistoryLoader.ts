@@ -5,6 +5,8 @@ import { getChangeHistory, type ChangeHistoryRecord } from '@/api/processForm'
 type TranslateFn = ReturnType<typeof useI18n>['t']
 
 export interface ChangeHistoryLoaderProps {
+  rowIdentifier?: string
+  taskId?: string
   processInstanceId: string
   snapshotTime?: string
   taskInstanceId?: string
@@ -28,6 +30,12 @@ export function useChangeHistoryLoader(
   const records = ref<ChangeHistoryRecord[]>([])
 
   function shouldKeepRecordInSnapshot(row: ChangeHistoryRecord): boolean {
+    // When viewing from a multi-instance sub-task, only show records for this specific row
+    // (plus top-level field changes that have no row identifier)
+    if (props.rowIdentifier) {
+      if (row.rowIdentifier != null && row.rowIdentifier !== props.rowIdentifier) return false
+    }
+
     if (!props.snapshotTime && !props.taskInstanceId) return true
     if (props.taskInstanceId && row.taskInstanceId === props.taskInstanceId) return true
     if (!props.snapshotTime) return true
@@ -43,7 +51,8 @@ export function useChangeHistoryLoader(
     loading.value = true
     error.value = null
     try {
-      const res = await getChangeHistory(props.processInstanceId) as Record<string, unknown>
+      console.warn('[changeHistory] loadHistory: pid=', props.processInstanceId, 'rowId=', props.rowIdentifier, 'taskId=', props.taskId)
+      const res = await getChangeHistory(props.processInstanceId, props.rowIdentifier, props.taskId) as Record<string, unknown>
       const raw = res?.data ?? res
       records.value = Array.isArray(raw) ? raw.filter(shouldKeepRecordInSnapshot) : []
     } catch (e: unknown) {
@@ -55,7 +64,7 @@ export function useChangeHistoryLoader(
     }
   }
 
-  watch(() => [props.processInstanceId, props.snapshotTime, props.taskInstanceId], () => {
+  watch(() => [props.processInstanceId, props.snapshotTime, props.taskInstanceId, props.rowIdentifier, props.taskId], () => {
     loadHistory()
   })
 

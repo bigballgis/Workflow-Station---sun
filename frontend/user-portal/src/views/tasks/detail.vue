@@ -363,6 +363,7 @@
         <ChangeHistoryPanel
           :process-instance-id="taskInfo.processInstanceId"
           :snapshot-time="completedHistorySnapshotTime"
+          :task-id="taskId"
           :task-instance-id="completedHistoryTaskId"
         />
       </div>

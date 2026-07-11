@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow Station 架构蓝图</title>
+<style>
+  :root {
+    --ground: #F5F6F4;
+    --surface: #FFFFFF;
+    --surface-2: #EEF0EC;
+    --ink: #16191C;
+    --muted: #5A6169;
+    --faint: #8A9099;
+    --line: #DCDFD9;
+    --line-strong: #C3C8BF;
+    --accent: #2A6F6B;
+    --accent-soft: #E4EDEC;
+    --allow: #2F7D4F;
+    --allow-soft: #E6F1E9;
+    --forbid: #B23A3A;
+    --forbid-soft: #F6E7E6;
+    --ctrl: #A8741C;
+    --ctrl-soft: #F5ECD9;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv02","cv03","cv04";
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---- Hero ---- */
+  header.hero {
+    padding: 72px 0 40px;
+    border-bottom: 1px solid var(--line);
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 18px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .kicker::before {
+    content: ""; width: 28px; height: 2px; background: var(--accent); display: inline-block;
+  }
+  h1 {
+    font-size: clamp(34px, 5vw, 52px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+    font-weight: 720;
+  }
+  .lede {
+    font-size: 18px; color: var(--muted); max-width: 68ch; margin: 0;
+  }
+  .lede b { color: var(--ink); font-weight: 640; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 26px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--faint);
+  }
+  .meta-row span b { color: var(--muted); font-weight: 600; }
+
+  /* ---- Question nav ---- */
+  nav.qnav {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin: 34px 0 0;
+  }
+  nav.qnav a {
+    text-decoration: none; color: var(--ink);
+    border: 1px solid var(--line-strong); border-radius: 10px;
+    background: var(--surface); padding: 14px 15px 15px;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: border-color .15s, transform .15s, box-shadow .15s;
+  }
+  nav.qnav a:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(42,111,107,.10); }
+  nav.qnav .qn { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 600; }
+  nav.qnav .qt { font-size: 14.5px; font-weight: 600; line-height: 1.3; }
+
+  /* ---- Sections ---- */
+  section { padding-top: 60px; scroll-margin-top: 20px; }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 8px; }
+  .sec-num {
+    font-family: var(--mono); font-size: 13px; color: var(--surface);
+    background: var(--accent); border-radius: 6px; padding: 3px 9px; font-weight: 600;
+    letter-spacing: .04em; flex: none;
+  }
+  h2 { font-size: 26px; letter-spacing: -0.01em; margin: 0; font-weight: 700; text-wrap: balance; }
+  .sec-sub { color: var(--muted); margin: 6px 0 26px; font-size: 15.5px; max-width: 74ch; }
+  .sec-sub code, .inline-code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---- Cards / tables ---- */
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden;
+  }
+  .tbl-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 12px 15px; vertical-align: top; border-bottom: 1px solid var(--line); }
+  thead th {
+    font-family: var(--mono); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--faint); background: var(--surface-2); font-weight: 600; white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #FAFBFA; }
+  td b { font-weight: 640; }
+  .prefix { font-family: var(--mono); font-weight: 600; color: var(--accent); white-space: nowrap; }
+  .sys { font-family: var(--mono); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .muted-cell { color: var(--muted); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+  .warn-cell { color: var(--forbid); font-size: 13px; }
+
+  /* ---- Chips ---- */
+  .chip { display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; letter-spacing: .02em; white-space: nowrap; }
+  .chip-allow { background: var(--allow-soft); color: var(--allow); }
+  .chip-forbid { background: var(--forbid-soft); color: var(--forbid); }
+  .chip-ctrl { background: var(--ctrl-soft); color: var(--ctrl); }
+  .chip-accent { background: var(--accent-soft); color: var(--accent); }
+
+  /* ---- Responsibility grid ---- */
+  .resp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .resp-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 19px; border-top: 3px solid var(--accent); }
+  .resp-card.design { border-top-color: #6A6ABF; }
+  .resp-card.runtime { border-top-color: #B5822E; }
+  .resp-card.portal { border-top-color: #2F7D4F; }
+  .resp-card.govern { border-top-color: #B23A3A; }
+  .resp-card h3 { margin: 0 0 3px; font-size: 16.5px; display: flex; align-items: center; gap: 9px; }
+  .resp-card h3 .tag { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface-2); padding: 2px 7px; border-radius: 5px; }
+  .resp-card .role { font-family: var(--mono); font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); margin: 0 0 10px; }
+  .resp-card p { margin: 0 0 12px; font-size: 14px; color: #2c3137; }
+  .resp-card .objs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .resp-card .objs span { font-family: var(--mono); font-size: 11px; background: var(--accent-soft); color: var(--accent); padding: 2px 7px; border-radius: 5px; }
+  .resp-card .nope { font-size: 12.5px; color: var(--forbid); border-top: 1px dashed var(--line-strong); padding-top: 9px; margin: 0; }
+  .resp-card .nope b { font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--forbid); opacity: .85; }
+
+  /* ---- Dependency diagram ---- */
+  .diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 26px; }
+  .layer { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+  .layer:last-child { margin-bottom: 0; }
+  .layer-label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); width: 96px; flex: none; text-align: right; }
+  .boxes { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; }
+  .box { font-family: var(--mono); font-size: 12.5px; font-weight: 600; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); flex: 1; min-width: 120px; text-align: center; }
+  .box.svc { background: var(--accent-soft); border-color: #B7D2D0; color: #1f5350; }
+  .box.eng { background: var(--ctrl-soft); border-color: #E0CFA6; color: #7a5814; }
+  .box.plat { background: var(--surface-2); color: var(--muted); }
+  .box.base { background: #16191C; color: #E8EBE6; border-color: #16191C; }
+  .flow-note { display: flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--mono); font-size: 11.5px; color: var(--faint); margin: 4px 0; }
+  .flow-note .arr { color: var(--accent); font-weight: 700; }
+
+  /* ---- Call matrix ---- */
+  .matrix-scroll { overflow-x: auto; }
+  table.matrix { font-family: var(--mono); font-size: 12.5px; text-align: center; }
+  table.matrix th, table.matrix td { text-align: center; padding: 10px 8px; border: 1px solid var(--line); }
+  table.matrix thead th { background: var(--surface-2); }
+  table.matrix .rowh { text-align: right; background: var(--surface-2); font-weight: 600; color: var(--ink); white-space: nowrap; }
+  table.matrix .self { background: repeating-linear-gradient(45deg, #F0F1EF, #F0F1EF 5px, #E9EBE7 5px, #E9EBE7 10px); color: var(--faint); }
+  table.matrix .yes { background: var(--allow-soft); color: var(--allow); font-weight: 700; }
+  table.matrix .dash { color: var(--line-strong); }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: flex; align-items: center; gap: 7px; }
+  .legend .sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid var(--line-strong); }
+
+  /* ---- Forbidden list ---- */
+  .forbid-list { display: flex; flex-direction: column; gap: 12px; }
+  .forbid-item { display: grid; grid-template-columns: 52px 1fr; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--forbid); border-radius: 10px; padding: 15px 18px; }
+  .forbid-item .fid { font-family: var(--mono); font-weight: 700; color: var(--forbid); font-size: 15px; }
+  .forbid-item .fbody h4 { margin: 0 0 4px; font-size: 15px; }
+  .forbid-item .fbody h4 .inline-code { background: var(--forbid-soft); color: var(--forbid); }
+  .forbid-item .fbody p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .forbid-item .fbody p .why { color: var(--ink); font-weight: 600; }
+
+  /* ---- Principle callout ---- */
+  .principle { background: var(--ink); color: #EDEFEA; border-radius: 14px; padding: 30px 32px; margin-top: 26px; }
+  .principle .plabel { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #8FB8B4; margin: 0 0 12px; }
+  .principle p { margin: 0; font-size: 19px; line-height: 1.5; letter-spacing: -.01em; text-wrap: balance; }
+  .principle b { color: #7FD1CB; font-weight: 600; }
+
+  footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--faint); display: flex; flex-wrap: wrap; gap: 6px 20px; justify-content: space-between; }
+
+  @media (max-width: 720px) {
+    .wrap { padding: 0 18px 64px; }
+    nav.qnav { grid-template-columns: repeat(2, 1fr); }
+    .resp-grid { grid-template-columns: 1fr; }
+    .layer { flex-direction: column; align-items: stretch; }
+    .layer-label { width: auto; text-align: left; }
+    header.hero { padding-top: 48px; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="kicker">Architecture Blueprint · 边界事实来源</p>
+    <h1>Workflow Station 架构蓝图</h1>
+    <p class="lede">一页说清 <b>谁负责什么、数据归谁、谁能调谁、什么禁止依赖</b>。本蓝图由代码、<code style="font-family:var(--mono)">pom.xml</code>、<code style="font-family:var(--mono)">init-scripts/00-schema</code> 与运行时 URL 配置逐条核对得出 —— 不是愿景图，是当前形态。</p>
+    <div class="meta-row">
+      <span><b>形态</b> 共享 PostgreSQL 之上的模块化单体</span>
+      <span><b>后端</b> 4 业务服务 + 4 共享 JAR</span>
+      <span><b>前端</b> 4 Vue SPA</span>
+      <span><b>入口</b> Kong Gateway</span>
+      <span><b>核对</b> 2026-07</span>
+    </div>
+    <nav class="qnav">
+      <a href="#q1"><span class="qn">Q1</span><span class="qt">每个系统负责什么</span></a>
+      <a href="#q2"><span class="qn">Q2</span><span class="qt">每种数据归谁管理</span></a>
+      <a href="#q3"><span class="qn">Q3</span><span class="qt">系统之间允许哪些调用</span></a>
+      <a href="#q4"><span class="qn">Q4</span><span class="qt">哪些方向禁止依赖</span></a>
+    </nav>
+  </header>
+
+  <!-- Q1 -->
+  <section id="q1">
+    <div class="sec-head"><span class="sec-num">Q1</span><h2>每个系统负责什么？</h2></div>
+    <p class="sec-sub">一句话原则：<b>设计时（DW）产出蓝图 → 运行时（WE）执行流程 → 门户（UP）承载终端用户 → 治理（AC）管账号与平台。</b>四个业务后端职责互不重叠，共享层只提供能力、不含业务。</p>
+    <div class="resp-grid">
+      <div class="resp-card design">
+        <h3>developer-workstation <span class="tag">DW</span></h3>
+        <p class="role">设计时 · 建模</p>
+        <p>可视化设计 Function Unit：表 / 字段 / FK-PK / 关联表 / 表单 / 视图访问 / BPMN / 决策 / 动作 / 邮件规则；版本管理与导入导出、克隆。</p>
+        <div class="objs"><span>FunctionUnit</span><span>FormDesign</span><span>RelationTable</span><span>Decision</span><span>Version</span></div>
+        <p class="nope"><b>不做</b> 不承载终端用户运行时；不消费门户消息；生产环境非常驻。</p>
+      </div>
+      <div class="resp-card runtime">
+        <h3>workflow-engine-core <span class="tag">WE</span></h3>
+        <p class="role">运行时 · 流程引擎</p>
+        <p>部署 BPMN、启动 / 流转流程实例、任务分派、多实例、流程完成回调、邮件入站（IMAP）同步。底层 Flowable 7。</p>
+        <div class="objs"><span>ProcessDefinition</span><span>ProcessInstance</span><span>Task</span><span>act_*</span></div>
+        <p class="nope"><b>不做</b> 不做界面业务逻辑；不直接持有账号 / 权限主数据。</p>
+      </div>
+      <div class="resp-card portal">
+        <h3>user-portal <span class="tag">UP</span></h3>
+        <p class="role">运行时 · 终端门户</p>
+        <p>待办处理、发起流程、填写表单、我的申请、关联表（MI）子表数据、站内信 / 通知、权限自助申请。</p>
+        <div class="objs"><span>Task（用户视角）</span><span>ProcessInstance（门户）</span><span>Notification</span></div>
+        <p class="nope"><b>不做</b> 不设计表单 / 流程（只消费 DW 蓝图）；不管账号主数据。</p>
+      </div>
+      <div class="resp-card govern">
+        <h3>admin-center <span class="tag">AC</span></h3>
+        <p class="role">治理 · 平台后台</p>
+        <p>用户 / 角色 / 权限 / 委托 / 字典 / 系统配置 / 审计日志 / LDAP 同步 / BI（Superset）管理 / Gateway 治理域。</p>
+        <div class="objs"><span>User</span><span>Role</span><span>Permission</span><span>Dictionary</span><span>AuditLog</span></div>
+        <p class="nope"><b>不做</b> 不处理业务流程运行；不直接改 DW 设计数据。</p>
+      </div>
+    </div>
+    <p class="sec-sub" style="margin-top:22px;margin-bottom:0"><span class="chip chip-accent">共享层</span>&nbsp; <code>platform-security</code>（JWT/鉴权/身份主数据）· <code>platform-cache</code>（Redis）· <code>platform-messaging</code>（Kafka 事件+通知）· <code>platform-common</code>（DTO/异常/工具，<code>ApiResponse&lt;T&gt;</code>）—— <b>只提供能力，绝不反向依赖任何业务后端</b>。</p>
+  </section>
+
+  <!-- Q2 -->
+  <section id="q2">
+    <div class="sec-head"><span class="sec-num">Q2</span><h2>每种数据归谁管理？</h2></div>
+    <p class="sec-sub">原则：<b>表前缀 = 归属服务，写方唯一，读方可跨库读</b>（当前现实，非理想）。已按 <code>deploy/init-scripts/00-schema/</code> 逐一核对表数。</p>
+    <div class="card tbl-scroll">
+      <table>
+        <thead><tr><th>前缀</th><th>归属 · 唯一写方</th><th>数据内容</th><th>表数</th></tr></thead>
+        <tbody>
+          <tr><td class="prefix">sys_*</td><td class="sys">platform-security</td><td>用户、角色、权限、动作定义（<span class="inline-code">sys_action_definitions</span>）、共享邮件配置 —— 被所有服务共享的身份核心</td><td class="num">~33</td></tr>
+          <tr><td class="prefix">dw_*</td><td class="sys">developer-workstation</td><td>Function Unit 设计元数据：表 / 字段定义、FK-PK、表单绑定、视图访问、版本、邮件规则</td><td class="num">~32</td></tr>
+          <tr><td class="prefix">admin_* · ac_*</td><td class="sys">admin-center</td><td>系统配置、审计日志、权限变更史、委托、告警策略、LDAP 同步审计</td><td class="num">~16</td></tr>
+          <tr><td class="prefix">up_*</td><td class="sys">user-portal</td><td>门户流程实例、变更历史、成员、权限申请、目录置顶</td><td class="num">~12</td></tr>
+          <tr><td class="prefix">rt_*</td><td class="sys">DW 定义结构 / UP 写运行数据</td><td>关联表 JSON 行存储 <span class="inline-code">rt_table_data_rows.data</span>（JSONB）、PK 序列、lookup 配置</td><td class="num">~10</td></tr>
+          <tr><td class="prefix">wf_*</td><td class="sys">workflow-engine</td><td>引擎扩展表（多实例执行、邮件入站等）</td><td class="num">~6</td></tr>
+          <tr><td class="prefix">bi_*</td><td class="sys">admin-center（BI 域）</td><td>BI / Superset 管理元数据</td><td class="num">~4</td></tr>
+          <tr><td class="prefix">act_* · ACT_*</td><td class="sys">workflow-engine（独占）</td><td>Flowable 原生：流程定义 / 实例 / 任务 / 历史</td><td class="num muted-cell">Flowable</td></tr>
+          <tr><td class="prefix">n8n_{env}</td><td class="sys">Activepieces / N8N</td><td>自动化流程数据 —— <b>独立数据库</b></td><td class="num muted-cell">独立 DB</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:14px; border-left:4px solid var(--ctrl); padding:15px 18px; background:var(--ctrl-soft);">
+      <p style="margin:0; font-size:13.5px; color:#6b4d13;"><span class="chip chip-ctrl">已知跨界读 · 受控</span>&nbsp; <b>user-portal 运行时直接读 <code>dw_*</code> 表</b>（共享库）加载表单定义，DW 不可达时才回退 HTTP（见 <code>TaskFormDefinitionLoader</code>）。这是「共享 schema、跨服务读表」形态，优化方案标为高风险 🔴 —— <b>保留但不得扩大，且必须有回退策略</b>。</p>
+    </div>
+  </section>
+
+  <!-- Q3 -->
+  <section id="q3">
+    <div class="sec-head"><span class="sec-num">Q3</span><h2>系统之间允许哪些调用？</h2></div>
+    <p class="sec-sub">分两个平面：<b>编译期（Maven JAR 依赖）</b>与<b>运行期（HTTP / Kafka）</b>。仅允许三种调用形态：HTTP REST、Kafka 事件、受控共享 DB 只读。</p>
+
+    <div class="diagram">
+      <div class="layer">
+        <span class="layer-label">运行时业务</span>
+        <div class="boxes">
+          <div class="box svc">admin-center</div>
+          <div class="box svc">user-portal</div>
+          <div class="box svc">developer-workstation</div>
+          <div class="box eng">workflow-engine · Flowable</div>
+        </div>
+      </div>
+      <div class="flow-note"><span class="arr">▼</span> 每个业务后端只依赖 platform-* 共享层（无业务→业务 JAR 依赖） <span class="arr">▼</span></div>
+      <div class="layer">
+        <span class="layer-label">共享能力</span>
+        <div class="boxes">
+          <div class="box plat">platform-security</div>
+          <div class="box plat">platform-cache</div>
+          <div class="box plat">platform-messaging</div>
+        </div>
+      </div>
+      <div class="flow-note"><span class="arr">▼</span> 依赖偏序无环 <span class="arr">▼</span></div>
+      <div class="layer">
+        <span class="layer-label">地基</span>
+        <div class="boxes">
+          <div class="box base">platform-common · DTO / 异常 / 工具（爆炸半径最大，禁止膨胀）</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="sec-sub" style="margin-top:30px; margin-bottom:14px"><b>运行期调用矩阵</b> —— 行调用列（<span class="chip chip-allow">✓</span> 已核对存在的调用链）：</p>
+    <div class="matrix-scroll card" style="padding:18px;">
+      <table class="matrix">
+        <thead>
+          <tr><th></th><th>→ AC</th><th>→ UP</th><th>→ DW</th><th>→ WE</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="rowh">AC →</td><td class="self"></td><td class="dash">·</td><td class="dash">·</td><td class="yes">✓</td><td style="text-align:left; font-family:var(--sans); color:var(--muted)">流程治理 / 查询</td></tr>
+          <tr><td class="rowh">UP →</td><td class="dash">·</td><td class="self"></td><td class="yes">✓</td><td class="yes">✓</td><td style="text-align:left; font-family:var(--sans); color:var(--muted)">取表单(+共享库回退) · 发起流程 / 完成任务</td></tr>
+          <tr><td class="rowh">DW →</td><td class="dash">·</td><td class="dash">·</td><td class="self"></td><td class="yes">✓</td><td style="text-align:left; font-family:var(--sans); color:var(--muted)">部署 BPMN</td></tr>
+          <tr><td class="rowh">WE →</td><td class="dash">·</td><td class="yes">✓</td><td class="dash">·</td><td class="self"></td><td style="text-align:left; font-family:var(--sans); color:var(--muted)">流程完成回调 · 邮件入站 hydrate</td></tr>
+        </tbody>
+      </table>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--allow-soft)"></i> 存在调用链</span>
+        <span><i class="sw" style="background:repeating-linear-gradient(45deg,#F0F1EF,#F0F1EF 4px,#E9EBE7 4px,#E9EBE7 8px)"></i> 自身</span>
+        <span><i class="sw" style="background:var(--surface)"></i> 无调用</span>
+        <span style="color:var(--ctrl)">🔁 WE ↔ UP 为唯一运行期双向耦合（内部 token + 异步回调控制）</span>
+      </div>
+    </div>
+
+    <p class="sec-sub" style="margin-top:22px; margin-bottom:0"><span class="chip chip-accent">Kafka</span>&nbsp; 异步解耦：<code>TaskEvent</code> / <code>ProcessEvent</code> / <code>PermissionEvent</code> / <code>NotificationEvent</code> / <code>DeploymentEvent</code> 由生产方发布，<b>user-portal 的 <code>NotificationKafkaConsumer</code> 消费后经 WebSocket 推浏览器</b>。业务后端之间的 REST 互调统一返回 <code>ApiResponse&lt;T&gt;</code>，经 Resilience4j 熔断。</p>
+  </section>
+
+  <!-- Q4 -->
+  <section id="q4">
+    <div class="sec-head"><span class="sec-num">Q4</span><h2>哪些方向禁止依赖？</h2></div>
+    <p class="sec-sub">七条红线守住模块边界。评审新增依赖 / 调用 / 建表时逐条对照。</p>
+    <div class="forbid-list">
+      <div class="forbid-item"><div class="fid">F1</div><div class="fbody"><h4><span class="inline-code">platform-*</span> 禁止依赖任何业务后端</h4><p><span class="why">共享层是叶子 / 地基，反向即成环。</span> 后果：Maven 循环依赖、全量重编、无法独立发版。</p></div></div>
+      <div class="forbid-item"><div class="fid">F2</div><div class="fbody"><h4>业务后端之间禁止编译期 JAR 依赖（AC/UP/DW/WE 互不 import）</h4><p><span class="why">保持服务可独立构建 / 发版；跨服务只走 HTTP / 事件。</span> 后果：退化为「分布式单体」，改一处全体重编。</p></div></div>
+      <div class="forbid-item"><div class="fid">F3</div><div class="fbody"><h4>任何服务禁止直接读写 Flowable <span class="inline-code">act_*</span> 表</h4><p><span class="why">引擎数据仅 WE 独占，只经 HTTP 访问。</span> 后果：绕过引擎一致性、破坏流程状态。</p></div></div>
+      <div class="forbid-item"><div class="fid">F4</div><div class="fbody"><h4>任何服务禁止写非自己前缀的表（如 UP 写 <span class="inline-code">dw_*</span>、AC 写 <span class="inline-code">up_*</span>）</h4><p><span class="why">单一写方保证数据主权；跨前缀只读且需登记。</span> 后果：数据归属混乱、并发覆盖、审计断链。</p></div></div>
+      <div class="forbid-item"><div class="fid">F5</div><div class="fbody"><h4>生产运行链路禁止依赖 developer-workstation</h4><p><span class="why">DW 是设计时系统，SIT/UAT/PROD 默认不部署。</span> 后果：生产因缺 DW 故障 —— 故 UP 取表单必须有共享库回退。</p></div></div>
+      <div class="forbid-item"><div class="fid">F6</div><div class="fbody"><h4>前端禁止直连 Kong Admin API / 跳过 Kong 直连后端（生产）</h4><p><span class="why">网关治理由后端治理域编排；边缘统一 JWT。</span> 后果：绕过鉴权与限流。</p></div></div>
+      <div class="forbid-item"><div class="fid">F7</div><div class="fbody"><h4><span class="inline-code">platform-common</span> 禁止继续膨胀（现 110+ 类 god module）</h4><p><span class="why">爆炸半径最大，改一 DTO 触发 4 服务重编。</span> 见优化方案 P1-1 拆分计划。</p></div></div>
+    </div>
+
+    <div class="principle">
+      <p class="plabel">依赖方向总则</p>
+      <p>共享层被业务层依赖，<b>业务层之间只经 HTTP / 事件</b>；数据按前缀<b>单一写方、跨前缀只读且登记</b>；<b>引擎数据只经 HTTP</b>；<b>设计时系统不进生产运行链路</b>。</p>
+    </div>
+  </section>
+
+  <footer>
+    <span>Workflow Station · Architecture Blueprint</span>
+    <span>docs/architecture/architecture-blueprint.md · 核对于 2026-07</span>
+  </footer>
+</div>
+</body>
+</html>

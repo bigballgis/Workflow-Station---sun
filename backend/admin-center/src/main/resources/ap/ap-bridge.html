@@ -42,7 +42,7 @@
 <body>
   <div class="box">
     <div class="spinner" id="spinner"></div>
-    <div class="msg" id="msg">正在以共享账号登录 Activepieces…</div>
+    <div class="msg" id="msg">Activepieces Login…</div>
   </div>
   <script>
     // AP 一个完整前端会话 = localStorage['token'] + localStorage['projectId']
@@ -89,7 +89,7 @@
         // 同源回退下 401 = 未登录，让网关 302 到平台登录；nonce 路径 401 = 票失效，提示重试。
         if (r.status === 401) {
           if (!nonce) { location.replace(TOKEN_ENDPOINT); return null; }
-          throw new Error('登录票已失效，请重试');
+          throw new Error('Token expired, please retry...');
         }
         if (!r.ok) { throw new Error('HTTP ' + r.status); }
         return r.json();
@@ -100,7 +100,7 @@
         var data = body.data || body;
         var token = data.token;
         var projectId = data.projectId;
-        if (!token) { throw new Error('响应无 token'); }
+        if (!token) { throw new Error('Responds have no token'); }
         try {
           // Clear any STALE AP auth state first (e.g. a token signed with a rotated
           // AP_JWT_SECRET, or a stale 'projectId'). A stale-but-unexpired token makes
@@ -109,11 +109,11 @@
           localStorage.clear();
           localStorage.setItem(AP_TOKEN_KEY, token);
           if (projectId) { localStorage.setItem(AP_PROJECT_KEY, projectId); }
-        } catch (e) { throw new Error('无法写入 localStorage：' + e.message); }
+        } catch (e) { throw new Error('Cannot wite into localStorage:' + e.message); }
         location.replace(AP_HOME);
       })
       .catch(function (e) {
-        fail('登录 Activepieces 失败：' + (e && e.message ? e.message : e));
+        fail('Login Activepieces Failed:' + (e && e.message ? e.message : e));
       });
   </script>
 </body>

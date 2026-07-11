@@ -82,6 +82,7 @@ class TaskQueryProperties {
         taskQueryComponent = new TaskQueryComponent(
             processInstanceRepository,
             workflowEngineClient,
+            new com.portal.component.EngineSubTableHydrator(workflowEngineClient),
             taskActionService,
             new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
             new WorkspaceTaskFilterComponent(

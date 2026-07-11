@@ -35,6 +35,7 @@ public class ProcessApplicationQueryComponent {
 
     private final ProcessInstanceRepository processInstanceRepository;
     private final WorkflowEngineClient workflowEngineClient;
+    private final EngineSubTableHydrator engineSubTableHydrator;
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final MiOverlayComponent miOverlayComponent;
     private final SubTableEnrichmentComponent subTableEnrichmentComponent;
@@ -262,6 +263,33 @@ public class ProcessApplicationQueryComponent {
      * Returns process detail
      * When local DB lacks current node, fetch live from Flowable
      */
+    /**
+     * Gap-fills {@code __subTables__} slices from the live Flowable engine into the portal store when a
+     * service task (e.g. Activepieces) produced rows the portal-written store never received. Only fills
+     * slices the store is missing or has empty — user-submitted rows always win. Persists so a subsequent
+     * task completion carries the rows rather than overwriting them with an empty grid. Best-effort.
+     */
+    @SuppressWarnings("unchecked")
+    private void hydrateEngineSubTablesIntoStore(String processId, ProcessInstance instance, ProcessInstanceInfo info) {
+        if (workflowEngineClient == null || !workflowEngineClient.isAvailable()) {
+            return; // engine known-down: skip the read-path round-trip
+        }
+        Map<String, Object> vars = info.getVariables() != null
+                ? new HashMap<>(info.getVariables()) : new HashMap<>();
+        Map<String, Object> current = vars.get("__subTables__") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : null;
+        engineSubTableHydrator.mergeFromEngine(processId, current).ifPresent(result -> {
+            vars.put("__subTables__", result.mergedSubTables());
+            if (result.rowCount() != null && vars.get("rowCount") == null) {
+                vars.put("rowCount", result.rowCount());
+            }
+            info.setVariables(vars);
+            instance.setVariables(vars);
+            processInstanceRepository.save(instance);
+            log.info("getProcessDetail: hydrated __subTables__ from engine for running process {}", processId);
+        });
+    }
+
     public ProcessInstanceInfo getProcessDetail(String processId) {
         Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
         if (optInstance.isEmpty()) {
@@ -270,6 +298,14 @@ public class ProcessApplicationQueryComponent {
 
         ProcessInstance instance = optInstance.get();
         ProcessInstanceInfo info = toProcessInstanceInfo(instance);
+
+        // Service-task outputs (e.g. an Activepieces task's __subTables__) live only in the Flowable
+        // engine and are absent from the portal's up_process_instance store (written only by form
+        // submissions). For a running instance, hydrate them so My Applications renders the rows and a
+        // later completion persists them instead of overwriting with an empty grid.
+        if ("RUNNING".equals(instance.getStatus())) {
+            hydrateEngineSubTablesIntoStore(processId, instance, info);
+        }
 
         // If the process is still running but the local DB has no currentNode stored,
         // try to fetch the live state from Flowable — this self-heals processes where

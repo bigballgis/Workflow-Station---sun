@@ -610,40 +610,81 @@ public class ProcessStartComponent {
                     processInstanceId, e.getMessage());
         }
 
-        // Record sub-table (subform) rows submitted during process initiation as ROW_ADD
+        // Record sub-table (subform) rows submitted during process initiation as ROW_ADD.
+        // Text-key aliases are preferred; when only numeric binding IDs are present, merge
+        // all rows into one comparison keyed by the first binding ID to avoid duplication.
         try {
             Object subTablesObj = variables.get("__subTables__");
             if (subTablesObj instanceof Map<?, ?>) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
-                for (Map.Entry<String, Object> subTableEntry : subTables.entrySet()) {
-                    String subTableKey = subTableEntry.getKey();
-                    Object rowsObj = subTableEntry.getValue();
-                    if (!(rowsObj instanceof List<?>)) {
-                        continue;
+                // Separate numeric (binding ID) keys from text (table name) keys
+                List<String> numericKeys = new ArrayList<>();
+                List<String> textKeys = new ArrayList<>();
+                for (String key : subTables.keySet()) {
+                    if (key.matches("\\d+")) {
+                        numericKeys.add(key);
+                    } else {
+                        textKeys.add(key);
                     }
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> rows = (List<Map<String, Object>>) rowsObj;
-                    if (rows.isEmpty()) {
-                        continue;
+                }
+                if (!textKeys.isEmpty()) {
+                    // Text keys exist — record only those (normalization merges aliases, dedup handles duplicates)
+                    for (String subTableKey : textKeys) {
+                        recordStartSubTableAdds(context, subTables, subTableKey);
                     }
-                    List<SubTableChange> changes = new ArrayList<>();
-                    for (Map<String, Object> row : rows) {
-                        String rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
-                        changes.add(SubTableChange.builder()
-                                .changeType("ROW_ADD")
-                                .rowIdentifier(rowId)
-                                .oldValues(null)
-                                .newValues(new HashMap<>(row))
-                                .build());
+                } else if (!numericKeys.isEmpty()) {
+                    // Only numeric keys — merge all rows and record under one virtual name
+                    List<SubTableChange> allChanges = new ArrayList<>();
+                    java.util.Set<Object> seen = new java.util.HashSet<>();
+                    for (String subTableKey : numericKeys) {
+                        Object rowsObj = subTables.get(subTableKey);
+                        if (!(rowsObj instanceof List<?>)) continue;
+                        for (Object row : (List<?>) rowsObj) {
+                            if (!(row instanceof Map<?, ?>)) continue;
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> rowMap = (Map<String, Object>) row;
+                            String rowId = ChangeHistoryComponent.resolveRowIdentifier(rowMap);
+                            if (rowId != null && seen.add(rowId)) {
+                                allChanges.add(SubTableChange.builder()
+                                        .changeType("ROW_ADD")
+                                        .rowIdentifier(rowId)
+                                        .oldValues(null)
+                                        .newValues(new HashMap<>(rowMap))
+                                        .build());
+                            }
+                        }
                     }
-                    changeHistoryComponent.recordSubTableChanges(context, subTableKey, changes);
+                    if (!allChanges.isEmpty()) {
+                        changeHistoryComponent.recordSubTableChangesWithName(
+                                context, numericKeys.get(0), allChanges);
+                    }
                 }
             }
         } catch (Exception e) {
             log.warn("Failed to record initial sub-table change history for process {}: {}",
                     processInstanceId, e.getMessage());
         }
+    }
+
+    private void recordStartSubTableAdds(ChangeHistoryContext context,
+                                          Map<String, Object> subTables, String subTableKey) {
+        Object rowsObj = subTables.get(subTableKey);
+        if (!(rowsObj instanceof List<?>)) return;
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) rowsObj;
+        if (rows.isEmpty()) return;
+        List<SubTableChange> changes = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            String rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
+            changes.add(SubTableChange.builder()
+                    .changeType("ROW_ADD")
+                    .rowIdentifier(rowId)
+                    .oldValues(null)
+                    .newValues(new HashMap<>(row))
+                    .build());
+        }
+        changeHistoryComponent.recordSubTableChanges(context, subTableKey, changes);
     }
 
     /**

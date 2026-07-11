@@ -72,9 +72,12 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.3
     container_name: platform-kafka-dev
+    restart: unless-stopped
     ports:
       - "${KAFKA_PORT}:9092"
     environment:
+      # Bound the JVM heap so Kafka can't balloon and get OOM-killed on the small dev VM.
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092

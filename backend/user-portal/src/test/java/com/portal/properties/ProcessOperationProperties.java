@@ -73,7 +73,8 @@ class ProcessOperationProperties {
         SubTableEnrichmentComponent subTableEnrichmentComponent = new SubTableEnrichmentComponent(
                 processInstanceRepository, jdbcTemplate, miOverlayComponent, subTablePhysicalMetadataCache);
         ProcessApplicationQueryComponent processApplicationQueryComponent = new ProcessApplicationQueryComponent(
-                processInstanceRepository, workflowEngineClient, userDisplayNameResolver,
+                processInstanceRepository, workflowEngineClient,
+                new com.portal.component.EngineSubTableHydrator(workflowEngineClient), userDisplayNameResolver,
                 miOverlayComponent, subTableEnrichmentComponent,
                 Mockito.mock(com.portal.component.RequestIdEnricher.class));
         ProcessStartComponent processStartComponent = new ProcessStartComponent(

@@ -455,11 +455,12 @@ public class ProcessFormComponent {
      */
     private List<Map<String, Object>> loadSubTableBindingMapsForForm(long formId) {
         try {
-            return jdbcTemplate.query(
+            List<Map<String, Object>> bindings = jdbcTemplate.query(
                     """
                             SELECT ftb.id AS binding_id,
                                    ftb.binding_type::text AS binding_type,
                                    ftb.binding_mode::text AS binding_mode,
+                                   COALESCE(td.id, rt.id) AS table_id,
                                    COALESCE(td.table_name, rt.table_name) AS table_name,
                                    COALESCE(td.table_display_name, rt.display_name) AS table_display_name
                             FROM dw_form_table_bindings ftb
@@ -477,9 +478,44 @@ public class ProcessFormComponent {
                         b.put("bindingMode", rs.getString("binding_mode"));
                         b.put("columns", Collections.emptyList());
                         b.put("data", Collections.emptyList());
+                        // Store table_id for PK resolution below
+                        long tableId = rs.getLong("table_id");
+                        if (!rs.wasNull()) {
+                            b.put("_tableId", tableId);
+                        }
                         return b;
                     },
                     formId);
+
+            // Batch-resolve primary key field names for all dw_ tables referenced in these bindings
+            List<Long> dwTableIds = bindings.stream()
+                    .filter(b -> b.get("_tableId") instanceof Long)
+                    .map(b -> (Long) b.get("_tableId"))
+                    .distinct()
+                    .toList();
+            if (!dwTableIds.isEmpty()) {
+                Map<Long, List<String>> pkByTable = new HashMap<>();
+                List<Map<String, Object>> pkRows = jdbcTemplate.queryForList(
+                        "SELECT table_id, field_name FROM dw_field_definitions WHERE is_primary_key = true AND table_id IN ("
+                                + String.join(",", dwTableIds.stream().map(String::valueOf).toList())
+                                + ") ORDER BY sort_order");
+                for (Map<String, Object> row : pkRows) {
+                    long tid = ((Number) row.get("table_id")).longValue();
+                    pkByTable.computeIfAbsent(tid, k -> new ArrayList<>())
+                            .add((String) row.get("field_name"));
+                }
+                for (Map<String, Object> b : bindings) {
+                    Object tid = b.remove("_tableId");
+                    if (tid instanceof Long) {
+                        List<String> pkFields = pkByTable.get((Long) tid);
+                        if (pkFields != null && !pkFields.isEmpty()) {
+                            b.put("primaryKeyFields", pkFields);
+                        }
+                    }
+                }
+            }
+
+            return bindings;
         } catch (Exception e) {
             log.debug("Could not load dw_form_table_bindings for formId={}: {}", formId, e.getMessage());
             return Collections.emptyList();
@@ -611,7 +647,7 @@ public class ProcessFormComponent {
         Object bindings = formDefinition.get("subTableBindings");
         if (bindings instanceof List) {
             List<Map<String, Object>> bindingList = (List<Map<String, Object>>) bindings;
-            return bindingList.stream()
+            List<SubTableBindingData> result = bindingList.stream()
                     .map(b -> SubTableBindingData.builder()
                             .bindingId(b.get("bindingId") != null ? ((Number) b.get("bindingId")).longValue() : null)
                             .tableName((String) b.get("tableName"))
@@ -622,6 +658,34 @@ public class ProcessFormComponent {
                             .data((List<Map<String, Object>>) b.get("data"))
                             .build())
                     .toList();
+
+            // Resolve primary key field names from dw_field_definitions for each table
+            List<String> tableNames = result.stream()
+                    .map(SubTableBindingData::getTableName)
+                    .filter(t -> t != null && !t.isBlank())
+                    .distinct()
+                    .toList();
+            if (!tableNames.isEmpty()) {
+                Map<String, List<String>> pkByTable = new HashMap<>();
+                List<Map<String, Object>> pkRows = jdbcTemplate.queryForList(
+                        "SELECT td.table_name, fd.field_name FROM dw_field_definitions fd"
+                                + " INNER JOIN dw_table_definitions td ON td.id = fd.table_id"
+                                + " WHERE td.table_name IN ('"
+                                + String.join("','", tableNames)
+                                + "') AND fd.is_primary_key = true ORDER BY fd.sort_order");
+                for (Map<String, Object> row : pkRows) {
+                    String tn = (String) row.get("table_name");
+                    pkByTable.computeIfAbsent(tn, k -> new ArrayList<>())
+                            .add((String) row.get("field_name"));
+                }
+                for (SubTableBindingData b : result) {
+                    if (b.getTableName() != null) {
+                        b.setPrimaryKeyFields(pkByTable.get(b.getTableName()));
+                    }
+                }
+            }
+
+            return result;
         }
         return Collections.emptyList();
     }

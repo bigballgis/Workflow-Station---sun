@@ -2,6 +2,10 @@
 
 本文档基于当前仓库实际目录与 `pom.xml` 聚合模块定义整理，适用于日常开发、联调与部署排查。
 
+> 📐 **边界事实来源**：谁负责什么 / 数据归谁 / 谁能调谁 / 什么禁止依赖，见
+> [docs/architecture/architecture-blueprint.md](docs/architecture/architecture-blueprint.md)（架构蓝图，逐条核对代码与 schema）。
+> 相关：[架构示意](docs/architecture/architecture-diagram.md) · [优化方案](docs/architecture/architecture-optimization-plan.md)。
+
 ## 1. 项目总览
 
 - 项目定位：企业级低代码工作流平台（Workflow Station）

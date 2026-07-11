@@ -43,6 +43,11 @@ public class KafkaConfig {
         configProps.put(ProducerConfig.ACKS_CONFIG, "all");
         configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
         configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        // Fail fast when the broker is unreachable. Without this, send() blocks the calling
+        // thread up to the default 60s waiting for cluster metadata — which, for the after-commit
+        // notification publish, stalls the whole process-start / task-complete request. Events
+        // here are best-effort, so a short cap is safe; healthy metadata fetch is well under 1s.
+        configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000);
         return new DefaultKafkaProducerFactory<>(configProps);
     }
     

@@ -171,6 +171,32 @@ public class TaskFormComponent {
                         "Process instance not found: " + processInstanceId));
     }
 
+    /**
+     * Fills {@code target} with process variables that live only in the Flowable engine (e.g. a service
+     * task's {@code __subTables__} output) and are absent from the portal's own {@code up_process_instance}
+     * store. Gap-fill only: values already present win, so portal form submissions and user edits are never
+     * overwritten. Best-effort — a failed engine round-trip leaves the portal-store values untouched.
+     */
+    private void mergeEngineOnlyVariables(String processInstanceId, Map<String, Object> target) {
+        if (workflowEngineClient == null || processInstanceId == null) {
+            return;
+        }
+        try {
+            workflowEngineClient.getProcessInstance(processInstanceId).ifPresent(row -> {
+                Object raw = row.get("variables");
+                if (raw instanceof Map<?, ?> engineVars) {
+                    engineVars.forEach((k, v) -> {
+                        if (k != null && v != null && !target.containsKey(String.valueOf(k))) {
+                            target.put(String.valueOf(k), v);
+                        }
+                    });
+                }
+            });
+        } catch (RuntimeException e) {
+            log.debug("mergeEngineOnlyVariables skipped for {}: {}", processInstanceId, e.getMessage());
+        }
+    }
+
     @Value("${developer-workstation.url:http://localhost:8091}")
     private String developerWorkstationUrl;
 
@@ -200,6 +226,10 @@ public class TaskFormComponent {
                 ? processInstance.getVariables()
                 : Collections.emptyMap();
         Map<String, Object> hydratedVariables = new HashMap<>(allVariables);
+        // Service-task outputs (e.g. an Activepieces task that sets __subTables__) live in the Flowable
+        // engine but never reach the portal's up_process_instance store, which is only written on portal
+        // form submissions. Gap-fill from the live engine variables so task forms render those results.
+        mergeEngineOnlyVariables(taskInfo.processInstanceId, hydratedVariables);
         if (processComponent != null) {
             __t = System.nanoTime();
             processComponent.enrichSubTablesVariablesFromPhysicalTables(taskInfo.processInstanceId, hydratedVariables);
@@ -359,6 +389,19 @@ public class TaskFormComponent {
 
             Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
             updatedVariables.putAll(editableData);
+
+            // Store initial __subTables__ baseline on first save so completion can produce a
+            // single consolidated change history record instead of one per save.
+            String baselineKey = "_baseline_subTables_" + taskInfo.taskDefinitionKey;
+            if (!updatedVariables.containsKey(baselineKey)) {
+                Object subTables = currentVariables.get("__subTables__");
+                if (subTables != null) {
+                    updatedVariables.put(baselineKey, subTables);
+                    log.info("Stored sub-table baseline for task {}: key={}, rowCount={}",
+                            taskId, baselineKey,
+                            subTables instanceof Map ? ((Map<?, ?>) subTables).size() : "?");
+                }
+            }
             // System audit fields: refresh updated_at/updated_by at the real update (key present
             // only when the field is on the form); created_* is preserved from the insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
@@ -373,6 +416,7 @@ public class TaskFormComponent {
 
         /*
          * Change history runs after the write TransactionTemplate commits so failures cannot mark it rollback-only.
+         * Sub-table change history is deferred to task completion for consolidated recording.
          */
         ChangeHistoryContext context = ChangeHistoryContext.builder()
                 .processInstanceId(taskInfo.processInstanceId)
@@ -395,10 +439,8 @@ public class TaskFormComponent {
                 changeHistoryComponent.recordConcurrentModificationWarning(
                         taskInfo.processInstanceId, field, "unknown", userId);
             }
+            // Record field-level changes (top-level form fields only; sub-table changes deferred to completion)
             changeHistoryComponent.recordFieldChanges(context, snapshotOldVars, editableData);
-            subTableChangeRecorder().recordSubTableChangeHistory(context,
-                    snapshotOldVars.get("__subTables__"),
-                    editableData.get("__subTables__"));
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
         }

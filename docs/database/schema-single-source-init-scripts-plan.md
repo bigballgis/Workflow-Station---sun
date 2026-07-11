@@ -55,7 +55,7 @@
   `00-init-all.sh` 里的 `USE_FLYWAY`/`FLYWAY_SEED_PHASE` 守卫（恢复原状）。
 - 更新 `PROJECT_ARCHITECTURE.md` / `deploy/CLAUDE.md` / `BUILD_GUIDE.md`：明确
   **"schema 唯一来源 = deploy/init-scripts/00-schema；新增/改表只改这里；不再有 Flyway"**。
-- 更新 [architecture-optimization-plan.md](architecture-optimization-plan.md)：把"双轨同步 P1"标记为"已通过清退 Flyway 解决"。
+- 更新 [architecture-optimization-plan.md](../architecture/architecture-optimization-plan.md)：把"双轨同步 P1"标记为"已通过清退 Flyway 解决"。
 
 ---
 

@@ -127,7 +127,7 @@ deploy/
 ## 8. 与现有规则的契合
 
 - `deploy/CLAUDE.md`：改环境/部署链路要同会话同步 K8s ConfigMap + 更新 BUILD_GUIDE/deploy 文档 → 本方案完成后需更新。
-- 本方案完成后，[architecture-optimization-plan.md](architecture-optimization-plan.md) 里"双轨同步"P1 项可标记关闭。
+- 本方案完成后，[architecture-optimization-plan.md](../architecture/architecture-optimization-plan.md) 里"双轨同步"P1 项可标记关闭。
 
 ---
 

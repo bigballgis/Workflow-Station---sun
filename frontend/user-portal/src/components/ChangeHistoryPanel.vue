@@ -238,6 +238,8 @@ import { useChangeHistoryExpansion } from '@/composables/changeHistoryPanel/useC
 const { t } = useI18n()
 
 interface Props {
+  rowIdentifier?: string
+  taskId?: string
   processInstanceId: string
   snapshotTime?: string
   taskInstanceId?: string
