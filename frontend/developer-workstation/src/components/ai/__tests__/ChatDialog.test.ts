@@ -23,6 +23,7 @@ const mockOnDocument = vi.fn()
 const mockOnPhaseComplete = vi.fn()
 const mockOnGeneratedData = vi.fn()
 const mockOnValidationWarning = vi.fn()
+const mockOnSession = vi.fn()
 
 const mockMessages = ref<any[]>([])
 const mockIsStreaming = ref(false)
@@ -55,6 +56,7 @@ vi.mock('@/composables/useAiChat', () => ({
     onPhaseComplete: mockOnPhaseComplete,
     onGeneratedData: mockOnGeneratedData,
     onValidationWarning: mockOnValidationWarning,
+    onSession: mockOnSession,
     setMessages: mockSetMessages,
     clearCurrentDraft: mockClearCurrentDraft
   }),

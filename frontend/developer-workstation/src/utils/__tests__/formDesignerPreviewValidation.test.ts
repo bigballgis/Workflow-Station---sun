@@ -8,9 +8,12 @@ import {
 } from '../formDesignerPreviewValidation'
 
 describe('formDesignerPreviewValidation', () => {
-  it('mergePreviewValidateFormOption enables submit validate button and showMessage', () => {
-    const merged = mergePreviewValidateFormOption({ submitBtn: { show: false } }, 'Validate')
-    expect(merged.submitBtn).toMatchObject({ show: true, innerText: 'Validate' })
+  it('mergePreviewValidateFormOption hides the built-in submit button and enables showMessage', () => {
+    // Spec change: preview is layout/field inspection only — form-create's built-in bottom
+    // submit/validate button is hidden (it ran api.submit() silently, looking like it did
+    // nothing); designer-placed Validate button components in the rules are unaffected.
+    const merged = mergePreviewValidateFormOption({ submitBtn: { show: true } }, 'Validate')
+    expect(merged.submitBtn).toBe(false)
     expect(merged.resetBtn).toMatchObject({ show: false })
     expect(merged.form).toMatchObject({ showMessage: true })
     expect(merged.validateOnSubmit).toBe(true)

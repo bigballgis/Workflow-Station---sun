@@ -42,7 +42,8 @@ export function useTableList(options: UseTableListOptions) {
 
   const tableTypeLabel = (type: string) => {
     const map: Record<string, string> = { MAIN: t('table.mainTable'), SUB: t('table.subTable'), ACTION: t('table.actionTable'), RELATION: t('table.relationTable') }
-    return map[type] || type
+    // Object.hasOwn guards against prototype-chain hits (e.g. a type named "toString").
+    return Object.hasOwn(map, type) ? map[type] : type
   }
 
   function getTableFields(tableId: number | null): FieldDefinition[] {

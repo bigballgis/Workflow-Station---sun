@@ -31,7 +31,9 @@ const IN_SCOPE_FILES: string[] = [
   // Admin Center - user visible strings
   path.join(ADMIN_CENTER_SRC, 'views', 'user', 'UserList.vue'),
   path.join(ADMIN_CENTER_SRC, 'views', 'role', 'RoleList.vue'),
-  path.join(ADMIN_CENTER_SRC, 'views', 'role', 'PermissionConfig.vue'),
+  // views/role/PermissionConfig.vue was removed in the 2026-07 governance dead-code
+  // cleanup (unrouted, zero references) — dropped from scope rather than kept as a
+  // permanently failing existence assertion.
   path.join(ADMIN_CENTER_SRC, 'views', 'user', 'components', 'UserImportDialog.vue'),
   path.join(ADMIN_CENTER_SRC, 'views', 'user', 'UserImport.vue'),
   // Developer Workstation - user visible strings

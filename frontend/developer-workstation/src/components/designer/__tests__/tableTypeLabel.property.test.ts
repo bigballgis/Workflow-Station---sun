@@ -21,7 +21,10 @@ const TABLE_TYPE_I18N_MAP: Record<string, string> = {
 const FORM_SPECIFIC_KEYS = ['form.mainForm', 'form.subForm', 'form.actionForm']
 
 function tableTypeLabel(type: string): string {
-  return TABLE_TYPE_I18N_MAP[type] || type
+  // Mirrors the real implementations (useTableBindingList / useTableList): Object.hasOwn
+  // guards against prototype-chain hits — fc.string() legitimately generates keys like
+  // "toString", which a bare map[type] lookup resolves to the inherited function.
+  return Object.hasOwn(TABLE_TYPE_I18N_MAP, type) ? TABLE_TYPE_I18N_MAP[type] : type
 }
 
 describe('Property 28: tableTypeLabel i18n Consistency', () => {

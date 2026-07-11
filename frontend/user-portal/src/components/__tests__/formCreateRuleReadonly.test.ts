@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { isFormCreateRuleReadonly, isFormFieldReadonly, type FormField } from '../formRendererHelpers'
 
 describe('isFormCreateRuleReadonly', () => {
-  it('honours designer props.readonly', () => {
+  it('honours designer props.readonly, and disabled always implies readonly', () => {
     expect(isFormCreateRuleReadonly({ props: { readonly: true } })).toBe(true)
     expect(isFormCreateRuleReadonly({ props: { readonly: false } })).toBe(false)
+    // Spec: a disabled control accepts no input, so disabled:true means readonly even
+    // when readonly:false is explicitly set (behavior since the audit-fields feature).
     expect(isFormCreateRuleReadonly({
       readonly: false,
       disabled: true,
       props: { readonly: false, disabled: true },
-    })).toBe(false)
+    })).toBe(true)
   })
 
   it('forces system audit fields readonly (values are server-filled at insert/update)', () => {
