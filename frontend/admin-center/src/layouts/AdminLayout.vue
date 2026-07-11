@@ -214,7 +214,7 @@ const apBridgeUrl = computed(() => {
 
 const openActivepieces = async () => {
   if (!apBridgeUrl.value) return
-  // Cross-domain SSO handshake (方案 B): ask the admin-domain /launch endpoint (where the
+  // Cross-domain SSO handshake (plan B): ask the admin-domain /launch endpoint (where the
   // platform JWT cookie is valid) to sign into AP with the shared account and mint a
   // one-time nonce, returning the AP bridge URL carrying it. Then navigate THIS tab there.
   // The AP domain needs no platform cookie, so admin and AP may live on different parent
@@ -224,7 +224,8 @@ const openActivepieces = async () => {
     const bridgeUrl = await launchActivepieces()
     if (bridgeUrl) window.location.assign(bridgeUrl)
   } catch {
-    // 错误提示已由 request 响应拦截器统一弹出（401 走刷新/登录，502/其它弹 toast）。
+    // Error toast is already surfaced by the request response interceptor
+    // (401 goes through refresh/login; 502/others show a toast).
   }
 }
 

@@ -63,7 +63,9 @@ export function useTableBindingList(options: UseTableBindingListOptions) {
       ACTION: t('tableBinding.actionTableType'),
       RELATION: t('tableBinding.relationTableType')
     }
-    return map[type] || type
+    // Object.hasOwn guards against prototype-chain hits (a type named "toString"
+    // would otherwise return the inherited function instead of falling through).
+    return Object.hasOwn(map, type) ? map[type] : type
   }
 
   // Delete binding

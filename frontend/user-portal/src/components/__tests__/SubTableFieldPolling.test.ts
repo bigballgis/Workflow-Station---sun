@@ -16,10 +16,15 @@ vi.mock('@/api/user', () => ({
   },
 }))
 
-// Mock i18n
+// Mock i18n. createI18n is needed because the component's import graph reaches
+// src/i18n/index.ts (module-level createI18n call), not just useI18n consumers.
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (key: string) => key,
+  }),
+  createI18n: () => ({
+    global: { t: (key: string) => key, locale: { value: 'en' } },
+    install: () => {},
   }),
 }))
 
