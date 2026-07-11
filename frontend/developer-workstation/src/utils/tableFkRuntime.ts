@@ -1,5 +1,9 @@
 /**
  * Shared FK/PK runtime for Form Preview (PRD §7, S4).
+ *
+ * DUPLICATE-BY-DESIGN: user-portal keeps a byte-identical copy at
+ * frontend/user-portal/src/utils/tableFkRuntime.ts (no shared frontend
+ * package yet) — any change here must be applied there too.
  */
 
 export interface FieldFkMeta {

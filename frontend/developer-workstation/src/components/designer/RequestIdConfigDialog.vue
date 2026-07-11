@@ -202,6 +202,9 @@ function moveDown(index: number) {
 
 const previewText = computed(() => {
   if (!orderedSelected.value.length) return t('table.requestId.previewEmpty')
+  // Shape preview only ([label] placeholders). Runtime join semantics live in the portal
+  // backend RequestIdEnricher, which additionally SKIPS empty field values (no "HR--001");
+  // this preview cannot show that because placeholders are never empty.
   return orderedSelected.value.map((n) => `[${fieldLabel(n)}]`).join(separator.value)
 })
 

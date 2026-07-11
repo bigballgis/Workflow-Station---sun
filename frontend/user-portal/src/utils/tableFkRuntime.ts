@@ -1,6 +1,11 @@
 /**
  * Shared FK/PK runtime for Preview and Portal (PRD §7, S4).
- * Mirrors backend {@code ForeignKeyRuntimeSupport} / {@code SubTableRowKeySupport}.
+ *
+ * DUPLICATE-BY-DESIGN: developer-workstation keeps a byte-identical copy at
+ * frontend/developer-workstation/src/utils/tableFkRuntime.ts (no shared frontend
+ * package yet) — any change here must be applied there too.
+ * Backend row-key semantics live in platform-common SubTableRowKeySupport.
+ * (The formerly referenced backend ForeignKeyRuntimeSupport was dead code and removed.)
  */
 
 export interface FieldFkMeta {
