@@ -56,7 +56,8 @@ export default {
     logout: '退出登录',
     logoutSuccess: '已退出登录',
     expand: '展开',
-    collapse: '收起'
+    collapse: '收起',
+    auth: '认证'
   },
   menu: {
     dashboard: '仪表盘',
@@ -523,6 +524,10 @@ export default {
   },
   audit: {
     title: '审计日志',
+    actionCREATE: '创建',
+    actionUPDATE: '更新',
+    actionDELETE: '删除',
+    actionQUERY: '查询',
     actionType: '操作类型',
     operator: '操作人',
     result: '结果',
@@ -651,6 +656,7 @@ export default {
       confirmDelete: '确认删除',
       confirmDeleteMsg: '确定要删除角色 "{name}" 的所有 RBAC 映射吗？',
       queryFailed: '查询 RBAC 映射失败',
+      syncSuccess: '同步完成：{created} 新建, {updated} 更新, {autoInactivated} 自动禁用',
       syncFailed: '同步 Superset 角色失败',
       loadSupersetRolesFailed: '加载 Superset 角色失败',
       loadUnmappedRolesFailed: '加载未映射角色失败',
