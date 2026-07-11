@@ -1267,7 +1267,6 @@ export default {
     executeNode: '執行節點',
     processCompleted: '流程執行完成',
     executionError: '執行錯誤',
-    steppingOver: '單步執行...',
     continuing: '繼續執行...',
     debugStopped: '偵錯已停止',
     variableUpdatedLog: '變數 {key} 已更新為: {value}',
@@ -1342,14 +1341,6 @@ export default {
     lookupProbeSucceeded: '{label} 探測完成，共 {count} 筆',
     lookupProbeFailed: '{label} 探測失敗',
     lookupProbeRowApplied: '已將選中列回填到預覽資料'
-  },
-  tags: {
-    coreBusiness: '核心業務',
-    reports: '報表',
-    approvalProcess: '審批流程',
-    dataManagement: '資料管理',
-    systemIntegration: '系統整合',
-    userManagement: '使用者管理',
   },
   api: {
     pleaseLogin: '請先登入',
@@ -2016,7 +2007,6 @@ export default {
     dataEntryDesc: '包含多種輸入類型的多標籤頁資料錄入表單',
     createFromTemplate: '從範本建立',
     selectTemplate: '選擇範本',
-    blankForm: '空白表單',
   },
   error: {
     forbidden: '無權限存取',

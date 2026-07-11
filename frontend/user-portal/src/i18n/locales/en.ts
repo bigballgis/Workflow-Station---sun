@@ -801,17 +801,7 @@ export default {
     noNotifications: 'No Notifications',
     markedAsRead: 'Marked as read',
     allMarkedAsRead: 'All marked as read',
-    deleteSuccess: 'Deleted successfully',
-    mockNewTask: 'New Task Assigned',
-    mockNewTaskContent: 'You have a new leave request pending approval',
-    mockProcessApproved: 'Process Approved',
-    mockProcessApprovedContent: 'Your reimbursement request has been approved',
-    mockSystemMaintenance: 'System Maintenance Notice',
-    mockSystemMaintenanceContent: 'System maintenance scheduled tonight at 22:00',
-    mockTaskExpiring: 'Task Expiring Soon',
-    mockTaskExpiringContent: 'Procurement approval task expires tomorrow',
-    mockMinutesAgo: '{n} min ago',
-    mockHoursAgo: '{n} hr ago'
+    deleteSuccess: 'Deleted successfully'
   },
   error: {
     notFound: 'Page Not Found',
@@ -860,8 +850,6 @@ export default {
   login: {
     title: 'Workflow Platform',
     subtitle: 'User Portal',
-    testUserQuickLogin: 'Test User Quick Login',
-    selectTestUser: 'Select Test User',
     username: 'Username',
     password: 'Password',
     login: 'Login',

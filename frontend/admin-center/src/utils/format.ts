@@ -127,10 +127,6 @@ export const roleTypeKey = (type: string) =>
 export const virtualGroupTypeKey = (type: string) =>
   ({ SYSTEM: 'virtualGroup.typeSystem', CUSTOM: 'virtualGroup.typeCustom' }[type] || type)
 
-/** 字典类型 i18n key */
-export const dictionaryTypeKey = (type: string) =>
-  ({ SYSTEM: 'dictionary.typeSystem', BUSINESS: 'dictionary.typeBusiness', CUSTOM: 'dictionary.typeCustom' }[type] || type)
-
 /** BI 分配目标类型 i18n key */
 export const assignmentTargetTypeKey = (type: string) =>
   ({

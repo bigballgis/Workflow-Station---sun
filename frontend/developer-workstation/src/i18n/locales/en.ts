@@ -1272,7 +1272,6 @@ export default {
     executeNode: 'Execute node',
     processCompleted: 'Process execution completed',
     executionError: 'Execution error',
-    steppingOver: 'Stepping over...',
     continuing: 'Continuing...',
     debugStopped: 'Debug stopped',
     variableUpdatedLog: 'Variable {key} updated to: {value}',
@@ -1347,14 +1346,6 @@ export default {
     lookupProbeSucceeded: '{label} probe succeeded, {count} rows',
     lookupProbeFailed: '{label} probe failed',
     lookupProbeRowApplied: 'Selected row applied to preview data'
-  },
-  tags: {
-    coreBusiness: 'Core Business',
-    reports: 'Reports',
-    approvalProcess: 'Approval Process',
-    dataManagement: 'Data Management',
-    systemIntegration: 'System Integration',
-    userManagement: 'User Management',
   },
   api: {
     pleaseLogin: 'Please login first',
@@ -2021,7 +2012,6 @@ export default {
     dataEntryDesc: 'Multi-tab form with various input types for data entry',
     createFromTemplate: 'Create from Template',
     selectTemplate: 'Select Template',
-    blankForm: 'Blank Form',
   },
   error: {
     forbidden: 'Access Denied',

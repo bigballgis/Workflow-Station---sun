@@ -1267,7 +1267,6 @@ export default {
     executeNode: '执行节点',
     processCompleted: '流程执行完成',
     executionError: '执行错误',
-    steppingOver: '单步执行...',
     continuing: '继续执行...',
     debugStopped: '调试已停止',
     variableUpdatedLog: '变量 {key} 已更新为: {value}',
@@ -1342,14 +1341,6 @@ export default {
     lookupProbeSucceeded: '{label} 探测完成，共 {count} 条',
     lookupProbeFailed: '{label} 探测失败',
     lookupProbeRowApplied: '已将选中行回填到预览数据'
-  },
-  tags: {
-    coreBusiness: '核心业务',
-    reports: '报表',
-    approvalProcess: '审批流程',
-    dataManagement: '数据管理',
-    systemIntegration: '系统集成',
-    userManagement: '用户管理',
   },
   api: {
     pleaseLogin: '请先登录',
@@ -2016,7 +2007,6 @@ export default {
     dataEntryDesc: '包含多种输入类型的多标签页数据录入表单',
     createFromTemplate: '从模板创建',
     selectTemplate: '选择模板',
-    blankForm: '空白表单',
   },
   error: {
     forbidden: '无权限访问',
