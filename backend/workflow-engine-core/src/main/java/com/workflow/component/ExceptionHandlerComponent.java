@@ -335,36 +335,6 @@ public class ExceptionHandlerComponent {
                 .build();
     }
 
-    @Transactional
-    public List<String> recoverInterruptedProcesses() {
-        log.info("Starting recovery of interrupted processes");
-        
-        List<String> interruptedIds = exceptionRecordRepository.findInterruptedProcessInstanceIds();
-        List<String> recoveredIds = new ArrayList<>();
-        
-        for (String processInstanceId : interruptedIds) {
-            try {
-                if (runtimeService != null) {
-                    ProcessInstance instance = runtimeService.createProcessInstanceQuery()
-                            .processInstanceId(processInstanceId)
-                            .singleResult();
-                    
-                    if (instance != null && instance.isSuspended()) {
-                        runtimeService.activateProcessInstanceById(processInstanceId);
-                        recoveredIds.add(processInstanceId);
-                        log.info("Recovered process instance: {}", processInstanceId);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Failed to recover process instance: {}, error: {}", 
-                        processInstanceId, e.getMessage());
-            }
-        }
-        
-        log.info("Recovery completed: {} processes recovered", recoveredIds.size());
-        return recoveredIds;
-    }
-
     public List<ExceptionRecord> getExceptionsNeedingAlert() {
         return exceptionRecordRepository.findExceptionsNeedingAlert();
     }
