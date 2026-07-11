@@ -98,7 +98,8 @@ export function createCustomActionFormPopup(deps: {
         const functionUnitId = taskInfo.value.processDefinitionKey
         if (functionUnitId) {
           try {
-            const res = await processApi.getFunctionUnitContent(functionUnitId)
+            const popupTaskId = taskInfo.value.taskId || taskInfo.value.id
+            const res = await processApi.getFunctionUnitContent(functionUnitId, popupTaskId)
             const content = ('data' in (res as any) ? (res as any).data : res) as any
             const forms = content?.forms || []
             formContent =

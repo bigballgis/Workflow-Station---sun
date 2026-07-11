@@ -11,6 +11,7 @@
 <!-- BEGIN cursor-rules:auto -->
 @../.cursor/rules/deployment-infra.mdc
 @../.cursor/rules/docker-k8s-config-sync.mdc
+@../.cursor/rules/init-scripts-append-only.mdc
 <!-- END cursor-rules:auto -->
 
 > 关键提醒：前端用 `Dockerfile.local`、不用多阶段构建；`.sh`/`.sql` 必须 LF；
@@ -20,3 +21,4 @@
 > **Schema 唯一来源 = `deploy/init-scripts/00-schema/`**（快照式）。Flyway 已清退（2026-06），
 > 后端不再有 `db/migration`，历史归档于 `docs/legacy-flyway-migrations/`。新增/改表只改 00-schema，
 > **不要再写 Flyway 迁移，也不要再做"Flyway↔init 双轨同步"**（双轨已消除）。
+> **init-scripts SQL 只增不改**：禁止编辑已有 `.sql`，变更一律新建递增编号文件（见 `init-scripts-append-only.mdc`）。

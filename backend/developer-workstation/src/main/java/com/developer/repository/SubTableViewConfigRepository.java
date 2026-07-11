@@ -31,7 +31,7 @@ public interface SubTableViewConfigRepository extends JpaRepository<SubTableView
      * (otherwise dangling configs collide with the unique binding_id index on the next import).
      * Must run before {@link #deleteConfigsByFunctionUnitId(Long)} (fields reference configs).
      */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query(value = "DELETE FROM dw_sub_table_view_fields WHERE view_config_id IN ("
             + "SELECT c.id FROM dw_sub_table_view_configs c "
             + "JOIN dw_form_table_bindings b ON b.id = c.binding_id "
@@ -43,7 +43,7 @@ public interface SubTableViewConfigRepository extends JpaRepository<SubTableView
      * Delete all sub-table view configs belonging to a function unit's form-table bindings.
      * Call {@link #deleteViewFieldsByFunctionUnitId(Long)} first.
      */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query(value = "DELETE FROM dw_sub_table_view_configs WHERE binding_id IN ("
             + "SELECT b.id FROM dw_form_table_bindings b "
             + "JOIN dw_form_definitions f ON f.id = b.form_id "

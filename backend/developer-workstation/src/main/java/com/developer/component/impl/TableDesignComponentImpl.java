@@ -41,13 +41,14 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     // DoS mitigation: cap field-definition count.
     private static final int MAX_FIELD_DEFINITIONS = 200;
 
-    /** Standard audit fields auto-appended to every new table. */
+    /** Standard audit fields auto-appended to every new table.
+     *  字段名唯一来源 = platform-common {@link com.platform.common.audit.SystemAuditFields}；本表只补类型/展示名元数据。 */
     private record AuditFieldDef(String fieldName, DataType dataType, Integer length, boolean nullable, String displayName) {}
     private static final List<AuditFieldDef> AUDIT_FIELD_DEFAULTS = List.of(
-            new AuditFieldDef("created_at", DataType.TIMESTAMP, null, true, "Created At"),
-            new AuditFieldDef("created_by", DataType.VARCHAR, 64, true, "Created By"),
-            new AuditFieldDef("updated_at", DataType.TIMESTAMP, null, true, "Updated At"),
-            new AuditFieldDef("updated_by", DataType.VARCHAR, 64, true, "Updated By")
+            new AuditFieldDef(com.platform.common.audit.SystemAuditFields.CREATED_AT, DataType.TIMESTAMP, null, true, "Created At"),
+            new AuditFieldDef(com.platform.common.audit.SystemAuditFields.CREATED_BY, DataType.VARCHAR, 64, true, "Created By"),
+            new AuditFieldDef(com.platform.common.audit.SystemAuditFields.UPDATED_AT, DataType.TIMESTAMP, null, true, "Updated At"),
+            new AuditFieldDef(com.platform.common.audit.SystemAuditFields.UPDATED_BY, DataType.VARCHAR, 64, true, "Updated By")
     );
 
     private final TableDefinitionRepository tableDefinitionRepository;

@@ -16,6 +16,8 @@ export interface SubTableBinding {
   tableType: string
   tableDescription: string
   columns: any[]
+  /** Form-design canvas columns for Add/Edit dialog; list view may include extra audit columns. */
+  dialogColumns?: any[]
   data: any[]
   formFields?: FormField[]
   formOptions?: Record<string, any>

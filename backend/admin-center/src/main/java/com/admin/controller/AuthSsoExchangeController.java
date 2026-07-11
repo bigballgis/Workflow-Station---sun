@@ -4,6 +4,7 @@ import com.admin.service.AuthService;
 import com.admin.service.PlatformSsoService;
 import com.admin.dto.sso.SsoRedeemRequest;
 import com.admin.dto.sso.SsoRedeemResponse;
+import com.admin.util.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.Data;
@@ -62,15 +63,7 @@ public class AuthSsoExchangeController {
         return r;
     }
     private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isEmpty()) {
-            return xRealIp;
-        }
-        return request.getRemoteAddr();
+        return ClientIpResolver.resolve(request);
     }
     @Data
     public static class SsoExchangeBody {

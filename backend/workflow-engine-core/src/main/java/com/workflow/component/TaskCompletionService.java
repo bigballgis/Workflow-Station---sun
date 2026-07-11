@@ -575,6 +575,8 @@ public class TaskCompletionService {
                 return info.get("id").toString().trim();
             }
         } catch (Exception e) {
+            // FALLBACK(external): id 规范化失败沿用原始 actor 值（含 AdminCenterUnavailableException），
+            // 变量消费方已兼容两种形态。
             log.debug("normalizePortalUserIdForVariable: {}", e.getMessage());
         }
         return actor.trim();

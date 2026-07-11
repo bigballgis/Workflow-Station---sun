@@ -156,9 +156,14 @@ public class ExceptionHandlerComponent {
     }
 
     public ExceptionSeverity determineSeverity(Exception exception) {
+        // admin-center 传输故障 = 分派链路中断，任务会静默无主直到自动修复；
+        // 必须走 HIGH 告警通道（sendAlert 只响 CRITICAL/HIGH），否则留痕只能靠人翻库。
+        if (exception instanceof com.workflow.exception.AdminCenterUnavailableException) {
+            return ExceptionSeverity.HIGH;
+        }
         String className = exception.getClass().getName().toLowerCase();
         String message = exception.getMessage() != null ? exception.getMessage().toLowerCase() : "";
-        
+
         if (className.contains("outofmemory") || className.contains("stackoverflow") ||
             className.contains("systemerror") || message.contains("system failure") ||
             message.contains("critical")) {
@@ -333,36 +338,6 @@ public class ExceptionHandlerComponent {
                 .thisWeekCount(thisWeekCount)
                 .thisMonthCount(thisMonthCount)
                 .build();
-    }
-
-    @Transactional
-    public List<String> recoverInterruptedProcesses() {
-        log.info("Starting recovery of interrupted processes");
-        
-        List<String> interruptedIds = exceptionRecordRepository.findInterruptedProcessInstanceIds();
-        List<String> recoveredIds = new ArrayList<>();
-        
-        for (String processInstanceId : interruptedIds) {
-            try {
-                if (runtimeService != null) {
-                    ProcessInstance instance = runtimeService.createProcessInstanceQuery()
-                            .processInstanceId(processInstanceId)
-                            .singleResult();
-                    
-                    if (instance != null && instance.isSuspended()) {
-                        runtimeService.activateProcessInstanceById(processInstanceId);
-                        recoveredIds.add(processInstanceId);
-                        log.info("Recovered process instance: {}", processInstanceId);
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Failed to recover process instance: {}, error: {}", 
-                        processInstanceId, e.getMessage());
-            }
-        }
-        
-        log.info("Recovery completed: {} processes recovered", recoveredIds.size());
-        return recoveredIds;
     }
 
     public List<ExceptionRecord> getExceptionsNeedingAlert() {

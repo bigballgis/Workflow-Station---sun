@@ -6,6 +6,8 @@ import {
   type FieldFkMeta,
   type PkGenerationConfig,
   type RowAddContext,
+  isFkHidden,
+  isFkReadonly,
 } from '../tableFkRuntime'
 
 export interface BindingFieldDefinition {
@@ -113,11 +115,12 @@ export function relationFieldsToBindingDefs(
   }))
 }
 
+/** Delegates to tableFkRuntime — the single FK readonly/hidden decision in this app. */
 export function isFkFieldReadonly(field: BindingFieldDefinition): boolean {
-  if (!field.isForeignKey) return false
-  return field.fkDisplayMode == null || field.fkDisplayMode === 'readonly'
+  return isFkReadonly(field)
 }
 
+/** Delegates to tableFkRuntime — the single FK readonly/hidden decision in this app. */
 export function isFkFieldHidden(field: BindingFieldDefinition): boolean {
-  return !!field.isForeignKey && field.fkDisplayMode === 'hidden'
+  return isFkHidden(field)
 }

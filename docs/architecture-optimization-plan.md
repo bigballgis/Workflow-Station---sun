@@ -60,7 +60,18 @@
 - **工作量**：S（改 k8s yaml）。
 
 #### P0-3　HPA 自动扩缩
-- **做法**：给业务服务加 `HorizontalPodAutoscaler`，按 CPU 70% / 自定义 QPS 指标扩缩，`minReplicas: 2, maxReplicas: 6`。
+- **做法**：给业务服务加 `HorizontalPodAutoscaler`，按 CPU 70% / 自定义 QPS 指标扩缩，`minReplicas: 2`。
+- **`maxReplicas` 不能凭感觉填**：上限由 **DB 连接数**决定，不是流量。
+  `max_connections=100` − 3（超级用户保留） − ~6（n8n/activepieces/superset/运维） = 91；
+  固定开销 engine 20 + admin-center 20 + developer-workstation 10 = 50；
+  留给 user-portal 41 ÷ 每副本 `maximum-pool-size=20` ⇒ **最多 2 副本**。
+  当前 `user-portal-hpa` 已按此设为 `maxReplicas: 2`。
+  想调大，必须**先**降各服务 `maximum-pool-size`（经 ConfigMap 注入
+  `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE`），否则扩容会打爆 Postgres。
+  根治靠 PgBouncer（transaction pooling），拆掉「副本数 × 每副本池」这个乘法。
+- **指标选型**：user-portal 是 IO 等待型（转发 workflow-engine 后阻塞等响应），线程阻塞不吃 CPU，
+  故 CPU 指标对它不敏感——真正需要扩容的场景（线程池耗尽）未必触发 HPA。
+  若确认需要弹性，应换 QPS / P95 延迟等自定义指标。
 - **前置**：需 metrics-server；资源 `requests` 要设准（HPA 按 request 算百分比）。
 - **工作量**：S。
 

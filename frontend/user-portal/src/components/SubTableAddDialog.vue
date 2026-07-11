@@ -492,6 +492,8 @@ function sanitizeHtml(html: string): string {
 const props = defineProps<{
   visible: boolean
   columns: DialogColumn[]
+  /** List-view columns for audit auto-fill on save (created_at / updated_at etc.). */
+  auditColumns?: DialogColumn[]
   title?: string
   mode: 'add' | 'edit'
   initialData?: Record<string, any>

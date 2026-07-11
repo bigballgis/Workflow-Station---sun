@@ -31,33 +31,6 @@ public class LogManagerComponent {
     private final SystemLogRepository logRepository;
     private final LogRetentionPolicyRepository policyRepository;
     
-    // ==================== 日志记录 ====================
-    
-    @Transactional
-    public SystemLog createLog(LogCreateRequest request) {
-        SystemLog logEntry = SystemLog.builder()
-                .id(UUID.randomUUID().toString())
-                .logType(request.getLogType())
-                .logLevel(request.getLogLevel())
-                .module(request.getModule())
-                .action(request.getAction())
-                .message(request.getMessage())
-                .stackTrace(request.getStackTrace())
-                .userId(request.getUserId())
-                .userName(request.getUserName())
-                .ipAddress(request.getIpAddress())
-                .userAgent(request.getUserAgent())
-                .requestUrl(request.getRequestUrl())
-                .requestMethod(request.getRequestMethod())
-                .responseTime(request.getResponseTime())
-                .responseStatus(request.getResponseStatus())
-                .requestBody(request.getRequestBody())
-                .responseBody(request.getResponseBody())
-                .extraData(request.getExtraData())
-                .build();
-        return logRepository.save(logEntry);
-    }
-    
     // ==================== 日志查询 ====================
     
     public Page<SystemLog> queryLogs(LogQueryRequest request, Pageable pageable) {

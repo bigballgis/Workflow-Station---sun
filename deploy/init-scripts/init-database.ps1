@@ -127,6 +127,7 @@ Exec-Sql -File (Join-Path $ScriptDir "01-admin/02-init-developer-permissions.sql
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/03-sync-role-tables.sql") -Desc "Sync role tables" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/04-admin-permissions.sql") -Desc "Admin permissions" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/05-e2e-test-users-and-business-units.sql") -Desc "E2E business units and users" | Out-Null
+Exec-Sql -File (Join-Path $ScriptDir "01-admin/06-hase-organization-seed.sql") -Desc "HASE organization + HMDC roles" | Out-Null
 
 # Step 4: Wipe all function units (matches Docker init path)
 Write-Step "Step 4/6: Wiping all function units (developer + deployed catalog)..."
@@ -203,6 +204,11 @@ $mcyInit = Join-Path $ScriptDir "18-MCY/init.sql"
 if (-not (Test-Path $mcyInit)) { Write-Fail "Missing: 18-MCY/init.sql"; exit 1 }
 if (-not (Exec-Sql -File $mcyInit -Desc "init.sql")) { exit 1 }
 
+Write-Step "Step 5g/6: Loading ATM (HASE MCY Debit Card Dispute Workflow)..."
+$atmInit = Join-Path $ScriptDir "19-ATM/init.sql"
+if (-not (Test-Path $atmInit)) { Write-Fail "Missing: 19-ATM/init.sql"; exit 1 }
+if (-not (Exec-Sql -File $atmInit -Desc "init.sql")) { exit 1 }
+
 Write-Step "Step 5f/6: Running post-seed alignment scripts (90-post-seed/)..."
 $postSeedScripts = @(
     "90-post-seed/00-align-id-sequences.sql"
@@ -222,6 +228,7 @@ Write-Host "  Database Initialization Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Login: admin / admin123  (test: 44027893 / admin123)" -ForegroundColor White
 Write-Host "  Change password after first login!" -ForegroundColor Yellow
-Write-Host "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant fu-20260403-a1b2c5; Multi-Instance Subtask Demo fu-20260422-23tfag; MCY Debit Card fu-20260505-thwmut" -ForegroundColor White
+Write-Host "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant fu-20260403-a1b2c5; Multi-Instance Subtask Demo fu-20260422-23tfag; MCY Debit Card fu-20260505-thwmut; ATM atm-20260623-gaevus" -ForegroundColor White
+Write-Host "  Organization: ASP -> HK -> HASE -> hase-hmdc (01-admin/06-hase-organization-seed.sql)" -ForegroundColor White
 Write-Host "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang" -ForegroundColor White
 Write-Host "=========================================" -ForegroundColor Green

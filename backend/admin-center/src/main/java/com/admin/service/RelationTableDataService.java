@@ -25,6 +25,20 @@ public interface RelationTableDataService {
     Page<RelationTableDataRowDTO> queryData(Long tableId, String search, Pageable pageable);
 
     /**
+     * Lookup 搜索：供 LOOKUP 字段下拉 + 派生带出。返回原始行 Map 列表（含全部列）。
+     * 无按角色 rt_table_access 守卫（与 user-portal searchForLookup 一致）——lookup 是
+     * 结构设计者配置的数据源，任何能打开该表单的人都需要读到完整行以做带出。
+     */
+    List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
+                                              List<String> searchFields, String displayField,
+                                              String filterConditions, int limit, int offset);
+
+    /**
+     * 获取 Relation Table 的 View 字段配置（带出面板列）。
+     */
+    List<Map<String, Object>> getViewFields(Long tableId);
+
+    /**
      * 新增数据
      */
     RelationTableDataRowDTO addData(Long tableId, Map<String, Object> data);

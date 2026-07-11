@@ -5,6 +5,7 @@ import { type TableDefinition, type FieldDefinition } from '@/api/functionUnit'
 import { suggestFieldName, suggestTableName } from '@/utils/fieldNameSlug'
 import { serializePkGeneration } from '@/utils/pkGenerationConfig'
 import { hasRequestIdConfig } from '@/utils/formFieldMeta'
+import { isTableAuditField } from '@/utils/tableAuditFields'
 
 type FieldRow = FieldDefinition & {
   __uid?: number
@@ -119,7 +120,11 @@ export function useTableEditor(options: UseTableEditorOptions) {
 
   function handleAddField() {
     if (!selectedTable.value) return
-    selectedTable.value.fieldDefinitions.push({
+    const fields = selectedTable.value.fieldDefinitions
+    // Insert new field before the first audit field so system fields stay at the bottom.
+    const firstAuditIdx = fields.findIndex(f => isTableAuditField(f.fieldName))
+    const insertIdx = firstAuditIdx >= 0 ? firstAuditIdx : fields.length
+    fields.splice(insertIdx, 0, {
       __uid: ++_fieldUidCounter,
       fieldName: '',
       dataType: 'VARCHAR',
@@ -136,6 +141,11 @@ export function useTableEditor(options: UseTableEditorOptions) {
 
   function handleRemoveField(index: number) {
     if (!selectedTable.value) return
+    const row = selectedTable.value.fieldDefinitions[index]
+    if (row && isTableAuditField(row.fieldName)) {
+      ElMessage.warning(t('table.auditFieldLocked'))
+      return
+    }
     selectedTable.value.fieldDefinitions.splice(index, 1)
   }
 
@@ -146,6 +156,11 @@ export function useTableEditor(options: UseTableEditorOptions) {
   function moveFieldUp(index: number) {
     if (!selectedTable.value || index <= 0) return
     const fields = selectedTable.value.fieldDefinitions
+    // Only prevent audit fields themselves from being moved; allow user fields
+    // to move up past audit fields (e.g. when correcting ordering after add).
+    if (isTableAuditField(fields[index]?.fieldName)) {
+      return
+    }
     const temp = fields[index]
     fields[index] = fields[index - 1]
     fields[index - 1] = temp
@@ -156,6 +171,9 @@ export function useTableEditor(options: UseTableEditorOptions) {
   function moveFieldDown(index: number) {
     if (!selectedTable.value || index >= selectedTable.value.fieldDefinitions.length - 1) return
     const fields = selectedTable.value.fieldDefinitions
+    if (isTableAuditField(fields[index]?.fieldName) || isTableAuditField(fields[index + 1]?.fieldName)) {
+      return
+    }
     const temp = fields[index]
     fields[index] = fields[index + 1]
     fields[index + 1] = temp

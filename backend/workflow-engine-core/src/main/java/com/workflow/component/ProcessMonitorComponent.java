@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Process Monitor Component
@@ -339,83 +338,4 @@ public class ProcessMonitorComponent {
         }
     }
 
-    /**
-     * Get process execution visualization data
-     *
-     * @param processInstanceId process instance ID
-     * @return visualization data
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Object> getProcessVisualizationData(String processInstanceId) {
-        log.info("Getting process execution visualization data: processInstanceId={}", processInstanceId);
-
-        try {
-            Map<String, Object> visualizationData = new HashMap<>();
-
-            // Get process instance info
-            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
-                    .processInstanceId(processInstanceId)
-                    .singleResult();
-
-            HistoricProcessInstance historicProcessInstance = null;
-            if (processInstance == null) {
-                historicProcessInstance = historyService.createHistoricProcessInstanceQuery()
-                        .processInstanceId(processInstanceId)
-                        .singleResult();
-            }
-
-            if (processInstance == null && historicProcessInstance == null) {
-                throw new WorkflowValidationException(List.of(
-                    new WorkflowValidationException.ValidationError("processInstanceId", "Process instance does not exist", processInstanceId)
-                ));
-            }
-
-            // Basic info
-            visualizationData.put("processInstanceId", processInstanceId);
-            visualizationData.put("processDefinitionId", processInstance != null ?
-                    processInstance.getProcessDefinitionId() : historicProcessInstance.getProcessDefinitionId());
-            visualizationData.put("businessKey", processInstance != null ?
-                    processInstance.getBusinessKey() : historicProcessInstance.getBusinessKey());
-            visualizationData.put("startTime", processInstance != null ?
-                    processInstance.getStartTime() : historicProcessInstance.getStartTime());
-            visualizationData.put("endTime", historicProcessInstance != null ?
-                    historicProcessInstance.getEndTime() : null);
-            visualizationData.put("isActive", processInstance != null);
-
-            // Current active nodes
-            if (processInstance != null) {
-                List<String> activeActivityIds = runtimeService.getActiveActivityIds(processInstanceId);
-                visualizationData.put("activeActivityIds", activeActivityIds);
-            }
-
-            // Completed activity nodes
-            List<Map<String, Object>> completedActivities = visualizationBuilder.getCompletedActivities(processInstanceId);
-            visualizationData.put("completedActivities", completedActivities);
-
-            // Process variables
-            Map<String, Object> variables = processInstance != null ?
-                    runtimeService.getVariables(processInstanceId) :
-                    historyService.createHistoricVariableInstanceQuery()
-                            .processInstanceId(processInstanceId)
-                            .list()
-                            .stream()
-                            .collect(Collectors.toMap(
-                                    var -> var.getVariableName(),
-                                    var -> var.getValue()
-                            ));
-            visualizationData.put("variables", variables);
-
-            // Execution path
-            List<Map<String, Object>> executionPath = visualizationBuilder.getExecutionPath(processInstanceId);
-            visualizationData.put("executionPath", executionPath);
-
-            return visualizationData;
-
-        } catch (WorkflowValidationException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to get process execution visualization data: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("VISUALIZATION_DATA_FAILED", "Failed to get process execution visualization data: " + e.getMessage());
-        }
-    }
 }

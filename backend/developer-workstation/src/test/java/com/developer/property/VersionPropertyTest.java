@@ -1,6 +1,8 @@
 package com.developer.property;
 
 import com.developer.component.VersionComponent;
+import com.developer.component.impl.FunctionUnitExporter;
+import com.developer.component.impl.FunctionUnitSnapshotRestorer;
 import com.developer.component.impl.VersionComponentImpl;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.VersionRepository;
@@ -27,7 +29,9 @@ public class VersionPropertyTest {
         ObjectMapper objectMapper = new ObjectMapper();
         VersionComponent component = new VersionComponentImpl(
                 repository, functionUnitRepository, objectMapper,
-                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), null,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
+                mock(FunctionUnitExporter.class),
+                mock(FunctionUnitSnapshotRestorer.class),
                 mock(com.developer.service.MainTableViewService.class),
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 mock(com.developer.repository.ForeignKeyRepository.class),
@@ -35,7 +39,7 @@ public class VersionPropertyTest {
                 mock(com.developer.repository.EmailConnectionRepository.class),
                 mock(com.developer.repository.EmailMonitorRuleRepository.class),
                 mock(com.developer.repository.TableRelationRepository.class),
-                mock(com.developer.component.impl.MainTableViewPortability.class));
+                mock(jakarta.persistence.EntityManager.class));
         
         assertThat(component).isNotNull();
         assertThat(versionNumber).matches("\\d+\\.\\d+\\.\\d+");

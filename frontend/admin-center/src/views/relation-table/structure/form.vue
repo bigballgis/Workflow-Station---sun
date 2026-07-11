@@ -197,6 +197,26 @@
           </template>
         </el-table-column>
         <el-table-column
+          :label="t('form.labelLookup')"
+          width="90"
+          align="center"
+        >
+          <template #default="{ row }">
+            <FieldLookupEditor
+              v-if="row.dataType === 'LOOKUP' && !isAuditField(row)"
+              :model-value="row.lookupConfig"
+              :ref-tables="fkRefTables"
+              :all-fields="form.fieldDefinitions"
+              :current-field-name="row.fieldName"
+              @update:model-value="row.lookupConfig = $event"
+            />
+            <span
+              v-else
+              class="lookup-na"
+            >—</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           :label="t('form.labelDefaultValue')"
           width="130"
         >
@@ -253,6 +273,7 @@ import type { FormInstance } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import PkGenerationEditor from '@/components/relation-table/PkGenerationEditor.vue'
 import FieldForeignKeyEditor from '@/components/relation-table/FieldForeignKeyEditor.vue'
+import FieldLookupEditor from '@/components/relation-table/FieldLookupEditor.vue'
 import { useTableStructureForm } from '@/composables/modules/useTableStructureForm'
 
 const { t } = useI18n()
@@ -292,5 +313,8 @@ onMounted(loadTableData)
   gap: 6px;
   padding: 2px 0;
   min-width: 180px;
+}
+.lookup-na {
+  color: var(--el-text-color-placeholder);
 }
 </style>

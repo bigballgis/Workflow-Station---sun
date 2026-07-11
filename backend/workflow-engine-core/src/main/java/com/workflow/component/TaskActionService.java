@@ -493,6 +493,8 @@ public class TaskActionService {
                 }
             }
         } catch (Exception e) {
+            // FALLBACK(external): 身份比对失败降级为不匹配（保守方向:拒绝而非放行），
+            // 含 AdminCenterUnavailableException。
             log.debug("engineActorMatchesPortalUser: {}", e.getMessage());
         }
         return false;

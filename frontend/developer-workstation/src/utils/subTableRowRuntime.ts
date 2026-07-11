@@ -1,5 +1,10 @@
 /**
  * Sub-table add-row orchestration (PRD S5) — guard, FK fill, PK allocate, column presentation.
+ *
+ * PARITY: user-portal implements the same contract as a split module directory at
+ * frontend/user-portal/src/utils/subTableRowRuntime/ (this file predates that split).
+ * Behavioral changes here must be mirrored there; backend row-key semantics live in
+ * platform-common SubTableRowKeySupport.
  */
 import type { FieldDefinition } from '@/api/functionUnit'
 import type { DialogColumn } from '../components/designer/subTableAddDialogHelpers'

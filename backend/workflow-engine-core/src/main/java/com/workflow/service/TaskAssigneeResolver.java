@@ -2,6 +2,7 @@ package com.workflow.service;
 
 import com.workflow.client.AdminCenterClient;
 import com.workflow.enums.AssigneeType;
+import com.workflow.exception.AdminCenterUnavailableException;
 import com.workflow.util.AssigneeRoleIdsSupport;
 import lombok.Builder;
 import lombok.Data;
@@ -33,6 +34,11 @@ public class TaskAssigneeResolver {
         private boolean requiresClaim;
         private AssigneeType assigneeType;
         private String errorMessage;
+        /**
+         * true = 解析失败源于 admin-center 传输故障（结果未知，可等服务恢复后自动补分派）；
+         * false + errorMessage != null = 配置/数据错误（如角色无准入、无候选人，重试无用，需人工修配置）。
+         */
+        private boolean infraFailure;
     }
 
     /**
@@ -108,6 +114,14 @@ public class TaskAssigneeResolver {
                         .errorMessage("Unsupported assignee type in resolver: " + assigneeType)
                         .build();
             };
+        } catch (AdminCenterUnavailableException e) {
+            log.error("admin-center unavailable while resolving assignee: type={}, error={}",
+                    assigneeType, e.getMessage());
+            return ResolveResult.builder()
+                    .assigneeType(assigneeType)
+                    .errorMessage("admin-center unavailable: " + e.getMessage())
+                    .infraFailure(true)
+                    .build();
         } catch (Exception e) {
             log.error("Failed to resolve assignee: type={}, error={}", assigneeType, e.getMessage());
             return ResolveResult.builder()

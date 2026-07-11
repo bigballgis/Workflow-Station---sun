@@ -269,8 +269,30 @@
           :label="field.displayName || field.fieldName"
           :required="!field.nullable"
         >
+          <template v-if="field.dataType === 'LOOKUP'">
+            <LookupField
+              :model-value="formData[field.fieldName]"
+              :table-id="field.lookupConfig?.refTableId || 0"
+              :search-fields="field.lookupConfig?.searchFields || []"
+              :display-field="field.lookupConfig?.displayFields?.[0] || ''"
+              :display-fields="field.lookupConfig?.displayFields || []"
+              :selected-display-field="field.lookupConfig?.selectedDisplayField"
+              :filter-conditions="lookupFilterConditionsFor(field)"
+              :view-fields="lookupViewFieldsFor(field)"
+              :multiple="field.lookupConfig?.multiple"
+              :lookup-config="JSON.stringify(field.lookupConfig || {})"
+              @update:model-value="formData[field.fieldName] = $event"
+              @select="onLookupSelect(field, $event)"
+              @clear="onLookupClear(field)"
+            />
+            <LookupViewDisplay
+              v-if="field.lookupConfig?.showBackfillView !== false && lookupSelectedData[field.fieldName]"
+              :selected-data="lookupSelectedData[field.fieldName]"
+              :view-fields="lookupViewFieldsFor(field)"
+            />
+          </template>
           <el-switch
-            v-if="field.dataType === 'BOOLEAN'"
+            v-else-if="field.dataType === 'BOOLEAN'"
             v-model="formData[field.fieldName]"
             :disabled="isPkFieldDisabled(field) || isFkFieldDisabled(field)"
           />
@@ -419,6 +441,8 @@
 import { onMounted, onActivated } from 'vue'
 import { Search, Download, Plus, Upload, ArrowDown, Loading } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
+import LookupField from '@/components/lookup/LookupField.vue'
+import LookupViewDisplay from '@/components/lookup/LookupViewDisplay.vue'
 import { useRelationTableData } from '@/composables/modules/useRelationTableData'
 
 const {
@@ -428,6 +452,7 @@ const {
   fetchDataError, dialogVisible, dialogMode, formData,
   selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
   isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
+  lookupSelectedData, lookupFilterConditionsFor, onLookupSelect, onLookupClear, lookupViewFieldsFor,
   fetchData, handleSelectTable, handlePageChange, handleSizeChange,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
   formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, init, refresh,

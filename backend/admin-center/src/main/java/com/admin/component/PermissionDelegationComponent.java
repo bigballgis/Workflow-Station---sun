@@ -175,29 +175,4 @@ public class PermissionDelegationComponent {
         log.info("Revoked {} expired delegations", expiredDelegations.size());
     }
     
-    /**
-     * 批量撤销用户的所有委托权限（用于用户离职等场景）
-     */
-    @Transactional
-    public void revokeAllUserDelegations(String userId, String revokedBy, String reason) {
-        log.info("Revoking all delegations for user: {}", userId);
-        
-        // 撤销用户委托出去的权限
-        List<PermissionDelegation> delegatedOut = delegationRepository.findByDelegatorId(userId);
-        for (PermissionDelegation delegation : delegatedOut) {
-            if ("ACTIVE".equals(delegation.getStatus())) {
-                revokeDelegation(delegation.getId(), revokedBy, reason);
-            }
-        }
-        
-        // 撤销委托给用户的权限
-        List<PermissionDelegation> delegatedIn = delegationRepository.findByDelegateeId(userId);
-        for (PermissionDelegation delegation : delegatedIn) {
-            if ("ACTIVE".equals(delegation.getStatus())) {
-                revokeDelegation(delegation.getId(), revokedBy, reason);
-            }
-        }
-        
-        log.info("Revoked all delegations for user: {}", userId);
-    }
 }

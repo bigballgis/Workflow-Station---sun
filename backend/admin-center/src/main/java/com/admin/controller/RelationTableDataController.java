@@ -109,6 +109,28 @@ public class RelationTableDataController {
         return ResponseEntity.ok(page);
     }
 
+    @GetMapping("/{tableId}/search")
+    @Operation(summary = "Lookup search", description = "Search rows of a table for a LOOKUP field dropdown / derived auto-fill")
+    public ResponseEntity<List<Map<String, Object>>> searchForLookup(
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @RequestParam(required = false, defaultValue = "") String keyword,
+            @RequestParam(required = false) List<String> searchFields,
+            @RequestParam(required = false, defaultValue = "") String displayField,
+            @RequestParam(required = false) String filterConditions,
+            @RequestParam(required = false, defaultValue = "50") int limit,
+            @RequestParam(required = false, defaultValue = "0") int offset) {
+        List<Map<String, Object>> rows = dataService.searchForLookup(
+                tableId, keyword, searchFields, displayField, filterConditions, limit, offset);
+        return ResponseEntity.ok(rows);
+    }
+
+    @GetMapping("/{tableId}/view-fields")
+    @Operation(summary = "Get view fields", description = "Backfill panel columns for a LOOKUP field")
+    public ResponseEntity<List<Map<String, Object>>> getViewFields(
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId) {
+        return ResponseEntity.ok(dataService.getViewFields(tableId));
+    }
+
     @PostMapping("/{tableId}/primary-keys/allocate")
     @Operation(summary = "Allocate primary key value(s)", description = "Backend PK allocation for Relation Table data add-row (PRD S5)")
     public ResponseEntity<AllocatePrimaryKeyResponse> allocatePrimaryKeys(

@@ -330,47 +330,4 @@ public class RoleMemberManagerComponent {
         return userRoleRepository.existsByUserIdAndRoleId(userId, roleId);
     }
     
-    /**
-     * Replace all roles for a user
-     */
-    @Transactional
-    public void replaceUserRoles(String userId, List<String> newRoleIds, String operatedBy, String reason) {
-        log.info("Replacing all roles for user {} with {} new roles", userId, newRoleIds.size());
-        
-        // Get current roles
-        List<UserRole> currentRoles = userRoleRepository.findByUserId(userId);
-        
-        // Remove all current roles
-        for (UserRole userRole : currentRoles) {
-            // Fetch role to get name
-            Role role = roleRepository.findById(userRole.getRoleId())
-                    .orElse(null);
-            String roleName = role != null ? role.getName() : "Unknown";
-            recordChangeHistory("ROLE_REMOVED", userId, userRole.getRoleId(), null, 
-                    roleName, null, reason, operatedBy);
-        }
-        userRoleRepository.deleteAll(currentRoles);
-        
-        // Add new roles
-        for (String roleId : newRoleIds) {
-            Role role = roleRepository.findById(roleId)
-                    .orElseThrow(() -> new RoleNotFoundException(roleId));
-            assertNotBuUnboundedDirectUserAssignment(role);
-
-            UserRole userRole = UserRole.builder()
-                    .id(UUID.randomUUID().toString())
-                    .userId(userId)
-                    .roleId(roleId)
-                    .assignedAt(LocalDateTime.now())
-                    .assignedBy(operatedBy)
-                    .build();
-            
-            userRoleRepository.save(userRole);
-            
-            recordChangeHistory("ROLE_ASSIGNED", userId, roleId, null, 
-                    null, role.getName(), reason, operatedBy);
-        }
-        
-        log.info("User {} roles replaced successfully", userId);
-    }
 }

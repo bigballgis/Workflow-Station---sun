@@ -3,6 +3,7 @@ package com.developer.component.impl;
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.EmailConnection;
+import com.developer.entity.EmailMonitorRule;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
@@ -21,6 +22,7 @@ import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.ConnectionType;
 import com.developer.enums.EmailConnectionDirection;
+import com.developer.enums.EmailMonitorActionType;
 import com.developer.enums.DataType;
 import com.developer.enums.FormType;
 import com.developer.enums.SubMode;
@@ -29,6 +31,7 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
+import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.LinkFormComponentRepository;
@@ -63,6 +66,7 @@ public class FunctionUnitImportWriter {
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final EmailConnectionRepository emailConnectionRepository;
+    private final EmailMonitorRuleRepository emailMonitorRuleRepository;
     private final FormTableBindingRepository formTableBindingRepository;
     private final LinkFormComponentRepository linkFormComponentRepository;
     private final TableRelationRepository tableRelationRepository;
@@ -274,7 +278,7 @@ public class FunctionUnitImportWriter {
         return formDefinitionRepository.save(form);
     }
 
-    void finalizeFormImport(FormDefinition form,
+    Map<Long, Long> finalizeFormImport(FormDefinition form,
                             Map<String, Object> formData,
                             Map<String, Long> importedTableNameToId,
                             Map<Long, Long> relationTableIdMapping,
@@ -297,6 +301,7 @@ public class FunctionUnitImportWriter {
 
         importFormStageBindings(form, formData);
         formDefinitionRepository.save(form);
+        return bindingIdMapping;
     }
 
     /**
@@ -565,6 +570,59 @@ public class FunctionUnitImportWriter {
                         ? (Boolean) connectionData.get("imapUseSsl") : null)
                 .build();
         emailConnectionRepository.save(connection);
+    }
+
+    void importEmailMonitorRule(FunctionUnit functionUnit,
+                                Map<String, Object> ruleData,
+                                Map<Long, Long> formIdMapping,
+                                Map<Long, Long> bindingIdMapping) {
+        Long targetFormId = null;
+        if (ruleData.get("targetFormId") instanceof Number sourceFormId) {
+            targetFormId = formIdMapping.getOrDefault(sourceFormId.longValue(), sourceFormId.longValue());
+        }
+        String targetBindingId = remapMonitorTargetBindingId(ruleData.get("targetBindingId"), bindingIdMapping);
+        EmailMonitorRule rule = EmailMonitorRule.builder()
+                .ruleUid(ruleData.get("ruleUid") != null
+                        ? (String) ruleData.get("ruleUid")
+                        : UUID.randomUUID().toString())
+                .functionUnit(functionUnit)
+                .name((String) ruleData.get("name"))
+                .enabled(ruleData.get("enabled") instanceof Boolean enabledVal ? enabledVal : true)
+                .connectionUid((String) ruleData.get("connectionUid"))
+                .processDefinitionKey((String) ruleData.get("processDefinitionKey"))
+                .startEventId((String) ruleData.get("startEventId"))
+                .folderLabel(ruleData.get("folderLabel") instanceof String folder
+                        ? folder : "INBOX")
+                .filterFrom((String) ruleData.get("filterFrom"))
+                .filterSubject((String) ruleData.get("filterSubject"))
+                .actionType(ruleData.get("actionType") instanceof String actionTypeStr
+                        ? EmailMonitorActionType.valueOf(actionTypeStr)
+                        : EmailMonitorActionType.START_PROCESS)
+                .targetFormId(targetFormId)
+                .targetBindingId(targetBindingId)
+                .systemInitiatorUserId((String) ruleData.get("systemInitiatorUserId"))
+                .extractionRules(parseJsonMap(ruleData.get("extractionRules")))
+                .correlation(parseJsonMap(ruleData.get("correlation")))
+                .pollIntervalSeconds(ruleData.get("pollIntervalSeconds") instanceof Number poll
+                        ? poll.intValue() : 60)
+                .reviewOnMissing(ruleData.get("reviewOnMissing") instanceof Boolean review
+                        ? review : true)
+                .build();
+        emailMonitorRuleRepository.save(rule);
+    }
+
+    private static String remapMonitorTargetBindingId(Object rawBindingId, Map<Long, Long> bindingIdMapping) {
+        if (rawBindingId == null) {
+            return null;
+        }
+        String raw = String.valueOf(rawBindingId);
+        try {
+            long oldId = Long.parseLong(raw);
+            Long mapped = bindingIdMapping.get(oldId);
+            return mapped != null ? String.valueOf(mapped) : raw;
+        } catch (NumberFormatException e) {
+            return raw;
+        }
     }
 
     /**

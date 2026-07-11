@@ -23,7 +23,14 @@ public enum RelationDataType {
     /** Raw binary (aligns with {@code DataType.BYTEA}) */
     BYTEA("BYTEA", "Binary"),
     /** File path / URL (aligns with {@code DataType.FILE}) */
-    FILE("FILE", "File");
+    FILE("FILE", "File"),
+    /**
+     * Reference to a row in another Relation Table. The stored value is the
+     * referenced row's primary key (scalar for single-value, JSON array for
+     * multiple). Physically stored as a scalar/text column; see
+     * {@code lookup_config} on the field definition for the full config.
+     */
+    LOOKUP("LOOKUP", "Lookup");
 
     private final String code;
     private final String displayName;

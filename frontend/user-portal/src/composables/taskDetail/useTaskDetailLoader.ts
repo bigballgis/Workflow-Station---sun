@@ -105,7 +105,7 @@ export function createTaskDetailLoader(
         })
         const fuFetchPromise = data.processDefinitionKey
           ? processApi
-              .getFunctionUnitContent(data.processDefinitionKey)
+              .getFunctionUnitContent(data.processDefinitionKey, taskId)
               .then(r => (r as { data?: unknown }).data ?? r)
               .catch((err: unknown) => {
                 console.error('Failed to prefetch function unit content:', err)
@@ -276,7 +276,7 @@ export function createTaskDetailLoader(
               const key = (taskInfo.value as any).processDefinitionKey
               const fuFetchPromise = key
                 ? processApi
-                    .getFunctionUnitContent(String(key))
+                    .getFunctionUnitContent(String(key), taskId)
                     .then(r => (r as { data?: unknown }).data ?? r)
                     .catch(() => null)
                 : Promise.resolve(null)

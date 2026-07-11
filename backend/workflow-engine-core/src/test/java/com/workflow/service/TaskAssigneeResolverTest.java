@@ -247,4 +247,37 @@ class TaskAssigneeResolverTest {
             assertThat(result.isRequiresClaim()).isTrue();
         }
     }
+
+    @Nested
+    @DisplayName("Infra failure vs no-data distinction")
+    class InfraFailureTests {
+
+        @Test
+        @DisplayName("admin-center transport failure marks result infraFailure=true")
+        void infraFailureWhenAdminCenterUnavailable() {
+            when(adminCenterClient.getUserBusinessUnitId(eq(ANCHOR_USER_ID), isNull()))
+                    .thenThrow(new com.workflow.exception.AdminCenterUnavailableException(
+                            "Connection refused", null));
+
+            TaskAssigneeResolver.ResolveResult result = resolver.resolve(
+                    AssigneeType.HIERARCHY_ROLE, ROLE_ID, null, INITIATOR_ID, ANCHOR_USER_ID);
+
+            assertThat(result.getErrorMessage()).contains("admin-center unavailable");
+            assertThat(result.isInfraFailure()).isTrue();
+        }
+
+        @Test
+        @DisplayName("Genuine no-data (empty candidate pool) keeps infraFailure=false")
+        void noDataIsNotInfraFailure() {
+            when(adminCenterClient.getUserBusinessUnitId(eq(ANCHOR_USER_ID), isNull())).thenReturn(BU_ID);
+            when(adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(BU_ID, ROLE_ID))
+                    .thenReturn(Collections.emptyList());
+
+            TaskAssigneeResolver.ResolveResult result = resolver.resolve(
+                    AssigneeType.HIERARCHY_ROLE, ROLE_ID, null, INITIATOR_ID, ANCHOR_USER_ID);
+
+            assertThat(result.getErrorMessage()).isNotNull();
+            assertThat(result.isInfraFailure()).isFalse();
+        }
+    }
 }

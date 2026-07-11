@@ -103,34 +103,70 @@ export function useChangeHistoryFormatting(
     return row.fieldLabel?.trim() || row.fieldName || '—'
   }
 
+ function formatScalarValue(value: unknown, maxLen: number): string {
+    if (value === null || value === undefined || value === '') return '—'
+    if (typeof value === 'object') {
+      const displayName = objectDisplayName(value as Record<string, unknown>)
+      if (displayName) return truncateText(displayName, maxLen)
+      return truncateText(JSON.stringify(value), maxLen)
+    }
+    return formatFileOrText(String(value), maxLen)
+  }
+
+  function objectDisplayName(value: Record<string, unknown>): string | null {
+    for (const key of ['dropdown_name', 'name', 'label', 'displayName', 'row_id', 'id']) {
+      const v = value[key]
+      if (v !== null && v !== undefined && typeof v !== 'object' && String(v).trim()) {
+        return String(v).trim()
+      }
+    }
+    return null
+  }
+
+  function formatObjectDiff(value: Record<string, unknown>, maxLen: number): string {
+    const parts = Object.entries(value)
+      .filter(([key]) => key !== 'row_id' && key !== 'id')
+      .map(([key, v]) => `${key}: ${formatScalarValue(v, Math.max(32, Math.floor(maxLen / 2)))}`)
+    if (parts.length === 0) {
+      const fallbackName = objectDisplayName(value)
+      return fallbackName ? truncateText(fallbackName, maxLen) : '—'
+    }
+    return truncateText(parts.join('; '), maxLen)
+  }
+
+  function formatFileOrText(value: string, maxLen: number): string {
+    const fileUploadMatch = value.match(/\/api\/v1\/upload\/files\/[^?]+\?originalName=([^&]+)/)
+    if (fileUploadMatch) {
+      return truncateText(decodeURIComponent(fileUploadMatch[1]!), maxLen)
+    }
+    return truncateText(value, maxLen)
+  }
+
+  function truncateText(value: string, maxLen: number): string {
+    return value.length <= maxLen ? value : `${value.slice(0, maxLen)}…`
+  }
+
   function formatDisplayValue(raw: string | null | undefined, maxLen = 240): string {
     if (raw === null || raw === undefined || raw === '') return '—'
     const s = String(raw).trim()
     if (!s) return '—'
-
+    
     // JSON object/array first — sub-table row data is serialised as JSON
     // and may contain file URLs; we must parse JSON before the file-upload
     // regex, otherwise the regex greedily captures JSON tail content.
     if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
       try {
         const parsed = JSON.parse(s) as unknown
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return formatObjectDiff(parsed as Record<string, unknown>, maxLen)
+        }
         const compact = JSON.stringify(parsed)
-        if (compact.length <= maxLen) return compact
-        return `${compact.slice(0, maxLen)}…`
+        return truncateText(compact, maxLen)
       } catch {
         /* fall through */
       }
     }
-
-    // File upload paths: show original filename instead of internal API path
-    const fileUploadMatch = s.match(/\/api\/v1\/upload\/files\/[^?]+\?originalName=([^&]+)/)
-    if (fileUploadMatch) {
-      const decoded = decodeURIComponent(fileUploadMatch[1]!)
-      return decoded.length <= maxLen ? decoded : `${decoded.slice(0, maxLen)}…`
-    }
-
-    if (s.length <= maxLen) return s
-    return `${s.slice(0, maxLen)}…`
+    return formatFileOrText(s, maxLen)
   }
 
   function formatTimestamp(ts: string): string {

@@ -97,7 +97,16 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Lazy
     private com.workflow.client.AdminCenterClient adminCenterClient;
 
+    @Autowired
+    @Lazy
+    private com.workflow.component.ExceptionHandlerComponent exceptionHandlerComponent;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /** 分派失败留痕的 task local 变量名：失败原因（human-readable）。 */
+    public static final String VAR_ASSIGNMENT_FAILURE = "assignmentFailure";
+    /** 分派失败留痕的 task local 变量名：失败类别（INFRA=服务故障可自动补分派 / CONFIG=配置错误需人工 / ERROR=未预期异常）。 */
+    public static final String VAR_ASSIGNMENT_FAILURE_KIND = "assignmentFailureKind";
 
     // ---- Package-private accessors so collaborators can read injected services without owning them.
     // Unit tests instantiate this listener via the no-arg constructor and inject mocks into these fields
@@ -142,6 +151,36 @@ public class TaskAssignmentListener implements FlowableEventListener {
             multiInstanceTaskWriter = writer;
         }
         return writer;
+    }
+
+    /**
+     * 分派失败留痕：写 task local 变量（可查询、TaskOrphanRepairService 修复后清除）并落 ExceptionRecord
+     * （HIGH/CRITICAL 走既有 notificationManager 告警）。
+     *
+     * <p>留痕动作整体 try-catch：留痕失败绝不能反过来中断任务创建主流程。
+     * FALLBACK(external): 该兜底只影响可观测性（少一条痕迹），不产生错误业务数据。</p>
+     */
+    private void recordAssignmentFailure(String taskId, String processInstanceId, String taskDefinitionKey,
+                                         String errorMessage, String failureKind, Exception cause) {
+        try {
+            if (taskService != null) {
+                taskService.setVariableLocal(taskId, VAR_ASSIGNMENT_FAILURE, errorMessage);
+                taskService.setVariableLocal(taskId, VAR_ASSIGNMENT_FAILURE_KIND, failureKind);
+            }
+            if (exceptionHandlerComponent != null) {
+                // INFRA 无 cause 时包装成 AdminCenterUnavailableException，让 determineSeverity 分到 HIGH 告警。
+                Exception recorded = cause != null ? cause
+                        : "INFRA".equals(failureKind)
+                                ? new com.workflow.exception.AdminCenterUnavailableException(
+                                        "Task assignment failed (INFRA): " + errorMessage, null)
+                                : new IllegalStateException(
+                                        "Task assignment failed (" + failureKind + "): " + errorMessage);
+                exceptionHandlerComponent.recordException(recorded, processInstanceId, taskId,
+                        taskDefinitionKey, null);
+            }
+        } catch (Exception e) {
+            log.error("Failed to record assignment failure trace for task {}: {}", taskId, e.getMessage());
+        }
     }
 
     /**
@@ -405,6 +444,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     assigneeTypeRaw);
         } catch (Exception e) {
             log.error("Error handling task assignment for task {}: {}", taskId, e.getMessage(), e);
+            // 任务照常创建（isFailOnException=false），但必须留痕：否则任务静默无主，
+            // 直到用户报"My Request 显示 -"才被发现。
+            String kind = e instanceof com.workflow.exception.AdminCenterUnavailableException ? "INFRA" : "ERROR";
+            recordAssignmentFailure(taskId, processInstanceId, taskDefinitionKey, e.getMessage(), kind, e);
         }
     }
 
@@ -420,6 +463,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     taskDefinitionKey)) {
                 return;
             }
+            recordAssignmentFailure(taskId, processInstanceId, taskDefinitionKey,
+                    result.getErrorMessage(), result.isInfraFailure() ? "INFRA" : "CONFIG", null);
             return;
         }
         if (result.getAssignee() != null && !result.getAssignee().isBlank()) {
@@ -454,7 +499,12 @@ public class TaskAssignmentListener implements FlowableEventListener {
             }
         } else {
             log.error("Task {}: no assignee and no candidates (assigneeType={})", taskId, assigneeTypeRaw);
-            tryRollbackPreviousHandlerFallback(taskId, task, processInstanceId, processDefinitionId, taskDefinitionKey);
+            if (!tryRollbackPreviousHandlerFallback(taskId, task, processInstanceId, processDefinitionId,
+                    taskDefinitionKey)) {
+                recordAssignmentFailure(taskId, processInstanceId, taskDefinitionKey,
+                        "No assignee and no candidates resolved (assigneeType=" + assigneeTypeRaw + ")",
+                        "CONFIG", null);
+            }
         }
     }
 

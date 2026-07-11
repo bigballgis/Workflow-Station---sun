@@ -19,6 +19,7 @@ import {
 import { walkRulesApplyTableFieldDefaultsToPersistedRules } from '@/utils/formCreateRuleDefaults'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdRule } from '@/utils/formFieldMeta'
+import { TABLE_AUDIT_FIELD_NAMES } from '@/utils/tableAuditFields'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 import type { PortalViewsValue } from './useSubTablePortalViews'
 
@@ -61,12 +62,19 @@ export function useFormSave(options: UseFormSaveOptions) {
   // Data_Table columns for field name autocomplete/validation
   const dataTableColumns = ref<string[]>([])
 
+  /** Whether the user has been notified of an auto-save failure (reset on success) —
+   *  failures must be visible, but not re-toasted every 30s. */
+  const autoSaveFailureNotified = ref(false)
+
   /** Load Data_Table columns for field name autocomplete */
   async function loadDataTableColumns() {
     try {
       const res = await functionUnitApi.getDataTableColumns(functionUnitId)
       dataTableColumns.value = res?.data || []
     } catch {
+      // FALLBACK(external): column names only feed autocomplete and best-effort validation
+      // (the backend does not enforce it). A failed load merely drops a hint layer and cannot
+      // corrupt data; validateFieldNames skips itself when the list is empty.
       dataTableColumns.value = []
     }
   }
@@ -74,8 +82,11 @@ export function useFormSave(options: UseFormSaveOptions) {
   /**
    * Standard audit fields auto-appended to every new table by TableDesignComponentImpl.
    * Always valid in form rules even before the table backfill runs.
+   * EXACT four names — semantics must stay in sync with backend platform-common
+   * SystemAuditFields and portal frontend subTableAddDialogHelpers/rowInit.ts;
+   * any change to the matching rule must update all three places.
    */
-  const ALWAYS_VALID_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', '__request_id'])
+  const ALWAYS_VALID_FIELDS = new Set([...TABLE_AUDIT_FIELD_NAMES, '__request_id'])
 
   /** Validate field names against Data_Table columns */
   function validateFieldNames(fieldNames: string[]): string[] {
@@ -92,7 +103,8 @@ export function useFormSave(options: UseFormSaveOptions) {
         .filter((r: any) => r.field && r.type !== 'subTable')
         .map((r: any) => ({ field: r.field, title: r.title || r.field }))
     } catch {
-      // Fallback to saved configJson
+      // FALLBACK(ux): read-only display (field list for the permission panel);
+      // fall back to the saved config when the designer is not ready yet.
       const rule = selectedForm.value.configJson?.rule || []
       return rule
         .filter((r: any) => r.field && r.type !== 'subTable')
@@ -128,7 +140,17 @@ export function useFormSave(options: UseFormSaveOptions) {
         if (subRef) flushDesignerValidatePanelToActiveRule(subRef as Parameters<typeof flushDesignerValidatePanelToActiveRule>[0])
       })
 
-      const rule = stripFormCreateRulesDisabledDeep(designerRef.value.getRule() || []) as any[]
+      // getRule() returning null/undefined means the designer is not ready (distinct from a
+      // legitimately emptied canvas, which returns []). Saving anyway would persist an empty
+      // rule and wipe the whole form design — and auto-save fires on a timer, so the damage
+      // would be silent. Abort instead.
+      const rawRule = designerRef.value.getRule()
+      if (rawRule == null) {
+        console.error('[FormDesigner] getRule() returned null/undefined; aborting save to protect persisted form design')
+        if (isManual) ElMessage.error(t('form.saveFailed'))
+        return
+      }
+      const rule = stripFormCreateRulesDisabledDeep(rawRule) as any[]
       ensureFormCreateRulesValidationDeep(rule)
       walkRulesApplyTableFieldDefaultsToPersistedRules(rule, getPrimaryBindingFieldDefinitions())
       prepareFormCreateRulesForPersist(rule)
@@ -175,53 +197,61 @@ export function useFormSave(options: UseFormSaveOptions) {
         }
       }
 
-      // Collect sub form rules — prefer live ref, then cache, then previously saved
+      // Collect sub form rules — prefer live ref, then cache, then previously saved.
+      // A failed collection must NEVER drop the binding from subForms entirely (that would
+      // erase the sub-form design on save); always fall through live -> cache -> saved config.
       const subForms: Record<number, { rule: any[]; options: any }> = {}
       designerSubBindings.value.forEach((binding, index) => {
         const subRef = subDesignerRefs.value[index]
+        let collected: { rule: any[]; options: any } | null = null
         if (subRef) {
           // Tab is currently active and mounted
           try {
             flushDesignerValidatePanelToActiveRule(subRef as Parameters<typeof flushDesignerValidatePanelToActiveRule>[0])
-            const liveRule = stripFormCreateRulesDisabledDeep(subRef.getRule() || []) as any[]
-            ensureFormCreateRulesValidationDeep(liveRule)
-            prepareFormCreateRulesForPersist(liveRule)
-            const liveOptions = serializeFormCreateOptionsForPersist(
-              subRef.getOption() as Record<string, unknown>,
-            )
-            subForms[binding.bindingId] = { rule: liveRule, options: liveOptions }
-            // Also update cache
-            subFormCache.value[binding.bindingId] = { rule: liveRule, options: liveOptions }
-          } catch {}
-        } else if (subFormCache.value[binding.bindingId]) {
-          // Tab was visited but is now unmounted — use cache
+            const rawSubRule = subRef.getRule()
+            if (rawSubRule == null) {
+              // Designer not ready (distinct from a legitimately empty canvas []) —
+              // treat as a failed collection and use the fallback chain.
+              console.error(`[FormDesigner] sub designer getRule() null for binding ${binding.bindingId}; falling back to cache/saved`)
+            } else {
+              const liveRule = stripFormCreateRulesDisabledDeep(rawSubRule) as any[]
+              ensureFormCreateRulesValidationDeep(liveRule)
+              prepareFormCreateRulesForPersist(liveRule)
+              const liveOptions = serializeFormCreateOptionsForPersist(
+                subRef.getOption() as Record<string, unknown>,
+              )
+              collected = { rule: liveRule, options: liveOptions }
+              // Also update cache
+              subFormCache.value[binding.bindingId] = collected
+            }
+          } catch (e) {
+            console.error(`[FormDesigner] collecting live sub form failed for binding ${binding.bindingId}; falling back to cache/saved`, e)
+          }
+        }
+        if (!collected && subFormCache.value[binding.bindingId]) {
+          // Tab was visited but is now unmounted (or live collection failed) — use cache
           const cached = subFormCache.value[binding.bindingId]
           const cachedRule = stripFormCreateRulesDisabledDeep(cached.rule || []) as any[]
           prepareFormCreateRulesForPersist(cachedRule)
-          subForms[binding.bindingId] = {
+          collected = {
             rule: cachedRule,
             options: serializeFormCreateOptionsForPersist(cached.options),
           }
-        } else {
+        }
+        if (!collected) {
           // Tab never visited — preserve previously saved data
           const existing = (selectedForm.value!.configJson?.subForms || {})[binding.bindingId]
           if (existing) {
             const existingRule = stripFormCreateRulesDisabledDeep(existing.rule || []) as any[]
             prepareFormCreateRulesForPersist(existingRule)
-            subForms[binding.bindingId] = {
+            collected = {
               rule: existingRule,
               options: serializeFormCreateOptionsForPersist(existing.options),
             }
           }
         }
-      })
-
-      // Incrementally add sub-form fields to list view columns (preserve link/lookup columns).
-      designerSubBindings.value.forEach((binding) => {
-        if (binding.bindingType !== 'SUB') return
-        const subForm = subForms[binding.bindingId]
-        if (subForm?.rule?.length) {
-          syncSubTableListViewFromFormRules(binding.bindingId, subForm.rule)
+        if (collected) {
+          subForms[binding.bindingId] = collected
         }
       })
 
@@ -309,10 +339,16 @@ export function useFormSave(options: UseFormSaveOptions) {
         await loadForms()
       } else {
         lastAutoSaveTime.value = new Date()
+        autoSaveFailureNotified.value = false
       }
     } catch (e: any) {
+      // 保存失败不许静默：用户以为已自动保存、离开页面即丢工作。
+      console.error('[FormDesigner] save failed', e)
       if (isManual) {
         ElMessage.error(e.response?.data?.message || t('form.saveFailed'))
+      } else if (!autoSaveFailureNotified.value) {
+        autoSaveFailureNotified.value = true
+        ElMessage.warning(e.response?.data?.message || t('form.saveFailed'))
       }
     } finally {
       if (!isManual) {

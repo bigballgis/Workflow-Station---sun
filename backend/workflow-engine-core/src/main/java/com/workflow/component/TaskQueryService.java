@@ -101,6 +101,7 @@ public class TaskQueryService {
                 ? uniqueTasks.subList(start, end)
                 : Collections.emptyList();
 
+            taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
             List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
                 .map(taskInfoAssembler::convertFlowableTaskToTaskInfo)
                 .toList();
@@ -220,6 +221,7 @@ public class TaskQueryService {
                 ? uniqueTasks.subList(start, end)
                 : Collections.emptyList();
 
+            taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
             List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
                 .map(taskInfoAssembler::convertFlowableTaskToTaskInfo)
                 .toList();

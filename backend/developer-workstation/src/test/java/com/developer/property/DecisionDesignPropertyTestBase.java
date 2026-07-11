@@ -3,6 +3,7 @@ package com.developer.property;
 import com.developer.component.FunctionUnitComponent;
 import com.developer.component.impl.DecisionDesignComponentImpl;
 import com.developer.component.impl.FunctionUnitComponentImpl;
+import com.developer.component.impl.FunctionUnitExporter;
 import com.developer.dto.DecisionDefinitionRequest;
 import com.developer.repository.*;
 import com.developer.service.DecisionDefinitionService;
@@ -86,6 +87,7 @@ public abstract class DecisionDesignPropertyTestBase {
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
                 mock(com.developer.service.MainTableViewService.class),
                 mock(com.developer.repository.ForeignKeyRepository.class),
+                mock(FunctionUnitExporter.class),
                 mock(com.developer.component.TableDesignComponent.class)
         );
 

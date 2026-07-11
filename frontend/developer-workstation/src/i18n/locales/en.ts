@@ -115,6 +115,7 @@ export default {
     noResults: 'No matching function units',
     clearFilters: 'Clear Filters',
     showingResults: 'Showing {count} / {total} results',
+    hiddenByStatusFilter: '{count} hidden by status filter (e.g. Draft after rollback)',
     settings: 'Function Unit Settings',
     setting: 'Settings',
     namePlaceholder: 'Function unit name',
@@ -264,6 +265,8 @@ export default {
     fkSettings: 'Foreign key settings',
     fkConfigure: 'Configure',
     fieldsHint: 'Click PK/FK tags to configure generation strategy and references.',
+    systemField: 'System',
+    auditFieldLocked: 'Audit fields (created/updated at/by) are managed by the platform and cannot be edited or removed.',
     pkGenerationStrategy: 'Strategy',
     pkGenerationScope: 'Scope',
     pkGenerationStartValue: 'Start value',
@@ -1272,7 +1275,6 @@ export default {
     executeNode: 'Execute node',
     processCompleted: 'Process execution completed',
     executionError: 'Execution error',
-    steppingOver: 'Stepping over...',
     continuing: 'Continuing...',
     debugStopped: 'Debug stopped',
     variableUpdatedLog: 'Variable {key} updated to: {value}',
@@ -1347,14 +1349,6 @@ export default {
     lookupProbeSucceeded: '{label} probe succeeded, {count} rows',
     lookupProbeFailed: '{label} probe failed',
     lookupProbeRowApplied: 'Selected row applied to preview data'
-  },
-  tags: {
-    coreBusiness: 'Core Business',
-    reports: 'Reports',
-    approvalProcess: 'Approval Process',
-    dataManagement: 'Data Management',
-    systemIntegration: 'System Integration',
-    userManagement: 'User Management',
   },
   api: {
     pleaseLogin: 'Please login first',
@@ -2021,7 +2015,6 @@ export default {
     dataEntryDesc: 'Multi-tab form with various input types for data entry',
     createFromTemplate: 'Create from Template',
     selectTemplate: 'Select Template',
-    blankForm: 'Blank Form',
   },
   error: {
     forbidden: 'Access Denied',

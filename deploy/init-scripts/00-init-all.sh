@@ -77,7 +77,11 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/46-*.sql \
          /docker-entrypoint-initdb.d/00-schema/47-*.sql \
          /docker-entrypoint-initdb.d/00-schema/48-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/49-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/49-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/50-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/51-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/52-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/53-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -90,6 +94,7 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/02-init-developer-permissions.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/03-sync-role-tables.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/04-admin-permissions.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/05-e2e-test-users-and-business-units.sql
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/06-hase-organization-seed.sql
 
 # --- Step 4: Wipe function units (dev catalog + deployed catalog), then seed Digital Lending EN only ---
 echo ""
@@ -163,6 +168,16 @@ else
   exit 1
 fi
 
+echo ""
+echo "[5g/6] Loading ATM (HASE MCY Debit Card Dispute Workflow)..."
+if [ -f /docker-entrypoint-initdb.d/19-ATM/init.sql ]; then
+  echo "  Running init.sql..."
+  $PSQL -f /docker-entrypoint-initdb.d/19-ATM/init.sql
+else
+  echo "  ERROR: ATM init script not found at /docker-entrypoint-initdb.d/19-ATM/init.sql"
+  exit 1
+fi
+
 # --- Step 5f: Post-seed alignment ---
 # Scripts under 90-post-seed/ run on every init, AFTER all seed packages above.
 # They are not DDL and not seed data -- they reconcile state introduced by the
@@ -188,7 +203,8 @@ echo "  Database Initialization Complete!"
 echo "========================================="
 echo "  Login: admin / admin123  (test: 44027893 / admin123)"
 echo "  Change password after first login!"
-echo "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending System V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5; Multi-Instance Subtask Demo fu-20260422-23tfag; MCY Debit Card fu-20260505-thwmut"
+echo "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending System V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5; Multi-Instance Subtask Demo fu-20260422-23tfag; MCY Debit Card fu-20260505-thwmut; ATM atm-20260623-gaevus"
+echo "  Organization: ASP → HK → HASE → hase-hmdc (see 01-admin/06-hase-organization-seed.sql)"
 echo "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang"
-echo "  (Re-seed: run init-scripts/99-maintenance/00-wipe-all-function-units.sql then reload 08-, 16-, 17-, and 18- scripts if needed.)"
+echo "  (Re-seed: run init-scripts/99-maintenance/00-wipe-all-function-units.sql then reload 08-, 16-, 17-, 18-, and 19- scripts if needed.)"
 echo "========================================="

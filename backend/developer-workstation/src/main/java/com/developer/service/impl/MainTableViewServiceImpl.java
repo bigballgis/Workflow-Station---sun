@@ -17,6 +17,7 @@ import com.developer.enums.TableType;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.MainTableViewAccessRepository;
 import com.developer.repository.MainTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.MainTableViewService;
@@ -41,6 +42,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     private static final String DEFAULT_VIEW_NAME = "Main view";
 
     private final MainTableViewConfigRepository viewConfigRepository;
+    private final MainTableViewAccessRepository mainTableViewAccessRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
     private final JdbcTemplate jdbcTemplate;
@@ -480,6 +482,11 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     }
 
     private void replaceAccessRules(MainTableViewConfig config, List<MainTableViewAccessRuleDTO> rules) {
+        // accessRules are loaded via JDBC for reads, not JOIN FETCH — clear() alone would not DELETE
+        // existing dw_main_table_view_access rows and the next save hits idx_mtv_access_view_target.
+        // Flush after bulk delete so lazy accessRules init does not reload rows pending deletion.
+        mainTableViewAccessRepository.deleteByViewConfigId(config.getId());
+        mainTableViewAccessRepository.flush();
         config.getAccessRules().clear();
         if (rules == null) {
             return;

@@ -11,43 +11,46 @@ function formatTimestampLocal(): string {
 }
 
 /**
- * Audit field name patterns that should be auto-filled when a new sub-table row
- * is created. Case-insensitive; matches snake_case, camelCase, and flat variants.
+ * Platform-managed audit fields — EXACT four names only (case-insensitive, trimmed):
+ * created_at / created_by / updated_at / updated_by.
  *
- * This is intentionally generic — any sub-table with these field names gets the
- * behaviour for free, no per-table wiring required.
+ * 判定语义与后端 platform-common `SystemAuditFields` 和 DW 前端 `useFormSave.ts`
+ * 的 ALWAYS_VALID_FIELDS 保持一致；改动匹配规则时三处必须同步。
+ * 不做模糊匹配（create_time / createUser 等变体一律不算）：审计字段名由平台
+ * Table Design 自动生成、恒为精确四名；模糊匹配会把用户自建的同名业务字段
+ * 误判为系统字段（设计端可编辑、运行端却被锁死/覆盖）。
  */
 const AUDIT_FIELD_PATTERNS: ReadonlyArray<{
-  /** Normalised (lowercase + underscores stripped) field-name check. */
+  /** Normalised (trimmed lowercase) field-name check — exact names only. */
   matches: (normalised: string) => boolean
   /** Produce the auto-filled value. Receives the stored user (may be null). */
   fill: (user: UserInfo | null) => string
 }> = [
   {
-    matches: (n) => n === 'created_at' || n === 'createdat' || n === 'create_time' || n === 'createtime',
+    matches: (n) => n === 'created_at',
     fill: () => formatTimestampLocal(),
   },
   {
-    matches: (n) => n === 'updated_at' || n === 'updatedat' || n === 'update_time' || n === 'updatetime',
+    matches: (n) => n === 'updated_at',
     fill: () => formatTimestampLocal(),
   },
   {
-    matches: (n) => n === 'created_by' || n === 'createdby' || n === 'create_user' || n === 'createuser',
+    matches: (n) => n === 'created_by',
     fill: (user) => user?.displayName || user?.username || '',
   },
   {
-    matches: (n) => n === 'updated_by' || n === 'updatedby' || n === 'update_user' || n === 'updateuser',
+    matches: (n) => n === 'updated_by',
     fill: (user) => user?.displayName || user?.username || '',
   },
 ]
 
-/** Normalise a field name for audit-field comparison. */
+/** Normalise a field name for audit-field comparison (trim + lowercase; underscores kept). */
 function normaliseFieldName(name: string): string {
-  return name.trim().toLowerCase().replace(/[\s_-]+/g, '')
+  return name.trim().toLowerCase()
 }
 
 /**
- * Single source of truth for "is this a system audit field?".
+ * Single source of truth for "is this a system audit field?" (portal frontend).
  * Use everywhere — column enrichment, readonly marking, dialog guards.
  */
 export function isAuditField(fieldName: string): boolean {

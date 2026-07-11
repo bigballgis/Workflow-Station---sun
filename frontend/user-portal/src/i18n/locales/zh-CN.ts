@@ -796,17 +796,7 @@ export default {
     noNotifications: '暂无消息',
     markedAsRead: '已标记为已读',
     allMarkedAsRead: '已全部标记为已读',
-    deleteSuccess: '删除成功',
-    mockNewTask: '新任务分配',
-    mockNewTaskContent: '您有一个新的请假申请需要审批',
-    mockProcessApproved: '流程审批通过',
-    mockProcessApprovedContent: '您的报销申请已通过审批',
-    mockSystemMaintenance: '系统维护通知',
-    mockSystemMaintenanceContent: '系统将于今晚22:00进行维护',
-    mockTaskExpiring: '任务即将到期',
-    mockTaskExpiringContent: '采购申请审批任务将于明天到期',
-    mockMinutesAgo: '{n}分钟前',
-    mockHoursAgo: '{n}小时前'
+    deleteSuccess: '删除成功'
   },
   error: {
     notFound: '页面不存在',
@@ -888,8 +878,6 @@ export default {
   login: {
     title: '工作流平台',
     subtitle: '用户门户',
-    testUserQuickLogin: '测试用户快速登录',
-    selectTestUser: '选择测试用户',
     username: '用户名',
     password: '密码',
     login: '登录',

@@ -1,21 +1,29 @@
 package com.workflow.client;
 
 import com.platform.common.util.SafeUrlInput;
-import lombok.RequiredArgsConstructor;
+import com.workflow.config.RestTemplateConfig;
+import com.workflow.exception.AdminCenterUnavailableException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import org.springframework.web.client.HttpClientErrorException;
+
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Admin Center 客户端
@@ -23,11 +31,25 @@ import java.util.Optional;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AdminCenterClient {
-    
+
+    /** 用户信息缓存 TTL。短到足以让改名/停用在一分钟内生效，长到能扛住一页 To Do 的重复查询。 */
+    private static final long USER_CACHE_TTL_MS = 60_000L;
+    private static final int USER_CACHE_MAX_ENTRIES = 10_000;
+
+    /**
+     * 走短超时的 {@code internalApiRestTemplate}，不要用默认那个 10 分钟读超时的 bean
+     * （见 {@link com.workflow.config.RestTemplateConfig}）。
+     */
     private final RestTemplate restTemplate;
-    
+
+    private final Map<String, CachedUser> userInfoCache = new ConcurrentHashMap<>();
+
+    public AdminCenterClient(
+            @Qualifier(RestTemplateConfig.INTERNAL_API_REST_TEMPLATE) RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
     
@@ -60,6 +82,8 @@ public class AdminCenterClient {
             return false;
             
         } catch (Exception e) {
+            // FALLBACK(external): 权限查询降级为"无权限"（功能变少而非数据变错）；
+            // 分派链路不走本方法（走 getUsersByVirtualGroupCode，那个会抛）。
             log.error("Failed to check if user {} is in virtual group {}: {}", userId, groupId, e.getMessage());
             return false;
         }
@@ -99,6 +123,8 @@ public class AdminCenterClient {
             return groupIds;
             
         } catch (Exception e) {
+            // FALLBACK(external): 权限查询降级为空（用户暂时看不到候选组任务，不产生错误数据）。
+            // portal 侧 WorkspaceTaskFilterComponent 有 last-known-good 缓存兜底。
             log.error("Failed to get virtual groups for user {}: {}", userId, e.getMessage());
             return Collections.emptyList();
         }
@@ -135,6 +161,7 @@ public class AdminCenterClient {
             return roleCodes;
             
         } catch (Exception e) {
+            // FALLBACK(external): 权限查询降级为空角色（保守方向:少给权限而非多给）。
             log.error("Failed to get roles for user {}: {}", userId, e.getMessage());
             return Collections.emptyList();
         }
@@ -172,8 +199,59 @@ public class AdminCenterClient {
      * @return 用户信息Map，包含 id, username, businessUnitId, entityManagerId, functionManagerId 等
      */
     public Map<String, Object> getUserInfo(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        String key = userId.trim();
+
+        CachedUser cached = userInfoCache.get(key);
+        if (cached != null && !cached.isExpired()) {
+            return cached.value();
+        }
+
+        // 传输故障时 fetchUserInfo 抛 AdminCenterUnavailableException——异常穿透、不落缓存，
+        // 避免把"服务抖动"当"查无此人"缓存 60 秒。
+        Map<String, Object> resolved = fetchUserInfo(key);
+        // "查无此人"(null)也要缓存：否则每次查不到的用户都会重新打一遍 HTTP（To Do 列表每行都会查）。
+        userInfoCache.put(key, CachedUser.of(resolved));
+        if (userInfoCache.size() > USER_CACHE_MAX_ENTRIES) {
+            evictExpiredUserInfo();
+        }
+        return resolved;
+    }
+
+    /**
+     * 批量解析用户信息：同一页里重复出现的 userId 只查一次。
+     *
+     * <p>To Do 列表的发起人/处理人高度重复，逐行查会把一页放大成几十次 HTTP。
+     */
+    public Map<String, Map<String, Object>> getUserInfoBatch(Collection<String> userIds) {
+        Map<String, Map<String, Object>> out = new LinkedHashMap<>();
+        if (userIds == null || userIds.isEmpty()) {
+            return out;
+        }
+        for (String userId : userIds) {
+            if (userId == null || userId.isBlank()) {
+                continue;
+            }
+            String key = userId.trim();
+            if (out.containsKey(key)) {
+                continue;
+            }
+            try {
+                out.put(key, getUserInfo(key));
+            } catch (AdminCenterUnavailableException e) {
+                // FALLBACK(external): 批量展示场景（To Do 列表姓名列），单个用户解析故障降级为
+                // 显示占位符，不让整页列表 500。分派链路不走本方法。
+                log.warn("User info unavailable for {} in batch resolve: {}", key, e.getMessage());
+                out.put(key, null);
+            }
+        }
+        return out;
+    }
+
+    private Map<String, Object> fetchUserInfo(String userId) {
         try {
-            // 首先尝试通过ID查询
             String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
@@ -181,24 +259,32 @@ public class AdminCenterClient {
                     null,
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
-            
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return response.getBody();
             }
-        } catch (Exception e) {
-            log.debug("Failed to get user by ID {}, trying by username: {}", userId, e.getMessage());
+            return null;
+        } catch (HttpClientErrorException.NotFound e) {
+            // 只有"确实不存在这个 id"才值得再按用户名搜一次。
+            return searchUserByUsername(userId);
+        } catch (RestClientException e) {
+            // 超时/熔断/5xx：结果未知，抛出而非返回 null——null 保留给"查无此人"。
+            // 不做第二次调用：那只会在 admin-center 已经过载时雪上加霜。
+            log.error("admin-center unavailable getting user {}: {}", userId, e.getMessage());
+            throw new AdminCenterUnavailableException("Failed to get user info for " + userId, e);
         }
-        
-        // 尝试通过用户名搜索
+    }
+
+    private Map<String, Object> searchUserByUsername(String userId) {
         try {
-            String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + SafeUrlInput.encodeQueryValue(userId) + "&size=1";
+            String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword="
+                    + SafeUrlInput.encodeQueryValue(userId) + "&size=1";
             ResponseEntity<Map<String, Object>> searchResponse = restTemplate.exchange(
                     searchUrl,
                     HttpMethod.GET,
                     null,
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
-            
+
             Map<String, Object> searchResult = searchResponse.getBody();
             if (searchResult != null && searchResult.get("content") != null) {
                 @SuppressWarnings("unchecked")
@@ -207,11 +293,28 @@ public class AdminCenterClient {
                     return users.get(0);
                 }
             }
-        } catch (Exception e) {
-            log.error("Failed to search user by username {}: {}", userId, e.getMessage());
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable searching user by username {}: {}", userId, e.getMessage());
+            throw new AdminCenterUnavailableException("Failed to search user by username " + userId, e);
         }
-        
         return null;
+    }
+
+    private void evictExpiredUserInfo() {
+        userInfoCache.entrySet().removeIf(e -> e.getValue().isExpired());
+        if (userInfoCache.size() > USER_CACHE_MAX_ENTRIES) {
+            userInfoCache.clear();
+        }
+    }
+
+    private record CachedUser(Map<String, Object> value, long expiresAtMs) {
+        static CachedUser of(Map<String, Object> value) {
+            return new CachedUser(value, System.currentTimeMillis() + USER_CACHE_TTL_MS);
+        }
+
+        boolean isExpired() {
+            return System.currentTimeMillis() > expiresAtMs;
+        }
     }
     
     // ==================== 任务分配相关 API ====================
@@ -246,10 +349,14 @@ public class AdminCenterClient {
                 }
             }
             return null;
-            
-        } catch (Exception e) {
-            log.error("Failed to get business unit ID for user {}: {}", userId, e.getMessage());
+
+        } catch (HttpClientErrorException.NotFound e) {
+            // 用户不存在：这是"确实无数据"，与传输故障区分。
             return null;
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable getting business unit ID for user {}: {}", userId, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to get business unit ID for user " + userId, e);
         }
     }
 
@@ -283,9 +390,12 @@ public class AdminCenterClient {
                 }
             }
             return null;
-        } catch (Exception e) {
-            log.error("Failed to get business unit code for id {}: {}", businessUnitId, e.getMessage());
+        } catch (HttpClientErrorException.NotFound e) {
             return null;
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable getting business unit code for id {}: {}", businessUnitId, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to get business unit code for id " + businessUnitId, e);
         }
     }
 
@@ -312,10 +422,13 @@ public class AdminCenterClient {
                 }
             }
             return null;
-            
-        } catch (Exception e) {
-            log.error("Failed to get parent business unit ID for {}: {}", businessUnitId, e.getMessage());
+
+        } catch (HttpClientErrorException.NotFound e) {
             return null;
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable getting parent business unit for {}: {}", businessUnitId, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to get parent business unit ID for " + businessUnitId, e);
         }
     }
     
@@ -337,10 +450,14 @@ public class AdminCenterClient {
             
             List<String> userIds = response.getBody();
             return userIds != null ? userIds : Collections.emptyList();
-            
-        } catch (Exception e) {
-            log.error("Failed to get users by business unit {} and role {}: {}", businessUnitId, roleId, e.getMessage());
+
+        } catch (HttpClientErrorException.NotFound e) {
             return Collections.emptyList();
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable getting users by business unit {} and role {}: {}",
+                    businessUnitId, roleId, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to get users by business unit " + businessUnitId + " and role " + roleId, e);
         }
     }
 
@@ -382,10 +499,13 @@ public class AdminCenterClient {
             
             List<String> userIds = response.getBody();
             return userIds != null ? userIds : Collections.emptyList();
-            
-        } catch (Exception e) {
-            log.error("Failed to get users by unbounded role {}: {}", roleId, e.getMessage());
+
+        } catch (HttpClientErrorException.NotFound e) {
             return Collections.emptyList();
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable getting users by unbounded role {}: {}", roleId, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to get users by unbounded role " + roleId, e);
         }
     }
 
@@ -409,9 +529,12 @@ public class AdminCenterClient {
             );
             List<String> userIds = response.getBody();
             return userIds != null ? userIds : Collections.emptyList();
-        } catch (Exception e) {
-            log.error("Failed to get users by virtual group code {}: {}", code, e.getMessage());
+        } catch (HttpClientErrorException.NotFound e) {
             return Collections.emptyList();
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable getting users by virtual group code {}: {}", code, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to get users by virtual group code " + code, e);
         }
     }
     
@@ -432,10 +555,14 @@ public class AdminCenterClient {
             
             List<String> roleIds = response.getBody();
             return roleIds != null ? roleIds : Collections.emptyList();
-            
-        } catch (Exception e) {
-            log.error("Failed to get eligible role IDs for business unit {}: {}", businessUnitId, e.getMessage());
+
+        } catch (HttpClientErrorException.NotFound e) {
             return Collections.emptyList();
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable getting eligible role IDs for business unit {}: {}",
+                    businessUnitId, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to get eligible role IDs for business unit " + businessUnitId, e);
         }
     }
     
@@ -461,10 +588,14 @@ public class AdminCenterClient {
                 return Boolean.TRUE.equals(eligible);
             }
             return false;
-            
-        } catch (Exception e) {
-            log.error("Failed to check if role {} is eligible for business unit {}: {}", roleId, businessUnitId, e.getMessage());
+
+        } catch (HttpClientErrorException.NotFound e) {
             return false;
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable checking role {} eligibility for business unit {}: {}",
+                    roleId, businessUnitId, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to check role " + roleId + " eligibility for business unit " + businessUnitId, e);
         }
     }
     
@@ -536,6 +667,7 @@ public class AdminCenterClient {
             return null;
 
         } catch (Exception e) {
+            // FALLBACK(external): N8N 集成配置获取失败降级为 null，调用方(委托节点)按"集成不可用"处理。
             log.error("Failed to get N8N config {}: {}", configId, e.getMessage());
             return null;
         }
@@ -559,6 +691,7 @@ public class AdminCenterClient {
             }
             return Optional.empty();
         } catch (Exception e) {
+            // FALLBACK(external): 邮件凭据获取失败降级为 empty，邮件轮询本轮跳过、下轮重试。
             log.error("Failed to get email connection credentials for {} / {}: {}",
                     functionUnitId, connectionId, e.getMessage());
             return Optional.empty();
@@ -583,6 +716,7 @@ public class AdminCenterClient {
             }
             return Optional.empty();
         } catch (Exception e) {
+            // FALLBACK(external): FU id 解析失败降级为 empty，调用方(邮件监听)本轮跳过。
             log.error("Failed to resolve function unit id by code {}: {}", functionUnitCode, e.getMessage());
             return Optional.empty();
         }

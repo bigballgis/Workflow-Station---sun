@@ -1,6 +1,8 @@
 package com.workflow.component;
 
 import com.workflow.client.AdminCenterClient;
+import com.workflow.exception.AdminCenterUnavailableException;
+import com.workflow.listener.TaskAssignmentListener;
 import com.workflow.util.AssigneeRoleIdsSupport;
 import com.workflow.util.InitiatorOrphanRepairEligibility;
 
@@ -24,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Orphan-task repair (BU_ROLE pool tasks, multi-instance initiator tasks)
@@ -36,6 +39,22 @@ public class TaskOrphanRepairService {
 
     private static final long ORPHAN_REPAIR_MIN_INTERVAL_MS = 30_000L;
     private volatile long lastOrphanRepairAtMs = 0L;
+
+    /**
+     * initiator 孤儿修复的<b>按用户</b>限频。
+     *
+     * <p>不能复用上面那个进程级的 {@link #lastOrphanRepairAtMs}：这个修复是 per-user 的
+     * （只扫当前用户发起的流程），进程级门会让 A 用户的修复把 B 用户的挡在门外 30 秒，
+     * B 的坏任务就一直不显示。这里改成每个用户各自一把门。
+     *
+     * <p>之所以必须限频：{@code processVariableValueEquals("initiator", ...)} 在
+     * {@code act_ru_variable} 上没有 {@code (name_, text_)} 索引（Flowable 只建了 id 类索引），
+     * 只能全表顺序扫。放在 To Do 读路径上每请求跑一次（数字 id 还要跑两次），高并发下
+     * 就是顺序扫 + {@code setAssignee} 写锁争抢。
+     */
+    private static final long INITIATOR_REPAIR_MIN_INTERVAL_MS = 30_000L;
+    private static final int INITIATOR_REPAIR_MAX_TRACKED_USERS = 10_000;
+    private final Map<String, Long> lastInitiatorRepairAtMsByUser = new ConcurrentHashMap<>();
 
     @Autowired
     private TaskService taskService;
@@ -140,9 +159,28 @@ public class TaskOrphanRepairService {
                     }
                     log.info("Repaired orphan BU_ROLE task {} with {} candidate users", t.getId(), userList.size());
                 }
+                clearAssignmentFailureTrace(t.getId());
+            } catch (AdminCenterUnavailableException ex) {
+                // 服务不可用时继续逐条重试只会放大对 admin-center 的压力，中止本轮，等下一轮限频窗口。
+                log.error("admin-center unavailable during orphan BU_ROLE repair; aborting this run: {}",
+                        ex.getMessage());
+                return;
             } catch (Exception ex) {
                 log.warn("Repair orphan BU_ROLE task {} failed: {}", t.getId(), ex.getMessage());
             }
+        }
+    }
+
+    /**
+     * 修复成功后清除 TaskAssignmentListener 留下的分派失败痕迹（若有）。
+     * 清痕失败只影响可观测性，不回滚已完成的修复。
+     */
+    private void clearAssignmentFailureTrace(String taskId) {
+        try {
+            taskService.removeVariableLocal(taskId, TaskAssignmentListener.VAR_ASSIGNMENT_FAILURE);
+            taskService.removeVariableLocal(taskId, TaskAssignmentListener.VAR_ASSIGNMENT_FAILURE_KIND);
+        } catch (Exception e) {
+            log.debug("Could not clear assignment failure trace for task {}: {}", taskId, e.getMessage());
         }
     }
 
@@ -188,6 +226,7 @@ public class TaskOrphanRepairService {
                 taskService.setAssignee(t.getId(), assigneeId);
                 log.info("Repaired orphan MI task {} assigned to {} (defKey={})",
                         t.getId(), assigneeId, defKey);
+                clearAssignmentFailureTrace(t.getId());
             } catch (Exception ex) {
                 log.warn("Repair orphan MI task {} failed: {}", t.getId(), ex.getMessage());
             }
@@ -202,6 +241,12 @@ public class TaskOrphanRepairService {
             return;
         }
         String uid = userId.trim();
+        if (!tryAcquireInitiatorRepairSlot(uid)) {
+            // 跳过本次扫描是安全的：已修好的任务 assignee_ 就是本人，会被 TaskQueryService
+            // 的 taskAssignee(userId) 常规查询捞到，不依赖这里的 merge。真正被推迟的只有
+            // "刚刚变成孤儿、且还没修过" 的任务，最多晚 30 秒，且只影响该用户自己。
+            return;
+        }
         try {
             appendUnassignedInitiatorTasks(uid, fetchLimit, taskMap, false);
             if (uid.matches("^-?\\d+$")) {
@@ -210,6 +255,32 @@ public class TaskOrphanRepairService {
         } catch (Exception e) {
             log.warn("mergeOrphanInitiatorTasksRepair for user {}: {}", uid, e.getMessage());
         }
+    }
+
+    /**
+     * @return 本次是否拿到该用户的修复名额（拿到即刷新时间戳）。
+     *         同一用户并发请求时，{@code compute} 对同一 key 原子执行，只有一个线程能拿到。
+     */
+    private boolean tryAcquireInitiatorRepairSlot(String uid) {
+        boolean[] acquired = {false};
+        lastInitiatorRepairAtMsByUser.compute(uid, (k, prev) -> {
+            long now = System.currentTimeMillis();
+            if (prev != null && now - prev < INITIATOR_REPAIR_MIN_INTERVAL_MS) {
+                return prev;
+            }
+            acquired[0] = true;
+            return now;
+        });
+        if (acquired[0] && lastInitiatorRepairAtMsByUser.size() > INITIATOR_REPAIR_MAX_TRACKED_USERS) {
+            evictStaleInitiatorRepairEntries();
+        }
+        return acquired[0];
+    }
+
+    /** 防止长期运行后 map 无界增长（用户量大 / userId 来自外部输入）。 */
+    private void evictStaleInitiatorRepairEntries() {
+        long cutoff = System.currentTimeMillis() - INITIATOR_REPAIR_MIN_INTERVAL_MS;
+        lastInitiatorRepairAtMsByUser.entrySet().removeIf(e -> e.getValue() < cutoff);
     }
 
     private void appendUnassignedInitiatorTasks(String userId, int fetchLimit,
@@ -239,6 +310,7 @@ public class TaskOrphanRepairService {
                     continue;
                 }
                 taskService.setAssignee(t.getId(), userId);
+                clearAssignmentFailureTrace(t.getId());
                 Task refreshed = taskService.createTaskQuery().taskId(t.getId()).singleResult();
                 if (refreshed != null) {
                     taskMap.putIfAbsent(refreshed.getId(), refreshed);
@@ -299,8 +371,16 @@ public class TaskOrphanRepairService {
         if (!StringUtils.hasText(businessUnitId) || adminCenterClient == null) {
             return businessUnitId;
         }
-        String code = adminCenterClient.getBusinessUnitCodeById(businessUnitId.trim());
-        return StringUtils.hasText(code) ? code : businessUnitId;
+        try {
+            String code = adminCenterClient.getBusinessUnitCodeById(businessUnitId.trim());
+            return StringUtils.hasText(code) ? code : businessUnitId;
+        } catch (AdminCenterUnavailableException e) {
+            // FALLBACK(external): 任务列表读路径。故障期间退回原始 id 比对（legacy 语义），
+            // 最坏是 FIXED_BU_ROLE 池任务暂时不可见（功能变少），直接分派的任务不受影响。
+            log.warn("admin-center unavailable mapping BU id {} to code; using raw id: {}",
+                    businessUnitId, e.getMessage());
+            return businessUnitId;
+        }
     }
 
     private boolean fixedBuRoleVisibleForActiveWorkspace(Task t, String activeBu, String queryUserId) {

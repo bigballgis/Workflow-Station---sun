@@ -71,39 +71,6 @@ public class HistoryManagerComponent {
     }
 
     /**
-     * 查询历史任务实例
-     * 支持任务级别的历史查询
-     */
-    public HistoryQueryResult queryHistoricTaskInstances(HistoryQueryRequest request) {
-        validateHistoryQueryRequest(request);
-
-        var query = historyService.createHistoricTaskInstanceQuery();
-
-        // 应用查询条件
-        applyTaskInstanceFilters(query, request);
-
-        // 获取总数
-        long totalCount = query.count();
-
-        // 应用分页和排序
-        List<HistoricTaskInstance> tasks = query
-            .orderByHistoricTaskInstanceEndTime().desc()
-            .listPage(request.getOffset(), request.getPageSize());
-
-        // 转换为结果对象
-        List<HistoryQueryResult.TaskInstanceHistory> taskHistories = tasks.stream()
-            .map(this::convertToTaskInstanceHistory)
-            .collect(Collectors.toList());
-
-        return HistoryQueryResult.builder()
-            .taskInstances(taskHistories)
-            .totalCount(totalCount)
-            .pageSize(request.getPageSize())
-            .currentPage(request.getPage())
-            .build();
-    }
-
-    /**
      * 查询历史变量实例
      * 支持变量变更历史的查询
      */
@@ -191,56 +158,6 @@ public class HistoryManagerComponent {
             .totalCount(1L)
             .pageSize(1)
             .currentPage(1)
-            .build();
-    }
-
-    /**
-     * 执行全文搜索
-     * 在历史数据中搜索指定关键词
-     */
-    public HistoryQueryResult performFullTextSearch(String searchText, HistoryQueryRequest request) {
-        if (!StringUtils.hasText(searchText)) {
-            throw new WorkflowValidationException("Search keyword cannot be empty");
-        }
-
-        validateHistoryQueryRequest(request);
-
-        // 在流程实例中搜索
-        List<HistoricProcessInstance> processInstances = historyService
-            .createHistoricProcessInstanceQuery()
-            .processInstanceNameLike("%" + searchText + "%")
-            .or()
-            .processInstanceBusinessKeyLike("%" + searchText + "%")
-            .endOr()
-            .orderByProcessInstanceStartTime().desc()
-            .listPage(request.getOffset(), request.getPageSize());
-
-        // 在任务中搜索
-        List<HistoricTaskInstance> taskInstances = historyService
-            .createHistoricTaskInstanceQuery()
-            .taskNameLike("%" + searchText + "%")
-            .or()
-            .taskDescriptionLike("%" + searchText + "%")
-            .endOr()
-            .orderByHistoricTaskInstanceStartTime().desc()
-            .listPage(request.getOffset(), request.getPageSize());
-
-        // 合并搜索结果
-        List<HistoryQueryResult.ProcessInstanceHistory> processHistories = processInstances.stream()
-            .map(this::convertToProcessInstanceHistory)
-            .collect(Collectors.toList());
-
-        List<HistoryQueryResult.TaskInstanceHistory> taskHistories = taskInstances.stream()
-            .map(this::convertToTaskInstanceHistory)
-            .collect(Collectors.toList());
-
-        return HistoryQueryResult.builder()
-            .processInstances(processHistories)
-            .taskInstances(taskHistories)
-            .totalCount((long) (processHistories.size() + taskHistories.size()))
-            .pageSize(request.getPageSize())
-            .currentPage(request.getPage())
-            .searchKeyword(searchText)
             .build();
     }
 
@@ -459,33 +376,6 @@ public class HistoryManagerComponent {
         }
         if (request.getUnfinishedOnly() != null && request.getUnfinishedOnly()) {
             query.unfinished();
-        }
-    }
-
-    private void applyTaskInstanceFilters(
-            org.flowable.task.api.history.HistoricTaskInstanceQuery query,
-            HistoryQueryRequest request) {
-        
-        if (StringUtils.hasText(request.getProcessInstanceId())) {
-            query.processInstanceId(request.getProcessInstanceId());
-        }
-        if (StringUtils.hasText(request.getTaskAssignee())) {
-            query.taskAssignee(request.getTaskAssignee());
-        }
-        if (StringUtils.hasText(request.getTaskName())) {
-            query.taskNameLike("%" + request.getTaskName() + "%");
-        }
-        if (request.getTaskStartTimeFrom() != null) {
-            query.taskCreatedAfter(Date.from(request.getTaskStartTimeFrom().atZone(ZoneId.systemDefault()).toInstant()));
-        }
-        if (request.getTaskStartTimeTo() != null) {
-            query.taskCreatedBefore(Date.from(request.getTaskStartTimeTo().atZone(ZoneId.systemDefault()).toInstant()));
-        }
-        if (request.getTaskEndTimeFrom() != null) {
-            query.taskCompletedAfter(Date.from(request.getTaskEndTimeFrom().atZone(ZoneId.systemDefault()).toInstant()));
-        }
-        if (request.getTaskEndTimeTo() != null) {
-            query.taskCompletedBefore(Date.from(request.getTaskEndTimeTo().atZone(ZoneId.systemDefault()).toInstant()));
         }
     }
 

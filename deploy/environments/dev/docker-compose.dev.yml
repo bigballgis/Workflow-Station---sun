@@ -218,8 +218,8 @@ services:
       postgres:
         condition: service_healthy
     # No host port: raw Superset (:8088) is NOT browser-reachable. It trusts
-    # X-Remote-* for REMOTE_USER auth, so it must only be reached via the edge
-    # (author gate :8087 / embed origin :8086). Reachable in-network as superset-final:8088.
+    # X-Remote-* for REMOTE_USER auth, so it must only be reached via the edge under
+    # /bi (author gate on /bi/login/, ungated embed elsewhere). In-network: superset-final:8088.
     expose:
       - "8088"
     environment:
@@ -228,8 +228,19 @@ services:
       # No insecure default: superset_config.py fails closed if this is unset (see .env).
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
       SUPERSET_CORS_ORIGINS: ${SUPERSET_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      # Served under /bi on the shared FQDN: Superset 6.0 reads SUPERSET_APP_ROOT natively
+      # (-> APPLICATION_ROOT) so routes/assets/redirects carry the /bi prefix.
+      SUPERSET_APP_ROOT: ${SUPERSET_APP_ROOT:-/bi}
+    # Persist superset_home. The `load_examples` sample DATA lands in a SQLite file
+    # here (SQLALCHEMY_EXAMPLES_URI = sqlite:////app/superset_home/examples.db); without
+    # a volume every container rebuild wipes it, so charts whose definitions live in the
+    # (persistent) Postgres metadata then fail with "no such table" until you reload.
+    # A named volume keeps examples.db across rebuilds — run `superset load_examples` once.
+    volumes:
+      - superset_home:/app/superset_home
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8088/health"]
+      # This superset:6.0.0 image has no wget/curl — use the bundled venv python.
+      test: ["CMD-SHELL", "/app/.venv/bin/python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8088/health').status==200 else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -331,8 +342,10 @@ services:
       SSO_REDIRECT_DW_PREFIX: ${SSO_REDIRECT_DW_PREFIX:-http://localhost:3000/dev/sso/callback}
       SSO_REDIRECT_DW_HTTP_PREFIX: ${SSO_REDIRECT_DW_HTTP_PREFIX:-http://localhost:3000/dev/sso/callback}
       SUPERSET_HOST: ${SUPERSET_HOST:-http://superset-final:8088}
-      # Browser-facing origin returned to the portal for embedding iframes (edge embed origin).
-      SUPERSET_PUBLIC_HOST: ${SUPERSET_PUBLIC_HOST:-http://localhost:8089}
+      # Browser-facing base URL returned to the portal for embedding iframes. Under the
+      # single-FQDN model this is the /bi subpath on the shared origin; the embedded SDK
+      # builds `${supersetDomain}/embedded/<id>` -> http://localhost:3000/bi/embedded/<id>.
+      SUPERSET_PUBLIC_HOST: ${SUPERSET_PUBLIC_HOST:-http://localhost:3000/bi}
       # After /auth/logout-redirect clears the cookie, land on a WORKING login page
       # (with SSO params, else it can't submit). Relative path -> resolved against the
       # host the browser used. redirect_uri is percent-encoded; state=superset-author
@@ -485,6 +498,8 @@ services:
       SPRING_FLYWAY_ENABLED: false
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
       FILE_UPLOAD_BASE_URL: /api/v1/upload/files
+      # AI Generate 对话已从 n8n 迁移到 Activepieces 同步 webhook(flowId 按环境不同)。
+      AI_GENERATION_WEBHOOK_URL: ${AI_GENERATION_WEBHOOK_URL:-http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
     networks:
       - platform-dev-network
     restart: unless-stopped
@@ -632,11 +647,8 @@ services:
       - platform-login-frontend
     ports:
       - "${EDGE_FRONTEND_PORT:-3000}:80"
-      # Gated Superset author UI (Phase 1 C1): JWT-enforced reverse proxy to Superset.
-      - "${SUPERSET_GATE_PORT:-8087}:8087"
-      # Embed origin (Phase 1 C2): ungated (guest-token auth) reverse proxy for iframes.
-      # 8086 is taken by activepieces on the host; use 8089.
-      - "${SUPERSET_EMBED_PORT:-8089}:8089"
+      # Superset author UI + embed now live under http://localhost:3000/bi (single FQDN
+      # + path, same model as /admin /portal /dev) — no dedicated 8087/8089 ports.
       # Activepieces gateway: shared-account login bridge + reverse proxy to AP.
       - "${ACTIVEPIECES_GATEWAY_PORT:-8085}:8085"
     volumes:
@@ -657,6 +669,7 @@ volumes:
   redis_dev_data:
   n8n_data:
   activepieces_data:
+  superset_home:   # persists load_examples SQLite data across superset container rebuilds
 
 networks:
   platform-dev-network:

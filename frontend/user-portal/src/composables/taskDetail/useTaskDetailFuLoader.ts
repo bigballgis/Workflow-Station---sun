@@ -29,6 +29,7 @@ import {
   inferColumnTypeFromFieldAndValue,
   buildRelationTableFieldIndexFromDataTables,
   isAuditField,
+  resolveSubFormDialogColumnsForBinding,
 } from '@/components/subTableAddDialogHelpers'
 import { createFuContentCache } from './fuContentCache'
 import {
@@ -91,7 +92,9 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
       // Check module-level cache first (avoids re-parsing when navigating between tasks of same process)
       let content: any = prefetchedContent ?? getCachedFuContent(processKey)
       if (!content) {
-        content = await processApi.getFunctionUnitContent(processKey).then(r => (r as any).data || r)
+        // taskId grants task participants (assignee/candidate/initiator) content access even
+        // when they lack the FU's start-access roles (backend falls back to the role gate).
+        content = await processApi.getFunctionUnitContent(processKey, ctx.taskId).then(r => (r as any).data || r)
         if (content && !content.error) {
           setCachedFuContent(processKey, content)
         }
@@ -262,6 +265,10 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
             if (isAuditField(col.field)) (col as any).readonly = true
           }
           const subFormDesign = ctx.resolveSubFormDesign(b, subForms)
+          const dialogColumns = resolveSubFormDialogColumnsForBinding(b, subForms, {
+            lookupDbConfigs: lookupDbConfigs.value,
+            relationViewConfigs: relationViewConfigs.value,
+          })
           // Per-binding portalViews lookup tolerates both numeric and string keys
           // (JSON.parse always yields strings, but designer code may have stored numeric keys).
           const bindingPortalViews =
@@ -277,6 +284,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
             tableType: b.tableType,
             tableDescription: b.tableDescription,
             columns,
+            ...(dialogColumns.length > 0 ? { dialogColumns } : {}),
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
             portalViews: bindingPortalViews,

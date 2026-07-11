@@ -5,6 +5,7 @@ import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.platform.security.repository.UserRepository;
 import com.portal.client.AdminCenterSsoClient;
+import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.dto.LoginResponse;
 import com.portal.dto.SsoExchangeRequest;
 import com.portal.repository.LoginAuditQueryRepository;
@@ -40,6 +41,7 @@ public class AuthSsoExchangeController {
     private final UserRepository userRepository;
     private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final PortalSessionIssuerService portalSessionIssuerService;
+    private final FunctionUnitAccessComponent functionUnitAccessComponent;
 
     private final ConcurrentHashMap<String, PendingRedeem> pendingRedeems = new ConcurrentHashMap<>();
 
@@ -78,6 +80,11 @@ public class AuthSsoExchangeController {
             user.setLastLoginAt(LocalDateTime.now());
             user.setLastLoginIp(ipAddress);
             userRepository.save(user);
+
+            // Role grants happen in admin-center and cannot invalidate this portal-local cache,
+            // so login is the refresh point: without this, a freshly granted role stays invisible
+            // in New Requests until the 5-minute role-code cache expires.
+            functionUnitAccessComponent.clearUserRolesCache(user.getId());
 
             ResponseEntity<LoginResponse> response = portalSessionIssuerService.issuePortalSession(
                     user,

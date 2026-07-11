@@ -15,6 +15,7 @@ import com.developer.enums.TableType;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.MainTableViewAccessRepository;
 import com.developer.repository.MainTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.MainTableViewService;
@@ -45,6 +46,8 @@ class MainTableViewServiceImplTest {
     @Mock
     private MainTableViewConfigRepository viewConfigRepository;
     @Mock
+    private MainTableViewAccessRepository mainTableViewAccessRepository;
+    @Mock
     private FunctionUnitRepository functionUnitRepository;
     @Mock
     private TableDefinitionRepository tableDefinitionRepository;
@@ -56,7 +59,8 @@ class MainTableViewServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new MainTableViewServiceImpl(
-                viewConfigRepository, functionUnitRepository, tableDefinitionRepository, jdbcTemplate);
+                viewConfigRepository, mainTableViewAccessRepository,
+                functionUnitRepository, tableDefinitionRepository, jdbcTemplate);
     }
 
     @Test
@@ -288,11 +292,45 @@ class MainTableViewServiceImplTest {
 
         service.updateView(1L, 10L, request);
 
+        verify(mainTableViewAccessRepository).deleteByViewConfigId(10L);
+        verify(mainTableViewAccessRepository).flush();
         assertThat(config.getAccessRules()).hasSize(2);
         assertThat(config.getAccessRules()).extracting(MainTableViewAccess::getTargetType)
                 .containsExactlyInAnyOrder(
                         MainTableViewAccessTargetType.BUSINESS_UNIT,
                         MainTableViewAccessTargetType.ROLE);
+    }
+
+    @Test
+    void updateView_canRenameViewWithExistingAccessRulesInDb() {
+        MainTableViewConfig config = viewConfigForAccessUpdate();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+        when(tableDefinitionRepository.findByIdWithFields(20L)).thenReturn(Optional.of(
+                TableDefinition.builder().id(20L).fieldDefinitions(new ArrayList<>()).build()));
+        when(viewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jdbcTemplate.queryForList(anyString(), eq(10L))).thenReturn(List.of());
+
+        UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                "HMDC Case23",
+                null,
+                List.of(
+                        MainTableViewAccessRuleDTO.builder()
+                                .targetType("BUSINESS_UNIT")
+                                .targetId("bu-e2e-finance")
+                                .build(),
+                        MainTableViewAccessRuleDTO.builder()
+                                .targetType("ROLE")
+                                .targetId("role-manager")
+                                .build()),
+                null,
+                null,
+                null);
+
+        service.updateView(1L, 10L, request);
+
+        verify(mainTableViewAccessRepository).deleteByViewConfigId(10L);
+        verify(mainTableViewAccessRepository).flush();
+        assertThat(config.getViewName()).isEqualTo("HMDC Case23");
     }
 
     private MainTableViewConfig viewConfigForAccessUpdate() {

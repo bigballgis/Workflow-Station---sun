@@ -42,17 +42,25 @@ export async function fetchLookupRowByPrimaryKey(
         searchFields: options.searchFields || [],
         displayField: options.displayField || '',
         filterConditions: filters,
-        limit: 10
+        // Server caps this at 200. Use the full cap, not 10: when the PK `eq` filter cannot be
+        // applied server-side (e.g. the resolved pk field is not a column of the relation table,
+        // so PortalRelationTableServiceImpl drops the predicate), the query degrades to "first N
+        // rows ORDER BY id". A window of 10 then misses any value whose row sits past row 10,
+        // and the code below must NOT paper over that with a wrong row.
+        limit: 200
       })
       const list = res.data || []
-      if (list.length === 0) {
+      // Only accept an EXACT primary-key match. A near-miss (filter silently dropped → first-N
+      // rows returned) must resolve to null so the caller keeps the raw scalar rather than
+      // confidently showing an unrelated row (previously `?? list[0]` displayed the first option
+      // for every value beyond the fetched window). See LookupField scalar/multi hydrate + list cells.
+      const exact = list.find(
+        r => String((r as Record<string, unknown>)[pk] ?? (r as Record<string, unknown>).id ?? '').trim() === sv
+      )
+      if (!exact) {
         resolved.set(ck, null)
         return null
       }
-      const exact =
-        list.find(
-          r => String((r as Record<string, unknown>)[pk] ?? (r as Record<string, unknown>).id ?? '').trim() === sv
-        ) ?? list[0]
       resolved.set(ck, exact as Record<string, any>)
       return exact as Record<string, any>
     } catch {
