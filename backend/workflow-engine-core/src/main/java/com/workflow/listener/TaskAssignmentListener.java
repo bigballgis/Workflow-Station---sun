@@ -168,8 +168,13 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 taskService.setVariableLocal(taskId, VAR_ASSIGNMENT_FAILURE_KIND, failureKind);
             }
             if (exceptionHandlerComponent != null) {
+                // INFRA 无 cause 时包装成 AdminCenterUnavailableException，让 determineSeverity 分到 HIGH 告警。
                 Exception recorded = cause != null ? cause
-                        : new IllegalStateException("Task assignment failed (" + failureKind + "): " + errorMessage);
+                        : "INFRA".equals(failureKind)
+                                ? new com.workflow.exception.AdminCenterUnavailableException(
+                                        "Task assignment failed (INFRA): " + errorMessage, null)
+                                : new IllegalStateException(
+                                        "Task assignment failed (" + failureKind + "): " + errorMessage);
                 exceptionHandlerComponent.recordException(recorded, processInstanceId, taskId,
                         taskDefinitionKey, null);
             }
