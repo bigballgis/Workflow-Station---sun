@@ -74,6 +74,8 @@ export function useFormSave(options: UseFormSaveOptions) {
   /**
    * Standard audit fields auto-appended to every new table by TableDesignComponentImpl.
    * Always valid in form rules even before the table backfill runs.
+   * 精确四名，与后端 platform-common SystemAuditFields、portal 前端
+   * subTableAddDialogHelpers/rowInit.ts 的判定语义一致；改动时三处必须同步。
    */
   const ALWAYS_VALID_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', '__request_id'])
 

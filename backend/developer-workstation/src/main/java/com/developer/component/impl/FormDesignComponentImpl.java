@@ -62,9 +62,10 @@ public class FormDesignComponentImpl implements FormDesignComponent {
      * Standard audit field names that are auto-appended to every new table by
      * {@code TableDesignComponentImpl}.  They must pass form-field validation even on
      * tables that were created before the auto-audit initializer ran.
+     * 判定唯一来源 = platform-common {@link com.platform.common.audit.SystemAuditFields}。
      */
-    private static final Set<String> ALWAYS_VALID_AUDIT_FIELDS = Set.of(
-            "created_at", "created_by", "updated_at", "updated_by");
+    private static final Set<String> ALWAYS_VALID_AUDIT_FIELDS =
+            com.platform.common.audit.SystemAuditFields.ALL;
 
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
