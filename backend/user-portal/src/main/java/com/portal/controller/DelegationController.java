@@ -108,6 +108,13 @@ public class DelegationController {
         return ApiResponse.success(delegatorIds);
     }
 
+    /**
+     * @deprecated Zero known callers (2026-07 governance audit: no frontend or backend-client
+     * references). Kong prefix-routes /api/portal wholesale, so external scripts cannot be ruled
+     * out from the repo alone — confirm none exist, then remove together with
+     * DelegationComponent.canProcessAsDelegate (its only remaining caller).
+     */
+    @Deprecated
     @Operation(summary = "检查代理权限")
     @GetMapping("/check-proxy")
     public ApiResponse<Boolean> checkProxyPermission(
