@@ -401,7 +401,7 @@ public class MemberManagementProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(expectedRoleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId)).thenReturn(Optional.of(binding));
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId)).thenReturn(Optional.of(binding));
         
         // When: Get role IDs
         List<String> actualRoleIds = memberManagementService.getVirtualGroupRoleIds(virtualGroupId);
@@ -420,7 +420,7 @@ public class MemberManagementProperties {
             @ForAll("validTargetIds") String virtualGroupId) {
         
         // Given: Virtual group has no bound role
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId)).thenReturn(Optional.empty());
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId)).thenReturn(Optional.empty());
         
         // When: Get role IDs
         List<String> actualRoleIds = memberManagementService.getVirtualGroupRoleIds(virtualGroupId);

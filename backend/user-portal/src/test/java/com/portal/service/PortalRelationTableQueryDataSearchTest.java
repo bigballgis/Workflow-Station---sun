@@ -32,25 +32,27 @@ class PortalRelationTableQueryDataSearchTest {
         when(roleAccess.getUserBusinessRoles(userId)).thenReturn(List.of(Map.of("id", "role1")));
         when(jdbcTemplate.queryForList(contains("sys_user_business_unit_roles"), eq(String.class), eq(userId)))
                 .thenReturn(Collections.emptyList());
+        // argThat lambdas must be null-safe: while later stubbings are being registered, Mockito
+        // probes earlier stubbings with null placeholder arguments (findAnswerFor), which would NPE.
         when(jdbcTemplate.queryForObject(
-                argThat(sql -> sql.contains("rt_table_access")),
+                argThat(sql -> sql != null && sql.contains("rt_table_access")),
                 eq(Long.class),
                 any(Object[].class)))
                 .thenReturn(1L);
         when(jdbcTemplate.queryForObject(
-                argThat(sql -> sql.contains("rt_table_definitions")),
+                argThat(sql -> sql != null && sql.contains("rt_table_definitions")),
                 eq(Integer.class),
-                any()))
+                any(Object[].class)))
                 .thenReturn(1);
         when(jdbcTemplate.query(contains("rt_field_definitions"), any(RowMapper.class), eq(tableId)))
                 .thenReturn(List.of("name", "code"));
         when(jdbcTemplate.queryForObject(
-                argThat(sql -> sql.contains("COUNT(*)") && sql.contains("ILIKE")),
+                argThat(sql -> sql != null && sql.contains("COUNT(*)") && sql.contains("ILIKE")),
                 eq(Long.class),
                 any(Object[].class)))
                 .thenReturn(1L);
         when(jdbcTemplate.query(
-                argThat(sql -> sql.contains("SELECT data") && sql.contains("ILIKE")),
+                argThat(sql -> sql != null && sql.contains("SELECT data") && sql.contains("ILIKE")),
                 any(RowMapper.class),
                 any(Object[].class)))
                 .thenReturn(Collections.emptyList());
@@ -61,8 +63,18 @@ class PortalRelationTableQueryDataSearchTest {
 
         assertThat(result.getTotalElements()).isEqualTo(1L);
 
+        // Two Long-typed COUNT queries run on this path: the rt_table_access grant check and the
+        // search-filtered data count. Assert on the ILIKE (search) one.
         ArgumentCaptor<String> countSql = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate).queryForObject(countSql.capture(), eq(Long.class), any(Object[].class));
-        assertThat(countSql.getValue()).contains("data->>'name'").contains("data->>'code'");
+        verify(jdbcTemplate, times(2)).queryForObject(countSql.capture(), eq(Long.class), any(Object[].class));
+        String searchCountSql = countSql.getAllValues().stream()
+                .filter(sql -> sql.contains("ILIKE"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "No search-filtered COUNT query captured: " + countSql.getAllValues()));
+        assertThat(searchCountSql)
+                .contains("data::text ILIKE ?")
+                .contains("data->>'name'")
+                .contains("data->>'code'");
     }
 }

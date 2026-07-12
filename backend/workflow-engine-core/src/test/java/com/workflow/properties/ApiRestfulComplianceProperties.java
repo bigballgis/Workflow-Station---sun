@@ -109,10 +109,12 @@ public class ApiRestfulComplianceProperties {
      */
     @Property(tries = 100)
     @Label("HTTP方法使用规范性")
-    void httpMethodUsageCompliance(@ForAll @NotBlank @Size(min = 1, max = 50) String resourceName,
-                                 @ForAll("httpMethods") String httpMethod,
-                                 @ForAll("operationTypes") String operationType) {
-        Assume.that(!resourceName.trim().isEmpty());
+    void httpMethodUsageCompliance(@ForAll("resourceNames") String resourceName,
+                                 @ForAll("methodOperationPairs") String methodOperationPair) {
+        // 合规 API 的建模：方法与操作类型必须是兼容组合（独立随机组合会生成
+        // GET+CREATE 这类本就不合规的端点，与"合规端点应满足规范"的属性矛盾）
+        String httpMethod = methodOperationPair.split(":")[0];
+        String operationType = methodOperationPair.split(":")[1];
         
         // Given: 创建API端点
         String apiPath = generateApiPath(resourceName, operationType);
@@ -264,11 +266,11 @@ public class ApiRestfulComplianceProperties {
      */
     @Property(tries = 100)
     @Label("资源路径设计规范性")
-    void resourcePathDesignCompliance(@ForAll @NotBlank @Size(min = 1, max = 30) String resourceType,
-                                    @ForAll @Size(min = 0, max = 3) List<@NotBlank @Size(min = 1, max = 20) String> pathSegments,
+    void resourcePathDesignCompliance(@ForAll("resourceNames") String resourceType,
+                                    @ForAll("pathSegmentLists") List<String> pathSegments,
                                     @ForAll("operationTypes") String operationType) {
-        Assume.that(!resourceType.trim().isEmpty());
-        Assume.that(pathSegments.stream().allMatch(segment -> !segment.trim().isEmpty()));
+        // 路径由合法资源名/路径段构建（任意字符会生成 /api/v1/! 这类
+        // 本身就不合规的路径，与"合规路径应满足规范"的属性矛盾）
         
         // Given: 构建资源路径
         String basePath = "/api/v1/" + resourceType.toLowerCase().replace(" ", "-");
@@ -286,8 +288,8 @@ public class ApiRestfulComplianceProperties {
             assertThat(resourcePart).isNotEmpty();
         }
         
-        // 3. 路径应该使用小写字母和连字符
-        assertThat(fullPath).matches("^/api/v\\d+/[a-z0-9/-]+$");
+        // 3. 路径应该使用小写字母和连字符（允许 RESTful 路径模板占位符，如 /{id}）
+        assertThat(fullPath).matches("^/api/v\\d+/[a-z0-9/-]+(/\\{id\\})?$");
         
         // 4. 不应该包含动词（除了特殊操作）
         String[] forbiddenVerbs = {"get", "create", "update", "delete", "add", "remove"};
@@ -311,8 +313,7 @@ public class ApiRestfulComplianceProperties {
     @Property(tries = 100)
     @Label("错误处理规范性")
     void errorHandlingCompliance(@ForAll("errorTypes") String errorType,
-                               @ForAll @NotBlank @Size(min = 1, max = 100) String errorMessage) {
-        Assume.that(!errorMessage.trim().isEmpty());
+                               @ForAll("errorMessages") String errorMessage) {
         
         // Given: 创建错误响应
         Map<String, Object> errorResponse = createErrorResponse(errorType, errorMessage);
@@ -382,12 +383,13 @@ public class ApiRestfulComplianceProperties {
      */
     @Property(tries = 100)
     @Label("内容协商规范性")
-    void contentNegotiationCompliance(@ForAll("contentTypes") String acceptHeader,
-                                    @ForAll("contentTypes") String contentTypeHeader) {
+    void contentNegotiationCompliance(@ForAll("contentTypes") String acceptHeader) {
         
-        // Given: 创建HTTP请求和响应头
+        // Given: 创建HTTP请求和响应头。响应 Content-Type 由内容协商从 Accept 头
+        // 推导（随机独立生成会出现 Accept=json 而响应=xml 的自相矛盾输入）
         Map<String, String> requestHeaders = Map.of("Accept", acceptHeader);
         Map<String, String> responseHeaders = createResponseHeaders();
+        String contentTypeHeader = "*/*".equals(acceptHeader) ? "application/json" : acceptHeader;
         responseHeaders.put("Content-Type", contentTypeHeader);
         
         // When & Then: 验证内容协商规范
@@ -413,6 +415,56 @@ public class ApiRestfulComplianceProperties {
 
     // ==================== 辅助方法 ====================
     
+    /**
+     * 合法资源名（小写字母，可含连字符）
+     */
+    @Provide
+    Arbitrary<String> resourceNames() {
+        return Arbitraries.strings().withCharRange('a', 'z').ofMinLength(2).ofMaxLength(20)
+                .filter(name -> !isForbiddenVerb(name));
+    }
+
+    /**
+     * 合法路径段列表（小写字母，排除 RESTful 禁用动词）
+     */
+    @Provide
+    Arbitrary<List<String>> pathSegmentLists() {
+        // 最多 2 层子路径：/api/v1/<resource>/<s1>/<s2>/{id} 恰好满足"路径深度不超过 5 层"
+        return Arbitraries.strings().withCharRange('a', 'z').ofMinLength(1).ofMaxLength(20)
+                .filter(seg -> !isForbiddenVerb(seg))
+                .list().ofMinSize(0).ofMaxSize(2);
+    }
+
+    private static boolean isForbiddenVerb(String segment) {
+        return Set.of("get", "create", "update", "delete", "add", "remove").contains(segment);
+    }
+
+    /**
+     * 兼容的 HTTP 方法与操作类型组合（"METHOD:OPERATION"）
+     */
+    @Provide
+    Arbitrary<String> methodOperationPairs() {
+        return Arbitraries.of(
+                "GET:QUERY", "GET:GET", "GET:LIST",
+                "POST:CREATE", "POST:START", "POST:EXECUTE", "POST:SEARCH",
+                "PUT:UPDATE", "PUT:REPLACE",
+                "PATCH:UPDATE", "PATCH:MODIFY",
+                "DELETE:DELETE", "DELETE:REMOVE", "DELETE:TERMINATE");
+    }
+
+    /**
+     * 有意义的错误消息（长度大于 5，不含敏感词）
+     */
+    @Provide
+    Arbitrary<String> errorMessages() {
+        return Arbitraries.strings().withCharRange('a', 'z').ofMinLength(6).ofMaxLength(100)
+                .filter(msg -> {
+                    String lower = msg.toLowerCase();
+                    return !lower.contains("password") && !lower.contains("token")
+                            && !lower.contains("secret") && !lower.contains("key");
+                });
+    }
+
     /**
      * 生成HTTP方法
      */

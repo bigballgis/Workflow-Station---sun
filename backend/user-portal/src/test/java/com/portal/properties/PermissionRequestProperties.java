@@ -45,15 +45,21 @@ class PermissionRequestProperties {
         virtualGroupAccessComponent = Mockito.mock(VirtualGroupAccessComponent.class);
         I18nService i18nService = Mockito.mock(I18nService.class);
         Mockito.when(i18nService.getMessage(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        FunctionUnitAccessComponent functionUnitAccessComponent = Mockito.mock(FunctionUnitAccessComponent.class);
         permissionComponent = new PermissionComponent(
                 permissionRequestRepository,
                 roleAccessComponent,
                 virtualGroupAccessComponent,
-                Mockito.mock(FunctionUnitAccessComponent.class),
+                functionUnitAccessComponent,
                 new ObjectMapper(),
                 Mockito.mock(JdbcTemplate.class),
                 i18nService);
-        
+        // PermissionComponent 拆分后目录查询委托给 @Lazy @Autowired 的 PermissionCatalogComponent，
+        // 直接 new 时该字段为 null——注入真实实现（复用同一批 mock），保持原测试语义。
+        org.springframework.test.util.ReflectionTestUtils.setField(permissionComponent, "catalogComponent",
+                new com.portal.component.PermissionCatalogComponent(
+                        roleAccessComponent, virtualGroupAccessComponent, functionUnitAccessComponent));
+
         // Mock default behavior for role and virtual group access
         when(roleAccessComponent.getUserBusinessRoles(any())).thenReturn(Collections.emptyList());
         when(virtualGroupAccessComponent.getUserVirtualGroups(any())).thenReturn(Collections.emptyList());

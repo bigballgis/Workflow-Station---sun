@@ -123,14 +123,18 @@ class RelationTableStructureServiceTest {
             assertThat(result.getEnabled()).isTrue();
             assertThat(result.getPortalVisible()).isFalse();
             assertThat(result.getCurrentVersion()).isEqualTo(0);
-            assertThat(result.getFieldDefinitions()).hasSize(1);
+            // 1 user field + 4 auto-appended audit fields (created_at/by, updated_at/by)
+            assertThat(result.getFieldDefinitions()).hasSize(5);
 
             ArgumentCaptor<RelationTableDefinition> captor = ArgumentCaptor.forClass(RelationTableDefinition.class);
             verify(tableDefinitionRepository).save(captor.capture());
             RelationTableDefinition saved = captor.getValue();
-            assertThat(saved.getFieldDefinitions()).hasSize(1);
+            assertThat(saved.getFieldDefinitions()).hasSize(5);
             assertThat(saved.getFieldDefinitions().get(0).getFieldName()).isEqualTo("name");
             assertThat(saved.getFieldDefinitions().get(0).getDataType()).isEqualTo(RelationDataType.VARCHAR);
+            assertThat(saved.getFieldDefinitions())
+                    .extracting(RelationFieldDefinition::getFieldName)
+                    .containsSequence("created_at", "created_by", "updated_at", "updated_by");
         }
 
         @Test
@@ -183,7 +187,8 @@ class RelationTableStructureServiceTest {
 
             RelationTableResponse result = service.createTable(request);
 
-            assertThat(result.getFieldDefinitions()).hasSize(2);
+            // 2 user fields + 4 auto-appended audit fields
+            assertThat(result.getFieldDefinitions()).hasSize(6);
         }
     }
 

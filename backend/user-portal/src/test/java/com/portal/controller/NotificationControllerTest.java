@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.portal.dto.NotificationDto;
 import com.portal.dto.PageResponse;
+import com.platform.common.dto.UserPrincipal;
 import com.portal.exception.PortalException;
+import com.portal.security.CurrentUserIdArgumentResolver;
 import com.portal.service.NotificationService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +18,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -83,8 +88,20 @@ class NotificationControllerTest {
 
         mockMvc = MockMvcBuilders.standaloneSetup(notificationController)
                 .setControllerAdvice(new TestExceptionHandler())
+                .setCustomArgumentResolvers(new CurrentUserIdArgumentResolver())
                 .setMessageConverters(converter)
                 .build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void authenticateAs(String userId) {
+        UserPrincipal principal = UserPrincipal.builder().userId(userId).username(userId).build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, java.util.List.of()));
     }
 
     // --- GET /notifications (Requirement 3.1, 3.2) ---
@@ -271,32 +288,55 @@ class NotificationControllerTest {
         verify(notificationService).deleteNotification(USER_ID, 1L);
     }
 
-    // --- Missing X-User-Id header ---
+    // --- @CurrentUserId identity resolution (anti-spoofing) ---
+    // The controller resolves identity from the JWT SecurityContext first and only
+    // falls back to the X-User-Id header when unauthenticated. Missing-header requests
+    // are rejected upstream (Kong gateway / JwtAuthenticationFilter), not by the controller.
 
     @Test
-    @DisplayName("缺少 X-User-Id 请求头 - GET /notifications 返回400")
-    void getNotifications_missingUserIdHeader_returnsBadRequest() throws Exception {
-        mockMvc.perform(get("/notifications"))
-                .andExpect(status().isBadRequest());
+    @DisplayName("GET /notifications - SecurityContext 身份优先于 X-User-Id 请求头(防伪造)")
+    void getNotifications_securityContextIdentityOverridesHeader() throws Exception {
+        authenticateAs("jwt-user");
+        PageResponse<NotificationDto> page = PageResponse.of(List.of(), 0, 20, 0);
+        when(notificationService.getNotifications(eq("jwt-user"), eq(0), eq(20), isNull(), isNull()))
+                .thenReturn(page);
 
-        verify(notificationService, never()).getNotifications(any(), anyInt(), anyInt(), any(), any());
+        mockMvc.perform(get("/notifications")
+                        .header(USER_ID_HEADER, "spoofed-user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(notificationService).getNotifications("jwt-user", 0, 20, null, null);
+        verify(notificationService, never()).getNotifications(eq("spoofed-user"), anyInt(), anyInt(), any(), any());
     }
 
     @Test
-    @DisplayName("缺少 X-User-Id 请求头 - PUT /notifications/{id}/read 返回400")
-    void markAsRead_missingUserIdHeader_returnsBadRequest() throws Exception {
-        mockMvc.perform(put("/notifications/1/read"))
-                .andExpect(status().isBadRequest());
+    @DisplayName("PUT /notifications/{id}/read - SecurityContext 身份优先于 X-User-Id 请求头(防伪造)")
+    void markAsRead_securityContextIdentityOverridesHeader() throws Exception {
+        authenticateAs("jwt-user");
+        doNothing().when(notificationService).markAsRead("jwt-user", 1L);
 
-        verify(notificationService, never()).markAsRead(any(), any());
+        mockMvc.perform(put("/notifications/1/read")
+                        .header(USER_ID_HEADER, "spoofed-user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(notificationService).markAsRead("jwt-user", 1L);
+        verify(notificationService, never()).markAsRead(eq("spoofed-user"), any());
     }
 
     @Test
-    @DisplayName("缺少 X-User-Id 请求头 - DELETE /notifications/{id} 返回400")
-    void deleteNotification_missingUserIdHeader_returnsBadRequest() throws Exception {
-        mockMvc.perform(delete("/notifications/1"))
-                .andExpect(status().isBadRequest());
+    @DisplayName("DELETE /notifications/{id} - SecurityContext 身份优先于 X-User-Id 请求头(防伪造)")
+    void deleteNotification_securityContextIdentityOverridesHeader() throws Exception {
+        authenticateAs("jwt-user");
+        doNothing().when(notificationService).deleteNotification("jwt-user", 1L);
 
-        verify(notificationService, never()).deleteNotification(any(), any());
+        mockMvc.perform(delete("/notifications/1")
+                        .header(USER_ID_HEADER, "spoofed-user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(notificationService).deleteNotification("jwt-user", 1L);
+        verify(notificationService, never()).deleteNotification(eq("spoofed-user"), any());
     }
 }

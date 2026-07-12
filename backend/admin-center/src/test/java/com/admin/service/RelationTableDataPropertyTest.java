@@ -129,35 +129,37 @@ class RelationTableDataPropertyTest {
     void dataListOnlyShowsDeployedTables(
             @ForAll("tableListsWithMixedStatuses") List<RelationTableDefinition> allTables
     ) {
-        // Compute expected: DEPLOYED or UPDATED tables that are enabled
+        // Compute expected: DEPLOYED / UPDATED / ROLLBACK tables that are enabled
         List<RelationTableDefinition> deployedOrUpdatedEnabled = allTables.stream()
                 .filter(t -> (t.getStatus() == RelationTableStatus.DEPLOYED
-                        || t.getStatus() == RelationTableStatus.UPDATED)
+                        || t.getStatus() == RelationTableStatus.UPDATED
+                        || t.getStatus() == RelationTableStatus.ROLLBACK)
                         && t.getEnabled())
                 .collect(Collectors.toList());
 
-        // Mock repository to return DEPLOYED/UPDATED enabled tables
+        // Mock repository to return DEPLOYED/UPDATED/ROLLBACK enabled tables
         when(tableDefinitionRepository.findByStatusInAndEnabledTrue(
-                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED)))
+                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)))
                 .thenReturn(deployedOrUpdatedEnabled);
 
         // Execute
         List<RelationTableResponse> result = service.getDeployedTables();
 
-        // === Verify: all returned tables have DEPLOYED or UPDATED status ===
+        // === Verify: all returned tables have DEPLOYED / UPDATED / ROLLBACK status ===
         assertThat(result)
-                .as("All returned tables should have DEPLOYED or UPDATED status")
+                .as("All returned tables should have DEPLOYED, UPDATED or ROLLBACK status")
                 .allMatch(r -> r.getStatus() == RelationTableStatus.DEPLOYED
-                        || r.getStatus() == RelationTableStatus.UPDATED);
+                        || r.getStatus() == RelationTableStatus.UPDATED
+                        || r.getStatus() == RelationTableStatus.ROLLBACK);
 
-        // === Verify: count matches the number of DEPLOYED/UPDATED enabled tables ===
+        // === Verify: count matches the number of DEPLOYED/UPDATED/ROLLBACK enabled tables ===
         assertThat(result)
-                .as("Result count should match the number of DEPLOYED/UPDATED enabled tables in input")
+                .as("Result count should match the number of DEPLOYED/UPDATED/ROLLBACK enabled tables in input")
                 .hasSize(deployedOrUpdatedEnabled.size());
 
         // === Verify: the repository was called with the correct method ===
         verify(tableDefinitionRepository).findByStatusInAndEnabledTrue(
-                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED));
+                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK));
     }
 
     // ==================== Property 19: 分页数据大小约束 ====================
@@ -243,8 +245,18 @@ class RelationTableDataPropertyTest {
 
         when(jdbcTemplate.queryForObject(contains("COUNT(*)"), eq(Long.class), any(Object[].class)))
                 .thenReturn((long) totalRows);
-        when(jdbcTemplate.queryForList(contains("SELECT"), any(Object[].class)))
-                .thenReturn(mockRows);
+        // Production maps rows via jdbcTemplate.query(sql, RowMapper, args); return mapped DTOs directly
+        List<RelationTableDataRowDTO> mockDtoRows = mockRows.stream()
+                .map(r -> RelationTableDataRowDTO.builder()
+                        .rowId(String.valueOf(r.get("id")))
+                        .tableId(tableId)
+                        .data(r)
+                        .build())
+                .collect(Collectors.toList());
+        doReturn(mockDtoRows).when(jdbcTemplate)
+                .query(contains("SELECT"),
+                        org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<RelationTableDataRowDTO>>any(),
+                        any(Object[].class));
 
         // Execute query with the generated pageSize
         Pageable pageable = PageRequest.of(0, pageSize);

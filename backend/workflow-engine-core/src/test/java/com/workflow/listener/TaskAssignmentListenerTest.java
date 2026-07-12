@@ -2,6 +2,7 @@ package com.workflow.listener;
 
 import com.workflow.component.BpmnActionParser;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.workflow.service.LastUserTaskAssigneeQuery;
 import com.workflow.service.TaskAssigneeResolver;
 import com.workflow.util.RollbackAssigneeFallbackSupport;
@@ -126,7 +127,7 @@ class TaskAssignmentListenerTest {
             TaskAssigneeResolver.ResolveResult failed = TaskAssigneeResolver.ResolveResult.builder()
                     .errorMessage("Assignee type Specified BU Role requires a role ID")
                     .build();
-            when(taskAssigneeResolver.resolve(eq("BU_ROLE"), isNull(), eq(BU_ID), eq(INITIATOR_ID), isNull(), isNull()))
+            when(taskAssigneeResolver.resolveWithRoleIds(eq("BU_ROLE"), eq(List.of()), eq(BU_ID), eq(INITIATOR_ID), isNull(), isNull()))
                     .thenReturn(failed);
 
             when(lastUserTaskAssigneeQuery.findLastCompletedAssigneeForActivity(PROCESS_INSTANCE_ID, TASK_DEFINITION_KEY))
@@ -166,14 +167,14 @@ class TaskAssignmentListenerTest {
                     .candidateUsers(Arrays.asList("user-001", "user-002"))
                     .requiresClaim(true)
                     .build();
-            when(taskAssigneeResolver.resolve(
-                    eq("FIXED_BU_ROLE"), eq(ROLE_ID), eq(BU_ID), eq(INITIATOR_ID), isNull(), isNull()))
+            when(taskAssigneeResolver.resolveWithRoleIds(
+                    eq("FIXED_BU_ROLE"), eq(List.of(ROLE_ID)), eq(BU_ID), eq(INITIATOR_ID), isNull(), isNull()))
                     .thenReturn(result);
             
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
             listener.onEvent(event);
             
-            verify(taskAssigneeResolver).resolve("FIXED_BU_ROLE", ROLE_ID, BU_ID, INITIATOR_ID, null, null);
+            verify(taskAssigneeResolver).resolveWithRoleIds("FIXED_BU_ROLE", List.of(ROLE_ID), BU_ID, INITIATOR_ID, null, null);
             
             // Verify candidate users were set
             verify(taskService).addCandidateUser(TASK_ID, "user-001");
@@ -197,7 +198,7 @@ class TaskAssignmentListenerTest {
                     .assignee(INITIATOR_ID)
                     .requiresClaim(false)
                     .build();
-            when(taskAssigneeResolver.resolve(eq("INITIATOR"), isNull(), isNull(), eq(INITIATOR_ID), isNull(), isNull()))
+            when(taskAssigneeResolver.resolveWithRoleIds(eq("INITIATOR"), eq(List.of()), isNull(), eq(INITIATOR_ID), isNull(), isNull()))
                     .thenReturn(result);
 
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
@@ -224,7 +225,7 @@ class TaskAssignmentListenerTest {
                     .assignee(INITIATOR_ID)
                     .requiresClaim(false)
                     .build();
-            when(taskAssigneeResolver.resolve(eq("INITIATOR"), isNull(), isNull(), eq(INITIATOR_ID), isNull(), isNull()))
+            when(taskAssigneeResolver.resolveWithRoleIds(eq("INITIATOR"), eq(List.of()), isNull(), eq(INITIATOR_ID), isNull(), isNull()))
                     .thenReturn(result);
 
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
@@ -254,8 +255,8 @@ class TaskAssignmentListenerTest {
                     .assignee("manager-001")
                     .requiresClaim(false)
                     .build();
-            when(taskAssigneeResolver.resolve(
-                    eq("ENTITY_MANAGER"), isNull(), isNull(), eq(INITIATOR_ID), eq(INITIATOR_ID), isNull()))
+            when(taskAssigneeResolver.resolveWithRoleIds(
+                    eq("ENTITY_MANAGER"), eq(List.of()), isNull(), eq(INITIATOR_ID), eq(INITIATOR_ID), isNull()))
                     .thenReturn(result);
             
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
@@ -287,7 +288,7 @@ class TaskAssignmentListenerTest {
                     .errorMessage("No users found with role")
                     .requiresClaim(true)
                     .build();
-            when(taskAssigneeResolver.resolve(eq("CURRENT_BU_ROLE"), eq(ROLE_ID), isNull(), eq(INITIATOR_ID), eq(CURRENT_USER_ID), isNull()))
+            when(taskAssigneeResolver.resolveWithRoleIds(eq("CURRENT_BU_ROLE"), eq(List.of(ROLE_ID)), isNull(), eq(INITIATOR_ID), eq(CURRENT_USER_ID), isNull()))
                     .thenReturn(result);
             
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
@@ -344,14 +345,14 @@ class TaskAssignmentListenerTest {
                     .assignee("user-003")
                     .requiresClaim(false)
                     .build();
-            when(taskAssigneeResolver.resolve(
-                    eq("INITIATOR_BU_ROLE"), eq(ROLE_ID), isNull(), eq(INITIATOR_ID), eq(INITIATOR_ID), isNull()))
+            when(taskAssigneeResolver.resolveWithRoleIds(
+                    eq("INITIATOR_BU_ROLE"), eq(List.of(ROLE_ID)), isNull(), eq(INITIATOR_ID), eq(INITIATOR_ID), isNull()))
                     .thenReturn(result);
             
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
             listener.onEvent(event);
             
-            verify(taskAssigneeResolver).resolve("INITIATOR_BU_ROLE", ROLE_ID, null, INITIATOR_ID, INITIATOR_ID, null);
+            verify(taskAssigneeResolver).resolveWithRoleIds("INITIATOR_BU_ROLE", List.of(ROLE_ID), null, INITIATOR_ID, INITIATOR_ID, null);
             // 单人候选人池：直接 setAssignee，避免无意义认领步骤
             verify(taskService).setAssignee(TASK_ID, "user-003");
             verify(taskService, never()).addCandidateUser(anyString(), anyString());
@@ -419,6 +420,20 @@ class TaskAssignmentListenerTest {
                 java.lang.reflect.Field extendedTaskInfoRepositoryField = TaskAssignmentListener.class.getDeclaredField("extendedTaskInfoRepository");
                 extendedTaskInfoRepositoryField.setAccessible(true);
                 extendedTaskInfoRepositoryField.set(elementVariableListener, mockExtendedTaskInfoRepository);
+
+                // Production resolves the MI sub-table physical PK before assignment (static cache);
+                // clear it and answer the catalog query with single-column PK "id".
+                PostgresPhysicalTablePrimaryKeys.clearCache();
+                org.springframework.jdbc.core.JdbcTemplate mockJdbcTemplate =
+                        mock(org.springframework.jdbc.core.JdbcTemplate.class);
+                lenient().when(mockJdbcTemplate.query(
+                        contains("PRIMARY KEY"),
+                        org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<String>>any(),
+                        eq("fu_participants")))
+                    .thenReturn(List.of("id"));
+                java.lang.reflect.Field jdbcTemplateField = TaskAssignmentListener.class.getDeclaredField("jdbcTemplate");
+                jdbcTemplateField.setAccessible(true);
+                jdbcTemplateField.set(elementVariableListener, mockJdbcTemplate);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to inject mocks", e);
             }
@@ -571,8 +586,10 @@ class TaskAssignmentListenerTest {
             verify(taskService).setAssignee(TASK_ID, "user-002");
             
             // Verify ExtendedTaskInfo was created with parsed rowId
+            // 行键快照改造后：字符串 rowId 保留原始值写入 subTableRowKey，
+            // 仅数值型行键才补写 legacy subTableRowId 字段
             verify(mockExtendedTaskInfoRepository).save(argThat(extInfo -> 
-                extInfo.getExtendedProperties().contains("\"subTableRowId\":102") &&
+                extInfo.getExtendedProperties().contains("\"subTableRowKey\":{\"id\":\"102\"}") &&
                 extInfo.getExtendedProperties().contains("\"subTableRowVersion\":2")
             ));
         }

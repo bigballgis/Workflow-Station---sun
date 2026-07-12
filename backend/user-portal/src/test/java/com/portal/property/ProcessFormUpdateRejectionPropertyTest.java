@@ -51,10 +51,12 @@ public class ProcessFormUpdateRejectionPropertyTest {
                 new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
+        // Caller must be the initiator: production validates initiator identity BEFORE the
+        // Return_To_Requester state gate, and this property targets the state rejection.
         ProcessInstance processInstance = ProcessInstance.builder()
                 .id(processInstanceId)
                 .processDefinitionKey("test-process")
-                .startUserId("user-001")
+                .startUserId(userId)
                 .status(processState)
                 .variables(new HashMap<>(Map.of("field1", "value1")))
                 .build();

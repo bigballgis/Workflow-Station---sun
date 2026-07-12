@@ -145,7 +145,12 @@ public class ProcessDefinitionVersionProperties {
         ProcessDefinitionResult definition = definitions.get(0);
         assertThat(definition.getKey()).isEqualTo(processKey);
         assertThat(definition.getVersion()).isEqualTo(3);
-        assertThat(definition.getId()).isEqualTo(latestResult.getProcessDefinitionId());
+        // deployProcess 有意把返回的 processDefinitionId 规范为 key:version:uuid 复合格式
+        // （7e18a560，user-portal 依赖该格式解析）；而查询接口返回引擎原生 id
+        // （key 超过 64 字符限制时 Flowable 存储纯 uuid）。两者应指向同一个流程定义。
+        assertThat(latestResult.getProcessDefinitionId())
+            .startsWith(processKey + ":3:")
+            .endsWith(definition.getId());
     }
 
     /**

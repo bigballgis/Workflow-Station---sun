@@ -6,6 +6,9 @@ import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.platform.common.i18n.I18nService;
+import com.platform.common.i18n.impl.I18nServiceImpl;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
@@ -16,9 +19,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Spy;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -64,9 +73,20 @@ class SubTableAssignmentHandlerTest {
     
     @Mock
     private Task task;
+
+    /** Real i18n service (English) backed by the production message bundle. */
+    @Spy
+    private I18nService i18nService = buildRealI18nService();
     
     @InjectMocks
     private SubTableAssignmentHandler handler;
+
+    private static I18nService buildRealI18nService() {
+        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+        messageSource.setBasenames("i18n/messages");
+        messageSource.setDefaultEncoding("UTF-8");
+        return new I18nServiceImpl(messageSource);
+    }
     
     private static final String TASK_ID = "task-001";
     private static final Long ROW_ID = 101L;
@@ -79,8 +99,17 @@ class SubTableAssignmentHandlerTest {
     
     @BeforeEach
     void setUp() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
         // 设置 TaskService mock
         when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        // Production resolves physical PK columns via information_schema (with a static cache);
+        // clear the cache and answer the catalog query with the single-column PK "id".
+        PostgresPhysicalTablePrimaryKeys.clearCache();
+        lenient().when(jdbcTemplate.query(
+                contains("PRIMARY KEY"),
+                org.mockito.ArgumentMatchers.<RowMapper<String>>any(),
+                eq(SUB_TABLE_NAME)))
+            .thenReturn(List.of("id"));
     }
     
     @Test
@@ -163,7 +192,7 @@ class SubTableAssignmentHandlerTest {
             () -> handler.assign(TASK_ID, ROW_ID, ASSIGNEE_ID)
         );
         
-        assertTrue(exception.getMessage().contains("任务不存在"));
+        assertTrue(exception.getMessage().contains("Task not found"));
         verify(taskService).createTaskQuery();
     }
     
@@ -185,7 +214,7 @@ class SubTableAssignmentHandlerTest {
         );
         
         assertEquals("SUBTABLE_CONFIG_NOT_FOUND", exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("任务未配置子表信息"));
+        assertTrue(exception.getMessage().contains("not configured with sub-table information"));
     }
     
     @Test
@@ -229,8 +258,8 @@ class SubTableAssignmentHandlerTest {
             () -> handler.assign(TASK_ID, ROW_ID, ASSIGNEE_ID)
         );
         
-        assertTrue(exception.getMessage().contains("子表行"));
-        assertTrue(exception.getMessage().contains("不属于当前任务"));
+        assertTrue(exception.getMessage().contains("Sub-table row"));
+        assertTrue(exception.getMessage().contains("does not belong to the main table record"));
     }
     
     @Test
@@ -277,7 +306,7 @@ class SubTableAssignmentHandlerTest {
             () -> handler.assign(TASK_ID, ROW_ID, ASSIGNEE_ID)
         );
         
-        assertTrue(exception.getMessage().contains("用户不存在"));
+        assertTrue(exception.getMessage().contains("User does not exist"));
     }
     
     @Test
@@ -328,7 +357,7 @@ class SubTableAssignmentHandlerTest {
             () -> handler.assign(TASK_ID, ROW_ID, ASSIGNEE_ID)
         );
         
-        assertTrue(exception.getMessage().contains("用户已被禁用"));
+        assertTrue(exception.getMessage().contains("User is disabled"));
     }
     
     @Test
@@ -386,6 +415,6 @@ class SubTableAssignmentHandlerTest {
             () -> handler.assign(TASK_ID, ROW_ID, ASSIGNEE_ID)
         );
         
-        assertTrue(exception.getMessage().contains("子表行不存在或已被删除"));
+        assertTrue(exception.getMessage().contains("Sub-table row does not exist or has been deleted"));
     }
 }

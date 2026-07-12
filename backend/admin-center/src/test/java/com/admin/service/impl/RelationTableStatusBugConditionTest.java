@@ -187,7 +187,7 @@ class RelationTableStatusBugConditionTest {
 
         // 修复后代码调用 findByStatusInAndEnabledTrue(List.of(DEPLOYED, UPDATED))
         when(tableDefinitionRepository.findByStatusInAndEnabledTrue(
-                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED)))
+                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)))
                 .thenReturn(List.of(deployedEnabled, updatedEnabled));
 
         List<RelationTableResponse> result = dataService.getDeployedTables();
@@ -218,7 +218,7 @@ class RelationTableStatusBugConditionTest {
         // 修复后代码调用 findByStatusInAndEnabledTrue，仅返回 enabled=true 的表
         // disabled 表已在 Repository 层被过滤，不会出现在结果中
         when(tableDefinitionRepository.findByStatusInAndEnabledTrue(
-                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED)))
+                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)))
                 .thenReturn(List.of(enabledTable));
 
         List<RelationTableResponse> result = dataService.getDeployedTables();

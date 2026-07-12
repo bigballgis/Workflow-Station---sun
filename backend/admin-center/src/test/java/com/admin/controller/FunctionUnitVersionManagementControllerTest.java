@@ -9,7 +9,9 @@ import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.dto.UserPrincipal;
 import com.platform.common.i18n.I18nService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,11 +20,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
@@ -74,6 +81,19 @@ class FunctionUnitVersionManagementControllerTest {
     void setUp() {
         lenient().when(i18nService.getMessage(anyString())).thenAnswer(inv -> inv.getArgument(0));
 
+        // activateVersion resolves the operator via SecurityContextUtils.getCurrentUserId();
+        // provide an authenticated principal for the standalone MockMvc setup.
+        UserPrincipal principal = UserPrincipal.builder()
+                .userId("test-user-id")
+                .username("test-user")
+                .roles(Collections.emptyList())
+                .permissions(Collections.emptyList())
+                .build();
+        Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, Collections.emptyList());
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(auth);
+        SecurityContextHolder.setContext(context);
+
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
 
         testCode = "TEST_FUNCTION_UNIT";
@@ -89,6 +109,12 @@ class FunctionUnitVersionManagementControllerTest {
                 .createdAt(Instant.now())
                 .deployedAt(Instant.now())
                 .build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        // Do not leak the authenticated context into other test classes on this thread
+        SecurityContextHolder.clearContext();
     }
 
     // ==================== 版本激活端点测试 ====================

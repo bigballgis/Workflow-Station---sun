@@ -92,7 +92,7 @@ public class UserPermissionProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         
         Role buBoundedRole = createRole(roleId, RoleType.BU_BOUNDED);
@@ -136,7 +136,7 @@ public class UserPermissionProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         
         Role buBoundedRole = createRole(roleId, RoleType.BU_BOUNDED);
@@ -177,7 +177,7 @@ public class UserPermissionProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         
         Role buUnboundedRole = createRole(roleId, RoleType.BU_UNBOUNDED);
@@ -226,7 +226,7 @@ public class UserPermissionProperties {
                     .virtualGroupId(vgId)
                     .roleId(unboundedRoleIds.get(i))
                     .build();
-            when(virtualGroupRoleRepository.findByVirtualGroupId(vgId))
+            when(virtualGroupRoleRepository.findSingleByVirtualGroupId(vgId))
                     .thenReturn(Optional.of(binding));
             
             allRoles.add(createRole(unboundedRoleIds.get(i), RoleType.BU_UNBOUNDED));
@@ -242,7 +242,7 @@ public class UserPermissionProperties {
                     .virtualGroupId(vgId)
                     .roleId(boundedRoleIds.get(i))
                     .build();
-            when(virtualGroupRoleRepository.findByVirtualGroupId(vgId))
+            when(virtualGroupRoleRepository.findSingleByVirtualGroupId(vgId))
                     .thenReturn(Optional.of(binding));
             
             allRoles.add(createRole(boundedRoleIds.get(i), RoleType.BU_BOUNDED));
@@ -288,7 +288,7 @@ public class UserPermissionProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         
         Role buBoundedRole = createRole(roleId, RoleType.BU_BOUNDED);
@@ -329,7 +329,7 @@ public class UserPermissionProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         
         Role buBoundedRole = createRole(roleId, RoleType.BU_BOUNDED);
@@ -376,7 +376,7 @@ public class UserPermissionProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         
         Role buBoundedRole = createRole(roleId, RoleType.BU_BOUNDED);
@@ -413,7 +413,7 @@ public class UserPermissionProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         
         Role buUnboundedRole = createRole(roleId, RoleType.BU_UNBOUNDED);

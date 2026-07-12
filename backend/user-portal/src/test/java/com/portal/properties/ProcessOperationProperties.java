@@ -100,7 +100,10 @@ class ProcessOperationProperties {
         String mockBpmnXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bpmn:definitions></bpmn:definitions>";
         Map<String, Object> mockContent = new HashMap<>();
         mockContent.put("name", "测试流程");
-        mockContent.put("processes", List.of(Map.of("data", mockBpmnXml)));
+        // startProcess 现要求可解析的 Flowable process key（API 的 flowableProcessDefinitionKey 或 BPMN <process id>）
+        mockContent.put("processes", List.of(Map.of(
+                "data", mockBpmnXml,
+                "flowableProcessDefinitionKey", "test-process")));
         doReturn(mockContent).when(processComponent).getFunctionUnitContent(any(String.class));
         
         // Mock WorkflowEngineClient 为可用状态
@@ -129,6 +132,37 @@ class ProcessOperationProperties {
         // Mock FunctionUnitAccessComponent 返回功能单元内容（包含 BPMN XML）
         when(functionUnitAccessComponent.resolveFunctionUnitId(any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // i18n: 返回 key 本身，避免分类等展示字段为 null
+        when(i18nService.getMessage(any(String.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // getAvailableProcessDefinitions 现从 admin-center 拉取已部署功能单元（/deployed/latest）
+        when(restTemplate.getForObject(contains("/function-units/deployed/latest"), eq(Map.class)))
+                .thenReturn(Map.of("success", true, "data", List.of(Map.of(
+                        "id", "fu-1",
+                        "code", "leave-request",
+                        "name", "请假流程",
+                        "description", "测试流程",
+                        "version", 1))));
+        when(functionUnitAccessComponent.filterAccessibleFunctionUnits(any(), anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+
+        // startProcess 现要求 admin-center 存在「已部署且启用」的目录版本（active-for-start pin），
+        // 且 pin.id 必须与 resolveFunctionUnitId(processKey)（上方恒等 stub）一致。
+        when(restTemplate.exchange(
+                contains("/active-for-start"),
+                eq(org.springframework.http.HttpMethod.GET),
+                isNull(),
+                Mockito.<org.springframework.core.ParameterizedTypeReference<Map<String, Object>>>any()))
+                .thenAnswer(invocation -> {
+                    String url = invocation.getArgument(0);
+                    String enc = url.substring(url.indexOf("/code/") + "/code/".length(),
+                            url.indexOf("/active-for-start"));
+                    String code = java.net.URLDecoder.decode(enc, java.nio.charset.StandardCharsets.UTF_8);
+                    return org.springframework.http.ResponseEntity.ok(
+                            Map.<String, Object>of("id", code, "code", code, "version", 1));
+                });
     }
 
     @Property(tries = 20)

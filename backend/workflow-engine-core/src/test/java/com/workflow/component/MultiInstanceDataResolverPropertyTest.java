@@ -7,6 +7,7 @@ import com.workflow.repository.ExtendedTaskInfoRepository;
 import net.jqwik.api.*;
 import org.flowable.engine.RuntimeService;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -105,7 +106,7 @@ class MultiInstanceDataResolverPropertyTest {
             .thenReturn(Optional.of(extInfo));
         
         // 当前 row_version 为 1
-        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(subTableRowId)))
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), rowIdArg(subTableRowId)))
             .thenReturn(1L);
         
         // UPDATE 成功
@@ -169,7 +170,7 @@ class MultiInstanceDataResolverPropertyTest {
             .thenReturn(Optional.of(extInfo));
         
         // 数据库中的当前 row_version
-        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(subTableRowId)))
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), rowIdArg(subTableRowId)))
             .thenReturn(currentVersion);
         
         Map<String, Object> formData = new HashMap<>();
@@ -288,7 +289,7 @@ class MultiInstanceDataResolverPropertyTest {
         when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(taskId))
             .thenReturn(Optional.of(extInfo));
         
-        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(subTableRowId)))
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), rowIdArg(subTableRowId)))
             .thenThrow(new EmptyResultDataAccessException(1));
         
         Map<String, Object> formData = new HashMap<>();
@@ -429,6 +430,15 @@ class MultiInstanceDataResolverPropertyTest {
         }
     }
     
+
+    /**
+     * Row-key params originate from extended_properties JSON where Jackson yields Integer for
+     * small ids; match by numeric value rather than boxed type (Long vs Integer).
+     */
+    private static Object rowIdArg(long subTableRowId) {
+        return ArgumentMatchers.<Object>argThat(v -> v instanceof Number n && n.longValue() == subTableRowId);
+    }
+
     private ExtendedTaskInfo createExtendedTaskInfo(String taskId, long subTableRowId, String subTableName) {
         String extendedProperties = String.format(
             "{\"multiInstance\":true,\"subTableRowId\":%d,\"subTableName\":\"%s\",\"subTableRowVersion\":1}",

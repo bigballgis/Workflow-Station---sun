@@ -239,16 +239,21 @@ class PortalRelationTablePropertyTest {
         when(jdbcTemplate.queryForObject(contains("rt_table_access"), eq(Long.class), any(Object[].class)))
                 .thenReturn(1L);
 
-        // Mock table name
-        when(jdbcTemplate.query(contains("table_name"), any(RowMapper.class), eq(tableId), any()))
-                .thenReturn(List.of("test_table"));
+        // Mock deployed relation table check (rt_table_definitions status guard)
+        when(jdbcTemplate.queryForObject(contains("rt_table_definitions"), eq(Integer.class), eq(tableId), any()))
+                .thenReturn(1);
 
-        // Mock field names
+        // Mock field definitions (loadFields maps rt_field_definitions rows to RelationFieldDTO)
         when(jdbcTemplate.query(contains("field_name"), any(RowMapper.class), eq(tableId)))
-                .thenReturn(scenario.fieldNames);
+                .thenReturn(scenario.fieldNames.stream()
+                        .map(fn -> com.platform.common.dto.RelationFieldDTO.builder()
+                                .fieldName(fn)
+                                .dataType(com.platform.common.enums.RelationDataType.TEXT)
+                                .build())
+                        .collect(Collectors.toList()));
 
-        // Mock data
-        when(jdbcTemplate.queryForList(contains("SELECT"), eq(scenario.maxRows)))
+        // Mock data (JSON row storage: SELECT data FROM rt_table_data_rows WHERE table_id = ? ... LIMIT ?)
+        when(jdbcTemplate.query(contains("rt_table_data_rows"), any(RowMapper.class), eq(tableId), eq(scenario.maxRows)))
                 .thenReturn(scenario.rows);
 
         PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,

@@ -4,6 +4,8 @@ import com.workflow.component.MultiInstanceDataResolver.OptimisticLockException;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.platform.common.i18n.I18nService;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import org.flowable.engine.RuntimeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,9 +16,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -53,6 +58,9 @@ class MultiInstanceDataResolverTest {
 
     @Mock
     private BpmnActionParser bpmnActionParser;
+
+    @Mock
+    private I18nService i18nService;
     
     @InjectMocks
     private MultiInstanceDataResolver resolver;
@@ -65,6 +73,22 @@ class MultiInstanceDataResolverTest {
                 any(),
                 any()))
             .thenReturn(0);
+        // Production resolves physical PK columns via information_schema (with a static cache);
+        // clear the cache and answer the catalog query with the single-column PK "id".
+        PostgresPhysicalTablePrimaryKeys.clearCache();
+        lenient().when(jdbcTemplate.query(
+                contains("PRIMARY KEY"),
+                ArgumentMatchers.<RowMapper<String>>any(),
+                eq(SUB_TABLE_NAME)))
+            .thenReturn(List.of("id"));
+    }
+
+    /**
+     * Row-key params originate from extended_properties JSON where Jackson yields Integer for
+     * small ids; match by numeric value rather than boxed type (Long vs Integer).
+     */
+    private static Object rowIdArg(long rowId) {
+        return ArgumentMatchers.<Object>argThat(v -> v instanceof Number n && n.longValue() == rowId);
     }
     
     private static final String TASK_ID = "task-001";
@@ -165,7 +189,7 @@ class MultiInstanceDataResolverTest {
                 .thenReturn(Optional.of(extInfo));
             
             // 当前 row_version 为 1
-            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(SUB_TABLE_ROW_ID)))
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), rowIdArg(SUB_TABLE_ROW_ID)))
                 .thenReturn(1L);
             
             // UPDATE 成功
@@ -198,7 +222,7 @@ class MultiInstanceDataResolverTest {
                 .thenReturn(Optional.of(extInfo));
             
             // 当前 row_version 为 2（与期望的 1 不一致）
-            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(SUB_TABLE_ROW_ID)))
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), rowIdArg(SUB_TABLE_ROW_ID)))
                 .thenReturn(2L);
             
             Map<String, Object> formData = new HashMap<>();
@@ -219,7 +243,7 @@ class MultiInstanceDataResolverTest {
                 .thenReturn(Optional.of(extInfo));
             
             // 数据行不存在
-            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(SUB_TABLE_ROW_ID)))
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), rowIdArg(SUB_TABLE_ROW_ID)))
                 .thenThrow(new EmptyResultDataAccessException(1));
             
             Map<String, Object> formData = new HashMap<>();
@@ -241,7 +265,7 @@ class MultiInstanceDataResolverTest {
             
             // 第一次查询：row_version 为 1（匹配）
             // 第二次查询（UPDATE 后）：row_version 为 2（说明被其他事务修改）
-            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(SUB_TABLE_ROW_ID)))
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), rowIdArg(SUB_TABLE_ROW_ID)))
                 .thenReturn(1L)  // 第一次查询
                 .thenReturn(2L); // 第二次查询（UPDATE 失败后）
             

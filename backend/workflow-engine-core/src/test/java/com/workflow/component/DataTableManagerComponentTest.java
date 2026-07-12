@@ -4,12 +4,15 @@ import com.workflow.dto.request.*;
 import com.workflow.dto.response.DataTableOperationResult;
 import com.workflow.dto.response.DataTableQueryResult;
 import com.workflow.exception.WorkflowValidationException;
+import com.platform.common.i18n.I18nService;
+import com.platform.common.i18n.impl.I18nServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -36,7 +39,6 @@ class DataTableManagerComponentTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
-    @InjectMocks
     private DataTableManagerComponent dataTableManagerComponent;
 
     private DataTableQueryRequest queryRequest;
@@ -44,8 +46,21 @@ class DataTableManagerComponentTest {
     private DataTableUpdateRequest updateRequest;
     private DataTableDeleteRequest deleteRequest;
 
+    /**
+     * Real i18n service backed by the production message bundle (English locale)
+     * so validation/error message assertions exercise the real resolved text.
+     */
+    private static I18nService realI18nService() {
+        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+        messageSource.setBasenames("i18n/messages");
+        messageSource.setDefaultEncoding("UTF-8");
+        return new I18nServiceImpl(messageSource);
+    }
+
     @BeforeEach
     void setUp() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        dataTableManagerComponent = new DataTableManagerComponent(jdbcTemplate, realI18nService());
         // 设置查询请求
         queryRequest = DataTableQueryRequest.builder()
                 .tableName("test_table")
@@ -142,7 +157,7 @@ class DataTableManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> dataTableManagerComponent.queryTable(queryRequest))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("表名不能为空");
+                .hasMessageContaining("Table name cannot be empty");
     }
 
     @Test
@@ -153,7 +168,7 @@ class DataTableManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> dataTableManagerComponent.queryTable(queryRequest))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("表名格式不正确");
+                .hasMessageContaining("Table name format invalid");
     }
 
     @Test
@@ -164,7 +179,7 @@ class DataTableManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> dataTableManagerComponent.queryTable(queryRequest))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("排序方向不正确");
+                .hasMessageContaining("Order direction invalid");
     }
 
     @Test
@@ -178,7 +193,7 @@ class DataTableManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getErrorMessage()).contains("查询失败");
+        assertThat(result.getErrorMessage()).contains("Query failed");
     }
 
     // ==================== 插入操作测试 ====================
@@ -230,7 +245,7 @@ class DataTableManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> dataTableManagerComponent.insertRecord(insertRequest))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("插入数据不能为空");
+                .hasMessageContaining("Insert data cannot be empty");
     }
 
     @Test
@@ -241,7 +256,7 @@ class DataTableManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> dataTableManagerComponent.insertRecord(insertRequest))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("字段名格式不正确");
+                .hasMessageContaining("Field name format invalid");
     }
 
     @Test
@@ -255,7 +270,7 @@ class DataTableManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getErrorMessage()).contains("插入失败");
+        assertThat(result.getErrorMessage()).contains("Insert failed");
     }
 
     // ==================== 更新操作测试 ====================
@@ -284,7 +299,7 @@ class DataTableManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> dataTableManagerComponent.updateRecord(updateRequest))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("更新数据不能为空");
+                .hasMessageContaining("Update data cannot be empty");
     }
 
     @Test
@@ -295,7 +310,7 @@ class DataTableManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> dataTableManagerComponent.updateRecord(updateRequest))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("更新条件不能为空");
+                .hasMessageContaining("Update conditions cannot be empty");
     }
 
     @Test
@@ -309,7 +324,7 @@ class DataTableManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getErrorMessage()).contains("更新失败");
+        assertThat(result.getErrorMessage()).contains("Update failed");
     }
 
     // ==================== 删除操作测试 ====================
@@ -338,7 +353,7 @@ class DataTableManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> dataTableManagerComponent.deleteRecord(deleteRequest))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("删除条件不能为空");
+                .hasMessageContaining("Delete conditions cannot be empty");
     }
 
     @Test
@@ -352,7 +367,7 @@ class DataTableManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getErrorMessage()).contains("删除失败");
+        assertThat(result.getErrorMessage()).contains("Delete failed");
     }
 
     // ==================== 数据类型转换测试 ====================
@@ -468,7 +483,7 @@ class DataTableManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getErrorMessage()).contains("插入失败");
+        assertThat(result.getErrorMessage()).contains("Insert failed");
         // 注意：实际的事务回滚测试需要在集成测试中进行
     }
 
@@ -555,7 +570,7 @@ class DataTableManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getErrorMessage()).contains("插入失败");
+        assertThat(result.getErrorMessage()).contains("Insert failed");
     }
 
     @Test

@@ -33,6 +33,7 @@ class FunctionPackageValidationProperties {
     private FunctionUnitDependencyRepository dependencyRepository;
     private FunctionUnitContentRepository contentRepository;
     private FunctionUnitAccessRepository accessRepository;
+    private com.admin.component.FunctionUnitPackageParser packageParser;
     private FunctionUnitManagerComponent component;
 
     @BeforeTry
@@ -41,10 +42,19 @@ class FunctionPackageValidationProperties {
         dependencyRepository = Mockito.mock(FunctionUnitDependencyRepository.class);
         contentRepository = Mockito.mock(FunctionUnitContentRepository.class);
         accessRepository = Mockito.mock(FunctionUnitAccessRepository.class);
+        packageParser = Mockito.mock(com.admin.component.FunctionUnitPackageParser.class);
+        // Generated file contents are not real base64 ZIPs: the real parser would throw
+        // IllegalArgumentException, and production then falls back to the legacy parser.
+        try {
+            Mockito.when(packageParser.parseBase64Zip(Mockito.anyString()))
+                    .thenThrow(new IllegalArgumentException("not a base64 zip"));
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
         component = com.admin.component.FunctionUnitManagerTestFactory.createManager(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(com.admin.component.FunctionUnitValidationComponent.class),
-                Mockito.mock(com.admin.component.FunctionUnitPackageParser.class),
+                packageParser,
                 Mockito.mock(com.admin.repository.ActionDefinitionRepository.class),
                 Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
                 Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class),

@@ -72,8 +72,8 @@ class ProcessKeySearchProperties {
         FunctionUnit expectedUnit = createFunctionUnit(functionUnitId, functionUnitName);
         FunctionUnitContent content = createProcessContent(expectedUnit, processKey);
         
-        when(contentRepository.findByProcessDefinitionKey(processKey))
-                .thenReturn(Optional.of(content));
+        when(contentRepository.findAllByProcessDefinitionKey(processKey))
+                .thenReturn(List.of(content));
         
         // When: Searching by process key
         FunctionUnit result = component.getFunctionUnitByProcessKey(processKey);
@@ -94,8 +94,8 @@ class ProcessKeySearchProperties {
             @ForAll("processKeys") String processKey) {
         
         // Given: No content matches the process key
-        when(contentRepository.findByProcessDefinitionKey(processKey))
-                .thenReturn(Optional.empty());
+        when(contentRepository.findAllByProcessDefinitionKey(processKey))
+                .thenReturn(List.of());
         
         // When/Then: Should throw FunctionUnitNotFoundException
         assertThatThrownBy(() -> component.getFunctionUnitByProcessKey(processKey))
@@ -117,8 +117,8 @@ class ProcessKeySearchProperties {
         FunctionUnit expectedUnit = createFunctionUnit(functionUnitId, "Test Unit");
         FunctionUnitContent content = createProcessContent(expectedUnit, processKey);
         
-        when(contentRepository.findByProcessDefinitionKey(processKey))
-                .thenReturn(Optional.of(content));
+        when(contentRepository.findAllByProcessDefinitionKey(processKey))
+                .thenReturn(List.of(content));
         
         // When: Searching by process key
         FunctionUnit result = component.getFunctionUnitByProcessKey(processKey);
@@ -140,8 +140,8 @@ class ProcessKeySearchProperties {
         FunctionUnit expectedUnit = createFunctionUnit(functionUnitId, "Test Unit");
         FunctionUnitContent content = createProcessContent(expectedUnit, processKey);
         
-        when(contentRepository.findByProcessDefinitionKey(processKey))
-                .thenReturn(Optional.of(content));
+        when(contentRepository.findAllByProcessDefinitionKey(processKey))
+                .thenReturn(List.of(content));
         
         // When: Searching multiple times
         FunctionUnit result1 = component.getFunctionUnitByProcessKey(processKey);

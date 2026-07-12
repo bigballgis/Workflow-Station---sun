@@ -81,8 +81,8 @@ class FunctionUnitUniquenessProperties {
         
         // Setup mock to return correct content for each process key
         for (Map.Entry<String, FunctionUnitContent> entry : processKeyToContent.entrySet()) {
-            when(contentRepository.findByProcessDefinitionKey(entry.getKey()))
-                    .thenReturn(Optional.of(entry.getValue()));
+            when(contentRepository.findAllByProcessDefinitionKey(entry.getKey()))
+                    .thenReturn(List.of(entry.getValue()));
         }
         
         // When/Then: Searching by each process key returns exactly one function unit
@@ -114,8 +114,8 @@ class FunctionUnitUniquenessProperties {
         FunctionUnit unit = createFunctionUnit(functionUnitId, "Test Unit");
         FunctionUnitContent content = createProcessContent(unit, processKey);
         
-        when(contentRepository.findByProcessDefinitionKey(processKey))
-                .thenReturn(Optional.of(content));
+        when(contentRepository.findAllByProcessDefinitionKey(processKey))
+                .thenReturn(List.of(content));
         
         // When: Searching by process key
         FunctionUnit result = component.getFunctionUnitByProcessKey(processKey);
@@ -146,10 +146,10 @@ class FunctionUnitUniquenessProperties {
         FunctionUnitContent content1 = createProcessContent(unit1, processKey1);
         FunctionUnitContent content2 = createProcessContent(unit2, processKey2);
         
-        when(contentRepository.findByProcessDefinitionKey(processKey1))
-                .thenReturn(Optional.of(content1));
-        when(contentRepository.findByProcessDefinitionKey(processKey2))
-                .thenReturn(Optional.of(content2));
+        when(contentRepository.findAllByProcessDefinitionKey(processKey1))
+                .thenReturn(List.of(content1));
+        when(contentRepository.findAllByProcessDefinitionKey(processKey2))
+                .thenReturn(List.of(content2));
         
         // When: Searching by each process key
         FunctionUnit result1 = component.getFunctionUnitByProcessKey(processKey1);
@@ -176,8 +176,8 @@ class FunctionUnitUniquenessProperties {
         FunctionUnit unit = createFunctionUnit(functionUnitId, "Test Unit");
         FunctionUnitContent content = createProcessContent(unit, processKey);
         
-        when(contentRepository.findByProcessDefinitionKey(processKey))
-                .thenReturn(Optional.of(content));
+        when(contentRepository.findAllByProcessDefinitionKey(processKey))
+                .thenReturn(List.of(content));
         
         // When: Searching multiple times
         Set<String> resultIds = new HashSet<>();

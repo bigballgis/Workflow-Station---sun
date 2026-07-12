@@ -271,14 +271,20 @@ public class HistoryDataArchivalIntegrityProperties {
         // 验证变量数据一致性
         assertThat(managerResult.getVariableInstances()).hasSize(nativeVariableInstances.size());
         
-        Map<String, HistoricVariableInstance> nativeVarMap = nativeVariableInstances.stream()
-            .collect(Collectors.toMap(HistoricVariableInstance::getVariableName, var -> var));
+        // 同名变量可能有多个实例（如每个任务各有一个 task-local 的 taskComment），
+        // 按名称分组后要求存在值与类型都一致的原生实例
+        Map<String, List<HistoricVariableInstance>> nativeVarsByName = nativeVariableInstances.stream()
+            .collect(Collectors.groupingBy(HistoricVariableInstance::getVariableName));
         
         for (HistoryQueryResult.VariableInstanceHistory managerVar : managerResult.getVariableInstances()) {
-            HistoricVariableInstance nativeVar = nativeVarMap.get(managerVar.getVariableName());
-            assertThat(nativeVar).isNotNull();
-            assertThat(managerVar.getValue()).isEqualTo(nativeVar.getValue());
-            assertThat(managerVar.getVariableTypeName()).isEqualTo(nativeVar.getVariableTypeName());
+            List<HistoricVariableInstance> candidates = nativeVarsByName.get(managerVar.getVariableName());
+            assertThat(candidates).isNotNull();
+            assertThat(candidates)
+                .as("variable %s should match a native instance by value and type", managerVar.getVariableName())
+                .anySatisfy(nativeVar -> {
+                    assertThat(managerVar.getValue()).isEqualTo(nativeVar.getValue());
+                    assertThat(managerVar.getVariableTypeName()).isEqualTo(nativeVar.getVariableTypeName());
+                });
         }
     }
 
@@ -337,6 +343,14 @@ public class HistoryDataArchivalIntegrityProperties {
                 
                 if (expectedValue instanceof LocalDateTime && actualValue instanceof Date) {
                     // 处理时间类型的比较 - 跳过精度差异
+                    continue;
+                }
+                
+                if (expectedValue instanceof LocalDateTime expectedTime
+                        && actualValue instanceof LocalDateTime actualTime) {
+                    // 历史库持久化到毫秒精度，纳秒部分被截断
+                    assertThat(actualTime.truncatedTo(java.time.temporal.ChronoUnit.MILLIS))
+                        .isEqualTo(expectedTime.truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
                     continue;
                 }
                 

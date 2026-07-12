@@ -27,10 +27,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ApprovalControllerProperties {
     
     private ApprovalController approvalController;
-    
+
     @BeforeTry
     void setUp() {
-        approvalController = new ApprovalController(Mockito.mock(com.portal.client.AdminCenterClient.class));
+        // ApprovalController delegates to AdminCenterClient; Optional.empty() means the
+        // admin-center service is unavailable and maps to 503. Stub a healthy client so
+        // these properties exercise the controller's happy-path/validation logic.
+        com.portal.client.AdminCenterClient adminCenterClient =
+                Mockito.mock(com.portal.client.AdminCenterClient.class);
+        Mockito.when(adminCenterClient.getPendingApprovals(Mockito.anyString()))
+                .thenReturn(Optional.of(List.of()));
+        Mockito.when(adminCenterClient.getApprovalHistory(Mockito.anyString(), Mockito.nullable(String.class)))
+                .thenReturn(Optional.of(List.of()));
+        Mockito.when(adminCenterClient.approveRequest(Mockito.anyString(), Mockito.anyString(), Mockito.nullable(String.class)))
+                .thenReturn(Optional.of(Map.of("success", true)));
+        Mockito.when(adminCenterClient.rejectRequest(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+                .thenReturn(Optional.of(Map.of("success", true)));
+        Mockito.when(adminCenterClient.checkIsApprover(Mockito.anyString()))
+                .thenReturn(Optional.of(Map.of("isApprover", true, "virtualGroupCount", 2, "businessUnitCount", 1)));
+        approvalController = new ApprovalController(adminCenterClient);
     }
     
     // ==================== Property 3: Approver Scope Filtering ====================
@@ -51,9 +66,9 @@ public class ApprovalControllerProperties {
         // Then: Should return OK status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         
-        // Then: Should return a list (even if empty)
+        // Then: Should return a list (even if empty) in the ApiResponse envelope
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody()).isInstanceOf(List.class);
+        assertThat(response.getBody().getData()).isInstanceOf(List.class);
     }
     
     /**
@@ -97,9 +112,9 @@ public class ApprovalControllerProperties {
         // Then: Should return OK status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         
-        // Then: Should return a list
+        // Then: Should return a list in the ApiResponse envelope
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody()).isInstanceOf(List.class);
+        assertThat(response.getBody().getData()).isInstanceOf(List.class);
     }
     
     // ==================== Property 4: Self-Approval Prevention ====================
@@ -298,12 +313,14 @@ public class ApprovalControllerProperties {
         
         // Then: Should return bad request status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        
-        // Then: Should contain success=false
+
+        // Then: Should be an error envelope with code 400 (error responses carry no data payload)
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getData().get("success")).isEqualTo(false);
+        assertThat(response.getBody().isSuccess()).isFalse();
+        assertThat(response.getBody().getError()).isNotNull();
+        assertThat(response.getBody().getError().getCode()).isEqualTo("400");
     }
-    
+
     /**
      * Feature: permission-request-approval, Property 14: Rejection Requires Comment
      * Reject request with valid comment should return success
@@ -352,12 +369,14 @@ public class ApprovalControllerProperties {
         
         // Then: Should return bad request status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        
-        // Then: Should contain success=false
+
+        // Then: Should be an error envelope with code 400 (error responses carry no data payload)
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getData().get("success")).isEqualTo(false);
+        assertThat(response.getBody().isSuccess()).isFalse();
+        assertThat(response.getBody().getError()).isNotNull();
+        assertThat(response.getBody().getError().getCode()).isEqualTo("400");
     }
-    
+
     // ==================== Data Generators ====================
     
     @Provide
