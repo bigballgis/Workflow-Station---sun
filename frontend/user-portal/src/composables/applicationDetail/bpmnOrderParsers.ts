@@ -134,6 +134,8 @@ export const parseBpmnXmlAndGetAllFormIds = (xml: string): Array<{ formId: strin
 
     return result
   } catch (e) {
+    // FALLBACK(ux): form-order topology is a display aid (previous-forms navigation order);
+    // an empty result degrades to unordered rendering, no data is affected.
     console.error('Failed to parse BPMN for all formIds:', e)
     return []
   }
@@ -194,8 +196,10 @@ export function findInitiatorCurrentStepIndexInAllOrdered(
       )
       if (hit >= 0) return hit
     }
-  } catch {
-    /* ignore */
+  } catch (e) {
+    // FALLBACK(ux): position lookup is a display aid; null means "unknown position" and the
+    // caller renders without an order hint. Keep the failure visible in the console.
+    console.warn('[bpmnOrderParsers] task position lookup failed', e)
   }
 
   return null

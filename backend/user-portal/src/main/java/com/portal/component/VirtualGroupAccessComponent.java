@@ -17,6 +17,14 @@ import java.util.*;
 /**
  * 虚拟组访问组件
  * 调用 Admin Center API 获取和管理虚拟组
+ *
+ * <p>FALLBACK(external) — class-wide policy: every method here is a cross-service HTTP call
+ * whose catch degrades to empty/null/false. Queries fail CLOSED (no data = no permission,
+ * fewer features rather than wrong data); mutations return false and callers surface the
+ * error to the user. This component is NOT on the task-assignment authoritative path (that
+ * is the engine's AdminCenterClient, which throws AdminCenterUnavailableException); the one
+ * hot consumer, WorkspaceTaskFilterComponent#getUserVirtualGroups, additionally has
+ * last-known-good caching + a 503 surface for the cold-start-plus-outage case.</p>
  */
 @Slf4j
 @Component

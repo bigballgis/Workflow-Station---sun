@@ -1,6 +1,11 @@
 /**
  * Build Form Preview items from saved form config (no live designer refs).
  * Used by Process Debug node-form panel and similar read-only previews.
+ *
+ * Fallback-audit note: the `|| []` / `|| {}` defaults throughout this file read OPTIONAL
+ * config sections (per-binding relationViews / subListViews / lookup fields) where absence
+ * legitimately means "not configured" — they are defaults, not swallowed errors. This is a
+ * read-only preview; nothing here is persisted.
  */
 
 import type { FormDefinition, TableBinding, TableDefinition } from '@/api/functionUnit'
@@ -383,7 +388,10 @@ export function buildSavedFormPreviewItems(options: SavedFormPreviewBuildOptions
   const bindingMap = buildBindingMap(options)
   try {
     return buildPreviewItems(rawRule, bindingMap, config, options.tables, bindings)
-  } catch {
+  } catch (e) {
+    // FALLBACK(ux): read-only preview — degrade to plain fields (sub-tables omitted) rather
+    // than a blank panel. Log so a systematically broken config is still discoverable.
+    console.warn('[savedFormPreviewBuilder] preview build failed; degrading to fields-only preview', e)
     const basicRule = rawRule.filter((r: any) => r.type !== 'subTable')
     return basicRule.length ? [{ kind: 'fields', rule: basicRule, modelKey: 'fallback' }] : []
   }

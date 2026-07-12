@@ -708,6 +708,7 @@ export default {
     saveSuccess: '保存成功',
     deleteSuccess: '删除成功',
     bindingSaveSuccess: '绑定保存成功',
+    bindingViewIncomplete: '部分动作绑定无法从 BPMN 解析，绑定面板可能显示不完整',
     createFailed: '创建失败',
     saveFailed: '保存失败',
     deleteFailed: '删除失败',

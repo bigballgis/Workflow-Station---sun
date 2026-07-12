@@ -512,6 +512,9 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
     }
     return result
   } catch (error) {
+    // FALLBACK(ux): diagram rendering is display-only — callers treat null as "no diagram"
+    // and the page omits the workflow-graph section instead of crashing. The error stays
+    // logged; a systematically unparseable BPMN shows up in every load of that process.
     console.error('Failed to parse BPMN XML:', error)
   }
   return null
