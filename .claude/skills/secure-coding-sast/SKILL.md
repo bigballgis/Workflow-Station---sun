@@ -12,7 +12,7 @@ description: >-
 
 # 安全编码规范 — 让新代码少触发 SAST 告警
 
-来源：Checkmarx 两轮扫描治理（Issue #1471/#1472/#1473）。总结见 `docs/SAST_REMEDIATION_SUMMARY.md`。
+来源：Checkmarx 两轮扫描治理（Issue #1476/#1477/#1478）。总结见 `docs/SAST_REMEDIATION_SUMMARY.md`。
 本 skill 与 `.cursor/rules/security-guard.mdc` 配套——security-guard 讲通用红线，本 skill 讲**如何写才不被
 Checkmarx 报警**（扫描器是过程内分析、不认自定义 sanitizer）。
 

@@ -1,6 +1,6 @@
 # SAST 安全告警治理总结（Checkmarx / Cyberflows）
 
-> 生成日期：2026-07-06 · 关联 Issue：#1471 / #1472 / #1473 · 报告来源：`8.cyberflow_sast漏洞扫描结果/`（仓库外）
+> 生成日期：2026-07-06 · 关联 Issue：#1476 / #1477 / #1478 · 报告来源：`8.cyberflow_sast漏洞扫描结果/`（仓库外）
 >
 > 本文档记录两轮 Checkmarx 扫描的治理进展、根因结论、遗留项与下一步建议。新代码的**编码规范**见
 > `.claude/skills/secure-coding-sast/SKILL.md`（处理相关文件时自动加载）。
@@ -100,7 +100,7 @@
   检测「`ldap://` 且 `tls=false`」而未显式允许时 **fail-fast 拒绝启动**；dev compose 显式 true，
   K8s uat/preprod ConfigMap 显式 false（已按 CONFIG_SYNC 同步）。
 
-### 3.5 硬编码后门 → 配置注入（#1472，兼顾本地测试需求）
+### 3.5 硬编码后门 → 配置注入（#1477，兼顾本地测试需求）
 
 移除 `SecurityManagerComponent.validateCredentials` 里硬编码的 `admin/admin123`、`user/user123`。
 本地测试账号改为**配置注入**：`workflow.security.test-users.enabled`（`WORKFLOW_TEST_USERS_ENABLED`，默认
@@ -151,5 +151,5 @@ K8s 显式关闭。代码中无任何明文口令 → 硬编码凭证告警不�
 
 - 编码规范 skill：`.claude/skills/secure-coding-sast/SKILL.md`
 - 工具类：`platform-common` 的 `util/SafeUrlInput.java`、`jdbc/SqlIdentifiers.java`
-- Issue：`.kiro/issues/index.yaml` #1471（首轮）/ #1472（后门）/ #1473（第二轮 + 根因结论）
+- Issue：`.kiro/issues/index.yaml` #1476（首轮）/ #1477（后门）/ #1478（第二轮 + 根因结论）
 - 既有安全规则：`.cursor/rules/security-guard.mdc`
