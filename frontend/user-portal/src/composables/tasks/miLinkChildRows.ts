@@ -83,8 +83,14 @@ export function backfillMiLinkChildPrimaryKeysFromVariables<
         if (sid == null || String(sid).trim() === '') return false
         const sidNorm = normalizeMiLinkMatchId(sid)
         if (!sidNorm || sidNorm === participantKey) return false
-        const sParticipant = resolveMiChildStructuralParentFk(sr) ?? sidNorm
-        return sParticipant === participantKey
+        // Participant identity of the saved row: structural parent FK first, else its id_idw
+        // (the participant discriminator for People-style link children whose PK is plain `id`).
+        // NEVER the donor's own `id`: that is the allocated UUID, which can never equal the
+        // parent's id_idw — the old `?? sidNorm` fallback made FK-less donors unmatchable, so
+        // hydration lost the persisted UUID and every Save re-allocated a fresh PK (id churn).
+        const sParticipant =
+          resolveMiChildStructuralParentFk(sr) ?? normalizeMiLinkMatchId(sr.id_idw)
+        return sParticipant != null && sParticipant === participantKey
       }) as Record<string, unknown> | undefined
       if (donor?.id != null && String(donor.id).trim() !== '') {
         binding.data[i] = { ...rec, id: donor.id }

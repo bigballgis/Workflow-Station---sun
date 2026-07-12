@@ -1,9 +1,12 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    # JSONB->JSON domain alias: entities use PostgreSQL jsonb columns, which stock H2 rejects
+    # ('Unknown data type: JSONB'), killing create-drop DDL and with it the whole test context.
+    # Deliberately NOT MODE=PostgreSQL — that breaks Flowable's own H2 schema DDL (IDENTITY type).
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;INIT=CREATE DOMAIN IF NOT EXISTS JSONB AS JSON
     driver-class-name: org.h2.Driver
     username: sa
-    password: 
+    password:
   
   jpa:
     hibernate:
@@ -11,16 +14,31 @@ spring:
     show-sql: true
     
   kafka:
-    bootstrap-servers: ${spring.embedded.kafka.brokers}
+    # Default to a dead-end address when no @EmbeddedKafka is on the test: the placeholder must
+    # resolve or kafkaConfig fails and the WHOLE application context dies, cascading errors into
+    # every @SpringBootTest in the module (was the root cause of 9 property classes at 100% error).
+    # Kafka clients connect lazily, so a resolvable-but-unreachable address is fine for tests
+    # that never touch messaging.
+    bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:19092}
     
   data:
     redis:
-      host: localhost
-      port: 6370  # 使用不同端口避免冲突
+      # redisMessageListenerContainer connects EAGERLY at context startup, so this must point at
+      # a live Redis: the old dead-end port 6370 killed the whole test context (every
+      # @SpringBootTest errored). Default = the dev docker Redis; override via TEST_REDIS_*.
+      host: ${TEST_REDIS_HOST:localhost}
+      port: ${TEST_REDIS_PORT:6379}
+      password: ${TEST_REDIS_PASSWORD:dev_redis_123}
 
 flowable:
   database-schema-update: true
   async-executor-activate: false
+
+# platform-common ConfigurationManager (@ConfigurationProperties prefix "app") hard-validates
+# security.jwtSecretKey at startup — without a value the whole test application context dies.
+app:
+  security:
+    jwt-secret-key: test-only-jwt-secret-key-with-enough-length-for-hs512-validation-0123456789
 
 logging:
   level:

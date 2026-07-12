@@ -6,6 +6,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { isFkHidden, isFkReadonly, type FieldFkMeta } from '@platform-shared/tableFkRuntime'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
 import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse, type RelationImportResult, type LookupConfig, type LookupFilterCondition } from '@/api/relationTable'
 import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, type FieldLike } from '@/components/lookup/useLookupBehaviors'
@@ -118,15 +119,19 @@ export function useRelationTableData() {
   const handleSizeChange = (size: number) => { pageSize.value = size; currentPage.value = 1; fetchData() }
 
   // ---- CRUD ----
-  // FK readonly/hidden semantics (fkDisplayMode null/'readonly' => readonly; 'hidden' => hidden)
-  // must match portal/DW utils/tableFkRuntime.ts isFkReadonly/isFkHidden — admin-center has no
-  // copy of that util, so the rule is inlined here; keep the three in sync when it changes.
+  // FK readonly/hidden decision delegates to @platform-shared/tableFkRuntime — the single
+  // implementation shared with portal/DW (previously inlined here and kept in sync by comment).
+  const toFkMeta = (f: { fieldName: string; isForeignKey?: boolean; fkDisplayMode?: string | null }): FieldFkMeta => ({
+    fieldName: f.fieldName,
+    isForeignKey: f.isForeignKey,
+    fkDisplayMode: (f.fkDisplayMode ?? undefined) as FieldFkMeta['fkDisplayMode'],
+  })
+
   const visibleFieldColumns = computed(() =>
-    fieldColumns.value.filter(f => !(f.isForeignKey && f.fkDisplayMode === 'hidden')),
+    fieldColumns.value.filter(f => !isFkHidden(toFkMeta(f))),
   )
 
-  const isFkFieldDisabled = (field: FieldDefinitionResponse) =>
-    !!field.isForeignKey && (field.fkDisplayMode == null || field.fkDisplayMode === 'readonly')
+  const isFkFieldDisabled = (field: FieldDefinitionResponse) => isFkReadonly(toFkMeta(field))
 
   const pkStrategy = (field: FieldDefinitionResponse): string =>
     (field.pkGeneration as { strategy?: string } | undefined)?.strategy ?? 'uuid'

@@ -260,4 +260,42 @@ describe('linkFormMiIsolation helpers', () => {
     backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058')
     expect(bindings[0]!.data[0]!.id).toBe('586152b6-c284-456b-8cdd-e782436b63be')
   })
+
+  it('backfill matches an FK-less donor via id_idw (id-churn root cause: donor identity must never be its own UUID)', () => {
+    // People-style link child: PK is plain `id`, participant discriminator is id_idw; the saved
+    // row carries NO structural parent FK. The old `?? sidNorm` fallback compared the donor's own
+    // UUID against the parent id_idw (never equal), so hydration lost the persisted UUID and every
+    // Save re-allocated a fresh PK.
+    const saved = {
+      30: [{ id: '586152b6-c284-456b-8cdd-e782436b63be', id_idw: 'Test-000058', age: 'ii66' }],
+    }
+    const bindings = [
+      {
+        bindingId: 30,
+        tableName: 'People',
+        foreignKeyField: 'id_idw',
+        columns: [{ field: 'id' }, { field: 'id_idw' }, { field: 'age' }],
+        data: [{ id_idw: 'Test-000058', age: 'ii66' }],
+      },
+    ]
+    backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058')
+    expect(bindings[0]!.data[0]!.id).toBe('586152b6-c284-456b-8cdd-e782436b63be')
+  })
+
+  it('backfill never borrows an id from a foreign participant row (id_idw points elsewhere, #1444 guard)', () => {
+    const saved = {
+      30: [{ id: '586152b6-c284-456b-8cdd-e782436b63be', id_idw: 'Test-000099', age: 'zz' }],
+    }
+    const bindings = [
+      {
+        bindingId: 30,
+        tableName: 'People',
+        foreignKeyField: 'id_idw',
+        columns: [{ field: 'id' }, { field: 'id_idw' }, { field: 'age' }],
+        data: [{ id_idw: 'Test-000058', age: 'ii66' }],
+      },
+    ]
+    backfillMiLinkChildPrimaryKeysFromVariables(bindings as any, saved, 'Test-000058')
+    expect(bindings[0]!.data[0]!.id).toBeUndefined()
+  })
 })
