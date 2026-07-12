@@ -122,8 +122,8 @@ public class ProcessInstanceDeletionProtectionProperties {
         // 尝试删除流程定义（非级联），应该失败
         assertThatThrownBy(() -> processEngineComponent.deleteProcessDefinition(deploymentResult.getDeploymentId(), false))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("无法删除流程定义，存在")
-                .hasMessageContaining("个运行中的流程实例");
+                .hasMessageContaining("Cannot delete process definition, there are")
+                .hasMessageContaining("running process instances");
     }
 
     /**
@@ -183,8 +183,8 @@ public class ProcessInstanceDeletionProtectionProperties {
         // 第一个流程定义有运行实例，不能删除
         assertThatThrownBy(() -> processEngineComponent.deleteProcessDefinition(deployment1.getDeploymentId(), false))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("无法删除流程定义，存在")
-                .hasMessageContaining("个运行中的流程实例");
+                .hasMessageContaining("Cannot delete process definition, there are")
+                .hasMessageContaining("running process instances");
         
         // 第二个流程定义无运行实例，可以删除
         assertThatCode(() -> processEngineComponent.deleteProcessDefinition(deployment2.getDeploymentId(), false))
@@ -241,7 +241,7 @@ public class ProcessInstanceDeletionProtectionProperties {
         // 验证错误信息包含准确的实例数量
         assertThatThrownBy(() -> processEngineComponent.deleteProcessDefinition(deploymentResult.getDeploymentId(), false))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("无法删除流程定义，存在 3 个运行中的流程实例");
+                .hasMessageContaining("Cannot delete process definition, there are 3 running process instances");
     }
 
     /**
@@ -253,7 +253,7 @@ public class ProcessInstanceDeletionProtectionProperties {
         
         // 尝试删除不存在的部署，应该抛出异常
         assertThatThrownBy(() -> processEngineComponent.deleteProcessDefinition(nonExistentDeploymentId, false))
-                .hasMessageContaining("删除流程定义失败");
+                .hasMessageContaining("Failed to delete process definition");
     }
 
     // 辅助方法

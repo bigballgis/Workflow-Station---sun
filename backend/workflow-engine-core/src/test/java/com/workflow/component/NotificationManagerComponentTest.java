@@ -76,7 +76,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("WebSocket会话注册成功");
+        assertThat(result.getMessage()).isEqualTo("WebSocket session registered successfully");
         assertThat(result.getSessionId()).isEqualTo(sessionId);
         
         // 验证事件发布
@@ -99,7 +99,7 @@ class NotificationManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> notificationManager.registerWebSocketSession(sessionId, userId))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("会话ID不能为空");
+                .hasMessageContaining("Session ID must not be empty");
     }
 
     @Test
@@ -112,7 +112,7 @@ class NotificationManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> notificationManager.registerWebSocketSession(sessionId, userId))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("用户ID不能为空");
+                .hasMessageContaining("User ID must not be empty");
     }
 
     @Test
@@ -130,7 +130,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("WebSocket会话注销成功");
+        assertThat(result.getMessage()).isEqualTo("WebSocket session unregistered successfully");
         assertThat(result.getSessionId()).isEqualTo(sessionId);
         
         // 验证会话已注销
@@ -149,7 +149,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("WebSocket会话注销成功");
+        assertThat(result.getMessage()).isEqualTo("WebSocket session unregistered successfully");
     }
 
     @Test
@@ -165,7 +165,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("事件订阅成功");
+        assertThat(result.getMessage()).isEqualTo("Event subscribed successfully");
         assertThat(result.getSubscriptionId()).isNotNull();
         
         // 验证订阅已创建
@@ -186,7 +186,7 @@ class NotificationManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> notificationManager.subscribeEvent(eventType, userId, filters))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("事件类型不能为空");
+                .hasMessageContaining("Event type must not be empty");
     }
 
     @Test
@@ -205,7 +205,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("取消订阅成功");
+        assertThat(result.getMessage()).isEqualTo("Unsubscribed successfully");
         
         // 验证订阅已删除
         List<Map<String, Object>> subscriptions = notificationManager.getEventSubscriptions(userId, eventType);
@@ -223,7 +223,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("订阅不存在");
+        assertThat(result.getMessage()).isEqualTo("Subscription not found");
     }
 
     @Test
@@ -241,7 +241,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("事件发布成功");
+        assertThat(result.getMessage()).isEqualTo("Event published successfully");
         assertThat(result.getEventId()).isNotNull();
         
         // 验证Spring事件发布
@@ -263,7 +263,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("事件发布成功");
+        assertThat(result.getMessage()).isEqualTo("Event published successfully");
         assertThat(result.getEventId()).isNotNull();
         
         // 验证Spring事件发布
@@ -285,7 +285,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("事件发布成功");
+        assertThat(result.getMessage()).isEqualTo("Event published successfully");
         assertThat(result.getEventId()).isNotNull();
         
         // 验证Spring事件发布
@@ -307,7 +307,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("事件发布成功");
+        assertThat(result.getMessage()).isEqualTo("Event published successfully");
         assertThat(result.getEventId()).isNotNull();
         
         // 验证Spring事件发布
@@ -330,7 +330,7 @@ class NotificationManagerComponentTest {
 
         // Then
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).isEqualTo("事件发布成功");
+        assertThat(result.getMessage()).isEqualTo("Event published successfully");
         assertThat(result.getEventId()).isNotNull();
         
         // 验证Spring事件发布
@@ -549,7 +549,7 @@ class NotificationManagerComponentTest {
         assertThat(notification.get("userId")).isEqualTo(userId);
         assertThat(notification.get("notificationType")).isEqualTo("WEBSOCKET");
         String message = (String) notification.get("message");
-        assertThat(message).contains("流程已完成");
+        assertThat(message).contains("Process completed");
         assertThat(message).contains(processDefinitionKey);
         assertThat(message).contains(businessKey);
     }
@@ -568,7 +568,7 @@ class NotificationManagerComponentTest {
         assertThatThrownBy(() -> testManager.publishProcessStartedEvent(
                 "proc-inst-123", "test-process", "business-key", "user-456"))
                 .isInstanceOf(WorkflowBusinessException.class)
-                .hasMessageContaining("发布流程启动事件失败");
+                .hasMessageContaining("Failed to publish process started event");
     }
 
     // ==================== 新增测试：Kafka、多渠道通知、模板 ====================
@@ -589,7 +589,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getMessage()).contains("Kafka消息发送成功");
+            assertThat(result.getMessage()).contains("Kafka message sent successfully");
             verify(listOperations).rightPush(anyString(), anyString());
         }
 
@@ -603,7 +603,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getMessage()).contains("Kafka消费者注册成功");
+            assertThat(result.getMessage()).contains("Kafka consumer registered successfully");
         }
     }
 
@@ -620,7 +620,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getMessage()).contains("邮件发送成功");
+            assertThat(result.getMessage()).contains("Email sent successfully");
         }
 
         @Test
@@ -632,7 +632,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getMessage()).contains("短信发送成功");
+            assertThat(result.getMessage()).contains("SMS sent successfully");
         }
 
         @Test
@@ -644,7 +644,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getMessage()).contains("站内消息发送成功");
+            assertThat(result.getMessage()).contains("In-app notification sent successfully");
             assertThat(result.getNotificationId()).isNotNull();
         }
 
@@ -664,7 +664,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getMessage()).contains("成功");
+            assertThat(result.getMessage()).contains("succeeded");
         }
     }
 
@@ -690,7 +690,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getMessage()).contains("通知模板定义成功");
+            assertThat(result.getMessage()).contains("Notification template defined successfully");
         }
 
         @Test
@@ -734,7 +734,7 @@ class NotificationManagerComponentTest {
             Map<String, String> result = notificationManager.renderNotificationTemplate(
                     "TASK_ASSIGNED_DEFAULT", variables, null);
             
-            assertThat(result.get("subject")).isEqualTo("您有新的任务待处理");
+            assertThat(result.get("subject")).isEqualTo("You have a new task to process");
             assertThat(result.get("body")).contains("测试任务");
         }
     }
@@ -759,7 +759,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getMessage()).contains("用户通知偏好设置成功");
+            assertThat(result.getMessage()).contains("User notification preference set successfully");
         }
 
         @Test
@@ -778,7 +778,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isFalse();
-            assertThat(result.getMessage()).contains("用户已禁用邮件通知");
+            assertThat(result.getMessage()).contains("User has disabled email notifications");
         }
     }
 
@@ -810,7 +810,7 @@ class NotificationManagerComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isFalse();
-            assertThat(result.getMessage()).contains("消息不存在");
+            assertThat(result.getMessage()).contains("Message not found");
         }
     }
 }

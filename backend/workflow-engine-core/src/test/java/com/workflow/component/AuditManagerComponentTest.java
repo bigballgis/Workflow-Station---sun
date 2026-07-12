@@ -329,7 +329,7 @@ class AuditManagerComponentTest {
             "user-123",
             "SUCCESS"
         )).isInstanceOf(RuntimeException.class)
-          .hasMessageContaining("记录审计日志失败");
+          .hasMessageContaining("Failed to record audit log");
     }
     
     @Test
@@ -343,7 +343,7 @@ class AuditManagerComponentTest {
         // When & Then
         assertThatThrownBy(() -> auditManagerComponent.queryAuditLogs(request))
             .isInstanceOf(RuntimeException.class)
-            .hasMessageContaining("查询审计日志失败");
+            .hasMessageContaining("Failed to query audit logs");
     }
     
     @Test
@@ -773,7 +773,7 @@ class AuditManagerComponentTest {
     void testAuditOperationTypeFromString_Invalid() {
         assertThatThrownBy(() -> AuditOperationType.fromString("INVALID_TYPE"))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("未知的操作类型");
+            .hasMessageContaining("Unknown operation type");
     }
     
     @Test
@@ -788,7 +788,7 @@ class AuditManagerComponentTest {
     void testAuditRiskLevelFromString_Invalid() {
         assertThatThrownBy(() -> AuditRiskLevel.fromString("INVALID_LEVEL"))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("未知的风险等级");
+            .hasMessageContaining("Unknown risk level");
     }
     
     // ==================== 查询边界条件测试 ====================
