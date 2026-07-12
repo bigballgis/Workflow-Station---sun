@@ -1,8 +1,12 @@
 // Feature: sub-table-position-control, Property 1: parseFormConfig round-trip for subTable rules
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import * as fc from 'fast-check'
 import { extractFieldsRecursive, parseFormConfigToTabs, extractTabsFromTabsRule, parseFormRulesLayout, collectPlacedSubTableBindingIds, collectSubTableFieldsFromLayout, mergeMissingSubTableFieldsIntoLayout, ensureSubTableBindingsOnFormLayout, removeSubTableFieldsByBindingIds, flattenAllFormFieldSegments, legacyBindingIdAliases } from '../formRendererHelpers'
+
+// fast-check properties here run hundreds of parse/merge iterations; under full-suite parallel
+// workers they intermittently exceed the 5s default timeout (they pass in isolation).
+vi.setConfig({ testTimeout: 30_000 })
 
 // A no-op converter — regular fields are not the focus of this property test
 const noopConverter = () => null

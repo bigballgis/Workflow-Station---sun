@@ -1,0 +1,1502 @@
+{
+ "id": "204d0fa7-6269-4c76-87ad-fcc471419690",
+ "name": "Multi-Instance Subtask Demo",
+ "code": "fu-20260422-23tfag",
+ "version": "1.0.104",
+ "description": null,
+ "status": "DEPLOYED",
+ "forms": [
+  {
+   "id": "1cba2d1b-ec9e-45a8-93ec-17d07fe9a9cf",
+   "name": "Assign Task",
+   "sourceId": "50017",
+   "data": "{\"rule\": [{\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fnfrmp57zw67acc\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"I\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input l\", \"showWordLimit\": true}, \"title\": \"Meeting Name\", \"_fc_id\": \"id_Fwwymp57zw67abc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fzjwmp57zw67aec\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"id\", \"props\": {\"readonly\": true, \"maxlength\": 222, \"placeholder\": \"Please input id\", \"showWordLimit\": true}, \"title\": \"Meeting ID\", \"_fc_id\": \"id_Frjlmp57zw67adc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"_fc_drag_tag\": \"input\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fcktmp57zw67agc\", \"type\": \"lookup\", \"wrap\": {\"class\": \"fc-lookup-wrap\"}, \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"lookup\", \"props\": {\"placeholder\": \"Click to search\", \"lookupConfig\": \"{\\\"bindingId\\\":50038,\\\"tableId\\\":-1000000001,\\\"tableName\\\":\\\"sys_users\\\",\\\"searchFields\\\":[\\\"id\\\"],\\\"displayFields\\\":[\\\"display_name\\\"],\\\"selectedDisplayField\\\":\\\"display_name\\\",\\\"filterConditions\\\":[],\\\"showBackfillView\\\":true}\"}, \"title\": \"Host\", \"_fc_id\": \"id_Fxytmp5802t8ajc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"lookup\"}, {\"_on\": {\"click\": \"$FNX:\"}, \"name\": \"ref_F62nmogvapb8acc\", \"type\": \"elCard\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"header\": \"Title\"}, \"style\": {\"width\": \"100%\"}, \"_fc_id\": \"id_F3tdmogvapb8abc\", \"hidden\": false, \"display\": true, \"children\": [{\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fi6fmog0fkmzacc\", \"type\": \"subTable\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"portalViews\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"subForm\", \"formId\": null}}}, \"title\": \"Sub-Table\", \"_fc_id\": \"id_Fyptmog0fkmzabc\", \"hidden\": false, \"display\": true, \"_bindingId\": 50066, \"_fc_drag_tag\": \"subTable\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_F68cmpdszcrxaic\", \"type\": \"subTable\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"readonly\": true, \"portalViews\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"subForm\", \"formId\": null, \"linkFormColumnId\": null}}}, \"title\": \"Sub-Table\", \"_fc_id\": \"id_F5xvmpdszcrxahc\", \"hidden\": false, \"display\": true, \"_bindingId\": 50103, \"_fc_drag_tag\": \"subTable\"}], \"_fc_drag_tag\": \"elCard\"}, {\"_on\": {\"blur\": \"$FNX:\", \"error\": \"$FNX:\", \"focus\": \"$FNX:\", \"exceed\": \"$FNX:\", \"remove\": \"$FNX:\", \"preview\": \"$FNX:\", \"progress\": \"$FNX:\"}, \"name\": \"ref_Fuljmpdp9p2paec\", \"type\": \"upload\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"fileupload\", \"props\": {\"tip\": \"Supported formats: jpg/png/pdf/docx/xlsx, max 10MB\", \"limit\": 1, \"accept\": \".jpg,.jpeg,.png,.pdf,.docx,.xlsx\", \"action\": \"/api/v1/upload\", \"listType\": \"text\", \"multiple\": false, \"uploadText\": \"Upload\"}, \"title\": \"Meeting Doc\", \"_fc_id\": \"id_Fuj9mpdp9p2padc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"upload\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fuzmmqf34mujaec\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"__request_id\", \"props\": {\"readonly\": true}, \"title\": \"Request ID\", \"_fc_id\": \"id_Fbntmqf34mujadc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"_requestId\": true, \"_fc_drag_tag\": \"input\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"showMessage\": true, \"labelPosition\": \"left\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": false, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\", \"validateOnSubmit\": true}, \"subForms\": {\"50066\": {\"rule\": [{\"name\": \"ref_Fquumps7e9d5acc\", \"type\": \"input\", \"field\": \"main_id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input main id\", \"showWordLimit\": true}, \"title\": \"main id\", \"_fc_id\": \"id_Ft0mmps7e9d5abc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"mode\": \"required\", \"message\": \"main id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_F5rimp111md0aec\", \"type\": \"inputNumber\", \"field\": \"id_idw\", \"props\": {\"readonly\": true, \"precision\": 0, \"placeholder\": \"Please input id\"}, \"title\": \"Id\", \"_fc_id\": \"id_Ftrsmp111md0adc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"inputNumber\"}, {\"name\": \"ref_Fdg6mofwbf48aqc\", \"type\": \"input\", \"field\": \"name\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input name\", \"showWordLimit\": true}, \"title\": \"Name\", \"_fc_id\": \"id_F8n4mofwbf48apc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fqr3mofwbf48auc\", \"type\": \"lookup\", \"wrap\": {\"class\": \"fc-lookup-wrap\"}, \"field\": \"assignee\", \"props\": {\"placeholder\": \"Click to search\", \"lookupConfig\": \"{\\\"bindingId\\\":50038,\\\"tableId\\\":-1000000001,\\\"tableName\\\":\\\"sys_users\\\",\\\"searchFields\\\":[\\\"id\\\"],\\\"displayFields\\\":[\\\"full_name\\\"],\\\"selectedDisplayField\\\":\\\"full_name\\\",\\\"filterConditions\\\":[],\\\"showBackfillView\\\":true}\"}, \"title\": \"Assignee\", \"_fc_id\": \"id_Fb5mmofwbob2avc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"lookup\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"labelPosition\": \"right\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": true, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\"}}, \"50103\": {\"rule\": [{\"name\": \"ref_Fqafmqhikyhqacc\", \"type\": \"input\", \"field\": \"id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input id\", \"showWordLimit\": true}, \"title\": \"id\", \"_fc_id\": \"id_Ftexmqhikyhqabc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fqswmqhikyhqaec\", \"type\": \"input\", \"field\": \"main_id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input main_id\", \"showWordLimit\": true}, \"title\": \"main_id\", \"_fc_id\": \"id_Fqtzmqhikyhqadc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"main_id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fh4xmqhikyhqagc\", \"type\": \"upload\", \"field\": \"file\", \"props\": {\"tip\": \"Supported formats: jpg/png/pdf/docx/xlsx, max 10MB\", \"limit\": 1, \"accept\": \".jpg,.jpeg,.png,.pdf,.docx,.xlsx\", \"action\": \"/api/v1/upload\", \"listType\": \"text\", \"multiple\": false, \"uploadText\": \"Upload\"}, \"title\": \"file\", \"_fc_id\": \"id_Fanfmqhikyhqafc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"upload\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"labelPosition\": \"left\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": true, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\"}}}, \"subListViews\": {\"50066\": {\"columns\": [{\"dataType\": \"VARCHAR\", \"fieldName\": \"name\", \"columnType\": \"field\", \"displayName\": \"name\"}, {\"dataType\": \"BIGINT\", \"fieldName\": \"id\", \"columnType\": \"field\", \"displayName\": \"id\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"assignee\", \"columnType\": \"field\", \"displayName\": \"assignee\"}]}, \"50103\": {\"columns\": [{\"dataType\": \"VARCHAR\", \"fieldName\": \"main_id\", \"columnType\": \"field\", \"displayName\": \"main id\"}, {\"dataType\": \"BIGINT\", \"fieldName\": \"id_idw\", \"columnType\": \"field\", \"displayName\": \"id\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"name\", \"columnType\": \"field\", \"displayName\": \"name\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"assignee\", \"columnType\": \"field\", \"displayName\": \"assignee\"}]}}, \"relationViews\": {}, \"subTablePortalViews\": {\"50066\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"linkForm\", \"formId\": null, \"linkFormColumnId\": null}}}}",
+   "type": "FORM",
+   "tableBindings": [
+    {
+     "bindingId": 50036,
+     "tableId": 50019,
+     "bindingType": "PRIMARY",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 0,
+     "tableName": "main",
+     "tableDisplayName": "Meeting",
+     "tableType": "MAIN",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id"
+     ],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "I",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {
+        "scope": "perTable",
+        "prefix": "Meeting-",
+        "padWidth": 6,
+        "strategy": "prefixedSequence",
+        "startValue": 1
+       },
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "lookup",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "fileupload",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "test",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "testlookup",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50066,
+     "tableId": 50020,
+     "bindingType": "SUB",
+     "bindingMode": "EDITABLE",
+     "subMode": "FULL",
+     "foreignKeyField": "id_idw",
+     "sortOrder": 1,
+     "tableName": "subtable",
+     "tableDisplayName": "Participants",
+     "tableType": "SUB",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id_idw"
+     ],
+     "bindingLinkMode": "miParticipantRow",
+     "fieldDefinitions": [
+      {
+       "fieldName": "name",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "id_idw",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {
+        "scope": "perTable",
+        "prefix": "Test-",
+        "padWidth": 6,
+        "strategy": "prefixedSequence",
+        "startValue": 1
+       },
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "assignee",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "task_status",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "task_current_node",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "main_id",
+       "isPrimaryKey": false,
+       "isForeignKey": true,
+       "refTableId": 50019,
+       "refPrimaryKeyFields": [
+        "id"
+       ],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "test",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50038,
+     "tableId": null,
+     "bindingType": "RELATED",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 2,
+     "tableName": null,
+     "tableDisplayName": null,
+     "tableType": "RELATION",
+     "tableDescription": null,
+     "primaryKeyFields": [],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": []
+    },
+    {
+     "bindingId": 50098,
+     "tableId": 1,
+     "bindingType": "RELATED",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 3,
+     "tableName": "test",
+     "tableDisplayName": "test",
+     "tableType": "RELATION",
+     "tableDescription": null,
+     "primaryKeyFields": [],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "name",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "lookup_hmdc",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50103,
+     "tableId": 50074,
+     "bindingType": "SUB",
+     "bindingMode": "EDITABLE",
+     "subMode": "FULL",
+     "foreignKeyField": "main_id",
+     "sortOrder": 4,
+     "tableName": "attachment",
+     "tableDisplayName": "Attachment",
+     "tableType": "SUB",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id"
+     ],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "main_id",
+       "isPrimaryKey": false,
+       "isForeignKey": true,
+       "refTableId": 50019,
+       "refPrimaryKeyFields": [
+        "id"
+       ],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "file",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "cd509c23-1e3f-4d2b-9aaa-c130a9aeb11a",
+   "name": "Sub task",
+   "sourceId": "50018",
+   "data": "{\"rule\": [{\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fy47mqhiqkcfayc\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"__request_id\", \"props\": {\"readonly\": true}, \"title\": \"Request ID\", \"_fc_id\": \"id_Fdj8mqhiqkcfaxc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"_requestId\": true, \"_fc_drag_tag\": \"input\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fi0tmqhiqkcfb0c\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"I\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input Meeting Name\", \"showWordLimit\": true}, \"title\": \"Meeting Name\", \"_fc_id\": \"id_Foxvmqhiqkcfazc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Foqumqhiqkcgb2c\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"id\", \"props\": {\"readonly\": true, \"maxlength\": 222, \"placeholder\": \"Please input Meeting ID\", \"showWordLimit\": true}, \"title\": \"Meeting ID\", \"_fc_id\": \"id_Ftutmqhiqkcgb1c\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"Meeting ID required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_F4f7mqhiqkcgb4c\", \"type\": \"lookup\", \"wrap\": {\"class\": \"fc-lookup-wrap\"}, \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"lookup\", \"props\": {\"placeholder\": \"Click to search\", \"lookupConfig\": \"{\\\"bindingId\\\":50039,\\\"tableId\\\":-1000000001,\\\"tableName\\\":\\\"sys_users\\\",\\\"searchFields\\\":[\\\"id\\\"],\\\"displayFields\\\":[\\\"display_name\\\"],\\\"selectedDisplayField\\\":\\\"display_name\\\",\\\"filterConditions\\\":[],\\\"showBackfillView\\\":true}\"}, \"title\": \"Host\", \"_fc_id\": \"id_Fjj2mqhj7ct1bbc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"lookup\"}, {\"_on\": {\"blur\": \"$FNX:\", \"error\": \"$FNX:\", \"focus\": \"$FNX:\", \"exceed\": \"$FNX:\", \"remove\": \"$FNX:\", \"preview\": \"$FNX:\", \"progress\": \"$FNX:\"}, \"name\": \"ref_Fi5umqhiqkcgb6c\", \"type\": \"upload\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"fileupload\", \"props\": {\"tip\": \"Supported formats: jpg/png/pdf/docx/xlsx, max 10MB\", \"limit\": 1, \"accept\": \".jpg,.jpeg,.png,.pdf,.docx,.xlsx\", \"action\": \"/api/v1/upload\", \"listType\": \"text\", \"multiple\": false, \"uploadText\": \"Upload\"}, \"title\": \"Meeting Doc\", \"_fc_id\": \"id_Fi41mqhiqkcgb5c\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"upload\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fcjemqhiqok6b8c\", \"type\": \"subTable\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"portalViews\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"subForm\", \"formId\": null, \"linkFormColumnId\": null}}}, \"title\": \"Sub-Table\", \"_fc_id\": \"id_Fgfpmqhiqok6b7c\", \"hidden\": false, \"display\": true, \"$required\": false, \"_bindingId\": 50069, \"_fc_drag_tag\": \"subTable\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fr77mqhiqq69bac\", \"type\": \"subTable\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"portalViews\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"subForm\", \"formId\": null, \"linkFormColumnId\": null}}}, \"title\": \"Sub-Table\", \"_fc_id\": \"id_Fkjfmqhiqq68b9c\", \"hidden\": false, \"display\": true, \"$required\": false, \"_bindingId\": 50104, \"_fc_drag_tag\": \"subTable\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"showMessage\": true, \"labelPosition\": \"right\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": false, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\", \"validateOnSubmit\": true}, \"subForms\": {\"50030\": {\"rule\": [{\"name\": \"ref_F5l3mpkyfr1gacc\", \"type\": \"inputNumber\", \"field\": \"id\", \"props\": {\"readonly\": true, \"precision\": 0, \"placeholder\": \"Please input id\"}, \"title\": \"id\", \"_fc_id\": \"id_Fq3wmpkyfr1gabc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"id is required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"inputNumber\"}, {\"name\": \"ref_Ffs9mpw0ln6daoc\", \"type\": \"input\", \"field\": \"sub_task_id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input sub task id\", \"showWordLimit\": true}, \"title\": \"sub task id\", \"_fc_id\": \"id_Faq5mpw0ln6danc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fkufmpkyfr1gaec\", \"type\": \"switch\", \"field\": \"sex\", \"props\": {}, \"title\": \"sex\", \"_fc_id\": \"id_Fdbsmpkyfr1gadc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"switch\"}, {\"name\": \"ref_F8wsmpkyfr1gagc\", \"type\": \"input\", \"field\": \"age\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input age\", \"showWordLimit\": true}, \"title\": \"age\", \"_fc_id\": \"id_Fecnmpkyfr1gafc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"showMessage\": true, \"labelPosition\": \"right\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": false, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\", \"validateOnSubmit\": true}}, \"50069\": {\"rule\": [{\"name\": \"ref_Fltnmqf1slmjasc\", \"type\": \"input\", \"field\": \"name\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input Name\", \"showWordLimit\": true}, \"title\": \"Name\", \"_fc_id\": \"id_Fyt8mqf1slmjarc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_F7uzmqf1slmjauc\", \"type\": \"inputNumber\", \"field\": \"id_idw\", \"props\": {\"readonly\": true, \"precision\": 0, \"placeholder\": \"Please input Id\"}, \"title\": \"Id\", \"_fc_id\": \"id_Fsb2mqf1slmjatc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"Id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"inputNumber\"}, {\"name\": \"ref_F1gqmqf1slmjawc\", \"type\": \"lookup\", \"wrap\": {\"class\": \"fc-lookup-wrap\"}, \"field\": \"assignee\", \"props\": {\"placeholder\": \"Click to search\", \"lookupConfig\": \"{\\\"bindingId\\\":50039,\\\"tableId\\\":-1000000001,\\\"tableName\\\":\\\"sys_users\\\",\\\"searchFields\\\":[\\\"id\\\"],\\\"displayFields\\\":[\\\"full_name\\\"],\\\"selectedDisplayField\\\":\\\"full_name\\\",\\\"filterConditions\\\":[],\\\"showBackfillView\\\":true}\"}, \"title\": \"Assignee\", \"_fc_id\": \"id_Fki4mqhin8etahc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"lookup\"}, {\"name\": \"ref_Fryfmqf1slmjb2c\", \"type\": \"input\", \"field\": \"main_id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input main id\", \"showWordLimit\": true}, \"title\": \"main id\", \"_fc_id\": \"id_Fmmhmqf1slmjb1c\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"main id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"showMessage\": true, \"labelPosition\": \"left\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": false, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\", \"validateOnSubmit\": true}}, \"50104\": {\"rule\": [{\"name\": \"ref_F9sfmqhioox3akc\", \"type\": \"input\", \"field\": \"id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input id\", \"showWordLimit\": true}, \"title\": \"id\", \"_fc_id\": \"id_Fv7fmqhioox3ajc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_F73ymqhioox3amc\", \"type\": \"input\", \"field\": \"main_id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input main_id\", \"showWordLimit\": true}, \"title\": \"main_id\", \"_fc_id\": \"id_Fedkmqhioox3alc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"main_id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fyhqmqhioox3aoc\", \"type\": \"upload\", \"field\": \"file\", \"props\": {\"tip\": \"Supported formats: jpg/png/pdf/docx/xlsx, max 10MB\", \"limit\": 1, \"accept\": \".jpg,.jpeg,.png,.pdf,.docx,.xlsx\", \"action\": \"/api/v1/upload\", \"listType\": \"text\", \"multiple\": false, \"uploadText\": \"Upload\"}, \"title\": \"file\", \"_fc_id\": \"id_Fusbmqhioox3anc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"upload\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"labelPosition\": \"left\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": true, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\"}}}, \"subListViews\": {\"50030\": {\"columns\": [{\"dataType\": \"INTEGER\", \"fieldName\": \"id\", \"columnType\": \"field\", \"displayName\": \"id\"}, {\"dataType\": \"BOOLEAN\", \"fieldName\": \"sex\", \"columnType\": \"field\", \"displayName\": \"sex\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"age\", \"columnType\": \"field\", \"displayName\": \"age\"}, {\"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"sub_task_id\", \"columnType\": \"field\", \"displayName\": \"sub task id\", \"isPrimaryKey\": false}]}, \"50069\": {\"columns\": [{\"dataType\": \"BIGINT\", \"fieldName\": \"id_idw\", \"columnType\": \"field\", \"displayName\": \"id_idw\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"main_id\", \"columnType\": \"field\", \"displayName\": \"main_id\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"assignee\", \"columnType\": \"field\", \"displayName\": \"assignee\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"task_status\", \"columnType\": \"field\", \"displayName\": \"task_status\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"task_current_node\", \"columnType\": \"field\", \"displayName\": \"task_current_node\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"name\", \"columnType\": \"field\", \"displayName\": \"name\"}, {\"dataType\": \"LINK_FORM\", \"linkText\": \"Details\", \"nullable\": true, \"fieldName\": \"linkForm:-50069\", \"columnType\": \"linkForm\", \"columnLabel\": \"Link Form\", \"componentId\": -50069, \"displayName\": \"Link Form\", \"isPrimaryKey\": false, \"linkFormColumnId\": -50069, \"boundSubTableName\": \"People\", \"boundSubTableBindingId\": 50030}]}, \"50104\": {\"columns\": [{\"dataType\": \"VARCHAR\", \"fieldName\": \"id\", \"columnType\": \"field\", \"displayName\": \"id\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"main_id\", \"columnType\": \"field\", \"displayName\": \"main_id\"}, {\"dataType\": \"FILE\", \"fieldName\": \"file\", \"columnType\": \"field\", \"displayName\": \"file\"}]}}, \"relationViews\": {\"50039\": {\"allFields\": [{\"id\": -1, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": false, \"fieldName\": \"id\", \"precision\": null, \"sortOrder\": 1, \"displayName\": \"User ID\", \"defaultValue\": null, \"isPrimaryKey\": true, \"pkGeneration\": null}, {\"id\": -2, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"username\", \"precision\": null, \"sortOrder\": 2, \"displayName\": \"Username\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -3, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"display_name\", \"precision\": null, \"sortOrder\": 3, \"displayName\": \"Display Name\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -4, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"full_name\", \"precision\": null, \"sortOrder\": 4, \"displayName\": \"Full Name\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -5, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"email\", \"precision\": null, \"sortOrder\": 5, \"displayName\": \"Email\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -6, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"employee_id\", \"precision\": null, \"sortOrder\": 6, \"displayName\": \"Employee ID\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -7, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"status\", \"precision\": null, \"sortOrder\": 7, \"displayName\": \"Status\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -8, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"language\", \"precision\": null, \"sortOrder\": 8, \"displayName\": \"Language\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}], \"viewFields\": [{\"id\": -1, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": false, \"fieldName\": \"id\", \"precision\": null, \"sortOrder\": 1, \"displayName\": \"User ID\", \"defaultValue\": null, \"isPrimaryKey\": true, \"pkGeneration\": null}, {\"id\": -2, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"username\", \"precision\": null, \"sortOrder\": 2, \"displayName\": \"Username\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -3, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"display_name\", \"precision\": null, \"sortOrder\": 3, \"displayName\": \"Display Name\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -4, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"full_name\", \"precision\": null, \"sortOrder\": 4, \"displayName\": \"Full Name\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -5, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"email\", \"precision\": null, \"sortOrder\": 5, \"displayName\": \"Email\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -6, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"employee_id\", \"precision\": null, \"sortOrder\": 6, \"displayName\": \"Employee ID\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -7, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"status\", \"precision\": null, \"sortOrder\": 7, \"displayName\": \"Status\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": -8, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"language\", \"precision\": null, \"sortOrder\": 8, \"displayName\": \"Language\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}]}, \"50097\": {\"allFields\": [{\"id\": 7, \"scale\": null, \"length\": 255, \"dataType\": \"INTEGER\", \"nullable\": false, \"fieldName\": \"id\", \"precision\": null, \"sortOrder\": 0, \"displayName\": \"ID\", \"defaultValue\": null, \"isPrimaryKey\": true, \"pkGeneration\": null}, {\"id\": 8, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"name\", \"precision\": null, \"sortOrder\": 1, \"displayName\": \"Name\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 9, \"scale\": null, \"length\": null, \"dataType\": \"TIMESTAMP\", \"nullable\": true, \"fieldName\": \"created_at\", \"precision\": null, \"sortOrder\": 2, \"displayName\": \"Created At\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 10, \"scale\": null, \"length\": 64, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"created_by\", \"precision\": null, \"sortOrder\": 3, \"displayName\": \"Created By\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 11, \"scale\": null, \"length\": null, \"dataType\": \"TIMESTAMP\", \"nullable\": true, \"fieldName\": \"updated_at\", \"precision\": null, \"sortOrder\": 4, \"displayName\": \"Updated At\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 12, \"scale\": null, \"length\": 64, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"updated_by\", \"precision\": null, \"sortOrder\": 5, \"displayName\": \"Updated By\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}], \"viewFields\": [{\"id\": 7, \"scale\": null, \"length\": 255, \"dataType\": \"INTEGER\", \"nullable\": false, \"fieldName\": \"id\", \"precision\": null, \"sortOrder\": 0, \"displayName\": \"ID\", \"defaultValue\": null, \"isPrimaryKey\": true, \"pkGeneration\": null}, {\"id\": 8, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"name\", \"precision\": null, \"sortOrder\": 1, \"displayName\": \"Name\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 9, \"scale\": null, \"length\": null, \"dataType\": \"TIMESTAMP\", \"nullable\": true, \"fieldName\": \"created_at\", \"precision\": null, \"sortOrder\": 2, \"displayName\": \"Created At\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 10, \"scale\": null, \"length\": 64, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"created_by\", \"precision\": null, \"sortOrder\": 3, \"displayName\": \"Created By\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 11, \"scale\": null, \"length\": null, \"dataType\": \"TIMESTAMP\", \"nullable\": true, \"fieldName\": \"updated_at\", \"precision\": null, \"sortOrder\": 4, \"displayName\": \"Updated At\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 12, \"scale\": null, \"length\": 64, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"updated_by\", \"precision\": null, \"sortOrder\": 5, \"displayName\": \"Updated By\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}]}}, \"subTablePortalViews\": {\"50030\": {\"assigneeTodo\": \"formBelowTable\", \"initiatorRequest\": \"summaryWithLinkFormModal\", \"assigneeTodoFormSource\": {\"type\": \"linkForm\", \"formId\": null, \"linkFormColumnId\": -50069}}, \"50069\": {\"assigneeTodo\": \"formBelowTable\", \"initiatorRequest\": \"summaryWithLinkFormModal\", \"assigneeTodoFormSource\": {\"type\": \"linkForm\", \"formId\": null, \"linkFormColumnId\": -50069}}, \"50104\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"linkForm\", \"formId\": null, \"linkFormColumnId\": -50069}}}}",
+   "type": "FORM",
+   "tableBindings": [
+    {
+     "bindingId": 50068,
+     "tableId": 50019,
+     "bindingType": "PRIMARY",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 0,
+     "tableName": "main",
+     "tableDisplayName": "Meeting",
+     "tableType": "MAIN",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id"
+     ],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "I",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {
+        "scope": "perTable",
+        "prefix": "Meeting-",
+        "padWidth": 6,
+        "strategy": "prefixedSequence",
+        "startValue": 1
+       },
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "lookup",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "fileupload",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "test",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "testlookup",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50069,
+     "tableId": 50020,
+     "bindingType": "SUB",
+     "bindingMode": "READONLY",
+     "subMode": "FULL",
+     "foreignKeyField": "id_idw",
+     "sortOrder": 1,
+     "tableName": "subtable",
+     "tableDisplayName": "Participants",
+     "tableType": "SUB",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id_idw"
+     ],
+     "bindingLinkMode": "miParticipantRow",
+     "fieldDefinitions": [
+      {
+       "fieldName": "name",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "id_idw",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {
+        "scope": "perTable",
+        "prefix": "Test-",
+        "padWidth": 6,
+        "strategy": "prefixedSequence",
+        "startValue": 1
+       },
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "assignee",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "task_status",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "task_current_node",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "main_id",
+       "isPrimaryKey": false,
+       "isForeignKey": true,
+       "refTableId": 50019,
+       "refPrimaryKeyFields": [
+        "id"
+       ],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "test",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50039,
+     "tableId": null,
+     "bindingType": "RELATED",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 3,
+     "tableName": null,
+     "tableDisplayName": null,
+     "tableType": "RELATION",
+     "tableDescription": null,
+     "primaryKeyFields": [],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": []
+    },
+    {
+     "bindingId": 50097,
+     "tableId": 1,
+     "bindingType": "RELATED",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 4,
+     "tableName": "test",
+     "tableDisplayName": "test",
+     "tableType": "RELATION",
+     "tableDescription": null,
+     "primaryKeyFields": [],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "name",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "lookup_hmdc",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50030,
+     "tableId": 50021,
+     "bindingType": "SUB",
+     "bindingMode": "EDITABLE",
+     "subMode": "FULL",
+     "foreignKeyField": "id",
+     "sortOrder": 5,
+     "tableName": "people",
+     "tableDisplayName": "People",
+     "tableType": "SUB",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id"
+     ],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "sex",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "age",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "sub_task_id",
+       "isPrimaryKey": false,
+       "isForeignKey": true,
+       "refTableId": 50020,
+       "refPrimaryKeyFields": [
+        "id_idw"
+       ],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50104,
+     "tableId": 50074,
+     "bindingType": "SUB",
+     "bindingMode": "EDITABLE",
+     "subMode": "FULL",
+     "foreignKeyField": "main_id",
+     "sortOrder": 5,
+     "tableName": "attachment",
+     "tableDisplayName": "Attachment",
+     "tableType": "SUB",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id"
+     ],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "main_id",
+       "isPrimaryKey": false,
+       "isForeignKey": true,
+       "refTableId": 50019,
+       "refPrimaryKeyFields": [
+        "id"
+       ],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "file",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "4d3b8ac1-ce1b-46d2-adff-d5884e7d205c",
+   "name": "Main",
+   "sourceId": "50016",
+   "data": "{\"rule\": [{\"_on\": {\"click\": \"$FNX:\"}, \"name\": \"ref_F5bxmob4jaayamc\", \"type\": \"elCard\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"header\": \"Title\"}, \"style\": {\"width\": \"100%\"}, \"_fc_id\": \"id_Fvzzmob4jaayalc\", \"hidden\": false, \"display\": true, \"children\": [{\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Feq2moe063f9acc\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"I\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input l\", \"showWordLimit\": true}, \"title\": \"Meeting Name\", \"_fc_id\": \"id_Fsw3moe063f9abc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Ffskmpqn3uypacc\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"id\", \"props\": {\"readonly\": true, \"maxlength\": 222, \"placeholder\": \"Please input id\", \"showWordLimit\": true}, \"title\": \"Meeting ID\", \"_fc_id\": \"id_Fox9mpqn3uypabc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"mode\": \"required\", \"message\": \"id required\", \"trigger\": \"blur\", \"required\": true}], \"$required\": false, \"_fc_drag_tag\": \"input\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fkrtmqf3492qacc\", \"type\": \"input\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"__request_id\", \"props\": {\"readonly\": true}, \"title\": \"Request ID\", \"_fc_id\": \"id_F4a8mqf3492qabc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"_requestId\": true, \"_fc_drag_tag\": \"input\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Fod0mra4ln44acc\", \"type\": \"lookup\", \"wrap\": {\"class\": \"fc-lookup-wrap\"}, \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"testlookup\", \"props\": {\"placeholder\": \"Click to search\", \"lookupConfig\": \"{\\\"bindingId\\\":50538,\\\"tableId\\\":7,\\\"tableName\\\":\\\"hmdc_dropdown\\\",\\\"searchFields\\\":[\\\"row_id\\\"],\\\"displayFields\\\":[\\\"enabled\\\"],\\\"selectedDisplayField\\\":\\\"dropdown_name\\\",\\\"filterConditions\\\":[],\\\"showBackfillView\\\":true}\"}, \"title\": \"testlookup\", \"_fc_id\": \"id_Fs4wmra4nf5hadc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"lookup\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_Faflmohd24soacc\", \"type\": \"lookup\", \"wrap\": {\"class\": \"fc-lookup-wrap\"}, \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"lookup\", \"props\": {\"placeholder\": \"Click to search\", \"lookupConfig\": \"{\\\"bindingId\\\":50037,\\\"tableId\\\":-1000000001,\\\"tableName\\\":\\\"sys_users\\\",\\\"searchFields\\\":[\\\"id\\\"],\\\"displayFields\\\":[\\\"display_name\\\"],\\\"selectedDisplayField\\\":\\\"display_name\\\",\\\"filterConditions\\\":[],\\\"showBackfillView\\\":true}\"}, \"title\": \"Host\", \"_fc_id\": \"id_F354mohd2m9uafc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"lookup\"}], \"_fc_drag_tag\": \"elCard\"}, {\"_on\": {\"blur\": \"$FNX:\", \"error\": \"$FNX:\", \"focus\": \"$FNX:\", \"exceed\": \"$FNX:\", \"remove\": \"$FNX:\", \"preview\": \"$FNX:\", \"progress\": \"$FNX:\"}, \"name\": \"ref_Fo91mpdp92h6acc\", \"type\": \"upload\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"field\": \"fileupload\", \"props\": {\"tip\": \"Supported formats: jpg/png/pdf/docx/xlsx, max 10MB\", \"limit\": 1, \"accept\": \".jpg,.jpeg,.png,.pdf,.docx,.xlsx\", \"action\": \"/api/v1/upload\", \"listType\": \"text\", \"multiple\": false, \"uploadText\": \"Upload\"}, \"title\": \"Meeting Doc\", \"_fc_id\": \"id_Fqlcmpdp92h6abc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"upload\"}, {\"_on\": {\"click\": \"$FNX:\"}, \"name\": \"ref_Fm1gmog14zblacc\", \"type\": \"elCard\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"header\": \"Title\"}, \"style\": {\"width\": \"100%\"}, \"_fc_id\": \"id_Frwomog14zblabc\", \"hidden\": false, \"display\": true, \"children\": [{\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_F5bemoifmxsxacc\", \"type\": \"subTable\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"readonly\": false, \"portalViews\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"subForm\", \"formId\": null}}}, \"title\": \"Sub-Table\", \"_fc_id\": \"id_F6lomoifmxsxabc\", \"hidden\": false, \"display\": true, \"readonly\": false, \"_bindingId\": 50064, \"_fc_drag_tag\": \"subTable\"}, {\"_on\": {\"blur\": \"$FNX:\", \"focus\": \"$FNX:\", \"change\": \"$FNX:\"}, \"name\": \"ref_F39xmqf3atjzacc\", \"type\": \"subTable\", \"_hook\": {\"load\": \"$FNX:\", \"value\": \"$FNX:\", \"watch\": \"$FNX:\", \"hidden\": \"$FNX:\", \"deleted\": \"$FNX:\", \"mounted\": \"$FNX:\", \"titleClick\": \"$FNX:\"}, \"props\": {\"portalViews\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"subForm\", \"formId\": null, \"linkFormColumnId\": null}}}, \"title\": \"Sub-Table\", \"_fc_id\": \"id_Fjcimqf3atjzabc\", \"hidden\": false, \"display\": true, \"_bindingId\": 50105, \"_fc_drag_tag\": \"subTable\"}], \"_fc_drag_tag\": \"elCard\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"showMessage\": true, \"labelPosition\": \"left\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": false, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\", \"validateOnSubmit\": true}, \"subForms\": {\"50064\": {\"rule\": [{\"name\": \"ref_F5zomr3cnkq8acc\", \"type\": \"input\", \"field\": \"name\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input Name\", \"showWordLimit\": true}, \"title\": \"Name\", \"_fc_id\": \"id_Ff9zmr3cnkq8abc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_F6ffmr3cnkq8aec\", \"type\": \"inputNumber\", \"field\": \"id_idw\", \"props\": {\"readonly\": true, \"precision\": 0, \"placeholder\": \"Please input Id\"}, \"title\": \"Id\", \"_fc_id\": \"id_Ffoimr3cnkq8adc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"Id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"inputNumber\"}, {\"name\": \"ref_Fp2lmqf1r0p6agc\", \"type\": \"lookup\", \"wrap\": {\"class\": \"fc-lookup-wrap\"}, \"field\": \"assignee\", \"props\": {\"placeholder\": \"Click to search\", \"lookupConfig\": \"{\\\"bindingId\\\":50037,\\\"tableId\\\":-1000000001,\\\"tableName\\\":\\\"sys_users\\\",\\\"searchFields\\\":[\\\"id\\\"],\\\"displayFields\\\":[\\\"full_name\\\"],\\\"selectedDisplayField\\\":\\\"display_name\\\",\\\"filterConditions\\\":[],\\\"showBackfillView\\\":true}\"}, \"title\": \"Assignee\", \"_fc_id\": \"id_Ftbnmqhi9j9iabc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"lookup\"}, {\"name\": \"ref_Ffxmmr3cnkq8aic\", \"type\": \"input\", \"field\": \"task_status\", \"props\": {\"value\": \"PENDING\", \"maxlength\": 20, \"placeholder\": \"Please input subtask status\", \"showWordLimit\": true}, \"title\": \"subtask status\", \"value\": \"PENDING\", \"_fc_id\": \"id_F6h3mr3cnkq8ahc\", \"hidden\": false, \"display\": true, \"validate\": [{\"message\": \"subtask status required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fzqkmr3cnkq8akc\", \"type\": \"input\", \"field\": \"task_current_node\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input Subtask Flow Current node\", \"showWordLimit\": true}, \"title\": \"Subtask Flow Current node\", \"_fc_id\": \"id_Fxetmr3cnkq8ajc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fpsfmr3cnkq8amc\", \"type\": \"input\", \"field\": \"main_id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input main id\", \"showWordLimit\": true}, \"title\": \"main id\", \"_fc_id\": \"id_Fjipmr3cnkq8alc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"main id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fl55mr3cnkq8aoc\", \"type\": \"input\", \"field\": \"test\", \"props\": {\"maxlength\": 255, \"placeholder\": \"Please input test\", \"showWordLimit\": true}, \"title\": \"test\", \"_fc_id\": \"id_Fzolmr3cnkq8anc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"input\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"labelPosition\": \"left\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": true, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\"}}, \"50105\": {\"rule\": [{\"name\": \"ref_Ffq6mr3cnkt6aqc\", \"type\": \"input\", \"field\": \"id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input id\", \"showWordLimit\": true}, \"title\": \"id\", \"_fc_id\": \"id_Fk46mr3cnkt6apc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fmgomr3cnkt6asc\", \"type\": \"input\", \"field\": \"main_id\", \"props\": {\"readonly\": true, \"maxlength\": 255, \"placeholder\": \"Please input main_id\", \"showWordLimit\": true}, \"title\": \"main_id\", \"_fc_id\": \"id_Fdp9mr3cnkt6arc\", \"hidden\": false, \"display\": true, \"readonly\": true, \"validate\": [{\"message\": \"main_id required\", \"trigger\": \"blur\", \"required\": true}], \"_fc_drag_tag\": \"input\"}, {\"name\": \"ref_Fp1wmr3cnkt6auc\", \"type\": \"upload\", \"field\": \"file\", \"props\": {\"tip\": \"Supported formats: jpg/png/pdf/docx/xlsx, max 10MB\", \"limit\": 1, \"accept\": \".jpg,.jpeg,.png,.pdf,.docx,.xlsx\", \"action\": \"/api/v1/upload\", \"listType\": \"text\", \"multiple\": false, \"uploadText\": \"Upload\"}, \"title\": \"file\", \"_fc_id\": \"id_F1v4mr3cnkt6atc\", \"hidden\": false, \"display\": true, \"_fc_drag_tag\": \"upload\"}], \"options\": {\"form\": {\"size\": \"default\", \"inline\": false, \"labelWidth\": \"125px\", \"labelPosition\": \"left\", \"hideRequiredAsterisk\": false}, \"onReset\": \"[[FORM-CREATE-PREFIX-function onReset(api){}-FORM-CREATE-SUFFIX]]\", \"language\": {\"en\": {\"clickToUpload\": \"Upload\"}}, \"onChange\": \"[[FORM-CREATE-PREFIX-function onChange(field, value, options){}-FORM-CREATE-SUFFIX]]\", \"onReload\": \"[[FORM-CREATE-PREFIX-function onReload(api){}-FORM-CREATE-SUFFIX]]\", \"onSubmit\": \"[[FORM-CREATE-PREFIX-function onSubmit(formData, api){}-FORM-CREATE-SUFFIX]]\", \"resetBtn\": {\"show\": false, \"innerText\": \"Reset\"}, \"onCreated\": \"[[FORM-CREATE-PREFIX-function onCreated(api){}-FORM-CREATE-SUFFIX]]\", \"onMounted\": \"[[FORM-CREATE-PREFIX-function onMounted(api){}-FORM-CREATE-SUFFIX]]\", \"submitBtn\": {\"show\": true, \"innerText\": \"Submit\"}, \"beforeFetch\": \"[[FORM-CREATE-PREFIX-function beforeFetch(config, data){}-FORM-CREATE-SUFFIX]]\", \"beforeSubmit\": \"[[FORM-CREATE-PREFIX-function beforeSubmit(formData, data){}-FORM-CREATE-SUFFIX]]\"}}}, \"subListViews\": {\"50064\": {\"columns\": [{\"id\": 219, \"scale\": null, \"length\": 255, \"dataType\": \"BIGINT\", \"nullable\": false, \"fieldName\": \"id\", \"precision\": null, \"sortOrder\": 1, \"columnType\": \"field\", \"displayName\": \"id\", \"defaultValue\": null, \"isPrimaryKey\": true}, {\"id\": 220, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"assignee\", \"precision\": null, \"sortOrder\": 2, \"columnType\": \"field\", \"displayName\": \"assignee\", \"defaultValue\": null, \"isPrimaryKey\": false}, {\"id\": 218, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"name\", \"precision\": null, \"sortOrder\": 0, \"columnType\": \"field\", \"displayName\": \"name\", \"defaultValue\": null, \"isPrimaryKey\": false}, {\"dataType\": \"LINK_FORM\", \"linkText\": \"Details\", \"nullable\": true, \"fieldName\": \"linkForm:-50064\", \"columnType\": \"linkForm\", \"columnLabel\": \"Link Form\", \"componentId\": -50064, \"displayName\": \"Link Form\", \"isPrimaryKey\": false, \"linkFormColumnId\": -50064, \"boundSubTableName\": \"People\", \"boundSubTableBindingId\": 50030}, {\"dataType\": \"LOOKUP\", \"nullable\": true, \"fieldName\": \"lookup:62\", \"columnType\": \"lookup\", \"columnLabel\": \"Lookup\", \"displayName\": \"Lookup\", \"isPrimaryKey\": false, \"lookupConfig\": \"{\\\"bindingId\\\":50037,\\\"tableId\\\":-1000000001,\\\"tableName\\\":\\\"sys_users\\\",\\\"searchFields\\\":[\\\"id\\\"],\\\"displayFields\\\":[\\\"username\\\",\\\"id\\\"],\\\"showBackfillView\\\":false}\"}]}, \"50105\": {\"columns\": [{\"dataType\": \"INTEGER\", \"fieldName\": \"id\", \"columnType\": \"field\", \"displayName\": \"id\"}, {\"dataType\": \"BOOLEAN\", \"fieldName\": \"sex\", \"columnType\": \"field\", \"displayName\": \"sex\"}, {\"dataType\": \"VARCHAR\", \"fieldName\": \"age\", \"columnType\": \"field\", \"displayName\": \"age\"}]}}, \"relationViews\": {\"50538\": {\"allFields\": [{\"id\": 212, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": false, \"fieldName\": \"row_id\", \"precision\": null, \"sortOrder\": 0, \"displayName\": \"Row ID\", \"defaultValue\": null, \"isPrimaryKey\": true, \"pkGeneration\": null}, {\"id\": 213, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": false, \"fieldName\": \"dropdown_category\", \"precision\": null, \"sortOrder\": 1, \"displayName\": \"Dropdown Category\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 214, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": false, \"fieldName\": \"dropdown_name\", \"precision\": null, \"sortOrder\": 2, \"displayName\": \"Dropdown Name\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 215, \"scale\": null, \"length\": 255, \"dataType\": \"BOOLEAN\", \"nullable\": false, \"fieldName\": \"enabled\", \"precision\": null, \"sortOrder\": 3, \"displayName\": \"Enabled\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 216, \"scale\": null, \"length\": null, \"dataType\": \"TIMESTAMP\", \"nullable\": true, \"fieldName\": \"created_at\", \"precision\": null, \"sortOrder\": 4, \"displayName\": \"Created At\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 217, \"scale\": null, \"length\": 64, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"created_by\", \"precision\": null, \"sortOrder\": 5, \"displayName\": \"Created By\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 218, \"scale\": null, \"length\": null, \"dataType\": \"TIMESTAMP\", \"nullable\": true, \"fieldName\": \"updated_at\", \"precision\": null, \"sortOrder\": 6, \"displayName\": \"Updated At\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 219, \"scale\": null, \"length\": 64, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"updated_by\", \"precision\": null, \"sortOrder\": 7, \"displayName\": \"Updated By\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}], \"viewFields\": [{\"id\": 212, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": false, \"fieldName\": \"row_id\", \"precision\": null, \"sortOrder\": 0, \"displayName\": \"Row ID\", \"defaultValue\": null, \"isPrimaryKey\": true, \"pkGeneration\": null}, {\"id\": 213, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": false, \"fieldName\": \"dropdown_category\", \"precision\": null, \"sortOrder\": 1, \"displayName\": \"Dropdown Category\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 214, \"scale\": null, \"length\": 255, \"dataType\": \"VARCHAR\", \"nullable\": false, \"fieldName\": \"dropdown_name\", \"precision\": null, \"sortOrder\": 2, \"displayName\": \"Dropdown Name\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 215, \"scale\": null, \"length\": 255, \"dataType\": \"BOOLEAN\", \"nullable\": false, \"fieldName\": \"enabled\", \"precision\": null, \"sortOrder\": 3, \"displayName\": \"Enabled\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 216, \"scale\": null, \"length\": null, \"dataType\": \"TIMESTAMP\", \"nullable\": true, \"fieldName\": \"created_at\", \"precision\": null, \"sortOrder\": 4, \"displayName\": \"Created At\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 217, \"scale\": null, \"length\": 64, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"created_by\", \"precision\": null, \"sortOrder\": 5, \"displayName\": \"Created By\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 218, \"scale\": null, \"length\": null, \"dataType\": \"TIMESTAMP\", \"nullable\": true, \"fieldName\": \"updated_at\", \"precision\": null, \"sortOrder\": 6, \"displayName\": \"Updated At\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}, {\"id\": 219, \"scale\": null, \"length\": 64, \"dataType\": \"VARCHAR\", \"nullable\": true, \"fieldName\": \"updated_by\", \"precision\": null, \"sortOrder\": 7, \"displayName\": \"Updated By\", \"defaultValue\": null, \"isPrimaryKey\": false, \"pkGeneration\": null}]}}, \"subTablePortalViews\": {\"50064\": {\"assigneeTodo\": \"tableOnly\", \"initiatorRequest\": \"mirrorTodo\", \"assigneeTodoFormSource\": {\"type\": \"subForm\", \"formId\": null, \"linkFormColumnId\": null}}}}",
+   "type": "FORM",
+   "tableBindings": [
+    {
+     "bindingId": 50034,
+     "tableId": 50019,
+     "bindingType": "PRIMARY",
+     "bindingMode": "EDITABLE",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 0,
+     "tableName": "main",
+     "tableDisplayName": "Meeting",
+     "tableType": "MAIN",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id"
+     ],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "I",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {
+        "scope": "perTable",
+        "prefix": "Meeting-",
+        "padWidth": 6,
+        "strategy": "prefixedSequence",
+        "startValue": 1
+       },
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "lookup",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "fileupload",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "test",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "testlookup",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50035,
+     "tableId": 1,
+     "bindingType": "RELATED",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 2,
+     "tableName": "test",
+     "tableDisplayName": "test",
+     "tableType": "RELATION",
+     "tableDescription": null,
+     "primaryKeyFields": [],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "name",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "lookup_hmdc",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50037,
+     "tableId": null,
+     "bindingType": "RELATED",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 3,
+     "tableName": null,
+     "tableDisplayName": null,
+     "tableType": "RELATION",
+     "tableDescription": null,
+     "primaryKeyFields": [],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": []
+    },
+    {
+     "bindingId": 50105,
+     "tableId": 50074,
+     "bindingType": "SUB",
+     "bindingMode": "EDITABLE",
+     "subMode": "FULL",
+     "foreignKeyField": "main_id",
+     "sortOrder": 4,
+     "tableName": "attachment",
+     "tableDisplayName": "Attachment",
+     "tableType": "SUB",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id"
+     ],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "main_id",
+       "isPrimaryKey": false,
+       "isForeignKey": true,
+       "refTableId": 50019,
+       "refPrimaryKeyFields": [
+        "id"
+       ],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "file",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50064,
+     "tableId": 50020,
+     "bindingType": "SUB",
+     "bindingMode": "EDITABLE",
+     "subMode": "FULL",
+     "foreignKeyField": "id_idw",
+     "sortOrder": 4,
+     "tableName": "subtable",
+     "tableDisplayName": "Participants",
+     "tableType": "SUB",
+     "tableDescription": "",
+     "primaryKeyFields": [
+      "id_idw"
+     ],
+     "bindingLinkMode": "miParticipantRow",
+     "fieldDefinitions": [
+      {
+       "fieldName": "name",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "id_idw",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {
+        "scope": "perTable",
+        "prefix": "Test-",
+        "padWidth": 6,
+        "strategy": "prefixedSequence",
+        "startValue": 1
+       },
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "assignee",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "task_status",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "task_current_node",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "main_id",
+       "isPrimaryKey": false,
+       "isForeignKey": true,
+       "refTableId": 50019,
+       "refPrimaryKeyFields": [
+        "id"
+       ],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "test",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    },
+    {
+     "bindingId": 50538,
+     "tableId": 7,
+     "bindingType": "RELATED",
+     "bindingMode": "READONLY",
+     "subMode": null,
+     "foreignKeyField": null,
+     "sortOrder": 5,
+     "tableName": "hmdc_dropdown",
+     "tableDisplayName": "HMDC Dropdown",
+     "tableType": "RELATION",
+     "tableDescription": null,
+     "primaryKeyFields": [],
+     "bindingLinkMode": "structuralFk",
+     "fieldDefinitions": [
+      {
+       "fieldName": "row_id",
+       "isPrimaryKey": true,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {
+        "strategy": "uuid"
+       },
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "dropdown_category",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "dropdown_name",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "enabled",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "created_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_at",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      },
+      {
+       "fieldName": "updated_by",
+       "isPrimaryKey": false,
+       "isForeignKey": false,
+       "refTableId": null,
+       "refPrimaryKeyFields": [],
+       "pkGeneration": {},
+       "fkDisplayMode": "readonly"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "processes": [
+  {
+   "id": "cb214f73-a6d3-4de9-842f-dbd7c386c46f",
+   "name": "main-process.bpmn",
+   "sourceId": null,
+   "data": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://workflow.platform/schema/custom\" xmlns:flowable=\"http://flowable.org/bpmn\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"fu-20260422-23tfag\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"Start\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"End\">\n      <bpmn:incoming>Flow_04w59ze</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_0z1px4l\" />\n    <bpmn:userTask id=\"Activity_0z1px4l\" name=\"submit\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:property name=\"formId\" value=\"50016\" />\n          <custom:property name=\"formName\" value=\"Main\" />\n          <custom:property name=\"actionIds\" value=\"[50047,50048]\" />\n          <custom:property name=\"actionNames\" value=\"[&#34;Approve&#34;,&#34;reject&#34;]\" />\n          <custom:property name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:property name=\"assigneeAnchor\" value=\"\" />\n          <custom:property name=\"roleId\" value=\"\" />\n          <custom:property name=\"businessUnitId\" value=\"\" />\n          <custom:property name=\"assigneeLabel\" value=\"Process Initiator\" />\n          <custom:property name=\"candidateUsers\" value=\"\" />\n          <custom:property name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0eji6op</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:subProcess id=\"Activity_1m8yirt\" name=\"multi\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:property name=\"multiInstance\" value=\"true\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0jlp4p7</bpmn:incoming>\n      <bpmn:outgoing>Flow_04w59ze</bpmn:outgoing>\n      <bpmn:multiInstanceLoopCharacteristics flowable:collection=\"multiInstance_subtable_collection\" flowable:elementVariable=\"currentItem\" />\n      <bpmn:startEvent id=\"Event_03ygley\">\n        <bpmn:outgoing>Flow_1dsyr04</bpmn:outgoing>\n      </bpmn:startEvent>\n      <bpmn:userTask id=\"Activity_0j8mz1c\" name=\"sub form1\">\n        <bpmn:extensionElements>\n          <custom:properties>\n            <custom:property name=\"assigneeType\" value=\"ELEMENT_VARIABLE\" />\n            <custom:property name=\"assigneeAnchor\" value=\"\" />\n            <custom:property name=\"roleId\" value=\"\" />\n            <custom:property name=\"businessUnitId\" value=\"\" />\n            <custom:property name=\"assigneeLabel\" value=\"\" />\n            <custom:property name=\"candidateUsers\" value=\"\" />\n            <custom:property name=\"candidateGroups\" value=\"\" />\n            <custom:property name=\"subTableName\" value=\"subtable\" />\n            <custom:property name=\"subTableId\" value=\"50020\" />\n            <custom:property name=\"assigneeField\" value=\"assignee\" />\n            <custom:property name=\"rowIdVariable\" value=\"currentItem.rowId\" />\n            <custom:property name=\"actionIds\" value=\"[50049,50048,50047]\" />\n            <custom:property name=\"actionNames\" value=\"[&#34;Save&#34;,&#34;reject&#34;,&#34;Approve&#34;]\" />\n            <custom:property name=\"formId\" value=\"50018\" />\n            <custom:property name=\"formName\" value=\"Sub task\" />\n          </custom:properties>\n        </bpmn:extensionElements>\n        <bpmn:incoming>Flow_1dsyr04</bpmn:incoming>\n        <bpmn:outgoing>Flow_1m1auu0</bpmn:outgoing>\n      </bpmn:userTask>\n      <bpmn:sequenceFlow id=\"Flow_1dsyr04\" sourceRef=\"Event_03ygley\" targetRef=\"Activity_0j8mz1c\" />\n      <bpmn:endEvent id=\"Event_0baw3ob\">\n        <bpmn:incoming>Flow_0j9ngkk</bpmn:incoming>\n        <bpmn:incoming>Flow_1mzurdx</bpmn:incoming>\n      </bpmn:endEvent>\n      <bpmn:sequenceFlow id=\"Flow_1m1auu0\" sourceRef=\"Activity_0j8mz1c\" targetRef=\"Gateway_kk_subtask_route\" />\n      <bpmn:exclusiveGateway id=\"Gateway_kk_subtask_route\" name=\"Route\">\n        <bpmn:incoming>Flow_1m1auu0</bpmn:incoming>\n        <bpmn:outgoing>Flow_kk_gateway_to_subform2</bpmn:outgoing>\n        <bpmn:outgoing>Flow_1mzurdx</bpmn:outgoing>\n      </bpmn:exclusiveGateway>\n      <bpmn:sequenceFlow id=\"Flow_kk_gateway_to_subform2\" name=\"yes\" sourceRef=\"Gateway_kk_subtask_route\" targetRef=\"Activity_134mqyl\">\n        <bpmn:extensionElements>\n          <custom:properties>\n            <custom:property name=\"conditionType\" value=\"script\" />\n          </custom:properties>\n        </bpmn:extensionElements>\n        <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${decision == 'yes'}</bpmn:conditionExpression>\n      </bpmn:sequenceFlow>\n      <bpmn:userTask id=\"Activity_134mqyl\" name=\"sub form2\">\n        <bpmn:extensionElements>\n          <custom:properties>\n            <custom:property name=\"assigneeType\" value=\"FIXED_BU_ROLE\" />\n            <custom:property name=\"assigneeLabel\" value=\"Fixed BU Role: Department Manager\" />\n            <custom:property name=\"formId\" value=\"50018\" />\n            <custom:property name=\"formName\" value=\"Sub task\" />\n            <custom:property name=\"assigneeAnchor\" value=\"\" />\n            <custom:property name=\"roleId\" value=\"MANAGER\" />\n            <custom:property name=\"businessUnitId\" value=\"E2E_FINANCE\" />\n            <custom:property name=\"candidateUsers\" value=\"\" />\n            <custom:property name=\"candidateGroups\" value=\"\" />\n            <custom:property name=\"actionIds\" value=\"[50048,50047]\" />\n            <custom:property name=\"actionNames\" value=\"[&#34;reject&#34;,&#34;Approve&#34;]\" />\n            <custom:property name=\"roleIds\" value=\"MANAGER\" />\n          </custom:properties>\n        </bpmn:extensionElements>\n        <bpmn:incoming>Flow_kk_gateway_to_subform2</bpmn:incoming>\n        <bpmn:outgoing>Flow_0j9ngkk</bpmn:outgoing>\n      </bpmn:userTask>\n      <bpmn:sequenceFlow id=\"Flow_0j9ngkk\" sourceRef=\"Activity_134mqyl\" targetRef=\"Event_0baw3ob\" />\n      <bpmn:sequenceFlow id=\"Flow_1mzurdx\" name=\"no\" sourceRef=\"Gateway_kk_subtask_route\" targetRef=\"Event_0baw3ob\">\n        <bpmn:extensionElements>\n          <custom:properties>\n            <custom:property name=\"conditionType\" value=\"script\" />\n          </custom:properties>\n        </bpmn:extensionElements>\n        <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${decision != 'yes'}</bpmn:conditionExpression>\n      </bpmn:sequenceFlow>\n    </bpmn:subProcess>\n    <bpmn:sequenceFlow id=\"Flow_0eji6op\" sourceRef=\"Activity_0z1px4l\" targetRef=\"Activity_0hwtl8v\" />\n    <bpmn:sequenceFlow id=\"Flow_04w59ze\" sourceRef=\"Activity_1m8yirt\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0hwtl8v\" name=\"assignment\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:property name=\"actionIds\" value=\"[50047,50048]\" />\n          <custom:property name=\"actionNames\" value=\"[&#34;Approve&#34;,&#34;reject&#34;]\" />\n          <custom:property name=\"formId\" value=\"50017\" />\n          <custom:property name=\"formName\" value=\"Assign Task\" />\n          <custom:property name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:property name=\"assigneeAnchor\" value=\"\" />\n          <custom:property name=\"roleId\" value=\"\" />\n          <custom:property name=\"businessUnitId\" value=\"\" />\n          <custom:property name=\"assigneeLabel\" value=\"Process Initiator\" />\n          <custom:property name=\"candidateUsers\" value=\"\" />\n          <custom:property name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0eji6op</bpmn:incoming>\n      <bpmn:outgoing>Flow_0jlp4p7</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0jlp4p7\" sourceRef=\"Activity_0hwtl8v\" targetRef=\"Activity_1m8yirt\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"fu-20260422-23tfag\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"1202\" y=\"182\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"1210\" y=\"225\" width=\"20\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_1xlf3py_di\" bpmnElement=\"Activity_0z1px4l\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n        <bpmndi:BPMNLabel />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_0vysedw_di\" bpmnElement=\"Activity_1m8yirt\" isExpanded=\"true\">\n        <dc:Bounds x=\"560\" y=\"110\" width=\"590\" height=\"260\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Event_03ygley_di\" bpmnElement=\"Event_03ygley\">\n        <dc:Bounds x=\"600\" y=\"192\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_0fjydyt_di\" bpmnElement=\"Activity_0j8mz1c\">\n        <dc:Bounds x=\"690\" y=\"170\" width=\"100\" height=\"80\" />\n        <bpmndi:BPMNLabel />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Event_0baw3ob_di\" bpmnElement=\"Event_0baw3ob\">\n        <dc:Bounds x=\"1092\" y=\"192\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_kk_subtask_route_di\" bpmnElement=\"Gateway_kk_subtask_route\" isMarkerVisible=\"true\">\n        <dc:Bounds x=\"845\" y=\"185\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"855\" y=\"161\" width=\"30\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_0t6cbe9_di\" bpmnElement=\"Activity_134mqyl\">\n        <dc:Bounds x=\"940\" y=\"170\" width=\"100\" height=\"80\" />\n        <bpmndi:BPMNLabel />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1dsyr04_di\" bpmnElement=\"Flow_1dsyr04\">\n        <di:waypoint x=\"636\" y=\"210\" />\n        <di:waypoint x=\"690\" y=\"210\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_1m1auu0_di\" bpmnElement=\"Flow_1m1auu0\">\n        <di:waypoint x=\"790\" y=\"210\" />\n        <di:waypoint x=\"845\" y=\"210\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_kk_gateway_to_subform2_di\" bpmnElement=\"Flow_kk_gateway_to_subform2\">\n        <di:waypoint x=\"895\" y=\"210\" />\n        <di:waypoint x=\"940\" y=\"210\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"909\" y=\"192\" width=\"18\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0j9ngkk_di\" bpmnElement=\"Flow_0j9ngkk\">\n        <di:waypoint x=\"1040\" y=\"210\" />\n        <di:waypoint x=\"1092\" y=\"210\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_1mzurdx_di\" bpmnElement=\"Flow_1mzurdx\">\n        <di:waypoint x=\"870\" y=\"235\" />\n        <di:waypoint x=\"870\" y=\"300\" />\n        <di:waypoint x=\"1110\" y=\"300\" />\n        <di:waypoint x=\"1110\" y=\"228\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"984\" y=\"282\" width=\"13\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNShape id=\"BPMNShape_0arnk7n\" bpmnElement=\"Activity_0hwtl8v\">\n        <dc:Bounds x=\"390\" y=\"138\" width=\"100\" height=\"80\" />\n        <bpmndi:BPMNLabel />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0eji6op_di\" bpmnElement=\"Flow_0eji6op\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"390\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_04w59ze_di\" bpmnElement=\"Flow_04w59ze\">\n        <di:waypoint x=\"1150\" y=\"200\" />\n        <di:waypoint x=\"1202\" y=\"200\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0jlp4p7_di\" bpmnElement=\"Flow_0jlp4p7\">\n        <di:waypoint x=\"490\" y=\"178\" />\n        <di:waypoint x=\"560\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>",
+   "type": "PROCESS",
+   "flowableProcessDefinitionKey": "fu-20260422-23tfag:1:88757bfe-78f4-11f1-b2e4-f6b0a459b11e"
+  }
+ ],
+ "dataTables": [],
+ "requestIdConfig": {
+  "fieldNames": [
+   "I",
+   "id"
+  ],
+  "separator": "_"
+ }
+}

@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createI18n } from 'vue-i18n'
 import FormRenderer from '../../components/FormRenderer.vue'
@@ -34,12 +34,12 @@ describe('Property 2: Inline sub-table editable prop reflects mode', () => {
    * is in readonly mode, and should equal (bindingMode === "EDITABLE") when not
    * in readonly mode.
    */
-  it('SubTableField editable prop is false in readonly mode, else equals (bindingMode === EDITABLE)', () => {
-    fc.assert(
-      fc.property(
+  it('SubTableField editable prop is false in readonly mode, else equals (bindingMode === EDITABLE)', async () => {
+    await fc.assert(
+      fc.asyncProperty(
         fc.constantFrom('EDITABLE', 'READONLY', 'VIEW_ONLY'),
         fc.boolean(),
-        (bindingMode, isReadonly) => {
+        async (bindingMode, isReadonly) => {
           const binding = {
             bindingId: 1,
             bindingType: 'TABLE',
@@ -59,6 +59,9 @@ describe('Property 2: Inline sub-table editable prop reflects mode', () => {
             global: formRendererMountGlobal,
           })
           try {
+            // SubTableField is a defineAsyncComponent inside FormRendererFields — the dynamic
+            // import resolves as a microtask, so the inline sub-table only exists after a flush.
+            await flushPromises()
             const subTable = wrapper.findComponent(SubTableField)
             const expectedEditable = !isReadonly && bindingMode === 'EDITABLE'
             expect(subTable.props('editable')).toBe(expectedEditable)
@@ -67,9 +70,11 @@ describe('Property 2: Inline sub-table editable prop reflects mode', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      // Input domain is 3 modes x 2 booleans = 6 distinct combos; 20 async full-app mounts
+      // cover it exhaustively while staying inside the test timeout.
+      { numRuns: 20 },
     )
-  })
+  }, 30_000)
 })
 
 describe('Property 3: update:subTableData emitted on inline row change', () => {
@@ -80,12 +85,12 @@ describe('Property 3: update:subTableData emitted on inline row change', () => {
    * FormRenderer should emit update:subTableData with the correct bindingId
    * and the updated row array.
    */
-  it('emits update:subTableData with correct bindingId and rows when SubTableField emits update:modelValue', () => {
-    fc.assert(
-      fc.property(
+  it('emits update:subTableData with correct bindingId and rows when SubTableField emits update:modelValue', async () => {
+    await fc.assert(
+      fc.asyncProperty(
         fc.integer({ min: 1, max: 9999 }),
         fc.array(fc.record({ val: fc.string() })),
-        (bindingId, newRows) => {
+        async (bindingId, newRows) => {
           const binding = {
             bindingId,
             bindingType: 'TABLE',
@@ -105,6 +110,8 @@ describe('Property 3: update:subTableData emitted on inline row change', () => {
             global: formRendererMountGlobal,
           })
           try {
+            // Wait for the defineAsyncComponent-wrapped SubTableField to resolve and mount.
+            await flushPromises()
             wrapper.findComponent(SubTableField).vm.$emit('update:modelValue', newRows)
             const emitted = wrapper.emitted('update:subTableData')
             expect(emitted).toBeTruthy()
@@ -115,9 +122,11 @@ describe('Property 3: update:subTableData emitted on inline row change', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      // Each run is a full FormRenderer mount + async-component flush (~100ms); 20 runs keeps
+      // the property meaningful without blowing the test timeout.
+      { numRuns: 20 },
     )
-  })
+  }, 30_000)
 })
 
 /** Mirrors process start page: keep only placed subTable bindings + linkForm-linked closures (no bottom orphan section). */

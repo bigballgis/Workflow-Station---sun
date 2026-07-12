@@ -1,11 +1,20 @@
 /**
  * Regression: assignment task (Activity_0hwtl8v) load pipeline must not throw
  * "n.has is not a function" during sub-table layout sync / hydration.
+ *
+ * Fixtures live in ./fixtures (captured 2026-07 from the dev-seed
+ * Multi-Instance Subtask Demo FU, key fu-20260422-23tfag): the Assign Task form
+ * places sub-table bindings 50066 (Participants, tableId 50020) and 50103
+ * (attachment), while the initiator Main form binds the same tableId 50020 as
+ * binding 50064 — the engine stores MI collection rows under the legacy alias
+ * key "64", so binding 50066 must resolve its rows via the sibling binding id.
+ * (The original capture used pre-reseed ids 66/103/64; only the raw id constants
+ * changed.) Previously these fixtures were read from os.tmpdir() dumps that only
+ * existed on the capturing machine, so the suite failed everywhere else.
  */
 import { describe, expect, it } from 'vitest'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import fuContentFixture from './fixtures/kk-assign-task-fu-content.json'
+import taskVariablesFixture from './fixtures/kk-assign-task-variables.json'
 import {
   collectPlacedSubTableBindingIds,
   collectSubTableFieldsFromLayout,
@@ -63,15 +72,11 @@ function bindingIdsPreferStrictSubTableLookup(
 }
 
 function loadFuContent(): any {
-  const p = path.join(os.tmpdir(), 'fu2.json')
-  const raw = JSON.parse(fs.readFileSync(p, 'utf8'))
-  return raw.data ?? raw
+  return fuContentFixture as any
 }
 
 function loadTaskVariables(): Record<string, unknown> {
-  const p = path.join(os.tmpdir(), 'task.json')
-  const raw = JSON.parse(fs.readFileSync(p, 'utf8'))
-  return (raw.data ?? raw).variables as Record<string, unknown>
+  return (taskVariablesFixture as any).variables as Record<string, unknown>
 }
 
 describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => {
@@ -85,8 +90,8 @@ describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => 
     const layout = parseFormRulesLayout(cfg.rule, items => extractFieldsRecursive(items))
     const fuSubTables = collectSubTableFieldsFromLayout(layout.fields, layout.tabs, layout.fieldsAfterTabs)
     const placed = collectPlacedSubTableBindingIds(layout.fields, layout.tabs, layout.fieldsAfterTabs)
-    expect(placed.has(66)).toBe(true)
-    expect(placed.has(103)).toBe(true)
+    expect(placed.has(50066)).toBe(true)
+    expect(placed.has(50103)).toBe(true)
 
     const nativeIds = (assignForm.tableBindings || [])
       .filter((b: { bindingType: string }) => b.bindingType !== 'PRIMARY')
@@ -148,8 +153,9 @@ describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => 
       bindingTableById: rtMap,
     })
 
-    // binding 66 should resolve rows from sibling key 64 (incl. assignee from initiator slice)
-    const subTask = bindings.find(b => b.bindingId === 66)
+    // binding 50066 should resolve rows from sibling slice keyed "64" (legacy alias of the
+    // initiator Main form's binding 50064, same tableId), incl. assignee snapshots.
+    const subTask = bindings.find(b => b.bindingId === 50066)
     expect(subTask?.data?.length).toBe(3)
     expect(subTask?.data?.[0]?.assignee).toBeTruthy()
     expect(subTask?.data?.[0]?.assignee_display_name).toBe('Developer Tester')
@@ -165,7 +171,7 @@ describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => 
       if (!isNative && !isPlaced) return false
       return (b.columns?.length ?? 0) > 0 || (b.data?.length ?? 0) > 0
     })
-    expect(taskNative.map((b: { bindingId: number }) => b.bindingId).sort((a, c) => a - c)).toEqual([66, 103])
+    expect(taskNative.map((b: { bindingId: number }) => b.bindingId).sort((a, c) => a - c)).toEqual([50066, 50103])
 
     // syncFormLayoutWithSubTableBindings equivalent
     const layoutBuckets = {
@@ -183,7 +189,7 @@ describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => 
       layoutBuckets.fieldsAfterTabs,
     )
     // Design parity: Sub Task / Attachment stay inside Title card in FormRenderer layout
-    expect(placedAfter.has(66)).toBe(true)
-    expect(placedAfter.has(103)).toBe(true)
+    expect(placedAfter.has(50066)).toBe(true)
+    expect(placedAfter.has(50103)).toBe(true)
   })
 })

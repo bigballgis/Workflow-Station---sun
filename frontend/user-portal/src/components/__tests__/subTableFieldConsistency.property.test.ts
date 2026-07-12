@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import * as fc from 'fast-check'
+
+// fast-check properties here run hundreds of iterations; under full-suite parallel workers
+// they intermittently exceed the 5s default timeout (they pass in isolation).
+vi.setConfig({ testTimeout: 30_000 })
+
 import {
   buildInitialRow,
   resolveDisplayValue,

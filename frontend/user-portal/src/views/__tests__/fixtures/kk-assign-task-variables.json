@@ -1,0 +1,32 @@
+{
+ "variables": {
+  "__subTables__": {
+   "64": [
+    {
+     "id_idw": "st-001",
+     "id": "st-001",
+     "name": "Subtask A",
+     "assignee": "user-dev",
+     "assignee_display_name": "Developer Tester",
+     "row_id": "st-001"
+    },
+    {
+     "id_idw": "st-002",
+     "id": "st-002",
+     "name": "Subtask B",
+     "assignee": "user-e2e-lina",
+     "assignee_display_name": "Li Na",
+     "row_id": "st-002"
+    },
+    {
+     "id_idw": "st-003",
+     "id": "st-003",
+     "name": "Subtask C",
+     "assignee": "user-e2e-zhangwei",
+     "assignee_display_name": "Zhang Wei",
+     "row_id": "st-003"
+    }
+   ]
+  }
+ }
+}
