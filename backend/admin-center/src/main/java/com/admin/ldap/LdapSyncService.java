@@ -64,6 +64,13 @@ import static com.admin.ldap.LdapConstants.VG_TECH_LEADS;
  * {@code memberOf} 敏感信息仅 DEBUG 级输出。</p>
  *
  * <p>仅 {@code ldap.enabled=true} 且 {@code ldap.sync-enabled=true} 时创建。</p>
+ *
+ * <p>FALLBACK(external) — class-wide policy: this is a periodic sync job against an external
+ * directory. Per-group / per-batch catches deliberately tolerate individual failures (one bad
+ * AD group must not abort the whole sync; batch upsert degrades to per-user), and the run-level
+ * catch records the failure into {@link LdapSyncAudit} — failures are persisted and visible,
+ * never silent. Do not "fix" these catches into rethrows: aborting the run on the first bad
+ * entry is worse for directory convergence than a partial sync plus an audit trail.</p>
  */
 @Slf4j
 @Service

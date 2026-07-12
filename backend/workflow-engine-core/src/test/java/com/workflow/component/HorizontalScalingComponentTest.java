@@ -186,7 +186,7 @@ class HorizontalScalingComponentTest {
 
             // Then
             assertThat(result.isSuccess()).isFalse();
-            assertThat(result.getMessage()).contains("没有可用的节点");
+            assertThat(result.getMessage()).contains("No available nodes");
         }
 
         @Test

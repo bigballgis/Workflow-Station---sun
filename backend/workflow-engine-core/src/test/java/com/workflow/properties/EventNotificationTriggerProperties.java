@@ -360,7 +360,7 @@ class EventNotificationTriggerProperties {
 
         // Then: 通知发送成功
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getMessage()).contains("成功");
+        assertThat(result.getMessage()).contains("succeeded");
 
         // Cleanup
         notificationManager.unregisterWebSocketSession(testSessionId);

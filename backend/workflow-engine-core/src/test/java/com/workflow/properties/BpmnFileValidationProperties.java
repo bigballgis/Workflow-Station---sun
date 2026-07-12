@@ -143,7 +143,7 @@ public class BpmnFileValidationProperties {
         // When & Then: 部署应该失败并抛出验证异常
         assertThatThrownBy(() -> processEngineComponent.deployProcess(request))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("BPMN文件格式验证失败");
+                .hasMessageContaining("BPMN file format validation failed");
     }
 
     /**
@@ -165,7 +165,7 @@ public class BpmnFileValidationProperties {
         // 纯空白字符应该被基本内容验证捕获，而不是格式验证
         assertThatThrownBy(() -> processEngineComponent.deployProcess(request))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("BPMN内容不能为空");
+                .hasMessageContaining("BPMN content must not be empty");
     }
 
     /**
@@ -185,7 +185,7 @@ public class BpmnFileValidationProperties {
         
         assertThatThrownBy(() -> processEngineComponent.deployProcess(requestWithNull))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("BPMN内容不能为空");
+                .hasMessageContaining("BPMN content must not be empty");
         
         // Test empty content
         ProcessDefinitionRequest requestWithEmpty = new ProcessDefinitionRequest();
@@ -196,7 +196,7 @@ public class BpmnFileValidationProperties {
         
         assertThatThrownBy(() -> processEngineComponent.deployProcess(requestWithEmpty))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("BPMN内容不能为空");
+                .hasMessageContaining("BPMN content must not be empty");
     }
 
     /**

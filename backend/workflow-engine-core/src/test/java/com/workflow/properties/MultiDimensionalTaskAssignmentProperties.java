@@ -415,7 +415,7 @@ public class MultiDimensionalTaskAssignmentProperties {
         // When & Then: 分配不存在的任务应该失败
         assertThatThrownBy(() -> taskManagerComponent.assignTask(nonExistentTaskId, request))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessageContaining("任务不存在");
+                .hasMessageContaining("Task not found");
     }
 
     // ==================== 辅助方法 ====================

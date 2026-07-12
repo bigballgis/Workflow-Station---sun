@@ -113,6 +113,9 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         return buildResponseWithSnapshotFields(entity, snapshotFields, deployedDisplayName);
                     }
                 } catch (Exception e) {
+                    // FALLBACK(external): the snapshot mirrors the DEPLOYED schema; falling back to
+                    // live JPA field definitions keeps the page working but may show design-time
+                    // columns not yet deployed (accuracy degradation, not data corruption).
                     log.warn("Cannot parse snapshot for table {}, falling back to JPA fields",
                             entity.getId());
                 }
@@ -673,6 +676,8 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         return snapshotFields;
                     }
                 } catch (Exception e) {
+                    // FALLBACK(external): same semantics as the snapshot fallback above — degraded
+                    // accuracy (design-time columns), not corruption.
                     log.warn("Cannot parse snapshot for table {}, falling back to rt_field_definitions",
                             tableDef.getId());
                 }
