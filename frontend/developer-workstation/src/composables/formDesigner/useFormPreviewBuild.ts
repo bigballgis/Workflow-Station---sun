@@ -169,7 +169,11 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     try {
       prepareDesignerPreviewValidation(getActiveDesignerRef(), t('common.validate'))
       rawRule = designerRef.value?.getRule() || []
-    } catch {}
+    } catch (e) {
+      // FALLBACK(ux): read-only preview — designer not ready falls through to the saved
+      // configJson rule below. Log so a systematic designer failure stays discoverable.
+      console.warn('[FormDesigner] live rule read failed for preview; using saved config', e)
+    }
     if (!rawRule.length) {
       rawRule = selectedForm.value.configJson?.rule || []
     }
@@ -214,7 +218,10 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
           rule = subForms[bindingId]?.rule || []
           option = subForms[bindingId]?.options || {}
         }
-      } catch {
+      } catch (e) {
+        // FALLBACK(ux): read-only preview — live sub-designer read failed, fall through the
+        // cache -> saved chain (same shape as useFormSave's collection, but nothing persists here).
+        console.warn(`[FormDesigner] live sub form read failed for preview (binding ${bindingId}); using cache/saved`, e)
         rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
         option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
       }
@@ -286,8 +293,10 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     ensureFormCreateRulesValidationDeep(rawRule)
     try {
       designerRef.value?.setRule?.(rawRule)
-    } catch {
-      /* ignore designer setRule sync errors */
+    } catch (e) {
+      // FALLBACK(ux): syncing the readonly-mapped rule back onto the canvas is cosmetic for
+      // the preview; a failure must not abort preview rendering.
+      console.warn('[FormDesigner] designer setRule sync failed (preview unaffected)', e)
     }
 
     const tableFieldDefs = getPrimaryBindingFieldDefinitions()

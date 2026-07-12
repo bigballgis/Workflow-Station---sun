@@ -675,6 +675,7 @@ export default {
     saveSuccess: 'Saved successfully',
     deleteSuccess: 'Deleted successfully',
     bindingSaveSuccess: 'Binding saved successfully',
+    bindingViewIncomplete: 'Some action bindings could not be parsed from the BPMN — the bindings panel may be incomplete',
     createFailed: 'Create failed',
     saveFailed: 'Save failed',
     deleteFailed: 'Delete failed',

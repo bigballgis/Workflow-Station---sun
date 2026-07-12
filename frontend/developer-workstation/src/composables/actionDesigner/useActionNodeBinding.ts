@@ -30,10 +30,19 @@ export function useActionNodeBinding(options: UseActionNodeBindingOptions) {
   const availableNodes = ref<Array<{ id: string; name: string }>>([])
   const savingBinding = ref(false)
 
+  /** Warn once per parse pass — a broken bindings view must be visible, not console-only. */
+  let bindingViewWarningShown = false
+  function notifyBindingViewIncomplete() {
+    if (bindingViewWarningShown) return
+    bindingViewWarningShown = true
+    ElMessage.warning(t('action.bindingViewIncomplete'))
+  }
+
   /**
    * 从BPMN XML解析动作与节点的绑定关系
    */
   function parseActionBindingsFromBpmn() {
+    bindingViewWarningShown = false
     const bindings = new Map<string | number, Array<{ id: string; name: string }>>()
     const nodes: Array<{ id: string; name: string }> = []
 
@@ -77,7 +86,12 @@ export function useActionNodeBinding(options: UseActionNodeBindingOptions) {
                     bindings.get(actionId)!.push({ id: 'process', name: t('action.processGlobal') })
                   })
                 } catch (e) {
+                  // FALLBACK(ux): display-path parse failure — the bindings PANEL shows this
+                  // action as unbound while the BPMN itself is untouched. Surface it so the
+                  // designer doesn't trust an incomplete view. (parseActionIds has an internal
+                  // format fallback and normally never throws; this is a defensive guard.)
                   console.warn('Failed to parse globalActionIds:', value)
+                  notifyBindingViewIncomplete()
                 }
               }
             }
@@ -117,7 +131,9 @@ export function useActionNodeBinding(options: UseActionNodeBindingOptions) {
                     bindings.get(actionId)!.push({ id: taskId, name: taskName })
                   })
                 } catch (e) {
+                  // FALLBACK(ux): same as globalActionIds above — incomplete panel, BPMN untouched.
                   console.warn('Failed to parse actionIds:', value, e)
+                  notifyBindingViewIncomplete()
                 }
               }
             }
@@ -125,7 +141,10 @@ export function useActionNodeBinding(options: UseActionNodeBindingOptions) {
         }
       }
     } catch (e) {
+      // FALLBACK(ux): whole-XML parse failure — the panel would silently show ZERO nodes and
+      // bindings, which reads as "nothing is bound". Tell the designer the view is broken.
       console.error('Failed to parse BPMN XML:', e)
+      notifyBindingViewIncomplete()
     }
 
     actionNodeBindings.value = bindings
@@ -274,7 +293,12 @@ export function useActionNodeBinding(options: UseActionNodeBindingOptions) {
                       namesProp.setAttribute('value', JSON.stringify(names))
                     }
                   } catch (e) {
-                    console.warn('Failed to parse globalActionNames:', namesValue, e)
+                    // The ids array WAS just rewritten above — persisting the old names alongside
+                    // new ids desyncs names[i]/ids[i] and nodes then display the WRONG action
+                    // names. Clear the names (display falls back to ids, regenerated on rebind)
+                    // rather than persist a misaligned pair.
+                    console.warn('Failed to parse globalActionNames; clearing to avoid ids/names desync:', namesValue, e)
+                    namesProp.setAttribute('value', '[]')
                   }
                 }
               }
@@ -314,7 +338,10 @@ export function useActionNodeBinding(options: UseActionNodeBindingOptions) {
                         namesProp.setAttribute('value', JSON.stringify(names))
                       }
                     } catch (e) {
-                      console.warn('Failed to parse actionNames:', namesValue, e)
+                      // Same ids/names desync hazard as globalActionNames above — clear, never
+                      // persist a misaligned pair.
+                      console.warn('Failed to parse actionNames; clearing to avoid ids/names desync:', namesValue, e)
+                      namesProp.setAttribute('value', '[]')
                     }
                   }
                 }
