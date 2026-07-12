@@ -115,20 +115,4 @@ public class MemberController {
                 .body(ApiResponse.error("503", "Admin center service unavailable"));
     }
     
-    /**
-     * @deprecated Zero known callers (2026-07 governance audit). Confirm no external scripts
-     * hit /api/portal/members/my-approval-scope, then remove with AdminCenterClient.getApprovalScope.
-     */
-    @Deprecated
-    @GetMapping("/my-approval-scope")
-    @Operation(summary = "Get approval scope", description = "Get virtual groups and business units where user is approver")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getApprovalScope(
-            @CurrentUserId String userId) {
-        log.info("Getting approval scope for user: {}", userId);
-
-        return adminCenterClient.getApprovalScope(userId)
-                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
-    }
 }

@@ -201,43 +201,6 @@ public class DelegationComponent {
     }
 
     /**
-     * 检查用户是否有权代理处理指定任务
-     * @param delegateId 代理人ID
-     * @param delegatorId 委托人ID（任务原处理人）
-     * @param processType 流程类型
-     * @param priority 任务优先级
-     * @return 是否有代理权限
-     */
-    public boolean canProcessAsDelegate(String delegateId, String delegatorId, 
-                                        String processType, String priority) {
-        List<DelegationRule> rules = delegationRuleRepository
-                .findActiveDelegationsForDelegate(delegateId, LocalDateTime.now());
-        
-        for (DelegationRule rule : rules) {
-            if (!rule.getDelegatorId().equals(delegatorId)) {
-                continue;
-            }
-            
-            // 检查流程类型过滤
-            if (rule.getProcessTypes() != null && !rule.getProcessTypes().isEmpty()) {
-                if (!rule.getProcessTypes().contains(processType)) {
-                    continue;
-                }
-            }
-            
-            // 检查优先级过滤
-            if (rule.getPriorityFilter() != null && !rule.getPriorityFilter().isEmpty()) {
-                if (!rule.getPriorityFilter().contains(priority)) {
-                    continue;
-                }
-            }
-            
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * 记录代理任务处理审计
      */
     @Transactional

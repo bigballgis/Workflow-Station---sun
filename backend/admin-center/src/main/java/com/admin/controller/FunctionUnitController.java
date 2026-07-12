@@ -640,35 +640,4 @@ public class FunctionUnitController extends AbstractBaseController {
         return handleRequest(() -> functionUnitManager.getContentsByType(id, type));
     }
 
-    // ==================== Legacy removals next release ====================
-
-    @Deprecated
-    @PostMapping(value = "/formcontent", produces = "application/json")
-    @Operation(summary = "Form-only content (deprecated)", description = "Use GET /{id}/contents?type=FORM instead")
-    public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitFormContent(
-            @RequestBody java.util.Map<String, String> request) {
-        String id = request.get("id");
-        log.info("[DEPRECATED] Getting function unit form content for: {}", id);
-        return handleRequest(() -> functionUnitManager.getContentsByType(id, "FORM"));
-    }
-    
-    @Deprecated
-    @GetMapping(value = "/fu-content/{id}/type/{contentType}", produces = "application/json")
-    @Operation(summary = "Typed content (deprecated)", description = "Use GET /{id}/contents?type={contentType}")
-    public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitContentByType(
-            @Parameter(description = "Function unit id") @PathVariable String id,
-            @Parameter(description = "Content type enum string") @PathVariable String contentType) {
-        log.info("[DEPRECATED] Getting function unit content by type for: {}, contentType: {}", id, contentType);
-        return handleRequest(() -> functionUnitManager.getContentsByType(id, contentType));
-    }
-    
-    @Deprecated
-    @GetMapping(value = "/{id}/content-items", produces = "application/json")
-    @Operation(summary = "Legacy content-items (deprecated)", description = "Use GET /{id}/contents?type={contentType}")
-    public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitContents(
-            @Parameter(description = "Function unit id") @PathVariable String id,
-            @Parameter(description = "Content type") @RequestParam String contentType) {
-        log.info("[DEPRECATED] Getting function unit content items for: {}, contentType: {}", id, contentType);
-        return handleRequest(() -> functionUnitManager.getContentsByType(id, contentType));
-    }
 }

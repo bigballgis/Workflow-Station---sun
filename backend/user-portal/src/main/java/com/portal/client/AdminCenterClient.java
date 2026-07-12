@@ -103,10 +103,6 @@ public class AdminCenterClient {
         return getList("/api/v1/admin/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/members");
     }
 
-    public Optional<Map<String, Object>> getApprovalScope(String userId) {
-        return get("/api/v1/admin/approvers/scope?userId=" + SafeUrlInput.encodeQueryValue(userId));
-    }
-
     // ==================== Exit ====================
 
     /**
@@ -140,10 +136,6 @@ public class AdminCenterClient {
 
     public Optional<Map<String, Object>> getUserMemberships(String userId) {
         return get("/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/memberships");
-    }
-
-    public Optional<List<Map<String, Object>>> getExitHistory(String userId) {
-        return getList("/api/v1/admin/member-change-logs?userId=" + SafeUrlInput.encodeQueryValue(userId) + "&changeType=EXIT");
     }
 
     // ==================== Permission Request Discovery ====================
