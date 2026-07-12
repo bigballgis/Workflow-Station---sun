@@ -4,6 +4,7 @@ import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.component.BpmnActionParser;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.workflow.service.TaskAssigneeResolver;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.ExtensionAttribute;
@@ -62,6 +63,9 @@ class TaskAssignmentListenerElementVariableTest {
     
     @Mock
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
+
+    @Mock
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     
     private TaskAssignmentListener listener;
     
@@ -77,6 +81,14 @@ class TaskAssignmentListenerElementVariableTest {
     void setUp() {
         listener = new TaskAssignmentListener();
         injectMocks();
+        // Production resolves physical PK columns of the MI sub-table before assignment
+        // (static cache); clear it and answer the catalog query with single-column PK "id".
+        PostgresPhysicalTablePrimaryKeys.clearCache();
+        lenient().when(jdbcTemplate.query(
+                contains("PRIMARY KEY"),
+                org.mockito.ArgumentMatchers.<org.springframework.jdbc.core.RowMapper<String>>any(),
+                eq(SUB_TABLE_NAME)))
+            .thenReturn(java.util.List.of("id"));
     }
     
     /**
@@ -90,6 +102,7 @@ class TaskAssignmentListenerElementVariableTest {
             injectField("repositoryService", repositoryService);
             injectField("bpmnActionParser", bpmnActionParser);
             injectField("extendedTaskInfoRepository", extendedTaskInfoRepository);
+            injectField("jdbcTemplate", jdbcTemplate);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }
@@ -250,7 +263,9 @@ class TaskAssignmentListenerElementVariableTest {
             verify(extendedTaskInfoRepository).save(captor.capture());
             
             String extProps = captor.getValue().getExtendedProperties();
-            assertThat(extProps).contains("\"subTableRowId\":103");
+            // 行键快照改造后：字符串 rowId 保留原始值写入 subTableRowKey，
+            // 仅数值型行键才补写 legacy subTableRowId 字段
+            assertThat(extProps).contains("\"subTableRowKey\":{\"id\":\"103\"}");
             assertThat(extProps).contains("\"subTableRowVersion\":3");
         }
     }
@@ -474,16 +489,11 @@ class TaskAssignmentListenerElementVariableTest {
             // When
             listener.onEvent(event);
             
-            // Then: 任务应该被分配（rowId 为 null 不影响分配）
-            verify(taskService).setAssignee(TASK_ID, "user-005");
-            
-            // Then: ExtendedTaskInfo 应该被创建（但不包含 subTableRowId）
-            ArgumentCaptor<ExtendedTaskInfo> captor = ArgumentCaptor.forClass(ExtendedTaskInfo.class);
-            verify(extendedTaskInfoRepository).save(captor.capture());
-            
-            String extProps = captor.getValue().getExtendedProperties();
-            assertThat(extProps).contains("\"multiInstance\":true");
-            assertThat(extProps).doesNotContain("\"subTableRowId\"");
+            // Then: 行键快照改造后，rowId 为 null 即无法解析子表行键，
+            // 生产逻辑（MultiInstanceTaskWriter）在 setAssignee 之前直接返回，
+            // 任务保持 CREATED 状态且不创建 ExtendedTaskInfo
+            verify(taskService, never()).setAssignee(anyString(), anyString());
+            verify(extendedTaskInfoRepository, never()).save(any());
         }
         
         @Test

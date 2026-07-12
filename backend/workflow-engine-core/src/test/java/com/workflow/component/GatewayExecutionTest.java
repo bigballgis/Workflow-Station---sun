@@ -103,7 +103,7 @@ class GatewayExecutionTest {
             () -> processEngineComponent.evaluateExclusiveGateway(processInstanceId, gatewayId)
         );
         
-        assertTrue(exception.getMessage().contains("流程实例不存在"));
+        assertTrue(exception.getMessage().contains("Process instance does not exist"));
     }
 
     @Test
@@ -131,7 +131,7 @@ class GatewayExecutionTest {
             () -> processEngineComponent.evaluateExclusiveGateway(processInstanceId, gatewayId)
         );
         
-        assertTrue(exception.getMessage().contains("不是排他网关"));
+        assertTrue(exception.getMessage().contains("not an exclusive gateway"));
     }
 
     @Test
@@ -194,7 +194,7 @@ class GatewayExecutionTest {
             () -> processEngineComponent.handleParallelGateway(processInstanceId, gatewayId)
         );
         
-        assertTrue(exception.getMessage().contains("流程实例不存在"));
+        assertTrue(exception.getMessage().contains("Process instance does not exist"));
     }
 
     @Test
@@ -222,7 +222,7 @@ class GatewayExecutionTest {
             () -> processEngineComponent.handleParallelGateway(processInstanceId, gatewayId)
         );
         
-        assertTrue(exception.getMessage().contains("不是并行网关"));
+        assertTrue(exception.getMessage().contains("not a parallel gateway"));
     }
 
     @Test
@@ -287,6 +287,6 @@ class GatewayExecutionTest {
             () -> processEngineComponent.getCurrentActivities(processInstanceId)
         );
         
-        assertTrue(exception.getMessage().contains("流程实例不存在"));
+        assertTrue(exception.getMessage().contains("Process instance does not exist"));
     }
 }

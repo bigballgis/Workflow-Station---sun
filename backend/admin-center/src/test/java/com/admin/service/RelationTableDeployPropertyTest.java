@@ -211,13 +211,18 @@ class RelationTableDeployPropertyTest {
                 return;
             }
 
-            assertThat(snapshotFields).hasSameSizeAs(fieldSpecs);
+            // deploy() auto-appends the 4 audit fields (created_at/by, updated_at/by) before snapshotting;
+            // generated field names are all "f_*" so the audit fields are always added.
+            assertThat(snapshotFields).hasSize(fieldSpecs.size() + 4);
             for (int i = 0; i < fieldSpecs.size(); i++) {
                 FieldSpec spec = fieldSpecs.get(i);
                 RelationFieldDTO snapshot = snapshotFields.get(i);
                 assertThat(snapshot.getFieldName()).isEqualTo(spec.fieldName());
                 assertThat(snapshot.getDataType()).isEqualTo(spec.dataType());
             }
+            assertThat(snapshotFields.subList(fieldSpecs.size(), snapshotFields.size()))
+                    .extracting(RelationFieldDTO::getFieldName)
+                    .containsExactly("created_at", "created_by", "updated_at", "updated_by");
 
             // === Verify status is DEPLOYED ===
             assertThat(result.getStatus()).isEqualTo(RelationTableStatus.DEPLOYED);
@@ -409,18 +414,24 @@ class RelationTableDeployPropertyTest {
         // Mock repository
         when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(table));
 
-        // For incremental deploy path
-        if (currentVersion > 0) {
-            when(tableDefinitionRepository.findByTableName(tableName)).thenReturn(Optional.of(table));
-            when(versionRepository.findLatestVersion(1L)).thenReturn(Optional.empty());
+        // Rows live in rt_table_data_rows (JSONB): deploy runs no CREATE/ALTER TABLE DDL anymore,
+        // so the remaining deploy failure mode is snapshot serialization. Inject a failing
+        // ObjectMapper to simulate it.
+        ObjectMapper failingMapper;
+        try {
+            failingMapper = mock(ObjectMapper.class);
+            when(failingMapper.writeValueAsString(any()))
+                    .thenThrow(new JsonProcessingException("Simulated snapshot serialization failure") {});
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(e);
         }
-
-        // Mock DDL execution to throw exception
-        doThrow(new RuntimeException("Simulated DDL failure"))
-                .when(jdbcTemplate).execute(anyString());
+        RelationTableDeployServiceImpl failingService = new RelationTableDeployServiceImpl(
+                tableDefinitionRepository, versionRepository, fieldDefinitionRepository,
+                jdbcTemplate, failingMapper, schemaResolver,
+                mock(com.platform.common.i18n.I18nService.class));
 
         // Execute deploy - should throw
-        assertThatThrownBy(() -> service.deploy(1L))
+        assertThatThrownBy(() -> failingService.deploy(1L))
                 .isInstanceOf(RelationTableDeploymentException.class);
 
         // === Verify status unchanged ===
@@ -436,8 +447,12 @@ class RelationTableDeployPropertyTest {
         // === Verify no version snapshot was created ===
         verify(versionRepository, never()).save(any());
 
-        // === Verify table definition was not saved ===
-        verify(tableDefinitionRepository, never()).save(any());
+        // === Verify no status/version mutation was persisted ===
+        // (ensureAuditFields may legitimately save the audit-field backfill before the failure,
+        //  but the DEPLOYED status / bumped version must never be persisted on a failed deploy)
+        verify(tableDefinitionRepository, never()).save(argThat(t ->
+                t.getStatus() != originalStatus
+                        || !Integer.valueOf(currentVersion).equals(t.getCurrentVersion())));
     }
 
     // ==================== Helper Record ====================

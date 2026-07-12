@@ -15,6 +15,7 @@ import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.workflow.client.AdminCenterClient;
 
 import net.jqwik.api.*;
 
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.RepeatedTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 /**
  * 多维度任务分配正确性属性测试
@@ -65,6 +68,13 @@ public class MultiDimensionalTaskAssignmentProperties {
     
     @Autowired
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
+
+    /**
+     * 虚拟组成员关系解析属于 admin-center 的职责，这里 mock 掉外部调用，
+     * 使认领属性测试可离线运行（否则随机生成的组/用户永远无法通过成员校验）。
+     */
+    @MockBean
+    private AdminCenterClient adminCenterClient;
 
     private static final String TEST_BPMN_WITH_USER_TASK = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -262,6 +272,9 @@ public class MultiDimensionalTaskAssignmentProperties {
         String groupId = generateGroupId();
         String claimUserId = generateUserId();
         String operatorId = generateUserId();
+        
+        // 认领人属于该虚拟组（成员关系由 admin-center 解析，这里 mock）
+        when(adminCenterClient.isUserInVirtualGroup(claimUserId, groupId)).thenReturn(true);
         
         // Given: 创建一个虚拟组任务
         String taskId = createTestTaskInstance();

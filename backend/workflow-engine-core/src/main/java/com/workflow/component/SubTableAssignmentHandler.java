@@ -321,7 +321,7 @@ public class SubTableAssignmentHandler {
             
             if (userInfo == null) {
                 throw new WorkflowValidationException(
-                    String.format(i18nService.getMessage("workflow.subtable.user_not_found"), assigneeId)
+                    i18nService.getMessage("workflow.subtable.user_not_found", assigneeId)
                 );
             }
             
@@ -329,7 +329,7 @@ public class SubTableAssignmentHandler {
             Boolean enabled = (Boolean) userInfo.get("enabled");
             if (enabled != null && !enabled) {
                 throw new WorkflowValidationException(
-                    String.format(i18nService.getMessage("workflow.subtable.user_disabled"), assigneeId)
+                    i18nService.getMessage("workflow.subtable.user_disabled", assigneeId)
                 );
             }
             

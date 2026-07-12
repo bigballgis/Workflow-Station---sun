@@ -376,6 +376,8 @@ public class AuthController {
         Date expiry = new Date(now.getTime() + jwtExpiration);
 
         var builder = Jwts.builder()
+                .issuer("platform")
+                .id(java.util.UUID.randomUUID().toString())
                 .subject(user.getId())
                 .claim("username", user.getUsername())
                 .claim("roles", roles)
@@ -398,6 +400,8 @@ public class AuthController {
         Date expiry = new Date(now.getTime() + 604800000);
 
         var builder = Jwts.builder()
+                .issuer("platform")
+                .id(java.util.UUID.randomUUID().toString())
                 .subject(userId)
                 .claim("type", REFRESH_TYPE)
                 .claim(CLAIM_PORTAL_ACCESS_MODE, portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)

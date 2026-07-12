@@ -82,7 +82,7 @@ public class BuBoundedRoleActivationProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         when(roleRepository.findAllById(Set.of(roleId))).thenReturn(List.of(buBoundedRole));
         
@@ -121,7 +121,7 @@ public class BuBoundedRoleActivationProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         when(roleRepository.findAllById(Set.of(roleId))).thenReturn(List.of(buBoundedRole));
         
@@ -158,7 +158,7 @@ public class BuBoundedRoleActivationProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         when(roleRepository.findAllById(Set.of(roleId))).thenReturn(List.of(buBoundedRole));
         
@@ -196,7 +196,7 @@ public class BuBoundedRoleActivationProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
         when(roleRepository.findAllById(Set.of(roleId))).thenReturn(List.of(buBoundedRole));
         

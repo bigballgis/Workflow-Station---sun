@@ -133,14 +133,14 @@ public class SubTableDataInjector {
                     || e.getMessage().contains("relation") && e.getMessage().contains("does not exist"))) {
                 throw new WorkflowBusinessException(
                         "SUBTABLE_NOT_FOUND",
-                        String.format(i18nService.getMessage("workflow.subtable.not_found"), subTableName),
+                        i18nService.getMessage("workflow.subtable.not_found", subTableName),
                         e
                 );
             }
 
             throw new WorkflowBusinessException(
                     "SUBTABLE_QUERY_FAILED",
-                    String.format(i18nService.getMessage("workflow.subtable.query_error"), e.getMessage()),
+                    i18nService.getMessage("workflow.subtable.query_error", e.getMessage()),
                     e
             );
         }
@@ -194,7 +194,7 @@ public class SubTableDataInjector {
             String rowNumbers = String.join(", ",
                     emptyAssigneeRows.stream().map(String::valueOf).toArray(String[]::new));
             throw new WorkflowValidationException(
-                    String.format(i18nService.getMessage("workflow.subtable.missing_assignee"), rowNumbers, assigneeField)
+                    i18nService.getMessage("workflow.subtable.missing_assignee", rowNumbers, assigneeField)
             );
         }
 

@@ -259,31 +259,25 @@ public class VirtualGroupRoleBindingProperties {
                 .build();
         when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(virtualGroup));
         
-        // Given: Old role binding exists
-        VirtualGroupRole existingBinding = VirtualGroupRole.builder()
-                .id(UUID.randomUUID().toString())
-                .virtualGroupId(virtualGroupId)
-                .roleId(oldRoleId)
-                .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
-                .thenReturn(Optional.of(existingBinding));
-        
+        // Given: Old role binding exists (production replaces via count + deleteByVirtualGroupId)
+        when(virtualGroupRoleRepository.countByVirtualGroupId(virtualGroupId)).thenReturn(1L);
+
         // Given: New role exists and is BU_BOUNDED type
         Role newRole = createRole(newRoleId, RoleType.BU_BOUNDED);
         when(roleRepository.findById(newRoleId)).thenReturn(Optional.of(newRole));
-        
+
         // Given: RoleHelper recognizes it as a business role
         when(roleHelper.isBusinessRole(newRole)).thenReturn(true);
-        
+
         // Given: Save succeeds
         when(virtualGroupRoleRepository.save(any(VirtualGroupRole.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        
+
         // When: Bind new role
         virtualGroupRoleService.bindRole(virtualGroupId, newRoleId);
-        
+
         // Then: Old binding should be deleted
-        verify(virtualGroupRoleRepository).delete(existingBinding);
+        verify(virtualGroupRoleRepository).deleteByVirtualGroupId(virtualGroupId);
         
         // Then: New binding should be saved
         verify(virtualGroupRoleRepository).save(argThat(binding -> 
@@ -351,13 +345,15 @@ public class VirtualGroupRoleBindingProperties {
                 .virtualGroupId(virtualGroupId)
                 .roleId(roleId)
                 .build();
-        when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
+        // Production reads via findSingleByVirtualGroupId (default method; mocked interface
+        // does not fall through to findByVirtualGroupId)
+        when(virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId))
                 .thenReturn(Optional.of(binding));
-        
+
         // Given: Role exists
         Role role = createRole(roleId, RoleType.BU_BOUNDED);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
-        
+
         // When: Get bound role
         Optional<Role> boundRole = virtualGroupRoleService.getBoundRole(virtualGroupId);
         

@@ -38,6 +38,14 @@ import static org.mockito.Mockito.when;
  */
 class FunctionUnitControllerPropertyTest {
 
+    @net.jqwik.api.lifecycle.AfterTry
+    void clearSecurityContext() {
+        // setupMockSecurityContext stores an authenticated principal in the thread-local
+        // SecurityContextHolder; clear it so it cannot leak into other test classes
+        // running on the same JVM thread.
+        SecurityContextHolder.clearContext();
+    }
+
     private FunctionUnitController createController(FunctionUnitManagerComponent mgr) {
         @SuppressWarnings("unchecked")
         I18nService i18n = mock(I18nService.class,

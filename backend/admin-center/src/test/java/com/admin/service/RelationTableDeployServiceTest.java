@@ -57,6 +57,12 @@ class RelationTableDeployServiceTest {
     private RelationTableVersionRepository versionRepository;
 
     @Mock
+    private com.admin.repository.RelationFieldDefinitionRepository fieldDefinitionRepository;
+
+    @Mock
+    private com.platform.common.i18n.I18nService i18nService;
+
+    @Mock
     private JdbcTemplate jdbcTemplate;
 
     @Mock
@@ -176,10 +182,12 @@ class RelationTableDeployServiceTest {
             RelationTableDefinition table = buildTableDefinition(1L, "empty_table", 0);
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(table));
+            when(i18nService.getMessage(anyString(), any(Object[].class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
 
             assertThatThrownBy(() -> service.deploy(1L))
                     .isInstanceOf(RelationTableDeploymentException.class)
-                    .hasMessageContaining("没有定义任何字段");
+                    .hasMessageContaining("admin.rt.no_fields_defined");
         }
 
         @Test
@@ -329,12 +337,14 @@ class RelationTableDeployServiceTest {
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(table));
             when(versionRepository.findById(999L)).thenReturn(Optional.empty());
+            when(i18nService.getMessage(anyString(), any(Object[].class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
 
             RollbackRequest request = RollbackRequest.builder().targetVersionId(999L).build();
 
             assertThatThrownBy(() -> service.rollback(1L, request))
                     .isInstanceOf(RelationTableDeploymentException.class)
-                    .hasMessageContaining("目标版本不存在");
+                    .hasMessageContaining("admin.rt.target_version_not_found");
         }
 
         @Test
@@ -346,12 +356,14 @@ class RelationTableDeployServiceTest {
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(table1));
             when(versionRepository.findById(5L)).thenReturn(Optional.of(versionOfTable2));
+            when(i18nService.getMessage(anyString(), any(Object[].class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
 
             RollbackRequest request = RollbackRequest.builder().targetVersionId(5L).build();
 
             assertThatThrownBy(() -> service.rollback(1L, request))
                     .isInstanceOf(RelationTableDeploymentException.class)
-                    .hasMessageContaining("不属于表");
+                    .hasMessageContaining("admin.rt.version_not_belongs_to_table");
         }
 
         @Test

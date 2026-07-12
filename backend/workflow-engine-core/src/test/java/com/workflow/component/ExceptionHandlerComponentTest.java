@@ -303,22 +303,17 @@ class ExceptionHandlerComponentTest {
         @Test
         @DisplayName("获取异常统计应该返回正确的统计信息")
         void getExceptionStatistics_shouldReturnCorrectStats() {
-            // Given
-            ExceptionRecord record1 = new ExceptionRecord();
-            record1.setStatus(ExceptionStatus.PENDING);
-            record1.setSeverity(ExceptionSeverity.CRITICAL);
-            record1.setResolved(false);
-            record1.setOccurredTime(LocalDateTime.now());
-            record1.setExceptionType("DATABASE_ERROR");
-            
-            ExceptionRecord record2 = new ExceptionRecord();
-            record2.setStatus(ExceptionStatus.RESOLVED);
-            record2.setSeverity(ExceptionSeverity.HIGH);
-            record2.setResolved(true);
-            record2.setOccurredTime(LocalDateTime.now());
-            record2.setExceptionType("NETWORK_ERROR");
-            
-            when(exceptionRecordRepository.findAll()).thenReturn(Arrays.asList(record1, record2));
+            // Given: 生产实现已从 findAll() 内存聚合改为仓库聚合查询
+            // (2 条记录: 1 条未解决 PENDING/CRITICAL + 1 条已解决 RESOLVED/HIGH)
+            when(exceptionRecordRepository.count()).thenReturn(2L);
+            when(exceptionRecordRepository.countByResolvedFalse()).thenReturn(1L);
+            when(exceptionRecordRepository.countUnresolvedBySeverity())
+                    .thenReturn(java.util.List.<Object[]>of(
+                            new Object[]{ExceptionSeverity.CRITICAL, 1L}));
+            when(exceptionRecordRepository.countByStatus())
+                    .thenReturn(java.util.List.<Object[]>of(
+                            new Object[]{ExceptionStatus.PENDING, 1L},
+                            new Object[]{ExceptionStatus.RESOLVED, 1L}));
 
             // When
             ExceptionStatisticsResult result = exceptionHandler.getExceptionStatistics();

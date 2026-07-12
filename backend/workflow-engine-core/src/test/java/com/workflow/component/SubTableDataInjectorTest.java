@@ -2,6 +2,8 @@ package com.workflow.component;
 
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
+import com.platform.common.i18n.I18nService;
+import com.platform.common.i18n.impl.I18nServiceImpl;
 import org.flowable.engine.RuntimeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +13,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Spy;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -18,6 +23,7 @@ import org.springframework.jdbc.core.RowMapper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -44,9 +50,20 @@ class SubTableDataInjectorTest {
     
     @Mock
     private JdbcTemplate jdbcTemplate;
+
+    /** Real i18n service (English) backed by the production message bundle. */
+    @Spy
+    private I18nService i18nService = buildRealI18nService();
     
     @InjectMocks
     private SubTableDataInjector injector;
+
+    private static I18nService buildRealI18nService() {
+        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+        messageSource.setBasenames("i18n/messages");
+        messageSource.setDefaultEncoding("UTF-8");
+        return new I18nServiceImpl(messageSource);
+    }
     
     private static final String PROCESS_INSTANCE_ID = "proc-001";
     private static final String SUB_TABLE_NAME = "fu_participants";
@@ -57,6 +74,7 @@ class SubTableDataInjectorTest {
     
     @BeforeEach
     void setUp() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
         lenient().when(jdbcTemplate.query(
                 contains("constraint_type"),
                 any(RowMapper.class),
@@ -160,8 +178,8 @@ class SubTableDataInjectorTest {
         );
         
         // 验证异常信息
-        assertTrue(exception.getMessage().contains("多实例数据源为空"));
-        assertTrue(exception.getMessage().contains("至少需要一条子表数据"));
+        assertTrue(exception.getMessage().contains("Multi-instance data source is empty"));
+        assertTrue(exception.getMessage().contains("at least one sub-table data row is required"));
         
         // 验证 runtimeService.setVariable 没有被调用
         verify(runtimeService, never()).setVariable(anyString(), anyString(), any());
@@ -222,7 +240,7 @@ class SubTableDataInjectorTest {
         
         // 验证异常信息包含行号
         String message = exception.getMessage();
-        assertTrue(message.contains("第 2, 4 行缺少处理人"));
+        assertTrue(message.contains("Row(s) 2, 4 missing assignee"));
         assertTrue(message.contains(ASSIGNEE_FIELD));
         
         // 验证 runtimeService.setVariable 没有被调用
@@ -259,7 +277,7 @@ class SubTableDataInjectorTest {
         );
         
         // 验证异常信息包含行号
-        assertTrue(exception.getMessage().contains("第 1 行缺少处理人"));
+        assertTrue(exception.getMessage().contains("Row(s) 1 missing assignee"));
     }
     
     @Test
@@ -287,9 +305,9 @@ class SubTableDataInjectorTest {
         
         // 验证异常信息
         assertEquals("SUBTABLE_NOT_FOUND", exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("关联的子表"));
+        assertTrue(exception.getMessage().contains("Associated sub-table"));
         assertTrue(exception.getMessage().contains(SUB_TABLE_NAME));
-        assertTrue(exception.getMessage().contains("不存在"));
+        assertTrue(exception.getMessage().contains("does not exist"));
         
         // 验证 runtimeService.setVariable 没有被调用
         verify(runtimeService, never()).setVariable(anyString(), anyString(), any());
@@ -320,7 +338,7 @@ class SubTableDataInjectorTest {
         
         // 验证异常信息
         assertEquals("SUBTABLE_QUERY_FAILED", exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("查询子表数据时发生错误"));
+        assertTrue(exception.getMessage().contains("Error querying sub-table data"));
         
         // 验证 runtimeService.setVariable 没有被调用
         verify(runtimeService, never()).setVariable(anyString(), anyString(), any());

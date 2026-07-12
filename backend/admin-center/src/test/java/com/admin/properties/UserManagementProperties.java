@@ -68,6 +68,8 @@ public class UserManagementProperties {
         i18nService = mock(I18nService.class);
 
         when(i18nService.getMessage(anyString())).thenAnswer(inv -> inv.getArgument(0));
+        // Production resolves parameterized messages via the varargs overload; echo the key back
+        when(i18nService.getMessage(anyString(), any(Object[].class))).thenAnswer(inv -> inv.getArgument(0));
 
         userManagerComponent = new UserManagerComponent(
                 userRepository,
@@ -337,7 +339,7 @@ public class UserManagementProperties {
         
         assertThatThrownBy(() -> userManagerComponent.createUser(request))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("Email already in use");
+                .hasMessageContaining("admin.user.email_already_in_use");
         
         // And: No user should be saved
         verify(userRepository, never()).save(any(User.class));
@@ -405,7 +407,7 @@ public class UserManagementProperties {
         
         assertThatThrownBy(() -> userManagerComponent.updateUser(userId, request))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("Email already in use");
+                .hasMessageContaining("admin.user.email_already_in_use");
     }
 
     @Example

@@ -137,9 +137,9 @@ class RelationTableStatusPreservationTest {
         RelationTableDefinition deployedEnabledTable = buildTableDefinition(
                 tableId, tableName, RelationTableStatus.DEPLOYED, true);
 
-        // After fix, findByStatusInAndEnabledTrue is called with DEPLOYED and UPDATED
+        // Production queries DEPLOYED / UPDATED / ROLLBACK enabled tables
         when(tableRepo.findByStatusInAndEnabledTrue(
-                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED)))
+                List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)))
                 .thenReturn(List.of(deployedEnabledTable));
 
         List<RelationTableResponse> result = dataService.getDeployedTables();

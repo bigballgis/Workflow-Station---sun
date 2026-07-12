@@ -19,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,7 +27,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
+import java.sql.ResultSet;
 import java.time.Instant;
 import java.util.*;
 
@@ -52,6 +55,12 @@ class RelationTableDataServiceTest {
 
     @Mock
     private RelationTableAuditService auditService;
+
+    @Mock
+    private RelationTableAccessService accessService;
+
+    @Mock
+    private RelationTablePrimaryKeyAllocationService primaryKeyAllocationService;
 
     @Mock
     private JdbcTemplate jdbcTemplate;
@@ -148,6 +157,23 @@ class RelationTableDataServiceTest {
         when(objectMapper.readValue(eq(snapshotJson), any(TypeReference.class))).thenReturn(fields);
     }
 
+    /** Mocks one JDBC ResultSet row for the queryData RowMapper (row_id, data JSON, status). */
+    private ResultSet mockDataRowResultSet(String rowId, String dataJson, String status) throws Exception {
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getString("row_id")).thenReturn(rowId);
+        when(rs.getString("data")).thenReturn(dataJson);
+        when(rs.getString("status")).thenReturn(status);
+        return rs;
+    }
+
+    /** Stubs the getRowData single-row lookup: SELECT data ... WHERE table_id = ? AND row_id = ?. */
+    @SuppressWarnings("unchecked")
+    private void stubRowLookup(Long tableId, String rowId, List<Map<String, Object>> rows) {
+        doReturn(rows).when(jdbcTemplate)
+                .query(contains("SELECT"), ArgumentMatchers.<RowMapper<Map<String, Object>>>any(),
+                        eq(tableId), eq(rowId));
+    }
+
     // ==================== getDeployedTables Tests ====================
 
     @Nested
@@ -161,7 +187,7 @@ class RelationTableDataServiceTest {
             RelationTableDefinition deployed2 = buildDeployedTable(2L, "deployed_table_2");
 
             when(tableDefinitionRepository.findByStatusInAndEnabledTrue(
-                    List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED)))
+                    List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)))
                     .thenReturn(List.of(deployed1, deployed2));
 
             List<RelationTableResponse> result = service.getDeployedTables();
@@ -169,14 +195,14 @@ class RelationTableDataServiceTest {
             assertThat(result).hasSize(2);
             assertThat(result).allMatch(r -> r.getStatus() == RelationTableStatus.DEPLOYED);
             verify(tableDefinitionRepository).findByStatusInAndEnabledTrue(
-                    List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED));
+                    List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK));
         }
 
         @Test
         @DisplayName("Should return empty list when no deployed tables exist")
         void shouldReturnEmptyWhenNoDeployedTables() {
             when(tableDefinitionRepository.findByStatusInAndEnabledTrue(
-                    List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED)))
+                    List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)))
                     .thenReturn(Collections.emptyList());
 
             List<RelationTableResponse> result = service.getDeployedTables();
@@ -236,7 +262,7 @@ class RelationTableDataServiceTest {
 
         @Test
         @DisplayName("Should return paginated data for deployed table")
-        void shouldReturnPaginatedData() throws JsonProcessingException {
+        void shouldReturnPaginatedData() throws Exception {
             setupDeployedTableWithFields(1L, "test_table");
             Pageable pageable = PageRequest.of(0, 10);
 
@@ -253,8 +279,16 @@ class RelationTableDataServiceTest {
             // No search term → empty params for count, pagination params for data query
             when(jdbcTemplate.queryForObject(contains("COUNT(*)"), eq(Long.class), any(Object[].class)))
                     .thenReturn(2L);
-            when(jdbcTemplate.queryForList(contains("SELECT"), any(Object[].class)))
-                    .thenReturn(List.of(row1, row2));
+            ResultSet rs1 = mockDataRowResultSet("1", "row1_json", "ACTIVE");
+            ResultSet rs2 = mockDataRowResultSet("2", "row2_json", "ACTIVE");
+            when(objectMapper.readValue(eq("row1_json"), any(TypeReference.class))).thenReturn(new LinkedHashMap<>(row1));
+            when(objectMapper.readValue(eq("row2_json"), any(TypeReference.class))).thenReturn(new LinkedHashMap<>(row2));
+            when(jdbcTemplate.query(contains("SELECT"),
+                    ArgumentMatchers.<RowMapper<RelationTableDataRowDTO>>any(), any(Object[].class)))
+                    .thenAnswer(inv -> {
+                        RowMapper<RelationTableDataRowDTO> mapper = inv.getArgument(1);
+                        return List.of(mapper.mapRow(rs1, 0), mapper.mapRow(rs2, 1));
+                    });
 
             Page<RelationTableDataRowDTO> result = service.queryData(1L, null, pageable);
 
@@ -267,7 +301,7 @@ class RelationTableDataServiceTest {
 
         @Test
         @DisplayName("Should apply search filter on text fields")
-        void shouldApplySearchFilter() throws JsonProcessingException {
+        void shouldApplySearchFilter() throws Exception {
             setupDeployedTableWithFields(1L, "test_table");
             Pageable pageable = PageRequest.of(0, 10);
 
@@ -278,8 +312,14 @@ class RelationTableDataServiceTest {
 
             when(jdbcTemplate.queryForObject(contains("COUNT(*)"), eq(Long.class), any(Object[].class)))
                     .thenReturn(1L);
-            when(jdbcTemplate.queryForList(contains("ILIKE"), any(Object[].class)))
-                    .thenReturn(List.of(row));
+            ResultSet rs = mockDataRowResultSet("1", "row_json", "ACTIVE");
+            when(objectMapper.readValue(eq("row_json"), any(TypeReference.class))).thenReturn(new LinkedHashMap<>(row));
+            when(jdbcTemplate.query(contains("ILIKE"),
+                    ArgumentMatchers.<RowMapper<RelationTableDataRowDTO>>any(), any(Object[].class)))
+                    .thenAnswer(inv -> {
+                        RowMapper<RelationTableDataRowDTO> mapper = inv.getArgument(1);
+                        return List.of(mapper.mapRow(rs, 0));
+                    });
 
             Page<RelationTableDataRowDTO> result = service.queryData(1L, "Alice", pageable);
 
@@ -295,7 +335,8 @@ class RelationTableDataServiceTest {
 
             when(jdbcTemplate.queryForObject(contains("COUNT(*)"), eq(Long.class), any(Object[].class)))
                     .thenReturn(0L);
-            when(jdbcTemplate.queryForList(contains("SELECT"), any(Object[].class)))
+            when(jdbcTemplate.query(contains("SELECT"),
+                    ArgumentMatchers.<RowMapper<RelationTableDataRowDTO>>any(), any(Object[].class)))
                     .thenReturn(Collections.emptyList());
 
             Page<RelationTableDataRowDTO> result = service.queryData(1L, "nonexistent", pageable);
@@ -403,10 +444,7 @@ class RelationTableDataServiceTest {
             newRow.put("name", "NewName");
             newRow.put("status", "Active");
 
-            // First call returns old data, second call returns updated data
-            when(jdbcTemplate.queryForList(contains("SELECT"), eq("1")))
-                    .thenReturn(List.of(oldRow))
-                    .thenReturn(List.of(newRow));
+            stubRowLookup(1L, "1", List.of(oldRow));
             when(jdbcTemplate.update(contains("UPDATE"), any(Object[].class))).thenReturn(1);
 
             Map<String, Object> updateData = Map.of("name", "NewName");
@@ -424,8 +462,7 @@ class RelationTableDataServiceTest {
         void shouldThrowWhenRowNotFoundForUpdate() throws JsonProcessingException {
             setupDeployedTableWithFields(1L, "test_table");
 
-            when(jdbcTemplate.queryForList(contains("SELECT"), eq("999")))
-                    .thenReturn(Collections.emptyList());
+            stubRowLookup(1L, "999", Collections.emptyList());
 
             assertThatThrownBy(() -> service.updateData(1L, "999", Map.of("name", "test")))
                     .isInstanceOf(RelationTableNotFoundException.class)
@@ -442,8 +479,7 @@ class RelationTableDataServiceTest {
             existingRow.put("name", "Existing");
             existingRow.put("status", "Active");
 
-            when(jdbcTemplate.queryForList(contains("SELECT"), eq("1")))
-                    .thenReturn(List.of(existingRow));
+            stubRowLookup(1L, "1", List.of(existingRow));
 
             // Only PK field in update data - should be filtered out
             Map<String, Object> updateData = Map.of("id", "1");
@@ -463,30 +499,31 @@ class RelationTableDataServiceTest {
         @Test
         @DisplayName("Should delete data and call audit log")
         void shouldDeleteDataAndAudit() throws JsonProcessingException {
-            setupDeployedTableWithFields(1L, "test_table");
+            // deleteData only loads the table definition (no field snapshot needed)
+            when(tableDefinitionRepository.findById(1L))
+                    .thenReturn(Optional.of(buildDeployedTable(1L, "test_table")));
 
             Map<String, Object> existingRow = new LinkedHashMap<>();
             existingRow.put("id", 1L);
             existingRow.put("name", "ToDelete");
             existingRow.put("status", "Active");
 
-            when(jdbcTemplate.queryForList(contains("SELECT"), eq("1")))
-                    .thenReturn(List.of(existingRow));
-            when(jdbcTemplate.update(contains("DELETE"), eq("1"))).thenReturn(1);
+            stubRowLookup(1L, "1", List.of(existingRow));
+            when(jdbcTemplate.update(contains("DELETE"), eq(1L), eq("1"))).thenReturn(1);
 
             service.deleteData(1L, "1");
 
-            verify(jdbcTemplate).update(contains("DELETE"), eq("1"));
+            verify(jdbcTemplate).update(contains("DELETE"), eq(1L), eq("1"));
             verify(auditService).logDelete(eq(1L), eq("test_table"), eq("1"), eq(existingRow));
         }
 
         @Test
         @DisplayName("Should throw when row not found for delete")
         void shouldThrowWhenRowNotFoundForDelete() throws JsonProcessingException {
-            setupDeployedTableWithFields(1L, "test_table");
+            when(tableDefinitionRepository.findById(1L))
+                    .thenReturn(Optional.of(buildDeployedTable(1L, "test_table")));
 
-            when(jdbcTemplate.queryForList(contains("SELECT"), eq("999")))
-                    .thenReturn(Collections.emptyList());
+            stubRowLookup(1L, "999", Collections.emptyList());
 
             assertThatThrownBy(() -> service.deleteData(1L, "999"))
                     .isInstanceOf(RelationTableNotFoundException.class)
@@ -519,16 +556,8 @@ class RelationTableDataServiceTest {
             existingRow.put("name", "TestRow");
             existingRow.put("status", "Active");
 
-            Map<String, Object> updatedRow = new LinkedHashMap<>();
-            updatedRow.put("id", 1L);
-            updatedRow.put("name", "TestRow");
-            updatedRow.put("status", "Inactive");
-
-            // First call for old data, second call for new data after update
-            when(jdbcTemplate.queryForList(contains("SELECT"), eq("1")))
-                    .thenReturn(List.of(existingRow))
-                    .thenReturn(List.of(updatedRow));
-            when(jdbcTemplate.update(contains("SET \"status\""), eq("Inactive"), eq("1"))).thenReturn(1);
+            stubRowLookup(1L, "1", List.of(existingRow));
+            when(jdbcTemplate.update(contains("SET status"), any(Object[].class))).thenReturn(1);
 
             RelationTableDataRowDTO result = service.changeStatus(1L, "1", "Inactive");
 
@@ -543,8 +572,7 @@ class RelationTableDataServiceTest {
         void shouldThrowWhenRowNotFoundForStatusChange() throws JsonProcessingException {
             setupDeployedTableWithFields(1L, "test_table");
 
-            when(jdbcTemplate.queryForList(contains("SELECT"), eq("999")))
-                    .thenReturn(Collections.emptyList());
+            stubRowLookup(1L, "999", Collections.emptyList());
 
             assertThatThrownBy(() -> service.changeStatus(1L, "999", "Inactive"))
                     .isInstanceOf(RelationTableNotFoundException.class)

@@ -49,6 +49,9 @@ class BpmnActionParserTest {
                 """;
 
         ProcessDefinition pd = org.mockito.Mockito.mock(ProcessDefinition.class);
+        // Production caches deployed XML by ProcessDefinition.getId(); a null id would NPE inside
+        // ConcurrentHashMap.get and be swallowed as "no XML".
+        when(pd.getId()).thenReturn("procDef:1:abc");
         when(pd.getResourceName()).thenReturn("proc.bpmn20.xml");
         when(pd.getDeploymentId()).thenReturn("dep-1");
 
@@ -99,6 +102,7 @@ class BpmnActionParserTest {
         when(repositoryService.getBpmnModel("pd:1")).thenReturn(null);
 
         ProcessDefinition pd = org.mockito.Mockito.mock(ProcessDefinition.class);
+        when(pd.getId()).thenReturn("pd:1");
         when(pd.getResourceName()).thenReturn("p.bpmn20.xml");
         when(pd.getDeploymentId()).thenReturn("d1");
         ProcessDefinitionQuery query = org.mockito.Mockito.mock(ProcessDefinitionQuery.class);

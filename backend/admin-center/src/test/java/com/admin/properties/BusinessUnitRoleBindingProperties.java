@@ -47,6 +47,9 @@ public class BusinessUnitRoleBindingProperties {
         roleHelper = mock(RoleHelper.class);
         i18nService = mock(I18nService.class);
         when(i18nService.getMessage(any(String.class))).thenReturn("test message");
+        // Production resolves parameterized messages via the varargs overload; echo the key back
+        when(i18nService.getMessage(any(String.class), any(Object[].class)))
+                .thenAnswer(inv -> inv.getArgument(0));
         businessUnitRoleService = new BusinessUnitRoleService(
                 businessUnitRoleRepository,
                 businessUnitRepository,
@@ -150,7 +153,7 @@ public class BusinessUnitRoleBindingProperties {
         // When & Then: Binding should throw exception
         assertThatThrownBy(() -> businessUnitRoleService.bindRole(businessUnitId, roleId))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("只能绑定业务角色");
+                .hasMessageContaining("admin.only_business_role");
         
         // Then: Role should not be saved
         verify(businessUnitRoleRepository, never()).save(any(BusinessUnitRole.class));
@@ -179,7 +182,7 @@ public class BusinessUnitRoleBindingProperties {
         // When & Then: Binding should throw exception
         assertThatThrownBy(() -> businessUnitRoleService.bindRole(businessUnitId, roleId))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("只能绑定业务角色");
+                .hasMessageContaining("admin.only_business_role");
         
         // Then: Role should not be saved
         verify(businessUnitRoleRepository, never()).save(any(BusinessUnitRole.class));

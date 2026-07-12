@@ -5,6 +5,9 @@ import com.workflow.component.BpmnActionParser;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import net.jqwik.api.*;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.ExtensionAttribute;
@@ -65,6 +68,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         injectField(listener, "repositoryService", repositoryService);
         injectField(listener, "bpmnActionParser", bpmnActionParser);
         injectField(listener, "extendedTaskInfoRepository", extendedTaskInfoRepository);
+        injectField(listener, "jdbcTemplate", stubPkJdbcTemplate());
         
         // 创建 mock TaskEntity
         TaskEntity task = mock(TaskEntity.class);
@@ -168,6 +172,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         injectField(listener, "repositoryService", repositoryService);
         injectField(listener, "bpmnActionParser", bpmnActionParser);
         injectField(listener, "extendedTaskInfoRepository", extendedTaskInfoRepository);
+        injectField(listener, "jdbcTemplate", stubPkJdbcTemplate());
         
         // 创建 mock TaskEntity
         TaskEntity task = mock(TaskEntity.class);
@@ -222,6 +227,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         injectField(listener, "repositoryService", repositoryService);
         injectField(listener, "bpmnActionParser", bpmnActionParser);
         injectField(listener, "extendedTaskInfoRepository", extendedTaskInfoRepository);
+        injectField(listener, "jdbcTemplate", stubPkJdbcTemplate());
         
         // 创建 mock TaskEntity
         TaskEntity task = mock(TaskEntity.class);
@@ -264,6 +270,21 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         verify(extendedTaskInfoRepository, never()).save(any());
     }
     
+    /**
+     * Production resolves the MI sub-table physical PK before assignment (static cache).
+     * Answer the information_schema catalog query with a single-column PK "id".
+     */
+    private static JdbcTemplate stubPkJdbcTemplate() {
+        PostgresPhysicalTablePrimaryKeys.clearCache();
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        lenient().when(jdbcTemplate.query(
+                org.mockito.ArgumentMatchers.contains("PRIMARY KEY"),
+                org.mockito.ArgumentMatchers.<RowMapper<String>>any(),
+                any()))
+            .thenReturn(java.util.List.of("id"));
+        return jdbcTemplate;
+    }
+
     // ==================== 数据生成器 ====================
     
     /**

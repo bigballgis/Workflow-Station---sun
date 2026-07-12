@@ -54,6 +54,7 @@ class LdapSyncServiceTest {
     @Mock private RoleAssignmentRepository roleAssignmentRepository;
     @Mock private UserRepository userRepository;
     @Mock private Environment environment;
+    @Mock private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private LdapSyncService ldapSyncService;
@@ -69,6 +70,13 @@ class LdapSyncServiceTest {
         lenient().when(ldapProperties.getGroupSync()).thenReturn(groupSync);
         lenient().when(ldapProperties.getHermesEnv()).thenReturn("");
         lenient().when(environment.getActiveProfiles()).thenReturn(new String[]{});
+        // Run transactional callbacks inline so membership-sync work executes in unit tests
+        lenient().doAnswer(inv -> {
+            java.util.function.Consumer<org.springframework.transaction.TransactionStatus> callback =
+                    inv.getArgument(0);
+            callback.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
         // 默认：显式映射未配置
         groupSync.setGroups("");
         groupSync.setRoles("");
