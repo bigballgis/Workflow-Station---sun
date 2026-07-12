@@ -21,7 +21,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src')
+      '@': resolve(__dirname, 'src'),
+      // Cross-app shared TS sources (frontend/shared/src) — single source for logic that
+      // must stay identical across portal/DW/admin (tableFkRuntime, pkGenerationConfig, ...).
+      '@platform-shared': resolve(__dirname, '../shared/src')
     }
   },
   test: {
@@ -30,6 +33,8 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    // Allow the dev server to serve ../shared sources (outside the app root).
+    fs: { allow: [resolve(__dirname, '..')] },
     proxy: {
       '/api/v1/auth': {
         target: 'http://localhost:8090',

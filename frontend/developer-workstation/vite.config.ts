@@ -54,6 +54,9 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@', replacement: resolve(__dirname, 'src') },
+      // Cross-app shared TS sources (frontend/shared/src) — single source for logic that
+      // must stay identical across portal/DW/admin (tableFkRuntime, pkGenerationConfig, ...).
+      { find: '@platform-shared', replacement: resolve(__dirname, '../shared/src') },
       /**
        * Package `main` points at dist/index.es.js (stock EventConfig/FnConfig baked in).
        * Use source entry so hermesDesignerOverridePlugin can replace panel components.
@@ -66,6 +69,8 @@ export default defineConfig({
   },
   server: {
     port: 3002,
+    // Allow the dev server to serve ../shared sources (outside the app root).
+    fs: { allow: [resolve(__dirname, '..')] },
     proxy: {
       // Auth：保留完整路径 /api/v1/auth/*（与 Spring context-path 一致）
       '/api/v1/auth': {
