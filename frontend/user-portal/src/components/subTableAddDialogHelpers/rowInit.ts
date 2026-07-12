@@ -1,4 +1,5 @@
 import type { FormRules } from 'element-plus'
+import { isSystemAuditField, normalizeAuditFieldName } from '@platform-shared/systemAuditFields'
 import type { DialogColumn } from './types'
 import { getUser, type UserInfo } from '@/api/auth'
 
@@ -11,42 +12,15 @@ function formatTimestampLocal(): string {
 }
 
 /**
- * Platform-managed audit fields — EXACT four names only (case-insensitive, trimmed):
- * created_at / created_by / updated_at / updated_by.
- *
- * 判定语义与后端 platform-common `SystemAuditFields` 和 DW 前端 `useFormSave.ts`
- * 的 ALWAYS_VALID_FIELDS 保持一致；改动匹配规则时三处必须同步。
- * 不做模糊匹配（create_time / createUser 等变体一律不算）：审计字段名由平台
- * Table Design 自动生成、恒为精确四名；模糊匹配会把用户自建的同名业务字段
- * 误判为系统字段（设计端可编辑、运行端却被锁死/覆盖）。
+ * Name DECISION lives in @platform-shared/systemAuditFields (exact four names, kept in
+ * sync with backend platform-common SystemAuditFields). Only the fill VALUES are
+ * portal-specific (timestamp format + current-user display name).
  */
-const AUDIT_FIELD_PATTERNS: ReadonlyArray<{
-  /** Normalised (trimmed lowercase) field-name check — exact names only. */
-  matches: (normalised: string) => boolean
-  /** Produce the auto-filled value. Receives the stored user (may be null). */
-  fill: (user: UserInfo | null) => string
-}> = [
-  {
-    matches: (n) => n === 'created_at',
-    fill: () => formatTimestampLocal(),
-  },
-  {
-    matches: (n) => n === 'updated_at',
-    fill: () => formatTimestampLocal(),
-  },
-  {
-    matches: (n) => n === 'created_by',
-    fill: (user) => user?.displayName || user?.username || '',
-  },
-  {
-    matches: (n) => n === 'updated_by',
-    fill: (user) => user?.displayName || user?.username || '',
-  },
-]
-
-/** Normalise a field name for audit-field comparison (trim + lowercase; underscores kept). */
-function normaliseFieldName(name: string): string {
-  return name.trim().toLowerCase()
+const AUDIT_FILLERS: Readonly<Record<string, (user: UserInfo | null) => string>> = {
+  created_at: () => formatTimestampLocal(),
+  updated_at: () => formatTimestampLocal(),
+  created_by: (user) => user?.displayName || user?.username || '',
+  updated_by: (user) => user?.displayName || user?.username || '',
 }
 
 /**
@@ -54,8 +28,7 @@ function normaliseFieldName(name: string): string {
  * Use everywhere — column enrichment, readonly marking, dialog guards.
  */
 export function isAuditField(fieldName: string): boolean {
-  const n = normaliseFieldName(fieldName)
-  return AUDIT_FIELD_PATTERNS.some(p => p.matches(n))
+  return isSystemAuditField(fieldName)
 }
 
 /**
@@ -78,13 +51,8 @@ export function applyAuditFieldDefaults(row: Record<string, unknown>, columns: D
   }
 
   for (const col of columns) {
-    const normalised = normaliseFieldName(col.field)
-    for (const pattern of AUDIT_FIELD_PATTERNS) {
-      if (pattern.matches(normalised)) {
-        row[col.field] = pattern.fill(resolveUser())
-        break
-      }
-    }
+    const filler = AUDIT_FILLERS[normalizeAuditFieldName(col.field)]
+    if (filler) row[col.field] = filler(resolveUser())
   }
 }
 
@@ -101,16 +69,11 @@ export function applyEditAuditDefaults(row: Record<string, unknown>, columns: Di
     return cachedUser
   }
 
-  const UPDATED_PATTERNS = AUDIT_FIELD_PATTERNS.filter(p => p.matches('updated_at') || p.matches('updated_by'))
-
   for (const col of columns) {
-    const normalised = normaliseFieldName(col.field)
-    for (const pattern of UPDATED_PATTERNS) {
-      if (pattern.matches(normalised)) {
-        row[col.field] = pattern.fill(resolveUser())
-        break
-      }
-    }
+    const n = normalizeAuditFieldName(col.field)
+    if (n !== 'updated_at' && n !== 'updated_by') continue
+    const filler = AUDIT_FILLERS[n]
+    if (filler) row[col.field] = filler(resolveUser())
   }
 }
 
