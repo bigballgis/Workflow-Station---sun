@@ -32,6 +32,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      // Keep in sync with vite.config.ts — cross-app shared TS sources.
+      '@platform-shared': resolve(__dirname, '../shared/src'),
     },
   },
 })
