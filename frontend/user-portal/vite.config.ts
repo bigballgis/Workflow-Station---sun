@@ -23,11 +23,16 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src')
+      '@': resolve(__dirname, 'src'),
+      // Cross-app shared TS sources (frontend/shared/src) — single source for logic that
+      // must stay identical across portal/DW/admin (tableFkRuntime, pkGenerationConfig, ...).
+      '@platform-shared': resolve(__dirname, '../shared/src')
     }
   },
   server: {
     port: 3001,
+    // Allow the dev server to serve ../shared sources (outside the app root).
+    fs: { allow: [resolve(__dirname, '..')] },
     proxy: {
       // Unified SSO UI (`frontend/login`, base `/login/`, default dev port 3010).
       // Without this, opening portal on :3001 redirects to /login/ on the same origin and Vite

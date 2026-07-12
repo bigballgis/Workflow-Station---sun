@@ -69,20 +69,4 @@ public class ExitController {
                         .body(ApiResponse.error("503", "Admin center service unavailable")));
     }
     
-    /**
-     * @deprecated Zero known callers (2026-07 governance audit). Confirm no external scripts
-     * hit /api/portal/exit/exit-history, then remove with AdminCenterClient.getExitHistory.
-     */
-    @Deprecated
-    @GetMapping("/exit-history")
-    @Operation(summary = "Get exit history", description = "Get current user's exit history")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getExitHistory(
-            @CurrentUserId String userId) {
-        log.info("Getting exit history for user: {}", userId);
-
-        return adminCenterClient.getExitHistory(userId)
-                .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
-    }
 }
