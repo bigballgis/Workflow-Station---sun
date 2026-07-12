@@ -108,6 +108,9 @@ public class SubTableEnrichmentComponent {
 
     private record EnrichedSubTablesCacheEntry(String baseFingerprint, String enrichedJson, long timestampMs) {}
 
+    // FALLBACK(ux): the three cache helpers below return null on (de)serialization failure,
+    // which the callers treat as a cache miss and recompute from source — the cache can only
+    // skip work, never feed wrong data.
     private String fingerprintForEnrichCache(Object subTables) {
         if (subTables == null) {
             return null;

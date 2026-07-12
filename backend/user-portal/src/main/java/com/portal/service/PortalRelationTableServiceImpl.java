@@ -778,6 +778,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         try {
             return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
         } catch (Exception e) {
+            // Corrupt pk_generation config must not fail the whole field load, but silently
+            // treating it as "no config" would change PK generation behavior — leave a trace.
+            log.warn("Failed to parse pk_generation config, treating as unset: json={}", json, e);
             return null;
         }
     }
@@ -787,6 +790,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         try {
             return objectMapper.readValue(json, new TypeReference<List<String>>() {});
         } catch (Exception e) {
+            log.warn("Failed to parse JSON string list config, treating as unset: json={}", json, e);
             return null;
         }
     }

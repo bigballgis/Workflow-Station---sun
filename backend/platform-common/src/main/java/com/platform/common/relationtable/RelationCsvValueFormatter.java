@@ -22,6 +22,9 @@ import java.util.Date;
  * {@code 26:31.0}). For TIMESTAMP / DATE / TIME fields we therefore normalize to a canonical pattern
  * ({@code yyyy-MM-dd HH:mm:ss} / {@code yyyy-MM-dd} / {@code HH:mm:ss}); anything we cannot parse is
  * passed through unchanged.
+ *
+ * <p>FALLBACK(ux): parse failures degrade to the raw {@code toString()} value in the exported cell —
+ * export formatting only, the stored row data is never mutated by this class.
  */
 public final class RelationCsvValueFormatter {
 

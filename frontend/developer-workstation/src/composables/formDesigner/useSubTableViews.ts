@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import type { FormDefinition } from '@/api/functionUnit'
 import { subTableViewApi, type SubTableFieldDTO, type SubTableViewConfig } from '@/api/subTableView'
 import { resolveBindingDisplayName } from '@/utils/bindingDisplayHelpers'
@@ -98,7 +99,11 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
               ),
             }
             console.log('[FormDesigner] Cached sub form:', { bindingId: binding.bindingId, ruleCount: rawRule.length })
-          } catch {}
+          } catch (e) {
+            // Cache snapshot failed — save will fall back to the previous cache/saved rule
+            // (useFormSave warns the user on that path); keep a trace for diagnosis.
+            console.warn('[FormDesigner] Failed to snapshot sub form into cache:', { bindingId: binding.bindingId, error: e })
+          }
         }
       }
     }
@@ -148,8 +153,11 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
         await subTableViewApi.saveViewConfig(selectedForm.value.id, bindingId, fields)
       }
       await persistSubTableListViewColumns(bindingId, state.viewFields)
-    } catch (e) {
+    } catch (e: any) {
+      // Write path must not fail silently: the user clicked save and would otherwise
+      // believe the column config persisted.
       console.error('[FormDesigner] Failed to save sub-table view config:', e)
+      ElMessage.error(e?.response?.data?.message || t('form.saveFailed'))
     }
   }
 
@@ -214,6 +222,8 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
       }
     } catch (e) {
       console.error('[FormDesigner] Failed to load sub-table view config:', e)
+      // FALLBACK(ux): read-path degrade — designer still opens with live/saved columns
+      // instead of blocking; the persisted config is not touched by this path.
       // Initialize with empty state
       const savedListDesigner = (selectedForm.value.configJson?.subListViews || {})[bindingId] || {}
       const liveColumns = subTableViewState.value[bindingId]?.viewFields
@@ -377,7 +387,10 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
           options: subRef.getOption?.() || {}
         }
       }
-    } catch {}
+    } catch (e) {
+      // Live designer read failed — fall through to cache/saved (persist-safe chain below).
+      console.warn('[FormDesigner] Failed to read live sub form design:', { bindingId, error: e })
+    }
     return subFormCache.value[bindingId] || { rule: saved.rule || [], options: saved.options || defaultFormOption.value }
   }
 
