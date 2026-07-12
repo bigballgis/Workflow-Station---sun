@@ -123,7 +123,7 @@ class PermissionRequestProperties {
         
         assertThatThrownBy(() -> permissionComponent.submitRequest(userId, dto))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("权限类型不能为空");
+                .hasMessageContaining("Permission type cannot be empty");
     }
 
     @Property(tries = 20)
@@ -139,7 +139,7 @@ class PermissionRequestProperties {
         
         assertThatThrownBy(() -> permissionComponent.submitRequest(userId, dto))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("权限范围不能为空");
+                .hasMessageContaining("Permission scope cannot be empty");
     }
 
     @Property(tries = 20)
@@ -155,7 +155,7 @@ class PermissionRequestProperties {
         
         assertThatThrownBy(() -> permissionComponent.submitRequest(userId, dto))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("申请理由不能为空");
+                .hasMessageContaining("Request reason cannot be empty");
     }
 
     @Property(tries = 20)

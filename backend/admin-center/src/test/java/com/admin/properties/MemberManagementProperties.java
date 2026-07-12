@@ -234,7 +234,7 @@ public class MemberManagementProperties {
         // When & Then: Removal should throw exception
         assertThatThrownBy(() -> memberManagementService.removeVirtualGroupMember(virtualGroupId, userId, nonApproverId))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("不是该虚拟组的审批人");
+                .hasMessageContaining("not an approver for this virtual group");
         
         // Then: Member should not be deleted
         verify(virtualGroupMemberRepository, never()).deleteByGroupIdAndUserId(any(), any());
@@ -496,7 +496,7 @@ public class MemberManagementProperties {
         // When & Then: Removal should throw exception
         assertThatThrownBy(() -> memberManagementService.removeBusinessUnitMember(businessUnitId, userId, nonApproverId))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("不是该业务单元的审批人");
+                .hasMessageContaining("not an approver for this business unit");
         
         // Then: Membership should not be deleted
         verify(userBusinessUnitRepository, never()).delete(any(UserBusinessUnit.class));

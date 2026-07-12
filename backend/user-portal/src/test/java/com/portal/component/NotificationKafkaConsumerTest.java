@@ -104,7 +104,7 @@ class NotificationKafkaConsumerTest {
 
         assertThatThrownBy(() -> consumer.consume(record, acknowledgment))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("处理通知事件失败");
+                .hasMessageContaining("Failed to process notification event");
 
         verify(notificationService, never()).createFromEvent(any());
         verify(acknowledgment, never()).acknowledge();
@@ -187,7 +187,7 @@ class NotificationKafkaConsumerTest {
 
         assertThatThrownBy(() -> consumer.consume(record, acknowledgment))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("处理通知事件失败");
+                .hasMessageContaining("Failed to process notification event");
 
         verify(notificationService).createFromEvent(any(NotificationEvent.class));
         verify(acknowledgment, never()).acknowledge();

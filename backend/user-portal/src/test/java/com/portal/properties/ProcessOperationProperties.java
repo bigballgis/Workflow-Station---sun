@@ -182,7 +182,7 @@ class ProcessOperationProperties {
         
         assertThatThrownBy(() -> processComponent.startProcess(userId, "", request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("流程Key不能为空");
+                .hasMessageContaining("Process key cannot be empty");
     }
 
     @Property(tries = 20)
@@ -192,7 +192,7 @@ class ProcessOperationProperties {
         
         assertThatThrownBy(() -> processComponent.startProcess("", processKey, request))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("用户ID不能为空");
+                .hasMessageContaining("User ID cannot be empty");
     }
 
     @Property(tries = 20)

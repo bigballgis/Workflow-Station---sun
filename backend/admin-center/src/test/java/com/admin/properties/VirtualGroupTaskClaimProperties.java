@@ -313,7 +313,7 @@ public class VirtualGroupTaskClaimProperties {
         
         assertThatThrownBy(() -> taskService.claimTask(userId, request))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("无法认领");
+                .hasMessageContaining("cannot claim");
     }
     
     /**
