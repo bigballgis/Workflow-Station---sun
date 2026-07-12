@@ -96,7 +96,7 @@ public class PermissionRequestProperties {
         assertThatThrownBy(() -> 
                 permissionRequestService.createVirtualGroupRequest(applicantId, virtualGroupId, "Test reason"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("已存在待审批");
+                .hasMessageContaining("request already exists");
         
         // Then: No new request should be saved
         verify(permissionRequestRepository, never()).save(any(PermissionRequest.class));
@@ -131,7 +131,7 @@ public class PermissionRequestProperties {
         assertThatThrownBy(() -> 
                 permissionRequestService.createBusinessUnitRequest(applicantId, businessUnitId, "Test reason"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("已存在待审批");
+                .hasMessageContaining("request already exists");
         
         // Then: No new request should be saved
         verify(permissionRequestRepository, never()).save(any(PermissionRequest.class));
@@ -296,7 +296,7 @@ public class PermissionRequestProperties {
         // When & Then: Approving should throw exception
         assertThatThrownBy(() -> permissionRequestService.approve(requestId, approverId, "Approved"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("已处理");
+                .hasMessageContaining("already been processed");
     }
     
     /**
@@ -324,7 +324,7 @@ public class PermissionRequestProperties {
         // When & Then: Rejecting should throw exception
         assertThatThrownBy(() -> permissionRequestService.reject(requestId, approverId, "Rejected"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("已处理");
+                .hasMessageContaining("already been processed");
     }
     
     // ==================== Helper Methods ====================

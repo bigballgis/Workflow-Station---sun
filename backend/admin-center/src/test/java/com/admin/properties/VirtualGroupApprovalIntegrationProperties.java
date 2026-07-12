@@ -390,7 +390,7 @@ public class VirtualGroupApprovalIntegrationProperties {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> 
                 permissionRequestService.approve(requestId, nonApproverId, "Approved"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("审批人");
+                .hasMessageContaining("approver");
         
         // Then: User should NOT be added to virtual group
         verify(virtualGroupMemberRepository, never()).save(any(VirtualGroupMember.class));

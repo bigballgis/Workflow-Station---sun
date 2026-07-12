@@ -108,7 +108,7 @@ public class VirtualGroupTaskVisibilityProperties {
         // When & Then: 应该抛出异常
         assertThatThrownBy(() -> taskService.getGroupTasks(groupId, userId))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("不是该虚拟组成员");
+                .hasMessageContaining("not a member of this virtual group");
     }
     
     /**
@@ -132,7 +132,7 @@ public class VirtualGroupTaskVisibilityProperties {
         // When & Then: 应该抛出异常
         assertThatThrownBy(() -> taskService.getGroupTasks(groupId, userId))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("已失效或过期");
+                .hasMessageContaining("invalid or expired");
     }
 
     

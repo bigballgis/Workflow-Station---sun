@@ -176,7 +176,7 @@ public class ApprovalWorkflowProperties {
         // When & Then: Approval should fail with authorization error
         assertThatThrownBy(() -> permissionRequestService.approve(requestId, unauthorizedUserId, comment))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("不是该");
+                .hasMessageContaining("not an approver for this");
         
         // Then: Request state should not be modified
         verify(permissionRequestRepository, never()).save(any(PermissionRequest.class));
@@ -206,7 +206,7 @@ public class ApprovalWorkflowProperties {
         // When & Then: Approval should fail with state error
         assertThatThrownBy(() -> permissionRequestService.approve(requestId, approverId, comment))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("该申请已处理");
+                .hasMessageContaining("already been processed");
         
         // Then: Request state should not be modified
         verify(permissionRequestRepository, never()).save(any(PermissionRequest.class));
@@ -234,15 +234,15 @@ public class ApprovalWorkflowProperties {
         // When & Then: Rejection without comment should fail
         assertThatThrownBy(() -> permissionRequestService.reject(requestId, approverId, null))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("拒绝时必须提供审批意见");
+                .hasMessageContaining("Rejection must include a comment");
         
         assertThatThrownBy(() -> permissionRequestService.reject(requestId, approverId, ""))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("拒绝时必须提供审批意见");
+                .hasMessageContaining("Rejection must include a comment");
         
         assertThatThrownBy(() -> permissionRequestService.reject(requestId, approverId, "   "))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("拒绝时必须提供审批意见");
+                .hasMessageContaining("Rejection must include a comment");
         
         // Then: Request state should not be modified
         verify(permissionRequestRepository, never()).save(any(PermissionRequest.class));

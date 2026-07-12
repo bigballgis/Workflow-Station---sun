@@ -206,7 +206,7 @@ public class BusinessUnitApprovalIntegrationProperties {
         assertThatThrownBy(() -> 
                 permissionRequestService.approve(requestId, nonApproverId, "Approved"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("审批人");
+                .hasMessageContaining("approver");
         
         // Then: Request should NOT be processed
         verify(memberManagementService, never()).processApprovedRequest(any());
@@ -281,7 +281,7 @@ public class BusinessUnitApprovalIntegrationProperties {
         assertThatThrownBy(() -> 
                 permissionRequestService.approve(requestId, approverId, "Approved"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("已处理");
+                .hasMessageContaining("already been processed");
         
         // Then: User should NOT be added to business unit
         verify(memberManagementService, never()).addUserToBusinessUnit(any(), any(), any());
@@ -315,7 +315,7 @@ public class BusinessUnitApprovalIntegrationProperties {
         assertThatThrownBy(() -> 
                 permissionRequestService.approve(requestId, approverId, "Approved"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("已处理");
+                .hasMessageContaining("already been processed");
         
         // Then: User should NOT be added to business unit
         verify(memberManagementService, never()).addUserToBusinessUnit(any(), any(), any());
