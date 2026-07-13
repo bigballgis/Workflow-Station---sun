@@ -129,6 +129,12 @@ export function useFormSave(options: UseFormSaveOptions) {
   async function handleSaveForm(isManual = false) {
     if (!selectedForm.value || !designerRef.value) return
 
+    // The form this save is for. If the user switches to another form while this save is
+    // in flight (awaits below yield), the canvas/collected state belongs to THIS form —
+    // persisting it under the newly selected form would clobber that form's design with
+    // another table's fields. Verified again right before updateForm.
+    const targetFormId = selectedForm.value.id
+
     if (!isManual) {
       autoSaving.value = true
     }
@@ -319,6 +325,11 @@ export function useFormSave(options: UseFormSaveOptions) {
         ...subTablePortalViewsState.value
       }
 
+      if (selectedForm.value?.id !== targetFormId) {
+        console.warn(`[FormDesigner] form switched (${targetFormId} -> ${selectedForm.value?.id ?? 'none'}) while collecting save payload; aborting to avoid saving one table's fields onto another form`)
+        return
+      }
+
       const nextConfig = { rule, options, subForms, relationViews, subListViews, subTablePortalViews }
       const updated = await store.updateForm(functionUnitId, selectedForm.value.id, {
         formName: selectedForm.value.formName,
@@ -329,9 +340,14 @@ export function useFormSave(options: UseFormSaveOptions) {
           ? { fieldPermissions: selectedForm.value.fieldPermissions }
           : {})
       })
-      selectedForm.value = {
-        ...selectedForm.value,
-        configJson: updated.configJson || nextConfig
+      // Only write back if the user is still on the same form — updateForm yields, and the
+      // selection may have moved on; overlaying this form's configJson onto the newly
+      // selected form would show this table's fields there until its own load finishes.
+      if (selectedForm.value?.id === targetFormId) {
+        selectedForm.value = {
+          ...selectedForm.value,
+          configJson: updated.configJson || nextConfig
+        }
       }
 
       if (isManual) {

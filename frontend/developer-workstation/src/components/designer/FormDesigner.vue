@@ -856,15 +856,12 @@ const activeBindingLabel = computed(() => {
   return b?.tableDisplayName || b?.tableName || ''
 })
 
+// Show only the first table on the group title — the dropdown lists the rest.
 function formatBindingGroupNavLabel(
   bindings: Array<{ tableName: string; tableDisplayName?: string }>,
 ): string {
-  if (bindings.length === 0) return ''
   const names = bindings.map(b => b.tableDisplayName || b.tableName).filter(Boolean)
-  if (names.length <= 3) {
-    return names.join(' · ')
-  }
-  return `${names.length} ${t('form.tabGroupTables')}`
+  return names[0] ?? ''
 }
 
 const subBindingsNavLabel = computed(() => {

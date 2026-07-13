@@ -29,20 +29,32 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
   // --- State ---
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
+  // While a form switch is in flight (cleanup called, new rules not yet loaded) the canvas
+  // still holds the PREVIOUS form's rules but selectedForm already points at the new one —
+  // any save fired in that window persists table A's fields under form B. Suspend scheduling
+  // until setupAutoSavePolling confirms the new form's rules are on the canvas.
+  let suspended = false
+
   // Polling state
   const lastDesignerState = ref<string>('')
   const pollTimerRef = ref<ReturnType<typeof setInterval> | null>(null)
 
   // --- Functions ---
 
-  function scheduleAutoSave() {
+  function cancelPendingAutoSave() {
     if (autoSaveTimer) {
       clearTimeout(autoSaveTimer)
+      autoSaveTimer = null
     }
+  }
+
+  function scheduleAutoSave() {
+    if (suspended) return
+    cancelPendingAutoSave()
     autoSaveTimer = setTimeout(() => {
       console.log('[FormDesigner] Auto-save triggered')
       handleSaveForm(false)
-    }, 2000)
+    }, 5000)
   }
 
   function formatAutoSaveTime(time: Date): string {
@@ -59,6 +71,10 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
   }
 
   function cleanupAutoSavePolling() {
+    // Cancel the pending debounce too and refuse new schedules: a timer armed by edits on
+    // the previous form must never fire after selectedForm has moved to another form.
+    suspended = true
+    cancelPendingAutoSave()
     if (pollTimerRef.value) {
       clearInterval(pollTimerRef.value)
       pollTimerRef.value = null
@@ -77,6 +93,8 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
 
   function setupAutoSavePolling() {
     cleanupAutoSavePolling()
+    // The new form's rules are on the canvas now — saves are safe again.
+    suspended = false
 
     if (!selectedForm.value || !designerRef.value) {
       console.log('[FormDesigner] Auto-save polling skipped: no form or designer ref')
