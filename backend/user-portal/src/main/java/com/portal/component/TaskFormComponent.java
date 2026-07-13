@@ -439,8 +439,18 @@ public class TaskFormComponent {
                 changeHistoryComponent.recordConcurrentModificationWarning(
                         taskInfo.processInstanceId, field, "unknown", userId);
             }
-            // Record field-level changes (top-level form fields only; sub-table changes deferred to completion)
+            // Record top-level field changes
             changeHistoryComponent.recordFieldChanges(context, snapshotOldVars, editableData);
+            // Record sub-table row changes immediately so users see per-save
+            // history; completion-time consolidation against the first-save
+            // baseline is still recorded (cross-save dedup prevents identical
+            // old+new pairs from duplicating when the final state equals the
+            // last save).
+            Object oldSubTables = snapshotOldVars.get("__subTables__");
+            Object newSubTables = editableData.get("__subTables__");
+            if (newSubTables != null || oldSubTables != null) {
+                subTableChangeRecorder().recordSubTableChangeHistory(context, oldSubTables, newSubTables);
+            }
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
         }
