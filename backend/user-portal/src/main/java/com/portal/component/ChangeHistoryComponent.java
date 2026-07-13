@@ -77,7 +77,8 @@ public class ChangeHistoryComponent {
             "__subTables__", "subTableName", "foreignKey", "assigneeField",
             "mainRecordId", "activeBusinessUnitId", "activeRoleId",
             "requestItemsHasHighValue", "totalPrice", "maxItemPrice", "itemCount",
-            "initiator", "participant_assigner_user_id"
+            "initiator", "participant_assigner_user_id",
+            "id", "currentUserId"
     );
 
     /**
@@ -651,7 +652,16 @@ public class ChangeHistoryComponent {
             return Map.of();
         }
         Map<String, List<Map<String, Object>>> rowsByName = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+        Set<String> seenRowIds = new HashSet<>();
+        // Sort keys so old and new snapshots assign the same row to the same
+        // normalized-name group regardless of HashMap iteration order.
+        List<Map.Entry<?, ?>> sortedEntries = new ArrayList<>(rawMap.entrySet());
+        sortedEntries.sort((a, b) -> {
+            String ka = a.getKey() != null ? a.getKey().toString() : "";
+            String kb = b.getKey() != null ? b.getKey().toString() : "";
+            return ka.compareTo(kb);
+        });
+        for (Map.Entry<?, ?> entry : sortedEntries) {
             String normalizedName = normalizeSubTableNameForHistory(stringOrNull(entry.getKey()));
             if (normalizedName == null) {
                 continue;
@@ -662,7 +672,16 @@ public class ChangeHistoryComponent {
             List<Map<String, Object>> rows = rowsByName.computeIfAbsent(normalizedName, ignored -> new ArrayList<>());
             for (Object rawRow : rawRows) {
                 if (rawRow instanceof Map<?, ?> row) {
-                    rows.add((Map<String, Object>) row);
+                    Map<String, Object> typedRow = (Map<String, Object>) row;
+                    // Cross-key dedup: the same row can appear under multiple
+                    // key aliases (binding ID, table name, normalized name).
+                    // Keep only the first occurrence so diff output doesn't
+                    // contain mirror records for each alias.
+                    String rowId = resolveRowIdentifier(typedRow);
+                    if (rowId != null && !seenRowIds.add(rowId)) {
+                        continue;
+                    }
+                    rows.add(typedRow);
                 }
             }
         }
