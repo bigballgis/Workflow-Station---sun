@@ -130,6 +130,21 @@
         </div>
       </div>
 
+      <!-- Load Error State (do not masquerade a failed load as "no data") -->
+      <div
+        v-else-if="store.loadError"
+        class="empty-state"
+      >
+        <el-empty :description="t('functionUnit.loadFailed')">
+          <el-button
+            type="primary"
+            @click="loadData"
+          >
+            {{ t('common.refresh') }}
+          </el-button>
+        </el-empty>
+      </div>
+
       <!-- Empty State -->
       <div
         v-else-if="store.list.length === 0"
@@ -246,6 +261,27 @@
               :key="tag" 
               :label="tag" 
               :value="tag" 
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item
+          v-if="showTeamSelector"
+          :label="t('functionUnit.team')"
+          prop="teamGroupIds"
+        >
+          <el-select
+            v-model="basicForm.teamGroupIds"
+            multiple
+            filterable
+            :loading="teamsLoading"
+            :placeholder="t('functionUnit.selectTeam')"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="group in teamOptions"
+              :key="group.id"
+              :label="group.name"
+              :value="group.id"
             />
           </el-select>
         </el-form-item>
@@ -375,6 +411,9 @@ const {
   basicForm,
   formDialogTitle,
   formRules,
+  teamOptions,
+  teamsLoading,
+  showTeamSelector,
   openCreateDialog,
   handleFormDialogClosed,
   handleSettings,

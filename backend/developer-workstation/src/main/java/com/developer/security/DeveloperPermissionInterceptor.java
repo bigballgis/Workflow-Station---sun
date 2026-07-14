@@ -112,10 +112,28 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
     
     /**
      * Convert permission code from UPPER_SNAKE_CASE to lowercase colon format.
-     * Example: FUNCTION_UNIT_VIEW -> function_unit:view
+     * The resource segment can itself contain underscores (e.g. FUNCTION_UNIT) and the
+     * action segment can be multi-word (e.g. ASSIGN_DEV_GROUP), so a naive "split on the
+     * last underscore" is wrong for codes like FUNCTION_UNIT_ASSIGN_DEV_GROUP. We match the
+     * annotation against the known resource prefixes (aligned with admin-center's
+     * DeveloperPermission enum) and treat the remainder as the action.
+     * Examples: FUNCTION_UNIT_VIEW -> function_unit:view,
+     *           FUNCTION_UNIT_ASSIGN_DEV_GROUP -> function_unit:assign_dev_group.
      */
+    private static final java.util.List<String> KNOWN_RESOURCE_PREFIXES = java.util.List.of(
+            "FUNCTION_UNIT", "PROCESS", "FORM", "TABLE", "ACTION", "DECISION");
+
     private String convertPermissionCode(String code) {
-        // Find the position of the last underscore (separates resource from action)
+        for (String resource : KNOWN_RESOURCE_PREFIXES) {
+            if (code.equals(resource)) {
+                return resource.toLowerCase();
+            }
+            if (code.startsWith(resource + "_")) {
+                String action = code.substring(resource.length() + 1).toLowerCase();
+                return resource.toLowerCase() + ":" + action;
+            }
+        }
+        // Fallback: original last-underscore heuristic for unrecognised resources.
         int lastUnderscore = code.lastIndexOf('_');
         if (lastUnderscore > 0) {
             String resource = code.substring(0, lastUnderscore).toLowerCase();

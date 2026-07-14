@@ -72,6 +72,11 @@ public class DeveloperPermissionService {
         developer.remove(DeveloperPermission.FUNCTION_UNIT_DELETE);
         developer.remove(DeveloperPermission.FUNCTION_UNIT_ASSIGN_DEV_GROUP);
         DEFAULT_ROLE_PERMISSIONS.put("DEVELOPER", developer);
+
+        // FU Viewer（团队只读基线）：只允许查看功能单元及其子资源（表单/数据表/流程/动作的读操作
+        // 均以 FUNCTION_UNIT_VIEW 门禁），无任何编辑能力。团队虚拟组默认绑定此角色，
+        // 叠加 TEAM_LEAD/DEVELOPER 后才获得对应编辑权。
+        DEFAULT_ROLE_PERMISSIONS.put("FU_VIEWER", EnumSet.of(DeveloperPermission.FUNCTION_UNIT_VIEW));
     }
     
     /**

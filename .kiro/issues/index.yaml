@@ -1194,3 +1194,69 @@
     才放行并打 WARN；dev compose 显式置 true，K8s uat/preprod configmap 显式置 false。
     验证：mvn compile admin-center+user-portal+workflow-engine-core+developer-workstation BUILD SUCCESS；
     SecurityManagerComponentTest 通过。
+- id: "1479"
+  status: fixed
+  fixed_at: "2026-07-14"
+  severity: major
+  category: bug
+  summary: "DW 功能单元列表加载失败被静默兜底为空列表，误显示「暂无功能单元」"
+  file: "frontend/developer-workstation/src/stores/functionUnit.ts"
+  note: |
+    根因：fetchList 的 catch 块 `list.value=[]; total.value=0` 静默吞错（违反 error-handling-governance 红线1），
+    首次进入 DW 时列表请求瞬时失败（如刷新部署后后端预热/首帧 token 竞态，控制台伴随 404），被当成「空列表」渲染，
+    用户看到「没有 function unit」；之后创建 FU 触发 loadData 重新拉取成功 → 全部 FU 出现（admin/tech_lead 全局可见，
+    本就应看到全部）。修复：新增 store.loadError；catch 中 ElMessage.error(resolveUserFacingHttpMessage) 显式提示，
+    不再冒充空态；FunctionUnitList.vue 新增独立错误态（functionUnit.loadFailed + Refresh，非 Create 空态）；
+    en/zh-CN/zh-TW 补 functionUnit.loadFailed。
+    验证：DW 前端 build + 重建 developer-workstation-frontend；Playwright 注入 500 → 列表显示「Failed to load
+    function units, please retry」+ Refresh（无 Create），非误导空态。截图
+    frontend/developer-workstation/verification-screenshots/2026-07-14_fu-list-load-error-state.png。
+    说明：与团队 scope 二维权限模型（#1479 无关的 FU_VIEWER/团队分配）非同一问题；account 123456 经
+    userHasActiveAdminTypeRole=true 确认为全局可见，看到全部 FU 属正确行为。
+- id: "1480"
+  status: fixed
+  fixed_at: "2026-07-14"
+  severity: major
+  category: architecture
+  summary: "团队成员进 DW 需绑 FU_VIEWER，但 admin-center VG 角色下拉框只允许绑 BU 类角色 → 团队成员被 auth.no_permission 拒之门外"
+  file: "backend/developer-workstation/src/main/java/com/developer/security/DeveloperPermissionChecker.java"
+  note: |
+    根因：DW「进入工作区」能力此前完全依赖能力角色（前端路由守卫 hasAnyRole([SYS_ADMIN,TECH_LEAD,TEAM_LEAD,
+    DEVELOPER,FU_VIEWER]) + 后端 @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")）。但 admin-center 的
+    VirtualGroupRolesDialog / useVirtualGroupRoles.availableRoles 刻意过滤只列 BU_BOUNDED/BU_UNBOUNDED/BUSINESS
+    角色（且单角色替换语义），无法给团队虚拟组绑 DEVELOPER 类的 FU_VIEWER；DEFAULT_DEV_TEAM 的 FU_VIEWER 是迁移
+    SQL 直插的。故仅是某团队(虚拟组)成员、无 DW 角色的用户（如 12345678 ∈ testFUaccessTeamB）登录 DW 报
+    auth.no_permission。
+    方案（DW-local 解耦，不改 admin-center/JWT/VG 角色）：将「团队成员身份」解耦为 DW 只读基线——
+    「拥有 FU 的团队(虚拟组)成员」自动获得只读能力。
+    1) FunctionUnitWorkspaceAccessService 新增 isMemberOfFunctionUnitOwningTeam(userId) 与 canEnterWorkspace(userId)。
+    2) DeveloperPermissionChecker.getUserPermissions 补丁：团队成员补 function_unit:view（只读），通过所有读接口
+       能力门禁；写权限一律不补；可见/可改具体 FU 仍由 FunctionUnitWorkspaceAccessInterceptor 按团队 scope 逐 FU 校验，
+       不越权。
+    3) 新增 GET /api/v1/function-units/workspace-access（无 @RequireDeveloperPermission，避免 chicken-egg）返回
+       {canView}；前端路由守卫在 hasAnyRole 失败时调用它，团队成员放行、其余 /403（结果按会话缓存）。
+    验证：mvn -pl backend/developer-workstation -am package -DskipTests BUILD SUCCESS；DW 前端 build + 重建
+    developer-workstation + developer-workstation-frontend。给 testFUaccessTeamB 分配 FU 50008 后，SQL 复算
+    12345678 的 visibleFunctionUnitIds={50008}（→ canEnterWorkspace=true、只读）；workspace-access 端点未登录
+    返回 canView:false（路由正确、未被 {id} 映射/权限拦截器误拦）。浏览器截图需 12345678 口令，留待人工/用户侧确认。
+- id: "1481"
+  status: fixed
+  fixed_at: "2026-07-14"
+  severity: major
+  category: bug
+  summary: "DW 修改 FU team 信息（分配虚拟开发组）对所有人报 auth.no_permission，含 SYS_ADMIN/TECH_LEAD"
+  file: "backend/developer-workstation/src/main/java/com/developer/security/DeveloperPermissionInterceptor.java"
+  note: |
+    根因：DeveloperPermissionInterceptor.convertPermissionCode 用「最后一个下划线」拆 resource/action，
+    对多词 action 失效。@RequireDeveloperPermission("FUNCTION_UNIT_ASSIGN_DEV_GROUP") 被误转成
+    function_unit_assign_dev:group，而 admin-center DeveloperPermission 枚举的规范码是 function_unit:assign_dev_group，
+    两者不匹配 → 能力门禁对所有用户（包括拥有该权限的 SYS_ADMIN+TECH_LEAD，如 username 123456/full_name liamtest4）
+    一律失败。此前无端点使用该 3 段 action 权限，团队分配（PUT /function-units/{id}/dev-groups）为本特性新引入，首次触发潜伏 bug。
+    日志佐证：getUserPermissions 明确 Loaded 23 permissions 含 function_unit:assign_dev_group，但 interceptor 仍
+    "does not have required permissions: [FUNCTION_UNIT_ASSIGN_DEV_GROUP]"。
+    修复：convertPermissionCode 改为按已知 resource 前缀（FUNCTION_UNIT/PROCESS/FORM/TABLE/ACTION/DECISION）匹配，
+    resource 之后余部为 action；未识别时回退旧「最后下划线」启发式。FUNCTION_UNIT_VIEW→function_unit:view、
+    FUNCTION_UNIT_ASSIGN_DEV_GROUP→function_unit:assign_dev_group 均正确。
+    附带：运行容器 platform-common 陈旧导致 auth.no_permission 在 en 未解析（源文件 messages_en.properties 实有该键），
+    -am 重建后一并刷新。验证：mvn -pl backend/developer-workstation -am package -DskipTests BUILD SUCCESS；
+    重建 developer-workstation 容器 healthy。待用户在 UI 用 123456 重试确认 team 修改成功。

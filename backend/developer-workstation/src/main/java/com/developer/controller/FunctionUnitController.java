@@ -63,6 +63,14 @@ public class FunctionUnitController extends BaseController {
         });
     }
     
+    @GetMapping("/workspace-access")
+    @Operation(summary = "Whether the current user may enter the function unit workspace",
+            description = "True for DW capability roles or members of a team that owns at least one function unit (read-only baseline). "
+                    + "Intentionally not gated by @RequireDeveloperPermission so role-less team members can be admitted.")
+    public ResponseEntity<ApiResponse<Map<String, Boolean>>> workspaceAccess() {
+        return handleRequest(() -> Map.of("canView", functionUnitComponent.canAccessWorkspace()));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get function unit details")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
