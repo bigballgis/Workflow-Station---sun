@@ -503,6 +503,8 @@ services:
       FILE_UPLOAD_BASE_URL: /api/v1/upload/files
       # AI Generate 对话已从 n8n 迁移到 Activepieces 同步 webhook(flowId 按环境不同)。
       AI_GENERATION_WEBHOOK_URL: ${AI_GENERATION_WEBHOOK_URL:-http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
+      # SMTP/IMAP connection test: allow internal relay hostnames (resolve to private IPs on corp VPN).
+      SSRF_ALLOWED_HOSTS: ${SSRF_ALLOWED_HOSTS:-activepieces,n8n}
     networks:
       - platform-dev-network
     restart: unless-stopped

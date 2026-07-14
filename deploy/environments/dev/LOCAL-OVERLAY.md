@@ -40,4 +40,4 @@ docker compose -f docker-compose.dev.yml -f docker-compose.local.yml --env-file 
 ## 注意
 
 - 提交前执行 `git status`，确认 **没有** `docker-compose.local.yml`。
-- 公司 SMTP / QQ 等真实邮箱仍按 Connections 表单单独配置，与 Mailpit 无关。
+- 公司 SMTP / QQ 等真实邮箱仍按 Connections 表单单独配置，与 Mailpit 无关。内网中继主机名加入 `.env` 的 `SSRF_ALLOWED_HOSTS` 后可在 Designer 测试连接；独立冒烟见 `scripts/email-smtp-test/`。
