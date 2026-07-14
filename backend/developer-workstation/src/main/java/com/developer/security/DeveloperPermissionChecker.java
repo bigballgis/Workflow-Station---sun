@@ -25,9 +25,13 @@ import java.util.concurrent.TimeUnit;
 @Component
 @RequiredArgsConstructor
 public class DeveloperPermissionChecker {
-    
+
+    /** 团队成员只读基线权限码（与 {@code @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")} 对应）。 */
+    private static final String FUNCTION_UNIT_VIEW_CODE = "function_unit:view";
+
     private final RestTemplate restTemplate;
-    
+    private final FunctionUnitWorkspaceAccessService workspaceAccessService;
+
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
     
@@ -63,7 +67,8 @@ public class DeveloperPermissionChecker {
             );
             
             Set<String> permissions = new HashSet<>(response.getBody() != null ? response.getBody() : Collections.emptyList());
-            
+            augmentWithTeamViewIfEligible(userId, permissions);
+
             // 更新缓存
             permissionCache.put(userId, new CachedPermissions(permissions));
             
@@ -77,7 +82,25 @@ public class DeveloperPermissionChecker {
                 log.warn("Returning expired cached permissions for user: {}", userId);
                 return cached.permissions;
             }
-            return Collections.emptySet();
+            // admin-center 不可用时，仍让「拥有 FU 的团队」成员保有只读能力（不阻塞 DW 只读浏览）
+            Set<String> fallback = new HashSet<>();
+            augmentWithTeamViewIfEligible(userId, fallback);
+            return fallback;
+        }
+    }
+
+    /**
+     * 团队成员身份 → DW 只读基线：若用户是「拥有功能单元的团队」成员，则补充
+     * {@code function_unit:view}，使其通过所有读接口的能力门禁。可见/可改的具体 FU
+     * 仍由工作区拦截器按团队 scope 逐 FU 校验，故不会越权。写权限一律不补。
+     */
+    private void augmentWithTeamViewIfEligible(String userId, Set<String> permissions) {
+        if (permissions.contains(FUNCTION_UNIT_VIEW_CODE)) {
+            return;
+        }
+        if (workspaceAccessService.isMemberOfFunctionUnitOwningTeam(userId)) {
+            permissions.add(FUNCTION_UNIT_VIEW_CODE);
+            log.info("Granted read-only {} to FU-owning-team member user {}", FUNCTION_UNIT_VIEW_CODE, userId);
         }
     }
     

@@ -1,12 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { functionUnitApi, type FunctionUnit, type FunctionUnitResponse, type FunctionUnitRequest, type TableDefinition, type FormDefinition, type ActionDefinition, type ProcessDefinition, type Version, type ValidationResult } from '@/api/functionUnit'
 import { sortFormsByType } from '@/utils/formDesigner'
+import i18n from '@/i18n'
+import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
 export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const list = ref<FunctionUnitResponse[]>([])
   const current = ref<FunctionUnit | null>(null)
   const loading = ref(false)
+  // Distinguishes "the load failed" from "there genuinely are no function units":
+  // a failed request must not masquerade as an empty list (misleading empty state).
+  const loadError = ref(false)
   const total = ref(0)
   const allTags = ref<string[]>([])
 
@@ -19,15 +25,21 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
 
   async function fetchList(params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number }) {
     loading.value = true
+    loadError.value = false
     try {
       // Default sort by name ascending (A→Z) at API level
       const res = await functionUnitApi.list({ sort: 'name,asc', ...params })
       const pageData = res?.data?.content !== undefined ? res.data : res?.data
       list.value = pageData?.content ?? []
       total.value = pageData?.totalElements ?? 0
-    } catch {
+    } catch (e) {
+      // Surface the failure instead of silently showing an empty list — a transient
+      // failure (e.g. token race on first load) previously looked like "no data".
+      loadError.value = true
       list.value = []
       total.value = 0
+      const t = i18n.global.t as (key: string) => string
+      ElMessage.error(resolveUserFacingHttpMessage(e, t) || t('functionUnit.loadFailed'))
     } finally {
       loading.value = false
     }
@@ -204,7 +216,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   }
 
   return {
-    list, current, loading, total, allTags, tables, forms, actions, process, versions,
+    list, current, loading, loadError, total, allTags, tables, forms, actions, process, versions,
     fetchList, fetchById, create, update, remove, restore, publish, clone, validate,
     fetchAllTags,
     fetchTables, createTable, updateTable, deleteTable,

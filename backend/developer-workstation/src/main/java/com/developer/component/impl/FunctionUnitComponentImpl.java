@@ -180,6 +180,11 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
         functionUnit = functionUnitRepository.save(functionUnit);
 
+        // 创建时绑定所属团队（虚拟组）——决定 FU 的可见范围。此处不走 ASSIGN_DEV_GROUPS 工作区校验：
+        // 创建动作已由 @RequireDeveloperPermission(FUNCTION_UNIT_CREATE) + @PreAuthorize 校验，
+        // 且新 FU 尚未 inScope，无法在创建后再自助分配（否则陷入「不可见→不可分配」死锁）。
+        persistCreateTimeDevGroups(functionUnit.getId(), request.getVirtualGroupIds());
+
         String initialBpmnXml = MinimalBpmnTemplate.build(functionUnit.getCode());
         ProcessDefinition initialProcess = ProcessDefinition.builder()
                 .functionUnit(functionUnit)
@@ -189,6 +194,24 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         processDefinitionRepository.save(initialProcess);
 
         return functionUnit;
+    }
+
+    private void persistCreateTimeDevGroups(Long functionUnitId, List<String> virtualGroupIds) {
+        if (virtualGroupIds == null || virtualGroupIds.isEmpty()) {
+            return;
+        }
+        String operator = getCurrentOperator();
+        for (String gid : virtualGroupIds) {
+            if (gid == null || gid.isBlank()) {
+                continue;
+            }
+            functionUnitDevGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
+                    .functionUnitId(functionUnitId)
+                    .virtualGroupId(gid.trim())
+                    .createdAt(Instant.now())
+                    .createdBy(operator)
+                    .build());
+        }
     }
 
     @Override
@@ -289,6 +312,13 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.VIEW);
         FunctionUnit entity = getById(id);
         return toResponse(entity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean canAccessWorkspace() {
+        String userId = SecurityContextUtils.getCurrentUserId().orElse(null);
+        return functionUnitWorkspaceAccessService.canEnterWorkspace(userId);
     }
 
     @Override

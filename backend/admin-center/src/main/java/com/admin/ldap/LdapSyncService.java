@@ -178,6 +178,8 @@ public class LdapSyncService {
             }
             // 5. 同步用户与虚拟组关系
             syncVirtualGroupMemberships(entries, groupDefs, syncedUserIdsByEmployeeId);
+            // 6. 数据驱动的团队组同步（CUSTOM + ad_group）——新团队零代码接入
+            syncCustomAdGroupBackedVirtualGroups();
             audit.setSuccessCount(successCount);
             audit.setInsertCount(insertCount);
             audit.setUpdateCount(updateCount);
@@ -313,6 +315,8 @@ public class LdapSyncService {
             }
             // 同步虚拟组关系
             syncVirtualGroupMemberships(entries, groupDefs, syncedUserIdsByEmployeeId);
+            // 数据驱动的团队组同步（CUSTOM + ad_group）——新团队零代码接入
+            syncCustomAdGroupBackedVirtualGroups();
             audit.setSuccessCount(successCount);
             audit.setInsertCount(insertCount);
             audit.setUpdateCount(updateCount);
@@ -704,6 +708,76 @@ public class LdapSyncService {
             // 清理该用户不再属于的 Hermes LDAP 管理虚拟组
             cleanStaleMembershipsForUser(actualUserId, targetVgCodes);
         }
+    }
+
+    // ==================== 数据驱动的团队组同步 ====================
+    /**
+     * 为所有「配置了 {@code ad_group} 的 CUSTOM 虚拟组」（团队组）从 AD 拉取成员。
+     *
+     * <p>与硬编码的 {@link #HERMES_BINDINGS}（SYSTEM 能力组）解耦：新团队接入只需在 Admin Center
+     * 创建 CUSTOM 虚拟组并填写 {@code adGroup}，下一次同步即自动灌入成员，<b>无需改代码或发版</b>。</p>
+     *
+     * <p>SYSTEM 组由 Hermes 绑定链处理，此处按 {@code type != SYSTEM} 排除，避免重复处理与冲突清理。
+     * 手工添加的成员（{@code addedBy != HERMES_AD_SYNC}）予以保留，仅回收本同步任务管理的过期成员。</p>
+     */
+    void syncCustomAdGroupBackedVirtualGroups() {
+        List<VirtualGroup> teamGroups = virtualGroupRepository.findAll().stream()
+                .filter(vg -> !"SYSTEM".equals(vg.getType()))
+                .filter(vg -> StringUtils.hasText(vg.getAdGroup()))
+                .toList();
+        if (teamGroups.isEmpty()) {
+            return;
+        }
+        for (VirtualGroup vg : teamGroups) {
+            try {
+                syncOneCustomAdGroup(vg);
+            } catch (Exception e) {
+                log.warn("Custom AD-backed team group sync failed: vg={} adGroup={}: {}",
+                        vg.getCode(), vg.getAdGroup(), e.getMessage());
+            }
+        }
+    }
+
+    private void syncOneCustomAdGroup(VirtualGroup vg) throws javax.naming.NamingException {
+        String adGroupCn = vg.getAdGroup().trim();
+        List<Map<String, String>> users = ldapClient.fetchUsersInGroup(adGroupCn);
+        Set<String> targetUserIds = new LinkedHashSet<>();
+        for (Map<String, String> attrs : users) {
+            Optional<LdapUserData> mapped = ldapUserMapper.mapToUser(attrs);
+            if (mapped.isEmpty()) {
+                continue;
+            }
+            try {
+                LdapUserSyncService.UpsertResult res = ldapUserSyncService.upsertUser(mapped.get());
+                if (StringUtils.hasText(res.userId())) {
+                    targetUserIds.add(res.userId());
+                }
+            } catch (Exception e) {
+                log.warn("Upsert failed for team group {} member {}: {}",
+                        vg.getCode(), mapped.get().getId(), e.getMessage());
+            }
+        }
+        transactionTemplate.executeWithoutResult(status -> {
+            for (String userId : targetUserIds) {
+                if (!virtualGroupMemberRepository.existsByGroupIdAndUserId(vg.getId(), userId)) {
+                    virtualGroupMemberRepository.save(VirtualGroupMember.builder()
+                            .id(UUID.randomUUID().toString())
+                            .groupId(vg.getId())
+                            .userId(userId)
+                            .addedBy(HERMES_SYNC_MEMBER_ADDED_BY)
+                            .build());
+                }
+            }
+            // 仅回收由本同步任务添加、现已不在 AD 组中的成员；手工添加的成员保留
+            for (VirtualGroupMember m : virtualGroupMemberRepository.findByGroupId(vg.getId())) {
+                if (HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy())
+                        && !targetUserIds.contains(m.getUserId())) {
+                    virtualGroupMemberRepository.deleteByGroupIdAndUserId(m.getGroupId(), m.getUserId());
+                }
+            }
+        });
+        log.info("Custom AD-backed team group sync: vg={} adGroup={} members={}",
+                vg.getCode(), adGroupCn, targetUserIds.size());
     }
 
    /**

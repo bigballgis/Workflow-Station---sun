@@ -63,6 +63,20 @@ FROM (VALUES
 ON CONFLICT (role_id, permission) DO NOTHING;
 
 \echo '✓ Initialized permissions for DEVELOPER role'
+
+-- FU_VIEWER: 团队只读基线，仅查看功能单元（子资源读操作均以 FUNCTION_UNIT_VIEW 门禁）
+INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
+SELECT 
+    gen_random_uuid()::varchar,
+    'role-fu-viewer',
+    p.permission,
+    CURRENT_TIMESTAMP
+FROM (VALUES 
+    ('FUNCTION_UNIT_VIEW')
+) AS p(permission)
+ON CONFLICT (role_id, permission) DO NOTHING;
+
+\echo '✓ Initialized permissions for FU_VIEWER role'
 \echo ''
 \echo 'Developer role permissions initialized successfully!'
 \echo '========================================='

@@ -121,6 +121,8 @@ export interface FunctionUnitRequest {
   description?: string
   iconId?: number
   tags?: string[]
+  /** Team (virtual group) ids that own/see this FU. Only honoured on create. */
+  virtualGroupIds?: string[]
 }
 
 /** Main-table Request ID config: ordered fields + separator joined into a human-readable
@@ -332,6 +334,15 @@ export interface Version {
 }
 
 export const functionUnitApi = {
+  /**
+   * Whether the current user may enter the function unit workspace.
+   * True for DW capability roles or members of a team (virtual group) that owns at least
+   * one function unit (read-only baseline). Used by the router guard to admit role-less
+   * team members who would otherwise fail the role-based check.
+   */
+  getWorkspaceAccess: () =>
+    functionUnitAxios.get<any, { data: { canView: boolean } }>('/api/v1/function-units/workspace-access'),
+
   // Function Unit CRUD
   list: (params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number; sort?: string }) =>
     functionUnitAxios.get<any, { data: { content: FunctionUnitResponse[]; totalElements: number } }>('/api/v1/function-units', { params }),
@@ -364,6 +375,13 @@ export const functionUnitApi = {
   
   validate: (id: number) => 
     functionUnitAxios.get<any, { data: ValidationResult }>(`/api/v1/function-units/${id}/validate`),
+
+  // Team (virtual dev group) assignments — controls FU visibility scope
+  getDevGroups: (id: number) =>
+    functionUnitAxios.get<any, { data: string[] }>(`/api/v1/function-units/${id}/dev-groups`),
+
+  replaceDevGroups: (id: number, virtualGroupIds: string[]) =>
+    functionUnitAxios.put<any, { data: void }>(`/api/v1/function-units/${id}/dev-groups`, { virtualGroupIds }),
 
   // Table Definitions
   getTables: (functionUnitId: number) =>

@@ -32,13 +32,13 @@ const routes: RouteRecordRaw[] = [
         path: 'function-units',
         name: 'FunctionUnits',
         component: () => import('@/views/function-unit/FunctionUnitList.vue'),
-        meta: { titleKey: 'functionUnit.title', requiredRoles: ['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+        meta: { titleKey: 'functionUnit.title', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER', 'FU_VIEWER'] }
       },
       {
         path: 'function-units/:id',
         name: 'FunctionUnitEdit',
         component: () => import('@/views/function-unit/FunctionUnitEdit.vue'),
-        meta: { titleKey: 'functionUnit.edit', requiredRoles: ['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+        meta: { titleKey: 'functionUnit.edit', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER', 'FU_VIEWER'] }
       },
       {
         path: 'profile',
@@ -60,6 +60,23 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
+
+// Cache the backend workspace-access decision for the session to avoid an extra request
+// on every navigation. Only consulted for users without a DW capability role.
+let workspaceAccessCache: boolean | null = null
+async function resolveWorkspaceAccess(): Promise<boolean> {
+  if (workspaceAccessCache !== null) {
+    return workspaceAccessCache
+  }
+  try {
+    const { functionUnitApi } = await import('@/api/functionUnit')
+    const res = await functionUnitApi.getWorkspaceAccess()
+    workspaceAccessCache = res?.data?.canView === true
+  } catch {
+    workspaceAccessCache = false
+  }
+  return workspaceAccessCache
+}
 
 // 路由守卫
 router.beforeEach(async (to, _from, next) => {
@@ -104,8 +121,14 @@ router.beforeEach(async (to, _from, next) => {
   const requiredRoles = to.meta.requiredRoles as string[] | undefined
   if (requiredRoles && requiredRoles.length > 0) {
     if (!hasAnyRole(requiredRoles)) {
-      next('/403')
-      return
+      // Members of a team (virtual group) that owns function units have no DW capability
+      // role but may still enter the workspace read-only. The backend is the source of
+      // truth (it knows team→FU ownership); ask it before denying access.
+      const canView = await resolveWorkspaceAccess()
+      if (!canView) {
+        next('/403')
+        return
+      }
     }
   }
   

@@ -59,7 +59,18 @@ ON CONFLICT (code) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     updated_at = CURRENT_TIMESTAMP;
 
-\echo '✓ 5 system roles created successfully'
+-- 7. Function Unit Viewer Role (team read-only baseline)
+-- Bound to team (CUSTOM) virtual groups so members can view — but not edit — the team's
+-- function units. Edit rights come only from an additional TEAM_LEAD/DEVELOPER role.
+INSERT INTO sys_roles (id, code, name, type, display_name, status, is_system, created_at, updated_at)
+VALUES 
+('role-fu-viewer', 'FU_VIEWER', 'Function Unit Viewer', 'DEVELOPER', 'Read-only access to a team''s function units in the developer workstation (no edit permissions)', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    display_name = EXCLUDED.display_name,
+    updated_at = CURRENT_TIMESTAMP;
+
+\echo '✓ system roles created successfully'
 \echo ''
 
 \echo '========================================='
