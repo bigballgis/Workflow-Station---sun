@@ -565,7 +565,9 @@ export default {
   permission: {
     title: 'User Profile Setup',
     sectionMyRequests: 'My requests',
-    sectionApprovals: 'Approvals',
+    sectionApprovals: 'My approvals',
+    sectionRequestsAndApprovals: 'Requests & Approvals',
+    pendingApprovalsBanner: 'You have {count} pending approval request(s).',
     tabInProgress: 'In progress',
     tabCompleted: 'Completed',
     tabPendingApproval: 'Pending approval',

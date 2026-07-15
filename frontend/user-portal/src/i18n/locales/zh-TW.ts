@@ -524,7 +524,9 @@ export default {
   permission: {
     title: '用戶檔案設置',
     sectionMyRequests: '我的申請',
-    sectionApprovals: '審批',
+    sectionApprovals: '我的審批',
+    sectionRequestsAndApprovals: '申請與審批',
+    pendingApprovalsBanner: '您有 {count} 條待審批申請。',
     tabInProgress: '進行中',
     tabCompleted: '已完成',
     tabPendingApproval: '待我審批',

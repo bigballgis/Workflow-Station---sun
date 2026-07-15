@@ -565,7 +565,9 @@ export default {
   permission: {
     title: '用户档案设置',
     sectionMyRequests: '我的申请',
-    sectionApprovals: '审批',
+    sectionApprovals: '我的审批',
+    sectionRequestsAndApprovals: '申请与审批',
+    pendingApprovalsBanner: '您有 {count} 条待审批申请。',
     tabInProgress: '进行中',
     tabCompleted: '已完成',
     tabPendingApproval: '待我审批',
