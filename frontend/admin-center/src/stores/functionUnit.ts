@@ -7,6 +7,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const functionUnits = ref<FunctionUnit[]>([])
   const archivedFunctionUnits = ref<FunctionUnit[]>([])
   const deployments = ref<Deployment[]>([])
+  const deploymentsTotal = ref(0)
   const loading = ref(false)
   const archivedLoading = ref(false)
   const deploymentsLoading = ref(false)
@@ -51,21 +52,13 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     }
   }
 
-  const fetchDeployments = async () => {
+  // Server-side pagination: fetch a single page (page is 0-based for the API).
+  const fetchDeployments = async (page = 0, size = 20) => {
     deploymentsLoading.value = true
     try {
-      const pageSize = 100
-      const raw: Deployment[] = []
-      let page = 0
-      let totalPages = 1
-      let guard = 0
-      while (page < totalPages && guard++ < 500) {
-        const result = await functionUnitApi.getAllDeployments(page, pageSize)
-        raw.push(...result.content)
-        totalPages = result.totalPages
-        page++
-      }
-      deployments.value = raw
+      const result = await functionUnitApi.getAllDeployments(page, size)
+      deployments.value = result.content
+      deploymentsTotal.value = result.totalElements
     } finally {
       deploymentsLoading.value = false
     }
@@ -95,7 +88,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   }
 
   return {
-    functionUnits, archivedFunctionUnits, deployments, loading, archivedLoading, deploymentsLoading,
+    functionUnits, archivedFunctionUnits, deployments, deploymentsTotal, loading, archivedLoading, deploymentsLoading,
     fetchFunctionUnits, fetchArchivedFunctionUnits, fetchDeployments,
     setEnabled, deleteFunctionUnit, batchSetEnabled, batchDelete,
   }

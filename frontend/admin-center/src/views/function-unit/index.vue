@@ -50,7 +50,7 @@
         </div>
         <el-table
           v-loading="loading"
-          :data="filteredFunctionUnits"
+          :data="pagedFunctionUnits"
           stripe
           @selection-change="handleSelectionChange"
         >
@@ -167,6 +167,16 @@
             </template>
           </el-table-column>
         </el-table>
+        <el-pagination
+          v-model:current-page="listPagination.page"
+          v-model:page-size="listPagination.size"
+          :disabled="loading"
+          :total="listTotal"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          style="margin-top: 16px; justify-content: flex-end;"
+          @size-change="handleListSizeChange"
+        />
       </el-tab-pane>
 
       <el-tab-pane
@@ -183,7 +193,7 @@
         </div>
         <el-table
           v-loading="archivedLoading"
-          :data="filteredArchivedFunctionUnits"
+          :data="pagedArchivedFunctionUnits"
           stripe
         >
           <el-table-column
@@ -233,6 +243,16 @@
             </template>
           </el-table-column>
         </el-table>
+        <el-pagination
+          v-model:current-page="archivePagination.page"
+          v-model:page-size="archivePagination.size"
+          :disabled="archivedLoading"
+          :total="archiveTotal"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          style="margin-top: 16px; justify-content: flex-end;"
+          @size-change="handleArchiveSizeChange"
+        />
       </el-tab-pane>
       
       <el-tab-pane
@@ -271,6 +291,16 @@
             :label="t('functionUnit.deployedBy')"
           />
         </el-table>
+        <el-pagination
+          v-model:current-page="deploymentsPagination.page"
+          v-model:page-size="deploymentsPagination.size"
+          :disabled="deploymentsLoading"
+          :total="deploymentsTotal"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          style="margin-top: 16px; justify-content: flex-end;"
+          @change="handleDeploymentsChange"
+        />
       </el-tab-pane>
     </el-tabs>
     
@@ -425,8 +455,11 @@ const { t } = useI18n()
 // All business logic is now in the composable — component is pure template binding
 const {
   activeTab, loading, archivedLoading, deploymentsLoading, versionsLoading, importLoading, deployLoadingId, validateLoadingId, restoreLoadingId,
-  deployments, versionList, searchKeyword, archiveSearchKeyword,
-  filteredFunctionUnits, filteredArchivedFunctionUnits, selectedUnits,
+  deployments, deploymentsTotal, versionList, searchKeyword, archiveSearchKeyword,
+  pagedFunctionUnits, pagedArchivedFunctionUnits, listTotal, archiveTotal,
+  listPagination, archivePagination, deploymentsPagination,
+  handleListSizeChange, handleArchiveSizeChange, handleDeploymentsChange,
+  selectedUnits,
   showImportDialog, showAccessDialogVisible,
   showDeleteDialogVisible, showVersionsDialogVisible, showCompareDialogVisible,
   showValidateResultDialog, validateResult,

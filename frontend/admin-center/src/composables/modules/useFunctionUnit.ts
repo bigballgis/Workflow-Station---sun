@@ -5,7 +5,7 @@
  * 组件仅保留 template + 调用此 composable。
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { logger } from '@/utils/logger'
 import { notifyConfirm, notifyError, notifySuccess, notifyWarning } from '@/utils/notify'
@@ -14,16 +14,24 @@ import { functionUnitApi, type FunctionUnit, type DeletePreviewResponse, type Fu
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { ApiError } from '@/types/errors'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
+import { useFunctionUnitPagination } from '@/composables/modules/useFunctionUnitPagination'
 
 export function useFunctionUnit() {
   const { t } = useI18n()
   const store = useFunctionUnitStore()
-  const { functionUnits, archivedFunctionUnits, deployments, loading, archivedLoading } = storeToRefs(store)
+  const {
+    functionUnits,
+    archivedFunctionUnits,
+    deployments,
+    deploymentsTotal,
+    loading,
+    archivedLoading,
+    deploymentsLoading,
+  } = storeToRefs(store)
 
   // ==================== State ====================
 
   const activeTab = ref('list')
-  const deploymentsLoading = ref(false)
   const versionsLoading = ref(false)
   const importLoading = ref(false)
   const deployLoadingId = ref<string | null>(null)
@@ -33,6 +41,7 @@ export function useFunctionUnit() {
   const versionList = ref<FunctionUnit[]>([])
   const searchKeyword = ref('')
   const archiveSearchKeyword = ref('')
+  /** Current-page selection only (no cross-page reserve). */
   const selectedUnits = ref<FunctionUnit[]>([])
 
   // Dialog visibility
@@ -54,26 +63,29 @@ export function useFunctionUnit() {
   const showValidateResultDialog = ref(false)
   const validateResult = ref<FunctionUnitValidationResult | null>(null)
 
-  // ==================== Computed ====================
+  // ==================== Pagination ====================
+  // loadDeploymentsImpl assigned after pagination is created (needs deploymentsPagination).
+  let loadDeploymentsImpl: () => Promise<void> = async () => {}
 
-  const filteredFunctionUnits = computed(() => {
-    const keyword = searchKeyword.value.trim().toLowerCase()
-    if (!keyword) return functionUnits.value
-    return functionUnits.value.filter(unit =>
-      (unit.name?.toLowerCase().includes(keyword)) ||
-      (unit.code?.toLowerCase().includes(keyword)) ||
-      (unit.description?.toLowerCase().includes(keyword))
-    )
-  })
-
-  const filteredArchivedFunctionUnits = computed(() => {
-    const keyword = archiveSearchKeyword.value.trim().toLowerCase()
-    if (!keyword) return archivedFunctionUnits.value
-    return archivedFunctionUnits.value.filter(unit =>
-      (unit.name?.toLowerCase().includes(keyword)) ||
-      (unit.code?.toLowerCase().includes(keyword)) ||
-      (unit.description?.toLowerCase().includes(keyword))
-    )
+  const {
+    listPagination,
+    archivePagination,
+    deploymentsPagination,
+    filteredFunctionUnits,
+    filteredArchivedFunctionUnits,
+    listTotal,
+    archiveTotal,
+    pagedFunctionUnits,
+    pagedArchivedFunctionUnits,
+    handleListSizeChange,
+    handleArchiveSizeChange,
+    handleDeploymentsChange,
+  } = useFunctionUnitPagination({
+    functionUnits: functionUnits as Ref<FunctionUnit[]>,
+    archivedFunctionUnits: archivedFunctionUnits as Ref<FunctionUnit[]>,
+    searchKeyword,
+    archiveSearchKeyword,
+    loadDeployments: () => loadDeploymentsImpl(),
   })
 
   // ==================== Data Fetching ====================
@@ -102,15 +114,15 @@ export function useFunctionUnit() {
   }
 
   const fetchDeployments = async () => {
-    deploymentsLoading.value = true
     try {
-      await store.fetchDeployments()
+      // UI page is 1-based; API is 0-based. Loading flag is owned by the store.
+      await store.fetchDeployments(deploymentsPagination.page - 1, deploymentsPagination.size)
     } catch (e) {
       logger.error('functionUnit', 'Failed to load deployments:', e)
-    } finally {
-      deploymentsLoading.value = false
+      notifyError(t('functionUnit.loadFailed'))
     }
   }
+  loadDeploymentsImpl = fetchDeployments
 
   watch(activeTab, (tab) => {
     if (tab === 'deployments') fetchDeployments()
@@ -297,7 +309,7 @@ export function useFunctionUnit() {
     }
   }
 
-  // ==================== Batch Operations ====================
+  // ==================== Batch Operations (current page only) ====================
 
   const handleSelectionChange = (selection: FunctionUnit[]) => {
     selectedUnits.value = selection
@@ -307,6 +319,7 @@ export function useFunctionUnit() {
     try {
       await store.batchSetEnabled(selectedUnits.value.map(u => u.id), true)
       notifySuccess(t('functionUnit.enabledSuccess'))
+      selectedUnits.value = []
       fetchFunctionUnits()
     } catch (e: unknown) {
       const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
@@ -319,6 +332,7 @@ export function useFunctionUnit() {
       await notifyConfirm(t('functionUnit.batchDisableConfirm'), t('common.confirm'), { type: 'warning' })
       await store.batchSetEnabled(selectedUnits.value.map(u => u.id), false)
       notifySuccess(t('functionUnit.disabledSuccess'))
+      selectedUnits.value = []
       fetchFunctionUnits()
     } catch (e) {
       if ((e as string) !== 'cancel') notifyError(t('common.failed'))
@@ -331,6 +345,7 @@ export function useFunctionUnit() {
       await notifyConfirm(t('functionUnit.batchArchiveConfirm', { count: ids.length }), t('common.confirm'), { type: 'warning' })
       await store.batchDelete(ids)
       notifySuccess(t('functionUnit.archiveSuccess'))
+      selectedUnits.value = []
       fetchFunctionUnits()
     } catch (e) {
       if ((e as string) !== 'cancel') notifyError(t('common.failed'))
@@ -412,11 +427,22 @@ export function useFunctionUnit() {
     functionUnits,
     archivedFunctionUnits,
     deployments,
+    deploymentsTotal,
     versionList,
     searchKeyword,
     archiveSearchKeyword,
     filteredFunctionUnits,
     filteredArchivedFunctionUnits,
+    pagedFunctionUnits,
+    pagedArchivedFunctionUnits,
+    listTotal,
+    archiveTotal,
+    listPagination,
+    archivePagination,
+    deploymentsPagination,
+    handleListSizeChange,
+    handleArchiveSizeChange,
+    handleDeploymentsChange,
     selectedUnits,
     showImportDialog,
     showAccessDialogVisible,
