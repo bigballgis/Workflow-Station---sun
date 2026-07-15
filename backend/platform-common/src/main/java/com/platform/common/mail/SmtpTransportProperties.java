@@ -7,10 +7,8 @@ import java.util.Properties;
 
 /**
  * Applies SMTP transport settings from explicit host/port/TLS flags (no provider presets).
- * Port 25 always uses plain authenticated SMTP (no STARTTLS), matching internal relays that
- * exempt port 25 from TLS — same semantics as {@code scripts/email-smtp-test} with
- * {@code SMTP_USE_TLS=false}. Port 465 uses implicit SSL; port 587 uses STARTTLS when
- * {@code useTls} is true.
+ * Port 25 with {@code useTls=false} uses plain authenticated SMTP (internal relay).
+ * Port 25/587 with {@code useTls=true} uses STARTTLS; port 465 uses implicit SSL.
  *
  * <p>When TLS is enabled, the configured SMTP host is added to {@code mail.smtp.ssl.trust}
  * so internal relays signed by a corporate CA (not in the JVM cacerts) can still connect.
@@ -45,8 +43,8 @@ public final class SmtpTransportProperties {
         props.put("mail.smtp.timeout", "15000");
         props.put("mail.smtp.writetimeout", "15000");
 
-        // Port 25 internal relay: always plain (ignore useTls) — aligns with email-smtp-test.
-        if (!useTls || port == 25) {
+        // Plain SMTP only when the connection explicitly disables TLS.
+        if (!useTls) {
             applyPlainSmtp(props, host, port, auth);
             return;
         }
@@ -135,7 +133,7 @@ public final class SmtpTransportProperties {
 
     /** Human-readable transport mode for logging / diagnostics. */
     public static String describeMode(int port, boolean useTls) {
-        if (!useTls || port == 25) {
+        if (!useTls) {
             return "PLAIN";
         }
         return port == 465 ? "SSL" : "STARTTLS";

@@ -23,7 +23,7 @@ public final class SmtpMailSender {
     }
 
     public static void send(SmtpConfig config, String to, String cc, String subject, String body) throws Exception {
-        boolean auth = config.username() != null && !config.username().isBlank();
+        boolean auth = hasSmtpAuth(config.username(), config.password());
         boolean useTls = Boolean.TRUE.equals(config.useTls());
         String mode = SmtpTransportProperties.describeMode(config.port(), useTls);
 
@@ -78,6 +78,11 @@ public final class SmtpMailSender {
                     debugBuf.toString(StandardCharsets.UTF_8), e);
             throw e;
         }
+    }
+
+    static boolean hasSmtpAuth(String username, String password) {
+        return username != null && !username.isBlank()
+                && password != null && !password.isBlank();
     }
 
     private static String mask(String value) {

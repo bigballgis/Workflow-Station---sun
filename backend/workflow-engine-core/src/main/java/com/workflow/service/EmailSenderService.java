@@ -94,7 +94,7 @@ public class EmailSenderService {
             throw new IllegalArgumentException("SMTP useTls is required");
         }
         boolean useTls = Boolean.TRUE.equals(credentials.get("useTls"));
-        boolean auth = StringUtils.hasText(username);
+        boolean auth = StringUtils.hasText(username) && StringUtils.hasText(password);
 
         Properties props = new Properties();
         SmtpTransportProperties.apply(props, host.trim(), port, useTls, auth);

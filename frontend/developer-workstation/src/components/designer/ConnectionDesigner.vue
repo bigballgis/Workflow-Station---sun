@@ -195,7 +195,7 @@ const defaultForm = (): EmailConnectionRequest => ({
   username: '',
   password: '',
   fromName: '',
-  useTls: false,
+  useTls: true,
   enabled: true,
   direction: 'OUTBOUND',
   mailboxAddress: '',
@@ -217,6 +217,7 @@ const imapRequired = computed(() => isInbound.value && !hasImapPreset.value)
 
 function buildPayload(): EmailConnectionRequest {
   const emailAddress = form.name.trim()
+  const smtpUsername = form.username?.trim()
   const inbound = form.direction === 'INBOUND' || form.direction === 'BOTH'
   return {
     name: emailAddress,
@@ -224,7 +225,7 @@ function buildPayload(): EmailConnectionRequest {
     host: form.host?.trim(),
     port: form.port,
     useTls: form.useTls,
-    username: form.username?.trim() || emailAddress,
+    username: smtpUsername || undefined,
     password: form.password,
     fromName: form.fromName?.trim() || undefined,
     enabled: form.enabled,
@@ -261,7 +262,7 @@ function openEditDialog(row: EmailConnection) {
     connectionType: normalizeEmailProviderType(row.connectionType),
     host: row.host,
     port: row.port,
-    username: row.username || row.name,
+    username: row.username || '',
     password: '',
     direction: row.direction || 'OUTBOUND',
     mailboxAddress: row.mailboxAddress || '',
@@ -306,7 +307,7 @@ async function handleSave() {
     ElMessage.warning(t('connection.imapPortRequired'))
     return
   }
-  if (!editingId.value && !form.password) {
+  if (form.username?.trim() && !form.password && !editingId.value) {
     ElMessage.warning(t('connection.passwordRequired'))
     return
   }

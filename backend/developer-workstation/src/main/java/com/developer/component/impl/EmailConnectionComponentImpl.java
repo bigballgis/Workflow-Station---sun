@@ -67,13 +67,17 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             throw new DeveloperBusinessException("CONFLICT_CONNECTION_NAME", "连接名称已存在: " + request.getName());
         }
 
-        if (!StringUtils.hasText(request.getPassword())) {
-            throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED", "创建连接时必须提供密码");
+        if (!StringUtils.hasText(request.getUsername())) {
+            if (StringUtils.hasText(request.getPassword())) {
+                throw new DeveloperBusinessException("VALIDATION_USERNAME_REQUIRED", "填写密码时必须提供用户名");
+            }
+        } else if (!StringUtils.hasText(request.getPassword())) {
+            throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED", "填写用户名时必须提供密码");
         }
 
         ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, null);
         String emailAddress = request.getName().trim();
-        String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : emailAddress;
+        String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : null;
         EmailConnectionDirection direction = request.getDirection() != null
                 ? request.getDirection() : EmailConnectionDirection.OUTBOUND;
         ResolvedImapEndpoint imap = resolveImapEndpoint(request, null, direction);
@@ -86,7 +90,9 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                 .host(endpoint.host())
                 .port(endpoint.port())
                 .username(username)
-                .passwordEncrypted(encryptionService.encrypt(request.getPassword()))
+                .passwordEncrypted(StringUtils.hasText(request.getPassword())
+                        ? encryptionService.encrypt(request.getPassword())
+                        : null)
                 .fromEmail(emailAddress)
                 .fromName(request.getFromName())
                 .useTls(endpoint.useTls())
@@ -113,7 +119,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
         ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, connection);
         String emailAddress = request.getName().trim();
-        String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : emailAddress;
+        String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : null;
         EmailConnectionDirection direction = request.getDirection() != null
                 ? request.getDirection() : connection.getDirection();
         ResolvedImapEndpoint imap = resolveImapEndpoint(request, connection, direction);
@@ -136,8 +142,12 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         connection.setImapHost(imap.host());
         connection.setImapPort(imap.port());
         connection.setImapUseSsl(imap.useSsl());
-        if (StringUtils.hasText(request.getPassword())) {
+        if (!StringUtils.hasText(request.getUsername())) {
+            connection.setPasswordEncrypted(null);
+        } else if (StringUtils.hasText(request.getPassword())) {
             connection.setPasswordEncrypted(encryptionService.encrypt(request.getPassword()));
+        } else if (!StringUtils.hasText(connection.getUsername())) {
+            throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED", "填写用户名时必须提供密码");
         }
 
         return EmailConnectionResponse.fromEntity(emailConnectionRepository.save(connection));

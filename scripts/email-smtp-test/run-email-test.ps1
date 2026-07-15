@@ -8,11 +8,19 @@ if ([string]::IsNullOrWhiteSpace($Recipient)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($UseAuth)) {
-    $UseAuth = Read-Host "Use SMTP auth? true/false"
+    $UseAuth = Read-Host "Use SMTP auth? true/false (default true)"
+    if ([string]::IsNullOrWhiteSpace($UseAuth)) { $UseAuth = "true" }
 }
 
 $env:SMTP_RECIPIENT = $Recipient
 $env:SMTP_USE_AUTH = $UseAuth
+
+if ([string]::IsNullOrWhiteSpace($env:SMTP_USE_TLS)) {
+    if ($UseAuth -eq "true") {
+        $env:SMTP_USE_TLS = "true"
+        Write-Host "SMTP_USE_TLS not set; defaulting to true (authenticated relay expects STARTTLS on port 25)."
+    }
+}
 
 if ($UseAuth -eq "true" -and [string]::IsNullOrWhiteSpace($env:SMTP_PASSWORD)) {
     $securePassword = Read-Host "SMTP password" -AsSecureString

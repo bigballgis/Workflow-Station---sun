@@ -22,7 +22,7 @@ public class EmailSender {
         String username = env("SMTP_USERNAME", "");
         String password = System.getenv("SMTP_PASSWORD");
         boolean useAuth = Boolean.parseBoolean(env("SMTP_USE_AUTH", "true"));
-        boolean useTls = Boolean.parseBoolean(env("SMTP_USE_TLS", "587".equals(port) ? "true" : "false"));
+        boolean useTls = resolveUseTls(port, useAuth);
         boolean debug = Boolean.parseBoolean(env("SMTP_DEBUG", "false"));
 
         if (useAuth && (password == null || password.isBlank())) {
@@ -48,10 +48,12 @@ public class EmailSender {
             prop.put("mail.smtp.socketFactory.port", "465");
             prop.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
             prop.put("mail.smtp.socketFactory.fallback", "false");
+            applySslTrust(prop, host);
         } else {
             prop.put("mail.smtp.starttls.enable", "true");
             prop.put("mail.smtp.starttls.required", "true");
             prop.put("mail.smtp.ssl.enable", "false");
+            applySslTrust(prop, host);
         }
 
         Session session;
@@ -99,5 +101,32 @@ public class EmailSender {
     private static String env(String key, String defaultValue) {
         String value = System.getenv(key);
         return value != null && !value.isBlank() ? value.trim() : defaultValue;
+    }
+
+    /**
+     * When {@code SMTP_USE_TLS} is unset: authenticated relays (typical internal Microsoft ESMTP)
+     * require STARTTLS even on port 25 — default TLS on for auth, off only for no-auth plain relay.
+     */
+    static boolean resolveUseTls(String port, boolean useAuth) {
+        String explicit = System.getenv("SMTP_USE_TLS");
+        if (explicit != null && !explicit.isBlank()) {
+            return Boolean.parseBoolean(explicit.trim());
+        }
+        if ("465".equals(port) || "587".equals(port)) {
+            return true;
+        }
+        return useAuth;
+    }
+
+    static void applySslTrust(Properties prop, String host) {
+        String extra = System.getenv("SMTP_SSL_TRUST");
+        String trust = host != null ? host.trim() : "";
+        if (extra != null && !extra.isBlank()) {
+            trust = trust.isBlank() ? extra.trim() : trust + "," + extra.trim();
+        }
+        if (!trust.isBlank()) {
+            prop.put("mail.smtp.ssl.trust", trust);
+            prop.put("mail.smtps.ssl.trust", trust);
+        }
     }
 }

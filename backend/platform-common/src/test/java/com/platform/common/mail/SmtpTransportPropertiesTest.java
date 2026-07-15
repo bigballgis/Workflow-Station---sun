@@ -19,14 +19,12 @@ class SmtpTransportPropertiesTest {
     }
 
     @Test
-    void apply_port25UsesPlainSmtpEvenWhenTlsFlagTrue() {
+    void apply_port25UsesStartTlsWhenTlsFlagTrue() {
         Properties props = new Properties();
         SmtpTransportProperties.apply(props, "internal-smtp-relay.corp.local", 25, true, true);
-        assertEquals("false", props.get("mail.smtp.starttls.enable"));
-        assertEquals("false", props.get("mail.smtp.starttls.required"));
+        assertEquals("true", props.get("mail.smtp.starttls.enable"));
+        assertEquals("true", props.get("mail.smtp.starttls.required"));
         assertEquals("false", props.get("mail.smtp.ssl.enable"));
-        assertEquals(null, props.get("mail.smtp.ssl.protocols"));
-        assertEquals(null, props.get("mail.smtp.ssl.trust"));
     }
 
     @Test

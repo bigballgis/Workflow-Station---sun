@@ -23,9 +23,11 @@ $env:SMTP_PASSWORD='your-password'
 可选：
 
 ```powershell
-$env:SMTP_PORT='25'              # 内网中继常用 25；STARTTLS 常用 587
-$env:SMTP_USE_TLS='false'        # 明文 25 中继填 false；服务器要求 STARTTLS 时填 true 或改 587
-$env:SMTP_USE_AUTH='true'        # 内网 25 免认证时设为 false
+$env:SMTP_PORT='25'              # 内网中继常用 25；公网 STARTTLS 常用 587
+$env:SMTP_USE_AUTH='true'        # 有服务账号时 true（默认 true）
+# SMTP_USE_TLS 未设置时：useAuth=true → 默认 true（port 25 也走 STARTTLS）；useAuth=false → 默认 false
+$env:SMTP_USE_TLS='true'         # 仅在中继明确支持明文 25 时设为 false
+$env:SMTP_SSL_TRUST='relay.example.com'  # 内网 CA 证书问题时可设；默认信任 SMTP_HOST
 $env:SMTP_DEBUG='false'          # 设为 true 可打印 JavaMail 协议日志
 ```
 
@@ -51,10 +53,15 @@ mvn clean compile exec:java
 
 | 场景 | 端口 | Designer「使用 TLS」 | 认证 |
 |------|------|---------------------|------|
-| 内网中继（端口 25，明文） | 25 | **否**（平台代码对 25 口强制明文，与 TLS 勾选无关） | 是 |
-| STARTTLS 中继 | 587 | **是** | 是 |
+| 内网中继 + 服务账号（常见，EHLO 含 STARTTLS） | 25 或 587 | **是** | 是 |
+| 内网明文中继（无认证、IT 明确说明） | 25 | **否** | 否 |
+| 公网 STARTTLS | 587 | **是** | 是 |
 
 **Connection 表单**：「邮箱地址」= 发件人地址（`SMTP_SENDER`）；「用户名」= 服务账号（`SMTP_USERNAME`），两者通常不同。
+
+若报 `STARTTLS is required to send mail`：把 Connection「使用 TLS」改为 **是**，或脚本设 `SMTP_USE_TLS=true`；若证书报错，在 `.env` 增加 `SMTP_SSL_TRUST=<中继主机名>` 并重建 `developer-workstation` / `workflow-engine`。
+
+完整排障指南见仓库根目录 [`docs/email-sending-implementation-guide.md`](../../docs/email-sending-implementation-guide.md)。
 
 若平台测试失败但 `email-smtp-test` 成功，请检查：① Docker 是否已重建（含 `platform-common`）；② `.env` 的 `SSRF_ALLOWED_HOSTS` 是否包含中继主机名。
 
