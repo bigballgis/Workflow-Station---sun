@@ -7,23 +7,38 @@
       </el-button>
     </div>
 
-    <el-table :data="templates" v-loading="loading" stripe>
-      <el-table-column prop="name" :label="t('emailTemplate.name')" min-width="180" />
-      <el-table-column prop="subject" :label="t('emailTemplate.subject')" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="enabled" :label="t('emailTemplate.enabled')" width="90">
-        <template #default="{ row }">
-          <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
-            {{ row.enabled ? t('common.yes') : t('common.no') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('common.actions')" width="180">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openEditDialog(row as EmailTemplate)">{{ t('common.edit') }}</el-button>
-          <el-button link type="danger" @click="handleDelete(row as EmailTemplate)">{{ t('common.delete') }}</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <DesignerListTable
+      :loading="loading"
+      :storage-key="`${functionUnitId}:email-templates`"
+      :columns="listColumns"
+      :rows="templates"
+      :actions-width="180"
+    >
+      <template #cell-enabled="{ row }">
+        <el-tag
+          :type="row.enabled ? 'success' : 'info'"
+          size="small"
+        >
+          {{ row.enabled ? t('common.yes') : t('common.no') }}
+        </el-tag>
+      </template>
+      <template #actions="{ row }">
+        <el-button
+          link
+          type="primary"
+          @click="openEditDialog(row as EmailTemplate)"
+        >
+          {{ t('common.edit') }}
+        </el-button>
+        <el-button
+          link
+          type="danger"
+          @click="handleDelete(row as EmailTemplate)"
+        >
+          {{ t('common.delete') }}
+        </el-button>
+      </template>
+    </DesignerListTable>
 
     <el-dialog
       v-model="showFormDialog"
@@ -73,6 +88,8 @@ import { Refresh } from '@element-plus/icons-vue'
 import DOMPurify from 'dompurify'
 import { emailTemplateApi, type EmailTemplate, type EmailTemplateRequest } from '@/api/emailTemplate'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const EmailRichBodyEditor = defineAsyncComponent(
   () => import('@/components/designer/email/EmailRichBodyEditor.vue')
@@ -98,6 +115,30 @@ const defaultForm = (): EmailTemplateRequest => ({
 const form = reactive<EmailTemplateRequest>(defaultForm())
 
 const sanitizedPreview = computed(() => DOMPurify.sanitize(form.bodyHtml || ''))
+
+const listColumns = computed<DesignerListTableColumn<EmailTemplate>[]>(() => [
+  {
+    key: 'name',
+    prop: 'name',
+    label: t('emailTemplate.name'),
+    defaultWidth: 180,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'subject',
+    prop: 'subject',
+    label: t('emailTemplate.subject'),
+    defaultWidth: 220,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'enabled',
+    prop: 'enabled',
+    label: t('emailTemplate.enabled'),
+    defaultWidth: 100,
+    getValue: (row) => (row.enabled ? t('common.yes') : t('common.no')),
+  },
+])
 
 async function loadTemplates() {
   loading.value = true

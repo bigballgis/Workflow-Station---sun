@@ -41,99 +41,60 @@
       v-if="!selectedTable"
       class="table-list table-scroll-wrap"
     >
-      <el-table
-        v-loading="loading"
-        :data="store.tables"
-        stripe
+      <DesignerListTable
+        :loading="loading"
+        :storage-key="`${functionUnitId}:tables`"
+        :columns="listColumns"
+        :rows="() => store.tables"
         @row-click="handleSelectTable"
       >
-        <el-table-column
-          prop="tableDisplayName"
-          :label="t('table.tableDisplayName')"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="tableName"
-          :label="t('table.tableName')"
-          min-width="150"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="tableType"
-          :label="t('table.tableType')"
-          min-width="120"
-        >
-          <template #default="{ row }">
-            <el-tag :type="row.tableType === 'MAIN' ? 'primary' : 'info'">
-              {{ tableTypeLabel(row.tableType) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="description"
-          :label="t('table.description')"
-          min-width="200"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          :label="t('table.fieldCount')"
-          min-width="100"
-        >
-          <template #default="{ row }">
-            {{ row.fieldDefinitions?.length || 0 }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('table.relations')"
-          min-width="100"
-        >
-          <template #default="{ row }">
-            <el-tag
-              v-if="getTableRelations(row.id).length"
-              type="success"
-              size="small"
+        <template #cell-tableType="{ row }">
+          <el-tag :type="row.tableType === 'MAIN' ? 'primary' : 'info'">
+            {{ tableTypeLabel(row.tableType) }}
+          </el-tag>
+        </template>
+        <template #cell-fieldCount="{ row }">
+          {{ row.fieldDefinitions?.length || 0 }}
+        </template>
+        <template #cell-relations="{ row }">
+          <el-tag
+            v-if="getTableRelations(row.id).length"
+            type="success"
+            size="small"
+          >
+            {{ getTableRelations(row.id).length }}
+          </el-tag>
+          <span
+            v-else
+            class="text-muted"
+          >-</span>
+        </template>
+        <template #actions="{ row }">
+          <div class="table-row-actions">
+            <el-button
+              link
+              type="primary"
+              @click.stop="handleSelectTable(row)"
             >
-              {{ getTableRelations(row.id).length }}
-            </el-tag>
-            <span
-              v-else
-              class="text-muted"
-            >-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('common.actions')"
-          min-width="240"
-          fixed="right"
-        >
-          <template #default="{ row }">
-            <div class="table-row-actions">
-              <el-button
-                link
-                type="primary"
-                @click.stop="handleSelectTable(row)"
-              >
-                {{ t('common.edit') }}
-              </el-button>
-              <el-button
-                link
-                type="success"
-                @click.stop="handleExportTable(row)"
-              >
-                {{ t('table.exportTemplate') }}
-              </el-button>
-              <el-button
-                link
-                type="danger"
-                @click.stop="handleDeleteTable(row)"
-              >
-                {{ t('common.delete') }}
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+              {{ t('common.edit') }}
+            </el-button>
+            <el-button
+              link
+              type="success"
+              @click.stop="handleExportTable(row)"
+            >
+              {{ t('table.exportTemplate') }}
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              @click.stop="handleDeleteTable(row)"
+            >
+              {{ t('common.delete') }}
+            </el-button>
+          </div>
+        </template>
+      </DesignerListTable>
     </div>
 
     <div
@@ -756,6 +717,8 @@ import { useTableCreate } from '@/composables/tableDesigner/useTableCreate'
 import { useTableTemplate } from '@/composables/tableDesigner/useTableTemplate'
 import { useTableTools } from '@/composables/tableDesigner/useTableTools'
 import { isTableAuditField } from '@/utils/tableAuditFields'
+import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 interface TableRelation {
   id?: number
@@ -863,6 +826,49 @@ const {
   handleDeleteTable,
 } = list
 loadTablesImpl = list.loadTables
+
+const listColumns = computed<DesignerListTableColumn<TableDefinition>[]>(() => [
+  {
+    key: 'tableDisplayName',
+    prop: 'tableDisplayName',
+    label: t('table.tableDisplayName'),
+    defaultWidth: 180,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'tableName',
+    prop: 'tableName',
+    label: t('table.tableName'),
+    defaultWidth: 150,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'tableType',
+    prop: 'tableType',
+    label: t('table.tableType'),
+    defaultWidth: 120,
+    getValue: (row) => tableTypeLabel(row.tableType),
+  },
+  {
+    key: 'description',
+    prop: 'description',
+    label: t('table.description'),
+    defaultWidth: 200,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'fieldCount',
+    label: t('table.fieldCount'),
+    defaultWidth: 110,
+    getValue: (row) => String(row.fieldDefinitions?.length || 0),
+  },
+  {
+    key: 'relations',
+    label: t('table.relations'),
+    defaultWidth: 110,
+    getValue: (row) => String(getTableRelations(row.id).length || 0),
+  },
+])
 
 const {
   showCreateDialog,

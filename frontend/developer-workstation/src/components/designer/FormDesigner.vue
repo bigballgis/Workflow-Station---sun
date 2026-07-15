@@ -3,6 +3,7 @@
     <!-- Form list view -->
     <FormListSidebar
       v-if="!selectedForm"
+      :function-unit-id="props.functionUnitId"
       :forms="store.forms"
       :loading="loading"
       :has-tables="store.tables.length > 0"

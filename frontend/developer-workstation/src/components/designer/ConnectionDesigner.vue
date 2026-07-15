@@ -7,29 +7,48 @@
       </el-button>
     </div>
 
-    <el-table :data="connections" v-loading="loading" stripe>
-      <el-table-column prop="name" :label="t('connection.emailAddress')" min-width="200" />
-      <el-table-column prop="connectionType" :label="t('connection.providerType')" width="140">
-        <template #default="{ row }">
-          {{ t(`connection.provider.${normalizeEmailProviderType(row.connectionType)}`) }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="fromName" :label="t('connection.fromName')" width="140" />
-      <el-table-column prop="enabled" :label="t('connection.enabled')" width="90">
-        <template #default="{ row }">
-          <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
-            {{ row.enabled ? t('common.yes') : t('common.no') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('common.actions')" width="220">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openEditDialog(row as EmailConnection)">{{ t('common.edit') }}</el-button>
-          <el-button link type="success" @click="openTestDialog(row as EmailConnection)">{{ t('connection.test') }}</el-button>
-          <el-button link type="danger" @click="handleDelete(row as EmailConnection)">{{ t('common.delete') }}</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <DesignerListTable
+      :loading="loading"
+      :storage-key="`${functionUnitId}:connections`"
+      :columns="listColumns"
+      :rows="connections"
+      :actions-width="220"
+    >
+      <template #cell-connectionType="{ row }">
+        {{ t(`connection.provider.${normalizeEmailProviderType(row.connectionType)}`) }}
+      </template>
+      <template #cell-enabled="{ row }">
+        <el-tag
+          :type="row.enabled ? 'success' : 'info'"
+          size="small"
+        >
+          {{ row.enabled ? t('common.yes') : t('common.no') }}
+        </el-tag>
+      </template>
+      <template #actions="{ row }">
+        <el-button
+          link
+          type="primary"
+          @click="openEditDialog(row as EmailConnection)"
+        >
+          {{ t('common.edit') }}
+        </el-button>
+        <el-button
+          link
+          type="success"
+          @click="openTestDialog(row as EmailConnection)"
+        >
+          {{ t('connection.test') }}
+        </el-button>
+        <el-button
+          link
+          type="danger"
+          @click="handleDelete(row as EmailConnection)"
+        >
+          {{ t('common.delete') }}
+        </el-button>
+      </template>
+    </DesignerListTable>
 
     <el-dialog
       v-model="showFormDialog"
@@ -173,6 +192,8 @@ import {
   normalizeEmailProviderType,
   type EmailProviderType
 } from '@/utils/emailProviderPresets'
+import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const props = defineProps<{ functionUnitId: number }>()
 const { t } = useI18n()
@@ -205,6 +226,38 @@ const defaultForm = (): EmailConnectionRequest => ({
 })
 
 const form = reactive<EmailConnectionRequest>(defaultForm())
+
+const listColumns = computed<DesignerListTableColumn<EmailConnection>[]>(() => [
+  {
+    key: 'name',
+    prop: 'name',
+    label: t('connection.emailAddress'),
+    defaultWidth: 200,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'connectionType',
+    prop: 'connectionType',
+    label: t('connection.providerType'),
+    defaultWidth: 140,
+    showOverflowTooltip: true,
+    getValue: (row) => t(`connection.provider.${normalizeEmailProviderType(row.connectionType)}`),
+  },
+  {
+    key: 'fromName',
+    prop: 'fromName',
+    label: t('connection.fromName'),
+    defaultWidth: 140,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'enabled',
+    prop: 'enabled',
+    label: t('connection.enabled'),
+    defaultWidth: 100,
+    getValue: (row) => (row.enabled ? t('common.yes') : t('common.no')),
+  },
+])
 
 /** Inbound (IMAP) fields only apply when direction includes inbound. */
 const isInbound = computed(() => form.direction === 'INBOUND' || form.direction === 'BOTH')
