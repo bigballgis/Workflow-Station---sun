@@ -1557,7 +1557,7 @@ export default {
     name: 'Connection Name',
     emailAddress: 'Email Address',
     emailAddressPlaceholder: "1527598351{'@'}qq.com",
-    emailAddressHint: 'Used as the connection name and SMTP login username.',
+    emailAddressHint: 'Connection name and sender address; set SMTP login separately under Username.',
     emailAddressRequired: 'Email address is required',
     passwordRequired: 'Password is required when username is set',
     passwordHint: 'For QQ Mail, use the SMTP authorization code from mail.qq.com (not your login password).',

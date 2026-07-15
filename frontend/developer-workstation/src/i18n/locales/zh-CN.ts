@@ -1552,7 +1552,7 @@ export default {
     name: '连接名称',
     emailAddress: '邮箱地址',
     emailAddressPlaceholder: "1527598351{'@'}qq.com",
-    emailAddressHint: '同时作为连接名称与 SMTP 登录用户名。',
+    emailAddressHint: '作为连接名称与发件人地址；SMTP 登录名请单独填写用户名。',
     emailAddressRequired: '请填写邮箱地址',
     passwordRequired: '填写用户名时必须提供密码',
     passwordHint: 'QQ 邮箱请填写 SMTP 授权码（在 mail.qq.com 设置中获取），不是 QQ 登录密码。',

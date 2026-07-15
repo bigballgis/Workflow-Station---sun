@@ -1553,7 +1553,7 @@ export default {
     name: '連線名稱',
     emailAddress: '信箱地址',
     emailAddressPlaceholder: "1527598351{'@'}qq.com",
-    emailAddressHint: '同時作為連線名稱與 SMTP 登入使用者名稱。',
+    emailAddressHint: '作為連線名稱與寄件人地址；SMTP 登入名請單獨填寫使用者名稱。',
     emailAddressRequired: '請填寫信箱地址',
     passwordRequired: '填寫使用者名稱時必須提供密碼',
     passwordHint: 'QQ 信箱請填寫 SMTP 授權碼（在 mail.qq.com 設定中取得），不是 QQ 登入密碼。',
