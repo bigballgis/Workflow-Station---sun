@@ -82,6 +82,23 @@ public class ProcessStartComponent {
     private String adminCenterUrl;
 
     /**
+     * Deploy-once cache: {@code processKey + ":" + sha256(bpmnXml)} -> resolved Flowable process definition key.
+     *
+     * <p>Before: {@code deployProcess} was called on <em>every</em> start. A 200-concurrent start burst of the
+     * same function unit therefore fired 200 simultaneous engine deploys of an identical BPMN; Flowable dedups
+     * identical resources but concurrent deploys race on {@code ACT_RE_DEPLOYMENT}/{@code ACT_RE_PROCDEF}
+     * (unique key / optimistic lock / deadlock) and surface to the portal as HTTP 500 =
+     * {@code portal.deploy_process_failed}. Keying by BPMN content hash means exactly one request deploys an
+     * unchanged definition and every other reuses the resolved key; a changed BPMN (new hash) redeploys once.
+     * Entry is evicted if the subsequent start fails, so a lost/rolled-back engine deployment self-heals.</p>
+     */
+    private final java.util.concurrent.ConcurrentHashMap<String, String> deployedProcessKeyCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** Per-cache-key locks so concurrent starts of the same definition serialize the single deploy (not the map bin). */
+    private final java.util.concurrent.ConcurrentHashMap<String, Object> deployLocks =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
      * Starts process
      * Via WorkflowEngineClient calling Flowable engine
      */
@@ -119,9 +136,18 @@ public class ProcessStartComponent {
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         SystemAuditFieldFiller.fillOnInsert(variables, startUserDisplayName);
 
-        Map<String, Object> data = workflowEngineClient.startProcess(
-                actualProcessKey, request.getBusinessKey(), userId, variables);
+        Map<String, Object> data;
+        try {
+            data = workflowEngineClient.startProcess(
+                    actualProcessKey, request.getBusinessKey(), userId, variables);
+        } catch (RuntimeException ex) {
+            // If the start failed (e.g. engine no longer has the deployment we cached), drop the cache entry
+            // so the next attempt redeploys instead of being permanently poisoned by a stale "deployed" flag.
+            evictDeploymentCache(processKey, def.bpmnXml());
+            throw ex;
+        }
         if (data == null || data.get("processInstanceId") == null) {
+            evictDeploymentCache(processKey, def.bpmnXml());
             throw new IllegalStateException("Process start returned empty data: " + processKey);
         }
 
@@ -246,9 +272,25 @@ public class ProcessStartComponent {
             }
         }
 
-        // Deploy process definition if not already deployed
-        Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, def.bpmnXml(), def.processName());
-        if (deployResult.isPresent()) {
+        // Deploy once per unchanged BPMN (see deployedProcessKeyCache). Fast path: already deployed.
+        final String cacheKey = deploymentCacheKey(processKey, def.bpmnXml());
+        String cached = deployedProcessKeyCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        // Double-checked locking on a per-key lock: concurrent starts of the same definition wait for the
+        // single in-flight deploy instead of each POSTing /deploy (which is what raced and 500'd under load).
+        Object lock = deployLocks.computeIfAbsent(cacheKey, k -> new Object());
+        synchronized (lock) {
+            cached = deployedProcessKeyCache.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+            Optional<Map<String, Object>> deployResult =
+                    workflowEngineClient.deployProcess(processKey, def.bpmnXml(), def.processName());
+            if (deployResult.isEmpty()) {
+                throw new IllegalStateException("Process deployment returned empty data: " + processKey);
+            }
             Map<String, Object> deployed = deployResult.get();
             log.info("Process definition deployed: {}", deployed);
             // deployResult processDefinitionKey from Flowable response, validated
@@ -257,10 +299,37 @@ public class ProcessStartComponent {
                 flowableProcessKey = deployedKey.toString();
                 log.info("Using actual process definition key from deployment response: [{}]", flowableProcessKey);
             }
-        } else {
-            throw new IllegalStateException("Process deployment returned empty data: " + processKey);
+            deployedProcessKeyCache.put(cacheKey, flowableProcessKey);
+            return flowableProcessKey;
         }
-        return flowableProcessKey;
+    }
+
+    /** Cache key for a deployed definition: process key + BPMN content hash (a changed BPMN redeploys once). */
+    private static String deploymentCacheKey(String processKey, String bpmnXml) {
+        return processKey + ":" + sha256(bpmnXml);
+    }
+
+    /**
+     * Force a redeploy of this definition on the next start (e.g. after a start failed because the engine
+     * lost/rolled back the deployment). Cheap no-op if the entry was never cached.
+     */
+    private void evictDeploymentCache(String processKey, String bpmnXml) {
+        deployedProcessKeyCache.remove(deploymentCacheKey(processKey, bpmnXml));
+    }
+
+    private static String sha256(String s) {
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(s == null ? new byte[0] : s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(d.length * 2);
+            for (byte b : d) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-256 is always present on a JRE; fall back to identity hash rather than fail the start.
+            return Integer.toHexString(java.util.Objects.hashCode(s));
+        }
     }
 
     private void applyWorkspaceContextVariables(String userId, Map<String, Object> variables) {
