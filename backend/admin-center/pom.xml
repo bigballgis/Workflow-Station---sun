@@ -24,9 +24,11 @@
         <spring-security.version>6.5.9</spring-security.version>
         <spring-framework.version>6.2.17</spring-framework.version>
         <kafka.version>4.2.0</kafka.version>
+        <spring-kafka.version>3.1.6</spring-kafka.version>
+        <jackson.version>2.15.4</jackson.version>
         <postgresql.version>42.7.10</postgresql.version>
         <jqwik.version>1.8.2</jqwik.version>
-        <testcontainers.version>2.0.3</testcontainers.version>
+        <testcontainers.version>2.0.2</testcontainers.version>
         <poi.version>5.4.1</poi.version>
         <minio.version>8.6.0</minio.version>
         <!-- 仅测试期使用：内存 LDAP 目录服务器，用于验证 LDAP bind/search/同步逻辑（不打入运行时） -->
@@ -36,9 +38,21 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
                 <version>${kafka.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.kafka</groupId>
+                <artifactId>spring-kafka</artifactId>
+                <version>${spring-kafka.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

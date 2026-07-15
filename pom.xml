@@ -47,6 +47,7 @@
         
         <!-- Messaging -->
         <kafka.version>4.2.0</kafka.version>
+        <spring-kafka.version>3.1.6</spring-kafka.version>
         
         <!-- Workflow -->
         <flowable.version>7.0.0</flowable.version>
@@ -54,12 +55,12 @@
         <!-- Utilities -->
         <lombok.version>1.18.38</lombok.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
-        <jackson.version>2.15.3</jackson.version>
+        <jackson.version>2.15.4</jackson.version>
         
         <!-- Testing -->
         <junit.version>5.10.1</junit.version>
         <jqwik.version>1.8.2</jqwik.version>
-        <testcontainers.version>2.0.3</testcontainers.version>
+        <testcontainers.version>2.0.2</testcontainers.version>
         
         <!-- Plugins -->
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
@@ -215,11 +216,43 @@
                 <version>${jjwt.version}</version>
             </dependency>
 
+            <!-- Jackson: override Spring Boot BOM (explicit pins; import BOM alone loses to Boot import order) -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-jsr310</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+
             <!-- Kafka: pin kafka-clients to match ${kafka.version} (Spring Boot BOM may import an older client) -->
             <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
                 <version>${kafka.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.kafka</groupId>
+                <artifactId>spring-kafka</artifactId>
+                <version>${spring-kafka.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.kafka</groupId>
+                <artifactId>spring-kafka-test</artifactId>
+                <version>${spring-kafka.version}</version>
             </dependency>
 
             <!-- Flowable -->
