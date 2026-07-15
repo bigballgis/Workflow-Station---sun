@@ -85,6 +85,10 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
           type: 'subTable',
           _bindingId: Number(bindingId),
           ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
+          // 子表逐操作权限：仅显式 false 才下发（undefined 由 SubTableField 回退 editable）
+          ...(item.props?.allowAdd === false ? { allowAdd: false } : {}),
+          ...(item.props?.allowEdit === false ? { allowEdit: false } : {}),
+          ...(item.props?.allowDelete === false ? { allowDelete: false } : {}),
           span: 24
         })
         continue

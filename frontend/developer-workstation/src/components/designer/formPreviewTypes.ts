@@ -22,6 +22,12 @@ export interface PreviewSubTableBinding {
   subMode?: string
   /** Effective portal views for this sub-table widget (rule overrides binding-level). */
   portalViews?: SubTablePortalViewsPreview
+  /**
+   * 子表逐操作权限（来自放置组件 rule.props）。undefined => 放开（SubTableField 回退 editable）；false => 隐藏该操作。
+   */
+  allowAdd?: boolean
+  allowEdit?: boolean
+  allowDelete?: boolean
 }
 
 /**

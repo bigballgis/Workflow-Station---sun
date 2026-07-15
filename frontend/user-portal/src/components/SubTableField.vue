@@ -11,14 +11,14 @@
           <el-icon><Download /></el-icon> {{ t('subTable.exportWithData') }}
         </el-button>
         <el-button
-          v-if="editable && !hasFileColumn"
+          v-if="canAdd && !hasFileColumn"
           size="small"
           @click="triggerImport"
         >
           <el-icon><Upload /></el-icon> {{ t('subTable.import') }}
         </el-button>
         <el-button
-          v-if="editable"
+          v-if="canAdd"
           type="primary"
           size="small"
           @click="handleAdd"
@@ -254,12 +254,13 @@
         </el-table-column>
 
         <el-table-column
-          v-if="editable"
+          v-if="canEdit || canDelete"
           :label="t('common.operation')"
           width="120"
         >
           <template #default="scope">
             <el-button
+              v-if="canEdit"
               link
               type="primary"
               size="small"
@@ -268,6 +269,7 @@
               {{ t('subTable.edit') }}
             </el-button>
             <el-button
+              v-if="canDelete"
               link
               type="danger"
               size="small"
@@ -565,6 +567,14 @@ const props = withDefaults(defineProps<{
   dialogColumns?: Column[]
   modelValue?: any[]
   editable?: boolean
+  /**
+   * 子表逐操作权限（设计器右侧属性面板配置，存于组件 rule.props）。
+   * 缺省/undefined => 视为 true（回退到 editable，历史表单三项全开）；显式 false => 即使 editable 也隐藏该操作。
+   * editable 作为总开关仍然优先：editable 为 false 时三项一律隐藏。
+   */
+  allowAdd?: boolean
+  allowEdit?: boolean
+  allowDelete?: boolean
   loading?: boolean
   rowFormulas?: RowFormulaRule[]
   summaryColumns?: string[]
@@ -643,6 +653,11 @@ const emit = defineEmits<{
   (e: 'update:linkedSubTableData', bindingId: number, rows: any[]): void
   (e: 'linkFormScrollToInline'): void
 }>()
+
+// 子表逐操作权限：editable 总开关优先，逐项标志缺省视为放开（历史数据三项全开）
+const canAdd = computed(() => props.editable === true && props.allowAdd !== false)
+const canEdit = computed(() => props.editable === true && props.allowEdit !== false)
+const canDelete = computed(() => props.editable === true && props.allowDelete !== false)
 
 // 判断列中是否存在 FILE 类型的字段（有 FILE 列时隐藏 Import 按钮）
 const hasFileColumn = computed(() => {

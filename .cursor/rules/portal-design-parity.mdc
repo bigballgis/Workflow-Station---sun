@@ -1,7 +1,7 @@
 ---
 description: User Portal must render forms exactly as designed in Developer Workstation (parity contract)
 globs: frontend/user-portal/**/*.{vue,ts},frontend/developer-workstation/**/*.{vue,ts}
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Portal 设计 parity — Developer Workstation → User Portal

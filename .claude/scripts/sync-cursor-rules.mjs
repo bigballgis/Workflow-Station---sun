@@ -2,11 +2,14 @@
 /**
  * sync-cursor-rules.mjs
  * --------------------------------------------------------------------------
- * Single source of truth = .cursor/rules/*.mdc
+ * Single source of truth = .cursor/rules (*.mdc)  AND  .cursor/skills (SKILL.md)
  *
- * Scans every .mdc rule, reads its frontmatter (`alwaysApply`, `globs`), and
- * rewrites the @import block inside the matching CLAUDE.md so Claude Code picks
- * up newly added Cursor rules automatically (run by a SessionStart hook).
+ * (1) Rules: scans every .mdc rule, reads its frontmatter (`alwaysApply`,
+ *     `globs`), and rewrites the @import block inside the matching CLAUDE.md so
+ *     Claude Code picks up newly added Cursor rules automatically.
+ * (2) Skills: mirrors .cursor/skills -> .claude/skills so Claude loads the same
+ *     skills Cursor does, from one source. .claude-only skills are pruned.
+ * Run by a SessionStart hook.
  *
  * Routing (deterministic, mirrors Cursor's globs/alwaysApply semantics):
  *   globs contains deploy//Dockerfile/docker-compose/nginx/k8s -> deploy/CLAUDE.md
@@ -20,13 +23,18 @@
  *
  * No external deps. Cross-platform (Node 16+). Idempotent.
  */
-import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import {
+  readFileSync, writeFileSync, readdirSync, existsSync,
+  mkdirSync, rmSync, statSync,
+} from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..', '..');           // .claude/scripts -> repo root
 const RULES_DIR = join(REPO, '.cursor', 'rules');
+const CURSOR_SKILLS = join(REPO, '.cursor', 'skills');   // single source of truth
+const CLAUDE_SKILLS = join(REPO, '.claude', 'skills');   // generated mirror
 
 const BEGIN = '<!-- BEGIN cursor-rules:auto -->';
 const END = '<!-- END cursor-rules:auto -->';
@@ -59,13 +67,39 @@ function parseFrontmatter(text) {
   return fm;
 }
 
-function classify(globs) {
-  if (!globs) return 'root';
+/**
+ * Decide which CLAUDE.md bucket(s) a rule belongs to.
+ * - alwaysApply:true (or no glob at all) -> root (always in context).
+ * - Otherwise honor alwaysApply:false: route to EVERY matching directory bucket
+ *   by path substring, and — for cross-cutting globs with no path hint (e.g.
+ *   `**\/*{Test}*.{java,ts}`) — infer from file extensions so the rule loads
+ *   only when editing those files, NOT always-on.
+ * Returns a de-duplicated array of bucket keys (at least one).
+ */
+function classifyTargets(fm) {
+  const globs = fm.globs;
+  if (!globs || fm.alwaysApply === true) return ['root'];
+
   const g = globs.toLowerCase();
-  if (/deploy\/|dockerfile|docker-compose|nginx|\/k8s|k8s\//.test(g)) return 'deploy';
-  if (g.includes('frontend')) return 'frontend';
-  if (g.includes('backend')) return 'backend';
-  return 'root'; // cross-cutting glob (e.g. **/*.{java,ts}) -> always available
+  const targets = new Set();
+
+  // Directory-scoped hints (path substrings).
+  if (/deploy\/|dockerfile|docker-compose|nginx|\/k8s|k8s\//.test(g)) targets.add('deploy');
+  if (g.includes('frontend')) targets.add('frontend');
+  if (g.includes('backend')) targets.add('backend');
+
+  // Cross-cutting globs with no path hint: infer by file extension so a
+  // non-always rule (e.g. testing, glob `**/*.{java,ts}`) lands in the code
+  // buckets, not root. Handles both bare `.ts` and brace `.{java,ts}` forms.
+  if (targets.size === 0) {
+    if (/\bjava\b/.test(g)) targets.add('backend');
+    if (/\b(ts|tsx|vue|scss)\b/.test(g)) targets.add('frontend');
+  }
+
+  // Truly unroutable non-always glob: last-resort root so it isn't dropped.
+  if (targets.size === 0) targets.add('root');
+
+  return [...targets];
 }
 
 function rewriteRegion(absFile, importLines) {
@@ -91,6 +125,59 @@ function rewriteRegion(absFile, importLines) {
   return false;
 }
 
+/**
+ * Mirror .cursor/skills -> .claude/skills so Claude Code loads the same skills
+ * Cursor does, from a single source (.cursor/skills). Each skill is a directory
+ * with a SKILL.md (+ optional support files). Skills present only under
+ * .claude/skills (no .cursor counterpart) are removed, so the mirror stays exact.
+ */
+function listSkillDirs(root) {
+  if (!existsSync(root)) return [];
+  return readdirSync(root).filter((d) => {
+    const p = join(root, d);
+    return statSync(p).isDirectory() && existsSync(join(p, 'SKILL.md'));
+  });
+}
+
+function copyDirShallow(srcDir, dstDir) {
+  mkdirSync(dstDir, { recursive: true });
+  let wrote = 0;
+  for (const entry of readdirSync(srcDir)) {
+    const s = join(srcDir, entry);
+    const d = join(dstDir, entry);
+    if (statSync(s).isDirectory()) { wrote += copyDirShallow(s, d); continue; }
+    const src = readFileSync(s);
+    const cur = existsSync(d) ? readFileSync(d) : null;
+    if (!cur || !cur.equals(src)) { writeFileSync(d, src); wrote++; }
+  }
+  return wrote;
+}
+
+function syncSkills() {
+  if (!existsSync(CURSOR_SKILLS)) {
+    console.warn('[sync-cursor-rules] no .cursor/skills dir; skipping skill mirror.');
+    return;
+  }
+  const sourceSkills = listSkillDirs(CURSOR_SKILLS);
+  mkdirSync(CLAUDE_SKILLS, { recursive: true });
+
+  let changed = 0;
+  for (const name of sourceSkills) {
+    changed += copyDirShallow(join(CURSOR_SKILLS, name), join(CLAUDE_SKILLS, name));
+  }
+
+  // Prune .claude skills that no longer have a .cursor source (keep mirror exact).
+  const sourceSet = new Set(sourceSkills);
+  for (const name of listSkillDirs(CLAUDE_SKILLS)) {
+    if (!sourceSet.has(name)) {
+      rmSync(join(CLAUDE_SKILLS, name), { recursive: true, force: true });
+      console.log(`[sync-cursor-rules] pruned .claude/skills/${name} (no .cursor source)`);
+    }
+  }
+  console.log(`[sync-cursor-rules] skills: ${sourceSkills.length} mirrored ` +
+    `(${changed} file(s) updated) -> ${sourceSkills.join(', ')}`);
+}
+
 function main() {
   if (!existsSync(RULES_DIR)) {
     console.warn(`[sync-cursor-rules] no .cursor/rules dir; nothing to sync.`);
@@ -102,8 +189,7 @@ function main() {
   for (const f of files) {
     const name = f.replace(/\.mdc$/, '');
     const fm = parseFrontmatter(readFileSync(join(RULES_DIR, f), 'utf8'));
-    const target = classify(fm.globs);
-    buckets[target].push(name);
+    for (const target of classifyTargets(fm)) buckets[target].push(name);
   }
 
   // Order root bucket: pinned priority first, then the rest alphabetically.
@@ -125,6 +211,9 @@ function main() {
       (names.length ? ` -> ${names.join(', ')}` : ''));
   }
   console.log(`[sync-cursor-rules] done; ${changed} CLAUDE.md file(s) updated.`);
+
+  // Mirror skills from the single source (.cursor/skills) into .claude/skills.
+  syncSkills();
 }
 
 main();

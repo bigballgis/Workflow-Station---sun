@@ -39,6 +39,7 @@ public class VersionPropertyTest {
                 mock(com.developer.repository.EmailConnectionRepository.class),
                 mock(com.developer.repository.EmailMonitorRuleRepository.class),
                 mock(com.developer.repository.TableRelationRepository.class),
+                mock(com.developer.repository.ProcessDefinitionRepository.class),
                 mock(jakarta.persistence.EntityManager.class));
         
         assertThat(component).isNotNull();

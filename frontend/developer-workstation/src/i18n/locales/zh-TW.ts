@@ -561,6 +561,12 @@ export default {
     lookupGoToViewDesign: 'Go To Designer',
     subTablePlaceholderUnconfigured: '未選擇 Sub Table',
     subTablePlaceholderStale: '綁定已失效',
+    // 子表逐操作權限（右側屬性面板）：獨立控制 新增 / 編輯 / 刪除
+    subTablePermission: {
+      allowAdd: '允許新增',
+      allowEdit: '允許編輯',
+      allowDelete: '允許刪除',
+    },
     portalViews: {
       sectionTitle: '門戶視圖',
       sidePanelCollapseTitle: '門戶視圖（點擊展開）',

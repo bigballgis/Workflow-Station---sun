@@ -1511,6 +1511,19 @@ const designerConfig = computed(() => ({
         return [{ type: 'switch', field: 'readonly', title: 'Readonly' }]
       },
     },
+    // 子表：右侧属性面板追加 新增/编辑/删除 三个逐操作开关（写入 rule.props.allowAdd/allowEdit/allowDelete）。
+    // 默认全开 → 与历史「只要可编辑就全放开」一致；关掉某项 → SubTableField 隐藏对应 Add/Edit/Delete。
+    // 只追加这三项；Readonly 已由 form-create 内建面板提供，不再重复。
+    subTable: {
+      append: true,
+      rule() {
+        return [
+          { type: 'switch', field: 'allowAdd', title: t('form.subTablePermission.allowAdd'), value: true },
+          { type: 'switch', field: 'allowEdit', title: t('form.subTablePermission.allowEdit'), value: true },
+          { type: 'switch', field: 'allowDelete', title: t('form.subTablePermission.allowDelete'), value: true },
+        ]
+      },
+    },
   },
   hiddenItemConfig: {
     // Hide the built-in Basic "Hidden" (rule-level `hidden`) — it collapses field content on the

@@ -138,7 +138,7 @@ description: >-
 2. `emailConnectionRepository.deleteByFunctionUnitId`
 3. `tableRelationRepository.deleteByFunctionUnitId`（与 tables 一并重建）
 
-不能依赖 `functionUnit.getEmailConnections().clear()`  alone — 集合常为 lazy 未加载，旧行会留在库中。
+不能依赖 `functionUnit.getEmailConnections().clear()` alone — 集合常为 lazy 未加载，旧行会留在库中。
 
 ---
 

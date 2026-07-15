@@ -213,6 +213,10 @@ export function extractFieldsRecursive(
         type: 'subTable',
         _bindingId: Number(bindingId),
         ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
+        // 逐操作权限：仅在显式为 false 时下发（undefined 由 SubTableField 回退到 editable）
+        ...(props?.allowAdd === false ? { allowAdd: false } : {}),
+        ...(props?.allowEdit === false ? { allowEdit: false } : {}),
+        ...(props?.allowDelete === false ? { allowDelete: false } : {}),
         span: 24,
       }
       applyDesignerHideFlagToFormField(subTableField, item)

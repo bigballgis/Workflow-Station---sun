@@ -1,6 +1,7 @@
 ---
 description: 性能变更安全 — 取数/语义分层、MI 回归门禁、禁止与功能混 PR
-alwaysApply: true
+globs: frontend/user-portal/src/{views/applications,views/tasks,composables/tasks,components,utils}/**/*
+alwaysApply: false
 ---
 
 # 性能变更安全 — 防止优化误伤多实例子任务

@@ -364,9 +364,17 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
           const binding = localBindingMap.get(Number(itemBindingId))
           if (binding) {
             const mergedPv = mergePortalViewsForPreview(ruleItem, Number(itemBindingId))
+            // 逐操作权限来自放置组件 rule.props（仅显式 false 下发，undefined 由 SubTableField 回退 editable）
+            const placedProps = (ruleItem.props ?? {}) as Record<string, unknown>
             items.push({
               kind: 'subTable',
-              binding: { ...binding, portalViews: mergedPv },
+              binding: {
+                ...binding,
+                portalViews: mergedPv,
+                allowAdd: placedProps.allowAdd === false ? false : undefined,
+                allowEdit: placedProps.allowEdit === false ? false : undefined,
+                allowDelete: placedProps.allowDelete === false ? false : undefined,
+              },
             })
             localBindingMap.delete(Number(itemBindingId))
           }

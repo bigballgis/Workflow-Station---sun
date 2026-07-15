@@ -13,13 +13,14 @@
           <el-icon><Download /></el-icon> {{ t('subTable.exportWithData') }}
         </el-button>
         <el-button
-          v-if="!hasFileColumn"
+          v-if="canAdd && !hasFileColumn"
           size="small"
           @click.stop="triggerImport"
         >
           <el-icon><Upload /></el-icon> {{ t('subTable.import') }}
         </el-button>
         <el-button
+          v-if="canAdd"
           type="primary"
           native-type="button"
           size="small"
@@ -175,12 +176,13 @@
       </el-table-column>
 
       <el-table-column
-        v-if="editable"
+        v-if="canEdit || canDelete"
         :label="t('common.operation')"
         width="120"
       >
         <template #default="scope">
           <el-button
+            v-if="canEdit"
             link
             type="primary"
             size="small"
@@ -189,6 +191,7 @@
             {{ t('common.edit') }}
           </el-button>
           <el-button
+            v-if="canDelete"
             link
             type="danger"
             size="small"
@@ -333,6 +336,13 @@ const props = defineProps<{
   config: SubTableConfig
   modelValue?: any[]
   editable?: boolean
+  /**
+   * 子表逐操作权限（设计器右侧属性面板配置，存于组件 rule.props）。
+   * 缺省/undefined => 视为放开（回退 editable，历史表单三项全开）；显式 false => 隐藏该操作。editable 总开关仍优先。
+   */
+  allowAdd?: boolean
+  allowEdit?: boolean
+  allowDelete?: boolean
   foreignKeyValue?: string | number
   /** Form-create rule from the sub-table form designer */
   formRule?: any[]
@@ -369,6 +379,11 @@ const editable = computed(() => {
   if (previewMyRequestsActive?.value === true) return false
   return props.editable !== false
 })
+
+// 子表逐操作权限：editable 总开关优先，逐项标志缺省视为放开（历史数据三项全开）
+const canAdd = computed(() => editable.value && props.allowAdd !== false)
+const canEdit = computed(() => editable.value && props.allowEdit !== false)
+const canDelete = computed(() => editable.value && props.allowDelete !== false)
 
 // 判断列中是否存在 FILE 类型的字段（有 FILE 列时隐藏 Import 按钮）
 const hasFileColumn = computed(() => {

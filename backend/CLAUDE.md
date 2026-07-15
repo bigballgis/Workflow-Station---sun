@@ -10,7 +10,11 @@
 <!-- BEGIN cursor-rules:auto -->
 @../.cursor/rules/api-design.mdc
 @../.cursor/rules/backend-architecture.mdc
+@../.cursor/rules/docker-k8s-config-sync.mdc
+@../.cursor/rules/form-preview-fk-pk-runtime.mdc
 @../.cursor/rules/jpa-entity.mdc
+@../.cursor/rules/json-row-storage-no-physical-tables.mdc
+@../.cursor/rules/testing.mdc
 <!-- END cursor-rules:auto -->
 
 > 关键提醒：分层方向 `Controller → Component → Service → Repository` 不可违反；

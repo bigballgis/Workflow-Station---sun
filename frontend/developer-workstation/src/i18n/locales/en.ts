@@ -525,6 +525,12 @@ export default {
     lookupGoToViewDesign: 'Go To Designer',
     subTablePlaceholderUnconfigured: 'No Sub Table selected',
     subTablePlaceholderStale: 'Binding stale',
+    // Sub-Table per-operation permissions (right-side props panel) — gate Add / Edit / Delete independently.
+    subTablePermission: {
+      allowAdd: 'Allow Add',
+      allowEdit: 'Allow Edit',
+      allowDelete: 'Allow Delete',
+    },
     // Sub-Table portal display (user-portal To Do / My Request) — SubTablePortalViewsEditor
     portalViews: {
       sectionTitle: 'Portal Views',

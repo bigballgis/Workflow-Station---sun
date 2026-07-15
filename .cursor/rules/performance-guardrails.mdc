@@ -107,13 +107,7 @@ private record CachedEntry(Object payload, long cachedAt) {
 
 ## MI 回归门禁
 
-性能优化与 `detail.vue` / `shared.ts` / `SubTableField.vue` 等共享路径的改动，**MUST NOT 合并**前未通过：
-
-```bash
-cd frontend && npm run regression:mi
-```
-
-（单元 + 6 场景 Playwright 截图；portal 未启动时仅 `regression:mi:unit-only` 为临时手段，不算完整回归。）
+触达 MI 热路径（`detail.vue` / `shared.ts` / `SubTableField.vue` 等）的性能改动，**MUST NOT 合并**前未通过 `npm run regression:mi`。**完整门禁规范（两层管道、invariant I1–I7、场景↔单测↔截图、PR 协议）见 `performance-change-safety.mdc`。**
 
 ## 参考实现
 
