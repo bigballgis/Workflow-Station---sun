@@ -24,6 +24,7 @@ $env:SMTP_PASSWORD='your-password'
 
 ```powershell
 $env:SMTP_PORT='25'              # 内网中继常用 25；STARTTLS 常用 587
+$env:SMTP_USE_TLS='false'        # 明文 25 中继填 false；服务器要求 STARTTLS 时填 true 或改 587
 $env:SMTP_USE_AUTH='true'        # 内网 25 免认证时设为 false
 $env:SMTP_DEBUG='false'          # 设为 true 可打印 JavaMail 协议日志
 ```
@@ -50,8 +51,12 @@ mvn clean compile exec:java
 
 | 场景 | 端口 | Designer「使用 TLS」 | 认证 |
 |------|------|---------------------|------|
-| 内网中继（端口 25，实测路径） | 25 | **否** | 是 |
+| 内网中继（端口 25，明文） | 25 | **否**（平台代码对 25 口强制明文，与 TLS 勾选无关） | 是 |
 | STARTTLS 中继 | 587 | **是** | 是 |
+
+**Connection 表单**：「邮箱地址」= 发件人地址（`SMTP_SENDER`）；「用户名」= 服务账号（`SMTP_USERNAME`），两者通常不同。
+
+若平台测试失败但 `email-smtp-test` 成功，请检查：① Docker 是否已重建（含 `platform-common`）；② `.env` 的 `SSRF_ALLOWED_HOSTS` 是否包含中继主机名。
 
 在 Developer Workstation → Connections 创建 **自定义 SMTP** 时按上表填写。若中继主机解析到内网 IP，须把主机名加入 `SSRF_ALLOWED_HOSTS`（`deploy/environments/dev/.env`）。
 

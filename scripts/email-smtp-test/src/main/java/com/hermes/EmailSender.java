@@ -22,6 +22,7 @@ public class EmailSender {
         String username = env("SMTP_USERNAME", "");
         String password = System.getenv("SMTP_PASSWORD");
         boolean useAuth = Boolean.parseBoolean(env("SMTP_USE_AUTH", "true"));
+        boolean useTls = Boolean.parseBoolean(env("SMTP_USE_TLS", "587".equals(port) ? "true" : "false"));
         boolean debug = Boolean.parseBoolean(env("SMTP_DEBUG", "false"));
 
         if (useAuth && (password == null || password.isBlank())) {
@@ -38,12 +39,24 @@ public class EmailSender {
         prop.put("mail.smtp.port", port);
         prop.put("mail.debug", String.valueOf(debug));
 
+        if (!useTls) {
+            prop.put("mail.smtp.starttls.enable", "false");
+            prop.put("mail.smtp.ssl.enable", "false");
+        } else if ("465".equals(port)) {
+            prop.put("mail.smtp.ssl.enable", "true");
+            prop.put("mail.smtp.starttls.enable", "false");
+            prop.put("mail.smtp.socketFactory.port", "465");
+            prop.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+            prop.put("mail.smtp.socketFactory.fallback", "false");
+        } else {
+            prop.put("mail.smtp.starttls.enable", "true");
+            prop.put("mail.smtp.starttls.required", "true");
+            prop.put("mail.smtp.ssl.enable", "false");
+        }
+
         Session session;
         if (useAuth) {
             prop.put("mail.smtp.auth", "true");
-            if ("587".equals(port)) {
-                prop.put("mail.smtp.starttls.enable", "true");
-            }
             session = Session.getInstance(prop, new Authenticator() {
                 @Override
                 protected PasswordAuthentication getPasswordAuthentication() {
@@ -65,7 +78,7 @@ public class EmailSender {
                             + "<p>This is an automated test email sent from Java.</p>",
                     "text/html; charset=utf-8");
 
-            System.out.println("Sending email via " + host + ":" + port + " (auth=" + useAuth + ")...");
+            System.out.println("Sending email via " + host + ":" + port + " (auth=" + useAuth + ", tls=" + useTls + ")...");
             Transport.send(message);
             System.out.println("Email sent successfully!");
         } catch (Exception e) {

@@ -195,7 +195,7 @@ const defaultForm = (): EmailConnectionRequest => ({
   username: '',
   password: '',
   fromName: '',
-  useTls: undefined,
+  useTls: false,
   enabled: true,
   direction: 'OUTBOUND',
   mailboxAddress: '',

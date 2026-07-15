@@ -7,9 +7,10 @@ import java.util.Properties;
 
 /**
  * Applies SMTP transport settings from explicit host/port/TLS flags (no provider presets).
- * Port 465 uses implicit SSL; port 587 uses STARTTLS when {@code useTls} is true.
- * Port 25 with auth uses plain SMTP (no STARTTLS) — matches internal relays where
- * IT exempts port 25 from TLS upgrade.
+ * Port 25 always uses plain authenticated SMTP (no STARTTLS), matching internal relays that
+ * exempt port 25 from TLS — same semantics as {@code scripts/email-smtp-test} with
+ * {@code SMTP_USE_TLS=false}. Port 465 uses implicit SSL; port 587 uses STARTTLS when
+ * {@code useTls} is true.
  *
  * <p>When TLS is enabled, the configured SMTP host is added to {@code mail.smtp.ssl.trust}
  * so internal relays signed by a corporate CA (not in the JVM cacerts) can still connect.
@@ -40,26 +41,17 @@ public final class SmtpTransportProperties {
         props.put("mail.smtp.host", host);
         props.put("mail.smtp.port", String.valueOf(port));
         props.put("mail.smtp.auth", String.valueOf(auth));
-        props.put("mail.smtp.ssl.protocols", SSL_PROTOCOLS);
         props.put("mail.smtp.connectiontimeout", "15000");
         props.put("mail.smtp.timeout", "15000");
         props.put("mail.smtp.writetimeout", "15000");
 
-        if (!useTls) {
-            props.put("mail.smtp.starttls.enable", "false");
-            props.put("mail.smtp.ssl.enable", "false");
-            log.info("[SMTP-CFG] host={} port={} mode=PLAIN auth={} protocols={}", host, port, auth, SSL_PROTOCOLS);
+        // Port 25 internal relay: always plain (ignore useTls) — aligns with email-smtp-test.
+        if (!useTls || port == 25) {
+            applyPlainSmtp(props, host, port, auth);
             return;
         }
 
-        // Internal relay on port 25: authenticated plain SMTP, no STARTTLS.
-        if (port == 25) {
-            props.put("mail.smtp.starttls.enable", "false");
-            props.put("mail.smtp.ssl.enable", "false");
-            log.info("[SMTP-CFG] host={} port={} mode=PLAIN auth={} (port 25 relay, TLS flag ignored)",
-                    host, port, auth);
-            return;
-        }
+        props.put("mail.smtp.ssl.protocols", SSL_PROTOCOLS);
 
         if (port == 465) {
             props.put("mail.smtp.ssl.enable", "true");
@@ -80,6 +72,14 @@ public final class SmtpTransportProperties {
                     host, port, auth, SSL_PROTOCOLS, props.get("mail.smtp.ssl.trust"),
                     props.getOrDefault("mail.smtp.ssl.checkserveridentity", "true"));
         }
+    }
+
+    /** Plain SMTP — minimal props only (no ssl.protocols / trust), matching standalone smoke test. */
+    private static void applyPlainSmtp(Properties props, String host, int port, boolean auth) {
+        props.put("mail.smtp.starttls.enable", "false");
+        props.put("mail.smtp.starttls.required", "false");
+        props.put("mail.smtp.ssl.enable", "false");
+        log.info("[SMTP-CFG] host={} port={} mode=PLAIN auth={}", host, port, auth);
     }
 
     /**
