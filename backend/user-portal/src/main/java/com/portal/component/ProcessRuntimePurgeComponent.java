@@ -7,6 +7,8 @@ import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,15 @@ public class ProcessRuntimePurgeComponent {
     private final ChangeHistoryRepository changeHistoryRepository;
     private final ProcessHistoryRepository processHistoryRepository;
     private final WorkflowEngineClient workflowEngineClient;
+
+    /**
+     * 聚合扇出线程池（引擎 purge HTTP，不碰 DB），移出共享 commonPool。
+     * 注意：DB 删除仍在下方 {@code @Transactional} 调用线程串行执行，不放到池线程（池线程无事务上下文）。
+     * 见 {@link com.portal.config.PortalAsyncConfig}。
+     */
+    @Autowired
+    @Qualifier(com.portal.config.PortalAsyncConfig.AGGREGATION_EXECUTOR)
+    private java.util.concurrent.Executor aggregationExecutor;
 
     @Transactional
     public Map<String, Object> purgeByCatalogId(String catalogId) {
@@ -54,7 +65,7 @@ public class ProcessRuntimePurgeComponent {
                         log.warn("Engine purge failed for instance {}: {}", engineId, e.getMessage());
                         return false;
                     }
-                }));
+                }, aggregationExecutor));
             }
             for (CompletableFuture<Boolean> f : purgeFutures) {
                 if (Boolean.TRUE.equals(f.join())) {

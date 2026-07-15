@@ -20,6 +20,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -43,6 +45,15 @@ public class DashboardComponent {
     private final UserBusinessUnitRepository userBusinessUnitRepository;
     private final ProcessInstanceRepository processInstanceRepository;
     private final UserDisplayNameResolver userDisplayNameResolver;
+
+    /**
+     * 聚合扇出线程池（独立于 taskQueryExecutor）。团队聚合分支在任务体内再调 {@code queryTasks}
+     * （→ taskQueryExecutor），必须分池以免同池自等待死锁；其余分支为 engine HTTP，移出 commonPool。
+     * 见 {@link com.portal.config.PortalAsyncConfig}。
+     */
+    @Autowired
+    @Qualifier(com.portal.config.PortalAsyncConfig.AGGREGATION_EXECUTOR)
+    private java.util.concurrent.Executor aggregationExecutor;
 
     /**
      * When true, home "team task overview" calls queryTasks per BU member (very slow; can overload engine with many members).
@@ -88,7 +99,7 @@ public class DashboardComponent {
 
         // Fetch process stats in parallel with queryTasks (both hit workflow-engine; snapshot speeds first paint)
         CompletableFuture<DashboardOverview.ProcessOverview> processOverviewFuture =
-                CompletableFuture.supplyAsync(() -> getProcessOverview(userId));
+                CompletableFuture.supplyAsync(() -> getProcessOverview(userId), aggregationExecutor);
 
         TaskQueryRequest dashTaskRequest = TaskQueryRequest.builder()
                 .userId(userId)
@@ -101,7 +112,7 @@ public class DashboardComponent {
 
         // Overlaps with history inside buildTaskOverviewFromPage (local CPU or light logic)
         CompletableFuture<DashboardOverview.PerformanceOverview> performanceFuture =
-                CompletableFuture.supplyAsync(() -> getPerformanceOverview(userId));
+                CompletableFuture.supplyAsync(() -> getPerformanceOverview(userId), aggregationExecutor);
 
         DashboardOverview.TaskOverview taskOverview = buildTaskOverviewFromPage(userId, taskPage);
         List<TaskInfo> recentTasks = taskPage.getContent().stream().limit(5).toList();
@@ -173,9 +184,9 @@ public class DashboardComponent {
             avgProcessingHours = 2.5;
         } else {
             CompletableFuture<Long> completedTodayFuture = CompletableFuture.supplyAsync(() ->
-                    fetchCompletedTasksTotalInRange(userId, completedRangeStart, completedRangeEnd));
+                    fetchCompletedTasksTotalInRange(userId, completedRangeStart, completedRangeEnd), aggregationExecutor);
             CompletableFuture<Double> avgHoursFuture = CompletableFuture.supplyAsync(() ->
-                    estimateAvgProcessingHoursFromRecentCompletions(userId));
+                    estimateAvgProcessingHoursFromRecentCompletions(userId), aggregationExecutor);
             completedTodayCount = completedTodayFuture.join();
             avgProcessingHours = avgHoursFuture.join();
         }
@@ -208,7 +219,7 @@ public class DashboardComponent {
                 String now = LocalDateTime.now().toString();
 
                 List<CompletableFuture<long[]>> futures = teamMemberIds.stream()
-                        .map(memberId -> CompletableFuture.supplyAsync(() -> {
+                        .map(memberId -> CompletableFuture.supplyAsync(() -> {  // aggregationExecutor: 体内调 queryTasks(→taskQueryExecutor)，分池避免自等待死锁
                             long memberPending = 0;
                             long memberOverdue = 0;
                             long memberCompleted = 0;
@@ -239,7 +250,7 @@ public class DashboardComponent {
                                 log.warn("Failed to get completed tasks for team member {}: {}", memberId, e.getMessage());
                             }
                             return new long[]{memberPending, memberOverdue, memberCompleted};
-                        }))
+                        }, aggregationExecutor))
                         .toList();
 
                 long aggregatedPending = 0;

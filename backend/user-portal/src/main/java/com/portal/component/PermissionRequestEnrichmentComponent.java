@@ -4,6 +4,8 @@ import com.portal.dto.PermissionRequestListItem;
 import com.portal.entity.PermissionRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -23,6 +25,11 @@ import java.util.concurrent.CompletableFuture;
 public class PermissionRequestEnrichmentComponent {
 
     private final RoleAccessComponent roleAccessComponent;
+
+    /** 聚合扇出线程池（admin-center HTTP，不碰 DB），移出共享 commonPool。见 {@link com.portal.config.PortalAsyncConfig}。 */
+    @Autowired
+    @Qualifier(com.portal.config.PortalAsyncConfig.AGGREGATION_EXECUTOR)
+    private java.util.concurrent.Executor aggregationExecutor;
 
     /**
      * 为审批列表填充申请人登录名等信息（供前端展示，避免只显示 applicantId UUID）
@@ -120,7 +127,7 @@ public class PermissionRequestEnrichmentComponent {
         }
         Map<String, CompletableFuture<Map<String, Object>>> futures = new HashMap<>();
         for (String id : ids) {
-            futures.put(id, CompletableFuture.supplyAsync(() -> roleAccessComponent.getUserById(id)));
+            futures.put(id, CompletableFuture.supplyAsync(() -> roleAccessComponent.getUserById(id), aggregationExecutor));
         }
         for (Map.Entry<String, CompletableFuture<Map<String, Object>>> e : futures.entrySet()) {
             try {

@@ -67,6 +67,9 @@ public class DelegatedTaskQueryComponent {
         SecurityContext ctx = SecurityContextHolder.getContext();
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
+        // 说明：每个 delegator 的叶子任务只做 workflow-engine HTTP（不碰 DB），不参与连接放大，
+        // 因此保留 commonPool；也避免“运行在有界池上的 delegatedFuture 又向同一有界池提交子任务并 join”
+        // 造成的有界池自等待死锁（父占满线程等子、子在队列无线程可跑）。
         List<CompletableFuture<List<TaskInfo>>> futures = delegatorIds.stream()
                 .map(delegatorId -> CompletableFuture.supplyAsync(() -> RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(
                         ctx, attrs, () -> loadDelegatedTasksForDelegator(userId, delegatorId))))
