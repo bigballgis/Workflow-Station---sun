@@ -71,6 +71,7 @@ export { resolveDisplayValue } from './subTableAddDialogHelpers/displayValue'
 
 // Form-design canvas columns (Add/Edit dialog — excludes list-view-only audit columns)
 export {
+  isDialogMappableSubFormRule,
   mapSubFormRuleToDialogColumns,
   resolveSubFormDialogColumnsForBinding,
   resolveSubFormRuleForBinding,

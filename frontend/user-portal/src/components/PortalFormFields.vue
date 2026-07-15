@@ -11,6 +11,7 @@ import type { FormField } from './formRendererHelpers'
 import {
   filterLinkOnlyStandaloneSubTableFields,
   isDisplayOnlyLayoutField,
+  mergeNestedSubTableRowsIntoSto,
 } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shared'
 
@@ -73,8 +74,10 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
 }
 
 function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
-  const parent = props.parentRow ?? props.model
-  if (parent && typeof parent === 'object') {
+  // Model first: it carries local __subTables__ edits before the host round-trips them
+  // into parentRow (SubTableInlineForm rowModel vs. currentRow).
+  for (const parent of [props.model, props.parentRow]) {
+    if (!parent || typeof parent !== 'object') continue
     const nested = pullNestedRowsForBindingFromParentRows(
       {
         bindingId: binding.bindingId,
@@ -95,6 +98,22 @@ function isSubTableEditable(): boolean {
 
 function onFieldUpdate(key: string, val: unknown) {
   emit('update:field', key, val)
+}
+
+/**
+ * Nested sub-table rows changed (add/edit/delete in SubTableField). Persist them under the
+ * host row's `__subTables__` and emit as a field update so the host (SubTableInlineForm →
+ * handleInlineFormUpdate, or the Link Form dialog → linkedFormData) carries them to save.
+ */
+function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
+  const binding = resolveBinding(field._bindingId)
+  if (!binding) return
+  const sto = mergeNestedSubTableRowsIntoSto(
+    [props.parentRow, props.model],
+    { bindingId: binding.bindingId, tableName: binding.tableName },
+    rows,
+  )
+  emit('update:field', '__subTables__', sto)
 }
 </script>
 
@@ -119,6 +138,7 @@ function onFieldUpdate(key: string, val: unknown) {
         :compact-lookup-cells="compactLookupCells"
         :primary-key-fields="resolveBinding(field._bindingId)?.primaryKeyFields"
         style="margin-bottom: 16px;"
+        @update:model-value="(rows: any[]) => onNestedSubTableRowsUpdate(field, rows)"
       />
     </el-col>
     <el-col

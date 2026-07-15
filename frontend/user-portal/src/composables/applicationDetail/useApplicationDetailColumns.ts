@@ -1,6 +1,7 @@
 import { isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import {
+  isDialogMappableSubFormRule,
   mergeListViewFieldColumn,
   mergeMissingTableFieldColumns,
   deriveColumnsFromRelationFieldDefinitions,
@@ -72,7 +73,7 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
 
     const subFormColumns =
       subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
-        ? subFormRule.map((r: any) => {
+        ? subFormRule.filter(isDialogMappableSubFormRule).map((r: any) => {
         const rProps = r.props || {}
         let type: string | undefined
 

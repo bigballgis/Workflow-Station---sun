@@ -10,7 +10,7 @@
 
 import type { FormDefinition, TableBinding, TableDefinition } from '@/api/functionUnit'
 import type { FormPreviewItem, PreviewSubTableBinding, SubTablePortalViewsPreview } from '@/components/designer/formPreviewTypes'
-import { getRuleChildren, isCardRule, getLayoutLabel } from '@/utils/formDesigner'
+import { getRuleChildren, isCardRule, getLayoutLabel, withSubTableBindingIdInProps } from '@/utils/formDesigner'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { derivePreviewColumns, parseLookupConfig } from '@/utils/formPreview'
@@ -273,8 +273,10 @@ function buildBindingMap(
   const nonPrimary = bindings.filter(b => b.bindingType !== 'PRIMARY')
   const map = new Map<number, PreviewSubTableBinding>()
 
+  // Persisted rules carry _bindingId only at top level; restore props._bindingId so nested
+  // subTable placeholders in preview form-create resolve their binding (see withSubTableBindingIdInProps).
   const getSubFormDesign = (bindingId: number) => ({
-    rule: subForms[bindingId]?.rule || [],
+    rule: withSubTableBindingIdInProps(subForms[bindingId]?.rule || []),
     options: subForms[bindingId]?.options || {},
   })
 

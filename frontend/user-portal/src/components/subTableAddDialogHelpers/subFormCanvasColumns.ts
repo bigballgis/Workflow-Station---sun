@@ -25,12 +25,25 @@ export function resolveSubFormRuleForBinding(
   return Array.isArray(entry?.rule) && entry.rule.length > 0 ? entry.rule : undefined
 }
 
+/**
+ * Only field-bearing input rules become dialog columns. Placeholders (`subTable` nested
+ * tables, `linkForm` widgets) and layout containers have no editable `field` and cannot
+ * live in the column-driven Add/Edit dialog — mapping them produced a bogus text input
+ * labeled "Sub-Table". Nested sub-tables render via form-below-table instead.
+ */
+export function isDialogMappableSubFormRule(rawRule: unknown): boolean {
+  const r = rawRule as Record<string, unknown> | null
+  if (!r || typeof r !== 'object') return false
+  if (r.type === 'subTable' || r.type === 'linkForm') return false
+  return typeof r.field === 'string' && r.field.length > 0
+}
+
 /** Map form-design canvas rule items to Add/Edit dialog columns (excludes list-view-only fields). */
 export function mapSubFormRuleToDialogColumns(
   subFormRule: unknown[],
   ctx: SubFormColumnLookupContext,
 ): DialogColumn[] {
-  return subFormRule.map((rawRule): DialogColumn => {
+  return subFormRule.filter(isDialogMappableSubFormRule).map((rawRule): DialogColumn => {
     const r = rawRule as Record<string, unknown>
     const rProps = (r.props ?? {}) as Record<string, unknown>
     let type: string | undefined

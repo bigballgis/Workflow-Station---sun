@@ -39,4 +39,31 @@ describe('resolveSubFormDialogColumnsForBinding', () => {
   it('returns empty when no sub-form rule exists', () => {
     expect(resolveSubFormDialogColumnsForBinding({ bindingId: 1 }, {}, ctx)).toEqual([])
   })
+
+  it('skips nested subTable / linkForm placeholders and fieldless layout rules', () => {
+    const binding = { bindingId: 50113 }
+    const subForms = {
+      50113: {
+        rule: [
+          { type: 'input', field: 'shipment_name', title: 'Shipment Name' },
+          { type: 'input', field: 'carrier', title: 'Carrier' },
+          // Nested sub-table widget — no `field`, title used to leak into the dialog as a text input
+          { type: 'subTable', title: 'Sub-Table', _bindingId: 50114, props: {} },
+          { type: 'linkForm', title: 'Link Form', props: {} },
+          { type: 'elCard', props: {}, children: [] },
+        ],
+      },
+    }
+    const dialogCols = resolveSubFormDialogColumnsForBinding(binding, subForms, ctx)
+    expect(dialogCols.map(c => c.field)).toEqual(['shipment_name', 'carrier'])
+    expect(dialogCols.some(c => c.label === 'Sub-Table')).toBe(false)
+  })
+
+  it('keeps unknown field-bearing types (SubTableAddDialog passthrough contract)', () => {
+    const subForms = {
+      9: { rule: [{ type: 'someCustomWidget', field: 'custom_field', title: 'Custom' }] },
+    }
+    const dialogCols = resolveSubFormDialogColumnsForBinding({ bindingId: 9 }, subForms, ctx)
+    expect(dialogCols.map(c => c.field)).toEqual(['custom_field'])
+  })
 })

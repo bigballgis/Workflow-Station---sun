@@ -25,6 +25,8 @@ export interface ProcessStartSubTableBinding {
   columns: Array<{ field: string; label: string; type?: string }>
   /** Form-design canvas columns for Add/Edit dialog (excludes list-view-only fields). */
   dialogColumns?: Array<{ field: string; label: string; type?: string }>
+  /** Parsed sub-form design fields — backs the form-below-table inline form (incl. nested sub-tables). */
+  formFields?: FormField[]
   portalViews?: Partial<SubTablePortalViews> | null
   data: any[]
   fieldDefinitions?: BindingFieldDefinition[]

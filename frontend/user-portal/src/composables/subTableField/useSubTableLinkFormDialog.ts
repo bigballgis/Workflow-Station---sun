@@ -199,6 +199,11 @@ export function useSubTableLinkFormDialog(
           next[field.key] = resolveLinkFormFieldValueForModal(field, v, modalOpts)
         }
       })
+      // Keep the nested-child slice: PortalFormFields resolves nested sub-table rows from
+      // this model and writes edits back to it (grandchild persistence via saveLinkedFormData).
+      if (raw.__subTables__ && typeof raw.__subTables__ === 'object') {
+        next.__subTables__ = raw.__subTables__
+      }
       return next
     }
     return { ...raw }

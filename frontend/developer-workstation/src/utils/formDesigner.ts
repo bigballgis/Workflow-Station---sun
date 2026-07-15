@@ -189,6 +189,31 @@ export function collectSubTableRules(items: any[]): any[] {
 }
 
 /**
+ * Copy top-level `_bindingId` into `props._bindingId` on every subTable rule (non-mutating).
+ * Persisted rules keep `_bindingId` only at top level (the drag rule's parseRule strips the
+ * props copy on save), but SubTablePlaceholderWidget reads props — so preview surfaces that
+ * feed saved rules straight into form-create must run this or nested placeholders render
+ * as "unconfigured".
+ */
+export function withSubTableBindingIdInProps(items: any[]): any[] {
+  return (items || []).map(item => {
+    if (!item || typeof item !== 'object') return item
+    let next = item
+    if (item.type === 'subTable' && item._bindingId != null && item.props?._bindingId == null) {
+      next = { ...item, props: { ...(item.props || {}), _bindingId: item._bindingId } }
+    }
+    const children = getRuleChildren(next)
+    if (children.length) {
+      const mapped = withSubTableBindingIdInProps(children)
+      if (next === item) next = { ...item }
+      if (Array.isArray(next.children)) next.children = mapped
+      else if (next.props?.children) next.props = { ...next.props, children: mapped }
+    }
+    return next
+  })
+}
+
+/**
  * Check if a rule item is a card/layout container.
  */
 export function isCardRule(item: any): boolean {

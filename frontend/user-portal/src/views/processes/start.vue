@@ -297,6 +297,7 @@ import {
   resolveBindingFieldDefinitions,
 } from '@/components/subTableAddDialogHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import { applyFieldDefinitionsToFormFields } from '@/utils/subTableRowRuntime'
 import { createProcessStartState } from '@/composables/processStart/useProcessStartState'
 import { createProcessStartFormParsing } from '@/composables/processStart/useProcessStartFormParsing'
 import { createProcessStartSubTables } from '@/composables/processStart/useProcessStartSubTables'
@@ -362,7 +363,7 @@ const {
 } = state
 
 // 表单解析（form-create 规则 → 字段、子表列推导）
-const { parseFormConfig, deriveColumnsFromBinding, deriveDialogColumnsFromBinding } = createProcessStartFormParsing({
+const { parseFormConfig, deriveColumnsFromBinding, deriveDialogColumnsFromBinding, extractFieldsRecursive } = createProcessStartFormParsing({
   lookupDbConfigs,
   relationViewConfigs,
   formConfigJson,
@@ -545,6 +546,17 @@ const loadFunctionUnitContent = async () => {
           ?? null
         const columns = resolveSubTableBindingColumnsForStart(b, subForms, formConfigForPk)
         const dialogColumns = deriveDialogColumnsFromBinding(b, subForms)
+        const bindingFieldDefinitions = resolveBindingFieldDefinitions(
+          { tableId: tid, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
+          caches.cachedRelationTableFieldIndex,
+        ) as unknown as BindingFieldDefinition[]
+        // Sub-form design fields back the form-below-table inline form (same contract as
+        // task detail's resolveSubFormDesign) — without them portalViews=formBelowTable
+        // renders an empty "no form fields configured" card on the start page.
+        const subFormDesign = subForms[b.bindingId] ?? subForms[String(b.bindingId)] ?? {}
+        const subFormFields = Array.isArray(subFormDesign.rule) && subFormDesign.rule.length > 0
+          ? applyFieldDefinitionsToFormFields(extractFieldsRecursive(subFormDesign.rule), bindingFieldDefinitions)
+          : []
         bindings.push({
           bindingId: b.bindingId,
           tableId: tid != null ? Number(tid) : null,
@@ -560,11 +572,9 @@ const loadFunctionUnitContent = async () => {
           ),
           columns,
           ...(dialogColumns.length > 0 ? { dialogColumns } : {}),
+          ...(subFormFields.length > 0 ? { formFields: subFormFields } : {}),
           portalViews: bindingPortalViews,
-          fieldDefinitions: resolveBindingFieldDefinitions(
-            { tableId: tid, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
-            caches.cachedRelationTableFieldIndex,
-          ) as unknown as BindingFieldDefinition[],
+          fieldDefinitions: bindingFieldDefinitions,
           bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
           foreignKeyField: (b as { foreignKeyField?: string | null }).foreignKeyField ?? null,
           data: []

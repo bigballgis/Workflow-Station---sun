@@ -3,7 +3,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FieldDefinition, FormDefinition, TableBinding } from '@/api/functionUnit'
 import type { FormPreviewItem } from '@/components/designer/formPreviewTypes'
-import { getRuleChildren, isCardRule, getLayoutLabel } from '@/utils/formDesigner'
+import { getRuleChildren, isCardRule, getLayoutLabel, withSubTableBindingIdInProps } from '@/utils/formDesigner'
 import {
   applyPreviewDefaultsToItemRules,
   attachPreviewMountedDefaultSync,
@@ -231,6 +231,9 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       }
       rule = mapFormCreateRulesReadonlyDeep(rule) as any[]
       ensureFormCreateRulesValidationDeep(rule)
+      // Saved/cached rules keep _bindingId only at top level — restore props._bindingId so
+      // nested subTable placeholders in preview form-create resolve their binding.
+      rule = withSubTableBindingIdInProps(rule)
       const columns = toSubTablePreviewColumns(bindingId, rule, config)
       previewTableRows.value[bindingId] = []
       bindingMap.set(bindingId, {
