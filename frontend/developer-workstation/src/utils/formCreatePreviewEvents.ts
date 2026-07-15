@@ -5,7 +5,7 @@
 
 import type { Ref } from 'vue'
 import type { FormPreviewItem } from '@/components/designer/formPreviewTypes'
-import { getRuleChildren } from '@/utils/formDesigner'
+import { walkFormCreateRules } from '@/utils/formDesigner'
 import { collectFieldComponentEventsFromRules } from '@/utils/formCreateComponentEvents'
 import {
   createPortalFormApi,
@@ -71,9 +71,7 @@ export function materializePreviewComponentEvents(
   )
 
   function walk(items: unknown[]) {
-    for (const raw of items) {
-      if (!raw || typeof raw !== 'object') continue
-      const rule = raw as Record<string, unknown>
+    walkFormCreateRules(items, (rule) => {
       const field = rule.field != null ? String(rule.field) : ''
       const ev = field ? eventMap.get(field) : undefined
       if (ev) {
@@ -81,8 +79,7 @@ export function materializePreviewComponentEvents(
           bindDomOnEvent(rule, name, ev.on[name], api)
         }
       }
-      walk(getRuleChildren(rule))
-    }
+    })
   }
   walk(rules)
 }
@@ -132,9 +129,7 @@ export function injectPreviewFieldLoadDefaults(
   const portalApi = previewApiFromRef(previewData)
 
   function walk(items: unknown[]) {
-    for (const raw of items) {
-      if (!raw || typeof raw !== 'object') continue
-      const rule = raw as Record<string, unknown>
+    walkFormCreateRules(items, (rule) => {
       const field = rule.field != null ? String(rule.field) : ''
       const initial = field ? resolveFieldInitialValue(rule, previewData) : undefined
 
@@ -159,9 +154,7 @@ export function injectPreviewFieldLoadDefaults(
         }
         rule.hook = hook
       }
-
-      walk(getRuleChildren(rule))
-    }
+    })
   }
   walk(rules)
 }

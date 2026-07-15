@@ -2,7 +2,7 @@
  * Component-level form-create events (Form Preview + portal parity).
  */
 
-import { getRuleChildren } from '@/utils/formDesigner'
+import { walkFormCreateRules } from '@/utils/formDesigner'
 import {
   createPortalFormApi,
   isEmptyFormCreateHandler,
@@ -58,18 +58,13 @@ function walkRulesCollect(
   items: unknown[],
   map: Map<string, FieldComponentEvents>,
 ): void {
-  if (!Array.isArray(items)) return
-  for (const raw of items) {
-    if (!raw || typeof raw !== 'object') continue
-    const rule = raw as Record<string, unknown>
+  walkFormCreateRules(items, (rule) => {
     const field = rule.field != null ? String(rule.field) : ''
-    if (field) {
-      const on = mergeRuleOnHandlers(rule)
-      const hook = mergeRuleHookHandlers(rule)
-      map.set(field, { rule, on, hook })
-    }
-    walkRulesCollect(getRuleChildren(rule), map)
-  }
+    if (!field) return
+    const on = mergeRuleOnHandlers(rule)
+    const hook = mergeRuleHookHandlers(rule)
+    map.set(field, { rule, on, hook })
+  })
 }
 
 export function collectFieldComponentEventsFromRules(

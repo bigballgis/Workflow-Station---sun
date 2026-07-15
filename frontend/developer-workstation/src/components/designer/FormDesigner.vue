@@ -440,9 +440,13 @@
       :close-on-click-modal="false"
       destroy-on-close
     >
-      <div class="preview-container">
+      <div
+        v-loading="previewBuilding"
+        :element-loading-text="t('form.previewLoading')"
+        class="preview-container"
+      >
         <FormPreviewItems
-          v-if="previewItems.length > 0 && previewFormReady"
+          v-if="!previewBuilding && previewItems.length > 0 && previewFormReady"
           v-model:preview-data="previewData"
           v-model:preview-table-rows="previewTableRows"
           :items="previewItems"
@@ -455,7 +459,7 @@
           :request-id-config="previewRequestIdConfig"
         />
         <el-empty
-          v-else
+          v-else-if="!previewBuilding"
           :description="t('form.noFormContent')"
         />
       </div>
@@ -1073,6 +1077,7 @@ const {
 // ── Preview dialog + build pipeline ─────────────────────────────────────────
 const {
   showPreviewDialog,
+  previewBuilding,
   previewFormReady,
   previewDialogOption,
   previewData,
@@ -1095,7 +1100,6 @@ const {
   getActiveDesignerRef,
   getTableFieldDefinitions,
   getPrimaryBindingFieldDefinitions,
-  refreshFormRulesFromTableMetadata,
   toSubTablePreviewColumns,
   makeLookupPreviewItem,
   mergePortalViewsForPreview,
@@ -1564,6 +1568,7 @@ watch(showPreviewDialog, (open) => {
   if (open) {
     return
   }
+  previewBuilding.value = false
   previewFormReady.value = false
   previewRowDialog.visible = false
   previewRowDialog.onSave = null

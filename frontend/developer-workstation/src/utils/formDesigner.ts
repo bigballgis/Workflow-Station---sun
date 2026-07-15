@@ -161,6 +161,35 @@ export function injectPreviewUploadHandlers(
 }
 
 /**
+ * Depth-first walk of a form-create rule tree with cycle detection.
+ * fc-designer layout nodes (el-row / el-col / card) can share object references;
+ * unguarded recursion on Preview paths caused main-thread hangs.
+ */
+export function walkFormCreateRules(
+  items: unknown[],
+  visit: (rule: Record<string, unknown>) => void,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): void {
+  if (!Array.isArray(items)) return
+  for (const raw of items) {
+    if (!raw || typeof raw !== 'object') continue
+    const rule = raw as Record<string, unknown>
+    if (visited.has(rule)) continue
+    visited.add(rule)
+    visit(rule)
+    walkFormCreateRules(getRuleChildren(rule), visit, visited)
+  }
+}
+
+/**
+ * Deep-clone designer rules before Preview transforms so getRule() references
+ * are never mutated in place (ensureFormCreateRulesValidationDeep mutates).
+ */
+export function snapshotRulesForPreview(rules: unknown[] | null | undefined): any[] {
+  return cloneFormRules(Array.isArray(rules) ? rules : [])
+}
+
+/**
  * Get children from any known nesting pattern in a form rule item.
  */
 export function getRuleChildren(item: any): any[] {
@@ -196,21 +225,36 @@ export function collectSubTableRules(items: any[]): any[] {
  * as "unconfigured".
  */
 export function withSubTableBindingIdInProps(items: any[]): any[] {
-  return (items || []).map(item => {
+  const visited = new WeakSet<object>()
+
+  function mapList(list: any[]): any[] {
+    return (list || []).map((item) => mapItem(item))
+  }
+
+  function mapItem(item: any): any {
     if (!item || typeof item !== 'object') return item
+    if (visited.has(item)) return item
+    visited.add(item)
+
     let next = item
     if (item.type === 'subTable' && item._bindingId != null && item.props?._bindingId == null) {
       next = { ...item, props: { ...(item.props || {}), _bindingId: item._bindingId } }
     }
     const children = getRuleChildren(next)
-    if (children.length) {
-      const mapped = withSubTableBindingIdInProps(children)
-      if (next === item) next = { ...item }
-      if (Array.isArray(next.children)) next.children = mapped
-      else if (next.props?.children) next.props = { ...next.props, children: mapped }
-    }
+    if (!children.length) return next
+
+    const mapped = mapList(children)
+    if (mapped === children) return next
+    next = next === item ? { ...item } : next
+    if (Array.isArray(next.children)) next.children = mapped
+    else if (next.props?.children) next.props = { ...next.props, children: mapped }
+    else if (Array.isArray(next.props?.list)) next.props = { ...next.props, list: mapped }
+    else if (Array.isArray(next.props?.items)) next.props = { ...next.props, items: mapped }
+    else if (Array.isArray(next.props?.fields)) next.props = { ...next.props, fields: mapped }
     return next
-  })
+  }
+
+  return mapList(items)
 }
 
 /**

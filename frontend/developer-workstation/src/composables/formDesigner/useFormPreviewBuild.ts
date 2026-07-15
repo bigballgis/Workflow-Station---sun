@@ -3,7 +3,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FieldDefinition, FormDefinition, TableBinding } from '@/api/functionUnit'
 import type { FormPreviewItem } from '@/components/designer/formPreviewTypes'
-import { getRuleChildren, isCardRule, getLayoutLabel, withSubTableBindingIdInProps } from '@/utils/formDesigner'
+import { getRuleChildren, isCardRule, getLayoutLabel, snapshotRulesForPreview, walkFormCreateRules, withSubTableBindingIdInProps } from '@/utils/formDesigner'
 import {
   applyPreviewDefaultsToItemRules,
   attachPreviewMountedDefaultSync,
@@ -11,8 +11,9 @@ import {
 } from '@/utils/formCreatePreviewEvents'
 import { ensureFormCreateRulesValidationDeep } from '@/utils/formCreateValidateRules'
 import {
+  flushDesignerPropsPanelToActiveRule,
+  flushDesignerValidatePanelToActiveRule,
   mergePreviewValidateFormOption,
-  prepareDesignerPreviewValidation,
 } from '@/utils/formDesignerPreviewValidation'
 import { wrapFormLevelOnChangeForFormCreate } from '@/utils/formCreateEventRuntime'
 import { isEmptyFormCreateHandler } from '@/utils/formCreateDefaultEvents'
@@ -41,7 +42,6 @@ interface UseFormPreviewBuildOptions {
   getActiveDesignerRef: () => DesignerLike
   getTableFieldDefinitions: (tableId: number) => FieldDefinition[]
   getPrimaryBindingFieldDefinitions: () => FieldDefinition[]
-  refreshFormRulesFromTableMetadata: () => void
   toSubTablePreviewColumns: (bindingId: number, rule: any[], config: any) => any[]
   makeLookupPreviewItem: (ruleItem: any, config: any) => any
   mergePortalViewsForPreview: (ruleItem: any, bindingId: number) => PortalViewsValue
@@ -50,20 +50,23 @@ interface UseFormPreviewBuildOptions {
 }
 
 /**
- * Form Preview dialog state and the preview build pipeline for FormDesigner:
- * normalizes live designer rules, derives sub-table/lookup preview items and
- * assembles the FormPreviewItems model.
+ * Form Preview dialog state and the preview build pipeline for FormDesigner.
+ *
+ * Preview is read-only: rules are snapshotted from getRule() and transformed in memory.
+ * Never call designer setRule/setOption during preview — fc-designer full canvas redraws
+ * were the primary cause of main-thread hangs on multi-sub-table forms (e.g. MCY).
  */
 export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
   const {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, subFormCache,
     designerSubBindings, getActiveDesignerRef, getTableFieldDefinitions,
-    getPrimaryBindingFieldDefinitions, refreshFormRulesFromTableMetadata,
+    getPrimaryBindingFieldDefinitions,
     toSubTablePreviewColumns, makeLookupPreviewItem, mergePortalViewsForPreview,
     getTableName, t,
   } = options
 
   const showPreviewDialog = ref(false)
+  const previewBuilding = ref(false)
   const previewFormReady = ref(false)
   const previewDialogOption = ref<Record<string, unknown>>({})
   const previewData = ref({})
@@ -141,23 +144,35 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     },
   })
 
+  function flushDesignerPanelsForPreview() {
+    const ref = getActiveDesignerRef()
+    flushDesignerValidatePanelToActiveRule(ref)
+    flushDesignerPropsPanelToActiveRule(ref)
+  }
+
   function prepareCustomPreviewValidation() {
-    prepareDesignerPreviewValidation(getActiveDesignerRef(), t('common.validate'))
+    flushDesignerPanelsForPreview()
   }
 
   async function handlePreview() {
-    console.log('[DEBUG] ==================== handlePreview START ====================')
-    try {
-      await store.fetchTables(functionUnitId)
-    } catch (e) {
-      console.warn('[FormDesigner] fetchTables before preview failed:', e)
+    if (!selectedForm.value) {
+      ElMessage.warning(t('form.noFormContent'))
+      return
     }
-    refreshFormRulesFromTableMetadata()
+
+    previewBuilding.value = true
+    previewFormReady.value = false
+    previewItems.value = []
+    showPreviewDialog.value = true
+    await nextTick()
+
+    const tablesPromise = store.fetchTables(functionUnitId).catch((e: unknown) => {
+      console.warn('[FormDesigner] fetchTables before preview failed:', e)
+    })
 
     // Wrapper to catch errors during preview generation
     async function buildPreview() {
     if (!selectedForm.value) {
-      console.log('[DEBUG] no selectedForm, returning early')
       return
     }
     // Always use the MAIN designer's live rule so unsaved reordering is reflected in preview.
@@ -167,15 +182,15 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     // Fall back to saved configJson rule only when the designer ref is unavailable.
     let rawRule: any[] = []
     try {
-      prepareDesignerPreviewValidation(getActiveDesignerRef(), t('common.validate'))
-      rawRule = designerRef.value?.getRule() || []
+      flushDesignerPanelsForPreview()
+      rawRule = snapshotRulesForPreview(designerRef.value?.getRule() || [])
     } catch (e) {
       // FALLBACK(ux): read-only preview — designer not ready falls through to the saved
       // configJson rule below. Log so a systematic designer failure stays discoverable.
       console.warn('[FormDesigner] live rule read failed for preview; using saved config', e)
     }
     if (!rawRule.length) {
-      rawRule = selectedForm.value.configJson?.rule || []
+      rawRule = snapshotRulesForPreview(selectedForm.value.configJson?.rule || [])
     }
     const primaryBinding = (selectedForm.value.tableBindings || []).find(
       (b: TableBinding) => b.bindingType === 'PRIMARY',
@@ -201,7 +216,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
 
     // Build a map of bindingId -> binding info for quick lookup
     const bindingMap = new Map<number, any>()
-    nonPrimary.forEach((b: TableBinding) => {
+    for (const b of nonPrimary) {
       const bindingId = b.id as number
       const index = designerSubBindings.value.findIndex(d => d.bindingId === bindingId)
       const subRef = subDesignerRefs.value[index]
@@ -209,20 +224,20 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       let option: any = {}
       try {
         if (subRef) {
-          rule = subRef.getRule() || []
+          rule = snapshotRulesForPreview(subRef.getRule() || [])
           option = subRef.getOption() || {}
         } else if (subFormCache.value[bindingId]) {
-          rule = subFormCache.value[bindingId].rule || []
+          rule = snapshotRulesForPreview(subFormCache.value[bindingId].rule || [])
           option = subFormCache.value[bindingId].options || {}
         } else {
-          rule = subForms[bindingId]?.rule || []
+          rule = snapshotRulesForPreview(subForms[bindingId]?.rule || [])
           option = subForms[bindingId]?.options || {}
         }
       } catch (e) {
         // FALLBACK(ux): read-only preview — live sub-designer read failed, fall through the
         // cache -> saved chain (same shape as useFormSave's collection, but nothing persists here).
         console.warn(`[FormDesigner] live sub form read failed for preview (binding ${bindingId}); using cache/saved`, e)
-        rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
+        rule = snapshotRulesForPreview(subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || [])
         option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
       }
       const tableFields = (store.tables.find(t => t.id === b.tableId)?.fieldDefinitions) || []
@@ -252,7 +267,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
         columns,
         subMode: b.subMode,
       })
-    })
+    }
 
     // ── Normalize custom types for form-create preview ──────────────────────────
     // form-create cannot pass nested options (with children) to custom components
@@ -294,13 +309,6 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     rawRule = mapFormCreateRulesReadonlyDeep(rawRule) as any[]
 
     ensureFormCreateRulesValidationDeep(rawRule)
-    try {
-      designerRef.value?.setRule?.(rawRule)
-    } catch (e) {
-      // FALLBACK(ux): syncing the readonly-mapped rule back onto the canvas is cosmetic for
-      // the preview; a failure must not abort preview rendering.
-      console.warn('[FormDesigner] designer setRule sync failed (preview unaffected)', e)
-    }
 
     const tableFieldDefs = getPrimaryBindingFieldDefinitions()
     applyTableFieldDefaultsToRulesAndModel(rawRule, tableFieldDefs, previewData.value, true, {
@@ -313,12 +321,22 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
 
     function containsSubTableRule(item: any): boolean {
-      if (!item) return false
-      if (item.type === 'subTable' && (item._bindingId ?? item.props?._bindingId) != null) return true
-      return getRuleChildren(item).some(child => containsSubTableRule(child))
+      let found = false
+      walkFormCreateRules([item], (rule) => {
+        if (found) return
+        if (rule.type === 'subTable' && (rule._bindingId ?? (rule.props as Record<string, unknown> | undefined)?._bindingId) != null) {
+          found = true
+        }
+      })
+      return found
     }
 
-    function buildPreviewItems(ruleItems: any[], localBindingMap: Map<number, any>, keyPrefix = 'seg'): FormPreviewItem[] {
+    function buildPreviewItems(
+      ruleItems: any[],
+      localBindingMap: Map<number, any>,
+      keyPrefix = 'seg',
+      seen: WeakSet<object> = new WeakSet<object>(),
+    ): FormPreviewItem[] {
       const items: FormPreviewItem[] = []
       let currentSegment: any[] = []
       let segmentIndex = 0
@@ -331,6 +349,11 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       }
 
       for (const ruleItem of ruleItems) {
+        if (ruleItem && typeof ruleItem === 'object') {
+          if (seen.has(ruleItem)) continue
+          seen.add(ruleItem)
+        }
+
         const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
 
         if (ruleItem.type === 'subTable' && itemBindingId != null) {
@@ -352,7 +375,12 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
           items.push({
             kind: 'card',
             title: getLayoutLabel(ruleItem),
-            items: buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, `card_${segmentIndex++}`),
+            items: buildPreviewItems(
+              getRuleChildren(ruleItem),
+              localBindingMap,
+              `card_${segmentIndex++}`,
+              new WeakSet<object>(),
+            ),
             modelKey: `${keyPrefix}_card_${segmentIndex}`,
           })
         } else if (ruleItem.type === 'lookup') {
@@ -364,7 +392,14 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
           const layoutChildren = getRuleChildren(ruleItem)
           if (containsSubTableRule(ruleItem) || layoutChildren.length > 0) {
             flushSegment()
-            items.push(...buildPreviewItems(layoutChildren, localBindingMap, `${keyPrefix}_layout_${segmentIndex++}`))
+            items.push(
+              ...buildPreviewItems(
+                layoutChildren,
+                localBindingMap,
+                `${keyPrefix}_layout_${segmentIndex++}`,
+                seen,
+              ),
+            )
           }
         } else if (!isFormCreateRuleHidden(ruleItem)) {
           currentSegment.push(ruleItem)
@@ -413,33 +448,35 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     previewRule.value = rawRule.filter(r => r.type !== 'subTable')
     previewSubBindings.value = [] // no longer used for bottom rendering
 
-    previewFormReady.value = false
-    showPreviewDialog.value = true
     await nextTick()
     previewFormReady.value = true
-    console.log('[DEBUG] ==================== handlePreview END ====================')
     } // end of buildPreview function
 
     // Wrap the entire preview building in try-catch to handle circular dependency errors
     try {
+      await tablesPromise
       await buildPreview()
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[FormDesigner] Preview build error:', e)
       // Try a simpler preview with just the basic rule
       try {
         const basicRule = (selectedForm.value?.configJson?.rule || []).filter((r: any) => r.type !== 'subTable')
         previewItems.value = [{ kind: 'fields', rule: basicRule, modelKey: 'fallback' }]
         previewSubBindings.value = []
-        showPreviewDialog.value = true
+        previewFormReady.value = true
       } catch (e2) {
         console.error('[FormDesigner] Fallback preview also failed:', e2)
+        showPreviewDialog.value = false
         ElMessage.error(t('form.previewFailed'))
       }
+    } finally {
+      previewBuilding.value = false
     }
   }
 
   return {
     showPreviewDialog,
+    previewBuilding,
     previewFormReady,
     previewDialogOption,
     previewData,
