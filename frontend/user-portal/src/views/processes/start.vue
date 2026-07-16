@@ -148,7 +148,6 @@
       <!-- 第一部分：实时工作流程图（可折叠；默认展开） -->
       <WorkflowDiagramCollapsibleSection
         :title="t('processStart.workflowDiagram')"
-        :default-expanded="true"
       >
         <template #badge>
           <el-tag

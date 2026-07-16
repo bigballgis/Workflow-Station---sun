@@ -95,14 +95,13 @@
         />
       </div>
 
-      <!-- Section 2: Process diagram (collapsible default off; async + viewport gate when expanded) -->
+      <!-- Section 2: Process diagram (collapsible default on; async + viewport gate) -->
       <div
         v-if="detailUiPhase >= 3"
         ref="workflowSectionRef"
       >
         <WorkflowDiagramCollapsibleSection
           :title="t('task.workflowDiagram')"
-          :default-expanded="false"
         >
           <template #badge>
             <el-tag
