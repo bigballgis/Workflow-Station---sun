@@ -52,7 +52,41 @@
           <el-input v-model="form.name" :placeholder="t('emailTemplate.namePlaceholder')" />
         </el-form-item>
         <el-form-item :label="t('emailTemplate.subject')">
-          <el-input v-model="form.subject" :placeholder="t('emailTemplate.subjectPlaceholder')" />
+          <div class="subject-field-row">
+            <el-input
+              ref="subjectInputRef"
+              v-model="form.subject"
+              :placeholder="t('emailTemplate.subjectPlaceholder', { example: EMAIL_SUBJECT_VAR_EXAMPLE })"
+            />
+            <el-select
+              :model-value="''"
+              :placeholder="t('emailTemplate.insertVariable')"
+              size="small"
+              filterable
+              :loading="variablesLoading"
+              class="subject-insert-select"
+              @change="insertSubjectVariable"
+            >
+              <template v-for="group in variableGroups" :key="group.label">
+                <el-option-group :label="subjectGroupLabel(group.label)">
+                  <el-option
+                    v-for="opt in group.options"
+                    :key="opt.token"
+                    :label="opt.label"
+                    :value="opt.token"
+                  />
+                </el-option-group>
+              </template>
+            </el-select>
+          </div>
+          <div class="form-tip">
+            {{
+              t('emailTemplate.subjectHint', {
+                pattern: EMAIL_FIELD_VAR_PATTERN,
+                example: EMAIL_SUBJECT_VAR_EXAMPLE,
+              })
+            }}
+          </div>
         </el-form-item>
         <el-form-item :label="t('emailTemplate.body')">
           <EmailRichBodyEditor
@@ -82,6 +116,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, defineAsyncComponent, onMounted } from 'vue'
+import type { ElInput } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -90,6 +125,12 @@ import { emailTemplateApi, type EmailTemplate, type EmailTemplateRequest } from 
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
+import {
+  EMAIL_FIELD_VAR_PATTERN,
+  EMAIL_SUBJECT_VAR_EXAMPLE,
+  useEmailTemplateVariables,
+  type EmailVariableGroup,
+} from '@/composables/email/useEmailTemplateVariables'
 
 const EmailRichBodyEditor = defineAsyncComponent(
   () => import('@/components/designer/email/EmailRichBodyEditor.vue')
@@ -104,6 +145,10 @@ const saving = ref(false)
 const showFormDialog = ref(false)
 const showPreview = ref(false)
 const editingId = ref<number | null>(null)
+const subjectInputRef = ref<InstanceType<typeof ElInput> | null>(null)
+const variableGroups = ref<EmailVariableGroup[]>([])
+const { groups, loading: variablesLoading, load: loadTemplateVariables } =
+  useEmailTemplateVariables(props.functionUnitId)
 
 const defaultForm = (): EmailTemplateRequest => ({
   name: '',
@@ -152,11 +197,25 @@ async function loadTemplates() {
   }
 }
 
+function subjectGroupLabel(label: string): string {
+  return label === '__SUBTABLES__' ? t('emailTemplate.subTableGroup') : label
+}
+
+function insertSubjectVariable(token: string) {
+  if (!token) return
+  const current = form.subject ?? ''
+  form.subject = current.trim() ? `${current.trimEnd()} ${token}` : token
+  subjectInputRef.value?.focus()
+}
+
 function openCreateDialog() {
   editingId.value = null
   Object.assign(form, defaultForm())
   showPreview.value = false
   showFormDialog.value = true
+  void loadTemplateVariables().then(() => {
+    variableGroups.value = groups.value
+  })
 }
 
 async function openEditDialog(row: EmailTemplate) {
@@ -171,7 +230,9 @@ async function openEditDialog(row: EmailTemplate) {
       bodyHtml: tpl.bodyHtml || '',
       enabled: tpl.enabled
     })
-  } catch {
+  } catch (e) {
+    // FALLBACK(ux): detail API failed — still open dialog with list row so user can edit without blocking
+    ElMessage.warning(resolveUserFacingHttpMessage(e, t) || t('emailTemplate.loadFailed'))
     Object.assign(form, {
       name: row.name,
       subject: row.subject || '',
@@ -180,6 +241,9 @@ async function openEditDialog(row: EmailTemplate) {
     })
   }
   showFormDialog.value = true
+  void loadTemplateVariables().then(() => {
+    variableGroups.value = groups.value
+  })
 }
 
 async function handleSave() {
@@ -221,7 +285,12 @@ async function handleDelete(row: EmailTemplate) {
   }
 }
 
-onMounted(loadTemplates)
+onMounted(() => {
+  void loadTemplates()
+  void loadTemplateVariables().then(() => {
+    variableGroups.value = groups.value
+  })
+})
 </script>
 
 <style scoped lang="scss">
@@ -237,6 +306,27 @@ onMounted(loadTemplates)
   :deep(.el-form-item) {
     margin-bottom: 16px;
   }
+  .form-tip {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #909399;
+  }
+}
+.subject-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  .el-input {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+}
+.subject-insert-select {
+  flex: 0 1 220px;
+  min-width: 160px;
 }
 .template-preview {
   width: 100%;

@@ -53,29 +53,30 @@
     <el-dialog
       v-model="showFormDialog"
       :title="editingId ? t('connection.edit') : t('connection.create')"
-      width="500px"
+      width="520px"
+      top="8vh"
+      :align-center="false"
       destroy-on-close
+      class="connection-form-dialog"
+      @opened="scrollConnectionDialogToTop"
     >
       <el-form :model="form" label-position="top" class="connection-form">
-        <el-form-item :label="t('connection.emailAddress')" required>
+        <el-form-item
+          class="connection-sender-email-item"
+          :label="t('connection.fromEmail')"
+          required
+        >
           <el-input
-            v-model="form.name"
-            type="email"
-            autocomplete="email"
-            placeholder="1527598351@qq.com"
+            v-model="form.senderEmail"
+            autocomplete="off"
+            :placeholder="t('connection.emailAddressPlaceholder')"
           />
-          <div class="form-tip">{{ t('connection.emailAddressHint') }}</div>
+          <div class="form-tip">{{ t('connection.fromEmailHint') }}</div>
         </el-form-item>
-        <el-form-item :label="t('connection.providerType')" required>
-          <el-select v-model="form.connectionType" style="width: 100%">
-            <el-option
-              v-for="provider in EMAIL_PROVIDER_OPTIONS"
-              :key="provider"
-              :label="t(`connection.provider.${provider}`)"
-              :value="provider"
-            />
-          </el-select>
+        <el-form-item :label="t('connection.fromName')">
+          <el-input v-model="form.fromName" :placeholder="t('connection.fromNamePlaceholder')" />
         </el-form-item>
+        <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
         <el-form-item :label="t('connection.host')" required>
           <el-input
             v-model="form.host"
@@ -114,9 +115,6 @@
             :placeholder="editingId ? t('connection.passwordKeep') : ''"
           />
           <div class="form-tip">{{ t('connection.passwordHint') }}</div>
-        </el-form-item>
-        <el-form-item :label="t('connection.fromName')">
-          <el-input v-model="form.fromName" :placeholder="t('connection.fromNamePlaceholder')" />
         </el-form-item>
         <el-form-item :label="t('connection.direction')">
           <el-select v-model="form.direction" style="width: 100%">
@@ -181,14 +179,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { connectionApi, type EmailConnection, type EmailConnectionRequest } from '@/api/connection'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import {
-  EMAIL_PROVIDER_OPTIONS,
   normalizeEmailProviderType,
   type EmailProviderType
 } from '@/utils/emailProviderPresets'
@@ -208,15 +205,22 @@ const editingId = ref<number | null>(null)
 const testingConnectionId = ref<number | null>(null)
 const testRecipient = ref('')
 
-const defaultForm = (): EmailConnectionRequest => ({
-  name: '',
-  connectionType: 'SMTP',
+const SMTP_DEFAULT_PORT = 25
+const SMTP_DEFAULT_USE_TLS = true
+const SMTP_CONNECTION_TYPE: EmailProviderType = 'SMTP'
+
+/** Dialog model — avoid `name` (reserved/conflicts with el-form + HTML form). */
+type ConnectionFormState = Omit<EmailConnectionRequest, 'name'> & { senderEmail: string }
+
+const defaultForm = (): ConnectionFormState => ({
+  senderEmail: '',
+  connectionType: SMTP_CONNECTION_TYPE,
   host: '',
-  port: undefined,
+  port: SMTP_DEFAULT_PORT,
   username: '',
   password: '',
   fromName: '',
-  useTls: true,
+  useTls: SMTP_DEFAULT_USE_TLS,
   enabled: true,
   direction: 'OUTBOUND',
   mailboxAddress: '',
@@ -225,7 +229,7 @@ const defaultForm = (): EmailConnectionRequest => ({
   imapUseSsl: true
 })
 
-const form = reactive<EmailConnectionRequest>(defaultForm())
+const form = reactive<ConnectionFormState>(defaultForm())
 
 const listColumns = computed<DesignerListTableColumn<EmailConnection>[]>(() => [
   {
@@ -269,12 +273,12 @@ const hasImapPreset = computed(() => form.connectionType !== 'SMTP')
 const imapRequired = computed(() => isInbound.value && !hasImapPreset.value)
 
 function buildPayload(): EmailConnectionRequest {
-  const emailAddress = form.name.trim()
+  const emailAddress = form.senderEmail.trim()
   const smtpUsername = form.username?.trim()
   const inbound = form.direction === 'INBOUND' || form.direction === 'BOTH'
   return {
     name: emailAddress,
-    connectionType: form.connectionType as EmailProviderType,
+    connectionType: SMTP_CONNECTION_TYPE,
     host: form.host?.trim(),
     port: form.port,
     useTls: form.useTls,
@@ -302,6 +306,15 @@ async function loadConnections() {
   }
 }
 
+function scrollConnectionDialogToTop() {
+  nextTick(() => {
+    const body = document.querySelector('.el-dialog.connection-form-dialog .el-dialog__body')
+    if (body instanceof HTMLElement) {
+      body.scrollTop = 0
+    }
+  })
+}
+
 function openCreateDialog() {
   editingId.value = null
   Object.assign(form, defaultForm())
@@ -311,10 +324,10 @@ function openCreateDialog() {
 function openEditDialog(row: EmailConnection) {
   editingId.value = row.id
   Object.assign(form, {
-    name: row.name,
-    connectionType: normalizeEmailProviderType(row.connectionType),
+    senderEmail: row.fromEmail || row.name || '',
+    connectionType: SMTP_CONNECTION_TYPE,
     host: row.host,
-    port: row.port,
+    port: row.port ?? SMTP_DEFAULT_PORT,
     username: row.username || '',
     password: '',
     direction: row.direction || 'OUTBOUND',
@@ -323,7 +336,7 @@ function openEditDialog(row: EmailConnection) {
     imapPort: row.imapPort ?? undefined,
     imapUseSsl: row.imapUseSsl ?? true,
     fromName: row.fromName || '',
-    useTls: row.useTls,
+    useTls: row.useTls ?? SMTP_DEFAULT_USE_TLS,
     enabled: row.enabled
   })
   showFormDialog.value = true
@@ -336,7 +349,7 @@ function openTestDialog(row: EmailConnection) {
 }
 
 async function handleSave() {
-  if (!form.name.trim()) {
+  if (!form.senderEmail.trim()) {
     ElMessage.warning(t('connection.emailAddressRequired'))
     return
   }
@@ -431,9 +444,25 @@ onMounted(loadConnections)
   gap: 8px;
 }
 
+.connection-form-dialog :deep(.el-dialog__body) {
+  padding-top: 12px;
+  overflow-y: auto;
+}
+
 .connection-form {
   :deep(.el-form-item) {
     margin-bottom: 16px;
+  }
+
+  .connection-section-title {
+    margin: 4px 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #606266;
+  }
+
+  .connection-sender-email-item {
+    margin-bottom: 18px;
   }
 
   .form-tip {
@@ -441,6 +470,26 @@ onMounted(loadConnections)
     font-size: 12px;
     line-height: 1.4;
     color: #909399;
+  }
+}
+</style>
+
+<style lang="scss">
+/* el-dialog teleports to body — unscoped so layout rules always apply */
+.el-dialog.connection-form-dialog {
+  margin-top: 8vh !important;
+  margin-bottom: 5vh;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+
+  .el-dialog__body {
+    padding-top: 12px;
+    overflow-y: auto;
+  }
+
+  .connection-sender-email-item .el-input {
+    width: 100%;
   }
 }
 </style>

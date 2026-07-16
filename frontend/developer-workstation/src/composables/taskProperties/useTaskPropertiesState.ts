@@ -147,8 +147,11 @@ export function useTaskPropertiesState(
     messagePayload.value = ext.messagePayload || ''
 
     // Send task email properties
-    connectionId.value = ext.connectionId || ''
-    emailTemplateId.value = ext.emailTemplateId || ''
+    connectionId.value = ext.connectionId != null ? String(ext.connectionId) : ''
+    emailTemplateId.value =
+      ext.emailTemplateId != null && ext.emailTemplateId !== ''
+        ? String(ext.emailTemplateId)
+        : ''
     emailFrom.value = ext.emailFrom || ''
     emailTo.value = ext.emailTo || ''
     emailCc.value = ext.emailCc || ''

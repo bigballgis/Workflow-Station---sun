@@ -79,7 +79,7 @@
         </label>
         <el-input
           v-model="emailSubject"
-          :placeholder="t('properties.emailSubjectPlaceholder')"
+          :placeholder="t('properties.emailSubjectPlaceholder', { example: EMAIL_SUBJECT_VAR_EXAMPLE })"
           @input="onEmailConfigChange('emailSubject', emailSubject)"
         />
       </div>
@@ -256,6 +256,7 @@ import EmailRichBodyEditor from '@/components/designer/email/EmailRichBodyEditor
 import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskPropertiesState'
 import { useTaskPropertiesForms } from '@/composables/taskProperties/useTaskPropertiesForms'
 import { useSendTaskEmailAttachments } from '@/composables/taskProperties/useSendTaskEmailAttachments'
+import { EMAIL_SUBJECT_VAR_EXAMPLE } from '@/composables/email/useEmailTemplateVariables'
 
 const { t } = useI18n()
 
@@ -369,12 +370,17 @@ async function applyEmailTemplate(templateId: string) {
   }
 }
 
-watch(() => props.element, loadSendTaskProperties, { immediate: true })
+watch(
+  () => props.element,
+  async () => {
+    loadSendTaskProperties()
+    await loadEmailTemplates()
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
-  loadSendTaskProperties()
   loadEmailConnections()
-  loadEmailTemplates()
 })
 </script>
 

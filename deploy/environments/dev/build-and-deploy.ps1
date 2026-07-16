@@ -159,7 +159,7 @@ function Pull-ImageWithRetry {
         docker pull $Image
         if ($LASTEXITCODE -eq 0) { Write-Host "    Pulled: $Image" -ForegroundColor Green; return $true }
 
-        # Try a lightweight fallback: strip known registry host prefix (e.g. docker.n8n.io/... -> namespace/name)
+        # Try a lightweight fallback: strip known registry host prefix (e.g. ghcr.io/org/image -> org/image)
         if ($Image -match '^[^/]+/([^/]+/[^:]+(:.*)?)$') {
             $short = $Matches[1]
             if ($short -and $short -ne $Image) {
@@ -402,14 +402,13 @@ if (-not $SkipFrontend) {
 
 # Step 3: Start infrastructure
 if (-not $SkipInfra) {
-    Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka, n8n)..." -ForegroundColor Yellow
+    Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka)..." -ForegroundColor Yellow
 
     # Pre-pull infra images sequentially to avoid concurrent registry failures
     $infraImages = @(
         "postgres:16.5-alpine",
         "redis:7.2-alpine",
-        "confluentinc/cp-kafka:7.5.3",
-        "docker.n8n.io/n8nio/n8n:latest"
+        "confluentinc/cp-kafka:7.5.3"
     )
     $failedInfra = @()
     foreach ($img in $infraImages) {
@@ -421,7 +420,7 @@ if (-not $SkipInfra) {
         Write-Host "  Will still attempt to start infra; if pulls fail compose will exit with error." -ForegroundColor Yellow
     }
 
-    docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka n8n
+    docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  docker compose up failed during infrastructure startup." -ForegroundColor Red
         Write-Host "  This usually means one or more required images could not be pulled." -ForegroundColor Red
@@ -456,21 +455,6 @@ if (-not $SkipInfra) {
     Wait-ForContainerHealth -ContainerName "platform-redis-dev" -DisplayName "Redis" -MaxRetries 20
     Wait-ForContainerHealth -ContainerName "platform-kafka-dev" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3
 
-    Write-Host "  Waiting for n8n..."
-    $retries = 0
-    while ($retries -lt 20) {
-        $lb = [char]123 + [char]123
-        $rb = [char]125 + [char]125
-        $fmt = $lb + '.State.Health.Status' + $rb
-        $health = docker inspect --format=$fmt platform-n8n-dev 2>$null
-        if ($health -eq "healthy") { break }
-        Start-Sleep -Seconds 3
-        $retries++
-    }
-    if ($health -ne "healthy") {
-        Write-Host "  N8N not healthy yet, continuing (it may take longer on first start)..." -ForegroundColor Yellow
-    }
-    
     Write-Host "  Infrastructure ready." -ForegroundColor Green
 } else {
     Write-Host "`n[3/4] Skipping infrastructure start" -ForegroundColor DarkGray
@@ -552,6 +536,11 @@ if (-not $SkipImagePull) {
     foreach ($img in $images) {
         # Skip local dev tags (built locally)
         if ($img -like 'dev-*') { continue }
+        # n8n is optional; pull often hangs on Docker Hub in restricted networks
+        if ($img -match 'n8n') {
+            Write-Host "  Skipping n8n image: $img" -ForegroundColor DarkGray
+            continue
+        }
         $ok = Pull-ImageWithRetry -Image $img -MaxAttempts 5
         if (-not $ok) { $failedImages += $img }
     }
@@ -567,7 +556,7 @@ if (-not $SkipImagePull) {
 
 if ($ServicesOnly -or $SkipInfra) {
     Write-Host "  Starting only non-infra services (skip infra)..." -ForegroundColor Yellow
-    $infra = @('postgres','redis','kafka','n8n','superset-final')
+    $infra = @('postgres','redis','kafka','superset-final')
     $allSvcs = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null
     $startSvcs = $allSvcs | Where-Object { $infra -notcontains $_ }
     if ($startSvcs -and $startSvcs.Count -gt 0) {
@@ -623,7 +612,6 @@ Write-Host "    Login:                http://localhost:$EdgePort/login/"
 Write-Host "    Admin:                http://localhost:$EdgePort/admin/"
 Write-Host "    Portal:               http://localhost:$EdgePort/portal/"
 Write-Host "    Developer:            http://localhost:$EdgePort/dev/"
-Write-Host "    N8N:                  http://localhost:$EdgePort/n8n/"
 Write-Host "    API (via Kong):       http://localhost:$EdgePort/api/"
 Write-Host ""
 
@@ -643,8 +631,6 @@ Write-Host "Infrastructure:" -ForegroundColor Cyan
 Write-Host "  PostgreSQL:             localhost:5432"
 Write-Host "  Redis:                  localhost:6379"
 Write-Host "  Kafka:                  localhost:9092"
-Write-Host "  N8N (edge):             http://localhost:$EdgePort/n8n/"
-Write-Host "  N8N (direct):           http://localhost:5678"
 Write-Host "  Superset (direct):      http://localhost:8088/superset/welcome/"
 Write-Host "  Superset (edge):        http://localhost:$EdgePort/superset/"
 Write-Host ""
