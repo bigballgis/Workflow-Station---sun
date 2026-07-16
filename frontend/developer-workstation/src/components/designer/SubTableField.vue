@@ -332,7 +332,7 @@ const hideInlineFormForRowDialog = computed(
   () => previewDialogHost?.rowDialogOpen.value === true,
 )
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   config: SubTableConfig
   modelValue?: any[]
   editable?: boolean
@@ -364,7 +364,14 @@ const props = defineProps<{
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
-}>()
+}>(), {
+  // Per-op switches default OPEN. Without an explicit default, Vue casts an *absent*
+  // Boolean prop to false (not undefined), which would hide Add/Edit/Delete at every
+  // call site that omits the prop — defeating the “缺省视为放开” contract above.
+  allowAdd: true,
+  allowEdit: true,
+  allowDelete: true
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any[]): void

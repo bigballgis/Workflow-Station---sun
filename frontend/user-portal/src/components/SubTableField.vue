@@ -648,7 +648,13 @@ const props = withDefaults(defineProps<{
 }>(), {
   showLinkFormDialogFooter: false,
   linkFormClickScrollToInline: false,
-  compactLookupCells: false
+  compactLookupCells: false,
+  // Per-op switches default OPEN. Without an explicit default, Vue casts an *absent*
+  // Boolean prop to false (not undefined), so every call site that omits allow-add
+  // (e.g. the nested table inside SubTableAddDialog) would silently lose its Add button.
+  allowAdd: true,
+  allowEdit: true,
+  allowDelete: true
 })
 
 const emit = defineEmits<{
