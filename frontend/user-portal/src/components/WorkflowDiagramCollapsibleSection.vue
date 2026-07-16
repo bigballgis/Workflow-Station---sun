@@ -31,16 +31,13 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown, ArrowRight, Share } from '@element-plus/icons-vue'
 
-const props = withDefaults(
-  defineProps<{
-    title: string
-    defaultExpanded?: boolean
-  }>(),
-  { defaultExpanded: false },
-)
+defineProps<{
+  title: string
+}>()
 
 const { t } = useI18n()
-const expanded = ref(props.defaultExpanded)
+/** Always start expanded; user may collapse manually. */
+const expanded = ref(true)
 
 function toggle(): void {
   expanded.value = !expanded.value

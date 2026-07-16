@@ -96,10 +96,9 @@
         </div>
       </div>
 
-      <!-- Section 2: Process diagram (collapsible; default collapsed) -->
+      <!-- Section 2: Process diagram (collapsible; default expanded) -->
       <WorkflowDiagramCollapsibleSection
         :title="t('applicationDetail.workflowDiagram')"
-        :default-expanded="false"
       >
         <template #badge>
           <el-tag
