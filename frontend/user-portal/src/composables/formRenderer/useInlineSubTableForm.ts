@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import type { ComputedRef } from 'vue'
 import {
   mergeSubTableRowsByRowId,
@@ -37,6 +38,40 @@ interface InlineSubTableFormDeps {
 
 export function useInlineSubTableForm(deps: InlineSubTableFormDeps) {
   const { resolveBinding, resolveInlineFormSourceBinding, resolveInlineFormFields } = deps
+
+  /** Manually selected row per binding (click on the sub-table) — drives the form-below-table. */
+  const inlineFormSelectedRows = ref<Record<number, Record<string, unknown> | null>>({})
+
+  function setInlineFormSelectedRow(bindingId: number | undefined, row: Record<string, unknown> | null) {
+    if (bindingId == null || !Number.isFinite(Number(bindingId))) return
+    // el-table emits current-change(null) whenever its data is replaced (inline-edit
+    // round-trip re-sets binding.data) — keep the last real selection so the form
+    // doesn't snap back to the first row.
+    if (!row) return
+    inlineFormSelectedRows.value = { ...inlineFormSelectedRows.value, [Number(bindingId)]: row }
+  }
+
+  /** Match by designer PK first (survives row edits), then id_idw/id, then structural equality. */
+  function rowsMatchForSelection(
+    a: Record<string, unknown> | null | undefined,
+    b: Record<string, unknown> | null | undefined,
+    pkFields: string[] | null,
+  ): boolean {
+    if (a === b) return a != null
+    if (!a || !b) return false
+    const candidates = [...(pkFields ?? []), 'id_idw', 'id']
+    for (const k of candidates) {
+      const av = a[k]
+      if (av == null || String(av).trim() === '') continue
+      if (b[k] == null) continue
+      return String(av) === String(b[k])
+    }
+    try {
+      return JSON.stringify(a) === JSON.stringify(b)
+    } catch {
+      return false
+    }
+  }
 
   function resolveTopLevelRowsForInlineTarget(target: SubTableBinding): any[] {
     const fromBinding = Array.isArray(target.data) ? target.data : []
@@ -266,6 +301,27 @@ export function useInlineSubTableForm(deps: InlineSubTableFormDeps) {
       }
     }
 
+    // Manual row selection (row click on the sub-table) — plain single-task path only;
+    // MI / link-target paths keep their participant-scoped picking above.
+    if (
+      !result
+      && !miLinkIsolate
+      && !isLinkTarget
+      && (parentId == null || String(parentId).trim() === '')
+      && field._bindingId != null
+    ) {
+      const sel = inlineFormSelectedRows.value[Number(field._bindingId)]
+      if (sel) {
+        const hit = rows.find(r =>
+          r && typeof r === 'object' && rowsMatchForSelection(r as Record<string, unknown>, sel, pack.target.primaryKeyFields ?? null),
+        )
+        if (hit) {
+          result = { ...(hit as Record<string, any>) }
+          pickReason = 'manual-select'
+        }
+      }
+    }
+
     if (!result && !miLinkIsolate) {
       const pick = pickPreferredInlineRow(rows, field)
       result = pick ? { ...(pick as Record<string, any>) } : null
@@ -386,6 +442,21 @@ export function useInlineSubTableForm(deps: InlineSubTableFormDeps) {
       idx = 0
     }
 
+    // Manual row selection: write back to the clicked row (matches getCurrentRowForInlineForm).
+    if (
+      idx < 0
+      && !isLinkTarget
+      && (parentId == null || String(parentId).trim() === '')
+      && field._bindingId != null
+    ) {
+      const sel = inlineFormSelectedRows.value[Number(field._bindingId)]
+      if (sel) {
+        idx = rows.findIndex(r =>
+          r && typeof r === 'object' && rowsMatchForSelection(r as Record<string, unknown>, sel, target.primaryKeyFields ?? null),
+        )
+      }
+    }
+
     if (idx < 0 && rows.length > 0) {
       idx = 0
     }
@@ -444,5 +515,6 @@ export function useInlineSubTableForm(deps: InlineSubTableFormDeps) {
     getCurrentRowForInlineForm,
     handleInlineFormUpdate,
     handleInlineFormSave,
+    setInlineFormSelectedRow,
   }
 }

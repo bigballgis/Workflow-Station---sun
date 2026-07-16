@@ -246,6 +246,8 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
+          :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
+          :enable-row-select="ctx.subTableMode(field) === 'formBelowTable'"
           :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
           :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
           :mi-parent-participant-row="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentRow ?? null"
@@ -289,6 +291,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           @update:linked-sub-table-data="ctx.handleSubTableUpdate"
           @view-detail="(row: any) => ctx.emitViewSubtaskDetail(row, ctx.resolveBinding(field._bindingId)?.data as any[])"
           @link-form-scroll-to-inline="ctx.scrollSubTableInlineIntoView(field._bindingId)"
+          @current-row-change="(row: Record<string, unknown> | null) => ctx.setInlineFormSelectedRow?.(field._bindingId, row)"
         />
         <div
           v-if="ctx.resolveBinding(field._bindingId) && ctx.subTableMode(field) === 'formBelowTable'"
@@ -318,6 +321,8 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
+          :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
+          :enable-row-select="ctx.subTableMode(field) === 'formBelowTable'"
           :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
           :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
           :mi-parent-participant-row="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentRow ?? null"
@@ -361,6 +366,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           @update:linked-sub-table-data="ctx.handleSubTableUpdate"
           @view-detail="(row: any) => ctx.emitViewSubtaskDetail(row, ctx.resolveBinding(field._bindingId)?.data as any[])"
           @link-form-scroll-to-inline="ctx.scrollSubTableInlineIntoView(field._bindingId)"
+          @current-row-change="(row: Record<string, unknown> | null) => ctx.setInlineFormSelectedRow?.(field._bindingId, row)"
         />
       </div>
     </template>

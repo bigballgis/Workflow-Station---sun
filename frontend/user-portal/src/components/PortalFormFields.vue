@@ -21,6 +21,10 @@ export interface PortalSubTableBindingLite {
   physicalTableName?: string
   tableId?: number | null
   columns: Array<{ field: string; label: string; type?: string; props?: Record<string, unknown> }>
+  /** Form-design canvas columns for the Add/Edit dialog. */
+  dialogColumns?: Array<{ field: string; label: string; type?: string; props?: Record<string, unknown> }>
+  /** This binding's own form-design fields — nested subTable widgets render inside its Add/Edit dialog. */
+  formFields?: FormField[]
   data: unknown[]
   primaryKeyFields?: string[]
 }
@@ -131,6 +135,8 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
         v-if="resolveBinding(field._bindingId)"
         :title="resolveBinding(field._bindingId)!.tableName || ''"
         :columns="resolveBinding(field._bindingId)!.columns"
+        :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
+        :form-fields="resolveBinding(field._bindingId)!.formFields"
         :model-value="resolveSubTableRows(resolveBinding(field._bindingId)!)"
         :editable="isSubTableEditable()"
         :allow-add="field.allowAdd"
