@@ -1,0 +1,70 @@
+/* Column resize handle styles for Developer Workstation designer list grids.
+   Keep cursor SVG in sync with designerListGridRuntime.ts (DWL_COL_RESIZE_CURSOR). */
+$dwl-col-resize-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cline x1='8' y1='3' x2='8' y2='17' stroke='%23303133' stroke-width='2'/%3E%3Cline x1='12' y1='3' x2='12' y2='17' stroke='%23303133' stroke-width='2'/%3E%3Cpath d='M4 10 L6.5 7 L6.5 13 Z' fill='%23303133'/%3E%3Cpath d='M16 10 L13.5 7 L13.5 13 Z' fill='%23303133'/%3E%3C/svg%3E")
+  10 10,
+  ew-resize;
+
+.dwl-data-grid .dwl-col-header {
+  position: static;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 23px;
+  box-sizing: border-box;
+  padding-right: 12px;
+}
+
+/* Make <th> the positioning context for the absolute resize handle. */
+.dwl-data-grid .el-table__header-wrapper th {
+  position: relative;
+  overflow: visible !important;
+}
+
+.dwl-data-grid .el-table__header-wrapper th .cell {
+  position: static !important;
+  display: flex !important;
+  align-items: center;
+  width: 100% !important;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip;
+}
+
+.dwl-data-grid .el-table__header-wrapper th:has(.col-resize-handle:hover),
+.dwl-data-grid .el-table__header-wrapper th:has(.col-resize-handle.is-active) {
+  z-index: 12;
+}
+
+.dwl-data-grid .col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 100%;
+  cursor: default;
+  z-index: 100;
+  box-sizing: border-box;
+  border-right: 2px solid transparent;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease;
+}
+
+.dwl-data-grid .col-resize-handle:hover,
+.dwl-data-grid .col-resize-handle.is-active {
+  cursor: $dwl-col-resize-cursor;
+  border-right-color: #409eff;
+  background-color: rgba(64, 158, 255, 0.18);
+}
+
+.dwl-data-grid .col-resize-handle.is-active {
+  border-right-width: 3px;
+  background-color: rgba(64, 158, 255, 0.28);
+}
+
+body.dwl-column-resizing,
+body.dwl-column-resizing * {
+  cursor: $dwl-col-resize-cursor !important;
+  user-select: none;
+}

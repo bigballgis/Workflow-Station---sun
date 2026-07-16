@@ -15,35 +15,48 @@
       style="margin-bottom: 12px;"
     />
 
-    <el-table
-      :data="rules"
-      v-loading="loading"
-      stripe
-      class="monitor-rules-table"
+    <DesignerListTable
+      :loading="loading"
+      :storage-key="`${functionUnitId}:email-monitors`"
+      :columns="listColumns"
+      :rows="rules"
+      :actions-width="160"
+      table-class="monitor-rules-table"
       @row-click="handleRowClick"
     >
-      <el-table-column prop="name" :label="t('emailMonitor.name')" min-width="160" />
-      <el-table-column prop="connectionUid" :label="t('emailMonitor.connection')" min-width="160">
-        <template #default="{ row }">{{ connectionName(row.connectionUid) }}</template>
-      </el-table-column>
-      <el-table-column prop="processDefinitionKey" :label="t('emailMonitor.process')" min-width="140" show-overflow-tooltip />
-      <el-table-column prop="startEventId" :label="t('emailMonitor.startEventId')" min-width="120" show-overflow-tooltip />
-      <el-table-column prop="enabled" :label="t('emailMonitor.enabled')" width="90">
-        <template #default="{ row }">
-          <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
-            {{ row.enabled ? t('common.yes') : t('common.no') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column :label="t('common.actions')" width="160">
-        <template #default="{ row }">
-          <div class="row-actions" @click.stop>
-            <el-button link type="primary" @click="openEditDialog(row as EmailMonitorRule)">{{ t('common.edit') }}</el-button>
-            <el-button link type="danger" @click="handleDelete(row as EmailMonitorRule)">{{ t('common.delete') }}</el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </el-table>
+      <template #cell-connectionUid="{ row }">
+        {{ connectionName(row.connectionUid) }}
+      </template>
+      <template #cell-enabled="{ row }">
+        <el-tag
+          :type="row.enabled ? 'success' : 'info'"
+          size="small"
+        >
+          {{ row.enabled ? t('common.yes') : t('common.no') }}
+        </el-tag>
+      </template>
+      <template #actions="{ row }">
+        <div
+          class="row-actions"
+          @click.stop
+        >
+          <el-button
+            link
+            type="primary"
+            @click="openEditDialog(row as EmailMonitorRule)"
+          >
+            {{ t('common.edit') }}
+          </el-button>
+          <el-button
+            link
+            type="danger"
+            @click="handleDelete(row as EmailMonitorRule)"
+          >
+            {{ t('common.delete') }}
+          </el-button>
+        </div>
+      </template>
+    </DesignerListTable>
 
     <el-dialog
       v-model="showFormDialog"
@@ -115,6 +128,8 @@ import {
 } from '@/api/emailMonitor'
 import { connectionApi, type EmailConnection } from '@/api/connection'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const props = defineProps<{ functionUnitId: number }>()
 const { t } = useI18n()
@@ -150,6 +165,45 @@ const form = reactive<EmailMonitorRuleRequest>(defaultForm())
 function connectionName(uid: string): string {
   return connections.value.find(c => c.connectionUid === uid)?.name ?? uid
 }
+
+const listColumns = computed<DesignerListTableColumn<EmailMonitorRule>[]>(() => [
+  {
+    key: 'name',
+    prop: 'name',
+    label: t('emailMonitor.name'),
+    defaultWidth: 160,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'connectionUid',
+    prop: 'connectionUid',
+    label: t('emailMonitor.connection'),
+    defaultWidth: 160,
+    showOverflowTooltip: true,
+    getValue: (row) => connectionName(row.connectionUid),
+  },
+  {
+    key: 'processDefinitionKey',
+    prop: 'processDefinitionKey',
+    label: t('emailMonitor.process'),
+    defaultWidth: 140,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'startEventId',
+    prop: 'startEventId',
+    label: t('emailMonitor.startEventId'),
+    defaultWidth: 120,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'enabled',
+    prop: 'enabled',
+    label: t('emailMonitor.enabled'),
+    defaultWidth: 100,
+    getValue: (row) => (row.enabled ? t('common.yes') : t('common.no')),
+  },
+])
 
 async function loadRules() {
   loading.value = true
