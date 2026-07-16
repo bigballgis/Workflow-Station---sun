@@ -32,7 +32,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URLEncoder;
@@ -72,6 +73,29 @@ public class ProcessStartComponent {
     private final TaskFormComponent taskFormComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final I18nService i18nService;
+    private final PlatformTransactionManager transactionManager;
+
+    /**
+     * Programmatic short transactions for the DB-write phases of a start.
+     *
+     * <p>{@code startProcess} makes ~4-5 sequential blocking HTTP calls (admin-center FU checks, engine
+     * deploy/start/auto-complete). Previously the whole method was {@code @Transactional}, so one JDBC
+     * connection was pinned across all of that — capping start throughput at {@code pool / holdTime}
+     * (~30-60 TPS on pool=20; thread dumps showed most workers parked in {@code Hikari.borrow} while a
+     * few held a connection blocked on an engine/admin socket read). Now the HTTP runs with no ambient
+     * transaction and only the actual writes run inside these short {@link TransactionTemplate} blocks,
+     * so a connection is held for milliseconds, not the whole flow. Lazily built (Lombok owns the ctor).</p>
+     */
+    private volatile TransactionTemplate txTemplate;
+
+    private TransactionTemplate tx() {
+        TransactionTemplate t = txTemplate;
+        if (t == null) {
+            t = new TransactionTemplate(transactionManager);
+            txTemplate = t;
+        }
+        return t;
+    }
 
     /** Lazy: breaks cycle with {@link ProcessComponent}, which keeps the FU content cache. */
     @Lazy
@@ -102,7 +126,9 @@ public class ProcessStartComponent {
      * Starts process
      * Via WorkflowEngineClient calling Flowable engine
      */
-    @Transactional
+    // NOT @Transactional: the ~4-5 engine/admin HTTP calls below must not run while holding a DB
+    // connection (that pins the pool and throttles start throughput). DB writes are confined to the
+    // short tx() blocks; all HTTP runs connection-free. See txTemplate javadoc.
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
         if (processKey == null || processKey.isEmpty()) {
             throw new IllegalArgumentException("Process key cannot be empty");
@@ -154,22 +180,29 @@ public class ProcessStartComponent {
         String flowableProcessInstanceId = (String) data.get("processInstanceId");
         log.info("Process started via Flowable: {}", flowableProcessInstanceId);
 
-        // Persist process instance as RUNNING so ProcessCompletionListener callback finds a row
-        persistRunningProcessInstance(
+        // TX1 (short): persist instance as RUNNING so ProcessCompletionListener callback finds a row.
+        // Committing here (before auto-complete) is stronger than the old single-tx behaviour, where the
+        // row was not visible until the whole method committed after all the engine round-trips.
+        tx().executeWithoutResult(status -> persistRunningProcessInstance(
                 flowableProcessInstanceId, data, processKey, def.processName(), request,
-                userId, startUserDisplayName, variables, pin);
+                userId, startUserDisplayName, variables, pin));
 
+        // Engine HTTP (claim/complete first task, query next) — runs with NO ambient tx / no connection held.
+        // Its own internal writes are individually transactional (captureTaskFormSnapshot is @Transactional;
+        // the meeting-path save auto-commits); autoCompleteFirstTask never throws (see its catch).
         FirstTaskOutcome outcome = autoCompleteFirstTask(flowableProcessInstanceId, userId, variables, pin);
 
-        // First task completed via engine API (not TaskFormComponent); record field change history like todo submit
-        recordInitialSubmitChangeHistory(
-                flowableProcessInstanceId,
-                outcome.initiatorTaskIdForHistory,
-                outcome.initiatorTaskDefKeyForHistory,
-                userId,
-                variables);
-
-        updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
+        // TX2 (short): change history + current-node update grouped atomically (the node update is a
+        // @Modifying query that requires a transaction). First task completed via engine API.
+        tx().executeWithoutResult(status -> {
+            recordInitialSubmitChangeHistory(
+                    flowableProcessInstanceId,
+                    outcome.initiatorTaskIdForHistory,
+                    outcome.initiatorTaskDefKeyForHistory,
+                    userId,
+                    variables);
+            updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
+        });
 
         return buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, outcome, pin);

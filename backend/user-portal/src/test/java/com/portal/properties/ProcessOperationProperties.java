@@ -90,7 +90,8 @@ class ProcessOperationProperties {
                 Mockito.mock(com.portal.component.ProcessSubTablePrimaryKeyEnricherComponent.class),
                 Mockito.mock(TaskFormComponent.class),
                 userDisplayNameResolver,
-                i18nService);
+                i18nService,
+                Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
         processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processInstanceRepository, Mockito.mock(com.portal.repository.ActionDefinitionRepository.class), functionUnitAccessComponent, workflowEngineClient, processDraftComponent, restTemplate, i18nService, processStartComponent, processApplicationQueryComponent, subTableEnrichmentComponent));
         // ProcessStartComponent resolves FU content via the (lazy) ProcessComponent facade — point it at the spy
         // so the getFunctionUnitContent stub below stays effective for startProcess.
