@@ -1894,6 +1894,8 @@ export default {
       iconPreview: 'Icon Preview: ',
       apply: 'Apply',
       regenerate: 'Regenerate',
+      applying: 'Applying...',
+      applied: 'Applied ✓',
       tablesSummary: '{count} tables, {fields} fields',
       formsSummary: '{count} forms',
       actionsSummary: '{count} actions',

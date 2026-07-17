@@ -292,13 +292,25 @@
 
     <div class="generation-preview__actions">
       <el-button
+        v-if="props.applyState === 'applied'"
+        type="success"
+        disabled
+      >
+        {{ t('ai.preview.applied') }}
+      </el-button>
+      <el-button
+        v-else
         type="primary"
+        :loading="props.applyState === 'applying'"
         :disabled="!props.isGenerationComplete"
         @click="emit('apply')"
       >
-        {{ t('ai.preview.apply') }}
+        {{ props.applyState === 'applying' ? t('ai.preview.applying') : t('ai.preview.apply') }}
       </el-button>
-      <el-button @click="emit('regenerate')">
+      <el-button
+        :disabled="props.applyState === 'applying'"
+        @click="emit('regenerate')"
+      >
         {{ t('ai.preview.regenerate') }}
       </el-button>
     </div>
@@ -329,6 +341,8 @@ const props = defineProps<{
   isStreaming?: boolean
   mode?: string
   diffResult?: DiffResult | null
+  /** Apply lifecycle owned by ChatDialog: spinner while the write runs, green "Applied" after. */
+  applyState?: 'idle' | 'applying' | 'applied'
 }>()
 
 const emit = defineEmits<{

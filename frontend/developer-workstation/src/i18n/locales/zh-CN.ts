@@ -1889,6 +1889,8 @@ export default {
       iconPreview: '图标预览：',
       apply: '确认应用',
       regenerate: '重新生成',
+      applying: '应用中...',
+      applied: '已应用 ✓',
       tablesSummary: '{count} 个表，共 {fields} 个字段',
       formsSummary: '{count} 个表单',
       actionsSummary: '{count} 个动作',

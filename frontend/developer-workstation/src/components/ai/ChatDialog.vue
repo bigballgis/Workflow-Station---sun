@@ -154,6 +154,7 @@
           :is-streaming="isStreaming"
           :mode="props.mode"
           :diff-result="diffResult"
+          :apply-state="applyState"
           @apply="handleApply"
           @regenerate="handleRegenerate"
         />
@@ -605,6 +606,8 @@ onDocument((type: string, content: string) => {
 onGeneratedData((data: any) => {
   generatedData.value = data as AiGeneratedData
   previewData.value = computePreviewData(data as AiGeneratedData)
+  // Fresh generation result → the Apply button must be actionable again
+  applyState.value = 'idle'
   // Task 17.2: Compute diff in MODIFY mode
   if (props.mode === 'MODIFY' && currentFunctionUnitData.value) {
     diffResult.value = computeDiff(currentFunctionUnitData.value, data as AiGeneratedData)
@@ -657,23 +660,46 @@ function handleNextPhase() {
   emit('phaseComplete', props.phase)
 }
 
+// Apply lifecycle surfaced on the preview's Apply button. The parent (AiPanel) owns the
+// API call and reports the outcome back via markApplySuccess / markApplyFailed.
+const applyState = ref<'idle' | 'applying' | 'applied'>('idle')
+
 function handleApply() {
-  if (generatedData.value) {
-    emit('apply', generatedData.value)
-    // Clear generation draft after successful apply
-    clearCurrentDraft()
-    if (props.sessionId) {
-      clearGenerationDraft(props.functionUnitId, props.sessionId)
-    }
-    // Task 17.3: Start undo countdown
-    startUndoCountdown()
+  if (!generatedData.value || applyState.value === 'applying') {
+    return
   }
+  applyState.value = 'applying'
+  emit('apply', generatedData.value)
+}
+
+/** Called by AiPanel when the apply API call succeeded. */
+function markApplySuccess() {
+  applyState.value = 'applied'
+  // Clear generation draft only after a CONFIRMED apply (previously this happened on
+  // click, so a failed apply still wiped the draft and started the undo countdown).
+  clearCurrentDraft()
+  if (props.sessionId) {
+    clearGenerationDraft(props.functionUnitId, props.sessionId)
+  }
+  // Task 17.3: Start undo countdown
+  startUndoCountdown()
+}
+
+/** Called by AiPanel when the apply API call failed (incl. validation errors). */
+function markApplyFailed() {
+  applyState.value = 'idle'
 }
 
 function handleRegenerate() {
   generatedData.value = null
   previewData.value = null
   diffResult.value = null
+  applyState.value = 'idle'
+  // Actually rerun the generation (previously this only cleared the preview and the
+  // click appeared to do nothing). The auto-trigger hint doubles as user feedback.
+  autoSendMessage('[AUTO_TRIGGER] Please regenerate the complete function unit component data '
+    + 'based on the existing requirements and design documents. '
+    + 'Ignore any previously generated component data and produce a fresh version.')
   emit('regenerate')
 }
 
@@ -753,7 +779,9 @@ defineExpose({
   setValidationErrors,
   setValidationWarnings,
   autoSendMessage,
-  setMessages
+  setMessages,
+  markApplySuccess,
+  markApplyFailed
 })
 </script>
 

@@ -239,4 +239,36 @@ class AiGenerationComponentImplTest {
         // Null list is a no-op (no exception)
         AiGenerationComponentImpl.normalizeTableRelations(null);
     }
+
+    @Test
+    void normalizeCrossFieldRules_defaultsMissingTargetFieldToLastRuleField() {
+        Map<String, Object> missingTarget = new LinkedHashMap<>();
+        missingTarget.put("fields", Arrays.asList("start_date", "end_date"));
+        missingTarget.put("operator", "date-after");
+        missingTarget.put("message", "End date must be after start date");
+        Map<String, Object> blankTarget = new LinkedHashMap<>();
+        blankTarget.put("fields", Arrays.asList("min_amount", "max_amount"));
+        blankTarget.put("targetField", " ");
+        Map<String, Object> explicitTarget = new LinkedHashMap<>();
+        explicitTarget.put("fields", Arrays.asList("a", "b"));
+        explicitTarget.put("targetField", "a");
+        Map<String, Object> configJson = new LinkedHashMap<>();
+        configJson.put("crossFieldRules", new ArrayList<>(Arrays.asList(missingTarget, blankTarget, explicitTarget, null)));
+        Map<String, Object> form = new LinkedHashMap<>();
+        form.put("formName", "F1");
+        form.put("configJson", configJson);
+        Map<String, Object> formWithoutConfig = new LinkedHashMap<>();
+        formWithoutConfig.put("formName", "F2");
+        formWithoutConfig.put("configJson", null);
+
+        AiGenerationComponentImpl.normalizeCrossFieldRules(
+                new ArrayList<>(Arrays.asList(form, formWithoutConfig, null)));
+
+        assertEquals("end_date", missingTarget.get("targetField"));
+        assertEquals("max_amount", blankTarget.get("targetField"));
+        // Explicit values are untouched
+        assertEquals("a", explicitTarget.get("targetField"));
+        // Null list is a no-op (no exception)
+        AiGenerationComponentImpl.normalizeCrossFieldRules(null);
+    }
 }

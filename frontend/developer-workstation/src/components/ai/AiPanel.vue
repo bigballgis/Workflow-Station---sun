@@ -431,7 +431,11 @@ function registerEventHandlers() {
 
   eventsComposable.onWriteSuccess((data: any) => {
     emit('dataApplied')
-    ElMessage.success(t('ai.panel.dataApplied'))
+    // The actor already got a toast from handleApply's HTTP success — don't double-toast;
+    // this event mainly informs OTHER viewers of the same function unit.
+    if (Date.now() - lastSelfApplyAt > SELF_APPLY_TOAST_DEDUPE_MS) {
+      ElMessage.success(t('ai.panel.dataApplied'))
+    }
     // Pass warnings from write_success to ChatDialog if present
     if (data?.warnings && data.warnings.length > 0) {
       chatDialogRef.value?.setValidationWarnings(data.warnings)
@@ -502,6 +506,11 @@ async function autoTriggerPhase(phase: AiPhase) {
   chatDialogRef.value?.autoSendMessage(message)
 }
 
+// Timestamp of the last apply THIS panel performed — used to suppress the duplicate
+// write_success toast that comes back over the event SSE right after our own apply.
+let lastSelfApplyAt = 0
+const SELF_APPLY_TOAST_DEDUPE_MS = 8000
+
 async function handleApply(data: AiGeneratedData) {
   try {
     let sessionId = currentSessionId.value
@@ -517,6 +526,7 @@ async function handleApply(data: AiGeneratedData) {
 
     if (!sessionId) {
       ElMessage.error(t('ai.panel.initFailed'))
+      chatDialogRef.value?.markApplyFailed()
       return
     }
 
@@ -524,7 +534,13 @@ async function handleApply(data: AiGeneratedData) {
       sessionId,
       generatedData: data
     })
+    // The apply endpoint is synchronous: HTTP success = data written. Give the actor
+    // immediate feedback here instead of relying on the write_success SSE event.
+    lastSelfApplyAt = Date.now()
+    chatDialogRef.value?.markApplySuccess()
+    ElMessage.success(t('ai.panel.dataApplied'))
   } catch (err: any) {
+    chatDialogRef.value?.markApplyFailed()
     if (err.response?.status === 422) {
       const errors: AiValidationError[] = err.response.data?.error?.details?.errors || []
       chatDialogRef.value?.setValidationErrors(errors)

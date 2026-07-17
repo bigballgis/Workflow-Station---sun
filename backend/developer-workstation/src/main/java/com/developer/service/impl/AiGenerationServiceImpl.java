@@ -549,7 +549,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         Map<String, Object> configJsonExtensions = new LinkedHashMap<>();
         configJsonExtensions.put("formulas", "Array of { targetField, expression, dependsOn[] }");
         configJsonExtensions.put("linkages", "Array of { sourceField, targetField, linkageType: option-filtering|value-auto-fill|field-state-change }");
-        configJsonExtensions.put("crossFieldRules", "Array of { fields[], operator, message, targetField }");
+        configJsonExtensions.put("crossFieldRules", "Array of { fields[], operator, message, targetField }. "
+                + "targetField is REQUIRED and must be one of fields[] — it is the field the validation message attaches to");
         configJsonExtensions.put("summaryRules", "Array of { sourceColumn, targetField, aggregation: SUM|AVG|COUNT|MIN|MAX }");
         configJsonExtensions.put("subTableValidation", "Object with sub-table validation rules");
         metadata.put("configJsonExtensions", configJsonExtensions);

@@ -201,6 +201,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> generatedDataMap = (Map<String, Object>) generatedDataObj;
                             normalizeTableRelations(extractTableRelations(generatedDataMap));
+                            normalizeCrossFieldRules(extractFormDefinitions(generatedDataMap));
                             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                             AiGeneratedData parsedData = mapper.convertValue(generatedDataMap, AiGeneratedData.class);
                             com.developer.dto.AiQualityScore qualityScore = aiValidationService.computeQualityScore(parsedData);
@@ -329,6 +330,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
             // 2. Normalize model output the platform enum can't express, then validate
             if (request.getGeneratedData() != null) {
                 normalizeTableRelations(request.getGeneratedData().getTableRelations());
+                normalizeCrossFieldRules(request.getGeneratedData().getFormDefinitions());
             }
             AiValidationResult validationResult = aiValidationService.validate(request.getGeneratedData());
 
@@ -436,6 +438,47 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     private static List<Map<String, Object>> extractTableRelations(Map<String, Object> generatedData) {
         Object rels = generatedData.get("tableRelations");
         return rels instanceof List ? (List<Map<String, Object>>) rels : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> extractFormDefinitions(Map<String, Object> generatedData) {
+        Object forms = generatedData.get("formDefinitions");
+        return forms instanceof List ? (List<Map<String, Object>>) forms : null;
+    }
+
+    /**
+     * A crossFieldRule's targetField only decides which of the involved fields the error
+     * message attaches to — LLMs routinely omit it because the rule already lists fields[].
+     * Default it to the last entry of fields[] (e.g. for [start_date, end_date] the message
+     * belongs on end_date) instead of failing validation with FIELD_CONSTRAINT at apply time.
+     */
+    @SuppressWarnings("unchecked")
+    static void normalizeCrossFieldRules(List<Map<String, Object>> formDefinitions) {
+        if (formDefinitions == null) {
+            return;
+        }
+        for (Map<String, Object> form : formDefinitions) {
+            if (form == null || !(form.get("configJson") instanceof Map)) {
+                continue;
+            }
+            Object rulesObj = ((Map<String, Object>) form.get("configJson")).get("crossFieldRules");
+            if (!(rulesObj instanceof List)) {
+                continue;
+            }
+            for (Map<String, Object> rule : (List<Map<String, Object>>) rulesObj) {
+                if (rule == null) {
+                    continue;
+                }
+                Object target = rule.get("targetField");
+                boolean missing = !(target instanceof String str) || str.isBlank();
+                if (missing && rule.get("fields") instanceof List<?> fields && !fields.isEmpty()) {
+                    Object last = fields.get(fields.size() - 1);
+                    if (last instanceof String lastField && !lastField.isBlank()) {
+                        rule.put("targetField", lastField);
+                    }
+                }
+            }
+        }
     }
 
     /**

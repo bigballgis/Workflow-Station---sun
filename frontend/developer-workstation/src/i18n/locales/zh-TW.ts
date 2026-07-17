@@ -1890,6 +1890,8 @@ export default {
       iconPreview: '圖示預覽：',
       apply: '確認套用',
       regenerate: '重新生成',
+      applying: '套用中...',
+      applied: '已套用 ✓',
       tablesSummary: '{count} 個表，共 {fields} 個欄位',
       formsSummary: '{count} 個表單',
       actionsSummary: '{count} 個動作',
