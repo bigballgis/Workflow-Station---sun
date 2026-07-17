@@ -22,6 +22,10 @@ import {
 import {
   resolveSubTablePrimaryKeyFields,
 } from '@/composables/tasks/shared'
+import {
+  bindingIdsPreferStrictSubTableLookup,
+  cloneSubTableRows,
+} from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
 
 export type PrefetchedTaskForms = {
@@ -348,6 +352,23 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
       } as any)
       const bid = Number(b.bindingId)
       if (Number.isFinite(bid)) nativeIds.push(bid)
+    }
+    // The DTO's binding.data is metadata-only (always empty). Hydrate rows from the live
+    // process variables the same way the task-form path does — without this, any node that
+    // falls back to the Process Form (e.g. no Task Form binding on the stage) renders every
+    // sub-table as "No Data" even though __subTables__ carries the submitted rows.
+    const savedSubTables = ((pfData.fieldValues || {}) as Record<string, any>).__subTables__
+    if (savedSubTables && typeof savedSubTables === 'object' && !Array.isArray(savedSubTables)) {
+      const ambiguous = bindingIdsPreferStrictSubTableLookup(bindings)
+      for (const binding of bindings) {
+        if (Array.isArray(binding.data) && binding.data.length > 0) continue
+        const rows = ctx.getSavedSubTableRows(
+          savedSubTables as Record<string, unknown>,
+          binding,
+          ambiguous.has(binding.bindingId),
+        )
+        if (rows?.length) binding.data = cloneSubTableRows(rows)
+      }
     }
     processFormSubTableBindings.value = bindings
     processFormFormConfig.value = cfg

@@ -115,6 +115,66 @@ export function scrubMiCorruptLinkChildRowsForParent(
   }
 }
 
+function nonEmptyScalarText(v: unknown): string | null {
+  if (v === undefined || v === null) return null
+  if (typeof v === 'object') return null
+  const s = String(v).trim()
+  return s === '' ? null : s
+}
+
+/**
+ * A previously hoisted nested row that went through backend PK/FK enrichment gains fields the
+ * still-un-enriched nested origin lacks (row_id, FK column, audit columns). The row_id-based merge
+ * can never re-match the two, so every persist cycle appended a duplicate (ATM Demo: nested
+ * attachment doubled in the TODO top-level table). Detect that shape: every non-empty business field
+ * of the nested copy equals the flat row's value, and the flat row carries at least one extra
+ * non-empty field — then the flat row IS this nested row, post-enrichment.
+ */
+function nestedCopyMatchesEnrichedFlatRow(
+  nested: Record<string, unknown>,
+  flat: Record<string, unknown>
+): boolean {
+  let comparedFields = 0
+  for (const [k, v] of Object.entries(nested)) {
+    if (k.startsWith('__')) continue
+    const nv = nonEmptyScalarText(v)
+    if (nv == null) continue
+    const fv = nonEmptyScalarText(flat[k])
+    if (fv == null || fv !== nv) return false
+    comparedFields++
+  }
+  if (comparedFields === 0) return false
+  for (const [k, v] of Object.entries(flat)) {
+    if (k.startsWith('__')) continue
+    if (nonEmptyScalarText(v) == null) continue
+    if (nonEmptyScalarText(nested[k]) == null) return true
+  }
+  return false
+}
+
+/** Fold the dropped nested copy's own nested slices into the matched flat row so grandchild rows survive. */
+function absorbNestedSubTablesIntoFlatRow(
+  nested: Record<string, unknown>,
+  flat: Record<string, unknown>
+): void {
+  const nSub = nested.__subTables__
+  if (!nSub || typeof nSub !== 'object' || Array.isArray(nSub)) return
+  const fSubRaw = flat.__subTables__
+  const fSub =
+    fSubRaw && typeof fSubRaw === 'object' && !Array.isArray(fSubRaw)
+      ? (fSubRaw as Record<string, unknown>)
+      : {}
+  for (const [k, arr] of Object.entries(nSub as Record<string, unknown>)) {
+    if (!Array.isArray(arr) || arr.length === 0) continue
+    const cur = fSub[k]
+    fSub[k] =
+      Array.isArray(cur) && cur.length > 0
+        ? mergeSubTableRowsByRowId(arr as any[], cur as any[], null)
+        : [...(arr as any[])]
+  }
+  flat.__subTables__ = fSub
+}
+
 export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, unknown>, maxPasses = 8): void {
   for (let pass = 0; pass < maxPasses; pass++) {
     let touched = false
@@ -128,6 +188,24 @@ export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, u
           if (!Array.isArray(childVal) || childVal.length === 0) continue
           const prev = subTables[childKey]
           const prevRows = Array.isArray(prev) ? [...(prev as any[])] : []
+          // A nested copy whose flat counterpart already went through PK enrichment must merge into
+          // it, not append next to it (see nestedCopyMatchesEnrichedFlatRow).
+          let hoistRows = childVal as any[]
+          if (prevRows.length > 0) {
+            hoistRows = hoistRows.filter(r => {
+              if (!r || typeof r !== 'object') return true
+              const rec = r as Record<string, unknown>
+              const enriched = prevRows.find(
+                p =>
+                  p &&
+                  typeof p === 'object' &&
+                  nestedCopyMatchesEnrichedFlatRow(rec, p as Record<string, unknown>)
+              )
+              if (!enriched) return true
+              absorbNestedSubTablesIntoFlatRow(rec, enriched as Record<string, unknown>)
+              return false
+            })
+          }
           // The existing top-level slice is the authoritative binding data; a nested copy is a
           // derivative cache that may lag behind (e.g. a prior userTask's collection row still holds a
           // stale link-child age while the current task already persisted a fresh one). Merge with the
@@ -135,7 +213,7 @@ export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, u
           // nested-only rows are still hoisted and empty top-level fields are filled. (#1443)
           const merged =
             prevRows.length > 0
-              ? mergeSubTableRowsByRowId(childVal as any[], prevRows, null)
+              ? mergeSubTableRowsByRowId(hoistRows, prevRows, null)
               : mergeSubTableRowsByRowId(prevRows, childVal as any[], null)
           subTables[childKey] = merged
           subTables[String(childKey)] = merged
