@@ -48,9 +48,11 @@ export function useFormData(deps: FormDataDeps) {
   }
   const handleLookupSelect = (fieldKey: string, row: Record<string, any>) => {
     lookupSelectedData.value[fieldKey] = row
+    handleFieldChange(fieldKey, row)
   }
   const handleLookupClear = (fieldKey: string) => {
     delete lookupSelectedData.value[fieldKey]
+    handleFieldChange(fieldKey, null)
   }
 
   // Manage file upload lists independently to avoid re-render issues when deriving from formData

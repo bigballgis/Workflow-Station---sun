@@ -1260,3 +1260,17 @@
     附带：运行容器 platform-common 陈旧导致 auth.no_permission 在 en 未解析（源文件 messages_en.properties 实有该键），
     -am 重建后一并刷新。验证：mvn -pl backend/developer-workstation -am package -DskipTests BUILD SUCCESS；
     重建 developer-workstation 容器 healthy。待用户在 UI 用 123456 重试确认 team 修改成功。
+- id: "1482"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "Form Preview Lookup 组件 change/blur 事件不触发，setValue 无法回填 sibling 字段"
+  fixed_at: "2026-07-14"
+  note: |
+    症状：HMDC Case Form 字段 test（lookup）配置 change/blur 脚本 $inject.api.setValue('testvalue','successful')，
+    在 Form Preview 选中 lookup 值后 testvalue 不更新。
+    根因：useFormPreviewBuild 将 lookup 从 form-create 拆成独立 LookupPreview，未绑定 previewModel，
+    也未调用 runComponentFieldEventsOnValueChange；且 live getRule() 常丢失 _on，Preview 需 merge 已保存 on。
+    User Portal：handleLookupSelect 仅更新 lookupSelectedData，未调用 handleFieldChange，组件 change 不触发。
+    修复：lookup preview item 携带 field+rule + dispatchPreviewFieldValueChange + mergeComponentEventsFromSavedRules；
+    Portal useFormData handleLookupSelect/Clear 调用 handleFieldChange。

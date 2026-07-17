@@ -67,6 +67,33 @@ describe('formCreateComponentEvents', () => {
     expect(formData.legal_hold).toBe(true)
   })
 
+  it('mirrors on.blur when lookup value changes', () => {
+    const rules = [
+      {
+        type: 'lookup',
+        field: 'test',
+        on: {
+          change: '$FNX:\nif ($inject.value != null) { $inject.api.setValue("testvalue", "successful") }',
+        },
+      },
+      { type: 'input', field: 'testvalue' },
+    ]
+    const formData: Record<string, unknown> = { test: null, testvalue: '' }
+    const map = collectFieldComponentEventsFromRules(rules)
+    const api = createPortalFormApi(
+      () => formData,
+      (patch) => Object.assign(formData, patch),
+    )
+    runComponentFieldEventsOnValueChange(map.get('test'), {
+      field: 'test',
+      value: { id: 'row-1', name: 'Demo' },
+      api,
+      onEvent: 'change',
+      fieldType: 'lookup',
+    })
+    expect(formData.testvalue).toBe('successful')
+  })
+
   it('mirrors on.blur when select value changes (designer blur on select)', () => {
     const rules = [
       {

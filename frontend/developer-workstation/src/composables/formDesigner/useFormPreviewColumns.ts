@@ -137,6 +137,8 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
     const previewConfig = resolveLookupPreviewConfig(ruleItem.props?.lookupConfig || '{}', config)
     return {
       kind: 'lookup' as const,
+      field: String(ruleItem.field ?? ''),
+      rule: ruleItem as Record<string, unknown>,
       label: ruleItem.title || 'Lookup',
       placeholder: ruleItem.props?.placeholder || previewConfig.placeholder,
       searchFields: previewConfig.searchFields,

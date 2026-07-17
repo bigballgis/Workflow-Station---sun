@@ -4,6 +4,11 @@
 
 import { getRuleChildren } from '@/utils/formDesigner'
 import { ensureFormCreateRulesValidationDeep } from '@/utils/formCreateValidateRules'
+import {
+  mergeComponentEventsFromSavedRules,
+  syncDesignerComponentEventsForFcPreview,
+} from '@/utils/formCreatePreviewEvents'
+import { seedFcDesignerPreviewComponentEventCache } from '@/utils/formCreateLookupComponentEvents'
 
 export type DesignerPreviewRef = {
   openPreview?: () => void
@@ -297,6 +302,7 @@ export function snapshotDesignerFieldValidate(rules: unknown[]): Array<Record<st
 export function prepareDesignerPreviewValidation(
   ref: DesignerPreviewRef | null | undefined,
   validateButtonText: string,
+  savedRules?: unknown[] | null,
 ): {
   applied: boolean
   fieldRules: Array<Record<string, unknown>>
@@ -309,6 +315,11 @@ export function prepareDesignerPreviewValidation(
     return { applied: false, fieldRules: [], flush }
   }
   const rules = ref.getRule() || []
+  if (Array.isArray(savedRules) && savedRules.length > 0) {
+    mergeComponentEventsFromSavedRules(rules, savedRules)
+  }
+  syncDesignerComponentEventsForFcPreview(rules)
+  seedFcDesignerPreviewComponentEventCache(rules)
   ensureFormCreateRulesValidationDeep(rules)
   ref.setRule(rules)
   const option = ref.getOption?.()
@@ -349,8 +360,13 @@ function runPreviewToolbarPrep(
   source: string,
   getDesignerRef: () => DesignerPreviewRef | null | undefined,
   validateButtonText: string,
+  getSavedRules?: () => unknown[] | null | undefined,
 ): void {
-  const result = prepareDesignerPreviewValidation(getDesignerRef(), validateButtonText)
+  const result = prepareDesignerPreviewValidation(
+    getDesignerRef(),
+    validateButtonText,
+    getSavedRules?.() ?? null,
+  )
   logPreviewPrep(`capture-${source}`, result)
 }
 
@@ -359,11 +375,12 @@ export function installFcDesignerPreviewCapture(
   root: Element | null | undefined,
   getDesignerRef: () => DesignerPreviewRef | null | undefined,
   validateButtonText: string,
+  getSavedRules?: () => unknown[] | null | undefined,
 ): void {
   if (!root || (root as DesignerPreviewRef).__hermesPreviewCapture) return
   const onPreviewToolbarEvent = (source: string) => (ev: Event) => {
     if (!isFcDesignerPreviewToolbarButton(ev.target)) return
-    runPreviewToolbarPrep(source, getDesignerRef, validateButtonText)
+    runPreviewToolbarPrep(source, getDesignerRef, validateButtonText, getSavedRules)
   }
   root.addEventListener('mousedown', onPreviewToolbarEvent('mousedown'), true)
   root.addEventListener('click', onPreviewToolbarEvent('click'), true)
@@ -374,20 +391,40 @@ export function installPreviewValidationDomProbe(): void {
   /* no-op */
 }
 
+export function wrapFcDesignerOpenPreview(
+  ref: DesignerPreviewRef | null | undefined,
+  validateButtonText: string,
+  getSavedRules?: () => unknown[] | null | undefined,
+): void {
+  if (!ref || typeof ref !== 'object') return
+  const bag = ref as Record<string, unknown>
+  if (bag.__hermesOpenPreviewWrapped) return
+  const original = ref.openPreview
+  if (typeof original !== 'function') return
+
+  ref.openPreview = function hermesWrappedOpenPreview(this: unknown, ...args: unknown[]) {
+    prepareDesignerPreviewValidation(ref, validateButtonText, getSavedRules?.() ?? null)
+    return (original as (...a: unknown[]) => unknown).apply(this, args)
+  }
+  bag.__hermesOpenPreviewWrapped = true
+}
+
 export function patchDesignerOpenPreview(
   ref: DesignerPreviewRef | null | undefined,
   validateButtonText: string,
+  getSavedRules?: () => unknown[] | null | undefined,
 ): void {
   if (!ref) return
-  const result = prepareDesignerPreviewValidation(ref, validateButtonText)
+  const result = prepareDesignerPreviewValidation(ref, validateButtonText, getSavedRules?.() ?? null)
   logPreviewPrep('patch-call', result)
 }
 
 export function patchDesignerOpenPreviewAll(
   refs: Array<DesignerPreviewRef | null | undefined>,
   validateButtonText: string,
+  getSavedRules?: () => unknown[] | null | undefined,
 ): void {
-  for (const ref of refs) patchDesignerOpenPreview(ref, validateButtonText)
+  for (const ref of refs) patchDesignerOpenPreview(ref, validateButtonText, getSavedRules)
 }
 
 export function syncDesignerRulesValidationToCanvas(

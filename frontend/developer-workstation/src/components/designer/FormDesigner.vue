@@ -734,6 +734,7 @@ import {
   flushDesignerValidatePanelToActiveRule,
   installFcDesignerPreviewCapture,
   installPreviewValidationDomProbe,
+  wrapFcDesignerOpenPreview,
 } from '@/utils/formDesignerPreviewValidation'
 import { lookupStore } from './lookupStore'
 import {
@@ -964,11 +965,18 @@ function onDesignerStructureChange() {
 function installDesignerPreviewCaptureHooks() {
   installPreviewValidationDomProbe()
   const root = document.querySelector('.form-editor-view')
+  const getSavedRules = () => selectedForm.value?.configJson?.rule ?? []
+  const validateText = t('common.validate')
   installFcDesignerPreviewCapture(
     root,
     () => getActiveDesignerRef() as ReturnType<typeof getActiveDesignerRef>,
-    t('common.validate'),
+    validateText,
+    getSavedRules,
   )
+  wrapFcDesignerOpenPreview(designerRef.value, validateText, getSavedRules)
+  for (const subRef of subDesignerRefs.value) {
+    wrapFcDesignerOpenPreview(subRef, validateText, getSavedRules)
+  }
 }
 
 // ── Table-field → rule mapping & Table Design hydration ─────────────────────
@@ -1507,6 +1515,7 @@ const designerConfig = computed(() => ({
     default: {
       append: true,
       rule(rule: { type?: string }) {
+        // lookup is custom — Readonly lives in lookup drag rule props() (main.ts), not fc built-in Props.
         const builtInReadonly = new Set(['input', 'textarea', 'password', 'timePicker', 'datePicker', 'lookup'])
         if (builtInReadonly.has(String(rule.type ?? ''))) return []
         return [{ type: 'switch', field: 'readonly', title: 'Readonly' }]

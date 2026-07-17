@@ -249,6 +249,8 @@ function makeLookupPreviewItem(
   )
   return {
     kind: 'lookup' as const,
+    field: String(ruleItem.field ?? ''),
+    rule: ruleItem as Record<string, unknown>,
     label: ruleItem.title || 'Lookup',
     placeholder: ruleItem.props?.placeholder || previewConfig.placeholder,
     searchFields: previewConfig.searchFields,

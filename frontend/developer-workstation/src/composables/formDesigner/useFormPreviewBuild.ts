@@ -8,6 +8,7 @@ import {
   applyPreviewDefaultsToItemRules,
   attachPreviewMountedDefaultSync,
   materializePreviewItemsEvents,
+  mergeComponentEventsFromSavedRules,
 } from '@/utils/formCreatePreviewEvents'
 import { ensureFormCreateRulesValidationDeep } from '@/utils/formCreateValidateRules'
 import {
@@ -191,6 +192,9 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     }
     if (!rawRule.length) {
       rawRule = snapshotRulesForPreview(selectedForm.value.configJson?.rule || [])
+    } else {
+      const savedRule = snapshotRulesForPreview(selectedForm.value.configJson?.rule || [])
+      mergeComponentEventsFromSavedRules(rawRule, savedRule)
     }
     const primaryBinding = (selectedForm.value.tableBindings || []).find(
       (b: TableBinding) => b.bindingType === 'PRIMARY',
