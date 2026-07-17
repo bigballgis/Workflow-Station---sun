@@ -16,11 +16,30 @@ function formatTimestampLocal(): string {
  * sync with backend platform-common SystemAuditFields). Only the fill VALUES are
  * portal-specific (timestamp format + current-user display name).
  */
-const AUDIT_FILLERS: Readonly<Record<string, (user: UserInfo | null) => string>> = {
-  created_at: () => formatTimestampLocal(),
-  updated_at: () => formatTimestampLocal(),
-  created_by: (user) => user?.displayName || user?.username || '',
-  updated_by: (user) => user?.displayName || user?.username || '',
+// Null prototype: looked up with designer-provided field names, so an inherited
+// key like "__proto__" must resolve to undefined, not Object.prototype members.
+const AUDIT_FILLERS: Readonly<Record<string, (user: UserInfo | null) => string>> = Object.assign(
+  Object.create(null),
+  {
+    created_at: () => formatTimestampLocal(),
+    updated_at: () => formatTimestampLocal(),
+    created_by: (user: UserInfo | null) => user?.displayName || user?.username || '',
+    updated_by: (user: UserInfo | null) => user?.displayName || user?.username || '',
+  },
+)
+
+/**
+ * Assign a designer-provided field name as an own enumerable key. Plain
+ * `obj[field] = value` breaks for names like "__proto__" (mutates the
+ * prototype instead of creating a key, so the field silently vanishes).
+ */
+function setOwnField(target: Record<string, unknown>, field: string, value: unknown): void {
+  Object.defineProperty(target, field, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  })
 }
 
 /**
@@ -52,7 +71,7 @@ export function applyAuditFieldDefaults(row: Record<string, unknown>, columns: D
 
   for (const col of columns) {
     const filler = AUDIT_FILLERS[normalizeAuditFieldName(col.field)]
-    if (filler) row[col.field] = filler(resolveUser())
+    if (filler) setOwnField(row, col.field, filler(resolveUser()))
   }
 }
 
@@ -73,60 +92,51 @@ export function applyEditAuditDefaults(row: Record<string, unknown>, columns: Di
     const n = normalizeAuditFieldName(col.field)
     if (n !== 'updated_at' && n !== 'updated_by') continue
     const filler = AUDIT_FILLERS[n]
-    if (filler) row[col.field] = filler(resolveUser())
+    if (filler) setOwnField(row, col.field, filler(resolveUser()))
+  }
+}
+
+function initialValueFor(col: DialogColumn): unknown {
+  switch (col.type) {
+    case 'number':
+      return undefined
+    case 'switch':
+      return false
+    case 'checkbox':
+      return []
+    case 'date':
+    case 'datetime':
+    case 'timerange':
+      return null
+    case 'treeselect':
+      return col.props?.multiple ? [] : ''
+    case 'rate':
+    case 'slider':
+      return 0
+    case 'colorPicker':
+      return ''
+    case 'tree':
+      return []
+    case 'transfer':
+      return []
+    case 'cascader':
+      return []
+    case 'lookup':
+      return null
+    case 'editor':
+      return ''
+    case 'signature':
+      return ''
+    default:
+      // text, textarea, password, radio, select, user, department
+      return ''
   }
 }
 
 export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown> {
   const row: Record<string, unknown> = {}
   for (const col of columns) {
-    switch (col.type) {
-      case 'number':
-        row[col.field] = undefined
-        break
-      case 'switch':
-        row[col.field] = false
-        break
-      case 'checkbox':
-        row[col.field] = []
-        break
-      case 'date':
-      case 'datetime':
-      case 'timerange':
-        row[col.field] = null
-        break
-      case 'treeselect':
-        row[col.field] = col.props?.multiple ? [] : ''
-        break
-      case 'rate':
-      case 'slider':
-        row[col.field] = 0
-        break
-      case 'colorPicker':
-        row[col.field] = ''
-        break
-      case 'tree':
-        row[col.field] = []
-        break
-      case 'transfer':
-        row[col.field] = []
-        break
-      case 'cascader':
-        row[col.field] = []
-        break
-      case 'lookup':
-        row[col.field] = null
-        break
-      case 'editor':
-        row[col.field] = ''
-        break
-      case 'signature':
-        row[col.field] = ''
-        break
-      default:
-        // text, textarea, password, radio, select, user, department
-        row[col.field] = ''
-    }
+    setOwnField(row, col.field, initialValueFor(col))
   }
 
   // Audit fields (created_at / created_by / updated_at / updated_by) stay empty here:
@@ -149,8 +159,11 @@ export function mergeFormRowWithSeed(
   const row = { ...form }
   if (!seed) return row
   for (const [key, seedVal] of Object.entries(seed)) {
-    if (isEmptyFormValue(row[key]) && !isEmptyFormValue(seedVal)) {
-      row[key] = seedVal
+    // Own-key read: for a field named "__proto__", row[key] would surface the
+    // inherited prototype object and wrongly count as a non-empty form value.
+    const current = Object.prototype.hasOwnProperty.call(row, key) ? row[key] : undefined
+    if (isEmptyFormValue(current) && !isEmptyFormValue(seedVal)) {
+      setOwnField(row, key, seedVal)
     }
   }
   return row
@@ -167,16 +180,15 @@ export function buildRules(columns: DialogColumn[]): FormRules {
         || col.type === 'cascader' || col.type === 'transfer' || col.type === 'lookup' || col.type === 'switch'
           ? 'change'
           : 'blur'
-      if (col.type === 'switch') {
-        rules[col.field] = [{
-          type: 'boolean',
-          required: true,
-          message: `${col.label} is required`,
-          trigger,
-        }]
-      } else {
-        rules[col.field] = [{ required: true, message: `${col.label} is required`, trigger }]
-      }
+      const rule = col.type === 'switch'
+        ? [{
+            type: 'boolean' as const,
+            required: true,
+            message: `${col.label} is required`,
+            trigger,
+          }]
+        : [{ required: true, message: `${col.label} is required`, trigger }]
+      setOwnField(rules as unknown as Record<string, unknown>, col.field, rule)
     }
   }
   return rules
