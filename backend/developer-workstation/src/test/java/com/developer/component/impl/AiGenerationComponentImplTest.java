@@ -209,4 +209,34 @@ class AiGenerationComponentImplTest {
         verify(aiGenerationService).callN8NWebhook(any(), eq("hello"), eq(AiPhase.REQUIREMENTS), eq(AiMode.NEW),
                 isNull(), eq(1L), eq(List.of()), isNull());
     }
+
+    @Test
+    void normalizeTableRelations_rewritesManyToOneAsSwappedOneToMany() {
+        Map<String, Object> manyToOne = new LinkedHashMap<>();
+        manyToOne.put("sourceTableName", "Package");
+        manyToOne.put("sourceFieldName", "shipment_id");
+        manyToOne.put("relationType", "MANY_TO_ONE");
+        manyToOne.put("targetTableName", "ExpressShipment");
+        manyToOne.put("targetFieldName", "id");
+        Map<String, Object> untouched = new LinkedHashMap<>();
+        untouched.put("sourceTableName", "ExpressShipment");
+        untouched.put("sourceFieldName", "id");
+        untouched.put("relationType", "ONE_TO_MANY");
+        untouched.put("targetTableName", "Package");
+        untouched.put("targetFieldName", "shipment_id");
+        List<Map<String, Object>> relations = new ArrayList<>(Arrays.asList(manyToOne, null, untouched));
+
+        AiGenerationComponentImpl.normalizeTableRelations(relations);
+
+        assertEquals("ONE_TO_MANY", manyToOne.get("relationType"));
+        assertEquals("ExpressShipment", manyToOne.get("sourceTableName"));
+        assertEquals("id", manyToOne.get("sourceFieldName"));
+        assertEquals("Package", manyToOne.get("targetTableName"));
+        assertEquals("shipment_id", manyToOne.get("targetFieldName"));
+        // Valid entries are untouched
+        assertEquals("ONE_TO_MANY", untouched.get("relationType"));
+        assertEquals("ExpressShipment", untouched.get("sourceTableName"));
+        // Null list is a no-op (no exception)
+        AiGenerationComponentImpl.normalizeTableRelations(null);
+    }
 }

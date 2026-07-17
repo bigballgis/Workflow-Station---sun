@@ -216,7 +216,7 @@
         >
           <el-upload
             :action="col.props?.action && col.props.action !== '/' ? col.props.action : (uploadUrl || '/api/v1/upload')"
-            :accept="col.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
+            :accept="col.props?.accept || ''"
             :show-file-list="false"
             :on-success="(res: any, file: any) => handleUploadSuccess(res, file, col)"
             :on-error="() => handleUploadError(col)"

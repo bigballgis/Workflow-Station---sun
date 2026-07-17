@@ -13,9 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -24,9 +22,6 @@ import java.util.UUID;
 @Slf4j
 @RequiredArgsConstructor
 public class FileUploadComponentImpl implements FileUploadComponent {
-
-    private static final List<String> ALLOWED_EXTENSIONS =
-            Arrays.asList(".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt");
 
     private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
 
@@ -88,18 +83,20 @@ public class FileUploadComponentImpl implements FileUploadComponent {
         if (originalFilename == null || originalFilename.isBlank()) {
             throw new DeveloperBusinessException("INVALID_FILENAME", "Invalid filename");
         }
-
-        String extension = getExtension(originalFilename).toLowerCase();
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new DeveloperBusinessException(
-                    "UNSUPPORTED_TYPE",
-                    "Unsupported file type, allowed: " + String.join(", ", ALLOWED_EXTENSIONS)
-            );
-        }
+        // Any file type is accepted. Safety lives on the serving side: FileUploadController
+        // only previews inline-safe content types; everything else downloads as attachment.
     }
 
+    /**
+     * Extension for the stored name, sanitized so it is safe inside a path segment and a
+     * Content-Disposition header (letters/digits/dots only, capped length). The original
+     * name is preserved separately and returned via the {@code originalName} query param.
+     */
     private String getExtension(String filename) {
         int dotIndex = filename.lastIndexOf('.');
-        return dotIndex >= 0 ? filename.substring(dotIndex) : "";
+        if (dotIndex < 0) return "";
+        String ext = filename.substring(dotIndex).replaceAll("[^A-Za-z0-9.]", "");
+        if (ext.length() > 16) ext = ext.substring(0, 16);
+        return ext.equals(".") ? "" : ext;
     }
 }

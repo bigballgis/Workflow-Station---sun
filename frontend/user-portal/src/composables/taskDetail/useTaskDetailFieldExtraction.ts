@@ -229,7 +229,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
     if (rule.type === 'upload') {
       const action = rule.props?.action
       field.uploadUrl = (action && action !== '/') ? action : '/api/v1/upload'
-      field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
+      field.uploadAccept = rule.props?.accept || ''
       field.uploadLimit = rule.props?.limit || 1
     }
     if (rule.type === 'userSelect' || rule.type === 'user') {

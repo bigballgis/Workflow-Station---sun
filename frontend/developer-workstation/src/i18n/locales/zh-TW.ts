@@ -1841,6 +1841,7 @@ export default {
       retry: '重試',
       nextPhase: '進入下一階段',
       send: '傳送',
+      stop: '停止',
       inputFeedback: '輸入修改意見...',
       aiReplying: 'AI 正在回覆中...',
       thinking: 'AI 正在思考中...',

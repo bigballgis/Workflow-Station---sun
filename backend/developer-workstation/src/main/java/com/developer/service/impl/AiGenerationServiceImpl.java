@@ -68,7 +68,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Value("${activepieces.ai-generation.webhook-url:${n8n.ai-generation.webhook-url:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}}")
     private String n8nWebhookUrl;
 
-    @Value("${activepieces.ai-generation.timeout-seconds:${n8n.ai-generation.timeout-seconds:120}}")
+    // 300s: deepseek-v4-pro 推理模型生成 DESIGN 文档实测可达 ~230s;须与 AP 的
+    // AP_WEBHOOK_TIMEOUT_SECONDS 保持一致(AP 先到期会返回 204 空响应)。
+    @Value("${activepieces.ai-generation.timeout-seconds:${n8n.ai-generation.timeout-seconds:300}}")
     private int n8nTimeoutSeconds;
 
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")
@@ -563,7 +565,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         // New entity structures
         Map<String, Object> newEntities = new LinkedHashMap<>();
         newEntities.put("decisionDefinitions", "Array of { decisionKey, decisionName, dmnXml, hitPolicy: FIRST|UNIQUE|PRIORITY|ANY|COLLECT|RULE_ORDER|OUTPUT_ORDER, description }");
-        newEntities.put("tableRelations", "Array of { sourceTableName, sourceFieldName, relationType: ONE_TO_ONE|ONE_TO_MANY|MANY_TO_MANY, targetTableName, targetFieldName }");
+        newEntities.put("tableRelations", "Array of { sourceTableName, sourceFieldName, relationType: ONE_TO_ONE|ONE_TO_MANY|MANY_TO_MANY, targetTableName, targetFieldName }. "
+                + "MANY_TO_ONE is NOT a valid relationType — express a child-to-parent relation as ONE_TO_MANY with the parent as source and the child as target");
         newEntities.put("formStageBindings", "Array of { stageId, stageName } within formDefinitions[].stageBindings");
         metadata.put("newEntities", newEntities);
 
@@ -674,6 +677,11 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Override
     public void sendChatEvent(Long functionUnitId, String userId, AiChatSseEvent event) {
         sseEmitterManager.sendChatEvent(functionUnitId, userId, event);
+    }
+
+    @Override
+    public boolean isChatEmitterSuperseded(Long functionUnitId, String userId, SseEmitter emitter) {
+        return sseEmitterManager.isChatEmitterSuperseded(functionUnitId, userId, emitter);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.developer.service.impl;
 
 import com.developer.dto.AiChatSseEvent;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -8,8 +9,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * SSE emitter 管理协作类。
@@ -22,11 +27,34 @@ class AiSseEmitterManager {
 
     private static final long EVENT_EMITTER_TIMEOUT = 300_000L; // 300 seconds
 
+    /**
+     * Heartbeat interval. SSE comment lines (": ping") keep intermediary proxies (Kong/nginx,
+     * whose idle read timeouts start at 60s) from severing the connection while the upstream
+     * AI call — which can legitimately run for minutes — produces no events.
+     */
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 20;
+
     /** Chat SSE emitters: key = "functionUnitId:userId" → SseEmitter */
     private final ConcurrentHashMap<String, SseEmitter> chatEmitters = new ConcurrentHashMap<>();
 
     /** Event SSE emitters: key = functionUnitId → list of (userId, SseEmitter) pairs */
     private final ConcurrentHashMap<Long, CopyOnWriteArrayList<EventEmitterEntry>> eventEmitters = new ConcurrentHashMap<>();
+
+    private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "ai-sse-heartbeat");
+        t.setDaemon(true);
+        return t;
+    });
+
+    AiSseEmitterManager() {
+        heartbeatExecutor.scheduleAtFixedRate(this::sendHeartbeats,
+                HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+    }
+
+    @PreDestroy
+    void shutdown() {
+        heartbeatExecutor.shutdownNow();
+    }
 
     /**
      * Create a chat SSE emitter. The timeout is computed by the caller (facade) so that it stays
@@ -36,34 +64,30 @@ class AiSseEmitterManager {
         String key = buildChatEmitterKey(functionUnitId, userId);
         SseEmitter emitter = new SseEmitter(chatEmitterTimeout);
 
-        // If there's already an active emitter, complete it first to prevent overwriting
-        SseEmitter existingEmitter = chatEmitters.get(key);
-        if (existingEmitter != null) {
-            log.warn("Existing chat SSE emitter found for key={}, completing it before creating new one", key);
-            try {
-                existingEmitter.complete();
-            } catch (Exception e) {
-                log.debug("Failed to complete existing emitter: {}", e.getMessage());
-            }
-            chatEmitters.remove(key);
-        }
-
+        // Cleanup callbacks must be instance-guarded (remove(key, emitter), not remove(key)):
+        // when a new emitter replaces this one, the replaced emitter's async onCompletion
+        // fires AFTER the new emitter is registered and would otherwise silently evict it —
+        // subsequent replies then hit "No chat SSE emitter found" and are lost.
         emitter.onCompletion(() -> {
-            chatEmitters.remove(key);
+            chatEmitters.remove(key, emitter);
             log.debug("Chat SSE completed: functionUnitId={}, userId={}", functionUnitId, userId);
         });
         emitter.onTimeout(() -> {
-            chatEmitters.remove(key);
+            chatEmitters.remove(key, emitter);
             log.debug("Chat SSE timed out: functionUnitId={}, userId={}", functionUnitId, userId);
             safeComplete(emitter);
         });
         emitter.onError(ex -> {
             log.warn("Chat SSE error for functionUnit {}, userId {}: {}", functionUnitId, userId, ex.getMessage());
-            chatEmitters.remove(key);
+            chatEmitters.remove(key, emitter);
             safeComplete(emitter);
         });
 
-        chatEmitters.put(key, emitter);
+        SseEmitter replaced = chatEmitters.put(key, emitter);
+        if (replaced != null) {
+            log.warn("Existing chat SSE emitter found for key={}, completing it after replacement", key);
+            safeComplete(replaced);
+        }
         log.info("Created chat SSE emitter: functionUnitId={}, userId={}", functionUnitId, userId);
         return emitter;
     }
@@ -129,11 +153,45 @@ class AiSseEmitterManager {
         } catch (IOException e) {
             log.warn("Failed to send chat SSE event: functionUnitId={}, userId={}, error={}",
                     functionUnitId, userId, e.getMessage());
-            chatEmitters.remove(key);
+            chatEmitters.remove(key, emitter);
         } catch (IllegalStateException e) {
             log.warn("Chat SSE emitter already completed: functionUnitId={}, userId={}, error={}",
                     functionUnitId, userId, e.getMessage());
-            chatEmitters.remove(key);
+            chatEmitters.remove(key, emitter);
+        }
+    }
+
+    /**
+     * Periodic keep-alive to all registered emitters. Sends an SSE comment line (": ping"),
+     * which both EventSource and the fetch-based chat parser ignore. A send failure means the
+     * client is gone — deregister so business sends stop wasting work on dead connections.
+     */
+    private void sendHeartbeats() {
+        for (Map.Entry<String, SseEmitter> entry : chatEmitters.entrySet()) {
+            try {
+                entry.getValue().send(SseEmitter.event().comment("ping"));
+            } catch (Exception e) {
+                log.debug("Chat SSE heartbeat failed, removing emitter: key={}, error={}",
+                        entry.getKey(), e.getMessage());
+                chatEmitters.remove(entry.getKey(), entry.getValue());
+                safeComplete(entry.getValue());
+            }
+        }
+        for (Map.Entry<Long, CopyOnWriteArrayList<EventEmitterEntry>> mapEntry : eventEmitters.entrySet()) {
+            CopyOnWriteArrayList<EventEmitterEntry> entries = mapEntry.getValue();
+            for (EventEmitterEntry entry : entries) {
+                try {
+                    entry.emitter().send(SseEmitter.event().comment("ping"));
+                } catch (Exception e) {
+                    log.debug("Event SSE heartbeat failed, removing emitter: functionUnitId={}, userId={}, error={}",
+                            mapEntry.getKey(), entry.userId(), e.getMessage());
+                    entries.remove(entry);
+                    safeComplete(entry.emitter());
+                }
+            }
+            if (entries.isEmpty()) {
+                eventEmitters.remove(mapEntry.getKey(), entries);
+            }
         }
     }
 
@@ -160,6 +218,15 @@ class AiSseEmitterManager {
         if (entries.isEmpty()) {
             eventEmitters.remove(functionUnitId, entries);
         }
+    }
+
+    /**
+     * True when the given emitter is no longer the registered one for this key —
+     * i.e. the client cancelled/disconnected (entry removed) or a newer chat request
+     * replaced it. Senders use this to avoid injecting stale events into the new stream.
+     */
+    boolean isChatEmitterSuperseded(Long functionUnitId, String userId, SseEmitter emitter) {
+        return chatEmitters.get(buildChatEmitterKey(functionUnitId, userId)) != emitter;
     }
 
     void completeChatEmitter(Long functionUnitId, String userId) {

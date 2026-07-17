@@ -22,7 +22,7 @@ import java.util.Map;
 
 /**
  * File upload controller.
- * Supports common formats: jpg/png/pdf/docx/xlsx.
+ * Accepts any file type (max 10MB); only inline-safe types preview in the browser.
  */
 @RestController
 @RequestMapping("/upload")
@@ -37,7 +37,7 @@ public class FileUploadController {
      * Upload a single file.
      */
     @PostMapping
-    @Operation(summary = "Upload file", description = "Supports jpg/png/pdf/docx/xlsx, max 10MB")
+    @Operation(summary = "Upload file", description = "Any file type, max 10MB")
     public ResponseEntity<ApiResponse<Map<String, Object>>> upload(
             @RequestParam("file") MultipartFile file) {
         try {
@@ -52,10 +52,19 @@ public class FileUploadController {
     }
 
     /**
-     * Access an uploaded file (supports inline preview).
+     * Content types safe to render inline in the browser. Anything else (html/svg/xml/js…)
+     * is served as a download with a generic content type — user uploads must never execute
+     * in the platform origin (stored-XSS guard now that any file type can be uploaded).
+     */
+    private static final java.util.Set<String> INLINE_SAFE_CONTENT_TYPES = java.util.Set.of(
+            "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp",
+            "application/pdf", "text/plain");
+
+    /**
+     * Access an uploaded file (inline preview for safe types, download otherwise).
      */
     @GetMapping("/files/{filename}")
-    @Operation(summary = "Get file", description = "Access uploaded file by filename, supports inline preview")
+    @Operation(summary = "Get file", description = "Access uploaded file by filename; images/PDF/plain text preview inline, other types download")
     public ResponseEntity<Resource> getFile(
             @PathVariable String filename) {
 
@@ -65,11 +74,18 @@ public class FileUploadController {
 
         try {
             UploadedFile file = fileUploadComponent.getFile(filename);
-            String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+            String rawType = file.getContentType();
+            String baseType = rawType == null ? "" : rawType.split(";")[0].trim().toLowerCase();
+            boolean inlineSafe = INLINE_SAFE_CONTENT_TYPES.contains(baseType);
+
+            String contentType = inlineSafe ? rawType : "application/octet-stream";
+            String disposition = (inlineSafe ? "inline" : "attachment")
+                    + "; filename=\"" + filename.replace("\"", "") + "\"";
 
             return ResponseEntity.ok()
                     .header("Content-Type", contentType)
-                    .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
+                    .header("Content-Disposition", disposition)
+                    .header("X-Content-Type-Options", "nosniff")
                     .body(new ByteArrayResource(file.getContent()));
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();

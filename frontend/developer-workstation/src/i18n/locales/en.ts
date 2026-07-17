@@ -1845,6 +1845,7 @@ export default {
       retry: 'Retry',
       nextPhase: 'Enter Next Phase',
       send: 'Send',
+      stop: 'Stop',
       inputFeedback: 'Enter feedback...',
       aiReplying: 'AI is replying...',
       thinking: 'AI is thinking...',

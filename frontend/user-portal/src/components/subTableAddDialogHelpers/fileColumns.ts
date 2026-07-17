@@ -53,7 +53,7 @@ export function resolveListColumnFieldType(
 
 const DEFAULT_UPLOAD_PROPS = {
   action: '/api/v1/upload',
-  accept: '.jpg,.jpeg,.png,.pdf,.docx,.xlsx',
+  accept: '',
   multiple: false,
 } as const
 

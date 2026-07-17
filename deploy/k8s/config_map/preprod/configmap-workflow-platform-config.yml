@@ -94,6 +94,8 @@ data:
   # flowId 每环境不同:先把 deploy/ap-flows/ai-function-unit-gen.json 经 Jenkins 导入本环境 AP,
   # 再把 ap-import 打印出的 flowId 回填 __AI_GEN_FLOW_ID__。
   AI_GENERATION_WEBHOOK_URL: "http://activepieces-service:80/api/v1/webhooks/__AI_GEN_FLOW_ID__/sync"
+  # 300s: deepseek-v4-pro DESIGN 文档实测 ~230s;与 activepieces.yaml 的 AP_WEBHOOK_TIMEOUT_SECONDS 对齐。
+  AI_GENERATION_TIMEOUT: "300"
   # developer-workstation 出站 SSRF 白名单(仅该服务读取 ssrf.allowed-hosts)。
   SSRF_ALLOWED_HOSTS: "localhost,activepieces-service"
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"

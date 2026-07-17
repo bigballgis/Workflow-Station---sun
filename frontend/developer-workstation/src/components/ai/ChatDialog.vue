@@ -343,10 +343,18 @@
         @keydown.enter.exact.prevent="handleSend"
       />
       <el-button
+        v-if="isStreaming"
+        type="danger"
+        plain
+        @click="handleStop"
+      >
+        {{ t('ai.chat.stop') }}
+      </el-button>
+      <el-button
+        v-else
         type="primary"
         :icon="Promotion"
         :disabled="isSendDisabled"
-        :loading="isStreaming"
         @click="handleSend"
       >
         {{ t('ai.chat.send') }}
@@ -421,7 +429,7 @@ const {
   degradationInfo,
   sendMessage,
   retry,
-  cancel: _cancel,
+  cancel,
   onDocument,
   onPhaseComplete,
   onGeneratedData,
@@ -635,6 +643,13 @@ function handleSend() {
 
 function handleRetry() {
   retry()
+}
+
+// Stop the in-flight generation: aborts the SSE fetch client-side and re-enables input.
+// The backend call keeps running to completion — any document it produces is still saved
+// server-side; only the streamed reply for this turn is discarded.
+function handleStop() {
+  cancel()
 }
 
 function handleNextPhase() {

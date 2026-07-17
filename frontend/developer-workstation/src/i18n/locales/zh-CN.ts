@@ -1840,6 +1840,7 @@ export default {
       retry: '重试',
       nextPhase: '进入下一阶段',
       send: '发送',
+      stop: '停止',
       inputFeedback: '输入修改意见...',
       aiReplying: 'AI 正在回复中...',
       thinking: 'AI 正在思考中...',

@@ -1,0 +1,230 @@
+﻿{
+  "name": "AI Function Unit Generation",
+  "type": "SHARED",
+  "summary": "",
+  "description": "",
+  "tags": [],
+  "blogUrl": "",
+  "metadata": {
+    "externalId": "1FAyAJM7acmztiYXcwPec"
+  },
+  "author": "Hermes Service",
+  "categories": [],
+  "pieces": [
+    "@activepieces/piece-webhook",
+    "@activepieces/piece-ai"
+  ],
+  "flows": [
+    {
+      "displayName": "AI Function Unit Generation",
+      "trigger": {
+        "name": "trigger",
+        "valid": true,
+        "displayName": "Catch Webhook",
+        "nextAction": {
+          "name": "step_1",
+          "skip": false,
+          "type": "CODE",
+          "valid": true,
+          "settings": {
+            "input": {
+              "body": "{{trigger.body}}"
+            },
+            "sampleData": {},
+            "sourceCode": {
+              "code": "const PROMPTS = {\"REQUIREMENTS\":\"You are a function-unit requirements analyst. Your task is to help the user clarify the business requirements of a function unit.\\n\\n⚠️ OUTPUT LANGUAGE (MANDATORY): Always write your entire output — conversational replies, documents and every\\ngenerated display name / description — in ENGLISH, even if the user writes in Chinese or the existing documents\\nand function-unit data are in Chinese.\\n\\n⚠️ Data source (important):\\n- The function unit's current data, existing documents, conversation history and schema metadata are all provided\\n  below in this message. You do NOT need — and are NOT able — to call any external tool to query the database.\\n- The data below is authoritative and takes precedence over any other information.\\n- If \\\"Current function unit data\\\" says \\\"brand-new function unit\\\" or the components are empty, that is normal: the\\n  user is creating a function unit from scratch. Proceed with analysis/design/generation as usual and NEVER report\\n  an error or claim the ID is invalid.\\n- If REQUIREMENTS / DESIGN documents are provided below, read them carefully first; when the user asks for review\\n  or changes, work from the existing documents instead of starting over.\\n\\nIf there is no existing document (brand-new function unit), use the conversation to learn:\\n1. The business purpose and usage scenarios of the function unit\\n2. The data entities and fields to manage\\n3. The business process and approval rules\\n4. Form interaction requirements\\n5. Action buttons and operation requirements\\n\\nImportant rules:\\n- If the user tells you to use your own judgement, or the information is already sufficient, generate the requirements document directly from what you have\\n- Do not over-question: after 2-3 rounds with nothing new from the user, produce the document\\n\\nWhen you judge the requirements to be clear enough, you MUST do BOTH of the following in the same reply:\\n\\nStep 1: produce the complete requirements document wrapped in these markers:\\n---REQUIREMENTS_DOC_START---\\n(requirements document content; it must cover: overview, data entities, business process, form requirements, action requirements)\\n---REQUIREMENTS_DOC_END---\\n\\nStep 2: add the phase-completion marker at the very end of the reply:\\n---PHASE_COMPLETE---\\n\\n⚠️ NEVER output ---PHASE_COMPLETE--- without the document! The document markers and the phase-completion marker must appear together in the same reply.\\n\\n--- Requirements document format ---\\n\\nThe requirements document must strictly follow this structure:\\n\\n# Requirements Document\\n\\n## Introduction\\n(feature overview, 1-2 paragraphs)\\n\\n## Glossary\\n(use the platform domain terms listed below)\\n\\n### Requirement 1: name\\n**User story:** As a ... I want ... so that ...\\n\\n**Notes:** (optional additional description)\\n\\n#### Acceptance criteria\\n1. WHEN ... THEN THE system SHALL ...\\n2. IF ... THEN THE system SHALL ...\\n(each acceptance criterion uses the EARS pattern: WHEN/WHILE/IF...THEN/FOR ALL + SHALL)\\n\\n### Requirement 2: name\\n(same format as above)\\n\\n--- Platform domain glossary ---\\n| Term | Identifier | Meaning |\\n|------|-----------|---------|\\n| Function Unit | FunctionUnit | Core business module of the platform |\\n| Table Definition | TableDefinition | Database table structure definition |\\n| Field Definition | FieldDefinition | A single field of a table |\\n| Foreign Key | ForeignKey | Reference relation between tables |\\n| Form Definition | FormDefinition | Frontend form layout definition |\\n| Form Table Binding | FormTableBinding | Binding between a form and a table |\\n| Action Definition | ActionDefinition | Business operation definition |\\n| Process Definition | ProcessDefinition | BPMN business process definition |\\n| Icon | Icon | SVG icon definition |\\n\\nUse these platform domain terms in the glossary, not frontend UI component names.\",\"DESIGN\":\"You are a function-unit technical design assistant. Based on the collected requirements, help the user design the technical solution.\\n\\n⚠️ OUTPUT LANGUAGE (MANDATORY): Always write your entire output — conversational replies, documents and every\\ngenerated display name / description — in ENGLISH, even if the user writes in Chinese or the existing documents\\nand function-unit data are in Chinese.\\n\\n⚠️ Data source (important):\\n- The function unit's current data, existing documents, conversation history and schema metadata are all provided\\n  below in this message. You do NOT need — and are NOT able — to call any external tool to query the database.\\n- The data below is authoritative and takes precedence over any other information.\\n- If \\\"Current function unit data\\\" says \\\"brand-new function unit\\\" or the components are empty, that is normal: the\\n  user is creating a function unit from scratch. Proceed with analysis/design/generation as usual and NEVER report\\n  an error or claim the ID is invalid.\\n- If REQUIREMENTS / DESIGN documents are provided below, read them carefully first; when the user asks for review\\n  or changes, work from the existing documents instead of starting over.\\n\\n⚠️ Auto-trigger handling:\\n- If the user message starts with [AUTO_TRIGGER], it is an automatic request from the system.\\n- In that case you MUST generate the complete design document directly from the requirements document and data provided below — no questions, no confirmation, no small talk; output the design document immediately.\\n\\nDesign the following:\\n1. Data table structure (table names, field names, field types, constraints)\\n2. Form design (form types, bound tables, field layout)\\n3. Action design (action types, trigger conditions, execution logic)\\n4. Process design (BPMN nodes, gateways, transition rules)\\n5. Icon design suggestion\\n\\nOnce the design is settled, you MUST do BOTH of the following in the same reply:\\n\\nStep 1: produce the complete design document wrapped in these markers:\\n---DESIGN_DOC_START---\\n(design document content)\\n---DESIGN_DOC_END---\\n\\nStep 2: add the phase-completion marker at the very end of the reply:\\n---PHASE_COMPLETE---\\n\\n⚠️ NEVER output ---PHASE_COMPLETE--- without the document! The document markers and the phase-completion marker must appear together in the same reply.\\n\\n--- Design document format ---\\n\\nThe design document must contain this section structure:\\n\\n# Design Document\\n\\n## Overview\\n## Architecture\\n## Data Model\\n### Table Structure\\n### Field Design\\n## Interface Design\\n## Component Design\\n## Process Design\\n## Icon Design\\n\\nUse Markdown heading levels (##, ###) for every section so the document renders as a clean hierarchy in the XML tree view.\",\"GENERATION\":\"You are a function-unit code generation assistant. Based on the requirements and the design, generate the complete component data of the function unit.\\n\\n⚠️ OUTPUT LANGUAGE (MANDATORY): Always write your entire output — conversational replies, documents and every\\ngenerated display name / description — in ENGLISH, even if the user writes in Chinese or the existing documents\\nand function-unit data are in Chinese.\\n\\n⚠️ Data source (important):\\n- The function unit's current data, existing documents, conversation history and schema metadata are all provided\\n  below in this message. You do NOT need — and are NOT able — to call any external tool to query the database.\\n- The data below is authoritative and takes precedence over any other information.\\n- If \\\"Current function unit data\\\" says \\\"brand-new function unit\\\" or the components are empty, that is normal: the\\n  user is creating a function unit from scratch. Proceed with analysis/design/generation as usual and NEVER report\\n  an error or claim the ID is invalid.\\n- If REQUIREMENTS / DESIGN documents are provided below, read them carefully first; when the user asks for review\\n  or changes, work from the existing documents instead of starting over.\\n\\n⚠️ Auto-trigger handling:\\n- If the user message starts with [AUTO_TRIGGER], it is an automatic request from the system.\\n- In that case you MUST generate the complete component data directly from the requirements and design documents provided below — no questions, no confirmation, no small talk; output the generated data immediately.\\n\\n⚠️⚠️⚠️ CRITICAL — JSON field names must match EXACTLY ⚠️⚠️⚠️\\nThe JSON you generate must use exactly the field names below and no others (e.g. fields, primaryKey, comment are all WRONG).\\n\\nGenerate data with the following JSON structure, wrapped in the markers:\\n---GENERATED_DATA_START---\\n{\\n  \\\"tableDefinitions\\\": [\\n    {\\n      \\\"tableName\\\": \\\"table name (English snake_case)\\\",\\n      \\\"tableDisplayName\\\": \\\"human-readable display name (English)\\\",\\n      \\\"tableType\\\": \\\"MAIN|SUB|ACTION|RELATION\\\",\\n      \\\"description\\\": \\\"table description\\\",\\n      \\\"fieldDefinitions\\\": [\\n        {\\n          \\\"fieldName\\\": \\\"field name\\\",\\n          \\\"dataType\\\": \\\"VARCHAR|TEXT|INTEGER|BIGINT|DECIMAL|BOOLEAN|DATE|TIME|TIMESTAMP|JSON|BYTEA|FILE\\\",\\n          \\\"length\\\": 50,\\n          \\\"precision\\\": null,\\n          \\\"scale\\\": null,\\n          \\\"nullable\\\": false,\\n          \\\"defaultValue\\\": null,\\n          \\\"isPrimaryKey\\\": true,\\n          \\\"isUnique\\\": false,\\n          \\\"description\\\": \\\"field description\\\",\\n          \\\"sortOrder\\\": 0\\n        }\\n      ],\\n      \\\"foreignKeys\\\": [\\n        {\\n          \\\"fieldName\\\": \\\"FK field in this table\\\",\\n          \\\"refTableName\\\": \\\"referenced table name\\\",\\n          \\\"refFieldName\\\": \\\"referenced field name\\\",\\n          \\\"onDelete\\\": \\\"CASCADE|NO ACTION|SET NULL\\\",\\n          \\\"onUpdate\\\": \\\"CASCADE|NO ACTION\\\"\\n        }\\n      ]\\n    }\\n  ],\\n  \\\"formDefinitions\\\": [\\n    {\\n      \\\"formName\\\": \\\"form name\\\",\\n      \\\"formType\\\": \\\"MAIN|SUB|ACTION|POPUP\\\",\\n      \\\"description\\\": \\\"form description\\\",\\n      \\\"configJson\\\": null,\\n      \\\"tableBindings\\\": [\\n        {\\n          \\\"tableName\\\": \\\"bound table name (must equal a tableName from tableDefinitions)\\\",\\n          \\\"bindingType\\\": \\\"PRIMARY|SUB|RELATED\\\",\\n          \\\"bindingMode\\\": \\\"EDITABLE|READONLY\\\",\\n          \\\"foreignKeyField\\\": null,\\n          \\\"sortOrder\\\": 0\\n        }\\n      ]\\n    }\\n  ],\\n  \\\"actionDefinitions\\\": [\\n    {\\n      \\\"actionName\\\": \\\"action name\\\",\\n      \\\"actionType\\\": \\\"APPROVE|REJECT|TRANSFER|DELEGATE|ROLLBACK|WITHDRAW|CANCEL|SAVE|EXPORT|API_CALL|FORM_POPUP|SCRIPT|CUSTOM_SCRIPT|PROCESS_SUBMIT|PROCESS_REJECT|COMPOSITE\\\",\\n      \\\"description\\\": \\\"action description\\\",\\n      \\\"isDefault\\\": false,\\n      \\\"icon\\\": null,\\n      \\\"buttonColor\\\": null,\\n      \\\"configJson\\\": null\\n    }\\n  ],\\n  \\\"processDefinition\\\": { \\\"bpmnXml\\\": \\\"complete BPMN 2.0 XML string\\\" },\\n  \\\"icon\\\": {\\n    \\\"name\\\": \\\"icon name (English snake_case, max 100 chars)\\\",\\n    \\\"category\\\": \\\"APPROVAL|CREDIT|ACCOUNT|PAYMENT|CUSTOMER|COMPLIANCE|OPERATION|GENERAL\\\",\\n    \\\"svgContent\\\": \\\"SVG XML string (max 10KB)\\\",\\n    \\\"description\\\": \\\"icon description\\\"\\n  },\\n  \\\"name\\\": \\\"function unit name\\\",\\n  \\\"description\\\": \\\"function unit description\\\"\\n}\\n---GENERATED_DATA_END---\\n\\n⚠️ Field-name cheat sheet (common mistakes to avoid):\\n- The field list must be \\\"fieldDefinitions\\\", never \\\"fields\\\"\\n- Primary key flag must be \\\"isPrimaryKey\\\", never \\\"primaryKey\\\"\\n- Descriptions must be \\\"description\\\", never \\\"comment\\\"\\n- Table display name must be \\\"tableDisplayName\\\", never \\\"displayName\\\" or \\\"tableComment\\\"\\n- Form bindings must be \\\"tableBindings\\\", never \\\"fieldBindings\\\" or \\\"bindings\\\"\\n- A binding references its table via \\\"tableName\\\", never \\\"bindingTableId\\\" or \\\"tableId\\\"\\n- VARCHAR fields must set length > 0\\n- DECIMAL fields must set precision > 0 and scale > 0\\n- Every table must have at least one field with isPrimaryKey: true\\n\\nIf the schema metadata (schemaMetadata) describes additional entity structures such as decisionDefinitions / tableRelations, you may generate them in the JSON as needed (field names as described in schemaMetadata).\\n\\nAfter generation, add at the very end of the reply:\\n---PHASE_COMPLETE---\\n\\nThese markers are essential — the system relies on them to parse the data and complete the flow. Make sure the generated data satisfies all constraints.\"};\n\nexport const code = async (inputs) => {\n  const body = (inputs && inputs.body) || {};\n  let phase = String(body.phase || 'REQUIREMENTS').trim().toUpperCase();\n  if (!PROMPTS[phase]) phase = 'REQUIREMENTS';\n  const mode = String(body.mode || 'NEW').trim().toUpperCase();\n\n  const sys = PROMPTS[phase];\n  const parts = [];\n  parts.push(sys);\n  parts.push('\\n\\n========== Session context (system-provided; do not expose this divider in your reply) ==========');\n  parts.push('Phase: ' + phase + ' | Mode: ' + mode);\n\n  const fuId = (body.functionUnitId !== undefined && body.functionUnitId !== null) ? String(body.functionUnitId) : '0';\n  parts.push('Function unit ID (functionUnitId): ' + fuId);\n\n  parts.push('\\n## Current function unit data');\n  if (body.context) {\n    // 后端已把 context 预序列化为 JSON 字符串\n    parts.push(typeof body.context === 'string' ? body.context : JSON.stringify(body.context));\n  } else {\n    parts.push('(Brand-new function unit — no component data yet. Proceed with analysis/design/generation as usual.)');\n  }\n\n  parts.push('\\n## Existing documents (existingDocuments)');\n  parts.push(body.existingDocuments ? String(body.existingDocuments) : '(none)');\n\n  if (body.schemaMetadata) {\n    parts.push('\\n## Schema metadata (schemaMetadata — generated data must follow these enum values and structures)');\n    parts.push(typeof body.schemaMetadata === 'string' ? body.schemaMetadata : JSON.stringify(body.schemaMetadata));\n  }\n\n  parts.push('\\n## Conversation history (conversationHistory, newest last)');\n  const hist = Array.isArray(body.conversationHistory) ? body.conversationHistory : [];\n  if (hist.length > 0) {\n    for (const m of hist) {\n      const role = (m && (m.role || m.type)) || 'user';\n      const content = (m && (m.content || m.text)) || '';\n      parts.push('[' + String(role).toUpperCase() + '] ' + content);\n    }\n  } else {\n    parts.push('(no history — this is the first turn)');\n  }\n\n  parts.push('\\n## Current user message (message)');\n  parts.push(String(body.message || ''));\n  parts.push('\\n========== End of context — complete the current phase task based on the information above ==========');\n\n  return { prompt: parts.join('\\n'), phase: phase, mode: mode };\n};",
+              "packageJson": "{\n  \"dependencies\": {}\n}"
+            },
+            "errorHandlingOptions": {
+              "retryOnFailure": {
+                "value": false
+              },
+              "continueOnFailure": {
+                "value": false
+              }
+            }
+          },
+          "nextAction": {
+            "name": "step_2",
+            "skip": false,
+            "type": "PIECE",
+            "valid": true,
+            "settings": {
+              "input": {
+                "prompt": "{{step_1.prompt}}",
+                "maxSteps": 6,
+                "webSearch": false,
+                "agentTools": [],
+                "aiProviderModel": {
+                  "model": "deepseek-v4-pro",
+                  "provider": "custom"
+                },
+                "structuredOutput": [],
+                "webSearchOptions": {}
+              },
+              "pieceName": "@activepieces/piece-ai",
+              "actionName": "run_agent",
+              "sampleData": {},
+              "pieceVersion": "0.4.4",
+              "propertySettings": {
+                "prompt": {
+                  "type": "MANUAL"
+                },
+                "maxSteps": {
+                  "type": "MANUAL"
+                },
+                "webSearch": {
+                  "type": "MANUAL"
+                },
+                "agentTools": {
+                  "type": "MANUAL"
+                },
+                "aiProviderModel": {
+                  "type": "MANUAL"
+                },
+                "structuredOutput": {
+                  "type": "MANUAL"
+                },
+                "webSearchOptions": {
+                  "type": "MANUAL",
+                  "schema": {}
+                }
+              },
+              "errorHandlingOptions": {
+                "retryOnFailure": {
+                  "value": false
+                },
+                "continueOnFailure": {
+                  "value": false
+                }
+              }
+            },
+            "nextAction": {
+              "name": "step_3",
+              "skip": false,
+              "type": "CODE",
+              "valid": true,
+              "settings": {
+                "input": {
+                  "agent": "{{step_2}}"
+                },
+                "sampleData": {},
+                "sourceCode": {
+                  "code": "export const code = async (inputs) => {\n  const a = inputs && inputs.agent;\n  // run_agent 输出形如 { status, steps:[{type:'MARKDOWN', markdown}, {type:'TOOL_CALL',...}], structuredOutput }。\n  // LLM 文本分散在 MARKDOWN 步骤的 markdown 字段里,需拼接。\n  let reply = '';\n  if (typeof a === 'string') {\n    reply = a;\n  } else if (a && typeof a === 'object') {\n    if (Array.isArray(a.steps)) {\n      reply = a.steps\n        .filter((s) => s && s.type === 'MARKDOWN' && typeof s.markdown === 'string')\n        .map((s) => s.markdown)\n        .join('\\n');\n    }\n    if (!reply || !reply.trim()) {\n      reply = a.output || a.text || a.message || a.result || a.answer || JSON.stringify(a);\n    }\n  } else {\n    reply = a == null ? '' : String(a);\n  }\n  if (typeof reply !== 'string') reply = JSON.stringify(reply);\n\n  let document = null, documentType = null, phaseComplete = false, generatedData = null;\n\n  const reqDoc = reply.match(/---REQUIREMENTS_DOC_START---([\\s\\S]*?)---REQUIREMENTS_DOC_END---/);\n  const designDoc = reply.match(/---DESIGN_DOC_START---([\\s\\S]*?)---DESIGN_DOC_END---/);\n  const genData = reply.match(/---GENERATED_DATA_START---([\\s\\S]*?)---GENERATED_DATA_END---/);\n\n  if (reqDoc) { document = reqDoc[1].trim(); documentType = 'REQUIREMENTS'; }\n  if (designDoc) { document = designDoc[1].trim(); documentType = 'DESIGN'; }\n  if (reply.indexOf('---PHASE_COMPLETE---') !== -1) phaseComplete = true;\n\n  if (genData) {\n    const raw = genData[1].trim();\n    try {\n      generatedData = JSON.parse(raw);\n    } catch (e) {\n      const block = raw.match(/\\`\\`\\`json?\\s*([\\s\\S]*?)\\`\\`\\`/);\n      if (block) { try { generatedData = JSON.parse(block[1].trim()); } catch (e2) {} }\n      if (generatedData === null) {\n        // 兜底:截取首个 { 到末个 }\n        const s = raw.indexOf('{'); const e3 = raw.lastIndexOf('}');\n        if (s !== -1 && e3 > s) { try { generatedData = JSON.parse(raw.slice(s, e3 + 1)); } catch (e4) {} }\n      }\n    }\n  }\n\n  const cleanReply = reply\n    .replace(/---REQUIREMENTS_DOC_START---[\\s\\S]*?---REQUIREMENTS_DOC_END---/g, '')\n    .replace(/---DESIGN_DOC_START---[\\s\\S]*?---DESIGN_DOC_END---/g, '')\n    .replace(/---GENERATED_DATA_START---[\\s\\S]*?---GENERATED_DATA_END---/g, '')\n    .replace(/---PHASE_COMPLETE---/g, '')\n    .trim();\n\n  return { reply: cleanReply, document: document, documentType: documentType, phaseComplete: phaseComplete, generatedData: generatedData };\n};",
+                  "packageJson": "{\n  \"dependencies\": {}\n}"
+                },
+                "errorHandlingOptions": {
+                  "retryOnFailure": {
+                    "value": false
+                  },
+                  "continueOnFailure": {
+                    "value": false
+                  }
+                }
+              },
+              "nextAction": {
+                "name": "step_4",
+                "skip": false,
+                "type": "PIECE",
+                "valid": true,
+                "settings": {
+                  "input": {
+                    "fields": {
+                      "body": "{{step_3}}",
+                      "status": 200,
+                      "headers": {}
+                    },
+                    "respond": "stop",
+                    "responseType": "json"
+                  },
+                  "pieceName": "@activepieces/piece-webhook",
+                  "actionName": "return_response",
+                  "sampleData": {},
+                  "pieceVersion": "0.1.36",
+                  "propertySettings": {
+                    "fields": {
+                      "type": "MANUAL",
+                      "schema": {
+                        "body": {
+                          "type": "JSON",
+                          "required": true,
+                          "displayName": "JSON Body"
+                        },
+                        "status": {
+                          "type": "NUMBER",
+                          "required": false,
+                          "displayName": "Status",
+                          "defaultValue": 200
+                        },
+                        "headers": {
+                          "type": "OBJECT",
+                          "required": false,
+                          "displayName": "Headers"
+                        }
+                      }
+                    },
+                    "respond": {
+                      "type": "MANUAL"
+                    },
+                    "responseType": {
+                      "type": "MANUAL"
+                    }
+                  },
+                  "errorHandlingOptions": {
+                    "retryOnFailure": {
+                      "value": false
+                    },
+                    "continueOnFailure": {
+                      "value": false
+                    }
+                  }
+                },
+                "displayName": "Return Response",
+                "lastUpdatedDate": "2026-07-17T05:11:50.565Z"
+              },
+              "displayName": "Parse Response",
+              "lastUpdatedDate": "2026-07-17T05:11:50.565Z"
+            },
+            "displayName": "Run Agent",
+            "lastUpdatedDate": "2026-07-17T05:11:50.563Z"
+          },
+          "displayName": "Build Prompt",
+          "lastUpdatedDate": "2026-07-17T05:11:50.560Z"
+        },
+        "lastUpdatedDate": "2026-07-17T05:11:50.560Z",
+        "type": "PIECE_TRIGGER",
+        "settings": {
+          "propertySettings": {
+            "authType": {
+              "type": "MANUAL"
+            },
+            "authFields": {
+              "type": "MANUAL",
+              "schema": {}
+            },
+            "liveMarkdown": {
+              "type": "MANUAL"
+            },
+            "syncMarkdown": {
+              "type": "MANUAL"
+            },
+            "testMarkdown": {
+              "type": "MANUAL"
+            }
+          },
+          "pieceName": "@activepieces/piece-webhook",
+          "pieceVersion": "0.1.36",
+          "triggerName": "catch_webhook",
+          "input": {
+            "authType": "none",
+            "authFields": {}
+          }
+        }
+      },
+      "valid": true,
+      "schemaVersion": "20",
+      "notes": []
+    }
+  ],
+  "status": "PUBLISHED"
+}

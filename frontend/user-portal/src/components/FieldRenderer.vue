@@ -433,7 +433,7 @@
       <el-upload
         v-if="!readonly"
         :action="resolvedUploadUrl"
-        :accept="field.uploadAccept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
+        :accept="field.uploadAccept || ''"
         :limit="field.uploadLimit || 1"
         :multiple="false"
         :disabled="isDisabled"
