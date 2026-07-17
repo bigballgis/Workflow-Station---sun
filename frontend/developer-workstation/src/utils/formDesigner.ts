@@ -203,6 +203,35 @@ export function getRuleChildren(item: any): any[] {
   return childSources.find(children => Array.isArray(children)) || []
 }
 
+/** Layout containers whose children are real field rules (card set + FC_SKIP_PREVIEW). */
+const LAYOUT_CONTAINER_TYPES = new Set([
+  'el-card', 'elCard', 'card',
+  'el-row', 'elRow', 'row',
+  'el-col', 'elCol', 'col',
+  'group', 'subForm', 'tableForm', 'tableFormColumn',
+])
+
+/**
+ * Expand layout containers (Card/Row/Col/…) into their children so field rules nested
+ * inside them still participate in sub-table column derivation. Field-bearing rules and
+ * placeholders (subTable/linkForm) pass through untouched, in document order.
+ */
+export function flattenRuleLayoutContainers(rules: any[]): any[] {
+  if (!Array.isArray(rules)) return []
+  const out: any[] = []
+  const walk = (items: any[]) => {
+    for (const item of items) {
+      if (item && typeof item === 'object' && !item.field && LAYOUT_CONTAINER_TYPES.has(String(item.type))) {
+        walk(getRuleChildren(item))
+      } else {
+        out.push(item)
+      }
+    }
+  }
+  walk(rules)
+  return out
+}
+
 /**
  * Recursively collect all subTable-type rules from a rule tree.
  */

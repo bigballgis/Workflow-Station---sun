@@ -25,6 +25,42 @@ export function resolveSubFormRuleForBinding(
   return Array.isArray(entry?.rule) && entry.rule.length > 0 ? entry.rule : undefined
 }
 
+/** Layout containers whose children are real field rules (same set the DW preview inlines). */
+const LAYOUT_CONTAINER_TYPES = new Set([
+  'el-card', 'elCard', 'card',
+  'el-row', 'elRow', 'row',
+  'el-col', 'elCol', 'col',
+  'group', 'subForm', 'tableForm', 'tableFormColumn',
+])
+
+function getLayoutRuleChildren(item: Record<string, unknown>): unknown[] {
+  const props = (item.props ?? {}) as Record<string, unknown>
+  const sources = [item.children, props.children, props.list, props.items, props.fields]
+  return (sources.find(Array.isArray) as unknown[] | undefined) ?? []
+}
+
+/**
+ * Expand layout containers (Card/Row/Col/…) into their children so field rules nested
+ * inside them still participate in column derivation. Field-bearing rules and
+ * placeholders (`subTable`, `linkForm`) pass through untouched, in document order.
+ */
+export function flattenSubFormRuleLayoutContainers(rules: unknown[] | undefined | null): unknown[] {
+  if (!Array.isArray(rules)) return []
+  const out: unknown[] = []
+  const walk = (items: unknown[]) => {
+    for (const item of items) {
+      const r = item as Record<string, unknown> | null
+      if (r && typeof r === 'object' && !r.field && LAYOUT_CONTAINER_TYPES.has(String(r.type))) {
+        walk(getLayoutRuleChildren(r))
+      } else {
+        out.push(item)
+      }
+    }
+  }
+  walk(rules)
+  return out
+}
+
 /**
  * Only field-bearing input rules become dialog columns. Placeholders (`subTable` nested
  * tables, `linkForm` widgets) and layout containers have no editable `field` and cannot
@@ -43,7 +79,7 @@ export function mapSubFormRuleToDialogColumns(
   subFormRule: unknown[],
   ctx: SubFormColumnLookupContext,
 ): DialogColumn[] {
-  return subFormRule.filter(isDialogMappableSubFormRule).map((rawRule): DialogColumn => {
+  return flattenSubFormRuleLayoutContainers(subFormRule).filter(isDialogMappableSubFormRule).map((rawRule): DialogColumn => {
     const r = rawRule as Record<string, unknown>
     const rProps = (r.props ?? {}) as Record<string, unknown>
     let type: string | undefined
@@ -164,8 +200,8 @@ export function resolveSubFormDialogColumnsForBinding(
   subForms: Record<string, { rule?: unknown[] }> | undefined,
   ctx: SubFormColumnLookupContext,
 ): DialogColumn[] {
-  const subFormRule = resolveSubFormRuleForBinding(binding, subForms)
-  if (!subFormRule?.length) return []
+  const subFormRule = flattenSubFormRuleLayoutContainers(resolveSubFormRuleForBinding(binding, subForms))
+  if (!subFormRule.length) return []
   return enrichLookupColumnPropsFromSubFormRule(
     mapSubFormRuleToDialogColumns(subFormRule, ctx),
     subFormRule,

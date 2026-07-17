@@ -10,7 +10,7 @@
 
 import type { FormDefinition, TableBinding, TableDefinition } from '@/api/functionUnit'
 import type { FormPreviewItem, PreviewSubTableBinding, SubTablePortalViewsPreview } from '@/components/designer/formPreviewTypes'
-import { getRuleChildren, isCardRule, getLayoutLabel, walkFormCreateRules, withSubTableBindingIdInProps } from '@/utils/formDesigner'
+import { flattenRuleLayoutContainers, getRuleChildren, isCardRule, getLayoutLabel, walkFormCreateRules, withSubTableBindingIdInProps } from '@/utils/formDesigner'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { derivePreviewColumns, parseLookupConfig } from '@/utils/formPreview'
@@ -83,8 +83,9 @@ function mapDataTypeToPreviewColumnType(dataType: string): string | undefined {
   return undefined
 }
 
-function deriveColumnsFromSubFormRule(rule: any[]): any[] {
-  if (!Array.isArray(rule) || !rule.length) return []
+function deriveColumnsFromSubFormRule(rawRule: any[]): any[] {
+  const rule = flattenRuleLayoutContainers(rawRule)
+  if (!rule.length) return []
   return rule.map((r: any) => {
     const rProps = r.props || {}
     let type: string | undefined
@@ -185,7 +186,7 @@ function toSubTablePreviewColumns(
 ): any[] {
   const savedColumns = (config.subListViews || {})[bindingId]?.columns
   if (Array.isArray(savedColumns) && savedColumns.length) {
-    const ruleByField = new Map((Array.isArray(rule) ? rule : []).map(r => [r?.field, r]))
+    const ruleByField = new Map(flattenRuleLayoutContainers(rule).map(r => [r?.field, r]))
     return savedColumns.map((column: any) => {
       if (column.columnType === 'linkForm') {
         const targetBindingId = column.boundSubTableBindingId || bindingId

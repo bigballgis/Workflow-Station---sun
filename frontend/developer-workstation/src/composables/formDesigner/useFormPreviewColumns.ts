@@ -2,6 +2,7 @@ import type { ComputedRef, Ref } from 'vue'
 import type { FormDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
+import { flattenRuleLayoutContainers } from '@/utils/formDesigner'
 import { parseLookupConfig } from '@/utils/formPreview'
 import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
 import { resolveRuleDefaultValue } from '@/utils/formCreateRuleDefaults'
@@ -33,8 +34,8 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
    * Derive columns from sub-form binding rule (supports all 15 field types)
    */
   function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) {
-    const subFormRule = subForms?.[binding.bindingId]?.rule
-    if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
+    const subFormRule = flattenRuleLayoutContainers(subForms?.[binding.bindingId]?.rule)
+    if (subFormRule.length > 0) {
       return subFormRule.map((r: any) => {
         const rProps = r.props || {}
         let type: string | undefined
@@ -211,7 +212,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
     const savedColumns = (config.subListViews || {})[bindingId]?.columns
     const listColumns = liveColumns?.length ? liveColumns : savedColumns
     if (Array.isArray(listColumns) && listColumns.length) {
-      const ruleByField = new Map((Array.isArray(rule) ? rule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem]))
+      const ruleByField = new Map(flattenRuleLayoutContainers(rule).map((ruleItem: any) => [ruleItem?.field, ruleItem]))
       return listColumns.map((column: any) => {
         if (column.columnType === 'linkForm') {
           const targetBindingId = column.boundSubTableBindingId || bindingId

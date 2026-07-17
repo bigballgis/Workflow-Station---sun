@@ -10,6 +10,7 @@ import {
   applyFieldDefinitionsToFormFields,
 } from '@/utils/subTableRowRuntime'
 import {
+  flattenSubFormRuleLayoutContainers,
   isDialogMappableSubFormRule,
   mergeListViewFieldColumn,
   deriveColumnsFromRelationFieldDefinitions,
@@ -78,6 +79,7 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
         }
       }
     }
+    if (subFormRule) subFormRule = flattenSubFormRuleLayoutContainers(subFormRule) as any[]
 
     const subFormColumns =
       subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0

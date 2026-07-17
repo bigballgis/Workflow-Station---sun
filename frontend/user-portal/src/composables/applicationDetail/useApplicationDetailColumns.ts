@@ -1,6 +1,7 @@
 import { isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import {
+  flattenSubFormRuleLayoutContainers,
   isDialogMappableSubFormRule,
   mergeListViewFieldColumn,
   mergeMissingTableFieldColumns,
@@ -66,10 +67,11 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
   // Derive display columns for a sub-table binding from the designer config.
   // List-view column order comes from subListViews; control types/options come from subForm (same as process start / task detail).
   const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
-    const subFormRule =
+    const subFormRule = flattenSubFormRuleLayoutContainers(
       binding.subFormConfig?.rule ||
       formConfig?.subForms?.[binding.bindingId]?.rule ||
-      formConfig?.subForms?.[String(binding.bindingId)]?.rule
+      formConfig?.subForms?.[String(binding.bindingId)]?.rule,
+    )
 
     const subFormColumns =
       subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
