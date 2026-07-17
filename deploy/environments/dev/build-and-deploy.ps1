@@ -230,12 +230,13 @@ if ($Service) {
         $feDir = "$RootDir/$($svc.FrontendDir)"
         Push-Location $feDir
         try {
+            Write-Host "  npm install..." -ForegroundColor DarkGray
             $prev = $ErrorActionPreference
             $ErrorActionPreference = "Continue"
-            npm install --prefer-offline --no-audit 2>&1 | Out-Null
+            npm install --prefer-offline --no-audit
             $npmExit = $LASTEXITCODE
             $ErrorActionPreference = $prev
-            if ($npmExit -ne 0) { throw "npm install failed: $Service" }
+            if ($npmExit -ne 0) { throw "npm install failed: $Service (exit code $npmExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
             Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
             npx vite build
@@ -376,12 +377,13 @@ if (-not $SkipFrontend) {
         Write-Host "  npm install & build $($fe.Name)..."
         Push-Location $feDir
         try {
+            Write-Host "  npm install..." -ForegroundColor DarkGray
             $prev = $ErrorActionPreference
             $ErrorActionPreference = "Continue"
-            npm install --prefer-offline --no-audit 2>&1 | Out-Null
+            npm install --prefer-offline --no-audit
             $npmExit = $LASTEXITCODE
             $ErrorActionPreference = $prev
-            if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name)" }
+            if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name) (exit code $npmExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
             Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
             npx vite build
