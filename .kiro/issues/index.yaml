@@ -1262,15 +1262,42 @@
     重建 developer-workstation 容器 healthy。待用户在 UI 用 123456 重试确认 team 修改成功。
 - id: "1482"
   status: fixed
+  fixed_at: "2026-07-17"
   severity: major
-  category: bug
-  summary: "Form Preview Lookup 组件 change/blur 事件不触发，setValue 无法回填 sibling 字段"
-  fixed_at: "2026-07-14"
+  category: architecture
+  summary: "DW FU 可见性重构：进入时选组 + 顶栏切组 + 内置 Public 组叠加 + 创建按当前组自动归属"
+  file: "backend/developer-workstation/src/main/java/com/developer/security/FunctionUnitWorkspaceAccessService.java"
   note: |
-    症状：HMDC Case Form 字段 test（lookup）配置 change/blur 脚本 $inject.api.setValue('testvalue','successful')，
-    在 Form Preview 选中 lookup 值后 testvalue 不更新。
-    根因：useFormPreviewBuild 将 lookup 从 form-create 拆成独立 LookupPreview，未绑定 previewModel，
-    也未调用 runComponentFieldEventsOnValueChange；且 live getRule() 常丢失 _on，Preview 需 merge 已保存 on。
-    User Portal：handleLookupSelect 仅更新 lookupSelectedData，未调用 handleFieldChange，组件 change 不触发。
-    修复：lookup preview item 携带 field+rule + dispatchPreviewFieldValueChange + mergeComponentEventsFromSavedRules；
-    Portal useFormData handleLookupSelect/Clear 调用 handleFieldChange。
+    背景：原「创建 FU 时手选团队」不优雅且有分错团队的安全风险。改为 User-Portal 式的组上下文模型。
+    行为：
+    1) 进入 DW 若属多个 CUSTOM 团队 → 弹「选择团队」对话框（DevGroupContextBar 入口态），选定后仅见「该团队 FU ∪ Public FU」；
+       顶栏「Team: xxx」可随时切换（切换器态，localStorage 持久化，经 X-Dev-Group-Id 头下发后端过滤）。
+    2) SYS_ADMIN：canSeeAllGroups=true，默认 __ALL__（全局可见全部 FU），亦可下拉过滤到某组=该组∪Public。
+    3) TECH_LEAD：不再全局可见，与普通用户同为 scope 可见（组∪Public），但创建/设置时 team 字段可编辑（可跨组分配）。
+    4) 内置 Public 组 vg-dev-public（CUSTOM，无成员）：其 FU 对所有 DW 用户恒可见，作为所选团队之上的叠加层；
+       仅 ADMIN 可改 Public 的 FU。所有历史/遗留 FU 迁入 Public。
+    5) 创建 FU：普通用户按当前所选组自动归属（team 字段只读显示当前组）；ADMIN/TECH_LEAD 可编辑（下拉多选）。
+    后端：新增 DevGroupConstants.PUBLIC_GROUP_ID、DevGroupContextHolder(X-Dev-Group-Id/__ALL__)、
+    VirtualGroupMembershipDao.findSelectableTeamsByUserId、DevGroupOptionDTO、MyDevGroupsResponse；
+    FunctionUnitWorkspaceAccessService 重写 canAccess/visibleFunctionUnitIds/canEnterWorkspace + 新增
+    isMemberOfAnyDevTeam/getSelectableTeams/canSeeAllGroups/publicFunctionUnitIds/resolveCreationTeamGroupIds；
+    FunctionUnitComponentImpl.create 用 resolveCreationTeamGroupIds；新增 GET /function-units/my-dev-groups
+    （无 @RequireDeveloperPermission，供无角色团队成员解析所属团队）；DeveloperPermissionChecker 改为
+    isMemberOfAnyDevTeam 成员即补 function_unit:view 只读。
+    前端：devGroupContext.ts（active group + X-Dev-Group-Id 头）、functionUnit.getMyDevGroups、
+    DevGroupContextBar.vue（入口对话框 + 顶栏切换器，挂 MainLayout header-right）、useFunctionUnitForm 的
+    teamEditable/activeGroupName/currentTeamNames + team 字段只读/可编辑分流、permission.canReassignTeam、
+    i18n en/zh-CN/zh-TW devGroup.*。
+    迁移：新增 deploy/init-scripts/01-admin/08-fu-public-group-migration.sql（幂等：建 Public 组 + 遗留/
+    default-dev-team FU 迁入 Public + 清 default-dev-team 分配），加入 00-init-all.sh；seed all-in-one 同步 vg-dev-public。
+    验证：mvn -pl backend/developer-workstation -am package -DskipTests BUILD SUCCESS；DW 前端 build；重建
+    developer-workstation + developer-workstation-frontend（healthy）；dev DB 跑 08 迁移（Public 建成、42 遗留 FU 迁入、
+    删 42 default-dev-team 行；团队组 finance/testFUaccessTeamB 等各自保留）。Playwright（本机 chromium）截图：
+    verification-screenshots/2026-07-17_fu-list-devgroup-bar.png（顶栏 Team: All groups + 列表加载）、
+    2026-07-17_devgroup-switcher-header.png（切换器近景）。UAT：现有库需手工跑 08 迁移，且团队↔用户成员关系须在
+    Admin Center 单独维护，否则非 ADMIN/TECH_LEAD 用户将只见 Public FU。
+    追加(2026-07-18)：创建 FU 时可编辑 team 下拉（ADMIN/TECH_LEAD）默认预选「当前所选组」，
+    进一步降低选错团队风险（openCreateDialog 在 loadTeamOptions 后，若 active group 非 __ALL__ 则
+    basicForm.teamGroupIds=[activeGroup]；__ALL__ 下留空需手选）。普通用户仍为只读=当前组。
+    验证：本机 chromium 截图 verification-screenshots/2026-07-18_fu-create-team-preselect.png
+    （active=Finance Team → 创建弹窗 Team 预选 Finance Team 且可改）。

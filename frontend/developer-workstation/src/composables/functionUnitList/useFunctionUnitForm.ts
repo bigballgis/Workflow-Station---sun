@@ -1,11 +1,12 @@
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { functionUnitApi, type FunctionUnitResponse } from '@/api/functionUnit'
+import { functionUnitApi, type FunctionUnitResponse, type DevGroupOption } from '@/api/functionUnit'
 import { adminCenterApi, type VirtualGroupInfo } from '@/api/adminCenter'
 import type { useFunctionUnitStore } from '@/stores/functionUnit'
 import { normalizeTags } from '@/utils/tagStorage'
 import { permissions } from '@/utils/permission'
+import { ALL_GROUPS, getActiveGroupRaw } from '@/utils/devGroupContext'
 
 type FunctionUnitStore = ReturnType<typeof useFunctionUnitStore>
 
@@ -34,35 +35,73 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
 
   const teamOptions = ref<VirtualGroupInfo[]>([])
   const teamsLoading = ref(false)
+  const myGroups = ref<DevGroupOption[]>([])
+  const canSeeAll = ref(false)
+  const publicGroupId = ref<string>('')
 
-  // Team ownership controls FU visibility. Show the selector when creating (creators pick a team)
-  // or when a user allowed to reassign teams opens settings. Backend enforces per-FU scope.
-  const showTeamSelector = computed(() =>
-    formDialogMode.value === 'create' || permissions.canAssignDevGroups()
-  )
+  // Whether the team field is an editable selector (SYS_ADMIN / TECH_LEAD) vs read-only
+  // (regular creators: team = their currently selected team; enforced by backend).
+  const teamEditable = computed(() => permissions.canReassignTeam())
+
+  // Always show the team field so the user sees which team owns the FU.
+  const showTeamSelector = computed(() => true)
+
+  // Display name of the user's currently active team (for the read-only field on create).
+  const activeGroupName = computed(() => {
+    const raw = getActiveGroupRaw()
+    if (!raw || raw === ALL_GROUPS) return raw === ALL_GROUPS ? t('devGroup.allGroups') : ''
+    if (raw === publicGroupId.value) return 'Public'
+    return myGroups.value.find(g => g.id === raw)?.name ?? ''
+  })
+
+  // Read-only display of a function unit's current team names (settings, non-editable users).
+  const currentTeamNames = ref<string>('')
 
   const formDialogTitle = computed(() =>
     formDialogMode.value === 'create' ? t('functionUnit.create') : t('functionUnit.settings')
   )
   const formRules = computed(() => ({
     name: [{ required: true, message: t('functionUnit.enterName'), trigger: 'blur' }],
-    teamGroupIds: formDialogMode.value === 'create'
+    // Only editable creators must pick a team; regular creators inherit the active team.
+    teamGroupIds: (formDialogMode.value === 'create' && teamEditable.value)
       ? [{ required: true, message: t('functionUnit.selectTeamRequired'), trigger: 'change' }]
       : []
   }))
 
+  function nameById(id: string): string {
+    if (id === publicGroupId.value) return 'Public'
+    return teamOptions.value.find(g => g.id === id)?.name
+      ?? myGroups.value.find(g => g.id === id)?.name
+      ?? id
+  }
+
   async function loadTeamOptions() {
-    if (teamOptions.value.length > 0) {
-      return
-    }
     teamsLoading.value = true
     try {
-      teamOptions.value = await adminCenterApi.getVirtualGroups('CUSTOM', 'ACTIVE')
+      // Dev-group context: names for read-only display + team scoping for the editable selector.
+      const my = await functionUnitApi.getMyDevGroups()
+      myGroups.value = my?.data?.groups ?? []
+      canSeeAll.value = my?.data?.canSeeAllGroups === true
+      publicGroupId.value = my?.data?.publicGroupId ?? ''
     } catch {
-      teamOptions.value = []
-    } finally {
-      teamsLoading.value = false
+      myGroups.value = []
+      canSeeAll.value = false
     }
+    if (teamEditable.value && teamOptions.value.length === 0) {
+      try {
+        // ADMIN may target any team (incl. Public); TECH_LEAD is scoped to own teams + Public.
+        if (canSeeAll.value) {
+          teamOptions.value = await adminCenterApi.getVirtualGroups('CUSTOM', 'ACTIVE')
+        } else {
+          const opts: VirtualGroupInfo[] = myGroups.value.map(g => ({ id: g.id, name: g.name }))
+          if (publicGroupId.value) opts.push({ id: publicGroupId.value, name: 'Public' })
+          teamOptions.value = opts
+        }
+      } catch {
+        teamOptions.value = []
+      }
+    }
+    teamsLoading.value = false
   }
 
   function resetBasicForm() {
@@ -77,7 +116,18 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     formDialogMode.value = 'create'
     settingsItemId.value = null
     resetBasicForm()
-    void loadTeamOptions()
+    currentTeamNames.value = ''
+    void loadTeamOptions().then(() => {
+      // Pre-select the user's currently active team so editable creators (admin/tech-lead)
+      // default to the team they are working in and don't accidentally file the FU under the
+      // wrong team. "All groups" (__ALL__) has no single team, so leave the selection empty.
+      if (teamEditable.value) {
+        const raw = getActiveGroupRaw()
+        if (raw && raw !== ALL_GROUPS) {
+          basicForm.teamGroupIds = [raw]
+        }
+      }
+    })
     showFormDialog.value = true
   }
 
@@ -94,13 +144,21 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     basicForm.iconId = item.iconId ?? null
     basicForm.tags = [...normalizeTags(item.tags)]
     basicForm.teamGroupIds = []
+    currentTeamNames.value = ''
     showFormDialog.value = true
-    if (permissions.canAssignDevGroups()) {
-      void loadTeamOptions()
+    // Load names/options, then the FU's current team assignment for display / editing.
+    void loadTeamOptions().then(() => {
       functionUnitApi.getDevGroups(item.id)
-        .then(res => { basicForm.teamGroupIds = res.data ?? [] })
-        .catch(() => { basicForm.teamGroupIds = [] })
-    }
+        .then(res => {
+          const ids = res.data ?? []
+          basicForm.teamGroupIds = ids
+          currentTeamNames.value = ids.map(nameById).join(', ')
+        })
+        .catch(() => {
+          basicForm.teamGroupIds = []
+          currentTeamNames.value = ''
+        })
+    })
   }
 
   async function handleFormSubmit() {
@@ -115,11 +173,15 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
         tags: normalizeTags(basicForm.tags),
       }
       if (formDialogMode.value === 'create') {
-        await store.create({ ...payload, virtualGroupIds: basicForm.teamGroupIds })
+        // Editable creators (admin/tech-lead) choose the team; regular creators inherit the
+        // currently selected team server-side (backend resolves from the X-Dev-Group-Id header).
+        const virtualGroupIds = teamEditable.value ? basicForm.teamGroupIds : undefined
+        await store.create({ ...payload, virtualGroupIds })
         ElMessage.success(t('functionUnit.createSuccess'))
       } else if (settingsItemId.value != null) {
         await store.update(settingsItemId.value, payload)
-        if (permissions.canAssignDevGroups()) {
+        // Only editable users may reassign the team.
+        if (teamEditable.value) {
           await functionUnitApi.replaceDevGroups(settingsItemId.value, basicForm.teamGroupIds)
         }
         ElMessage.success(t('functionUnit.saveSuccess'))
@@ -147,6 +209,9 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     teamOptions,
     teamsLoading,
     showTeamSelector,
+    teamEditable,
+    activeGroupName,
+    currentTeamNames,
     openCreateDialog,
     handleFormDialogClosed,
     handleSettings,

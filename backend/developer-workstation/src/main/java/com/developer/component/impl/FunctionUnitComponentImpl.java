@@ -183,7 +183,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         // 创建时绑定所属团队（虚拟组）——决定 FU 的可见范围。此处不走 ASSIGN_DEV_GROUPS 工作区校验：
         // 创建动作已由 @RequireDeveloperPermission(FUNCTION_UNIT_CREATE) + @PreAuthorize 校验，
         // 且新 FU 尚未 inScope，无法在创建后再自助分配（否则陷入「不可见→不可分配」死锁）。
-        persistCreateTimeDevGroups(functionUnit.getId(), request.getVirtualGroupIds());
+        persistCreateTimeDevGroups(functionUnit.getId(),
+                functionUnitWorkspaceAccessService.resolveCreationTeamGroupIds(request.getVirtualGroupIds()));
 
         String initialBpmnXml = MinimalBpmnTemplate.build(functionUnit.getCode());
         ProcessDefinition initialProcess = ProcessDefinition.builder()
@@ -319,6 +320,17 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     public boolean canAccessWorkspace() {
         String userId = SecurityContextUtils.getCurrentUserId().orElse(null);
         return functionUnitWorkspaceAccessService.canEnterWorkspace(userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.developer.dto.MyDevGroupsResponse getMyDevGroups() {
+        String userId = SecurityContextUtils.getCurrentUserId().orElse(null);
+        return com.developer.dto.MyDevGroupsResponse.builder()
+                .groups(functionUnitWorkspaceAccessService.getSelectableTeams(userId))
+                .canSeeAllGroups(functionUnitWorkspaceAccessService.canSeeAllGroups(userId))
+                .publicGroupId(com.developer.security.DevGroupConstants.PUBLIC_GROUP_ID)
+                .build();
     }
 
     @Override

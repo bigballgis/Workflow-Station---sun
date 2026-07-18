@@ -1,5 +1,6 @@
 package com.developer.security;
 
+import com.developer.dto.DevGroupOptionDTO;
 import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.RoleRepository;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -26,11 +28,19 @@ import java.util.Set;
  *       但仅在团队 scope 内生效（编辑 ⊆ 可见）。</li>
  * </ul>
  *
- * <p>豁免：{@code ADMIN} 型角色（如 {@code SYS_ADMIN}）与 {@code TECH_LEAD} 为平台级超级视角，
- * 不受团队隔离约束（全局可见/可改）。</p>
+ * <p>可见范围（scope）：
+ * <ul>
+ *   <li><b>仅 {@code ADMIN} 型角色（如 {@code SYS_ADMIN}）</b>为平台级超级视角，默认全局可见；
+ *       亦可通过 {@code X-Dev-Group-Id} 收窄到某一团队（团队 ∪ Public）。</li>
+ *   <li>其余用户（含 {@code TECH_LEAD}）只能看到「当前所选团队」（或未选择时其全部团队）
+ *       <b>叠加 Public 组</b>的功能单元。</li>
+ * </ul>
+ * Public 组（{@link DevGroupConstants#PUBLIC_GROUP_ID}）的功能单元对所有能进入工作区者始终可见。</p>
  *
- * <p>仅拥有团队成员身份、无 {@code TEAM_LEAD}/{@code DEVELOPER} 能力角色的用户（如绑定
- * {@code FU_VIEWER} 的团队组成员）只获得团队 FU 的<b>只读</b>访问。</p>
+ * <p>能力（capability）在可见 scope 内生效：
+ * {@code TECH_LEAD}/{@code TEAM_LEAD}/{@code DEVELOPER} 可编辑；{@code TECH_LEAD}/{@code TEAM_LEAD}
+ * 可删除/维护团队分配；仅成员身份（如 {@code FU_VIEWER}）为<b>只读</b>。Public 组功能单元
+ * 仅 {@code ADMIN} 可改（承载历史/共享，团队成员只读）。</p>
  */
 @Slf4j
 @Service
@@ -66,37 +76,37 @@ public class FunctionUnitWorkspaceAccessService {
             return false;
         }
 
-        // ADMIN / TECH_LEAD 全局豁免团队隔离
-        if (roleRepository.userHasActiveAdminTypeRole(userId)
-                || roleRepository.hasRoleByUserId(userId, ROLE_TECH_LEAD)) {
+        // 仅 ADMIN 型角色全局豁免团队隔离（TECH_LEAD 已收窄为团队 scope）
+        if (roleRepository.userHasActiveAdminTypeRole(userId)) {
             return true;
         }
 
-        // 团队 scope：FU 是否分配到用户所属的任一虚拟组。编辑 ⊆ 可见 —— 不在 scope 内即不可做任何操作。
-        if (!isAssignedViaVirtualGroup(userId, functionUnitId)) {
+        boolean inMemberScope = isAssignedViaVirtualGroup(userId, functionUnitId);
+        boolean inPublic = publicFunctionUnitIds().contains(functionUnitId);
+
+        // 既不在自己团队、也不属于 Public —— 不可做任何操作
+        if (!inMemberScope && !inPublic) {
             return false;
         }
 
+        boolean techLead = roleRepository.hasRoleByUserId(userId, ROLE_TECH_LEAD);
         boolean teamLead = roleRepository.hasRoleByUserId(userId, ROLE_TEAM_LEAD);
         boolean developer = roleRepository.hasRoleByUserId(userId, ROLE_DEVELOPER);
 
         return switch (action) {
-            // 团队成员（含只读 FU_VIEWER）均可查看团队 FU
+            // 团队成员（含只读 FU_VIEWER）与 Public 组功能单元：任何可进入工作区者均可查看
             case VIEW -> true;
-            // 编辑/设计/发布/部署/回滚：需要能力角色
-            case MODIFY -> teamLead || developer;
-            // 删除、维护团队分配：团队内的 Team Lead
-            case DELETE, ASSIGN_DEV_GROUPS -> teamLead;
+            // 编辑/设计/发布/部署/回滚：需能力角色，且必须在自己团队 scope 内（Public 仅 ADMIN 可改）
+            case MODIFY -> inMemberScope && (techLead || teamLead || developer);
+            // 删除、维护团队分配：团队内的 Tech Lead / Team Lead（Public 仅 ADMIN）
+            case DELETE, ASSIGN_DEV_GROUPS -> inMemberScope && (techLead || teamLead);
         };
     }
 
     /**
      * 是否为「拥有功能单元的团队」成员：用户所属任一虚拟组被分配了 ≥1 个功能单元
-     * （{@code dw_function_unit_dev_groups}）。
-     *
-     * <p>用于将「团队成员身份」解耦为 DW 只读能力——团队组无需再绑定 {@code FU_VIEWER}
-     * 等 DW 角色（admin-center 的 VG 角色下拉框仅允许绑 BU 类角色，无法绑 DW 角色）。
-     * 具体某个 FU 能否被访问仍由 {@link #canAccess} / 拦截器按团队 scope 逐 FU 校验。</p>
+     * （{@code dw_function_unit_dev_groups}）。保留供历史调用；DW 只读基线判断改用
+     * {@link #isMemberOfAnyDevTeam(String)}。
      */
     public boolean isMemberOfFunctionUnitOwningTeam(String userId) {
         if (userId == null || userId.isBlank()) {
@@ -110,11 +120,26 @@ public class FunctionUnitWorkspaceAccessService {
     }
 
     /**
+     * 是否为任一「团队」（CUSTOM 虚拟组，排除 Public）的成员。
+     *
+     * <p>作为 DW 只读基线：团队成员即可进入工作区，查看本团队（可能暂无 FU）与 Public 的功能单元。
+     * 迁移后历史 FU 归入 Public、团队初始可能无 FU，故不再要求「团队已拥有 FU」。</p>
+     */
+    public boolean isMemberOfAnyDevTeam(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        return !virtualGroupMembershipDao
+                .findSelectableTeamsByUserId(userId, DevGroupConstants.PUBLIC_GROUP_ID)
+                .isEmpty();
+    }
+
+    /**
      * 能否进入 DW 功能单元工作区（能力门禁）：
      * <ul>
      *   <li>{@code ADMIN} 型 / {@code TECH_LEAD} / {@code TEAM_LEAD} / {@code DEVELOPER} /
      *       {@code FU_VIEWER} 能力角色；或</li>
-     *   <li>「拥有功能单元的团队」成员（团队成员身份 → 只读基线）。</li>
+     *   <li>任一团队（CUSTOM 虚拟组）成员（团队成员身份 → 只读基线）。</li>
      * </ul>
      * 进入后可见/可改的具体 FU 仍受团队 scope 约束。
      */
@@ -129,7 +154,87 @@ public class FunctionUnitWorkspaceAccessService {
                 || roleRepository.hasRoleByUserId(userId, ROLE_FU_VIEWER)) {
             return true;
         }
-        return isMemberOfFunctionUnitOwningTeam(userId);
+        return isMemberOfAnyDevTeam(userId);
+    }
+
+    /** 当前用户可选择的团队列表（进入弹窗 / 顶部切换器）。 */
+    public List<DevGroupOptionDTO> getSelectableTeams(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return Collections.emptyList();
+        }
+        return virtualGroupMembershipDao.findSelectableTeamsByUserId(userId, DevGroupConstants.PUBLIC_GROUP_ID);
+    }
+
+    /** 当前用户是否为 ADMIN 型角色（可查看全部功能单元、选择「全部团队」）。 */
+    public boolean canSeeAllGroups(String userId) {
+        return userId != null && !userId.isBlank() && roleRepository.userHasActiveAdminTypeRole(userId);
+    }
+
+    /**
+     * 解析创建功能单元时应绑定的团队（虚拟组）：
+     * <ul>
+     *   <li><b>ADMIN</b>：可自由选择任意团队（含 Public）——用请求携带的 {@code virtualGroupIds}；
+     *       未提供则回退到当前所选团队。</li>
+     *   <li><b>TECH_LEAD</b>：可选择「自己的团队 ∪ Public」——请求值经白名单过滤；
+     *       未提供则回退到当前所选团队。</li>
+     *   <li><b>其余创建者（TEAM_LEAD）</b>：强制绑定「当前所选团队」（须为其成员），忽略请求携带值。</li>
+     * </ul>
+     * 无法确定合法目标团队时抛业务异常，避免创建出「无归属 → 无人可见」的孤儿功能单元。
+     *
+     * @throws IllegalStateException 当前无有效用户
+     * @throws FunctionUnitWorkspaceAccessDeniedException 未选择/无权选择目标团队
+     */
+    public List<String> resolveCreationTeamGroupIds(List<String> requested) {
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new IllegalStateException("No authenticated user"));
+        Optional<String> selected = DevGroupContextHolder.getSelectedGroupId();
+        List<String> memberships = virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId);
+
+        boolean admin = roleRepository.userHasActiveAdminTypeRole(userId);
+        boolean techLead = roleRepository.hasRoleByUserId(userId, ROLE_TECH_LEAD);
+
+        if (admin || techLead) {
+            Set<String> allowed = null; // admin: 任意
+            if (!admin) {
+                allowed = new HashSet<>();
+                for (DevGroupOptionDTO t : getSelectableTeams(userId)) {
+                    allowed.add(t.getId());
+                }
+                allowed.add(DevGroupConstants.PUBLIC_GROUP_ID);
+            }
+            List<String> chosen = new java.util.ArrayList<>();
+            if (requested != null) {
+                for (String gid : requested) {
+                    if (gid == null || gid.isBlank()) {
+                        continue;
+                    }
+                    String trimmed = gid.trim();
+                    if (allowed == null || allowed.contains(trimmed)) {
+                        chosen.add(trimmed);
+                    }
+                }
+            }
+            if (!chosen.isEmpty()) {
+                return chosen;
+            }
+            if (selected.isPresent() && (admin || memberships.contains(selected.get()))) {
+                return List.of(selected.get());
+            }
+            throw new FunctionUnitWorkspaceAccessDeniedException(
+                    "Please select a team for this function unit");
+        }
+
+        // 普通创建者（Team Lead）：绑定当前所选团队，必须是其成员
+        if (selected.isPresent() && memberships.contains(selected.get())) {
+            return List.of(selected.get());
+        }
+        throw new FunctionUnitWorkspaceAccessDeniedException(
+                "Please select a team before creating a function unit");
+    }
+
+    private Set<Long> publicFunctionUnitIds() {
+        return new HashSet<>(devGroupAssignmentRepository
+                .findDistinctFunctionUnitIdsByVirtualGroupIdIn(List.of(DevGroupConstants.PUBLIC_GROUP_ID)));
     }
 
     private boolean isAssignedViaVirtualGroup(String userId, Long functionUnitId) {
@@ -142,8 +247,13 @@ public class FunctionUnitWorkspaceAccessService {
     }
 
     /**
-     * 列表/可见范围：{@code ADMIN} / {@code TECH_LEAD} = 全部（返回 {@code null}）；
-     * 否则为「用户所属虚拟组被分配到的 FU 集合」（团队 scope）。
+     * 列表/可见范围：
+     * <ul>
+     *   <li><b>ADMIN</b>：未选择团队（或 __ALL__）→ 全部（返回 {@code null}）；选择了某团队 →
+     *       该团队 ∪ Public。</li>
+     *   <li><b>其余用户</b>：所选团队（若为其成员）否则其全部团队，<b>叠加 Public</b>。</li>
+     * </ul>
+     * 返回 {@code null} 表示「全部可见」；返回空集表示「无可见项」。
      */
     public Set<Long> visibleFunctionUnitIds() {
         Optional<String> userIdOpt = SecurityContextUtils.getCurrentUserId();
@@ -151,16 +261,30 @@ public class FunctionUnitWorkspaceAccessService {
             return Collections.emptySet();
         }
         String userId = userIdOpt.get();
+        Optional<String> selected = DevGroupContextHolder.getSelectedGroupId();
 
-        if (roleRepository.userHasActiveAdminTypeRole(userId)
-                || roleRepository.hasRoleByUserId(userId, ROLE_TECH_LEAD)) {
-            return null;
+        if (roleRepository.userHasActiveAdminTypeRole(userId)) {
+            if (selected.isEmpty()) {
+                return null;
+            }
+            Set<Long> adminIds = new HashSet<>(devGroupAssignmentRepository
+                    .findDistinctFunctionUnitIdsByVirtualGroupIdIn(List.of(selected.get())));
+            adminIds.addAll(publicFunctionUnitIds());
+            return adminIds;
         }
 
-        List<String> groups = virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId);
-        if (groups.isEmpty()) {
-            return new HashSet<>();
+        List<String> memberships = virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId);
+        // 所选团队必须是用户真实成员的组才据此收窄（防伪造）；否则回退到全部团队。
+        Collection<String> scope = (selected.isPresent() && memberships.contains(selected.get()))
+                ? List.of(selected.get())
+                : memberships;
+
+        Set<Long> ids = new HashSet<>();
+        if (!scope.isEmpty()) {
+            ids.addAll(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(scope));
         }
-        return new HashSet<>(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(groups));
+        // Public 组功能单元始终叠加可见
+        ids.addAll(publicFunctionUnitIds());
+        return ids;
     }
 }

@@ -8,6 +8,7 @@
         <span class="logo-text">{{ t('app.name') }}</span>
       </div>
       <div class="header-right">
+        <DevGroupContextBar />
         <UserProfileDropdown />
       </div>
     </el-header>
@@ -21,6 +22,7 @@
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
+import DevGroupContextBar from '@/components/DevGroupContextBar.vue'
 import { getUser, getCurrentUser, saveUser, clearAuth } from '@/api/auth'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 

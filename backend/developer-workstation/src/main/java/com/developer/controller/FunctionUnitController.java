@@ -71,6 +71,15 @@ public class FunctionUnitController extends BaseController {
         return handleRequest(() -> Map.of("canView", functionUnitComponent.canAccessWorkspace()));
     }
 
+    @GetMapping("/my-dev-groups")
+    @Operation(summary = "Current user's selectable dev teams (for the entry dialog / header switcher)",
+            description = "Returns the CUSTOM virtual groups the user belongs to (excluding the built-in Public group), "
+                    + "whether they may view all function units (ADMIN), and the Public group id. "
+                    + "Not gated by @RequireDeveloperPermission so role-less team members can resolve their teams.")
+    public ResponseEntity<ApiResponse<com.developer.dto.MyDevGroupsResponse>> myDevGroups() {
+        return handleRequest(functionUnitComponent::getMyDevGroups);
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get function unit details")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")

@@ -107,6 +107,15 @@ export default {
     selectTestUser: 'Select Test User',
     testUserHint: 'Quick login for test environment'
   },
+  devGroup: {
+    current: 'Team',
+    switch: 'Switch',
+    allGroups: 'All groups',
+    noTeam: 'No team',
+    selectTitle: 'Select a team',
+    selectHint: 'You belong to multiple teams. Choose the team to work in — you will only see this team\'s function units plus public ones. You can switch anytime from the top bar.',
+    confirm: 'Enter'
+  },
   functionUnit: {
     title: 'Function Units',
     name: 'Name',

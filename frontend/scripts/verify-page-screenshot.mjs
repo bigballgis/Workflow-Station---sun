@@ -112,7 +112,16 @@ async function main() {
 
   const [vw, vh] = args.viewport.split('x').map(Number)
   const { chromium } = await loadPlaywright()
-  const browser = await chromium.launch({ headless: true })
+  // Allow reusing a locally-installed Chrome/Chromium (PLAYWRIGHT_EXECUTABLE_PATH)
+  // or a system channel (PLAYWRIGHT_CHANNEL, e.g. "chrome") when the managed
+  // headless-shell download is unavailable/blocked.
+  const launchOpts = { headless: true }
+  if (process.env.PLAYWRIGHT_EXECUTABLE_PATH) {
+    launchOpts.executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH
+  } else if (process.env.PLAYWRIGHT_CHANNEL) {
+    launchOpts.channel = process.env.PLAYWRIGHT_CHANNEL
+  }
+  const browser = await chromium.launch(launchOpts)
   const page = await (await browser.newContext({
     viewport: { width: vw || 1400, height: vh || 1600 },
   })).newPage()
