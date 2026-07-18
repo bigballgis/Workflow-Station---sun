@@ -237,8 +237,10 @@ const props = defineProps<{
   config?: RecordNoteConfig
   tableKind?: 'DW' | 'RT'
   tableId?: number | string | null
-  /** Resolved record identity: process instance id (main form) or row id (sub/RT row). */
+  /** Resolved record identity: process instance id (main form) or row id (sub-table row). */
   recordId?: string | null
+  /** Current process instance id — TABLE scope always anchors here; falls back to recordId. */
+  processInstanceId?: string | null
   functionUnitId?: number | string | null
   readonly?: boolean
 }>()
@@ -262,15 +264,18 @@ const maxFileBytes = computed(() => Math.min(Number(props.config?.maxFileSizeMb)
 const expanded = ref(false)
 const bodyVisible = computed(() => !compact.value || expanded.value)
 
-// Notes never cross process instances — both scopes anchor on recordId:
-// TABLE = the hosting table's shared stream within the current process
-// (targetId = process instance id), RECORD = a single sub-table row
-// (targetId = row id, once sub-table forms are wired up).
+// Notes never cross process instances. TABLE scope = the hosting table's
+// shared stream within the current process (targetId = instance id, or the
+// New-Request draft id); RECORD scope = one sub-table row (targetId = row id).
 const target = computed<RecordNoteTargetParams | null>(() => {
-  if (props.tableId == null || props.tableId === '' || !props.recordId) return null
+  if (props.tableId == null || props.tableId === '') return null
+  const targetId = scope.value === 'TABLE'
+    ? (props.processInstanceId ?? props.recordId)
+    : props.recordId
+  if (!targetId) return null
   return {
     targetType: scope.value,
-    targetId: String(props.recordId),
+    targetId: String(targetId),
     tableKind: props.tableKind ?? 'DW',
     tableId: String(props.tableId),
     functionUnitId: props.functionUnitId ?? null,

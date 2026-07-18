@@ -450,6 +450,23 @@
       />
     </div>
 
+    <!-- RecordNote panels from this binding's form design: RECORD scope binds the
+         edited row (disabled until the row is saved), TABLE scope binds this
+         sub-table's shared stream within the current process. -->
+    <div
+      v-for="rn in recordNoteFields || []"
+      :key="rn.key"
+      class="dialog-record-note"
+    >
+      <RecordNoteField
+        :config="rn._recordNote"
+        :table-id="recordNoteTableId ?? null"
+        :record-id="editingRowStableId"
+        :process-instance-id="recordNoteInstanceId ?? null"
+        :function-unit-id="recordNoteFunctionUnitId ?? null"
+      />
+    </div>
+
     <template #footer>
       <el-button @click="handleClose">
         {{ t('common.cancel') }}
@@ -466,14 +483,15 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
 import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
-import type { RowFormulaRule, ValidationRule } from './formRendererHelpers'
+import type { FormField, RowFormulaRule, ValidationRule } from './formRendererHelpers'
+import RecordNoteField from './RecordNoteField.vue'
 import DOMPurify from 'dompurify'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
@@ -529,6 +547,14 @@ const props = defineProps<{
   nestedSubTables?: NestedSubTableDescriptor[]
   /** When set, awaited before closing (supports async PK allocate on Save). */
   saveRow?: (row: Record<string, unknown>) => void | Promise<void>
+  /** RecordNote components placed in this binding's form design. */
+  recordNoteFields?: FormField[]
+  recordNoteTableId?: number | string | null
+  /** Current process instance id — TABLE scope stream anchor. */
+  recordNoteInstanceId?: string | null
+  recordNoteFunctionUnitId?: string | number | null
+  /** This sub-table's PK fields — resolve the edited row's stable id for RECORD scope. */
+  primaryKeyFields?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -538,6 +564,23 @@ const emit = defineEmits<{
 
 // Shared model owned by the SFC and threaded through the composables below.
 const formData = ref<Record<string, any>>({})
+
+// Stable identity of the row being edited — RECORD-scope note anchor. Resolution
+// mirrors subTableRowMerge: declared PK first, then rowId, then the platform
+// id / id_idw alias pair. New (unsaved) rows have none: the panel shows its
+// "available after save" hint.
+const editingRowStableId = computed<string | null>(() => {
+  if (props.mode !== 'edit') return null
+  const row = formData.value || {}
+  const candidates: unknown[] = []
+  const pk = props.primaryKeyFields?.[0]
+  if (pk) candidates.push(row[pk])
+  candidates.push(row.rowId, row.id, row.id_idw)
+  for (const v of candidates) {
+    if (v != null && String(v).trim() !== '') return String(v)
+  }
+  return null
+})
 
 // ─── Nested sub-tables (sub-table-in-sub-table inside the row dialog) ────────
 /** Rows for one nested table, read from the edited row's `__subTables__` (alias keys). */
