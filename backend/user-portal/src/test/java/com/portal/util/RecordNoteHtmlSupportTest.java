@@ -28,6 +28,19 @@ class RecordNoteHtmlSupportTest {
     }
 
     @Test
+    void sanitizeKeepsRichTextStyling() {
+        String html = "<p><span style=\"color: rgb(225, 60, 57); background-color: rgb(252, 251, 207);\">colored</span>"
+                + " <s>struck</s> <u>underlined</u></p><ol><li>one</li></ol>";
+        String cleaned = RecordNoteHtmlSupport.sanitize(html);
+        assertThat(cleaned)
+                .contains("color: rgb(225, 60, 57)")
+                .contains("background-color")
+                .contains("<s>")
+                .contains("<u>")
+                .contains("<ol>");
+    }
+
+    @Test
     void sanitizeKeepsRelativeInlineImage() {
         String html = "<p><img src=\"/api/portal/record-notes/abc/content\" alt=\"pic\"></p>";
         String cleaned = RecordNoteHtmlSupport.sanitize(html);

@@ -143,15 +143,13 @@
             >{{ note.subject }}</div>
             <template v-if="note.noteType === 'COMMENT'">
               <div
-                v-if="expandedHtml[note.id]"
+                v-if="note.bodyHtml || displayHtml[note.id]"
                 class="rn-body-html"
-                v-html="expandedHtml[note.id]"
+                v-html="displayHtml[note.id] ?? note.bodyHtml"
               />
               <div
                 v-else-if="note.bodyText"
-                class="rn-body-text clickable"
-                :title="t('recordNote.expand')"
-                @click="expandNote(note)"
+                class="rn-body-text"
               >
                 {{ note.bodyText }}
               </div>
@@ -209,7 +207,11 @@ import { formContextKey } from 'element-plus'
 import type { UploadFile, UploadUserFile } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
+import { i18nChangeLanguage } from '@wangeditor/editor'
 import '@wangeditor/editor/dist/css/style.css'
+
+// wangeditor ships with a Chinese UI by default; the platform is English-first.
+i18nChangeLanguage('en')
 import {
   createRecordNote,
   deleteRecordNote,
@@ -302,6 +304,7 @@ async function load(reset = true) {
       total.value = result.totalElements
       page.value = result.page
       hasNext.value = result.hasNext
+      void hydrateInlineImages(result.content)
     }
   } catch {
     // interceptor already surfaced the error message
@@ -324,18 +327,23 @@ watch(
   { immediate: true },
 )
 
-// ---- expand detail (rich text body) ----
-const expandedHtml = reactive<Record<string, string>>({})
+// ---- rich body display ----
+// Bodies render directly from the list payload; comments containing inline
+// images get their <img> src swapped to authenticated blob URLs (plain <img>
+// requests cannot carry the Authorization header).
+const displayHtml = reactive<Record<string, string>>({})
 const objectUrls: string[] = []
 
-async function expandNote(note: RecordNoteItem) {
-  try {
-    const detail = await getRecordNoteDetail(note.id)
-    if (detail?.bodyHtml) {
-      expandedHtml[note.id] = await resolveInlineImages(detail.bodyHtml)
+async function hydrateInlineImages(items: RecordNoteItem[]) {
+  for (const note of items) {
+    if (note.noteType !== 'COMMENT' || !note.bodyHtml) continue
+    if (!note.bodyHtml.includes('/api/portal/record-notes/')) continue
+    if (displayHtml[note.id]) continue
+    try {
+      displayHtml[note.id] = await resolveInlineImages(note.bodyHtml)
+    } catch {
+      /* keep the raw body as fallback */
     }
-  } catch {
-    /* surfaced by interceptor */
   }
 }
 
@@ -419,9 +427,13 @@ function openEditor() {
 }
 
 async function startEdit(note: RecordNoteItem) {
-  const detail = await getRecordNoteDetail(note.id)
+  let body = note.bodyHtml
+  if (!body) {
+    const detail = await getRecordNoteDetail(note.id)
+    body = detail?.bodyHtml || ''
+  }
   editingNoteId.value = note.id
-  editorHtml.value = detail?.bodyHtml || ''
+  editorHtml.value = body || ''
   inlineImageIds.value = []
   pickedFiles.value = []
   uploadList.value = []
@@ -473,7 +485,7 @@ async function submit() {
   try {
     if (editingNoteId.value) {
       await updateRecordNote(editingNoteId.value, { bodyHtml: html })
-      delete expandedHtml[editingNoteId.value]
+      delete displayHtml[editingNoteId.value]
     } else {
       await createRecordNote(target.value, {
         bodyHtml: html || undefined,
@@ -659,6 +671,29 @@ function formatSize(bytes?: number): string {
 
 .rn-body-html :deep(img) {
   max-width: 100%;
+}
+
+.rn-body-html :deep(ul) {
+  list-style: disc;
+  padding-left: 1.5em;
+  margin: 0.3em 0;
+}
+
+.rn-body-html :deep(ol) {
+  list-style: decimal;
+  padding-left: 1.5em;
+  margin: 0.3em 0;
+}
+
+.rn-body-html :deep(p) {
+  margin: 0.2em 0;
+}
+
+.rn-body-html :deep(blockquote) {
+  border-left: 3px solid var(--el-border-color, #dcdfe6);
+  padding-left: 8px;
+  margin: 0.3em 0;
+  color: var(--el-text-color-secondary, #909399);
 }
 
 .rn-standalone-file {

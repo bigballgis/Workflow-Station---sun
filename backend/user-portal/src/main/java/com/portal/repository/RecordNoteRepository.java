@@ -27,6 +27,7 @@ public interface RecordNoteRepository extends JpaRepository<RecordNote, String> 
         String getParentNoteId();
         String getSubject();
         String getBodyText();
+        String getBodyHtml();
         String getFileName();
         String getMimeType();
         Long getFileSize();

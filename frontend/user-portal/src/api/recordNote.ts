@@ -21,6 +21,7 @@ export interface RecordNoteItem {
   noteType: 'COMMENT' | 'ATTACHMENT'
   subject?: string
   bodyText?: string
+  bodyHtml?: string
   fileName?: string
   mimeType?: string
   fileSize?: number

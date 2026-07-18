@@ -39,6 +39,8 @@ public final class RecordNoteDtos {
         private String noteType;
         private String subject;
         private String bodyText;
+        /** Sanitized rich-text body — rendered directly in the list. */
+        private String bodyHtml;
         private String fileName;
         private String mimeType;
         private Long fileSize;

@@ -17,6 +17,8 @@ public final class RecordNoteHtmlSupport {
     private static final int MAX_BODY_TEXT = 500;
 
     private static final Safelist SAFELIST = Safelist.relaxed()
+            // wangeditor emits <s> for strikethrough (relaxed only covers <strike>)
+            .addTags("s")
             .addAttributes("span", "style")
             .addAttributes("p", "style")
             .addAttributes("img", "alt", "width", "height")
