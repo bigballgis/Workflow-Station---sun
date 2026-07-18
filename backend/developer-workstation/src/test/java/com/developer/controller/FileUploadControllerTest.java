@@ -128,6 +128,43 @@ class FileUploadControllerTest {
     }
 
     @Test
+    void getFile_shouldServeNonInlineSafeTypesAsAttachment() throws Exception {
+        when(fileUploadComponent.getFile("page.html"))
+                .thenReturn(UploadedFile.builder()
+                        .storedName("page.html")
+                        .originalName("page.html")
+                        .contentType("text/html")
+                        .fileSize(20L)
+                        .content("<script>x</script>".getBytes())
+                        .build());
+
+        // Stored-XSS guard: html/svg/etc. must never render inline in the platform origin.
+        mockMvc.perform(get("/upload/files/page.html"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/octet-stream"))
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"page.html\""))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+    }
+
+    @Test
+    void getFile_shouldKeepInlinePreviewForSafeTypes() throws Exception {
+        when(fileUploadComponent.getFile("pic.png"))
+                .thenReturn(UploadedFile.builder()
+                        .storedName("pic.png")
+                        .originalName("pic.png")
+                        .contentType("image/png")
+                        .fileSize(3L)
+                        .content("png".getBytes())
+                        .build());
+
+        mockMvc.perform(get("/upload/files/pic.png"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/png"))
+                .andExpect(header().string("Content-Disposition", "inline; filename=\"pic.png\""))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+    }
+
+    @Test
     void getFile_shouldReturnNotFoundWhenMissing() throws Exception {
         when(fileUploadComponent.getFile("missing.pdf"))
                 .thenThrow(new ResourceNotFoundException("UploadedFile", "missing.pdf"));

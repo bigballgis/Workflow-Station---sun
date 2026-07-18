@@ -32,12 +32,29 @@ export interface SubTableBinding {
   formOptions?: Record<string, any>
 }
 
+/**
+ * Nested sub-table (sub-table-in-sub-table) rendered inside the parent's Add/Edit row
+ * dialog. Rows live under the edited row's `__subTables__` (same convention as the
+ * form-below-table / Link Form paths).
+ */
+export interface NestedSubTableDescriptor {
+  bindingId: number
+  tableName: string
+  columns: Column[]
+  dialogColumns?: Column[]
+  primaryKeyFields?: string[]
+}
+
 /** Structural mirror of SubTableField.vue props — composables accept the component's props object. */
 export interface SubTableFieldProps {
   title: string
   columns: Column[]
   /** Form-design canvas columns for Add/Edit row dialog (Designer parity). */
   dialogColumns?: Column[]
+  /** This binding's own form-design fields — nested subTable widgets here render inside the Add/Edit dialog. */
+  formFields?: FormField[]
+  /** Form-below-table hosts: row click highlights + drives the inline form via currentRowChange. */
+  enableRowSelect?: boolean
   modelValue?: any[]
   editable?: boolean
   loading?: boolean

@@ -367,6 +367,7 @@ FcDesigner.addDragRule({
   props() {
     return [
       { type: 'input', field: 'placeholder', title: 'Placeholder' },
+      { type: 'switch', field: 'readonly', title: 'Readonly' },
       { type: 'LookupBindingSelect', field: 'lookupConfig', title: 'Lookup Config', props: {} },
     ]
   }

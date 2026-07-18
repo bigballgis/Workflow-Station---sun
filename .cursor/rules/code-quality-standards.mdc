@@ -31,7 +31,7 @@ alwaysApply: true
 - **公共提取**：同一逻辑 ≥2 个服务出现即提取到 `platform-*`；工具类 `XxxUtils`（静态、无状态）。
 - **API 设计**：RESTful（资源名复数、kebab-case URL、动作用 HTTP 方法）；状态码 200/400/401/403/404/500 按义使用；分页 `page`/`size`、排序统一；时间一律 ISO 8601；接口变更向后兼容（只增字段不删改）。
 - **事务与并发**：`@Transactional` 只在 ComponentImpl/Service 边界，禁止 Controller 层；跨服务一致性用 `SagaOrchestrator` 或 Kafka 事件，禁止跨服务同步链式写库；分布式互斥用 `DistributedLock`，禁止本地锁。
-- **数据库变更**：脚本入 `deploy/init-scripts/`，必须幂等（`IF NOT EXISTS`/`ON CONFLICT`）；存量表只增不删改；表名前缀 `dw_`/`ac_`/`up_`/`we_`，字段 snake_case。
+- **数据库变更**：脚本入 `deploy/init-scripts/`，必须幂等（`IF NOT EXISTS`/`ON CONFLICT`）；存量表只增不删改；表名前缀见 `domain-model.mdc`，字段 snake_case。完整规范见 `init-scripts-append-only.mdc`。
 - **命名**：类 PascalCase，方法/变量 camelCase，常量 UPPER_SNAKE，DTO 后缀 `Request`/`Response`，布尔 `is`/`has`；禁止魔法值，业务取值用枚举/常量。
 - **依赖**：版本收口到根 pom `dependencyManagement`，子模块不自定版本；新增依赖在 PR 说明用途与选型。
 

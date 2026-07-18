@@ -93,11 +93,39 @@ class FileUploadComponentImplTest {
     }
 
     @Test
-    void upload_shouldRejectUnsupportedExtension() {
-        MockMultipartFile file = new MockMultipartFile("file", "notes.txt", "text/plain", "hi".getBytes());
+    void upload_shouldAcceptAnyExtension() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "archive.zip", "application/zip", "zipbytes".getBytes());
+        when(fileStorageService.store(anyString(), anyString(), anyString(), anyLong(), any(byte[].class)))
+                .thenAnswer(invocation -> UploadedFile.builder()
+                        .storedName(invocation.getArgument(0, String.class))
+                        .originalName(invocation.getArgument(1, String.class))
+                        .contentType(invocation.getArgument(2, String.class))
+                        .fileSize(invocation.getArgument(3, Long.class))
+                        .content(invocation.getArgument(4, byte[].class))
+                        .build());
 
-        assertThatThrownBy(() -> component.upload(file))
-                .isInstanceOf(DeveloperBusinessException.class)
-                .hasMessageContaining("Unsupported file type");
+        var result = component.upload(file);
+
+        assertThat(String.valueOf(result.get("id"))).endsWith(".zip");
+        assertThat(result.get("name")).isEqualTo("archive.zip");
+    }
+
+    @Test
+    void upload_shouldSanitizeExtensionForStoredName() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "weird.p\"d;f", "application/octet-stream", "x".getBytes());
+        when(fileStorageService.store(anyString(), anyString(), anyString(), anyLong(), any(byte[].class)))
+                .thenAnswer(invocation -> UploadedFile.builder()
+                        .storedName(invocation.getArgument(0, String.class))
+                        .originalName(invocation.getArgument(1, String.class))
+                        .contentType(invocation.getArgument(2, String.class))
+                        .fileSize(invocation.getArgument(3, Long.class))
+                        .content(invocation.getArgument(4, byte[].class))
+                        .build());
+
+        var result = component.upload(file);
+
+        // Stored name keeps UUID + sanitized extension (letters/digits/dots only) —
+        // safe inside the path segment and the Content-Disposition header.
+        assertThat(String.valueOf(result.get("id"))).matches("^[0-9a-f-]+(\\.[A-Za-z0-9.]+)?$");
     }
 }

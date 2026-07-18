@@ -19,12 +19,20 @@ class SmtpTransportPropertiesTest {
     }
 
     @Test
-    void apply_startTlsOnPort25TrustsInternalRelayHost() {
+    void apply_port25UsesStartTlsWhenTlsFlagTrue() {
         Properties props = new Properties();
-        SmtpTransportProperties.apply(props, "dynip-smtp-Int-Relay.hk.hsbc", 25, true, true);
+        SmtpTransportProperties.apply(props, "internal-smtp-relay.corp.local", 25, true, true);
         assertEquals("true", props.get("mail.smtp.starttls.enable"));
-        assertEquals("dynip-smtp-Int-Relay.hk.hsbc", props.get("mail.smtp.ssl.trust"));
-        assertEquals("dynip-smtp-Int-Relay.hk.hsbc", props.get("mail.smtps.ssl.trust"));
+        assertEquals("true", props.get("mail.smtp.starttls.required"));
+        assertEquals("false", props.get("mail.smtp.ssl.enable"));
+    }
+
+    @Test
+    void apply_port25PlainWhenTlsOff() {
+        Properties props = new Properties();
+        SmtpTransportProperties.apply(props, "internal-smtp-relay.corp.local", 25, false, true);
+        assertEquals("false", props.get("mail.smtp.starttls.enable"));
+        assertEquals("false", props.get("mail.smtp.ssl.enable"));
     }
 
     @Test

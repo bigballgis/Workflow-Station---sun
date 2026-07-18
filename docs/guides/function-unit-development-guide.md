@@ -1,7 +1,7 @@
 # 功能单元 (Function Unit) 完整开发文档
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
-> **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../design/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../schema-and-migration.md)。  
+> **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../design/developer-workstation-workspace-rbac.md)；数据库 **schema 单一来源 = init-scripts（Flyway 已清退）** 见 [docs/schema-and-migration.md](../schema-and-migration.md)。  
 > 最后更新: 2026-04-10（含 §7 各控制器表格路径统一为“接在基础路径后”的相对片段）
 
 ---
@@ -23,7 +23,7 @@
 13. [安全模型](#13-安全模型)
 14. [国际化 (i18n)](#14-国际化)
 15. [配置属性](#15-配置属性)
-16. [数据库迁移 (Flyway)](#16-数据库迁移)
+16. [数据库迁移 (init-scripts)](#16-数据库迁移)
 17. [已知限制与技术债务](#17-已知限制与技术债务)
 
 ---
@@ -1458,12 +1458,9 @@ spring:
   application:
     name: developer-workstation
 
-  # Flyway（默认开启；Dev Compose 常覆盖为 SPRING_FLYWAY_ENABLED=false，见 §16）
+  # Flyway 已清退（2026-06）：固化关闭，schema 由 deploy/init-scripts 建，见 §16
   flyway:
-    enabled: true
-    locations: classpath:db/migration/developer-workstation
-    baseline-on-migrate: true
-    validate-on-migrate: false
+    enabled: false
 
   # 数据源 (PostgreSQL)
   datasource:
@@ -1480,7 +1477,7 @@ spring:
   # JPA
   jpa:
     hibernate:
-      ddl-auto: none          # 使用 Flyway 管理 schema
+      ddl-auto: none          # schema 由 deploy/init-scripts 管理（Flyway 已清退）
     show-sql: false
     properties:
       hibernate:
@@ -1635,7 +1632,6 @@ management:
 | `JWT_EXPIRATION` | JWT 有效期 (ms) | 86400000 (24h) |
 | `JWT_REFRESH_EXPIRATION` | Refresh 有效期 (ms)，`platform.security.jwt` | 604800000（约 7 天） |
 | `ENCRYPTION_SECRET_KEY` | AES 加密密钥（`platform.encryption`） | 开发默认占位；**生产须覆盖** |
-| `SPRING_FLYWAY_ENABLED` | 是否执行 Flyway | `application.yml` 默认 true；**Dev Compose 常为 false** |
 | `DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH` | 部署到 admin-center 是否要求携带 admin JWT | true |
 | `SSO_DEVELOPER_EXCHANGE_ENABLED` | DEV SSO / developer exchange 是否启用 | true |
 | `SSO_INTERNAL_TOKEN` | 内部兑换用 token（可选） | 空 |
@@ -1671,18 +1667,19 @@ management:
 
 ## 16. 数据库迁移
 
-### Flyway 约定
+> **Flyway 已清退（2026-06）**：后端已删除 Flyway 依赖，`application.yml` 固化 `enabled: false`，
+> 不再有 `db/migration` 脚本（历史归档于 `docs/legacy-flyway-migrations/`）。
+> 详见 [docs/schema-and-migration.md](../schema-and-migration.md)。
 
-- 路径: `src/main/resources/db/migration/{模块目录}/`（本服务为 **`developer-workstation`**）
-- 命名: `V{版本号}__{描述}.sql`
-- **本服务 Flyway 配置**（`application.yml`）: `enabled: true`、`baseline-on-migrate: true`、**`validate-on-migrate: false`**（与部分环境历史脚本共存时的取舍，以运维策略为准）。
-- 版本号分段（约定，非强制）:
-  - admin-center: 200+
-  - developer-workstation: 300+
-  - user-portal: 400+（示例：`V405__...`）
-- **本仓库** `workflow-engine-core` **未**使用 Flyway；引擎表结构依赖 `deploy/init-scripts` 等。
-- **Dev Docker Compose** 对 admin-center / user-portal / developer-workstation 常设置 **`SPRING_FLYWAY_ENABLED=false`**，与默认 `application.yml` 不同，见 [docs/schema-and-migration.md](../schema-and-migration.md) §2.1。
-- `.sql` 文件必须使用 LF 换行 (`.gitattributes` 已配置)
+### schema 变更约定（init-scripts 唯一来源）
+
+- **唯一来源** = `deploy/init-scripts/00-schema/`；新表 / 新列 **新建**递增编号 `.sql`。
+- **只增不改**：禁止编辑已有 `.sql`（详见 `.cursor/rules/init-scripts-append-only.mdc`）。
+- 幂等：`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` / `ON CONFLICT`。
+- 表名前缀见 `.cursor/rules/domain-model.mdc`（`dw_`/`ac_`/`up_`/`we_`），字段 snake_case。
+- `.sql` 文件必须使用 LF 换行（`.gitattributes` 已配置）。
+- 改 schema 后：删卷重建 Postgres（`dev_postgres_dev_data`）或按 `BUILD_GUIDE.md` 手工迁移，
+  读 `docker logs platform-postgres-dev` 确认 init 无 ERROR。
 
 ### 核心表清单
 
@@ -1753,7 +1750,7 @@ management:
 
 ### 部署状态存储
 
-- **已演进**：`DeploymentComponentImpl` 通过 **`DeploymentJobService`** 将部署任务写入表 **`dw_deployment_jobs`**（实体 `DeploymentJob`，Flyway **`V309__create_dw_deployment_jobs.sql`** 等），支持多实例与进程重启后仍可查进度/历史。
+- **已演进**：`DeploymentComponentImpl` 通过 **`DeploymentJobService`** 将部署任务写入表 **`dw_deployment_jobs`**（实体 `DeploymentJob`，schema 见 `deploy/init-scripts/00-schema/`），支持多实例与进程重启后仍可查进度/历史。
 - 若仍有少量仅内存的辅助状态（如 SSE、AI undo 快照等），见各 `*ServiceImpl` / `*ComponentImpl` 实现，**不等同于**部署任务主存储。
 
 ### VersionController 路径

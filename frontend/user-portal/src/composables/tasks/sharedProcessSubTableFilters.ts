@@ -144,14 +144,10 @@ export function filterRowsForSharedProcessSubTableBinding(
 
     if (!attachmentBinding && isSubTableMiDashboardRow(rec)) return false
 
-    if (!attachmentBinding && rec.id_idw != null && String(rec.id_idw).trim() !== '' && !colFields.has('id_idw')) {
-      return false
-    }
-
-    if (!attachmentBinding && rec.name != null && String(rec.name).trim() !== '' && !colFields.has('name')) {
-      return false
-    }
-
+    // Rows carrying real data for this binding's own columns are ALWAYS kept. The id_idw /
+    // name "foreign row" heuristics below only apply to rows WITHOUT own column data —
+    // id_idw is the DW default sub-table PK, so a data-bearing row whose list view simply
+    // doesn't display the PK must never be treated as an MI leak (it emptied whole tables).
     const hasOwnData = sharedBindingRowHasNonIdColumnData(rec, colFields)
     if (hasOwnData) return true
 

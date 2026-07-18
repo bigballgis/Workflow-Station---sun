@@ -274,7 +274,7 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
           type: 'upload',
           props: {
             action: '/api/v1/upload',
-            accept: '.jpg,.jpeg,.png,.pdf,.docx,.xlsx',
+            accept: '',
             limit: 1,
             multiple: false,
             listType: 'text',

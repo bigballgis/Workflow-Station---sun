@@ -68,6 +68,13 @@ export interface FormField {
   _bindingId?: number  // set when type === 'subTable'
   /** Designer-driven portal display strategy; only present when type === 'subTable'. */
   portalViews?: SubTablePortalViews
+  /**
+   * 子表逐操作权限（type === 'subTable'）：设计器右侧属性面板 props.allowAdd/allowEdit/allowDelete。
+   * undefined => 视为放开（回退 editable，历史表单三项全开）；显式 false => 隐藏该操作。
+   */
+  allowAdd?: boolean
+  allowEdit?: boolean
+  allowDelete?: boolean
   children?: FormField[] // set for layout containers such as card
   /** Nested el-tabs inside a tab pane (type === 'tabs'). */
   tabs?: FormTab[]

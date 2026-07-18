@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
 import {
   attachPreviewMountedDefaultSync,
+  dispatchPreviewFieldValueChange,
   injectPreviewFieldLoadDefaults,
   materializePreviewComponentEvents,
+  mergeComponentEventsFromSavedRules,
+  syncDesignerComponentEventsForFcPreview,
 } from '../formCreatePreviewEvents'
 
 describe('formCreatePreviewEvents', () => {
@@ -66,5 +69,56 @@ describe('formCreatePreviewEvents', () => {
       },
     })
     expect(setValues.select).toBe(1)
+  })
+
+  it('dispatchPreviewFieldValueChange runs lookup change handler and sets sibling field', () => {
+    const previewData = ref<Record<string, unknown>>({
+      test: null,
+      testvalue: '',
+    })
+    const rules = [
+      {
+        type: 'lookup',
+        field: 'test',
+        on: {
+          change: '$FNX:\nif ($inject.value != null && String($inject.value).trim() !== \'\') { $inject.api.setValue(\'testvalue\', \'successful\') }',
+        },
+      },
+      { type: 'input', field: 'testvalue' },
+    ]
+    dispatchPreviewFieldValueChange(rules, 'test', { id: 'row-1', name: 'Demo' }, previewData)
+    expect(previewData.value.test).toEqual({ id: 'row-1', name: 'Demo' })
+    expect(previewData.value.testvalue).toBe('successful')
+  })
+
+  it('syncDesignerComponentEventsForFcPreview copies _on.change onto on for fc-designer preview', () => {
+    const rules = [
+      {
+        type: 'lookup',
+        field: 'test',
+        _on: {
+          change: '$FNX:\n$inject.api.setValue("testvalue", "fc-preview")',
+        },
+      },
+    ]
+    syncDesignerComponentEventsForFcPreview(rules)
+    expect((rules[0].on as Record<string, unknown>).change).toBeDefined()
+  })
+
+  it('mergeComponentEventsFromSavedRules overlays persisted handlers when live getRule omits them', () => {
+    const live = [{ type: 'lookup', field: 'test' }]
+    const saved = [
+      {
+        type: 'lookup',
+        field: 'test',
+        on: {
+          change: '$FNX:\n$inject.api.setValue("testvalue", "from-saved")',
+        },
+      },
+    ]
+    mergeComponentEventsFromSavedRules(live, saved)
+    const previewData = ref<Record<string, unknown>>({ test: null, testvalue: '' })
+    dispatchPreviewFieldValueChange(live, 'test', { id: 1 }, previewData)
+    expect(previewData.value.testvalue).toBe('from-saved')
   })
 })

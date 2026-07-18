@@ -61,53 +61,47 @@ if (Test-Path $EnvFile) {
 # so a build-time value can't differ per environment.
 
 # ==================== Service Registry ====================
-# Maps compose service name -> Maven module path, container name, type
+# Maps compose service name -> Maven module path / frontend dir / type
 $ServiceRegistry = @{
     "workflow-engine" = @{
-        Maven     = "backend/workflow-engine-core"
-        Container = "platform-workflow-engine-dev"
-        Type      = "backend"
+        Maven = "backend/workflow-engine-core"
+        Type  = "backend"
     }
     "admin-center" = @{
-        Maven     = "backend/admin-center"
-        Container = "platform-admin-center-dev"
-        Type      = "backend"
+        Maven = "backend/admin-center"
+        Type  = "backend"
     }
     "user-portal" = @{
-        Maven     = "backend/user-portal"
-        Container = "platform-user-portal-dev"
-        Type      = "backend"
+        Maven = "backend/user-portal"
+        Type  = "backend"
     }
     "developer-workstation" = @{
-        Maven     = "backend/developer-workstation"
-        Container = "platform-developer-workstation-dev"
-        Type      = "backend"
+        Maven = "backend/developer-workstation"
+        Type  = "backend"
     }
     "admin-center-frontend" = @{
         FrontendDir = "frontend/admin-center"
-        Container   = "platform-admin-center-frontend-dev"
         Type        = "frontend"
     }
     "user-portal-frontend" = @{
         FrontendDir = "frontend/user-portal"
-        Container   = "platform-user-portal-frontend-dev"
         Type        = "frontend"
     }
     "developer-workstation-frontend" = @{
         FrontendDir = "frontend/developer-workstation"
-        Container   = "platform-developer-workstation-frontend-dev"
         Type        = "frontend"
     }
     "platform-login-frontend" = @{
         FrontendDir = "frontend/login"
-        Container   = "platform-login-frontend-dev"
         Type        = "frontend"
     }
     "edge-frontend" = @{
-        Container = "platform-edge-frontend-dev"
-        Type      = "edge"
+        Type = "edge"
     }
 }
+
+# Services whose build/start may be skipped when optional deps (private npm, heavy images) fail.
+$OptionalComposeServices = @('activepieces', 'superset-final', 'n8n')
 
 # Validate -Service parameter
 if ($Service -and -not $ServiceRegistry.ContainsKey($Service)) {
@@ -116,34 +110,132 @@ if ($Service -and -not $ServiceRegistry.ContainsKey($Service)) {
     exit 1
 }
 
+function Get-ComposeContainerId {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServiceName
+    )
+
+    $raw = docker compose -f $ComposeFile --env-file $EnvFile ps -q $ServiceName 2>$null
+    if (-not $raw) { return $null }
+    $id = ($raw -split "\r?\n" | Where-Object { $_ -match '\S' } | Select-Object -First 1)
+    if ($id) { return $id.Trim() }
+    return $null
+}
+
+function Get-ComposeContainerStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ContainerId
+    )
+
+    $lb = [char]123 + [char]123
+    $rb = [char]125 + [char]125
+    $fmt = $lb + 'if .State.Health' + $rb + $lb + '.State.Health.Status' + $rb + $lb + 'else' + $rb + $lb + '.State.Status' + $rb + $lb + 'end' + $rb
+    return docker inspect --format=$fmt $ContainerId 2>$null
+}
+
 function Wait-ForContainerHealth {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ContainerName,
+        [string]$ServiceName,
         [Parameter(Mandatory = $true)]
         [string]$DisplayName,
         [int]$MaxRetries = 60,
         [int]$SleepSeconds = 2
     )
 
-    Write-Host "  Waiting for $DisplayName..."
+    Write-Host "  Waiting for $DisplayName ($ServiceName)..."
     $attempt = 0
     while ($attempt -lt $MaxRetries) {
-        $lb = [char]123 + [char]123
-        $rb = [char]125 + [char]125
-        $fmt = $lb + 'if .State.Health' + $rb + $lb + '.State.Health.Status' + $rb + $lb + 'else' + $rb + $lb + '.State.Status' + $rb + $lb + 'end' + $rb
-        $status = docker inspect --format=$fmt $ContainerName 2>$null
-        if ($status -eq "healthy") {
-            Write-Host "    $DisplayName is healthy." -ForegroundColor Green
-            return
-        }
-        if ($status -eq "exited" -or $status -eq "dead") {
-            throw "$DisplayName container stopped unexpectedly"
+        $containerId = Get-ComposeContainerId -ServiceName $ServiceName
+        if ($containerId) {
+            $status = Get-ComposeContainerStatus -ContainerId $containerId
+            if ($status -eq "healthy") {
+                Write-Host "    $DisplayName is healthy (container $containerId)." -ForegroundColor Green
+                return $containerId
+            }
+            if ($status -eq "exited" -or $status -eq "dead") {
+                throw "$DisplayName ($ServiceName) container stopped unexpectedly (status=$status, id=$containerId)"
+            }
         }
         Start-Sleep -Seconds $SleepSeconds
         $attempt++
     }
-    throw "$DisplayName failed to become healthy in time"
+    throw "$DisplayName ($ServiceName) failed to become healthy in time"
+}
+
+function Wait-ForContainerRunning {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServiceName,
+        [Parameter(Mandatory = $true)]
+        [string]$DisplayName,
+        [int]$MaxRetries = 30,
+        [int]$SleepSeconds = 2
+    )
+
+    Write-Host "  Waiting for $DisplayName ($ServiceName) to run..."
+    $attempt = 0
+    while ($attempt -lt $MaxRetries) {
+        $containerId = Get-ComposeContainerId -ServiceName $ServiceName
+        if ($containerId) {
+            $lb = [char]123 + [char]123
+            $rb = [char]125 + [char]125
+            $fmt = $lb + '.State.Status' + $rb
+            $status = docker inspect --format=$fmt $containerId 2>$null
+            if ($status -eq "running") {
+                Write-Host "    $DisplayName is running (container $containerId)." -ForegroundColor Green
+                return $containerId
+            }
+            if ($status -eq "exited" -or $status -eq "dead") {
+                throw "$DisplayName ($ServiceName) container stopped unexpectedly (status=$status, id=$containerId)"
+            }
+        }
+        Start-Sleep -Seconds $SleepSeconds
+        $attempt++
+    }
+    throw "$DisplayName ($ServiceName) failed to reach running state in time"
+}
+
+function Invoke-ComposeUpSequential {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$ServiceNames,
+        [switch]$NoDeps,
+        [switch]$ForceRecreate,
+        [string[]]$OptionalServices = $OptionalComposeServices
+    )
+
+    foreach ($svcName in $ServiceNames) {
+        if (-not $svcName) { continue }
+        Write-Host "  Starting $svcName..." -ForegroundColor DarkGray
+        $composeArgs = @('-f', $ComposeFile, '--env-file', $EnvFile, 'up', '-d')
+        if ($NoDeps) { $composeArgs += '--no-deps' }
+        if ($ForceRecreate) { $composeArgs += '--force-recreate' }
+        $composeArgs += $svcName
+
+        $started = $false
+        for ($attempt = 1; $attempt -le 2; $attempt++) {
+            if ($attempt -gt 1) {
+                Write-Host "    Retrying $svcName (attempt $attempt/2) after compose/named-pipe glitch..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 3
+            }
+            docker compose @composeArgs
+            if ($LASTEXITCODE -eq 0) {
+                $started = $true
+                break
+            }
+        }
+
+        if (-not $started) {
+            if ($OptionalServices -contains $svcName) {
+                Write-Host "    WARNING: Skipping optional service $svcName (image missing or compose glitch)." -ForegroundColor Yellow
+                continue
+            }
+            throw "Failed to start compose service: $svcName"
+        }
+    }
 }
 
 # Pull image with retries and simple fallback rules (sequential, reduces concurrent registry load)
@@ -159,7 +251,7 @@ function Pull-ImageWithRetry {
         docker pull $Image
         if ($LASTEXITCODE -eq 0) { Write-Host "    Pulled: $Image" -ForegroundColor Green; return $true }
 
-        # Try a lightweight fallback: strip known registry host prefix (e.g. docker.n8n.io/... -> namespace/name)
+        # Try a lightweight fallback: strip known registry host prefix (e.g. ghcr.io/org/image -> org/image)
         if ($Image -match '^[^/]+/([^/]+/[^:]+(:.*)?)$') {
             $short = $Matches[1]
             if ($short -and $short -ne $Image) {
@@ -230,12 +322,13 @@ if ($Service) {
         $feDir = "$RootDir/$($svc.FrontendDir)"
         Push-Location $feDir
         try {
+            Write-Host "  npm install..." -ForegroundColor DarkGray
             $prev = $ErrorActionPreference
             $ErrorActionPreference = "Continue"
-            npm install --prefer-offline --no-audit 2>&1 | Out-Null
+            npm install --prefer-offline --no-audit
             $npmExit = $LASTEXITCODE
             $ErrorActionPreference = $prev
-            if ($npmExit -ne 0) { throw "npm install failed: $Service" }
+            if ($npmExit -ne 0) { throw "npm install failed: $Service (exit code $npmExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
             Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
             npx vite build
@@ -270,18 +363,9 @@ if ($Service) {
     if ($LASTEXITCODE -ne 0) { throw "Failed to deploy $Service" }
 
     if ($svc.Type -eq "backend" -or $svc.Type -eq "edge") {
-        Wait-ForContainerHealth -ContainerName $svc.Container -DisplayName $Service
+        Wait-ForContainerHealth -ServiceName $Service -DisplayName $Service
     } else {
-        Start-Sleep -Seconds 3
-        $lb = [char]123 + [char]123
-        $rb = [char]125 + [char]125
-        $fmt = $lb + '.State.Status' + $rb
-        $status = docker inspect --format=$fmt $svc.Container 2>$null
-        if ($status -eq "running") {
-            Write-Host "  $Service is running." -ForegroundColor Green
-        } else {
-            Write-Host "  WARNING: $Service status: $status" -ForegroundColor Yellow
-        }
+        Wait-ForContainerRunning -ServiceName $Service -DisplayName $Service -MaxRetries 15
     }
 
     Write-Host "`n========================================" -ForegroundColor Green
@@ -376,12 +460,13 @@ if (-not $SkipFrontend) {
         Write-Host "  npm install & build $($fe.Name)..."
         Push-Location $feDir
         try {
+            Write-Host "  npm install..." -ForegroundColor DarkGray
             $prev = $ErrorActionPreference
             $ErrorActionPreference = "Continue"
-            npm install --prefer-offline --no-audit 2>&1 | Out-Null
+            npm install --prefer-offline --no-audit
             $npmExit = $LASTEXITCODE
             $ErrorActionPreference = $prev
-            if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name)" }
+            if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name) (exit code $npmExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
             Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
             npx vite build
@@ -402,14 +487,13 @@ if (-not $SkipFrontend) {
 
 # Step 3: Start infrastructure
 if (-not $SkipInfra) {
-    Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka, n8n)..." -ForegroundColor Yellow
+    Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka)..." -ForegroundColor Yellow
 
     # Pre-pull infra images sequentially to avoid concurrent registry failures
     $infraImages = @(
         "postgres:16.5-alpine",
         "redis:7.2-alpine",
-        "confluentinc/cp-kafka:7.5.3",
-        "docker.n8n.io/n8nio/n8n:latest"
+        "confluentinc/cp-kafka:7.5.3"
     )
     $failedInfra = @()
     foreach ($img in $infraImages) {
@@ -421,17 +505,10 @@ if (-not $SkipInfra) {
         Write-Host "  Will still attempt to start infra; if pulls fail compose will exit with error." -ForegroundColor Yellow
     }
 
-    docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka n8n
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  docker compose up failed during infrastructure startup." -ForegroundColor Red
-        Write-Host "  This usually means one or more required images could not be pulled." -ForegroundColor Red
-        Write-Host "  Check Docker network/proxy settings or ensure the mirror is reachable." -ForegroundColor Yellow
-        docker compose -f $ComposeFile --env-file $EnvFile ps
-        throw "Docker compose infra startup failed"
-    }
+    Invoke-ComposeUpSequential -ServiceNames @('postgres', 'redis', 'kafka')
 
     # First boot runs large init-scripts (demo data + Flowable schema); allow more time.
-    Wait-ForContainerHealth -ContainerName "platform-postgres-dev" -DisplayName "PostgreSQL" -MaxRetries 180
+    $postgresContainerId = Wait-ForContainerHealth -ServiceName "postgres" -DisplayName "PostgreSQL" -MaxRetries 180
     
     # Run incremental schema migrations (docker-entrypoint-initdb.d only runs on first init)
     Write-Host "  Running DB schema migrations..." -ForegroundColor DarkGray
@@ -444,7 +521,7 @@ if (-not $SkipInfra) {
             # doesn't kill the script in Windows PowerShell 5.1. We check $LASTEXITCODE below.
             $prevEAP = $ErrorActionPreference
             $ErrorActionPreference = 'Continue'
-            Get-Content $_.FullName | docker exec -i platform-postgres-dev psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=0 2>&1 | Out-Null
+            Get-Content $_.FullName | docker exec -i $postgresContainerId psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=0 2>&1 | Out-Null
             $ErrorActionPreference = $prevEAP
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "    WARNING: $scriptName had errors (may be expected for idempotent scripts)" -ForegroundColor Yellow
@@ -453,24 +530,9 @@ if (-not $SkipInfra) {
         Write-Host "  Schema migrations complete." -ForegroundColor Green
     }
     
-    Wait-ForContainerHealth -ContainerName "platform-redis-dev" -DisplayName "Redis" -MaxRetries 20
-    Wait-ForContainerHealth -ContainerName "platform-kafka-dev" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3
+    Wait-ForContainerHealth -ServiceName "redis" -DisplayName "Redis" -MaxRetries 20
+    Wait-ForContainerHealth -ServiceName "kafka" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3
 
-    Write-Host "  Waiting for n8n..."
-    $retries = 0
-    while ($retries -lt 20) {
-        $lb = [char]123 + [char]123
-        $rb = [char]125 + [char]125
-        $fmt = $lb + '.State.Health.Status' + $rb
-        $health = docker inspect --format=$fmt platform-n8n-dev 2>$null
-        if ($health -eq "healthy") { break }
-        Start-Sleep -Seconds 3
-        $retries++
-    }
-    if ($health -ne "healthy") {
-        Write-Host "  N8N not healthy yet, continuing (it may take longer on first start)..." -ForegroundColor Yellow
-    }
-    
     Write-Host "  Infrastructure ready." -ForegroundColor Green
 } else {
     Write-Host "`n[3/4] Skipping infrastructure start" -ForegroundColor DarkGray
@@ -506,14 +568,14 @@ while (-not $buildOk -and $attemptedImages.Count -le 3) {
 
     Write-Host "  docker compose build failed with image: $tryImage" -ForegroundColor Yellow
 
-    # Fallback 1: try excluding superset-final (heavy, may have independent pull issues)
-    Write-Host "  Attempting fallback: rebuild excluding superset-final..." -ForegroundColor Yellow
-    $svcList = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null | Where-Object { $_ -ne 'superset-final' }
+    # Fallback 1: skip optional services (superset-final, activepieces private npm build, etc.)
+    Write-Host "  Attempting fallback: rebuild excluding optional services ($($OptionalComposeServices -join ', '))..." -ForegroundColor Yellow
+    $svcList = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null | Where-Object { $OptionalComposeServices -notcontains $_ }
     if ($svcList -and $svcList.Count -gt 0) {
         Write-Host "  Rebuilding services: $($svcList -join ', ')" -ForegroundColor DarkGray
         docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage" $svcList
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "  Fallback build succeeded (superset-final skipped)." -ForegroundColor Green
+            Write-Host "  Fallback build succeeded (optional services skipped)." -ForegroundColor Green
             $buildOk = $true
             $resolvedJavaImage = $tryImage
             break
@@ -550,8 +612,12 @@ if (-not $SkipImagePull) {
     $images = docker compose -f $ComposeFile --env-file $EnvFile config --images 2>$null | Sort-Object -Unique
     $failedImages = @()
     foreach ($img in $images) {
-        # Skip local dev tags (built locally)
-        if ($img -like 'dev-*') { continue }
+        # Skip locally built / optional images that may be unavailable offline
+        if ($img -like 'dev-*' -or $img -like 'activepieces:*') { continue }
+        if ($img -match 'n8n|superset|activepieces') {
+            Write-Host "  Skipping optional image pull: $img" -ForegroundColor DarkGray
+            continue
+        }
         $ok = Pull-ImageWithRetry -Image $img -MaxAttempts 5
         if (-not $ok) { $failedImages += $img }
     }
@@ -567,16 +633,21 @@ if (-not $SkipImagePull) {
 
 if ($ServicesOnly -or $SkipInfra) {
     Write-Host "  Starting only non-infra services (skip infra)..." -ForegroundColor Yellow
-    $infra = @('postgres','redis','kafka','n8n','superset-final')
+    $infra = @('postgres','redis','kafka','superset-final')
     $allSvcs = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null
     $startSvcs = $allSvcs | Where-Object { $infra -notcontains $_ }
     if ($startSvcs -and $startSvcs.Count -gt 0) {
-        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $startSvcs
+        Invoke-ComposeUpSequential -ServiceNames $startSvcs -NoDeps
     } else {
         Write-Host "  No non-infra services to start." -ForegroundColor DarkGray
     }
 } else {
-    docker compose -f $ComposeFile --env-file $EnvFile up -d
+    $allSvcs = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null
+    if ($allSvcs -and $allSvcs.Count -gt 0) {
+        Invoke-ComposeUpSequential -ServiceNames $allSvcs
+    } else {
+        throw "No compose services found to start"
+    }
 }
 
 if ($LASTEXITCODE -ne 0) {
@@ -586,11 +657,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "  Waiting for backend health checks..." -ForegroundColor Cyan
-Wait-ForContainerHealth -ContainerName "platform-workflow-engine-dev" -DisplayName "Workflow Engine"
-Wait-ForContainerHealth -ContainerName "platform-admin-center-dev" -DisplayName "Admin Center"
-Wait-ForContainerHealth -ContainerName "platform-user-portal-dev" -DisplayName "User Portal"
-Wait-ForContainerHealth -ContainerName "platform-developer-workstation-dev" -DisplayName "Developer Workstation"
-Wait-ForContainerHealth -ContainerName "platform-edge-frontend-dev" -DisplayName "Edge frontend (single-origin)"
+Wait-ForContainerHealth -ServiceName "workflow-engine" -DisplayName "Workflow Engine"
+Wait-ForContainerHealth -ServiceName "admin-center" -DisplayName "Admin Center"
+Wait-ForContainerHealth -ServiceName "user-portal" -DisplayName "User Portal"
+Wait-ForContainerHealth -ServiceName "developer-workstation" -DisplayName "Developer Workstation"
+Wait-ForContainerHealth -ServiceName "edge-frontend" -DisplayName "Edge frontend (single-origin)"
 
 Write-Host "  Current service status:" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps
@@ -623,7 +694,6 @@ Write-Host "    Login:                http://localhost:$EdgePort/login/"
 Write-Host "    Admin:                http://localhost:$EdgePort/admin/"
 Write-Host "    Portal:               http://localhost:$EdgePort/portal/"
 Write-Host "    Developer:            http://localhost:$EdgePort/dev/"
-Write-Host "    N8N:                  http://localhost:$EdgePort/n8n/"
 Write-Host "    API (via Kong):       http://localhost:$EdgePort/api/"
 Write-Host ""
 
@@ -643,8 +713,6 @@ Write-Host "Infrastructure:" -ForegroundColor Cyan
 Write-Host "  PostgreSQL:             localhost:5432"
 Write-Host "  Redis:                  localhost:6379"
 Write-Host "  Kafka:                  localhost:9092"
-Write-Host "  N8N (edge):             http://localhost:$EdgePort/n8n/"
-Write-Host "  N8N (direct):           http://localhost:5678"
 Write-Host "  Superset (direct):      http://localhost:8088/superset/welcome/"
 Write-Host "  Superset (edge):        http://localhost:$EdgePort/superset/"
 Write-Host ""

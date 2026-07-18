@@ -13,7 +13,12 @@ spring:
       minimum-idle: 5
       idle-timeout: 300000
       connection-timeout: 20000
+      # 连接占用超过阈值(ms)时打印堆栈，用于压测确认“是否真泄漏”——正常情况下不应有告警。
+      leak-detection-threshold: 20000
   jpa:
+    # OSIV 关闭：连接按仓储/事务调用即取即还，不再横跨整个请求(含对 workflow-engine 的阻塞 HTTP)。
+    # /tasks/query 高并发下连接池耗尽的主因之一。见 TaskQueryComponent 并行扇出。
+    open-in-view: false
     hibernate:
       ddl-auto: none
     show-sql: false

@@ -20,6 +20,7 @@
 import { computed } from 'vue'
 import LookupPreview from './LookupPreview.vue'
 import { lookupStore } from './lookupStore'
+import { dispatchLookupComponentFieldEvents } from '@/utils/formCreateLookupComponentEvents'
 import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
 
 const props = defineProps<{
@@ -27,16 +28,27 @@ const props = defineProps<{
   placeholder?: string
   lookupConfig?: string
   disabled?: boolean
-  formCreateInject?: { rule?: Record<string, unknown> }
+  formCreateInject?: {
+    rule?: Record<string, unknown>
+    api?: Record<string, unknown>
+    field?: string
+    preview?: boolean
+  }
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any): void
+  /** form-create built-in preview runs rule.on.change only when custom components emit change. */
+  (e: 'change', value: any): void
 }>()
 
 const lookupValue = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => {
+    emit('update:modelValue', value)
+    emit('change', value)
+    dispatchLookupComponentFieldEvents(props.formCreateInject, value)
+  },
 })
 
 const isReadonly = computed(

@@ -16,3 +16,9 @@ RUN sh /tmp/prewarm-pieces.sh /tmp/pieces.json && rm /tmp/prewarm-pieces.sh
 # that are outside the allowlist — it would spin forever and spam 404s. Patch it out.
 COPY patch-web-approvals.js /tmp/patch-web-approvals.js
 RUN node /tmp/patch-web-approvals.js && rm /tmp/patch-web-approvals.js
+
+# run_agent + DeepSeek reasoning models: set an explicit maxOutputTokens (the provider
+# default is small enough that chain-of-thought exhausts it before the real answer) and
+# keep reasoning deltas out of the markdown output (they polluted the chat reply).
+COPY patch-piece-ai-run-agent.js /tmp/patch-piece-ai-run-agent.js
+RUN node /tmp/patch-piece-ai-run-agent.js && rm /tmp/patch-piece-ai-run-agent.js

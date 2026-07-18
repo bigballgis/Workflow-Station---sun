@@ -20,6 +20,7 @@
         <spring-boot.version>3.2.1</spring-boot.version>
         <spring-security.version>6.5.9</spring-security.version>
         <tomcat.version>10.1.55</tomcat.version>
+        <jackson.version>2.15.4</jackson.version>
         <spring-security.version>6.5.9</spring-security.version>
         <jjwt.version>0.12.3</jjwt.version>
         <jqwik.version>1.8.2</jqwik.version>
@@ -28,6 +29,13 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.security</groupId>
                 <artifactId>spring-security-bom</artifactId>

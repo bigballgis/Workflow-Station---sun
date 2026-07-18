@@ -2,6 +2,7 @@ import type { Ref } from 'vue'
 import {
   buildLookupColumnProps,
   enrichLookupColumnPropsFromSubFormRule,
+  flattenSubFormRuleLayoutContainers,
   mapSubFormRuleToDialogColumns,
   mergeListViewFieldColumn,
   parseLookupConfig,
@@ -48,10 +49,11 @@ export function createSubTableColumnDeriver(deps: {
     subForms?: Record<string, any>,
     formConfig?: Record<string, any>,
   ): DialogColumn[] => {
-    const subFormRule =
+    const subFormRule = flattenSubFormRuleLayoutContainers(
       binding.subFormConfig?.rule ||
       subForms?.[binding.bindingId]?.rule ||
-      subForms?.[String(binding.bindingId)]?.rule
+      subForms?.[String(binding.bindingId)]?.rule,
+    )
 
     const subFormColumns: DialogColumn[] =
       subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0

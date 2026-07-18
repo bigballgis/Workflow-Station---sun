@@ -3,6 +3,8 @@
  * Designer stores per-field read-only as props.readonly; form-create preview respects props.disabled.
  */
 
+import { getRuleChildren } from '@/utils/formDesigner'
+
 /** User explicitly turned Readonly off in fc-designer (must win over stale parser-injected disabled). */
 export function isFormCreateRuleExplicitlyEditable(rule: unknown): boolean {
   if (!rule || typeof rule !== 'object') return false
@@ -82,9 +84,67 @@ export function applyFormCreateRuleReadonly(rule: unknown): unknown {
   return next
 }
 
+function replaceRuleChildren(rule: Record<string, unknown>, mappedChildren: unknown[]): Record<string, unknown> {
+  if (Array.isArray(rule.children)) {
+    return { ...rule, children: mappedChildren }
+  }
+  const props = rule.props as Record<string, unknown> | undefined
+  if (props) {
+    for (const key of ['children', 'list', 'items', 'fields'] as const) {
+      if (Array.isArray(props[key])) {
+        return { ...rule, props: { ...props, [key]: mappedChildren } }
+      }
+    }
+  }
+  return rule
+}
+
+/** Apply readonly→disabled mapping on a single node (no child recursion). */
+function mapReadonlyOnNode(rule: Record<string, unknown>): Record<string, unknown> {
+  const props = (rule.props as Record<string, unknown> | undefined) || {}
+  const readonly = isFormCreateRuleReadonly(rule)
+
+  if (isFormCreateRuleExplicitlyEditable(rule)) {
+    const { disabled: _omitDisabled, readonly: _omitReadonly, ...restProps } = props
+    const next: Record<string, unknown> = {
+      ...rule,
+      readonly: false,
+      props: { ...restProps, readonly: false },
+    }
+    delete next.disabled
+    return next
+  }
+
+  if (!readonly) return rule
+
+  const { readonly: _omitReadonly, disabled: _omitDisabled, ...restProps } = props
+  return {
+    ...rule,
+    disabled: true,
+    props: { ...restProps, disabled: true },
+  }
+}
+
 export function mapFormCreateRulesReadonlyDeep(rules: unknown[]): unknown[] {
   if (!Array.isArray(rules)) return []
-  return rules.map((rule) => applyFormCreateRuleReadonly(rule))
+  const visited = new WeakSet<object>()
+
+  function mapItem(rule: unknown): unknown {
+    if (!rule || typeof rule !== 'object') return rule
+    if (visited.has(rule)) return rule
+    visited.add(rule)
+
+    const r = rule as Record<string, unknown>
+    const children = getRuleChildren(r)
+    const mappedChildren = children.length ? children.map(mapItem) : []
+    const childrenChanged = children.length > 0 && mappedChildren.some((c, i) => c !== children[i])
+    const withChildren = childrenChanged
+      ? replaceRuleChildren(r, mappedChildren)
+      : r
+    return mapReadonlyOnNode(withChildren)
+  }
+
+  return rules.map(mapItem)
 }
 
 /** Remove designer `disabled`; migrate legacy disabled → props.readonly before persist/load. */

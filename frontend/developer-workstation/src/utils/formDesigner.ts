@@ -161,6 +161,35 @@ export function injectPreviewUploadHandlers(
 }
 
 /**
+ * Depth-first walk of a form-create rule tree with cycle detection.
+ * fc-designer layout nodes (el-row / el-col / card) can share object references;
+ * unguarded recursion on Preview paths caused main-thread hangs.
+ */
+export function walkFormCreateRules(
+  items: unknown[],
+  visit: (rule: Record<string, unknown>) => void,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): void {
+  if (!Array.isArray(items)) return
+  for (const raw of items) {
+    if (!raw || typeof raw !== 'object') continue
+    const rule = raw as Record<string, unknown>
+    if (visited.has(rule)) continue
+    visited.add(rule)
+    visit(rule)
+    walkFormCreateRules(getRuleChildren(rule), visit, visited)
+  }
+}
+
+/**
+ * Deep-clone designer rules before Preview transforms so getRule() references
+ * are never mutated in place (ensureFormCreateRulesValidationDeep mutates).
+ */
+export function snapshotRulesForPreview(rules: unknown[] | null | undefined): any[] {
+  return cloneFormRules(Array.isArray(rules) ? rules : [])
+}
+
+/**
  * Get children from any known nesting pattern in a form rule item.
  */
 export function getRuleChildren(item: any): any[] {
@@ -172,6 +201,35 @@ export function getRuleChildren(item: any): any[] {
     item?.props?.fields,
   ]
   return childSources.find(children => Array.isArray(children)) || []
+}
+
+/** Layout containers whose children are real field rules (card set + FC_SKIP_PREVIEW). */
+const LAYOUT_CONTAINER_TYPES = new Set([
+  'el-card', 'elCard', 'card',
+  'el-row', 'elRow', 'row',
+  'el-col', 'elCol', 'col',
+  'group', 'subForm', 'tableForm', 'tableFormColumn',
+])
+
+/**
+ * Expand layout containers (Card/Row/Col/…) into their children so field rules nested
+ * inside them still participate in sub-table column derivation. Field-bearing rules and
+ * placeholders (subTable/linkForm) pass through untouched, in document order.
+ */
+export function flattenRuleLayoutContainers(rules: any[]): any[] {
+  if (!Array.isArray(rules)) return []
+  const out: any[] = []
+  const walk = (items: any[]) => {
+    for (const item of items) {
+      if (item && typeof item === 'object' && !item.field && LAYOUT_CONTAINER_TYPES.has(String(item.type))) {
+        walk(getRuleChildren(item))
+      } else {
+        out.push(item)
+      }
+    }
+  }
+  walk(rules)
+  return out
 }
 
 /**
@@ -186,6 +244,46 @@ export function collectSubTableRules(items: any[]): any[] {
     if (children.length) result.push(...collectSubTableRules(children))
   }
   return result
+}
+
+/**
+ * Copy top-level `_bindingId` into `props._bindingId` on every subTable rule (non-mutating).
+ * Persisted rules keep `_bindingId` only at top level (the drag rule's parseRule strips the
+ * props copy on save), but SubTablePlaceholderWidget reads props — so preview surfaces that
+ * feed saved rules straight into form-create must run this or nested placeholders render
+ * as "unconfigured".
+ */
+export function withSubTableBindingIdInProps(items: any[]): any[] {
+  const visited = new WeakSet<object>()
+
+  function mapList(list: any[]): any[] {
+    return (list || []).map((item) => mapItem(item))
+  }
+
+  function mapItem(item: any): any {
+    if (!item || typeof item !== 'object') return item
+    if (visited.has(item)) return item
+    visited.add(item)
+
+    let next = item
+    if (item.type === 'subTable' && item._bindingId != null && item.props?._bindingId == null) {
+      next = { ...item, props: { ...(item.props || {}), _bindingId: item._bindingId } }
+    }
+    const children = getRuleChildren(next)
+    if (!children.length) return next
+
+    const mapped = mapList(children)
+    if (mapped === children) return next
+    next = next === item ? { ...item } : next
+    if (Array.isArray(next.children)) next.children = mapped
+    else if (next.props?.children) next.props = { ...next.props, children: mapped }
+    else if (Array.isArray(next.props?.list)) next.props = { ...next.props, list: mapped }
+    else if (Array.isArray(next.props?.items)) next.props = { ...next.props, items: mapped }
+    else if (Array.isArray(next.props?.fields)) next.props = { ...next.props, fields: mapped }
+    return next
+  }
+
+  return mapList(items)
 }
 
 /**

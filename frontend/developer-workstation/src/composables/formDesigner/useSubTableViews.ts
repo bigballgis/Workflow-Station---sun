@@ -9,6 +9,7 @@ import {
   serializeFormCreateOptionsForPersist,
 } from '@/utils/formCreateDefaultEvents'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
+import { withSubTableBindingIdInProps } from '@/utils/formDesigner'
 
 export type SubTableListColumnDTO = SubTableFieldDTO & {
   columnType?: 'field' | 'linkForm' | 'lookup'
@@ -383,7 +384,7 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
     try {
       if (subRef) {
         return {
-          rule: subRef.getRule?.() || [],
+          rule: withSubTableBindingIdInProps(subRef.getRule?.() || []),
           options: subRef.getOption?.() || {}
         }
       }
@@ -391,7 +392,11 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
       // Live designer read failed — fall through to cache/saved (persist-safe chain below).
       console.warn('[FormDesigner] Failed to read live sub form design:', { bindingId, error: e })
     }
-    return subFormCache.value[bindingId] || { rule: saved.rule || [], options: saved.options || defaultFormOption.value }
+    const fallback = subFormCache.value[bindingId] || { rule: saved.rule || [], options: saved.options || defaultFormOption.value }
+    // Preview surfaces feed this rule straight into form-create (no designer loadRule pass),
+    // and persisted rules keep _bindingId only at top level — restore the props copy so
+    // nested subTable placeholders resolve their binding instead of rendering "unconfigured".
+    return { rule: withSubTableBindingIdInProps(fallback.rule || []), options: fallback.options }
   }
 
   function getSubTableFormRule(bindingId: number): any[] {

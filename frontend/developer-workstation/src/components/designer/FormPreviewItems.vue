@@ -45,6 +45,9 @@
             :config="{ title: item.binding.tableName, columns: item.binding.columns, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField }"
             :model-value="previewTableRows[item.binding.bindingId]"
             :editable="true"
+            :allow-add="item.binding.allowAdd"
+            :allow-edit="item.binding.allowEdit"
+            :allow-delete="item.binding.allowDelete"
             :form-rule="item.binding.rule"
             :form-option="item.binding.option"
             :primary-form-data="previewModel"
@@ -106,6 +109,9 @@
         :config="{ title: item.binding.tableName, columns: item.binding.columns || [], tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="!isMyRequestsPreview"
+        :allow-add="item.binding.allowAdd"
+        :allow-edit="item.binding.allowEdit"
+        :allow-delete="item.binding.allowDelete"
         :form-rule="item.binding.rule"
         :form-option="item.binding.option"
         :primary-form-data="previewModel"
@@ -154,6 +160,7 @@
       class="lookup-preview-item"
     >
       <LookupPreview
+        :model-value="previewModel[item.field]"
         :label="item.label"
         :placeholder="item.placeholder"
         :search-fields="item.searchFields"
@@ -164,6 +171,7 @@
         :field-defs="item.fieldDefs"
         :show-backfill-view="item.showBackfillView !== false"
         :readonly="isMyRequestsPreview || item.readonly === true"
+        @update:model-value="(val) => onLookupPreviewChange(item, val)"
       />
     </div>
 
@@ -211,11 +219,8 @@ import {
   resolvePreviewInlineFormBelowDesign,
 } from './formPreviewTypes'
 import {
-  collectFieldComponentEventsFromRules,
-  runComponentFieldEventsOnValueChange,
-} from '@/utils/formCreateComponentEvents'
-import { createPortalFormApi } from '@/utils/formCreateEventRuntime'
-import { REQUEST_ID_FIELD } from '@/utils/formFieldMeta'
+  dispatchPreviewFieldValueChange,
+} from '@/utils/formCreatePreviewEvents'
 
 defineOptions({ name: 'FormPreviewItems' })
 
@@ -316,28 +321,18 @@ function recomputeRequestId(model: Record<string, any>): string | undefined {
 
 function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unknown) {
   if (!field || isMyRequestsPreview.value) return
-  const patch: Record<string, any> = { [field]: value }
-  const nextModel = { ...previewModel.value, ...patch }
-  // If this field feeds the Request ID, recompute the readonly Request ID live.
-  if (props.requestIdConfig?.fieldNames?.includes(field)) {
-    patch[REQUEST_ID_FIELD] = recomputeRequestId(nextModel)
-  }
-  previewModel.value = { ...previewModel.value, ...patch }
-  const api = createPortalFormApi(
-    () => previewModel.value,
-    (p) => {
-      previewModel.value = { ...previewModel.value, ...p }
-    },
-  )
-  const ev = collectFieldComponentEventsFromRules(segmentRules).get(field)
-  runComponentFieldEventsOnValueChange(ev, {
-    field,
-    value,
-    api,
-    onEvent: 'change',
-    hookEvent: 'value',
-    fieldType: ev?.rule?.type != null ? String(ev.rule.type) : undefined,
+  dispatchPreviewFieldValueChange(segmentRules, field, value, previewModel, {
+    requestIdConfig: props.requestIdConfig,
+    requestIdRecompute: recomputeRequestId,
   })
+}
+
+function onLookupPreviewChange(
+  item: Extract<FormPreviewItem, { kind: 'lookup' }>,
+  value: unknown,
+) {
+  if (!item.field || isMyRequestsPreview.value) return
+  onPreviewFieldChange([item.rule], item.field, value)
 }
 
 function mergePrimaryFormData(patch: Record<string, unknown>) {

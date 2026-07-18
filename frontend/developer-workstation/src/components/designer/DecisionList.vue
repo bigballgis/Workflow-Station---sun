@@ -34,32 +34,14 @@
       </div>
 
       <div class="table-scroll-wrap">
-      <el-table
-        v-if="decisions.length > 0"
-        v-loading="loading"
-        :data="decisions"
-        style="width: 100%"
-      >
-        <el-table-column
-          prop="decisionKey"
-          :label="t('decision.key')"
-          min-width="150"
-        />
-        <el-table-column
-          prop="decisionName"
-          :label="t('decision.name')"
-          min-width="150"
-        />
-        <el-table-column
-          prop="hitPolicy"
-          :label="t('decision.hitPolicy')"
-          width="120"
-        />
-        <el-table-column
-          :label="t('decision.boundNodes')"
-          min-width="150"
+        <DesignerListTable
+          v-if="decisions.length > 0"
+          :loading="loading"
+          :storage-key="`${functionUnitId}:decisions`"
+          :columns="listColumns"
+          :rows="decisions"
         >
-          <template #default="{ row }">
+          <template #cell-boundNodes="{ row }">
             <div class="table-cell-tags">
               <template v-if="getBoundNodes(row.id).length > 0">
                 <el-tag
@@ -77,22 +59,10 @@
               >{{ t('decision.notBound') }}</span>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column
-          prop="updatedAt"
-          :label="t('decision.lastUpdated')"
-          width="180"
-        >
-          <template #default="{ row }">
+          <template #cell-updatedAt="{ row }">
             {{ row.updatedAt || row.createdAt }}
           </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('common.actions')"
-          min-width="240"
-          fixed="right"
-        >
-          <template #default="{ row }">
+          <template #actions="{ row }">
             <div class="table-row-actions">
               <el-button
                 link
@@ -117,8 +87,7 @@
               </el-button>
             </div>
           </template>
-        </el-table-column>
-      </el-table>
+        </DesignerListTable>
       </div>
 
       <el-empty
@@ -257,6 +226,8 @@ import type { DecisionDefinition, DecisionDefinitionRequest } from '@/api/decisi
 import DecisionDesigner from './DecisionDesigner.vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { parseBpmnServiceTasks, bindDecisionToNode } from './decisionListHelpers'
+import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
@@ -348,6 +319,49 @@ async function handleDelete(row: DecisionDefinition) {
 function getBoundNodes(decisionId: number): Array<{ nodeId: string; nodeName: string }> {
   return decisionNodeBindings.value.get(decisionId) || []
 }
+
+const listColumns = computed<DesignerListTableColumn<DecisionDefinition>[]>(() => [
+  {
+    key: 'decisionKey',
+    prop: 'decisionKey',
+    label: t('decision.key'),
+    defaultWidth: 150,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'decisionName',
+    prop: 'decisionName',
+    label: t('decision.name'),
+    defaultWidth: 150,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'hitPolicy',
+    prop: 'hitPolicy',
+    label: t('decision.hitPolicy'),
+    defaultWidth: 120,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'boundNodes',
+    label: t('decision.boundNodes'),
+    defaultWidth: 150,
+    showOverflowTooltip: true,
+    getValue: (row) => {
+      const nodes = getBoundNodes(row.id)
+      if (!nodes.length) return t('decision.notBound')
+      return nodes.map((n) => n.nodeName).join(', ')
+    },
+  },
+  {
+    key: 'updatedAt',
+    prop: 'updatedAt',
+    label: t('decision.lastUpdated'),
+    defaultWidth: 180,
+    showOverflowTooltip: true,
+    getValue: (row) => row.updatedAt || row.createdAt,
+  },
+])
 
 /**
  * Parse bindings from current BPMN XML in store.

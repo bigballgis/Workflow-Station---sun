@@ -127,6 +127,18 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         // 6. Async N8N call (context and existingDocuments already loaded in main thread)
         final FunctionUnitContextDTO finalContext = context;
         final List<Map<String, String>> finalExistingDocuments = existingDocuments;
+        // Guarded sender: if the user stopped this turn and immediately started a new one,
+        // this task's emitter is superseded — its stale events (reply/done) must not leak
+        // into the new request's stream, and it must not complete the new emitter.
+        // Persistence (saveDocument/saveMessage/phase advance) intentionally stays unguarded.
+        final java.util.function.Consumer<AiChatSseEvent> emitIfCurrent = ev -> {
+            if (aiGenerationService.isChatEmitterSuperseded(request.getFunctionUnitId(), userId, emitter)) {
+                log.info("Skipping stale chat SSE event '{}': emitter superseded, functionUnitId={}, userId={}",
+                        ev.getEventType(), request.getFunctionUnitId(), userId);
+                return;
+            }
+            aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId, ev);
+        };
         CompletableFuture.runAsync(() -> {
             try {
                 log.info("chatStream async: starting N8N call, functionUnitId={}, sessionId={}, contextPresent={}, docsCount={}",
@@ -134,8 +146,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         finalContext != null, finalExistingDocuments.size());
 
                 // 6a. Send session_created event so frontend knows the sessionId
-                aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
-                        AiChatSseEvent.builder().eventType("session")
+                emitIfCurrent.accept(AiChatSseEvent.builder().eventType("session")
                                 .data(Map.of("sessionId", session.getSessionId().toString())).build());
 
                 // 6b. Call N8N Webhook
@@ -145,11 +156,13 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         request.getRegenerateScope());
 
                 // 6b. Parse N8N response and send SSE events
+                // Blank replies are legal (the model may put everything inside the document
+                // markers); skip both the token event and persistence so the chat history
+                // doesn't accumulate empty assistant bubbles.
                 String reply = null;
-                if (n8nResponse.containsKey("reply")) {
-                    reply = (String) n8nResponse.get("reply");
-                    aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
-                            AiChatSseEvent.builder().eventType("token").data(reply).build());
+                if (n8nResponse.get("reply") instanceof String replyStr && !replyStr.isBlank()) {
+                    reply = replyStr;
+                    emitIfCurrent.accept(AiChatSseEvent.builder().eventType("token").data(reply).build());
                 }
 
                 if (n8nResponse.containsKey("document") && n8nResponse.get("document") != null) {
@@ -160,8 +173,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         String summary = (String) n8nResponse.getOrDefault("documentSummary", "AI generated document");
 
                         aiGenerationService.saveDocument(request.getFunctionUnitId(), documentType, documentContent, summary, userId);
-                        aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
-                                AiChatSseEvent.builder().eventType("document")
+                        emitIfCurrent.accept(AiChatSseEvent.builder().eventType("document")
                                         .data(Map.of("documentType", documentTypeStr, "content", documentContent)).build());
                     }
                 }
@@ -178,8 +190,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                             log.error("Failed to auto-advance phase: sessionId={}", session.getSessionId(), phaseErr);
                         }
                     }
-                    aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
-                            AiChatSseEvent.builder().eventType("phase_complete").data(request.getPhase().name()).build());
+                    emitIfCurrent.accept(AiChatSseEvent.builder().eventType("phase_complete").data(request.getPhase().name()).build());
                 }
 
                 if (n8nResponse.containsKey("generatedData") && n8nResponse.get("generatedData") != null) {
@@ -189,6 +200,8 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         try {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> generatedDataMap = (Map<String, Object>) generatedDataObj;
+                            normalizeTableRelations(extractTableRelations(generatedDataMap));
+                            normalizeCrossFieldRules(extractFormDefinitions(generatedDataMap));
                             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                             AiGeneratedData parsedData = mapper.convertValue(generatedDataMap, AiGeneratedData.class);
                             com.developer.dto.AiQualityScore qualityScore = aiValidationService.computeQualityScore(parsedData);
@@ -197,8 +210,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                             log.warn("Failed to compute quality score, skipping: {}", qsEx.getMessage());
                         }
                     }
-                    aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
-                            AiChatSseEvent.builder().eventType("generated_data").data(n8nResponse.get("generatedData")).build());
+                    emitIfCurrent.accept(AiChatSseEvent.builder().eventType("generated_data").data(n8nResponse.get("generatedData")).build());
                 }
 
                 // 6c. Save AI response message
@@ -207,11 +219,12 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 }
 
                 // 6d. Send done event
-                aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
-                        AiChatSseEvent.builder().eventType("done").data(null).build());
+                emitIfCurrent.accept(AiChatSseEvent.builder().eventType("done").data(null).build());
 
-                // 6e. Complete the emitter
-                aiGenerationService.completeChatEmitter(request.getFunctionUnitId(), userId);
+                // 6e. Complete the emitter — only if this task still owns it
+                if (!aiGenerationService.isChatEmitterSuperseded(request.getFunctionUnitId(), userId, emitter)) {
+                    aiGenerationService.completeChatEmitter(request.getFunctionUnitId(), userId);
+                }
 
             } catch (Exception e) {
                 log.error("N8N call failed: functionUnitId={}, sessionId={}", request.getFunctionUnitId(), session.getSessionId(), e);
@@ -237,13 +250,14 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         }
                     }
 
-                    aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
-                            AiChatSseEvent.builder().eventType("error").data(errorData).build());
+                    emitIfCurrent.accept(AiChatSseEvent.builder().eventType("error").data(errorData).build());
                 } catch (Exception sendError) {
                     log.error("Failed to send error event", sendError);
                 }
-                // Complete emitter
-                aiGenerationService.completeChatEmitter(request.getFunctionUnitId(), userId);
+                // Complete emitter — only if this task still owns it
+                if (!aiGenerationService.isChatEmitterSuperseded(request.getFunctionUnitId(), userId, emitter)) {
+                    aiGenerationService.completeChatEmitter(request.getFunctionUnitId(), userId);
+                }
             }
         }, taskExecutor);
 
@@ -313,7 +327,11 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         aiLockService.extendLock(functionUnitId, userId);
 
         try {
-            // 2. Validate generated data
+            // 2. Normalize model output the platform enum can't express, then validate
+            if (request.getGeneratedData() != null) {
+                normalizeTableRelations(request.getGeneratedData().getTableRelations());
+                normalizeCrossFieldRules(request.getGeneratedData().getFormDefinitions());
+            }
             AiValidationResult validationResult = aiValidationService.validate(request.getGeneratedData());
 
             // 3. Throw exception if validation fails
@@ -414,6 +432,76 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     @Override
     public void updateSessionPhase(String sessionId, com.developer.enums.AiPhase phase) {
         aiGenerationService.updateSessionPhase(sessionId, phase);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> extractTableRelations(Map<String, Object> generatedData) {
+        Object rels = generatedData.get("tableRelations");
+        return rels instanceof List ? (List<Map<String, Object>>) rels : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> extractFormDefinitions(Map<String, Object> generatedData) {
+        Object forms = generatedData.get("formDefinitions");
+        return forms instanceof List ? (List<Map<String, Object>>) forms : null;
+    }
+
+    /**
+     * A crossFieldRule's targetField only decides which of the involved fields the error
+     * message attaches to — LLMs routinely omit it because the rule already lists fields[].
+     * Default it to the last entry of fields[] (e.g. for [start_date, end_date] the message
+     * belongs on end_date) instead of failing validation with FIELD_CONSTRAINT at apply time.
+     */
+    @SuppressWarnings("unchecked")
+    static void normalizeCrossFieldRules(List<Map<String, Object>> formDefinitions) {
+        if (formDefinitions == null) {
+            return;
+        }
+        for (Map<String, Object> form : formDefinitions) {
+            if (form == null || !(form.get("configJson") instanceof Map)) {
+                continue;
+            }
+            Object rulesObj = ((Map<String, Object>) form.get("configJson")).get("crossFieldRules");
+            if (!(rulesObj instanceof List)) {
+                continue;
+            }
+            for (Map<String, Object> rule : (List<Map<String, Object>>) rulesObj) {
+                if (rule == null) {
+                    continue;
+                }
+                Object target = rule.get("targetField");
+                boolean missing = !(target instanceof String str) || str.isBlank();
+                if (missing && rule.get("fields") instanceof List<?> fields && !fields.isEmpty()) {
+                    Object last = fields.get(fields.size() - 1);
+                    if (last instanceof String lastField && !lastField.isBlank()) {
+                        rule.put("targetField", lastField);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The platform relation enum is ONE_TO_ONE | ONE_TO_MANY | MANY_TO_MANY — there is no
+     * MANY_TO_ONE, but LLMs naturally describe child→parent that way. It is semantically the
+     * same as ONE_TO_MANY with the two ends swapped, so rewrite it instead of failing
+     * validation with INVALID_ENUM at apply time.
+     */
+    static void normalizeTableRelations(List<Map<String, Object>> tableRelations) {
+        if (tableRelations == null) {
+            return;
+        }
+        for (Map<String, Object> relation : tableRelations) {
+            if (relation != null && "MANY_TO_ONE".equals(relation.get("relationType"))) {
+                Object sourceTable = relation.get("sourceTableName");
+                Object sourceField = relation.get("sourceFieldName");
+                relation.put("sourceTableName", relation.get("targetTableName"));
+                relation.put("sourceFieldName", relation.get("targetFieldName"));
+                relation.put("targetTableName", sourceTable);
+                relation.put("targetFieldName", sourceField);
+                relation.put("relationType", "ONE_TO_MANY");
+            }
+        }
     }
 
     /**

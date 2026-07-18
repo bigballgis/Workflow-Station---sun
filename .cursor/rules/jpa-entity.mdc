@@ -36,7 +36,7 @@ public class FunctionUnit {
 
 | 要求 | 说明 |
 |------|------|
-| 表名前缀 | `dw_`(developer), `ac_`(admin), `up_`(portal), `we_`(workflow) |
+| 表名前缀 | 见 `domain-model.mdc` 命名红线（`dw_`/`ac_`/`up_`/`we_`） |
 | 时间字段 | 统一 `Instant`，不用 `LocalDateTime` |
 | 乐观锁 | `@Version` + `lockVersion` 字段 |
 | 审计 | `@CreatedBy`, `@CreatedDate`, `@LastModifiedBy`, `@LastModifiedDate` |
@@ -52,8 +52,7 @@ public class FunctionUnit {
 
 ## Schema 同步
 
-新增/修改实体后，检查 `deploy/init-scripts/` SQL 脚本是否需要同步更新:
-- 新表 → 新增 SQL 脚本（序号递增）
-- 新字段 → `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+新增/修改实体后，检查 `deploy/init-scripts/` SQL 脚本是否需要同步更新（**只增不改**，完整规范见 `init-scripts-append-only.mdc`）:
+- 新表 → 新增递增编号 SQL 脚本
+- 新字段 → 新脚本内 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
 - 新关联 → 检查外键约束
-- `.sql` 文件必须 LF 换行

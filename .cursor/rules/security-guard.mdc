@@ -5,6 +5,9 @@ alwaysApply: true
 
 # 安全编码守卫
 
+> 本规则是**通用安全红线**。**如何写才不被 Checkmarx/Cyberflows 报警**（SafeUrlInput、SqlIdentifiers、
+> XXE 内联加固、LDAP、参数篡改等具体写法）见 skill **`secure-coding-sast`**。
+
 ## 威胁感知检查 — "这段代码会被怎样攻击？"
 
 每次写代码时，问自己这四个问题：

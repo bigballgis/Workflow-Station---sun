@@ -83,6 +83,20 @@ describe('formCreateRuleUtils', () => {
     expect((stripped.props as Record<string, unknown>).placeholder).toBe('Pick')
   })
 
+  it('preserves sub-table per-operation permission props through persist strip', () => {
+    // 子表逐操作权限存于 rule.props.allowAdd/allowEdit/allowDelete；
+    // 保存时 stripFormCreateRuleDisabled 只处理 disabled/readonly，不得丢掉这些标志。
+    const stripped = stripFormCreateRuleDisabled({
+      type: 'subTable',
+      _bindingId: 50114,
+      props: { allowAdd: true, allowEdit: true, allowDelete: false, _bindingId: 50114 },
+    }) as Record<string, unknown>
+    const props = stripped.props as Record<string, unknown>
+    expect(props.allowAdd).toBe(true)
+    expect(props.allowEdit).toBe(true)
+    expect(props.allowDelete).toBe(false)
+  })
+
   it('does not re-persist readonly when user explicitly turned it off', () => {
     const stripped = stripFormCreateRuleDisabled({
       type: 'input',

@@ -95,6 +95,30 @@ export function collectSubTableFieldsFromLayout(
 }
 
 /**
+ * Write a nested sub-table's rows into a parent row's `__subTables__` map, keyed by both
+ * binding id and table name — the same convention Link Form persistence (`saveLinkedFormData`)
+ * uses, so `pullNestedRowsForBindingFromParentRows` resolves the slice on reload. `sources`
+ * are merged in order (later wins) so the freshest local model overrides the stale parent row.
+ */
+export function mergeNestedSubTableRowsIntoSto(
+  sources: Array<Record<string, unknown> | null | undefined>,
+  binding: { bindingId: number | string; tableName?: string },
+  rows: unknown[],
+): Record<string, unknown> {
+  const sto: Record<string, unknown> = {}
+  for (const src of sources) {
+    const raw = src?.__subTables__
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      Object.assign(sto, raw as Record<string, unknown>)
+    }
+  }
+  sto[String(binding.bindingId)] = rows
+  const name = typeof binding.tableName === 'string' ? binding.tableName.trim() : ''
+  if (name) sto[name] = rows
+  return sto
+}
+
+/**
  * Re-attach FU-canvas `subTable` widgets dropped when task-form configJson overwrites layout.
  */
 export function mergeMissingSubTableFieldsIntoLayout(
@@ -117,13 +141,20 @@ export function mergeMissingSubTableFieldsIntoLayout(
 
 /**
  * Last-resort: ensure every live sub-table binding has a canvas `subTable` widget so FormRenderer mounts it.
+ * Bindings placed *inside another binding's form design* (nested sub-table, rendered by
+ * SubTableInlineForm → PortalFormFields) count as placed — no standalone duplicate.
  */
 export function ensureSubTableBindingsOnFormLayout(
   layout: FormLayoutBuckets,
-  bindings: Array<{ bindingId: number; portalViews?: Partial<SubTablePortalViews> | null }>,
+  bindings: Array<{ bindingId: number; portalViews?: Partial<SubTablePortalViews> | null; formFields?: FormField[] }>,
   formConfig?: Record<string, unknown> | null,
 ): void {
   const placed = collectPlacedSubTableBindingIds(layout.fields, layout.tabs, layout.fieldsAfterTabs)
+  for (const b of bindings) {
+    if (Array.isArray(b.formFields) && b.formFields.length > 0) {
+      for (const id of collectPlacedSubTableBindingIds(b.formFields)) placed.add(id)
+    }
+  }
   const portalViewsMap = (formConfig?.subTablePortalViews ?? {}) as Record<string, unknown>
   for (const b of bindings) {
     const bid = Number(b.bindingId)
@@ -293,11 +324,13 @@ export function collectAllLinkFormTargetBindingIds(
 
 /**
  * Same closure as developer-workstation FormDesigner preview / process start:
- * placed sub-tables plus link-form targets reachable from them.
+ * placed sub-tables plus link-form targets reachable from them, plus nested
+ * `subTable` widgets placed inside a needed binding's own form design
+ * (sub-table-in-sub-table — rendered by SubTableInlineForm → PortalFormFields).
  */
 export function computeNeededSubTableBindingIds(
   placed: Set<number> | Iterable<number>,
-  allBindings: SubTableBindingLinkRef[]
+  allBindings: Array<SubTableBindingLinkRef & { formFields?: FormField[] }>
 ): Set<number> {
   const needed = asNumberSet(placed)
   let changed = true
@@ -313,6 +346,14 @@ export function computeNeededSubTableBindingIds(
         if (Number.isFinite(n) && !needed.has(n)) {
           needed.add(n)
           changed = true
+        }
+      }
+      if (Array.isArray(b.formFields) && b.formFields.length > 0) {
+        for (const id of collectPlacedSubTableBindingIds(b.formFields)) {
+          if (!needed.has(id)) {
+            needed.add(id)
+            changed = true
+          }
         }
       }
     }

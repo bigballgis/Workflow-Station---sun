@@ -11,14 +11,14 @@
           <el-icon><Download /></el-icon> {{ t('subTable.exportWithData') }}
         </el-button>
         <el-button
-          v-if="editable && !hasFileColumn"
+          v-if="canAdd && !hasFileColumn"
           size="small"
           @click="triggerImport"
         >
           <el-icon><Upload /></el-icon> {{ t('subTable.import') }}
         </el-button>
         <el-button
-          v-if="editable"
+          v-if="canAdd"
           type="primary"
           size="small"
           @click="handleAdd"
@@ -45,6 +45,8 @@
         style="width: 100%"
         :show-summary="hasSummary"
         :summary-method="getSummaryMethod"
+        :highlight-current-row="enableRowSelect"
+        @current-change="onTableCurrentRowChange"
       >
         <el-table-column
           v-for="col in columns"
@@ -254,12 +256,13 @@
         </el-table-column>
 
         <el-table-column
-          v-if="editable"
+          v-if="canEdit || canDelete"
           :label="t('common.operation')"
           width="120"
         >
           <template #default="scope">
             <el-button
+              v-if="canEdit"
               link
               type="primary"
               size="small"
@@ -268,6 +271,7 @@
               {{ t('subTable.edit') }}
             </el-button>
             <el-button
+              v-if="canDelete"
               link
               type="danger"
               size="small"
@@ -373,6 +377,7 @@
       :row-formulas="rowFormulas"
       :column-validation-rules="validationConfig?.columnRules"
       :upload-url="uploadUrl"
+      :nested-sub-tables="nestedSubTableDescriptors"
       @update:visible="dialogVisible = $event"
       :save-row="handleDialogSave"
     />
@@ -530,13 +535,14 @@ import {
   formatUserSnapshotCellValue,
   isUploadColumn
 } from './subTableAddDialogHelpers'
-import type { RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
+import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
+import { collectSubTableFieldsFromLayout } from './formRendererHelpers'
 import { calculateSummary } from './businessLogicEngine'
 import FieldRenderer from './FieldRenderer.vue'
 import PortalFormFields from './PortalFormFields.vue'
 import dayjs from 'dayjs'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
-import type { Column, SubTableBinding } from '@/composables/subTableField/subTableFieldTypes'
+import type { Column, NestedSubTableDescriptor, SubTableBinding } from '@/composables/subTableField/subTableFieldTypes'
 import { sanitizeHtml } from '@/composables/subTableField/subTableHtmlSanitize'
 import {
   columnMinWidth,
@@ -563,8 +569,20 @@ const props = withDefaults(defineProps<{
   columns: Column[]
   /** Form-design canvas columns for Add/Edit row dialog (excludes list-view-only audit fields). */
   dialogColumns?: Column[]
+  /** This binding's own form-design fields — nested subTable widgets here render inside the Add/Edit dialog. */
+  formFields?: FormField[]
+  /** Form-below-table hosts: row click highlights + drives the inline form via currentRowChange. */
+  enableRowSelect?: boolean
   modelValue?: any[]
   editable?: boolean
+  /**
+   * 子表逐操作权限（设计器右侧属性面板配置，存于组件 rule.props）。
+   * 缺省/undefined => 视为 true（回退到 editable，历史表单三项全开）；显式 false => 即使 editable 也隐藏该操作。
+   * editable 作为总开关仍然优先：editable 为 false 时三项一律隐藏。
+   */
+  allowAdd?: boolean
+  allowEdit?: boolean
+  allowDelete?: boolean
   loading?: boolean
   rowFormulas?: RowFormulaRule[]
   summaryColumns?: string[]
@@ -630,7 +648,13 @@ const props = withDefaults(defineProps<{
 }>(), {
   showLinkFormDialogFooter: false,
   linkFormClickScrollToInline: false,
-  compactLookupCells: false
+  compactLookupCells: false,
+  // Per-op switches default OPEN. Without an explicit default, Vue casts an *absent*
+  // Boolean prop to false (not undefined), so every call site that omits allow-add
+  // (e.g. the nested table inside SubTableAddDialog) would silently lose its Add button.
+  allowAdd: true,
+  allowEdit: true,
+  allowDelete: true
 })
 
 const emit = defineEmits<{
@@ -642,7 +666,19 @@ const emit = defineEmits<{
   (e: 'fillForm', row: any, index: number): void
   (e: 'update:linkedSubTableData', bindingId: number, rows: any[]): void
   (e: 'linkFormScrollToInline'): void
+  (e: 'currentRowChange', row: Record<string, unknown> | null): void
 }>()
+
+// 子表逐操作权限：editable 总开关优先，逐项标志缺省视为放开（历史数据三项全开）
+const canAdd = computed(() => props.editable === true && props.allowAdd !== false)
+const canEdit = computed(() => props.editable === true && props.allowEdit !== false)
+const canDelete = computed(() => props.editable === true && props.allowDelete !== false)
+
+/** Row click (highlight-current-row) — hosts use it to pick the form-below-table row. */
+function onTableCurrentRowChange(row: Record<string, unknown> | null) {
+  if (!props.enableRowSelect) return
+  emit('currentRowChange', row)
+}
 
 // 判断列中是否存在 FILE 类型的字段（有 FILE 列时隐藏 Import 按钮）
 const hasFileColumn = computed(() => {
@@ -914,6 +950,31 @@ const {
 } = useSubTableRowDialog(props, rows, emit, t, assignment)
 /** Test-facing binding (wrapper.vm.editingRowIndex) — see comment above. */
 void editingRowIndex
+
+/**
+ * Nested sub-tables placed in this binding's own form design render inside the Add/Edit
+ * dialog. Bindings resolve from the linked pool; rows persist under the edited row's
+ * `__subTables__` (same convention as form-below-table / Link Form).
+ */
+const nestedSubTableDescriptors = computed<NestedSubTableDescriptor[]>(() => {
+  const fields = props.formFields
+  if (!Array.isArray(fields) || fields.length === 0) return []
+  const pool = props.linkedSubTableBindings ?? []
+  const out: NestedSubTableDescriptor[] = []
+  for (const f of collectSubTableFieldsFromLayout(fields as FormField[])) {
+    if (f._bindingId == null) continue
+    const b = pool.find(x => Number(x.bindingId) === Number(f._bindingId))
+    if (!b || out.some(d => d.bindingId === Number(b.bindingId))) continue
+    out.push({
+      bindingId: Number(b.bindingId),
+      tableName: b.tableName,
+      columns: b.columns,
+      dialogColumns: b.dialogColumns,
+      primaryKeyFields: b.primaryKeyFields,
+    })
+  }
+  return out
+})
 
 const { clearAssigneeDisplayHydrateTimer } = useSubTableAssigneeHydration(props, rows, emit, assignment)
 

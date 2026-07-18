@@ -22,6 +22,12 @@ export interface PreviewSubTableBinding {
   subMode?: string
   /** Effective portal views for this sub-table widget (rule overrides binding-level). */
   portalViews?: SubTablePortalViewsPreview
+  /**
+   * 子表逐操作权限（来自放置组件 rule.props）。undefined => 放开（SubTableField 回退 editable）；false => 隐藏该操作。
+   */
+  allowAdd?: boolean
+  allowEdit?: boolean
+  allowDelete?: boolean
 }
 
 /**
@@ -171,5 +177,5 @@ export type FormPreviewItem =
   | { kind: 'fields'; rule: any[]; modelKey: string }
   | { kind: 'subTable'; binding: PreviewSubTableBinding }
   | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
-  | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; selectedDisplayField?: string; filterConditions?: any[]; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number; readonly?: boolean }
+  | { kind: 'lookup'; field: string; rule: Record<string, unknown>; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; selectedDisplayField?: string; filterConditions?: any[]; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number; readonly?: boolean }
   | { kind: 'card'; title: string; items: FormPreviewItem[]; modelKey: string }

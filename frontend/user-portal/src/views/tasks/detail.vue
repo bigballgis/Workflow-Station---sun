@@ -95,24 +95,23 @@
         />
       </div>
 
-      <!-- Section 2: Process diagram (async chunk + viewport gate — bpmn-js init is expensive) -->
+      <!-- Section 2: Process diagram (collapsible default on; async + viewport gate) -->
       <div
         v-if="detailUiPhase >= 3"
         ref="workflowSectionRef"
-        class="section workflow-section"
       >
-        <div class="section-header">
-          <el-icon><Share /></el-icon>
-          <span>{{ t('task.workflowDiagram') }}</span>
-          <el-tag
-            v-if="!isCompletedTask"
-            type="warning"
-            size="small"
-          >
-            {{ taskInfo.taskName || t('task.pending') }}
-          </el-tag>
-        </div>
-        <div class="section-content">
+        <WorkflowDiagramCollapsibleSection
+          :title="t('task.workflowDiagram')"
+        >
+          <template #badge>
+            <el-tag
+              v-if="!isCompletedTask"
+              type="warning"
+              size="small"
+            >
+              {{ taskInfo.taskName || t('task.pending') }}
+            </el-tag>
+          </template>
           <el-alert
             v-if="processError && !bpmnXml && processNodes.length === 0"
             :title="processError"
@@ -151,7 +150,7 @@
             v-else
             :description="t('task.noProcessDefinition')"
           />
-        </div>
+        </WorkflowDiagramCollapsibleSection>
       </div>
 
       <!-- Selected node form (click a node in the diagram to show its form) -->
@@ -456,6 +455,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import type { ProcessNode } from '@/components/ProcessDiagram.vue'
+import WorkflowDiagramCollapsibleSection from '@/components/WorkflowDiagramCollapsibleSection.vue'
 
 /** Lazy-load bpmn-js (~190kB gzip) only when the diagram section enters the viewport. */
 const ProcessDiagramAsync = defineAsyncComponent(
@@ -858,12 +858,6 @@ onBeforeUnmount(() => {
     
     .section-content {
       padding: 20px;
-    }
-  }
-  
-  .workflow-section {
-    .section-content {
-      min-height: 300px;
     }
   }
   

@@ -209,4 +209,66 @@ class AiGenerationComponentImplTest {
         verify(aiGenerationService).callN8NWebhook(any(), eq("hello"), eq(AiPhase.REQUIREMENTS), eq(AiMode.NEW),
                 isNull(), eq(1L), eq(List.of()), isNull());
     }
+
+    @Test
+    void normalizeTableRelations_rewritesManyToOneAsSwappedOneToMany() {
+        Map<String, Object> manyToOne = new LinkedHashMap<>();
+        manyToOne.put("sourceTableName", "Package");
+        manyToOne.put("sourceFieldName", "shipment_id");
+        manyToOne.put("relationType", "MANY_TO_ONE");
+        manyToOne.put("targetTableName", "ExpressShipment");
+        manyToOne.put("targetFieldName", "id");
+        Map<String, Object> untouched = new LinkedHashMap<>();
+        untouched.put("sourceTableName", "ExpressShipment");
+        untouched.put("sourceFieldName", "id");
+        untouched.put("relationType", "ONE_TO_MANY");
+        untouched.put("targetTableName", "Package");
+        untouched.put("targetFieldName", "shipment_id");
+        List<Map<String, Object>> relations = new ArrayList<>(Arrays.asList(manyToOne, null, untouched));
+
+        AiGenerationComponentImpl.normalizeTableRelations(relations);
+
+        assertEquals("ONE_TO_MANY", manyToOne.get("relationType"));
+        assertEquals("ExpressShipment", manyToOne.get("sourceTableName"));
+        assertEquals("id", manyToOne.get("sourceFieldName"));
+        assertEquals("Package", manyToOne.get("targetTableName"));
+        assertEquals("shipment_id", manyToOne.get("targetFieldName"));
+        // Valid entries are untouched
+        assertEquals("ONE_TO_MANY", untouched.get("relationType"));
+        assertEquals("ExpressShipment", untouched.get("sourceTableName"));
+        // Null list is a no-op (no exception)
+        AiGenerationComponentImpl.normalizeTableRelations(null);
+    }
+
+    @Test
+    void normalizeCrossFieldRules_defaultsMissingTargetFieldToLastRuleField() {
+        Map<String, Object> missingTarget = new LinkedHashMap<>();
+        missingTarget.put("fields", Arrays.asList("start_date", "end_date"));
+        missingTarget.put("operator", "date-after");
+        missingTarget.put("message", "End date must be after start date");
+        Map<String, Object> blankTarget = new LinkedHashMap<>();
+        blankTarget.put("fields", Arrays.asList("min_amount", "max_amount"));
+        blankTarget.put("targetField", " ");
+        Map<String, Object> explicitTarget = new LinkedHashMap<>();
+        explicitTarget.put("fields", Arrays.asList("a", "b"));
+        explicitTarget.put("targetField", "a");
+        Map<String, Object> configJson = new LinkedHashMap<>();
+        configJson.put("crossFieldRules", new ArrayList<>(Arrays.asList(missingTarget, blankTarget, explicitTarget, null)));
+        Map<String, Object> form = new LinkedHashMap<>();
+        form.put("formName", "F1");
+        form.put("configJson", configJson);
+        Map<String, Object> formWithoutConfig = new LinkedHashMap<>();
+        formWithoutConfig.put("formName", "F2");
+        formWithoutConfig.put("configJson", null);
+
+        AiGenerationComponentImpl.normalizeCrossFieldRules(
+                new ArrayList<>(Arrays.asList(form, formWithoutConfig, null)));
+
+        assertEquals("end_date", missingTarget.get("targetField"));
+        assertEquals("max_amount", blankTarget.get("targetField"));
+        // Explicit values are untouched
+        assertEquals("a", explicitTarget.get("targetField"));
+        // Null list is a no-op (no exception)
+        AiGenerationComponentImpl.normalizeCrossFieldRules(null);
+    }
 }

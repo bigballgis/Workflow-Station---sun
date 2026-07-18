@@ -1,7 +1,7 @@
 ---
 description: My Request / MI 子表数据规则 — 发起人全量 vs 办理人切片、file-only 附件禁止 global MI merge
 globs: frontend/user-portal/src/{views/applications,views/tasks,composables/tasks}/**/*
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Portal — My Request × MI 子表数据规则

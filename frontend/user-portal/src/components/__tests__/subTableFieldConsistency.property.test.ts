@@ -108,7 +108,13 @@ const optionArb = fc.record({
   value: nonEmptyStringArb,
 })
 
-const optionsArb = fc.array(optionArb, { minLength: 1, maxLength: 10 })
+// Unique values: resolveDisplayValue returns the FIRST option matching a value,
+// so duplicate generated values would make the expected label ambiguous.
+const optionsArb = fc.uniqueArray(optionArb, {
+  minLength: 1,
+  maxLength: 10,
+  selector: (o) => o.value,
+})
 
 // ─── Property 3: buildInitialRow covers all types ────────────────────────────
 

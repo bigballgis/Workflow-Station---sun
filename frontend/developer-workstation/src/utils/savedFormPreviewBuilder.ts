@@ -10,7 +10,7 @@
 
 import type { FormDefinition, TableBinding, TableDefinition } from '@/api/functionUnit'
 import type { FormPreviewItem, PreviewSubTableBinding, SubTablePortalViewsPreview } from '@/components/designer/formPreviewTypes'
-import { getRuleChildren, isCardRule, getLayoutLabel } from '@/utils/formDesigner'
+import { flattenRuleLayoutContainers, getRuleChildren, isCardRule, getLayoutLabel, walkFormCreateRules, withSubTableBindingIdInProps } from '@/utils/formDesigner'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { derivePreviewColumns, parseLookupConfig } from '@/utils/formPreview'
@@ -83,8 +83,9 @@ function mapDataTypeToPreviewColumnType(dataType: string): string | undefined {
   return undefined
 }
 
-function deriveColumnsFromSubFormRule(rule: any[]): any[] {
-  if (!Array.isArray(rule) || !rule.length) return []
+function deriveColumnsFromSubFormRule(rawRule: any[]): any[] {
+  const rule = flattenRuleLayoutContainers(rawRule)
+  if (!rule.length) return []
   return rule.map((r: any) => {
     const rProps = r.props || {}
     let type: string | undefined
@@ -185,7 +186,7 @@ function toSubTablePreviewColumns(
 ): any[] {
   const savedColumns = (config.subListViews || {})[bindingId]?.columns
   if (Array.isArray(savedColumns) && savedColumns.length) {
-    const ruleByField = new Map((Array.isArray(rule) ? rule : []).map(r => [r?.field, r]))
+    const ruleByField = new Map(flattenRuleLayoutContainers(rule).map(r => [r?.field, r]))
     return savedColumns.map((column: any) => {
       if (column.columnType === 'linkForm') {
         const targetBindingId = column.boundSubTableBindingId || bindingId
@@ -248,6 +249,8 @@ function makeLookupPreviewItem(
   )
   return {
     kind: 'lookup' as const,
+    field: String(ruleItem.field ?? ''),
+    rule: ruleItem as Record<string, unknown>,
     label: ruleItem.title || 'Lookup',
     placeholder: ruleItem.props?.placeholder || previewConfig.placeholder,
     searchFields: previewConfig.searchFields,
@@ -273,8 +276,10 @@ function buildBindingMap(
   const nonPrimary = bindings.filter(b => b.bindingType !== 'PRIMARY')
   const map = new Map<number, PreviewSubTableBinding>()
 
+  // Persisted rules carry _bindingId only at top level; restore props._bindingId so nested
+  // subTable placeholders in preview form-create resolve their binding (see withSubTableBindingIdInProps).
   const getSubFormDesign = (bindingId: number) => ({
-    rule: subForms[bindingId]?.rule || [],
+    rule: withSubTableBindingIdInProps(subForms[bindingId]?.rule || []),
     options: subForms[bindingId]?.options || {},
   })
 
@@ -301,9 +306,14 @@ function buildBindingMap(
 }
 
 function containsSubTableRule(item: any): boolean {
-  if (!item) return false
-  if (item.type === 'subTable' && (item._bindingId ?? item.props?._bindingId) != null) return true
-  return getRuleChildren(item).some(child => containsSubTableRule(child))
+  let found = false
+  walkFormCreateRules([item], (rule) => {
+    if (found) return
+    if (rule.type === 'subTable' && (rule._bindingId ?? (rule.props as Record<string, unknown> | undefined)?._bindingId) != null) {
+      found = true
+    }
+  })
+  return found
 }
 
 function buildPreviewItems(
@@ -313,6 +323,7 @@ function buildPreviewItems(
   tables: TableDefinition[],
   tableBindings: TableBinding[],
   keyPrefix = 'seg',
+  seen: WeakSet<object> = new WeakSet<object>(),
 ): FormPreviewItem[] {
   const items: FormPreviewItem[] = []
   let currentSegment: any[] = []
@@ -326,6 +337,11 @@ function buildPreviewItems(
   }
 
   for (const ruleItem of ruleItems) {
+    if (ruleItem && typeof ruleItem === 'object') {
+      if (seen.has(ruleItem)) continue
+      seen.add(ruleItem)
+    }
+
     const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
 
     if (ruleItem.type === 'subTable' && itemBindingId != null) {
@@ -341,7 +357,15 @@ function buildPreviewItems(
       items.push({
         kind: 'card',
         title: getLayoutLabel(ruleItem),
-        items: buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, config, tables, tableBindings, `card_${segmentIndex++}`),
+        items: buildPreviewItems(
+          getRuleChildren(ruleItem),
+          localBindingMap,
+          config,
+          tables,
+          tableBindings,
+          `card_${segmentIndex++}`,
+          new WeakSet<object>(),
+        ),
         modelKey: `${keyPrefix}_card_${segmentIndex}`,
       })
     } else if (ruleItem.type === 'lookup') {
@@ -350,7 +374,15 @@ function buildPreviewItems(
     } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
       if (containsSubTableRule(ruleItem)) {
         flushSegment()
-        items.push(...buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, config, tables, tableBindings, `${keyPrefix}_layout_${segmentIndex++}`))
+        items.push(...buildPreviewItems(
+          getRuleChildren(ruleItem),
+          localBindingMap,
+          config,
+          tables,
+          tableBindings,
+          `${keyPrefix}_layout_${segmentIndex++}`,
+          seen,
+        ))
       }
     } else {
       currentSegment.push(ruleItem)

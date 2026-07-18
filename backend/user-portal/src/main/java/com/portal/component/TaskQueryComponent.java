@@ -18,6 +18,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -70,6 +71,14 @@ public class TaskQueryComponent {
     @Lazy
     @Autowired
     private ProcessComponent processComponent;
+
+    /**
+     * 有界扇出线程池，替代 commonPool。每个扇出任务运行时各借一条 Hikari 连接，
+     * 用有界池 + CallerRunsPolicy 背压，避免高并发下连接池被瞬时扇出打空。见 {@link com.portal.config.PortalAsyncConfig}。
+     */
+    @Autowired
+    @Qualifier(com.portal.config.PortalAsyncConfig.TASK_QUERY_EXECUTOR)
+    private java.util.concurrent.Executor taskQueryExecutor;
 
     @PostConstruct
     public void init() {
@@ -175,11 +184,11 @@ public class TaskQueryComponent {
 
         CompletableFuture<List<TaskInfo>> engineAllFuture = CompletableFuture.supplyAsync(() ->
                 RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs,
-                        () -> fetchAllEngineTasksPaged(userId, assignmentTypes, size)));
+                        () -> fetchAllEngineTasksPaged(userId, assignmentTypes, size)), taskQueryExecutor);
 
         CompletableFuture<List<TaskInfo>> delegatedFuture = includeDelegated
                 ? CompletableFuture.supplyAsync(() ->
-                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
+                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)), taskQueryExecutor)
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
         long __tF0 = System.nanoTime();
@@ -273,11 +282,11 @@ public class TaskQueryComponent {
 
         CompletableFuture<EngineWindowResult> engineFuture = CompletableFuture.supplyAsync(() ->
                 RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs,
-                        () -> fetchEngineTaskPageWindow(userId, assignmentTypes, page, size)));
+                        () -> fetchEngineTaskPageWindow(userId, assignmentTypes, page, size)), taskQueryExecutor);
 
         CompletableFuture<List<TaskInfo>> delegatedFuture = includeDelegated
                 ? CompletableFuture.supplyAsync(() ->
-                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
+                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)), taskQueryExecutor)
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
         long __tQ0 = System.nanoTime();

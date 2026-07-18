@@ -9,6 +9,8 @@ import com.portal.service.ProcessAssigneeSnapshot;
 import com.portal.service.UserDisplayNameResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +43,11 @@ public class ProcessApplicationQueryComponent {
     private final SubTableEnrichmentComponent subTableEnrichmentComponent;
     private final RequestIdEnricher requestIdEnricher;
 
+    /** 聚合扇出线程池（引擎 HTTP，不碰 DB），移出共享 commonPool。见 {@link com.portal.config.PortalAsyncConfig}。 */
+    @Autowired
+    @Qualifier(com.portal.config.PortalAsyncConfig.AGGREGATION_EXECUTOR)
+    private java.util.concurrent.Executor aggregationExecutor;
+
     /**
      * For running processes with incomplete local assignee data, backfill user/candidate ids from engine and persist.
      *
@@ -64,7 +71,7 @@ public class ProcessApplicationQueryComponent {
         // Fan out the read-only engine lookups concurrently.
         Map<ProcessInstance, CompletableFuture<Optional<ProcessAssigneeSnapshot>>> futures = new LinkedHashMap<>();
         for (ProcessInstance instance : needEnrich) {
-            futures.put(instance, CompletableFuture.supplyAsync(() -> fetchAssigneeSnapshot(instance.getId())));
+            futures.put(instance, CompletableFuture.supplyAsync(() -> fetchAssigneeSnapshot(instance.getId()), aggregationExecutor));
         }
 
         // Apply mutations + persist on the calling thread (preserves prior write ordering / tx behavior).

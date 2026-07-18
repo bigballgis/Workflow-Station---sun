@@ -115,6 +115,11 @@ spec:
           value: "prod"
         - name: AP_TRIGGER_DEFAULT_POLL_INTERVAL
           value: "5"
+        # Sync-webhook wait (AP default 30s → 204 No Content on slow flows). The AI
+        # generation flow's DeepSeek reasoning model needs up to ~230s for DESIGN docs;
+        # keep this <= the DW backend's AI_GENERATION_TIMEOUT (300s) so AP answers first.
+        - name: AP_WEBHOOK_TIMEOUT_SECONDS
+          value: "300"
         # ---- Offline / no-external-download policy (IKP blocks external egress) ----
         # Piece catalog is served ONLY from the piece_metadata table; AP must never
         # sync/download pieces from cloud.activepieces.com or the public npm registry.

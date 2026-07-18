@@ -326,4 +326,6 @@ frontend/user-portal/package-lock.json
 !docs/**/*.md
 # Claude Code personal settings
 .claude/settings.local.json
+# .claude/skills 是由 sync-cursor-rules.mjs 从 .cursor/skills(唯一真源)镜像生成的产物，不入库
+.claude/skills/
 deploy/pieces_metadata*

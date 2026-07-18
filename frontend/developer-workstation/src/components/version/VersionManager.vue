@@ -1,76 +1,54 @@
 <template>
   <div class="version-manager table-scroll-wrap">
-    <el-table
-      v-loading="loading"
-      :data="store.versions"
+    <DesignerListTable
+      :loading="loading"
+      :storage-key="`${functionUnitId}:versions`"
+      :columns="listColumns"
+      :rows="() => store.versions"
       row-key="id"
-      stripe
+      actions-align="center"
     >
-      <el-table-column
-        prop="versionNumber"
-        :label="t('version.versionNumber')"
-        min-width="120"
-      >
-        <template #default="{ row }">
-          <span>{{ row.versionNumber }}</span>
-          <el-tag
-            v-if="row.current"
-            type="success"
-            size="small"
-            style="margin-left: 8px;"
+      <template #cell-versionNumber="{ row }">
+        <span>{{ row.versionNumber }}</span>
+        <el-tag
+          v-if="row.current"
+          type="success"
+          size="small"
+          style="margin-left: 8px;"
+        >
+          {{ t('version.currentActive') }}
+        </el-tag>
+      </template>
+      <template #cell-createdAt="{ row }">
+        {{ formatDate(row.createdAt) }}
+      </template>
+      <template #actions="{ row }">
+        <div class="action-buttons">
+          <el-button
+            link
+            type="primary"
+            @click="handleCompare(row)"
           >
-            {{ t('version.currentActive') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="createdBy"
-        :label="t('version.publisher')"
-        min-width="120"
-      />
-      <el-table-column
-        prop="createdAt"
-        :label="t('version.publishTime')"
-        min-width="180"
-      >
-        <template #default="{ row }">
-          {{ formatDate(row.createdAt) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('common.actions')"
-        min-width="240"
-        align="center"
-        fixed="right"
-      >
-        <template #default="{ row }">
-          <div class="action-buttons">
-            <el-button
-              link
-              type="primary"
-              @click="handleCompare(row)"
-            >
-              {{ t('common.compare') }}
-            </el-button>
-            <el-button
-              link
-              type="warning"
-              :disabled="row.current"
-              @click="handleRollback(row)"
-            >
-              {{ t('common.rollback') }}
-            </el-button>
-            <el-button
-              link
-              type="success"
-              @click="handleExport(row)"
-            >
-              {{ t('common.export') }}
-            </el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </el-table>
+            {{ t('common.compare') }}
+          </el-button>
+          <el-button
+            link
+            type="warning"
+            :disabled="row.current"
+            @click="handleRollback(row)"
+          >
+            {{ t('common.rollback') }}
+          </el-button>
+          <el-button
+            link
+            type="success"
+            @click="handleExport(row)"
+          >
+            {{ t('common.export') }}
+          </el-button>
+        </div>
+      </template>
+    </DesignerListTable>
 
     <!-- Compare Dialog -->
     <el-dialog
@@ -299,13 +277,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Minus, Edit, Right } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import { functionUnitApi } from '@/api/functionUnit'
+import { functionUnitApi, type Version } from '@/api/functionUnit'
 import dayjs from 'dayjs'
+import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const { t } = useI18n()
 
@@ -321,6 +301,30 @@ const compareResult = ref<any>(null)
 const activeTab = ref('overview')
 
 const formatDate = (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+
+const listColumns = computed<DesignerListTableColumn<Version>[]>(() => [
+  {
+    key: 'versionNumber',
+    prop: 'versionNumber',
+    label: t('version.versionNumber'),
+    defaultWidth: 140,
+  },
+  {
+    key: 'createdBy',
+    prop: 'createdBy',
+    label: t('version.publisher'),
+    defaultWidth: 140,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'createdAt',
+    prop: 'createdAt',
+    label: t('version.publishTime'),
+    defaultWidth: 180,
+    showOverflowTooltip: true,
+    getValue: (row) => formatDate(row.createdAt || ''),
+  },
+])
 
 const diffTagType = (type: string) => {
   const map: Record<string, string> = { added: 'success', modified: 'warning', removed: 'danger' }

@@ -32,7 +32,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URLEncoder;
@@ -72,6 +73,29 @@ public class ProcessStartComponent {
     private final TaskFormComponent taskFormComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final I18nService i18nService;
+    private final PlatformTransactionManager transactionManager;
+
+    /**
+     * Programmatic short transactions for the DB-write phases of a start.
+     *
+     * <p>{@code startProcess} makes ~4-5 sequential blocking HTTP calls (admin-center FU checks, engine
+     * deploy/start/auto-complete). Previously the whole method was {@code @Transactional}, so one JDBC
+     * connection was pinned across all of that — capping start throughput at {@code pool / holdTime}
+     * (~30-60 TPS on pool=20; thread dumps showed most workers parked in {@code Hikari.borrow} while a
+     * few held a connection blocked on an engine/admin socket read). Now the HTTP runs with no ambient
+     * transaction and only the actual writes run inside these short {@link TransactionTemplate} blocks,
+     * so a connection is held for milliseconds, not the whole flow. Lazily built (Lombok owns the ctor).</p>
+     */
+    private volatile TransactionTemplate txTemplate;
+
+    private TransactionTemplate tx() {
+        TransactionTemplate t = txTemplate;
+        if (t == null) {
+            t = new TransactionTemplate(transactionManager);
+            txTemplate = t;
+        }
+        return t;
+    }
 
     /** Lazy: breaks cycle with {@link ProcessComponent}, which keeps the FU content cache. */
     @Lazy
@@ -82,10 +106,29 @@ public class ProcessStartComponent {
     private String adminCenterUrl;
 
     /**
+     * Deploy-once cache: {@code processKey + ":" + sha256(bpmnXml)} -> resolved Flowable process definition key.
+     *
+     * <p>Before: {@code deployProcess} was called on <em>every</em> start. A 200-concurrent start burst of the
+     * same function unit therefore fired 200 simultaneous engine deploys of an identical BPMN; Flowable dedups
+     * identical resources but concurrent deploys race on {@code ACT_RE_DEPLOYMENT}/{@code ACT_RE_PROCDEF}
+     * (unique key / optimistic lock / deadlock) and surface to the portal as HTTP 500 =
+     * {@code portal.deploy_process_failed}. Keying by BPMN content hash means exactly one request deploys an
+     * unchanged definition and every other reuses the resolved key; a changed BPMN (new hash) redeploys once.
+     * Entry is evicted if the subsequent start fails, so a lost/rolled-back engine deployment self-heals.</p>
+     */
+    private final java.util.concurrent.ConcurrentHashMap<String, String> deployedProcessKeyCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** Per-cache-key locks so concurrent starts of the same definition serialize the single deploy (not the map bin). */
+    private final java.util.concurrent.ConcurrentHashMap<String, Object> deployLocks =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
      * Starts process
      * Via WorkflowEngineClient calling Flowable engine
      */
-    @Transactional
+    // NOT @Transactional: the ~4-5 engine/admin HTTP calls below must not run while holding a DB
+    // connection (that pins the pool and throttles start throughput). DB writes are confined to the
+    // short tx() blocks; all HTTP runs connection-free. See txTemplate javadoc.
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
         if (processKey == null || processKey.isEmpty()) {
             throw new IllegalArgumentException("Process key cannot be empty");
@@ -119,31 +162,47 @@ public class ProcessStartComponent {
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         SystemAuditFieldFiller.fillOnInsert(variables, startUserDisplayName);
 
-        Map<String, Object> data = workflowEngineClient.startProcess(
-                actualProcessKey, request.getBusinessKey(), userId, variables);
+        Map<String, Object> data;
+        try {
+            data = workflowEngineClient.startProcess(
+                    actualProcessKey, request.getBusinessKey(), userId, variables);
+        } catch (RuntimeException ex) {
+            // If the start failed (e.g. engine no longer has the deployment we cached), drop the cache entry
+            // so the next attempt redeploys instead of being permanently poisoned by a stale "deployed" flag.
+            evictDeploymentCache(processKey, def.bpmnXml());
+            throw ex;
+        }
         if (data == null || data.get("processInstanceId") == null) {
+            evictDeploymentCache(processKey, def.bpmnXml());
             throw new IllegalStateException("Process start returned empty data: " + processKey);
         }
 
         String flowableProcessInstanceId = (String) data.get("processInstanceId");
         log.info("Process started via Flowable: {}", flowableProcessInstanceId);
 
-        // Persist process instance as RUNNING so ProcessCompletionListener callback finds a row
-        persistRunningProcessInstance(
+        // TX1 (short): persist instance as RUNNING so ProcessCompletionListener callback finds a row.
+        // Committing here (before auto-complete) is stronger than the old single-tx behaviour, where the
+        // row was not visible until the whole method committed after all the engine round-trips.
+        tx().executeWithoutResult(status -> persistRunningProcessInstance(
                 flowableProcessInstanceId, data, processKey, def.processName(), request,
-                userId, startUserDisplayName, variables, pin);
+                userId, startUserDisplayName, variables, pin));
 
+        // Engine HTTP (claim/complete first task, query next) — runs with NO ambient tx / no connection held.
+        // Its own internal writes are individually transactional (captureTaskFormSnapshot is @Transactional;
+        // the meeting-path save auto-commits); autoCompleteFirstTask never throws (see its catch).
         FirstTaskOutcome outcome = autoCompleteFirstTask(flowableProcessInstanceId, userId, variables, pin);
 
-        // First task completed via engine API (not TaskFormComponent); record field change history like todo submit
-        recordInitialSubmitChangeHistory(
-                flowableProcessInstanceId,
-                outcome.initiatorTaskIdForHistory,
-                outcome.initiatorTaskDefKeyForHistory,
-                userId,
-                variables);
-
-        updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
+        // TX2 (short): change history + current-node update grouped atomically (the node update is a
+        // @Modifying query that requires a transaction). First task completed via engine API.
+        tx().executeWithoutResult(status -> {
+            recordInitialSubmitChangeHistory(
+                    flowableProcessInstanceId,
+                    outcome.initiatorTaskIdForHistory,
+                    outcome.initiatorTaskDefKeyForHistory,
+                    userId,
+                    variables);
+            updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
+        });
 
         return buildStartResult(flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, outcome, pin);
@@ -246,9 +305,25 @@ public class ProcessStartComponent {
             }
         }
 
-        // Deploy process definition if not already deployed
-        Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, def.bpmnXml(), def.processName());
-        if (deployResult.isPresent()) {
+        // Deploy once per unchanged BPMN (see deployedProcessKeyCache). Fast path: already deployed.
+        final String cacheKey = deploymentCacheKey(processKey, def.bpmnXml());
+        String cached = deployedProcessKeyCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        // Double-checked locking on a per-key lock: concurrent starts of the same definition wait for the
+        // single in-flight deploy instead of each POSTing /deploy (which is what raced and 500'd under load).
+        Object lock = deployLocks.computeIfAbsent(cacheKey, k -> new Object());
+        synchronized (lock) {
+            cached = deployedProcessKeyCache.get(cacheKey);
+            if (cached != null) {
+                return cached;
+            }
+            Optional<Map<String, Object>> deployResult =
+                    workflowEngineClient.deployProcess(processKey, def.bpmnXml(), def.processName());
+            if (deployResult.isEmpty()) {
+                throw new IllegalStateException("Process deployment returned empty data: " + processKey);
+            }
             Map<String, Object> deployed = deployResult.get();
             log.info("Process definition deployed: {}", deployed);
             // deployResult processDefinitionKey from Flowable response, validated
@@ -257,10 +332,37 @@ public class ProcessStartComponent {
                 flowableProcessKey = deployedKey.toString();
                 log.info("Using actual process definition key from deployment response: [{}]", flowableProcessKey);
             }
-        } else {
-            throw new IllegalStateException("Process deployment returned empty data: " + processKey);
+            deployedProcessKeyCache.put(cacheKey, flowableProcessKey);
+            return flowableProcessKey;
         }
-        return flowableProcessKey;
+    }
+
+    /** Cache key for a deployed definition: process key + BPMN content hash (a changed BPMN redeploys once). */
+    private static String deploymentCacheKey(String processKey, String bpmnXml) {
+        return processKey + ":" + sha256(bpmnXml);
+    }
+
+    /**
+     * Force a redeploy of this definition on the next start (e.g. after a start failed because the engine
+     * lost/rolled back the deployment). Cheap no-op if the entry was never cached.
+     */
+    private void evictDeploymentCache(String processKey, String bpmnXml) {
+        deployedProcessKeyCache.remove(deploymentCacheKey(processKey, bpmnXml));
+    }
+
+    private static String sha256(String s) {
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(s == null ? new byte[0] : s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(d.length * 2);
+            for (byte b : d) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-256 is always present on a JRE; fall back to identity hash rather than fail the start.
+            return Integer.toHexString(java.util.Objects.hashCode(s));
+        }
     }
 
     private void applyWorkspaceContextVariables(String userId, Map<String, Object> variables) {

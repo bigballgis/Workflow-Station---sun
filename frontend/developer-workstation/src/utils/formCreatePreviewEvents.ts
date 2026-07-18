@@ -5,8 +5,11 @@
 
 import type { Ref } from 'vue'
 import type { FormPreviewItem } from '@/components/designer/formPreviewTypes'
-import { getRuleChildren } from '@/utils/formDesigner'
-import { collectFieldComponentEventsFromRules } from '@/utils/formCreateComponentEvents'
+import { walkFormCreateRules } from '@/utils/formDesigner'
+import {
+  collectFieldComponentEventsFromRules,
+  runComponentFieldEventsOnValueChange,
+} from '@/utils/formCreateComponentEvents'
 import {
   createPortalFormApi,
   isEmptyFormCreateHandler,
@@ -14,8 +17,62 @@ import {
   type PortalFormApi,
 } from '@/utils/formCreateEventRuntime'
 import { hasMeaningfulFormValue } from '@/utils/formCreateRuleDefaults'
+import { REQUEST_ID_FIELD } from '@/utils/formFieldMeta'
+import {
+  mergeRuleHookHandlers,
+  mergeRuleOnHandlers,
+} from '@/utils/formCreateDefaultEvents'
 
 const PREVIEW_DOM_ON_EVENTS = ['blur', 'change', 'focus'] as const
+
+function bucketHasHandlers(bucket: Record<string, unknown>): boolean {
+  return Object.values(bucket).some((v) => !isEmptyFormCreateHandler(v))
+}
+
+/**
+ * form-create getRule() often drops designer `_on` / serialized handlers.
+ * Overlay persisted config_json handlers onto live preview rules by field name.
+ */
+export function mergeComponentEventsFromSavedRules(
+  liveRules: unknown[],
+  savedRules: unknown[],
+): void {
+  if (!Array.isArray(liveRules) || liveRules.length === 0) return
+  if (!Array.isArray(savedRules) || savedRules.length === 0) return
+  const savedEvents = collectFieldComponentEventsFromRules(savedRules)
+  if (savedEvents.size === 0) return
+
+  walkFormCreateRules(liveRules, (rule) => {
+    const field = rule.field != null ? String(rule.field) : ''
+    if (!field) return
+    const saved = savedEvents.get(field)
+    if (!saved) return
+
+    const liveOn = mergeRuleOnHandlers(rule)
+    if (!bucketHasHandlers(liveOn) && bucketHasHandlers(saved.on)) {
+      rule.on = { ...saved.on }
+    }
+    const liveHook = mergeRuleHookHandlers(rule)
+    if (!bucketHasHandlers(liveHook) && bucketHasHandlers(saved.hook)) {
+      rule.hook = { ...saved.hook }
+    }
+  })
+}
+
+/** fc-designer toolbar Preview reads `on`/`hook`; merge designer `_on`/`_hook` before openPreview. */
+export function syncDesignerComponentEventsForFcPreview(rules: unknown[]): void {
+  if (!Array.isArray(rules) || rules.length === 0) return
+  walkFormCreateRules(rules, (rule) => {
+    const on = mergeRuleOnHandlers(rule)
+    if (bucketHasHandlers(on)) {
+      rule.on = on
+    }
+    const hook = mergeRuleHookHandlers(rule)
+    if (bucketHasHandlers(hook)) {
+      rule.hook = hook
+    }
+  })
+}
 
 function normalizeHandler(raw: unknown): unknown {
   if (Array.isArray(raw)) return raw[0]
@@ -57,6 +114,46 @@ function bindDomOnEvent(
   on[eventName] = wrapped
 }
 
+type PreviewDataBox = { value: Record<string, unknown> }
+
+export interface PreviewFieldChangeOptions {
+  requestIdConfig?: { fieldNames?: string[]; separator?: string } | null
+  requestIdRecompute?: (model: Record<string, unknown>) => string | undefined
+}
+
+/** Update preview model and run component change/blur/value hooks (form-create segments + standalone lookup). */
+export function dispatchPreviewFieldValueChange(
+  segmentRules: unknown[],
+  field: string,
+  value: unknown,
+  previewData: PreviewDataBox,
+  options?: PreviewFieldChangeOptions,
+): void {
+  if (!field) return
+  const patch: Record<string, unknown> = { [field]: value }
+  const nextModel = { ...previewData.value, ...patch }
+  const fieldNames = options?.requestIdConfig?.fieldNames
+  if (fieldNames?.includes(field) && options?.requestIdRecompute) {
+    patch[REQUEST_ID_FIELD] = options.requestIdRecompute(nextModel)
+  }
+  previewData.value = { ...previewData.value, ...patch }
+  const api = createPortalFormApi(
+    () => previewData.value,
+    (p) => {
+      previewData.value = { ...previewData.value, ...p }
+    },
+  )
+  const ev = collectFieldComponentEventsFromRules(segmentRules).get(field)
+  runComponentFieldEventsOnValueChange(ev, {
+    field,
+    value,
+    api,
+    onEvent: 'change',
+    hookEvent: 'value',
+    fieldType: ev?.rule?.type != null ? String(ev.rule.type) : undefined,
+  })
+}
+
 export function materializePreviewComponentEvents(
   rules: unknown[],
   previewData: Ref<Record<string, unknown>>,
@@ -71,9 +168,7 @@ export function materializePreviewComponentEvents(
   )
 
   function walk(items: unknown[]) {
-    for (const raw of items) {
-      if (!raw || typeof raw !== 'object') continue
-      const rule = raw as Record<string, unknown>
+    walkFormCreateRules(items, (rule) => {
       const field = rule.field != null ? String(rule.field) : ''
       const ev = field ? eventMap.get(field) : undefined
       if (ev) {
@@ -81,8 +176,7 @@ export function materializePreviewComponentEvents(
           bindDomOnEvent(rule, name, ev.on[name], api)
         }
       }
-      walk(getRuleChildren(rule))
-    }
+    })
   }
   walk(rules)
 }
@@ -132,9 +226,7 @@ export function injectPreviewFieldLoadDefaults(
   const portalApi = previewApiFromRef(previewData)
 
   function walk(items: unknown[]) {
-    for (const raw of items) {
-      if (!raw || typeof raw !== 'object') continue
-      const rule = raw as Record<string, unknown>
+    walkFormCreateRules(items, (rule) => {
       const field = rule.field != null ? String(rule.field) : ''
       const initial = field ? resolveFieldInitialValue(rule, previewData) : undefined
 
@@ -159,9 +251,7 @@ export function injectPreviewFieldLoadDefaults(
         }
         rule.hook = hook
       }
-
-      walk(getRuleChildren(rule))
-    }
+    })
   }
   walk(rules)
 }

@@ -13,6 +13,10 @@ export interface EmailVariableGroup {
   options: EmailVariableOption[]
 }
 
+/** Shown in Subject placeholder/hint UI — pass as vue-i18n param, not inside locale strings. */
+export const EMAIL_SUBJECT_VAR_EXAMPLE = '${name}'
+export const EMAIL_FIELD_VAR_PATTERN = '${fieldName}'
+
 /**
  * Loads insertable email-template variables for a Function Unit:
  * - main-table fields  -> ${fieldName}

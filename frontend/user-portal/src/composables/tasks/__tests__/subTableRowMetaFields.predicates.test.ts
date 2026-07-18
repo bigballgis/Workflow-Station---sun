@@ -354,6 +354,24 @@ describe('subTableRowMetaFields predicates', () => {
     expect(out[0]).toMatchObject({ id: 44, name: '44' })
   })
 
+  it('keeps data-bearing rows whose id_idw PK is not a display column (plain sub-table, non-MI)', () => {
+    // Regression: id_idw is the DW default sub-table PK; a list view that omits it must not
+    // lose every row on task detail (Review-step "Shipment shows no data").
+    const shipmentBinding = {
+      tableName: 'Shipment',
+      physicalTableName: 'nst_shipment',
+      columns: [{ field: 'shipment_name' }, { field: 'carrier' }],
+    }
+    const rows = [
+      { id_idw: '790ddf3f-6b07', shipment_name: '111', carrier: '222', order_id: 'a5f8' },
+      { id_idw: '8e0a1176-013a', shipment_name: '333', carrier: '444', order_id: 'a5f8' },
+    ]
+    expect(filterRowsForSharedProcessSubTableBinding(rows, shipmentBinding)).toHaveLength(2)
+    // Id-only ghosts (no own column data) still drop.
+    const ghosts = [{ id_idw: 'ghost-1', order_id: 'a5f8' }]
+    expect(filterRowsForSharedProcessSubTableBinding(ghosts, shipmentBinding)).toHaveLength(0)
+  })
+
   it('filterRowsForMiParticipantSubTableBinding drops pure attachment rows even when list has file column', () => {
     const subtableBinding = {
       tableName: 'Sub Task',

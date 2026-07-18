@@ -455,6 +455,7 @@ const {
   getCurrentRowForInlineForm,
   handleInlineFormUpdate,
   handleInlineFormSave,
+  setInlineFormSelectedRow,
 } = inlineFormApi
 
 // ---------------------------------------------------------------------------
@@ -602,6 +603,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   handlePrimaryFormDataPatch,
   handleInlineFormSave,
   handleInlineFormUpdate,
+  setInlineFormSelectedRow,
   scrollSubTableInlineIntoView,
   setSubTableInlineAnchor,
   handleLookupSelect,

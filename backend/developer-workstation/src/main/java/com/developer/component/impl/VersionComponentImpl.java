@@ -12,6 +12,7 @@ import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.ForeignKeyRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.LinkFormComponentRepository;
+import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.repository.VersionRepository;
@@ -48,6 +49,7 @@ public class VersionComponentImpl implements VersionComponent {
     private final EmailConnectionRepository emailConnectionRepository;
     private final EmailMonitorRuleRepository emailMonitorRuleRepository;
     private final TableRelationRepository tableRelationRepository;
+    private final ProcessDefinitionRepository processDefinitionRepository;
     private final EntityManager entityManager;
     
     /**
@@ -267,9 +269,19 @@ public class VersionComponentImpl implements VersionComponent {
         emailMonitorRuleRepository.deleteByFunctionUnitId(functionUnitId);
         emailConnectionRepository.deleteByFunctionUnitId(functionUnitId);
         tableRelationRepository.deleteByFunctionUnitId(functionUnitId);
+        // Explicit delete of the OneToOne process definition. Relying on orphanRemoval via
+        // functionUnit.setProcessDefinition(null) does NOT fire after refreshFunctionUnitAfterNativeClear
+        // (entityManager.clear() detaches the original, so Hibernate sees no old value to orphan-remove);
+        // the old row then survives and the re-import's new insert reuses its id (dw_process_definitions_pkey).
+        // Null the in-memory reference FIRST: the native delete below bypasses the persistence context, so
+        // if functionUnit still referenced the (now deleted) process def, the cascade=ALL saveAndFlush at the
+        // end of this method would re-insert it under a fresh id — which the importer's own insert then collides with.
+        functionUnit.setProcessDefinition(null);
+        processDefinitionRepository.deleteByFunctionUnitId(functionUnitId);
         emailMonitorRuleRepository.flush();
         emailConnectionRepository.flush();
         tableRelationRepository.flush();
+        processDefinitionRepository.flush();
         if (functionUnit.getEmailConnections() != null) {
             functionUnit.getEmailConnections().clear();
         }

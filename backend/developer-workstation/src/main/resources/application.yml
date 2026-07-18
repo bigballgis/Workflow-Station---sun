@@ -191,7 +191,9 @@ management:
 activepieces:
   ai-generation:
     webhook-url: ${AI_GENERATION_WEBHOOK_URL:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
-    timeout-seconds: ${AI_GENERATION_TIMEOUT:120}
+    # 300s: deepseek-v4-pro 生成 DESIGN 文档实测 ~230s;须 >= AP 的 AP_WEBHOOK_TIMEOUT_SECONDS,
+    # 否则 AP 侧先超时返回 204 空响应(表现为 "returned empty response")。
+    timeout-seconds: ${AI_GENERATION_TIMEOUT:300}
 
 # Trusted hostnames for configured outbound webhooks (localhost for local dev, activepieces for Docker)
 ssrf:

@@ -19,89 +19,64 @@
       v-if="!selectedAction"
       class="action-list table-scroll-wrap"
     >
-      <el-table
-        v-loading="loading"
-        :data="store.actions"
-        stripe
+      <DesignerListTable
+        :loading="loading"
+        :storage-key="`${functionUnitId}:actions`"
+        :columns="listColumns"
+        :rows="() => store.actions"
+        :actions-label="t('action.operation')"
         @row-click="handleSelectAction"
       >
-        <el-table-column
-          prop="actionName"
-          :label="t('action.actionName')"
-          width="120"
-        />
-        <el-table-column
-          prop="actionType"
-          :label="t('action.actionType')"
-          width="100"
-        >
-          <template #default="{ row }">
-            <el-tag size="small">
-              {{ actionTypeLabel(row.actionType) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('action.boundNodes')"
-          min-width="200"
-        >
-          <template #default="{ row }">
-            <div class="bound-nodes">
-              <template v-if="getActionBoundNodes(row.id).length > 0">
-                <el-tag 
-                  v-for="node in getActionBoundNodes(row.id)" 
-                  :key="node.id"
-                  size="small"
-                  type="info"
-                  class="node-tag"
-                >
-                  {{ node.name || node.id }}
-                </el-tag>
-              </template>
-              <span
-                v-else
-                class="no-binding"
-              >{{ t('action.notBound') }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="description"
-          :label="t('action.description')"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          :label="t('action.operation')"
-          min-width="200"
-          fixed="right"
-        >
-          <template #default="{ row }">
-            <div class="table-row-actions">
-              <el-button
-                link
-                type="primary"
-                @click.stop="handleSelectAction(row)"
+        <template #cell-actionType="{ row }">
+          <el-tag size="small">
+            {{ actionTypeLabel(row.actionType) }}
+          </el-tag>
+        </template>
+        <template #cell-boundNodes="{ row }">
+          <div class="bound-nodes">
+            <template v-if="getActionBoundNodes(row.id).length > 0">
+              <el-tag
+                v-for="node in getActionBoundNodes(row.id)"
+                :key="node.id"
+                size="small"
+                type="info"
+                class="node-tag"
               >
-                {{ t('action.edit') }}
-              </el-button>
-              <el-button
-                link
-                type="success"
-                @click.stop="handleTestAction(row)"
-              >
-                {{ t('action.test') }}
-              </el-button>
-              <el-button
-                link
-                type="danger"
-                @click.stop="handleDeleteAction(row)"
-              >
-                {{ t('action.delete') }}
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+                {{ node.name || node.id }}
+              </el-tag>
+            </template>
+            <span
+              v-else
+              class="no-binding"
+            >{{ t('action.notBound') }}</span>
+          </div>
+        </template>
+        <template #actions="{ row }">
+          <div class="table-row-actions">
+            <el-button
+              link
+              type="primary"
+              @click.stop="handleSelectAction(row)"
+            >
+              {{ t('action.edit') }}
+            </el-button>
+            <el-button
+              link
+              type="success"
+              @click.stop="handleTestAction(row)"
+            >
+              {{ t('action.test') }}
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              @click.stop="handleDeleteAction(row)"
+            >
+              {{ t('action.delete') }}
+            </el-button>
+          </div>
+        </template>
+      </DesignerListTable>
     </div>
 
     <div
@@ -536,7 +511,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import ActionCreateDialog from './action-designer/ActionCreateDialog.vue'
@@ -549,6 +524,8 @@ import { useActionNodeBinding } from '@/composables/actionDesigner/useActionNode
 import { useActionConfig } from '@/composables/actionDesigner/useActionConfig'
 import { useActionList } from '@/composables/actionDesigner/useActionList'
 import { useActionTest } from '@/composables/actionDesigner/useActionTest'
+import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const { t } = useI18n()
 
@@ -604,6 +581,41 @@ const {
   t,
   parseActionBindingsFromBpmn,
 })
+
+const listColumns = computed<DesignerListTableColumn<ActionDefinition>[]>(() => [
+  {
+    key: 'actionName',
+    prop: 'actionName',
+    label: t('action.actionName'),
+    defaultWidth: 140,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'actionType',
+    prop: 'actionType',
+    label: t('action.actionType'),
+    defaultWidth: 120,
+    getValue: (row) => actionTypeLabel(row.actionType),
+  },
+  {
+    key: 'boundNodes',
+    label: t('action.boundNodes'),
+    defaultWidth: 200,
+    showOverflowTooltip: true,
+    getValue: (row) => {
+      const nodes = getActionBoundNodes(row.id)
+      if (!nodes.length) return t('action.notBound')
+      return nodes.map((n: { name?: string; id: string | number }) => n.name || String(n.id)).join(', ')
+    },
+  },
+  {
+    key: 'description',
+    prop: 'description',
+    label: t('action.description'),
+    defaultWidth: 180,
+    showOverflowTooltip: true,
+  },
+])
 
 // 测试对话框
 const {

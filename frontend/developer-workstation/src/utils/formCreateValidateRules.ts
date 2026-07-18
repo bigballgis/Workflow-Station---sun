@@ -81,11 +81,14 @@ export function ensureFormCreateRuleValidation(rule: Record<string, unknown>): b
 export function ensureFormCreateRulesValidationDeep(rules: unknown[]): boolean {
   if (!Array.isArray(rules)) return false
   let changed = false
+  const visited = new WeakSet<object>()
 
   function walk(items: unknown[]) {
     for (const raw of items) {
       if (!raw || typeof raw !== 'object') continue
       const rule = raw as Record<string, unknown>
+      if (visited.has(rule)) continue
+      visited.add(rule)
       if (ensureFormCreateRuleValidation(rule)) changed = true
       const children = getRuleChildren(rule)
       if (children.length) walk(children)

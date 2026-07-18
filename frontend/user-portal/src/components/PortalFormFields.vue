@@ -11,6 +11,7 @@ import type { FormField } from './formRendererHelpers'
 import {
   filterLinkOnlyStandaloneSubTableFields,
   isDisplayOnlyLayoutField,
+  mergeNestedSubTableRowsIntoSto,
 } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shared'
 
@@ -20,6 +21,10 @@ export interface PortalSubTableBindingLite {
   physicalTableName?: string
   tableId?: number | null
   columns: Array<{ field: string; label: string; type?: string; props?: Record<string, unknown> }>
+  /** Form-design canvas columns for the Add/Edit dialog. */
+  dialogColumns?: Array<{ field: string; label: string; type?: string; props?: Record<string, unknown> }>
+  /** This binding's own form-design fields — nested subTable widgets render inside its Add/Edit dialog. */
+  formFields?: FormField[]
   data: unknown[]
   primaryKeyFields?: string[]
 }
@@ -73,8 +78,10 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
 }
 
 function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
-  const parent = props.parentRow ?? props.model
-  if (parent && typeof parent === 'object') {
+  // Model first: it carries local __subTables__ edits before the host round-trips them
+  // into parentRow (SubTableInlineForm rowModel vs. currentRow).
+  for (const parent of [props.model, props.parentRow]) {
+    if (!parent || typeof parent !== 'object') continue
     const nested = pullNestedRowsForBindingFromParentRows(
       {
         bindingId: binding.bindingId,
@@ -96,6 +103,22 @@ function isSubTableEditable(): boolean {
 function onFieldUpdate(key: string, val: unknown) {
   emit('update:field', key, val)
 }
+
+/**
+ * Nested sub-table rows changed (add/edit/delete in SubTableField). Persist them under the
+ * host row's `__subTables__` and emit as a field update so the host (SubTableInlineForm →
+ * handleInlineFormUpdate, or the Link Form dialog → linkedFormData) carries them to save.
+ */
+function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
+  const binding = resolveBinding(field._bindingId)
+  if (!binding) return
+  const sto = mergeNestedSubTableRowsIntoSto(
+    [props.parentRow, props.model],
+    { bindingId: binding.bindingId, tableName: binding.tableName },
+    rows,
+  )
+  emit('update:field', '__subTables__', sto)
+}
 </script>
 
 <template>
@@ -112,13 +135,19 @@ function onFieldUpdate(key: string, val: unknown) {
         v-if="resolveBinding(field._bindingId)"
         :title="resolveBinding(field._bindingId)!.tableName || ''"
         :columns="resolveBinding(field._bindingId)!.columns"
+        :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
+        :form-fields="resolveBinding(field._bindingId)!.formFields"
         :model-value="resolveSubTableRows(resolveBinding(field._bindingId)!)"
         :editable="isSubTableEditable()"
+        :allow-add="field.allowAdd"
+        :allow-edit="field.allowEdit"
+        :allow-delete="field.allowDelete"
         :linked-sub-table-bindings="linkedSubTableBindings ?? subTableBindings"
         :show-link-form-dialog-footer="showLinkFormDialogFooter"
         :compact-lookup-cells="compactLookupCells"
         :primary-key-fields="resolveBinding(field._bindingId)?.primaryKeyFields"
         style="margin-bottom: 16px;"
+        @update:model-value="(rows: any[]) => onNestedSubTableRowsUpdate(field, rows)"
       />
     </el-col>
     <el-col

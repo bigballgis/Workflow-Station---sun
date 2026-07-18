@@ -3,6 +3,7 @@
     <!-- Form list view -->
     <FormListSidebar
       v-if="!selectedForm"
+      :function-unit-id="props.functionUnitId"
       :forms="store.forms"
       :loading="loading"
       :has-tables="store.tables.length > 0"
@@ -440,9 +441,13 @@
       :close-on-click-modal="false"
       destroy-on-close
     >
-      <div class="preview-container">
+      <div
+        v-loading="previewBuilding"
+        :element-loading-text="t('form.previewLoading')"
+        class="preview-container"
+      >
         <FormPreviewItems
-          v-if="previewItems.length > 0 && previewFormReady"
+          v-if="!previewBuilding && previewItems.length > 0 && previewFormReady"
           v-model:preview-data="previewData"
           v-model:preview-table-rows="previewTableRows"
           :items="previewItems"
@@ -455,7 +460,7 @@
           :request-id-config="previewRequestIdConfig"
         />
         <el-empty
-          v-else
+          v-else-if="!previewBuilding"
           :description="t('form.noFormContent')"
         />
       </div>
@@ -729,6 +734,7 @@ import {
   flushDesignerValidatePanelToActiveRule,
   installFcDesignerPreviewCapture,
   installPreviewValidationDomProbe,
+  wrapFcDesignerOpenPreview,
 } from '@/utils/formDesignerPreviewValidation'
 import { lookupStore } from './lookupStore'
 import {
@@ -959,11 +965,18 @@ function onDesignerStructureChange() {
 function installDesignerPreviewCaptureHooks() {
   installPreviewValidationDomProbe()
   const root = document.querySelector('.form-editor-view')
+  const getSavedRules = () => selectedForm.value?.configJson?.rule ?? []
+  const validateText = t('common.validate')
   installFcDesignerPreviewCapture(
     root,
     () => getActiveDesignerRef() as ReturnType<typeof getActiveDesignerRef>,
-    t('common.validate'),
+    validateText,
+    getSavedRules,
   )
+  wrapFcDesignerOpenPreview(designerRef.value, validateText, getSavedRules)
+  for (const subRef of subDesignerRefs.value) {
+    wrapFcDesignerOpenPreview(subRef, validateText, getSavedRules)
+  }
 }
 
 // ── Table-field → rule mapping & Table Design hydration ─────────────────────
@@ -1073,6 +1086,7 @@ const {
 // ── Preview dialog + build pipeline ─────────────────────────────────────────
 const {
   showPreviewDialog,
+  previewBuilding,
   previewFormReady,
   previewDialogOption,
   previewData,
@@ -1095,7 +1109,6 @@ const {
   getActiveDesignerRef,
   getTableFieldDefinitions,
   getPrimaryBindingFieldDefinitions,
-  refreshFormRulesFromTableMetadata,
   toSubTablePreviewColumns,
   makeLookupPreviewItem,
   mergePortalViewsForPreview,
@@ -1502,9 +1515,23 @@ const designerConfig = computed(() => ({
     default: {
       append: true,
       rule(rule: { type?: string }) {
+        // lookup is custom — Readonly lives in lookup drag rule props() (main.ts), not fc built-in Props.
         const builtInReadonly = new Set(['input', 'textarea', 'password', 'timePicker', 'datePicker', 'lookup'])
         if (builtInReadonly.has(String(rule.type ?? ''))) return []
         return [{ type: 'switch', field: 'readonly', title: 'Readonly' }]
+      },
+    },
+    // 子表：右侧属性面板追加 新增/编辑/删除 三个逐操作开关（写入 rule.props.allowAdd/allowEdit/allowDelete）。
+    // 默认全开 → 与历史「只要可编辑就全放开」一致；关掉某项 → SubTableField 隐藏对应 Add/Edit/Delete。
+    // 只追加这三项；Readonly 已由 form-create 内建面板提供，不再重复。
+    subTable: {
+      append: true,
+      rule() {
+        return [
+          { type: 'switch', field: 'allowAdd', title: t('form.subTablePermission.allowAdd'), value: true },
+          { type: 'switch', field: 'allowEdit', title: t('form.subTablePermission.allowEdit'), value: true },
+          { type: 'switch', field: 'allowDelete', title: t('form.subTablePermission.allowDelete'), value: true },
+        ]
       },
     },
   },
@@ -1564,6 +1591,7 @@ watch(showPreviewDialog, (open) => {
   if (open) {
     return
   }
+  previewBuilding.value = false
   previewFormReady.value = false
   previewRowDialog.visible = false
   previewRowDialog.onSave = null

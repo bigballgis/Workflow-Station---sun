@@ -1,6 +1,7 @@
 ---
 description: Relation Table / Table Design 行数据仅用 JSON 存储，禁止为每张业务表创建物理表
-alwaysApply: true
+globs: backend/**/*RelationTable*,backend/**/*TableDesign*,backend/**/*RowData*,deploy/init-scripts/**
+alwaysApply: false
 ---
 
 # JSON 行存储 — 禁止 per-table 物理表

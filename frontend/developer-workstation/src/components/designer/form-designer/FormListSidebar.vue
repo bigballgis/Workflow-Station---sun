@@ -22,33 +22,19 @@
     </div>
     
     <div class="table-scroll-wrap">
-    <el-table
-      v-loading="loading"
-      :data="forms"
-      stripe
-      @row-click="(row: any) => $emit('selectForm', row)"
-    >
-      <el-table-column
-        prop="formName"
-        :label="$t('form.formName')"
-      />
-      <el-table-column
-        prop="formType"
-        :label="$t('form.formType')"
-        width="120"
+      <DesignerListTable
+        :loading="loading"
+        :storage-key="storageKey"
+        :columns="listColumns"
+        :rows="toRef(props, 'forms')"
+        @row-click="(row: any) => $emit('selectForm', row)"
       >
-        <template #default="{ row }">
+        <template #cell-formType="{ row }">
           <el-tag :type="row.formType === 'PROCESS' ? 'primary' : 'info'">
             {{ formTypeLabel(row.formType) }}
           </el-tag>
         </template>
-      </el-table-column>
-      <el-table-column
-        prop="boundTableId"
-        :label="$t('form.boundTable')"
-        width="180"
-      >
-        <template #default="{ row }">
+        <template #cell-boundTableId="{ row }">
           <template v-if="getPrimaryBinding(row)">
             <el-tag
               type="success"
@@ -77,19 +63,13 @@
             class="text-muted"
           >{{ $t('form.notBound') }}</span>
         </template>
-      </el-table-column>
-      <el-table-column
-        prop="boundNodeId"
-        :label="$t('form.boundNode')"
-        min-width="180"
-      >
-        <template #default="{ row }">
+        <template #cell-boundNodeId="{ row }">
           <div class="bound-nodes">
             <template v-if="getFormBoundNodes(row.id).length > 0">
-              <el-tag 
-                v-for="node in getFormBoundNodes(row.id)" 
+              <el-tag
+                v-for="node in getFormBoundNodes(row.id)"
                 :key="node.nodeId"
-                :type="node.readOnly ? 'info' : 'success'" 
+                :type="node.readOnly ? 'info' : 'success'"
                 size="small"
                 class="node-tag"
               >
@@ -102,19 +82,7 @@
             >{{ $t('form.notBound') }}</span>
           </div>
         </template>
-      </el-table-column>
-      <el-table-column
-        prop="description"
-        :label="$t('table.description')"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        :label="$t('common.actions')"
-        min-width="220"
-        fixed="right"
-        align="left"
-      >
-        <template #default="{ row }">
+        <template #actions="{ row }">
           <div class="action-buttons">
             <el-button
               link
@@ -172,16 +140,20 @@
             </el-dropdown>
           </div>
         </template>
-      </el-table-column>
-    </el-table>
+      </DesignerListTable>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, toRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Plus, Refresh, Connection, ArrowDown } from '@element-plus/icons-vue'
+import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
-defineProps<{
+const props = defineProps<{
+  functionUnitId: number
   forms: any[]
   loading: boolean
   hasTables: boolean
@@ -200,6 +172,70 @@ defineEmits<{
   deleteForm: [row: any]
   moreAction: [cmd: string, row: any]
 }>()
+
+const { t } = useI18n()
+
+function boundTableText(row: any): string {
+  const primary = props.getPrimaryBinding(row)
+  if (primary) {
+    const extra = props.getSubBindingsCount(row)
+    return extra > 0 ? `${primary.tableName} +${extra}` : String(primary.tableName || '')
+  }
+  if (row.boundTableId) return props.getTableName(row.boundTableId)
+  return t('form.notBound')
+}
+
+function boundNodesText(row: any): string {
+  const nodes = props.getFormBoundNodes(row.id)
+  if (!nodes.length) return t('form.notBound')
+  return nodes
+    .map((n: { nodeName?: string; readOnly?: boolean }) =>
+      n.readOnly ? `${n.nodeName}(${t('form.readOnly')})` : String(n.nodeName || ''),
+    )
+    .join(', ')
+}
+
+const storageKey = computed(() => `${props.functionUnitId}:forms`)
+
+const listColumns = computed<DesignerListTableColumn<any>[]>(() => [
+  {
+    key: 'formName',
+    prop: 'formName',
+    label: t('form.formName'),
+    defaultWidth: 160,
+    showOverflowTooltip: true,
+  },
+  {
+    key: 'formType',
+    prop: 'formType',
+    label: t('form.formType'),
+    defaultWidth: 120,
+    getValue: (row) => props.formTypeLabel(row.formType),
+  },
+  {
+    key: 'boundTableId',
+    prop: 'boundTableId',
+    label: t('form.boundTable'),
+    defaultWidth: 180,
+    showOverflowTooltip: true,
+    getValue: boundTableText,
+  },
+  {
+    key: 'boundNodeId',
+    prop: 'boundNodeId',
+    label: t('form.boundNode'),
+    defaultWidth: 180,
+    showOverflowTooltip: true,
+    getValue: boundNodesText,
+  },
+  {
+    key: 'description',
+    prop: 'description',
+    label: t('table.description'),
+    defaultWidth: 180,
+    showOverflowTooltip: true,
+  },
+])
 </script>
 
 <style lang="scss" scoped>

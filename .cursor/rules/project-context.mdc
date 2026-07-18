@@ -46,9 +46,8 @@ platform-common ◄── platform-cache
 
 ## 关键约定
 
-- 分层: `Controller → Component(接口) → ComponentImpl → Service / Repository`
-- 统一响应: `ApiResponse<T>` 包装所有接口返回
-- 表名前缀: `dw_`(developer), `ac_`(admin), `up_`(portal), `we_`(workflow)
-- Schema 管理: **双轨** — `deploy/init-scripts/` 负责 Docker 首次初始化等基线；**Flyway** 在 admin-center / user-portal / developer-workstation 的 `application.yml` 中默认启用，但 **本地 `docker-compose.dev.yml` 对三服务设置了 `SPRING_FLYWAY_ENABLED=false`**，故 Dev 容器内以 init 脚本为准。详见 `docs/schema-and-migration.md`
+- 分层 & 统一响应 `ApiResponse<T>`: 详见 `backend-architecture.mdc` / `api-design.mdc`（`code-quality-standards.mdc §3` 为最高优先级操作细则）
+- 表名前缀: 见 `domain-model.mdc` 命名红线（`dw_`/`ac_`/`up_`/`we_`）
+- Schema 管理: **唯一来源 = `deploy/init-scripts/00-schema/`**；**Flyway 已清退（2026-06）**，后端不再有 `db/migration`，禁止双轨。完整规范见 `deployment-infra.mdc` 与 `init-scripts-append-only.mdc`（另 `docs/schema-and-migration.md`）
 - 环境变量: `ENCRYPTION_SECRET_KEY`（非 `ENCRYPTION_KEY`）
 - API 边缘由 **Kong Gateway** 提供；各前端 nginx 可按环境直连后端或经 Kong

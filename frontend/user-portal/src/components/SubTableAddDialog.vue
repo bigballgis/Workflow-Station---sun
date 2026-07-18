@@ -216,7 +216,7 @@
         >
           <el-upload
             :action="col.props?.action && col.props.action !== '/' ? col.props.action : (uploadUrl || '/api/v1/upload')"
-            :accept="col.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
+            :accept="col.props?.accept || ''"
             :show-file-list="false"
             :on-success="(res: any, file: any) => handleUploadSuccess(res, file, col)"
             :on-error="() => handleUploadError(col)"
@@ -432,6 +432,24 @@
       </el-form-item>
     </el-form>
 
+    <!-- Nested sub-tables placed in this binding's form design (sub-table-in-sub-table) -->
+    <div
+      v-for="nested in nestedSubTables || []"
+      :key="`nested-sub-table-${nested.bindingId}`"
+      class="dialog-nested-sub-table"
+    >
+      <NestedSubTableField
+        :title="nested.tableName"
+        :columns="nested.columns"
+        :dialog-columns="nested.dialogColumns"
+        :model-value="nestedRowsFor(nested)"
+        :primary-key-fields="nested.primaryKeyFields"
+        :upload-url="uploadUrl"
+        editable
+        @update:model-value="(nestedRows: unknown[]) => onNestedRowsUpdate(nested, nestedRows)"
+      />
+    </div>
+
     <template #footer>
       <el-button @click="handleClose">
         {{ t('common.cancel') }}
@@ -448,7 +466,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
@@ -465,6 +483,13 @@ import { useSubTableDialogEditor } from '@/composables/subTableAddDialog/useSubT
 import { useSubTableDialogRelations } from '@/composables/subTableAddDialog/useSubTableDialogRelations'
 import { useSubTableDialogUpload } from '@/composables/subTableAddDialog/useSubTableDialogUpload'
 import { useSubTableDialogForm } from '@/composables/subTableAddDialog/useSubTableDialogForm'
+import { mergeNestedSubTableRowsIntoSto } from './formRendererHelpers'
+import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
+import type { NestedSubTableDescriptor } from '@/composables/subTableField/subTableFieldTypes'
+
+// SubTableField hosts this dialog and the dialog hosts nested SubTableField — resolve the
+// circular SFC pair lazily.
+const NestedSubTableField = defineAsyncComponent(() => import('./SubTableField.vue'))
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -500,6 +525,8 @@ const props = defineProps<{
   rowFormulas?: RowFormulaRule[]
   columnValidationRules?: Record<string, ValidationRule[]>
   uploadUrl?: string
+  /** Nested sub-tables from this binding's form design — rows save under the row's `__subTables__`. */
+  nestedSubTables?: NestedSubTableDescriptor[]
   /** When set, awaited before closing (supports async PK allocate on Save). */
   saveRow?: (row: Record<string, unknown>) => void | Promise<void>
 }>()
@@ -511,6 +538,23 @@ const emit = defineEmits<{
 
 // Shared model owned by the SFC and threaded through the composables below.
 const formData = ref<Record<string, any>>({})
+
+// ─── Nested sub-tables (sub-table-in-sub-table inside the row dialog) ────────
+/** Rows for one nested table, read from the edited row's `__subTables__` (alias keys). */
+function nestedRowsFor(nested: NestedSubTableDescriptor): Record<string, unknown>[] {
+  return pullNestedRowsForBindingFromParentRows(
+    { bindingId: nested.bindingId, tableName: nested.tableName, tableId: null },
+    [formData.value],
+  )
+}
+
+/** Write edited nested rows back into formData so Save carries them on the row. */
+function onNestedRowsUpdate(nested: NestedSubTableDescriptor, nestedRows: unknown[]) {
+  formData.value = {
+    ...formData.value,
+    __subTables__: mergeNestedSubTableRowsIntoSto([formData.value], nested, nestedRows),
+  }
+}
 
 // ─── Lookup backfill ────────────────────────────────────────────────────────
 const {
@@ -682,5 +726,9 @@ const {
 }
 .upload-download-link:hover {
   text-decoration: underline;
+}
+.dialog-nested-sub-table {
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 </style>

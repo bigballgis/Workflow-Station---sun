@@ -53,6 +53,23 @@ async function main() {
     await page.screenshot({ path: dialogPath })
     console.log('[saved]', dialogPath)
 
+    const subjectRow = page.locator('.subject-field-row').first()
+    await subjectRow.waitFor({ timeout: 10000 })
+    const subjectPath = join(OUT_DIR, `${datePrefix()}_email-template-subject-field.png`)
+    await subjectRow.screenshot({ path: subjectPath })
+    console.log('[saved]', subjectPath)
+
+    const placeholder = await page.locator('.subject-field-row input').first().getAttribute('placeholder')
+    const hintText = await page.locator('.template-form .form-tip').first().textContent()
+    console.log('SUBJECT_PLACEHOLDER:', placeholder)
+    console.log('SUBJECT_HINT:', hintText?.trim())
+    if (!placeholder?.includes('${name}')) {
+      throw new Error(`Subject placeholder must show \${name}, got: ${placeholder}`)
+    }
+    if (!hintText?.includes('${name}')) {
+      throw new Error(`Subject hint must mention \${name}, got: ${hintText}`)
+    }
+
     const hasToolbar = await page.locator('.w-e-toolbar').count()
     const hasInsert = await page.locator('.erb-insert-select').count()
     console.log('RICH_TOOLBAR:', hasToolbar, 'INSERT_SELECT:', hasInsert)

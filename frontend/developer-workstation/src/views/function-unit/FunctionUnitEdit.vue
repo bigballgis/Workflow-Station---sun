@@ -9,7 +9,7 @@
           class="flex"
           style="align-items: center; gap: 16px;"
         >
-          <el-button @click="router.back()">
+          <el-button @click="goBack">
             <el-icon><ArrowLeft /></el-icon>
             {{ t('common.back') }}
           </el-button>
@@ -481,6 +481,17 @@ const router = useRouter()
 const store = useFunctionUnitStore()
 
 const functionUnitId = computed(() => Number(route.params.id))
+
+// Deep links (URL pasted into a new tab) have no in-app history entry —
+// vue-router leaves history.state.back null, so go to the FU list instead
+// of walking the browser history out of the app.
+const goBack = () => {
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    router.push('/function-units')
+  }
+}
 const activeTab = ref('process')
 
 watch(activeTab, (tab) => {

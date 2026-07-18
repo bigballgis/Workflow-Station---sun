@@ -57,6 +57,8 @@ export interface FormRendererFieldsContext {
   /** Persist task form (form-below-table Save — same as action bar SAVE). */
   handleInlineFormSave?: () => void
   handleInlineFormUpdate: (field: FormField, row: Record<string, unknown>) => void
+  /** Row click on a form-below-table sub-table — pick which row the inline form edits. */
+  setInlineFormSelectedRow?: (bindingId: number | undefined, row: Record<string, unknown> | null) => void
   scrollSubTableInlineIntoView: (bindingId?: number) => void
   setSubTableInlineAnchor: (bindingId: number | undefined, el: HTMLElement | null) => void
   handleLookupSelect: (key: string, row: unknown) => void

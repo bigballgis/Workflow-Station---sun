@@ -231,6 +231,18 @@ public interface AiGenerationService {
     void sendChatEvent(Long functionUnitId, String userId, AiChatSseEvent event);
 
     /**
+     * 判断给定 emitter 是否已被同一 (functionUnitId, userId) 的新对话请求取代。
+     * 异步任务在发送事件前用它判活：用户「停止后立刻重发」时，被取代的旧任务
+     * 不得把过期 reply/done 注入新请求的 SSE 流，也不得关闭新 emitter。
+     *
+     * @param functionUnitId 功能单元 ID
+     * @param userId         用户 ID
+     * @param emitter        发起方持有的 emitter 实例
+     * @return true 表示已被取代（或已完成移除）
+     */
+    boolean isChatEmitterSuperseded(Long functionUnitId, String userId, SseEmitter emitter);
+
+    /**
      * 向指定 functionUnitId 的所有独立事件 SSE 发送通知
      *
      * @param functionUnitId 功能单元 ID

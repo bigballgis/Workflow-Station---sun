@@ -96,42 +96,40 @@
         </div>
       </div>
 
-      <!-- Section 2: Process diagram -->
-      <div class="section workflow-section">
-        <div class="section-header">
-          <el-icon><Share /></el-icon>
-          <span>{{ t('applicationDetail.workflowDiagram') }}</span>
+      <!-- Section 2: Process diagram (collapsible; default expanded) -->
+      <WorkflowDiagramCollapsibleSection
+        :title="t('applicationDetail.workflowDiagram')"
+      >
+        <template #badge>
           <el-tag
             :type="getNodeStatusType(processInfo.status)"
             size="small"
           >
             {{ workflowDiagramBadgeLabel }}
           </el-tag>
-        </div>
-        <div class="section-content">
-          <el-skeleton
-            v-if="!diagramReady && bpmnXml"
-            animated
-            :rows="4"
-          />
-          <ProcessDiagram
-            v-else-if="diagramReady && (bpmnXml || processNodes.length > 0)"
-            :nodes="processNodes"
-            :flows="processFlows"
-            :bpmn-xml="bpmnXml"
-            :current-node-id="currentNodeId"
-            :completed-node-ids="completedNodeIds"
-            :selected-node-id="selectedNodeId ?? ''"
-            :show-toolbar="true"
-            :show-legend="true"
-            @node-click="handleDiagramNodeClick"
-          />
-          <el-empty
-            v-else-if="diagramReady"
-            :description="t('applicationDetail.noProcessDefinition')"
-          />
-        </div>
-      </div>
+        </template>
+        <el-skeleton
+          v-if="!diagramReady && bpmnXml"
+          animated
+          :rows="4"
+        />
+        <ProcessDiagram
+          v-else-if="diagramReady && (bpmnXml || processNodes.length > 0)"
+          :nodes="processNodes"
+          :flows="processFlows"
+          :bpmn-xml="bpmnXml"
+          :current-node-id="currentNodeId"
+          :completed-node-ids="completedNodeIds"
+          :selected-node-id="selectedNodeId ?? ''"
+          :show-toolbar="true"
+          :show-legend="true"
+          @node-click="handleDiagramNodeClick"
+        />
+        <el-empty
+          v-else-if="diagramReady"
+          :description="t('applicationDetail.noProcessDefinition')"
+        />
+      </WorkflowDiagramCollapsibleSection>
 
       <!-- Click a workflow node to preview that step's bound form (read-only) -->
       <div
@@ -425,7 +423,8 @@
 import { onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, RefreshLeft, Refresh } from '@element-plus/icons-vue'
+import { ArrowLeft, InfoFilled, Document, Clock, Bell, RefreshLeft, Refresh } from '@element-plus/icons-vue'
+import WorkflowDiagramCollapsibleSection from '@/components/WorkflowDiagramCollapsibleSection.vue'
 import ProcessDiagram from '@/components/ProcessDiagram.vue'
 import ProcessHistory from '@/components/ProcessHistory.vue'
 import FormRenderer from '@/components/FormRenderer.vue'
@@ -583,7 +582,6 @@ onMounted(() => { loadProcessDetail() })
     .section-header { display: flex; align-items: center; gap: 8px; padding: 16px 20px; background: #fafafa; border-bottom: 1px solid var(--border-color); font-size: 16px; font-weight: 500; color: var(--text-primary); .el-icon { color: var(--hsbc-red); } }
     .section-content { padding: 20px; }
   }
-  .workflow-section .section-content { min-height: 300px; }
   .form-section .form-container { width: 100%; }
   .form-section .sub-table-section { margin-top: 16px; }
   .change-history-section .section-content { padding: 20px; }
