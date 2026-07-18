@@ -191,6 +191,7 @@
             <FormRenderer
               :fields="selectedNodeForm.isCurrentTask ? formFields : selectedNodeForm.fields"
               :tabs="selectedNodeForm.isCurrentTask ? formTabs : selectedNodeForm.tabs"
+              :process-instance-id="taskInfo.processInstanceId"
               :model-value="selectedNodeForm.isCurrentTask ? formData : selectedNodeForm.values"
               :label-width="formLabelWidth"
               :readonly="selectedNodeForm.isCurrentTask ? formReadOnly : true"
@@ -258,6 +259,7 @@
                 :fields="processFormFields"
                 :tabs="processFormTabs"
                 :model-value="processFormValues"
+                :process-instance-id="taskInfo.processInstanceId"
                 :label-width="formLabelWidth"
                 :readonly="!processFormEditable"
                 :primary-read-only="primaryReadOnly"
@@ -317,6 +319,7 @@
               :fields="formFields"
               :tabs="formTabs"
               :fields-after-tabs="formFieldsAfterTabs"
+              :process-instance-id="taskInfo.processInstanceId"
               :model-value="formData"
               :label-width="formLabelWidth"
               :readonly="formReadOnly"

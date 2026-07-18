@@ -25,6 +25,8 @@ import LinkFormBindingSelect from './components/designer/LinkFormBindingSelect.v
 import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
 import LookupComponent from './components/designer/LookupComponent.vue'
 import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
+import RecordNotePlaceholderWidget from './components/designer/RecordNotePlaceholderWidget.vue'
+import RecordNoteScopeSelect from './components/designer/RecordNoteScopeSelect.vue'
 import { registerFormCreateReadonlyParser } from './utils/registerFormCreateReadonlyParser'
 import formCreateFactory from '@form-create/element-ui'
 
@@ -71,6 +73,10 @@ FcDesigner.component('Cascader', FcCascader)
 FcDesigner.component('Slider', FcSlider)
 FcDesigner.component('Lookup', LookupComponent)
 FcDesigner.component('LookupBindingSelect', LookupBindingSelect)
+
+// Register RecordNotePlaceholderWidget as the canvas renderer for 'recordNote' type
+FcDesigner.component('RecordNote', RecordNotePlaceholderWidget)
+FcDesigner.component('RecordNoteScopeSelect', RecordNoteScopeSelect)
 
 // Register the subTable drag rule so it appears in the designer left menu
 FcDesigner.addDragRule({
@@ -369,6 +375,59 @@ FcDesigner.addDragRule({
       { type: 'input', field: 'placeholder', title: 'Placeholder' },
       { type: 'switch', field: 'readonly', title: 'Readonly' },
       { type: 'LookupBindingSelect', field: 'lookupConfig', title: 'Lookup Config', props: {} },
+    ]
+  }
+})
+
+// RecordNote: rich-text comments + attachments panel scoped to the hosting form's table.
+// Display-only (no data field) — the portal runtime resolves the target from form context.
+FcDesigner.addDragRule({
+  name: 'recordNote',
+  label: 'Record Note',
+  icon: 'icon-textarea',
+  menu: 'main',
+  mask: true,
+  input: false,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  loadRule(rule: any) {
+    rule.props = rule.props || {}
+    if (rule.props.scope !== 'TABLE' && rule.props.scope !== 'RECORD') {
+      rule.props.scope = 'TABLE'
+    }
+  },
+  rule() {
+    return {
+      type: 'recordNote',
+      title: 'Record Note',
+      props: {
+        // Whole table is the only scope valid on every host; Single Record is
+        // opt-in and only selectable on sub-table forms (see RecordNoteScopeSelect).
+        scope: 'TABLE',
+        panelTitle: 'Notes',
+        allowAttachment: true,
+        maxFileSizeMb: 10,
+        allowEditOwn: true,
+        pageSize: 5
+      }
+    }
+  },
+  props() {
+    return [
+      {
+        type: 'RecordNoteScopeSelect',
+        field: 'scope',
+        title: 'Scope'
+      },
+      { type: 'input', field: 'panelTitle', title: 'Panel Title' },
+      { type: 'switch', field: 'allowAttachment', title: 'Allow Attachments' },
+      { type: 'inputNumber', field: 'maxFileSizeMb', title: 'Max File Size (MB)', props: { min: 1, max: 10 } },
+      { type: 'switch', field: 'allowEditOwn', title: 'Allow Edit Own Notes' },
+      { type: 'inputNumber', field: 'pageSize', title: 'Visible Notes', props: { min: 1, max: 20 } }
     ]
   }
 })

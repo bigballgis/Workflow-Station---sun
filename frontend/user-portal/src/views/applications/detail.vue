@@ -171,6 +171,7 @@
           >
             <FormRenderer
               :key="`diagram-node-${selectedNodeId}-${processId}`"
+              :process-instance-id="processId"
               :model-value="selectedNodeForm.isCurrentStep ? formData : selectedNodeForm.values"
               :fields="selectedNodeForm.isCurrentStep ? formFields : selectedNodeForm.fields"
               :tabs="selectedNodeForm.isCurrentStep ? formTabs : selectedNodeForm.tabs"
@@ -270,6 +271,7 @@
           >
             <FormRenderer
               :key="`app-form-${processId}`"
+              :process-instance-id="processId"
               v-model="formData"
               :fields="formFields"
               :tabs="formTabs"

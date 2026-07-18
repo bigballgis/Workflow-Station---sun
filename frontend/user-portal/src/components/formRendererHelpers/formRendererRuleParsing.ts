@@ -203,6 +203,26 @@ export function extractFieldsRecursive(
     const item = items[index]
     const props = item.props as Record<string, unknown> | undefined
     const bindingId = item._bindingId ?? props?._bindingId
+    if (item.type === 'recordNote') {
+      const scope = props?.scope === 'TABLE' ? 'TABLE' : 'RECORD'
+      const recordNoteField: FormField = {
+        key: `__recordNote_${scope.toLowerCase()}`,
+        label: '',
+        type: 'recordNote',
+        span: 24,
+        _recordNote: {
+          scope,
+          panelTitle: typeof props?.panelTitle === 'string' ? props.panelTitle : undefined,
+          allowAttachment: props?.allowAttachment !== false,
+          maxFileSizeMb: Number(props?.maxFileSizeMb) || 10,
+          allowEditOwn: props?.allowEditOwn !== false,
+          pageSize: Number(props?.pageSize) || 5,
+        },
+      }
+      applyDesignerHideFlagToFormField(recordNoteField, item)
+      fields.push(recordNoteField)
+      continue
+    }
     if (item.type === 'subTable' && bindingId != null) {
       const rawPv = props?.portalViews as Partial<SubTablePortalViews> | undefined
       const hasWidgetPortalViews =

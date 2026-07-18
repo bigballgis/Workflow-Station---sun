@@ -66,6 +66,15 @@ export interface FormField {
   uploadAccept?: string
   uploadLimit?: number
   _bindingId?: number  // set when type === 'subTable'
+  /** RecordNote panel config; only present when type === 'recordNote'. */
+  _recordNote?: {
+    scope: 'TABLE' | 'RECORD'
+    panelTitle?: string
+    allowAttachment?: boolean
+    maxFileSizeMb?: number
+    allowEditOwn?: boolean
+    pageSize?: number
+  }
   /** Designer-driven portal display strategy; only present when type === 'subTable'. */
   portalViews?: SubTablePortalViews
   /**

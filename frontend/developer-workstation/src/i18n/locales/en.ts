@@ -545,6 +545,14 @@ export default {
     lookupGoToViewDesign: 'Go To Designer',
     subTablePlaceholderUnconfigured: 'No Sub Table selected',
     subTablePlaceholderStale: 'Binding stale',
+    recordNoteDefaultTitle: 'Notes',
+    recordNoteScopeTable: 'Whole table',
+    recordNoteScopeRecord: 'Single record',
+    recordNoteAdd: 'Add',
+    recordNotePlaceholderHint: 'Comments & attachments panel — active in User Portal after deploy',
+    recordNoteDuplicateScope: 'Only one Record Note per scope is allowed on a form',
+    recordNoteScopeMainHint: 'Single record is available on sub-table forms only; the main form is whole-table',
+    recordNoteRecordScopeMainForm: 'Record Note on the main form supports whole-table scope only; use Single record inside a sub-table form',
     // Sub-Table per-operation permissions (right-side props panel) — gate Add / Edit / Delete independently.
     subTablePermission: {
       allowAdd: 'Allow Add',

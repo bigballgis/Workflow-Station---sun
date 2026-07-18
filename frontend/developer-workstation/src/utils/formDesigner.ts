@@ -247,6 +247,23 @@ export function collectSubTableRules(items: any[]): any[] {
 }
 
 /**
+ * Recursively collect the scope of every recordNote rule in a rule tree
+ * (normalized to 'TABLE' | 'RECORD'); used to enforce one component per scope.
+ */
+export function collectRecordNoteScopes(items: any[]): string[] {
+  const result: string[] = []
+  for (const item of items || []) {
+    if (!item) continue
+    if (item.type === 'recordNote') {
+      result.push(item.props?.scope === 'TABLE' ? 'TABLE' : 'RECORD')
+    }
+    const children = getRuleChildren(item)
+    if (children.length) result.push(...collectRecordNoteScopes(children))
+  }
+  return result
+}
+
+/**
  * Copy top-level `_bindingId` into `props._bindingId` on every subTable rule (non-mutating).
  * Persisted rules keep `_bindingId` only at top level (the drag rule's parseRule strips the
  * props copy on save), but SubTablePlaceholderWidget reads props — so preview surfaces that

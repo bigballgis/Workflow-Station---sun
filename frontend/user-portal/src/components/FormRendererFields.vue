@@ -7,6 +7,7 @@ const SubTableField = defineAsyncComponent({
   delay: 0,
 })
 import SubTableInlineForm from './SubTableInlineForm.vue'
+import RecordNoteField from './RecordNoteField.vue'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import type { FormField } from './formRendererHelpers'
@@ -232,6 +233,31 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :readonly="true"
         />
       </div>
+    </template>
+
+    <!-- Record Note: comments + attachments panel (TABLE / RECORD scope) -->
+    <template v-else-if="field.type === 'recordNote'">
+      <el-col
+        v-if="!inColumn"
+        :span="24"
+        style="padding: 0;"
+      >
+        <RecordNoteField
+          :config="field._recordNote"
+          :table-id="(ctx.primaryTableId ?? null) as number | null"
+          :record-id="(ctx.processInstanceId ?? null) as string | null"
+          :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
+          :readonly="false"
+        />
+      </el-col>
+      <RecordNoteField
+        v-else
+        :config="field._recordNote"
+        :table-id="(ctx.primaryTableId ?? null) as number | null"
+        :record-id="(ctx.processInstanceId ?? null) as string | null"
+        :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
+        :readonly="false"
+      />
     </template>
 
     <!-- Sub-table -->

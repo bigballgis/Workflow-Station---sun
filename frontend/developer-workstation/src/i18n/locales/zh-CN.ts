@@ -581,6 +581,14 @@ export default {
     lookupGoToViewDesign: 'Go To Designer',
     subTablePlaceholderUnconfigured: '未选择 Sub Table',
     subTablePlaceholderStale: '绑定已失效',
+    recordNoteDefaultTitle: '备注',
+    recordNoteScopeTable: '整表',
+    recordNoteScopeRecord: '单条记录',
+    recordNoteAdd: '添加',
+    recordNotePlaceholderHint: '评论与附件面板——部署后在用户门户生效',
+    recordNoteDuplicateScope: '同一表单同一作用域只能放置一个 Record Note 组件',
+    recordNoteScopeMainHint: 'Single record 仅在子表表单可用；主表单仅支持整表',
+    recordNoteRecordScopeMainForm: '主表单的 Record Note 仅支持整表作用域，Single record 请放在子表表单中',
     // 子表逐操作权限（右侧属性面板）：独立控制 新增 / 编辑 / 删除
     subTablePermission: {
       allowAdd: '允许新增',

@@ -119,6 +119,8 @@ interface Props {
   formId?: string
   // Task 16: Real-time sync props
   taskId?: string
+  /** Current process instance id — enables RecordNote RECORD scope on this form. */
+  processInstanceId?: string
   enableSubTablePolling?: boolean
   subTablePollingInterval?: number
   /** When false, hides the sub-table Assign button (only the "Assign Participants" task node allows assignment) */
@@ -546,6 +548,7 @@ const {
   viewContext: propViewContext,
   subTableBindings: propSubTableBindings,
   functionUnitId: propFunctionUnitId,
+  processInstanceId: propProcessInstanceId,
   enableSubTablePolling: propEnableSubTablePolling,
   subTablePollingInterval: propSubTablePollingInterval,
   suppressLinkFormInitialData: propSuppressLinkFormInitialData,
@@ -562,6 +565,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   subTableBindings: propSubTableBindings,
   linkableSubTableBindings,
   functionUnitId: propFunctionUnitId,
+  processInstanceId: propProcessInstanceId,
   resolveMiParticipantSeedForSubTableAdd,
   primaryFormData: formData,
   primaryTableDisplayName,
