@@ -117,7 +117,17 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     settingsItemId.value = null
     resetBasicForm()
     currentTeamNames.value = ''
-    void loadTeamOptions()
+    void loadTeamOptions().then(() => {
+      // Pre-select the user's currently active team so editable creators (admin/tech-lead)
+      // default to the team they are working in and don't accidentally file the FU under the
+      // wrong team. "All groups" (__ALL__) has no single team, so leave the selection empty.
+      if (teamEditable.value) {
+        const raw = getActiveGroupRaw()
+        if (raw && raw !== ALL_GROUPS) {
+          basicForm.teamGroupIds = [raw]
+        }
+      }
+    })
     showFormDialog.value = true
   }
 

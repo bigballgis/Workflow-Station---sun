@@ -1296,3 +1296,8 @@
     verification-screenshots/2026-07-17_fu-list-devgroup-bar.png（顶栏 Team: All groups + 列表加载）、
     2026-07-17_devgroup-switcher-header.png（切换器近景）。UAT：现有库需手工跑 08 迁移，且团队↔用户成员关系须在
     Admin Center 单独维护，否则非 ADMIN/TECH_LEAD 用户将只见 Public FU。
+    追加(2026-07-18)：创建 FU 时可编辑 team 下拉（ADMIN/TECH_LEAD）默认预选「当前所选组」，
+    进一步降低选错团队风险（openCreateDialog 在 loadTeamOptions 后，若 active group 非 __ALL__ 则
+    basicForm.teamGroupIds=[activeGroup]；__ALL__ 下留空需手选）。普通用户仍为只读=当前组。
+    验证：本机 chromium 截图 verification-screenshots/2026-07-18_fu-create-team-preselect.png
+    （active=Finance Team → 创建弹窗 Team 预选 Finance Team 且可改）。
