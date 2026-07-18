@@ -66,7 +66,9 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
 
   // Derive display columns for a sub-table binding from the designer config.
   // List-view column order comes from subListViews; control types/options come from subForm (same as process start / task detail).
-  const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
+  // `visitedBindingIds` guards the alt-schema recursion below: two forms binding the same
+  // physical table can resolve each other as "alt" and ping-pong forever (stack overflow).
+  const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>, visitedBindingIds?: Set<number>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
     const subFormRule = flattenSubFormRuleLayoutContainers(
       binding.subFormConfig?.rule ||
       formConfig?.subForms?.[binding.bindingId]?.rule ||
@@ -257,11 +259,14 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
 
     const tableId = binding.tableId != null ? Number(binding.tableId) : NaN
     if (Number.isFinite(tableId) && ctx.cachedContentForms.length > 0) {
-      const alt = resolveSubTableSchemaByTableId(tableId, ctx.cachedContentForms, binding.bindingId)
+      const visited = visitedBindingIds ?? new Set<number>()
+      if (Number.isFinite(Number(binding.bindingId))) visited.add(Number(binding.bindingId))
+      const alt = resolveSubTableSchemaByTableId(tableId, ctx.cachedContentForms, visited)
       if (alt) {
         const fromAlt = deriveColumnsFromBinding(
           { ...binding, bindingId: alt.bindingId },
           alt.formConfig,
+          visited,
         )
         if (fromAlt.length > 0) return fromAlt
       }
@@ -291,7 +296,9 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
     if ((!Array.isArray(columns) || columns.length === 0) && Number.isFinite(tableIdNum) && forms.length > 0) {
       const alt = resolveSubTableSchemaByTableId(tableIdNum, forms, b.bindingId)
       if (alt) {
-        columns = deriveColumnsFromBinding({ ...b, bindingId: alt.bindingId }, alt.formConfig)
+        const visited = new Set<number>()
+        if (Number.isFinite(Number(b.bindingId))) visited.add(Number(b.bindingId))
+        columns = deriveColumnsFromBinding({ ...b, bindingId: alt.bindingId }, alt.formConfig, visited)
       }
       if ((!columns || columns.length === 0) && ctx.cachedRelationTableFieldIndex.has(tableIdNum)) {
         columns = deriveColumnsFromRelationFieldDefinitions(ctx.cachedRelationTableFieldIndex.get(tableIdNum)!)
