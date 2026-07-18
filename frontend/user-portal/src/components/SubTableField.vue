@@ -457,6 +457,23 @@
               :description="t('subTable.noData')"
               :image-size="60"
             />
+            <!-- RecordNote panels from the linked binding's form design: RECORD scope
+                 binds the linked row, TABLE scope binds this table's per-process stream.
+                 Placed after the v-if chain; the list is empty unless the linked form
+                 design actually contains recordNote components. -->
+            <div
+              v-for="rn in linkFormRecordNoteFields"
+              :key="rn.key"
+              class="link-form-record-note"
+            >
+              <RecordNoteField
+                :config="rn._recordNote"
+                :table-id="(selectedLinkBinding as any)?.tableId ?? null"
+                :record-id="linkFormRowStableId"
+                :process-instance-id="recordNoteInstanceId"
+                :function-unit-id="functionUnitId ?? null"
+              />
+            </div>
           </div>
           <div
             v-if="showLinkFormDetailActionFooter"
@@ -543,6 +560,8 @@ import {
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { collectSubTableFieldsFromLayout } from './formRendererHelpers'
 import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
+import { collectRecordNoteFields, resolveRowStableId } from './formRendererHelpers/recordNoteFields'
+import RecordNoteField from './RecordNoteField.vue'
 import { calculateSummary } from './businessLogicEngine'
 import FieldRenderer from './FieldRenderer.vue'
 import PortalFormFields from './PortalFormFields.vue'
@@ -988,18 +1007,17 @@ const nestedSubTableDescriptors = computed<NestedSubTableDescriptor[]>(() => {
 // the FormRenderer context (optional — absent in detached/preview usages).
 const recordNoteCtx = inject(FORM_RENDERER_FIELDS_CTX, null)
 
-function collectRecordNoteFields(fields: FormField[] | undefined): FormField[] {
-  if (!Array.isArray(fields)) return []
-  const out: FormField[] = []
-  for (const f of fields) {
-    if (!f) continue
-    if (f.type === 'recordNote') out.push(f)
-    if (Array.isArray(f.children)) out.push(...collectRecordNoteFields(f.children))
-  }
-  return out
-}
-
 const recordNoteFields = computed<FormField[]>(() => collectRecordNoteFields(props.formFields as FormField[] | undefined))
+
+// Link Form modal: recordNote components of the linked binding's own form design.
+const linkFormRecordNoteFields = computed<FormField[]>(() =>
+  collectRecordNoteFields(linkedFormFields.value as FormField[] | undefined))
+
+const linkFormRowStableId = computed<string | null>(() =>
+  resolveRowStableId(
+    linkedFormData.value as Record<string, unknown> | null,
+    (selectedLinkBinding.value as { primaryKeyFields?: string[] } | null)?.primaryKeyFields,
+  ))
 
 const recordNoteInstanceId = computed<string | null>(() => {
   const v = (recordNoteCtx as { processInstanceId?: unknown } | null)?.processInstanceId

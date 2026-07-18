@@ -13,6 +13,7 @@ import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import type { FormField } from './formRendererHelpers'
 import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
 import { isDisplayOnlyLayoutField } from './formRendererHelpers'
+import { collectRecordNoteFields, resolveRowStableId } from './formRendererHelpers/recordNoteFields'
 
 defineOptions({ name: 'FormRendererFields' })
 
@@ -36,6 +37,18 @@ if (!ctx) {
 }
 
 const collapseActiveByKey = ref<Record<string, string[]>>({})
+
+// Form-below-table: recordNote components of the binding's sub-form design render
+// under the inline form — RECORD scope follows the selected row, TABLE scope the
+// current process instance.
+function inlineFormRecordNoteFields(field: FormField): FormField[] {
+  return collectRecordNoteFields(ctx!.resolveInlineFormFields(field))
+}
+
+function inlineFormRowStableId(field: FormField): string | null {
+  const binding = ctx!.resolveBinding(field._bindingId) as { primaryKeyFields?: string[] } | undefined
+  return resolveRowStableId(ctx!.getCurrentRowForInlineForm(field), binding?.primaryKeyFields)
+}
 
 function collapseActiveNames(field: FormField): string[] {
   const key = field.key
@@ -335,6 +348,15 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
             :suppress-link-only-standalone-sub-tables="ctx.viewContext === 'initiatorRequest'"
             @update:row="(row: Record<string, any>) => ctx.handleInlineFormUpdate(field, row)"
             @save="ctx.handleInlineFormSave?.()"
+          />
+          <RecordNoteField
+            v-for="rn in inlineFormRecordNoteFields(field)"
+            :key="rn.key"
+            :config="rn._recordNote"
+            :table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
+            :record-id="inlineFormRowStableId(field)"
+            :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
+            :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
           />
         </div>
       </el-col>

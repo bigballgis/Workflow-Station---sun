@@ -491,6 +491,7 @@ import '@wangeditor/editor/dist/css/style.css'
 import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, ValidationRule } from './formRendererHelpers'
+import { resolveRowStableId } from './formRendererHelpers/recordNoteFields'
 import RecordNoteField from './RecordNoteField.vue'
 import DOMPurify from 'dompurify'
 import LookupField from './lookup/LookupField.vue'
@@ -569,18 +570,8 @@ const formData = ref<Record<string, any>>({})
 // mirrors subTableRowMerge: declared PK first, then rowId, then the platform
 // id / id_idw alias pair. New (unsaved) rows have none: the panel shows its
 // "available after save" hint.
-const editingRowStableId = computed<string | null>(() => {
-  if (props.mode !== 'edit') return null
-  const row = formData.value || {}
-  const candidates: unknown[] = []
-  const pk = props.primaryKeyFields?.[0]
-  if (pk) candidates.push(row[pk])
-  candidates.push(row.rowId, row.id, row.id_idw)
-  for (const v of candidates) {
-    if (v != null && String(v).trim() !== '') return String(v)
-  }
-  return null
-})
+const editingRowStableId = computed<string | null>(() =>
+  props.mode === 'edit' ? resolveRowStableId(formData.value, props.primaryKeyFields) : null)
 
 // ─── Nested sub-tables (sub-table-in-sub-table inside the row dialog) ────────
 /** Rows for one nested table, read from the edited row's `__subTables__` (alias keys). */
