@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getUser } from './auth'
 import i18n from '@/i18n'
+import { getActiveGroupHeaderValue } from '@/utils/devGroupContext'
 
 // Create a separate axios instance for function unit API
 export const functionUnitAxios = axios.create({
@@ -32,7 +33,13 @@ functionUnitAxios.interceptors.request.use(config => {
   if (user && user.userId) {
     config.headers['X-User-Id'] = user.userId
   }
-  
+
+  // Active dev group (team) — visibility filter only; backend re-validates membership.
+  const activeGroupId = getActiveGroupHeaderValue()
+  if (activeGroupId) {
+    config.headers['X-Dev-Group-Id'] = activeGroupId
+  }
+
   return config
 })
 
@@ -333,6 +340,17 @@ export interface Version {
   snapshotData?: string
 }
 
+export interface DevGroupOption {
+  id: string
+  name: string
+}
+
+export interface MyDevGroups {
+  groups: DevGroupOption[]
+  canSeeAllGroups: boolean
+  publicGroupId: string
+}
+
 export const functionUnitApi = {
   /**
    * Whether the current user may enter the function unit workspace.
@@ -342,6 +360,13 @@ export const functionUnitApi = {
    */
   getWorkspaceAccess: () =>
     functionUnitAxios.get<any, { data: { canView: boolean } }>('/api/v1/function-units/workspace-access'),
+
+  /**
+   * Current user's selectable dev teams (for the entry dialog + header switcher), whether
+   * they may view all function units (ADMIN), and the built-in Public group id.
+   */
+  getMyDevGroups: () =>
+    functionUnitAxios.get<any, { data: MyDevGroups }>('/api/v1/function-units/my-dev-groups'),
 
   // Function Unit CRUD
   list: (params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number; sort?: string }) =>

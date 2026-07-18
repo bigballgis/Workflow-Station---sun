@@ -3,6 +3,7 @@ package com.developer.component;
 import com.developer.dto.DevGroupAssignmentRequest;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
+import com.developer.dto.MyDevGroupsResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.dto.VersionResponse;
 import com.developer.entity.FunctionUnit;
@@ -118,4 +119,10 @@ public interface FunctionUnitComponent {
      * members of a team (virtual group) that owns at least one function unit (read-only baseline).
      */
     boolean canAccessWorkspace();
+
+    /**
+     * The current user's selectable teams (for the entry dialog / header switcher), plus
+     * whether they may view all function units (ADMIN) and the built-in Public group id.
+     */
+    MyDevGroupsResponse getMyDevGroups();
 }

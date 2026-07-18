@@ -88,6 +88,15 @@ export default {
     selectTestUser: '选择测试用户',
     testUserHint: '测试环境快速登录'
   },
+  devGroup: {
+    current: '团队',
+    switch: '切换',
+    allGroups: '全部团队',
+    noTeam: '无团队',
+    selectTitle: '选择团队',
+    selectHint: '你属于多个团队，请选择要进入的团队——你将只看到该团队的功能单元以及公共（Public）功能单元。随时可在顶部切换。',
+    confirm: '进入'
+  },
   functionUnit: {
     title: '功能单元',
     name: '名称',

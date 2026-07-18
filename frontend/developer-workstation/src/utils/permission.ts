@@ -115,6 +115,16 @@ export const permissions = {
    */
   canAssignDevGroups(): boolean {
     return isAdmin() || hasAnyRole(['TECH_LEAD', 'TEAM_LEAD'])
+  },
+
+  /**
+   * Can freely (re)assign a function unit's team via an editable selector in create/settings.
+   * Allowed: SYS_ADMIN (any team incl. Public) or TECH_LEAD (own teams + Public).
+   * Regular creators (TEAM_LEAD) get a read-only team = their currently selected team.
+   * Backend re-validates the chosen teams against the caller's scope.
+   */
+  canReassignTeam(): boolean {
+    return isAdmin() || hasRole('TECH_LEAD')
   }
 }
 

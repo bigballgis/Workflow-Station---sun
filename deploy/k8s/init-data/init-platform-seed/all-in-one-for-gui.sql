@@ -157,6 +157,18 @@ ON CONFLICT (code) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     updated_at = CURRENT_TIMESTAMP;
 
+-- 8. Public Development Group (CUSTOM, no members) — its function units are always visible to
+-- every developer-workstation user, overlaid on top of the user's currently selected team.
+-- Existing/legacy function units are migrated into this group (see init-scripts 01-admin/08).
+INSERT INTO sys_virtual_groups (id, code, name, type, display_name, status, created_at, updated_at)
+VALUES 
+('vg-dev-public', 'DEV_TEAM_PUBLIC', 'Public', 'CUSTOM', 'Built-in public group: its function units are visible to every developer-workstation user', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    type = EXCLUDED.type,
+    display_name = EXCLUDED.display_name,
+    updated_at = CURRENT_TIMESTAMP;
+
 
 
 -- Bind SYS_ADMIN role to System Administrators group

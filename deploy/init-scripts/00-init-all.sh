@@ -95,6 +95,9 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/03-sync-role-tables.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/04-admin-permissions.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/05-e2e-test-users-and-business-units.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/06-hase-organization-seed.sql
+# Built-in Public dev group (always-visible overlay for the function-unit workspace).
+# On a fresh DB the FU-migration steps are no-ops (no function units yet); it just creates the group.
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/08-fu-public-group-migration.sql
 
 # --- Step 4: Wipe function units (dev catalog + deployed catalog), then seed Digital Lending EN only ---
 echo ""

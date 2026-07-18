@@ -270,6 +270,7 @@
           prop="teamGroupIds"
         >
           <el-select
+            v-if="teamEditable"
             v-model="basicForm.teamGroupIds"
             multiple
             filterable
@@ -284,6 +285,13 @@
               :value="group.id"
             />
           </el-select>
+          <el-input
+            v-else
+            :model-value="formDialogMode === 'create' ? activeGroupName : currentTeamNames"
+            readonly
+            :placeholder="t('devGroup.noTeam')"
+            style="width: 100%;"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -414,6 +422,9 @@ const {
   teamOptions,
   teamsLoading,
   showTeamSelector,
+  teamEditable,
+  activeGroupName,
+  currentTeamNames,
   openCreateDialog,
   handleFormDialogClosed,
   handleSettings,
