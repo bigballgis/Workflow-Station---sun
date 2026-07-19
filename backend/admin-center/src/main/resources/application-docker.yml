@@ -9,14 +9,14 @@ app:
   database:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/workflow_platform_dev}
     username: ${SPRING_DATASOURCE_USERNAME:platform_dev}
-    password: ${SPRING_DATASOURCE_PASSWORD:dev_password_123}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
     driver-class-name: org.postgresql.Driver
     max-pool-size: 20
     min-idle: 5
     connection-timeout: 20000
     
   security:
-    jwt-secret-key: ${JWT_SECRET:dev-256-bit-secret-key-for-jwt-signing-development-environment-only}
+    jwt-secret-key: ${JWT_SECRET:?JWT_SECRET is required}
     jwt-expiration-ms: ${JWT_EXPIRATION:86400000}
     jwt-refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
     password:
@@ -50,7 +50,7 @@ app:
   cache:
     redis-host: redis
     redis-port: 6379
-    redis-password: ${SPRING_REDIS_PASSWORD:redis123}
+    redis-password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
     redis-database: 1
     user-ttl-minutes: ${CACHE_USER_TTL_MINUTES:30}
     permission-ttl-minutes: ${CACHE_PERMISSION_TTL_MINUTES:60}
@@ -70,13 +70,13 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/workflow_platform_dev}
     username: ${SPRING_DATASOURCE_USERNAME:platform_dev}
-    password: ${SPRING_DATASOURCE_PASSWORD:dev_password_123}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
 
   data:
     redis:
       host: redis
       port: 6379
-      password: ${SPRING_REDIS_PASSWORD:redis123}
+      password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
       database: 1
 
   kafka:

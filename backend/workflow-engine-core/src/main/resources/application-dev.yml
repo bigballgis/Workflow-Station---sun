@@ -1,4 +1,6 @@
 # Development Profile Configuration
+# Secrets here apply ONLY when spring.profiles.active=dev (local bare-metal, not Docker).
+# Docker Compose uses profile=docker and injects secrets via environment variables.
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/workflow_platform
@@ -13,6 +15,16 @@ spring:
   
   jpa:
     show-sql: true
+
+jwt:
+  secret: ${JWT_SECRET:dev-256-bit-secret-key-for-jwt-signing-development-environment-only}
+
+platform:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dev-256-bit-secret-key-for-jwt-signing-development-environment-only}
+  encryption:
+    secret-key: ${ENCRYPTION_SECRET_KEY:dev-32-byte-aes-256-secret-key!!}
 
 logging:
   level:

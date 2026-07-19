@@ -25,7 +25,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -60,7 +60,7 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
-      password: ${SPRING_REDIS_PASSWORD:redis123}
+      password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
       timeout: 5000ms
   
   messages:
@@ -80,7 +80,7 @@ file:
 # Security
 security:
   jwt:
-    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+    secret: ${JWT_SECRET:?JWT_SECRET is required}
     expiration: ${JWT_EXPIRATION:2592000000}  # 30 days
   max-login-attempts: ${MAX_LOGIN_ATTEMPTS:5}
   lock-duration-minutes: ${LOCK_DURATION_MINUTES:30}
@@ -113,11 +113,11 @@ workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
   enabled: true
   jwt:
-    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+    secret: ${JWT_SECRET:?JWT_SECRET is required}
 
 # JWT Configuration (used by AuthController)
 jwt:
-  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  secret: ${JWT_SECRET:?JWT_SECRET is required}
   expiration: ${JWT_EXPIRATION:2592000000}
 
 # Platform Security JWT Configuration (used by platform-security JwtProperties)
@@ -128,7 +128,7 @@ platform:
     internal-token: ${SSO_INTERNAL_TOKEN:}
   security:
     jwt:
-      secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+      secret: ${JWT_SECRET:?JWT_SECRET is required}
       expiration-ms: ${JWT_EXPIRATION:2592000000}
       refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
       # 服务自有 cookie 名，避免与 user-portal / admin-center 在同源下互相覆盖。
@@ -140,7 +140,7 @@ platform:
       issuer: platform
       validate-issuer: false
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
+    secret-key: ${ENCRYPTION_SECRET_KEY:?ENCRYPTION_SECRET_KEY is required}
 
 # OpenAPI
 springdoc:
