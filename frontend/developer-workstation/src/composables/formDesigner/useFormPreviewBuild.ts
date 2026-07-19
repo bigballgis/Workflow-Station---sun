@@ -9,6 +9,8 @@ import {
   attachPreviewMountedDefaultSync,
   materializePreviewItemsEvents,
   mergeComponentEventsFromSavedRules,
+  sanitizePreviewItemsHandlers,
+  sanitizePreviewRuleHandlers,
 } from '@/utils/formCreatePreviewEvents'
 import { ensureFormCreateRulesValidationDeep } from '@/utils/formCreateValidateRules'
 import {
@@ -250,6 +252,9 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       }
       rule = mapFormCreateRulesReadonlyDeep(rule) as any[]
       ensureFormCreateRulesValidationDeep(rule)
+      // Strip designer `$FNX:` handler strings from on/hook so the sub-form row dialog's
+      // base form-create instance doesn't crash on them (same freeze guard as the main form).
+      sanitizePreviewRuleHandlers(rule)
       // Saved/cached rules keep _bindingId only at top level — restore props._bindingId so
       // nested subTable placeholders in preview form-create resolve their binding.
       rule = withSubTableBindingIdInProps(rule)
@@ -441,6 +446,10 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     previewData.value = { ...previewData.value }
     applyPreviewDefaultsToItemRules(previewItems.value, previewData)
     materializePreviewItemsEvents(previewItems.value, previewData)
+    // Guard: the base form-create preview instance can't run designer `$FNX:` handler strings.
+    // Any non-function left on rule.on/rule.hook would throw "w is not a function" every render
+    // tick and freeze the preview. Runs last so real handlers installed above are kept.
+    sanitizePreviewItemsHandlers(previewItems.value)
     const previewOpt = mergePreviewValidateFormOption(
       {
         ...getPreviewOption(),

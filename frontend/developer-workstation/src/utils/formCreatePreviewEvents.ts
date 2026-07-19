@@ -32,6 +32,14 @@ function bucketHasHandlers(bucket: Record<string, unknown>): boolean {
 /**
  * form-create getRule() often drops designer `_on` / serialized handlers.
  * Overlay persisted config_json handlers onto live preview rules by field name.
+ *
+ * IMPORTANT: saved handlers are serialized `$FNX:` / function-body STRINGS, not
+ * compiled functions. They MUST land in the designer shadow buckets `_on` / `_hook`,
+ * NEVER on `on` / `hook` — form-create executes `rule.on` / `rule.hook` directly via
+ * `forEach(hooks, w => w(...))`, so a raw string there throws `w is not a function`
+ * on every render tick and freezes Form Preview (the loading spinner never clears).
+ * The preview pipeline consumes `_on` / `_hook` later: `collectFieldComponentEventsFromRules`
+ * merges both buckets and `parseFormCreateEventHandler` compiles the strings before running them.
  */
 export function mergeComponentEventsFromSavedRules(
   liveRules: unknown[],
@@ -50,11 +58,11 @@ export function mergeComponentEventsFromSavedRules(
 
     const liveOn = mergeRuleOnHandlers(rule)
     if (!bucketHasHandlers(liveOn) && bucketHasHandlers(saved.on)) {
-      rule.on = { ...saved.on }
+      rule._on = { ...saved.on }
     }
     const liveHook = mergeRuleHookHandlers(rule)
     if (!bucketHasHandlers(liveHook) && bucketHasHandlers(saved.hook)) {
-      rule.hook = { ...saved.hook }
+      rule._hook = { ...saved.hook }
     }
   })
 }
@@ -190,6 +198,44 @@ export function materializePreviewItemsEvents(
       materializePreviewComponentEvents(item.rule, previewData)
     } else if (item.kind === 'card') {
       materializePreviewItemsEvents(item.items, previewData)
+    }
+  }
+}
+
+/**
+ * Strip any non-function entry from `on` / `hook` on preview rules.
+ *
+ * Preview renders through the base @form-create/element-ui instance, which does NOT
+ * understand the designer's `$FNX:` serialized-handler prefix — it calls the value as-is.
+ * A serialized `$FNX:` string (or array / object) left in `rule.on` / `rule.hook` therefore
+ * makes form-create run a non-function (`forEach(hooks, w => w(...))` → "w is not a function")
+ * on every render tick, flooding errors and freezing Form Preview on its loading spinner.
+ *
+ * Real function handlers the preview pipeline installs (materializePreviewComponentEvents,
+ * injectPreviewFieldLoadDefaults) are kept. The `_on` / `_hook` shadow buckets — which the
+ * preview's own event runtime reads and compiles — are left untouched.
+ */
+export function sanitizePreviewRuleHandlers(rules: unknown[]): void {
+  if (!Array.isArray(rules) || rules.length === 0) return
+  walkFormCreateRules(rules, (rule) => {
+    for (const bucketKey of ['on', 'hook'] as const) {
+      const bucket = rule[bucketKey]
+      if (!bucket || typeof bucket !== 'object') continue
+      const map = bucket as Record<string, unknown>
+      for (const name of Object.keys(map)) {
+        if (typeof map[name] !== 'function') delete map[name]
+      }
+      if (Object.keys(map).length === 0) delete rule[bucketKey]
+    }
+  })
+}
+
+export function sanitizePreviewItemsHandlers(items: FormPreviewItem[]): void {
+  for (const item of items) {
+    if (item.kind === 'fields') {
+      sanitizePreviewRuleHandlers(item.rule)
+    } else if (item.kind === 'card') {
+      sanitizePreviewItemsHandlers(item.items)
     }
   }
 }

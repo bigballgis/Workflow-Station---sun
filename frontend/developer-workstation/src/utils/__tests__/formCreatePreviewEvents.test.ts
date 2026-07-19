@@ -6,6 +6,7 @@ import {
   injectPreviewFieldLoadDefaults,
   materializePreviewComponentEvents,
   mergeComponentEventsFromSavedRules,
+  sanitizePreviewRuleHandlers,
   syncDesignerComponentEventsForFcPreview,
 } from '../formCreatePreviewEvents'
 
@@ -120,5 +121,58 @@ describe('formCreatePreviewEvents', () => {
     const previewData = ref<Record<string, unknown>>({ test: null, testvalue: '' })
     dispatchPreviewFieldValueChange(live, 'test', { id: 1 }, previewData)
     expect(previewData.value.testvalue).toBe('from-saved')
+  })
+
+  it('mergeComponentEventsFromSavedRules keeps raw string handlers off form-create on/hook (freeze guard)', () => {
+    // Regression: serialized $FNX: strings on rule.on / rule.hook make form-create call a
+    // string as a function ("w is not a function") on every render tick and freeze Form Preview.
+    // Saved handlers must land only in the designer shadow buckets _on / _hook.
+    const live: Array<Record<string, unknown>> = [{ type: 'lookup', field: 'test' }]
+    const saved = [
+      {
+        type: 'lookup',
+        field: 'test',
+        on: { change: '$FNX:\n$inject.api.setValue("x", 1)' },
+        hook: { load: '$FNX:\n$inject.api.setValue("y", 2)' },
+      },
+    ]
+    mergeComponentEventsFromSavedRules(live, saved)
+    // form-create-facing buckets must NOT receive raw strings
+    expect(live[0].on).toBeUndefined()
+    expect(live[0].hook).toBeUndefined()
+    // shadow buckets carry the serialized handlers for the preview pipeline to compile later
+    expect((live[0]._on as Record<string, unknown>).change).toBe('$FNX:\n$inject.api.setValue("x", 1)')
+    expect((live[0]._hook as Record<string, unknown>).load).toBe('$FNX:\n$inject.api.setValue("y", 2)')
+  })
+
+  it('sanitizePreviewRuleHandlers removes non-function on/hook entries but keeps functions and _on/_hook', () => {
+    // The base form-create preview instance can't run "$FNX:" strings; leaving them on
+    // on/hook throws "w is not a function" every render tick and freezes the preview.
+    const kept = () => {}
+    const rules: Array<Record<string, unknown>> = [
+      {
+        type: 'input',
+        field: 'a',
+        on: { change: '$FNX:\nfoo()', focus: kept },
+        hook: { mounted: '$FNX:\nbar()', load: ['$FNX:\nbaz()'] },
+        _on: { change: '$FNX:\nfoo()' },
+        _hook: { mounted: '$FNX:\nbar()' },
+        children: [
+          { type: 'input', field: 'b', hook: { value: '$FNX:\nqux()' } },
+        ],
+      },
+    ]
+    sanitizePreviewRuleHandlers(rules)
+    const root = rules[0]
+    // string handler removed, function handler kept
+    expect((root.on as Record<string, unknown>).change).toBeUndefined()
+    expect((root.on as Record<string, unknown>).focus).toBe(kept)
+    // hook bucket had only non-functions → removed entirely
+    expect(root.hook).toBeUndefined()
+    // shadow buckets untouched (preview runtime compiles them later)
+    expect((root._on as Record<string, unknown>).change).toBe('$FNX:\nfoo()')
+    expect((root._hook as Record<string, unknown>).mounted).toBe('$FNX:\nbar()')
+    // nested child sanitized too
+    expect((root.children as Array<Record<string, unknown>>)[0].hook).toBeUndefined()
   })
 })
