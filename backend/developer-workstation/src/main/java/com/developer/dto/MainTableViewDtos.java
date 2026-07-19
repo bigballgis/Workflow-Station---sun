@@ -24,7 +24,13 @@ public final class MainTableViewDtos {
             Boolean isPrimaryKey,
             Boolean isForeignKey,
             Long refTableId,
-            List<String> refPrimaryKeyFields
+            List<String> refPrimaryKeyFields,
+            /** {@code field}, {@code lookup_display}, or {@code fk_display}. */
+            String columnType,
+            /** For lookup_display / fk_display: source field (widget or FK column). */
+            String lookupSourceField,
+            /** For lookup_display / fk_display: attribute on the related row. */
+            String lookupDisplayField
     ) {}
 
     @Builder

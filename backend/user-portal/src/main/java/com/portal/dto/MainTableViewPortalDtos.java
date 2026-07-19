@@ -44,7 +44,19 @@ public final class MainTableViewPortalDtos {
             // Lookup drill-down: when isLookup, the portal links to the referenced Relation Table's data
             // (lookupTableId), pre-filtered by this cell's value. Resolved from the form's lookupConfig.
             Boolean isLookup,
-            Long lookupTableId
+            Long lookupTableId,
+            /** {@code field}, {@code lookup_display}, or {@code fk_display}. */
+            String columnType,
+            /** For lookup_display / fk_display: source field on the owning table. */
+            String lookupSourceField,
+            /** For lookup_display / fk_display: attribute on the related row. */
+            String lookupDisplayField,
+            /** From form lookupConfig.selectedDisplayField — used to label the source lookup column. */
+            String lookupSelectedDisplayField,
+            /** From form lookupConfig.searchFields — PK hydration hint for the portal. */
+            List<String> lookupSearchFields,
+            /** For fk_display: referenced DW table id (from FieldDefinition.refTableId). */
+            Long fkRefTableId
     ) {}
 
     @Builder

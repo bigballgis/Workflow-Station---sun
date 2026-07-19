@@ -74,6 +74,46 @@
   padding: 4px 8px 8px;
 }
 
+.columns-panel-subtitle {
+  padding: 10px 12px 4px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.columns-panel-lookup {
+  max-height: 40%;
+  overflow: auto;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.lookup-group {
+  padding: 0 4px 8px;
+}
+
+.lookup-group-title {
+  padding: 6px 8px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+}
+
+.lookup-group-table {
+  margin-left: 4px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+}
+
+.add-column-popover-subtitle {
+  margin: 8px 0 4px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
 
 
 .columns-field-list {

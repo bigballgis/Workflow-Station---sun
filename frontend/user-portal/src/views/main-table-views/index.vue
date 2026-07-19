@@ -244,17 +244,17 @@ const {
                   class="mtv-fk-link"
                   :title="t('mainTableView.openLookupTable')"
                   @click.stop="openLookupTarget(col, row)"
-                >{{ formatCell(row.values[col.fieldName]) }}</a>
+                >{{ formatCell(col, row) }}</a>
               </template>
               <template v-else-if="isFkLinkCell(col, row)">
                 <a
                   class="mtv-fk-link"
                   :title="t('mainTableView.openRelatedRecord')"
                   @click.stop="openFkTarget(col, row)"
-                >{{ formatCell(row.values[col.fieldName]) }}</a>
+                >{{ formatCell(col, row) }}</a>
               </template>
               <template v-else>
-                {{ formatCell(row.values[col.fieldName]) }}
+                {{ formatCell(col, row) }}
               </template>
             </template>
           </el-table-column>

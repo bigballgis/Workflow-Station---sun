@@ -21,6 +21,8 @@ export interface MainTableViewSummary {
   enableImport?: boolean
 }
 
+export type MainTableViewColumnType = 'field' | 'lookup_display' | 'fk_display'
+
 export interface MainTableViewFieldColumn {
   fieldName: string
   displayLabel: string
@@ -34,6 +36,13 @@ export interface MainTableViewFieldColumn {
   // Lookup drill-down: link to the referenced Relation Table's data, filtered by this cell's value.
   isLookup?: boolean
   lookupTableId?: number | null
+  columnType?: MainTableViewColumnType | null
+  lookupSourceField?: string | null
+  lookupDisplayField?: string | null
+  lookupSelectedDisplayField?: string | null
+  lookupSearchFields?: string[] | null
+  /** For fk_display: DW table id of the FK target (e.g. Case table). */
+  fkRefTableId?: number | null
 }
 
 export interface MainTableViewDataRow {

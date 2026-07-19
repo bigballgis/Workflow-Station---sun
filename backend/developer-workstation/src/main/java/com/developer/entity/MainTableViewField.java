@@ -42,4 +42,20 @@ public class MainTableViewField {
     @Column(name = "is_system_field", nullable = false)
     @Builder.Default
     private Boolean isSystemField = false;
+
+    /**
+     * {@code field} (default), {@code lookup_display} (form Lookup → RT/sys_users),
+     * or {@code fk_display} (table-design FK → DW table attributes).
+     */
+    @Column(name = "column_type", nullable = false, length = 20)
+    @Builder.Default
+    private String columnType = "field";
+
+    /** For {@code lookup_display} / {@code fk_display}: source field on the owning table. */
+    @Column(name = "lookup_source_field", length = 100)
+    private String lookupSourceField;
+
+    /** For {@code lookup_display} / {@code fk_display}: attribute on the related row. */
+    @Column(name = "lookup_display_field", length = 100)
+    private String lookupDisplayField;
 }

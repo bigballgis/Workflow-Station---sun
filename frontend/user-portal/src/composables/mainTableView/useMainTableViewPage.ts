@@ -19,6 +19,8 @@ import {
 import {
   downloadMainTableViewRowsAsCsv, formatMainTableViewCell, extractFileLinks, type FileLink,
 } from '@/utils/mainTableViewCsvExport'
+import { useMainTableViewLookupHydration } from '@/composables/mainTableView/useMainTableViewLookupHydration'
+import { useMainTableViewFkHydration } from '@/composables/mainTableView/useMainTableViewFkHydration'
 
 export function useMainTableViewPage() {
   const { t } = useI18n()
@@ -35,6 +37,16 @@ const allRows = ref<MainTableViewDataRow[]>([])
 const dataTotal = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
+
+const {
+  hydrateLookupCells,
+  formatHydratedCell,
+} = useMainTableViewLookupHydration(gridColumns, allRows)
+
+const {
+  hydrateFkCells,
+  formatFkDisplayCell,
+} = useMainTableViewFkHydration(gridColumns, allRows)
 
 const gridRuntime = reactive<GridRuntimeState>(createDefaultGridRuntime())
 
@@ -252,6 +264,8 @@ async function loadData() {
     currentPage.value = 1
     selectedTableRows.value = []
     tableRef.value?.clearSelection()
+    await hydrateLookupCells()
+    await hydrateFkCells()
     await nextTick()
     tableRef.value?.doLayout?.()
   } catch (e: unknown) {
@@ -319,8 +333,17 @@ function handleSizeChange(size: number) {
   currentPage.value = 1
 }
 
-function formatCell(value: unknown) {
-  return formatMainTableViewCell(value)
+function formatCell(colOrValue: MainTableViewFieldColumn | unknown, row?: GridDisplayRow | MainTableViewDataRow) {
+  // Backward-compatible: formatCell(value) still works for non-lookup callers.
+  if (row && colOrValue && typeof colOrValue === 'object' && 'fieldName' in (colOrValue as object)) {
+    const col = colOrValue as MainTableViewFieldColumn
+    if (isGroupHeaderRow(row as GridDisplayRow)) return ''
+    if (col.columnType === 'fk_display') {
+      return formatFkDisplayCell(col, row as MainTableViewDataRow)
+    }
+    return formatHydratedCell(col, row as MainTableViewDataRow)
+  }
+  return formatMainTableViewCell(colOrValue)
 }
 
 function isRowSelectable(row: GridDisplayRow) {
@@ -342,9 +365,23 @@ async function handleExport() {
   if (!selectedViewId.value) return
   const baseName = selectedFu.value?.functionUnitName || 'view'
   const selected = selectedTableRows.value
+  const cols = displayColumns.value
+
+  const projectHydrated = (rows: MainTableViewDataRow[]): MainTableViewDataRow[] =>
+    rows.map(row => ({
+      ...row,
+      values: Object.fromEntries(
+        cols.map(col => [
+          col.fieldName,
+          col.columnType === 'fk_display'
+            ? formatFkDisplayCell(col, row)
+            : formatHydratedCell(col, row),
+        ]),
+      ),
+    }))
 
   if (selected.length) {
-    downloadMainTableViewRowsAsCsv(selected, displayColumns.value, baseName)
+    downloadMainTableViewRowsAsCsv(projectHydrated(selected), cols, baseName)
     ElMessage.success(t('mainTableView.exportSelected', { count: selected.length }))
     return
   }
@@ -354,7 +391,7 @@ async function handleExport() {
     ElMessage.warning(t('mainTableView.exportNoRows'))
     return
   }
-  downloadMainTableViewRowsAsCsv(rows, displayColumns.value, baseName)
+  downloadMainTableViewRowsAsCsv(projectHydrated(rows), cols, baseName)
   ElMessage.success(t('mainTableView.exportAllHint', { count: rows.length }))
 }
 

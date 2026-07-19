@@ -1,5 +1,7 @@
 import { functionUnitAxios } from './functionUnit'
 
+export type MainTableViewColumnType = 'field' | 'lookup_display' | 'fk_display'
+
 export interface MainTableViewField {
   fieldName: string
   displayLabel?: string | null
@@ -12,6 +14,27 @@ export interface MainTableViewField {
   isForeignKey?: boolean | null
   refTableId?: number | null
   refPrimaryKeyFields?: string[] | null
+  /** Physical/system column vs lookup_display / fk_display related attributes. */
+  columnType?: MainTableViewColumnType | null
+  /** For lookup_display / fk_display: source field (lookup widget or FK column). */
+  lookupSourceField?: string | null
+  /** For lookup_display / fk_display: attribute on the target row. */
+  lookupDisplayField?: string | null
+}
+
+export interface MainTableLookupCatalogGroup {
+  sourceField: string
+  sourceLabel: string
+  tableId: number
+  tableName: string
+  fields: MainTableFieldCatalogItem[]
+  /** lookup = form lookup widget; fk = table-design foreign key. */
+  relationKind?: 'lookup' | 'fk'
+}
+
+/** Synthetic view field name for a lookup-derived attribute column. */
+export function lookupDisplayFieldName(sourceField: string, displayField: string): string {
+  return `${sourceField}@${displayField}`
 }
 
 export interface FilterCondition {
@@ -62,6 +85,12 @@ export interface MainTableFieldCatalogItem {
   displayName?: string
   dataType?: string
   systemField?: boolean
+  /** Present when this catalog entry is a lookup-derived attribute. */
+  columnType?: MainTableViewColumnType
+  lookupSourceField?: string
+  lookupDisplayField?: string
+  lookupTableId?: number
+  lookupTableName?: string
 }
 
 export const SYSTEM_VIEW_FIELDS: MainTableFieldCatalogItem[] = [

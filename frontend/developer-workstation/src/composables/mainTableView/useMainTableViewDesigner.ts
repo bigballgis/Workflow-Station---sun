@@ -6,15 +6,22 @@ import {
   Switch as SwitchIcon, Filter, CaretTop, CaretBottom, Connection, Key,
 } from '@element-plus/icons-vue'
 import {
-  mainTableViewApi, SYSTEM_VIEW_FIELDS,
+  mainTableViewApi, SYSTEM_VIEW_FIELDS, lookupDisplayFieldName,
   type MainTableViewDefinition, type MainTableViewField, type MainTableFieldCatalogItem,
-  type FilterCondition, type FilterConfig,
+  type MainTableLookupCatalogGroup, type FilterCondition, type FilterConfig,
 } from '@/api/mainTableView'
 import {
   flattenFilterConditions, parseFilterConfigToEditorRoot, removeFieldFromFilterTree,
   removeFlattenedConditionAt, serializeFilterEditorRoot,
 } from '@/utils/mainTableViewFilter'
+import {
+  buildLookupCatalogGroups, flattenLookupCatalogItems,
+} from '@/utils/mainTableViewLookupCatalog'
+import {
+  buildFkCatalogGroups, flattenFkCatalogItems,
+} from '@/utils/mainTableViewFkCatalog'
 import { functionUnitApi, type TableDefinition } from '@/api/functionUnit'
+import { relationTableBindingApi } from '@/api/relationTable'
 import { adminCenterApi, type BusinessUnitInfo, type RoleInfo } from '@/api/adminCenter'
 
 export interface MainTableViewDesignerProps {
@@ -51,8 +58,14 @@ const businessUnitOptions = ref<BusinessUnitInfo[]>([])
 const roleOptions = ref<RoleInfo[]>([])
 const accessOptionsLoading = ref(false)
 const catalogFields = ref<MainTableFieldCatalogItem[]>([])
+const lookupCatalogGroups = ref<MainTableLookupCatalogGroup[]>([])
+const lookupCatalogFields = ref<MainTableFieldCatalogItem[]>([])
+const fkCatalogGroups = ref<MainTableLookupCatalogGroup[]>([])
+const fkCatalogFields = ref<MainTableFieldCatalogItem[]>([])
 const fieldMetaMap = ref<Record<string, { isPrimaryKey: boolean; isForeignKey: boolean; refTableId: number | null }>>({})
 const selectedCatalogFields = ref<Set<string>>(new Set())
+const selectedLookupCatalogFields = ref<Set<string>>(new Set())
+const selectedFkCatalogFields = ref<Set<string>>(new Set())
 const mainTableName = ref('')
 const filterDialogVisible = ref(false)
 const addColumnPopoverVisible = ref(false)
@@ -74,7 +87,9 @@ const displayFilterConditions = computed(() => flattenFilterConditions(filterEdi
 
 const sortFieldOptions = computed(() =>
   viewFields.value
-    .filter(f => f.visible !== false)
+    .filter(f => f.visible !== false
+      && f.columnType !== 'lookup_display'
+      && f.columnType !== 'fk_display')
     .map(f => ({
       fieldName: f.fieldName,
       label: f.displayLabel || f.fieldName,
@@ -159,8 +174,12 @@ async function loadAccessOptions() {
 
 async function loadCatalog() {
   try {
-    const res = await functionUnitApi.getTables(props.functionUnitId)
-    const tables: TableDefinition[] = res.data || []
+    const [tablesRes, formsRes, rtRes] = await Promise.all([
+      functionUnitApi.getTables(props.functionUnitId),
+      functionUnitApi.getForms(props.functionUnitId),
+      relationTableBindingApi.getAvailableTables().catch(() => ({ data: [] })),
+    ])
+    const tables: TableDefinition[] = tablesRes.data || []
     // Catalog is scoped to THIS view's owning table (not always MAIN).
     const table = tables.find(tbl => tbl.id === props.view.mainTableId)
     mainTableName.value = table?.tableDisplayName || table?.tableName || ''
@@ -184,8 +203,36 @@ async function loadCatalog() {
     catalogFields.value = table?.tableType === 'MAIN'
       ? [...business, ...SYSTEM_VIEW_FIELDS]
       : business
+
+    const relationTables = (rtRes as { data?: unknown })?.data
+      || (Array.isArray(rtRes) ? rtRes : [])
+    const allForms = formsRes.data || []
+    const formsForTable: typeof allForms = []
+    await Promise.all(allForms.map(async (form) => {
+      if (form.id == null) return
+      try {
+        const bindRes = await functionUnitApi.getFormBindings(props.functionUnitId, form.id)
+        const binds = bindRes.data || []
+        if (binds.some(b => b.tableId === props.view.mainTableId)) {
+          formsForTable.push(form)
+        }
+      } catch {
+        // FALLBACK(ux): if bindings fail to load, still scan the form for lookup widgets
+        formsForTable.push(form)
+      }
+    }))
+    const groups = buildLookupCatalogGroups(formsForTable, relationTables as never[])
+    lookupCatalogGroups.value = groups
+    lookupCatalogFields.value = flattenLookupCatalogItems(groups)
+    const fkGroups = buildFkCatalogGroups(table, tables)
+    fkCatalogGroups.value = fkGroups
+    fkCatalogFields.value = flattenFkCatalogItems(fkGroups)
   } catch {
     catalogFields.value = []
+    lookupCatalogGroups.value = []
+    lookupCatalogFields.value = []
+    fkCatalogGroups.value = []
+    fkCatalogFields.value = []
     fieldMetaMap.value = {}
   }
 }
@@ -245,6 +292,52 @@ const filteredCatalog = computed(() => {
   })
 })
 
+const filteredLookupCatalog = computed(() => {
+  const inView = new Set(viewFields.value.map(f => f.fieldName))
+  const kw = fieldSearchKeyword.value.trim().toLowerCase()
+  return lookupCatalogFields.value.filter(f => {
+    if (inView.has(f.fieldName)) return false
+    if (!kw) return true
+    return f.fieldName.toLowerCase().includes(kw)
+      || (f.displayName || '').toLowerCase().includes(kw)
+      || (f.lookupSourceField || '').toLowerCase().includes(kw)
+      || (f.lookupDisplayField || '').toLowerCase().includes(kw)
+  })
+})
+
+const filteredLookupCatalogGroups = computed(() => {
+  const available = new Set(filteredLookupCatalog.value.map(f => f.fieldName))
+  return lookupCatalogGroups.value
+    .map(g => ({
+      ...g,
+      fields: flattenLookupCatalogItems([g]).filter(f => available.has(f.fieldName)),
+    }))
+    .filter(g => g.fields.length > 0)
+})
+
+const filteredFkCatalog = computed(() => {
+  const inView = new Set(viewFields.value.map(f => f.fieldName))
+  const kw = fieldSearchKeyword.value.trim().toLowerCase()
+  return fkCatalogFields.value.filter(f => {
+    if (inView.has(f.fieldName)) return false
+    if (!kw) return true
+    return f.fieldName.toLowerCase().includes(kw)
+      || (f.displayName || '').toLowerCase().includes(kw)
+      || (f.lookupSourceField || '').toLowerCase().includes(kw)
+      || (f.lookupDisplayField || '').toLowerCase().includes(kw)
+  })
+})
+
+const filteredFkCatalogGroups = computed(() => {
+  const available = new Set(filteredFkCatalog.value.map(f => f.fieldName))
+  return fkCatalogGroups.value
+    .map(g => ({
+      ...g,
+      fields: flattenFkCatalogItems([g]).filter(f => available.has(f.fieldName)),
+    }))
+    .filter(g => g.fields.length > 0)
+})
+
 
 
 function fieldLabel(fieldName: string): string {
@@ -268,6 +361,15 @@ function getFieldIcon(dataType?: string) {
 
 
 function getMockValue(field: MainTableViewField, rowIndex: number): string {
+  if (field.columnType === 'lookup_display' || field.columnType === 'fk_display') {
+    const attr = field.lookupDisplayField || 'value'
+    if (attr.includes('name') || attr.includes('Name') || attr.includes('number')) {
+      return rowIndex === 0 ? (attr.includes('number') ? 'CASE-001' : 'Alice Chen') : (attr.includes('number') ? 'CASE-002' : 'Bob Lee')
+    }
+    if (attr.includes('email')) return rowIndex === 0 ? 'alice@example.com' : 'bob@example.com'
+    if (attr.includes('hold') || attr.includes('Hold')) return rowIndex === 0 ? 'Yes' : 'No'
+    return `Sample ${attr} ${rowIndex + 1}`
+  }
   const type = (catalogFields.value.find(f => f.fieldName === field.fieldName)?.dataType || '').toUpperCase()
   if (field.fieldName === 'process_status') return rowIndex === 0 ? 'Running' : 'Completed'
   if (field.fieldName === 'initiator') return rowIndex === 0 ? 'Alice Chen' : 'Bob Lee'
@@ -318,6 +420,27 @@ function formatFilterTag(cond: FilterCondition): string {
 
 function addField(field: MainTableFieldCatalogItem) {
   if (viewFields.value.some(f => f.fieldName === field.fieldName)) return
+  if ((field.columnType === 'lookup_display' || field.columnType === 'fk_display')
+      && field.lookupSourceField && field.lookupDisplayField) {
+    const synthetic = lookupDisplayFieldName(field.lookupSourceField, field.lookupDisplayField)
+    const sourceMeta = field.columnType === 'fk_display'
+      ? fieldMetaMap.value[field.lookupSourceField]
+      : undefined
+    viewFields.value.push({
+      fieldName: synthetic,
+      displayLabel: field.displayName || `${field.lookupSourceField}.${field.lookupDisplayField}`,
+      columnWidth: 150,
+      sortOrder: viewFields.value.length,
+      visible: true,
+      systemField: false,
+      columnType: field.columnType,
+      lookupSourceField: field.lookupSourceField,
+      lookupDisplayField: field.lookupDisplayField,
+      refTableId: sourceMeta?.refTableId ?? field.lookupTableId ?? null,
+    })
+    addColumnPopoverVisible.value = false
+    return
+  }
   const meta = fieldMetaMap.value[field.fieldName]
   viewFields.value.push({
     fieldName: field.fieldName,
@@ -326,6 +449,7 @@ function addField(field: MainTableFieldCatalogItem) {
     sortOrder: viewFields.value.length,
     visible: true,
     systemField: field.systemField ?? false,
+    columnType: 'field',
     isPrimaryKey: meta?.isPrimaryKey ?? false,
     isForeignKey: meta?.isForeignKey ?? false,
     refTableId: meta?.refTableId ?? null,
@@ -365,6 +489,78 @@ function addSelectedFields() {
     }
   }
   selectedCatalogFields.value = new Set()
+}
+
+function toggleLookupCatalogSelect(fieldName: string) {
+  const next = new Set(selectedLookupCatalogFields.value)
+  if (next.has(fieldName)) next.delete(fieldName)
+  else next.add(fieldName)
+  selectedLookupCatalogFields.value = next
+}
+
+const allLookupCatalogSelected = computed(() =>
+  filteredLookupCatalog.value.length > 0
+  && filteredLookupCatalog.value.every(f => selectedLookupCatalogFields.value.has(f.fieldName)),
+)
+const someLookupCatalogSelected = computed(() =>
+  filteredLookupCatalog.value.some(f => selectedLookupCatalogFields.value.has(f.fieldName)),
+)
+function toggleSelectAllLookupCatalog(checked: boolean) {
+  const next = new Set(selectedLookupCatalogFields.value)
+  for (const f of filteredLookupCatalog.value) {
+    if (checked) next.add(f.fieldName)
+    else next.delete(f.fieldName)
+  }
+  selectedLookupCatalogFields.value = next
+}
+
+function addSelectedLookupFields() {
+  for (const field of filteredLookupCatalog.value) {
+    if (selectedLookupCatalogFields.value.has(field.fieldName)) {
+      addField(field)
+    }
+  }
+  selectedLookupCatalogFields.value = new Set()
+}
+
+function toggleFkCatalogSelect(fieldName: string) {
+  const next = new Set(selectedFkCatalogFields.value)
+  if (next.has(fieldName)) next.delete(fieldName)
+  else next.add(fieldName)
+  selectedFkCatalogFields.value = next
+}
+
+const allFkCatalogSelected = computed(() =>
+  filteredFkCatalog.value.length > 0
+  && filteredFkCatalog.value.every(f => selectedFkCatalogFields.value.has(f.fieldName)),
+)
+const someFkCatalogSelected = computed(() =>
+  filteredFkCatalog.value.some(f => selectedFkCatalogFields.value.has(f.fieldName)),
+)
+function toggleSelectAllFkCatalog(checked: boolean) {
+  const next = new Set(selectedFkCatalogFields.value)
+  for (const f of filteredFkCatalog.value) {
+    if (checked) next.add(f.fieldName)
+    else next.delete(f.fieldName)
+  }
+  selectedFkCatalogFields.value = next
+}
+
+function addSelectedFkFields() {
+  for (const field of filteredFkCatalog.value) {
+    if (selectedFkCatalogFields.value.has(field.fieldName)) {
+      addField(field)
+    }
+  }
+  selectedFkCatalogFields.value = new Set()
+}
+
+function isLookupDisplayField(field: MainTableViewField): boolean {
+  return field.columnType === 'lookup_display'
+}
+
+function isFkDisplayField(field: MainTableViewField): boolean {
+  return field.columnType === 'fk_display'
 }
 
 // Remove every column from the view at once.
@@ -544,14 +740,20 @@ const previewRowCount = 3
     columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig, filterEditorRoot,
     enableExport, enableImport, restrictToInvolvedUsers, selectedBusinessUnitIds, selectedRoleIds,
     businessUnitOptions, roleOptions, accessOptionsLoading,
-    catalogFields, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
+    catalogFields, lookupCatalogGroups, fkCatalogGroups, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
     dragColIndex, dragOverIndex, isDraggingFromPanel, dragSourceField, visibleColumns, displayFilterConditions,
-    sortFieldOptions, filteredCatalog, previewRowCount, fieldLabel, getFieldIcon, getMockValue, sortIndicator,
+    sortFieldOptions, filteredCatalog, filteredLookupCatalog, filteredLookupCatalogGroups,
+    filteredFkCatalog, filteredFkCatalogGroups, previewRowCount,
+    fieldLabel, getFieldIcon, getMockValue, sortIndicator,
     formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
     removeDisplayFilterTag, addSortField, removeSort, handleSave, onFieldDragStart, onFieldDragEnd, onGridDrop,
     onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd, getFieldDataType,
-    isFkField, isPkField, onFkColumnClick,
+    isFkField, isPkField, onFkColumnClick, isLookupDisplayField, isFkDisplayField,
     selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
     allCatalogSelected, someCatalogSelected, toggleSelectAllCatalog,
+    selectedLookupCatalogFields, toggleLookupCatalogSelect, addSelectedLookupFields,
+    allLookupCatalogSelected, someLookupCatalogSelected, toggleSelectAllLookupCatalog,
+    selectedFkCatalogFields, toggleFkCatalogSelect, addSelectedFkFields,
+    allFkCatalogSelected, someFkCatalogSelected, toggleSelectAllFkCatalog,
   }
 }

@@ -2,6 +2,7 @@ package com.developer.service.impl;
 
 import com.developer.dto.MainTableViewDtos.CreateMainTableViewRequest;
 import com.developer.dto.MainTableViewDtos.MainTableViewAccessRuleDTO;
+import com.developer.dto.MainTableViewDtos.MainTableViewFieldDTO;
 import com.developer.dto.MainTableViewDtos.UpdateMainTableViewRequest;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FunctionUnit;
@@ -331,6 +332,109 @@ class MainTableViewServiceImplTest {
         verify(mainTableViewAccessRepository).deleteByViewConfigId(10L);
         verify(mainTableViewAccessRepository).flush();
         assertThat(config.getViewName()).isEqualTo("HMDC Case23");
+    }
+
+    @Test
+    void updateView_acceptsFkDisplayColumnWhenSourceIsForeignKey() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        FieldDefinition caseId = FieldDefinition.builder()
+                .fieldName("case_id")
+                .displayName("Case ID")
+                .isForeignKey(true)
+                .refTableId(10L)
+                .refPrimaryKeyFields(List.of("case_number"))
+                .sortOrder(0)
+                .build();
+        TableDefinition attachment = TableDefinition.builder()
+                .id(20L)
+                .functionUnit(fu)
+                .tableType(TableType.SUB)
+                .fieldDefinitions(new ArrayList<>(List.of(caseId)))
+                .build();
+        MainTableViewConfig config = MainTableViewConfig.builder()
+                .id(10L)
+                .functionUnit(fu)
+                .mainTableId(20L)
+                .viewName("Attachment")
+                .status(MainTableViewStatus.DRAFT)
+                .viewFields(new ArrayList<>())
+                .accessRules(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+        when(tableDefinitionRepository.findByIdWithFields(20L)).thenReturn(Optional.of(attachment));
+        when(viewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jdbcTemplate.queryForList(anyString(), eq(10L))).thenReturn(List.of());
+
+        UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(MainTableViewFieldDTO.builder()
+                        .fieldName("case_id@legal_hold")
+                        .displayLabel("Legal Hold")
+                        .columnType("fk_display")
+                        .lookupSourceField("case_id")
+                        .lookupDisplayField("legal_hold")
+                        .visible(true)
+                        .build()));
+
+        service.updateView(1L, 10L, request);
+
+        assertThat(config.getViewFields()).hasSize(1);
+        MainTableViewField saved = config.getViewFields().get(0);
+        assertThat(saved.getColumnType()).isEqualTo("fk_display");
+        assertThat(saved.getFieldName()).isEqualTo("case_id@legal_hold");
+        assertThat(saved.getLookupSourceField()).isEqualTo("case_id");
+        assertThat(saved.getLookupDisplayField()).isEqualTo("legal_hold");
+    }
+
+    @Test
+    void updateView_rejectsFkDisplayWhenSourceNotForeignKey() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        FieldDefinition fileName = FieldDefinition.builder()
+                .fieldName("file_name")
+                .displayName("File")
+                .isForeignKey(false)
+                .sortOrder(0)
+                .build();
+        TableDefinition attachment = TableDefinition.builder()
+                .id(20L)
+                .functionUnit(fu)
+                .tableType(TableType.SUB)
+                .fieldDefinitions(new ArrayList<>(List.of(fileName)))
+                .build();
+        MainTableViewConfig config = MainTableViewConfig.builder()
+                .id(10L)
+                .functionUnit(fu)
+                .mainTableId(20L)
+                .viewName("Attachment")
+                .status(MainTableViewStatus.DRAFT)
+                .viewFields(new ArrayList<>())
+                .accessRules(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+        when(tableDefinitionRepository.findByIdWithFields(20L)).thenReturn(Optional.of(attachment));
+
+        UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(MainTableViewFieldDTO.builder()
+                        .fieldName("file_name@x")
+                        .columnType("fk_display")
+                        .lookupSourceField("file_name")
+                        .lookupDisplayField("x")
+                        .visible(true)
+                        .build()));
+
+        assertThatThrownBy(() -> service.updateView(1L, 10L, request))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo("BIZ_VIEW_FK_DISPLAY_SOURCE");
     }
 
     private MainTableViewConfig viewConfigForAccessUpdate() {

@@ -109,15 +109,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
             config.getViewFields().clear();
             int order = 0;
             for (MainTableViewFieldDTO fieldDto : request.fields()) {
-                config.getViewFields().add(MainTableViewField.builder()
-                        .viewConfig(config)
-                        .fieldName(fieldDto.fieldName())
-                        .displayLabel(fieldDto.displayLabel())
-                        .columnWidth(fieldDto.columnWidth())
-                        .sortOrder(fieldDto.sortOrder() != null ? fieldDto.sortOrder() : order++)
-                        .visible(fieldDto.visible() == null || fieldDto.visible())
-                        .isSystemField(Boolean.TRUE.equals(fieldDto.systemField()))
-                        .build());
+                config.getViewFields().add(toViewFieldEntity(config, fieldDto, order++));
             }
         }
         config.setStatus(MainTableViewStatus.DRAFT);
@@ -358,8 +350,80 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                     .sortOrder(field.getSortOrder())
                     .visible(field.getVisible())
                     .isSystemField(field.getIsSystemField())
+                    .columnType(normalizeColumnType(field.getColumnType()))
+                    .lookupSourceField(field.getLookupSourceField())
+                    .lookupDisplayField(field.getLookupDisplayField())
                     .build());
         }
+    }
+
+    private MainTableViewField toViewFieldEntity(MainTableViewConfig config, MainTableViewFieldDTO fieldDto,
+                                                 int defaultOrder) {
+        String columnType = normalizeColumnType(fieldDto.columnType());
+        String source = blankToNull(fieldDto.lookupSourceField());
+        String display = blankToNull(fieldDto.lookupDisplayField());
+        String fieldName = fieldDto.fieldName();
+        if ("lookup_display".equals(columnType) || "fk_display".equals(columnType)) {
+            if (source == null || display == null) {
+                throw new DeveloperBusinessException("BIZ_VIEW_RELATED_DISPLAY_INCOMPLETE",
+                        columnType + " columns require lookupSourceField and lookupDisplayField");
+            }
+            if ("fk_display".equals(columnType)) {
+                assertFkSourceField(config.getMainTableId(), source);
+            }
+            fieldName = lookupDisplayFieldName(source, display);
+        }
+        return MainTableViewField.builder()
+                .viewConfig(config)
+                .fieldName(fieldName)
+                .displayLabel(fieldDto.displayLabel())
+                .columnWidth(fieldDto.columnWidth())
+                .sortOrder(fieldDto.sortOrder() != null ? fieldDto.sortOrder() : defaultOrder)
+                .visible(fieldDto.visible() == null || fieldDto.visible())
+                .isSystemField(Boolean.TRUE.equals(fieldDto.systemField()))
+                .columnType(columnType)
+                .lookupSourceField(source)
+                .lookupDisplayField(display)
+                .build();
+    }
+
+    static String lookupDisplayFieldName(String sourceField, String displayField) {
+        return sourceField + "@" + displayField;
+    }
+
+    private static String normalizeColumnType(String columnType) {
+        if (columnType == null || columnType.isBlank()) {
+            return "field";
+        }
+        String t = columnType.trim().toLowerCase(Locale.ROOT);
+        if ("lookup_display".equals(t)) {
+            return "lookup_display";
+        }
+        if ("fk_display".equals(t)) {
+            return "fk_display";
+        }
+        return "field";
+    }
+
+    /** fk_display source must be a foreign-key field on the view's owning table. */
+    private void assertFkSourceField(Long tableId, String sourceField) {
+        FieldDefinition fd = tableDefinitionRepository.findByIdWithFields(tableId)
+                .map(t -> t.getFieldDefinitions().stream()
+                        .filter(f -> sourceField.equals(f.getFieldName()))
+                        .findFirst()
+                        .orElse(null))
+                .orElse(null);
+        if (fd == null || !Boolean.TRUE.equals(fd.getIsForeignKey()) || fd.getRefTableId() == null) {
+            throw new DeveloperBusinessException("BIZ_VIEW_FK_DISPLAY_SOURCE",
+                    "fk_display source '" + sourceField + "' must be a foreign-key field on the view table");
+        }
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private List<Map<String, Object>> copySortConfig(List<Map<String, Object>> sortConfig) {
@@ -416,7 +480,18 @@ public class MainTableViewServiceImpl implements MainTableViewService {
 
         List<MainTableViewFieldDTO> fields = config.getViewFields().stream()
                 .map(f -> {
-                    FieldDefinition fd = fieldMeta.get(f.getFieldName());
+                    boolean derivedDisplay = "lookup_display".equalsIgnoreCase(
+                            f.getColumnType() != null ? f.getColumnType() : "")
+                            || "fk_display".equalsIgnoreCase(
+                            f.getColumnType() != null ? f.getColumnType() : "");
+                    // FK/PK metadata only applies to physical table columns, not derived displays.
+                    FieldDefinition fd = derivedDisplay ? null : fieldMeta.get(f.getFieldName());
+                    // For fk_display, enrich isForeignKey/ref from the SOURCE FK field so designer can show hints.
+                    FieldDefinition sourceFd = null;
+                    if ("fk_display".equalsIgnoreCase(f.getColumnType() != null ? f.getColumnType() : "")
+                            && f.getLookupSourceField() != null) {
+                        sourceFd = fieldMeta.get(f.getLookupSourceField());
+                    }
                     return MainTableViewFieldDTO.builder()
                             .fieldName(f.getFieldName())
                             .displayLabel(f.getDisplayLabel())
@@ -425,9 +500,15 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                             .visible(f.getVisible())
                             .systemField(f.getIsSystemField())
                             .isPrimaryKey(fd != null ? fd.getIsPrimaryKey() : null)
-                            .isForeignKey(fd != null ? fd.getIsForeignKey() : null)
-                            .refTableId(fd != null ? fd.getRefTableId() : null)
-                            .refPrimaryKeyFields(fd != null ? fd.getRefPrimaryKeyFields() : null)
+                            .isForeignKey(fd != null ? fd.getIsForeignKey()
+                                    : (sourceFd != null ? sourceFd.getIsForeignKey() : null))
+                            .refTableId(fd != null ? fd.getRefTableId()
+                                    : (sourceFd != null ? sourceFd.getRefTableId() : null))
+                            .refPrimaryKeyFields(fd != null ? fd.getRefPrimaryKeyFields()
+                                    : (sourceFd != null ? sourceFd.getRefPrimaryKeyFields() : null))
+                            .columnType(normalizeColumnType(f.getColumnType()))
+                            .lookupSourceField(f.getLookupSourceField())
+                            .lookupDisplayField(f.getLookupDisplayField())
                             .build();
                 })
                 .toList();
@@ -552,6 +633,9 @@ public class MainTableViewServiceImpl implements MainTableViewService {
             m.put("sortOrder", f.getSortOrder());
             m.put("visible", f.getVisible());
             m.put("systemField", f.getIsSystemField());
+            m.put("columnType", normalizeColumnType(f.getColumnType()));
+            m.put("lookupSourceField", f.getLookupSourceField());
+            m.put("lookupDisplayField", f.getLookupDisplayField());
             return m;
         }).toList();
         snap.put("fields", fields);

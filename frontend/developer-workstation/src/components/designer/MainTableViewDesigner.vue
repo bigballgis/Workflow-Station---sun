@@ -16,13 +16,19 @@ const {
   businessUnitOptions, roleOptions, accessOptionsLoading,
   mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
   dragOverIndex, dragSourceField, visibleColumns, displayFilterConditions,
-  sortFieldOptions, filteredCatalog, previewRowCount, fieldLabel, getFieldIcon, getMockValue, sortIndicator,
+  sortFieldOptions, filteredCatalog, filteredLookupCatalog, filteredLookupCatalogGroups,
+  filteredFkCatalog, filteredFkCatalogGroups, previewRowCount,
+  fieldLabel, getFieldIcon, getMockValue, sortIndicator,
   formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
   removeDisplayFilterTag, addSortField, removeSort, handleSave, onFieldDragStart, onFieldDragEnd, onGridDrop,
   onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd,
-  isFkField, isPkField, onFkColumnClick,
+  isFkField, isPkField, onFkColumnClick, isLookupDisplayField, isFkDisplayField,
   selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
   allCatalogSelected, someCatalogSelected, toggleSelectAllCatalog,
+  selectedLookupCatalogFields, toggleLookupCatalogSelect, addSelectedLookupFields,
+  allLookupCatalogSelected, someLookupCatalogSelected, toggleSelectAllLookupCatalog,
+  selectedFkCatalogFields, toggleFkCatalogSelect, addSelectedFkFields,
+  allFkCatalogSelected, someFkCatalogSelected, toggleSelectAllFkCatalog,
 } = useMainTableViewDesigner(props, emit)
 </script>
 
@@ -147,15 +153,113 @@ const {
 
         </div>
 
+        <div
+          v-if="filteredLookupCatalogGroups.length"
+          class="columns-panel-lookup"
+        >
+          <div class="columns-panel-subtitle">
+            {{ t('mainTableView.lookupColumns') }}
+          </div>
+          <div
+            v-if="filteredLookupCatalog.length"
+            class="columns-select-all"
+          >
+            <el-checkbox
+              :model-value="allLookupCatalogSelected"
+              :indeterminate="someLookupCatalogSelected && !allLookupCatalogSelected"
+              @change="toggleSelectAllLookupCatalog($event === true)"
+            >
+              {{ t('mainTableView.selectAllLookupColumns') }}
+            </el-checkbox>
+          </div>
+          <div
+            v-for="group in filteredLookupCatalogGroups"
+            :key="group.sourceField"
+            class="lookup-group"
+          >
+            <div class="lookup-group-title">
+              {{ group.sourceLabel }}
+              <span class="lookup-group-table">({{ group.tableName }})</span>
+            </div>
+            <div
+              v-for="field in group.fields"
+              :key="field.fieldName"
+              class="field-item"
+              :class="{ selected: selectedLookupCatalogFields.has(field.fieldName) }"
+              @click="toggleLookupCatalogSelect(field.fieldName)"
+            >
+              <el-checkbox
+                :model-value="selectedLookupCatalogFields.has(field.fieldName)"
+                @click.stop
+                @change="toggleLookupCatalogSelect(field.fieldName)"
+              />
+              <el-icon class="field-icon">
+                <Connection />
+              </el-icon>
+              <span class="field-name">{{ field.lookupDisplayField || field.fieldName }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="filteredFkCatalogGroups.length"
+          class="columns-panel-lookup"
+        >
+          <div class="columns-panel-subtitle">
+            {{ t('mainTableView.relatedColumns') }}
+          </div>
+          <div
+            v-if="filteredFkCatalog.length"
+            class="columns-select-all"
+          >
+            <el-checkbox
+              :model-value="allFkCatalogSelected"
+              :indeterminate="someFkCatalogSelected && !allFkCatalogSelected"
+              @change="toggleSelectAllFkCatalog($event === true)"
+            >
+              {{ t('mainTableView.selectAllRelatedColumns') }}
+            </el-checkbox>
+          </div>
+          <div
+            v-for="group in filteredFkCatalogGroups"
+            :key="'fk-' + group.sourceField"
+            class="lookup-group"
+          >
+            <div class="lookup-group-title">
+              {{ group.sourceLabel }}
+              <span class="lookup-group-table">({{ group.tableName }})</span>
+            </div>
+            <div
+              v-for="field in group.fields"
+              :key="field.fieldName"
+              class="field-item"
+              :class="{ selected: selectedFkCatalogFields.has(field.fieldName) }"
+              @click="toggleFkCatalogSelect(field.fieldName)"
+            >
+              <el-checkbox
+                :model-value="selectedFkCatalogFields.has(field.fieldName)"
+                @click.stop
+                @change="toggleFkCatalogSelect(field.fieldName)"
+              />
+              <el-icon class="field-icon">
+                <Connection />
+              </el-icon>
+              <span class="field-name">{{ field.lookupDisplayField || field.fieldName }}</span>
+            </div>
+          </div>
+        </div>
+
         <div class="columns-panel-actions">
           <el-button
             type="primary"
             size="small"
-            :disabled="!selectedCatalogFields.size"
-            @click="addSelectedFields"
+            :disabled="!selectedCatalogFields.size && !selectedLookupCatalogFields.size && !selectedFkCatalogFields.size"
+            @click="() => { addSelectedFields(); addSelectedLookupFields(); addSelectedFkFields() }"
           >
             {{ t('mainTableView.addSelectedColumns') }}
-            <template v-if="selectedCatalogFields.size">({{ selectedCatalogFields.size }})</template>
+            <template v-if="selectedCatalogFields.size + selectedLookupCatalogFields.size + selectedFkCatalogFields.size">
+              ({{ selectedCatalogFields.size + selectedLookupCatalogFields.size + selectedFkCatalogFields.size }})
+            </template>
           </el-button>
           <el-button
             size="small"
@@ -328,9 +432,37 @@ const {
 
                 </div>
 
+                <template v-if="filteredLookupCatalog.length">
+                  <div class="add-column-popover-subtitle">
+                    {{ t('mainTableView.lookupColumns') }}
+                  </div>
+                  <div
+                    v-for="field in filteredLookupCatalog"
+                    :key="'add-lookup-' + field.fieldName"
+                    class="field-item compact"
+                    @click="addField(field)"
+                  >
+                    {{ field.displayName || field.fieldName }}
+                  </div>
+                </template>
+
+                <template v-if="filteredFkCatalog.length">
+                  <div class="add-column-popover-subtitle">
+                    {{ t('mainTableView.relatedColumns') }}
+                  </div>
+                  <div
+                    v-for="field in filteredFkCatalog"
+                    :key="'add-fk-' + field.fieldName"
+                    class="field-item compact"
+                    @click="addField(field)"
+                  >
+                    {{ field.displayName || field.fieldName }}
+                  </div>
+                </template>
+
                 <el-empty
 
-                  v-if="!filteredCatalog.length"
+                  v-if="!filteredCatalog.length && !filteredLookupCatalog.length && !filteredFkCatalog.length"
 
                   :description="t('mainTableView.noAvailableFields')"
 
@@ -708,6 +840,44 @@ const {
             >
 
               {{ t('mainTableView.systemField') }}
+
+            </el-tag>
+
+            <el-tag
+
+              v-else-if="isLookupDisplayField(field)"
+
+              size="small"
+
+              type="warning"
+
+              :title="t('mainTableView.lookupDerivedFieldHint', {
+                source: field.lookupSourceField,
+                attr: field.lookupDisplayField,
+              })"
+
+            >
+
+              {{ t('mainTableView.lookupDerivedField') }}
+
+            </el-tag>
+
+            <el-tag
+
+              v-else-if="isFkDisplayField(field)"
+
+              size="small"
+
+              type="success"
+
+              :title="t('mainTableView.relatedDerivedFieldHint', {
+                source: field.lookupSourceField,
+                attr: field.lookupDisplayField,
+              })"
+
+            >
+
+              {{ t('mainTableView.relatedDerivedField') }}
 
             </el-tag>
 
