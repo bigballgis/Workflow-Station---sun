@@ -1863,8 +1863,8 @@ export default {
     error: {
       AI_SESSION_NOT_FOUND: 'AI session not found, please restart',
       AI_FUNCTION_UNIT_NOT_FOUND: 'Function unit not found',
-      AI_N8N_TIMEOUT: 'AI service timed out, please retry',
-      AI_N8N_CALL_FAILED: 'AI service call failed, please retry',
+      AI_WEBHOOK_TIMEOUT: 'AI service timed out, please retry',
+      AI_WEBHOOK_CALL_FAILED: 'AI service call failed, please retry',
       AI_WRITE_CONFLICT: 'Data was modified by another user, please refresh and retry',
       AI_CONTEXT_TOO_LARGE: 'Function unit data too large for AI processing',
       AI_UNDO_EXPIRED: 'Undo window has expired',

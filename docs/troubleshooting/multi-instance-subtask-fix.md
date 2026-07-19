@@ -101,7 +101,8 @@ PK **列名字符串**来自：
 
 | 组件 | 路径 |
 |------|------|
-| 审批完成 → MI 注入 | `backend/user-portal/.../TaskProcessComponent.java` |
+| 审批完成 → MI 注入 | `backend/user-portal/.../TaskApprovalCompletionComponent.java`（入口原在 `TaskProcessComponent`，后拆出）|
+| MI 集合变量组装 | `backend/user-portal/.../MiCollectionVariableBuilder.java`（`injectMiCollectionFromBpmn` / `buildMiCollectionVariable` 现居于此）|
 | PK 解析 / 设计器兜底 | `backend/platform-common/.../PostgresPhysicalTablePrimaryKeys.java` |
 | 行主键 / `id_idw` 别名 | `backend/platform-common/.../SubTableRowKeySupport.java` |
 | 引擎侧集合与物理表判定 | `backend/workflow-engine-core/.../TaskManagerComponent.java`, `SubTableDataInjector.java` |

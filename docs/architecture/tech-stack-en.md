@@ -13,9 +13,14 @@ This mirrors the root `README.md` for linking from English-only runbooks.
 | Cache | Spring Data Redis, Redis 7.2 |
 | Messaging | Spring Kafka, Kafka 7.5 (KRaft) |
 | Security | JWT, BCrypt; **Kong** at the edge for routing/plugins |
-| Migrations | **Flyway** per deployable service: `admin-center`, `user-portal`, `developer-workstation` |
+| Schema | **`deploy/init-scripts/00-schema/` is the single source of truth** (Flyway was retired in 2026-06; legacy migrations archived under `docs/legacy-flyway-migrations/`, see [schema-and-migration.md](../schema-and-migration.md)) |
 
-The parent `pom.xml` imports the **Spring Cloud BOM** for dependency alignment only. There is **no** Spring Cloud Gateway application in this repo (legacy `api-gateway` module removed).
+The parent `pom.xml` contains **no Spring Cloud** (BOM and dependencies fully removed — zero code references). There is **no** Spring Cloud Gateway application in this repo (legacy `api-gateway` module removed).
+
+## Testing
+
+- Backend: JUnit 5, jqwik (property-based testing)
+- Frontend: Vitest, fast-check (per each app's `package.json`)
 
 ## Frontend
 

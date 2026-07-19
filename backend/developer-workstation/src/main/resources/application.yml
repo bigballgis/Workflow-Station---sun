@@ -185,7 +185,7 @@ management:
     redis:
       enabled: true
 
-# AI Generation webhook — migrated from n8n to Activepieces (sync webhook).
+# AI Generation webhook — Activepieces sync webhook.
 # The backend POSTs to <base>/api/v1/webhooks/<flowId>/sync; the response contract is unchanged
 # ({reply, document, documentType, phaseComplete, generatedData}). flowId is environment-specific.
 activepieces:

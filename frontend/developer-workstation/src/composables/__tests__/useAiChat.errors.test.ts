@@ -61,7 +61,7 @@ describe('useAiChat', () => {
   // --- Task 11.1: Structured error data parsing ---
 
   it('should parse structured error data with errorCode', async () => {
-    const errorData = { errorCode: 'AI_N8N_TIMEOUT', message: 'N8N timed out' }
+    const errorData = { errorCode: 'AI_WEBHOOK_TIMEOUT', message: 'AI webhook timed out' }
     const sseEvents = [
       `event:error\ndata:${JSON.stringify(errorData)}\n\n`
     ]
@@ -74,8 +74,8 @@ describe('useAiChat', () => {
     const { error, errorCode, canRetry, sendMessage } = useAiChat()
     await sendMessage(mockRequest)
 
-    expect(error.value).toBe('N8N timed out')
-    expect(errorCode.value).toBe('AI_N8N_TIMEOUT')
+    expect(error.value).toBe('AI webhook timed out')
+    expect(errorCode.value).toBe('AI_WEBHOOK_TIMEOUT')
     expect(canRetry.value).toBe(true)
   })
 
@@ -120,7 +120,7 @@ describe('useAiChat', () => {
    * Property: structured error parsing correctly identifies retryable vs non-retryable codes
    */
   it('Property: retryable error codes are correctly identified', () => {
-    const retryableCodes = ['AI_N8N_TIMEOUT', 'AI_N8N_CALL_FAILED']
+    const retryableCodes = ['AI_WEBHOOK_TIMEOUT', 'AI_WEBHOOK_CALL_FAILED']
     const nonRetryableCodes = ['AI_WRITE_CONFLICT', 'AI_SESSION_NOT_FOUND', 'AI_UNKNOWN_ERROR', 'AI_CONTEXT_TOO_LARGE']
 
     fc.assert(
@@ -163,7 +163,7 @@ describe('useAiChat', () => {
           try {
             const parsed = JSON.parse(eventDataStr)
             if (parsed.errorCode) {
-              const retryable = ['AI_N8N_TIMEOUT', 'AI_N8N_CALL_FAILED']
+              const retryable = ['AI_WEBHOOK_TIMEOUT', 'AI_WEBHOOK_CALL_FAILED']
               const canRetryResult = retryable.includes(parsed.errorCode)
               return canRetryResult === expected
             }
@@ -183,8 +183,8 @@ describe('useAiChat', () => {
    */
   it('should parse structured error with degradation info', async () => {
     const errorData = {
-      errorCode: 'AI_N8N_TIMEOUT',
-      message: 'N8N timed out after retries',
+      errorCode: 'AI_WEBHOOK_TIMEOUT',
+      message: 'AI webhook timed out after retries',
       degradationOptions: ['SAVE_DRAFT', 'MANUAL_CREATE'],
       lastSuccessTime: '2026-03-15T10:00:00Z'
     }
@@ -200,8 +200,8 @@ describe('useAiChat', () => {
     const { error, errorCode, canRetry, degradationInfo, sendMessage } = useAiChat()
     await sendMessage(mockRequest)
 
-    expect(error.value).toBe('N8N timed out after retries')
-    expect(errorCode.value).toBe('AI_N8N_TIMEOUT')
+    expect(error.value).toBe('AI webhook timed out after retries')
+    expect(errorCode.value).toBe('AI_WEBHOOK_TIMEOUT')
     expect(canRetry.value).toBe(true)
     expect(degradationInfo.value).not.toBeNull()
     expect(degradationInfo.value!.degradationOptions).toEqual(['SAVE_DRAFT', 'MANUAL_CREATE'])

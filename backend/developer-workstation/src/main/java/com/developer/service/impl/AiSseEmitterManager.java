@@ -58,7 +58,7 @@ class AiSseEmitterManager {
 
     /**
      * Create a chat SSE emitter. The timeout is computed by the caller (facade) so that it stays
-     * aligned with the configured N8N timeout (including one retry).
+     * aligned with the configured AI webhook timeout (including one retry).
      */
     SseEmitter createChatEmitter(Long functionUnitId, String userId, long chatEmitterTimeout) {
         String key = buildChatEmitterKey(functionUnitId, userId);

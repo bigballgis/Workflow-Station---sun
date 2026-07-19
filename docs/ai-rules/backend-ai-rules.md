@@ -1,6 +1,6 @@
-# Hermes — 后端代码治理与规则摘要
+# 后端代码治理与规则摘要
 
-面向 Workflow Station（Maven 多模块、`platform-*` 共享 jar、四座业务服务、Controller→Component→Service→Repository）。本文可与 `RULES.md`、`.cursor/rules/`、`BUILD_GUIDE.md` 并列使用。
+面向 Workflow Station（Maven 多模块、`platform-*` 共享 jar、四座业务服务、Controller→Component→Service→Repository）。本文可与 `.cursor/rules/`、`BUILD_GUIDE.md` 并列使用。
 
 ---
 

@@ -39,7 +39,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     private final EncryptionService encryptionService;
 
     /** Corporate SMTP relays / internal hosts permitted (same config as webhook SSRF allowlist). */
-    @Value("${ssrf.allowed-hosts:localhost,n8n}")
+    @Value("${ssrf.allowed-hosts:localhost,activepieces}")
     private List<String> ssrfAllowedHosts;
 
     @Override

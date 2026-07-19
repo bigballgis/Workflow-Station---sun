@@ -1859,8 +1859,8 @@ export default {
     error: {
       AI_SESSION_NOT_FOUND: 'AI 會話未找到，請重新開始',
       AI_FUNCTION_UNIT_NOT_FOUND: '功能單元未找到',
-      AI_N8N_TIMEOUT: 'AI 服務逾時，請重試',
-      AI_N8N_CALL_FAILED: 'AI 服務呼叫失敗，請重試',
+      AI_WEBHOOK_TIMEOUT: 'AI 服務逾時，請重試',
+      AI_WEBHOOK_CALL_FAILED: 'AI 服務呼叫失敗，請重試',
       AI_WRITE_CONFLICT: '資料已被其他使用者修改，請重新整理後重試',
       AI_CONTEXT_TOO_LARGE: '功能單元資料過大，無法進行 AI 處理',
       AI_UNDO_EXPIRED: '復原視窗已過期',

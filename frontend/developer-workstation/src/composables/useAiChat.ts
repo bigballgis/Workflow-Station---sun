@@ -269,7 +269,7 @@ export function useAiChat() {
           const parsed = JSON.parse(eventData)
           if (parsed.errorCode) {
             error.value = parsed.message || eventData
-            const retryableCodes = ['AI_N8N_TIMEOUT', 'AI_N8N_CALL_FAILED']
+            const retryableCodes = ['AI_WEBHOOK_TIMEOUT', 'AI_WEBHOOK_CALL_FAILED']
             canRetry.value = retryableCodes.includes(parsed.errorCode)
             // Store errorCode for i18n lookup
             errorCode.value = parsed.errorCode

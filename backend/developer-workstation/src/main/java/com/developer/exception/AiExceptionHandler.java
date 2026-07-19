@@ -91,8 +91,8 @@ public class AiExceptionHandler {
         return switch (errorCode) {
             case "AI_SESSION_NOT_FOUND", "AI_FUNCTION_UNIT_NOT_FOUND", "AI_DOCUMENT_NOT_FOUND" -> HttpStatus.NOT_FOUND;
             case "AI_CONTEXT_TOO_LARGE" -> HttpStatus.PAYLOAD_TOO_LARGE;
-            case "AI_N8N_TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
-            case "AI_N8N_CALL_FAILED", "AI_N8N_EMPTY_RESPONSE" -> HttpStatus.BAD_GATEWAY;
+            case "AI_WEBHOOK_TIMEOUT" -> HttpStatus.GATEWAY_TIMEOUT;
+            case "AI_WEBHOOK_CALL_FAILED", "AI_WEBHOOK_EMPTY_RESPONSE" -> HttpStatus.BAD_GATEWAY;
             default -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }

@@ -22,7 +22,7 @@ platform-common ◄── platform-cache
 - **当前运行态不变**：Kong 仍是统一 API Gateway 运行面。
 - **治理面建设中**：以 Admin Center 内嵌 Gateway Domain 起步，逐步演进到独立 `gateway-mfe`，最终支持多网关治理。
 - **统一建模方向**：平台侧以 `API / Application / Policy / Release` 作为业务模型，不直接暴露 Kong 原生对象给前端。
-- **治理路线图**：见 `docs/gateway-governance-README.md`（Phase 1–5 蓝图、任务、契约、DDL、权限矩阵与启动清单）。
+- **治理路线图**：尚未成文（规划中；注意 [architecture-optimization-plan.md](./architecture-optimization-plan.md) 已将「多厂商 Adapter SPI」类扩展判为过度设计，路线图落笔时需对齐该口径）。
 
 ### 2) Process Debug Console MVP（Developer Workstation）
 
@@ -30,7 +30,7 @@ platform-common ◄── platform-cache
 - **Gateway Explain**：展示网关分支命中结果与命中原因。
 - **Lookup Live Probe**：在 debug 会话中执行真实 lookup 探测并返回回填结果。
 - **Action Button Runner**：在 debug 会话中执行 action 并返回变量补丁与执行日志。
-- 采用“**模拟器主导**”路径，不引入完整 runtime 引擎，控制爆炸半径（详见 `docs/process-debug-console-mvp-spec.md`）。
+- 采用“**模拟器主导**”路径，不引入完整 runtime 引擎，控制爆炸半径（MVP 规格尚未成文）。
 
 ## 请求路径（典型生产 / K8S）
 

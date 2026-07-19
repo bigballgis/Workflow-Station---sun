@@ -14,6 +14,7 @@
 |------|------|
 | [tech-stack.md](./architecture/tech-stack.md) | 技术栈与版本（中文） |
 | [tech-stack-en.md](./architecture/tech-stack-en.md) | Tech stack (English) |
+| [architecture-blueprint.md](./architecture/architecture-blueprint.md) | 架构蓝图：系统职责 / 数据归属 / 依赖禁令 F1–F7（2026-07 逐条核对，[html](./architecture/architecture-blueprint.html) 为同内容样式化导出版） |
 | [architecture-diagram.md](./architecture/architecture-diagram.md) | 部署与模块关系示意 |
 | [architecture-optimization-plan.md](./architecture/architecture-optimization-plan.md) | 架构优化方案（不迁 schema 版） |
 | [p1-1-split-platform-common-plan.md](./architecture/p1-1-split-platform-common-plan.md) | P1-1 拆分 `platform-common` god module 设计 |
@@ -24,9 +25,9 @@
 |------|------|
 | [schema-and-migration.md](./schema-and-migration.md) | 数据库：`init-scripts` 与 Flyway 双轨说明（根路径锚点） |
 | [demo-data-requirements.md](./demo-data-requirements.md) | Demo：英文界面与种子数据约定（根路径锚点） |
-| [schema-single-source-init-scripts-plan.md](./database/schema-single-source-init-scripts-plan.md) | Schema 单一事实来源方案（init-scripts 唯一来源，清退 Flyway） |
-| [flyway-unification-plan.md](./database/flyway-unification-plan.md) | Flyway 单一事实来源改造方案 |
-| [database-review-report.md](./database/database-review-report.md) | 数据库初始化脚本深度检查报告 |
+| [schema-single-source-init-scripts-plan.md](./database/schema-single-source-init-scripts-plan.md) | Schema 单一事实来源方案（init-scripts 唯一来源，清退 Flyway；**已于 2026-06 执行完毕，历史记录**） |
+| [flyway-unification-plan.md](./database/flyway-unification-plan.md) | Flyway 单一事实来源改造方案（**已废弃**——未采纳的方向 ①，仅留档） |
+| [database-review-report.md](./database/database-review-report.md) | 数据库初始化脚本深度检查报告（2026-03；Flyway 章节已作废，实体修复结论仍有效） |
 | [legacy-flyway-migrations/](./legacy-flyway-migrations/) | 历史 Flyway 迁移归档 |
 
 ## 设计规格 · Design — [`design/`](./design/)
@@ -48,13 +49,15 @@
 | [function-unit-development-guide.md](./guides/function-unit-development-guide.md) | 功能单元（Function Unit）完整开发文档（developer-workstation 权威长文） |
 | [form-script-api.md](./guides/form-script-api.md) | 表单脚本 API：Form/Component event、`$FNX:` 与 `[[FORM-CREATE-PREFIX…]]`、PortalFormApi 等 |
 | [local-developer.md](./guides/local-developer.md) | 本地开发环境速记 |
+| [email-sending-implementation-guide.md](./email-sending-implementation-guide.md) | 邮件发送实现指南（SMTP 连接 / 引擎发信链路；被 `scripts/email-smtp-test` 引用，根路径锚点） |
 
 ## AI 治理规则 · AI Rules — [`ai-rules/`](./ai-rules/)
 
 | 文档 | 说明 |
 |------|------|
 | [frontend-ai-rules.md](./ai-rules/frontend-ai-rules.md) | 前端代码治理与 AI 协作规则摘要 |
-| [backend-ai-rules.md](./ai-rules/backend-ai-rules.md) | Hermes — 后端代码治理与规则摘要 |
+| [backend-ai-rules.md](./ai-rules/backend-ai-rules.md) | 后端代码治理与规则摘要 |
+| [rules-skills-reorg-plan.md](./rules-skills-reorg-plan.md) | Rule / Skill 整改方案（**2026-07-15 已执行完毕**，历史决策记录，根路径） |
 
 > 会话级规则的单一事实来源仍是 `.cursor/rules/*.mdc`（经 SessionStart 钩子同步进各级 `CLAUDE.md`）。本目录为可读性摘要。
 
@@ -63,6 +66,7 @@
 | 文档 | 说明 |
 |------|------|
 | [bank-grade-hardening-review.md](./security/bank-grade-hardening-review.md) | 外资银行级要求 — 审查结论与待决策项 |
+| [SAST_REMEDIATION_SUMMARY.md](./SAST_REMEDIATION_SUMMARY.md) | SAST（Checkmarx）两轮扫描治理总结（2026-07 一次性记录，根路径；编码规范见 skill `secure-coding-sast`） |
 
 ## 测试 · Testing
 
