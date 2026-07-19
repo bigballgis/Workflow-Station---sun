@@ -308,6 +308,8 @@ docs/troubleshooting/session-logs/
 BOOT-INF/
 
 # Root-level temp/debug files
+/_tmp_*
+/_tmp_*.js
 /*.sql
 /*.json
 !package.json

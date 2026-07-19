@@ -11,6 +11,13 @@ export const FORM_CREATE_VALIDATOR_ADAPTER_KEY = '__formCreateValidatorAdapter'
 
 
 
+/** Matches @form-create/core adapter validate (IPv4 only). */
+const FORM_CREATE_IPV4_REGEX =
+  /^(2(5[0-5]{1}|[0-4]\d{1})|[0-1]?\d{1,2})(\.(2(5[0-5]{1}|[0-4]\d{1})|[0-1]?\d{1,2})){3}$/
+
+/** Matches @form-create/core adapter validate (optional +86 / 0086 prefix). */
+const FORM_CREATE_PHONE_REGEX = /^(?:(?:\+|00)86)?1[3-9]\d{9}$/
+
 /** form-create designer stores "Is it required" on `$required`, not always in validate[]. */
 
 function isTruthyRequiredFlag(value: unknown): boolean {
@@ -87,10 +94,151 @@ function buildRequiredValidationRule(
 
 
 
-function isNumericFieldType(fieldType?: string): boolean {
+function resolveNumericValidationThreshold(raw: unknown): number | null {
+  if (typeof raw === 'number' && !Number.isNaN(raw)) return raw
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const parsed = Number(raw)
+    if (!Number.isNaN(parsed)) return parsed
+  }
+  return null
+}
 
-  return fieldType === 'number'
+/** Infer validate mode when saved JSON has `min: 1` but no `mode: 'min'` (adapter / legacy shape). */
+export function inferFormCreateDesignerValidateMode(
+  item: Record<string, unknown>,
+): string | undefined {
+  if (typeof item.mode === 'string' && item.mode) return item.mode
+  if (item.required === true) return 'required'
+  if (item.validator != null) return 'validator'
 
+  const flagModes = [
+    'uppercase',
+    'lowercase',
+    'email',
+    'url',
+    'ip',
+    'phone',
+    'positive',
+    'negative',
+    'integer',
+    'number',
+  ] as const
+  for (const key of flagModes) {
+    if (item[key] === true) return key
+  }
+
+  const valueModes = [
+    'len',
+    'maxLen',
+    'minLen',
+    'min',
+    'max',
+    'pattern',
+    'equal',
+    'enum',
+    'hasKeys',
+  ] as const
+  for (const key of valueModes) {
+    const val = item[key]
+    if (val !== undefined && val !== null && val !== '') return key
+  }
+
+  return undefined
+}
+
+function designerValidateHasMode(
+  rule: Record<string, unknown>,
+  ...modes: string[]
+): boolean {
+  const validate = rule.validate
+  if (!Array.isArray(validate)) return false
+  return validate.some((raw) => {
+    if (!raw || typeof raw !== 'object') return false
+    const mode = inferFormCreateDesignerValidateMode(raw as Record<string, unknown>)
+    return mode != null && modes.includes(mode)
+  })
+}
+
+/** @form-create/core adapter validate — numeric modes share Number(value) semantics. */
+type FormCreateNumericValidationMode =
+  | 'min'
+  | 'max'
+  | 'positive'
+  | 'negative'
+  | 'integer'
+  | 'number'
+
+function defaultFormCreateNumericValidationMessage(
+  mode: FormCreateNumericValidationMode,
+  threshold: number | null,
+): string {
+  if (mode === 'min' && threshold != null) return `Must be at least ${threshold}`
+  if (mode === 'max' && threshold != null) return `Must be at most ${threshold}`
+  switch (mode) {
+    case 'positive':
+      return 'Must be a positive number'
+    case 'negative':
+      return 'Must be a negative number'
+    case 'integer':
+      return 'Must be an integer'
+    case 'number':
+      return 'Must be a number'
+    default:
+      return 'Invalid number'
+  }
+}
+
+function buildFormCreateNumericValidationRule(
+  mode: FormCreateNumericValidationMode,
+  threshold: unknown,
+  trigger: unknown,
+  message: unknown,
+): Record<string, unknown> | null {
+  const limit =
+    mode === 'min' || mode === 'max' ? resolveNumericValidationThreshold(threshold) : null
+  if ((mode === 'min' || mode === 'max') && limit == null) return null
+
+  const resolvedMessage =
+    message != null && message !== ''
+      ? String(message)
+      : defaultFormCreateNumericValidationMessage(mode, limit)
+
+  return {
+    trigger,
+    message: resolvedMessage,
+    validator: (_rule: unknown, value: unknown, callback: (err?: Error) => void) => {
+      if (value === '' || value == null) {
+        callback()
+        return
+      }
+      const num = Number(value)
+      if (Number.isNaN(num)) {
+        callback(new Error(resolvedMessage))
+        return
+      }
+      if (mode === 'min' && limit != null && num < limit) {
+        callback(new Error(resolvedMessage))
+        return
+      }
+      if (mode === 'max' && limit != null && num > limit) {
+        callback(new Error(resolvedMessage))
+        return
+      }
+      if (mode === 'positive' && num <= 0) {
+        callback(new Error(resolvedMessage))
+        return
+      }
+      if (mode === 'negative' && num >= 0) {
+        callback(new Error(resolvedMessage))
+        return
+      }
+      if (mode === 'integer' && !Number.isInteger(num)) {
+        callback(new Error(resolvedMessage))
+        return
+      }
+      callback()
+    },
+  }
 }
 
 
@@ -143,7 +291,7 @@ export function convertFormCreateDesignerValidateEntry(
 
 
 
-  const mode = typeof item.mode === 'string' ? item.mode : undefined
+  const mode = inferFormCreateDesignerValidateMode(item)
 
   if (mode) {
 
@@ -199,31 +347,19 @@ export function convertFormCreateDesignerValidateEntry(
 
       case 'max':
 
-        return {
-
-          max: item.max,
-
-          type: isNumericFieldType(fieldType) ? 'number' : 'string',
-
-          trigger,
-
-          ...(message != null && message !== '' ? { message } : {}),
-
-        }
+        return buildFormCreateNumericValidationRule('max', item.max, trigger, message)
 
       case 'min':
 
-        return {
+        return buildFormCreateNumericValidationRule('min', item.min, trigger, message)
 
-          min: item.min,
+      case 'positive':
 
-          type: isNumericFieldType(fieldType) ? 'number' : 'string',
+        return buildFormCreateNumericValidationRule('positive', undefined, trigger, message)
 
-          trigger,
+      case 'negative':
 
-          ...(message != null && message !== '' ? { message } : {}),
-
-        }
+        return buildFormCreateNumericValidationRule('negative', undefined, trigger, message)
 
       case 'pattern':
 
@@ -245,13 +381,78 @@ export function convertFormCreateDesignerValidateEntry(
 
         return { type: 'url', trigger, ...(message != null && message !== '' ? { message } : {}) }
 
+      case 'ip': {
+        const resolvedMessage =
+          message != null && message !== '' ? String(message) : 'Invalid IP address'
+        return {
+          trigger,
+          message: resolvedMessage,
+          validator: (_rule: unknown, value: unknown, callback: (err?: Error) => void) => {
+            if (value === '' || value == null) {
+              callback()
+              return
+            }
+            if (FORM_CREATE_IPV4_REGEX.test(String(value))) {
+              callback()
+              return
+            }
+            callback(new Error(resolvedMessage))
+          },
+        }
+      }
+
+      case 'phone': {
+        const resolvedMessage =
+          message != null && message !== '' ? String(message) : 'Invalid phone number'
+        return {
+          trigger,
+          message: resolvedMessage,
+          validator: (_rule: unknown, value: unknown, callback: (err?: Error) => void) => {
+            if (value === '' || value == null) {
+              callback()
+              return
+            }
+            if (FORM_CREATE_PHONE_REGEX.test(String(value))) {
+              callback()
+              return
+            }
+            callback(new Error(resolvedMessage))
+          },
+        }
+      }
+
       case 'integer':
 
-        return { type: 'integer', trigger, ...(message != null && message !== '' ? { message } : {}) }
+        return buildFormCreateNumericValidationRule('integer', undefined, trigger, message)
 
       case 'number':
 
-        return { type: 'number', trigger, ...(message != null && message !== '' ? { message } : {}) }
+        return buildFormCreateNumericValidationRule('number', undefined, trigger, message)
+
+      case 'uppercase':
+      case 'lowercase': {
+        const wantUpper = mode === 'uppercase'
+        const defaultMessage = wantUpper ? 'Must be uppercase' : 'Must be lowercase'
+        const resolvedMessage =
+          message != null && message !== '' ? String(message) : defaultMessage
+        return {
+          trigger,
+          message: resolvedMessage,
+          validator: (_rule: unknown, value: unknown, callback: (err?: Error) => void) => {
+            if (value === '' || value == null) {
+              callback()
+              return
+            }
+            const text = String(value)
+            const ok = wantUpper ? text === text.toUpperCase() : text === text.toLowerCase()
+            if (ok) {
+              callback()
+              return
+            }
+            callback(new Error(resolvedMessage))
+          },
+        }
+      }
 
       case 'validator': {
         const raw = item.validator
@@ -384,10 +585,11 @@ export function applyFormCreateValidationToFormField(
   const propsMaxLength = resolveRulePropsMaxLength(rule)
   if (propsMaxLength != null) {
     field.maxLength = propsMaxLength
+    const hasDesignerMaxConstraint = designerValidateHasMode(rule, 'max', 'maxLen')
     const hasMaxRule = elRules.some(
       (entry) => entry.max != null || entry.len != null,
     )
-    if (!hasMaxRule) {
+    if (!hasDesignerMaxConstraint && !hasMaxRule) {
       elRules.push({
         max: propsMaxLength,
         type: 'string',

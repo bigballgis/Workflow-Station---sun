@@ -20,6 +20,7 @@ import {
   convertAuxiliaryLayoutField,
 } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
+import { applyFormCreateValidationToFormField } from '@/utils/formCreateValidateRules'
 import { resolveSubTableSchemaByTableId } from '@/components/subTableAddDialogHelpers'
 import type { ApplicationDetailCtx } from './context'
 
@@ -257,7 +258,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
     if (rule.props?.type === 'datetime') dateType = 'datetime'
     else if (rule.props?.type === 'daterange') dateType = 'daterange'
     const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'rate': 'rate', 'slider': 'slider', 'colorPicker': 'colorPicker', 'treeSelect': 'treeselect', 'upload': 'upload', 'editor': 'editor', 'signature': 'signature', 'transfer': 'transfer' }
-    const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', required: rule.validate?.some((v: any) => v.required) || false, placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
+    const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
     const rawOptions = rule.options || rule.props?.options
     if (rawOptions) {
       if (rule.type === 'cascader') {
@@ -282,6 +283,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
       field.readonly = true
     }
     applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
+    applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
     return field
   }
 

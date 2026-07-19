@@ -30,6 +30,7 @@
 @.cursor/rules/ai-guardrails.mdc
 @.cursor/rules/cross-cutting.mdc
 @.cursor/rules/change-playbook.mdc
+@.cursor/rules/ai-development-playbook.mdc
 @.cursor/rules/code-quality-standards.mdc
 @.cursor/rules/debug-mode-docker-workflow.mdc
 @.cursor/rules/error-handling-governance.mdc

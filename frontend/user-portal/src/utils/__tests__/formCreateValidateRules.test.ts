@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { FormField } from '@/components/formRendererHelpers'
 
@@ -7,6 +7,8 @@ import {
   applyFormCreateValidationToFormField,
 
   convertFormCreateDesignerValidateEntry,
+
+  inferFormCreateDesignerValidateMode,
 
   FORM_CREATE_VALIDATOR_ADAPTER_KEY,
 
@@ -69,6 +71,347 @@ describe('formCreateValidateRules', () => {
 
     })
 
+  })
+
+
+
+  it('inferFormCreateDesignerValidateMode reads adapter validate entries without mode key', () => {
+    expect(inferFormCreateDesignerValidateMode({ min: 1, adapter: true, trigger: 'blur' })).toBe('min')
+    expect(inferFormCreateDesignerValidateMode({ max: 10, adapter: true, trigger: 'blur' })).toBe('max')
+    expect(inferFormCreateDesignerValidateMode({ positive: true, adapter: true, trigger: 'blur' })).toBe('positive')
+    expect(inferFormCreateDesignerValidateMode({ negative: true, adapter: true, trigger: 'blur' })).toBe('negative')
+    expect(inferFormCreateDesignerValidateMode({ integer: true, adapter: true, trigger: 'blur' })).toBe('integer')
+    expect(inferFormCreateDesignerValidateMode({ number: true, adapter: true, trigger: 'blur' })).toBe('number')
+    expect(inferFormCreateDesignerValidateMode({ mode: 'phone', phone: true })).toBe('phone')
+  })
+
+  it('convertFormCreateDesignerValidateEntry maps adapter min/max without mode as numeric bounds', () => {
+    type ValidatorFn = (rule: unknown, value: unknown, cb: (err?: Error) => void) => void
+    const run = (entry: Record<string, unknown> | null, value: unknown) => {
+      const cb = vi.fn()
+      ;(entry?.validator as ValidatorFn)({}, value, cb)
+      return cb
+    }
+
+    const minEntry = convertFormCreateDesignerValidateEntry({
+      min: 1,
+      message: 'xxxx',
+      trigger: 'blur',
+      adapter: true,
+    }, 'text')
+    expect(run(minEntry, '0').mock.calls[0][0]?.message).toBe('xxxx')
+    expect(run(minEntry, '11')).toHaveBeenCalledWith()
+
+    const minNegativeOne = convertFormCreateDesignerValidateEntry({
+      min: -1,
+      mode: 'min',
+      message: 'lo',
+      trigger: 'blur',
+      adapter: true,
+    }, 'text')
+    expect(run(minNegativeOne, '0')).toHaveBeenCalledWith()
+
+    const maxEntry = convertFormCreateDesignerValidateEntry({
+      max: 10,
+      message: 'yyyy',
+      trigger: 'blur',
+      adapter: true,
+    }, 'text')
+    expect(run(maxEntry, '11').mock.calls[0][0]?.message).toBe('yyyy')
+    expect(run(maxEntry, '5')).toHaveBeenCalledWith()
+  })
+
+  it('applyFormCreateValidationToFormField does not add props maxlength rule when designer max exists', () => {
+    const field: FormField = { key: 'T', label: 'T', type: 'text' }
+    applyFormCreateValidationToFormField(field, {
+      props: { maxlength: 2 },
+      validate: [{ max: 10, message: 'xxxx', trigger: 'blur', adapter: true }],
+    })
+    expect(field.maxLength).toBe(2)
+    expect(field.rules).toHaveLength(1)
+    expect(field.rules?.[0]).toMatchObject({ message: 'xxxx', trigger: 'blur' })
+    expect(field.rules?.[0]?.max).toBeUndefined()
+  })
+
+  it('convertFormCreateDesignerValidateEntry maps min/max mode to numeric comparison', () => {
+    const minEntry = convertFormCreateDesignerValidateEntry({
+      mode: 'min',
+      min: 1,
+      message: 'min err',
+      trigger: 'blur',
+    }, 'text')
+    const maxEntry = convertFormCreateDesignerValidateEntry({
+      mode: 'max',
+      max: 10,
+      message: 'max err',
+      trigger: 'blur',
+    }, 'text')
+    expect(minEntry).toMatchObject({ message: 'min err', trigger: 'blur' })
+    expect(maxEntry).toMatchObject({ message: 'max err', trigger: 'blur' })
+    expect(typeof minEntry?.validator).toBe('function')
+    expect(typeof maxEntry?.validator).toBe('function')
+
+    const minPass = vi.fn()
+    ;(minEntry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '5',
+      minPass,
+    )
+    expect(minPass).toHaveBeenCalledWith()
+
+    const minFail = vi.fn()
+    ;(minEntry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '0',
+      minFail,
+    )
+    expect(minFail.mock.calls[0][0]?.message).toBe('min err')
+
+    const maxPass = vi.fn()
+    ;(maxEntry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '10',
+      maxPass,
+    )
+    expect(maxPass).toHaveBeenCalledWith()
+
+    const maxFail = vi.fn()
+    ;(maxEntry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '11',
+      maxFail,
+    )
+    expect(maxFail.mock.calls[0][0]?.message).toBe('max err')
+
+    const notNumber = vi.fn()
+    ;(minEntry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      'abc',
+      notNumber,
+    )
+    expect(notNumber.mock.calls[0][0]?.message).toBe('min err')
+  })
+
+  it('applyFormCreateValidationToFormField wires min and max validate from saved rule', () => {
+    const field: FormField = { key: 'T', label: 'T', type: 'text' }
+    applyFormCreateValidationToFormField(field, {
+      field: 'T',
+      type: 'input',
+      validate: [
+        { mode: 'min', min: 1, message: 'xxxx', trigger: 'blur' },
+        { mode: 'max', max: 10, message: 'yyyy', trigger: 'blur' },
+      ],
+    })
+    expect(field.rules).toHaveLength(2)
+    expect(field.rules?.[0]).toMatchObject({ message: 'xxxx', trigger: 'blur' })
+    expect(field.rules?.[1]).toMatchObject({ message: 'yyyy', trigger: 'blur' })
+  })
+
+  it('convertFormCreateDesignerValidateEntry maps adapter positive/integer without mode key', () => {
+    type ValidatorFn = (rule: unknown, value: unknown, cb: (err?: Error) => void) => void
+    const run = (entry: Record<string, unknown> | null, value: unknown) => {
+      const cb = vi.fn()
+      ;(entry?.validator as ValidatorFn)({}, value, cb)
+      return cb
+    }
+
+    const positive = convertFormCreateDesignerValidateEntry({
+      positive: true,
+      message: 'pos',
+      trigger: 'blur',
+      adapter: true,
+    }, 'text')
+    expect(run(positive, '2')).toHaveBeenCalledWith()
+    expect(run(positive, '0').mock.calls[0][0]?.message).toBe('pos')
+
+    const integer = convertFormCreateDesignerValidateEntry({
+      integer: true,
+      message: 'int',
+      trigger: 'blur',
+      adapter: true,
+    }, 'text')
+    expect(run(integer, '3.0')).toHaveBeenCalledWith()
+    expect(run(integer, '3.1').mock.calls[0][0]?.message).toBe('int')
+  })
+
+  it('convertFormCreateDesignerValidateEntry maps positive/negative/integer/number modes', () => {
+    type ValidatorFn = (rule: unknown, value: unknown, cb: (err?: Error) => void) => void
+    const run = (entry: Record<string, unknown> | null, value: unknown) => {
+      const cb = vi.fn()
+      ;(entry?.validator as ValidatorFn)({}, value, cb)
+      return cb
+    }
+
+    const positive = convertFormCreateDesignerValidateEntry({
+      mode: 'positive',
+      message: 'pos err',
+      trigger: 'blur',
+    }, 'text')
+    expect(run(positive, '5')).toHaveBeenCalledWith()
+    expect(run(positive, '0').mock.calls[0][0]?.message).toBe('pos err')
+    expect(run(positive, '-1').mock.calls[0][0]?.message).toBe('pos err')
+
+    const negative = convertFormCreateDesignerValidateEntry({
+      mode: 'negative',
+      message: 'neg err',
+      trigger: 'blur',
+    }, 'text')
+    expect(run(negative, '-3')).toHaveBeenCalledWith()
+    expect(run(negative, '0').mock.calls[0][0]?.message).toBe('neg err')
+    expect(run(negative, '2').mock.calls[0][0]?.message).toBe('neg err')
+
+    const integer = convertFormCreateDesignerValidateEntry({
+      mode: 'integer',
+      message: 'int err',
+      trigger: 'blur',
+    }, 'text')
+    expect(run(integer, '3')).toHaveBeenCalledWith()
+    expect(run(integer, '3.5').mock.calls[0][0]?.message).toBe('int err')
+
+    const number = convertFormCreateDesignerValidateEntry({
+      mode: 'number',
+      message: 'num err',
+      trigger: 'blur',
+    }, 'text')
+    expect(run(number, '3.14')).toHaveBeenCalledWith()
+    expect(run(number, 'abc').mock.calls[0][0]?.message).toBe('num err')
+  })
+
+  it('applyFormCreateValidationToFormField wires positive negative integer number rules', () => {
+    const field: FormField = { key: 'N', label: 'N', type: 'text' }
+    applyFormCreateValidationToFormField(field, {
+      validate: [
+        { mode: 'positive', message: 'p', trigger: 'blur' },
+        { mode: 'negative', message: 'n', trigger: 'blur' },
+        { mode: 'integer', message: 'i', trigger: 'blur' },
+        { mode: 'number', message: 'num', trigger: 'blur' },
+      ],
+    })
+    expect(field.rules).toHaveLength(4)
+    expect(field.rules?.every((r) => typeof r.validator === 'function')).toBe(true)
+  })
+
+  it('convertFormCreateDesignerValidateEntry maps ip mode to custom validator', () => {
+    const entry = convertFormCreateDesignerValidateEntry({
+      mode: 'ip',
+      message: 'xxxx',
+      trigger: 'blur',
+    }, 'text')
+    expect(entry).toMatchObject({ message: 'xxxx', trigger: 'blur' })
+    expect(typeof entry?.validator).toBe('function')
+
+    const pass = vi.fn()
+    ;(entry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '192.168.1.1',
+      pass,
+    )
+    expect(pass).toHaveBeenCalledWith()
+
+    const fail = vi.fn()
+    ;(entry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '999.999.999.999',
+      fail,
+    )
+    expect(fail).toHaveBeenCalledTimes(1)
+    expect(fail.mock.calls[0][0]?.message).toBe('xxxx')
+  })
+
+  it('convertFormCreateDesignerValidateEntry maps phone mode to custom validator', () => {
+    const entry = convertFormCreateDesignerValidateEntry({
+      mode: 'phone',
+      message: 'bad phone',
+      trigger: 'blur',
+    }, 'text')
+    expect(entry).toMatchObject({ message: 'bad phone', trigger: 'blur' })
+    expect(typeof entry?.validator).toBe('function')
+
+    const pass = vi.fn()
+    ;(entry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '13800138000',
+      pass,
+    )
+    expect(pass).toHaveBeenCalledWith()
+
+    const passWithPrefix = vi.fn()
+    ;(entry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '+8613800138000',
+      passWithPrefix,
+    )
+    expect(passWithPrefix).toHaveBeenCalledWith()
+
+    const fail = vi.fn()
+    ;(entry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      '12345',
+      fail,
+    )
+    expect(fail).toHaveBeenCalledTimes(1)
+    expect(fail.mock.calls[0][0]?.message).toBe('bad phone')
+  })
+
+  it('applyFormCreateValidationToFormField wires ip and phone validate from saved rule', () => {
+    const ipField: FormField = { key: 'ipField', label: 'IP', type: 'text' }
+    applyFormCreateValidationToFormField(ipField, {
+      field: 'ipField',
+      type: 'input',
+      validate: [{ mode: 'ip', message: 'xxxx', trigger: 'blur' }],
+    })
+    expect(ipField.rules).toHaveLength(1)
+    expect(ipField.rules?.[0]).toMatchObject({ message: 'xxxx', trigger: 'blur' })
+
+    const phoneField: FormField = { key: 'phoneField', label: 'Phone', type: 'text' }
+    applyFormCreateValidationToFormField(phoneField, {
+      field: 'phoneField',
+      type: 'input',
+      validate: [{ mode: 'phone', message: 'invalid', trigger: 'blur' }],
+    })
+    expect(phoneField.rules).toHaveLength(1)
+    expect(phoneField.rules?.[0]).toMatchObject({ message: 'invalid', trigger: 'blur' })
+  })
+
+  it('convertFormCreateDesignerValidateEntry maps uppercase mode to custom validator', () => {
+    const entry = convertFormCreateDesignerValidateEntry({
+      mode: 'uppercase',
+      message: 'XXX',
+      trigger: 'blur',
+    }, 'text')
+    expect(entry).toMatchObject({ message: 'XXX', trigger: 'blur' })
+    expect(typeof entry?.validator).toBe('function')
+
+    const callback = vi.fn()
+    ;(entry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      'ABC',
+      callback,
+    )
+    expect(callback).toHaveBeenCalledWith()
+
+    const fail = vi.fn()
+    ;(entry?.validator as (rule: unknown, value: unknown, cb: (err?: Error) => void) => void)(
+      {},
+      'abc',
+      fail,
+    )
+    expect(fail).toHaveBeenCalledTimes(1)
+    expect(fail.mock.calls[0][0]).toBeInstanceOf(Error)
+    expect(fail.mock.calls[0][0]?.message).toBe('XXX')
+  })
+
+
+
+  it('applyFormCreateValidationToFormField wires uppercase validate from saved rule', () => {
+    const field: FormField = { key: 'T', label: 'T', type: 'text' }
+    applyFormCreateValidationToFormField(field, {
+      field: 'T',
+      type: 'input',
+      validate: [{ mode: 'uppercase', message: 'XXX', trigger: 'blur' }],
+    })
+    expect(field.rules).toHaveLength(1)
+    expect(field.rules?.[0]).toMatchObject({ message: 'XXX', trigger: 'blur' })
   })
 
 

@@ -55,6 +55,8 @@
 
 | 文档 | 说明 |
 |------|------|
+| [ai-development-playbook.md](./ai-rules/ai-development-playbook.md) | **AI 协作开发手册** — 任务模板、验证命令、PR 自检、Issue 闭环 |
+| [cursor-user-rules-paste.md](./ai-rules/cursor-user-rules-paste.md) | 可选：复制到 Cursor **User Rules**（本仓库已内置 project rule） |
 | [frontend-ai-rules.md](./ai-rules/frontend-ai-rules.md) | 前端代码治理与 AI 协作规则摘要 |
 | [backend-ai-rules.md](./ai-rules/backend-ai-rules.md) | 后端代码治理与规则摘要 |
 | [rules-skills-reorg-plan.md](./rules-skills-reorg-plan.md) | Rule / Skill 整改方案（**2026-07-15 已执行完毕**，历史决策记录，根路径） |

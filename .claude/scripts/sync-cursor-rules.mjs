@@ -50,7 +50,7 @@ const TARGETS = {
 // Pin a few foundational always-on rules to the top of the root block.
 const ROOT_PRIORITY = [
   'project-context', 'domain-model', 'reasoning-protocol',
-  'ai-guardrails', 'cross-cutting', 'change-playbook',
+  'ai-guardrails', 'cross-cutting', 'change-playbook', 'ai-development-playbook',
 ];
 
 function parseFrontmatter(text) {

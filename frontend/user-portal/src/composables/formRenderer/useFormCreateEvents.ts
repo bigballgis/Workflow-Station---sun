@@ -1,4 +1,5 @@
 import { ref, shallowReactive, type ComputedRef, type Ref } from 'vue'
+import type { FormInstance } from 'element-plus'
 import type { FormField } from '../../components/formRendererHelpers'
 import {
   createPortalFormApi,
@@ -23,6 +24,7 @@ import type { FormTab } from '../../components/formRendererHelpers'
 type FormDataBox = { value: Record<string, any> }
 
 interface FormCreateEventsDeps {
+  formRef: Ref<FormInstance | undefined>
   formData: FormDataBox
   allFields: ComputedRef<FormField[]>
   fieldComponentEvents: ComputedRef<Map<string, FieldComponentEvents>>
@@ -133,6 +135,11 @@ export function useFormCreateEvents(deps: FormCreateEventsDeps) {
       if (!deps.readonly()) {
         deps.emitModelValue({ ...deps.formData.value })
       }
+    }
+    if (!deps.readonly()) {
+      void deps.formRef.value?.validateField(key).catch(() => {
+        // Expected when validation fails; Element Plus surfaces the field error.
+      })
     }
   }
 

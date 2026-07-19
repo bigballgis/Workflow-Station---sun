@@ -337,6 +337,7 @@ const {
 // Composable — form-create Form/Component events + visibility
 // ---------------------------------------------------------------------------
 const eventsApi = useFormCreateEvents({
+  formRef,
   formData: { get value() { return formData.value }, set value(v: Record<string, any>) { formData.value = v } } as { value: Record<string, any> },
   allFields,
   fieldComponentEvents,
