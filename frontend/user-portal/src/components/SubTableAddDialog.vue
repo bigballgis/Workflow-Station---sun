@@ -29,16 +29,72 @@
       label-width="auto"
       label-position="left"
     >
-      <el-form-item
-        v-for="col in columns"
+      <template
+        v-for="col in visibleColumns"
         :key="col.field"
-        :label="col.label"
-        :prop="col.field"
-        :error="columnErrors[col.field]?.join('; ')"
       >
+        <!-- MI 场景 C：分派方式 radio 插在分派字段组（Assignee/BU/Role）正上方 -->
+        <el-form-item
+          v-if="showAssignModeRadio && col.field === firstAssignField"
+          :label="t('subTable.assignMode')"
+        >
+          <el-radio-group
+            v-model="assignMode"
+            @change="onAssignModeChange"
+          >
+            <el-radio value="person">
+              {{ t('subTable.assignByPerson') }}
+            </el-radio>
+            <el-radio value="role">
+              {{ t('subTable.assignByRole') }}
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item
+          :label="col.label"
+          :prop="col.field"
+          :error="columnErrors[col.field]?.join('; ')"
+        >
+        <!-- MI 按角色分派：BU 级联树选择（父 BU 可展开子 BU，与 admin 一致；按 field 名抢先匹配） -->
+        <el-cascader
+          v-if="col.field === 'bu_code'"
+          v-model="selectedBuId"
+          :options="buTree"
+          :props="(buCascaderProps as any)"
+          :placeholder="col.placeholder || t('subTable.selectBusinessUnit')"
+          :disabled="isColDisabled(col)"
+          filterable
+          clearable
+          :teleported="true"
+          style="width: 100%"
+          @change="(v: any) => onBuChange(v)"
+        />
+
+        <!-- MI 按角色分派：Role 选择（选项随所选 BU 收敛） -->
+        <el-select
+          v-else-if="col.field === 'role_code'"
+          v-model="formData[col.field]"
+          :placeholder="col.placeholder || t('subTable.selectRole')"
+          :loading="roleLoading"
+          :clearable="!isColDisabled(col)"
+          :disabled="isColDisabled(col) || !formData['bu_code']"
+          filterable
+          :teleported="true"
+          style="width: 100%"
+          @change="(v: string) => onRoleChange(v)"
+        >
+          <el-option
+            v-for="opt in roleOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+
         <!-- text -->
         <el-input
-          v-if="(!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])"
+          v-else-if="(!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])"
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
@@ -429,7 +485,8 @@
           :disabled="isColDisabled(col)"
           :clearable="!isColDisabled(col)"
         />
-      </el-form-item>
+        </el-form-item>
+      </template>
     </el-form>
 
     <!-- Nested sub-tables placed in this binding's form design (sub-table-in-sub-table) -->
@@ -483,7 +540,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
@@ -497,6 +554,7 @@ import DOMPurify from 'dompurify'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import { useSubTableDialogLookup } from '@/composables/subTableAddDialog/useSubTableDialogLookup'
+import { useSubTableBuRoleCascade } from '@/composables/subTableAddDialog/useSubTableBuRoleCascade'
 import { useSubTableDialogSignature } from '@/composables/subTableAddDialog/useSubTableDialogSignature'
 import { useSubTableDialogEditor } from '@/composables/subTableAddDialog/useSubTableDialogEditor'
 import { useSubTableDialogRelations } from '@/composables/subTableAddDialog/useSubTableDialogRelations'
@@ -637,6 +695,82 @@ const {
   handleUploadError,
   clearUpload,
 } = useSubTableDialogUpload(formData, () => props.columns, t)
+
+// ─── BU→Role 级联（MI 子任务「按角色分派」）+ 与 assignee 行级互斥 ──────────────
+const {
+  buTree,
+  buCascaderProps,
+  selectedBuId,
+  roleOptions,
+  buLoading,
+  roleLoading,
+  loadBusinessUnits,
+  onBuChange,
+  onRoleChange,
+  primeFromExistingRow,
+} = useSubTableBuRoleCascade(formData)
+
+const hasBuRoleColumns = () =>
+  props.columns.some(c => c.field === 'bu_code' || c.field === 'role_code')
+
+// 弹窗打开时，若该子表含 bu_code/role_code 列，加载 BU 列表（编辑态再预热已选 BU 的 role）。
+watch(
+  () => props.visible,
+  (visible) => {
+    if (!visible || !hasBuRoleColumns()) return
+    if (props.mode === 'edit') {
+      primeFromExistingRow()
+    } else {
+      loadBusinessUnits()
+    }
+  },
+  { immediate: true }
+)
+
+// ─── MI 分派方式 radio（个人 / 角色，二选一显隐，互斥）──────────────────────────
+const hasAssigneeCol = computed(() => props.columns.some(c => c.field === 'assignee'))
+const hasRoleCol = computed(() => props.columns.some(c => c.field === 'role_code' || c.field === 'bu_code'))
+// 场景 C：同时提供个人与角色两种录入方式，才需要 radio 二选一。
+const showAssignModeRadio = computed(() => hasAssigneeCol.value && hasRoleCol.value)
+const assignMode = ref<'person' | 'role'>('person')
+
+// 打开/切数据时确定初始 radio：已填 role/bu → role，否则 person。
+watch(
+  () => [props.visible, props.mode, props.initialData] as const,
+  ([visible]) => {
+    if (!visible || !showAssignModeRadio.value) return
+    const d = (props.initialData || {}) as Record<string, any>
+    const roleFilled = (d.role_code && String(d.role_code).trim()) || (d.bu_code && String(d.bu_code).trim())
+    assignMode.value = roleFilled ? 'role' : 'person'
+  },
+  { immediate: true }
+)
+
+// radio 切换：清掉另一种方式的值，避免残留导致两种并存。
+function onAssignModeChange(mode: string | number | boolean | undefined) {
+  if (mode === 'person') {
+    formData.value.bu_code = ''
+    formData.value.role_code = ''
+  } else {
+    formData.value.assignee = ''
+  }
+}
+
+// 按 radio 过滤要渲染的列：场景 C 下 person 隐藏 bu/role，role 隐藏 assignee；A/B 全显。
+const ROLE_GROUP_FIELDS = ['bu_code', 'role_code']
+const visibleColumns = computed(() => {
+  if (!showAssignModeRadio.value) return props.columns
+  return props.columns.filter(c => {
+    if (assignMode.value === 'person') return !ROLE_GROUP_FIELDS.includes(c.field)
+    return c.field !== 'assignee'
+  })
+})
+// 分派字段组的首列（radio 插在它正上方，与分派字段成一体）。
+const ASSIGN_FIELDS = new Set(['assignee', 'bu_code', 'role_code'])
+const firstAssignField = computed(() => {
+  const c = visibleColumns.value.find(col => ASSIGN_FIELDS.has(col.field))
+  return c?.field || ''
+})
 
 // ─── Form core (state / rules / formulas / validation / open / save) ───────────
 const {

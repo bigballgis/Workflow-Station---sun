@@ -204,9 +204,14 @@ export const permissionApi = {
     return request.get<VirtualGroupInfo[]>('/permissions/available-virtual-groups')
   },
 
-  /** 获取业务单元树 */
+  /** 获取业务单元（扁平列表） */
   getBusinessUnits() {
     return request.get<BusinessUnit[]>('/permissions/business-units')
+  },
+
+  /** 获取业务单元树（保留 children 层级，供级联选择器） */
+  getBusinessUnitsTree() {
+    return request.get<BusinessUnit[]>('/permissions/business-units/tree')
   },
 
   /** 获取业务单元绑定的角色 */

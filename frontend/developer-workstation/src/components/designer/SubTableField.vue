@@ -167,7 +167,7 @@
               :view-fields="col.props?.viewFields || []"
               :field-defs="col.props?.fieldDefs || []"
               :show-backfill-view="previewLookupCompact ? false : (col.props?.showBackfillView !== false)"
-              :readonly="!editable"
+              :readonly="!editable || (col.field === 'assignee' && assigneeCellLocked(scope.row))"
             />
           </template>
           <!-- default -->
@@ -391,6 +391,18 @@ const editable = computed(() => {
 const canAdd = computed(() => editable.value && props.allowAdd !== false)
 const canEdit = computed(() => editable.value && props.allowEdit !== false)
 const canDelete = computed(() => editable.value && props.allowDelete !== false)
+
+// MI 分派行级互斥：该行选了角色（role_code / bu_code 有值）时，assignee 分派字段应只读，
+// 反之亦然（一行只能一种分派方式）。约定字段名 assignee / role_code / bu_code。
+function hasVal(v: unknown): boolean {
+  if (v == null) return false
+  if (Array.isArray(v)) return v.length > 0
+  if (typeof v === 'object') return Object.keys(v as object).length > 0
+  return String(v).trim() !== ''
+}
+function assigneeCellLocked(row: Record<string, any>): boolean {
+  return hasVal(row?.role_code) || hasVal(row?.bu_code)
+}
 
 // 判断列中是否存在 FILE 类型的字段（有 FILE 列时隐藏 Import 按钮）
 const hasFileColumn = computed(() => {

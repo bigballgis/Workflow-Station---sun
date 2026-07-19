@@ -47,6 +47,13 @@ export function useUserTaskState(
   const elementSubTableId = ref<number | ''>('')
   const elementSubTableName = ref('')
   const assigneeField = ref('')
+  // MI 子任务分派：两个独立开关，可同时开（都开=场景 C，运行时逐行二选一）。
+  // assigneeMode 存 BPMN（user|role|both），由 allowUser/allowRole 组合派生。
+  const assigneeMode = ref<'user' | 'role' | 'both'>('user')
+  const allowUser = ref(true)
+  const allowRole = ref(false)
+  const roleField = ref('')
+  const buField = ref('')
   const rowIdVariable = ref('')
   const subTables = ref<TableDefinition[]>([])
   const loadingSubTables = ref(false)
@@ -122,6 +129,11 @@ export function useUserTaskState(
     elementSubTableId,
     elementSubTableName,
     assigneeField,
+    assigneeMode,
+    allowUser,
+    allowRole,
+    roleField,
+    buField,
     rowIdVariable,
     subTables,
     loadingSubTables,

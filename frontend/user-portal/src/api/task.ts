@@ -30,6 +30,8 @@ export interface TaskActionInfo {
 export interface TaskInfo {
   taskId: string
   taskName: string
+  /** 「当前步骤」名（MI 感知）：普通节点=taskName；多实例子任务=外层多实例 subProcess name（如 "multi"）。 */
+  currentStepName?: string
   description?: string
   processInstanceId: string
   processDefinitionKey: string

@@ -402,4 +402,22 @@ public class MiOverlayComponent {
         }
         info.setCurrentNode(bestNode);
     }
+
+    /**
+     * 外层多实例 subProcess 的 name（如 "multi"），取自 MI 状态响应的 {@code multiInstanceActivityName}。
+     * 读 {@link #resolveMiRowProgress} 已填充的 MI 状态缓存（同一次详情请求内已调用过），无缓存/无值返回 null。
+     * 用于详情「当前步骤」在流程处于 MI 内部时展示多实例节点名而非具体内层子任务名。
+     */
+    String getMiActivityName(String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()) {
+            return null;
+        }
+        MiStatusCacheEntry cached = miStatusCache.get(processInstanceId);
+        if (cached == null || cached.payload() == null) {
+            return null;
+        }
+        Object name = cached.payload().get("multiInstanceActivityName");
+        String s = name != null ? String.valueOf(name).trim() : "";
+        return s.isEmpty() ? null : s;
+    }
 }

@@ -84,6 +84,39 @@ public class MiCollectionVariableBuilder {
     private static final List<String> MI_ASSIGNEE_ALTERNATE_KEYS = List.of(
             "assignee_user_id", "assigneeUserId", "assignee_id", "assigneeId", "assignee", "user_id", "userId");
 
+    /**
+     * MI 行「是否可纳入」取值：user 模式走 {@link #resolveMiAssigneeRaw}（带 assignee 兜底键），
+     * role 模式直接读配置列（role code 不该套用 assignee 兜底键）。
+     */
+    private Object resolveMiEligibilityRaw(Map<String, Object> row, String field, boolean roleMode) {
+        if (roleMode) {
+            if (row == null || field == null || field.isBlank()) {
+                return null;
+            }
+            return SubTableRowKeySupport.getRowValueIgnoreCase(row, field.trim());
+        }
+        return resolveMiAssigneeRaw(row, field);
+    }
+
+    /**
+     * 逐行分派下「该行是否可纳入 MI」：assigneeField（带兜底键）或 roleField（直接读列）任一非空即合格。
+     */
+    private boolean rowHasAssigneeOrRole(Map<String, Object> row, String assigneeField, String roleField) {
+        if (assigneeField != null && !assigneeField.isBlank()) {
+            Object v = resolveMiEligibilityRaw(row, assigneeField, false);
+            if (v != null && !String.valueOf(v).trim().isEmpty()) {
+                return true;
+            }
+        }
+        if (roleField != null && !roleField.isBlank()) {
+            Object v = resolveMiEligibilityRaw(row, roleField, true);
+            if (v != null && !String.valueOf(v).trim().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Object resolveMiAssigneeRaw(Map<String, Object> row, String configuredAssigneeField) {
         if (row == null || configuredAssigneeField == null || configuredAssigneeField.isBlank()) {
             return null;
@@ -111,7 +144,6 @@ public class MiCollectionVariableBuilder {
      * <p>
      * Replaces hard-coded {@code Task_AssignParticipants} checks; adapts to any BPMN multi-instance configuration.
      */
-    @SuppressWarnings("unchecked")
     void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
                                     String processInstanceId, Map<String, Object> variables) {
         try {
@@ -177,13 +209,28 @@ public class MiCollectionVariableBuilder {
                             log.warn("[MI] SubProcess {} has no flowable:collection configuration", nodeId);
                             continue;
                         }
-                        String assigneeField = BpmnMiXmlSupport.extractAssigneeFieldFromSubProcess(subProcess);
-                        if (assigneeField == null || assigneeField.isBlank()) {
-                            log.warn("[MI] No assigneeField found in subProcess {} inner UserTask", nodeId);
+                        // 逐行分派：assigneeField / roleField / buField 都读出来，运行时按每行填了什么决定。
+                        // assigneeMode 只标节点允许了哪些方式（user|role|both），不再决定整表模式。
+                        String assigneeMode = BpmnMiXmlSupport.extractAssigneeModeFromSubProcess(subProcess);
+                        boolean roleAllowed = assigneeMode == null
+                                || "role".equalsIgnoreCase(assigneeMode.trim())
+                                || "both".equalsIgnoreCase(assigneeMode.trim());
+                        boolean userAllowed = assigneeMode == null
+                                || "user".equalsIgnoreCase(assigneeMode.trim())
+                                || "both".equalsIgnoreCase(assigneeMode.trim());
+                        String roleField = roleAllowed ? BpmnMiXmlSupport.extractRoleFieldFromSubProcess(subProcess) : null;
+                        String buField = roleAllowed ? BpmnMiXmlSupport.extractBuFieldFromSubProcess(subProcess) : null;
+                        String assigneeField = userAllowed
+                                ? BpmnMiXmlSupport.extractAssigneeFieldFromSubProcess(subProcess) : null;
+                        boolean hasAssignee = assigneeField != null && !assigneeField.isBlank();
+                        boolean hasRole = roleField != null && !roleField.isBlank();
+                        if (!hasAssignee && !hasRole) {
+                            log.warn("[MI] subProcess {} inner UserTask has neither assigneeField nor roleField", nodeId);
                             continue;
                         }
                         String bpmnSubTableName = BpmnMiXmlSupport.findFirstPropertyValue(subProcess, "subTableName");
-                        buildMiCollectionVariable(variables, collectionVariableName, assigneeField, bpmnSubTableName);
+                        buildMiCollectionVariable(variables, collectionVariableName, assigneeField, bpmnSubTableName,
+                                roleField, buField);
                         return;
                     }
                     List<String> spOut = BpmnMiXmlSupport.getDirectChildTextValues(subProcess, "outgoing");
@@ -229,7 +276,11 @@ public class MiCollectionVariableBuilder {
      */
     @SuppressWarnings("unchecked")
     private void buildMiCollectionVariable(Map<String, Object> variables, String collectionVariableName,
-                                          String assigneeField, String bpmnSubTableName) {
+                                          String assigneeField, String bpmnSubTableName,
+                                          String roleField, String buField) {
+        // 逐行分派：一行只要 assigneeField 或 roleField 任一有值即可纳入 MI（场景 C 混用）。
+        boolean hasAssigneeField = assigneeField != null && !assigneeField.isBlank();
+        boolean hasRoleField = roleField != null && !roleField.isBlank();
         Object subTablesObj = variables.get("__subTables__");
         if (!(subTablesObj instanceof Map)) {
             log.warn("[MI] No __subTables__ found, setting empty collection for {}", collectionVariableName);
@@ -253,7 +304,7 @@ public class MiCollectionVariableBuilder {
             pkResult = resolveMiSubTablePk(collectionVariableName.trim());
         }
         if ((pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty())) {
-            pkResult = inferMiPkFromJsonSubTables(subTables, assigneeField, collectionVariableName);
+            pkResult = inferMiPkFromJsonSubTables(subTables, assigneeField, roleField, collectionVariableName);
         }
 
         if (pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty()) {
@@ -268,20 +319,21 @@ public class MiCollectionVariableBuilder {
         }
         List<String> pkCols = pkResult.pkCols();
 
-        List<Map<String, Object>> allRows = selectRowsForMiCollection(subTables, pkCols, assigneeField);
+        List<Map<String, Object>> allRows = selectRowsForMiCollection(subTables, pkCols, assigneeField, roleField);
         if (allRows.isEmpty()) {
             log.warn(
-                    "[MI] No eligible sub-table rows for '{}' (resolvedTable={}, pk={}, assigneeField='{}'); setting empty collection",
+                    "[MI] No eligible sub-table rows for '{}' (resolvedTable={}, pk={}, assigneeField='{}', roleField='{}'); setting empty collection",
                     collectionVariableName,
                     pkResult.resolvedTable(),
                     pkCols,
-                    assigneeField);
+                    assigneeField,
+                    roleField);
             variables.put(collectionVariableName, List.of());
             return;
         }
 
         List<Map<String, Object>> collection = new ArrayList<>();
-        List<Integer> emptyAssigneeRows = new ArrayList<>();
+        List<Integer> emptyEligibilityRows = new ArrayList<>();
         Set<String> seenRowKeys = new LinkedHashSet<>();
         int skippedUnmappedPk = 0;
         for (int i = 0; i < allRows.size(); i++) {
@@ -301,10 +353,19 @@ public class MiCollectionVariableBuilder {
             if (pkCols.size() == 1) {
                 rowId = rowKey.get(pkCols.get(0));
             }
-            Object assigneeValue = resolveMiAssigneeRaw(row, assigneeField);
-            String assigneeText = MiSubTableVariableSupport.normalizeMiAssigneeText(assigneeValue);
-            if (assigneeText.isEmpty()) {
-                emptyAssigneeRows.add(i + 1);
+            // 逐行：分别取该行的 assignee 值（带兜底键）与 role 值（直接读列），任一非空即合格。
+            String assigneeText = "";
+            if (hasAssigneeField) {
+                assigneeText = MiSubTableVariableSupport.normalizeMiAssigneeText(
+                        resolveMiEligibilityRaw(row, assigneeField, false));
+            }
+            String roleText = "";
+            if (hasRoleField) {
+                roleText = MiSubTableVariableSupport.normalizeMiAssigneeText(
+                        resolveMiEligibilityRaw(row, roleField, true));
+            }
+            if (assigneeText.isEmpty() && roleText.isEmpty()) {
+                emptyEligibilityRows.add(i + 1);
                 continue;
             }
             String dedupKey = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rowKey);
@@ -320,7 +381,20 @@ public class MiCollectionVariableBuilder {
             } else if (rowId != null && pkCols.size() == 1) {
                 item.put("rowId", rowId);
             }
-            item.put(assigneeField, assigneeText);
+            // 该行填了 role → 带 role/bu code（引擎逐行判定优先走 role 分支）；填了 assignee → 带 assignee。
+            if (!roleText.isEmpty()) {
+                item.put(roleField, roleText);
+                if (buField != null && !buField.isBlank()) {
+                    Object buValue = SubTableRowKeySupport.getRowValueIgnoreCase(row, buField.trim());
+                    String buText = MiSubTableVariableSupport.normalizeMiAssigneeText(buValue);
+                    if (!buText.isEmpty()) {
+                        item.put(buField, buText);
+                    }
+                }
+            }
+            if (!assigneeText.isEmpty()) {
+                item.put(assigneeField, assigneeText);
+            }
 
             collection.add(item);
         }
@@ -330,15 +404,17 @@ public class MiCollectionVariableBuilder {
                     skippedUnmappedPk, collectionVariableName, collection.size());
         }
 
-        if (!emptyAssigneeRows.isEmpty()) {
+        if (!emptyEligibilityRows.isEmpty()) {
             String rowNumbers = String.join(", ",
-                    emptyAssigneeRows.stream().map(String::valueOf).toArray(String[]::new));
-            log.warn("[MI] Rows {} have empty assigneeField '{}' for collection {}", rowNumbers, assigneeField, collectionVariableName);
+                    emptyEligibilityRows.stream().map(String::valueOf).toArray(String[]::new));
+            log.warn("[MI] Rows {} have neither assigneeField '{}' nor roleField '{}' for collection {}",
+                    rowNumbers, assigneeField, roleField, collectionVariableName);
         }
 
         variables.put(collectionVariableName, collection);
-        log.info("[MI] Built collection '{}' with {} items, assigneeField='{}', collectionVarMiddleToken='{}', resolvedTable='{}'",
-                collectionVariableName, collection.size(), assigneeField, tokenFromCollectionVar, pkResult.resolvedTable());
+        log.info("[MI] Built collection '{}' with {} items, assigneeField='{}', roleField='{}', collectionVarMiddleToken='{}', resolvedTable='{}'",
+                collectionVariableName, collection.size(), assigneeField, roleField,
+                tokenFromCollectionVar, pkResult.resolvedTable());
     }
 
     /**
@@ -466,12 +542,15 @@ public class MiCollectionVariableBuilder {
      * When physical/designer table names do not match: if {@code __subTables__} rows have non-empty {@code id} and assignee, use single-column id as row key (JSON sub-table).
      */
     private MiSubTablePkResult inferMiPkFromJsonSubTables(Map<String, Object> subTables, String assigneeField,
-                                                          String collectionVariableName) {
-        if (subTables == null || subTables.isEmpty() || assigneeField == null || assigneeField.isBlank()) {
+                                                          String roleField, String collectionVariableName) {
+        boolean hasAssignee = assigneeField != null && !assigneeField.isBlank();
+        boolean hasRole = roleField != null && !roleField.isBlank();
+        if (subTables == null || subTables.isEmpty() || (!hasAssignee && !hasRole)) {
             return null;
         }
         List<String> idPk = List.of("id");
-        List<Map<String, Object>> rows = selectRowsForMiCollection(subTables, idPk, assigneeField);
+        // JSON id 推断只依据「行是否含 id + (assignee 或 role) 资格字段」。
+        List<Map<String, Object>> rows = selectRowsForMiCollection(subTables, idPk, assigneeField, roleField);
         if (rows.isEmpty()) {
             log.debug("[MI] JSON id inference found no eligible rows for collection '{}'", collectionVariableName);
             return null;
@@ -486,7 +565,8 @@ public class MiCollectionVariableBuilder {
      */
     private List<Map<String, Object>> selectRowsForMiCollection(Map<String, Object> subTables,
                                                                 List<String> pkCols,
-                                                                String assigneeField) {
+                                                                String assigneeField,
+                                                                String roleField) {
         if (subTables == null || subTables.isEmpty() || pkCols == null || pkCols.isEmpty()) {
             return List.of();
         }
@@ -503,7 +583,7 @@ public class MiCollectionVariableBuilder {
                     typed.add((Map<String, Object>) m);
                 }
             }
-            int score = scoreRowsEligibleForMi(typed, pkCols, assigneeField);
+            int score = scoreRowsEligibleForMi(typed, pkCols, assigneeField, roleField);
             if (score > 0) {
                 scored.add(new ScoredSlice(entry.getKey(), typed, score));
             }
@@ -530,8 +610,7 @@ public class MiCollectionVariableBuilder {
                 if (rowKey == null) {
                     continue;
                 }
-                Object assigneeValue = resolveMiAssigneeRaw(row, assigneeField);
-                if (assigneeValue == null || MiSubTableVariableSupport.normalizeMiAssigneeText(assigneeValue).isEmpty()) {
+                if (!rowHasAssigneeOrRole(row, assigneeField, roleField)) {
                     continue;
                 }
                 String dedup = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rowKey);
@@ -544,14 +623,14 @@ public class MiCollectionVariableBuilder {
         return new ArrayList<>(mergedByPk.values());
     }
 
-    private int scoreRowsEligibleForMi(List<Map<String, Object>> rows, List<String> pkCols, String assigneeField) {
+    private int scoreRowsEligibleForMi(List<Map<String, Object>> rows, List<String> pkCols,
+                                       String assigneeField, String roleField) {
         int n = 0;
         for (Map<String, Object> row : rows) {
             if (SubTableRowKeySupport.rowKeyFromVariableRow(row, pkCols) == null) {
                 continue;
             }
-            Object assigneeValue = resolveMiAssigneeRaw(row, assigneeField);
-            if (assigneeValue == null || String.valueOf(assigneeValue).trim().isEmpty()) {
+            if (!rowHasAssigneeOrRole(row, assigneeField, roleField)) {
                 continue;
             }
             n++;

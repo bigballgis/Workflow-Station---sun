@@ -271,6 +271,26 @@ public class VirtualGroupAccessComponent {
     }
     
     /**
+     * 业务单元树（保留 children 层级，供级联选择器使用）。
+     */
+    public List<Map<String, Object>> getBusinessUnitsTree() {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/business-units/tree";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            List<Map<String, Object>> tree = response.getBody();
+            return tree != null ? tree : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to get business unit tree: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
      * 递归扁平化业务单元树
      */
     @SuppressWarnings("unchecked")

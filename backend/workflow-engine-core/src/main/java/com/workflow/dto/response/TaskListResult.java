@@ -66,7 +66,13 @@ public class TaskListResult {
          * Task name
          */
         private String taskName;
-        
+
+        /**
+         * 「当前步骤」名（MI 感知）：普通节点=任务名；多实例子任务=外层多实例 subProcess 的 name（如 "multi"）。
+         * 供 To Do/Completed 列表与详情展示「进到多实例这一大步」，区别于 taskName（具体内层子任务名）。
+         */
+        private String currentStepName;
+
         /**
          * Task description
          */
@@ -107,7 +113,16 @@ public class TaskListResult {
          * BPMN extension {@code businessUnitId} (e.g. fixed BU specified by FIXED_BU_ROLE), used by portal to filter tasks by current workspace.
          */
         private String bpmnBusinessUnitId;
-        
+
+        /**
+         * MI 按角色分派信号（来自 ExtendedTaskInfo.extendedProperties）：
+         * assigneeMode=role 表示该 MI 子任务是按角色分派（共享认领池），portal 据此做 workspace 可见性收敛
+         * （role 分派只在用户切到该 role 的 workspace 时可见）；roleCode/businessUnitCode 是分派的角色/BU code。
+         */
+        private String miAssigneeMode;
+        private String miRoleCode;
+        private String miBusinessUnitCode;
+
         /**
          * Assignment target
          */

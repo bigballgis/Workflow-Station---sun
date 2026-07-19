@@ -89,6 +89,9 @@ export function stringifyPropertyValue(value: any): string {
  * 同名键以 **custom** 为准，避免面板修改被表单侧旧数据覆盖。
  */
 export function getExtensionProperties(element: BpmnElement): Record<string, any> {
+  // 与 setExtensionProperty 对称：都对 raw 元素读写。props.element 常是 Vue reactive 代理，
+  // 若这里读代理、写路径读 raw，两者的 businessObject 视图可能不一致（读到旧值 / 写丢）。
+  element = rawElement(element)
   const businessObject = element?.businessObject
   if (!businessObject) {
     return {}

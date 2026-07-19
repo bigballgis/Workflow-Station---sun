@@ -155,13 +155,13 @@
           </el-table-column>
           <!-- Process Type column hidden -->
           <el-table-column
-            prop="currentNode"
+            prop="currentStepName"
             :label="t('application.currentStep')"
             min-width="100"
             show-overflow-tooltip
           >
             <template #default="{ row }">
-              {{ row.currentNode || '-' }}
+              {{ row.currentStepName || row.currentNode || '-' }}
             </template>
           </el-table-column>
           <el-table-column

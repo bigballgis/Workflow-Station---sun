@@ -46,31 +46,122 @@
       </div>
     </el-form-item>
 
-    <el-form-item
-      :label="t('properties.assigneeFieldLabel')"
-      required
-    >
-      <el-select
-        v-model="assigneeField"
-        :placeholder="assigneeFieldPlaceholder"
-        :loading="loadingSubTables"
-        :disabled="!elementSubTableId"
-        clearable
-        filterable
-        style="width: 100%"
-        @change="handleAssigneeFieldChange"
+    <!-- 分派方式：两个独立开关，可同时勾选（都勾=场景 C，运行时逐行二选一） -->
+    <el-form-item :label="t('properties.assignmentModeLabel')">
+      <el-checkbox
+        v-model="allowUser"
+        @change="handleAllowUserChange"
       >
-        <el-option
-          v-for="field in assigneeFieldOptions"
-          :key="field.fieldName"
-          :label="`${field.displayName || field.fieldName} (${field.fieldName})`"
-          :value="field.fieldName"
-        />
-      </el-select>
+        {{ t('properties.assignmentModeUser') }}
+      </el-checkbox>
+      <el-checkbox
+        v-model="allowRole"
+        @change="handleAllowRoleChange"
+      >
+        {{ t('properties.assignmentModeRole') }}
+      </el-checkbox>
       <div class="form-tip">
-        {{ t('properties.subTaskAssigneeFieldTip') }}
+        {{ t('properties.assignmentModeTip') }}
       </div>
     </el-form-item>
+
+    <!-- 已启用的分派方式各占一个 tab 展示对应字段（person→Assignee；role→Role+BU） -->
+    <el-tabs
+      v-if="allowUser || allowRole"
+      v-model="fieldTab"
+      type="border-card"
+      class="assign-field-tabs"
+    >
+      <!-- 允许个人：读某列的用户 id 直接指派该人 -->
+      <el-tab-pane
+        v-if="allowUser"
+        :label="t('properties.assignmentModeUser')"
+        name="user"
+      >
+        <el-form-item
+          :label="t('properties.assigneeFieldLabel')"
+          required
+        >
+          <el-select
+            v-model="assigneeField"
+            :placeholder="assigneeFieldPlaceholder"
+            :loading="loadingSubTables"
+            :disabled="!elementSubTableId"
+            clearable
+            filterable
+            style="width: 100%"
+            @change="handleAssigneeFieldChange"
+          >
+            <el-option
+              v-for="field in assigneeFieldOptions"
+              :key="field.fieldName"
+              :label="`${field.displayName || field.fieldName} (${field.fieldName})`"
+              :value="field.fieldName"
+            />
+          </el-select>
+          <div class="form-tip">
+            {{ t('properties.subTaskAssigneeFieldTip') }}
+          </div>
+        </el-form-item>
+      </el-tab-pane>
+
+      <!-- 允许角色：读某列的 role code + BU code 列 → BU 下该角色成员共享认领 -->
+      <el-tab-pane
+        v-if="allowRole"
+        :label="t('properties.assignmentModeRole')"
+        name="role"
+      >
+        <!-- 先选 BU（级联上游），再选 Role -->
+        <el-form-item :label="t('properties.buFieldLabel')">
+          <el-select
+            v-model="buField"
+            :placeholder="t('properties.selectBuField')"
+            :loading="loadingSubTables"
+            :disabled="!elementSubTableId"
+            clearable
+            filterable
+            style="width: 100%"
+            @change="handleBuFieldChange"
+          >
+            <el-option
+              v-for="field in assigneeFieldOptions"
+              :key="field.fieldName"
+              :label="`${field.displayName || field.fieldName} (${field.fieldName})`"
+              :value="field.fieldName"
+            />
+          </el-select>
+          <div class="form-tip">
+            {{ t('properties.buFieldTip') }}
+          </div>
+        </el-form-item>
+
+        <el-form-item
+          :label="t('properties.roleFieldLabel')"
+          required
+        >
+          <el-select
+            v-model="roleField"
+            :placeholder="assigneeFieldPlaceholder"
+            :loading="loadingSubTables"
+            :disabled="!elementSubTableId"
+            clearable
+            filterable
+            style="width: 100%"
+            @change="handleRoleFieldChange"
+          >
+            <el-option
+              v-for="field in assigneeFieldOptions"
+              :key="field.fieldName"
+              :label="`${field.displayName || field.fieldName} (${field.fieldName})`"
+              :value="field.fieldName"
+            />
+          </el-select>
+          <div class="form-tip">
+            {{ t('properties.roleFieldTip') }}
+          </div>
+        </el-form-item>
+      </el-tab-pane>
+    </el-tabs>
 
     <el-form-item
       :label="t('properties.subTaskForm')"
@@ -170,6 +261,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { injectUserTaskPanel } from './userTaskPropertiesInject'
 
 const { ctx, multiInstance } = injectUserTaskPanel()
@@ -178,6 +270,10 @@ const {
   elementSubTableId,
   elementSubTableName,
   assigneeField,
+  allowUser,
+  allowRole,
+  roleField,
+  buField,
   rowIdVariable,
   subTables,
   loadingSubTables,
@@ -192,12 +288,29 @@ const {
   handleFormChange,
   handleSubTableChange,
   handleAssigneeFieldChange,
+  handleAllowUserChange,
+  handleAllowRoleChange,
+  handleRoleFieldChange,
+  handleBuFieldChange,
   assigneeFieldOptions,
   miProgressFieldOptions,
   assigneeFieldPlaceholder,
   handleMiTaskStatusFieldChange,
   handleMiTaskCurrentNodeFieldChange,
 } = multiInstance
+
+// 字段区当前 tab（纯 UI，不持久化）。保证 activeTab 始终指向一个已启用的 tab。
+const fieldTab = ref<'user' | 'role'>('user')
+watch(
+  [allowUser, allowRole],
+  ([u, r]) => {
+    if (fieldTab.value === 'user' && !u && r) fieldTab.value = 'role'
+    else if (fieldTab.value === 'role' && !r && u) fieldTab.value = 'user'
+    else if (!u && r) fieldTab.value = 'role'
+    else if (u && !r) fieldTab.value = 'user'
+  },
+  { immediate: true }
+)
 </script>
 
 <style lang="scss" scoped>
@@ -212,5 +325,18 @@ const {
   font-size: 11px;
   color: #f56c6c;
   margin-top: 4px;
+}
+
+/* 分派字段 tab：窄属性面板里收紧内边距 */
+.assign-field-tabs {
+  margin-bottom: 12px;
+}
+.assign-field-tabs :deep(.el-tabs__content) {
+  padding: 12px 10px 2px;
+}
+.assign-field-tabs :deep(.el-tabs__item) {
+  font-size: 12px;
+  height: 34px;
+  line-height: 34px;
 }
 </style>

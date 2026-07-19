@@ -10,6 +10,7 @@
       v-if="formRule && formRule.length"
       class="sub-table-form-preview form-readonly-surface"
     >
+      <!-- MI 场景 C：分派方式 radio 由 rebuildFormRule 注入到 form-create rule 中，插在分派字段组正上方 -->
       <form-create
         v-if="formCreateMounted"
         v-model="formData"
@@ -52,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
@@ -141,6 +142,8 @@ function buildDialogFormOption(option: Record<string, any> = {}) {
 
 const formOption = ref(buildDialogFormOption(props.option))
 const formRule = ref<any[]>([])
+/** 未按 assignMode 过滤的原始 rule（radio 切换时据此重建 formRule）。 */
+const rawRule = ref<any[]>([])
 /** Allocated PK / FK values seeded on add — merged back on save when form-create omits disabled fields. */
 const seedRow = ref<Record<string, any>>({})
 
@@ -153,8 +156,7 @@ watch(
     }
     formCreateMounted.value = false
     uploadSession.value = {}
-    formRule.value = mapFormCreateRulesReadonlyDeep(cloneFormRules(rule || [])) as any[]
-    injectPreviewUploadHandlers(formRule.value, formData, uploadSession)
+    rawRule.value = (rule || []) as any[]
     if (mode === 'edit' && data) {
       seedRow.value = { ...(data as Record<string, any>) }
       formData.value = { ...seedRow.value }
@@ -165,6 +167,13 @@ watch(
       seedRow.value = {}
       formData.value = {}
     }
+    // 初始 radio：已填 role/bu → role，否则 person（仅场景 C 有 radio）。
+    if (showAssignModeRadio.value) {
+      const d = (data || {}) as Record<string, any>
+      const roleFilled = (d.role_code && String(d.role_code).trim()) || (d.bu_code && String(d.bu_code).trim())
+      assignMode.value = roleFilled ? 'role' : 'person'
+    }
+    rebuildFormRule()
     hydrateUploadFieldsForFormCreate(formData.value, collectUploadRulesFromTree(formRule.value))
     formOption.value = buildDialogFormOption(option || {})
     nextTick(() => {
@@ -173,6 +182,117 @@ watch(
   },
   { immediate: true },
 )
+
+/**
+ * MI 子任务「按个人 / 按角色」二选一（form-create Form Preview 侧）：
+ * 场景 C（表单同时含 assignee 与 role_code/bu_code 字段）时顶部显示 radio，
+ * 选中哪种就只渲染哪组字段，从根上杜绝一行两种方式。与运行时 SubTableAddDialog 一致。
+ */
+const ROLE_GROUP = ['bu_code', 'role_code']
+
+function ruleHasField(rules: any[], field: string): boolean {
+  for (const r of rules || []) {
+    if (r && r.field === field) return true
+    if (r && Array.isArray(r.children) && ruleHasField(r.children, field)) return true
+  }
+  return false
+}
+
+const hasAssigneeField = computed(() => ruleHasField(rawRule.value, 'assignee'))
+const hasRoleFields = computed(() =>
+  ROLE_GROUP.some(f => ruleHasField(rawRule.value, f)))
+const showAssignModeRadio = computed(() => hasAssigneeField.value && hasRoleFields.value)
+const assignMode = ref<'person' | 'role'>('person')
+
+/** 按 assignMode 从 rule 树里剔除另一组字段（person 去 bu/role，role 去 assignee）。 */
+function filterRuleByAssignMode(rules: any[]): any[] {
+  if (!showAssignModeRadio.value) return rules
+  const drop = assignMode.value === 'person' ? ROLE_GROUP : ['assignee']
+  const walk = (list: any[]): any[] =>
+    (list || [])
+      .filter(r => !(r && drop.includes(r.field)))
+      .map(r => (r && Array.isArray(r.children) ? { ...r, children: walk(r.children) } : r))
+  return walk(rules)
+}
+
+/** 构造 form-create 原生 radio rule，插到分派字段组正上方，与字段成一体。 */
+function buildAssignModeRadioRule(): any {
+  return {
+    type: 'radio',
+    field: '__assignMode',
+    title: t('subTable.assignMode'),
+    value: assignMode.value,
+    options: [
+      { label: t('subTable.assignByPerson'), value: 'person' },
+      { label: t('subTable.assignByRole'), value: 'role' },
+    ],
+    props: { button: false },
+    on: {
+      change: (v: string) => {
+        if (v === 'person' || v === 'role') {
+          assignMode.value = v
+          onAssignModeChange()
+        }
+      },
+    },
+  }
+}
+
+/** 在顶层 rule 数组里，把 radio 插到第一个分派字段（assignee/bu_code/role_code）之前。 */
+function insertAssignModeRadio(rules: any[]): any[] {
+  if (!showAssignModeRadio.value) return rules
+  const targets = new Set(['assignee', ...ROLE_GROUP])
+  const idx = rules.findIndex(r => r && targets.has(r.field))
+  const out = [...rules]
+  out.splice(idx < 0 ? 0 : idx, 0, buildAssignModeRadioRule())
+  return out
+}
+
+// Form Preview 只演示布局/交互，BU/Role 用示例假数据（不查 admin-center）；
+// 真实 BU→Role 级联在 user portal 运行时（SubTableAddDialog）里查。
+// 纯占位示例（仅供 Preview 看布局/交互）；真实 BU→Role 在 user portal 运行时查。
+const DEMO_BU_OPTIONS = [
+  { label: 'Sample Business Unit 1', value: '__demo_bu_1' },
+  { label: 'Sample Business Unit 2', value: '__demo_bu_2' },
+]
+const DEMO_ROLE_OPTIONS = [
+  { label: 'Sample Role A', value: '__demo_role_a' },
+  { label: 'Sample Role B', value: '__demo_role_b' },
+]
+
+/** 给 Preview 的 bu_code/role_code 字段填充示例 options（form-create select）。 */
+function injectDemoBuRoleOptions(rules: any[]) {
+  const walk = (list: any[]) => {
+    for (const r of list || []) {
+      if (r && r.field === 'bu_code') r.options = DEMO_BU_OPTIONS
+      else if (r && r.field === 'role_code') r.options = DEMO_ROLE_OPTIONS
+      if (r && Array.isArray(r.children)) walk(r.children)
+    }
+  }
+  walk(rules)
+}
+
+function rebuildFormRule() {
+  const filtered = filterRuleByAssignMode(
+    mapFormCreateRulesReadonlyDeep(cloneFormRules(rawRule.value || [])) as any[]
+  )
+  injectDemoBuRoleOptions(filtered)
+  formRule.value = insertAssignModeRadio(filtered)
+  injectPreviewUploadHandlers(formRule.value, formData, uploadSession)
+}
+
+function onAssignModeChange() {
+  // 清掉另一组的值，重建 rule 并 remount form-create。
+  if (assignMode.value === 'person') {
+    formData.value.bu_code = ''
+    formData.value.role_code = ''
+  } else {
+    formData.value.assignee = ''
+  }
+  formCreateMounted.value = false
+  rebuildFormRule()
+  nextTick(() => { formCreateMounted.value = true })
+}
 
 function handleClosed() {
   formCreateMounted.value = false

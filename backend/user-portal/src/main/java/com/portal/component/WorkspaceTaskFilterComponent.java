@@ -55,9 +55,21 @@ public class WorkspaceTaskFilterComponent {
         // The JWT activeBusinessUnitId is a BU *id*, but BPMN businessUnitId is now a *code*
         // (code-based assignment). Convert id -> code so FIXED_BU_ROLE pool tasks aren't all hidden.
         String activeBu = resolveActiveBusinessUnitCode(normalizeBuId(activeBuOpt.get()));
+        // MI「按角色分派」任务是 workspace-scoped：仅当用户当前切换到的 role 恰是该任务分派的 role 时才可见。
+        // 先把 JWT active roleId 反查成 roleCode（单人角色也走 setAssignee，但仍算 role 分派，不能靠 assignee 放行）。
+        String activeRoleCode = resolveActiveRoleCode(userId);
         List<TaskInfo> out = new ArrayList<>();
         for (TaskInfo t : tasks) {
             if (t == null) {
+                continue;
+            }
+            // MI role-scoped gate（优先于 assignee/candidate 放行）：
+            // role 分派任务只在“切到该 role 的 workspace”时出现；active role 不匹配则隐藏，
+            // 即便当前用户是该任务的 assignee/candidate（单持有者角色也遵循此规则）。
+            if (isMiRoleScopedTask(t)) {
+                if (activeRoleCode != null && activeRoleCode.equalsIgnoreCase(t.getMiRoleCode().trim())) {
+                    out.add(t);
+                }
                 continue;
             }
             if (isDirectAssigneeForPortalUser(t, userId, portalUsername)
@@ -79,6 +91,36 @@ public class WorkspaceTaskFilterComponent {
             }
         }
         return out;
+    }
+
+    /**
+     * MI「按角色分派」任务（引擎从 ExtendedTaskInfo 透出 {@code miAssigneeMode=role} + {@code miRoleCode}）。
+     * 这类任务是 workspace-scoped：仅在用户切到该 role 的 workspace 时可见（区别于「按人分派」任务全 workspace 可见）。
+     */
+    private static boolean isMiRoleScopedTask(TaskInfo t) {
+        return t != null
+                && "role".equalsIgnoreCase(t.getMiAssigneeMode() == null ? null : t.getMiAssigneeMode().trim())
+                && t.getMiRoleCode() != null && !t.getMiRoleCode().isBlank();
+    }
+
+    /**
+     * 把 JWT active roleId 反查成 role code，用于和任务的 {@code miRoleCode} 比对。
+     * 走 {@link PortalWorkspaceAuthService#listWorkspaceContexts}（用户的 UBR 上下文，含 roleId↔roleCode）。
+     * 无 active role 或查不到对应 code 时返回 null（此时所有 MI role 任务都不匹配 → 一律隐藏，符合“未切到该 role 不可见”）。
+     */
+    private String resolveActiveRoleCode(String userId) {
+        Optional<String> activeRoleIdOpt = SecurityContextUtils.getCurrentActiveRoleId();
+        if (activeRoleIdOpt.isEmpty() || userId == null || userId.isBlank()) {
+            return null;
+        }
+        String activeRoleId = activeRoleIdOpt.get().trim();
+        for (PortalWorkspaceAuthService.WorkspaceContextRow row : portalWorkspaceAuthService.listWorkspaceContexts(userId)) {
+            if (row.getRoleId() != null && activeRoleId.equals(row.getRoleId().trim())
+                    && row.getRoleCode() != null && !row.getRoleCode().isBlank()) {
+                return row.getRoleCode().trim();
+            }
+        }
+        return null;
     }
 
     private static boolean isDirectAssigneeForPortalUser(TaskInfo t, String userId, String portalUsername) {

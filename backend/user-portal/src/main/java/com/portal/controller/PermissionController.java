@@ -78,6 +78,13 @@ public class PermissionController {
         return ApiResponse.success(permissionComponent.getBusinessUnitsCatalog());
     }
 
+    @GetMapping("/business-units/tree")
+    @Operation(summary = "Get business unit tree", description = "Platform business unit tree (keeps children hierarchy, for cascader selectors)")
+    public ApiResponse<List<Map<String, Object>>> getBusinessUnitsTree(@CurrentUserId String userId) {
+        log.debug("Business unit tree requested by user {}", userId);
+        return ApiResponse.success(permissionComponent.getBusinessUnitsTree());
+    }
+
     @GetMapping("/business-units/{businessUnitId}/roles")
     @Operation(summary = "Get business unit bound roles", description = "Get the list of business roles bound to a business unit")
     public ApiResponse<List<Map<String, Object>>> getBusinessUnitRoles(

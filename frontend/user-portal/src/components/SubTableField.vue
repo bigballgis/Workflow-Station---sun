@@ -341,6 +341,11 @@
               >
                 {{ getUserDisplayName(resolveRowAssigneeCell(scope.row)) }}
               </span>
+              <!-- 按角色分派的行（有 role_code）：共享认领池，未认领前无具体 assignee，显示角色池信息而非 Unassigned -->
+              <span
+                v-else-if="rowRoleCode(scope.row)"
+                class="assignee-role-pool"
+              >{{ t('subTable.sharedRole', { role: rowRoleCode(scope.row) }) }}</span>
               <span
                 v-else
                 class="text-muted"
@@ -698,6 +703,16 @@ const emit = defineEmits<{
 const canAdd = computed(() => props.editable === true && props.allowAdd !== false)
 const canEdit = computed(() => props.editable === true && props.allowEdit !== false)
 const canDelete = computed(() => props.editable === true && props.allowDelete !== false)
+
+/**
+ * MI「按角色分派」行的 role code（行里有 role_code/bu_code 即视为角色分派）。
+ * 用于 Assignee 列在共享认领池未认领时显示角色信息，而非误导性的 "Unassigned"。
+ */
+function rowRoleCode(row: Record<string, any>): string {
+  const rc = row?.role_code
+  if (rc != null && String(rc).trim() !== '') return String(rc).trim()
+  return ''
+}
 
 /** Row click (highlight-current-row) — hosts use it to pick the form-below-table row. */
 function onTableCurrentRowChange(row: Record<string, unknown> | null) {

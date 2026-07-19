@@ -137,6 +137,48 @@ final class BpmnMiXmlSupport {
         return null;
     }
 
+    /**
+     * 解析 BPMN，建「多实例内层 userTask 的 name → 外层多实例 subProcess 的 name」映射，
+     * 供 My Requests 列表把 currentNode（内层任务名，如 "sub form1"）映射成多实例节点名（如 "multi"）。
+     * 不含 name 的 MI subProcess 回退用其 id。每个 processDefinition 只需解析一次（调用方缓存）。
+     * 解析失败返回空 map（调用方回退 currentNode）。
+     */
+    static java.util.Map<String, String> buildMiInnerTaskNameToSubProcessName(String bpmnXml) {
+        java.util.Map<String, String> map = new java.util.HashMap<>();
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return map;
+        }
+        try {
+            Document doc = parseBpmnSecurely(bpmnXml);
+            NodeList subProcesses = doc.getElementsByTagNameNS("*", "subProcess");
+            for (int i = 0; i < subProcesses.getLength(); i++) {
+                if (!(subProcesses.item(i) instanceof Element sp)) {
+                    continue;
+                }
+                if (findMultiInstanceLoopInSubProcess(sp) == null) {
+                    continue; // 非多实例 subProcess，跳过
+                }
+                String miName = sp.getAttribute("name");
+                if (miName == null || miName.isBlank()) {
+                    miName = sp.getAttribute("id"); // 边界无 name 回退 id
+                }
+                // 该 MI subProcess 内的所有 userTask 的 name → miName
+                NodeList tasks = sp.getElementsByTagNameNS("*", "userTask");
+                for (int j = 0; j < tasks.getLength(); j++) {
+                    if (tasks.item(j) instanceof Element t) {
+                        String tn = t.getAttribute("name");
+                        if (tn != null && !tn.isBlank()) {
+                            map.putIfAbsent(tn.trim(), miName);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // 解析失败：返回已收集的（可能空）映射，调用方回退 currentNode
+        }
+        return map;
+    }
+
     static String findFirstPropertyValue(Element root, String propertyName) {
         if (root == null || propertyName == null) {
             return null;
@@ -278,5 +320,23 @@ final class BpmnMiXmlSupport {
 
     static String extractAssigneeFieldFromSubProcess(Element subProcessElement) {
         return findFirstPropertyValue(subProcessElement, "assigneeField");
+    }
+
+    /**
+     * MI 子任务的分派模式：{@code user}（默认，逐行读用户 id）或 {@code role}（逐行读 role/BU code）。
+     * 由设计器写在子流程内层 UserTask 的自定义扩展属性上。
+     */
+    static String extractAssigneeModeFromSubProcess(Element subProcessElement) {
+        return findFirstPropertyValue(subProcessElement, "assigneeMode");
+    }
+
+    /** role 模式下存 role code 的子表列名。 */
+    static String extractRoleFieldFromSubProcess(Element subProcessElement) {
+        return findFirstPropertyValue(subProcessElement, "roleField");
+    }
+
+    /** role 模式下存 BU code 的子表列名（可选）。 */
+    static String extractBuFieldFromSubProcess(Element subProcessElement) {
+        return findFirstPropertyValue(subProcessElement, "buField");
     }
 }

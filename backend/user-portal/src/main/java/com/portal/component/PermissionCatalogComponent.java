@@ -96,6 +96,13 @@ public class PermissionCatalogComponent {
     }
 
     /**
+     * 业务单元树（保留层级，供级联选择器）。
+     */
+    public List<Map<String, Object>> getBusinessUnitsTree() {
+        return virtualGroupAccessComponent.getBusinessUnitsTree();
+    }
+
+    /**
      * 指定业务单元已绑定的业务角色
      */
     public List<Map<String, Object>> getBusinessUnitRoles(String businessUnitId) {

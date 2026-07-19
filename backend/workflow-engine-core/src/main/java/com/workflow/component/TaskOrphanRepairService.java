@@ -205,6 +205,23 @@ public class TaskOrphanRepairService {
                     continue;
                 }
                 Map<String, Object> currentItem = (Map<String, Object>) currentItemObj;
+
+                // 逐行判定（与创建期 MultiInstanceTaskWriter 一致）：该行填了 role code（且节点允许 role）
+                // → 走 BU_ROLE 池修复，否则落到下方 assignee 修复。
+                String assigneeMode = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeMode");
+                boolean roleAllowed = assigneeMode == null
+                        || "role".equalsIgnoreCase(assigneeMode.trim())
+                        || "both".equalsIgnoreCase(assigneeMode.trim());
+                String roleField = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleField");
+                boolean rowHasRole = roleAllowed && roleField != null && !roleField.isBlank()
+                        && !miRoleCodesFromItem(currentItem, roleField.trim()).isEmpty();
+                if (rowHasRole) {
+                    if (repairOrphanMiRoleTask(t, currentItem, pdId, defKey)) {
+                        clearAssignmentFailureTrace(t.getId());
+                    }
+                    continue;
+                }
+
                 String assigneeField = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeField");
                 Object assigneeObj = null;
                 if (assigneeField != null && !assigneeField.isBlank()) {
@@ -231,6 +248,108 @@ public class TaskOrphanRepairService {
                 log.warn("Repair orphan MI task {} failed: {}", t.getId(), ex.getMessage());
             }
         }
+    }
+
+    /**
+     * MI role 模式孤儿修复：从 {@code currentItem} 读逐行 role code（{@code roleField}）与可选 BU code
+     * （{@code buField}，空则回退进程 active BU），走 BU_ROLE 池解析并重做 setAssignee/addCandidateUser。
+     * 与创建期 {@code MultiInstanceTaskWriter.handleRoleModeAssignment} 行为对齐。
+     *
+     * @return 是否成功落地（成功才清除失败留痕）
+     */
+    private boolean repairOrphanMiRoleTask(Task t, Map<String, Object> currentItem, String pdId, String defKey) {
+        String roleField = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleField");
+        if (roleField == null || roleField.isBlank()) {
+            log.warn("Orphan MI role task {} missing roleField; skip repair", t.getId());
+            return false;
+        }
+        List<String> roleCodes = miRoleCodesFromItem(currentItem, roleField.trim());
+        if (roleCodes.isEmpty()) {
+            log.warn("Orphan MI role task {} has no role code in currentItem[{}]; skip repair", t.getId(), roleField);
+            return false;
+        }
+        String buField = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "buField");
+        String buCode = null;
+        if (buField != null && !buField.isBlank()) {
+            Object buObj = currentItem.get(buField.trim());
+            if (buObj != null && !String.valueOf(buObj).trim().isEmpty()) {
+                buCode = String.valueOf(buObj).trim();
+            }
+        }
+        if (buCode == null) {
+            try {
+                Object activeBuId = runtimeService.getVariable(t.getExecutionId(), "activeBusinessUnitId");
+                if (activeBuId != null && !String.valueOf(activeBuId).trim().isEmpty()) {
+                    String code = adminCenterClient.getBusinessUnitCodeById(String.valueOf(activeBuId).trim());
+                    buCode = (code != null && !code.isBlank()) ? code : String.valueOf(activeBuId).trim();
+                }
+            } catch (Exception e) {
+                log.debug("Orphan MI role task {}: could not read active BU: {}", t.getId(), e.getMessage());
+            }
+        }
+        if (buCode == null || buCode.isBlank()) {
+            log.warn("Orphan MI role task {} has no BU code (buField empty and no active BU); skip repair", t.getId());
+            return false;
+        }
+
+        LinkedHashSet<String> users = new LinkedHashSet<>();
+        for (String rid : roleCodes) {
+            if (!adminCenterClient.isEligibleRole(buCode, rid)) {
+                log.warn("Orphan MI role task {} role {} not eligible for bu {}; skip repair", t.getId(), rid, buCode);
+                return false;
+            }
+            List<String> chunk = adminCenterClient.getUsersByBusinessUnitAndRole(buCode, rid);
+            if (chunk != null) {
+                for (String uid : chunk) {
+                    if (uid != null && !uid.isBlank()) {
+                        users.add(uid.trim());
+                    }
+                }
+            }
+        }
+        if (users.isEmpty()) {
+            log.warn("Orphan MI role task {} resolved no users for bu={} roles={}", t.getId(), buCode, roleCodes);
+            return false;
+        }
+        List<String> userList = new ArrayList<>(users);
+        if (userList.size() == 1) {
+            taskService.setAssignee(t.getId(), userList.get(0));
+            log.info("Repaired orphan MI role task {} with direct assignee {} (bu={}, roles={})",
+                    t.getId(), userList.get(0), buCode, roleCodes);
+        } else {
+            for (String uid : userList) {
+                taskService.addCandidateUser(t.getId(), uid);
+            }
+            log.info("Repaired orphan MI role task {} with {} candidate users (bu={}, roles={})",
+                    t.getId(), userList.size(), buCode, roleCodes);
+        }
+        return true;
+    }
+
+    /**
+     * 把 {@code currentItem[roleField]} 规范成 role code 列表：支持 {@code List}、JSON 数组文本、逗号串、单值。
+     * 与 {@code MultiInstanceTaskWriter.resolveRoleCodesFromItem} 保持一致。
+     */
+    private static List<String> miRoleCodesFromItem(Map<String, Object> currentItem, String roleField) {
+        Object raw = currentItem.get(roleField);
+        if (raw == null) {
+            return List.of();
+        }
+        if (raw instanceof List<?> list) {
+            List<String> out = new ArrayList<>();
+            for (Object o : list) {
+                if (o != null && !String.valueOf(o).trim().isEmpty()) {
+                    out.add(String.valueOf(o).trim());
+                }
+            }
+            return out;
+        }
+        String text = String.valueOf(raw).trim();
+        if (text.isEmpty()) {
+            return List.of();
+        }
+        String normalized = text.replaceAll("^[\\[\\]\"']+|[\\[\\]\"']+$", "").replace("\"", "").replace("'", "");
+        return AssigneeRoleIdsSupport.parseRoleIds(normalized, null);
     }
 
     // ==================== Initiator Orphan Merge ====================

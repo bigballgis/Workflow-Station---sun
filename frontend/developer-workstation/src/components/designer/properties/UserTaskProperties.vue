@@ -397,6 +397,26 @@ async function loadPropertiesAsync() {
       : (rawSubTableId ? Number(rawSubTableId) || '' : '')
   ctx.elementSubTableName.value = ext.subTableName || ''
   ctx.assigneeField.value = ext.assigneeField || ''
+  ctx.roleField.value = ext.roleField || ''
+  ctx.buField.value = ext.buField || ''
+  // 由 assigneeMode（user|role|both）派生两个开关；缺省时按已存字段兼容旧数据。
+  const modeRaw = typeof ext.assigneeMode === 'string' ? ext.assigneeMode.toLowerCase() : ''
+  if (modeRaw === 'both') {
+    ctx.allowUser.value = true
+    ctx.allowRole.value = true
+  } else if (modeRaw === 'role') {
+    ctx.allowUser.value = false
+    ctx.allowRole.value = true
+  } else if (modeRaw === 'user') {
+    ctx.allowUser.value = true
+    ctx.allowRole.value = false
+  } else {
+    // 旧数据无 assigneeMode：有 roleField 视为允许角色，有 assigneeField 视为允许个人。
+    ctx.allowRole.value = !!ctx.roleField.value
+    ctx.allowUser.value = !!ctx.assigneeField.value || !ctx.roleField.value
+  }
+  ctx.assigneeMode.value = ctx.allowUser.value && ctx.allowRole.value
+    ? 'both' : (ctx.allowRole.value ? 'role' : 'user')
   ctx.rowIdVariable.value = ext.rowIdVariable || ''
   formId.value = ext.formId || null
   actionIds.value = ext.actionIds || []
@@ -410,6 +430,9 @@ async function loadPropertiesAsync() {
 
   if (isFirstMultiInstanceSubTask.value) {
     loadSubTaskMiProgressFields()
+    // 回写派生的 assigneeMode 到 modeler，确保 modeler 与 DB 一致（防止某些加载/交互时序
+    // 让 saveXML 序列化出与 DB 不符的值）。幂等：与 DB 相同则无实质变化。
+    updateExtProp('assigneeMode', ctx.assigneeMode.value)
   }
 
   // Load role/BU catalogs first so persisted *codes* can be mapped back to ids for the UI,
