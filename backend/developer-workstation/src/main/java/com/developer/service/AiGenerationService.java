@@ -22,7 +22,7 @@ import java.util.UUID;
 
 /**
  * AI 生成服务
- * 负责会话生命周期管理、模式判定、消息持久化、文档版本管理、N8N 调用与 SSE 事件流
+ * 负责会话生命周期管理、模式判定、消息持久化、文档版本管理、AI webhook 调用与 SSE 事件流
  */
 public interface AiGenerationService {
 
@@ -150,7 +150,7 @@ public interface AiGenerationService {
     // ==================== Context Serialization ====================
 
     /**
-     * 序列化功能单元上下文（发送给 N8N AI Agent）
+     * 序列化功能单元上下文（发送给 AI Agent (Activepieces)）
      * 加载功能单元及所有关联数据，序列化为 FunctionUnitContextDTO。
      * 如果序列化后 JSON 超过配置的最大字节数（默认 100KB），
      * 则依次截断 bpmnXml 和 configJson 字段。
@@ -161,11 +161,11 @@ public interface AiGenerationService {
      */
     FunctionUnitContextDTO serializeFunctionUnitContext(Long functionUnitId);
 
-    // ==================== N8N Session Memory Rebuild ====================
+    // ==================== AI webhook Session Memory Rebuild ====================
 
     /**
      * 从 dw_ai_messages 加载完整对话历史，按 (role, content) 格式组装为对话历史数组。
-     * 用于 N8N 会话记忆丢失时重建会话上下文。
+     * 用于 AI webhook 会话记忆丢失时重建会话上下文。
      *
      * @param sessionId 会话 ID
      * @return 对话历史数组，每个元素包含 "role" 和 "content" 键
@@ -183,8 +183,8 @@ public interface AiGenerationService {
     List<Map<String, String>> getLatestDocuments(Long functionUnitId, AiPhase phase, AiMode mode);
 
     /**
-     * 调用 N8N Webhook，包含会话不存在错误检测与自动重建逻辑。
-     * 如果 N8N 返回会话不存在错误，自动从数据库加载对话历史并重新发送请求。
+     * 调用 AI webhook，包含会话不存在错误检测与自动重建逻辑。
+     * 如果 AI webhook 返回会话不存在错误，自动从数据库加载对话历史并重新发送请求。
      *
      * @param sessionId          会话 ID
      * @param message            用户消息
@@ -194,9 +194,9 @@ public interface AiGenerationService {
      * @param functionUnitId     功能单元 ID（用于会话重建时重新加载上下文）
      * @param existingDocuments  前序文档列表（首次请求时提供，后续为空列表）
      * @param regenerateScope    增量重新生成范围（ALL/TABLES/FORMS/ACTIONS/DECISIONS/PROCESS/TABLE_RELATIONS，null 等同于 ALL）
-     * @return N8N 响应体（Map 格式）
+     * @return AI webhook 响应体（Map 格式）
      */
-    Map<String, Object> callN8NWebhook(UUID sessionId, String message, AiPhase phase, AiMode mode,
+    Map<String, Object> callAiWebhook(UUID sessionId, String message, AiPhase phase, AiMode mode,
                                         FunctionUnitContextDTO context, Long functionUnitId,
                                         List<Map<String, String>> existingDocuments,
                                         String regenerateScope);

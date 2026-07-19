@@ -1,5 +1,10 @@
 # Schema 单一事实来源方案（init-scripts 唯一来源，清退 Flyway）
 
+> **✅ 已执行完毕（2026-06）**：本方案四个步骤均已落地——pom 无 Flyway 依赖、
+> `application.yml` 固化 `flyway.enabled: false`、历史迁移归档 `docs/legacy-flyway-migrations/`、
+> 方向 ① 脚手架（`deploy/flyway/` 等）已回退。本文作为历史决策与执行记录保留，
+> 现行说明见 [schema-and-migration.md](../schema-and-migration.md)。
+
 > 方向 ②：承认现实——所有环境都关着 Flyway、schema 一直由 init-scripts 建——
 > 把 **`deploy/init-scripts` 正式确立为唯一 schema 来源**，清退名存实亡的后端 Flyway 迁移。
 > 比"扶正 Flyway"工作量小得多、风险低得多，同样消灭双轨。

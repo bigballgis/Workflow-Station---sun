@@ -23,15 +23,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Property-based tests for N8N success timestamp tracking.
+ * Property-based tests for AI webhook success timestamp tracking.
  *
- * <p>Verifies that successful N8N calls update {@code lastN8NSuccessTime},
+ * <p>Verifies that successful AI webhook calls update {@code lastAiWebhookSuccessTime},
  * and failed calls do not modify it.</p>
  *
  * <p><b>Validates: Requirements 45.1, 45.2</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 24: N8N success timestamp tracking")
-class AiN8NResilienceProperties {
+@Tag("Feature: ai-function-unit-generation-refactor, Property 24: AI webhook success timestamp tracking")
+class AiWebhookResilienceProperties {
 
     @SuppressWarnings("unchecked")
     private AiGenerationServiceImpl createServiceWithMockRestTemplate(RestTemplate mockRestTemplate) {
@@ -42,22 +42,22 @@ class AiN8NResilienceProperties {
                 mock(FunctionUnitRepository.class),
                 new ObjectMapper(),
                 102400);
-        ReflectionTestUtils.setField(service, "n8nWebhookUrl", "http://localhost:5678/webhook/test");
-        ReflectionTestUtils.setField(service, "n8nTimeoutSeconds", 30);
-        ReflectionTestUtils.setField(service, "n8nRestTemplate", mockRestTemplate);
+        ReflectionTestUtils.setField(service, "aiWebhookUrl", "http://localhost:5678/webhook/test");
+        ReflectionTestUtils.setField(service, "aiWebhookTimeoutSeconds", 30);
+        ReflectionTestUtils.setField(service, "aiWebhookRestTemplate", mockRestTemplate);
         return service;
     }
 
     /**
-     * Property 24a: Successful N8N call updates lastN8NSuccessTime.
+     * Property 24a: Successful AI webhook call updates lastAiWebhookSuccessTime.
      *
-     * <p>After a successful call to doCallN8NWebhookWithRetry, the
-     * lastN8NSuccessTime field should be set to a recent Instant.</p>
+     * <p>After a successful call to doCallAiWebhookWithRetry, the
+     * lastAiWebhookSuccessTime field should be set to a recent Instant.</p>
      *
      * <p><b>Validates: Requirements 45.1</b></p>
      */
     @Property(tries = 100)
-    @Label("Property 24a: successful call updates lastN8NSuccessTime")
+    @Label("Property 24a: successful call updates lastAiWebhookSuccessTime")
     void successfulCallUpdatesTimestamp(@ForAll("arbitrarySessionId") String sessionId) {
         RestTemplate mockRestTemplate = mock(RestTemplate.class);
         AiGenerationServiceImpl service = createServiceWithMockRestTemplate(mockRestTemplate);
@@ -68,14 +68,14 @@ class AiN8NResilienceProperties {
         when(mockRestTemplate.postForEntity(anyString(), any(), eq(Map.class)))
                 .thenReturn(responseEntity);
 
-        // Ensure lastN8NSuccessTime is null initially
-        assertThat(ReflectionTestUtils.getField(service, "lastN8NSuccessTime")).isNull();
+        // Ensure lastAiWebhookSuccessTime is null initially
+        assertThat(ReflectionTestUtils.getField(service, "lastAiWebhookSuccessTime")).isNull();
 
         // Invoke the retry wrapper via reflection (private method)
         Instant before = Instant.now();
         try {
             java.lang.reflect.Method method = AiGenerationServiceImpl.class
-                    .getDeclaredMethod("doCallN8NWebhookWithRetry", Map.class);
+                    .getDeclaredMethod("doCallAiWebhookWithRetry", Map.class);
             method.setAccessible(true);
             method.invoke(service, Map.of("sessionId", sessionId, "message", "test"));
         } catch (Exception e) {
@@ -84,31 +84,31 @@ class AiN8NResilienceProperties {
         }
         Instant after = Instant.now();
 
-        Instant lastSuccess = (Instant) ReflectionTestUtils.getField(service, "lastN8NSuccessTime");
+        Instant lastSuccess = (Instant) ReflectionTestUtils.getField(service, "lastAiWebhookSuccessTime");
         assertThat(lastSuccess)
-                .as("lastN8NSuccessTime should be updated after successful call")
+                .as("lastAiWebhookSuccessTime should be updated after successful call")
                 .isNotNull()
                 .isAfterOrEqualTo(before)
                 .isBeforeOrEqualTo(after);
     }
 
     /**
-     * Property 24b: Failed N8N call (non-retryable) does not modify lastN8NSuccessTime.
+     * Property 24b: Failed AI webhook call (non-retryable) does not modify lastAiWebhookSuccessTime.
      *
-     * <p>When the N8N call fails with a non-retryable error code,
-     * lastN8NSuccessTime should remain unchanged.</p>
+     * <p>When the AI webhook call fails with a non-retryable error code,
+     * lastAiWebhookSuccessTime should remain unchanged.</p>
      *
      * <p><b>Validates: Requirements 45.2</b></p>
      */
     @Property(tries = 100)
-    @Label("Property 24b: failed non-retryable call does not modify lastN8NSuccessTime")
+    @Label("Property 24b: failed non-retryable call does not modify lastAiWebhookSuccessTime")
     void failedNonRetryableCallDoesNotUpdateTimestamp(@ForAll("arbitrarySessionId") String sessionId) {
         RestTemplate mockRestTemplate = mock(RestTemplate.class);
         AiGenerationServiceImpl service = createServiceWithMockRestTemplate(mockRestTemplate);
 
         // Set a known initial timestamp
         Instant initialTimestamp = Instant.parse("2026-01-01T00:00:00Z");
-        ReflectionTestUtils.setField(service, "lastN8NSuccessTime", initialTimestamp);
+        ReflectionTestUtils.setField(service, "lastAiWebhookSuccessTime", initialTimestamp);
 
         // Mock a non-retryable exception (e.g., empty response)
         when(mockRestTemplate.postForEntity(anyString(), any(), eq(Map.class)))
@@ -116,18 +116,18 @@ class AiN8NResilienceProperties {
 
         try {
             java.lang.reflect.Method method = AiGenerationServiceImpl.class
-                    .getDeclaredMethod("doCallN8NWebhookWithRetry", Map.class);
+                    .getDeclaredMethod("doCallAiWebhookWithRetry", Map.class);
             method.setAccessible(true);
             method.invoke(service, Map.of("sessionId", sessionId, "message", "test"));
         } catch (java.lang.reflect.InvocationTargetException e) {
-            // Expected: AI_N8N_EMPTY_RESPONSE is not retryable, should throw
+            // Expected: AI_WEBHOOK_EMPTY_RESPONSE is not retryable, should throw
         } catch (Exception e) {
             // Expected failure
         }
 
-        Instant lastSuccess = (Instant) ReflectionTestUtils.getField(service, "lastN8NSuccessTime");
+        Instant lastSuccess = (Instant) ReflectionTestUtils.getField(service, "lastAiWebhookSuccessTime");
         assertThat(lastSuccess)
-                .as("lastN8NSuccessTime should not be modified after non-retryable failure")
+                .as("lastAiWebhookSuccessTime should not be modified after non-retryable failure")
                 .isEqualTo(initialTimestamp);
     }
 

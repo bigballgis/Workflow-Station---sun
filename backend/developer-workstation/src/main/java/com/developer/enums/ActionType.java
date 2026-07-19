@@ -32,7 +32,8 @@ public enum ActionType {
     SCRIPT,
     /** 自定义动作 - 自定义脚本 */
     CUSTOM_SCRIPT,
-    /** 自定义动作 - N8N 动作 */
+    /** 自定义动作 - 外部 Webhook 动作。枚举名是历史命名,已持久化于 dw_action_definitions.action_type
+     *  与种子脚本,运行时由 Activepieces 承接;改名需数据迁移,勿直接重命名。 */
     N8N_ACTION,
     /** 流程提交 */
     PROCESS_SUBMIT,

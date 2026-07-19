@@ -247,7 +247,7 @@
         </el-alert>
       </div>
 
-      <!-- Task 16.4: N8N Degradation Panel -->
+      <!-- Task 16.4: AI webhook Degradation Panel -->
       <div
         v-if="degradationInfo"
         class="chat-dialog__degradation"

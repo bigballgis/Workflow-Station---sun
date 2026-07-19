@@ -119,6 +119,25 @@ export function createFieldExtractor(deps: {
           children: extractFieldsRecursive(getRuleChildren(item))
         } as any)
         continue
+      } else if (item.type === 'recordNote') {
+        // New Request: notes are writable before the instance exists — the page
+        // anchors them on a draft target id, then re-anchors (adopt) after start.
+        const rnProps = item.props || {}
+        const rnScope = rnProps.scope === 'TABLE' ? 'TABLE' : 'RECORD'
+        fields.push({
+          key: `__recordNote_${rnScope.toLowerCase()}`,
+          label: '',
+          type: 'recordNote',
+          span: 24,
+          _recordNote: {
+            scope: rnScope,
+            panelTitle: typeof rnProps.panelTitle === 'string' ? rnProps.panelTitle : undefined,
+            allowAttachment: rnProps.allowAttachment !== false,
+            maxFileSizeMb: Number(rnProps.maxFileSizeMb) || 10,
+            allowEditOwn: rnProps.allowEditOwn !== false,
+            pageSize: Number(rnProps.pageSize) || 5,
+          },
+        } as any)
       } else if (item.type === 'lookup' && item.field) {
         // Lookup field — parse config from form-create rule props.lookupConfig
         let lookupCfg: any = {}

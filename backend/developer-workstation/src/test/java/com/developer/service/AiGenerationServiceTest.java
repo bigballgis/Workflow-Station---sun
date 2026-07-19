@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * AiGenerationService 单元测试
- * N8N 调用模拟、SSE 事件生成、会话恢复
+ * AI webhook 调用模拟、SSE 事件生成、会话恢复
  */
 @ExtendWith(MockitoExtension.class)
 class AiGenerationServiceTest {
@@ -60,9 +60,9 @@ class AiGenerationServiceTest {
                 objectMapper,
                 102400 // 100KB max context size
         );
-        ReflectionTestUtils.setField(generationService, "n8nWebhookUrl",
+        ReflectionTestUtils.setField(generationService, "aiWebhookUrl",
                 "http://localhost:5678/webhook/ai-function-unit-gen");
-        ReflectionTestUtils.setField(generationService, "n8nTimeoutSeconds", 120);
+        ReflectionTestUtils.setField(generationService, "aiWebhookTimeoutSeconds", 120);
     }
 
     // ==================== Session Management ====================
@@ -102,10 +102,10 @@ class AiGenerationServiceTest {
         assertEquals("AI_SESSION_NOT_FOUND", ex.getErrorCode());
     }
 
-    // ==================== N8N Webhook ====================
+    // ==================== AI webhook ====================
 
     @Test
-    void callN8NWebhook_sessionNotFound_shouldRetryWithHistory() {
+    void callAiWebhook_sessionNotFound_shouldRetryWithHistory() {
         UUID sessionId = UUID.randomUUID();
 
         // Mock message history for rebuild
@@ -126,15 +126,15 @@ class AiGenerationServiceTest {
         when(aiMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId))
                 .thenReturn(List.of(msg1, msg2));
 
-        // Use a spy to intercept doCallN8NWebhook
+        // Use a spy to intercept doCallAiWebhook
         AiGenerationServiceImpl spyService = spy(generationService);
 
         // First call returns session-not-found error, second call returns success
         Map<String, Object> errorResponse = Map.of("error", "Session not found for id xyz");
         Map<String, Object> successResponse = Map.of("reply", "Generated response");
 
-        // We need to mock the private doCallN8NWebhook via the public callN8NWebhook
-        // Since doCallN8NWebhook makes real HTTP calls, we test buildConversationHistory instead
+        // We need to mock the private doCallAiWebhook via the public callAiWebhook
+        // Since doCallAiWebhook makes real HTTP calls, we test buildConversationHistory instead
         List<Map<String, String>> history = generationService.buildConversationHistory(sessionId);
 
         assertEquals(2, history.size());
@@ -151,7 +151,7 @@ class AiGenerationServiceTest {
         SseEmitter emitter = generationService.createChatEmitter(1L, "user1");
 
         assertNotNull(emitter);
-        // Dynamic timeout: n8nTimeoutSeconds(120) * 2 * 1000 + 60_000 = 300_000
+        // Dynamic timeout: aiWebhookTimeoutSeconds(120) * 2 * 1000 + 60_000 = 300_000
         assertEquals(300_000L, emitter.getTimeout());
     }
 

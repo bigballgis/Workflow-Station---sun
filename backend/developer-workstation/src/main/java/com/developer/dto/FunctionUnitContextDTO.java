@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 功能单元上下文序列化 DTO（发送给 N8N）
+ * 功能单元上下文序列化 DTO（发送给 AI webhook）
  */
 @Data
 @Builder

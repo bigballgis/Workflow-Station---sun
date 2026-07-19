@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 
 /**
  * 功能单元上下文序列化协作类。
- * 负责将 {@link FunctionUnit} 及其关联实体转换为发送给 N8N AI Agent 的 {@link FunctionUnitContextDTO}。
+ * 负责将 {@link FunctionUnit} 及其关联实体转换为发送给 AI Agent (Activepieces) 的 {@link FunctionUnitContextDTO}。
  * 纯结构转换，无副作用、无外部依赖。
  */
 @Component

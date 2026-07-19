@@ -39,8 +39,8 @@ class AiContextAwarenessProperties {
         generationService = new AiGenerationServiceImpl(
                 aiSessionRepository, aiMessageRepository, aiDocumentRepository,
                 functionUnitRepository, objectMapper, 102400);
-        ReflectionTestUtils.setField(generationService, "n8nWebhookUrl", "http://localhost:5678/webhook/ai-function-unit-gen");
-        ReflectionTestUtils.setField(generationService, "n8nTimeoutSeconds", 120);
+        ReflectionTestUtils.setField(generationService, "aiWebhookUrl", "http://localhost:5678/webhook/ai-function-unit-gen");
+        ReflectionTestUtils.setField(generationService, "aiWebhookTimeoutSeconds", 120);
     }
 
     /**
@@ -132,13 +132,13 @@ class AiContextAwarenessProperties {
     }
 
     /**
-     * Feature: ai-context-awareness, Property 3: buildN8NRequestBody 正确包含 existingDocuments
+     * Feature: ai-context-awareness, Property 3: buildAiWebhookRequestBody 正确包含 existingDocuments
      *
      * Validates: Requirements 3.1, 3.2, 3.3
      */
     @Property(tries = 100)
-    @Label("Property 3: buildN8NRequestBody correctly includes existingDocuments")
-    void buildN8NRequestBodyIncludesExistingDocuments(
+    @Label("Property 3: buildAiWebhookRequestBody correctly includes existingDocuments")
+    void buildAiWebhookRequestBodyIncludesExistingDocuments(
             @ForAll AiPhase phase, @ForAll AiMode mode,
             @ForAll @StringLength(min = 1, max = 100) String docContent) {
         setupService();
@@ -154,7 +154,7 @@ class AiContextAwarenessProperties {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildN8NRequestBody",
+                generationService, "buildAiWebhookRequestBody",
                 sessionId, "test message", phase, mode, context, 1L, existingDocuments,
                 (List<Map<String, String>>) null, (String) null);
 
@@ -165,7 +165,7 @@ class AiContextAwarenessProperties {
         // Test with empty list
         @SuppressWarnings("unchecked")
         Map<String, Object> bodyEmpty = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildN8NRequestBody",
+                generationService, "buildAiWebhookRequestBody",
                 sessionId, "test message", phase, mode, context, 1L, List.of(),
                 (List<Map<String, String>>) null, (String) null);
 
@@ -181,7 +181,7 @@ class AiContextAwarenessProperties {
      */
     @Property(tries = 100)
     @Label("Property 4: context pre-serialized as string, existingDocuments formatted as readable text")
-    void buildN8NRequestBodyPreSerializesContextAndDocuments(
+    void buildAiWebhookRequestBodyPreSerializesContextAndDocuments(
             @ForAll AiPhase phase, @ForAll AiMode mode) {
         setupService();
 
@@ -196,7 +196,7 @@ class AiContextAwarenessProperties {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildN8NRequestBody",
+                generationService, "buildAiWebhookRequestBody",
                 sessionId, "test message", phase, mode, context, 1L, existingDocuments,
                 (List<Map<String, String>>) null, (String) null);
 

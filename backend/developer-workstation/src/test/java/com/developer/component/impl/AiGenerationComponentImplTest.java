@@ -33,7 +33,7 @@ import static org.mockito.Mockito.*;
  *
  * 验证 chatStream 编排逻辑：
  * - 首条消息加载 context 和 existingDocuments
- * - 非首条消息也加载 context 和 existingDocuments（N8N systemMessage 每次渲染）
+ * - 非首条消息也加载 context 和 existingDocuments（AI webhook systemMessage 每次渲染）
  * - 阶段切换时加载 context 和 existingDocuments
  * - serializeFunctionUnitContext 异常时发送 SSE error 事件
  *
@@ -77,7 +77,7 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.REQUIREMENTS, AiMode.NEW)).thenReturn(List.of());
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -107,7 +107,7 @@ class AiGenerationComponentImplTest {
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.DESIGN, AiMode.MODIFY))
                 .thenReturn(List.of(Map.of("documentType", "REQUIREMENTS", "content", "req doc")));
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -137,7 +137,7 @@ class AiGenerationComponentImplTest {
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.DESIGN, AiMode.NEW))
                 .thenReturn(List.of(Map.of("documentType", "REQUIREMENTS", "content", "req doc")));
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -155,7 +155,7 @@ class AiGenerationComponentImplTest {
 
     /**
      * 非首条消息（sessionId 非 null，同阶段）：也应加载 context 和 existingDocuments
-     * N8N systemMessage 每次请求都重新渲染，需要最新数据
+     * AI webhook systemMessage 每次请求都重新渲染，需要最新数据
      */
     @Test
     void chatStream_subsequentMessage_alsoLoadsContextAndDocuments() throws Exception {
@@ -166,7 +166,7 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.REQUIREMENTS, AiMode.NEW)).thenReturn(List.of());
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -182,7 +182,7 @@ class AiGenerationComponentImplTest {
     }
 
     /**
-     * serializeFunctionUnitContext 抛出异常时：降级为 null context，仍然调用 N8N
+     * serializeFunctionUnitContext 抛出异常时：降级为 null context，仍然调用 AI webhook
      * Validates: Requirements 1.3 (graceful degradation)
      */
     @Test
@@ -193,8 +193,8 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.createChatEmitter(anyLong(), anyString())).thenReturn(new SseEmitter(120000L));
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenThrow(new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "功能单元不存在"));
-        // N8N should still be called with null context and empty documents
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), isNull(), anyLong(), anyList(), any()))
+        // AI webhook should still be called with null context and empty documents
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), isNull(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -205,8 +205,8 @@ class AiGenerationComponentImplTest {
         component.chatStream(request, "user1");
         latch.await(5, TimeUnit.SECONDS);
 
-        // Verify N8N was still called (graceful degradation, not failure)
-        verify(aiGenerationService).callN8NWebhook(any(), eq("hello"), eq(AiPhase.REQUIREMENTS), eq(AiMode.NEW),
+        // Verify AI webhook was still called (graceful degradation, not failure)
+        verify(aiGenerationService).callAiWebhook(any(), eq("hello"), eq(AiPhase.REQUIREMENTS), eq(AiMode.NEW),
                 isNull(), eq(1L), eq(List.of()), isNull());
     }
 

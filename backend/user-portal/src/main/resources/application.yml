@@ -62,6 +62,12 @@ spring:
           max-idle: 8
           min-idle: 0
   
+  # RecordNote 附件上传（multipart 默认 1MB 太小）
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 30MB
+
   # 禁用静态资源处理，避免与 API 路由冲突
   web:
     resources:

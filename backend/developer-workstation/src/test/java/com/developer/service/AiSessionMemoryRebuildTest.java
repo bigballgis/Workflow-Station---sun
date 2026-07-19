@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
 /**
  * 会话重建场景单元测试
  *
- * 验证 N8N 返回 session-not-found 时，重建请求包含：
+ * 验证 AI webhook 返回 session-not-found 时，重建请求包含：
  * - 重新加载的 context（通过 functionUnitId 调用 serializeFunctionUnitContext）
  * - 重新加载的 existingDocuments（通过 functionUnitId 调用 getLatestDocuments）
  * - conversationHistory（从数据库加载）
@@ -52,13 +52,13 @@ class AiSessionMemoryRebuildTest {
         generationService = new AiGenerationServiceImpl(
                 aiSessionRepository, aiMessageRepository, aiDocumentRepository,
                 functionUnitRepository, objectMapper, 102400);
-        ReflectionTestUtils.setField(generationService, "n8nWebhookUrl",
+        ReflectionTestUtils.setField(generationService, "aiWebhookUrl",
                 "http://localhost:5678/webhook/ai-function-unit-gen");
-        ReflectionTestUtils.setField(generationService, "n8nTimeoutSeconds", 120);
+        ReflectionTestUtils.setField(generationService, "aiWebhookTimeoutSeconds", 120);
     }
 
     /**
-     * 验证会话重建时 buildN8NRequestBody 包含 conversationHistory、context 和 existingDocuments
+     * 验证会话重建时 buildAiWebhookRequestBody 包含 conversationHistory、context 和 existingDocuments
      */
     @Test
     @SuppressWarnings("unchecked")
@@ -91,7 +91,7 @@ class AiSessionMemoryRebuildTest {
                 Map.of("documentType", "REQUIREMENTS", "content", "req content"));
 
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildN8NRequestBody",
+                generationService, "buildAiWebhookRequestBody",
                 sessionId, "new message", AiPhase.DESIGN, AiMode.MODIFY,
                 context, functionUnitId, existingDocuments, history, (String) null);
 

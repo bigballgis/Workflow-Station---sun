@@ -608,6 +608,9 @@
       </div>
     </template>
 
+    <!-- RecordNote is rendered by FormRendererFields (main form only); skip in nested contexts -->
+    <template v-else-if="field.type === 'recordNote'" />
+
     <!-- default fallback -->
     <template v-else>
       <el-input

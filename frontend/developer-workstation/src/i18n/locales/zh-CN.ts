@@ -590,6 +590,14 @@ export default {
     lookupGoToViewDesign: 'Go To Designer',
     subTablePlaceholderUnconfigured: '未选择 Sub Table',
     subTablePlaceholderStale: '绑定已失效',
+    recordNoteDefaultTitle: '备注',
+    recordNoteScopeTable: '整表',
+    recordNoteScopeRecord: '单条记录',
+    recordNoteAdd: '添加',
+    recordNotePlaceholderHint: '评论与附件面板——部署后在用户门户生效',
+    recordNoteDuplicateScope: '同一表单同一作用域只能放置一个 Record Note 组件',
+    recordNoteScopeMainHint: 'Single record 仅在子表表单可用；主表单仅支持整表',
+    recordNoteRecordScopeMainForm: '主表单的 Record Note 仅支持整表作用域，Single record 请放在子表表单中',
     // 子表逐操作权限（右侧属性面板）：独立控制 新增 / 编辑 / 删除
     subTablePermission: {
       allowAdd: '允许新增',
@@ -1859,8 +1867,8 @@ export default {
     error: {
       AI_SESSION_NOT_FOUND: 'AI 会话未找到，请重新开始',
       AI_FUNCTION_UNIT_NOT_FOUND: '功能单元未找到',
-      AI_N8N_TIMEOUT: 'AI 服务超时，请重试',
-      AI_N8N_CALL_FAILED: 'AI 服务调用失败，请重试',
+      AI_WEBHOOK_TIMEOUT: 'AI 服务超时，请重试',
+      AI_WEBHOOK_CALL_FAILED: 'AI 服务调用失败，请重试',
       AI_WRITE_CONFLICT: '数据已被其他用户修改，请刷新后重试',
       AI_CONTEXT_TOO_LARGE: '功能单元数据过大，无法进行 AI 处理',
       AI_UNDO_EXPIRED: '撤销窗口已过期',

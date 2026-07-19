@@ -61,26 +61,24 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     private final ObjectMapper objectMapper;
     private final int maxContextSizeBytes;
 
-    // AI 生成 webhook 目标:已从旧的 n8n 迁移到 Activepieces 同步 webhook
-    // (POST <base>/api/v1/webhooks/<flowId>/sync,响应契约不变)。
-    // 优先读新键 activepieces.ai-generation.webhook-url,回退到旧键,再回退到 AP dev 默认。
-    // 字段名保留 n8nWebhookUrl 以兼容既有测试(ReflectionTestUtils 按此名注入)。
-    @Value("${activepieces.ai-generation.webhook-url:${n8n.ai-generation.webhook-url:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}}")
-    private String n8nWebhookUrl;
+    // AI 生成 webhook 目标:Activepieces 同步 webhook
+    // (POST <base>/api/v1/webhooks/<flowId>/sync,flowId 随环境不同)。
+    @Value("${activepieces.ai-generation.webhook-url:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}")
+    private String aiWebhookUrl;
 
     // 300s: deepseek-v4-pro 推理模型生成 DESIGN 文档实测可达 ~230s;须与 AP 的
     // AP_WEBHOOK_TIMEOUT_SECONDS 保持一致(AP 先到期会返回 204 空响应)。
-    @Value("${activepieces.ai-generation.timeout-seconds:${n8n.ai-generation.timeout-seconds:300}}")
-    private int n8nTimeoutSeconds;
+    @Value("${activepieces.ai-generation.timeout-seconds:300}")
+    private int aiWebhookTimeoutSeconds;
 
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")
     private List<String> ssrfAllowedHosts;
 
-    /** Cached N8N RestTemplate (initialized at startup via @PostConstruct) */
-    private RestTemplate n8nRestTemplate;
+    /** Cached AI webhook RestTemplate (initialized at startup via @PostConstruct) */
+    private RestTemplate aiWebhookRestTemplate;
 
-    /** Timestamp of the last successful N8N call, used for degradation info (requirements 45 linkage) */
-    private volatile Instant lastN8NSuccessTime;
+    /** Timestamp of the last successful AI webhook call, used for degradation info (requirements 45 linkage) */
+    private volatile Instant lastAiWebhookSuccessTime;
 
     // 协作类（单一职责拆分）。Spring 通过字段注入用容器托管的 Bean 覆盖默认实例；
     // 默认实例保证脱离 Spring 上下文直接 new 本类时（单元测试）委托路径仍可用。
@@ -110,18 +108,18 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     @PostConstruct
-    void initN8NRestTemplate() {
+    void initAiWebhookRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        int timeoutMs = n8nTimeoutSeconds * 1000;
+        int timeoutMs = aiWebhookTimeoutSeconds * 1000;
         factory.setConnectTimeout(timeoutMs);
         factory.setReadTimeout(timeoutMs);
-        this.n8nRestTemplate = new RestTemplate(factory);
+        this.aiWebhookRestTemplate = new RestTemplate(factory);
         Set<String> allowedHosts = ssrfAllowedHosts.stream()
                 .map(h -> h.trim().toLowerCase())
                 .filter(h -> !h.isEmpty())
                 .collect(Collectors.toSet());
-        SsrfProtection.validate(n8nWebhookUrl, allowedHosts);
-        log.info("Initialized N8N RestTemplate with timeout={}ms, webhookUrl validated (allowedHosts={})",
+        SsrfProtection.validate(aiWebhookUrl, allowedHosts);
+        log.info("Initialized AI webhook RestTemplate with timeout={}ms, webhookUrl validated (allowedHosts={})",
                 timeoutMs, allowedHosts);
     }
 
@@ -377,7 +375,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         }
     }
 
-    // ==================== N8N Session Memory Rebuild ====================
+    // ==================== AI webhook Session Memory Rebuild ====================
 
     @Override
     @Transactional(readOnly = true)
@@ -453,37 +451,37 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     @Override
     @SuppressWarnings("unchecked")
-    public Map<String, Object> callN8NWebhook(UUID sessionId, String message, AiPhase phase, AiMode mode,
+    public Map<String, Object> callAiWebhook(UUID sessionId, String message, AiPhase phase, AiMode mode,
                                                FunctionUnitContextDTO context, Long functionUnitId,
                                                List<Map<String, String>> existingDocuments,
                                                String regenerateScope) {
-        // Activepieces 的 sync webhook 每次调用都是全新一次 agent 运行,不像旧 n8n 有 Postgres 对话记忆。
+        // Activepieces 的 sync webhook 每次调用都是全新一次 agent 运行,没有跨调用的对话记忆。
         // 因此每次都把完整对话历史一并带上,保证多轮连续性。saveMessage 已在调用本方法前持久化本轮用户消息,
         // 故构建后剔除末尾这条"当前用户消息",避免与单独传的 message 字段重复。
         List<Map<String, String>> priorHistory = buildPriorConversationHistory(sessionId, message);
 
-        Map<String, Object> requestBody = buildN8NRequestBody(sessionId, message, phase, mode,
+        Map<String, Object> requestBody = buildAiWebhookRequestBody(sessionId, message, phase, mode,
                 context, functionUnitId, existingDocuments, priorHistory, regenerateScope);
 
-        Map<String, Object> response = doCallN8NWebhookWithRetry(requestBody);
+        Map<String, Object> response = doCallAiWebhookWithRetry(requestBody);
 
         if (isSessionNotFoundError(response)) {
-            log.warn("N8N session not found for sessionId={}, rebuilding", sessionId);
+            log.warn("AI webhook session not found for sessionId={}, rebuilding", sessionId);
             List<Map<String, String>> conversationHistory = buildConversationHistory(sessionId);
 
             // Reload context and documents using functionUnitId
             FunctionUnitContextDTO rebuiltContext = serializeFunctionUnitContext(functionUnitId);
             List<Map<String, String>> rebuiltDocs = getLatestDocuments(functionUnitId, phase, mode);
 
-            Map<String, Object> retryBody = buildN8NRequestBody(sessionId, message, phase, mode,
+            Map<String, Object> retryBody = buildAiWebhookRequestBody(sessionId, message, phase, mode,
                     rebuiltContext, functionUnitId, rebuiltDocs, conversationHistory, regenerateScope);
-            response = doCallN8NWebhookWithRetry(retryBody);
+            response = doCallAiWebhookWithRetry(retryBody);
         }
 
         return response;
     }
 
-    private Map<String, Object> buildN8NRequestBody(UUID sessionId, String message, AiPhase phase, AiMode mode,
+    private Map<String, Object> buildAiWebhookRequestBody(UUID sessionId, String message, AiPhase phase, AiMode mode,
                                                      FunctionUnitContextDTO context, Long functionUnitId,
                                                      List<Map<String, String>> existingDocuments,
                                                      List<Map<String, String>> conversationHistory,
@@ -494,7 +492,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         body.put("phase", phase.name());
         body.put("mode", mode.name());
 
-        // Always pass functionUnitId to N8N for the Agent tool node to query the database.
+        // Always pass functionUnitId to AI webhook for the Agent tool node to query the database.
         // Even if context is null (new function unit not yet generated), pass functionUnitId.
         if (functionUnitId != null) {
             body.put("functionUnitId", functionUnitId);
@@ -503,7 +501,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         }
 
         if (context != null) {
-            // Pre-serialize to JSON string to avoid N8N expression rendering as [object Object]
+            // Pre-serialize to JSON string to avoid AI webhook expression rendering as [object Object]
             body.put("context", toJsonString(context));
         }
 
@@ -531,7 +529,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     /**
      * Build new architecture metadata, including enum value lists, configJson extension
      * structure descriptions, ConditionExpression format, and new entity structures.
-     * Provides N8N/AI with understanding of the current system architecture to generate
+     * Provides AI webhook/AI with understanding of the current system architecture to generate
      * standard-compliant data.
      */
     private Map<String, Object> buildSchemaMetadata() {
@@ -575,19 +573,19 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     /**
-     * Wraps doCallN8NWebhook with an automatic retry (2-second delay) for AI_N8N_TIMEOUT
-     * and AI_N8N_CALL_FAILED exceptions.
+     * Wraps doCallAiWebhook with an automatic retry (2-second delay) for AI_WEBHOOK_TIMEOUT
+     * and AI_WEBHOOK_CALL_FAILED exceptions.
      * On retry failure, builds degradation info and passes it to the caller via
      * AiGenerationException extraData (requirements 23 + 45 linkage).
      */
-    private Map<String, Object> doCallN8NWebhookWithRetry(Map<String, Object> requestBody) {
+    private Map<String, Object> doCallAiWebhookWithRetry(Map<String, Object> requestBody) {
         try {
-            Map<String, Object> response = doCallN8NWebhook(requestBody);
-            lastN8NSuccessTime = Instant.now();
+            Map<String, Object> response = doCallAiWebhook(requestBody);
+            lastAiWebhookSuccessTime = Instant.now();
             return response;
         } catch (AiGenerationException e) {
-            if ("AI_N8N_TIMEOUT".equals(e.getErrorCode()) || "AI_N8N_CALL_FAILED".equals(e.getErrorCode())) {
-                log.warn("N8N call failed with {}, retrying in 2 seconds...", e.getErrorCode());
+            if ("AI_WEBHOOK_TIMEOUT".equals(e.getErrorCode()) || "AI_WEBHOOK_CALL_FAILED".equals(e.getErrorCode())) {
+                log.warn("AI webhook call failed with {}, retrying in 2 seconds...", e.getErrorCode());
                 try {
                     Thread.sleep(2000);
                 } catch (InterruptedException ie) {
@@ -595,15 +593,15 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                     throw e;
                 }
                 try {
-                    Map<String, Object> response = doCallN8NWebhook(requestBody);
-                    lastN8NSuccessTime = Instant.now();
+                    Map<String, Object> response = doCallAiWebhook(requestBody);
+                    lastAiWebhookSuccessTime = Instant.now();
                     return response;
                 } catch (AiGenerationException retryEx) {
-                    log.warn("N8N retry also failed with {}: {}", retryEx.getErrorCode(), retryEx.getMessage());
+                    log.warn("AI webhook retry also failed with {}: {}", retryEx.getErrorCode(), retryEx.getMessage());
                     // Build degradation info (requirements 45 linkage)
                     Map<String, Object> degradationInfo = new LinkedHashMap<>();
                     degradationInfo.put("lastSuccessTime",
-                            lastN8NSuccessTime != null ? lastN8NSuccessTime.toString() : null);
+                            lastAiWebhookSuccessTime != null ? lastAiWebhookSuccessTime.toString() : null);
                     degradationInfo.put("degradationOptions", List.of("SAVE_DRAFT", "MANUAL_CREATE"));
                     throw new AiGenerationException(e.getErrorCode(), e.getMessage(), degradationInfo);
                 }
@@ -613,24 +611,24 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> doCallN8NWebhook(Map<String, Object> requestBody) {
+    private Map<String, Object> doCallAiWebhook(Map<String, Object> requestBody) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-            ResponseEntity<Map> responseEntity = n8nRestTemplate.postForEntity(n8nWebhookUrl, entity, Map.class);
+            ResponseEntity<Map> responseEntity = aiWebhookRestTemplate.postForEntity(aiWebhookUrl, entity, Map.class);
             Map<String, Object> responseBody = responseEntity.getBody();
             if (responseBody == null) {
-                throw new AiGenerationException("AI_N8N_EMPTY_RESPONSE", "N8N returned empty response");
+                throw new AiGenerationException("AI_WEBHOOK_EMPTY_RESPONSE", "AI webhook returned empty response");
             }
             return responseBody;
         } catch (AiGenerationException e) {
             throw e;
         } catch (org.springframework.web.client.ResourceAccessException e) {
-            throw new AiGenerationException("AI_N8N_TIMEOUT", "N8N Webhook call timed out: " + e.getMessage());
+            throw new AiGenerationException("AI_WEBHOOK_TIMEOUT", "AI webhook call timed out: " + e.getMessage());
         } catch (Exception e) {
-            throw new AiGenerationException("AI_N8N_CALL_FAILED", "N8N Webhook call failed: " + e.getMessage());
+            throw new AiGenerationException("AI_WEBHOOK_CALL_FAILED", "AI webhook call failed: " + e.getMessage());
         }
     }
 
@@ -664,9 +662,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     @Override
     public SseEmitter createChatEmitter(Long functionUnitId, String userId) {
-        // Compute timeout here so it stays aligned with the configured N8N timeout (incl. one retry),
+        // Compute timeout here so it stays aligned with the configured AI webhook timeout (incl. one retry),
         // then delegate emitter lifecycle management to the SSE collaborator.
-        long chatEmitterTimeout = (long) n8nTimeoutSeconds * 2 * 1000 + 60_000L;
+        long chatEmitterTimeout = (long) aiWebhookTimeoutSeconds * 2 * 1000 + 60_000L;
         return sseEmitterManager.createChatEmitter(functionUnitId, userId, chatEmitterTimeout);
     }
 

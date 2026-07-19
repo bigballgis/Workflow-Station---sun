@@ -64,8 +64,10 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
     }
   }
 
-  // Derive display columns for a sub-table binding based on table metadata
-  const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, config?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
+  // Derive display columns for a sub-table binding based on table metadata.
+  // `visitedBindingIds` guards the alt-schema recursion below: two forms binding the same
+  // physical table can resolve each other as "alt" and ping-pong forever (stack overflow).
+  const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, config?: Record<string, any>, visitedBindingIds?: Set<number>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
     // Consistent with process/start: prefer subFormConfig on binding, then configJson.subForms (supports string/number key)
     let subFormRule: any[] | undefined
     if (binding.subFormConfig?.rule) {
@@ -267,12 +269,15 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
 
     const tableId = binding.tableId != null ? Number(binding.tableId) : NaN
     if (Number.isFinite(tableId)) {
-      const alt = resolveSubTableSchemaByTableId(tableId, ctx.cachedContentForms, binding.bindingId)
+      const visited = visitedBindingIds ?? new Set<number>()
+      if (Number.isFinite(Number(binding.bindingId))) visited.add(Number(binding.bindingId))
+      const alt = resolveSubTableSchemaByTableId(tableId, ctx.cachedContentForms, visited)
       if (alt) {
         const fromAlt = deriveColumnsFromBinding(
           { ...binding, bindingId: alt.bindingId },
           alt.subForms,
           alt.formConfig,
+          visited,
         )
         if (fromAlt.length > 0) return fromAlt
       }

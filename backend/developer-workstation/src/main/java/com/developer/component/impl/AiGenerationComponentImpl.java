@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * AI Generation Component Implementation
- * Orchestrates lock management, session management, N8N calls, SSE event streaming, data validation, and write services
+ * Orchestrates lock management, session management, AI webhook calls, SSE event streaming, data validation, and write services
  */
 @Component
 @Slf4j
@@ -124,7 +124,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         // 5. Create the chat SSE emitter
         SseEmitter emitter = aiGenerationService.createChatEmitter(request.getFunctionUnitId(), userId);
 
-        // 6. Async N8N call (context and existingDocuments already loaded in main thread)
+        // 6. Async AI webhook call (context and existingDocuments already loaded in main thread)
         final FunctionUnitContextDTO finalContext = context;
         final List<Map<String, String>> finalExistingDocuments = existingDocuments;
         // Guarded sender: if the user stopped this turn and immediately started a new one,
@@ -141,7 +141,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         };
         CompletableFuture.runAsync(() -> {
             try {
-                log.info("chatStream async: starting N8N call, functionUnitId={}, sessionId={}, contextPresent={}, docsCount={}",
+                log.info("chatStream async: starting AI webhook call, functionUnitId={}, sessionId={}, contextPresent={}, docsCount={}",
                         request.getFunctionUnitId(), session.getSessionId(),
                         finalContext != null, finalExistingDocuments.size());
 
@@ -149,28 +149,28 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 emitIfCurrent.accept(AiChatSseEvent.builder().eventType("session")
                                 .data(Map.of("sessionId", session.getSessionId().toString())).build());
 
-                // 6b. Call N8N Webhook
-                Map<String, Object> n8nResponse = aiGenerationService.callN8NWebhook(
+                // 6b. Call AI webhook
+                Map<String, Object> aiResponse = aiGenerationService.callAiWebhook(
                         session.getSessionId(), request.getMessage(), request.getPhase(), request.getMode(),
                         finalContext, request.getFunctionUnitId(), finalExistingDocuments,
                         request.getRegenerateScope());
 
-                // 6b. Parse N8N response and send SSE events
+                // 6b. Parse AI webhook response and send SSE events
                 // Blank replies are legal (the model may put everything inside the document
                 // markers); skip both the token event and persistence so the chat history
                 // doesn't accumulate empty assistant bubbles.
                 String reply = null;
-                if (n8nResponse.get("reply") instanceof String replyStr && !replyStr.isBlank()) {
+                if (aiResponse.get("reply") instanceof String replyStr && !replyStr.isBlank()) {
                     reply = replyStr;
                     emitIfCurrent.accept(AiChatSseEvent.builder().eventType("token").data(reply).build());
                 }
 
-                if (n8nResponse.containsKey("document") && n8nResponse.get("document") != null) {
-                    String documentContent = (String) n8nResponse.get("document");
-                    String documentTypeStr = (String) n8nResponse.get("documentType");
+                if (aiResponse.containsKey("document") && aiResponse.get("document") != null) {
+                    String documentContent = (String) aiResponse.get("document");
+                    String documentTypeStr = (String) aiResponse.get("documentType");
                     if (documentTypeStr != null) {
                         AiDocumentType documentType = AiDocumentType.valueOf(documentTypeStr);
-                        String summary = (String) n8nResponse.getOrDefault("documentSummary", "AI generated document");
+                        String summary = (String) aiResponse.getOrDefault("documentSummary", "AI generated document");
 
                         aiGenerationService.saveDocument(request.getFunctionUnitId(), documentType, documentContent, summary, userId);
                         emitIfCurrent.accept(AiChatSseEvent.builder().eventType("document")
@@ -178,7 +178,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     }
                 }
 
-                if (Boolean.TRUE.equals(n8nResponse.get("phaseComplete"))) {
+                if (Boolean.TRUE.equals(aiResponse.get("phaseComplete"))) {
                     // Auto-advance session phase (persisted in backend, not dependent on frontend "next phase" button)
                     AiPhase nextPhase = getNextPhase(request.getPhase());
                     if (nextPhase != null) {
@@ -193,9 +193,9 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     emitIfCurrent.accept(AiChatSseEvent.builder().eventType("phase_complete").data(request.getPhase().name()).build());
                 }
 
-                if (n8nResponse.containsKey("generatedData") && n8nResponse.get("generatedData") != null) {
+                if (aiResponse.containsKey("generatedData") && aiResponse.get("generatedData") != null) {
                     // Compute quality score and attach to generated_data event
-                    Object generatedDataObj = n8nResponse.get("generatedData");
+                    Object generatedDataObj = aiResponse.get("generatedData");
                     if (generatedDataObj instanceof Map) {
                         try {
                             @SuppressWarnings("unchecked")
@@ -210,7 +210,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                             log.warn("Failed to compute quality score, skipping: {}", qsEx.getMessage());
                         }
                     }
-                    emitIfCurrent.accept(AiChatSseEvent.builder().eventType("generated_data").data(n8nResponse.get("generatedData")).build());
+                    emitIfCurrent.accept(AiChatSseEvent.builder().eventType("generated_data").data(aiResponse.get("generatedData")).build());
                 }
 
                 // 6c. Save AI response message
@@ -227,7 +227,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 }
 
             } catch (Exception e) {
-                log.error("N8N call failed: functionUnitId={}, sessionId={}", request.getFunctionUnitId(), session.getSessionId(), e);
+                log.error("AI webhook call failed: functionUnitId={}, sessionId={}", request.getFunctionUnitId(), session.getSessionId(), e);
                 // Send structured error event with errorCode and message
                 try {
                     String errorCode = (e instanceof com.developer.exception.AiGenerationException aiEx)
@@ -237,7 +237,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     errorData.put("errorCode", errorCode);
                     errorData.put("message", e.getMessage());
 
-                    // Check if the exception carries degradation info (graceful degradation after N8N retry failure)
+                    // Check if the exception carries degradation info (graceful degradation after AI webhook retry failure)
                     if (e instanceof com.developer.exception.AiGenerationException aiEx2
                             && aiEx2.getExtraData() != null) {
                         Object degradationOptions = aiEx2.getExtraData().get("degradationOptions");

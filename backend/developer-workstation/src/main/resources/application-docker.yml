@@ -103,7 +103,7 @@ logging:
     com.developer: INFO
     org.hibernate.SQL: WARN
 
-# AI Generation webhook (Docker) — Activepieces sync webhook (migrated from n8n).
+# AI Generation webhook (Docker) — Activepieces sync webhook.
 # flowId is environment-specific; override via AI_GENERATION_WEBHOOK_URL per environment.
 activepieces:
   ai-generation:

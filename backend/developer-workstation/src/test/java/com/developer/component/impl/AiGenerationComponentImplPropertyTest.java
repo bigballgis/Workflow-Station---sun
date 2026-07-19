@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
  * AiGenerationComponentImpl 属性测试
  *
  * Property 1: 首条消息始终加载上下文
- * Property 1b: 后续消息也始终加载上下文（N8N systemMessage 每次渲染需要最新数据）
+ * Property 1b: 后续消息也始终加载上下文（AI webhook systemMessage 每次渲染需要最新数据）
  * Property 1c: 阶段切换时加载上下文
  * Validates: Requirements 1.1, 1.2
  */
@@ -64,7 +64,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
@@ -82,7 +82,7 @@ class AiGenerationComponentImplPropertyTest {
 
     /**
      * Property 1b: 后续消息（同阶段）也始终加载上下文和文档
-     * N8N Agent 的 systemMessage 每次请求都重新渲染，需要最新的 context 和 existingDocuments
+     * AI webhook Agent 的 systemMessage 每次请求都重新渲染，需要最新的 context 和 existingDocuments
      */
     @Property(tries = 100)
     @Label("Property 1b: 后续消息也始终加载上下文和文档")
@@ -114,7 +114,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
@@ -127,7 +127,7 @@ class AiGenerationComponentImplPropertyTest {
         component.chatStream(request, "user1");
         latch.await(5, TimeUnit.SECONDS);
 
-        // Context and documents are ALWAYS loaded (N8N systemMessage re-renders each request)
+        // Context and documents are ALWAYS loaded (AI webhook systemMessage re-renders each request)
         verify(aiGenerationService).serializeFunctionUnitContext(1L);
         verify(aiGenerationService).getLatestDocuments(1L, phase, mode);
     }
@@ -167,7 +167,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());

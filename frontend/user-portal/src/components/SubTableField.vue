@@ -378,6 +378,11 @@
       :column-validation-rules="validationConfig?.columnRules"
       :upload-url="uploadUrl"
       :nested-sub-tables="nestedSubTableDescriptors"
+      :record-note-fields="recordNoteFields"
+      :record-note-table-id="tableId ?? null"
+      :record-note-instance-id="recordNoteInstanceId"
+      :record-note-function-unit-id="functionUnitId ?? null"
+      :primary-key-fields="primaryKeyFields"
       @update:visible="dialogVisible = $event"
       :save-row="handleDialogSave"
     />
@@ -452,6 +457,23 @@
               :description="t('subTable.noData')"
               :image-size="60"
             />
+            <!-- RecordNote panels from the linked binding's form design: RECORD scope
+                 binds the linked row, TABLE scope binds this table's per-process stream.
+                 Placed after the v-if chain; the list is empty unless the linked form
+                 design actually contains recordNote components. -->
+            <div
+              v-for="rn in linkFormRecordNoteFields"
+              :key="rn.key"
+              class="link-form-record-note"
+            >
+              <RecordNoteField
+                :config="rn._recordNote"
+                :table-id="(selectedLinkBinding as any)?.tableId ?? null"
+                :record-id="linkFormRowStableId"
+                :process-instance-id="recordNoteInstanceId"
+                :function-unit-id="functionUnitId ?? null"
+              />
+            </div>
           </div>
           <div
             v-if="showLinkFormDetailActionFooter"
@@ -523,7 +545,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, withDefaults, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, computed, withDefaults, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Document, Loading, Search, Close, Download, Upload } from '@element-plus/icons-vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
@@ -537,6 +559,9 @@ import {
 } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { collectSubTableFieldsFromLayout } from './formRendererHelpers'
+import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
+import { collectRecordNoteFields, resolveRowStableId } from './formRendererHelpers/recordNoteFields'
+import RecordNoteField from './RecordNoteField.vue'
 import { calculateSummary } from './businessLogicEngine'
 import FieldRenderer from './FieldRenderer.vue'
 import PortalFormFields from './PortalFormFields.vue'
@@ -974,6 +999,29 @@ const nestedSubTableDescriptors = computed<NestedSubTableDescriptor[]>(() => {
     })
   }
   return out
+})
+
+// ─── RecordNote panels placed in this binding's form design ──────────────────
+// Rendered inside the row Add/Edit dialog: RECORD scope binds the edited row,
+// TABLE scope binds this sub-table's per-process stream. Instance id comes from
+// the FormRenderer context (optional — absent in detached/preview usages).
+const recordNoteCtx = inject(FORM_RENDERER_FIELDS_CTX, null)
+
+const recordNoteFields = computed<FormField[]>(() => collectRecordNoteFields(props.formFields as FormField[] | undefined))
+
+// Link Form modal: recordNote components of the linked binding's own form design.
+const linkFormRecordNoteFields = computed<FormField[]>(() =>
+  collectRecordNoteFields(linkedFormFields.value as FormField[] | undefined))
+
+const linkFormRowStableId = computed<string | null>(() =>
+  resolveRowStableId(
+    linkedFormData.value as Record<string, unknown> | null,
+    (selectedLinkBinding.value as { primaryKeyFields?: string[] } | null)?.primaryKeyFields,
+  ))
+
+const recordNoteInstanceId = computed<string | null>(() => {
+  const v = (recordNoteCtx as { processInstanceId?: unknown } | null)?.processInstanceId
+  return typeof v === 'string' && v ? v : null
 })
 
 const { clearAssigneeDisplayHydrateTimer } = useSubTableAssigneeHydration(props, rows, emit, assignment)

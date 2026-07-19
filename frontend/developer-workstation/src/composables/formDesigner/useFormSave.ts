@@ -5,7 +5,7 @@ import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { functionUnitApi } from '@/api/functionUnit'
 import type { FormDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
-import { collectSubTableRules } from '@/utils/formDesigner'
+import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import {
   prepareFormCreateRulesForPersist,
   serializeFormCreateOptionsForPersist,
@@ -186,6 +186,20 @@ export function useFormSave(options: UseFormSaveOptions) {
             return
           }
         }
+      }
+
+      // RecordNote: at most one component per scope (TABLE / RECORD) on a form
+      const recordNoteScopes = collectRecordNoteScopes(rule)
+      if (recordNoteScopes.some((scope, idx) => recordNoteScopes.indexOf(scope) !== idx)) {
+        if (isManual) ElMessage.error(t('form.recordNoteDuplicateScope'))
+        return
+      }
+      // RecordNote: Single Record scope is sub-table-form only — the main canvas
+      // must stay whole-table (Relation Table tabs have no form-design canvas at
+      // all). Backstop for configs that bypassed the disabled panel option.
+      if (recordNoteScopes.includes('RECORD')) {
+        if (isManual) ElMessage.error(t('form.recordNoteRecordScopeMainForm'))
+        return
       }
 
       // Validate field names against Data_Table columns (for PROCESS and TASK forms).

@@ -14,9 +14,9 @@
 | 缓存 | Spring Data Redis，Redis 7.2 |
 | 消息 | Spring Kafka，Kafka 7.5（KRaft，无 ZooKeeper） |
 | 安全 | JWT（jjwt）、BCrypt；边缘路由与插件由 **Kong** 承担 |
-| 迁移 | **Flyway**（上述三模块各自 `db/migration`；`application.yml` 默认启用，但 **Dev Compose 对三服务设 `SPRING_FLYWAY_ENABLED=false`**，见 [schema-and-migration.md](../schema-and-migration.md)） |
+| Schema | **`deploy/init-scripts/00-schema/` 为唯一事实来源**（Flyway 已于 2026-06 清退，历史迁移归档 `docs/legacy-flyway-migrations/`，见 [schema-and-migration.md](../schema-and-migration.md)） |
 
-父 POM 声明 **Spring Cloud BOM** 仅用于依赖对齐；**不包含**可部署的 Spring Cloud Gateway 应用（历史 `api-gateway` 模块已移除）。
+父 POM **不含 Spring Cloud**（BOM 与依赖已整体移除，零代码引用）；**不包含**可部署的 Spring Cloud Gateway 应用（历史 `api-gateway` 模块已移除）。
 
 ## 前端
 

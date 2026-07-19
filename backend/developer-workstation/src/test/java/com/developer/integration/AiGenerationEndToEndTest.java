@@ -33,7 +33,7 @@ import static org.mockito.Mockito.*;
 /**
  * End-to-end integration tests for the AI generation flow.
  * Tests the complete orchestration through AiGenerationComponentImpl:
- * session creation → N8N call → validation → write → database verification.
+ * session creation → AI webhook call → validation → write → database verification.
  *
  * Uses Mockito with synchronous executor for deterministic testing of the
  * async SSE orchestration pipeline.
@@ -77,7 +77,7 @@ class AiGenerationEndToEndTest {
     // ==================== NEW Mode Complete Flow ====================
 
     /**
-     * NEW mode complete flow: create session → mock N8N response (with all component data
+     * NEW mode complete flow: create session → mock AI webhook response (with all component data
      * including decisionDefinitions + tableRelations) → validation passes → write success
      * → SSE events verified.
      *
@@ -98,16 +98,16 @@ class AiGenerationEndToEndTest {
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.GENERATION, AiMode.NEW))
                 .thenReturn(List.of());
 
-        // 2. N8N response with ALL component types including decisionDefinitions + tableRelations
+        // 2. AI webhook response with ALL component types including decisionDefinitions + tableRelations
         Map<String, Object> generatedData = buildFullGeneratedData();
-        Map<String, Object> n8nResponse = new LinkedHashMap<>();
-        n8nResponse.put("reply", "Here is your generated application");
-        n8nResponse.put("generatedData", generatedData);
+        Map<String, Object> aiResponse = new LinkedHashMap<>();
+        aiResponse.put("reply", "Here is your generated application");
+        aiResponse.put("generatedData", generatedData);
 
-        when(aiGenerationService.callN8NWebhook(
+        when(aiGenerationService.callAiWebhook(
                 eq(sessionUuid), eq("Generate CRUD app"), eq(AiPhase.GENERATION), eq(AiMode.NEW),
                 any(), eq(1L), anyList(), isNull()))
-                .thenReturn(n8nResponse);
+                .thenReturn(aiResponse);
 
         // 3. Quality score computation
         when(aiValidationService.computeQualityScore(any(AiGeneratedData.class)))
@@ -138,8 +138,8 @@ class AiGenerationEndToEndTest {
         // Verify: context loaded
         verify(aiGenerationService).serializeFunctionUnitContext(1L);
 
-        // Verify: N8N called
-        verify(aiGenerationService).callN8NWebhook(
+        // Verify: AI webhook called
+        verify(aiGenerationService).callAiWebhook(
                 eq(sessionUuid), eq("Generate CRUD app"), eq(AiPhase.GENERATION), eq(AiMode.NEW),
                 any(), eq(1L), anyList(), isNull());
 
@@ -454,12 +454,12 @@ class AiGenerationEndToEndTest {
     // ==================== Error Handling ====================
 
     /**
-     * N8N call failure: should send structured error SSE event with errorCode.
+     * AI webhook call failure: should send structured error SSE event with errorCode.
      *
      * Validates: Requirements 36.2
      */
     @Test
-    void chatStream_n8nFailure_sendsStructuredErrorEvent() throws Exception {
+    void chatStream_webhookFailure_sendsStructuredErrorEvent() throws Exception {
         when(aiGenerationService.createSession(1L, "test-user", AiMode.NEW)).thenReturn(session);
         when(aiGenerationService.saveMessage(any(), any(), anyString(), any()))
                 .thenReturn(com.developer.entity.AiMessage.builder()
@@ -470,9 +470,9 @@ class AiGenerationEndToEndTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L)).thenReturn(null);
         when(aiGenerationService.getLatestDocuments(anyLong(), any(), any())).thenReturn(List.of());
 
-        // N8N throws timeout
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
-                .thenThrow(new AiGenerationException("AI_N8N_TIMEOUT", "N8N Webhook call timed out"));
+        // AI webhook throws timeout
+        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+                .thenThrow(new AiGenerationException("AI_WEBHOOK_TIMEOUT", "AI webhook call timed out"));
 
         CountDownLatch latch = new CountDownLatch(1);
         doAnswer(inv -> { latch.countDown(); return null; })
@@ -494,14 +494,14 @@ class AiGenerationEndToEndTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> errorData = (Map<String, Object>) errorEvent.getData();
-        assertEquals("AI_N8N_TIMEOUT", errorData.get("errorCode"));
+        assertEquals("AI_WEBHOOK_TIMEOUT", errorData.get("errorCode"));
         assertNotNull(errorData.get("message"));
     }
 
     // ==================== Helper Methods ====================
 
     /**
-     * Build a full N8N response generatedData map with all component types.
+     * Build a full AI webhook response generatedData map with all component types.
      */
     private Map<String, Object> buildFullGeneratedData() {
         Map<String, Object> data = new LinkedHashMap<>();

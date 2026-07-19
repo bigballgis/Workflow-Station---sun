@@ -19,15 +19,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 /**
- * Property-based tests for N8N request body completeness.
+ * Property-based tests for AI webhook request body completeness.
  *
- * <p>Verifies that {@code buildN8NRequestBody()} includes complete {@code schemaMetadata},
+ * <p>Verifies that {@code buildAiWebhookRequestBody()} includes complete {@code schemaMetadata},
  * {@code includeExplanations}, and {@code regenerateScope} fields.</p>
  *
  * <p><b>Validates: Requirements 15</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 12: N8N request body contains complete schemaMetadata")
-class AiN8NRequestBodyProperties {
+@Tag("Feature: ai-function-unit-generation-refactor, Property 12: AI webhook request body contains complete schemaMetadata")
+class AiWebhookRequestBodyProperties {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -41,22 +41,22 @@ class AiN8NRequestBodyProperties {
                 mock(FunctionUnitRepository.class),
                 OBJECT_MAPPER,
                 102400);
-        ReflectionTestUtils.setField(generationService, "n8nWebhookUrl", "http://localhost:5678/webhook/ai-function-unit-gen");
-        ReflectionTestUtils.setField(generationService, "n8nTimeoutSeconds", 120);
+        ReflectionTestUtils.setField(generationService, "aiWebhookUrl", "http://localhost:5678/webhook/ai-function-unit-gen");
+        ReflectionTestUtils.setField(generationService, "aiWebhookTimeoutSeconds", 120);
     }
 
     /**
-     * Invoke the private buildN8NRequestBody method via reflection.
+     * Invoke the private buildAiWebhookRequestBody method via reflection.
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> invokeBuildN8NRequestBody(
+    private Map<String, Object> invokeBuildAiWebhookRequestBody(
             UUID sessionId, String message, AiPhase phase, AiMode mode,
             FunctionUnitContextDTO context, Long functionUnitId,
             List<Map<String, String>> existingDocuments,
             List<Map<String, String>> conversationHistory,
             String regenerateScope) {
         return (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildN8NRequestBody",
+                generationService, "buildAiWebhookRequestBody",
                 sessionId, message, phase, mode, context, functionUnitId,
                 existingDocuments, conversationHistory, regenerateScope);
     }
@@ -64,7 +64,7 @@ class AiN8NRequestBodyProperties {
     // --- Property 12: schemaMetadata 包含所有必需字段 ---
 
     /**
-     * Property 12: N8N 请求体包含完整 schemaMetadata.
+     * Property 12: AI webhook 请求体包含完整 schemaMetadata.
      *
      * <p>For any valid combination of phase, mode, and regenerateScope,
      * the request body's {@code schemaMetadata} must contain all required fields:
@@ -88,7 +88,7 @@ class AiN8NRequestBodyProperties {
                 .tableDefinitions(List.of()).formDefinitions(List.of())
                 .actionDefinitions(List.of()).build();
 
-        Map<String, Object> body = invokeBuildN8NRequestBody(
+        Map<String, Object> body = invokeBuildAiWebhookRequestBody(
                 sessionId, "test message", phase, mode, context, 1L,
                 List.of(), null, regenerateScope);
 
@@ -153,7 +153,7 @@ class AiN8NRequestBodyProperties {
         setupService();
 
         UUID sessionId = UUID.randomUUID();
-        Map<String, Object> body = invokeBuildN8NRequestBody(
+        Map<String, Object> body = invokeBuildAiWebhookRequestBody(
                 sessionId, "msg", phase, mode, null, 1L,
                 List.of(), null, null);
 
@@ -178,7 +178,7 @@ class AiN8NRequestBodyProperties {
         setupService();
 
         UUID sessionId = UUID.randomUUID();
-        Map<String, Object> body = invokeBuildN8NRequestBody(
+        Map<String, Object> body = invokeBuildAiWebhookRequestBody(
                 sessionId, "msg", phase, mode, null, 1L,
                 List.of(), null, regenerateScope);
 

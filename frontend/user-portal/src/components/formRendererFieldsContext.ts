@@ -47,6 +47,8 @@ export interface FormRendererFieldsContext {
   parentTablesById?: Ref<Record<number, { fieldDefinitions: unknown[] }>>
   subTableBindingsForContext?: Ref<unknown[]> | unknown[]
   functionUnitId?: Ref<string | undefined> | string
+  /** Current process instance id — RecordNote RECORD scope target on main forms. */
+  processInstanceId?: Ref<string | undefined> | string
   resolveMiParticipantSeedForSubTableAdd?: (bindingId?: number) => {
     rowId: string | number | null
     parentRow: Record<string, unknown> | null

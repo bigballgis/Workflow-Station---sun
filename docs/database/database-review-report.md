@@ -3,6 +3,12 @@
 > 检查范围：`deploy/init-scripts/` 全部文件 + `backend/admin-center/src/main/resources/db/migration/`
 > 检查遍数：10 遍 + 修复后复查 3 遍
 > 检查日期：2026-03-20
+>
+> **⚠️ 部分内容已过时（2026-07 标注）**：本报告早于 2026-06 的 Flyway 整体清退
+> （见 [schema-single-source-init-scripts-plan.md](./schema-single-source-init-scripts-plan.md)）。
+> 其中「第 5 遍：Flyway 迁移一致性」章节及 **E16**（为 developer-workstation /
+> platform-security 建 Flyway 基线）已作废——`db/migration` 已归档删除，E16 不会再做。
+> E01–E15 的实体-Schema 修复结论仍然有效；P01/P02（BPMN 占位符脚本）建议至今未落地，仍为遗留项。
 
 ---
 

@@ -1,5 +1,11 @@
 # Flyway 单一事实来源改造方案（全新环境也走 Flyway）
 
+> **⚠️ 已废弃（2026-06）**：本方案（方向 ①「扶正 Flyway」）**未被采纳**，最终采用相反的方向 ②
+> [schema-single-source-init-scripts-plan.md](./schema-single-source-init-scripts-plan.md)——
+> Flyway 已整体清退（pom 依赖删除、`flyway.enabled` 固化 false、历史迁移归档至
+> `docs/legacy-flyway-migrations/`），schema 唯一来源为 `deploy/init-scripts/00-schema/`。
+> 本文仅作为决策备选项留档；正文中「采用方案 A」「分步落地」等表述**不再生效**。
+
 > 目标：消灭"双轨制"——让后端 4 个服务的 Flyway 迁移成为 schema 的**唯一事实来源**，
 > 删除 `deploy/init-scripts/00-schema/` 这套手工镜像，全新环境也用 Flyway 建表。
 > 种子/demo 数据（角色、5 个 demo FU、post-seed 对齐）**留在 init-scripts**，各司其职。

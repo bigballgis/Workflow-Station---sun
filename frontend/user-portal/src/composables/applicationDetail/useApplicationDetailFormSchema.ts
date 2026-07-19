@@ -156,6 +156,23 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
           children: extractFieldsRecursive(getRuleChildren(item), ctx)
         } as any)
         continue
+      } else if (item.type === 'recordNote') {
+        const rnProps = item.props || {}
+        const rnScope = rnProps.scope === 'TABLE' ? 'TABLE' : 'RECORD'
+        fields.push({
+          key: `__recordNote_${rnScope.toLowerCase()}`,
+          label: '',
+          type: 'recordNote',
+          span: 24,
+          _recordNote: {
+            scope: rnScope,
+            panelTitle: typeof rnProps.panelTitle === 'string' ? rnProps.panelTitle : undefined,
+            allowAttachment: rnProps.allowAttachment !== false,
+            maxFileSizeMb: Number(rnProps.maxFileSizeMb) || 10,
+            allowEditOwn: rnProps.allowEditOwn !== false,
+            pageSize: Number(rnProps.pageSize) || 5,
+          },
+        } as any)
       } else if (item.type === 'lookup' && item.field) {
         let lookupCfg: any = {}
         try {

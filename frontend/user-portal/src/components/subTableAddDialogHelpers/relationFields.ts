@@ -258,9 +258,15 @@ export function resolveSubListViewColumnsForBinding(
 export function resolveSubTableSchemaByTableId(
   tableId: number,
   contentForms: unknown[] | undefined | null,
-  excludeBindingId?: number | null,
+  excludeBindingId?: number | null | Iterable<number>,
 ): { formConfig: Record<string, any>; subForms: Record<string, any>; bindingId: number } | null {
   if (!Number.isFinite(tableId) || !Array.isArray(contentForms)) return null
+  const excludedIds =
+    excludeBindingId == null
+      ? null
+      : typeof excludeBindingId === 'number'
+        ? new Set([excludeBindingId])
+        : new Set(excludeBindingId)
   for (const f of contentForms) {
     if (!f || typeof f !== 'object') continue
     const form = f as Record<string, unknown>
@@ -282,7 +288,7 @@ export function resolveSubTableSchemaByTableId(
       if (b?.tableId == null || Number(b.tableId) !== Number(tableId)) continue
       const bid = b.bindingId
       if (bid == null || bid === '') continue
-      if (excludeBindingId != null && Number(bid) === Number(excludeBindingId)) continue
+      if (excludedIds?.has(Number(bid))) continue
       if (!formHasSubTableSchemaForBinding(formConfig, subForms, bid)) continue
       return { formConfig, subForms, bindingId: Number(bid) }
     }

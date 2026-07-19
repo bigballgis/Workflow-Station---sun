@@ -13,13 +13,13 @@ import java.util.List;
 
 /**
  * AI 生成功能组件接口
- * 编排锁管理、会话管理、N8N 调用、SSE 事件流、数据校验与写入等服务
+ * 编排锁管理、会话管理、AI webhook 调用、SSE 事件流、数据校验与写入等服务
  */
 public interface AiGenerationComponent {
 
     /**
      * 对话流式传输
-     * 编排: 锁续期 → 消息持久化 → N8N 调用 → SSE 事件流 → 文档保存
+     * 编排: 锁续期 → 消息持久化 → AI webhook 调用 → SSE 事件流 → 文档保存
      */
     SseEmitter chatStream(AiChatRequest request, String userId);
 
