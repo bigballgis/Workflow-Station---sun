@@ -22,21 +22,21 @@ if (requiredVersions.some(version => nodeVersion.startsWith(version))) {
 
 
 try {
-  // Try to get bun version to check if installed
-  execSync("bun --version", { stdio: "ignore" });
-  console.log("✅ Bun is already installed.");
+  // pnpm is provisioned via corepack (bundled with Node); bun is forbidden (X-4).
+  execSync("corepack pnpm --version", { stdio: "ignore" });
+  console.log("✅ pnpm is available (corepack).");
 } catch {
-  console.log("⚙️ Bun not found. Installing globally...");
+  console.log("⚙️ Activating pnpm via corepack...");
   try {
-    execSync("npm install -g bun", { stdio: "inherit" });
-    console.log("✅ Bun installed successfully.");
+    execSync("corepack enable pnpm", { stdio: "inherit" });
+    console.log("✅ pnpm activated.");
   } catch (err) {
-    console.error("❌ Failed to install Bun:", err.message);
+    console.error("❌ Failed to activate pnpm:", err.message);
     process.exit(1);
   }
 }
 
-execSync('bun install', { stdio: 'inherit' });
+execSync('corepack pnpm install', { stdio: 'inherit' });
 
 const IGNORED_DIRS = new Set(['node_modules', 'dist', 'framework', 'common']);
 
