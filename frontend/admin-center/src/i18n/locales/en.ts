@@ -79,7 +79,7 @@ export default {
     tableStructure: 'Table Structure',
     tableData: 'Table Data',
     biManagement: 'BI Management',
-    activepieces: 'Activepieces',
+    serviceTask: 'ServiceTask',
     biDashboardRegistry: 'Dashboard Registry',
     biDashboardAssignment: 'Dashboard Assignment',
     biRbacMapping: 'RBAC Mapping'

@@ -63,12 +63,12 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     // AI 生成 webhook 目标:Activepieces 同步 webhook
     // (POST <base>/api/v1/webhooks/<flowId>/sync,flowId 随环境不同)。
-    @Value("${activepieces.ai-generation.webhook-url:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}")
+    @Value("${service-task.ai-generation.webhook-url:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}")
     private String aiWebhookUrl;
 
     // 300s: deepseek-v4-pro 推理模型生成 DESIGN 文档实测可达 ~230s;须与 AP 的
     // AP_WEBHOOK_TIMEOUT_SECONDS 保持一致(AP 先到期会返回 204 空响应)。
-    @Value("${activepieces.ai-generation.timeout-seconds:300}")
+    @Value("${service-task.ai-generation.timeout-seconds:300}")
     private int aiWebhookTimeoutSeconds;
 
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")

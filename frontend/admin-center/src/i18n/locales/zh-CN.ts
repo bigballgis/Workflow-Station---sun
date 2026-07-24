@@ -79,7 +79,7 @@ export default {
     tableStructure: '表结构管理',
     tableData: '表数据管理',
     biManagement: 'BI 管理',
-    activepieces: 'Activepieces 自动化',
+    serviceTask: 'ServiceTask 自动化',
     biDashboardRegistry: '仪表盘注册',
     biDashboardAssignment: '仪表盘分配',
     biRbacMapping: 'RBAC 映射'

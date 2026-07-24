@@ -2,11 +2,11 @@ package com.workflow.component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.workflow.dto.request.ApActionRequest;
-import com.workflow.dto.response.ApExecutionResult;
-import com.workflow.entity.ApExecutionRecord;
-import com.workflow.repository.ApExecutionRecordRepository;
-import com.workflow.util.ApVariableMappingUtil;
+import com.workflow.dto.request.ServiceTaskActionRequest;
+import com.workflow.dto.response.ServiceTaskExecutionResult;
+import com.workflow.entity.ServiceTaskExecutionRecord;
+import com.workflow.repository.ServiceTaskExecutionRecordRepository;
+import com.workflow.util.ServiceTaskVariableMappingUtil;
 import com.platform.common.security.SsrfProtection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +43,7 @@ import java.util.*;
 @Slf4j
 @Component("apTaskExecutor")
 @RequiredArgsConstructor
-public class ApTaskExecutor implements JavaDelegate {
+public class ServiceTaskExecutor implements JavaDelegate {
 
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_SUCCESS = "SUCCESS";
@@ -54,12 +54,12 @@ public class ApTaskExecutor implements JavaDelegate {
     /** Base retry delay (milliseconds) */
     private static final long BASE_RETRY_DELAY_MS = 1000L;
 
-    private final ApExecutionRecordRepository executionRecordRepository;
+    private final ServiceTaskExecutionRecordRepository executionRecordRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
     /** Per-environment AP runtime base URL; the sync webhook path is appended to it. */
-    @Value("${activepieces.webhook-base-url:http://localhost:8086}")
+    @Value("${service-task.webhook-base-url:http://localhost:8086}")
     private String webhookBaseUrl;
 
     @Value("${file-service.base-url:http://localhost:8083}")
@@ -71,7 +71,7 @@ public class ApTaskExecutor implements JavaDelegate {
     public void execute(DelegateExecution execution) {
         String executionId = execution.getId();
         String processInstanceId = execution.getProcessInstanceId();
-        log.info("ApTaskExecutor triggered: executionId={}, processInstanceId={}", executionId, processInstanceId);
+        log.info("ServiceTaskExecutor triggered: executionId={}, processInstanceId={}", executionId, processInstanceId);
 
         // 1. Read AP config from BPMN extension attributes (ap: prefix)
         String flowId = getExtensionProperty(execution, "ap:flowId");
@@ -86,11 +86,11 @@ public class ApTaskExecutor implements JavaDelegate {
 
         // 2. Build request body from process variables via input mapping
         Map<String, Object> processVariables = execution.getVariables();
-        Map<String, Object> inputData = ApVariableMappingUtil.applyInputMapping(processVariables, inputMappingJson);
+        Map<String, Object> inputData = ServiceTaskVariableMappingUtil.applyInputMapping(processVariables, inputMappingJson);
         convertRelativeUrls(inputData);
 
         // 3. Create execution record (PENDING)
-        ApExecutionRecord record = newRecord(processInstanceId, executionId, flowId, webhookUrl,
+        ServiceTaskExecutionRecord record = newRecord(processInstanceId, executionId, flowId, webhookUrl,
                 SOURCE_SERVICE_TASK, toJson(inputData), timeoutSeconds);
         record = executionRecordRepository.save(record);
 
@@ -106,7 +106,7 @@ public class ApTaskExecutor implements JavaDelegate {
         // 5. Apply output mapping and write results back into process variables
         Map<String, Object> outputData = responseBody;
         if (outputMappingJson != null && !outputMappingJson.isBlank()) {
-            outputData = ApVariableMappingUtil.applyOutputMapping(responseBody, outputMappingJson);
+            outputData = ServiceTaskVariableMappingUtil.applyOutputMapping(responseBody, outputMappingJson);
         }
         if (outputData != null && !outputData.isEmpty()) {
             execution.setVariables(outputData);
@@ -125,7 +125,7 @@ public class ApTaskExecutor implements JavaDelegate {
     /**
      * Synchronously execute an AP flow for the user Action mode and return its output.
      */
-    public ApExecutionResult executeSynchronous(ApActionRequest request) {
+    public ServiceTaskExecutionResult executeSynchronous(ServiceTaskActionRequest request) {
         String flowId = request.getApFlowId();
         String webhookUrl = resolveWebhookUrl(flowId, request.getWebhookUrl());
         validateWebhookUrl(webhookUrl);
@@ -140,13 +140,13 @@ public class ApTaskExecutor implements JavaDelegate {
             inputData = Collections.emptyMap();
         }
         if (request.getInputMapping() != null && !request.getInputMapping().isBlank()) {
-            inputData = ApVariableMappingUtil.applyInputMapping(inputData, request.getInputMapping());
+            inputData = ServiceTaskVariableMappingUtil.applyInputMapping(inputData, request.getInputMapping());
         } else {
             inputData = new LinkedHashMap<>(inputData);
         }
         convertRelativeUrls(inputData);
 
-        ApExecutionRecord record = newRecord(request.getProcessInstanceId(), request.getTaskId(), flowId,
+        ServiceTaskExecutionRecord record = newRecord(request.getProcessInstanceId(), request.getTaskId(), flowId,
                 webhookUrl, SOURCE_ACTION, toJson(inputData), timeoutSeconds);
         record = executionRecordRepository.save(record);
 
@@ -155,7 +155,7 @@ public class ApTaskExecutor implements JavaDelegate {
 
             Map<String, Object> outputData = responseBody;
             if (request.getOutputMapping() != null && !request.getOutputMapping().isBlank() && responseBody != null) {
-                outputData = ApVariableMappingUtil.applyOutputMapping(responseBody, request.getOutputMapping());
+                outputData = ServiceTaskVariableMappingUtil.applyOutputMapping(responseBody, request.getOutputMapping());
             }
 
             record.setStatus(STATUS_SUCCESS);
@@ -164,7 +164,7 @@ public class ApTaskExecutor implements JavaDelegate {
             executionRecordRepository.save(record);
 
             log.info("AP Action executed successfully: recordId={}", record.getId());
-            return ApExecutionResult.success(record.getId(), outputData);
+            return ServiceTaskExecutionResult.success(record.getId(), outputData);
         } catch (Exception e) {
             String errorMsg = extractErrorMessage(e);
             record.setStatus(STATUS_FAILED);
@@ -172,7 +172,7 @@ public class ApTaskExecutor implements JavaDelegate {
             record.setCompletedAt(Instant.now());
             executionRecordRepository.save(record);
             log.error("AP Action execution failed: recordId={}, error={}", record.getId(), errorMsg);
-            return ApExecutionResult.failure(record.getId(), STATUS_FAILED, errorMsg);
+            return ServiceTaskExecutionResult.failure(record.getId(), STATUS_FAILED, errorMsg);
         }
     }
 
@@ -216,10 +216,10 @@ public class ApTaskExecutor implements JavaDelegate {
         return Set.of();
     }
 
-    private ApExecutionRecord newRecord(String processInstanceId, String taskId, String flowId,
+    private ServiceTaskExecutionRecord newRecord(String processInstanceId, String taskId, String flowId,
                                         String webhookUrl, String sourceType, String inputDataJson,
                                         int timeoutSeconds) {
-        ApExecutionRecord record = new ApExecutionRecord();
+        ServiceTaskExecutionRecord record = new ServiceTaskExecutionRecord();
         record.setProcessInstanceId(processInstanceId);
         record.setTaskId(taskId);
         record.setApFlowId(flowId);
@@ -239,7 +239,7 @@ public class ApTaskExecutor implements JavaDelegate {
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> invokeWebhookWithRetry(String webhookUrl, Map<String, Object> inputData,
-                                                       ApExecutionRecord record, int maxRetries) {
+                                                       ServiceTaskExecutionRecord record, int maxRetries) {
         Exception lastException = null;
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
             try {

@@ -19,7 +19,7 @@ import java.util.UUID;
  * 避免落入 GlobalExceptionHandler 的 RuntimeException → 500。
  * <p>Relation Table 异常（均继承 {@link AdminBusinessException}）由更具体的 handler
  * 映射为 404/409/500；其余 {@link AdminBusinessException} → 400，
- * {@link AdminConflictException} → 409，{@link ActivepiecesApiException} → 502（上游 AP 不可达/失败）。
+ * {@link AdminConflictException} → 409，{@link ServiceTaskApiException} → 502（上游 AP 不可达/失败）。
  */
 @RestControllerAdvice
 @Slf4j
@@ -40,9 +40,9 @@ public class AdminApiExceptionHandler {
         return respond(HttpStatus.BAD_REQUEST, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
     }
 
-    @ExceptionHandler(ActivepiecesApiException.class)
+    @ExceptionHandler(ServiceTaskApiException.class)
     public ResponseEntity<ApiResponse<Void>> handleActivepiecesApi(
-            ActivepiecesApiException ex, HttpServletRequest request) {
+            ServiceTaskApiException ex, HttpServletRequest request) {
         String traceId = shortTraceId();
         log.error("Activepieces API error [{}] {}: {}", traceId, ex.getErrorCode(), ex.getErrorMessage());
         return respond(HttpStatus.BAD_GATEWAY, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);

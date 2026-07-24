@@ -185,14 +185,14 @@ import { reactive, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties, setExtensionProperty } from '@/utils/bpmnExtensions'
-import type { ApTaskConfig } from '@/api/ap'
+import type { ServiceTaskConfig } from '@/api/serviceTask'
 import {
   serializeApConfig,
   deserializeApConfig,
   validateApConfig,
   createDefaultApConfig,
   type ApValidationErrors
-} from '@/utils/apConfigSerializer'
+} from '@/utils/serviceTaskConfigSerializer'
 
 const { t } = useI18n()
 
@@ -202,7 +202,7 @@ const props = defineProps<{
 }>()
 
 const validationErrors = reactive<ApValidationErrors>({ flowId: '' })
-const apConfig = reactive<ApTaskConfig>(createDefaultApConfig())
+const apConfig = reactive<ServiceTaskConfig>(createDefaultApConfig())
 
 /** Add input mapping row */
 function addInputMapping() {

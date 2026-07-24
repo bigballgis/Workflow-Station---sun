@@ -134,18 +134,18 @@
               </el-menu-item>
             </el-sub-menu>
 
-            <!-- Activepieces - external tool (non-prod), opens the :8085 login bridge
+            <!-- ServiceTask - external tool (non-prod), opens the :8085 login bridge
                  in a new tab. el-menu is in router mode, so bind :route to the current
                  path (no-op navigation) and do the real action in @click. -->
             <el-menu-item
               v-if="isSystemAdmin && apBridgeUrl"
-              index="activepieces-launch"
+              index="service-task-launch"
               :route="route.path"
-              @click="openActivepieces"
+              @click="openServiceTask"
             >
               <el-icon><Connection /></el-icon>
               <template #title>
-                {{ t('menu.activepieces') }}
+                {{ t('menu.serviceTask') }}
               </template>
             </el-menu-item>
           </el-menu>
@@ -191,7 +191,7 @@ import {
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
-import { launchActivepieces } from '@/api/ap'
+import { launchServiceTask } from '@/api/serviceTask'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -199,7 +199,7 @@ const { t } = useI18n()
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
 
-// Activepieces launcher (non-prod only). The menu visibility is gated on RUNTIME config
+// ServiceTask launcher (non-prod only). The menu visibility is gated on RUNTIME config
 // (window.__APP_CONFIG__.AP_BRIDGE_URL, injected per-environment at container start) — the
 // frontend image is built once and promoted to uat/sit/prod, so this can't be a build-time
 // value. Non-prod sets it -> the entry shows; prod leaves it empty -> hidden (AP is
@@ -212,7 +212,7 @@ const apBridgeUrl = computed(() => {
   return import.meta.env.DEV ? 'http://localhost:8085/__ap/bridge' : ''
 })
 
-const openActivepieces = async () => {
+const openServiceTask = async () => {
   if (!apBridgeUrl.value) return
   // Cross-domain SSO handshake (plan B): ask the admin-domain /launch endpoint (where the
   // platform JWT cookie is valid) to sign into AP with the shared account and mint a
@@ -221,7 +221,7 @@ const openActivepieces = async () => {
   // domains. Same-tab navigation (not a new tab) keeps the bridge's localStorage['token']
   // write in the same storage partition as the AP app; the user returns via browser back.
   try {
-    const bridgeUrl = await launchActivepieces()
+    const bridgeUrl = await launchServiceTask()
     if (bridgeUrl) window.location.assign(bridgeUrl)
   } catch {
     // Error toast is already surfaced by the request response interceptor

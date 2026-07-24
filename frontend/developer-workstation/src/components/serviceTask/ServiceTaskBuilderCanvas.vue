@@ -1,5 +1,5 @@
 <!--
-  HERMES L1: DW (Vue 3) host wrapper that mounts the vendored Activepieces builder
+  HERMES L1: DW (Vue 3) host wrapper that mounts the vendored ServiceTask builder
   (React, lib-mode ESM bundle) inside a Shadow DOM — NOT an iframe (project X-6).
 
   Contract with the builder bundle (activepieces/packages/web, built via

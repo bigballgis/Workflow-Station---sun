@@ -1,6 +1,6 @@
-package com.admin.ap.service;
+package com.admin.servicetask.service;
 
-import com.admin.ap.client.ActivepiecesApiClient.ApSession;
+import com.admin.servicetask.client.ServiceTaskApiClient.ApSession;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +26,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ApBridgeNonceStore {
+public class ServiceTaskBridgeNonceStore {
 
     private static final String KEY_PREFIX = "ap:bridge:nonce:";
 

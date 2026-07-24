@@ -1,8 +1,8 @@
-package com.admin.ap.controller;
+package com.admin.servicetask.controller;
 
-import com.admin.ap.client.ActivepiecesApiClient;
-import com.admin.ap.config.ActivepiecesProperties;
-import com.admin.ap.service.ApBridgeNonceStore;
+import com.admin.servicetask.client.ServiceTaskApiClient;
+import com.admin.servicetask.config.ServiceTaskProperties;
+import com.admin.servicetask.service.ServiceTaskBridgeNonceStore;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.dto.UserPrincipal;
 import com.platform.security.util.SecurityContextUtils;
@@ -48,11 +48,11 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Activepieces Login Bridge", description = "Shared-account login bridge endpoints for the AP gateway")
-public class ApTokenController {
+public class ServiceTaskTokenController {
 
-    private final ActivepiecesProperties properties;
-    private final ActivepiecesApiClient apiClient;
-    private final ApBridgeNonceStore nonceStore;
+    private final ServiceTaskProperties properties;
+    private final ServiceTaskApiClient apiClient;
+    private final ServiceTaskBridgeNonceStore nonceStore;
 
     /** Bridge HTML, loaded once from the classpath. */
     private volatile String bridgeHtml;
@@ -88,7 +88,7 @@ public class ApTokenController {
         String login = user.getUsername() != null ? user.getUsername() : user.getUserId();
         // Per-user provisioning（审计到人）优先：configured => 按当前 DW 用户换取专属 AP token，
         // AP 侧 externalId=DW userId。未配置 managed 则回退共享账号（不回归既有 dev/非生产行为）。
-        ActivepiecesApiClient.ApSession session = properties.getManaged().isEnabled()
+        ServiceTaskApiClient.ApSession session = properties.getManaged().isEnabled()
                 ? apiClient.signInManaged(user)
                 : apiClient.signInShared();
         String nonce = nonceStore.issue(session, properties.getBridge().getNonceTtlSeconds());
@@ -169,10 +169,10 @@ public class ApTokenController {
             return ResponseEntity.notFound().build();
         }
 
-        ActivepiecesApiClient.ApSession session;
+        ServiceTaskApiClient.ApSession session;
         if (nonce != null && !nonce.isBlank()) {
             // 跨域路径：用一次性 nonce 兑换，AP 域无平台 cookie 也可。
-            Optional<ActivepiecesApiClient.ApSession> resolved = nonceStore.consume(nonce);
+            Optional<ServiceTaskApiClient.ApSession> resolved = nonceStore.consume(nonce);
             if (resolved.isEmpty()) {
                 return ResponseEntity.status(401).build();
             }

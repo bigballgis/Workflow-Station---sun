@@ -1,5 +1,5 @@
 /**
- * Activepieces (AP) types for the BPMN service-task designer.
+ * ServiceTask (AP) types for the BPMN service-task designer.
  *
  * AP runs as a single shared runtime per environment, so — unlike the old per-connection
  * model — the designer does not fetch connection configs or workflow lists. The service task
@@ -14,7 +14,7 @@ export interface VariableMapping {
 }
 
 /** AP task config for BPMN serialization */
-export interface ApTaskConfig {
+export interface ServiceTaskConfig {
   /** AP flow id (the webhook flow identifier) */
   flowId: string
   /** Optional full sync webhook URL override; blank = build from engine config + flowId */

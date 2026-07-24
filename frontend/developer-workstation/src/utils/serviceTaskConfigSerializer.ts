@@ -1,13 +1,13 @@
 /**
- * Activepieces (AP) Task Config Serialization/Deserialization utilities.
- * Handles conversion between ApTaskConfig objects and BPMN extension properties.
+ * ServiceTask (AP) Task Config Serialization/Deserialization utilities.
+ * Handles conversion between ServiceTaskConfig objects and BPMN extension properties.
  *
  * The engine reads these `ap:`-prefixed properties from the deployed service task and
  * (because `ap:flowId` is present) binds the task to the `${apTaskExecutor}` delegate at
  * deploy time.
  */
 
-import type { ApTaskConfig, VariableMapping } from '@/api/ap'
+import type { ServiceTaskConfig, VariableMapping } from '@/api/serviceTask'
 
 /** BPMN extension property prefix for AP config */
 export const AP_PREFIX = 'ap:'
@@ -28,7 +28,7 @@ export interface ApValidationErrors {
 }
 
 /** Default AP task config */
-export function createDefaultApConfig(): ApTaskConfig {
+export function createDefaultApConfig(): ServiceTaskConfig {
   return {
     flowId: '',
     webhookUrl: '',
@@ -40,10 +40,10 @@ export function createDefaultApConfig(): ApTaskConfig {
 }
 
 /**
- * Serialize ApTaskConfig to BPMN extension property key-value pairs.
+ * Serialize ServiceTaskConfig to BPMN extension property key-value pairs.
  * Variable mappings are serialized as JSON strings.
  */
-export function serializeApConfig(config: ApTaskConfig): Record<string, string> {
+export function serializeApConfig(config: ServiceTaskConfig): Record<string, string> {
   return {
     [AP_KEYS.flowId]: config.flowId || '',
     [AP_KEYS.webhookUrl]: config.webhookUrl || '',
@@ -55,10 +55,10 @@ export function serializeApConfig(config: ApTaskConfig): Record<string, string> 
 }
 
 /**
- * Deserialize BPMN extension properties (Record<string, any>) back to ApTaskConfig.
+ * Deserialize BPMN extension properties (Record<string, any>) back to ServiceTaskConfig.
  * Handles both prefixed (ap:flowId) and raw property names.
  */
-export function deserializeApConfig(ext: Record<string, any>): ApTaskConfig {
+export function deserializeApConfig(ext: Record<string, any>): ServiceTaskConfig {
   const get = (key: string): any => ext[`${AP_PREFIX}${key}`] ?? ext[key]
 
   return {
@@ -75,7 +75,7 @@ export function deserializeApConfig(ext: Record<string, any>): ApTaskConfig {
  * Validate AP task config required fields.
  * Returns error messages for invalid fields (empty string = valid).
  */
-export function validateApConfig(config: ApTaskConfig): ApValidationErrors {
+export function validateApConfig(config: ServiceTaskConfig): ApValidationErrors {
   return {
     flowId: config.flowId || config.webhookUrl ? '' : 'AP flow ID is required',
   }

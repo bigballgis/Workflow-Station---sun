@@ -1,11 +1,11 @@
 package com.workflow.controller;
 
-import com.workflow.component.ApTaskExecutor;
-import com.workflow.dto.request.ApActionRequest;
+import com.workflow.component.ServiceTaskExecutor;
+import com.workflow.dto.request.ServiceTaskActionRequest;
 import com.workflow.dto.response.ApiResponse;
-import com.workflow.dto.response.ApExecutionResult;
-import com.workflow.entity.ApExecutionRecord;
-import com.workflow.repository.ApExecutionRecordRepository;
+import com.workflow.dto.response.ServiceTaskExecutionResult;
+import com.workflow.entity.ServiceTaskExecutionRecord;
+import com.workflow.repository.ServiceTaskExecutionRecordRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,16 +32,16 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Tag(name = "AP Execution Records", description = "Activepieces execution record query and Action sync execution API")
-public class ApExecutionController {
+public class ServiceTaskExecutionController {
 
-    private final ApExecutionRecordRepository executionRecordRepository;
-    private final ApTaskExecutor apTaskExecutor;
+    private final ServiceTaskExecutionRecordRepository executionRecordRepository;
+    private final ServiceTaskExecutor apTaskExecutor;
 
     // ==================== Execution Record Queries ====================
 
     @GetMapping("/api/workflow/ap/executions")
     @Operation(summary = "Query execution record list", description = "Support filtering by process instance ID, status, time range and pagination")
-    public ResponseEntity<ApiResponse<Page<ApExecutionRecord>>> listExecutions(
+    public ResponseEntity<ApiResponse<Page<ServiceTaskExecutionRecord>>> listExecutions(
             @Parameter(description = "Process instance ID")
             @RequestParam(value = "processInstanceId", required = false) String processInstanceId,
             @Parameter(description = "Execution status: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT")
@@ -59,15 +59,15 @@ public class ApExecutionController {
                 processInstanceId, status, page, size);
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Specification<ApExecutionRecord> spec = buildFilterSpecification(processInstanceId, status, startTime, endTime);
-        Page<ApExecutionRecord> result = executionRecordRepository.findAll(spec, pageable);
+        Specification<ServiceTaskExecutionRecord> spec = buildFilterSpecification(processInstanceId, status, startTime, endTime);
+        Page<ServiceTaskExecutionRecord> result = executionRecordRepository.findAll(spec, pageable);
 
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     @GetMapping("/api/workflow/ap/executions/{id}")
     @Operation(summary = "Get single execution record")
-    public ResponseEntity<ApiResponse<ApExecutionRecord>> getExecution(@PathVariable("id") Long id) {
+    public ResponseEntity<ApiResponse<ServiceTaskExecutionRecord>> getExecution(@PathVariable("id") Long id) {
         return executionRecordRepository.findById(id)
                 .map(record -> ResponseEntity.ok(ApiResponse.success(record)))
                 .orElseGet(() -> ResponseEntity.status(404)
@@ -78,8 +78,8 @@ public class ApExecutionController {
 
     @PostMapping("/api/v1/ap/execute")
     @Operation(summary = "AP Action sync execution", description = "Internal API: Synchronously execute AP flow and return result")
-    public ResponseEntity<ApiResponse<ApExecutionResult>> executeSynchronous(
-            @RequestBody @Valid ApActionRequest request) {
+    public ResponseEntity<ApiResponse<ServiceTaskExecutionResult>> executeSynchronous(
+            @RequestBody @Valid ServiceTaskActionRequest request) {
 
         log.info("AP Action sync execution request: apFlowId={}, processInstanceId={}, timeoutSeconds={}",
                 request.getApFlowId(), request.getProcessInstanceId(), request.getTimeoutSeconds());
@@ -91,12 +91,12 @@ public class ApExecutionController {
         }
 
         try {
-            ApExecutionResult result = apTaskExecutor.executeSynchronous(request);
+            ServiceTaskExecutionResult result = apTaskExecutor.executeSynchronous(request);
 
             if (result.isSuccess()) {
                 return ResponseEntity.ok(ApiResponse.success(result));
             } else {
-                return ResponseEntity.ok(ApiResponse.<ApExecutionResult>builder()
+                return ResponseEntity.ok(ApiResponse.<ServiceTaskExecutionResult>builder()
                         .success(false)
                         .code(result.getStatus())
                         .message(result.getErrorMessage())
@@ -113,7 +113,7 @@ public class ApExecutionController {
 
     // ==================== Internal Methods ====================
 
-    Specification<ApExecutionRecord> buildFilterSpecification(
+    Specification<ServiceTaskExecutionRecord> buildFilterSpecification(
             String processInstanceId, String status, String startTime, String endTime) {
 
         return (root, query, criteriaBuilder) -> {

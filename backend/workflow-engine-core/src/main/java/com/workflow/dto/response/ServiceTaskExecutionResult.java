@@ -9,7 +9,7 @@ import java.util.Map;
  * Returned for AP Action synchronous execution.
  */
 @Data
-public class ApExecutionResult {
+public class ServiceTaskExecutionResult {
 
     /** Whether the execution succeeded */
     private boolean success;
@@ -26,8 +26,8 @@ public class ApExecutionResult {
     /** Error message (on failure) */
     private String errorMessage;
 
-    public static ApExecutionResult success(Long executionRecordId, Map<String, Object> outputData) {
-        ApExecutionResult result = new ApExecutionResult();
+    public static ServiceTaskExecutionResult success(Long executionRecordId, Map<String, Object> outputData) {
+        ServiceTaskExecutionResult result = new ServiceTaskExecutionResult();
         result.setSuccess(true);
         result.setExecutionRecordId(executionRecordId);
         result.setStatus("SUCCESS");
@@ -35,8 +35,8 @@ public class ApExecutionResult {
         return result;
     }
 
-    public static ApExecutionResult failure(Long executionRecordId, String status, String errorMessage) {
-        ApExecutionResult result = new ApExecutionResult();
+    public static ServiceTaskExecutionResult failure(Long executionRecordId, String status, String errorMessage) {
+        ServiceTaskExecutionResult result = new ServiceTaskExecutionResult();
         result.setSuccess(false);
         result.setExecutionRecordId(executionRecordId);
         result.setStatus(status);

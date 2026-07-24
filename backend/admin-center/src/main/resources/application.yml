@@ -280,7 +280,7 @@ bi:
 # Activepieces integration (community edition + gateway shared account).
 # bridge.enabled is OFF by default — prod runs AP as runtime only (no UI login).
 # Non-prod enables the bridge so the :8085 gateway can mint AP tokens via the shared account.
-activepieces:
+service-task:
   internal-url: ${ACTIVEPIECES_INTERNAL_URL:http://localhost:8086}
   bridge:
     enabled: ${ACTIVEPIECES_BRIDGE_ENABLED:false}

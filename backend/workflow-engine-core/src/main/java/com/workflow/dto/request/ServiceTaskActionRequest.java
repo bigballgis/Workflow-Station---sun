@@ -9,7 +9,7 @@ import java.util.Map;
  * Used by user-portal (via WorkflowEngineClient) to forward an AP Action execution request.
  */
 @Data
-public class ApActionRequest {
+public class ServiceTaskActionRequest {
 
     /** AP flow ID (webhook flow identifier) */
     private String apFlowId;

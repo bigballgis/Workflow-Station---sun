@@ -13,11 +13,11 @@ import java.util.*;
  * Mapping configuration is stored in BPMN extension attributes as a JSON string
  * in the format [{source, target}].
  */
-public final class ApVariableMappingUtil {
+public final class ServiceTaskVariableMappingUtil {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private ApVariableMappingUtil() {
+    private ServiceTaskVariableMappingUtil() {
         // utility class
     }
 

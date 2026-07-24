@@ -95,7 +95,7 @@ file-service:
 # Activepieces (AP) runtime — single shared instance per environment.
 # Service tasks store only ap:flowId; the sync webhook URL is built as
 # <webhook-base-url>/api/v1/webhooks/<flowId>/sync at runtime.
-activepieces:
+service-task:
   webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://localhost:8086}
 
 # 本地/开发联调测试账号（默认关闭 fail-closed；生产严禁设置这两个变量）

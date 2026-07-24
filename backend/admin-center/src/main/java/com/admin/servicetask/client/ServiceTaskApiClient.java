@@ -1,7 +1,7 @@
-package com.admin.ap.client;
+package com.admin.servicetask.client;
 
-import com.admin.ap.config.ActivepiecesProperties;
-import com.admin.exception.ActivepiecesApiException;
+import com.admin.servicetask.config.ServiceTaskProperties;
+import com.admin.exception.ServiceTaskApiException;
 import com.platform.common.dto.UserPrincipal;
 import io.jsonwebtoken.Jwts;
 import lombok.RequiredArgsConstructor;
@@ -34,10 +34,10 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ActivepiecesApiClient {
+public class ServiceTaskApiClient {
 
     private final RestTemplate restTemplate;
-    private final ActivepiecesProperties properties;
+    private final ServiceTaskProperties properties;
 
     /**
      * 共享账号 sign-in 的结果。AP 的一个完整前端会话需要 token + projectId
@@ -49,13 +49,13 @@ public class ActivepiecesApiClient {
      * 调用 AP {@code POST /api/v1/authentication/sign-in}，用共享账号换取 AP 会话。
      *
      * @return {@link ApSession}（token 写 localStorage['token']，projectId 写 localStorage['projectId']）
-     * @throws ActivepiecesApiException 未配置共享账号、登录失败或超时
+     * @throws ServiceTaskApiException 未配置共享账号、登录失败或超时
      */
     public ApSession signInShared() {
         String email = properties.getSharedAccount().getEmail();
         String password = properties.getSharedAccount().getPassword();
         if (email == null || email.isBlank() || password == null || password.isBlank()) {
-            throw new ActivepiecesApiException("Activepieces shared account not configured");
+            throw new ServiceTaskApiException("Activepieces shared account not configured");
         }
 
         String base = properties.getInternalUrl();
@@ -84,14 +84,14 @@ public class ActivepiecesApiClient {
                     return new ApSession(token.toString(), projectId != null ? projectId.toString() : null);
                 }
             }
-            throw new ActivepiecesApiException("Activepieces sign-in failed: no token in response");
+            throw new ServiceTaskApiException("Activepieces sign-in failed: no token in response");
 
         } catch (ResourceAccessException e) {
             log.error("Activepieces sign-in timeout or connection error: {}", e.getMessage(), e);
-            throw new ActivepiecesApiException("Activepieces API timeout or connection error", e);
+            throw new ServiceTaskApiException("Activepieces API timeout or connection error", e);
         } catch (RestClientException e) {
             log.error("Activepieces sign-in failed: {}", e.getMessage(), e);
-            throw new ActivepiecesApiException("Activepieces API call failed: " + e.getMessage(), e);
+            throw new ServiceTaskApiException("Activepieces API call failed: " + e.getMessage(), e);
         }
     }
 
@@ -106,13 +106,13 @@ public class ActivepiecesApiClient {
      *
      * @param user 已认证的当前 DW 用户
      * @return {@link ApSession}（该用户专属 token + 共享 projectId）
-     * @throws ActivepiecesApiException 未配置签名密钥、签名失败、AP 换取失败或超时
+     * @throws ServiceTaskApiException 未配置签名密钥、签名失败、AP 换取失败或超时
      */
     public ApSession signInManaged(UserPrincipal user) {
-        ActivepiecesProperties.Managed managed = properties.getManaged();
+        ServiceTaskProperties.Managed managed = properties.getManaged();
         if (managed.getSigningKeyId() == null || managed.getSigningKeyId().isBlank()
                 || managed.getPrivateKey() == null || managed.getPrivateKey().isBlank()) {
-            throw new ActivepiecesApiException("Activepieces managed provisioning not configured (signing key id / private key)");
+            throw new ServiceTaskApiException("Activepieces managed provisioning not configured (signing key id / private key)");
         }
 
         String externalToken = buildExternalToken(user);
@@ -143,14 +143,14 @@ public class ActivepiecesApiClient {
                     return new ApSession(token.toString(), projectId != null ? projectId.toString() : null);
                 }
             }
-            throw new ActivepiecesApiException("Activepieces managed exchange failed: no token in response");
+            throw new ServiceTaskApiException("Activepieces managed exchange failed: no token in response");
 
         } catch (ResourceAccessException e) {
             log.error("Activepieces managed exchange timeout or connection error: {}", e.getMessage(), e);
-            throw new ActivepiecesApiException("Activepieces API timeout or connection error", e);
+            throw new ServiceTaskApiException("Activepieces API timeout or connection error", e);
         } catch (RestClientException e) {
             log.error("Activepieces managed exchange failed: {}", e.getMessage(), e);
-            throw new ActivepiecesApiException("Activepieces API call failed: " + e.getMessage(), e);
+            throw new ServiceTaskApiException("Activepieces API call failed: " + e.getMessage(), e);
         }
     }
 
@@ -160,7 +160,7 @@ public class ActivepiecesApiClient {
      * 不带 {@code role} → AP 默认 EDITOR。{@code kid} 走 header，AP 据此查 publicKey 验签。
      */
     private String buildExternalToken(UserPrincipal user) {
-        ActivepiecesProperties.Managed managed = properties.getManaged();
+        ServiceTaskProperties.Managed managed = properties.getManaged();
         String firstName = firstNonBlank(user.getDisplayName(), user.getUsername(), user.getUserId());
         Date now = new Date();
         Date expiry = new Date(now.getTime() + managed.getTokenTtlSeconds() * 1000L);
@@ -175,11 +175,11 @@ public class ActivepiecesApiClient {
                     .expiration(expiry)
                     .signWith(loadPrivateKey(managed.getPrivateKey()), Jwts.SIG.RS256)
                     .compact();
-        } catch (ActivepiecesApiException e) {
+        } catch (ServiceTaskApiException e) {
             throw e;
         } catch (RuntimeException e) {
             log.error("Failed to sign Activepieces external token: {}", e.getMessage(), e);
-            throw new ActivepiecesApiException("Failed to sign Activepieces external token", e);
+            throw new ServiceTaskApiException("Failed to sign Activepieces external token", e);
         }
     }
 
@@ -200,7 +200,7 @@ public class ActivepiecesApiClient {
             cachedPrivateKey = key;
             return key;
         } catch (RuntimeException | java.security.GeneralSecurityException e) {
-            throw new ActivepiecesApiException("Invalid Activepieces managed private key (expected PKCS8 PEM)", e);
+            throw new ServiceTaskApiException("Invalid Activepieces managed private key (expected PKCS8 PEM)", e);
         }
     }
 

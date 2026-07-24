@@ -193,7 +193,7 @@ management:
 # AI Generation webhook — Activepieces sync webhook.
 # The backend POSTs to <base>/api/v1/webhooks/<flowId>/sync; the response contract is unchanged
 # ({reply, document, documentType, phaseComplete, generatedData}). flowId is environment-specific.
-activepieces:
+service-task:
   ai-generation:
     webhook-url: ${AI_GENERATION_WEBHOOK_URL:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
     # 300s: deepseek-v4-pro 生成 DESIGN 文档实测 ~230s;须 >= AP 的 AP_WEBHOOK_TIMEOUT_SECONDS,

@@ -197,9 +197,9 @@
             </el-form-item>
           </template>
 
-          <!-- Activepieces config -->
+          <!-- ServiceTask config -->
           <template v-if="serviceType === 'ap'">
-            <ApTaskPropertiesPanel
+            <ServiceTaskFlowPanel
               ref="apPanelRef"
               :modeler="modeler"
               :element="element"
@@ -278,7 +278,7 @@ import {
   getExtensionProperties,
   setExtensionProperty
 } from '@/utils/bpmnExtensions'
-import ApTaskPropertiesPanel from './ApTaskPropertiesPanel.vue'
+import ServiceTaskFlowPanel from './ServiceTaskFlowPanel.vue'
 
 const { t } = useI18n()
 
@@ -294,7 +294,7 @@ const taskDescription = ref('')
 
 const serviceType = ref<'http' | 'script' | 'message' | 'ap' | 'dmn'>('http')
 
-const apPanelRef = ref<InstanceType<typeof ApTaskPropertiesPanel> | null>(null)
+const apPanelRef = ref<InstanceType<typeof ServiceTaskFlowPanel> | null>(null)
 
 const httpUrl = ref('')
 const httpMethod = ref<'GET' | 'POST' | 'PUT' | 'DELETE'>('POST')

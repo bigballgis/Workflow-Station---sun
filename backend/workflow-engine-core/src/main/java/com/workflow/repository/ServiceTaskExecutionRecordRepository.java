@@ -1,6 +1,6 @@
 package com.workflow.repository;
 
-import com.workflow.entity.ApExecutionRecord;
+import com.workflow.entity.ServiceTaskExecutionRecord;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,16 +11,16 @@ import org.springframework.stereotype.Repository;
  * Activepieces execution record data access layer.
  */
 @Repository
-public interface ApExecutionRecordRepository extends JpaRepository<ApExecutionRecord, Long>,
-        JpaSpecificationExecutor<ApExecutionRecord> {
+public interface ServiceTaskExecutionRecordRepository extends JpaRepository<ServiceTaskExecutionRecord, Long>,
+        JpaSpecificationExecutor<ServiceTaskExecutionRecord> {
 
     /**
      * Find execution records by process instance ID with pagination.
      */
-    Page<ApExecutionRecord> findByProcessInstanceId(String processInstanceId, Pageable pageable);
+    Page<ServiceTaskExecutionRecord> findByProcessInstanceId(String processInstanceId, Pageable pageable);
 
     /**
      * Find execution records by execution status with pagination.
      */
-    Page<ApExecutionRecord> findByStatus(String status, Pageable pageable);
+    Page<ServiceTaskExecutionRecord> findByStatus(String status, Pageable pageable);
 }

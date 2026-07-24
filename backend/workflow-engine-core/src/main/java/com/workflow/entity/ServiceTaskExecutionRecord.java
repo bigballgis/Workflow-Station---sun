@@ -21,7 +21,7 @@ import java.time.Instant;
     @Index(name = "idx_ap_exec_status", columnList = "status"),
     @Index(name = "idx_ap_exec_created_at", columnList = "created_at")
 })
-public class ApExecutionRecord {
+public class ServiceTaskExecutionRecord {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

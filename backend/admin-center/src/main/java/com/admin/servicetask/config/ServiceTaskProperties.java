@@ -1,4 +1,4 @@
-package com.admin.ap.config;
+package com.admin.servicetask.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -9,9 +9,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>方案：社区版 + 网关共享账号。生产仅作 runtime（不开 UI 登录），非生产经边缘网关 :8085
  * 的「共享账号登录桥」进入 AP。本配置仅服务端使用（用共享账号调 AP sign-in 换取 AP token）。
  */
-@ConfigurationProperties(prefix = "activepieces")
+@ConfigurationProperties(prefix = "service-task")
 @Data
-public class ActivepiecesProperties {
+public class ServiceTaskProperties {
 
     /**
      * AP 服务的服务端可达地址（容器内网，例如 {@code http://activepieces:80}）。
