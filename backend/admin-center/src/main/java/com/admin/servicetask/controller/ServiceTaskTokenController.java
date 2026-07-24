@@ -178,15 +178,20 @@ public class ServiceTaskTokenController {
             }
             session = resolved.get();
         } else {
-            // 同源回退（dev）：校验平台 JWT，现场换 AP token。
+            // 同源：校验平台 JWT，现场换 AP token。与 /launch 一致按 managed 分流——
+            // per-user（审计到人）开启时换该用户专属 token，否则回退共享账号。
+            // DW 内嵌 builder（lib-mode 挂载）走的正是这条路径。
             Optional<UserPrincipal> userOpt = SecurityContextUtils.getCurrentUser();
             if (userOpt.isEmpty()) {
                 return ResponseEntity.status(401).build();
             }
-            String login = userOpt.get().getUsername() != null
-                    ? userOpt.get().getUsername() : userOpt.get().getUserId();
-            session = apiClient.signInShared();
-            log.debug("Issued AP shared session (same-origin) for platform user {}", login);
+            UserPrincipal user = userOpt.get();
+            String login = user.getUsername() != null ? user.getUsername() : user.getUserId();
+            session = properties.getManaged().isEnabled()
+                    ? apiClient.signInManaged(user)
+                    : apiClient.signInShared();
+            log.debug("Issued AP session (same-origin) for platform user {} (managed={})",
+                    login, properties.getManaged().isEnabled());
         }
 
         // A complete AP session is token + projectId (AP clears both on logout). Returning
