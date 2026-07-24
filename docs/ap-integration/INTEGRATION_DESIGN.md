@@ -6,7 +6,7 @@
 >
 > **阅读起点**：[STATUS.md](STATUS.md)。本文的每一层都标注**冻结状态**与其**门禁**。
 
-更新日期：2026-07-23
+更新日期：2026-07-24
 
 ---
 
@@ -56,7 +56,7 @@ HERMES 侧 :8085 桥加 per-user 分流（admin-center BUILD SUCCESS）；余重
 
 **L2 网关已实施**（2026-07-24）：AP builder API（REST+socket.io）收编进 Kong `/api/ap/*`，dev 实测 per-user token 透传 + WS 升级全绿（见 §4.4）。
 
-**L1 已实施 + 浏览器 E2E PASS**（2026-07-24）：6 注入切点 + lib-mode 构建（✓17s/6.8MB）+ DW Shadow-DOM 包装；**浏览器实测真实 builder 挂载渲染、flow 加载（REST 经 Kong 全 200）、socket.io 连接、Tailwind CSS 隔离、点 Trigger 弹 piece 选择器（Radix Portal in shadow）**。见 §6.5。
+**L1 已实施 + 浏览器 E2E PASS**（2026-07-24）：7 注入切点 + lib-mode 构建（✓17s/6.8MB）+ DW Shadow-DOM 包装；**浏览器实测真实 builder 挂载渲染、flow 加载（REST 经 Kong 全 200）、socket.io 连接、Tailwind CSS 隔离、点 Trigger 弹 piece 选择器（Radix Portal in shadow）**。见 §6.5。
 
 **收尾（非阻塞）**：L1 接 DW 的 FU→Service Task 视图 + web-embed 交付落地（AG-02.8）、
 C-1 集群 NetworkPolicy、air-gap piece 预烘焙。
@@ -346,7 +346,7 @@ project_member（带角色）**，忠实 G2 表驱动 RBAC 天然给出正确权
 - 打包候选 = **lib mode + Shadow DOM**（§6.5 P1–P4 框架级 PoC 已过）；React **19**（AG-01，须 dedupe）。
 - 契约经 **`ap-contracts`**（AG-02：vendored shared 用 zod 4.3.6、ESM 产物、`lib/ee` 可剥离）。
 
-### 6.2 施工记录（2026-07-24）：6 个注入切点已在真实 AP 代码落地
+### 6.2 施工记录（2026-07-24）：7 个注入切点已在真实 AP 代码落地
 
 AG-04 的剩余缺口是"8 注入切点在真实代码上的改造（首要 `ApStorage` 单例）"。已实施——**新增单一宿主配置面
 `window.__AP_HOST_CONFIG__`**（`packages/web/src/lib/host-config.ts` 的 `apHost`，懒读、字段全可选、**未设时逐字回退
@@ -393,7 +393,7 @@ AP 原生 `EmbeddingProvider`（18 开关：`hideSideNav`/`disableNavigationInBu
 - **实测**：`vite build` **✓ 17.11s，6784 模块**；产物 `dist/packages/web-embed/`：`ap-builder.mjs`（入口，`export mountApBuilder`）、
   `mount-builder-*.mjs` **6.8MB**（gzip 1.73MB，含 react-flow/codemirror/shiki/全 builder）、`web.css` **1.2MB**、懒加载 chunk（shiki 语言）+ `locales/`。
 
-**DW 侧宿主包装（✅ vue-tsc 0 error）**：`frontend/developer-workstation/src/components/activepieces/ApBuilderCanvas.vue`——
+**DW 侧宿主包装（✅ vue-tsc 0 error）**：`frontend/developer-workstation/src/components/serviceTask/ServiceTaskBuilderCanvas.vue`——
 `attachShadow({mode:'open'})` → **fetch `web.css` inline 注入 shadow `<style>`**（AG-04.4，不进 document.head）→
 `import(bundleUrl)` → `mountApBuilder({container: shadow 内 div, flowId, projectId, token, apiUrl:'/api/ap', socketPath:'/api/ap/socket.io', onUnauthorized})`；
 `onBeforeUnmount` 调 unmount。props 传 per-user token（L7）+ Kong 前缀（L2）+ `bundleUrl/cssUrl`（交付方式，AG-02.8）。
@@ -432,6 +432,25 @@ E2E 之后已把挂载链接进 DW 应用本体（不再是独立 host 页）：
 **DW 内实测**（截图 + 网络）：页签渲染出该 FU 绑定的 csv flow（webhook→http→csv）及其 step 设置面板；调用全经 Kong `/api/ap` 且全 200，
 其中三条正好坐实 L2 硬约束：**`/v1/pieces/@activepieces/piece-*`（#4 未编码斜杠双段）**、
 **`POST /v1/pieces/options`（#3 同步引擎作业）**、**`POST /v1/flows/:id`（#2 单点写路径）**。
+
+### 6.8 ⚠️ Shadow DOM 的三个非显然失效点（真实 builder 才暴露）
+
+AG-04 的框架级 PoC（AG-04.2/.3/.4）在**小样本**上全绿，但真实 builder 挂进 shadow root 后又暴露三处失效。
+三者共同特征：**在 shadow 树之外都是 no-op，所以上游永远不会遇到**；且都**不报错**，只是样式/弹层静默失效，
+布局类照常工作因而极易被忽略。判定手法：拿 embed 与 :8085 独立版的**同一面板**对照。
+
+| # | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| ⓪ | unpublished-changes 横幅变裸文本、必填红星/开关/pill 边框全丢 | AP 把主题变量（`--background`/`--border`/`--radius`…）声明在 **`:root`**，而 **shadow root 内 `:root` 永不匹配** ⇒ Tailwind v4 的 `bg-background`/`border-border` 等全部解析为空 | 宿主注入样式时 `css.replace(/:root\b/g, ':host')`。注意 Tailwind 自身 `@layer theme` 已写成 `:root,:host` 双写，**出问题的是 AP 应用层**那份 |
+| ⓪″ | piece 设置面板所有输入框/卡片边框消失、间距松散 | **Chromium 忽略 shadow 样式表里的 `@property` 注册** ⇒ Tailwind v4 读注册变量的 utilities（`border-style:var(--tw-border-style)`、shadow、transform…）全部 guaranteed-invalid | 抽出全部 `@property` 的 `initial-value`，以 `@layer properties { *, ::before, ::after, ::backdrop { … } }` 追加——**正是 Tailwind 给无 `@property` 浏览器的原生兜底**（44 个变量） |
+| ⓪′ | 点"+"加步骤：巨大无样式 SVG/文本散落页面、压在画布后 | Radix **Portal 默认挂 `document.body`（shadow 外）**，样式表在 shadow 内 ⇒ 弹层完全失样式 | **新增注入点 #7 `portalContainer`**：`components/ui/` 的 popover/tooltip/select/dialog/dropdown-menu/sheet/drawer/context-menu/hover-card 各 Portal 用 `container ?? apHost.getPortalContainer()`，另 `prompt-kit/file-upload` 的裸 `createPortal` 同改；standalone 时该值 undefined，行为不变 |
+
+前两项合成宿主侧一个函数 `adaptCssForShadowRoot()`（`ServiceTaskBuilderCanvas.vue`）。
+快速自检：`getComputedStyle(el).getPropertyValue('--tw-border-style')` 为空即中了 ⓪″。
+
+> **给 AG-04.3 的更正**：PoC 记的"Radix Portal 零泄漏 body"只在**显式传了 container 的调用点**成立；
+> 真实 builder 里绝大多数 Portal 调用点没传，默认仍逃逸到 body。**凡向 Shadow DOM 挂 React/Radix 组件树，
+> Portal 容器必须全局改道**，不能依赖个别调用点。
 
 ### 6.7 收尾（2026-07-24）
 
@@ -472,7 +491,7 @@ AG-06 原定 "per-user provisioning = 以 AP 自带 **`managed-authn`** 为模�
 
 ### 7.1 当前状态与修订方案
 
-**当前（dev 实况）= 共享账号**：`ApTokenController`（:8085 桥）用服务端持有的**共享 AP 账号**签发 token
+**当时（改名前）= 共享账号**：`ServiceTaskTokenController`（原 `ApTokenController`，:8085 桥）用服务端持有的**共享 AP 账号**签发 token
 （nonce 换 token 写 localStorage）。所有 DW 用户共用一个 AP 账号 ⇒ **per-user（Q4）尚未做**，RBAC 退化为"单账号全权"。
 
 **修订选项**（因 managed-authn/signing-key 删除，三选一）：
@@ -513,9 +532,9 @@ per-user 在此模型主要为**归属/审计 + 会话隔离**；访问控制仍
 **HERMES 侧（admin-center，BUILD SUCCESS）**：
 - `ActivepiecesProperties.Managed`：`enabled` / `signingKeyId`(=kid) / `privateKey`(PKCS8 secret) / `projectExternalId`(默认 `hermes-shared`) / `tokenTtlSeconds`。
 - `ActivepiecesApiClient.signInManaged(UserPrincipal)`：jjwt 0.12 签 RS256 外部 token（header `kid`；claims `externalUserId=DW userId` / `externalProjectId` / `firstName` / `lastName`）→ POST `/api/v1/managed-authn/external-token` → 返回 per-user `ApSession`。PKCS8 私钥解析后 `volatile` 缓存。
-- `ApTokenController#launch`：`managed.enabled ? signInManaged(user) : signInShared()`——**默认关闭 → 回退共享账号，不回归 dev**。
+- `ServiceTaskTokenController#launch`：`managed.enabled ? signInManaged(user) : signInShared()`——**默认关闭 → 回退共享账号，不回归 dev**。
 
-**引导（一次性，重建镜像后）**：`POST /v1/signing-keys`（平台 admin）→ 拿 `{id, privateKey}` → `id`→config `activepieces.managed.signing-key-id`、`privateKey`→secret `activepieces.managed.private-key`、置 `activepieces.managed.enabled=true`。私钥仅创建时返回一次。
+**引导（一次性，重建镜像后）**：`POST /v1/signing-keys`（平台 admin）→ 拿 `{id, privateKey}` → `id`→config `service-task.managed.signing-key-id`、`privateKey`→secret `service-task.managed.private-key`、置 `service-task.managed.enabled=true`。私钥仅创建时返回一次。
 
 **待复测**：重建 EE-removed 镜像（现含两 module）→ 引导 signing-key → AG-06 端到端（DW 用户经 `/launch` → managed 换取 → 核 AP `user.externalId == DW userId`、`projectId==共享 project`）。
 

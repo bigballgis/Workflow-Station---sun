@@ -15,11 +15,11 @@
 | ID | Gate | 状态 | 阻塞对象 |
 |---|---|---|---|
 | **AG-02** | **Frontend workspace 边界**（ap-contracts 落地） | 🟢 **核心已验证**（独立编译/零后端依赖/无 bun/DW 消费全绿）；余 CI 与 Codegen 实施 | Doc4 前端集成层 |
-| AG-EE | **EE 剥离闭合**（EE-4 清零） | 🔴 未闭合 | Doc4 全部 AP 服务端 Layer |
+| AG-EE | **EE 剥离闭合**（EE-4 清零） | 🟢 **出口标准已达成**（删 `app/ee/` + 12 CE 重写；CE 编译 0 error、启动、dev 端到端处理请求）；余文档/CI 子项 .1/.5/.6 | — |
 | AG-01 | React version consistency | 🟡 版本已定，真实 dedupe 待验 | Doc4 Layer 1 |
 | AG-03 | 共享 project 完整 RBAC + 资源所有权 | 🟢 HTTP RBAC 回归 PASS（2026-07-24） | — |
 | AG-04 | Builder 组件化 | 🟢 浏览器 E2E PASS + 已接进 DW Service Task 页签（2026-07-24） | — |
-| AG-05 | Sandbox + offline + prebuilt piece 联合验证 | 🟢 **8/8 子项 PASS**；**基线经 [D6](DECISIONS.md#d6) 降级为 `SANDBOX_CODE_ONLY`+`STRICT`**（不再申请 SYS_ADMIN）；余：补偿控制 C-1/C-3 待 Doc4 承接 | Doc4 Layer 3–5 |
+| AG-05 | Sandbox + offline + prebuilt piece 联合验证 | 🟢 **8/8 子项 PASS**；**基线经 [D6](DECISIONS.md#d6) 降级为 `SANDBOX_CODE_ONLY`+`STRICT`**（不再申请 SYS_ADMIN）；余：**C-3 已实现并实测**，C-1 待集群（填 CIDR + 显式 apply） | Doc4 Layer 3–5 |
 | AG-06 | Per-user provisioning 策略 | 🟢 实现完成 + dev 端到端 PASS（Option A，2026-07-24） | — |
 
 > **AG-EE 为 D3 新增**，其实施方案见 Document 3.5（`EE_REMOVAL_PLAN.md`）。
@@ -95,7 +95,7 @@ project-members/oauth-apps/audit-events/git-repo/…）。实测：
 | AG-02.5 DW 真实工程回归 | ⏳ 待在真实 DW 上跑（PoC 用的是最小 Vite 工程） |
 | AG-02.6 CI 路径过滤 | ⏳ 待实施 |
 | AG-02.7 Schema Drift（Codegen + CI 新鲜度校验） | ⏳ 待实施——**canonical = `activepieces/packages/shared`**，ap-contracts 为派生物 |
-| AG-02.8 builder 组件交付 | ⏳ 待定（本节的 `file:` 方案适用于 contracts；**builder 组件是另一码事**，体量与打包方式不同） |
+| AG-02.8 builder 组件交付 | ✅ **已定案 = 构建期拷贝**（`prebuild` 把 web-embed 拷进 DW `public/service-task-builder/`，DW 自身 nginx 提供；无 registry、运行时不出网；产物不入库）。⚠️ nginx 默认 mime.types 无 `.mjs`，须显式 `default_type text/javascript` |
 
 ### 失败回退
 
@@ -176,16 +176,16 @@ EXTRACT / REIMPLEMENT / REPLACE 解决，使 CE 可在"无 EE 专有业务功能
 |---|---|---|
 | AG-04.1 | React 19 单实例 | ✅ PASS |
 | AG-04.2 | Shadow DOM × React Flow（fitView/拖拽/边重路由/滚轮缩放/minimap） | ✅ PASS |
-| AG-04.3 | Shadow DOM × Radix Portal（DropdownMenu + Dialog 双基元） | ✅ PASS，零泄漏 body |
-| AG-04.4 | Shadow DOM × Tailwind v4（preflight 隔离） | ✅ PASS，EP 宿主零污染 |
+| AG-04.3 | Shadow DOM × Radix Portal（DropdownMenu + Dialog 双基元） | ⚠️ **PoC PASS 但结论过窄**——"零泄漏 body" 只在**显式传了 container 的调用点**成立；真实 builder 多数 Portal 调用点没传，仍逃逸到 body 而完全失样式。须全局改道（注入点 #7 `portalContainer`），见 [Doc4 §6.8](INTEGRATION_DESIGN.md) |
+| AG-04.4 | Shadow DOM × Tailwind v4（preflight 隔离） | ⚠️ **隔离方向 PASS，反向失效未覆盖**——宿主零污染成立，但 shadow 内 **`:root` 变量不匹配** + **Chromium 不注册 shadow 内 `@property`**，致主题变量与 border/shadow/transform 静默失效；须 `adaptCssForShadowRoot()`，见 [Doc4 §6.8](INTEGRATION_DESIGN.md) |
 | AG-04.5 | Socket.io + TanStack Query + i18n 注入链路 | ⏭ 未纳入（低风险，随实建验证） |
 
-- **注入切点已实施（2026-07-24）**：6 个注入切点已在真实 AP 代码改造（含首要 `ApStorage` 单例），
+- **注入切点已实施（2026-07-24）**：7 个注入切点已在真实 AP 代码改造（含首要 `ApStorage` 单例，以及真实 builder 才暴露的 #7 `portalContainer`），
   经单一宿主配置面 `window.__AP_HOST_CONFIG__`（`lib/host-config.ts`，懒读、全可选、未设时回退 standalone）。
   tsc 0 新增 error + vitest 3/3。见 [Doc4 §6.2](INTEGRATION_DESIGN.md)。
 - **lib-mode 构建 + 宿主包装已实施（2026-07-24）**：`src/embed/mount-builder.tsx`（`mountApBuilder`，绕 iframe SDK 用
   `isEmbedded→memoryRouter`）+ `vite.embed.config.mts` → **`vite build` ✓ 17s，6784 模块**，产物 = `ap-builder.mjs`（导出 mountApBuilder）
-  + 6.8MB bundle + 1.2MB `web.css`。DW 侧 `ApBuilderCanvas.vue`（Shadow DOM + web.css inline 注入 + `mountApBuilder`），vue-tsc 0 error。见 [Doc4 §6.4](INTEGRATION_DESIGN.md)。
+  + 6.8MB bundle + 1.2MB `web.css`。DW 侧 `ServiceTaskBuilderCanvas.vue`（Shadow DOM + web.css inline 注入 + `mountApBuilder`），vue-tsc 0 error。见 [Doc4 §6.4](INTEGRATION_DESIGN.md)。
 - **浏览器 E2E PASS（2026-07-24）**：web-embed 产物 + host 页起于 :5173，`attachShadow` + inline `web.css` +
   `mountApBuilder`（token=L7 per-user，REST/socket 经 L2 Kong `/api/ap`）。实测 **builder 渲染 + flow 加载（REST 全 200）+
   socket.io 连接 + CSS 隔离正确 + 点 Trigger 弹 piece 选择器（Radix Portal 在 shadow 内工作）**。见 [Doc4 §6.5](INTEGRATION_DESIGN.md)。
@@ -365,7 +365,7 @@ Node 内置的既有 flow，在 `SANDBOX_CODE_ONLY` 与 `SANDBOX_CODE_AND_PROCES
   - RS256 外部 token（kid header）→ `POST /v1/managed-authn/external-token` → per-user AP token；
   - **幂等** alice 重跑同 apUserId/projectId；**隔离** bob 不同 apUserId、同共享 projectId；
   - **审计到人** `user.externalId == DW userId`（DB 核验）；共享 project `externalId=hermes-shared`、两用户同绑 Editor。
-- **HERMES 侧**：`ApTokenController#launch` 按 `activepieces.managed.enabled` 分流 `signInManaged`/`signInShared`，
+- **HERMES 侧**：`ServiceTaskTokenController#launch` 按 `service-task.managed.enabled` 分流 `signInManaged`/`signInShared`，
   admin-center BUILD SUCCESS（jjwt 0.12 RS256）。**默认 false → 回退共享账号，不回归 dev**。
 - **余（非 AG-06 本体）**：AG-06.3 生命周期"停用联动"、AG-06.4 端点暴露面加固（managed-authn 现为 `public()`，
   凭外部 token 签名鉴权——须确保 signing key 私钥仅 HERMES 持有 + 内网限制）留作运维/加固项。

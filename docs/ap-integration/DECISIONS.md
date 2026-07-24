@@ -44,6 +44,8 @@
 
 ---
 
+> **D7** — HERMES 侧命名改为 ServiceTask（含明确不改清单）｜**D8** — admin-center 接受 DW 平台 JWT cookie
+
 ## 2. 决策正文
 
 ### <a id="d1"></a>D1 — EE 发现动摇 Q1/Q8 成本模型（2026-07-23）
@@ -365,6 +367,51 @@ AI Generate 另需 LLM(deepseek) 公网/内网。**默认拒绝其余**——尤
 **⚠️ 未在本环境运行时验证**：dev 是 compose 无 k8s；已做 YAML 解析 + NetworkPolicy v1 schema 结构校验。
 README 附**集群内验证流程**（AP pod 打 admin-center 须失败、打 redis/DNS/AI-Generate 须成功）——
 **生产依赖前必须先在集群跑通，并确认 CNI 真正执行 NetworkPolicy**（否则 manifest 形同虚设）。
+
+---
+
+### <a id="d7"></a>D7 — HERMES 侧命名改为 ServiceTask（2026-07-24）
+
+**裁决（用户）**：AP 已 vendor 进仓库自维护，**在本项目里就叫 ServiceTask**；用户可见处不出现厂商品牌。
+
+**改名范围（B 档：文案 + HERMES 自有代码）**：
+
+| 层 | 改动 |
+|---|---|
+| 后端 | 包 `com.admin.ap` → `com.admin.servicetask`；`ApConfig`/`ActivepiecesProperties`/`ApTokenController`/`ApBridgeNonceStore`/`ActivepiecesApiClient`/`ActivepiecesApiException` → `ServiceTask*`；workflow-engine 的 `ApTaskExecutor`/`ApExecutionController`/`ApActionRequest`/`ApExecutionResult`/`ApExecutionRecord`/`ApExecutionRecordRepository`/`ApVariableMappingUtil` → `ServiceTask*`；配置前缀 `activepieces.*` → `service-task.*` |
+| 前端 | `api/ap.ts` → `api/serviceTask.ts`（两应用）；`launchActivepieces` → `launchServiceTask`；`ApTaskConfig` → `ServiceTaskConfig`；`apConfigSerializer.ts` → `serviceTaskConfigSerializer.ts`；`components/activepieces/ApBuilderCanvas.vue` → `components/serviceTask/ServiceTaskBuilderCanvas.vue`；`ApTaskPropertiesPanel.vue` → **`ServiceTaskFlowPanel.vue`**（不叫 `ServiceTaskPropertiesPanel`，避免与既有 BPMN `ServiceTaskProperties.vue` 混淆） |
+
+**明确不改（改了会断）**：
+- vendored `activepieces/` 树、`@activepieces/*` 包名（engine 的 piece loader 按 `pieces/@activepieces/piece-x` 解析）、AP 自读的 `AP_*` 环境变量；
+- 服务主机名 `activepieces:80` / k8s `activepieces-service` 与 27 个 `ACTIVEPIECES_*`（属 C 档，未选）；
+- **JPA 表名/索引名**（`wf_ap_execution_record`、`idx_ap_exec_*`）——`@Table`/`@Index` 显式硬编码，schema 完全未动，**init-scripts 无需更新**；
+- **BPMN `serviceType` 枚举值 `"ap"`** 及其 `ap*` i18n 键——该值**持久化在已保存流程定义**里，改则废存量流程。
+
+**命名冲突的处置**：BPMN 里 "Service Task" 本就是元素类型，其实现枚举含 `http/script/message/ap/dmn`。
+若把 `ap` 这一项也叫 ServiceTask 会读成"服务任务的类型是服务任务"。⇒ **该项用户可见文案定为
+"Automation Flow / 自动化流程"**（去品牌且不重复父概念），同批清掉 flow-id / webhook / 变量映射文案里的裸 "AP"。
+
+**验证**：后端 `BUILD SUCCESS`（JDK17）；两前端 `vue-tsc` 与基线持平，改名文件 0 error。
+
+---
+
+### <a id="d8"></a>D8 — admin-center 接受 DW 的平台 JWT cookie（2026-07-24）
+
+**背景**：DW 页面（FU → Service Task）直调 admin-center 的 `/internal/ap/*` 登录桥端点。浏览器持有的是
+**DW 签发的 `dw_access_token`** cookie，而 admin-center 的 `platform.security.jwt.cookie-names` 只列
+`ac_access_token`/`access_token` ⇒ `JwtAuthenticationFilter` 取不到 token、无认证主体 → `/launch` **401**
+（表现为 Service Task 页签 "Failed to connect"）。
+
+**裁决**：给 admin-center 的 `cookie-names` 增加**只读项** `dw_access_token`（首项 `ac_access_token` 不变，
+仍是它自己写出的 cookie）——正是该配置注释既定的用法（"首项写出，其余用于读取"）。
+
+**与 [C-3](#d6) 不冲突**：C-3 拒的是**无密码学凭据的裸 `X-User-Id` 头**；这里读取并**验签平台 JWT**，属真实认证。
+`workflow-engine-core` 早已同时接受 `up_`/`dw_`/`ac_` 三种 cookie 名，此为同一模式。
+
+**诊断要点（复现同类问题时用）**：DW 前端各 api 客户端会注入 `X-User-Id`（自称身份、无 JWT），C-3 后该路径不再铸主体；
+真凭据是 **httpOnly cookie**，`document.cookie` 看不到，须用 `fetch(..., {credentials:'include'})` 打一个
+**需要认证主体**的端点（如 DW 的 `/api/v1/auth/me`）判定是否真登录——多数 admin 端点从 URL 取 userId、不需主体，
+**它们返回 200 并不能证明已认证**。
 
 ---
 

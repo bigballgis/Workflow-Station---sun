@@ -32,7 +32,7 @@
 
 | 资产 | 位置 | 状态 |
 |---|---|---|
-| 共享账号登录桥 + nonce 跨域 SSO | `backend/admin-center` `com.admin.ap`（ApTokenController / ApBridgeNonceStore / ActivepiecesApiClient） | 已提交，dev 验证 |
+| 共享账号登录桥 + nonce 跨域 SSO | `backend/admin-center` `com.admin.servicetask`（ServiceTaskTokenController / ServiceTaskBridgeNonceStore / ServiceTaskApiClient；[D7](DECISIONS.md#d7) 改名前为 `com.admin.ap`） | 已提交，dev 验证 |
 | BPMN Service Task → AP 同步 webhook（Path B） | `backend/workflow-engine-core`：`ApTaskExecutor`、`ProcessDeploymentManager#bindActivepiecesServiceTasks`（部署期注入 delegate）、`wf_ap_execution_record` | 已提交，dev 端到端实测通过 |
 | DW 设计器 AP 配置面板 | `frontend/developer-workstation`：`ServiceTaskProperties.vue`、`ApTaskPropertiesPanel.vue`、`apConfigSerializer.ts`、`api/ap.ts` | 已提交 |
 | AI Generate 走 AP flow | DW 后端 `AiGenerationServiceImpl` → AP 同步 webhook（flow `QnU0ytf5oBaxL9rbwOU2Z`，deepseek-v4-pro，`AP_WEBHOOK_TIMEOUT_SECONDS=300`） | 生产依赖，**不得破坏** |

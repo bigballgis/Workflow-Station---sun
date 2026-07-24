@@ -1,6 +1,6 @@
 # Activepieces 0.84.0 集成 — 当前状态
 
-> **从这里开始读。** 更新日期：2026-07-23
+> **从这里开始读。** 更新日期：2026-07-24
 
 ---
 
@@ -8,7 +8,7 @@
 
 AP 0.84.0 的源码逆向已完成并证实：这**不是一次简单的 vendor，而是一个受控 fork**
 （约 1000–1300 行重实现 + Bun 迁移 + React→Vue 宿主适配 + EE 剥离 + 离线/安全改造）。
-需求与依赖分析已成文，**设计（Document 4）被 3 个红灯 Gate 阻塞**（AG-02 / AG-EE / AG-05）。
+**现已全部落地**：九层集成逐层实施并实测（L1 浏览器 E2E、L2/L3/L7 dev 实测、地基 L4–L9），原先卡住 Doc4 的三个红灯 Gate（AG-02 / AG-EE / AG-05）均已转绿。
 
 **Phase 0 + AG-02 均已完成（2026-07-23）**：
 Phase 0 → 18 项能力盘点 + 13 条 EE-4 裁定 + 20 组处置，**必须重写的仅 5 项，AP 认证域可整体删除**；
@@ -25,7 +25,7 @@ AG-02 → **AP shared 独立编译零错误、零 AP 后端依赖、零 bun、DW
 | 文件 | 角色 | 状态 |
 |---|---|---|
 | **STATUS.md** | 本文 · 一屏总览 | — |
-| **[DECISIONS.md](DECISIONS.md)** | **ADR — 全局约束唯一事实来源**（X 约束 / Q1–Q9 / Q4a / D1–D5） | 现行 |
+| **[DECISIONS.md](DECISIONS.md)** | **ADR — 全局约束唯一事实来源**（X 约束 / Q1–Q9 / Q4a / **D1–D8**） | 现行 |
 | **[OPEN_GATES.md](OPEN_GATES.md)** | **阻塞项唯一总账**（AG-01~06 + AG-EE，含全部子项） | 现行 |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Document 1 — 需求规格 | 待冻结 |
 | [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md) | Document 2 — 源码逆向（6 线全完成） | 待冻结（依赖 Gate） |
@@ -40,8 +40,8 @@ AG-02 → **AP shared 独立编译零错误、零 AP 后端依赖、零 bun、DW
 | ID | Gate | 状态 |
 |---|---|---|
 | **AG-02** | Frontend workspace 边界（ap-contracts 落地） | 🟢 **核心已验证**，余 CI/Codegen 实施 |
-| **AG-EE** | EE 剥离闭合（EE-4 清零） | 🟡 **13 条已裁定处置**，实施与验证待做 |
-| AG-05 | Sandbox + offline + prebuilt piece 联合验证 | 🟢 **8/8 PASS**；基线经 **[D6](DECISIONS.md#d6) 降级**为 `SANDBOX_CODE_ONLY`+`STRICT`；余补偿控制 C-1/C-3 |
+| **AG-EE** | EE 剥离闭合（EE-4 清零） | 🟢 **出口标准已达成**：删 `app/ee/` + 12 CE 重写，CE 编译 0 error、启动、dev 端到端处理请求；余文档/CI 子项 |
+| AG-05 | Sandbox + offline + prebuilt piece 联合验证 | 🟢 **8/8 PASS**；基线经 **[D6](DECISIONS.md#d6) 降级**为 `SANDBOX_CODE_ONLY`+`STRICT`；**C-3 已实测**，余 C-1 待集群 |
 | AG-01 | React version consistency | 🟡 版本已定，真实 dedupe 待验 |
 | AG-03 | 共享 project 完整 RBAC + 资源所有权 | 🟢 **HTTP RBAC 回归 PASS**（per-user Editor/Viewer 同端点 allow/deny，2026-07-24；Q4a bypass 不需要） |
 | AG-04 | Builder 组件化 | 🟢 **浏览器 E2E PASS**（2026-07-24）：真实 builder Shadow-DOM 挂载、flow 加载、socket 连接、piece 选择器（Radix Portal in shadow）全绿 |
@@ -113,7 +113,7 @@ AG-02 → **AP shared 独立编译零错误、零 AP 后端依赖、零 bun、DW
 
 ## 待决策清单
 
-目前**无阻塞性待决策**——Q1–Q9、Q4a、D1–D5 均已裁决（见 [DECISIONS.md](DECISIONS.md)）。
+目前**无阻塞性待决策**——Q1–Q9、Q4a、D1–D8 均已裁决（见 [DECISIONS.md](DECISIONS.md)）。
 以下为实施期需要在对应 Gate 内确定的技术选择，非架构级：
 
 - AG-02.7：同步机制的具体实现（**Codegen 首选**；Canonical 已定 = vendored AP shared；
