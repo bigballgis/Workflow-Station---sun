@@ -21,6 +21,7 @@ public class ActivepiecesProperties {
 
     private Bridge bridge = new Bridge();
     private SharedAccount sharedAccount = new SharedAccount();
+    private Managed managed = new Managed();
 
     /**
      * 登录桥开关。仅非生产开启；生产 runtime 关闭（无 UI 登录入口），
@@ -52,5 +53,37 @@ public class ActivepiecesProperties {
     public static class SharedAccount {
         private String email;
         private String password;
+    }
+
+    /**
+     * Per-user provisioning（审计到人）配置。开启后登录桥 {@code /launch} 不再用共享账号，
+     * 改为按当前 DW 用户签发 AP 外部 token（RS256），换取<b>该用户专属</b>的 AP token——
+     * AP 侧 {@code user.externalId = DW userId}，每一步 AP 操作天然映射回发起的 DW 人。
+     *
+     * <p>依赖 AP 的 {@code /v1/managed-authn/external-token} 端点（vendored CE 重写）。
+     * 签名私钥来自一次性 {@code POST /v1/signing-keys}（平台 admin），其 {@code id} 作为 JWT
+     * header 的 {@code kid}，AP 据此查 publicKey 验签。私钥仅 HERMES 持有（secret），浏览器永不接触。
+     *
+     * <p>{@code enabled=false}（默认）时桥回退到共享账号模式，不回归既有行为。
+     */
+    @Data
+    public static class Managed {
+        /** 开启 per-user 外部 token 模式；关闭则登录桥 {@code /launch} 回退共享账号。 */
+        private boolean enabled = false;
+
+        /** AP 签名密钥 id（{@code POST /v1/signing-keys} 返回的 id），作为外部 token 的 {@code kid}。 */
+        private String signingKeyId;
+
+        /** 签名私钥（PKCS8 PEM，{@code BEGIN PRIVATE KEY}）。secret，仅服务端持有。 */
+        private String privateKey;
+
+        /**
+         * 共享 project 的外部 id（{@code externalProjectId}）。所有 per-user 会话绑定到这一个
+         * 共享 project（Q4a 共享-project 模型），AP 首次见到时按此 id getOrCreate。
+         */
+        private String projectExternalId = "hermes-shared";
+
+        /** 外部 token 有效期（秒），短时——仅用于换取 AP token 的一次握手。 */
+        private int tokenTtlSeconds = 120;
     }
 }

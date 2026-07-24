@@ -84,10 +84,16 @@ public class ApTokenController {
             return ResponseEntity.status(502).build();
         }
 
-        String login = userOpt.get().getUsername() != null ? userOpt.get().getUsername() : userOpt.get().getUserId();
-        ActivepiecesApiClient.ApSession session = apiClient.signInShared();
+        UserPrincipal user = userOpt.get();
+        String login = user.getUsername() != null ? user.getUsername() : user.getUserId();
+        // Per-user provisioning（审计到人）优先：configured => 按当前 DW 用户换取专属 AP token，
+        // AP 侧 externalId=DW userId。未配置 managed 则回退共享账号（不回归既有 dev/非生产行为）。
+        ActivepiecesApiClient.ApSession session = properties.getManaged().isEnabled()
+                ? apiClient.signInManaged(user)
+                : apiClient.signInShared();
         String nonce = nonceStore.issue(session, properties.getBridge().getNonceTtlSeconds());
-        log.debug("Issued AP bridge launch nonce for platform user {}", login);
+        log.debug("Issued AP bridge launch nonce for platform user {} (managed={})",
+                login, properties.getManaged().isEnabled());
 
         String bridgeUrl = publicUrl + "#nonce=" + URLEncoder.encode(nonce, StandardCharsets.UTF_8);
         Map<String, String> data = new HashMap<>();
