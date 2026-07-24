@@ -415,10 +415,28 @@ socketBaseUrl:'http://localhost:8000', socketPath:'/api/ap/socket.io'})`。实�
 **唯一非致命 404**：`GET /api/ap/v1/users/:id`（builder header 取当前用户）——G8 EE 剥离把 `/v1/users` 收窄为影子记录所致，
 builder 优雅降级、正常渲染。**收尾项（非 L1）**：CE user 模块对该 id 返影子记录以消 404。
 
+### 6.6 接进 DW ✅ 已完成（2026-07-24）：Service Task 页签跑真实 builder
+
+E2E 之后已把挂载链接进 DW 应用本体（不再是独立 host 页）：
+
+- **页签**：`FunctionUnitEdit.vue` 第 2 位加 `Service Task`（`ServiceTaskDesigner.vue`）。它读本 FU 的 BPMN，
+  取 `serviceType=ap` 服务任务的 `ap:flowId`，向桥要 AP 会话，再挂 `ServiceTaskBuilderCanvas`；多个任务给下拉切换，
+  另有空态 / 错误重试态。
+- **会话**：`fetchServiceTaskSession()` → `GET /internal/ap/token`（同源、平台 cookie；`managed.enabled` 时为 per-user）。
+  同时修了 `/token` 同源分支写死共享账号的疏漏，与 `/launch` 一致按 managed 分流。
+- **交付（AG-02.8 定案）= 构建期拷贝**：`scripts/sync-service-task-builder.mjs` 作 `prebuild`，把 web-embed 产物拷进
+  `public/service-task-builder/`，由 **DW 自己的 nginx** 提供（无 registry、运行时不出网，合 X-3）。产物是构建物，**gitignore 不入库**。
+- **一处必踩的坑**：nginx 默认 `mime.types` **无 `.mjs`**，会以 `application/octet-stream` 下发致浏览器拒绝 `import()`；
+  已加 `location ~* \.mjs$ { types {} default_type text/javascript; }`。
+
+**DW 内实测**（截图 + 网络）：页签渲染出该 FU 绑定的 csv flow（webhook→http→csv）及其 step 设置面板；调用全经 Kong `/api/ap` 且全 200，
+其中三条正好坐实 L2 硬约束：**`/v1/pieces/@activepieces/piece-*`（#4 未编码斜杠双段）**、
+**`POST /v1/pieces/options`（#3 同步引擎作业）**、**`POST /v1/flows/:id`（#2 单点写路径）**。
+
 **剩余（收尾，非阻塞）**：
-- **交付落地**（AG-02.8）：web-embed 产物如何进 DW（构建期拷贝 public/ / 本地包 / 离线私有镜像，须 air-gap 可用）——当前 E2E 用静态服务器验证。
-- **DW 真实集成**：把 `ApBuilderCanvas.vue` 接进 DW 的 FU→Service Task(AP) 视图（本 E2E 用独立 host 页证明挂载链，未接 DW 应用路由）。
-- **可选瘦身**：从 bundle 剪 sign-in/sign-up chrome（当前全量打包 6.8MB 已可用）。
+- **可选瘦身**：从 bundle 剪 sign-in/sign-up chrome（当前全量产物 21MB 已可用）。
+- 内嵌 AP 会改写宿主 `document.title`（浏览器页签标题变 "Activepieces"）——观感泄漏，可在挂载层复位。
+- CE user 模块对 `/v1/users/:id` 返影子记录，消除那个非致命 404。
 
 ---
 

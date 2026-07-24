@@ -190,8 +190,14 @@ EXTRACT / REIMPLEMENT / REPLACE 解决，使 CE 可在"无 EE 专有业务功能
   `mountApBuilder`（token=L7 per-user，REST/socket 经 L2 Kong `/api/ap`）。实测 **builder 渲染 + flow 加载（REST 全 200）+
   socket.io 连接 + CSS 隔离正确 + 点 Trigger 弹 piece 选择器（Radix Portal 在 shadow 内工作）**。见 [Doc4 §6.5](INTEGRATION_DESIGN.md)。
   唯一非致命 404 = `/v1/users/:id`（G8 收窄，builder 优雅降级）。
-- **收尾（非阻塞）**：`ApBuilderCanvas.vue` 接进 DW 的 FU→Service Task 视图（E2E 用独立 host 页证明挂载链）；
-  web-embed 产物进 DW 交付落地（AG-02.8）；CE user 模块对 `/v1/users/:id` 返影子记录消 404。
+- **已接进 DW（2026-07-24）**：`FunctionUnitEdit` 第 2 位 `Service Task` 页签 → `ServiceTaskDesigner` 读 FU 的 BPMN 取
+  `serviceType=ap` 任务的 `ap:flowId` → 取桥会话 → 挂 `ServiceTaskBuilderCanvas`。DW 内实测渲染出该 FU 的 csv flow 与
+  step 设置面板，调用全经 Kong `/api/ap` 且 200（含 `@scope/name` piece 元数据、`pieces/options`、`POST /flows/:id`）。
+- **AG-02.8 交付方式定案 = 构建期拷贝**：`prebuild` 脚本把 web-embed 拷进 DW `public/service-task-builder/`，
+  由 DW 自身 nginx 提供；无 registry、运行时不出网（合 X-3）；产物 gitignore 不入库。
+  ⚠️ nginx 默认 mime.types 无 `.mjs` → 须显式 `default_type text/javascript`，否则模块被浏览器拒绝。
+- **收尾（非阻塞）**：bundle 瘦身（剪 sign-in chrome）；内嵌 AP 改写宿主 `document.title`；
+  CE user 模块对 `/v1/users/:id` 返影子记录消 404。
 - **约束**：符合 [X-6](DECISIONS.md)——不得以"React SPA 直接并入"处理。
 - **失败回退**：放弃 Shadow DOM，改 Tailwind v4 分层去 preflight + PostCSS scope + prefix。
 

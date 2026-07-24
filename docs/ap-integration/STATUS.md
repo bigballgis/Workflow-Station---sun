@@ -120,4 +120,4 @@ AG-02 → **AP shared 独立编译零错误、零 AP 后端依赖、零 bun、DW
   **CI 新鲜度校验无条件强制**）；
 - ~~Document 3.5 处置归类~~ **✅ 已完成**（20 组 G1–G20，见 [Doc3.5 §2](EE_REMOVAL_PLAN.md)）；
 - ~~AG-05 降级阶梯落点~~ **✅ 已裁决**（[D6](DECISIONS.md#d6) → 第 3 级，补偿控制 C-1~C-4 已列，**实施未做**）；
-- **AG-02.8**：builder 组件跨 workspace 的交付方式（本地包 / 构建期拷贝 / 私有 registry，须离线可用）。
+- ~~AG-02.8：builder 组件跨 workspace 的交付方式~~ **✅ 已定案（2026-07-24）= 构建期拷贝**：`prebuild` 把 web-embed 产物拷进 DW `public/service-task-builder/`，DW 自身 nginx 提供，离线可用，产物不入库。
