@@ -11,6 +11,11 @@ cors:
 admin-center:
   url: ${ADMIN_CENTER_URL:http://localhost:8090}
 
+# C-3 (docs/ap-integration/DECISIONS.md#d6): 调用 admin-center 时附带的可信服务密钥，
+# 使 admin-center 信任转发的 X-User-Id。须与 admin-center service.internal-token 一致。
+service:
+  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+
 # 一键部署到管理中心：生产环境应要求 JWT（由 Kong 注入或浏览器转发）；本地/测试可关闭
 developer:
   deployment:

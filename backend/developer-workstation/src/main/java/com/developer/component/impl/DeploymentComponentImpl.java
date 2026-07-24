@@ -75,6 +75,14 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private String defaultAdminCenterUrl;
 
     /**
+     * Shared secret proving this is a trusted first-party HERMES service call, so
+     * admin-center honors the forwarded X-User-Id even without a JWT. See C-3 in
+     * docs/ap-integration/DECISIONS.md#d6. Activepieces is not given this secret.
+     */
+    @Value("${service.internal-token:}")
+    private String serviceInternalToken;
+
+    /**
      * In production, a logged-in user should supply JWT; may be false for local/automated tests.
      */
     @Value("${developer.deployment.require-admin-authorization:true}")
@@ -357,6 +365,9 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         }
         adminUserId.filter(s -> !s.isBlank())
                 .ifPresent(uid -> headers.set(PlatformConstants.HEADER_USER_ID, uid));
+        if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
+            headers.set(PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
+        }
     }
 
     /**

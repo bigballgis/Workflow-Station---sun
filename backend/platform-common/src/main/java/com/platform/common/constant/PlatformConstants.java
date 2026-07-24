@@ -14,6 +14,14 @@ public final class PlatformConstants {
     public static final String HEADER_BEARER_PREFIX = "Bearer ";
     public static final String HEADER_TRACE_ID = "X-Trace-Id";
     public static final String HEADER_USER_ID = "X-User-Id";
+    /**
+     * Shared-secret header that marks a request as coming from a trusted first-party
+     * HERMES service (not from a user-programmable execution surface such as Activepieces).
+     * admin-center only mints an identity from the bare {@link #HEADER_USER_ID} /
+     * X-Username headers when this header carries the configured service token.
+     * See docs/ap-integration/DECISIONS.md#d6 (compensating control C-3).
+     */
+    public static final String HEADER_SERVICE_TOKEN = "X-Service-Token";
     public static final String HEADER_LANGUAGE = "Accept-Language";
     public static final String HEADER_REQUEST_ID = "X-Request-Id";
     

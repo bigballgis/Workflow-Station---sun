@@ -27,7 +27,14 @@ public class RoleAccessComponent {
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
-    
+
+    /**
+     * C-3 (docs/ap-integration/DECISIONS.md#d6): shared secret marking this as a trusted
+     * first-party service call, required for admin-center to honor the forwarded X-User-Id.
+     */
+    @Value("${service.internal-token:}")
+    private String serviceInternalToken;
+
     /**
      * 获取所有业务角色列表
      */
@@ -110,7 +117,10 @@ public class RoleAccessComponent {
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-User-Id", operatedBy != null ? operatedBy : userId);
-            
+            if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
+                headers.set(com.platform.common.constant.PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
+            }
+
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             
             ResponseEntity<Void> response = restTemplate.exchange(

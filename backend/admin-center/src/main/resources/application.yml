@@ -74,6 +74,12 @@ user-portal:
   base-url: ${USER_PORTAL_BASE_URL:http://localhost:8082/api/portal}
   internal-api-token: ${PORTAL_INTERNAL_API_TOKEN:}
 
+# C-3 (docs/ap-integration/DECISIONS.md#d6): 可信一方服务共享密钥。仅当请求携带此 token 时，
+# admin-center 才信任裸 X-User-Id/X-Username 铸身份。Activepieces 不持有此密钥。
+# 未配置 → header 身份兜底整体禁用（fail-closed）。须与 DW/user-portal 的同名密钥一致。
+service:
+  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+
 spring:
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
