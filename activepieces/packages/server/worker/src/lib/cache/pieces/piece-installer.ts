@@ -19,7 +19,7 @@ import { Logger } from 'pino'
 import writeFileAtomic from 'write-file-atomic'
 import { workerSettings } from '../../config/worker-settings'
 import { getGlobalCacheCommonPath, getGlobalCachePathLatestVersion } from '../cache-paths'
-import { bunRunner } from '../code/bun-runner'
+import { pkgRunner } from '../code/pkg-runner'
 
 const tracer = trace.getTracer('piece-installer')
 
@@ -90,12 +90,12 @@ async function installPieces(rootWorkspace: string, pieces: PiecePackage[], incl
                 piecePackage: piece,
             })))
 
-            await tracer.startActiveSpan('pieceInstaller.bunInstall', async (span) => {
+            await tracer.startActiveSpan('pieceInstaller.pkgInstall', async (span) => {
                 try {
                     span.setAttribute('pieces.count', piecesToInstall.length)
                     span.setAttribute('pieces.rootWorkspace', rootWorkspace)
 
-                    const { error: batchError } = await tryCatch(async () => bunRunner(log).install({
+                    const { error: batchError } = await tryCatch(async () => pkgRunner(log).install({
                         path: rootWorkspace,
                         filtersPath: includeFilters ? piecesToInstall.map(relativePiecePath) : [],
                     }))
@@ -105,7 +105,7 @@ async function installPieces(rootWorkspace: string, pieces: PiecePackage[], incl
                         log.info({
                             rootWorkspace,
                             piecesCount: piecesToInstall.length,
-                        }, '[pieceInstaller] Installed registry pieces using bun')
+                        }, '[pieceInstaller] Installed registry pieces')
                         return
                     }
 
@@ -133,7 +133,7 @@ async function installPieces(rootWorkspace: string, pieces: PiecePackage[], incl
                     log.info({
                         rootWorkspace,
                         piecesCount: piecesToInstall.length,
-                    }, '[pieceInstaller] Installed registry pieces using bun (individual fallback)')
+                    }, '[pieceInstaller] Installed registry pieces (individual fallback)')
                 }
                 finally {
                     span.end()
@@ -158,7 +158,7 @@ async function tryInstallPiecesIndividually(
     const failures: PiecePackage[] = []
     for (const piece of pieces) {
         const { error } = await tryCatch(async () =>
-            bunRunner(log).install({
+            pkgRunner(log).install({
                 path: rootWorkspace,
                 filtersPath: [relativePiecePath(piece)],
             }),

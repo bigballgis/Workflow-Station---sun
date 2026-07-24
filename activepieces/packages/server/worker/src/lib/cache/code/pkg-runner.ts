@@ -3,20 +3,28 @@ import { tryCatch } from '@activepieces/shared'
 import { Logger } from 'pino'
 import { CommandOutput, spawnWithKill } from '../../utils/exec'
 
-export const bunRunner = (log: Logger) => ({
+// HERMES: bun removed (X-4). The runtime piece / CODE-step dependency installer used the
+// `bun` binary; it now uses `npm`. npm reads the same `workspaces` field the installer
+// writes into the root package.json and hoists dependencies into the workspace's flat
+// node_modules exactly like bun did (pnpm would need a pnpm-workspace.yaml + hoisted
+// node-linker), so this is a drop-in replacement — the engine's piece resolution is
+// unchanged. The `build` step already uses esbuild.
+export const pkgRunner = (log: Logger) => ({
     async install({ path, filtersPath }: InstallParams): Promise<CommandOutput> {
         const filterArgs: string[] = filtersPath
             .map(sanitizeFilterPath)
-            .flatMap((p) => ['--filter', `./${p}`])
+            .flatMap((p) => ['--workspace', `./${p}`])
         const args = [
             'install',
             '--ignore-scripts',
+            '--no-audit',
+            '--no-fund',
             ...filterArgs,
         ]
         await fileSystemUtils.threadSafeMkdir(path)
-        log.debug({ path, args }, '[bunRunner#install]')
+        log.debug({ path, args }, '[pkgRunner#install]')
         const { error, data } = await tryCatch(async () => spawnWithKill({
-            cmd: 'bun',
+            cmd: 'npm',
             args,
             options: {
                 cwd: path,
@@ -25,7 +33,7 @@ export const bunRunner = (log: Logger) => ({
             timeoutMs: apDayjsDuration(10, 'minutes').asMilliseconds(),
         }))
         if (error) {
-            log.error({ error }, '[bunRunner#install] Failed to install dependencies')
+            log.error({ error }, '[pkgRunner#install] Failed to install dependencies')
             throw error
         }
         return data
@@ -38,7 +46,7 @@ export const bunRunner = (log: Logger) => ({
             '--format=cjs',
             `--outfile=${outputFile}`,
         ]
-        log.debug({ path, entryFile, outputFile, args }, '[bunRunner#build]')
+        log.debug({ path, entryFile, outputFile, args }, '[pkgRunner#build]')
         return spawnWithKill({
             cmd: 'esbuild',
             args,

@@ -402,5 +402,21 @@
   ],
   "resolutions": {
     "rollup": "npm:@rollup/wasm-node"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "bcrypt",
+      "better-sqlite3",
+      "bufferutil",
+      "cpu-features",
+      "isolated-vm",
+      "msgpackr-extract",
+      "secp256k1",
+      "sqlite3",
+      "ssh2"
+    ],
+    "overrides": {
+      "@codemirror/view": "6.43.6"
+    }
   }
 }

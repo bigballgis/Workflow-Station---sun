@@ -28,32 +28,21 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
     locale-gen en_US.UTF-8
 
-RUN export ARCH=$(uname -m) && \
-    if [ "$ARCH" = "x86_64" ]; then \
-      curl -fSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.1/bun-linux-x64-baseline.zip -o bun.zip; \
-    elif [ "$ARCH" = "aarch64" ]; then \
-      curl -fSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.1/bun-linux-aarch64.zip -o bun.zip; \
-    fi
-
-RUN unzip bun.zip \
-    && mv bun-*/bun /usr/local/bin/bun \
-    && chmod +x /usr/local/bin/bun \
-    && rm -rf bun.zip bun-*
-
-RUN bun --version
-
-# Install global npm packages in a single layer
+# HERMES: bun removed (X-4). Global npm packages incl. pnpm (replaces bun) in a single layer.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g --no-fund --no-audit \
     node-gyp \
     npm@11.11.0 \
+    pnpm@9.15.9 \
     pm2@6.0.10 \
     typescript@4.9.4 \
     esbuild@0.25.0
 
-# Install isolated-vm globally (needed for sandboxes)
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    cd /usr/src && bun install isolated-vm@6.0.2
+RUN pnpm --version
+
+# Install isolated-vm standalone (needed for sandboxes); resolved at runtime via NODE_PATH
+RUN --mount=type=cache,target=/root/.npm \
+    cd /usr/src && npm install --no-fund --no-audit isolated-vm@6.0.2
 
 ### STAGE 1: Build ###
 FROM base AS build
@@ -61,18 +50,18 @@ FROM base AS build
 WORKDIR /usr/src/app
 
 # Copy dependency files and workspace package.json files for resolution
-COPY .npmrc package.json bun.lock bunfig.toml ./
+COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/ ./packages/
 
 # Install all dependencies with frozen lockfile
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --frozen-lockfile
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Copy remaining source code (turbo config, etc.)
 COPY . .
 
 # Build frontend, engine, server API, and worker
-RUN npx turbo run build --filter=web --filter=@activepieces/engine --filter=api --filter=worker
+RUN pnpm exec turbo run build --filter=web --filter=@activepieces/engine --filter=api --filter=worker
 
 # Generate migration manifest (ordered list of migration names) for image-tag-based rollback
 RUN node -e "\
@@ -82,7 +71,7 @@ RUN node -e "\
 " > packages/server/api/dist/src/migration-manifest.json
 
 # Remove piece directories not needed at runtime (keeps only the 4 pieces api imports)
-# Then regenerate bun.lock so it matches the trimmed workspace
+# Then regenerate pnpm-lock.yaml so it matches the trimmed workspace
 RUN rm -rf packages/pieces/core packages/pieces/custom && \
     find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \
       ! -name slack \
@@ -90,7 +79,7 @@ RUN rm -rf packages/pieces/core packages/pieces/custom && \
       ! -name facebook-leads \
       ! -name intercom \
       -exec rm -rf {} + && \
-    rm -f bun.lock && bun install
+    rm -f pnpm-lock.yaml && pnpm install
 
 ### STAGE 2: Run ###
 FROM base AS run
@@ -109,19 +98,19 @@ RUN mkdir -p \
 # Copy root config files needed for dependency resolution
 COPY --from=build /usr/src/app/package.json ./
 COPY --from=build /usr/src/app/.npmrc ./
-COPY --from=build /usr/src/app/bun.lock ./
-COPY --from=build /usr/src/app/bunfig.toml ./
+COPY --from=build /usr/src/app/pnpm-lock.yaml ./
+COPY --from=build /usr/src/app/pnpm-workspace.yaml ./
 COPY --from=build /usr/src/app/LICENSE .
 
-# Copy workspace package.json files (needed for bun workspace resolution)
+# Copy workspace package.json files (needed for pnpm workspace resolution)
 COPY --from=build /usr/src/app/packages ./packages
 
 # Copy built engine
 COPY --from=build /usr/src/app/dist/packages/engine/ ./dist/packages/engine/
 
-# Regenerate lockfile and install production dependencies (pieces were trimmed from workspace)
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --production
+# Install production dependencies (pieces were trimmed; lockfile regenerated in build stage)
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --prod
 
 # Copy frontend files
 COPY --from=build /usr/src/app/dist/packages/web ./dist/packages/web/
