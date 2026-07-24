@@ -307,8 +307,16 @@ platform:
       refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
       # 服务自有 cookie 名，避免与 user-portal / developer-workstation 在同源下互相覆盖。
       # 列表首项是本服务写出 Cookie 的名字；其它项用于读取（兼容老客户端 / 转发场景）。
+      #
+      # dw_access_token 为只读项：Developer Workstation 页面（FU → Service Task）会直接调用
+      # admin-center 的 /internal/ap/* 登录桥端点，而浏览器此时持有的是 DW 签发的平台 JWT
+      # cookie。不列入则 JwtAuthenticationFilter 取不到 token → 无认证主体 → /launch 返回 401。
+      # 这与 C-3（DECISIONS.md#d6）不冲突：C-3 拒绝的是无密码学凭据的裸 X-User-Id 头，
+      # 这里读取并验签的是平台 JWT，属于真实认证；workflow-engine-core 早已同时接受
+      # up_/dw_/ac_ 三种 cookie 名，此处沿用同一模式。
       cookie-names:
         - ac_access_token
+        - dw_access_token
         - access_token
       refresh-cookie-name: ac_refresh_token
       # Cookie Domain. Empty (dev, single host) -> host-only. k8s non-prod sets it to
