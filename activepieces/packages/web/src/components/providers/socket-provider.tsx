@@ -1,23 +1,34 @@
 import React, { useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 
-import { API_BASE_URL } from '@/lib/api';
 import { authenticationSession } from '@/lib/authentication-session';
+import { apHost } from '@/lib/host-config';
 
-const socket = io(API_BASE_URL, {
-  transports: ['websocket'],
-  path: '/api/socket.io',
-  autoConnect: false,
-  reconnection: true,
-});
+// HERMES L1 (#5): created lazily on first provider render (not at module load) so
+// a host-injected socket origin/path applies. The embedding host proxies
+// socket.io through its gateway (e.g. path '/api/ap/socket.io'); standalone AP
+// falls back to same-origin '/api/socket.io'. test-run progress depends on this ws.
+let socketSingleton: Socket | undefined;
+function getSocket(): Socket {
+  if (!socketSingleton) {
+    socketSingleton = io(apHost.getSocketBaseUrl(), {
+      transports: ['websocket'],
+      path: apHost.getSocketPath(),
+      autoConnect: false,
+      reconnection: true,
+    });
+  }
+  return socketSingleton;
+}
 
-const SocketContext = React.createContext<typeof socket>(socket);
+const SocketContext = React.createContext<Socket>(undefined as unknown as Socket);
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const token = authenticationSession.getToken();
   const projectId = authenticationSession.getProjectId();
   const toastIdRef = useRef<string | null>(null);
+  const socket = getSocket();
 
   useEffect(() => {
     if (token) {

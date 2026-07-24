@@ -11,6 +11,7 @@ import { authenticationApi } from '@/api/authentication-api';
 import { queryClient } from '@/app/query-client';
 
 import { ApStorage } from './ap-browser-storage';
+import { apHost } from './host-config';
 const tokenKey = 'token';
 const projectIdKey = 'projectId';
 export const authenticationSession = {
@@ -129,6 +130,14 @@ export const authenticationSession = {
   },
   logOut() {
     this.clearSession();
+    // HERMES L1 (#2): the embedding host owns the session lifecycle and must not
+    // be navigated to AP's /sign-in. Delegate to its callback; standalone AP keeps
+    // the redirect.
+    const onUnauthorized = apHost.getConfig().onUnauthorized;
+    if (onUnauthorized) {
+      onUnauthorized('logout');
+      return;
+    }
     window.location.href = '/sign-in';
   },
 };

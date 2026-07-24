@@ -9,11 +9,15 @@ import axios, {
 import qs from 'qs';
 
 import { authenticationSession } from '@/lib/authentication-session';
+import { apHost } from '@/lib/host-config';
 export const isRunningCloudInDevMode = import.meta.env.MODE === 'cloud';
 
 export const API_BASE_URL = isRunningCloudInDevMode
   ? 'https://cloud.activepieces.com'
   : window.location.origin;
+// HERMES L1 (#3): default standalone base kept for compatibility, but the active
+// request path resolves the base lazily via apHost.getApiUrl() so an embedding
+// host (DW) can point REST at its gateway prefix (e.g. `${origin}/api/ap`).
 export const API_URL = `${API_BASE_URL}/api`;
 
 const disallowedRoutes = [
@@ -44,9 +48,17 @@ function globalErrorHandler(error: AxiosError) {
       errorCode === ErrorCode.SESSION_EXPIRED ||
       errorCode === ErrorCode.INVALID_BEARER_TOKEN
     ) {
-      authenticationSession.logOut();
-      console.log(errorCode);
-      window.location.href = '/sign-in';
+      // HERMES L1 (#4): an embedding host handles re-auth itself (it owns the
+      // session and must NOT be navigated away to AP's /sign-in). Standalone AP
+      // keeps the original logout-and-redirect.
+      const onUnauthorized = apHost.getConfig().onUnauthorized;
+      if (onUnauthorized) {
+        onUnauthorized(errorCode);
+      } else {
+        authenticationSession.logOut();
+        console.log(errorCode);
+        window.location.href = '/sign-in';
+      }
     }
   }
 }
@@ -55,10 +67,13 @@ function request<TResponse>(
   url: string,
   config: AxiosRequestConfig = {},
 ): Promise<TResponse> {
-  const resolvedUrl = !isUrlRelative(url) ? url : `${API_URL}${url}`;
-  const isApWebsite = resolvedUrl.startsWith(API_URL);
+  // HERMES L1 (#3): resolve the API base at call time so a host-injected gateway
+  // prefix applies even though this module evaluated before the host set config.
+  const apiUrl = apHost.getApiUrl();
+  const resolvedUrl = !isUrlRelative(url) ? url : `${apiUrl}${url}`;
+  const isApWebsite = resolvedUrl.startsWith(apiUrl);
   const unAuthenticated = disallowedRoutes.some((route) =>
-    resolvedUrl.replace(API_URL, '').startsWith(route),
+    resolvedUrl.replace(apiUrl, '').startsWith(route),
   );
 
   return axios({

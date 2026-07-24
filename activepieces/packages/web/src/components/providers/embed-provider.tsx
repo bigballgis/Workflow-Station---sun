@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 
+import { apHost } from '@/lib/host-config';
 import { cn } from '@/lib/utils';
 
 type EmbeddingState = {
@@ -55,7 +56,13 @@ type EmbeddingProviderProps = {
 };
 
 const EmbeddingProvider = ({ children }: EmbeddingProviderProps) => {
-  const [state, setState] = useState<EmbeddingState>(defaultState);
+  // HERMES L1: when the DW host mounts the builder via lib-mode (not the
+  // postMessage iframe SDK), it seeds isEmbedded + the chrome switches here so
+  // ApRouter picks the memoryRouter and the standalone chrome is hidden.
+  const [state, setState] = useState<EmbeddingState>(() => ({
+    ...defaultState,
+    ...(apHost.getConfig().embedding as Partial<EmbeddingState> | undefined),
+  }));
 
   return (
     <EmbeddingContext.Provider

@@ -6,6 +6,7 @@ import { useApErrorDialogStore } from '@/components/custom/ap-error-dialog/ap-er
 import { internalErrorToast } from '@/components/ui/sonner';
 import { useManagePlanDialogStore } from '@/features/billing';
 import { api } from '@/lib/api';
+import { apHost } from '@/lib/host-config';
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -27,7 +28,13 @@ export const queryClient = new QueryClient({
   }),
   mutationCache: new MutationCache({
     onError: (err: Error, _, __, mutation) => {
-      if (api.isApError(err, ErrorCode.QUOTA_EXCEEDED)) {
+      // HERMES L1 (#6): the billing/quota manage-plan dialog is an EE surface the
+      // embedding host (DW, no billing) does not want. When disabled, fall through
+      // to the generic error toast instead of opening it.
+      if (
+        api.isApError(err, ErrorCode.QUOTA_EXCEEDED) &&
+        !apHost.getConfig().disableBillingDialogs
+      ) {
         const { openDialog } = useManagePlanDialogStore.getState();
         openDialog();
       } else if (isNil(mutation.options.onError)) {
