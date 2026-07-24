@@ -1,9 +1,9 @@
 #!/bin/sh
-# Pre-installs the pieces from pieces.json into the AP worker's bun workspace
+# Pre-installs the pieces from pieces.json into the AP worker's pnpm workspace
 # (/usr/src/app/cache/v11/common) and writes the `ready` markers, replicating
 # EXACTLY what packages/server/worker .../pieces/piece-installer.ts does at runtime.
 # Because pieceCheckIfAlreadyInstalled() sees ready + node_modules, the runtime
-# installer becomes a NO-OP for these pieces — bun never runs, no registry is hit.
+# installer becomes a NO-OP for these pieces — pnpm never runs, no registry is hit.
 #
 # Runs INSIDE the AP image (docker build RUN step) on a machine WITH network.
 # The `v11` segment is AP 0.84's LATEST_CACHE_VERSION (cache-paths.ts) — re-check
@@ -26,6 +26,20 @@ cat > package.json <<'EOF'
 }
 EOF
 
+# pnpm does not read package.json `workspaces`, and the engine's piece loader resolves
+# pieces/<name>-<ver>/node_modules/<name> — i.e. the isolated (per-member) layout.
+# Byte-for-byte what createRootPackageJson() writes at runtime; a mismatch here makes
+# the runtime re-install (or fail with PieceNotFound).
+cat > pnpm-workspace.yaml <<'EOF'
+packages:
+  - "pieces/**"
+EOF
+
+cat > .npmrc <<'EOF'
+node-linker=isolated
+ignore-workspace-root-check=true
+EOF
+
 # One folder per piece: pieces/<name>-<version>/package.json, same as
 # createPiecePackageJson() (REGISTRY variant).
 FILTERS=$(node -e '
@@ -45,9 +59,9 @@ for (const p of pieces) {
 process.stdout.write(filters.join(" "))
 ' "$MANIFEST")
 
-# Same command bunRunner().install() spawns.
+# Same command pkgRunner().install() spawns (X-4: no bun anywhere).
 # shellcheck disable=SC2086
-bun install --ignore-scripts $FILTERS
+pnpm install --ignore-scripts --config.node-linker=isolated --config.confirmModulesPurge=false $FILTERS
 
 # Verify layout matches what the runtime skip-check needs, then mark ready.
 node -e '
