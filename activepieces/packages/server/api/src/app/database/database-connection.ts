@@ -31,6 +31,7 @@ import { PieceTagEntity } from '../pieces/tags/pieces/piece-tag.entity'
 import { TagEntity } from '../pieces/tags/tag-entity'
 import { PlatformEntity } from '../platform/platform.entity'
 import { ProjectEntity } from '../project/project-entity'
+import { SigningKeyEntity } from '../signing-key/signing-key-entity'
 import { StoreEntryEntity } from '../store-entry/store-entry-entity'
 import { FieldEntity } from '../tables/field/field.entity'
 import { CellEntity } from '../tables/record/cell.entity'
@@ -79,6 +80,7 @@ function getEntities(): EntitySchema<unknown>[] {
         CellEntity,
         TableWebhookEntity,
         UserIdentityEntity,
+        SigningKeyEntity,
         McpServerEntity,
         McpOAuthClientEntity,
         McpOAuthAuthorizationCodeEntity,

@@ -42,7 +42,9 @@ import { knowledgeBaseModule } from './knowledge-base/knowledge-base.module'
 import { mcpServerModule } from './mcp/mcp-module'
 import { mcpOAuthApproveController } from './mcp/oauth/code/mcp-oauth-approve.controller'
 import { communityPiecesModule } from './pieces/community-piece-module'
+import { managedAuthnModule } from './managed-authn/managed-authn-module'
 import { projectModule } from './project/project.module'
+import { signingKeyModule } from './signing-key/signing-key-module'
 import { startDevPieceWatcher } from './pieces/dev-piece-watcher'
 import { pieceModule } from './pieces/metadata/piece-metadata-controller'
 import { pieceMetadataService } from './pieces/metadata/piece-metadata-service'
@@ -205,6 +207,13 @@ export const setupApp = async (app: FastifyInstance): Promise<FastifyInstance> =
             // in CE — see EE_REMOVAL_PLAN G6/R8. userModule (/v1/users) shadow — G8/R10.
             await app.register(projectModule)
             await app.register(communityPiecesModule)
+            // HERMES L7 per-user provisioning (audit-to-person): signing-key +
+            // managed-authn reimplemented in CE (ee versions removed in EE strip).
+            // signing-key mints the RS256 keypair HERMES signs external tokens
+            // with; managed-authn (/v1/managed-authn/external-token) exchanges a
+            // per-DW-user external token for an AP USER token. See AG-06.
+            await app.register(signingKeyModule)
+            await app.register(managedAuthnModule)
             break
     }
 
