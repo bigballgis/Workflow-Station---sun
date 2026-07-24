@@ -39,6 +39,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), tsconfigPaths()],
   define: {
     'process.env.NODE_ENV': JSON.stringify('production'),
+    // Read by src/i18n.ts to load translations relative to the bundle URL
+    // instead of the host origin's root (the host serves the bundle + locales
+    // under its own base path, e.g. /dev/service-task-builder/).
+    'import.meta.env.AP_EMBED_BUILD': 'true',
   },
   build: {
     outDir: '../../dist/packages/web-embed',

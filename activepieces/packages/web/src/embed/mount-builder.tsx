@@ -49,10 +49,35 @@ export function mountApBuilder(config: MountBuilderConfig): () => void {
     `/projects/${config.projectId}/flows/${config.flowId}`,
   );
 
-  // 4) Mount the React app; ApRouter selects memoryRouter because isEmbedded.
+  // 4) Keep the host's document title. AP sets its own per page, which would rename
+  //    the host's browser tab — the one part of the app that escapes the shadow root.
+  const restoreTitle = pinDocumentTitle();
+
+  // 5) Mount the React app; ApRouter selects memoryRouter because isEmbedded.
   const root = ReactDOM.createRoot(config.container);
   root.render(<App />);
-  return () => root.unmount();
+  return () => {
+    restoreTitle();
+    root.unmount();
+  };
+}
+
+function pinDocumentTitle(): () => void {
+  const hostTitle = document.title;
+  const titleElement = document.querySelector('title');
+  if (!titleElement) {
+    return () => undefined;
+  }
+  const observer = new MutationObserver(() => {
+    if (document.title !== hostTitle) {
+      document.title = hostTitle;
+    }
+  });
+  observer.observe(titleElement, { childList: true });
+  return () => {
+    observer.disconnect();
+    document.title = hostTitle;
+  };
 }
 
 export type MountBuilderConfig = {
