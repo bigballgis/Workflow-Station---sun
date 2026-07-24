@@ -60,6 +60,7 @@ import { appEventRoutingModule } from './trigger/app-event-routing/app-event-rou
 import { triggerModule } from './trigger/trigger.module'
 import { userBadgeModule } from './user/badges/badge-module'
 import { platformUserModule } from './user/platform/platform-user-module'
+import { userModule } from './user/user.module'
 import { invitationModule } from './user-invitations/user-invitation.module'
 import { variableModule } from './variable/variable.module'
 import { webhookModule } from './webhooks/webhook-module'
@@ -166,6 +167,9 @@ export const setupApp = async (app: FastifyInstance): Promise<FastifyInstance> =
     await app.register(mcpOAuthApproveController)
     await app.register(agentsModule)
     await app.register(platformUserModule)
+    // HERMES: CE shadow of the removed ee /v1/users (EE_REMOVAL_PLAN G8/R10) —
+    // the builder reads GET /v1/users/:id for its header.
+    await app.register(userModule)
     await app.register(invitationModule)
     await app.register(workerModule)
     await aiProviderService(app.log).setup()
