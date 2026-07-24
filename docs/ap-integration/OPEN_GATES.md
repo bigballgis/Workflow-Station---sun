@@ -17,8 +17,8 @@
 | **AG-02** | **Frontend workspace 边界**（ap-contracts 落地） | 🟢 **核心已验证**（独立编译/零后端依赖/无 bun/DW 消费全绿）；余 CI 与 Codegen 实施 | Doc4 前端集成层 |
 | AG-EE | **EE 剥离闭合**（EE-4 清零） | 🔴 未闭合 | Doc4 全部 AP 服务端 Layer |
 | AG-01 | React version consistency | 🟡 版本已定，真实 dedupe 待验 | Doc4 Layer 1 |
-| AG-03 | 共享 project 完整 RBAC + 资源所有权 | 🟡 所有权已证，权限面回归待做 | Doc4 身份权限层 |
-| AG-04 | Builder 组件化 | 🟡 框架级 PoC 已过，真实 builder 待验 | Doc4 Layer 1 |
+| AG-03 | 共享 project 完整 RBAC + 资源所有权 | 🟢 HTTP RBAC 回归 PASS（2026-07-24） | — |
+| AG-04 | Builder 组件化 | 🟢 浏览器 E2E PASS + 已接进 DW Service Task 页签（2026-07-24） | — |
 | AG-05 | Sandbox + offline + prebuilt piece 联合验证 | 🟢 **8/8 子项 PASS**；**基线经 [D6](DECISIONS.md#d6) 降级为 `SANDBOX_CODE_ONLY`+`STRICT`**（不再申请 SYS_ADMIN）；余：补偿控制 C-1/C-3 待 Doc4 承接 | Doc4 Layer 3–5 |
 | AG-06 | Per-user provisioning 策略 | 🟢 实现完成 + dev 端到端 PASS（Option A，2026-07-24） | — |
 
