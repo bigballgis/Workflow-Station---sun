@@ -2,7 +2,6 @@ import { ActivepiecesError, apId, CreateTemplateRequestBody, ErrorCode, FlowVers
 import { FastifyBaseLogger } from 'fastify'
 import { ArrayContains, ArrayOverlap, Equal, IsNull } from 'typeorm'
 import { repoFactory } from '../core/db/repo-factory'
-import { platformTemplateService } from '../ee/template/platform-template.service'
 import { paginationHelper } from '../helper/pagination/pagination-utils'
 import { templateValidator } from './template-validator'
 import { TemplateEntity } from './template.entity'
@@ -61,7 +60,11 @@ export const templateService = (log: FastifyBaseLogger) => ({
                 return templateRepo().save(newTemplate)
             }
             case TemplateType.CUSTOM: {
-                return platformTemplateService().create({ platformId, name, summary, description, pieces, tags: newTags, blogUrl, metadata, author, categories, flows })
+                // HERMES: EE platform/custom templates removed (AG-EE / G18).
+                throw new ActivepiecesError({
+                    code: ErrorCode.FEATURE_DISABLED,
+                    params: { message: 'Custom platform templates are not available in this deployment' },
+                })
             }
         }
     },
@@ -103,7 +106,11 @@ export const templateService = (log: FastifyBaseLogger) => ({
                 return templateRepo().findOneByOrFail({ id })
             }
             case TemplateType.CUSTOM: {
-                return platformTemplateService().update({ id, params })
+                // HERMES: EE platform/custom templates removed (AG-EE / G18).
+                throw new ActivepiecesError({
+                    code: ErrorCode.FEATURE_DISABLED,
+                    params: { message: 'Custom platform templates are not available in this deployment' },
+                })
             }
         }
     },

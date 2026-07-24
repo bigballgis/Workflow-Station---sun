@@ -4,8 +4,6 @@ import { FastifyBaseLogger } from 'fastify'
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { repoFactory } from '../../core/db/repo-factory'
 import { securityAccess } from '../../core/security/authorization/fastify-security'
-import { ChatConversationEntity } from '../../ee/chat/chat-conversation-entity'
-import { CONVERSATION_ID_HEADER } from '../../ee/chat/mcp/chat-mcp'
 import { rejectedPromiseHandler } from '../../helper/promise-handler'
 import { telemetry } from '../../helper/telemetry.utils'
 import { mcpServerService } from '../mcp-service'
@@ -72,13 +70,9 @@ function registerMcpEndpoint(app: Parameters<FastifyPluginAsyncZod>[0], scope: M
             })
         }
 
-        const conversationId = req.headers[CONVERSATION_ID_HEADER] as string | undefined
-        const conversationProjectId = conversationId && userId
-            ? await resolveConversationProjectId({ conversationId, userId, log: req.log })
-            : null
-        const serverMcp = conversationProjectId
-            ? await mcpServerService(req.log).getPopulatedByProjectId(conversationProjectId) ?? mcp
-            : mcp
+        // HERMES: EE chat removed (AG-EE / EE_REMOVAL_PLAN G18); no chat-conversation-based
+        // MCP server routing. Use the resolved MCP server directly.
+        const serverMcp = mcp
         const { server } = await mcpServerService(req.log).buildServer({ mcp: serverMcp, userId })
 
         const transport = new StreamableHTTPServerTransport({
@@ -144,27 +138,6 @@ async function resolveMcpAndUser({ identity, log }: { identity: ResolvedIdentity
 type ResolvedIdentity =
     | { type: McpServerType.PROJECT, projectId: string, userId: string }
     | { type: McpServerType.PLATFORM, platformId: string, userId: string }
-
-const chatConversationRepo = repoFactory(ChatConversationEntity)
-
-async function resolveConversationProjectId({ conversationId, userId, log }: {
-    conversationId: string
-    userId: string
-    log: FastifyBaseLogger
-}): Promise<string | null> {
-    const { data: conversation, error } = await tryCatch(async () =>
-        chatConversationRepo().findOne({ where: { id: conversationId, userId }, select: ['projectId'] }),
-    )
-    if (error) {
-        log.warn({ err: error, conversationId }, 'DB error resolving conversation project')
-        return null
-    }
-    if (!conversation) {
-        log.debug({ conversationId }, 'Conversation not found for project resolution')
-        return null
-    }
-    return conversation.projectId ?? null
-}
 
 const McpEndpointConfig = {
     config: { security: securityAccess.public() },

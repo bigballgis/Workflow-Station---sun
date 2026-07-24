@@ -17,8 +17,6 @@ import { FastifyBaseLogger } from 'fastify'
 import cron from 'node-cron'
 import { In } from 'typeorm'
 import { repoFactory } from '../core/db/repo-factory'
-import { openRouterApi } from '../ee/platform/platform-plan/openrouter/openrouter-api'
-import { platformPlanService } from '../ee/platform/platform-plan/platform-plan.service'
 import { flagService } from '../flags/flag.service'
 import { encryptUtils } from '../helper/encryption'
 import { rejectedPromiseHandler } from '../helper/promise-handler'
@@ -293,27 +291,18 @@ type GetOrCreateActivepiecesConfigResponse = {
     provider: AIProviderName
 }
 
-async function enrichWithKeysIfNeeded(aiProvider: AIProviderSchema, platformId: PlatformId, log: FastifyBaseLogger): Promise<GetProviderConfigResponse> {
-    const platformPlan = await platformPlanService(log).getOrCreateForPlatform(platformId)
-    const limit = platformPlan.includedAiCredits / 1000
-    const { key, data } = await openRouterApi.createKey({
-        name: `Platform ${platformId}`, 
-        limit,
+// HERMES: the EE-managed "Activepieces" hosted-credits AI provider (OpenRouter key
+// minting + platform-plan AI credits) was removed (AG-EE / EE_REMOVAL_PLAN G18). It
+// cannot function in an air-gapped deployment (needs openrouter.com) and is not the path
+// used by HERMES AI Generate, which uses a self-configured custom provider. Invoking the
+// managed provider therefore fails explicitly rather than minting unusable keys.
+async function enrichWithKeysIfNeeded(_aiProvider: AIProviderSchema, _platformId: PlatformId, _log: FastifyBaseLogger): Promise<GetProviderConfigResponse> {
+    throw new ActivepiecesError({
+        code: ErrorCode.FEATURE_DISABLED,
+        params: {
+            message: 'The managed Activepieces AI provider is not available in this deployment. Configure a custom AI provider instead.',
+        },
     })
-    const rawAuth: ActivePiecesProviderAuthConfig = { apiKey: key, apiKeyHash: data.hash }
-    const savedAiProvider = await aiProviderRepo().save({
-        id: aiProvider.id,
-        platformId,
-        provider: AIProviderName.ACTIVEPIECES,
-        displayName: 'Activepieces',
-        config: {},
-        auth: await encryptUtils.encryptObject(rawAuth),
-    })
-    await platformPlanService(log).update({
-        platformId,
-        lastFreeAiCreditsRenewalDate: new Date().toISOString(),
-    })
-    return { provider: savedAiProvider.provider, auth: rawAuth, config: savedAiProvider.config, platformId }
 }
 
 

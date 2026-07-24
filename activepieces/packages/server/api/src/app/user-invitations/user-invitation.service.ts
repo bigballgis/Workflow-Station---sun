@@ -3,10 +3,8 @@ import { FastifyBaseLogger } from 'fastify'
 import { IsNull } from 'typeorm'
 import { userIdentityService } from '../authentication/user-identity/user-identity-service'
 import { repoFactory } from '../core/db/repo-factory'
-import { smtpEmailSender } from '../ee/helper/email/email-sender/smtp-email-sender'
-import { emailService } from '../ee/helper/email/email-service'
-import { projectMemberService } from '../ee/projects/project-members/project-member.service'
-import { projectRoleService } from '../ee/projects/project-role/project-role.service'
+import { projectMemberService } from '../project/project-member.service'
+import { projectRoleService } from '../project/project-role.service'
 import { domainHelper } from '../helper/domain-helper'
 import { JwtAudience, jwtUtils } from '../helper/jwt-utils'
 import { buildPaginator } from '../helper/pagination/build-paginator'
@@ -130,11 +128,7 @@ export const userInvitationsService = (log: FastifyBaseLogger) => ({
                 invitationId: id,
                 platformId,
             })
-            if (smtpEmailSender(log).isSmtpConfigured()) {
-                await emailService(log).sendProjectMemberAdded({
-                    userInvitation,
-                })
-            }
+            // HERMES: EE email removed (AG-EE / EE_REMOVAL_PLAN G13); no member-added email.
             return userInvitation
         }
         return enrichWithInvitationLink(userInvitation, invitationExpirySeconds, log)
@@ -252,19 +246,14 @@ async function generateInvitationLink(userInvitation: UserInvitation, expireyInS
         path: `invitation?token=${token}&email=${encodeURIComponent(userInvitation.email)}`,
     })
 }
-const enrichWithInvitationLink = async (userInvitation: UserInvitation, expireyInSeconds: number, log: FastifyBaseLogger) => {
+const enrichWithInvitationLink = async (userInvitation: UserInvitation, expireyInSeconds: number, _log: FastifyBaseLogger) => {
+    // HERMES: EE SMTP/email removed (AG-EE / EE_REMOVAL_PLAN G13). CE never sends the
+    // invitation email; it always returns the invitation with its link for out-of-band delivery.
     const invitationLink = await generateInvitationLink(userInvitation, expireyInSeconds)
-    if (!smtpEmailSender(log).isSmtpConfigured()) {
-        return {
-            ...userInvitation,
-            link: invitationLink,
-        }
+    return {
+        ...userInvitation,
+        link: invitationLink,
     }
-    await emailService(log).sendInvitation({
-        userInvitation,
-        invitationLink,
-    })
-    return userInvitation
 }
 type ListUserParams = {
     platformId: string

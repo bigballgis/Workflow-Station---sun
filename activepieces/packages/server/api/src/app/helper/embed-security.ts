@@ -1,7 +1,6 @@
-import { ApEdition, isNil } from '@activepieces/shared'
+import { isNil } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
 import { lru, LRU } from 'tiny-lru'
-import { embedSubdomainService } from '../ee/embed-subdomain/embed-subdomain.service'
 import { platformService } from '../platform/platform.service'
 import { system } from './system/system'
 import { AppSystemProp } from './system/system-props'
@@ -20,35 +19,22 @@ function buildFrameAncestorsHeader({ origins }: { origins: string[] }): string {
 }
 
 async function resolveAllowedOrigins({ hostname, log }: { hostname: string, log: FastifyBaseLogger }): Promise<string[]> {
-    const edition = system.getEdition()
-    const cacheKey = edition === ApEdition.CLOUD ? hostname : SELF_HOSTED_CACHE_KEY
-
-    const hit = cache.get(cacheKey)
+    // HERMES: EE embed-subdomain (CLOUD-only) removed (AG-EE / G18). Self-hosted resolves
+    // allowed embed origins from the single platform + env, with no per-subdomain lookup.
+    const hit = cache.get(SELF_HOSTED_CACHE_KEY)
     if (!isNil(hit)) {
         return hit
     }
     const envOrigins = system.getList(AppSystemProp.ALLOWED_EMBED_ORIGINS).filter(isValidOrigin)
 
     try {
-        if (edition === ApEdition.CLOUD) {
-            const record = await embedSubdomainService(log).getByHostname({ hostname })
-            if (isNil(record)) {
-                cache.set(cacheKey, envOrigins)
-                return envOrigins
-            }
-            const platform = await platformService(log).getOneOrThrow(record.platformId)
-            const origins = mergeUnique(platform.allowedEmbedOrigins ?? [], envOrigins)
-            cache.set(cacheKey, origins)
-            return origins
-        }
-
         const platform = await platformService(log).getOldestPlatform()
         if (isNil(platform)) {
-            cache.set(cacheKey, envOrigins)
+            cache.set(SELF_HOSTED_CACHE_KEY, envOrigins)
             return envOrigins
         }
         const origins = mergeUnique(platform.allowedEmbedOrigins ?? [], envOrigins)
-        cache.set(cacheKey, origins)
+        cache.set(SELF_HOSTED_CACHE_KEY, origins)
         return origins
     }
     catch (e) {

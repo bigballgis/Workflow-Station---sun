@@ -14,7 +14,6 @@ import {
 import { FastifyBaseLogger } from 'fastify'
 import { websocketService } from '../../core/websockets.service'
 import { distributedStore } from '../../database/redis-connections'
-import { chatRpcHandlers } from '../../ee/chat/chat-rpc-handlers'
 import { fileService } from '../../file/file.service'
 import { flowService } from '../../flows/flow/flow.service'
 import { flowRunService } from '../../flows/flow-run/flow-run-service'
@@ -239,25 +238,32 @@ export function createHandlers(log: FastifyBaseLogger, workerGroupId?: string): 
             })
         },
 
-        async getChatConfig(input) {
-            return chatRpcHandlers(log).getChatConfig(input)
+        // HERMES: EE chat removed (AG-EE / EE_REMOVAL_PLAN G18). The chat RPC methods are
+        // retained to satisfy the worker RPC contract but are never invoked (no chat feature
+        // in CE); they fail explicitly if the worker ever calls them.
+        async getChatConfig() {
+            throw chatRemoved()
         },
 
-        async saveChatMessages(input) {
-            return chatRpcHandlers(log).saveChatMessages(input)
+        async saveChatMessages() {
+            throw chatRemoved()
         },
 
-        async updateChatProgress(input) {
-            return chatRpcHandlers(log).updateChatProgress(input)
+        async updateChatProgress() {
+            throw chatRemoved()
         },
 
-        async updateProjectContext(input) {
-            return chatRpcHandlers(log).updateProjectContext(input)
+        async updateProjectContext() {
+            throw chatRemoved()
         },
 
-        async executeChatTool(input) {
-            return chatRpcHandlers(log).executeChatTool(input)
+        async executeChatTool() {
+            throw chatRemoved()
         },
     }
+}
+
+function chatRemoved(): Error {
+    return new Error('Chat is not available in this deployment')
 }
 

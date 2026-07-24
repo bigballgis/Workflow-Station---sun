@@ -1,46 +1,15 @@
-import { ActivepiecesError, ApEdition, ErrorCode, isNil, McpToolDefinition, Permission } from '@activepieces/shared'
+import { isNil, McpToolDefinition, Permission } from '@activepieces/shared'
 import { FastifyBaseLogger } from 'fastify'
-import { getPrincipalRoleOrThrow } from '../ee/authentication/project-role/rbac-middleware'
-import { system } from '../helper/system/system'
 
-const EDITION_REQUIRES_RBAC = [ApEdition.CLOUD, ApEdition.ENTERPRISE].includes(system.getEdition())
-
-export async function resolvePermissionChecker({ userId, projectId, log }: {
+// HERMES: EE per-project-role MCP tool gating removed (AG-EE / EE_REMOVAL_PLAN G11). CE
+// does not gate MCP tools by project role (the EE rbac path was CLOUD/ENTERPRISE-only);
+// API-layer RBAC still governs access. MCP tools are allowed at this layer.
+export async function resolvePermissionChecker(_params: {
     userId: string
     projectId: string
     log: FastifyBaseLogger
 }): Promise<PermissionChecker> {
-    if (!EDITION_REQUIRES_RBAC) {
-        return ALLOW_ALL
-    }
-
-    try {
-        const role = await getPrincipalRoleOrThrow(userId, projectId, log)
-        const permissionSet = new Set(role.permissions ?? [])
-        return buildChecker((permission, toolTitle) => {
-            if (isNil(permission) || permissionSet.has(permission)) {
-                return null
-            }
-            return {
-                content: [{ type: 'text' as const, text: `❌ Permission denied: your role does not have the "${permission}" permission required to use "${toolTitle}".` }],
-                isError: true,
-            }
-        })
-    }
-    catch (err) {
-        if (err instanceof ActivepiecesError && err.error.code === ErrorCode.AUTHORIZATION) {
-            return buildChecker((permission, toolTitle) => {
-                if (isNil(permission)) {
-                    return null
-                }
-                return {
-                    content: [{ type: 'text' as const, text: `❌ Permission denied: no role found for this user in the project. Cannot execute "${toolTitle}".` }],
-                    isError: true,
-                }
-            })
-        }
-        throw err
-    }
+    return ALLOW_ALL
 }
 
 export const ALLOW_ALL: PermissionChecker = {

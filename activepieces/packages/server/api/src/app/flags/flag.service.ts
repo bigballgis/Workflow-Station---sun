@@ -3,8 +3,6 @@ import dayjs from 'dayjs'
 import { FastifyBaseLogger } from 'fastify'
 import { In } from 'typeorm'
 import { repoFactory } from '../core/db/repo-factory'
-import { federatedAuthnService } from '../ee/authentication/federated-authn/federated-authn-service'
-import { smtpEmailSender } from '../ee/helper/email/email-sender/smtp-email-sender'
 import { domainHelper } from '../helper/domain-helper'
 import { system } from '../helper/system/system'
 import { AppSystemProp, apVersionUtil } from '../helper/system/system-props'
@@ -163,7 +161,8 @@ export const flagService = (log: FastifyBaseLogger) => ({
             },
             {
                 id: ApFlagId.THIRD_PARTY_AUTH_PROVIDER_REDIRECT_URL,
-                value: await federatedAuthnService(log).getThirdPartyRedirectUrl(),
+                // HERMES: EE federated authn removed (AG-EE / G14). No third-party redirect in CE.
+                value: null,
                 created,
                 updated,
             },
@@ -303,7 +302,8 @@ export const flagService = (log: FastifyBaseLogger) => ({
             },
             {
                 id: ApFlagId.SMTP_CONFIGURED,
-                value: smtpEmailSender(log).isSmtpConfigured(),
+                // HERMES: EE SMTP email sender removed (AG-EE / G13). AP sends no email in CE.
+                value: false,
                 created,
                 updated,
             },

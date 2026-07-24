@@ -4,7 +4,6 @@ import { StatusCodes } from 'http-status-codes'
 import { z } from 'zod'
 import { ProjectResourceType } from '../../core/security/authorization/common'
 import { securityAccess } from '../../core/security/authorization/fastify-security'
-import { gitRepoService } from '../../ee/projects/project-release/git-sync/git-sync.service'
 import { userService } from '../../user/user-service'
 import { recordSideEffects } from '../record/record-side-effects'
 import { recordService } from '../record/record.service'
@@ -57,14 +56,7 @@ export const tablesController: FastifyPluginAsyncZod = async (fastify) => {
             projectId: request.projectId,
             id: request.params.id,
         })
-        await gitRepoService(request.log).onDeleted({
-            type: GitPushOperationType.DELETE_TABLE,
-            externalId: table.externalId,
-            userId: request.principal.id,
-            projectId: request.projectId,
-            platformId: request.principal.platform.id,
-            log: request.log,
-        })
+        // HERMES: EE git-sync removed (AG-EE / G18); no external repo to notify on delete.
         await tableService.delete({
             projectId: request.projectId,
             id: request.params.id,

@@ -3,7 +3,6 @@ import { FastifyBaseLogger } from 'fastify'
 import { In } from 'typeorm'
 import { repoFactory } from '../../core/db/repo-factory'
 import { websocketService } from '../../core/websockets.service'
-import { emailService } from '../../ee/helper/email/email-service'
 import { applicationEvents } from '../../helper/application-events'
 import { BadgeCheck } from './badge-check'
 import { UserBadgeEntity } from './badge-entity'
@@ -62,8 +61,8 @@ async function processBadgeChecks(
                 userId,
             })
 
-            await emailService(log).sendBadgeAwardedEmail(userId, badgeName)
-
+            // HERMES: EE email removed (AG-EE / G13). Badge is still awarded and pushed over
+            // websocket; the award email (EE-only) is dropped.
             websocketService.to(userId).emit(WebsocketClientEvent.BADGE_AWARDED, {
                 badge: badgeName,
                 userId,

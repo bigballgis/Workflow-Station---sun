@@ -25,9 +25,7 @@ import { authenticationUtils } from '../../authentication/authentication-utils'
 import { entitiesMustBeOwnedByCurrentProject } from '../../authentication/authorization'
 import { ProjectResourceType } from '../../core/security/authorization/common'
 import { securityAccess } from '../../core/security/authorization/fastify-security'
-import { assertUserHasPermissionToFlow } from '../../ee/authentication/project-role/rbac-middleware'
-import { platformPlanService } from '../../ee/platform/platform-plan/platform-plan.service'
-import { gitRepoService } from '../../ee/projects/project-release/git-sync/git-sync.service'
+import { assertUserHasPermissionToFlow } from '../../core/security/v2/authz/rbac-service'
 import { applicationEvents } from '../../helper/application-events'
 import { userService } from '../../user/user-service'
 import { migrateFlowVersionTemplate } from '../flow-version/migrations'
@@ -102,14 +100,8 @@ export const flowController: FastifyPluginAsyncZod = async (app) => {
             projectId: request.projectId,
         })
 
-        const turnOnFlow = request.body.type === FlowOperationType.CHANGE_STATUS && request.body.request.status === FlowStatus.ENABLED
-        const publishDisabledFlow = request.body.type === FlowOperationType.LOCK_AND_PUBLISH && flow.status === FlowStatus.DISABLED
-        if (turnOnFlow || publishDisabledFlow) {
-            await platformPlanService(request.log).checkActiveFlowsExceededLimit(
-                request.principal.platform.id,
-                PlatformUsageMetric.ACTIVE_FLOWS,
-            )
-        }
+        // HERMES: EE platform-plan active-flows limit removed (AG-EE / EE_REMOVAL_PLAN G11).
+        // CE does not cap the number of active flows.
         const updatedFlow = await flowService(request.log).update({
             id: request.params.id,
             userId: request.principal.type === PrincipalType.SERVICE ? null : userId,
@@ -187,14 +179,7 @@ export const flowController: FastifyPluginAsyncZod = async (app) => {
             id: request.params.id,
             projectId: request.projectId,
         })
-        await gitRepoService(request.log).onDeleted({
-            type: GitPushOperationType.DELETE_FLOW,
-            externalId: flow.externalId,
-            userId: request.principal.id,
-            projectId: request.projectId,
-            platformId: request.principal.platform.id,
-            log: request.log,
-        })
+        // HERMES: EE git-sync removed (AG-EE / EE_REMOVAL_PLAN G18); no external repo to notify.
         await flowService(request.log).delete({
             id: request.params.id,
             projectId: request.projectId,

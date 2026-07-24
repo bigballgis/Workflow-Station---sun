@@ -5,9 +5,12 @@ import {
     CreateTableWebhookRequest,
     ErrorCode,
     ExportTableResponse,
+    FieldState,
+    FieldType,
     isNil,
     PopulatedTable,
     SeekPage,
+    TableState,
     SharedTemplate,
     spreadIfDefined,
     Table,
@@ -25,7 +28,6 @@ import {
 import { FastifyBaseLogger } from 'fastify'
 import { ArrayContains, ILike, In, IsNull } from 'typeorm'
 import { repoFactory } from '../../core/db/repo-factory'
-import { projectStateService } from '../../ee/projects/project-release/project-state/project-state.service'
 import { getFolderIdFromRequest } from '../../flows/flow/flow.service'
 import { buildPaginator } from '../../helper/pagination/build-paginator'
 import { paginationHelper } from '../../helper/pagination/pagination-utils'
@@ -154,7 +156,7 @@ export const tableService = {
             fields,
         }
 
-        const tableState = projectStateService(log).getTableState(populatedTable)
+        const tableState = toTableState(populatedTable)
 
         const records = await recordRepo().find({
             where: { tableId: table.id, projectId },
@@ -372,4 +374,21 @@ type GetTemplateParams = {
     log: FastifyBaseLogger
     userMetadata: UserWithMetaInformation | null
     projectId: string
+}
+// HERMES: CE reimplementation of the pure PopulatedTable -> TableState transform that
+// previously lived in the EE project-state service (AG-EE / EE_REMOVAL_PLAN G18). Used by
+// table templates/export — no EE logic, just field/table shape mapping.
+function toTableState(table: PopulatedTable): TableState {
+    const fields: FieldState[] = table.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        externalId: field.externalId,
+        data: field.type === FieldType.STATIC_DROPDOWN ? field.data : undefined,
+    }))
+    return TableState.parse({
+        id: table.id,
+        externalId: table.externalId ?? table.id,
+        name: table.name,
+        fields,
+    })
 }

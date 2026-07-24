@@ -25,8 +25,8 @@ import { nanoid } from 'nanoid'
 import { In, IsNull } from 'typeorm'
 import { userIdentityRepository, userIdentityService } from '../authentication/user-identity/user-identity-service'
 import { repoFactory } from '../core/db/repo-factory'
-import { platformProjectService } from '../ee/projects/platform-project-service'
-import { projectMemberRepo } from '../ee/projects/project-role/project-role.service'
+import { projectRepo } from '../project/project-repo'
+import { projectMemberRepo } from '../project/project-role.service'
 import { buildPaginator } from '../helper/pagination/build-paginator'
 import { paginationHelper } from '../helper/pagination/pagination-utils'
 import { system } from '../helper/system/system'
@@ -172,10 +172,7 @@ export const userService = (log: FastifyBaseLogger) => ({
     },
     async delete({ id, platformId }: DeleteParams): Promise<void> {
         await assertNotPlatformOwner({ id, platformId, log })
-        await platformProjectService(log).deletePersonalProjectForUser({
-            userId: id,
-            platformId,
-        })
+        await softDeletePersonalProject({ userId: id, platformId })
         await userRepo().delete({
             id,
             platformId,
@@ -184,10 +181,7 @@ export const userService = (log: FastifyBaseLogger) => ({
     async removeFromPlatform({ id, platformId }: DeleteParams): Promise<void> {
         await assertNotPlatformOwner({ id, platformId, log })
         const user = await this.getOneOrFail({ id })
-        await platformProjectService(log).deletePersonalProjectForUser({
-            userId: id,
-            platformId,
-        })
+        await softDeletePersonalProject({ userId: id, platformId })
         await userRepo().update({
             id,
             platformId,
@@ -354,4 +348,16 @@ type UpdatePlatformIdParams = {
 type GetOrCreateWithProjectParams = {
     identity: UserIdentity
     platformId: string
+}
+
+// HERMES: CE reimplementation of the personal-project cleanup that lived in the ee
+// platform-project-service (AG-EE / EE_REMOVAL_PLAN G7). Soft-deletes the user's personal
+// project on user removal. The original also scheduled a HARD_DELETE_PROJECT system job,
+// which is EE and removed; CE relies on the soft-delete only. In the HERMES shared-project
+// model users own no personal project, so this is typically a no-op.
+async function softDeletePersonalProject({ userId, platformId }: { userId: string, platformId: string }): Promise<void> {
+    const personalProject = await projectRepo().findOneBy({ platformId, ownerId: userId, type: ProjectType.PERSONAL })
+    if (!isNil(personalProject)) {
+        await projectRepo().softDelete({ id: personalProject.id, platformId })
+    }
 }

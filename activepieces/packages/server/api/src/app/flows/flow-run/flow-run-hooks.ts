@@ -2,7 +2,6 @@ import { ApEdition, FlowRun, FlowTriggerType, isFailedState, isFlowRunStateTermi
 import dayjs from 'dayjs'
 import { FastifyBaseLogger } from 'fastify'
 import { websocketService } from '../../core/websockets.service'
-import { alertsService } from '../../ee/alerts/alerts-service'
 import { system } from '../../helper/system/system'
 import { flowVersionService } from '../flow-version/flow-version.service'
 
@@ -23,25 +22,7 @@ export const flowRunHooks = (log: FastifyBaseLogger) => ({
                 flowRun,
             } satisfies UpdateRunProgressRequest)
         }
-        if (isFailedState(flowRun.status) && flowRun.environment === RunEnvironment.PRODUCTION && !isNil(flowRun.failedStep)) {
-            const date = dayjs(flowRun.created).toISOString()
-            const issueToAlert = {
-                projectId: flowRun.projectId,
-                flowVersionId: flowRun.flowVersionId,
-                flowId: flowRun.flowId,
-                created: date,
-            }
-
-            if (paidEditions) {
-                await alertsService(log).sendAlertOnRunFinish({
-                    issueToAlert,
-                    flowRunId: flowRun.id,
-                    failedStep: flowRun.failedStep,
-                })
-            }
-        }
-        if (!paidEditions) {
-            return
-        }
+        // HERMES: EE alerts removed (AG-EE / G10). alertsService was an EE-only,
+        // paid-edition feature with no CE consumer (C11 empty shell); CE never sent alerts.
     },
 })

@@ -27,8 +27,6 @@ import { nanoid } from 'nanoid'
 import { authenticationUtils } from '../authentication/authentication-utils'
 import { userIdentityRepository, userIdentityService } from '../authentication/user-identity/user-identity-service'
 import { repoFactory } from '../core/db/repo-factory'
-import { invalidateSamlClientCache } from '../ee/authentication/saml-authn/saml-client'
-import { platformPlanService } from '../ee/platform/platform-plan/platform-plan.service'
 import { defaultTheme } from '../flags/theme'
 import { system } from '../helper/system/system'
 import { projectService } from '../project/project-service'
@@ -136,28 +134,8 @@ export const platformService = (log: FastifyBaseLogger) => ({
         })
     },
     async update(params: UpdateParams): Promise<PlatformWithoutFederatedAuth> {
-        if (params.federatedAuthProviders?.saml !== undefined) {
-            const plan = await platformPlanService(log).getOrCreateForPlatform(params.id)
-            if (!plan.ssoEnabled) {
-                throw new ActivepiecesError({
-                    code: ErrorCode.FEATURE_DISABLED,
-                    params: {
-                        message: 'SSO is not enabled for this platform',
-                    },
-                })
-            }
-            if (!isNil(params.federatedAuthProviders.saml)) {
-                const platform = await this.getOneOrThrow(params.id)
-                if (platform.ssoDomainVerification?.status !== SsoDomainVerificationStatus.VERIFIED) {
-                    throw new ActivepiecesError({
-                        code: ErrorCode.VALIDATION,
-                        params: {
-                            message: 'SSO domain must be verified before configuring SAML',
-                        },
-                    })
-                }
-            }
-        }
+        // HERMES: EE SAML/SSO + platform-plan gating removed (AG-EE / EE_REMOVAL_PLAN G6/G18).
+        // CE has no SSO and no paid plan, so the SAML plan/domain validation is dropped.
         const platform = params.federatedAuthProviders !== undefined
             ? await this.getOneWithFederatedAuthOrThrow(params.id)
             : await this.getOneOrThrow(params.id)
@@ -190,15 +168,8 @@ export const platformService = (log: FastifyBaseLogger) => ({
             ...spreadIfDefined('ssoDomainVerification', params.ssoDomainVerification),
             ...spreadIfDefined('pinnedPieces', params.pinnedPieces),
         }
-        if (!isNil(params.plan)) {
-            await platformPlanService(log).update({
-                platformId: params.id,
-                ...params.plan,
-            })
-        }
-        if (!isNil(params.federatedAuthProviders?.saml)) {
-            invalidateSamlClientCache(params.id)
-        }
+        // HERMES: EE platform-plan update + SAML client cache invalidation removed
+        // (AG-EE / EE_REMOVAL_PLAN G6/G18).
         log.info({ platformId: params.id }, 'Platform updated')
         const saved = await platformRepo().save(updatedPlatform)
         return stripFederatedAuth(saved)
@@ -270,23 +241,17 @@ export const platformService = (log: FastifyBaseLogger) => ({
 })
 
 async function getUsage(log: FastifyBaseLogger, platform: PlatformWithoutFederatedAuth): Promise<PlatformUsage | undefined> {
-    const edition = system.getEdition()
-    if (edition === ApEdition.COMMUNITY) {
-        return undefined
-    }
-    return platformPlanService(log).getUsage(platform.id)
+    // HERMES: EE platform-plan usage removed (AG-EE / EE_REMOVAL_PLAN G6). CE has no usage metering.
+    return undefined
 }
 
-async function getPlan(log: FastifyBaseLogger, platform: PlatformWithoutFederatedAuth): Promise<PlatformPlanLimits> {
-    const edition = system.getEdition()
-    if (edition === ApEdition.COMMUNITY) {
-        return {
-            ...OPEN_SOURCE_PLAN,
-            stripeSubscriptionStartDate: 0,
-            stripeSubscriptionEndDate: 0,
-        }
+async function getPlan(_log: FastifyBaseLogger, _platform: PlatformWithoutFederatedAuth): Promise<PlatformPlanLimits> {
+    // HERMES: EE platform-plan removed (AG-EE / EE_REMOVAL_PLAN G6). CE always uses the open-source plan.
+    return {
+        ...OPEN_SOURCE_PLAN,
+        stripeSubscriptionStartDate: 0,
+        stripeSubscriptionEndDate: 0,
     }
-    return platformPlanService(log).getOrCreateForPlatform(platform.id)
 }
 
 function stripFederatedAuth(platform: Platform): PlatformWithoutFederatedAuth {

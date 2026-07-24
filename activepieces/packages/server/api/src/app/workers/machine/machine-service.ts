@@ -13,7 +13,7 @@ import {
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import { FastifyBaseLogger } from 'fastify'
-import { workerGroupService } from '../../ee/platform/platform-plan/worker-group.service'
+import { workerGroupService } from '../worker-group-stub'
 import { domainHelper } from '../../helper/domain-helper'
 import { system } from '../../helper/system/system'
 import { AppSystemProp } from '../../helper/system/system-props'

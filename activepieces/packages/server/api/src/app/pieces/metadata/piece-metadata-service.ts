@@ -23,7 +23,6 @@ import { FastifyBaseLogger } from 'fastify'
 import semVer from 'semver'
 import { EntityManager, In, IsNull } from 'typeorm'
 import { repoFactory } from '../../core/db/repo-factory'
-import { enterpriseFilteringUtils } from '../../ee/pieces/filters/piece-filtering-utils'
 import { apVersionUtil } from '../../helper/system/system-props'
 import { pieceTagService } from '../tags/pieces/piece-tag.service'
 import { pieceCache, PieceRegistryEntry } from './piece-cache'
@@ -79,14 +78,8 @@ export const pieceMetadataService = (log: FastifyBaseLogger) => {
                 return undefined
             }
 
-            const isFiltered = await enterpriseFilteringUtils(log).isFiltered({
-                piece,
-                projectId,
-                platformId,
-            })
-            if (isFiltered) {
-                return undefined
-            }
+            // HERMES: EE piece white/blacklist filtering removed (AG-EE / G12). CE governs
+            // the available piece set via build-time offline pre-install (FR-F01).
             return piece
         },
         async getOrThrow({ version, name, platformId, locale }: GetOrThrowParams): Promise<PieceMetadataModel> {
