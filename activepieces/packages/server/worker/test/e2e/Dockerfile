@@ -42,8 +42,8 @@ COPY tools/ ./tools/
 COPY tsconfig.base.json ./
 
 # Skip native build scripts — integration tests don't need better-sqlite3/isolated-vm native modules.
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --ignore-scripts
 
 # isolate binary + config (checked into the repo under assets/; repo ships x86_64 and arm variants)
 RUN ARCH=$(uname -m) && \
