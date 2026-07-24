@@ -781,7 +781,11 @@ defineExpose({
   autoSendMessage,
   setMessages,
   markApplySuccess,
-  markApplyFailed
+  markApplyFailed,
+  // AiPanel must act on THIS component's useAiChat instance (the one holding the SSE
+  // fetch) — a useAiChat() call in the parent creates unrelated state and is a no-op.
+  cancel,
+  isStreaming
 })
 </script>
 

@@ -178,7 +178,6 @@ import DocumentPanel from './DocumentPanel.vue'
 import { useAiLock } from '@/composables/useAiLock'
 import { useAiSession } from '@/composables/useAiSession'
 import { useAiEvents } from '@/composables/useAiEvents'
-import { useAiChat } from '@/composables/useAiChat'
 import { useAiPanelSidebar } from '@/composables/aiPanel/useAiPanelSidebar'
 import { useAiPanelLayout } from '@/composables/aiPanel/useAiPanelLayout'
 import { aiGenerationApi } from '@/api/aiGeneration'
@@ -237,8 +236,6 @@ const sessionComposable = useAiSession()
 
 const functionUnitIdRef = ref(props.functionUnitId)
 const eventsComposable = useAiEvents(functionUnitIdRef)
-
-const chatComposable = useAiChat()
 
 // Computed
 const currentSessionId = computed(() =>
@@ -395,7 +392,9 @@ function handleClose() {
 }
 
 async function closePanel() {
-  chatComposable.cancel()
+  // Abort ChatDialog's in-flight SSE stream. useAiChat state is per-instance, so this
+  // must go through the child's exposed cancel — calling useAiChat() here would be a no-op.
+  chatDialogRef.value?.cancel?.()
   stopWatchingSidebar()
   try {
     if (lockComposable.isLocked.value) {
@@ -486,7 +485,8 @@ function handlePhaseComplete(_phase: AiPhase) {
     const newPhase = sessionComposable.currentPhase.value
     if (newPhase === 'DESIGN' || newPhase === 'GENERATION') {
       // 使用 guard 防止重复触发（如果已经在 streaming 则跳过）
-      if (!chatComposable.isStreaming.value) {
+      // isStreaming 必须读 ChatDialog 实例暴露的状态（defineExpose 自动解包 ref）
+      if (!chatDialogRef.value?.isStreaming) {
         nextTick(() => {
           autoTriggerPhase(newPhase)
         })
