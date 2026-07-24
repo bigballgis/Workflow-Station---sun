@@ -81,7 +81,8 @@ spec:
       - name: nexus3
       containers:
       - name: ap-bootstrap
-        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0
+        # Same vendored EE-removed image as the activepieces Deployment (keep tags in sync).
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed
         imagePullPolicy: IfNotPresent
         command: ["node", "/scripts/ap-bootstrap-shared-account.js"]
         env:
