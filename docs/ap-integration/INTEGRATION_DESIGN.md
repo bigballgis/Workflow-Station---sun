@@ -433,10 +433,27 @@ E2E 之后已把挂载链接进 DW 应用本体（不再是独立 host 页）：
 其中三条正好坐实 L2 硬约束：**`/v1/pieces/@activepieces/piece-*`（#4 未编码斜杠双段）**、
 **`POST /v1/pieces/options`（#3 同步引擎作业）**、**`POST /v1/flows/:id`（#2 单点写路径）**。
 
-**剩余（收尾，非阻塞）**：
-- **可选瘦身**：从 bundle 剪 sign-in/sign-up chrome（当前全量产物 21MB 已可用）。
-- 内嵌 AP 会改写宿主 `document.title`（浏览器页签标题变 "Activepieces"）——观感泄漏，可在挂载层复位。
-- CE user 模块对 `/v1/users/:id` 返影子记录，消除那个非致命 404。
+### 6.7 收尾（2026-07-24）
+
+**已完成**：
+- **宿主 `document.title` 不再被改写**：AP 每页会设自己的标题（这是唯一逃出 shadow root 的部分）。挂载层用
+  `MutationObserver` 钉住宿主标题、卸载时还原。实测页签保持 `Edit Function Unit - Workflow Platform`。
+- **i18n locales 路径**（注入点 #8 闭合）：原从 origin 根 `/locales/...` 取，在宿主里会 404、界面退化成裸 key。
+  embed 构建定义 `AP_EMBED_BUILD`，`i18n.ts` 据此把 locale 基址解析为 **bundle 自身 URL**。
+  实测 `/dev/service-task-builder/locales/en/translation.json` → 200。
+**代码已完成、待部署验证**：
+- **`GET /v1/users/:id` 404**：该路由原由 `ee/users/user.module` 提供，EE 剥离后未补（G8/R10 的"影子 /v1/users"）。
+  已在 CE 忠实重写 `user/user.module.ts`（`GET /:id` + `POST /me` + `DELETE /me/profile-picture`，
+  依赖全在 CE：`userService.getOneByIdAndPlatformIdOrThrow` 本就返回 `UserWithBadges`）并注册进 `app.ts`；
+  `tsc` 0 error。**尚未随镜像部署**——重建 `activepieces` 镜像需要整个 monorepo 构建，本机内存/负载不足时会在
+  `web:build` 阶段颠簸（实测 free ≈60MB、load>25 时 20 分钟无进展），须在机器空闲时重建再复验该 404 消失。
+
+**仍未做**：
+- **可选瘦身**：从 bundle 剪 sign-in/sign-up chrome（当前全量产物 21MB 已可用，收益小、回归风险不划算）。
+- **C-1 集群验证**：manifest 静态校验通过（1 个 NetworkPolicy、`policyTypes:[Egress]`、5 条 egress 规则），
+  但需 operator 填 `__NAMESPACE__` / `__AP_EGRESS_POSTGRES_CIDR__` / `__AP_EGRESS_LLM_CIDR__` 并在真实集群 apply
+  （**未纳入 kustomization**，需显式 apply）。
+- **air-gap 预烘焙镜像**：实现缺口已闭合（prewarm 去 bun + BASE_IMAGE + 25 piece），但**预烘焙镜像尚未构建与断网验证**。
 
 ---
 
