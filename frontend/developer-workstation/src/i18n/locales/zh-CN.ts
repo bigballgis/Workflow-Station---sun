@@ -32,6 +32,7 @@ export default {
     changePasswordUnauthorized: '登录已失效，请重新登录后再修改密码'
   },
   common: {
+    retry: '重试',
     save: '保存',
     cancel: '取消',
     delete: '删除',
@@ -117,6 +118,10 @@ export default {
     confirm: '进入'
   },
   functionUnit: {
+    serviceTaskLoadFailed: '自动化编排器加载失败',
+    serviceTaskEmpty: '该功能单元还没有自动化服务任务，请先在流程设计中绑定流程。',
+    serviceTaskFlow: '自动化流程',
+    serviceTask: '服务任务',
     title: '功能单元',
     name: '名称',
     description: '描述',

@@ -32,6 +32,7 @@ export default {
     changePasswordUnauthorized: '登入已失效，請重新登入後再修改密碼'
   },
   common: {
+    retry: '重試',
     save: '儲存',
     cancel: '取消',
     delete: '刪除',
@@ -117,6 +118,10 @@ export default {
     confirm: '進入'
   },
   functionUnit: {
+    serviceTaskLoadFailed: '自動化編排器載入失敗',
+    serviceTaskEmpty: '該功能單元尚未有自動化服務任務，請先於流程設計中綁定流程。',
+    serviceTaskFlow: '自動化流程',
+    serviceTask: '服務任務',
     title: '功能單元',
     name: '名稱',
     description: '描述',

@@ -32,6 +32,7 @@ export default {
     changePasswordUnauthorized: 'Your session has expired. Please sign in again to change your password.'
   },
   common: {
+    retry: 'Retry',
     save: 'Save',
     cancel: 'Cancel',
     delete: 'Delete',
@@ -117,6 +118,10 @@ export default {
     confirm: 'Enter'
   },
   functionUnit: {
+    serviceTaskLoadFailed: 'Failed to load the automation builder',
+    serviceTaskEmpty: 'This function unit has no automation service task yet. Bind a flow in Process Design first.',
+    serviceTaskFlow: 'Automation flow',
+    serviceTask: 'Service Task',
     title: 'Function Units',
     name: 'Name',
     description: 'Description',
