@@ -225,6 +225,12 @@ async function createRootPackageJson({ path }: { path: string }): Promise<void> 
             'pieces/**',
         ],
     }, null, 2), 'utf8')
+    // HERMES: bun removed (X-4). pnpm needs a pnpm-workspace.yaml (it does not read the
+    // package.json `workspaces` field) and must use the isolated linker so each piece's
+    // dependency lands in `pieces/<name>-<ver>/node_modules/<name>` — the layout the
+    // engine's piece loader resolves. See pkg-runner.ts.
+    await writeFileAtomic(join(path, 'pnpm-workspace.yaml'), 'packages:\n  - "pieces/**"\n', 'utf8')
+    await writeFileAtomic(join(path, '.npmrc'), 'node-linker=isolated\nignore-workspace-root-check=true\n', 'utf8')
 }
 
 async function createPiecePackageJson({ rootWorkspace, piecePackage }: {

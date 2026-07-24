@@ -4,27 +4,29 @@ import { Logger } from 'pino'
 import { CommandOutput, spawnWithKill } from '../../utils/exec'
 
 // HERMES: bun removed (X-4). The runtime piece / CODE-step dependency installer used the
-// `bun` binary; it now uses `npm`. npm reads the same `workspaces` field the installer
-// writes into the root package.json and hoists dependencies into the workspace's flat
-// node_modules exactly like bun did (pnpm would need a pnpm-workspace.yaml + hoisted
-// node-linker), so this is a drop-in replacement — the engine's piece resolution is
-// unchanged. The `build` step already uses esbuild.
+// `bun` binary; it now uses `pnpm`. This must NOT hoist: the engine's piece loader
+// (piece-loader.ts#traverseAllParentFoldersToFindPiece) resolves a piece at
+// `pieces/<name>-<ver>/node_modules/<name>` — the per-workspace-member node_modules that
+// bun's isolated linker produced. pnpm's default (isolated / symlinked) linker matches
+// this exactly (npm hoists to the root node_modules and breaks it). The installer writes a
+// pnpm-workspace.yaml + `.npmrc` (node-linker=isolated) alongside the root package.json.
+// The `build` step already uses esbuild.
 export const pkgRunner = (log: Logger) => ({
     async install({ path, filtersPath }: InstallParams): Promise<CommandOutput> {
         const filterArgs: string[] = filtersPath
             .map(sanitizeFilterPath)
-            .flatMap((p) => ['--workspace', `./${p}`])
+            .flatMap((p) => ['--filter', `./${p}`])
         const args = [
             'install',
             '--ignore-scripts',
-            '--no-audit',
-            '--no-fund',
+            '--config.node-linker=isolated',
+            '--config.confirmModulesPurge=false',
             ...filterArgs,
         ]
         await fileSystemUtils.threadSafeMkdir(path)
         log.debug({ path, args }, '[pkgRunner#install]')
         const { error, data } = await tryCatch(async () => spawnWithKill({
-            cmd: 'npm',
+            cmd: 'pnpm',
             args,
             options: {
                 cwd: path,
