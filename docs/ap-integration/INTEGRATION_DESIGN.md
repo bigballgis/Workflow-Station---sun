@@ -49,7 +49,7 @@
 - **G2 授权忠实表驱动重写**（AP principal 无 permissions，Q4a/JWT 零回调后置）；**ee-authorization 是混合体**（所有权授权必须保留）。
 - **G16 迁移安全**：20 ee 迁移是历史迁移，CE 表由保留的 MIT `Unify` 迁移重建 → 全新库自足（实测 354 条通）。
 - **去 bun 两处运行时坑**：piece 安装器 spawn `bun`（改 pnpm **isolated linker**，非 npm——npm hoist 致 `PieceNotFound`）；Dockerfile 全三阶段。
-- **⚠️ air-gap 未闭合**：镜像运行时经 pnpm 从 registry 装 piece → 断网 prod 会断，须**构建期预烘焙 25 piece**（机制现成 `deploy/pieces/`，待 prewarm 去 bun）。
+- **⚠️ air-gap 未闭合**：镜像运行时经 pnpm 从 registry 装 piece → 断网 prod 会断，须**构建期预烘焙 11 piece**（已删 14 个 AI/搜索 piece，见 §pieces）（机制现成 `deploy/pieces/`，待 prewarm 去 bun）。
 
 **L7 身份供给已实施**（2026-07-24，Option A）：AP 侧 CE 重写 managed-authn+signing-key（tsc/eslint 0 error）、
 HERMES 侧 :8085 桥加 per-user 分流（admin-center BUILD SUCCESS）；余重建镜像 + signing-key 引导 + AG-06 端到端（见 §7.2.1）。
@@ -216,7 +216,7 @@ dev 已据此把 `csv` flow 的 Fetch File 步改为 http piece 并实跑 SUCCEE
 1. ✅ 三合一运行体（api+engine+worker 单容器 pm2）——**已实施，dev 实跑**。
 2. ✅ D6 基线环境变量（`docker-compose.dev.yml` / `activepieces.yaml` 均已落）。
 3. ✅ 去 bun 运行时（pkg-runner pnpm isolated + esbuild）——**AI Generate/csv 端到端验证**。
-4. 🔴 **air-gap piece 构建期预烘焙**（25 piece，prewarm 去 bun）——**prod 前必做**。
+4. 🔴 **air-gap piece 构建期预烘焙**（11 piece，AI piece 已删，prewarm 去 bun）——**prod 前必做**。
 5. 🟡 C-1 NetworkPolicy 填环境 CIDR + 集群验证（生产依赖前必须跑通）。
 6. 🟡 flow 编写规范（T3 + FR-F03B）写入开发者文档。
 
@@ -472,7 +472,7 @@ AG-04 的框架级 PoC（AG-04.2/.3/.4）在**小样本**上全绿，但真实 b
 - **C-1 集群验证**：manifest 静态校验通过（1 个 NetworkPolicy、`policyTypes:[Egress]`、5 条 egress 规则），
   但需 operator 填 `__NAMESPACE__` / `__AP_EGRESS_POSTGRES_CIDR__` / `__AP_EGRESS_LLM_CIDR__` 并在真实集群 apply
   （**未纳入 kustomization**，需显式 apply）。
-- **air-gap 预烘焙镜像**：实现缺口已闭合（prewarm 去 bun + BASE_IMAGE + 25 piece），但**预烘焙镜像尚未构建与断网验证**。
+- **air-gap 预烘焙镜像**：实现缺口已闭合（prewarm 去 bun + BASE_IMAGE + 11 piece（AI piece 已删）），但**预烘焙镜像尚未构建与断网验证**。
 
 ---
 
