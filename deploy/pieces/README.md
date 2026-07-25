@@ -6,6 +6,10 @@ fail-closed 的 `NPM_CONFIG_REGISTRY`（见 `deploy/ACTIVEPIECES_INTEGRATION.md`
 断外网元数据同步靠 `AP_PIECES_SYNC_MODE=NONE`。）
 本目录是**经审批的 piece 白名单**的唯一来源。pieces 均为 MIT 开源，镜像合法。
 
+> 要**从零开发一个自研 piece** 并走完到 DW 可用的全链路（写代码 → 本地跑通 → 产出离线物料 →
+> 烘镜像 → 投放 → 验证），见 [`docs/ap-integration/PIECE_DEVELOPMENT_HOWTO.md`](../../docs/ap-integration/PIECE_DEVELOPMENT_HOWTO.md)。
+> 本文件是它的下游「离线白名单投放」篇。
+
 一个 piece 由两半组成，两半都要投放、版本必须一致：
 
 | 半边 | 给谁用 | 投放方式 |
