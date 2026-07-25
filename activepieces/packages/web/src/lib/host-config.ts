@@ -29,6 +29,12 @@ export const apHost = {
   getSocketPath(): string {
     return apHost.getConfig().socketPath ?? '/api/socket.io';
   },
+  // #7 Radix portal target. Under a shadow-root embed, portals must NOT fall back
+  // to document.body: the Tailwind stylesheet lives inside the shadow root, so a
+  // body-mounted popover/dialog renders unstyled and stacks under the host UI.
+  getPortalContainer(): HTMLElement | undefined {
+    return apHost.getConfig().portalContainer;
+  },
 };
 
 function defaultOrigin(): string {
@@ -48,6 +54,9 @@ export type ApHostConfig = {
   socketPath?: string;
   // #2/#4 invoked instead of redirecting to /sign-in on session-expired / invalid token.
   onUnauthorized?: (reason: string) => void;
+  // #7 element Radix portals render into (default document.body). A shadow-root
+  // host passes its in-shadow container so portalled UI keeps the shadow styles.
+  portalContainer?: HTMLElement;
   // #6 suppress EE billing/quota dialogs when the host has no billing surface.
   disableBillingDialogs?: boolean;
   // Builder-embed seed: when mounted via lib-mode (not the postMessage iframe SDK),

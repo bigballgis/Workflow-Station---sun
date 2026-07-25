@@ -82,7 +82,7 @@ onMounted(async () => {
   // AG-04.4: Tailwind CSS goes INTO the shadow root, never document.head.
   const css = await fetch(props.cssUrl).then((r) => r.text());
   const style = document.createElement('style');
-  style.textContent = css;
+  style.textContent = adaptCssForShadowRoot(css);
   shadow.appendChild(style);
 
   const container = document.createElement('div');
@@ -108,6 +108,42 @@ onBeforeUnmount(() => {
   unmount?.();
   unmount = null;
 });
+
+/**
+ * Two shadow-root adaptations the stock stylesheet needs (both no-ops outside
+ * a shadow tree, which is why upstream never hits them):
+ *
+ * 1. `:root` → `:host`. AP declares its theme variables (--background/--border/…)
+ *    on `:root`, which never matches inside a shadow root — every bg-background/
+ *    border-border utility would resolve to nothing.
+ *
+ * 2. Chromium ignores `@property` registrations found in shadow-root stylesheets,
+ *    so Tailwind v4 utilities that read registered vars (`border-style:
+ *    var(--tw-border-style)`, shadows, transforms…) resolve to guaranteed-invalid
+ *    — inputs and cards lose their borders. Re-emit each registered initial value
+ *    as a universal-selector rule appended to the low-priority `properties` layer:
+ *    the exact fallback Tailwind ships for browsers without @property support.
+ */
+function adaptCssForShadowRoot(css: string): string {
+  const hostCss = css.replace(/:root\b/g, ':host');
+
+  const fallbackDecls: string[] = [];
+  const propertyRulePattern = /@property\s+(--[\w-]+)\s*\{([^}]*)\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = propertyRulePattern.exec(hostCss)) !== null) {
+    const initialValue = match[2].match(/initial-value\s*:\s*([^;]+);?/)?.[1];
+    if (initialValue !== undefined) {
+      fallbackDecls.push(`${match[1]}: ${initialValue.trim()};`);
+    }
+  }
+  if (fallbackDecls.length === 0) {
+    return hostCss;
+  }
+  return (
+    `${hostCss}\n` +
+    `@layer properties { *, ::before, ::after, ::backdrop { ${fallbackDecls.join(' ')} } }`
+  );
+}
 </script>
 
 <style scoped>

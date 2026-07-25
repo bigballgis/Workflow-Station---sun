@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
+import { apHost } from '@/lib/host-config';
 import { cn } from '@/lib/utils';
 
 type FileUploadContextValue = {
@@ -186,7 +187,7 @@ function FileUploadContent({ className, ...props }: FileUploadContentProps) {
     />
   );
 
-  return createPortal(content, document.body);
+  return createPortal(content, apHost.getPortalContainer() ?? document.body);
 }
 
 export { FileUpload, FileUploadTrigger, FileUploadContent };

@@ -9,6 +9,7 @@ import {
 import { Select as SelectPrimitive } from 'radix-ui';
 import * as React from 'react';
 
+import { apHost } from '@/lib/host-config';
 import { cn } from '@/lib/utils';
 
 function Select({
@@ -63,7 +64,7 @@ function SelectContent({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={apHost.getPortalContainer()}>
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(

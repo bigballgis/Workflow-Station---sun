@@ -28,6 +28,10 @@ export function mountApBuilder(config: MountBuilderConfig): () => void {
     socketPath: config.socketPath,
     onUnauthorized: config.onUnauthorized,
     disableBillingDialogs: true,
+    // Radix portals must stay inside the shadow root — document.body has none of
+    // the builder's styles (they are injected into the shadow root only).
+    portalContainer:
+      config.container instanceof HTMLElement ? config.container : undefined,
     embedding: {
       isEmbedded: true,
       hideSideNav: true,
