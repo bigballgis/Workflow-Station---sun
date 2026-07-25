@@ -1,0 +1,40 @@
+// AI Generate — “制图室 / Drafting Room” design tokens
+// 唯一强调色为 HSBC 红；所有“机器话语”（编号/计数/版本/时间戳）走等宽字体。
+// 仅供 src/components/ai/* 使用，勿在其他模块引用。
+
+// Ink & text
+$ai-ink: #23282E;        // 标题、主文本
+$ai-body: #333333;       // 正文（对齐 DW $text-primary）
+$ai-graphite: #5B6470;   // 次级文本
+$ai-faint: #8A93A0;      // 时间戳、提示
+
+// Brand accent（唯一强调色）
+$ai-red: #DB0011;
+$ai-red-deep: #B00010;   // hover/pressed
+$ai-red-soft: #FBEBEC;   // 红色淡washes（选中态背景）
+
+// Surfaces
+$ai-paper: #FFFFFF;      // 卡片/图纸
+$ai-mist: #F6F7F9;       // 对话画布背景
+$ai-mist-deep: #EFF1F4;  // hover wash
+$ai-hairline: #E7E9ED;   // 发丝线
+$ai-user-bubble: #2E343C; // 用户气泡（墨水）
+
+// Machine voice
+$ai-mono: 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+
+// Eyebrow：等宽小字距标签（AI GENERATE / GENERATED SPEC …）
+@mixin ai-eyebrow {
+  font-family: $ai-mono;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: $ai-faint;
+}
+
+// 等宽数字（计数、编号）
+@mixin ai-mono-num {
+  font-family: $ai-mono;
+  font-variant-numeric: tabular-nums;
+}

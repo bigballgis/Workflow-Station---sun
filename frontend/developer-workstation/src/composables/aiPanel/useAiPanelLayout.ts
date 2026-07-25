@@ -1,13 +1,14 @@
-import { ref, reactive, computed, type Ref } from 'vue'
+import { ref, reactive, computed } from 'vue'
 
 /**
  * Composable for the AI panel's docked/detached layout: detach toggle, the
  * computed panel style, and the drag (header handle) + resize interactions for
  * the detached (pop-out) window.
  *
- * @param sidebarWidth Reactive docked-mode left offset (sidebar width in px).
+ * Docked mode is a full-screen takeover (positioning lives in AiPanel CSS);
+ * only the detached window needs inline geometry.
  */
-export function useAiPanelLayout(sidebarWidth: Ref<string>) {
+export function useAiPanelLayout() {
   // Detach / pop-out state
   const isDetached = ref(false)
   const dragPos = reactive({ x: 0, y: 0 })
@@ -24,7 +25,7 @@ export function useAiPanelLayout(sidebarWidth: Ref<string>) {
         height: `${detachedSize.height}px`
       }
     }
-    return { left: sidebarWidth.value }
+    return {}
   })
 
   function toggleDetach() {

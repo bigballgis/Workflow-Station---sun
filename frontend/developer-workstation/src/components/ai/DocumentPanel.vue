@@ -414,11 +414,24 @@ defineExpose({
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/ai-tokens.scss' as ai;
+
 .document-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
   padding: 0 12px;
+  background: ai.$ai-paper;
+
+  :deep(.el-tabs__item) {
+    font-size: 13px;
+    color: ai.$ai-graphite;
+
+    &.is-active {
+      color: ai.$ai-ink;
+      font-weight: 600;
+    }
+  }
 }
 
 .document-panel__toolbar {
@@ -453,17 +466,16 @@ defineExpose({
 
 .document-panel__sidebar {
   width: 220px;
-  border-left: 1px solid #ebeef5;
+  border-left: 1px solid ai.$ai-hairline;
   padding: 8px;
   overflow-y: auto;
   flex-shrink: 0;
 }
 
 .document-panel__sidebar-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #606266;
-  margin-bottom: 6px;
+  @include ai.ai-eyebrow;
+  margin-bottom: 8px;
+  padding: 0 8px;
 }
 
 .document-panel__toolbar-actions {
@@ -477,32 +489,41 @@ defineExpose({
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 4px;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
   cursor: pointer;
   font-size: 12px;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 
   &:hover {
-    background: #f5f7fa;
+    background: ai.$ai-mist;
   }
 
   &.is-active {
-    background: #ecf5ff;
-    color: #409eff;
+    background: ai.$ai-red-soft;
+    border-left-color: ai.$ai-red;
+
+    .document-panel__version-num {
+      color: ai.$ai-red;
+    }
   }
 }
 
 .document-panel__version-num {
+  @include ai.ai-mono-num;
   font-weight: 600;
   min-width: 30px;
+  color: ai.$ai-ink;
 }
 
 .document-panel__version-time {
-  color: #909399;
+  @include ai.ai-mono-num;
+  font-size: 11px;
+  color: ai.$ai-faint;
 }
 
 .document-panel__version-summary {
-  color: #606266;
+  color: ai.$ai-graphite;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

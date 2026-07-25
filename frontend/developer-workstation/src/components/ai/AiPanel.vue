@@ -14,8 +14,15 @@
           @mousedown="onHeaderMouseDown"
         >
           <span class="ai-panel__title">
-            <el-icon :size="18"><MagicStick /></el-icon>
-            {{ t('ai.panel.title') }}
+            <span
+              class="ai-panel__lamp"
+              :class="{ 'is-busy': isBusy }"
+              aria-hidden="true"
+            />
+            <span class="ai-panel__title-stack">
+              <span class="ai-panel__eyebrow">AI GENERATE</span>
+              <span class="ai-panel__title-text">{{ t('ai.panel.title') }}</span>
+            </span>
           </span>
           <div class="ai-panel__header-actions">
             <!-- Task 17.4: Session history dropdown -->
@@ -170,7 +177,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Lock, MagicStick, Loading, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue'
+import { Close, Lock, Loading, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue'
 import { Clock } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import ChatDialog from './ChatDialog.vue'
@@ -178,7 +185,6 @@ import DocumentPanel from './DocumentPanel.vue'
 import { useAiLock } from '@/composables/useAiLock'
 import { useAiSession } from '@/composables/useAiSession'
 import { useAiEvents } from '@/composables/useAiEvents'
-import { useAiPanelSidebar } from '@/composables/aiPanel/useAiPanelSidebar'
 import { useAiPanelLayout } from '@/composables/aiPanel/useAiPanelLayout'
 import { aiGenerationApi } from '@/api/aiGeneration'
 import type {
@@ -211,22 +217,15 @@ const currentMode = ref<AiMode>('NEW')
 const completedPhases = ref<AiPhase[]>([])
 const initialMessages = ref<AiMessage[]>([])
 
-// Sidebar width tracking (docked-mode left offset)
-const {
-  sidebarWidth,
-  updateSidebarWidth,
-  startWatchingSidebar,
-  stopWatchingSidebar
-} = useAiPanelSidebar()
-
 // Docked/detached layout: panel style, drag + resize interactions
+// （停靠模式已改为全屏接管，不再需要跟踪侧栏宽度做 left 偏移）
 const {
   isDetached,
   panelStyle,
   toggleDetach,
   onHeaderMouseDown,
   onResizeMouseDown
-} = useAiPanelLayout(sidebarWidth)
+} = useAiPanelLayout()
 
 // Composables
 const lockComposable = useAiLock()
@@ -241,6 +240,10 @@ const eventsComposable = useAiEvents(functionUnitIdRef)
 const currentSessionId = computed(() =>
   sessionComposable.currentSession.value?.sessionId || ''
 )
+
+// 头部状态灯：AI 流式回复中亮红并脉动（读 ChatDialog 实例暴露的 isStreaming，
+// useAiChat 状态每实例独立，本组件自己的 chatComposable 读不到子组件的流式状态）
+const isBusy = computed(() => !!chatDialogRef.value?.isStreaming)
 
 // Task 17.4: Sorted sessions for history dropdown (desc by creation time)
 const sortedSessions = computed(() => {
@@ -258,8 +261,6 @@ function formatTime(time?: string) {
 async function openPanel() {
   ready.value = false
   functionUnitIdRef.value = props.functionUnitId
-  updateSidebarWidth()
-  startWatchingSidebar()
 
   try {
     const lockSuccess = await lockComposable.acquireLock(props.functionUnitId)
@@ -395,7 +396,6 @@ async function closePanel() {
   // Abort ChatDialog's in-flight SSE stream. useAiChat state is per-instance, so this
   // must go through the child's exposed cancel — calling useAiChat() here would be a no-op.
   chatDialogRef.value?.cancel?.()
-  stopWatchingSidebar()
   try {
     if (lockComposable.isLocked.value) {
       await lockComposable.releaseLock(props.functionUnitId)
@@ -584,28 +584,35 @@ watch(() => props.functionUnitId, (newVal) => {
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/ai-tokens.scss' as ai;
+
 .ai-panel {
+  // 全局只覆盖了 --el-color-primary 基色，Element 的 hover/禁用态用 light-N 派生色，
+  // 缺省仍是默认蓝——在面板内补齐 HSBC 红的派生色（mix white 30/50/70/80/90%）。
+  --el-color-primary-light-3: #E64D58;
+  --el-color-primary-light-5: #ED8088;
+  --el-color-primary-light-7: #F4B3B8;
+  --el-color-primary-light-8: #F7CCD0;
+  --el-color-primary-light-9: #FBE6E7;
+  --el-color-primary-dark-2: #AF000E;
+
+  /* 停靠模式 = 全屏接管（弹出模式仍是可拖拽小窗，位置尺寸由 :style 注入） */
   position: fixed;
-  bottom: 0;
-  right: 0;
-  height: 80vh;
-  /* left is set via :style binding */
-  background: #fff;
+  inset: 0;
+  background: ai.$ai-paper;
   z-index: 2000;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
-  border-radius: 12px 12px 0 0;
 
   &--detached {
-    /* Override docked styles */
-    bottom: auto;
-    right: auto;
-    height: auto;
+    /* Override docked styles: left/top/width/height come from panelStyle */
+    inset: auto;
+    border: 1px solid ai.$ai-hairline;
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 12px 40px rgba(35, 40, 46, 0.22);
     min-width: 600px;
     min-height: 400px;
+    overflow: hidden;
   }
 }
 
@@ -613,8 +620,8 @@ watch(() => props.functionUnitId, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
-  border-bottom: 1px solid #ebeef5;
+  padding: 10px 20px;
+  border-bottom: 1px solid ai.$ai-hairline;
   flex-shrink: 0;
   user-select: none;
 
@@ -632,10 +639,50 @@ watch(() => props.functionUnitId, (newVal) => {
 .ai-panel__title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
+  gap: 12px;
+}
+
+// 状态灯：空闲 graphite，AI 回复中亮红脉动
+.ai-panel__lamp {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c4cad2;
+  flex-shrink: 0;
+  transition: background 0.3s;
+
+  &.is-busy {
+    background: ai.$ai-red;
+    animation: lamp-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes lamp-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(219, 0, 17, 0.35); }
+  50% { box-shadow: 0 0 0 5px rgba(219, 0, 17, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-panel__lamp.is-busy {
+    animation: none;
+  }
+}
+
+.ai-panel__title-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ai-panel__eyebrow {
+  @include ai.ai-eyebrow;
+}
+
+.ai-panel__title-text {
+  font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: ai.$ai-ink;
+  line-height: 1.2;
 }
 
 .ai-panel__body {
@@ -646,7 +693,7 @@ watch(() => props.functionUnitId, (newVal) => {
 
 .ai-panel__chat {
   width: 60%;
-  border-right: 1px solid #ebeef5;
+  border-right: 1px solid ai.$ai-hairline;
   overflow: hidden;
 }
 
@@ -662,7 +709,7 @@ watch(() => props.functionUnitId, (newVal) => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #909399;
+  color: ai.$ai-faint;
   font-size: 14px;
 }
 
@@ -683,19 +730,20 @@ watch(() => props.functionUnitId, (newVal) => {
 .ai-panel__lock-title {
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: ai.$ai-ink;
   margin-bottom: 8px;
 }
 
 .ai-panel__lock-detail {
   font-size: 14px;
-  color: #606266;
+  color: ai.$ai-graphite;
   margin: 4px 0;
 }
 
 .ai-panel__session-time {
-  font-size: 12px;
-  color: #606266;
+  @include ai.ai-mono-num;
+  font-size: 11px;
+  color: ai.$ai-graphite;
   margin-right: 6px;
 }
 

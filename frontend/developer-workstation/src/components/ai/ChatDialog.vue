@@ -4,23 +4,18 @@
     <PhaseIndicator
       :current-phase="phase"
       :completed-phases="completedPhases"
+      :busy="isStreaming"
     />
 
-    <!-- Task 16.2: Multi-step generation progress indicator -->
-    <el-steps
+    <!-- Task 16.2: Multi-step generation progress ticker -->
+    <div
       v-if="isStreaming && generationStep > 0 && generationStep < 6"
-      :active="generationStep - 1"
-      finish-status="success"
-      simple
-      class="chat-dialog__progress"
+      class="chat-dialog__ticker"
     >
-      <el-step :title="t('ai.progress.analyzing')" />
-      <el-step :title="t('ai.progress.designingTables')" />
-      <el-step :title="t('ai.progress.creatingForms')" />
-      <el-step :title="t('ai.progress.generatingProcess')" />
-      <el-step :title="t('ai.progress.validating')" />
-      <el-step :title="t('ai.progress.ready')" />
-    </el-steps>
+      <span class="chat-dialog__ticker-step">{{ String(generationStep).padStart(2, '0') }}/06</span>
+      <span class="chat-dialog__ticker-text">{{ progressText }}</span>
+      <span class="chat-dialog__ticker-bar"><i /></span>
+    </div>
 
     <!-- Middle: Message List -->
     <div class="chat-dialog__messages">
@@ -29,32 +24,32 @@
         v-if="messages.length === 0 && !isStreaming"
         class="chat-dialog__templates"
       >
+        <p class="chat-dialog__templates-eyebrow">
+          BLUEPRINTS
+        </p>
         <p class="chat-dialog__templates-title">
           {{ t('ai.template.selectTitle') }}
         </p>
-        <el-row :gutter="12">
-          <el-col
-            v-for="tpl in templates"
+        <div class="chat-dialog__template-grid">
+          <button
+            v-for="(tpl, idx) in templates"
             :key="tpl.id"
-            :span="12"
+            type="button"
+            class="chat-dialog__template-card"
+            @click="applyTemplate(tpl)"
           >
-            <el-card
-              shadow="hover"
-              class="chat-dialog__template-card"
-              @click="applyTemplate(tpl)"
-            >
-              <template #header>
-                <div class="chat-dialog__template-header">
-                  <el-icon><component :is="tpl.icon" /></el-icon>
-                  <span>{{ t(tpl.nameKey) }}</span>
-                </div>
-              </template>
-              <p class="chat-dialog__template-desc">
+            <span class="chat-dialog__template-idx">{{ String(idx + 1).padStart(2, '0') }}</span>
+            <span class="chat-dialog__template-main">
+              <span class="chat-dialog__template-header">
+                <el-icon :size="14"><component :is="tpl.icon" /></el-icon>
+                <span>{{ t(tpl.nameKey) }}</span>
+              </span>
+              <span class="chat-dialog__template-desc">
                 {{ t(tpl.descriptionKey) }}
-              </p>
-            </el-card>
-          </el-col>
-        </el-row>
+              </span>
+            </span>
+          </button>
+        </div>
       </div>
 
       <!-- Task 16.4: Draft restoration alert -->
@@ -129,9 +124,7 @@
         v-if="isStreaming && !streamingContent"
         class="chat-dialog__thinking"
       >
-        <div class="chat-dialog__thinking-avatar">
-          <el-icon :size="20"><MagicStick /></el-icon>
-        </div>
+        <span class="chat-dialog__thinking-avatar">AI</span>
         <div class="chat-dialog__thinking-bubble">
           <span class="chat-dialog__thinking-dots">
             <span class="dot">●</span>
@@ -367,7 +360,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Promotion, ArrowDown, ArrowUp, MagicStick } from '@element-plus/icons-vue'
+import { Promotion, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import PhaseIndicator from './PhaseIndicator.vue'
 import ChatMessage from './ChatMessage.vue'
 import GenerationPreview from './GenerationPreview.vue'
@@ -536,6 +529,13 @@ const errorMessage = computed(() => {
     if (translated !== i18nKey) return translated
   }
   return error.value
+})
+
+// Task 16.2: 进度 ticker 文案（generationStep 1..5 映射 ai.progress.* key）
+const PROGRESS_KEYS = ['analyzing', 'designingTables', 'creatingForms', 'generatingProcess', 'validating', 'ready'] as const
+const progressText = computed(() => {
+  const key = PROGRESS_KEYS[generationStep.value - 1]
+  return key ? t(`ai.progress.${key}`) : ''
 })
 
 const inputPlaceholder = computed(() => {
@@ -784,23 +784,76 @@ defineExpose({
   markApplyFailed,
   // AiPanel must act on THIS component's useAiChat instance (the one holding the SSE
   // fetch) — a useAiChat() call in the parent creates unrelated state and is a no-op.
+  // cancel 供关闭面板时中止流式请求；isStreaming 供头部状态灯与防重复触发 guard 读取。
   cancel,
   isStreaming
 })
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/ai-tokens.scss' as ai;
+
 .chat-dialog {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: ai.$ai-mist;
 }
 
 .chat-dialog__messages {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+}
+
+// 生成进度 ticker：一行等宽文案 + 红色发丝进度线
+.chat-dialog__ticker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  background: ai.$ai-paper;
+  border-bottom: 1px solid ai.$ai-hairline;
+}
+
+.chat-dialog__ticker-step {
+  @include ai.ai-mono-num;
+  font-size: 11px;
+  font-weight: 600;
+  color: ai.$ai-red;
+  flex-shrink: 0;
+}
+
+.chat-dialog__ticker-text {
+  font-size: 12px;
+  color: ai.$ai-graphite;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-dialog__ticker-bar {
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  background: ai.$ai-hairline;
+  overflow: hidden;
+  min-width: 60px;
+
+  i {
+    display: block;
+    height: 100%;
+    width: 36%;
+    border-radius: 1px;
+    background: ai.$ai-red;
+    animation: ticker-slide 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes ticker-slide {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(310%); }
 }
 
 .chat-dialog__preview {
@@ -819,8 +872,9 @@ defineExpose({
 }
 
 .chat-dialog__error-type {
+  @include ai.ai-mono-num;
   font-weight: 600;
-  color: #f56c6c;
+  color: ai.$ai-red;
   margin-right: 4px;
 
   &--warning {
@@ -829,7 +883,9 @@ defineExpose({
 }
 
 .chat-dialog__error-path {
-  color: #909399;
+  font-family: ai.$ai-mono;
+  font-size: 12px;
+  color: ai.$ai-faint;
   margin-right: 4px;
 }
 
@@ -848,18 +904,31 @@ defineExpose({
   align-items: flex-end;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid #ebeef5;
-  background: #fff;
-}
+  border-top: 1px solid ai.$ai-hairline;
+  background: ai.$ai-paper;
 
-.chat-dialog__progress {
-  padding: 8px 16px;
-  border-bottom: 1px solid #ebeef5;
+  :deep(.el-textarea__inner) {
+    border-radius: 8px;
+    box-shadow: 0 0 0 1px ai.$ai-hairline inset;
+    background: ai.$ai-mist;
+    font-size: 13px;
+    transition: box-shadow 0.2s, background 0.2s;
+
+    &:hover {
+      box-shadow: 0 0 0 1px #c9ced6 inset;
+    }
+
+    &:focus {
+      background: ai.$ai-paper;
+      box-shadow: 0 0 0 1.5px ai.$ai-red inset;
+    }
+  }
 }
 
 .chat-dialog__scope {
   padding: 4px 16px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid ai.$ai-hairline;
+  background: ai.$ai-paper;
 }
 
 .chat-dialog__scope-group {
@@ -875,7 +944,7 @@ defineExpose({
 
 .chat-dialog__degradation-time {
   font-size: 13px;
-  color: #909399;
+  color: ai.$ai-faint;
   margin: 4px 0 8px;
 }
 
@@ -895,39 +964,116 @@ defineExpose({
 }
 
 .chat-dialog__templates {
-  padding: 16px;
+  padding: 28px 20px 16px;
+}
+
+.chat-dialog__templates-eyebrow {
+  @include ai.ai-eyebrow;
+  text-align: center;
+  margin-bottom: 6px;
 }
 
 .chat-dialog__templates-title {
-  font-size: 14px;
-  color: #606266;
-  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: ai.$ai-ink;
+  margin-bottom: 16px;
   text-align: center;
 }
 
-.chat-dialog__template-card {
-  cursor: pointer;
-  margin-bottom: 12px;
-  transition: border-color 0.2s;
+.chat-dialog__template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 
-  &:hover {
-    border-color: #409eff;
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
   }
+}
+
+// 蓝图卡：左侧等宽编号 + 悬停红色左缘
+.chat-dialog__template-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  text-align: left;
+  background: ai.$ai-paper;
+  border: 1px solid ai.$ai-hairline;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  font: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: ai.$ai-red;
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 0.2s ease;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: #c9ced6;
+    box-shadow: 0 2px 8px rgba(35, 40, 46, 0.06);
+
+    &::before {
+      transform: scaleY(1);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid ai.$ai-red;
+    outline-offset: 1px;
+  }
+}
+
+.chat-dialog__template-idx {
+  @include ai.ai-mono-num;
+  font-size: 11px;
+  font-weight: 600;
+  color: ai.$ai-faint;
+  line-height: 20px;
+  flex-shrink: 0;
+
+  .chat-dialog__template-card:hover & {
+    color: ai.$ai-red;
+  }
+}
+
+.chat-dialog__template-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .chat-dialog__template-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 13px;
+  color: ai.$ai-ink;
+
+  .el-icon {
+    color: ai.$ai-graphite;
+  }
 }
 
 .chat-dialog__template-desc {
   font-size: 12px;
-  color: #909399;
+  color: ai.$ai-graphite;
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 // Thinking indicator (shows while waiting for AI's first response)
@@ -935,25 +1081,31 @@ defineExpose({
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 0;
+  padding: 10px 16px;
   animation: fadeIn 0.3s ease;
 
   &-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #409eff, #6366f1);
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: ai.$ai-paper;
+    border: 1px solid ai.$ai-hairline;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
     flex-shrink: 0;
+    font-family: ai.$ai-mono;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: ai.$ai-red;
   }
 
   &-bubble {
-    background: #f0f2f5;
-    border-radius: 8px 8px 8px 2px;
-    padding: 10px 16px;
+    background: ai.$ai-paper;
+    border: 1px solid ai.$ai-hairline;
+    border-radius: 3px 10px 10px 10px;
+    padding: 9px 14px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -965,7 +1117,7 @@ defineExpose({
 
     .dot {
       font-size: 6px;
-      color: #909399;
+      color: ai.$ai-red;
       animation: bounce 1.4s ease infinite;
 
       &:nth-child(2) { animation-delay: 0.2s; }
@@ -975,7 +1127,7 @@ defineExpose({
 
   &-text {
     font-size: 13px;
-    color: #909399;
+    color: ai.$ai-graphite;
   }
 }
 
@@ -987,5 +1139,17 @@ defineExpose({
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-dialog__ticker-bar i,
+  .chat-dialog__thinking,
+  .chat-dialog__thinking-dots .dot {
+    animation: none !important;
+  }
+
+  .chat-dialog__template-card::before {
+    transition: none;
+  }
 }
 </style>
