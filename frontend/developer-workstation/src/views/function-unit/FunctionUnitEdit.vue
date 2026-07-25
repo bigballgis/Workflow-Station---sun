@@ -89,7 +89,7 @@
           />
         </el-tab-pane>
         <el-tab-pane
-          :label="t('functionUnit.serviceTask')"
+          :label="t('functionUnit.automation')"
           name="service-task"
         >
           <ServiceTaskDesigner

@@ -118,6 +118,10 @@ export default {
     confirm: '进入'
   },
   functionUnit: {
+    serviceTaskCreateFailed: '创建自动化流程失败',
+    serviceTaskCreateFlow: '创建自动化流程',
+    serviceTaskNoFlow: '该自动化任务还没有流程，创建一个即可开始设计。',
+    automation: '自动化',
     newGroup: '新建分组',
     removeFromGroup: '移出分组',
     groupNamePlaceholder: '分组名称',
@@ -126,7 +130,7 @@ export default {
     viewCard: '卡片视图',
     dragOutHint: '把卡片拖到面板外即可移出分组',
     serviceTaskLoadFailed: '自动化编排器加载失败',
-    serviceTaskEmpty: '该功能单元还没有自动化服务任务，请先在流程设计中绑定流程。',
+    serviceTaskEmpty: '这里还没有自动化任务。请在流程设计中添加一个服务任务并将其类型设为“自动化”，保存后再回到本页创建流程。',
     serviceTaskFlow: '自动化流程',
     serviceTask: '服务任务',
     title: '功能单元',

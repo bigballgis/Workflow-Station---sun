@@ -118,6 +118,10 @@ export default {
     confirm: 'Enter'
   },
   functionUnit: {
+    serviceTaskCreateFailed: 'Failed to create the automation flow',
+    serviceTaskCreateFlow: 'Create automation flow',
+    serviceTaskNoFlow: 'This automation task has no flow yet. Create one to start designing.',
+    automation: 'Automation',
     newGroup: 'New Group',
     removeFromGroup: 'Remove from group',
     groupNamePlaceholder: 'Group name',
@@ -126,7 +130,7 @@ export default {
     viewCard: 'Card view',
     dragOutHint: 'Drag a card outside the panel to remove it from the group',
     serviceTaskLoadFailed: 'Failed to load the automation builder',
-    serviceTaskEmpty: 'This function unit has no automation service task yet. Bind a flow in Process Design first.',
+    serviceTaskEmpty: 'No automation task here yet. In Process Design, add a Service Task and set its type to Automation; save, then come back to create its flow.',
     serviceTaskFlow: 'Automation flow',
     serviceTask: 'Service Task',
     title: 'Function Units',

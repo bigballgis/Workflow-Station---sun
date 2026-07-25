@@ -1,20 +1,25 @@
 <!--
-  ServiceTask tab of the Function Unit editor.
+  Automation tab of the Function Unit editor.
 
-  Mounts the vendored Activepieces builder for the automation flow bound to this
-  Function Unit's BPMN service task(s). The builder is embedded via lib-mode +
-  Shadow DOM (ServiceTaskBuilderCanvas), NOT an iframe — see decision X-6.
+  Mounts the vendored Activepieces builder for the automation flow bound to a BPMN
+  service task of type "ap". The builder is embedded via lib-mode + Shadow DOM
+  (ServiceTaskBuilderCanvas), NOT an iframe — see decision X-6.
 
-  Chain: the admin-center bridge issues the per-user AP session (L7), the builder
-  talks to AP through the Kong /api/ap prefix (L2), and the bundle itself is served
-  from DW's own origin at /dev/service-task-builder (build-time copy, AG-02.8).
+  This tab is also where the flow is *created*: a service task can be declared as an
+  automation (serviceType=ap) in Process Design without a flow id yet, and this tab
+  turns that empty task into a real flow (POST /api/ap/v1/flows) and binds the new id
+  back onto the BPMN — otherwise the flow id in the Service Task panel would have
+  nowhere to come from.
+
+  Chain: the admin-center bridge issues the AP session (L7), the builder talks to AP
+  through the Kong /api/ap prefix (L2), and the bundle itself is served from DW's own
+  origin at /dev/service-task-builder (build-time copy, AG-02.8).
 -->
 <template>
   <div
     v-loading="loading"
     class="service-task-designer"
   >
-    <!-- 单任务也显示，让用户知道正在编辑哪条 flow -->
     <div
       v-if="tasks.length > 0"
       class="service-task-designer__toolbar"
@@ -51,10 +56,25 @@
       </template>
     </el-alert>
 
+    <!-- No automation service task in the BPMN at all -->
     <el-empty
       v-else-if="!loading && tasks.length === 0"
       :description="t('functionUnit.serviceTaskEmpty')"
     />
+
+    <!-- A service task is declared as automation but has no flow yet: create it here -->
+    <el-empty
+      v-else-if="!loading && selectedTask && !selectedTask.flowId"
+      :description="t('functionUnit.serviceTaskNoFlow')"
+    >
+      <el-button
+        type="primary"
+        :loading="creating"
+        @click="createFlow"
+      >
+        {{ t('functionUnit.serviceTaskCreateFlow') }}
+      </el-button>
+    </el-empty>
 
     <ServiceTaskBuilderCanvas
       v-else-if="session && selectedFlowId"
@@ -78,7 +98,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { functionUnitApi } from '@/api/functionUnit'
-import { fetchServiceTaskSession, type ServiceTaskSession } from '@/api/serviceTask'
+import {
+  createServiceTaskFlow,
+  fetchServiceTaskSession,
+  type ServiceTaskSession,
+} from '@/api/serviceTask'
 import ServiceTaskBuilderCanvas from '@/components/serviceTask/ServiceTaskBuilderCanvas.vue'
 
 interface ApServiceTask {
@@ -87,11 +111,14 @@ interface ApServiceTask {
   flowId: string
 }
 
+const CUSTOM_NS = 'http://workflow.platform/schema/custom'
+
 const props = defineProps<{ functionUnitId: number }>()
 
 const { t } = useI18n()
 
 const loading = ref(false)
+const creating = ref(false)
 const errorMessage = ref('')
 const session = ref<ServiceTaskSession | null>(null)
 const tasks = ref<ApServiceTask[]>([])
@@ -105,16 +132,12 @@ const socketBaseUrl = origin
 const bundleUrl = `${import.meta.env.BASE_URL}service-task-builder/ap-builder.mjs`
 const cssUrl = `${import.meta.env.BASE_URL}service-task-builder/web.css`
 
-const selectedFlowId = computed(
-  () => tasks.value.find((task) => task.id === selectedTaskId.value)?.flowId || '',
+const selectedTask = computed(() =>
+  tasks.value.find((task) => task.id === selectedTaskId.value),
 )
+const selectedFlowId = computed(() => selectedTask.value?.flowId || '')
 
-/**
- * Pull the AP-backed service tasks out of the BPMN. They are marked by the
- * `serviceType=ap` extension property and carry their flow in `ap:flowId`
- * (see utils/serviceTaskConfigSerializer).
- */
-/** 解析单个 XML 标签的属性表（与属性书写顺序无关） */
+/** Parse one XML tag's attributes (order-independent). */
 function parseTagAttributes(tag: string): Record<string, string> {
   const attrs: Record<string, string> = {}
   const attrPattern = /([\w:.-]+)="([^"]*)"/g
@@ -125,13 +148,17 @@ function parseTagAttributes(tag: string): Record<string, string> {
   return attrs
 }
 
+/**
+ * Pull the automation service tasks out of the BPMN — those marked
+ * serviceType=ap — INCLUDING ones without a flow id yet (they are the ones this
+ * tab lets you create a flow for). The flow, when present, is in `ap:flowId`.
+ */
 function parseApServiceTasks(bpmnXml: string): ApServiceTask[] {
   const result: ApServiceTask[] = []
   const taskPattern = /<(?:\w+:)?serviceTask\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?serviceTask>/g
   let match: RegExpExecArray | null
   while ((match = taskPattern.exec(bpmnXml)) !== null) {
     const [, attrs, body] = match
-    // 收集扩展 property 标签为键值表，不依赖 name/value 的先后顺序
     const props: Record<string, string> = {}
     const propPattern = /<[\w:.-]*[Pp]roperty\b[^>]*\/?>/g
     let propMatch: RegExpExecArray | null
@@ -144,18 +171,50 @@ function parseApServiceTasks(bpmnXml: string): ApServiceTask[] {
     if (props['serviceType'] !== 'ap') {
       continue
     }
-    const flowId = props['ap:flowId'] || ''
-    if (!flowId) {
+    const taskAttrs = parseTagAttributes(attrs)
+    const id = taskAttrs.id || ''
+    if (!id) {
       continue
     }
-    const taskAttrs = parseTagAttributes(attrs)
-    result.push({
-      id: taskAttrs.id || flowId,
-      name: taskAttrs.name || '',
-      flowId,
-    })
+    result.push({ id, name: taskAttrs.name || '', flowId: props['ap:flowId'] || '' })
   }
   return result
+}
+
+/**
+ * Write `ap:flowId` onto the given service task in the BPMN and return the new XML.
+ * Uses DOM parsing (namespace-aware) and bails to the original XML on any structural
+ * surprise rather than risking a corrupt document.
+ */
+function bindFlowIdToBpmn(bpmnXml: string, taskId: string, flowId: string): string {
+  const doc = new DOMParser().parseFromString(bpmnXml, 'application/xml')
+  if (doc.getElementsByTagName('parsererror').length > 0) {
+    return bpmnXml
+  }
+  const task = Array.from(doc.getElementsByTagName('*')).find(
+    (el) => el.localName === 'serviceTask' && el.getAttribute('id') === taskId,
+  )
+  if (!task) {
+    return bpmnXml
+  }
+  const propsEl = Array.from(task.getElementsByTagName('*')).find(
+    (el) => el.localName === 'properties',
+  )
+  if (!propsEl) {
+    return bpmnXml
+  }
+  const existing = Array.from(propsEl.getElementsByTagName('*')).find(
+    (el) => el.localName === 'property' && el.getAttribute('name') === 'ap:flowId',
+  )
+  if (existing) {
+    existing.setAttribute('value', flowId)
+  } else {
+    const prop = doc.createElementNS(CUSTOM_NS, 'custom:property')
+    prop.setAttribute('name', 'ap:flowId')
+    prop.setAttribute('value', flowId)
+    propsEl.appendChild(prop)
+  }
+  return new XMLSerializer().serializeToString(doc)
 }
 
 async function load() {
@@ -179,6 +238,39 @@ async function load() {
     console.error('[ServiceTaskDesigner] load failed', error)
   } finally {
     loading.value = false
+  }
+}
+
+/** Create an empty flow for the selected task, bind it into the BPMN, then mount. */
+async function createFlow() {
+  const task = selectedTask.value
+  if (!task || creating.value) {
+    return
+  }
+  creating.value = true
+  errorMessage.value = ''
+  try {
+    if (!session.value) {
+      session.value = await fetchServiceTaskSession()
+    }
+    const flowId = await createServiceTaskFlow({
+      projectId: session.value.projectId,
+      token: session.value.token,
+      displayName: task.name || 'Automation flow',
+    })
+    const processData = await functionUnitApi.getProcess(props.functionUnitId)
+    const bpmnXml = processData?.data?.bpmnXml || ''
+    const updatedXml = bindFlowIdToBpmn(bpmnXml, task.id, flowId)
+    await functionUnitApi.saveProcess(props.functionUnitId, {
+      ...processData?.data,
+      bpmnXml: updatedXml,
+    })
+    task.flowId = flowId
+  } catch (error) {
+    errorMessage.value = t('functionUnit.serviceTaskCreateFailed')
+    console.error('[ServiceTaskDesigner] create flow failed', error)
+  } finally {
+    creating.value = false
   }
 }
 

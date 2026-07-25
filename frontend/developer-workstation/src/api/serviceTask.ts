@@ -69,3 +69,27 @@ export async function fetchServiceTaskSession(): Promise<ServiceTaskSession> {
   }
   return { token, projectId }
 }
+
+/**
+ * Create a new (empty) automation flow in the shared runtime and return its id.
+ *
+ * The bridge session's token authorises the call; it goes through the Kong /api/ap
+ * prefix like every other builder request. The caller then binds this id onto the
+ * BPMN service task and mounts the builder on it.
+ */
+export async function createServiceTaskFlow(params: {
+  projectId: string
+  token: string
+  displayName: string
+}): Promise<string> {
+  const res = await serviceTaskAxios.post(
+    `${window.location.origin}/api/ap/v1/flows`,
+    { projectId: params.projectId, displayName: params.displayName },
+    { headers: { Authorization: `Bearer ${params.token}` } },
+  )
+  const flowId = (res.data as { id?: string } | null)?.id
+  if (!flowId) {
+    throw new Error('ServiceTask flow creation returned no id')
+  }
+  return flowId
+}
