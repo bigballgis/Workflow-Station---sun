@@ -248,12 +248,12 @@
   }
 
   @keyframes color-cycle {
-    0% { color: #8b5cf6; }
+    0% { color: #db0011; }
     20% { color: #ec4899; }
     40% { color: #f59e0b; }
     60% { color: #10b981; }
     80% { color: #3b82f6; }
-    100% { color: #8b5cf6; }
+    100% { color: #db0011; }
   }
 
   @keyframes shimmer {
@@ -408,10 +408,11 @@
     --ring: theme('colors.neutral.400');
     --radius: 0.5rem;
 
-    --primary-100: 257 75% 85%;
-    --primary: 257 74% 57%;
-    --primary-300: 257 74% 25%;
-    --primary-foreground: 210 20% 98%;
+    /* Workflow Station 品牌红（#DB0011）—— 与三端前端主题统一 */
+    --primary-100: 355 80% 91%;
+    --primary: 355 100% 43%;
+    --primary-300: 355 100% 28%;
+    --primary-foreground: 0 0% 98%;
 
     /* Success — Emerald */
     --success-50: 152 81% 96%;
@@ -466,7 +467,7 @@
 
     --sidebar-background: theme('colors.neutral.50');
     --sidebar-foreground: theme('colors.neutral.950');
-    --sidebar-primary: 257 74% 57%;
+    --sidebar-primary: 355 100% 43%;
     --sidebar-primary-foreground: theme('colors.neutral.50');
     --sidebar-accent: color-mix(
       in srgb,
@@ -494,10 +495,11 @@
     --accent: theme('colors.neutral.700');
     --accent-foreground: theme('colors.neutral.50');
 
-    --primary-100: 210 80% 40%;
-    --primary: 210 90% 50%;
-    --primary-300: 210 100% 85%;
-    --primary-foreground: 210 90% 98%;
+    /* Workflow Station 品牌红（暗色下提亮一档保证可读性） */
+    --primary-100: 355 70% 32%;
+    --primary: 355 85% 55%;
+    --primary-300: 355 90% 85%;
+    --primary-foreground: 0 0% 98%;
 
     --success: var(--success-400);
     --destructive: var(--destructive-400);
@@ -782,7 +784,7 @@
 /* Animated AI gradient border */
 .auth-anim-gradient-border {
   position: relative;
-  background: linear-gradient(90deg, #8b5cf6, #a855f7, #c084fc, #a855f7, #8b5cf6);
+  background: linear-gradient(90deg, #db0011, #f5222d, #ff7875, #f5222d, #db0011);
   background-size: 300% 100%;
   animation: auth-anim-gradient-flow 4s ease-in-out infinite;
   transition: transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1);

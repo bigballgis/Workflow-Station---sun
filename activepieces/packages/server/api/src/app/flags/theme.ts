@@ -64,7 +64,8 @@ export function generateTheme({
 }
 
 export const defaultTheme = generateTheme({
-    primaryColor: '#6e41e2',
+    // Workflow Station 品牌红 —— 与三端前端主题统一（platform 表无自定义色时的默认值）
+    primaryColor: '#db0011',
     websiteName: 'Activepieces',
     fullLogoUrl: 'https://cdn.activepieces.com/brand/full-logo.png',
     favIconUrl: 'https://cdn.activepieces.com/brand/logo.svg',
