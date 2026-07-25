@@ -14,8 +14,9 @@
     v-loading="loading"
     class="service-task-designer"
   >
+    <!-- 单任务也显示，让用户知道正在编辑哪条 flow -->
     <div
-      v-if="tasks.length > 1"
+      v-if="tasks.length > 0"
       class="service-task-designer__toolbar"
     >
       <span class="service-task-designer__label">{{ t('functionUnit.serviceTaskFlow') }}</span>
@@ -113,23 +114,44 @@ const selectedFlowId = computed(
  * `serviceType=ap` extension property and carry their flow in `ap:flowId`
  * (see utils/serviceTaskConfigSerializer).
  */
+/** 解析单个 XML 标签的属性表（与属性书写顺序无关） */
+function parseTagAttributes(tag: string): Record<string, string> {
+  const attrs: Record<string, string> = {}
+  const attrPattern = /([\w:.-]+)="([^"]*)"/g
+  let match: RegExpExecArray | null
+  while ((match = attrPattern.exec(tag)) !== null) {
+    attrs[match[1]] = match[2]
+  }
+  return attrs
+}
+
 function parseApServiceTasks(bpmnXml: string): ApServiceTask[] {
   const result: ApServiceTask[] = []
   const taskPattern = /<(?:\w+:)?serviceTask\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?serviceTask>/g
   let match: RegExpExecArray | null
   while ((match = taskPattern.exec(bpmnXml)) !== null) {
     const [, attrs, body] = match
-    const isAp = /name="serviceType"\s+value="ap"/.test(body)
-    if (!isAp) {
+    // 收集扩展 property 标签为键值表，不依赖 name/value 的先后顺序
+    const props: Record<string, string> = {}
+    const propPattern = /<[\w:.-]*[Pp]roperty\b[^>]*\/?>/g
+    let propMatch: RegExpExecArray | null
+    while ((propMatch = propPattern.exec(body)) !== null) {
+      const propAttrs = parseTagAttributes(propMatch[0])
+      if (propAttrs.name !== undefined) {
+        props[propAttrs.name] = propAttrs.value ?? ''
+      }
+    }
+    if (props['serviceType'] !== 'ap') {
       continue
     }
-    const flowId = body.match(/name="ap:flowId"\s+value="([^"]*)"/)?.[1] || ''
+    const flowId = props['ap:flowId'] || ''
     if (!flowId) {
       continue
     }
+    const taskAttrs = parseTagAttributes(attrs)
     result.push({
-      id: attrs.match(/\bid="([^"]*)"/)?.[1] || flowId,
-      name: attrs.match(/\bname="([^"]*)"/)?.[1] || '',
+      id: taskAttrs.id || flowId,
+      name: taskAttrs.name || '',
       flowId,
     })
   }

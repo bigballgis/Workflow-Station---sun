@@ -47,19 +47,14 @@
           <el-form-item :label="t('common.type')">
             <el-select
               v-model="serviceType"
-              @change="updateExtProp('serviceType', serviceType)"
+              @change="onServiceTypeChange"
             >
+              <!-- 引擎只执行 ap 与 dmn；旧类型仅在存量节点上显示，供迁移 -->
               <el-option
-                :label="t('properties.serviceTypeHttp')"
-                value="http"
-              />
-              <el-option
-                :label="t('properties.serviceTypeScript')"
-                value="script"
-              />
-              <el-option
-                :label="t('properties.serviceTypeMessage')"
-                value="message"
+                v-if="isLegacyType"
+                :label="legacyTypeLabel"
+                :value="serviceType"
+                disabled
               />
               <el-option
                 :label="t('properties.serviceTypeAp')"
@@ -71,7 +66,16 @@
               />
             </el-select>
           </el-form-item>
-          
+
+          <el-alert
+            v-if="isLegacyType"
+            :title="t('properties.serviceTypeLegacyWarning')"
+            type="warning"
+            show-icon
+            :closable="false"
+            class="legacy-type-alert"
+          />
+
           <!-- HTTP config -->
           <template v-if="serviceType === 'http'">
             <el-form-item :label="t('properties.requestUrl')">
@@ -224,46 +228,6 @@
           </template>
         </el-form>
       </el-collapse-item>
-      
-      <!-- Retry config -->
-      <el-collapse-item
-        :title="t('properties.retryConfig')"
-        name="retry"
-      >
-        <el-form
-          label-position="top"
-          size="small"
-        >
-          <el-form-item :label="t('properties.enableRetry')">
-            <el-switch
-              v-model="retryEnabled"
-              @change="updateExtProp('retryEnabled', retryEnabled)"
-            />
-          </el-form-item>
-          
-          <template v-if="retryEnabled">
-            <el-form-item :label="t('properties.retryCount')">
-              <el-input-number
-                v-model="retryCount"
-                :min="1"
-                :max="10"
-                @change="updateExtProp('retryCount', retryCount)"
-              />
-            </el-form-item>
-            
-            <el-form-item :label="t('properties.retryInterval')">
-              <el-input
-                v-model="retryInterval"
-                :placeholder="t('properties.retryIntervalPlaceholder')"
-                @change="updateExtProp('retryInterval', retryInterval)"
-              />
-              <div class="form-tip">
-                ISO 8601
-              </div>
-            </el-form-item>
-          </template>
-        </el-form>
-      </el-collapse-item>
     </el-collapse>
   </div>
 </template>
@@ -271,12 +235,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import {
   getBasicProperties,
   setBasicProperties,
   getExtensionProperties,
-  setExtensionProperty
+  setExtensionProperty,
+  removeExtensionProperty
 } from '@/utils/bpmnExtensions'
 import ServiceTaskFlowPanel from './ServiceTaskFlowPanel.vue'
 
@@ -292,7 +258,31 @@ const activeGroups = ref(['basic', 'service'])
 const taskName = ref('')
 const taskDescription = ref('')
 
-const serviceType = ref<'http' | 'script' | 'message' | 'ap' | 'dmn'>('http')
+type ServiceTaskType = 'http' | 'script' | 'message' | 'ap' | 'dmn'
+
+/** 引擎不执行的存量类型（ServiceTaskExecutor 只认 ap:flowId，DMN 走 Flowable 原生字段） */
+const LEGACY_TYPES: ServiceTaskType[] = ['http', 'script', 'message']
+
+/** 各类型独占的扩展属性；切换类型时清掉其他类型的残留，避免污染导出/版本快照 */
+const TYPE_EXT_KEYS: Record<ServiceTaskType, string[]> = {
+  http: ['httpUrl', 'httpMethod', 'httpHeaders', 'httpBody', 'httpResponseVar'],
+  script: ['scriptLanguage', 'scriptContent'],
+  message: ['messageTopic', 'messagePayload'],
+  ap: ['ap:flowId', 'ap:webhookUrl', 'ap:timeoutSeconds', 'ap:retryCount', 'ap:inputMapping', 'ap:outputMapping'],
+  dmn: ['decisionTableReferenceKey', 'fallbackToDefaultTenant'],
+}
+
+const serviceType = ref<ServiceTaskType>('ap')
+
+const isLegacyType = computed(() => LEGACY_TYPES.includes(serviceType.value))
+const legacyTypeLabel = computed(() => {
+  switch (serviceType.value) {
+    case 'http': return t('properties.serviceTypeHttp')
+    case 'script': return t('properties.serviceTypeScript')
+    case 'message': return t('properties.serviceTypeMessage')
+    default: return serviceType.value
+  }
+})
 
 const apPanelRef = ref<InstanceType<typeof ServiceTaskFlowPanel> | null>(null)
 
@@ -308,10 +298,6 @@ const scriptContent = ref('')
 const messageTopic = ref('')
 const messagePayload = ref('')
 
-const retryEnabled = ref(false)
-const retryCount = ref(3)
-const retryInterval = ref('PT5M')
-
 const dmnDecisionKey = ref('')
 const dmnFallbackToDefaultTenant = ref(false)
 
@@ -325,7 +311,7 @@ function loadProperties() {
   
   const ext = getExtensionProperties(props.element)
   taskDescription.value = ext.description || ''
-  serviceType.value = ext.serviceType || 'http'
+  serviceType.value = ext.serviceType || 'ap'
   httpUrl.value = ext.httpUrl || ''
   httpMethod.value = ext.httpMethod || 'POST'
   httpHeadersStr.value = ext.httpHeaders ? JSON.stringify(ext.httpHeaders, null, 2) : ''
@@ -335,11 +321,21 @@ function loadProperties() {
   scriptContent.value = ext.scriptContent || ''
   messageTopic.value = ext.messageTopic || ''
   messagePayload.value = ext.messagePayload || ''
-  retryEnabled.value = ext.retryEnabled || false
-  retryCount.value = ext.retryCount || 3
-  retryInterval.value = ext.retryInterval || 'PT5M'
   dmnDecisionKey.value = ext.decisionTableReferenceKey || ''
   dmnFallbackToDefaultTenant.value = ext.fallbackToDefaultTenant || false
+}
+
+/** 切换类型：写入新类型并清理其他类型的残留扩展属性（可用 Ctrl+Z 撤销） */
+function onServiceTypeChange(newType: ServiceTaskType) {
+  if (!props.element || !props.modeler) return
+  updateExtProp('serviceType', newType)
+  for (const [type, keys] of Object.entries(TYPE_EXT_KEYS)) {
+    if (type === newType) continue
+    for (const key of keys) {
+      removeExtensionProperty(props.modeler, props.element, key)
+    }
+  }
+  loadProperties()
 }
 
 function updateBasicProp(name: string, value: any) {
@@ -357,7 +353,7 @@ function updateHttpHeaders() {
     const headers = httpHeadersStr.value ? JSON.parse(httpHeadersStr.value) : {}
     updateExtProp('httpHeaders', headers)
   } catch {
-    // Ignore JSON parse errors
+    ElMessage.error(t('properties.requestHeadersInvalid'))
   }
 }
 
@@ -370,45 +366,49 @@ onMounted(loadProperties)
 .service-task-properties {
   :deep(.el-collapse) {
     border: none;
-    
+
     .el-collapse-item__header {
       font-size: 13px;
       font-weight: 600;
-      color: #303133;
-      background: #fafafa;
+      color: var(--el-text-color-primary);
+      background: var(--el-fill-color-lighter);
       padding: 0 12px;
       height: 36px;
       line-height: 36px;
       border-radius: 4px;
       margin-bottom: 8px;
-      
+
       &:hover {
-        background: #f0f0f0;
+        background: var(--el-fill-color-light);
       }
     }
-    
+
     .el-collapse-item__wrap {
       border: none;
     }
-    
+
     .el-collapse-item__content {
       padding: 0 4px 12px;
     }
   }
-  
+
   :deep(.el-form-item) {
     margin-bottom: 12px;
-    
+
     .el-form-item__label {
       font-size: 12px;
-      color: #606266;
+      color: var(--el-text-color-regular);
       padding-bottom: 4px;
     }
   }
-  
+
+  .legacy-type-alert {
+    margin-bottom: 12px;
+  }
+
   .form-tip {
     font-size: 11px;
-    color: #909399;
+    color: var(--el-text-color-secondary);
     margin-top: 4px;
     line-height: 1.4;
   }

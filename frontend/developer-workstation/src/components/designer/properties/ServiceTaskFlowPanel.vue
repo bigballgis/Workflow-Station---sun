@@ -36,6 +36,9 @@
         @change="saveConfig"
       />
       <span class="form-tip">{{ t('properties.apTimeoutUnit') }}</span>
+      <div class="form-tip">
+        {{ t('properties.apTimeoutRuntimeTip') }}
+      </div>
     </el-form-item>
 
     <!-- Retry Count -->
@@ -105,7 +108,7 @@
                 size="small"
                 @click="removeInputMapping($index)"
               >
-                ✕
+                <el-icon><Close /></el-icon>
               </el-button>
             </template>
           </el-table-column>
@@ -170,7 +173,7 @@
                 size="small"
                 @click="removeOutputMapping($index)"
               >
-                ✕
+                <el-icon><Close /></el-icon>
               </el-button>
             </template>
           </el-table-column>
@@ -183,6 +186,7 @@
 <script setup lang="ts">
 import { reactive, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Close } from '@element-plus/icons-vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties, setExtensionProperty } from '@/utils/bpmnExtensions'
 import type { ServiceTaskConfig } from '@/api/serviceTask'
@@ -231,7 +235,7 @@ function removeOutputMapping(index: number) {
 /** Save all AP config to BPMN extension properties */
 function saveConfig() {
   if (!props.element || !props.modeler) return
-  clearValidationErrors()
+  validate()
   const serialized = serializeApConfig(apConfig)
   for (const [key, value] of Object.entries(serialized)) {
     setExtensionProperty(props.modeler, props.element, key, value)
@@ -244,6 +248,7 @@ function loadConfig() {
   const ext = getExtensionProperties(props.element)
   const loaded = deserializeApConfig(ext)
   Object.assign(apConfig, loaded)
+  validate()
 }
 
 /** Validate required fields - returns true if valid */
@@ -251,10 +256,6 @@ function validate(): boolean {
   const errors = validateApConfig(apConfig)
   validationErrors.flowId = errors.flowId
   return !errors.flowId
-}
-
-function clearValidationErrors() {
-  validationErrors.flowId = ''
 }
 
 /** Expose validate method for parent component */
@@ -277,13 +278,13 @@ onMounted(loadConfig)
       margin-bottom: 8px;
       font-size: 12px;
       font-weight: 600;
-      color: #606266;
+      color: var(--el-text-color-regular);
     }
   }
 
   .form-tip {
     font-size: 11px;
-    color: #909399;
+    color: var(--el-text-color-secondary);
     margin-top: 4px;
     line-height: 1.4;
   }
