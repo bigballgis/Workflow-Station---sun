@@ -205,7 +205,11 @@ public class FunctionUnitController extends AbstractBaseController {
             @Parameter(description = "Function unit id") @PathVariable String id,
             @Parameter(description = "Deployer id header") @RequestHeader(value = "X-User-Id", defaultValue = "system") String deployerId) {
         log.info("Deploying function unit to user portal: {}", id);
-        String operator = SecurityContextUtils.getCurrentUsername().orElse(deployerId);
+        // C-3 (docs/ap-integration/DECISIONS.md#d6): trust only the authenticated username
+        // (JWT, or a service-token-gated header mint — see SecurityConfig). The bare
+        // X-User-Id header is attacker-controllable from a shared-network caller, so it must
+        // not be used as the audit operator when no authenticated identity is present.
+        String operator = SecurityContextUtils.getCurrentUsername().orElse("system");
         return handleRequest(() -> {
             FunctionUnit functionUnit = functionUnitManager.getFunctionUnitById(id);
 

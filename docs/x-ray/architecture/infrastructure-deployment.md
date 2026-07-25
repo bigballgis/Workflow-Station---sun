@@ -47,7 +47,7 @@ flowchart TB
 
         subgraph AUTO["Automation / BI"]
             N8N["n8n 1.89.2 x1 (:5678, emptyDir)"]
-            AP["activepieces 0.84.0 x1 (:80, emptyDir,<br/>PIECES_SOURCE=DB, SYNC=NONE)"]
+            AP["activepieces 0.84.0 x1 (:80, emptyDir,<br/>PIECES_SYNC_MODE=NONE)"]
             SUP["superset 6.0.0 x1 (:8088, svc :80)"]
             SUPPROXY["superset-author-proxy (nginx)<br/>auth_request -> admin-center"]
         end
@@ -107,7 +107,7 @@ All Deployments: `imagePullSecrets: nexus3`, registry `nexus3.hk.hsbc:18080/hsbc
 | redis | `redis.yaml` | `redis:7.2` | 6379 | 1 | 128Mi/100m → 256Mi/500m | ✅ exec redis-cli ping | PVC 2Gi `pwx-standard`; requirepass from Secret; ⚠️ also exposed via Istio TCP Gateway `workflow-station-redis.__BASE_DOMAIN__:6379` |
 | kafka | `kafka.yaml` | `kafka:3.6.2` KRaft | 9092/29092 | 1 | 512Mi/250m → 1Gi/1000m | ✅ tcpSocket 29092 | PVC 5Gi; RF=1; PLAINTEXT, no auth; ⚠️ Istio TCP Gateway `...-kafka.__BASE_DOMAIN__:9092` |
 | n8n | `n8n.yaml` | `n8n:1.89.2` | 5678 | 1 | 512Mi/250m → 1Gi/1000m | ✅ `/healthz` | DB = shared platform PG schema `n8n`; ⚠️ `/home/node/.n8n` = **emptyDir**; DOUBAO creds from Secret; UI exposed at `n8n.__BASE_DOMAIN__` (no platform auth in front) |
-| activepieces | `activepieces.yaml` | `activepieces:0.84.0` | 80 | 1 | 512Mi/250m → 1Gi/1000m | ✅ `/api/v1/flags` | Prod = runtime-only: VirtualService matches **only `/api/v1/webhooks`** (UI 404s). Offline policy: `AP_PIECES_SOURCE=DB`, `AP_PIECES_SYNC_MODE=NONE`, `AP_TELEMETRY_ENABLED=false`, `NPM_CONFIG_REGISTRY` fail-closed `.invalid` default. `AP_WEBHOOK_TIMEOUT_SECONDS=300`; ⚠️ data dir emptyDir |
+| activepieces | `activepieces.yaml` | `activepieces:0.84.0` | 80 | 1 | 512Mi/250m → 1Gi/1000m | ✅ `/api/v1/flags` | Prod = runtime-only: VirtualService matches **only `/api/v1/webhooks`** (UI 404s). Offline policy: `AP_PIECES_SYNC_MODE=NONE` (note: 0.84 has no `AP_PIECES_SOURCE` var — the once-configured `AP_PIECES_SOURCE=DB` was never read and has been removed), `AP_TELEMETRY_ENABLED=false`, `NPM_CONFIG_REGISTRY` fail-closed `.invalid` default. `AP_WEBHOOK_TIMEOUT_SECONDS=300`; ⚠️ data dir emptyDir |
 | ap-gateway (non-prod) | `ap-gateway.yaml` | (routing only) | — | — | — | — | Host `hermes-workflow-activepieces.*`: `/__ap/bridge`,`/__ap/token` → admin-center (nonce-based cross-domain SSO, 方案 B), rest → AP. Excluded by default; `-IncludeApBridgeGateway` |
 | ap-bootstrap-job | `ap-bootstrap-job.yaml` | reuses AP image | — | Job | 128Mi/50m → 256Mi/200m | — | Idempotent sign-in-probe→sign-up of shared account `ACTIVEPIECES_SHARED_EMAIL/PASSWORD`; sidecar injection off; ttl 3600s |
 | superset | `workflow-station-superset.yaml` | `superset:6.0.0` | 8088 (svc :80) | 1 | 2000Mi/600m → 3600Mi/1000m | ❌ **no liveness/readiness probes** | Config from ConfigMap `superset_config.py`. Two hosts: embed host (strips inbound `x-remote-*`) and author host → nginx `superset-author-proxy` (auth_request → admin-center, injects X-Remote-*). `AuthorizationPolicy` DENY any `x-remote-user` not from proxy SA (needs mTLS) |

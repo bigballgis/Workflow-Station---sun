@@ -264,7 +264,7 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 | **`/launch` 502 且日志「public-url is not configured」** | `AP_BRIDGE_URL` 没注入 → `bridge.public-url` 空 | configmap/compose 设 `AP_BRIDGE_URL=<AP 主机>/__ap/bridge`，重启 admin-center |
 | **`/launch` 500「No mapping / No endpoint」** | 运行的是**旧镜像**，没有方案 B 的 `/launch` | 重建镜像：Dockerfile 是 `COPY target/*.jar`，**必须先 `mvn ... package`** 出新 jar 再 `docker build`（仅 restart 容器不更新代码） |
 | 进 AP `/flows ↔ /sign-in` 循环、sign-in 返回 `projectId=null`、token 类型 `ONBOARDING` | AP 0.84 CE 的 sign-up **不自动建 platform/project**，账号卡 ONBOARDING（见 §6） | **重跑引导脚本**——新版会 `POST /api/v1/platforms` 完成 onboarding（建 platform+默认 project），之后 sign-in 带非空 projectId。旧版脚本只 sign-up、留下这个坑 |
-| 清空 `piece_metadata` 后 pieces **又自己回来了** | 只设 `AP_PIECES_SOURCE=DB` 不够：**后台同步 Job（`AP_PIECES_SYNC_MODE` 默认 `OFFICIAL_AUTO`）** 启动即从 cloud.activepieces.com 重新拉元数据入库 | 两个都设：`AP_PIECES_SOURCE=DB` + `AP_PIECES_SYNC_MODE=NONE`（compose 与 k8s 均已加），再清表 |
+| 清空 `piece_metadata` 后 pieces **又自己回来了** | **后台同步 Job（`AP_PIECES_SYNC_MODE` 默认 `OFFICIAL_AUTO`）** 启动即从 cloud.activepieces.com 重新拉元数据入库。（注：曾同时配的 `AP_PIECES_SOURCE=DB` 经 0.84.0 全仓 grep 核实**不存在、从未被读取**，已删除） | 设 `AP_PIECES_SYNC_MODE=NONE`（compose 与 k8s 均已加），再清表 |
 | psql 导入 piece 元数据后，列表 `/api/v1/pieces` 有、设计器单查 404 `piece_metadata_not_found` | piece registry 缓存在 AP **进程内存**（piece-cache.ts），只在经 AP 自身 API 改动时用 Redis pubsub 失效；直接写表不触发。列表直查 DB、单查走缓存 | 导入 seed 后**重启 AP**（dev `docker restart`；k8s `rollout restart`） |
 
 ---
@@ -285,7 +285,8 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
   - 唯一能做**硬隔离**的是给 AP **独立 database**（dev 可仿 `n8n_dev`，生产由 DBA 开）。当前不冲突，故维持 public。
 - **Istio Job sidecar**：bootstrap Job 关了 sidecar 注入；若 mesh 为 STRICT mTLS 需另行处理（见 yaml 注记）。
 - **外网下载封禁（IKP 合规，2026-07-02）**：compose 与 `deploy/k8s/activepieces.yaml` 均已设
-  `AP_PIECES_SOURCE=DB` + `AP_PIECES_SYNC_MODE=NONE` + `AP_CLOUD_AUTH_ENABLED=false` + `AP_TELEMETRY_ENABLED=false`——
+  `AP_PIECES_SYNC_MODE=NONE` + `AP_CLOUD_AUTH_ENABLED=false` + `AP_TELEMETRY_ENABLED=false`
+  （曾配的 `AP_PIECES_SOURCE=DB` 经 0.84.0 全仓 grep 核实该版本无此变量、从未生效，2026-07-22 已删；断外网靠 `AP_PIECES_SYNC_MODE=NONE`）——
   AP 不再从 cloud.activepieces.com / 公网 npm 同步或下载任何 pieces；piece 目录只来自 `piece_metadata` 表，
   **全新部署 = 空目录**。后果：flow 设计器里没有可选 piece（含 `piece-webhook`），要用 pieces 必须内部投放
   （DB ARCHIVE 或内部 npm 源）。历史外部数据已于 2026-07-02 全量清除（piece_metadata 10k+ 行与容器缓存）。

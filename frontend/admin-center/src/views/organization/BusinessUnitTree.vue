@@ -108,21 +108,18 @@
               </div>
               <div class="header-actions">
                 <el-button
-                  type="primary"
                   size="small"
                   @click="showMembersDialog"
                 >
                   {{ t('organization.members') }}
                 </el-button>
                 <el-button
-                  type="primary"
                   size="small"
                   @click="showRolesDialog"
                 >
                   {{ t('organization.eligibleRoles') }}
                 </el-button>
                 <el-button
-                  type="primary"
                   size="small"
                   @click="showApproversDialog"
                 >
@@ -131,20 +128,20 @@
               </div>
             </div>
           </template>
-          <el-descriptions
-            :column="2"
-            border
-          >
-            <el-descriptions-item :label="t('organization.businessUnitCode')">
-              {{ selectedBusinessUnit.code }}
-            </el-descriptions-item>
-            <el-descriptions-item :label="t('organization.parentBusinessUnit')">
-              {{ selectedBusinessUnit.parentName || t('common.noData') }}
-            </el-descriptions-item>
-            <el-descriptions-item :label="t('organization.memberCount')">
-              {{ selectedBusinessUnit.memberCount || 0 }} {{ t('role.people') }}
-            </el-descriptions-item>
-          </el-descriptions>
+          <div class="fact-strip">
+            <div class="fact">
+              <span class="fact-label">{{ t('organization.businessUnitCode') }}</span>
+              <span class="fact-value">{{ selectedBusinessUnit.code }}</span>
+            </div>
+            <div class="fact">
+              <span class="fact-label">{{ t('organization.parentBusinessUnit') }}</span>
+              <span class="fact-value">{{ selectedBusinessUnit.parentName || t('common.noData') }}</span>
+            </div>
+            <div class="fact">
+              <span class="fact-label">{{ t('organization.memberCount') }}</span>
+              <span class="fact-value">{{ selectedBusinessUnit.memberCount || 0 }} {{ t('role.people') }}</span>
+            </div>
+          </div>
           
           <!-- 成员和审批人两列布局 -->
           <el-row
@@ -243,7 +240,14 @@
           v-else
           class="empty-card"
         >
-          <el-empty :description="t('common.noData')" />
+          <div class="empty-invite">
+            <span class="empty-icon">
+              <el-icon :size="22"><OfficeBuilding /></el-icon>
+            </span>
+            <p class="empty-text">
+              {{ t('organization.selectHint') }}
+            </p>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -359,51 +363,70 @@ onMounted(() => {
 
 .tree-node {
   flex: 1;
+  min-width: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 4px 8px 4px 0;
-  
+
   .node-content {
     display: flex;
     align-items: center;
     gap: 8px;
-    
+    min-width: 0;
+
     .node-icon {
-      color: #409eff;
+      color: var(--ws-text-muted);
       font-size: 16px;
+      flex-shrink: 0;
     }
-    
+
     .node-label {
       font-size: 14px;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    
+
     .member-tag {
       margin-left: 4px;
+      flex-shrink: 0;
     }
   }
-  
+
   .node-actions {
     display: none;
     gap: 4px;
   }
-  
+
   &:hover .node-actions {
     display: inline-flex;
   }
 }
 
 :deep(.el-tree-node__content) {
-  height: 36px;
-  border-radius: 4px;
-  
+  height: 40px;
+  margin: 1px 0;
+  border-radius: 10px;
+
   &:hover {
     background-color: #f5f7fa;
   }
 }
 
+// 选中节点：红字 + 红色浅底，与侧栏激活态同一语言
 :deep(.el-tree-node.is-current > .el-tree-node__content) {
-  background-color: #ecf5ff;
+  background-color: var(--primary-soft);
+
+  .node-icon,
+  .node-label {
+    color: var(--primary-color);
+  }
+
+  .node-label {
+    font-weight: 600;
+  }
 }
 
 .detail-card {
@@ -427,8 +450,8 @@ onMounted(() => {
       gap: 12px;
       
       .header-title {
-        font-size: 16px;
-        font-weight: 500;
+        font-size: 18px;
+        font-weight: 700;
       }
     }
     
@@ -456,17 +479,21 @@ onMounted(() => {
     align-items: center;
     margin-bottom: 12px;
     flex-shrink: 0;
-    
+
+    // 与表格表头同一套小号大写标签语言
     h4 {
       margin: 0;
-      font-size: 14px;
-      color: #606266;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8f8f8a;
     }
   }
-  
+
   .list-container {
-    border: 1px solid #ebeef5;
-    border-radius: 4px;
+    border: 1px solid var(--ws-card-border);
+    border-radius: 10px;
     flex: 1;
     min-height: 0;
     overflow: hidden;
@@ -481,10 +508,65 @@ onMounted(() => {
   }
 }
 
+// 事实条：标签在上、值在下，替代带边框的 descriptions 网格
+.fact-strip {
+  display: flex;
+  gap: 48px;
+  padding: 4px 0 16px;
+  border-bottom: 1px solid var(--ws-line);
+
+  .fact {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .fact-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8f8f8a;
+    white-space: nowrap;
+  }
+
+  .fact-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ws-text);
+  }
+}
+
 .empty-card {
   height: calc(100vh - 180px);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+// 空态：指引而非「No Data」
+.empty-invite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+
+  .empty-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: var(--primary-soft);
+    color: var(--primary-color);
+  }
+
+  .empty-text {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ws-text-secondary);
+  }
 }
 </style>

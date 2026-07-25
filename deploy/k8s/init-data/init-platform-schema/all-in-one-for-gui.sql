@@ -3825,3 +3825,45 @@ COMMENT ON COLUMN up_record_note.table_kind IS 'ID space of table_id: DW = dw_ta
 COMMENT ON COLUMN up_record_note.note_type IS 'COMMENT = rich-text note; ATTACHMENT = binary file (parent_note_id links it to its comment, NULL for standalone uploads)';
 COMMENT ON COLUMN up_record_note.is_inline_image IS 'TRUE when the attachment is an inline image referenced from a comment body, hidden from the attachment list';
 COMMENT ON COLUMN up_record_note.body_text IS 'Plain-text extraction of body_html for list summaries and search';
+
+
+-- =============================================================================
+-- 55-dw-main-table-view-lookup-display-columns.sql
+-- Source file: deploy/init-scripts/00-schema/55-dw-main-table-view-lookup-display-columns.sql
+-- =============================================================================
+-- Main Table View: Power Apps-style lookup display columns
+-- column_type = 'field' (default) | 'lookup_display'
+-- lookup_display rows store source field (e.g. t) + target attribute (e.g. full_name);
+-- field_name uses synthetic key source@display (e.g. t@full_name).
+
+ALTER TABLE dw_main_table_view_fields
+    ADD COLUMN IF NOT EXISTS column_type VARCHAR(20) NOT NULL DEFAULT 'field';
+
+ALTER TABLE dw_main_table_view_fields
+    ADD COLUMN IF NOT EXISTS lookup_source_field VARCHAR(100);
+
+ALTER TABLE dw_main_table_view_fields
+    ADD COLUMN IF NOT EXISTS lookup_display_field VARCHAR(100);
+
+COMMENT ON COLUMN dw_main_table_view_fields.column_type IS
+    'field = physical/system column; lookup_display = derived attribute from a lookup source field';
+COMMENT ON COLUMN dw_main_table_view_fields.lookup_source_field IS
+    'For lookup_display: form/main-table lookup field name (e.g. t)';
+COMMENT ON COLUMN dw_main_table_view_fields.lookup_display_field IS
+    'For lookup_display: attribute on the lookup target table (e.g. full_name)';
+
+
+-- =============================================================================
+-- 56-dw-user-preferences.sql
+-- Source file: deploy/init-scripts/00-schema/56-dw-user-preferences.sql
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS dw_user_preferences (
+    id BIGSERIAL PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    pref_key VARCHAR(64) NOT NULL,
+    pref_value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_dw_user_pref UNIQUE (user_id, pref_key)
+);
+
+COMMENT ON TABLE dw_user_preferences IS 'Per-user UI preferences for developer workstation (e.g. launchpad layout)';

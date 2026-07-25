@@ -103,6 +103,42 @@ data:
               - /api/workflow
             strip_path: false
             preserve_host: false
+      # --- Activepieces builder API (L2, per-user) ---
+      # DW 设计态嵌入的 AP builder 经此访问 AP REST + socket.io。AP 原生 API 在
+      # /api/v1/* + /api/socket.io，与平台自身 /api/v1/* 冲突，故用独立前缀 /api/ap/*
+      # 收编（替代 :8085 独立 origin 桥，见 X-Bridge-Retire / Q6）。鉴权由 AP 自身完成
+      # （浏览器持 L7 per-user AP token：REST 走 Authorization: Bearer，socket.io 握手走
+      # auth {token}）——Kong 不验 JWT，仅透明路由（与本网关既有约定一致）。
+      # ⚠️ 仅设计态环境需要；纯运行态 prod（portal only）应删除本两 service（Doc4 §4.1，
+      # 生产只经 Istio 暴露 /api/v1/webhooks）。硬约束落点见 dev kong.yml.template 注释。
+      - name: activepieces-builder-service
+        url: http://activepieces-service.__NAMESPACE__:80/api
+        connect_timeout: 60000
+        write_timeout: 300000
+        read_timeout: 300000
+        routes:
+          - name: activepieces-builder-route
+            paths:
+              - /api/ap
+            strip_path: true
+            preserve_host: false
+      # --- Activepieces builder socket.io (WebSocket) ---
+      # service url 带完整 /api/socket.io base，route strip /api/ap/socket.io，保住段：
+      #   /api/ap/socket.io/?EIO=4 -> strip -> /?EIO=4 -> service /api/socket.io + /?EIO=4
+      - name: activepieces-builder-ws-service
+        url: http://activepieces-service.__NAMESPACE__:80/api/socket.io
+        connect_timeout: 60000
+        write_timeout: 86400000
+        read_timeout: 86400000
+        routes:
+          - name: activepieces-builder-ws-route
+            paths:
+              - /api/ap/socket.io
+            strip_path: true
+            preserve_host: false
+            protocols:
+              - http
+              - https
       # --- 公开路由 (不启用 JWT 插件) ---
       # admin-center 登录
       - name: admin-center-auth-service
@@ -292,6 +328,22 @@ data:
             password: __REDIS_PASSWORD__
             database: 5
           limit_by: ip
+
+      # --- Activepieces builder REST 路由级限流 (放宽) ---
+      # builder 首屏放大 ≈ 2N+2M + 长轮询/心跳 -> 全局 600/min 误伤，放宽 3000/min。
+      # socket.io（WS 路由）不限流。（删本 service 时一并删本 plugin。）
+      - name: rate-limiting
+        route: activepieces-builder-route
+        config:
+          minute: 3000
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+          fault_tolerant: true
     # ============================================================
     # Upstreams — removed (not referenced by services)
     # ============================================================

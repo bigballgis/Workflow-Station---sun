@@ -105,7 +105,7 @@ logging:
 
 # AI Generation webhook (Docker) — Activepieces sync webhook.
 # flowId is environment-specific; override via AI_GENERATION_WEBHOOK_URL per environment.
-activepieces:
+service-task:
   ai-generation:
     webhook-url: ${AI_GENERATION_WEBHOOK_URL:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
 

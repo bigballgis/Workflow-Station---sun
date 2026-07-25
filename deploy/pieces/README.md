@@ -1,7 +1,9 @@
 # Approved Activepieces pieces（离线投放，IKP 合规）
 
-集群禁止外网下载，AP 已配 `AP_PIECES_SOURCE=DB` + `AP_PIECES_SYNC_MODE=NONE` +
+集群禁止外网下载，AP 已配 `AP_PIECES_SYNC_MODE=NONE` +
 fail-closed 的 `NPM_CONFIG_REGISTRY`（见 `deploy/ACTIVEPIECES_INTEGRATION.md` §9）。
+（注：0.84 无 `AP_PIECES_SOURCE` 变量，曾配的 `AP_PIECES_SOURCE=DB` 从未生效、已删；
+断外网元数据同步靠 `AP_PIECES_SYNC_MODE=NONE`。）
 本目录是**经审批的 piece 白名单**的唯一来源。pieces 均为 MIT 开源，镜像合法。
 
 一个 piece 由两半组成，两半都要投放、版本必须一致：
@@ -83,7 +85,7 @@ docker exec <ap容器> node -e "require('http').get('http://127.0.0.1:80/api/v1/
 ```
 
 断网环境前置检查：configmap 里 `ACTIVEPIECES_NPM_REGISTRY` 保持 fail-closed 的 `.invalid` 值
-（pieces 已预装进镜像，运行时不会碰 registry）；`AP_PIECES_SOURCE=DB`、`AP_PIECES_SYNC_MODE=NONE`
+（pieces 已预装进镜像，运行时不会碰 registry）；`AP_PIECES_SYNC_MODE=NONE`
 已在 activepieces.yaml / compose 里，无需另配。
 
 > dev 本机（有外网）不用走 tar：`cd deploy/environments/dev && docker compose build activepieces

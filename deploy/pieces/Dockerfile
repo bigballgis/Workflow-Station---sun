@@ -1,11 +1,13 @@
 # Activepieces image with the approved pieces PRE-INSTALLED (offline / IKP policy).
-# The bun install happens HERE, at build time on a networked machine; at runtime the
+# The pnpm install happens HERE, at build time on a networked machine; at runtime the
 # worker's piece-installer sees the ready markers and never touches any registry.
 #
 # Build (from deploy/pieces/):
 #   docker build -t <registry>/workflow-station2/activepieces:0.84.0-pieces-<n> .
 # For the cluster, override BASE_IMAGE with the nexus3 mirror.
-ARG BASE_IMAGE=activepieces/activepieces:0.84.0
+# HERMES vendored, EE-removed, de-bunned image (see activepieces/Dockerfile) — the
+# prewarm layout must match that image's runtime piece installer (pnpm, isolated linker).
+ARG BASE_IMAGE=activepieces:0.84.0-ee-removed
 FROM ${BASE_IMAGE}
 
 COPY pieces.json /tmp/pieces.json

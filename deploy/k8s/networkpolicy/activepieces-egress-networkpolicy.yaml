@@ -1,0 +1,119 @@
+# =============================================================================
+# Activepieces egress lockdown — compensating control C-1 for decision D6.
+#   See docs/ap-integration/DECISIONS.md#d6 and docs/ap-integration/OPEN_GATES.md (AG-05).
+#
+# WHY THIS EXISTS
+#   The sandbox baseline was downgraded to SANDBOX_CODE_ONLY (security policy forbids
+#   CAP_SYS_ADMIN), which REMOVES the kernel-level iptables egress lockdown. Empirically
+#   verified 2026-07-23: without it, AP worker/piece processes (uid=0) can open a raw
+#   socket to any in-cluster service. The Istio Sidecar for AP allows egress to "./*"
+#   (every service in this namespace) — i.e. admin-center / user-portal /
+#   developer-workstation / workflow-engine / kafka are all reachable at the mesh level.
+#   A DW user authoring an AP Service Task can run piece code, so that lateral-movement
+#   surface is user-programmable.
+#
+#   C-3 (X-Service-Token) already blocks IDENTITY SPOOFING at admin-center. C-1 (this file)
+#   is the DEFENCE-IN-DEPTH that blocks AP from reaching HERMES backends AT ALL (L3/L4),
+#   including any endpoint that does not require authentication and direct DB/Redis access.
+#   C-1 and C-3 are NOT interchangeable — both are required before production.
+#
+# SCOPE
+#   Egress only. Ingress to AP (DW/admin-center bridge, browser builder embed, HERMES
+#   webhook calls) stays open. This policy denies ALL egress from `app: activepieces`
+#   pods except the explicit allow-list below. Everything not listed — notably every
+#   HERMES backend pod in this namespace — is denied.
+#
+# OPERATOR-GATED (not auto-applied)
+#   This manifest lives OUTSIDE the istio-generated renderer's scan path and is NOT in
+#   kustomization.yaml on purpose: the external egress CIDRs (rules 4 & 5) are
+#   environment-specific and MUST be filled in before applying. Render + apply manually:
+#     sed -e "s/__NAMESPACE__/<ns>/g" \
+#         -e "s#__AP_EGRESS_POSTGRES_CIDR__#<db-ip>/32#g" \
+#         -e "s#__AP_EGRESS_LLM_CIDR__#<llm-cidr>#g" \
+#         deploy/k8s/networkpolicy/activepieces-egress-networkpolicy.yaml | kubectl apply -f -
+#
+# PREREQUISITE
+#   The cluster CNI must enforce NetworkPolicy (Calico / Cilium / etc.). On a CNI that
+#   ignores NetworkPolicy this file is inert — confirm enforcement before relying on it.
+#
+# NOT YET RUNTIME-VERIFIED: authored from source + dev evidence; no k8s cluster was
+#   available to apply/verify it in. See the README in this directory for the in-cluster
+#   verification procedure to run before trusting it in production.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: activepieces-egress-lockdown
+  namespace: __NAMESPACE__
+  labels:
+    app: activepieces
+    app.kubernetes.io/name: activepieces
+    app.kubernetes.io/part-of: workflow-station
+spec:
+  podSelector:
+    matchLabels:
+      app: activepieces
+  policyTypes:
+    - Egress
+  egress:
+    # 1. DNS — CoreDNS/kube-dns in kube-system. Required for all name resolution.
+    #    Adjust the podSelector label if your DNS pods are not labelled k8s-app=kube-dns.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # 2. Istio control plane — sidecar xDS (15012), legacy xDS (15010), telemetry (15014).
+    #    Remove this rule entirely if the cluster does not run Istio.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - protocol: TCP
+          port: 15012
+        - protocol: TCP
+          port: 15010
+        - protocol: TCP
+          port: 15014
+
+    # 3. Redis — AP queues (BullMQ) + state. In-cluster pod, same namespace.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    # 4. Postgres — AP's own schema. External managed DB in preprod/uat
+    #    (e.g. preprod ACTIVEPIECES_POSTGRES_HOST=hkl25243602.hc.cloud.hk.hsbc), so an
+    #    ipBlock to the DB host's /32. If in some env AP's Postgres runs in-cluster,
+    #    replace this rule with a podSelector to the postgres pod instead.
+    - to:
+        - ipBlock:
+            cidr: __AP_EGRESS_POSTGRES_CIDR__
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # 5. LLM endpoint for AI Generate (deepseek custom provider), HTTPS.
+    #    ⚠️ AIR-GAPPED PRODUCTION (X-constraint: prod fully disconnected from the public
+    #       internet): set this to the INTERNAL model-gateway CIDR ONLY. NEVER 0.0.0.0/0.
+    #    dev/sit/uat reaching public deepseek: set to the egress-proxy / provider CIDR.
+    #    If a given environment has no LLM egress (e.g. AI Generate disabled), delete
+    #    this rule so nothing on 443 is opened.
+    - to:
+        - ipBlock:
+            cidr: __AP_EGRESS_LLM_CIDR__
+      ports:
+        - protocol: TCP
+          port: 443

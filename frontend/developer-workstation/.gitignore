@@ -1,0 +1,4 @@
+
+# ServiceTask builder bundle — build artifact copied from activepieces/dist/packages/web-embed
+# by scripts/sync-service-task-builder.mjs (prebuild). Never committed.
+public/service-task-builder/

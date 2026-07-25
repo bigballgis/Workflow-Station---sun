@@ -69,6 +69,16 @@
           </span>
         </div>
         <div class="filter-actions">
+          <!-- 图标 / 卡片 视图切换：整个开关都是点击区 -->
+          <el-switch
+            v-model="isCardView"
+            class="view-switch"
+            inline-prompt
+            size="large"
+            :active-icon="Postcard"
+            :inactive-icon="Grid"
+            :title="isCardView ? t('functionUnit.viewIcon') : t('functionUnit.viewCard')"
+          />
           <el-button
             v-if="permissions.canCreate()"
             @click="showImportDialog = true"
@@ -173,23 +183,63 @@
         </el-empty>
       </div>
 
-      <!-- Grid Layout -->
+      <!-- Launchpad Grid：图标 / 卡片双视图；拖到两侧重排，拖到中间合并成组 -->
       <div
         v-else
-        class="function-unit-grid"
+        class="launchpad-grid"
+        :class="`launchpad-grid--${viewMode}`"
+        @dragover.prevent
+        @drop.prevent="onDropToEnd"
       >
-        <FunctionUnitCard
-          v-for="item in filteredList"
-          :key="item.id"
-          :item="item"
-          :tags="getItemTags(item)"
-          @click="handleEdit"
-          @edit="handleEdit"
-          @settings="handleSettings"
-          @clone="handleClone"
-          @delete="handleDelete"
-          @restore="handleRestore"
-        />
+        <div
+          v-for="entry in visibleEntries"
+          :key="entryKey(entry)"
+          class="launchpad-cell"
+          :class="cellClasses(entryKey(entry))"
+          draggable="true"
+          @dragstart="onDragStart(entry)"
+          @dragend="onDragEnd"
+          @dragover.prevent.stop="onDragOver(entry, $event)"
+          @dragleave="onDragLeave(entry)"
+          @drop.prevent.stop="onDrop(entry)"
+        >
+          <template v-if="viewMode === 'icon'">
+            <LaunchpadTile
+              v-if="entry.type === 'item' && itemOf(entry.id)"
+              :item="itemOf(entry.id)!"
+              @open="handleEdit"
+              @settings="handleSettings"
+              @clone="handleClone"
+              @restore="handleRestore"
+              @delete="handleDelete"
+            />
+            <LaunchpadFolderTile
+              v-else-if="entry.type === 'folder'"
+              :folder="entry"
+              :items="folderItems(entry)"
+              @open="openFolderId = entry.id"
+            />
+          </template>
+          <template v-else>
+            <FunctionUnitCard
+              v-if="entry.type === 'item' && itemOf(entry.id)"
+              :item="itemOf(entry.id)!"
+              :tags="getItemTags(itemOf(entry.id)!)"
+              @click="handleEdit"
+              @edit="handleEdit"
+              @settings="handleSettings"
+              @clone="handleClone"
+              @restore="handleRestore"
+              @delete="handleDelete"
+            />
+            <LaunchpadFolderCard
+              v-else-if="entry.type === 'folder'"
+              :folder="entry"
+              :items="folderItems(entry)"
+              @open="openFolderId = entry.id"
+            />
+          </template>
+        </div>
       </div>
 
       <!-- Pagination -->
@@ -308,6 +358,21 @@
       </template>
     </el-dialog>
 
+    <!-- 分组展开浮层（iOS 文件夹） -->
+    <LaunchpadFolderOverlay
+      :folder="openedFolder"
+      :items="openedFolderItems"
+      @close="openFolderId = null"
+      @open-item="handleEdit"
+      @settings="handleSettings"
+      @clone="handleClone"
+      @restore="handleRestore"
+      @delete="handleDelete"
+      @remove="(fid: string, item: FunctionUnitResponse) => removeFromFolder(fid, item.id)"
+      @rename="renameFolder"
+      @reorder="reorderInFolder"
+    />
+
     <!-- Import Dialog -->
     <FunctionUnitImportDialog
       v-model="showImportDialog"
@@ -360,21 +425,30 @@
 
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, Upload, Download } from '@element-plus/icons-vue'
+import { Search, Plus, Upload, Download, Grid, Postcard } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { type FunctionUnitResponse } from '@/api/functionUnit'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
+import LaunchpadTile from '@/components/function-unit/LaunchpadTile.vue'
+import LaunchpadFolderTile from '@/components/function-unit/LaunchpadFolderTile.vue'
+import LaunchpadFolderCard from '@/components/function-unit/LaunchpadFolderCard.vue'
+import LaunchpadFolderOverlay from '@/components/function-unit/LaunchpadFolderOverlay.vue'
 import FunctionUnitImportDialog from '@/components/function-unit/FunctionUnitImportDialog.vue'
 import { isAuthenticated } from '@/api/auth'
 import { permissions } from '@/utils/permission'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { useFunctionUnitFilters } from '@/composables/functionUnitList/useFunctionUnitFilters'
+import {
+  useLaunchpadLayout,
+  keyOf as entryKey,
+  type LaunchpadFolderEntry,
+} from '@/composables/functionUnitList/useLaunchpadLayout'
 import { useFunctionUnitForm } from '@/composables/functionUnitList/useFunctionUnitForm'
 import { useFunctionUnitExport } from '@/composables/functionUnitList/useFunctionUnitExport'
 
@@ -439,6 +513,79 @@ const {
   initExportSelection,
   handleExport,
 } = useFunctionUnitExport({ list: storeList, filteredList })
+
+// ==================== Launchpad（iOS 图标布局 + 拖拽 + 分组） ====================
+const {
+  visibleEntries,
+  itemById,
+  draggingKey,
+  dropTarget,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDropToEnd,
+  folderById,
+  renameFolder,
+  reorderInFolder,
+  removeFromFolder,
+} = useLaunchpadLayout({
+  list: storeList,
+  visibleList: filteredList,
+  defaultGroupName: () => t('functionUnit.newGroup'),
+})
+
+// 图标 / 卡片视图切换（默认图标），选择持久化
+const VIEW_MODE_KEY = 'dw-fu-launchpad-view'
+const viewMode = ref<'icon' | 'card'>(
+  localStorage.getItem(VIEW_MODE_KEY) === 'card' ? 'card' : 'icon'
+)
+watch(viewMode, (v) => {
+  try {
+    localStorage.setItem(VIEW_MODE_KEY, v)
+  } catch {
+    // 存储不可用时仅本次会话生效
+  }
+})
+
+// el-switch 的布尔模型：开 = 卡片视图，关 = 图标视图
+const isCardView = computed({
+  get: () => viewMode.value === 'card',
+  set: (v: boolean) => { viewMode.value = v ? 'card' : 'icon' },
+})
+
+const openFolderId = ref<string | null>(null)
+// 布局对账可能解散正打开的分组（如删除成员后不足 2 个），computed 会自动关浮层
+const openedFolder = computed<LaunchpadFolderEntry | null>(() =>
+  openFolderId.value ? folderById(openFolderId.value) ?? null : null
+)
+const openedFolderItems = computed<FunctionUnitResponse[]>(() =>
+  openedFolder.value
+    ? openedFolder.value.itemIds
+      .map((id) => itemById.value.get(id))
+      .filter((i): i is FunctionUnitResponse => !!i)
+    : []
+)
+
+function itemOf(id: number): FunctionUnitResponse | undefined {
+  return itemById.value.get(id)
+}
+
+function folderItems(entry: LaunchpadFolderEntry): FunctionUnitResponse[] {
+  return entry.itemIds
+    .map((id) => itemById.value.get(id))
+    .filter((i): i is FunctionUnitResponse => !!i)
+}
+
+function cellClasses(key: string) {
+  return {
+    'is-dragging': draggingKey.value === key,
+    'drop-before': dropTarget.value?.key === key && dropTarget.value.mode === 'before',
+    'drop-after': dropTarget.value?.key === key && dropTarget.value.mode === 'after',
+    'drop-merge': dropTarget.value?.key === key && dropTarget.value.mode === 'merge',
+  }
+}
 
 function handleEdit(item: FunctionUnitResponse) {
   router.push(`/function-units/${item.id}`)
@@ -555,6 +702,93 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
+}
+
+// ==================== 视图切换开关 ====================
+// 开 = 卡片视图（红），关 = 图标视图（灰）；图标嵌在开关内
+.view-switch {
+  // 关态也给个实色底，避免看起来像禁用
+  --el-switch-off-color: #b8bcc4;
+}
+
+// ==================== Launchpad（图标 / 卡片双视图 + 拖拽重排/合组） ====================
+.launchpad-grid {
+  align-content: start;
+  min-height: 320px; // 空白区域也可接收「拖到末尾」
+
+  &--icon {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+    gap: 26px 10px;
+    padding: 20px 4px;
+    justify-items: center;
+  }
+
+  &--card {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+}
+
+.launchpad-cell {
+  position: relative;
+  border-radius: 12px;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+
+  &.is-dragging {
+    opacity: 0.35;
+  }
+
+  // 合并成组候选：目标放大 + 品牌红描边
+  &.drop-merge {
+    :deep(.function-unit-card),
+    :deep(.folder-card),
+    :deep(.tile-icon),
+    :deep(.folder-icon) {
+      box-shadow: 0 0 0 3px var(--primary-color), 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+  }
+
+  // 插入排序指示条
+  &.drop-before::before,
+  &.drop-after::after {
+    content: '';
+    position: absolute;
+    top: 16px;
+    bottom: 16px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--primary-color);
+    z-index: 4;
+  }
+}
+
+.launchpad-grid--card .launchpad-cell {
+  &.drop-merge {
+    transform: scale(1.02);
+  }
+
+  &.drop-before::before { left: -11px; }
+  &.drop-after::after { right: -11px; }
+}
+
+.launchpad-grid--icon .launchpad-cell {
+  padding: 6px;
+  border-radius: 24px;
+
+  &.drop-merge {
+    transform: scale(1.08);
+  }
+
+  &.drop-before::before,
+  &.drop-after::after {
+    top: 10px;
+    bottom: 28px;
+  }
+
+  &.drop-before::before { left: -6px; }
+  &.drop-after::after { right: -6px; }
 }
 
 .skeleton-card {

@@ -75,6 +75,8 @@ const docLabel = computed(() =>
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/ai-tokens.scss' as ai;
+
 .inline-doc-viewer {
   margin: 8px 16px;
 }
@@ -84,26 +86,30 @@ const docLabel = computed(() =>
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  background: ai.$ai-paper;
+  border: 1px solid ai.$ai-hairline;
+  border-left: 2px solid ai.$ai-red;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: box-shadow 0.2s;
 
   &:hover {
-    background: #ebeef5;
+    box-shadow: 0 2px 8px rgba(35, 40, 46, 0.06);
   }
 }
 
 .inline-doc-viewer__label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: #606266;
+  color: ai.$ai-ink;
 }
 
 .inline-doc-viewer__expanded {
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
+  border: 1px solid ai.$ai-hairline;
+  border-left: 2px solid ai.$ai-red;
+  border-radius: 6px;
   overflow-y: auto;
+  background: ai.$ai-paper;
 }
 
 .inline-doc-viewer__header {
@@ -111,8 +117,8 @@ const docLabel = computed(() =>
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid #ebeef5;
-  background: #fafafa;
+  border-bottom: 1px solid ai.$ai-hairline;
+  background: ai.$ai-paper;
   position: sticky;
   top: 0;
   z-index: 1;

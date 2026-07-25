@@ -110,5 +110,5 @@ file-service:
   base-url: ${FILE_SERVICE_BASE_URL:http://developer-workstation:8080}
 
 # Activepieces runtime — internal Docker address (AP container listens on :80)
-activepieces:
+service-task:
   webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://activepieces:80}

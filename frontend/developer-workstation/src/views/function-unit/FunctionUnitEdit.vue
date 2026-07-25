@@ -89,6 +89,15 @@
           />
         </el-tab-pane>
         <el-tab-pane
+          :label="t('functionUnit.automation')"
+          name="service-task"
+        >
+          <ServiceTaskDesigner
+            v-if="activeTab === 'service-task'"
+            :function-unit-id="functionUnitId"
+          />
+        </el-tab-pane>
+        <el-tab-pane
           :label="t('functionUnit.tables')"
           name="tables"
         >
@@ -458,6 +467,7 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
+import ServiceTaskDesigner from '@/components/serviceTask/ServiceTaskDesigner.vue'
 import TableDesigner from '@/components/designer/TableDesigner.vue'
 import FormDesigner from '@/components/designer/FormDesigner.vue'
 import MainTableViewDesignTab from '@/components/designer/MainTableViewDesignTab.vue'

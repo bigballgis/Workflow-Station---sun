@@ -82,6 +82,11 @@ server:
 admin-center:
   url: ${ADMIN_CENTER_URL:http://localhost:8090}
 
+# C-3 (docs/ap-integration/DECISIONS.md#d6): 调用 admin-center 时附带的可信服务密钥，
+# 使 admin-center 信任转发的 X-User-Id。须与 admin-center service.internal-token 一致。
+service:
+  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+
 # Workflow Engine Core URL for API calls
 workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}

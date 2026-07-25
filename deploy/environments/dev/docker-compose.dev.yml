@@ -144,11 +144,16 @@ services:
   # Non-prod: UI login via the edge gateway shared-account (see nginx :8085 + bridge).
   # Shares the platform Postgres/Redis. Runs the engine + UI + API on container :80.
   activepieces:
-    # Custom image = upstream 0.84.0 + allowlisted pieces pre-installed + Approvals-tab
-    # patch (see deploy/pieces/README.md). Build once: docker compose build activepieces
+    # HERMES vendored image: EE-removed + de-bunned Activepieces 0.84.0, built from the
+    # in-repo source tree (activepieces/) via its own Dockerfile. Replaces the old
+    # deploy/pieces image (upstream binary + pre-installed pieces + Approvals-tab patch):
+    # EE is stripped (AG-EE), bun is gone (X-4, pnpm/Node), the Approvals/Todos piece is
+    # out of the v1 whitelist (Q9), and pieces install at runtime via pnpm (isolated linker).
+    # Build (heavy — full monorepo): docker compose build activepieces
     build:
-      context: ../../pieces
-    image: activepieces:0.84.0-pieces
+      context: ../../../activepieces
+      dockerfile: Dockerfile
+    image: activepieces:0.84.0-ee-removed
     container_name: platform-activepieces-dev
     depends_on:
       postgres:
@@ -165,7 +170,29 @@ services:
       - "80"
     # ports:
     #   - "${ACTIVEPIECES_PORT:-8086}:80"   # raw AP UI — keep DISABLED outside emergencies
+    # >>> SANDBOX BASELINE — decision D6 (2026-07-23). NOT an experiment; do not remove. <<<
+    # See docs/ap-integration/DECISIONS.md#d6.
+    # SYS_ADMIN was deliberately NOT granted: security policy forbids privilege
+    # escalation, and it conflicts with K8s Pod Security Standards `restricted`.
+    # That rules out isolate(1) process sandboxing (it needs SYS_ADMIN to clone()
+    # namespaces — otherwise every run dies with "Cannot run proxy, clone failed"),
+    # so the baseline drops to SANDBOX_CODE_ONLY.
+    # NET_ADMIN is kept for parity with production, but is currently INERT: the
+    # iptables owner-uid egress chain (AP_EGRESS_LOCKDOWN) is only installed in the
+    # isolate process-sandbox modes. Verified 2026-07-23: OUTPUT policy ACCEPT, no
+    # AP_EGRESS_LOCKDOWN chain, all processes uid=0, raw socket reaches admin-center.
+    # Only the app-layer egress proxy survives (piece HTTP to internal targets → 403).
+    # Residual exposure is PIECE code (in-process, can bypass the proxy), NOT CODE
+    # steps (isolated-vm has no network primitives). Compensating controls C-1
+    # (NetworkPolicy) and C-3 (drop bare X-User-Id at the bridge) are REQUIRED before
+    # production and are not yet implemented.
+    cap_add:
+      - NET_ADMIN
     environment:
+      # 0.84 ships UNSANDBOXED + UNRESTRICTED (neither layer isolates, no egress limits).
+      AP_EXECUTION_MODE: SANDBOX_CODE_ONLY
+      AP_NETWORK_MODE: STRICT
+    # <<< SANDBOX BASELINE (D6) >>>
       AP_DB_TYPE: POSTGRES
       AP_POSTGRES_HOST: postgres
       AP_POSTGRES_PORT: 5432
@@ -191,9 +218,10 @@ services:
       # comes ONLY from the piece_metadata table — no cloud.activepieces.com sync, no
       # public-npm installs, no cloud OAuth2 apps. Pieces must be provisioned internally,
       # so a fresh rebuild starts with an EMPTY piece catalog.
-      AP_PIECES_SOURCE: DB
-      # SOURCE=DB alone is NOT enough: the background sync job (default OFFICIAL_AUTO)
-      # still re-downloads piece metadata from cloud.activepieces.com into the DB.
+      # NOTE: AP 0.84.0 has no AP_PIECES_SOURCE variable (verified by full-repo grep);
+      # the offline switch that actually works is SYNC_MODE=NONE, which makes
+      # piece-sync-service skip the cloud metadata sync (default OFFICIAL_AUTO
+      # re-downloads piece metadata from cloud.activepieces.com into the DB).
       AP_PIECES_SYNC_MODE: NONE
       AP_CLOUD_AUTH_ENABLED: "false"
       # Runtime piece installs use bun, which honors NPM_CONFIG_REGISTRY. Empty (dev
@@ -341,6 +369,8 @@ services:
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
       SPRING_FLYWAY_ENABLED: "false"
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
+      # C-3 (DECISIONS.md#d6): 可信服务密钥；admin-center 凭此校验裸 X-User-Id。AP 服务不得配置此项。
+      SERVICE_INTERNAL_TOKEN: ${SERVICE_INTERNAL_TOKEN:-dev-service-internal-token-change-me}
       # 默认与 edge-frontend（EDGE_FRONTEND_PORT）单源路径一致；直连前端端口时见 application.yml 额外前缀
       SSO_REDIRECT_ADMIN_PREFIX: ${SSO_REDIRECT_ADMIN_PREFIX:-http://localhost:3000/admin/sso/callback}
       SSO_REDIRECT_ADMIN_HTTP_PREFIX: ${SSO_REDIRECT_ADMIN_HTTP_PREFIX:-http://localhost:3000/admin/sso/callback}
@@ -464,6 +494,8 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
       PORTAL_INTERNAL_API_TOKEN: ${PORTAL_INTERNAL_API_TOKEN:-dev-portal-internal-token-change-me}
+      # C-3 (DECISIONS.md#d6): 可信服务密钥；调用 admin-center 时附带，使其信任转发的 X-User-Id。
+      SERVICE_INTERNAL_TOKEN: ${SERVICE_INTERNAL_TOKEN:-dev-service-internal-token-change-me}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -504,6 +536,8 @@ services:
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
       SPRING_FLYWAY_ENABLED: false
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
+      # C-3 (DECISIONS.md#d6): 可信服务密钥；调用 admin-center 时附带，使其信任转发的 X-User-Id。
+      SERVICE_INTERNAL_TOKEN: ${SERVICE_INTERNAL_TOKEN:-dev-service-internal-token-change-me}
       FILE_UPLOAD_BASE_URL: /api/v1/upload/files
       # AI Generate 对话已从 n8n 迁移到 Activepieces 同步 webhook(flowId 按环境不同)。
       AI_GENERATION_WEBHOOK_URL: ${AI_GENERATION_WEBHOOK_URL:-http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}

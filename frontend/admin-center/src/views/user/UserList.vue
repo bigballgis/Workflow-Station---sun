@@ -146,7 +146,7 @@
         </el-table-column>
         <el-table-column
           :label="t('common.actions')"
-          width="200"
+          width="140"
           fixed="right"
         >
           <template #header>
@@ -179,10 +179,9 @@
                   link
                   type="primary"
                   size="small"
+                  :title="t('common.operation')"
                 >
-                  {{ t('common.operation') }}<el-icon class="el-icon--right">
-                    <ArrowDown />
-                  </el-icon>
+                  <el-icon><MoreFilled /></el-icon>
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
@@ -259,9 +258,9 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { 
-  Plus, Search, Refresh, ArrowDown, 
-  CircleCheck, CircleClose, Unlock, Key, Delete 
+import {
+  Plus, Search, Refresh, MoreFilled,
+  CircleCheck, CircleClose, Unlock, Key, Delete
 } from '@element-plus/icons-vue'
 import { statusTagType, userStatusKey } from '@/utils/format'
 import { useUser } from '@/composables/modules/useUser'
