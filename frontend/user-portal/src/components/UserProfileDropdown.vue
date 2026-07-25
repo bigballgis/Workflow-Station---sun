@@ -209,16 +209,24 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
   color: white;
-  
+
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.12);
   }
-  
+
   .user-name {
     font-size: 14px;
+    font-weight: 500;
+  }
+
+  // 红顶栏上的头像：白底红字（与 admin-center 一致）
+  :deep(.el-avatar) {
+    background: #fff;
+    color: var(--primary-color, #db0011);
+    font-weight: 600;
   }
 }
 

@@ -1,0 +1,154 @@
+// Workflow Station 统一设计系统（三端镜像：admin-center 为源，user-portal / developer-workstation 同步）
+// 内容：设计令牌 + Inter 字体 + Element Plus 覆盖（胶囊按钮 / 卡片 / 账册风格表格 / 软色标签 / 圆角输入）
+// 注意：Element Plus 的 per-component CSS 是懒加载 chunk，会晚于全局样式加载并重置
+// 组件上的 CSS 变量，因此下方一律用提权选择器（双类名 / thead）压住。
+
+:root {
+  --primary-color: #db0011;
+  --primary-light: #f5222d;
+  --primary-dark: #a8000d;
+  --primary-soft: #fdebed;      // 红色浅底：图标砖 / 进度轨道 / hover 背景
+
+  --ws-ink: #161616;            // 墨色（表头规则线等）
+  --ws-canvas: #f5f7fa;         // 主内容画布
+  --ws-card-bg: #ffffff;
+  --ws-card-border: #ececea;
+  --ws-line: #f0f0ee;           // 表格行分隔线
+  --ws-text: #1a1a1a;
+  --ws-text-secondary: #6f6f6f;
+  --ws-text-muted: #9c9c9c;
+  --ws-radius-card: 14px;
+  --ws-radius-input: 8px;
+
+  // Element Plus 主色板整体切到品牌红（复选框/分页/链接/开关等跟随）
+  --el-color-primary: var(--primary-color);
+  --el-color-primary-light-3: #e84b56;
+  --el-color-primary-light-5: #f08a91;
+  --el-color-primary-light-7: #f7bcc0;
+  --el-color-primary-light-8: #fad3d6;
+  --el-color-primary-light-9: #fdebed;
+  --el-color-primary-dark-2: var(--primary-dark);
+
+  // Inter Variable（自托管，main.ts 引入）负责西文与数字；中文回退系统黑体
+  --el-font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+html, body, #app {
+  font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+// ==================== 按钮：胶囊造型 ====================
+.el-button {
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.el-button.is-circle {
+  border-radius: 50%;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--primary-color);
+  --el-button-border-color: var(--primary-color);
+  --el-button-hover-bg-color: var(--primary-light);
+  --el-button-hover-border-color: var(--primary-light);
+  --el-button-active-bg-color: var(--primary-dark);
+  --el-button-active-border-color: var(--primary-dark);
+}
+
+// ==================== 卡片 ====================
+.el-card {
+  --el-card-border-color: var(--ws-card-border);
+  --el-card-border-radius: var(--ws-radius-card);
+  box-shadow: 0 1px 2px rgba(20, 20, 20, 0.04);
+
+  .el-card__header {
+    font-weight: 600;
+    color: var(--ws-text);
+    border-bottom-color: var(--ws-line);
+  }
+}
+
+// ==================== 表格：编辑部风格 ====================
+// 表头不用色块：小号大写字距标签 + 表头下 2px 墨色规则线；行距放宽，hover 冷灰。
+.el-table.el-table {
+  --el-table-border-color: var(--ws-line);
+  --el-table-header-bg-color: #ffffff;
+  --el-table-header-text-color: #8f8f8a;
+  --el-table-row-hover-bg-color: #f7f8fa;
+
+  thead th.el-table__cell {
+    background-color: #ffffff; // sticky 固定列需要实色底
+    color: #8f8f8a;
+    font-weight: 600;
+    border-bottom: 2px solid var(--ws-ink);
+
+    .cell {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+  }
+
+  // 固定列（sticky）表头：EP 有 `background: inherit` 的同权规则，需类名更多才能压过
+  thead th.el-table__cell.el-table-fixed-column--right,
+  thead th.el-table__cell.el-table-fixed-column--left {
+    background-color: #ffffff;
+  }
+
+  .el-table__body tr:hover > td.el-table__cell {
+    background-color: var(--el-table-row-hover-bg-color);
+  }
+}
+
+// 默认尺寸表格行距放宽；size="small" 的嵌套小表保持紧凑
+.el-table--default td.el-table__cell {
+  padding: 13px 0;
+}
+
+// 斑马纹底色调轻
+.el-table.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background-color: #fafbfc;
+}
+
+// ==================== 标签：无边框软色胶囊 ====================
+.el-tag.el-tag {
+  border: none;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.el-tag.el-tag.el-tag--success {
+  --el-tag-bg-color: #e6f5eb;
+  --el-tag-text-color: #1f7a40;
+}
+
+.el-tag.el-tag.el-tag--info {
+  --el-tag-bg-color: #f0f0ee;
+  --el-tag-text-color: #6f6f6f;
+}
+
+.el-tag.el-tag.el-tag--warning {
+  --el-tag-bg-color: #fbf0dd;
+  --el-tag-text-color: #a36a00;
+}
+
+.el-tag.el-tag.el-tag--danger,
+.el-tag.el-tag.el-tag--primary {
+  --el-tag-bg-color: var(--primary-soft);
+  --el-tag-text-color: #c00011;
+}
+
+// ==================== 输入 / 弹窗 ====================
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: var(--ws-radius-input);
+}
+
+.el-dialog {
+  border-radius: var(--ws-radius-card);
+}

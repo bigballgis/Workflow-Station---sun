@@ -163,6 +163,13 @@ export default {
   },
   dashboard: {
     title: '首頁',
+    greetingMorning: '早安，{name}',
+    greetingAfternoon: '午安，{name}',
+    greetingEvening: '晚安，{name}',
+    startRequest: '新建申請',
+    needsAction: '需要你處理',
+    viewTeamRequests: '查看團隊申請',
+    dueBy: '截止 {date}',
     taskOverview: '我的任務概覽',
     teamTaskOverview: '團隊任務概覽',
     processOverview: '流程概覽',

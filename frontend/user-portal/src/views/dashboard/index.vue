@@ -1,379 +1,248 @@
 <template>
   <div class="dashboard-page">
-    <div class="page-header">
-      <h1>{{ t('dashboard.title') }}</h1>
+    <!-- 报头式「今日台账」：问候 + 日期 | 待办/逾期/今日完成 内联大数字 + 新建申请 CTA -->
+    <header class="day-masthead">
+      <div class="masthead-left">
+        <h1 class="greeting">
+          {{ greetingText }}
+        </h1>
+        <p class="dateline">
+          {{ dateLine }}
+        </p>
+      </div>
+      <div class="masthead-right">
+        <div class="day-ledger">
+          <router-link
+            to="/tasks"
+            class="ledger-item is-link"
+          >
+            <span class="ledger-num">{{ loading ? '–' : taskOverview.pendingCount }}</span>
+            <span class="ledger-label">{{ t('dashboard.pendingTasks') }}</span>
+          </router-link>
+          <div
+            class="ledger-item"
+            :class="{ 'is-alert': !loading && taskOverview.overdueCount > 0 }"
+          >
+            <span class="ledger-num">{{ loading ? '–' : taskOverview.overdueCount }}</span>
+            <span class="ledger-label">{{ t('dashboard.overdueTasks') }}</span>
+          </div>
+          <router-link
+            to="/tasks/completed"
+            class="ledger-item is-link"
+          >
+            <span class="ledger-num">{{ loading ? '–' : taskOverview.completedTodayCount }}</span>
+            <span class="ledger-label">{{ t('dashboard.completedToday') }}</span>
+          </router-link>
+        </div>
+        <el-button
+          type="primary"
+          round
+          class="masthead-cta"
+          @click="$router.push('/processes')"
+        >
+          {{ t('dashboard.startRequest') }}
+        </el-button>
+      </div>
+    </header>
+    <div class="masthead-rule">
+      <span class="rule-accent" />
     </div>
 
     <el-row :gutter="20">
-      <!-- 任务概览 -->
-      <el-col :span="12">
-        <div class="portal-card">
-          <div class="card-header">
-            <span class="card-title">{{ t('dashboard.taskOverview') }}</span>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="8">
-              <div class="stat-item">
-                <div class="stat-number">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <router-link
-                    v-else
-                    to="/tasks"
-                    class="stat-link"
-                  >
-                    {{ taskOverview.pendingCount }}
-                  </router-link>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.pendingTasks') }}
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="8">
-              <div class="stat-item">
-                <div class="stat-number error">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <template v-else>{{ taskOverview.overdueCount }}</template>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.overdueTasks') }}
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="8">
-              <div class="stat-item">
-                <div class="stat-number success">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <router-link
-                    v-else
-                    to="/tasks/completed"
-                    class="stat-link"
-                  >
-                    {{ taskOverview.completedTodayCount }}
-                  </router-link>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.completedToday') }}
-                </div>
-              </div>
-            </el-col>
-          </el-row>
-          <el-divider />
-          <div class="card-header">
+      <!-- 左栏：需要你处理（任务台账） -->
+      <el-col
+        :lg="16"
+        :xs="24"
+        class="col-main"
+      >
+        <section class="ledger-card tasks-card">
+          <header class="card-head">
+            <span class="eyebrow">{{ t('dashboard.needsAction') }}</span>
             <span
-              class="card-title team-title-link"
-              @click="openTeamRequestsDialog"
-            >{{ t('dashboard.teamTaskOverview') }}</span>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="8">
-              <div class="stat-item small">
-                <div class="stat-value">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading-sm"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <template v-else>{{ taskOverview.teamPendingCount }}</template>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.teamPendingTasks') }}
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="8">
-              <div class="stat-item small">
-                <div class="stat-value error">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading-sm"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <template v-else>{{ taskOverview.teamOverdueCount }}</template>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.teamOverdueTasks') }}
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="8">
-              <div class="stat-item small">
-                <div class="stat-value success">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading-sm"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <template v-else>{{ taskOverview.teamCompletedTodayCount }}</template>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.teamCompletedToday') }}
-                </div>
-              </div>
-            </el-col>
-          </el-row>
-        </div>
-      </el-col>
+              v-if="!loading && taskOverview.pendingCount > 0"
+              class="count-pill"
+            >{{ taskOverview.pendingCount }}</span>
+            <router-link
+              to="/tasks"
+              class="head-link"
+            >
+              {{ t('dashboard.viewAll') }} →
+            </router-link>
+          </header>
 
-      <!-- 流程概览 -->
-      <el-col :span="12">
-        <div class="portal-card">
-          <div class="card-header">
-            <span class="card-title">{{ t('dashboard.processOverview') }}</span>
-          </div>
-          <el-row :gutter="16">
-            <el-col :span="8">
-              <div class="stat-item">
-                <div class="stat-number">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <template v-else>{{ processOverview.initiatedCount }}</template>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.initiatedProcesses') }}
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="8">
-              <div class="stat-item">
-                <div class="stat-number warning">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <template v-else>{{ processOverview.inProgressCount }}</template>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.inProgressProcesses') }}
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="8">
-              <div class="stat-item">
-                <div class="stat-number success">
-                  <el-icon
-                    v-if="loading"
-                    class="is-loading dashboard-inline-loading"
-                  >
-                    <Loading />
-                  </el-icon>
-                  <template v-else>{{ processOverview.completedThisMonthCount }}</template>
-                </div>
-                <div class="stat-label">
-                  {{ t('dashboard.completedThisMonth') }}
-                </div>
-              </div>
-            </el-col>
-          </el-row>
-          <el-divider />
-          <div class="approval-rate">
-            <span>{{ t('dashboard.approvalRate') }}</span>
-            <el-progress
-              :percentage="loading ? 0 : Math.round(processOverview.approvalRate * 100)"
-              :stroke-width="10"
-              color="var(--success-green)"
-            />
-          </div>
-        </div>
-      </el-col>
-    </el-row>
+          <el-skeleton
+            v-if="loading && recentTasks.length === 0"
+            :rows="5"
+            animated
+            class="card-skeleton"
+          />
 
-    <el-row
-      :gutter="20"
-      style="margin-top: 20px;"
-    >
-      <!-- 快捷操作 -->
-      <el-col :span="8">
-        <div class="portal-card">
-          <div class="card-header">
-            <span class="card-title">{{ t('dashboard.quickActions') }}</span>
-          </div>
-          <div class="quick-actions">
-            <div
-              class="action-item"
+          <ul
+            v-else-if="recentTasks.length > 0"
+            class="task-ledger"
+          >
+            <li
+              v-for="task in recentTasks"
+              :key="taskKey(task)"
+              class="task-row"
+              tabindex="0"
+              role="link"
+              @click="openTask(task)"
+              @keyup.enter="openTask(task)"
+            >
+              <span
+                class="prio-dot"
+                :class="getPriorityClass(task.priority)"
+              />
+              <div class="task-text">
+                <span class="task-name">{{ task.taskName || task.name }}</span>
+                <span class="task-process">{{ task.processDefinitionName || task.processName }}</span>
+              </div>
+              <div class="task-meta">
+                <span
+                  v-if="task.dueDate"
+                  class="task-due"
+                >{{ t('dashboard.dueBy', { date: formatDate(task.dueDate) }) }}</span>
+                <span
+                  class="prio-tag"
+                  :class="getPriorityClass(task.priority)"
+                >{{ getPriorityLabel(task.priority) }}</span>
+                <span class="row-arrow">→</span>
+              </div>
+            </li>
+          </ul>
+
+          <div
+            v-else
+            class="task-empty"
+          >
+            <p class="empty-text">
+              {{ t('dashboard.noTasks') }}
+            </p>
+            <el-button
+              round
               @click="$router.push('/processes')"
             >
-              <el-icon
-                :size="24"
-                color="var(--hsbc-red)"
-              >
-                <Plus />
-              </el-icon>
-              <span>{{ t('menu.processes') }}</span>
-            </div>
-            <div
-              class="action-item"
-              @click="$router.push('/tasks')"
-            >
-              <el-icon
-                :size="24"
-                color="var(--info-blue)"
-              >
-                <List />
-              </el-icon>
-              <span>{{ t('menu.tasks') }}</span>
-            </div>
-            <div
-              class="action-item"
-              @click="$router.push('/my-applications')"
-            >
-              <el-icon
-                :size="24"
-                color="var(--success-green)"
-              >
-                <Document />
-              </el-icon>
-              <span>{{ t('menu.myApplications') }}</span>
-            </div>
-            <div
-              class="action-item"
-              @click="$router.push('/delegations')"
-            >
-              <el-icon
-                :size="24"
-                color="var(--warning-orange)"
-              >
-                <Share />
-              </el-icon>
-              <span>{{ t('menu.delegations') }}</span>
-            </div>
-            <div
-              class="action-item"
-              @click="$router.push('/permissions')"
-            >
-              <el-icon
-                :size="24"
-                color="#722ed1"
-              >
-                <Key />
-              </el-icon>
-              <span>{{ t('menu.permissions') }}</span>
-            </div>
+              {{ t('dashboard.startRequest') }}
+            </el-button>
           </div>
-        </div>
+        </section>
       </el-col>
 
-      <!-- 个人绩效 -->
-      <el-col :span="8">
-        <div class="portal-card">
-          <div class="card-header">
-            <span class="card-title">{{ t('dashboard.performance') }}</span>
-          </div>
-          <div class="performance-scores">
-            <div class="score-item">
-              <span class="score-label">{{ t('dashboard.efficiencyScore') }}</span>
-              <el-progress
-                :percentage="loading ? 0 : Math.round(performanceOverview.efficiencyScore)"
-                :stroke-width="8"
-                color="var(--hsbc-red)"
-              />
+      <!-- 右栏：流程概览 / 团队台账 / 个人绩效 -->
+      <el-col
+        :lg="8"
+        :xs="24"
+        class="col-side"
+      >
+        <section class="ledger-card">
+          <header class="card-head">
+            <span class="eyebrow">{{ t('dashboard.processOverview') }}</span>
+          </header>
+          <div class="mini-ledger">
+            <div class="mini-item">
+              <span class="mini-num">{{ loading ? '–' : processOverview.initiatedCount }}</span>
+              <span class="ledger-label">{{ t('dashboard.initiatedProcesses') }}</span>
             </div>
-            <div class="score-item">
-              <span class="score-label">{{ t('dashboard.qualityScore') }}</span>
-              <el-progress
-                :percentage="loading ? 0 : Math.round(performanceOverview.qualityScore)"
-                :stroke-width="8"
-                color="var(--success-green)"
-              />
+            <div class="mini-item">
+              <span class="mini-num">{{ loading ? '–' : processOverview.inProgressCount }}</span>
+              <span class="ledger-label">{{ t('dashboard.inProgressProcesses') }}</span>
             </div>
-            <div class="score-item">
-              <span class="score-label">{{ t('dashboard.collaborationScore') }}</span>
-              <el-progress
-                :percentage="loading ? 0 : Math.round(performanceOverview.collaborationScore)"
-                :stroke-width="8"
-                color="var(--info-blue)"
-              />
+            <div class="mini-item">
+              <span class="mini-num">{{ loading ? '–' : processOverview.completedThisMonthCount }}</span>
+              <span class="ledger-label">{{ t('dashboard.completedThisMonth') }}</span>
             </div>
           </div>
-          <div class="rank-info">
-            <span>{{ t('dashboard.monthlyRank') }}:</span>
-            <span
-              v-if="loading"
-              class="rank-value rank-loading"
-            >
-              <el-icon class="is-loading dashboard-inline-loading-sm">
-                <Loading />
-              </el-icon>
+          <div class="meter-row">
+            <span class="meter-label">{{ t('dashboard.approvalRate') }}</span>
+            <span class="meter">
+              <span
+                class="meter-fill"
+                :style="{ width: loading ? '0%' : `${Math.round(processOverview.approvalRate * 100)}%` }"
+              />
             </span>
+            <span class="meter-value">{{ loading ? '–' : `${Math.round(processOverview.approvalRate * 100)}%` }}</span>
+          </div>
+        </section>
+
+        <section class="ledger-card">
+          <header class="card-head">
+            <span class="eyebrow">{{ t('dashboard.teamTaskOverview') }}</span>
+          </header>
+          <div class="mini-ledger">
+            <div class="mini-item">
+              <span class="mini-num">{{ loading ? '–' : taskOverview.teamPendingCount }}</span>
+              <span class="ledger-label">{{ t('dashboard.teamPendingTasks') }}</span>
+            </div>
+            <div
+              class="mini-item"
+              :class="{ 'is-alert': !loading && taskOverview.teamOverdueCount > 0 }"
+            >
+              <span class="mini-num">{{ loading ? '–' : taskOverview.teamOverdueCount }}</span>
+              <span class="ledger-label">{{ t('dashboard.teamOverdueTasks') }}</span>
+            </div>
+            <div class="mini-item">
+              <span class="mini-num">{{ loading ? '–' : taskOverview.teamCompletedTodayCount }}</span>
+              <span class="ledger-label">{{ t('dashboard.teamCompletedToday') }}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="card-foot-link"
+            @click="openTeamRequestsDialog"
+          >
+            {{ t('dashboard.viewTeamRequests') }} →
+          </button>
+        </section>
+
+        <section class="ledger-card">
+          <header class="card-head">
+            <span class="eyebrow">{{ t('dashboard.performance') }}</span>
+          </header>
+          <div class="score-list">
+            <div class="meter-row">
+              <span class="meter-label">{{ t('dashboard.efficiencyScore') }}</span>
+              <span class="meter">
+                <span
+                  class="meter-fill"
+                  :style="{ width: loading ? '0%' : `${Math.round(performanceOverview.efficiencyScore)}%` }"
+                />
+              </span>
+              <span class="meter-value">{{ loading ? '–' : Math.round(performanceOverview.efficiencyScore) }}</span>
+            </div>
+            <div class="meter-row">
+              <span class="meter-label">{{ t('dashboard.qualityScore') }}</span>
+              <span class="meter">
+                <span
+                  class="meter-fill"
+                  :style="{ width: loading ? '0%' : `${Math.round(performanceOverview.qualityScore)}%` }"
+                />
+              </span>
+              <span class="meter-value">{{ loading ? '–' : Math.round(performanceOverview.qualityScore) }}</span>
+            </div>
+            <div class="meter-row">
+              <span class="meter-label">{{ t('dashboard.collaborationScore') }}</span>
+              <span class="meter">
+                <span
+                  class="meter-fill"
+                  :style="{ width: loading ? '0%' : `${Math.round(performanceOverview.collaborationScore)}%` }"
+                />
+              </span>
+              <span class="meter-value">{{ loading ? '–' : Math.round(performanceOverview.collaborationScore) }}</span>
+            </div>
+          </div>
+          <div class="rank-line">
+            <span class="ledger-label">{{ t('dashboard.monthlyRank') }}</span>
+            <span
+              v-if="!loading"
+              class="rank-value"
+            >{{ t('dashboard.rankFormat', { rank: performanceOverview.monthlyRank, total: performanceOverview.totalUsers }) }}</span>
             <span
               v-else
               class="rank-value"
-            >
-              {{ t('dashboard.rankFormat', { rank: performanceOverview.monthlyRank, total: performanceOverview.totalUsers }) }}
-            </span>
+            >–</span>
           </div>
-        </div>
-      </el-col>
-
-      <!-- Recent Tasks -->
-      <el-col :span="8">
-        <div class="portal-card">
-          <div class="card-header">
-            <span class="card-title">{{ t('dashboard.recentTasks') }}</span>
-            <el-button
-              type="primary"
-              link
-              @click="$router.push('/tasks')"
-            >
-              {{ t('dashboard.viewAll') }}
-            </el-button>
-          </div>
-          <div class="recent-tasks">
-            <div
-              v-for="task in recentTasks"
-              :key="task.taskId"
-              class="task-item"
-            >
-              <div class="task-info">
-                <span class="task-name">{{ task.taskName }}</span>
-                <span class="task-process">{{ task.processDefinitionName }}</span>
-              </div>
-              <el-tag
-                :class="['priority-tag', getPriorityClass(task.priority)]"
-                size="small"
-              >
-                {{ getPriorityLabel(task.priority) }}
-              </el-tag>
-            </div>
-            <div
-              v-if="loading && recentTasks.length === 0"
-              class="recent-tasks-loading"
-            >
-              <el-icon class="is-loading">
-                <Loading />
-              </el-icon>
-              <span>{{ t('common.loading') }}</span>
-            </div>
-            <el-empty
-              v-else-if="recentTasks.length === 0"
-              :description="t('dashboard.noTasks')"
-            />
-          </div>
-        </div>
+        </section>
       </el-col>
     </el-row>
 
@@ -540,15 +409,17 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Plus, List, Document, Share, Key, Loading } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/dateFormat'
+import { getStoredUser } from '@/api/auth'
 import { useDashboardOverview } from '@/composables/dashboard/useDashboardOverview'
 import { useTeamRequests } from '@/composables/dashboard/useTeamRequests'
 import { useTaskPriority } from '@/composables/dashboard/useTaskPriority'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const router = useRouter()
 
 // 仪表盘概览数据（任务 / 流程 / 绩效 / 最近任务）
 const {
@@ -578,184 +449,480 @@ const {
 // 最近任务优先级标签与样式
 const { getPriorityLabel, getPriorityClass } = useTaskPriority()
 
+// 报头问候：按当前时段选键，带用户显示名
+const greetingText = computed(() => {
+  const hour = new Date().getHours()
+  const key = hour < 12 ? 'dashboard.greetingMorning'
+    : hour < 18 ? 'dashboard.greetingAfternoon'
+      : 'dashboard.greetingEvening'
+  const user = getStoredUser()
+  return t(key, { name: user?.displayName || user?.username || '' })
+})
+
+// 日期行随语言环境格式化（zh: 7月24日 星期五 / en: Friday, July 24）
+const dateLine = computed(() => new Intl.DateTimeFormat(locale.value, {
+  month: 'long',
+  day: 'numeric',
+  weekday: 'long'
+}).format(new Date()))
+
+// 后端最近任务字段有 taskId/taskName 与 id/name 两种形态，取键与跳转都做兼容
+interface RecentTaskLike {
+  taskId?: string
+  id?: string
+  taskName?: string
+  name?: string
+  processDefinitionName?: string
+  processName?: string
+  priority?: string | number
+  dueDate?: string
+}
+const taskKey = (task: RecentTaskLike) => task.taskId || task.id
+const openTask = (task: RecentTaskLike) => {
+  const id = taskKey(task)
+  if (id) router.push(`/tasks/${id}`)
+}
+
 onMounted(() => {
   loadDashboardData()
 })
 </script>
 
 <style lang="scss" scoped>
-.dashboard-page {
-  .dashboard-inline-loading {
-    font-size: 28px;
-    vertical-align: middle;
+// ==================== 报头台账 ====================
+.day-masthead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 8px 4px 18px;
+}
+
+.greeting {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ws-text);
+  line-height: 1.25;
+}
+
+.dateline {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ws-text-muted);
+}
+
+.masthead-right {
+  display: flex;
+  align-items: flex-end;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.day-ledger {
+  display: flex;
+  align-items: stretch;
+}
+
+.ledger-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 24px;
+  text-decoration: none;
+
+  & + .ledger-item {
+    border-left: 1px solid var(--ws-line);
   }
 
-  .dashboard-inline-loading-sm {
-    font-size: 22px;
-    vertical-align: middle;
+  &.is-link:hover .ledger-num {
+    color: var(--primary-color);
   }
 
-  .recent-tasks-loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 24px 0;
-    color: var(--text-secondary);
-    font-size: 14px;
+  &.is-alert .ledger-num {
+    color: var(--primary-color);
+  }
+}
+
+.ledger-num {
+  font-size: 32px;
+  font-weight: 650;
+  line-height: 1.1;
+  color: var(--ws-text);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.15s;
+}
+
+.ledger-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8f8f8a;
+  white-space: nowrap;
+}
+
+.masthead-cta {
+  margin-bottom: 4px;
+}
+
+// 报头下 2px 墨色规则线 + 左端品牌红短段（呼应表头规则线母题）
+.masthead-rule {
+  position: relative;
+  height: 2px;
+  background: var(--ws-ink);
+  margin-bottom: 20px;
+
+  .rule-accent {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 64px;
+    height: 2px;
+    background: var(--primary-color);
+  }
+}
+
+// ==================== 账册卡通用 ====================
+.ledger-card {
+  background: var(--ws-card-bg);
+  border: 1px solid var(--ws-card-border);
+  border-radius: var(--ws-radius-card);
+  padding: 18px 22px 20px;
+  box-shadow: 0 1px 2px rgba(20, 20, 20, 0.04);
+
+  .col-side & + .ledger-card {
+    margin-top: 20px;
+  }
+}
+
+.col-side .ledger-card:first-child {
+  margin-top: 0;
+}
+
+// xs 下右栏整体与左栏拉开距离
+@media (max-width: 1199px) {
+  .col-side .ledger-card:first-child {
+    margin-top: 20px;
+  }
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8f8f8a;
   }
 
-  .rank-loading {
+  .count-pill {
     display: inline-flex;
     align-items: center;
-    min-height: 24px;
+    justify-content: center;
+    min-width: 22px;
+    height: 18px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--primary-soft);
+    color: var(--primary-color);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 
-  .page-header {
-    margin-bottom: 20px;
-    
-    h1 {
-      font-size: 24px;
-      font-weight: 500;
-      color: var(--text-primary);
-      margin: 0;
-    }
-  }
-  
-  .stat-item {
-    text-align: center;
-    padding: 16px 0;
-    
-    &.small {
-      padding: 8px 0;
-      
-      .stat-value {
-        font-size: 20px;
-        font-weight: 600;
-        color: var(--text-primary);
-      }
-    }
-    
-    .stat-label {
-      font-size: 14px;
-      color: var(--text-secondary);
-      margin-top: 8px;
-    }
+  .head-link {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--ws-text-secondary);
+    text-decoration: none;
 
-    .stat-link {
-      color: inherit;
-      text-decoration: none;
-      &:hover {
-        text-decoration: underline;
-        cursor: pointer;
-      }
-    }
-  }
-
-  .team-title-link {
-    cursor: pointer;
     &:hover {
-      text-decoration: underline;
-      color: var(--el-color-primary);
+      color: var(--primary-color);
     }
   }
-  
-  .approval-rate {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    
-    span {
-      white-space: nowrap;
-      color: var(--text-secondary);
-    }
-    
-    .el-progress {
-      flex: 1;
+}
+
+.card-skeleton {
+  padding: 4px 0;
+}
+
+// ==================== 任务台账列表 ====================
+.task-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+  border-bottom: 1px solid var(--ws-line);
+  cursor: pointer;
+  transition: background-color 0.15s;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background-color: #f7f8fa;
+
+    .row-arrow {
+      opacity: 1;
+      transform: translateX(0);
     }
   }
-  
-  .quick-actions {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    
-    .action-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background-color 0.2s;
-      
-      &:hover {
-        background-color: var(--background-light);
-      }
-      
-      span {
-        font-size: 12px;
-        color: var(--text-secondary);
-      }
-    }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
   }
-  
-  .performance-scores {
-    .score-item {
-      margin-bottom: 16px;
-      
-      .score-label {
-        display: block;
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin-bottom: 8px;
-      }
-    }
-  }
-  
-  .rank-info {
-    display: flex;
-    justify-content: space-between;
-    padding-top: 16px;
-    border-top: 1px solid var(--border-color);
+}
+
+.prio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #9c9c9c;
+
+  &.urgent { background: var(--primary-color); }
+  &.high { background: #d98f00; }
+  &.normal { background: #b8b8b4; }
+  &.low { background: #d8d8d4; }
+}
+
+.task-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+
+  .task-name {
     font-size: 14px;
-    color: var(--text-secondary);
-    
-    .rank-value {
-      color: var(--hsbc-red);
-      font-weight: 500;
-    }
+    font-weight: 500;
+    color: var(--ws-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  
-  .recent-tasks {
-    .task-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border-color);
-      
-      &:last-child {
-        border-bottom: none;
-      }
-      
-      .task-info {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        
-        .task-name {
-          font-size: 14px;
-          color: var(--text-primary);
-        }
-        
-        .task-process {
-          font-size: 12px;
-          color: var(--text-secondary);
-        }
-      }
-    }
+
+  .task-process {
+    font-size: 12px;
+    color: var(--ws-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+
+  .task-due {
+    font-size: 12px;
+    color: var(--ws-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.prio-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+
+  &.urgent { background: var(--primary-soft); color: #c00011; }
+  &.high { background: #fbf0dd; color: #a36a00; }
+  &.normal { background: #f0f0ee; color: #6f6f6f; }
+  &.low { background: #f0f0ee; color: #9c9c9c; }
+}
+
+.row-arrow {
+  color: var(--primary-color);
+  font-size: 15px;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.task-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 48px 0;
+
+  .empty-text {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ws-text-muted);
+  }
+}
+
+// ==================== 右栏迷你台账 / 量表 ====================
+.mini-ledger {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+
+.mini-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  padding: 0 14px;
+
+  &:first-child {
+    padding-left: 0;
+  }
+
+  & + .mini-item {
+    border-left: 1px solid var(--ws-line);
+  }
+
+  &.is-alert .mini-num {
+    color: var(--primary-color);
+  }
+
+  .ledger-label {
+    white-space: normal;
+    line-height: 1.4;
+  }
+}
+
+.mini-num {
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--ws-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.meter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+
+  .meter-label {
+    flex-shrink: 0;
+    width: 5.5em;
+    font-size: 13px;
+    color: var(--ws-text-secondary);
+  }
+
+  .meter {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--primary-soft);
+    overflow: hidden;
+  }
+
+  .meter-fill {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--primary-color);
+    transition: width 0.5s ease-out;
+  }
+
+  .meter-value {
+    flex-shrink: 0;
+    min-width: 2.5em;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ws-text);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.score-list .meter-row:first-child {
+  padding-top: 0;
+}
+
+.card-foot-link {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 0 0;
+  border: none;
+  border-top: 1px solid var(--ws-line);
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--ws-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--primary-color);
+  }
+}
+
+.rank-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ws-line);
+
+  .rank-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary-color);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// ==================== 入场动效（尊重 reduced-motion） ====================
+@media (prefers-reduced-motion: no-preference) {
+  .day-masthead,
+  .masthead-rule {
+    animation: rise 0.4s ease-out both;
+  }
+
+  .col-main .ledger-card {
+    animation: rise 0.4s ease-out 0.06s both;
+  }
+
+  .col-side .ledger-card {
+    animation: rise 0.4s ease-out both;
+
+    &:nth-child(1) { animation-delay: 0.12s; }
+    &:nth-child(2) { animation-delay: 0.18s; }
+    &:nth-child(3) { animation-delay: 0.24s; }
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }
 </style>
@@ -780,22 +947,23 @@ onMounted(() => {
     }
 
     &.running {
-      background: #fdf6ec;
-      .team-summary-value { color: #e6a23c; }
+      background: #fbf0dd;
+      .team-summary-value { color: #a36a00; }
     }
     &.completed {
-      background: #f0f9eb;
-      .team-summary-value { color: #00A651; }
+      background: #e6f5eb;
+      .team-summary-value { color: #1f7a40; }
     }
     &.withdrawn {
-      background: #f4f4f5;
-      .team-summary-value { color: #909399; }
+      background: #f0f0ee;
+      .team-summary-value { color: #6f6f6f; }
     }
 
     .team-summary-value {
       font-size: 28px;
       font-weight: 700;
       color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
     }
 
     .team-summary-label {

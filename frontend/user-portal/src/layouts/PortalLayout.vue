@@ -1,35 +1,15 @@
 <template>
-  <el-container class="portal-layout">
-    <!-- 顶部导航栏 -->
-    <el-header class="portal-header">
-      <div class="header-left">
-        <div class="logo">
-          <img
-            src="/logo.svg"
-            alt="Logo"
-            class="logo-img"
-          >
-          <span class="logo-text">{{ t('app.name') }}</span>
-        </div>
+  <div class="portal-layout">
+    <!-- 左侧通高侧栏：品牌区 + 菜单 + 底部折叠（与 admin-center 同构） -->
+    <aside
+      class="portal-aside"
+      :class="{ 'is-collapsed': isCollapsed }"
+    >
+      <div class="brand">
+        <span class="brand-mark" />
+        <span class="brand-name">{{ t('app.name') }}</span>
       </div>
-      <div class="header-right">
-        <NotificationBadge />
-        <WorkspaceContextBar />
-        <UserProfileDropdown />
-      </div>
-    </el-header>
-
-    <SelfServiceBanner
-      :portal-access-mode="portalAccessMode"
-      :workspace-context-count="workspaceContextCount"
-    />
-
-    <el-container class="portal-main">
-      <!-- 左侧菜单 -->
-      <el-aside
-        :width="isCollapsed ? '64px' : '260px'"
-        class="portal-aside"
-      >
+      <el-scrollbar class="aside-scroll">
         <el-menu
           :default-active="activeMenu"
           :collapse="isCollapsed"
@@ -176,19 +156,46 @@
             </el-menu-item>
           </el-sub-menu>
         </el-menu>
-        <div
-          class="collapse-btn"
-          @click="toggleCollapse"
-        >
-          <el-icon :size="20">
-            <Fold v-if="!isCollapsed" />
-            <Expand v-else />
-          </el-icon>
-        </div>
-      </el-aside>
+      </el-scrollbar>
+      <div
+        class="collapse-btn"
+        @click="toggleCollapse"
+      >
+        <el-icon :size="20">
+          <Fold v-if="!isCollapsed" />
+          <Expand v-else />
+        </el-icon>
+      </div>
+    </aside>
 
-      <!-- 主内容区 -->
-      <el-main class="portal-content">
+    <!-- 右侧主体：红色顶栏（面包屑 + 通知/工作台/用户）+ 内容画布 -->
+    <div class="portal-body">
+      <header class="portal-header">
+        <nav class="breadcrumb">
+          <router-link
+            to="/dashboard"
+            class="crumb-home"
+          >
+            {{ t('menu.dashboard') }}
+          </router-link>
+          <template v-if="currentTitle && route.path !== '/dashboard'">
+            <span class="crumb-sep">/</span>
+            <span class="crumb-current">{{ currentTitle }}</span>
+          </template>
+        </nav>
+        <div class="header-right">
+          <NotificationBadge />
+          <WorkspaceContextBar />
+          <UserProfileDropdown />
+        </div>
+      </header>
+
+      <SelfServiceBanner
+        :portal-access-mode="portalAccessMode"
+        :workspace-context-count="workspaceContextCount"
+      />
+
+      <main class="portal-content">
         <router-view v-slot="{ Component }">
           <transition
             name="fade"
@@ -199,9 +206,9 @@
             </keep-alive>
           </transition>
         </router-view>
-      </el-main>
-    </el-container>
-  </el-container>
+      </main>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -246,6 +253,12 @@ const viewFunctionUnits = ref<FunctionUnitViewMenuItem[]>([])
 const viewFuLoading = ref(false)
 
 const activeMenu = computed(() => route.path)
+
+// 顶栏面包屑：当前页标题取路由 meta.titleKey（与 admin-center 同构）
+const currentTitle = computed(() => {
+  const key = route.meta.titleKey as string | undefined
+  return key ? t(key) : ''
+})
 
 /** 与 localStorage 解耦：路由守卫 saveUser 后 computed(getStoredUser) 不会重算，需 ref + /me 显式同步 */
 const portalAccessMode = ref<string | undefined>(getStoredUser()?.portalAccessMode)
@@ -335,8 +348,22 @@ const toggleCollapse = () => {
 </script>
 
 <style lang="scss" scoped>
+$aside-width: 248px; // 与 admin-center / developer-workstation 侧栏同宽
+$aside-collapsed-width: 64px;
+
 .portal-layout {
+  display: flex;
   height: 100vh;
+  overflow: hidden;
+  background-color: var(--ws-canvas);
+}
+
+// ==================== 右侧主体 ====================
+.portal-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .portal-header {
@@ -345,29 +372,11 @@ const toggleCollapse = () => {
   align-items: center;
   background: linear-gradient(135deg, var(--hsbc-red) 0%, #8B0000 100%);
   color: white;
-  padding: 0 20px;
+  padding: 0 24px;
   height: var(--header-height);
-  
-  .header-left {
-    display: flex;
-    align-items: center;
-    
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      
-      .logo-img {
-        height: 32px;
-      }
-      
-      .logo-text {
-        font-size: 18px;
-        font-weight: 600;
-      }
-    }
-  }
-  
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+
   .header-right {
     display: flex;
     align-items: center;
@@ -375,20 +384,125 @@ const toggleCollapse = () => {
   }
 }
 
-.portal-main {
-  height: calc(100vh - var(--header-height));
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+
+  .crumb-home {
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+
+  .crumb-sep {
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  .crumb-current {
+    color: #fff;
+    font-weight: 700;
+  }
 }
 
+.portal-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  background-color: var(--background-light);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+// ==================== 白色通高侧栏 ====================
 .portal-aside {
+  display: flex;
+  flex-direction: column;
+  width: $aside-width;
+  flex-shrink: 0;
   background: white;
   border-right: 1px solid var(--border-color);
   transition: width 0.3s;
-  display: flex;
-  flex-direction: column;
-  
+  overflow: hidden;
+
+  &.is-collapsed {
+    width: $aside-collapsed-width;
+
+    .brand {
+      justify-content: center;
+      padding: 0;
+    }
+
+    .brand-name {
+      display: none;
+    }
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: var(--header-height);
+    padding: 0 20px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #f0f0f0;
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--hsbc-red);
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      color: var(--ws-text);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+  }
+
+  .aside-scroll {
+    flex: 1;
+    min-height: 0;
+  }
+
   .portal-menu {
     flex: 1;
     border-right: none;
+    padding: 8px;
+
+    /* 与 admin-center 一致：圆角菜单条目 + 红色激活左条 */
+    :deep(.el-menu-item),
+    :deep(.el-sub-menu__title) {
+      height: 44px;
+      line-height: 44px;
+      margin: 2px 0;
+      border-radius: 10px;
+    }
+
+    :deep(.el-menu-item.is-active) {
+      font-weight: 600;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: -8px; // 贴到侧栏最左缘（抵消菜单容器 padding）
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 22px;
+        background-color: var(--hsbc-red);
+        border-radius: 0 3px 3px 0;
+      }
+    }
 
     /* 展开：徽标在菜单文字右侧；收起：徽标在图标上 */
     &:not(.el-menu--collapse) .menu-item-tasks .task-menu-badge-icon :deep(.el-badge__content) {
@@ -501,10 +615,4 @@ const toggleCollapse = () => {
   }
 }
 
-.portal-content {
-  background-color: var(--background-light);
-  padding: 20px;
-  overflow-y: auto;
-  min-width: 0;
-}
 </style>

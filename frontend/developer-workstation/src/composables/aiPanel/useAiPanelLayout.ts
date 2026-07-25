@@ -9,12 +9,20 @@ import { ref, reactive, computed } from 'vue'
  * only the detached window needs inline geometry.
  */
 export function useAiPanelLayout() {
-  // Detach / pop-out state
-  const isDetached = ref(false)
+  // Detach / pop-out state（默认弹出小窗；全屏为切换态）
+  const isDetached = ref(true)
+  const detachedSize = reactive({ width: 1100, height: 720 })
   const dragPos = reactive({ x: 0, y: 0 })
-  const detachedSize = reactive({ width: 900, height: 620 })
+  centerWindow()
   const isDragging = ref(false)
   const isResizing = ref(false)
+
+  function centerWindow() {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    dragPos.x = Math.max(0, (vw - detachedSize.width) / 2)
+    dragPos.y = Math.max(0, (vh - detachedSize.height) / 2)
+  }
 
   const panelStyle = computed(() => {
     if (isDetached.value) {
@@ -31,11 +39,7 @@ export function useAiPanelLayout() {
   function toggleDetach() {
     isDetached.value = !isDetached.value
     if (isDetached.value) {
-      // Center the window
-      const vw = window.innerWidth
-      const vh = window.innerHeight
-      dragPos.x = Math.max(0, (vw - detachedSize.width) / 2)
-      dragPos.y = Math.max(0, (vh - detachedSize.height) / 2)
+      centerWindow()
     }
   }
 

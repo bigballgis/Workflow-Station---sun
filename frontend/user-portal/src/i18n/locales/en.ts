@@ -163,6 +163,13 @@ export default {
   },
   dashboard: {
     title: 'Home',
+    greetingMorning: 'Good morning, {name}',
+    greetingAfternoon: 'Good afternoon, {name}',
+    greetingEvening: 'Good evening, {name}',
+    startRequest: 'New request',
+    needsAction: 'Needs your action',
+    viewTeamRequests: 'View team requests',
+    dueBy: 'Due {date}',
     taskOverview: 'My Task Overview',
     teamTaskOverview: 'Team Task Overview',
     processOverview: 'Process Overview',

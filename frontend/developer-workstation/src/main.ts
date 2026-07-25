@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
+import '@fontsource-variable/inter'
 import FcDesigner from '@form-create/designer'
 import { ensureEmptyRuleComponentEvents } from '@/utils/formCreateDefaultEvents'
 // Import form-create styles

@@ -60,6 +60,7 @@ export default {
     auth: '认证'
   },
   menu: {
+    home: '首页',
     dashboard: '仪表盘',
     userManagement: '用户管理',
     entitlementManagement: '权限管理',
@@ -285,6 +286,7 @@ export default {
     importFailedCheckFormat: '导入失败，请检查文件格式'
   },
   organization: {
+    selectHint: '选择左侧业务单元，查看其成员与审批人',
     businessUnitName: '业务单元名称',
     businessUnitCode: '业务单元编码',
     parentBusinessUnit: '上级业务单元',

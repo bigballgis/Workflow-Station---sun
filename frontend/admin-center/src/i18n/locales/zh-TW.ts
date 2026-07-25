@@ -60,6 +60,7 @@ export default {
     auth: '認證'
   },
   menu: {
+    home: '首頁',
     dashboard: '儀表板',
     userManagement: '使用者管理',
     entitlementManagement: '權限管理',
@@ -287,6 +288,7 @@ export default {
     importFailedCheckFormat: '匯入失敗，請檢查檔案格式'
   },
   organization: {
+    selectHint: '選擇左側業務單元，查看其成員與審批人',
     businessUnitName: '業務單元名稱',
     businessUnitCode: '業務單元編碼',
     parentBusinessUnit: '上級業務單元',

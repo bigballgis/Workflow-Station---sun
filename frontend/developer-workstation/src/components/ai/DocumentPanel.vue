@@ -423,6 +423,26 @@ defineExpose({
   padding: 0 12px;
   background: ai.$ai-paper;
 
+  // 高度约束链：el-tabs 默认不参与 flex 布局，内容会把面板撑出窗口而不出滚动条。
+  // 让 tabs → content → pane 逐层传递高度，滚动收敛到 .document-panel__content。
+  :deep(.el-tabs) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :deep(.el-tabs__content) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  :deep(.el-tab-pane) {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
   :deep(.el-tabs__item) {
     font-size: 13px;
     color: ai.$ai-graphite;
@@ -438,12 +458,15 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 6px 8px;
   margin-bottom: 4px;
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #fff;
+  background: ai.$ai-paper;
+  border-bottom: 1px solid ai.$ai-hairline;
 }
 
 .document-panel__content {
@@ -482,6 +505,11 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
+
+  :deep(.el-button) {
+    font-size: 12px;
+  }
 }
 
 .document-panel__version-item {

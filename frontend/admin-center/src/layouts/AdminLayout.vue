@@ -1,168 +1,180 @@
 <template>
-  <el-container class="admin-layout">
-    <!-- Top navigation bar -->
-    <el-header class="admin-header">
-      <div class="header-left">
-        <div class="logo">
-          <span class="logo-icon">🛡️</span>
-          <span class="logo-text">{{ t('app.name') }}</span>
-        </div>
+  <div class="admin-layout">
+    <!-- Left dark sidebar: brand on top, nav, collapse toggle at bottom -->
+    <aside
+      class="admin-aside"
+      :class="{ 'is-collapsed': isCollapse }"
+    >
+      <div class="brand">
+        <span class="brand-mark" />
+        <span class="brand-name">{{ t('app.name') }}</span>
       </div>
-      <div class="header-right">
-        <UserProfileDropdown />
-      </div>
-    </el-header>
 
-    <el-container class="admin-body">
-      <!-- Left sidebar menu -->
-      <el-aside
-        :width="isCollapse ? '64px' : '260px'"
-        class="admin-aside"
-      >
-        <el-scrollbar>
-          <el-menu
-            :default-active="activeMenu"
-            :collapse="isCollapse"
-            :collapse-transition="false"
-            class="admin-menu"
-            router
+      <el-scrollbar class="aside-scroll">
+        <el-menu
+          :default-active="activeMenu"
+          :collapse="isCollapse"
+          :collapse-transition="false"
+          class="admin-menu"
+          router
+        >
+          <!-- Dashboard - everyone -->
+          <el-menu-item index="/dashboard">
+            <el-icon><Odometer /></el-icon>
+            <template #title>
+              {{ t('menu.dashboard') }}
+            </template>
+          </el-menu-item>
+
+          <!-- User Management - requires user:read -->
+          <el-menu-item
+            v-if="canReadUser"
+            index="/user/list"
           >
-            <!-- Dashboard - everyone -->
-            <el-menu-item index="/dashboard">
-              <el-icon><Odometer /></el-icon>
-              <template #title>
-                {{ t('menu.dashboard') }}
-              </template>
-            </el-menu-item>
-            
-            <!-- User Management - requires user:read -->
+            <el-icon><User /></el-icon>
+            <template #title>
+              {{ t('menu.userManagement') }}
+            </template>
+          </el-menu-item>
+
+          <!-- Entitlement Management - sub-menu -->
+          <el-sub-menu
+            v-if="canReadUser || canReadRole"
+            index="entitlement"
+          >
+            <template #title>
+              <el-icon><Lock /></el-icon>
+              <span>{{ t('menu.entitlementManagement') }}</span>
+            </template>
             <el-menu-item
               v-if="canReadUser"
-              index="/user/list"
+              index="/organization"
             >
-              <el-icon><User /></el-icon>
-              <template #title>
-                {{ t('menu.userManagement') }}
-              </template>
+              {{ t('menu.organization') }}
             </el-menu-item>
-            
-            <!-- Entitlement Management - sub-menu -->
-            <el-sub-menu
-              v-if="canReadUser || canReadRole"
-              index="entitlement"
-            >
-              <template #title>
-                <el-icon><Lock /></el-icon>
-                <span>{{ t('menu.entitlementManagement') }}</span>
-              </template>
-              <el-menu-item
-                v-if="canReadUser"
-                index="/organization"
-              >
-                {{ t('menu.organization') }}
-              </el-menu-item>
-              <el-menu-item
-                v-if="canReadUser"
-                index="/virtual-group"
-              >
-                {{ t('menu.virtualGroup') }}
-              </el-menu-item>
-              <el-menu-item
-                v-if="canReadRole"
-                index="/role"
-              >
-                {{ t('menu.roleManagement') }}
-              </el-menu-item>
-            </el-sub-menu>
-            
-            <!-- Function Unit - requires system:admin -->
             <el-menu-item
-              v-if="isSystemAdmin"
-              index="/function-unit"
+              v-if="canReadUser"
+              index="/virtual-group"
             >
-              <el-icon><Box /></el-icon>
-              <template #title>
-                {{ t('menu.functionUnit') }}
-              </template>
+              {{ t('menu.virtualGroup') }}
             </el-menu-item>
-            
-            <!-- BI Management - requires system:admin -->
-            <el-sub-menu
-              v-if="isSystemAdmin"
-              index="bi-management"
-            >
-              <template #title>
-                <el-icon><DataAnalysis /></el-icon>
-                <span>{{ t('menu.biManagement') }}</span>
-              </template>
-              <el-menu-item index="/bi-management/dashboard-registry">
-                {{ t('menu.biDashboardRegistry') }}
-              </el-menu-item>
-              <el-menu-item index="/bi-management/dashboard-assignment">
-                {{ t('menu.biDashboardAssignment') }}
-              </el-menu-item>
-              <el-menu-item index="/bi-management/rbac-mapping">
-                {{ t('menu.biRbacMapping') }}
-              </el-menu-item>
-            </el-sub-menu>
-
-            <!-- Audit Log - requires audit:read or log:read -->
             <el-menu-item
-              v-if="canReadAudit"
-              index="/audit"
+              v-if="canReadRole"
+              index="/role"
             >
-              <el-icon><Document /></el-icon>
-              <template #title>
-                {{ t('menu.audit') }}
-              </template>
+              {{ t('menu.roleManagement') }}
             </el-menu-item>
+          </el-sub-menu>
 
-            <!-- Relation Tables - requires system:admin -->
-            <el-sub-menu
-              v-if="isSystemAdmin"
-              index="relation-tables"
-            >
-              <template #title>
-                <el-icon><Grid /></el-icon>
-                <span>{{ t('menu.relationTables') }}</span>
-              </template>
-              <el-menu-item index="/relation-tables/structure">
-                {{ t('menu.tableStructure') }}
-              </el-menu-item>
-              <el-menu-item index="/relation-tables/data">
-                {{ t('menu.tableData') }}
-              </el-menu-item>
-            </el-sub-menu>
+          <!-- Function Unit - requires system:admin -->
+          <el-menu-item
+            v-if="isSystemAdmin"
+            index="/function-unit"
+          >
+            <el-icon><Box /></el-icon>
+            <template #title>
+              {{ t('menu.functionUnit') }}
+            </template>
+          </el-menu-item>
 
-            <!-- ServiceTask - external tool (non-prod), opens the :8085 login bridge
-                 in a new tab. el-menu is in router mode, so bind :route to the current
-                 path (no-op navigation) and do the real action in @click. -->
-            <el-menu-item
-              v-if="isSystemAdmin && apBridgeUrl"
-              index="service-task-launch"
-              :route="route.path"
-              @click="openServiceTask"
-            >
-              <el-icon><Connection /></el-icon>
-              <template #title>
-                {{ t('menu.serviceTask') }}
-              </template>
+          <!-- BI Management - requires system:admin -->
+          <el-sub-menu
+            v-if="isSystemAdmin"
+            index="bi-management"
+          >
+            <template #title>
+              <el-icon><DataAnalysis /></el-icon>
+              <span>{{ t('menu.biManagement') }}</span>
+            </template>
+            <el-menu-item index="/bi-management/dashboard-registry">
+              {{ t('menu.biDashboardRegistry') }}
             </el-menu-item>
-          </el-menu>
-        </el-scrollbar>
-        <div
-          class="collapse-btn"
-          @click="toggleCollapse"
-        >
-          <el-icon :size="20">
-            <Fold v-if="!isCollapse" />
-            <Expand v-else />
-          </el-icon>
+            <el-menu-item index="/bi-management/dashboard-assignment">
+              {{ t('menu.biDashboardAssignment') }}
+            </el-menu-item>
+            <el-menu-item index="/bi-management/rbac-mapping">
+              {{ t('menu.biRbacMapping') }}
+            </el-menu-item>
+          </el-sub-menu>
+
+          <!-- Audit Log - requires audit:read or log:read -->
+          <el-menu-item
+            v-if="canReadAudit"
+            index="/audit"
+          >
+            <el-icon><Document /></el-icon>
+            <template #title>
+              {{ t('menu.audit') }}
+            </template>
+          </el-menu-item>
+
+          <!-- Relation Tables - requires system:admin -->
+          <el-sub-menu
+            v-if="isSystemAdmin"
+            index="relation-tables"
+          >
+            <template #title>
+              <el-icon><Grid /></el-icon>
+              <span>{{ t('menu.relationTables') }}</span>
+            </template>
+            <el-menu-item index="/relation-tables/structure">
+              {{ t('menu.tableStructure') }}
+            </el-menu-item>
+            <el-menu-item index="/relation-tables/data">
+              {{ t('menu.tableData') }}
+            </el-menu-item>
+          </el-sub-menu>
+
+          <!-- ServiceTask - external tool (non-prod), opens the :8085 login bridge
+               in a new tab. el-menu is in router mode, so bind :route to the current
+               path (no-op navigation) and do the real action in @click. -->
+          <el-menu-item
+            v-if="isSystemAdmin && apBridgeUrl"
+            index="service-task-launch"
+            :route="route.path"
+            @click="openServiceTask"
+          >
+            <el-icon><Connection /></el-icon>
+            <template #title>
+              {{ t('menu.serviceTask') }}
+            </template>
+          </el-menu-item>
+        </el-menu>
+      </el-scrollbar>
+
+      <div
+        class="collapse-btn"
+        role="button"
+        @click="toggleCollapse"
+      >
+        <el-icon :size="18">
+          <Fold v-if="!isCollapse" />
+          <Expand v-else />
+        </el-icon>
+      </div>
+    </aside>
+
+    <!-- Right column: white top bar + canvas -->
+    <div class="admin-body">
+      <header class="admin-header">
+        <nav class="breadcrumb">
+          <router-link
+            to="/dashboard"
+            class="crumb-home"
+          >
+            {{ t('menu.home') }}
+          </router-link>
+          <template v-if="currentTitle && route.path !== '/dashboard'">
+            <span class="crumb-sep">/</span>
+            <span class="crumb-current">{{ currentTitle }}</span>
+          </template>
+        </nav>
+        <div class="header-right">
+          <UserProfileDropdown />
         </div>
-      </el-aside>
+      </header>
 
-      <!-- Main content area -->
-      <el-main class="admin-main">
+      <main class="admin-main">
         <router-view v-slot="{ Component, route }">
           <transition
             name="fade"
@@ -176,9 +188,9 @@
             </keep-alive>
           </transition>
         </router-view>
-      </el-main>
-    </el-container>
-  </el-container>
+      </main>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -198,6 +210,12 @@ const { t } = useI18n()
 
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
+
+// 顶栏面包屑：当前页标题取路由 meta.titleKey
+const currentTitle = computed(() => {
+  const key = route.meta.titleKey
+  return key ? t(key) : ''
+})
 
 // ServiceTask launcher (non-prod only). The menu visibility is gated on RUNTIME config
 // (window.__APP_CONFIG__.AP_BRIDGE_URL, injected per-environment at container start) — the
@@ -241,136 +259,195 @@ const toggleCollapse = () => {
 </script>
 
 <style scoped lang="scss">
-$primary-color: #DB0011;
-$primary-dark: #8B0000;
-$header-height: 60px;
-$aside-bg: #ffffff;
-$main-bg: #f5f7fa;
+$header-height: 64px;
+$aside-width: 248px;
+$aside-collapsed-width: 64px;
+$primary-color: #db0011;
+$primary-dark: #8b0000;
 
 .admin-layout {
+  display: flex;
   height: 100vh;
   overflow: hidden;
+  background-color: var(--ws-canvas);
 }
 
-.admin-header {
-  height: $header-height;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
-  color: white;
-  padding: 0 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 100;
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-
-      .logo-icon {
-        font-size: 24px;
-      }
-
-      .logo-text {
-        font-size: 18px;
-        font-weight: 600;
-        letter-spacing: 1px;
-      }
-    }
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-  }
-}
-
-.admin-body {
-  height: calc(100vh - $header-height);
-}
-
+// ==================== 白色侧栏（回归原配色） ====================
 .admin-aside {
-  background: $aside-bg;
+  display: flex;
+  flex-direction: column;
+  width: $aside-width;
+  flex-shrink: 0;
+  background: #ffffff;
   border-right: 1px solid #e6e8eb;
   transition: width 0.3s;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
 
-  .admin-menu {
-    border-right: none;
-    height: 100%;
+  &.is-collapsed {
+    width: $aside-collapsed-width;
 
-    :deep(.el-menu-item),
-    :deep(.el-sub-menu__title) {
-      height: 50px;
-      line-height: 50px;
-      margin: 4px 8px;
-      border-radius: 8px;
-      
-      &:hover {
-        background-color: rgba($primary-color, 0.08);
-      }
+    .brand {
+      justify-content: center;
+      padding: 0;
     }
 
-    :deep(.el-menu-item.is-active) {
-      background-color: rgba($primary-color, 0.12);
-      color: $primary-color;
-      font-weight: 500;
-
-      &::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 3px;
-        height: 24px;
-        background-color: $primary-color;
-        border-radius: 0 3px 3px 0;
-      }
-    }
-
-    :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
-      color: $primary-color;
-    }
-
-    :deep(.el-menu--collapse) {
-      .el-menu-item,
-      .el-sub-menu__title {
-        margin: 4px;
-      }
-    }
-  }
-
-  .el-scrollbar {
-    flex: 1;
-  }
-
-  .collapse-btn {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 48px;
-    cursor: pointer;
-    border-top: 1px solid #e6e8eb;
-
-    &:hover {
-      background-color: rgba($primary-color, 0.08);
+    .brand-name {
+      display: none;
     }
   }
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: $header-height;
+  padding: 0 20px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #f0f0f0;
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--primary-color);
+    flex-shrink: 0;
+  }
+
+  .brand-name {
+    color: var(--ws-text);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+}
+
+.aside-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.admin-menu {
+  border-right: none;
+  padding: 8px;
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: #4a4a4a;
+  --el-menu-active-color: #{$primary-color};
+  --el-menu-hover-bg-color: rgba(219, 0, 17, 0.06);
+  --el-menu-hover-text-color: #{$primary-color};
+
+  &:not(.el-menu--collapse) {
+    width: 100%;
+  }
+
+  :deep(.el-menu-item),
+  :deep(.el-sub-menu__title) {
+    height: 44px;
+    line-height: 44px;
+    margin: 2px 0;
+    border-radius: 10px;
+  }
+
+  :deep(.el-menu-item.is-active) {
+    color: $primary-color;
+    font-weight: 600;
+    background-color: rgba(219, 0, 17, 0.1);
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -8px; // 贴到侧栏最左缘（抵消菜单容器 padding）
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 22px;
+      background-color: $primary-color;
+      border-radius: 0 3px 3px 0;
+    }
+  }
+
+  :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
+    color: $primary-color;
+  }
+
+  :deep(.el-menu) {
+    background: transparent;
+  }
+}
+
+.collapse-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 48px;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--ws-text-secondary);
+  border-top: 1px solid #e6e8eb;
+
+  &:hover {
+    color: $primary-color;
+    background-color: rgba(219, 0, 17, 0.06);
+  }
+}
+
+// ==================== 右侧主体 ====================
+.admin-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: $header-height;
+  flex-shrink: 0;
+  padding: 0 24px;
+  background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+
+  .crumb-home {
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+
+  .crumb-sep {
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  .crumb-current {
+    color: #fff;
+    font-weight: 700;
+  }
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .admin-main {
-  background-color: $main-bg;
-  padding: 20px;
+  flex: 1;
+  min-height: 0;
+  background-color: var(--ws-canvas);
+  padding: 24px;
   overflow-y: auto;
 }
 

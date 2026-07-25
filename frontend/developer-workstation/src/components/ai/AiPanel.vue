@@ -71,9 +71,9 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-            <el-tooltip :content="isDetached ? t('ai.panel.attach') : t('ai.panel.detach')">
+            <el-tooltip :content="isDetached ? t('ai.panel.maximize') : t('ai.panel.restore')">
               <el-button
-                :icon="isDetached ? ScaleToOriginal : FullScreen"
+                :icon="isDetached ? FullScreen : ScaleToOriginal"
                 circle
                 size="small"
                 @click="toggleDetach"
@@ -406,7 +406,8 @@ async function closePanel() {
   sessionComposable.endSession()
 
   ready.value = false
-  isDetached.value = false
+  // 下次打开回到默认的弹出小窗（而非停留在全屏态）
+  isDetached.value = true
   lockComposable.reset()
   initialMessages.value = []
   completedPhases.value = []
