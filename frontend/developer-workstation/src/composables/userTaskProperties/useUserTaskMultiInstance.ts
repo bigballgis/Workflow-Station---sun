@@ -21,6 +21,11 @@ export function useUserTaskMultiInstance(
     lastLoadedAssigneeType,
     elementSubTableName,
     assigneeField,
+    assigneeMode,
+    allowUser,
+    allowRole,
+    roleField,
+    buField,
     rowIdVariable,
     elementSubTableId,
     subTables,
@@ -68,10 +73,14 @@ export function useUserTaskMultiInstance(
     if (id === '' || id === null || id === undefined) {
       elementSubTableName.value = ''
       assigneeField.value = ''
+      roleField.value = ''
+      buField.value = ''
       rowIdVariable.value = ''
       updateExtProp('subTableId', '')
       updateExtProp('subTableName', '')
       updateExtProp('assigneeField', '')
+      updateExtProp('roleField', '')
+      updateExtProp('buField', '')
       updateExtProp('rowIdVariable', '')
       return
     }
@@ -91,6 +100,20 @@ export function useUserTaskMultiInstance(
         updateExtProp('assigneeField', assigneeField.value)
       }
 
+      // role 模式：若当前 roleField 不在该表字段中，重置并尝试自动预选一个 role 列
+      if (!roleField.value || !fieldNames.includes(roleField.value)) {
+        const preferredRole = (table.fieldDefinitions || []).find(fd =>
+          /^(role|role_code|role_id|role_codes)$/i.test(fd.fieldName)
+        )
+        roleField.value = preferredRole?.fieldName || ''
+        updateExtProp('roleField', roleField.value)
+      }
+      // BU 列可选：若当前 buField 不在该表字段中则清空（不强制预选）
+      if (buField.value && !fieldNames.includes(buField.value)) {
+        buField.value = ''
+        updateExtProp('buField', '')
+      }
+
       // Default rowIdVariable convention uses the element variable (currentItem) of the parent SubProcess
       if (!rowIdVariable.value) {
         rowIdVariable.value = 'currentItem.rowId'
@@ -102,6 +125,73 @@ export function useUserTaskMultiInstance(
   function handleAssigneeFieldChange(value: string) {
     ensureSubTaskAssigneeMode()
     updateExtProp('assigneeField', value || '')
+  }
+
+  /**
+   * 由 allowUser / allowRole 两个开关派生 assigneeMode（user|role|both）并持久化到 BPMN。
+   * 用 checkbox @change 的显式写入路径，避免 radio v-model+@change 的时序问题。
+   */
+  function persistAssigneeMode() {
+    ensureSubTaskAssigneeMode()
+    // 至少保证一个开关开着（都关时回落到个人）
+    if (!allowUser.value && !allowRole.value) {
+      allowUser.value = true
+    }
+    const mode = allowUser.value && allowRole.value ? 'both' : (allowRole.value ? 'role' : 'user')
+    assigneeMode.value = mode
+    updateExtProp('assigneeMode', mode)
+  }
+
+  function autoPickRoleField() {
+    if (!roleField.value && elementSubTableId.value) {
+      const table = findSubTableById(elementSubTableId.value)
+      const preferredRole = (table?.fieldDefinitions || []).find(fd =>
+        /^(role|role_code|role_id|role_codes)$/i.test(fd.fieldName)
+      )
+      roleField.value = preferredRole?.fieldName || ''
+      updateExtProp('roleField', roleField.value)
+    }
+    if (!buField.value && elementSubTableId.value) {
+      const table = findSubTableById(elementSubTableId.value)
+      const preferredBu = (table?.fieldDefinitions || []).find(fd =>
+        /^(bu|bu_code|business_unit|business_unit_code)$/i.test(fd.fieldName)
+      )
+      buField.value = preferredBu?.fieldName || ''
+      updateExtProp('buField', buField.value)
+    }
+  }
+
+  // Element Plus el-checkbox @change 回调值类型是 CheckboxValueType(string|number|boolean)，用宽松入参 + !! 归一化。
+  function handleAllowUserChange(checkedRaw: string | number | boolean) {
+    const checked = !!checkedRaw
+    persistAssigneeMode()
+    if (!checked) {
+      assigneeField.value = ''
+      updateExtProp('assigneeField', '')
+    }
+  }
+
+  function handleAllowRoleChange(checkedRaw: string | number | boolean) {
+    const checked = !!checkedRaw
+    persistAssigneeMode()
+    if (checked) {
+      autoPickRoleField()
+    } else {
+      roleField.value = ''
+      buField.value = ''
+      updateExtProp('roleField', '')
+      updateExtProp('buField', '')
+    }
+  }
+
+  function handleRoleFieldChange(value: string) {
+    ensureSubTaskAssigneeMode()
+    updateExtProp('roleField', value || '')
+  }
+
+  function handleBuFieldChange(value: string) {
+    ensureSubTaskAssigneeMode()
+    updateExtProp('buField', value || '')
   }
 
   const assigneeFieldOptions = computed(() => {
@@ -262,6 +352,10 @@ export function useUserTaskMultiInstance(
     handleFormChange,
     handleSubTableChange,
     handleAssigneeFieldChange,
+    handleAllowUserChange,
+    handleAllowRoleChange,
+    handleRoleFieldChange,
+    handleBuFieldChange,
     assigneeFieldOptions,
     miProgressFieldOptions,
     assigneeFieldPlaceholder,

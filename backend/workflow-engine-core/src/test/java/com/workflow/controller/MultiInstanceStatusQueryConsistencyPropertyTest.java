@@ -8,7 +8,9 @@ import com.workflow.enums.AssignmentType;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import net.jqwik.api.*;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
+import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricProcessInstanceQuery;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ExecutionQuery;
@@ -60,15 +62,8 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
         when(hipQuery.processInstanceId(anyString())).thenReturn(hipQuery);
         when(hipQuery.singleResult()).thenReturn(null);
 
-        MultiInstanceStatusController controller = new MultiInstanceStatusController(
-            runtimeService,
-            historyService,
-            null,
-            extendedTaskInfoRepository,
-            objectMapper,
-            null,
-            mock(com.workflow.component.BpmnActionParser.class)
-        );
+        MultiInstanceStatusController controller = createController(
+            runtimeService, historyService, extendedTaskInfoRepository);
         
         // Given: 准备多实例执行场景
         String processInstanceId = scenario.processInstanceId;
@@ -234,15 +229,8 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
         when(hipQuery.processInstanceId(anyString())).thenReturn(hipQuery);
         when(hipQuery.singleResult()).thenReturn(null);
 
-        MultiInstanceStatusController controller = new MultiInstanceStatusController(
-            runtimeService,
-            historyService,
-            null,
-            extendedTaskInfoRepository,
-            objectMapper,
-            null,
-            mock(com.workflow.component.BpmnActionParser.class)
-        );
+        MultiInstanceStatusController controller = createController(
+            runtimeService, historyService, extendedTaskInfoRepository);
         when(runtimeService.createExecutionQuery()).thenReturn(executionQuery);
         when(executionQuery.processInstanceId(processInstanceId)).thenReturn(executionQuery);
         when(executionQuery.list()).thenReturn(Collections.emptyList());
@@ -279,15 +267,8 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
         when(hipQuery.processInstanceId(anyString())).thenReturn(hipQuery);
         when(hipQuery.singleResult()).thenReturn(null);
 
-        MultiInstanceStatusController controller = new MultiInstanceStatusController(
-            runtimeService,
-            historyService,
-            null,
-            extendedTaskInfoRepository,
-            objectMapper,
-            null,
-            mock(com.workflow.component.BpmnActionParser.class)
-        );
+        MultiInstanceStatusController controller = createController(
+            runtimeService, historyService, extendedTaskInfoRepository);
         String processInstanceId = scenario.processInstanceId;
         
         when(runtimeService.createExecutionQuery()).thenReturn(executionQuery);
@@ -329,6 +310,23 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
     }
     
     // ==================== 辅助方法和数据生成器 ====================
+
+    private MultiInstanceStatusController createController(
+        RuntimeService runtimeService,
+        HistoryService historyService,
+        ExtendedTaskInfoRepository extendedTaskInfoRepository
+    ) {
+        return new MultiInstanceStatusController(
+            runtimeService,
+            mock(RepositoryService.class),
+            historyService,
+            mock(TaskService.class),
+            extendedTaskInfoRepository,
+            objectMapper,
+            null,
+            mock(com.workflow.component.BpmnActionParser.class)
+        );
+    }
     
     /**
      * 多实例场景数据结构

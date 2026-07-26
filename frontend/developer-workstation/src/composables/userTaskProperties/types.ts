@@ -64,6 +64,11 @@ export interface UserTaskPropertyContext {
   elementSubTableId: Ref<number | ''>
   elementSubTableName: Ref<string>
   assigneeField: Ref<string>
+  assigneeMode: Ref<'user' | 'role' | 'both'>
+  allowUser: Ref<boolean>
+  allowRole: Ref<boolean>
+  roleField: Ref<string>
+  buField: Ref<string>
   rowIdVariable: Ref<string>
   subTables: Ref<TableDefinition[]>
   loadingSubTables: Ref<boolean>

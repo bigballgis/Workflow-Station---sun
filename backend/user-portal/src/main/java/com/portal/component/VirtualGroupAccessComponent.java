@@ -35,7 +35,14 @@ public class VirtualGroupAccessComponent {
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
-    
+
+    /**
+     * C-3 (docs/ap-integration/DECISIONS.md#d6): shared secret marking this as a trusted
+     * first-party service call, required for admin-center to honor the forwarded X-User-Id.
+     */
+    @Value("${service.internal-token:}")
+    private String serviceInternalToken;
+
     /**
      * 获取所有虚拟组列表
      */
@@ -271,6 +278,26 @@ public class VirtualGroupAccessComponent {
     }
     
     /**
+     * 业务单元树（保留 children 层级，供级联选择器使用）。
+     */
+    public List<Map<String, Object>> getBusinessUnitsTree() {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/business-units/tree";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            List<Map<String, Object>> tree = response.getBody();
+            return tree != null ? tree : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to get business unit tree: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
      * 递归扁平化业务单元树
      */
     @SuppressWarnings("unchecked")
@@ -414,6 +441,9 @@ public class VirtualGroupAccessComponent {
             headers.setContentType(MediaType.APPLICATION_JSON);
             SecurityContextUtils.getCurrentUserId().ifPresent(id -> headers.set("X-User-Id", id));
             SecurityContextUtils.getCurrentUsername().ifPresent(name -> headers.set("X-Username", name));
+            if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
+                headers.set(com.platform.common.constant.PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
+            }
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
             ResponseEntity<Void> response = restTemplate.exchange(

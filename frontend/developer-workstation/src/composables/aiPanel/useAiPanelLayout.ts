@@ -1,19 +1,28 @@
-import { ref, reactive, computed, type Ref } from 'vue'
+import { ref, reactive, computed } from 'vue'
 
 /**
  * Composable for the AI panel's docked/detached layout: detach toggle, the
  * computed panel style, and the drag (header handle) + resize interactions for
  * the detached (pop-out) window.
  *
- * @param sidebarWidth Reactive docked-mode left offset (sidebar width in px).
+ * Docked mode is a full-screen takeover (positioning lives in AiPanel CSS);
+ * only the detached window needs inline geometry.
  */
-export function useAiPanelLayout(sidebarWidth: Ref<string>) {
-  // Detach / pop-out state
-  const isDetached = ref(false)
+export function useAiPanelLayout() {
+  // Detach / pop-out state（默认弹出小窗；全屏为切换态）
+  const isDetached = ref(true)
+  const detachedSize = reactive({ width: 1100, height: 720 })
   const dragPos = reactive({ x: 0, y: 0 })
-  const detachedSize = reactive({ width: 900, height: 620 })
+  centerWindow()
   const isDragging = ref(false)
   const isResizing = ref(false)
+
+  function centerWindow() {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    dragPos.x = Math.max(0, (vw - detachedSize.width) / 2)
+    dragPos.y = Math.max(0, (vh - detachedSize.height) / 2)
+  }
 
   const panelStyle = computed(() => {
     if (isDetached.value) {
@@ -24,17 +33,13 @@ export function useAiPanelLayout(sidebarWidth: Ref<string>) {
         height: `${detachedSize.height}px`
       }
     }
-    return { left: sidebarWidth.value }
+    return {}
   })
 
   function toggleDetach() {
     isDetached.value = !isDetached.value
     if (isDetached.value) {
-      // Center the window
-      const vw = window.innerWidth
-      const vh = window.innerHeight
-      dragPos.x = Math.max(0, (vw - detachedSize.width) / 2)
-      dragPos.y = Math.max(0, (vh - detachedSize.height) / 2)
+      centerWindow()
     }
   }
 

@@ -18,11 +18,15 @@ export interface ApplicationDetailActionsFns {
 export function createApplicationDetailActions(ctx: ApplicationDetailCtx): ApplicationDetailActionsFns {
   const { t, router, processId, processInfo, urging, withdrawing, processNodes, processFlows } = ctx
 
-  /** 已完成等终态下无「当前步骤」；兼容库内仍残留最后一笔活动名的历史数据 */
+  /**
+   * 已完成等终态下无「当前步骤」；兼容库内仍残留最后一笔活动名的历史数据。
+   * MI 感知：优先用后端 currentStepName（流程处于多实例子任务内部时=外层多实例节点名如 "multi"），
+   * 回退 currentNode（普通节点名）。
+   */
   const displayCurrentStepLabel = computed(() => {
     const st = processInfo.value.status
     if (st === 'COMPLETED') return '-'
-    return processInfo.value.currentNode || '-'
+    return processInfo.value.currentStepName || processInfo.value.currentNode || '-'
   })
 
   /** 流程图区块角标：终态显示状态文案，运行中显示当前节点或待处理 */

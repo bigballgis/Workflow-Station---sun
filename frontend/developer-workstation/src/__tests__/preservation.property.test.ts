@@ -141,13 +141,21 @@ describe('Preservation: Kong configuration has routes for /api/v1/admin, /api/v1
     expect(content).toContain('- /api/portal')
   })
 
-  test('Kong config should have strip_path: false for all routes', () => {
+  test('Kong config should have strip_path: false for all routes (AP gateway routes excepted)', () => {
     const content = fs.readFileSync(kongConfigPath, 'utf-8')
-    // All routes should have strip_path: false
-    const stripPathMatches = content.match(/strip_path:\s*(true|false)/g)
-    expect(stripPathMatches).not.toBeNull()
-    for (const match of stripPathMatches!) {
-      expect(match).toBe('strip_path: false')
+    // AP builder 网关路由（/api/ap 收编）按设计 strip /api/ap 前缀，其余路由必须 strip_path: false
+    const routeBlocks = content.match(/paths:\n(?:\s+- \S+\n)+\s+strip_path: (?:true|false)/g)
+    expect(routeBlocks).not.toBeNull()
+
+    // 每个 strip_path 都必须能配对到它的 paths 块，防止正则漏检
+    const stripPathCount = content.match(/strip_path:\s*(?:true|false)/g)!.length
+    expect(routeBlocks!.length).toBe(stripPathCount)
+
+    for (const block of routeBlocks!) {
+      const paths = [...block.matchAll(/- (\S+)/g)].map((m) => m[1])
+      const isApRoute = paths.every((p) => p.startsWith('/api/ap'))
+      if (isApRoute) continue
+      expect(block).toContain('strip_path: false')
     }
   })
 

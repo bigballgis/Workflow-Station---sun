@@ -1,4 +1,6 @@
 @use './variables.scss' as *;
+// 统一设计系统（Inter 字体 / 红主色板 / 胶囊按钮 / 账册表格 / 软色标签）——三端镜像文件
+@use './ws-theme.scss';
 
 * {
   margin: 0;
@@ -8,7 +10,7 @@
 
 html, body, #app {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 // Scrollbar
@@ -223,13 +225,19 @@ svg:empty {
 .el-input__wrapper,
 .el-select__placeholder,
 .el-input__inner::placeholder {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+  font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
 }
 
 // Fix: form-create designer drag mask needs a background to receive click events
 // Without a background, transparent divs don't receive pointer events in browsers
 ._fd-drag-mask {
   background: transparent;
+}
+
+// Launchpad「⋯」下拉菜单：需要压过分组浮层（.folder-overlay z-index 3000），
+// 否则 EP popper 默认 z-index (~2000+) 会被浮层盖住，表现为点击无反应
+.launchpad-dropdown-popper {
+  z-index: 4000 !important;
 }
 
 // Element Plus tables: flat single-line rows; parent .table-scroll-wrap enables horizontal scroll

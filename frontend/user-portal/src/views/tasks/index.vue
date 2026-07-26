@@ -134,6 +134,16 @@
           show-overflow-tooltip
         />
         <el-table-column
+          prop="currentStepName"
+          :label="t('task.currentStep')"
+          min-width="130"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ row.currentStepName || row.taskName || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column
           prop="processDefinitionName"
           :label="t('task.processName')"
           min-width="140"

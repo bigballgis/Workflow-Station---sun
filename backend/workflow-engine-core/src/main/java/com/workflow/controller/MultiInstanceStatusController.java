@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricProcessInstance;
@@ -50,6 +51,7 @@ import java.util.stream.Collectors;
 public class MultiInstanceStatusController {
 
     private final RuntimeService runtimeService;
+    private final RepositoryService repositoryService;
     private final HistoryService historyService;
     private final TaskService taskService;
     private final ExtendedTaskInfoRepository extendedTaskInfoRepository;
@@ -472,8 +474,21 @@ public class MultiInstanceStatusController {
      */
     private String getActivityName(String processInstanceId, String activityId) {
         try {
-            // Get activity name from process definition
-            // Simplified implementation: return activity ID
+            // 从流程定义的 BpmnModel 解析该 element 的 name（多实例 subProcess 的 name，如 "multi"）；
+            // 无 name / 解析失败时回退 activityId，避免上层拿到空值。
+            org.flowable.engine.runtime.ProcessInstance pi = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            if (pi != null && pi.getProcessDefinitionId() != null) {
+                org.flowable.bpmn.model.BpmnModel bpmnModel =
+                        repositoryService.getBpmnModel(pi.getProcessDefinitionId());
+                if (bpmnModel != null) {
+                    org.flowable.bpmn.model.FlowElement element = bpmnModel.getFlowElement(activityId);
+                    if (element != null && org.springframework.util.StringUtils.hasText(element.getName())) {
+                        return element.getName();
+                    }
+                }
+            }
             return activityId;
         } catch (Exception e) {
             log.warn("Failed to get activity name, processInstanceId: {}, activityId: {}", processInstanceId, activityId, e);

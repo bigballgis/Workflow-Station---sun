@@ -60,6 +60,7 @@ export default {
     auth: 'Auth'
   },
   menu: {
+    home: 'Home',
     dashboard: 'Dashboard',
     userManagement: 'User Management',
     entitlementManagement: 'Entitlement Management',
@@ -79,7 +80,7 @@ export default {
     tableStructure: 'Table Structure',
     tableData: 'Table Data',
     biManagement: 'BI Management',
-    activepieces: 'Activepieces',
+    serviceTask: 'Automation Flow',
     biDashboardRegistry: 'Dashboard Registry',
     biDashboardAssignment: 'Dashboard Assignment',
     biRbacMapping: 'RBAC Mapping'
@@ -289,6 +290,7 @@ export default {
     importFailedCheckFormat: 'Import failed, please check file format'
   },
   organization: {
+    selectHint: 'Select a business unit on the left to view its members and approvers',
     businessUnitName: 'Business Unit Name',
     businessUnitCode: 'Business Unit Code',
     parentBusinessUnit: 'Parent Business Unit',

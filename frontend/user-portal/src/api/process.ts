@@ -23,6 +23,8 @@ export interface ProcessInstance {
   startUserId: string
   startUserName: string
   currentNode?: string
+  /** 「当前步骤」名（MI 感知）：普通节点=currentNode；多实例子任务内部=外层多实例 subProcess name（如 "multi"）。 */
+  currentStepName?: string
   currentAssignee?: string
   candidateUsers?: string
   /** Request ID: main-table configured human-readable identifier (e.g. HR-2026-001); null when unconfigured. */

@@ -50,6 +50,21 @@ public class TaskInfo {
     private String bpmnBusinessUnitId;
 
     /**
+     * MI 按角色分派信号（引擎从 ExtendedTaskInfo.extendedProperties 透出）：
+     * miAssigneeMode=role 表示该 MI 子任务按角色分派（共享认领池），据此做 workspace 可见性收敛
+     * （role 分派仅在用户切到该 role 的 workspace 才可见）；miRoleCode/miBusinessUnitCode 为分派角色/BU code。
+     */
+    private String miAssigneeMode;
+    private String miRoleCode;
+    private String miBusinessUnitCode;
+
+    /**
+     * 「当前步骤」名（MI 感知）：普通节点=任务名；多实例子任务=外层多实例 subProcess name（如 "multi"）。
+     * 供 To Do/Completed 列表与详情展示，区别于 taskName（具体内层子任务名）。
+     */
+    private String currentStepName;
+
+    /**
      * 引擎分配目标：USER 时为处理人 ID；CANDIDATE_USERS 时为候选人用户 ID 逗号拼接等（与 workflow-engine TaskListResult 一致）
      */
     private String assignmentTarget;

@@ -167,16 +167,48 @@ public class ProcessApplicationQueryComponent {
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         RequestIdEnricher.SpecCache requestIdSpecs = requestIdEnricher.resolveSpecs(functionUnitCodes);
 
+        // 「当前步骤」MI 感知：currentNode 存的是内层任务名（如 "sub form1"）；若该任务在多实例子流程内，
+        // 列表应展示外层多实例 subProcess 的 name（如 "multi"）。MI 结构是流程定义静态的，按
+        // processDefinitionKey 只解析一次 BPMN（列表同 FU 的行共享 key，通常 1~few 次，不是每行 HTTP）。
+        Map<String, Map<String, String>> miNameMapByProcessDefKey = buildMiNodeNameMaps(pageContent);
+
         // List API omits variables: JSONB may contain Jackson-unfriendly nesting → HttpMessageNotWritableException → SYS_INTERNAL_ERROR
         // Request ID is computed from the (still present) variables before they are nulled.
         List<ProcessInstanceInfo> instances = pageContent.stream()
-                .map(inst -> toProcessInstanceInfoForList(inst, userNameCache))
+                .map(inst -> toProcessInstanceInfoForList(inst, userNameCache, miNameMapByProcessDefKey))
                 .peek(info -> info.setRequestId(
                         requestIdEnricher.buildRequestId(requestIdSpecs, info.getFunctionUnitCode(), info.getVariables())))
                 .peek(info -> info.setVariables(null))
                 .toList();
 
         return new PageImpl<>(instances, pageable, instancePage.getTotalElements());
+    }
+
+    /**
+     * 为本页所有实例，按 processDefinitionKey 解析一次 BPMN，建「内层 MI 任务名 → 外层 MI subProcess name」映射。
+     * 引擎不可用/无 BPMN 时该 key 映射为空 map（调用方回退 currentNode）。COMPLETED 实例不需要（列表显 '-'）。
+     */
+    private Map<String, Map<String, String>> buildMiNodeNameMaps(List<ProcessInstance> pageContent) {
+        Map<String, Map<String, String>> byKey = new HashMap<>();
+        if (!workflowEngineClient.isAvailable()) {
+            return byKey;
+        }
+        Set<String> keys = pageContent.stream()
+                .filter(i -> !"COMPLETED".equals(i.getStatus()))
+                .map(ProcessInstance::getProcessDefinitionKey)
+                .filter(k -> k != null && !k.isBlank())
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        for (String key : keys) {
+            try {
+                byKey.put(key, workflowEngineClient.getBpmnXml(key)
+                        .map(BpmnMiXmlSupport::buildMiInnerTaskNameToSubProcessName)
+                        .orElseGet(HashMap::new));
+            } catch (Exception e) {
+                log.debug("buildMiNodeNameMaps: BPMN parse failed for processDefKey {}: {}", key, e.getMessage());
+                byKey.put(key, new HashMap<>());
+            }
+        }
+        return byKey;
     }
 
     /**
@@ -191,7 +223,8 @@ public class ProcessApplicationQueryComponent {
      * Assignee display name from {@link ProcessInstance#getCurrentAssignee()} / {@link ProcessInstance#getCandidateUsers()}
      * via {@link UserDisplayNameResolver} (single name; BU/Role OR pool {@code name1, name2, name3}).
      */
-    private ProcessInstanceInfo toProcessInstanceInfoForList(ProcessInstance instance, Map<String, String> userNameCache) {
+    private ProcessInstanceInfo toProcessInstanceInfoForList(ProcessInstance instance, Map<String, String> userNameCache,
+            Map<String, Map<String, String>> miNameMapByProcessDefKey) {
         String currentAssigneeName = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
                 instance.getCurrentAssignee(), instance.getCandidateUsers(), userNameCache);
 
@@ -202,6 +235,16 @@ public class ProcessApplicationQueryComponent {
         String currentNode = instance.getCurrentNode();
         if ("COMPLETED".equals(instance.getStatus())) {
             currentNode = null;
+        }
+
+        // 「当前步骤」MI 感知：若 currentNode 是多实例内层任务名，映射成外层多实例 subProcess name（如 "multi"）；
+        // 否则 = currentNode（普通节点）。终态 currentNode 为 null → currentStepName 也为 null（前端显 '-'）。
+        String currentStepName = currentNode;
+        if (currentNode != null && miNameMapByProcessDefKey != null) {
+            Map<String, String> miMap = miNameMapByProcessDefKey.get(instance.getProcessDefinitionKey());
+            if (miMap != null) {
+                currentStepName = miMap.getOrDefault(currentNode, currentNode);
+            }
         }
 
         return ProcessInstanceInfo.builder()
@@ -218,6 +261,7 @@ public class ProcessApplicationQueryComponent {
                 .startUserId(instance.getStartUserId())
                 .startUserName(instance.getStartUserName())
                 .currentNode(currentNode)
+                .currentStepName(currentStepName)
                 .currentAssignee(currentAssigneeName)
                 .candidateUsers(instance.getCandidateUsers())
                 .variables(instance.getVariables())
@@ -371,6 +415,16 @@ public class ProcessApplicationQueryComponent {
         }
         if ("RUNNING".equals(instance.getStatus())) {
             miOverlayComponent.reconcileCurrentNodeWithMiOverlay(info, miProgress);
+        }
+
+        // 「当前步骤」(MI 感知)：流程正处于多实例子任务内部时，展示外层多实例 subProcess 的 name（如 "multi"），
+        // 而非某个具体内层子任务名；普通节点则等于 currentNode。终态由前端显示 '-'（此处 currentNode 已为 null）。
+        if ("RUNNING".equals(instance.getStatus())) {
+            String miActivityName = (miProgress != null && !miProgress.isEmpty())
+                    ? miOverlayComponent.getMiActivityName(processId) : null;
+            info.setCurrentStepName(miActivityName != null ? miActivityName : info.getCurrentNode());
+        } else {
+            info.setCurrentStepName(info.getCurrentNode());
         }
         if (hasSubTables) {
             subTableEnrichmentComponent.enrichSubTablesWithAssignmentData(info, miProgress);

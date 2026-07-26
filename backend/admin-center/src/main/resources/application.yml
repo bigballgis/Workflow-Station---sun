@@ -12,14 +12,14 @@ app:
   database:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
     driver-class-name: org.postgresql.Driver
     max-pool-size: 20
     min-idle: 5
     connection-timeout: 20000
     
   security:
-    jwt-secret-key: ${JWT_SECRET:default-jwt-secret-key}
+    jwt-secret-key: ${JWT_SECRET:?JWT_SECRET is required}
     jwt-expiration-ms: ${JWT_EXPIRATION:86400000}
     jwt-refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
     password:
@@ -53,7 +53,7 @@ app:
   cache:
     redis-host: ${SPRING_REDIS_HOST:localhost}
     redis-port: ${SPRING_REDIS_PORT:6379}
-    redis-password: ${SPRING_REDIS_PASSWORD:redis123}
+    redis-password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
     redis-database: 1
     user-ttl-minutes: 30
     permission-ttl-minutes: 60
@@ -74,6 +74,12 @@ user-portal:
   base-url: ${USER_PORTAL_BASE_URL:http://localhost:8082/api/portal}
   internal-api-token: ${PORTAL_INTERNAL_API_TOKEN:}
 
+# C-3 (docs/ap-integration/DECISIONS.md#d6): 可信一方服务共享密钥。仅当请求携带此 token 时，
+# admin-center 才信任裸 X-User-Id/X-Username 铸身份。Activepieces 不持有此密钥。
+# 未配置 → header 身份兜底整体禁用（fail-closed）。须与 DW/user-portal 的同名密钥一致。
+service:
+  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+
 spring:
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
@@ -83,7 +89,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -119,7 +125,7 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
-      password: ${SPRING_REDIS_PASSWORD:redis123}
+      password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
       database: 1
       timeout: 5000ms
       lettuce:
@@ -251,7 +257,7 @@ admin:
     dictionary-ttl-minutes: 120
 
   user:
-    reset-password: ${USER_RESET_PASSWORD:password}
+    reset-password: ${USER_RESET_PASSWORD:?USER_RESET_PASSWORD is required}
 
 # Workflow Engine Configuration
 workflow-engine:
@@ -274,7 +280,7 @@ bi:
 # Activepieces integration (community edition + gateway shared account).
 # bridge.enabled is OFF by default — prod runs AP as runtime only (no UI login).
 # Non-prod enables the bridge so the :8085 gateway can mint AP tokens via the shared account.
-activepieces:
+service-task:
   internal-url: ${ACTIVEPIECES_INTERNAL_URL:http://localhost:8086}
   bridge:
     enabled: ${ACTIVEPIECES_BRIDGE_ENABLED:false}
@@ -288,7 +294,7 @@ activepieces:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  secret: ${JWT_SECRET:?JWT_SECRET is required}
   expiration: ${JWT_EXPIRATION:86400000}
   refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 
@@ -296,13 +302,21 @@ jwt:
 platform:
   security:
     jwt:
-      secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+      secret: ${JWT_SECRET:?JWT_SECRET is required}
       expiration-ms: ${JWT_EXPIRATION:86400000}
       refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
       # 服务自有 cookie 名，避免与 user-portal / developer-workstation 在同源下互相覆盖。
       # 列表首项是本服务写出 Cookie 的名字；其它项用于读取（兼容老客户端 / 转发场景）。
+      #
+      # dw_access_token 为只读项：Developer Workstation 页面（FU → Service Task）会直接调用
+      # admin-center 的 /internal/ap/* 登录桥端点，而浏览器此时持有的是 DW 签发的平台 JWT
+      # cookie。不列入则 JwtAuthenticationFilter 取不到 token → 无认证主体 → /launch 返回 401。
+      # 这与 C-3（DECISIONS.md#d6）不冲突：C-3 拒绝的是无密码学凭据的裸 X-User-Id 头，
+      # 这里读取并验签的是平台 JWT，属于真实认证；workflow-engine-core 早已同时接受
+      # up_/dw_/ac_ 三种 cookie 名，此处沿用同一模式。
       cookie-names:
         - ac_access_token
+        - dw_access_token
         - access_token
       refresh-cookie-name: ac_refresh_token
       # Cookie Domain. Empty (dev, single host) -> host-only. k8s non-prod sets it to
@@ -311,7 +325,7 @@ platform:
       issuer: platform
       validate-issuer: false
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
+    secret-key: ${ENCRYPTION_SECRET_KEY:?ENCRYPTION_SECRET_KEY is required}
   # 统一登录页 /login：签发 SSO code；子系统凭 SSO_INTERNAL_TOKEN 调用 /internal/sso/redeem
   sso:
     internal-token: ${SSO_INTERNAL_TOKEN:}

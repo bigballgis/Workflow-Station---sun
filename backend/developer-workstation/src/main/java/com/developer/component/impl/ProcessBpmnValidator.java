@@ -300,21 +300,52 @@ public class ProcessBpmnValidator {
                                 subProcessId);
                         }
 
-                        // 验证 4: assigneeField 存在于子表的 FieldDefinition 列表中
-                        String assigneeField = userTaskProps.get("assigneeField");
-                        if (assigneeField != null && !assigneeField.isEmpty()) {
-                            boolean fieldExists = table.getFieldDefinitions().stream()
-                                .anyMatch(fd -> fd.getFieldName().equals(assigneeField));
-
-                            if (!fieldExists) {
-                                result.addError("ASSIGNEE_FIELD_NOT_FOUND",
-                                    "AssigneeField '" + assigneeField + "' not found in SubTable " + subTableId,
-                                    subProcessId);
+                        // 验证 4: 按分派模式校验字段配置。
+                        // role 模式（assigneeMode=role）用 roleField（+ 可选 buField），user 模式用 assigneeField。
+                        String assigneeMode = userTaskProps.get("assigneeMode");
+                        boolean roleMode = assigneeMode != null && "role".equalsIgnoreCase(assigneeMode.trim());
+                        if (roleMode) {
+                            String roleField = userTaskProps.get("roleField");
+                            if (roleField != null && !roleField.isEmpty()) {
+                                boolean fieldExists = table.getFieldDefinitions().stream()
+                                    .anyMatch(fd -> fd.getFieldName().equals(roleField));
+                                if (!fieldExists) {
+                                    result.addError("ROLE_FIELD_NOT_FOUND",
+                                        "RoleField '" + roleField + "' not found in SubTable " + subTableId,
+                                        subProcessId);
+                                }
+                            } else {
+                                result.addError("MISSING_ROLE_FIELD",
+                                    "Multi-instance userTask (role mode) is missing roleField configuration",
+                                    userTaskId);
+                            }
+                            // buField 可选：填了就必须存在于子表字段中
+                            String buField = userTaskProps.get("buField");
+                            if (buField != null && !buField.isEmpty()) {
+                                boolean buExists = table.getFieldDefinitions().stream()
+                                    .anyMatch(fd -> fd.getFieldName().equals(buField));
+                                if (!buExists) {
+                                    result.addError("BU_FIELD_NOT_FOUND",
+                                        "BuField '" + buField + "' not found in SubTable " + subTableId,
+                                        subProcessId);
+                                }
                             }
                         } else {
-                            result.addError("MISSING_ASSIGNEE_FIELD",
-                                "Multi-instance userTask is missing assigneeField configuration",
-                                userTaskId);
+                            String assigneeField = userTaskProps.get("assigneeField");
+                            if (assigneeField != null && !assigneeField.isEmpty()) {
+                                boolean fieldExists = table.getFieldDefinitions().stream()
+                                    .anyMatch(fd -> fd.getFieldName().equals(assigneeField));
+
+                                if (!fieldExists) {
+                                    result.addError("ASSIGNEE_FIELD_NOT_FOUND",
+                                        "AssigneeField '" + assigneeField + "' not found in SubTable " + subTableId,
+                                        subProcessId);
+                                }
+                            } else {
+                                result.addError("MISSING_ASSIGNEE_FIELD",
+                                    "Multi-instance userTask is missing assigneeField configuration",
+                                    userTaskId);
+                            }
                         }
                     }
                 } catch (NumberFormatException e) {

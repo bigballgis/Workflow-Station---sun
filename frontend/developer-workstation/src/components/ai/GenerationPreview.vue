@@ -1,23 +1,22 @@
 <template>
-  <el-card
-    class="generation-preview"
-    shadow="hover"
-  >
-    <template #header>
-      <div class="generation-preview__header">
+  <section class="generation-preview">
+    <div class="generation-preview__header">
+      <div>
+        <p class="generation-preview__eyebrow">
+          GENERATED SPEC
+        </p>
         <span class="generation-preview__title">{{ t('ai.preview.title') }}</span>
       </div>
-    </template>
-
-    <!-- Task 16.1: Streaming indicator -->
-    <div
-      v-if="props.isStreaming"
-      class="generation-preview__streaming"
-    >
-      <el-icon class="is-loading">
-        <Loading />
-      </el-icon>
-      <span>{{ t('ai.preview.generating') }}</span>
+      <!-- Task 16.1: Streaming indicator -->
+      <div
+        v-if="props.isStreaming"
+        class="generation-preview__streaming"
+      >
+        <el-icon class="is-loading">
+          <Loading />
+        </el-icon>
+        <span>{{ t('ai.preview.generating') }}</span>
+      </div>
     </div>
 
     <!-- Task 15.2: Quality Score Display -->
@@ -82,32 +81,18 @@
         />
       </el-tabs>
 
-      <!-- Summary tab (default) -->
+      <!-- Summary tab (default): 规格统计带 -->
       <template v-if="previewTab === 'summary' || !props.diffResult || props.mode !== 'MODIFY'">
-        <el-descriptions
-          :column="2"
-          border
-          size="small"
-        >
-          <el-descriptions-item :label="t('ai.preview.tables')">
-            {{ t('ai.preview.tablesSummary', { count: previewData.tableCount, fields: previewData.totalFieldCount }) }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('ai.preview.forms')">
-            {{ t('ai.preview.formsSummary', { count: previewData.formCount }) }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('ai.preview.actions')">
-            {{ t('ai.preview.actionsSummary', { count: previewData.actionCount }) }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('ai.preview.process')">
-            {{ t('ai.preview.processSummary', { nodes: previewData.processNodeCount, gateways: previewData.processGatewayCount }) }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('ai.preview.decisions')">
-            {{ previewData.decisionCount }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('ai.preview.tableRelations')">
-            {{ previewData.tableRelationCount }}
-          </el-descriptions-item>
-        </el-descriptions>
+        <div class="generation-preview__stats">
+          <div
+            v-for="stat in statCells"
+            :key="stat.label"
+            class="generation-preview__stat"
+          >
+            <span class="generation-preview__stat-num">{{ stat.value }}</span>
+            <span class="generation-preview__stat-label">{{ stat.label }}</span>
+          </div>
+        </div>
 
         <div
           v-if="previewData.actionTypes.length"
@@ -314,7 +299,7 @@
         {{ t('ai.preview.regenerate') }}
       </el-button>
     </div>
-  </el-card>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -368,29 +353,119 @@ function getExplanation(path: string): string | undefined {
   return props.generatedData?.explanations?.[path]
 }
 
+// 规格统计带：等宽大数字 + 小标签
+const statCells = computed(() => [
+  { label: t('ai.preview.tables'), value: props.previewData.tableCount },
+  { label: t('ai.preview.fields'), value: props.previewData.totalFieldCount },
+  { label: t('ai.preview.forms'), value: props.previewData.formCount },
+  { label: t('ai.preview.actions'), value: props.previewData.actionCount },
+  { label: t('ai.preview.nodes'), value: props.previewData.processNodeCount },
+  { label: t('ai.preview.gateways'), value: props.previewData.processGatewayCount },
+  { label: t('ai.preview.decisions'), value: props.previewData.decisionCount },
+  { label: t('ai.preview.tableRelations'), value: props.previewData.tableRelationCount }
+])
+
 // Task 17.2: Diff preview tab state
 const previewTab = ref('summary')
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/ai-tokens.scss' as ai;
+
+// 规格单：白纸 + 发丝边 + 顶部红色细檐
 .generation-preview {
   margin: 12px 0;
+  background: ai.$ai-paper;
+  border: 1px solid ai.$ai-hairline;
+  border-top: 2px solid ai.$ai-red;
+  border-radius: 8px;
+  padding: 14px 16px 16px;
 }
 
 .generation-preview__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.generation-preview__eyebrow {
+  @include ai.ai-eyebrow;
+  margin: 0 0 2px;
 }
 
 .generation-preview__title {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
+  color: ai.$ai-ink;
 }
 
 .generation-preview__summary {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+// 统计带
+.generation-preview__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid ai.$ai-hairline;
+  border-radius: 6px;
+  overflow: hidden;
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.generation-preview__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-right: 1px solid ai.$ai-hairline;
+  border-bottom: 1px solid ai.$ai-hairline;
+
+  // 4 列网格：去掉每行最后一格右边线、最后一行下边线
+  &:nth-child(4n) {
+    border-right: none;
+  }
+
+  &:nth-child(n+5) {
+    border-bottom: none;
+  }
+
+  @media (max-width: 720px) {
+    &:nth-child(4n) {
+      border-right: 1px solid ai.$ai-hairline;
+    }
+
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(n+5) {
+      border-bottom: 1px solid ai.$ai-hairline;
+    }
+
+    &:nth-child(n+7) {
+      border-bottom: none;
+    }
+  }
+}
+
+.generation-preview__stat-num {
+  @include ai.ai-mono-num;
+  font-size: 18px;
+  font-weight: 600;
+  color: ai.$ai-ink;
+  line-height: 1.1;
+}
+
+.generation-preview__stat-label {
+  font-size: 11px;
+  color: ai.$ai-faint;
 }
 
 .generation-preview__tags {
@@ -401,8 +476,8 @@ const previewTab = ref('summary')
 }
 
 .generation-preview__label {
-  font-size: 13px;
-  color: #606266;
+  font-size: 12px;
+  color: ai.$ai-graphite;
 }
 
 .generation-preview__tag {
@@ -418,13 +493,13 @@ const previewTab = ref('summary')
 .generation-preview__icon-box {
   width: 48px;
   height: 48px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  border: 1px solid ai.$ai-hairline;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 4px;
-  background: #fafafa;
+  background: ai.$ai-mist;
 
   :deep(svg) {
     width: 100%;
@@ -443,9 +518,9 @@ const previewTab = ref('summary')
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #409eff;
-  font-size: 13px;
-  margin-bottom: 8px;
+  color: ai.$ai-red;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .generation-preview__skeleton {
@@ -476,7 +551,7 @@ const previewTab = ref('summary')
   margin: 8px 0 0;
   padding-left: 20px;
   font-size: 13px;
-  color: #606266;
+  color: ai.$ai-graphite;
   line-height: 1.8;
 }
 
@@ -496,8 +571,9 @@ const previewTab = ref('summary')
 }
 
 .preview-detail__entity-name {
-  font-weight: 500;
+  font-weight: 600;
   font-size: 13px;
+  color: ai.$ai-ink;
 }
 
 .preview-detail__fields {
@@ -509,6 +585,8 @@ const previewTab = ref('summary')
 
 .preview-detail__field-tag {
   margin: 0;
+  font-family: ai.$ai-mono;
+  font-size: 11px;
 }
 
 .preview-detail__form {
@@ -519,8 +597,9 @@ const previewTab = ref('summary')
 }
 
 .preview-detail__binding {
-  font-size: 12px;
-  color: #909399;
+  font-family: ai.$ai-mono;
+  font-size: 11px;
+  color: ai.$ai-faint;
 }
 
 .generation-preview__tabs {
@@ -528,12 +607,13 @@ const previewTab = ref('summary')
 }
 
 .generation-preview__diff-summary {
-  font-size: 13px;
-  color: #606266;
+  @include ai.ai-mono-num;
+  font-size: 12px;
+  color: ai.$ai-graphite;
   margin-bottom: 8px;
-  padding: 8px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  padding: 8px 10px;
+  background: ai.$ai-mist;
+  border-radius: 6px;
 }
 
 .generation-preview__diff-item {
@@ -562,7 +642,7 @@ const previewTab = ref('summary')
   margin: 4px 0 0;
   padding-left: 20px;
   font-size: 12px;
-  color: #909399;
+  color: ai.$ai-faint;
   line-height: 1.6;
 }
 </style>

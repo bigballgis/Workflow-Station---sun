@@ -18,6 +18,9 @@
         <el-descriptions-item :label="$t('task.taskName')">
           {{ taskInfo.taskName || $t('common.empty') }}
         </el-descriptions-item>
+        <el-descriptions-item :label="$t('task.currentStep')">
+          {{ currentStepDisplay }}
+        </el-descriptions-item>
         <el-descriptions-item :label="$t('task.processName')">
           {{ taskInfo.processDefinitionName || $t('common.empty') }}
         </el-descriptions-item>
@@ -41,13 +44,28 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { InfoFilled } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 
-defineProps<{
+const props = defineProps<{
   taskInfo: Record<string, any>
   formatDate: (date?: any) => string
   getCurrentAssigneeDisplay: () => string
+  /** 已完成任务：Current Step 无「当前」语义，显示 '-'（与申请详情终态一致）。 */
+  isCompleted?: boolean
 }>()
+
+const { t } = useI18n()
+
+/**
+ * Current Step（MI 感知）：优先用后端 currentStepName（多实例子任务内=外层多实例节点名如 "multi"），
+ * 回退 taskName（内层/普通节点名）；已完成任务显示 '-'。
+ */
+const currentStepDisplay = computed(() => {
+  if (props.isCompleted) return '-'
+  return props.taskInfo.currentStepName || props.taskInfo.taskName || t('common.empty')
+})
 </script>
 
 <style lang="scss" scoped>

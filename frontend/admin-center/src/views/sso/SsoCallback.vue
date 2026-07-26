@@ -11,7 +11,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { clearAuth, exchangeSsoCode, saveTokens, saveUser, USER_ID_KEY, USERNAME_KEY } from '@/api/auth'
 import { consumeSsoReturnPath, redirectToUnifiedLogin } from '@/utils/sso'
 import { canAccessRoute } from '@/utils/permission'
-import { launchActivepieces } from '@/api/ap'
+import { launchServiceTask } from '@/api/serviceTask'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
@@ -73,7 +73,7 @@ onMounted(async () => {
   // a static URL: without a freshly minted nonce the AP bridge has nothing to exchange.
   if (state === 'ap-bridge') {
     try {
-      const bridgeUrl = await launchActivepieces()
+      const bridgeUrl = await launchServiceTask()
       if (bridgeUrl) {
         window.location.href = bridgeUrl
         return

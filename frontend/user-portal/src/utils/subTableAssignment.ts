@@ -39,10 +39,12 @@ export function resolveAssigneeFieldForBinding(
 /** When a sub-table has multiple rows with an assignee column, every row must be assigned (non-empty) before the task can be completed. */
 export function allSubTableRowsHaveAssignee(rows: any[], assigneeField: string): boolean {
   if (!rows?.length) return true
+  const hasVal = (v: unknown) => v != null && String(v).trim() !== ''
   return rows.every(
     r =>
       r &&
-      r[assigneeField] != null &&
-      String(r[assigneeField]).trim() !== ''
+      // 已选具体人，或该行是「按角色分派」（有 role_code，走 BU_ROLE 共享认领池，
+      // 无需具体 assignee 即可完成——认领由角色成员在 To Do 里进行）。
+      (hasVal(r[assigneeField]) || hasVal(r.role_code))
   )
 }

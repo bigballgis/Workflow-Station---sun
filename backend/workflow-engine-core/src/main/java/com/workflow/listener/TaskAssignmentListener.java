@@ -140,6 +140,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
         return objectMapper;
     }
 
+    TaskAssigneeResolver taskAssigneeResolver() {
+        return taskAssigneeResolver;
+    }
+
     /**
      * Lazily resolves the MI writer collaborator. Falls back to a plain instance when the {@code @Lazy} bean
      * was not injected (e.g. unit tests that construct this listener directly without a Spring context).
@@ -188,7 +192,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
      * When the client bean was not injected (unit tests constructing this listener directly), the
      * original id is returned unchanged rather than NPE-ing.
      */
-    private String mapActiveBusinessUnitIdToCode(String businessUnitId) {
+    String mapActiveBusinessUnitIdToCode(String businessUnitId) {
         if (businessUnitId == null || businessUnitId.isBlank() || adminCenterClient == null) {
             return businessUnitId;
         }
@@ -784,7 +788,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 "workflow-engine");
     }
 
-    private void notifyCandidateTask(String userId, String taskId, String taskName, String processInstanceId) {
+    void notifyCandidateTask(String userId, String taskId, String taskName, String processInstanceId) {
         if (userId == null || userId.isBlank() || notificationDispatchHelper == null) {
             return;
         }

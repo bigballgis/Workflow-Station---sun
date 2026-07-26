@@ -46,17 +46,22 @@ type FormCreateParserCtx = {
   prop: { props?: Record<string, unknown> }
 }
 
+// form-create calls mergeProp during every rule normalization pass. These helpers MUST be
+// idempotent: reassigning ctx.rule / ctx.rule.props (or writing an unchanged value onto a
+// reactive rule) re-triggers form-create's watcher → re-normalize → mergeProp → infinite
+// render loop that synchronously locks the main thread (Form Preview spinner never clears).
+// So only write when the value actually changes, and mutate the existing props object in place.
+
 function clearStaleReadonlyDisabled(ctx: FormCreateParserCtx): void {
-  delete ctx.rule.disabled
-  ctx.rule.readonly = false
-  const ruleProps = { ...((ctx.rule.props as Record<string, unknown> | undefined) || {}) }
-  delete ruleProps.disabled
-  ruleProps.readonly = false
-  ctx.rule.props = ruleProps
+  if (ctx.rule.disabled !== undefined) delete ctx.rule.disabled
+  if (ctx.rule.readonly !== false) ctx.rule.readonly = false
+  const ruleProps = (ctx.rule.props as Record<string, unknown> | undefined) ?? (ctx.rule.props = {})
+  if ((ruleProps as Record<string, unknown>).disabled !== undefined) delete (ruleProps as Record<string, unknown>).disabled
+  if ((ruleProps as Record<string, unknown>).readonly !== false) (ruleProps as Record<string, unknown>).readonly = false
 
   const props = ctx.prop.props ?? (ctx.prop.props = {})
-  delete props.disabled
-  props.readonly = false
+  if (props.disabled !== undefined) delete props.disabled
+  if (props.readonly !== false) props.readonly = false
 }
 
 function isPanelReadonlyExplicitlyOff(ctx: FormCreateParserCtx): boolean {
@@ -70,10 +75,10 @@ function applyReadonlyToParserCtx(ctx: FormCreateParserCtx): void {
   }
   if (!isFormCreateRuleReadonly(ctx.rule)) return
 
-  ctx.rule.disabled = true
+  if (ctx.rule.disabled !== true) ctx.rule.disabled = true
   const props = ctx.prop.props ?? (ctx.prop.props = {})
-  props.disabled = true
-  delete props.readonly
+  if (props.disabled !== true) props.disabled = true
+  if (props.readonly !== undefined) delete props.readonly
 }
 
 const readonlyParserConfig = {

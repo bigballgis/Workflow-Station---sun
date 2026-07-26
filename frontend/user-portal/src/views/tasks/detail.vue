@@ -83,6 +83,7 @@
         :task-info="taskInfo"
         :format-date="formatDate"
         :get-current-assignee-display="getCurrentAssigneeDisplay"
+        :is-completed="isCompletedTask"
       />
 
       <div

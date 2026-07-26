@@ -106,6 +106,53 @@ services:
         strip_path: false
         preserve_host: false
 
+  # --- Activepieces builder API (L2, per-user) ---
+  # DW 设计态嵌入的 AP builder 经此访问 AP 的 REST+socket.io。AP 的原生 API 在
+  # /api/v1/* + /api/socket.io，与平台自身 /api/v1/* 冲突，故这里用独立前缀
+  # /api/ap/* 收编（替代已退役的 :8085 独立 origin 桥，见 X-Bridge-Retire / Q6）：
+  #   /api/ap/v1/flags        -> AP /api/v1/flags        （strip /api/ap，service 带 /api）
+  #   /api/ap/socket.io/...   -> AP /api/socket.io/...    （见下方独立 WS service）
+  # 鉴权由 AP 自身完成（浏览器持 L7 的 per-user AP token，REST 走 Authorization: Bearer，
+  # socket.io 握手走 auth {token}）——Kong 不验 JWT（与本网关既有约定一致），仅透明路由。
+  # 生产 portal 运行态不需要 builder API 面，此前缀应只在设计态可达（见 Doc4 §4.1）。
+  #
+  # 硬约束落点（Doc4 §4.2）：
+  #   #3 POST /api/v1/pieces/options 同步跑引擎作业 -> read/write_timeout 放宽到 300s；
+  #   #4 /v1/pieces/@scope/name 含未编码斜杠 -> strip_path 只切 /api/ap 前缀、其余原样透传，
+  #      Kong 3.x 默认不重复解码路径，保留 @scope/name 双段；
+  #   #2 POST /v1/flows/:flowId 单点写路径最高 SLA -> 不加 retries/熔断，超时给足。
+  - name: activepieces-builder-service
+    url: http://activepieces:80/api
+    connect_timeout: 60000
+    write_timeout: 300000
+    read_timeout: 300000
+    routes:
+      - name: activepieces-builder-route
+        paths:
+          - /api/ap
+        strip_path: true
+        preserve_host: false
+
+  # --- Activepieces builder socket.io (WebSocket) ---
+  # 硬约束 #1：测试/观测 100% 靠 socket.io，无 HTTP 兜底 -> 必须支持 WS 升级 + 长连接。
+  # service url 带完整 /api/socket.io base，route strip /api/ap/socket.io，保住 socket.io 段：
+  #   /api/ap/socket.io/?EIO=4  -> strip -> /?EIO=4 -> service /api/socket.io + /?EIO=4
+  # Kong 按最长前缀匹配：socket.io 命中本 WS 路由，其余命中上面的 REST 路由。
+  - name: activepieces-builder-ws-service
+    url: http://activepieces:80/api/socket.io
+    connect_timeout: 60000
+    write_timeout: 86400000
+    read_timeout: 86400000
+    routes:
+      - name: activepieces-builder-ws-route
+        paths:
+          - /api/ap/socket.io
+        strip_path: true
+        preserve_host: false
+        protocols:
+          - http
+          - https
+
   # --- 公开路由 (不启用 JWT 插件) ---
   # admin-center 登录
   - name: admin-center-auth-service
@@ -311,6 +358,22 @@ plugins:
         password: __REDIS_PASSWORD__
         database: 5
       limit_by: ip
+
+  # --- Activepieces builder REST 路由级限流 (放宽) ---
+  # 硬约束 #5：builder 首屏放大 ≈ 2N+2M（20 步 ~80 请求）+ #6 长轮询/心跳（15s/5s/30s）
+  # 常驻产生持续流量 -> 全局 600/min 会误伤。放宽到 3000/min。socket.io（WS 路由）不限流。
+  - name: rate-limiting
+    route: activepieces-builder-route
+    config:
+      minute: 3000
+      policy: redis
+      redis:
+        host: __REDIS_HOST__
+        port: 6379
+        password: __REDIS_PASSWORD__
+        database: 5
+      limit_by: ip
+      fault_tolerant: true
 
 # ============================================================
 # Upstreams — removed (not referenced by services)

@@ -6,7 +6,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
-    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
+    password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -53,7 +53,7 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
-      password: ${SPRING_REDIS_PASSWORD:redis123}
+      password: ${SPRING_REDIS_PASSWORD:?SPRING_REDIS_PASSWORD is required}
       database: 2
       timeout: 5000ms
       lettuce:
@@ -82,6 +82,11 @@ server:
 admin-center:
   url: ${ADMIN_CENTER_URL:http://localhost:8090}
 
+# C-3 (docs/ap-integration/DECISIONS.md#d6): 调用 admin-center 时附带的可信服务密钥，
+# 使 admin-center 信任转发的 X-User-Id。须与 admin-center service.internal-token 一致。
+service:
+  internal-token: ${SERVICE_INTERNAL_TOKEN:}
+
 # Workflow Engine Core URL for API calls
 workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
@@ -102,7 +107,7 @@ portal:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  secret: ${JWT_SECRET:?JWT_SECRET is required}
   expiration: ${JWT_EXPIRATION:86400000}
   refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 
@@ -113,7 +118,7 @@ platform:
     internal-token: ${SSO_INTERNAL_TOKEN:}
   security:
     jwt:
-      secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+      secret: ${JWT_SECRET:?JWT_SECRET is required}
       expiration-ms: ${JWT_EXPIRATION:86400000}
       refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
       # 服务自有 cookie 名，避免与 admin-center / developer-workstation 在同源 localhost:3000 下互相覆盖工作台 claim。
@@ -125,7 +130,7 @@ platform:
       issuer: platform
       validate-issuer: false
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
+    secret-key: ${ENCRYPTION_SECRET_KEY:?ENCRYPTION_SECRET_KEY is required}
 
 springdoc:
   api-docs:
