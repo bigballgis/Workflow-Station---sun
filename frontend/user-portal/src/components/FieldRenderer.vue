@@ -590,14 +590,15 @@
           :display-field="(field as any)._lookupDisplayField || ''"
           :display-fields="(field as any)._lookupDisplayFields || []"
           :selected-display-field="(field as any)._lookupSelectedDisplayField || ''"
-          :filter-conditions="(field as any)._lookupFilterConditions || []"
+          :filter-conditions="effectiveLookupFilterConditions"
           :lookup-config="(field as any)._lookupConfig"
           :view-fields="(field as any)._lookupViewFields || []"
           :placeholder="field.placeholder"
           :readonly="isDisabled"
+          :multiple="(field as any)._lookupMultiple === true"
           @update:model-value="onUpdate"
-          @select="(row: Record<string, any>) => onLookupSelect(row)"
-          @clear="onLookupClear"
+          @select="(row: Record<string, any>) => handleLookupSelect(row)"
+          @clear="handleLookupClear"
           @view-fields-loaded="(vfs: any[]) => onLookupViewFieldsLoaded(vfs)"
         />
         <LookupViewDisplay
@@ -632,7 +633,7 @@
 // ordering is preserved (lookup watch → upload watch; editor onBeforeUnmount →
 // signature onBeforeUnmount; combined onMounted for signature + department).
 // ---------------------------------------------------------------------------
-import { onMounted } from 'vue'
+import { computed, inject, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
@@ -647,6 +648,8 @@ import { useFieldUpload } from '@/composables/fieldRenderer/useFieldUpload'
 import { useFieldEditor } from '@/composables/fieldRenderer/useFieldEditor'
 import { useFieldSignature } from '@/composables/fieldRenderer/useFieldSignature'
 import { useFieldDepartment } from '@/composables/fieldRenderer/useFieldDepartment'
+import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
+import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -708,6 +711,41 @@ const {
   onLookupClear,
   onLookupViewFieldsLoaded,
 } = useFieldLookup(props)
+
+const formRendererCtx = inject(FORM_RENDERER_FIELDS_CTX, null)
+const inlineLookupCtx = inject(INLINE_LOOKUP_CASCADE_CTX, null)
+
+const effectiveLookupFilterConditions = computed(() => {
+  if (formRendererCtx?.lookupFilterConditionsFor) {
+    return formRendererCtx.lookupFilterConditionsFor(props.field)
+  }
+  if (inlineLookupCtx?.lookupFilterConditionsFor) {
+    return inlineLookupCtx.lookupFilterConditionsFor(props.field)
+  }
+  return (props.field as { _lookupFilterConditions?: unknown[] })._lookupFilterConditions || []
+})
+
+function handleLookupSelect(row: Record<string, unknown>) {
+  onLookupSelect(row as Record<string, any>)
+  if (formRendererCtx?.handleLookupSelect) {
+    void formRendererCtx.handleLookupSelect(props.field.key, row)
+    return
+  }
+  if (inlineLookupCtx?.handleLookupSelect) {
+    void inlineLookupCtx.handleLookupSelect(props.field.key, row)
+  }
+}
+
+function handleLookupClear() {
+  onLookupClear()
+  if (formRendererCtx?.handleLookupClear) {
+    formRendererCtx.handleLookupClear(props.field.key)
+    return
+  }
+  if (inlineLookupCtx?.handleLookupClear) {
+    inlineLookupCtx.handleLookupClear(props.field.key)
+  }
+}
 
 // Upload URL + file list — registers the modelValue watch second.
 const {

@@ -30,6 +30,13 @@ export interface LookupPreviewConfig {
   displayFields: string[]
   selectedDisplayField: string
   filterConditions: any[]
+  /** LOOKUP cascade (derivedFrom) — used by List/Card preview mock row */
+  derivedFrom?: {
+    parentField: string
+    joins: Array<{ fromColumn: string; toColumn: string; matchType?: string }>
+    derivedMode: 'autofill' | 'filter'
+  }
+  multiple?: boolean
   viewFields: any[]
   fieldDefs: any[]
   showBackfillView: boolean

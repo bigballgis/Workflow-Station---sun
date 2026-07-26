@@ -420,7 +420,9 @@ const {
   lookupSelectedData,
   lookupLoadedViewFields,
   lookupShowBackfillView,
+  lookupFilterConditionsFor,
   handleLookupSelect,
+  handleLookupModelUpdate,
   handleLookupClear,
   initFormData,
   formRules,
@@ -604,6 +606,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   getCurrentRowForInlineForm,
   inlineSubTableFormReadonly,
   lookupShowBackfillView,
+  lookupFilterConditionsFor,
   handleSubTableUpdate,
   handlePrimaryFormDataPatch,
   handleInlineFormSave,
@@ -612,6 +615,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   scrollSubTableInlineIntoView,
   setSubTableInlineAnchor,
   handleLookupSelect,
+  handleLookupModelUpdate,
   handleLookupClear,
   handleFieldChange,
   handleFieldBlur,
@@ -750,18 +754,19 @@ defineExpose({
     }
   }
 
-  .form-layout-card {
+  /* FormRendererFields is a fragment; pierce so card chrome stays shared with DW Preview. */
+  :deep(.form-layout-card) {
     width: 100%;
-    margin-bottom: 18px;
+    margin-bottom: 10px;
 
-    :deep(.el-card__header) {
+    .el-card__header {
       padding: 12px 16px;
       font-weight: 500;
       background: #fafafa;
     }
   }
 
-  .form-layout-card-title {
+  :deep(.form-layout-card-title) {
     color: #303133;
   }
 

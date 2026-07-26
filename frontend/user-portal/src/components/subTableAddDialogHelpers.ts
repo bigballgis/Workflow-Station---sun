@@ -63,6 +63,7 @@ export {
   getLookupSelectedDisplayField,
   buildLookupColumnProps,
   resolveLookupCellTagText,
+  unwrapSingleLookupModelValue,
   enrichLookupColumnPropsFromSubFormRule,
 } from './subTableAddDialogHelpers/lookup'
 
@@ -78,3 +79,8 @@ export {
   resolveSubFormRuleForBinding,
   type SubFormColumnLookupContext,
 } from './subTableAddDialogHelpers/subFormCanvasColumns'
+
+export {
+  buildDialogLayoutGroups,
+  type DialogLayoutGroup,
+} from './subTableAddDialogHelpers/dialogFormLayout'

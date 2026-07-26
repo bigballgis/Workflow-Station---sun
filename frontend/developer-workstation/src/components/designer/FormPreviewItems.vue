@@ -166,12 +166,16 @@
         :search-fields="item.searchFields"
         :display-fields="item.displayFields"
         :selected-display-field="item.selectedDisplayField"
-        :filter-conditions="item.filterConditions || []"
+        :filter-conditions="effectivePreviewLookupFilterConditions(item)"
         :view-fields="item.viewFields"
         :field-defs="item.fieldDefs"
+        :ensure-mock-fields="ensureMockFieldsForLookup(item)"
         :show-backfill-view="item.showBackfillView !== false"
         :readonly="isMyRequestsPreview || item.readonly === true"
+        :multiple="item.multiple === true"
         @update:model-value="(val) => onLookupPreviewChange(item, val)"
+        @select="(row) => onLookupPreviewSelect(item, row)"
+        @clear="() => onLookupPreviewClear(item)"
       />
     </div>
 
@@ -203,12 +207,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, reactive, watch } from 'vue'
+import { computed, inject, provide, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   PREVIEW_MY_REQUESTS_ACTIVE_KEY,
   PREVIEW_RESOLVE_SUBTABLE_FORM_KEY,
 } from './previewSubTableDialog'
+import { PREVIEW_LOOKUP_CASCADE_KEY } from './previewLookupCascade'
 import SubTableField from './SubTableField.vue'
 import LookupPreview from './LookupPreview.vue'
 import type { FormPreviewItem, PreviewSubTableBinding } from './formPreviewTypes'
@@ -221,6 +226,11 @@ import {
 import {
   dispatchPreviewFieldValueChange,
 } from '@/utils/formCreatePreviewEvents'
+import {
+  buildDerivedFilterConditions,
+  buildPreviewAutofillModelValue,
+  normalizeLookupRow,
+} from '@/utils/lookupCascade'
 
 defineOptions({ name: 'FormPreviewItems' })
 
@@ -295,6 +305,94 @@ const previewModel = computed({
   set: (value: Record<string, any>) => emit('update:previewData', value),
 })
 
+const parentCascade = inject(PREVIEW_LOOKUP_CASCADE_KEY, null)
+const lookupSelectedRows =
+  parentCascade?.lookupSelectedRows ?? reactive<Record<string, Record<string, unknown>>>({})
+
+function collectLookupPreviewItems(nodes: FormPreviewItem[]): Extract<FormPreviewItem, { kind: 'lookup' }>[] {
+  const out: Extract<FormPreviewItem, { kind: 'lookup' }>[] = []
+  for (const node of nodes) {
+    if (node.kind === 'lookup') out.push(node)
+    if (node.kind === 'card') out.push(...collectLookupPreviewItems(node.items))
+  }
+  return out
+}
+
+function applyCascadeAutofillFromParent(parentField: string, parentRow: Record<string, unknown> | null) {
+  const deps = collectLookupPreviewItems(props.items)
+  let nextModel: Record<string, any> | null = null
+  for (const dep of deps) {
+    if (dep.derivedFrom?.parentField !== parentField) continue
+    if (dep.derivedFrom?.derivedMode !== 'autofill') continue
+    const autofill = parentRow
+      ? buildPreviewAutofillModelValue(
+        { derivedFrom: dep.derivedFrom, filterConditions: dep.filterConditions },
+        parentRow,
+        {
+          searchFields: dep.searchFields,
+          selectedDisplayField: dep.selectedDisplayField,
+          displayFields: dep.displayFields,
+          multiple: dep.multiple === true,
+        },
+      )
+      : (dep.multiple === true ? [] : null)
+    const firstRow = Array.isArray(autofill) ? (autofill[0] ?? null) : autofill
+    if (firstRow) lookupSelectedRows[dep.field] = firstRow
+    else delete lookupSelectedRows[dep.field]
+    if (!nextModel) nextModel = { ...previewModel.value }
+    nextModel[dep.field] = autofill
+    onPreviewFieldChange([dep.rule], dep.field, autofill)
+  }
+  if (nextModel) emit('update:previewData', nextModel)
+}
+
+function notifyLookupChange(field: string, row: Record<string, unknown> | null) {
+  if (row) lookupSelectedRows[field] = row
+  else delete lookupSelectedRows[field]
+  applyCascadeAutofillFromParent(field, row)
+}
+
+function filterFor(
+  base: import('@/utils/lookupFilterConditions').LookupFilterCondition[],
+  derivedFrom: import('@/utils/lookupCascade').LookupDerivedFrom | undefined,
+) {
+  if (!derivedFrom?.parentField) return base
+  const parentRow = lookupSelectedRows[derivedFrom.parentField] ?? null
+  return buildDerivedFilterConditions(base, { derivedFrom, filterConditions: base }, parentRow)
+}
+
+if (!parentCascade) {
+  provide(PREVIEW_LOOKUP_CASCADE_KEY, {
+    lookupSelectedRows,
+    filterFor,
+    notifyLookupChange,
+  })
+}
+
+function effectivePreviewLookupFilterConditions(
+  item: Extract<FormPreviewItem, { kind: 'lookup' }>,
+): import('@/utils/lookupFilterConditions').LookupFilterCondition[] {
+  const base = item.filterConditions || []
+  return (parentCascade?.filterFor ?? filterFor)(base, item.derivedFrom)
+}
+
+/** Join columns that must exist on mock rows for cascade filter/autofill to demonstrate. */
+function ensureMockFieldsForLookup(
+  item: Extract<FormPreviewItem, { kind: 'lookup' }>,
+): string[] {
+  const fields = new Set<string>()
+  for (const j of item.derivedFrom?.joins || []) {
+    if (j.toColumn) fields.add(j.toColumn)
+  }
+  for (const dep of collectLookupPreviewItems(props.items)) {
+    if (dep.derivedFrom?.parentField !== item.field) continue
+    for (const j of dep.derivedFrom.joins || []) {
+      if (j.fromColumn) fields.add(j.fromColumn)
+    }
+  }
+  return Array.from(fields)
+}
+
 function inlineFormBelowForBinding(binding: PreviewSubTableBinding) {
   return resolvePreviewInlineFormBelowDesign(binding, resolveSubTableFormDesign)
 }
@@ -333,6 +431,27 @@ function onLookupPreviewChange(
 ) {
   if (!item.field || isMyRequestsPreview.value) return
   onPreviewFieldChange([item.rule], item.field, value)
+  // Single-select: model value is the row object → drive cascade here.
+  // Multi-select: model value is PK[]; cascade parent row comes from @select/@clear.
+  if (item.multiple) return
+  const row = normalizeLookupRow(value)
+  if (parentCascade) parentCascade.notifyLookupChange(item.field, row)
+  else notifyLookupChange(item.field, row)
+}
+
+function onLookupPreviewSelect(
+  item: Extract<FormPreviewItem, { kind: 'lookup' }>,
+  row: Record<string, unknown>,
+) {
+  if (!item.field || isMyRequestsPreview.value || !item.multiple) return
+  if (parentCascade) parentCascade.notifyLookupChange(item.field, row)
+  else notifyLookupChange(item.field, row)
+}
+
+function onLookupPreviewClear(item: Extract<FormPreviewItem, { kind: 'lookup' }>) {
+  if (!item.field || isMyRequestsPreview.value) return
+  if (parentCascade) parentCascade.notifyLookupChange(item.field, null)
+  else notifyLookupChange(item.field, null)
 }
 
 function mergePrimaryFormData(patch: Record<string, unknown>) {
@@ -346,6 +465,11 @@ function mergePrimaryFormData(patch: Record<string, unknown>) {
 .form-preview-wrapper {
   :deep(.form-create) {
     width: 100%;
+  }
+
+  /* form-create elCard rules stay inside fields segments — gap matches Portal FormRenderer */
+  :deep(.el-card) {
+    margin-bottom: 10px;
   }
 
   :deep(.el-form-item) {
@@ -417,7 +541,7 @@ function mergePrimaryFormData(patch: Record<string, unknown>) {
 }
 
 .form-preview-card {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .form-preview-card-title {

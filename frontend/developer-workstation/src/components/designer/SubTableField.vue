@@ -163,11 +163,14 @@
               :search-fields="col.props?.searchFields || []"
               :display-fields="col.props?.displayFields || []"
               :selected-display-field="col.props?.selectedDisplayField || ''"
-              :filter-conditions="col.props?.filterConditions || []"
+              :filter-conditions="effectiveLookupFilterForCell(col, scope.row)"
               :view-fields="col.props?.viewFields || []"
               :field-defs="col.props?.fieldDefs || []"
+              :ensure-mock-fields="ensureMockFieldsForColumn(col)"
               :show-backfill-view="previewLookupCompact ? false : (col.props?.showBackfillView !== false)"
               :readonly="!editable || (col.field === 'assignee' && assigneeCellLocked(scope.row))"
+              :multiple="col.props?.multiple === true"
+              @update:model-value="(val) => onLookupCellChange(col, scope.$index, val)"
             />
           </template>
           <!-- default -->
@@ -324,6 +327,14 @@ import { useSubTableUploadCells } from '@/composables/designerSubTableField/useS
 import { useSubTableInlineForm } from '@/composables/designerSubTableField/useSubTableInlineForm'
 import { useSubTableLinkForm } from '@/composables/designerSubTableField/useSubTableLinkForm'
 import { useSubTableRowDialog } from '@/composables/designerSubTableField/useSubTableRowDialog'
+import {
+  buildPreviewAutofillModelValue,
+  effectiveLookupFilterConditionsForRow,
+  normalizeLookupRow,
+  type LookupCascadeConfig,
+  type LookupDerivedFrom,
+} from '@/utils/lookupCascade'
+import { parseLookupConfig } from '@/utils/formPreview'
 
 const { t } = useI18n()
 const previewDialogHost = inject(PREVIEW_SUBTABLE_DIALOG_KEY, null)
@@ -402,6 +413,75 @@ function hasVal(v: unknown): boolean {
 }
 function assigneeCellLocked(row: Record<string, any>): boolean {
   return hasVal(row?.role_code) || hasVal(row?.bu_code)
+}
+
+function lookupCascadeConfigForColumn(col: ColumnConfig): LookupCascadeConfig {
+  const fromProps = col.props?.derivedFrom as LookupDerivedFrom | undefined
+  if (fromProps) {
+    return {
+      filterConditions: (col.props?.filterConditions as LookupCascadeConfig['filterConditions']) || [],
+      derivedFrom: fromProps,
+    }
+  }
+  const cfg = parseLookupConfig(
+    typeof col.props?.lookupConfig === 'string' ? col.props.lookupConfig : JSON.stringify(col.props?.lookupConfig || {}),
+  )
+  return {
+    filterConditions: Array.isArray(cfg.filterConditions)
+      ? cfg.filterConditions
+      : ((col.props?.filterConditions as LookupCascadeConfig['filterConditions']) || []),
+    derivedFrom: cfg.derivedFrom,
+  }
+}
+
+function effectiveLookupFilterForCell(col: ColumnConfig, row: Record<string, unknown>) {
+  const cfg = lookupCascadeConfigForColumn(col)
+  const base = (col.props?.filterConditions as LookupCascadeConfig['filterConditions']) || cfg.filterConditions || []
+  return effectiveLookupFilterConditionsForRow(base, cfg, row)
+}
+
+function ensureMockFieldsForColumn(col: ColumnConfig): string[] {
+  const fields = new Set<string>()
+  const cfg = lookupCascadeConfigForColumn(col)
+  for (const j of cfg.derivedFrom?.joins || []) {
+    if (j.toColumn) fields.add(j.toColumn)
+  }
+  for (const dep of displayColumns.value) {
+    if (dep.type !== 'lookup' || dep.field === col.field) continue
+    const depCfg = lookupCascadeConfigForColumn(dep)
+    if (depCfg.derivedFrom?.parentField !== col.field) continue
+    for (const j of depCfg.derivedFrom.joins || []) {
+      if (j.fromColumn) fields.add(j.fromColumn)
+    }
+  }
+  return Array.from(fields)
+}
+
+function onLookupCellChange(col: ColumnConfig, rowIndex: number, value: unknown) {
+  if (!editable.value || rowIndex < 0 || rowIndex >= tableData.value.length) return
+  const next = tableData.value.map((r, i) => (i === rowIndex ? { ...r } : r))
+  const row = next[rowIndex]
+  const isMulti = col.props?.multiple === true
+  // Multi LOOKUP stores full row object(s); single stores row object (Portal parity).
+  row[col.field] = isMulti ? (Array.isArray(value) ? value : []) : normalizeLookupRow(value)
+  const parentRow = isMulti ? null : normalizeLookupRow(value)
+  for (const dep of displayColumns.value) {
+    if (dep.type !== 'lookup' || dep.field === col.field) continue
+    const depCfg = lookupCascadeConfigForColumn(dep)
+    if (depCfg.derivedFrom?.parentField !== col.field) continue
+    if (depCfg.derivedFrom.derivedMode !== 'autofill') continue
+    const depMulti = dep.props?.multiple === true
+    row[dep.field] = parentRow
+      ? buildPreviewAutofillModelValue(depCfg, parentRow, {
+        searchFields: (dep.props?.searchFields as string[]) || [],
+        selectedDisplayField: String(dep.props?.selectedDisplayField || ''),
+        displayFields: (dep.props?.displayFields as string[]) || [],
+        multiple: depMulti,
+      })
+      : (depMulti ? [] : null)
+  }
+  tableData.value = next
+  emit('update:modelValue', next)
 }
 
 // 判断列中是否存在 FILE 类型的字段（有 FILE 列时隐藏 Import 按钮）
@@ -746,6 +826,10 @@ defineExpose(exposed)
 
     :deep(.form-create) {
       width: 100%;
+    }
+
+    :deep(.el-card) {
+      margin-bottom: 10px;
     }
   }
 

@@ -1,8 +1,11 @@
 // Derived auto-fill + cascade filtering between two LOOKUP columns (admin-center).
-// A dependent lookup B declares derivedFrom.parentField = A. When A's value is
-// selected, we build B-table filterConditions from A's picked row and either
-// auto-fill B (take matched rows) or just narrow B's dropdown candidates.
+// Pure filter/cycle: @platform-shared/lookupCascadeCore. Resolve uses relationTableDataApi.
 import { relationTableDataApi, type LookupConfig, type LookupFilterCondition } from '@/api/relationTable'
+import {
+  buildDerivedFilterConditions as buildDerivedFilterConditionsCore,
+  hasCascadeCycle as hasCascadeCycleCore,
+  type LookupCascadeConfigLike,
+} from '@platform-shared/lookupCascadeCore'
 
 export interface FieldLike {
   fieldName: string
@@ -16,16 +19,11 @@ export function buildDerivedFilterConditions(
   cfg: LookupConfig | undefined,
   parentRow: Record<string, any> | null | undefined,
 ): LookupFilterCondition[] {
-  const out: LookupFilterCondition[] = [...(baseConditions || [])]
-  const df = cfg?.derivedFrom
-  if (!df || !parentRow) return out
-  for (const join of df.joins || []) {
-    if (!join.fromColumn || !join.toColumn) continue
-    const v = parentRow[join.fromColumn]
-    if (v == null || String(v).trim() === '') continue
-    out.push({ fieldName: join.toColumn, value: String(v), matchType: join.matchType || 'eq' })
-  }
-  return out
+  return buildDerivedFilterConditionsCore(
+    baseConditions,
+    cfg as LookupCascadeConfigLike | undefined,
+    parentRow,
+  ) as LookupFilterCondition[]
 }
 
 /**
@@ -33,16 +31,7 @@ export function buildDerivedFilterConditions(
  * ever return to `startField`? Guards against A⇐B and B⇐A looping forever.
  */
 export function hasCascadeCycle(startField: string, fields: FieldLike[]): boolean {
-  const byName = new Map(fields.map(f => [f.fieldName, f]))
-  const seen = new Set<string>()
-  let cur: string | undefined = byName.get(startField)?.lookupConfig?.derivedFrom?.parentField
-  while (cur) {
-    if (cur === startField) return true
-    if (seen.has(cur)) return false
-    seen.add(cur)
-    cur = byName.get(cur)?.lookupConfig?.derivedFrom?.parentField
-  }
-  return false
+  return hasCascadeCycleCore(startField, fields)
 }
 
 const LOOKUP_PAGE_SIZE = 200

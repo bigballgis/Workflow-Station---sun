@@ -387,7 +387,9 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
             })
             localBindingMap.delete(Number(itemBindingId))
           }
-        } else if (isCardRule(ruleItem) && containsSubTableRule(ruleItem)) {
+        } else if (isCardRule(ruleItem)) {
+          // Extract every card so lookups inside cards use FormPreviewItems cascade
+          // (same path as main-form kind:'lookup'), not form-create LookupComponent alone.
           flushSegment()
           items.push({
             kind: 'card',

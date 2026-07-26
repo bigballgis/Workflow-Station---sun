@@ -64,7 +64,10 @@ export interface FormRendererFieldsContext {
   scrollSubTableInlineIntoView: (bindingId?: number) => void
   setSubTableInlineAnchor: (bindingId: number | undefined, el: HTMLElement | null) => void
   handleLookupSelect: (key: string, row: unknown) => void
+  /** Multi LOOKUP model sync (tag remove / toggle) — optional for older inject sites. */
+  handleLookupModelUpdate?: (key: string, value: unknown) => void
   handleLookupClear: (key: string) => void
+  lookupFilterConditionsFor: (field: FormField) => unknown[]
   handleFieldChange: (key: string, val: unknown) => void
   handleFieldBlur: (key: string) => void
   /** Form-event script errors (setFieldError), keyed by field binding key. */

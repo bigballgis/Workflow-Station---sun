@@ -6,7 +6,7 @@
  */
 import FieldRenderer from './FieldRenderer.vue'
 import SubTableField from './SubTableField.vue'
-import { computed } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import type { FormField } from './formRendererHelpers'
 import {
   filterLinkOnlyStandaloneSubTableFields,
@@ -14,6 +14,8 @@ import {
   mergeNestedSubTableRowsIntoSto,
 } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shared'
+import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
+import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
 
 export interface PortalSubTableBindingLite {
   bindingId: number
@@ -65,6 +67,17 @@ const emit = defineEmits<{
 
 defineOptions({ name: 'PortalFormFields' })
 
+const rowModelRef = ref<Record<string, unknown>>({})
+const inlineLookupSelectedData = ref<Record<string, Record<string, unknown>>>({})
+
+watch(
+  () => props.model,
+  (model) => {
+    rowModelRef.value = model != null && typeof model === 'object' ? { ...model } : {}
+  },
+  { immediate: true, deep: true },
+)
+
 const displayFields = computed(() => {
   if (!props.suppressLinkOnlyStandaloneSubTables) return props.fields
   const pool = [...(props.linkedSubTableBindings ?? []), ...(props.subTableBindings ?? [])]
@@ -103,6 +116,15 @@ function isSubTableEditable(): boolean {
 function onFieldUpdate(key: string, val: unknown) {
   emit('update:field', key, val)
 }
+
+const inlineLookupCascade = createLookupCascadeHandlers({
+  allFields: () => props.fields,
+  formData: rowModelRef,
+  lookupSelectedData: inlineLookupSelectedData,
+  onFieldChange: (key, value) => onFieldUpdate(key, value),
+})
+
+provide(INLINE_LOOKUP_CASCADE_CTX, inlineLookupCascade)
 
 /**
  * Nested sub-table rows changed (add/edit/delete in SubTableField). Persist them under the
@@ -323,7 +345,8 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
 
 <style scoped>
 .portal-form-fields-card {
-  margin-bottom: 16px;
+  width: 100%;
+  margin-bottom: 10px;
 }
 
 .portal-form-col-field {

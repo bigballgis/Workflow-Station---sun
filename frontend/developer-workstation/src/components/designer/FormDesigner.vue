@@ -743,7 +743,7 @@ import {
   PREVIEW_SUBTABLE_DIALOG_KEY,
   type PreviewSubTableRowDialogOpen,
 } from './previewSubTableDialog'
-import { cloneFormRules, injectUploadButtonLabels } from '@/utils/formDesigner'
+import { cloneFormRules, getRuleChildren, injectUploadButtonLabels, walkFormCreateRules } from '@/utils/formDesigner'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
@@ -955,8 +955,65 @@ function patchDesignerRulesDefaultEvents() {
   }
 }
 
+function parseLookupConfigJson(raw: unknown): Record<string, unknown> {
+  try {
+    const cfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
+    return cfg && typeof cfg === 'object' ? (cfg as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function resolveActiveEditingLookupField(): string | null {
+  const designer = getActiveDesignerRef() as {
+    activeRule?: { field?: string; type?: string }
+    baseForm?: { api?: { formData?: () => { field?: string } } }
+  } | null | undefined
+  if (designer?.activeRule?.type === 'lookup' && designer.activeRule.field) {
+    return String(designer.activeRule.field)
+  }
+  const panelField = designer?.baseForm?.api?.formData?.()?.field
+  if (typeof panelField === 'string' && panelField) {
+    const rules = (getActiveDesignerRef()?.getRule?.() || []) as Array<{ field?: string; type?: string }>
+    const match = rules.find(r => r?.field === panelField && r?.type === 'lookup')
+    if (match) return panelField
+  }
+  return null
+}
+
+function refreshSiblingLookups() {
+  const designer = getActiveDesignerRef()
+  let rules: unknown[] = []
+  try {
+    rules = designer?.getRule?.() || []
+  } catch {
+    lookupStore.siblingLookupFields = []
+    lookupStore.editingLookupField = resolveActiveEditingLookupField()
+    return
+  }
+  const siblings: typeof lookupStore.siblingLookupFields = []
+  walkFormCreateRules(rules, (rule) => {
+    if (rule?.type !== 'lookup' || !rule.field) return
+    const lookupCfg = parseLookupConfigJson(rule.props?.lookupConfig)
+    const bindingId = lookupCfg.bindingId != null ? Number(lookupCfg.bindingId) : null
+    const tableId = lookupCfg.tableId != null ? Number(lookupCfg.tableId) : null
+    const tableName = String(lookupCfg.tableName || '')
+    siblings.push({
+      field: String(rule.field),
+      title: String(rule.title || rule.field),
+      tableId: Number.isFinite(tableId) ? tableId : null,
+      tableName,
+      bindingId: Number.isFinite(bindingId) ? bindingId : null,
+      lookupConfig: lookupCfg,
+    })
+  })
+  lookupStore.siblingLookupFields = siblings
+  lookupStore.editingLookupField = resolveActiveEditingLookupField()
+}
+
 function onDesignerStructureChange() {
   scheduleSyncHiddenMarkers()
+  refreshSiblingLookups()
   nextTick(() => {
     patchDesignerRulesDefaultEvents()
   })
@@ -1648,6 +1705,7 @@ provide('designerLinkFormColumns', () => designerLinkFormColumnsMap.value)
 // Expose switchToBinding via module-level singleton so fc-designer property-panel components
 // (registered in a separate Vue app context where provide/inject doesn't reach) can navigate.
 lookupStore.switchToBinding = (id: number) => switchToBinding(String(id))
+lookupStore.refreshSiblingLookups = refreshSiblingLookups
 
 // ── Watches ─────────────────────────────────────────────────────────────────
 // Sync relation bindings and formId to lookupStore for fc-designer property panel components
@@ -1663,6 +1721,10 @@ watch([() => selectedForm.value?.id, designerSubBindings, () => store.tables], (
     }))
   lookupStore.tables = store.tables as any[]
 }, { immediate: true })
+
+watch(activeDesignerTab, () => {
+  nextTick(() => refreshSiblingLookups())
+})
 
 // Table Design saved while another tab was open — refresh canvas defaults when tables update.
 watch(

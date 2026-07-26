@@ -14,6 +14,34 @@ export function parseLookupConfig(raw: unknown): Partial<LookupConfig> {
   }
 }
 
+/**
+ * Format a grid cell value for display. Vue's toDisplayString JSON.stringifies
+ * arrays (e.g. multi LOOKUP → `[ "a", "b" ]`); join with commas instead.
+ */
+export function formatRelationCellDisplay(val: unknown): string {
+  if (val == null || val === '') return ''
+  if (Array.isArray(val)) {
+    return val
+      .map(v => (v == null ? '' : String(v).trim()))
+      .filter(s => s !== '')
+      .join(', ')
+  }
+  if (typeof val === 'string') {
+    const t = val.trim()
+    if (t.startsWith('[') && t.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(t) as unknown
+        if (Array.isArray(parsed)) return formatRelationCellDisplay(parsed)
+      } catch {
+        // keep raw string
+      }
+    }
+    return val
+  }
+  if (typeof val === 'object') return JSON.stringify(val)
+  return String(val)
+}
+
 /** snake_case user-like objects → a plain display string (mirrors portal unwrapUserLikeValueToDisplayString). */
 export function unwrapUserLikeValueToDisplayString(rawValue: unknown): string {
   if (rawValue === null || rawValue === undefined) return '-'

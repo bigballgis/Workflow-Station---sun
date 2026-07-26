@@ -33,6 +33,8 @@ so existing import sites stay untouched.
 |---|---|---|
 | `tableFkRuntime.ts` | portal, DW | FK/PK runtime (readonly/hidden decision, FK fill, composite PK encode). Backend row-key counterpart: platform-common `SubTableRowKeySupport`. |
 | `pkGenerationConfig.ts` | portal, DW, admin | PK generation strategy parse/serialize. |
+| `lookupCascadeCore.ts` | portal, DW, admin | Pure `buildDerivedFilterConditions` / `hasCascadeCycle`. App resolve/search stays local. |
+| `systemAuditFields.ts` | portal, DW | System audit field name set. |
 
 ## Known candidates not yet migrated
 

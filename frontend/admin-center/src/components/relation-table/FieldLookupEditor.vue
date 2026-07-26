@@ -238,7 +238,30 @@
               </el-form-item>
 
               <el-form-item :label="t('form.lookupJoins')">
+                <p class="lookup-joins-hint">
+                  {{ t('form.lookupJoinsHint', {
+                    parentLabel: parentJoinSourceLabel,
+                    thisLabel: thisJoinSourceLabel,
+                  }) }}
+                </p>
                 <div class="lookup-filter-list">
+                  <div
+                    v-if="derivedJoins.length"
+                    class="lookup-filter-row lookup-join-headers"
+                  >
+                    <span class="lookup-join-header" style="flex: 1.2;">
+                      <span class="lookup-join-header-title">{{ t('form.lookupJoinFromTitle') }}</span>
+                      <span class="lookup-join-header-source">{{ parentLookupFieldLabel }} . {{ parentRefTableLabel }}</span>
+                    </span>
+                    <span class="lookup-join-header lookup-join-header--match" style="flex: 1;">
+                      <span class="lookup-join-header-title">{{ t('form.lookupJoinMatch') }}</span>
+                    </span>
+                    <span class="lookup-join-header" style="flex: 1.2;">
+                      <span class="lookup-join-header-title">{{ t('form.lookupJoinToTitle') }}</span>
+                      <span class="lookup-join-header-source">{{ thisLookupFieldLabel }} . {{ thisRefTableLabel }}</span>
+                    </span>
+                    <span class="lookup-join-header-spacer" />
+                  </div>
                   <div
                     v-for="(jn, i) in derivedJoins"
                     :key="i"
@@ -250,27 +273,14 @@
                       filterable
                       size="small"
                       style="flex: 1.2;"
-                      :placeholder="t('form.lookupJoinFrom')"
+                      :placeholder="t('form.lookupJoinFrom', {
+                        field: parentLookupFieldLabel,
+                        table: parentRefTableLabel,
+                      })"
                       @change="emitChange"
                     >
                       <el-option
                         v-for="f in parentRefFieldOptions"
-                        :key="f.fieldName"
-                        :label="f.displayName || f.fieldName"
-                        :value="f.fieldName"
-                      />
-                    </el-select>
-                    <el-select
-                      :teleported="false"
-                      v-model="jn.toColumn"
-                      filterable
-                      size="small"
-                      style="flex: 1.2;"
-                      :placeholder="t('form.lookupJoinTo')"
-                      @change="emitChange"
-                    >
-                      <el-option
-                        v-for="f in refFieldOptions"
                         :key="f.fieldName"
                         :label="f.displayName || f.fieldName"
                         :value="f.fieldName"
@@ -288,6 +298,25 @@
                         :key="m"
                         :label="t(`form.lookupMatch_${m}`)"
                         :value="m"
+                      />
+                    </el-select>
+                    <el-select
+                      :teleported="false"
+                      v-model="jn.toColumn"
+                      filterable
+                      size="small"
+                      style="flex: 1.2;"
+                      :placeholder="t('form.lookupJoinTo', {
+                        field: thisLookupFieldLabel,
+                        table: thisRefTableLabel,
+                      })"
+                      @change="emitChange"
+                    >
+                      <el-option
+                        v-for="f in refFieldOptions"
+                        :key="f.fieldName"
+                        :label="f.displayName || f.fieldName"
+                        :value="f.fieldName"
                       />
                     </el-select>
                     <el-button
@@ -318,29 +347,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { Search, Delete, Plus } from '@element-plus/icons-vue'
-import type {
-  FieldDefinitionResponse,
-  LookupConfig,
-  LookupMatchType,
-  RelationTableResponse,
-} from '@/api/relationTable'
-
-interface FieldRowLike {
-  fieldName: string
-  displayName?: string
-  dataType: string
-  lookupConfig?: LookupConfig
-}
+import type { LookupConfig, RelationTableResponse } from '@/api/relationTable'
+import {
+  useFieldLookupEditor,
+  type FieldLookupEditorRowLike,
+} from '@/composables/modules/useFieldLookupEditor'
 
 const props = defineProps<{
   modelValue?: LookupConfig
   /** DEPLOYED tables available as reference targets (with fieldDefinitions). */
   refTables: RelationTableResponse[]
   /** All field rows of the table being edited (to pick parent lookup / auto-fill targets). */
-  allFields: FieldRowLike[]
+  allFields: FieldLookupEditorRowLike[]
   /** The field name of the row this editor belongs to (excluded from parent options). */
   currentFieldName?: string
   disabled?: boolean
@@ -350,141 +369,32 @@ const emit = defineEmits<{
   'update:modelValue': [value: LookupConfig]
 }>()
 
-const { t } = useI18n()
-
-const matchTypes: LookupMatchType[] = ['eq', 'contains', 'startsWith', 'endsWith']
-
-function emptyConfig(): LookupConfig {
-  return {
-    refTableId: undefined,
-    searchFields: [],
-    displayFields: [],
-    selectedDisplayField: undefined,
-    filterConditions: [],
-    showBackfillView: true,
-    multiple: false,
-    derivedFrom: undefined,
-  }
-}
-
-const cfg = reactive<LookupConfig>({ ...emptyConfig(), ...(props.modelValue || {}) })
-// Ensure arrays exist even if partial config arrived.
-cfg.searchFields = cfg.searchFields || []
-cfg.displayFields = cfg.displayFields || []
-cfg.filterConditions = cfg.filterConditions || []
-if (cfg.showBackfillView === undefined) cfg.showBackfillView = true
-if (cfg.multiple === undefined) cfg.multiple = false
-
-const derivedParentField = ref<string>(props.modelValue?.derivedFrom?.parentField || '')
-const derivedMode = ref<'autofill' | 'filter'>(props.modelValue?.derivedFrom?.derivedMode || 'autofill')
-const derivedJoins = reactive(
-  (props.modelValue?.derivedFrom?.joins || []).map(j => ({ ...j })),
-)
-
-watch(
-  () => props.modelValue,
-  (v) => {
-    Object.assign(cfg, emptyConfig(), v || {})
-    cfg.searchFields = cfg.searchFields || []
-    cfg.displayFields = cfg.displayFields || []
-    cfg.filterConditions = cfg.filterConditions || []
-    if (cfg.showBackfillView === undefined) cfg.showBackfillView = true
-    if (cfg.multiple === undefined) cfg.multiple = false
-    derivedParentField.value = v?.derivedFrom?.parentField || ''
-    derivedMode.value = v?.derivedFrom?.derivedMode || 'autofill'
-    derivedJoins.splice(0, derivedJoins.length, ...(v?.derivedFrom?.joins || []).map(j => ({ ...j })))
-  },
-)
-
-const refTable = computed<RelationTableResponse | undefined>(() =>
-  props.refTables.find(tb => tb.id === cfg.refTableId),
-)
-
-const refFieldOptions = computed<FieldDefinitionResponse[]>(() =>
-  (refTable.value?.fieldDefinitions ?? []).filter(f => f.fieldName?.trim()),
-)
-
-// Sibling LOOKUP fields (this table) that can drive a derived lookup, minus self.
-const parentFieldOptions = computed<FieldRowLike[]>(() =>
-  props.allFields.filter(
-    f => f.dataType === 'LOOKUP'
-      && f.fieldName?.trim()
-      && f.fieldName !== props.currentFieldName,
-  ),
-)
-
-// The parent lookup's referenced table fields (fromColumn options).
-const parentRefFieldOptions = computed<FieldDefinitionResponse[]>(() => {
-  const parent = props.allFields.find(f => f.fieldName === derivedParentField.value)
-  const parentRefTableId = parent?.lookupConfig?.refTableId
-  const parentRefTable = props.refTables.find(tb => tb.id === parentRefTableId)
-  return (parentRefTable?.fieldDefinitions ?? []).filter(f => f.fieldName?.trim())
-})
-
-const isConfigured = computed(() => !!cfg.refTableId && (cfg.searchFields?.length ?? 0) > 0)
-
-const summaryLabel = computed(() => {
-  if (!cfg.refTableId) return t('form.lookupConfigure')
-  const name = refTable.value?.displayName || refTable.value?.tableName || '?'
-  return derivedParentField.value ? `${name} · ⇐ ${derivedParentField.value}` : name
-})
-
-function onRefTableChange() {
-  // Reset ref-dependent selections when the table changes.
-  cfg.searchFields = []
-  cfg.displayFields = []
-  cfg.selectedDisplayField = undefined
-  cfg.filterConditions = []
-  derivedJoins.splice(0, derivedJoins.length)
-  emitChange()
-}
-
-function onParentFieldChange() {
-  if (!derivedParentField.value) {
-    derivedJoins.splice(0, derivedJoins.length)
-  }
-  emitChange()
-}
-
-function addFilter() {
-  cfg.filterConditions = cfg.filterConditions || []
-  cfg.filterConditions.push({ fieldName: '', value: '', matchType: 'eq' })
-  emitChange()
-}
-function removeFilter(i: number) {
-  cfg.filterConditions?.splice(i, 1)
-  emitChange()
-}
-
-function addJoin() {
-  derivedJoins.push({ fromColumn: '', toColumn: '', matchType: 'eq' })
-  emitChange()
-}
-function removeJoin(i: number) {
-  derivedJoins.splice(i, 1)
-  emitChange()
-}
-
-function emitChange() {
-  const out: LookupConfig = {
-    refTableId: cfg.refTableId,
-    refTableName: refTable.value?.tableName,
-    searchFields: [...(cfg.searchFields || [])],
-    displayFields: [...(cfg.displayFields || [])],
-    selectedDisplayField: cfg.selectedDisplayField || undefined,
-    filterConditions: (cfg.filterConditions || []).map(f => ({ ...f })),
-    showBackfillView: cfg.showBackfillView !== false,
-    multiple: !!cfg.multiple,
-    derivedFrom: derivedParentField.value
-      ? {
-          parentField: derivedParentField.value,
-          derivedMode: derivedMode.value,
-          joins: derivedJoins.map(j => ({ ...j })),
-        }
-      : undefined,
-  }
-  emit('update:modelValue', out)
-}
+const {
+  t,
+  matchTypes,
+  cfg,
+  derivedParentField,
+  derivedMode,
+  derivedJoins,
+  refFieldOptions,
+  parentFieldOptions,
+  parentRefFieldOptions,
+  parentLookupFieldLabel,
+  thisLookupFieldLabel,
+  parentRefTableLabel,
+  thisRefTableLabel,
+  parentJoinSourceLabel,
+  thisJoinSourceLabel,
+  isConfigured,
+  summaryLabel,
+  onRefTableChange,
+  onParentFieldChange,
+  addFilter,
+  removeFilter,
+  addJoin,
+  removeJoin,
+  emitChange,
+} = useFieldLookupEditor(props, emit)
 </script>
 
 <style scoped>
@@ -520,5 +430,38 @@ function emitChange() {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.lookup-joins-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--el-text-color-secondary);
+}
+.lookup-join-headers {
+  align-items: flex-end;
+  margin-bottom: 2px;
+}
+.lookup-join-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--el-text-color-regular);
+  word-break: break-word;
+}
+.lookup-join-header-title {
+  font-weight: 600;
+}
+.lookup-join-header-source {
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
+}
+.lookup-join-header--match {
+  justify-content: flex-end;
+}
+.lookup-join-header-spacer {
+  width: 24px;
+  flex-shrink: 0;
 }
 </style>

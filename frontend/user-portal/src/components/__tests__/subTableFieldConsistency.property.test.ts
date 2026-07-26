@@ -9,6 +9,7 @@ import {
   buildInitialRow,
   resolveDisplayValue,
   resolveLookupCellTagText,
+  unwrapSingleLookupModelValue,
   type DialogColumn,
   type ColumnType,
 } from '../subTableAddDialogHelpers'
@@ -262,6 +263,16 @@ describe('Lookup selected display field', () => {
     expect(
       resolveLookupCellTagText(props, { id: 'c9c70955-37cb-4d17-b3f7-2e01ddd34bab' }),
     ).toBe('-')
+  })
+
+  it('unwrapSingleLookupModelValue takes first row from multi LOOKUP array for single-select forms', () => {
+    const rows = [
+      { status_id: '4', status_name: 'A llll' },
+      { status_id: '5', status_name: 'A d dddd' },
+    ]
+    expect(unwrapSingleLookupModelValue(rows)).toEqual(rows[0])
+    expect(unwrapSingleLookupModelValue(null)).toBe(null)
+    expect(unwrapSingleLookupModelValue({ status_id: '4' })).toEqual({ status_id: '4' })
   })
 
   it('resolveLookupCellTagText uses username when cell stores full user snapshot object', () => {

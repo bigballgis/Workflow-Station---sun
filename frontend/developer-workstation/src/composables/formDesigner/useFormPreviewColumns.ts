@@ -82,11 +82,14 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
         if (type === 'lookup') {
           const lookupPreviewConfig = resolveLookupPreviewConfig(rProps.lookupConfig || '{}')
+          const lookupCfg = parseLookupConfig(rProps.lookupConfig || '{}')
           passProps.lookupConfig = rProps.lookupConfig || '{}'
           passProps.searchFields = lookupPreviewConfig.searchFields
           passProps.displayFields = lookupPreviewConfig.displayFields
           passProps.selectedDisplayField = lookupPreviewConfig.selectedDisplayField
           passProps.filterConditions = lookupPreviewConfig.filterConditions
+          passProps.derivedFrom = lookupCfg.derivedFrom
+          passProps.multiple = lookupCfg.multiple === true
           passProps.viewFields = lookupPreviewConfig.viewFields
           passProps.fieldDefs = lookupPreviewConfig.fieldDefs
           passProps.showBackfillView = lookupPreviewConfig.showBackfillView
@@ -135,6 +138,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
 
   function makeLookupPreviewItem(ruleItem: any, config: any) {
     const previewConfig = resolveLookupPreviewConfig(ruleItem.props?.lookupConfig || '{}', config)
+    const lookupConfig = parseLookupConfig(ruleItem.props?.lookupConfig || '{}')
     return {
       kind: 'lookup' as const,
       field: String(ruleItem.field ?? ''),
@@ -145,6 +149,8 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
       displayFields: previewConfig.displayFields,
       selectedDisplayField: previewConfig.selectedDisplayField,
       filterConditions: previewConfig.filterConditions,
+      derivedFrom: lookupConfig.derivedFrom,
+      multiple: lookupConfig.multiple === true,
       viewFields: previewConfig.viewFields,
       fieldDefs: previewConfig.fieldDefs,
       showBackfillView: previewConfig.showBackfillView,
@@ -167,6 +173,8 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
       displayFields: lookupConfig.displayFields || [],
       selectedDisplayField: lookupConfig.selectedDisplayField || lookupConfig.displayField || '',
       filterConditions: Array.isArray(lookupConfig.filterConditions) ? lookupConfig.filterConditions : [],
+      derivedFrom: lookupConfig.derivedFrom,
+      multiple: lookupConfig.multiple === true,
       viewFields: lookupConfig.showBackfillView === false
         ? []
         : (savedRelationView?.viewFields || relationViewState.value[bindingId]?.viewFields || []),
@@ -238,6 +246,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         }
         if (column.columnType === 'lookup') {
           const lookupPreviewConfig = resolveLookupPreviewConfig(column.lookupConfig || '{}', config)
+          const lookupCfg = parseLookupConfig(column.lookupConfig || '{}')
           return {
             field: column.fieldName || `lookup:${bindingId}`,
             label: column.columnLabel || column.displayName || 'Lookup',
@@ -245,10 +254,13 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
             minWidth: 260,
             placeholder: lookupPreviewConfig.placeholder,
             props: {
+              lookupConfig: column.lookupConfig || '{}',
               searchFields: lookupPreviewConfig.searchFields,
               displayFields: lookupPreviewConfig.displayFields,
               selectedDisplayField: lookupPreviewConfig.selectedDisplayField,
               filterConditions: lookupPreviewConfig.filterConditions,
+              derivedFrom: lookupCfg.derivedFrom,
+              multiple: lookupCfg.multiple === true,
               viewFields: lookupPreviewConfig.viewFields,
               fieldDefs: lookupPreviewConfig.fieldDefs,
               showBackfillView: lookupPreviewConfig.showBackfillView
@@ -258,6 +270,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         const fieldRule = ruleByField.get(column.fieldName)
         if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig) {
           const lookupPreviewConfig = resolveLookupPreviewConfig(fieldRule.props?.lookupConfig || '{}', config)
+          const lookupCfg = parseLookupConfig(fieldRule.props?.lookupConfig || '{}')
           return {
             field: column.fieldName,
             label: column.displayName || column.columnLabel || fieldRule.title || column.fieldName,
@@ -265,10 +278,13 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
             minWidth: 260,
             placeholder: fieldRule.props?.placeholder || lookupPreviewConfig.placeholder,
             props: {
+              lookupConfig: fieldRule.props?.lookupConfig || '{}',
               searchFields: lookupPreviewConfig.searchFields,
               displayFields: lookupPreviewConfig.displayFields,
               selectedDisplayField: lookupPreviewConfig.selectedDisplayField,
               filterConditions: lookupPreviewConfig.filterConditions,
+              derivedFrom: lookupCfg.derivedFrom,
+              multiple: lookupCfg.multiple === true,
               viewFields: lookupPreviewConfig.viewFields,
               fieldDefs: lookupPreviewConfig.fieldDefs,
               showBackfillView: lookupPreviewConfig.showBackfillView

@@ -27,6 +27,7 @@ import {
   cloneSubTableRows,
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
+import { seedTaskFormFromProcessValues } from './seedTaskFormFromProcessValues'
 
 export type PrefetchedTaskForms = {
   pfData: ProcessFormData | null
@@ -265,6 +266,20 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
         if (tfData.fieldValues) {
           ctx.mergeIncomingTaskFormFieldValues(tfData.fieldValues as Record<string, any>, taskData)
         }
+      }
+    }
+    // Start Process LOOKUP cascade autofill lives on processFormRef.fieldValues; task form
+    // fieldValues often omit those keys. Seed empty overlapping fields so To Do FormRenderer
+    // can show multi/single tags (status_name etc.) via the same LookupField path.
+    {
+      const { formData, getCurrentFormFieldKeys } = ctx.taskForm
+      const { next, patched } = seedTaskFormFromProcessValues(
+        formData.value as Record<string, unknown>,
+        processFormValues.value as Record<string, unknown>,
+        getCurrentFormFieldKeys(),
+      )
+      if (patched) {
+        formData.value = next as Record<string, any>
       }
     }
     ctx.syncFormLayoutWithSubTableBindings()

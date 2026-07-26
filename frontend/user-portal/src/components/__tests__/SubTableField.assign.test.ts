@@ -587,5 +587,48 @@ describe('SubTableField - Assign Button', () => {
       expect(assignSubTableRow).not.toHaveBeenCalled()
       expect(wrapper.vm.rows[0].assignee_display_name).toBe('User One')
     })
+
+    it('edit save keeps intentionally cleared fields empty (no seed restore)', async () => {
+      const existing = [{
+        id: 101,
+        test: 'was-filled',
+        name: 'keep',
+        assignee: 'user-001',
+        assignee_display_name: 'User One',
+      }]
+      const columns = [
+        { field: 'test', label: 'test', type: 'text' },
+        { field: 'name', label: 'Name', type: 'text' },
+        { field: 'assignee', label: 'assignee', type: 'lookup' },
+      ]
+
+      const wrapper = mount(SubTableField, {
+        props: {
+          title: 'Participants',
+          columns,
+          modelValue: [...existing],
+          primaryKeyFields: ['id'],
+          assigneeField: 'assignee',
+          editable: true,
+        },
+        global: { stubs: globalStubs },
+      })
+
+      wrapper.vm.dialogMode = 'edit'
+      wrapper.vm.editingRowIndex = 0
+      wrapper.vm.dialogInitialData = { ...existing[0] }
+
+      await wrapper.vm.handleDialogSave({
+        id: 101,
+        test: '',
+        name: 'keep',
+        assignee: '',
+      })
+
+      expect(wrapper.vm.rows[0].test).toBe('')
+      expect(wrapper.vm.rows[0].assignee).toBe('')
+      expect(wrapper.vm.rows[0].assignee_display_name).toBeUndefined()
+      expect(wrapper.vm.rows[0].name).toBe('keep')
+    })
   })
 })

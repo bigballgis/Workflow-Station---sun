@@ -330,4 +330,8 @@ frontend/user-portal/package-lock.json
 .claude/settings.local.json
 # .claude/skills 是由 sync-cursor-rules.mjs 从 .cursor/skills(唯一真源)镜像生成的产物，不入库
 .claude/skills/
+# Local ad-hoc Playwright dumps / underscore-prefixed scratch verify scripts (not product)
+frontend/scripts/_*.json
+frontend/scripts/_*.mjs
+
 deploy/pieces_metadata*

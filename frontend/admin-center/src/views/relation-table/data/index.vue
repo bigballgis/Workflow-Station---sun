@@ -125,7 +125,7 @@
               show-overflow-tooltip
             >
               <template #default="{ row }">
-                {{ row.data?.[field.fieldName] ?? '' }}
+                {{ formatRelationCellDisplay(row.data?.[field.fieldName]) }}
               </template>
             </el-table-column>
             <!-- System columns -->
@@ -443,6 +443,7 @@ import { Search, Download, Plus, Upload, ArrowDown, Loading } from '@element-plu
 import PageHeader from '@/components/PageHeader.vue'
 import LookupField from '@/components/lookup/LookupField.vue'
 import LookupViewDisplay from '@/components/lookup/LookupViewDisplay.vue'
+import { formatRelationCellDisplay } from '@/components/lookup/lookupHelpers'
 import { useRelationTableData } from '@/composables/modules/useRelationTableData'
 
 const {

@@ -1,18 +1,45 @@
 import { ref, type Ref } from 'vue'
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
+import type { FormField } from '@/components/formRendererHelpers'
+import {
+  lookupFilterConditionsForField,
+  processLookupCascadeClear,
+  processLookupCascadeSelect,
+} from '@/composables/formRenderer/useFormLookupCascade'
+import { parseLookupConfig } from '@/components/subTableAddDialogHelpers/lookup'
+
+function dialogColumnAsLookupField(col: DialogColumn): FormField {
+  const cfg = parseLookupConfig(col.props?.lookupConfig)
+  return {
+    key: col.field,
+    label: col.label,
+    type: 'lookup',
+    _lookupTableId: Number(col.props?.tableId || cfg.tableId || 0),
+    _lookupSearchFields: (col.props?.searchFields as string[]) || cfg.searchFields || [],
+    _lookupDisplayField: String(col.props?.displayField || cfg.displayFields?.[0] || ''),
+    _lookupDisplayFields: (col.props?.displayFields as string[]) || cfg.displayFields || [],
+    _lookupSelectedDisplayField: String(col.props?.selectedDisplayField || cfg.selectedDisplayField || ''),
+    _lookupFilterConditions: (col.props?.filterConditions as import('@/utils/lookupFilterConditions').LookupFilterCondition[]) || cfg.filterConditions || [],
+    _lookupDerivedFrom: cfg.derivedFrom,
+    _lookupMultiple: col.props?.multiple === true || cfg.multiple === true,
+    _lookupConfig: typeof col.props?.lookupConfig === 'string'
+      ? col.props.lookupConfig
+      : JSON.stringify(cfg || {}),
+  } as FormField
+}
 
 /**
- * Lookup backfill state for the sub-table add/edit dialog: view-field metadata
- * (from column props or LookupField API load) and the hydrated selected row used
- * when modelValue is still a scalar PK (matches FormRenderer).
- *
- * Behaviour preserved verbatim from the original SFC.
+ * Lookup backfill + derived cascade for the sub-table add/edit dialog row.
  */
-export function useSubTableDialogLookup(formData: Ref<Record<string, any>>) {
-  /** View-field metadata for lookup backfill (from column props or LookupField API load). */
-  const lookupLoadedViewFields = ref<Record<string, any[]>>({})
-  /** Hydrated lookup row for backfill when modelValue is still a scalar PK (matches FormRenderer). */
+export function useSubTableDialogLookup(
+  formData: Ref<Record<string, unknown>>,
+  columns: Ref<DialogColumn[]>,
+) {
+  const lookupLoadedViewFields = ref<Record<string, unknown[]>>({})
   const lookupSelectedData = ref<Record<string, Record<string, unknown>>>({})
+
+  const lookupFields = (): FormField[] =>
+    columns.value.filter(c => c.type === 'lookup').map(dialogColumnAsLookupField)
 
   function isLookupRowSelected(val: unknown): boolean {
     return (
@@ -23,24 +50,64 @@ export function useSubTableDialogLookup(formData: Ref<Record<string, any>>) {
     )
   }
 
-  function effectiveLookupViewFieldsForDialog(col: DialogColumn): any[] {
+  function isLookupModelPresent(val: unknown): boolean {
+    if (val == null || val === '') return false
+    if (typeof val === 'string' && val.trim() === '') return false
+    if (typeof val === 'object' && !Array.isArray(val) && Object.keys(val as object).length === 0) {
+      return false
+    }
+    return true
+  }
+
+  function effectiveLookupViewFieldsForDialog(col: DialogColumn): unknown[] {
     const fromCol = col.props?.viewFields
-    if (Array.isArray(fromCol) && fromCol.length > 0) return fromCol as any[]
+    if (Array.isArray(fromCol) && fromCol.length > 0) return fromCol
     return lookupLoadedViewFields.value[col.field] || []
   }
 
-  function onLookupViewFieldsLoaded(field: string, fields: any[]) {
+  function effectiveLookupFilterConditions(col: DialogColumn) {
+    return lookupFilterConditionsForField(dialogColumnAsLookupField(col), lookupSelectedData.value)
+  }
+
+  function onLookupViewFieldsLoaded(field: string, fields: unknown[]) {
     lookupLoadedViewFields.value = { ...lookupLoadedViewFields.value, [field]: fields }
   }
 
-  function onLookupSelect(field: string, row: Record<string, unknown>) {
+  async function onLookupSelect(field: string, row: Record<string, unknown>) {
     lookupSelectedData.value = { ...lookupSelectedData.value, [field]: row }
+    const colField = lookupFields().find((f) => f.key === field)
+    const isMulti = (colField as { _lookupMultiple?: boolean } | undefined)?._lookupMultiple === true
+    // Multi LOOKUP modelValue is already set via @update:modelValue.
+    if (!isMulti) {
+      formData.value[field] = row
+    }
+    await processLookupCascadeSelect(
+      field,
+      row,
+      lookupFields(),
+      formData,
+      lookupSelectedData,
+      (key, value) => { formData.value[key] = value },
+    )
+  }
+
+  function onLookupClear(field: string) {
+    processLookupCascadeClear(
+      field,
+      lookupFields(),
+      formData,
+      lookupSelectedData,
+      (key, value) => { formData.value[key] = value },
+    )
+    delete lookupSelectedData.value[field]
+    formData.value[field] = null
   }
 
   function effectiveLookupSelectedRow(field: string): Record<string, unknown> | null {
+    const val = formData.value[field]
+    if (!isLookupModelPresent(val)) return null
     const fromSelect = lookupSelectedData.value[field]
     if (fromSelect && Object.keys(fromSelect).length > 0) return fromSelect
-    const val = formData.value[field]
     if (isLookupRowSelected(val)) return val as Record<string, unknown>
     return null
   }
@@ -55,8 +122,10 @@ export function useSubTableDialogLookup(formData: Ref<Record<string, any>>) {
     lookupSelectedData,
     isLookupRowSelected,
     effectiveLookupViewFieldsForDialog,
+    effectiveLookupFilterConditions,
     onLookupViewFieldsLoaded,
     onLookupSelect,
+    onLookupClear,
     effectiveLookupSelectedRow,
     resetLookupState,
   }

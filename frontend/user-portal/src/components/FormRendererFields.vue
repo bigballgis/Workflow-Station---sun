@@ -443,10 +443,13 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
               :display-field="(field as any)._lookupDisplayField || ''"
               :display-fields="(field as any)._lookupDisplayFields || []"
               :selected-display-field="(field as any)._lookupSelectedDisplayField || ''"
-              :filter-conditions="(field as any)._lookupFilterConditions || []"
+              :filter-conditions="ctx.lookupFilterConditionsFor(field)"
+              :lookup-config="(field as any)._lookupConfig"
               :view-fields="(field as any)._lookupViewFields || []"
               :placeholder="field.placeholder"
               :readonly="ctx.isFieldReadonly(field)"
+              :multiple="(field as any)._lookupMultiple === true"
+              @update:model-value="(val: unknown) => ctx.handleLookupModelUpdate?.(field.key, val)"
               @select="(row: any) => ctx.handleLookupSelect(field.key, row)"
               @clear="() => ctx.handleLookupClear(field.key)"
               @view-fields-loaded="(loaded: any[]) => { ctx.lookupLoadedViewFields[field.key] = loaded }"
@@ -481,10 +484,13 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
               :display-field="(field as any)._lookupDisplayField || ''"
               :display-fields="(field as any)._lookupDisplayFields || []"
               :selected-display-field="(field as any)._lookupSelectedDisplayField || ''"
-              :filter-conditions="(field as any)._lookupFilterConditions || []"
+              :filter-conditions="ctx.lookupFilterConditionsFor(field)"
+              :lookup-config="(field as any)._lookupConfig"
               :view-fields="(field as any)._lookupViewFields || []"
               :placeholder="field.placeholder"
               :readonly="ctx.isFieldReadonly(field)"
+              :multiple="(field as any)._lookupMultiple === true"
+              @update:model-value="(val: unknown) => ctx.handleLookupModelUpdate?.(field.key, val)"
               @select="(row: any) => ctx.handleLookupSelect(field.key, row)"
               @clear="() => ctx.handleLookupClear(field.key)"
               @view-fields-loaded="(loaded: any[]) => { ctx.lookupLoadedViewFields[field.key] = loaded }"
@@ -576,8 +582,15 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
 </template>
 
 <style scoped lang="scss">
+/* Adjacent designer cards (elCard) need vertical gap — parent FormRenderer scoped
+   styles do not pierce this fragment root, so margin lives here. */
+.form-layout-card {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
 .form-layout-card--stacked {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .form-col-field {

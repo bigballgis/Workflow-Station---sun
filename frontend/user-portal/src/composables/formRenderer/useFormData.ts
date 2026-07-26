@@ -4,6 +4,12 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { materializeFormCreateValidationRules } from '../../utils/formCreateValidateRules'
 import type { FormField, FormBusinessLogicConfig } from '../../components/formRendererHelpers'
 import {
+  emptyLookupModelValue,
+  lookupFilterConditionsForField,
+  processLookupCascadeClear,
+  processLookupCascadeSelect,
+} from './useFormLookupCascade'
+import {
   REQUEST_ID_FIELD,
   fieldFeedsRequestId,
   computeRequestId,
@@ -46,14 +52,64 @@ export function useFormData(deps: FormDataDeps) {
   function lookupShowBackfillView(field: FormField): boolean {
     return (field as any)._lookupShowBackfillView !== false
   }
-  const handleLookupSelect = (fieldKey: string, row: Record<string, any>) => {
+  /** Flush internal formData to parent v-model immediately (bypass 150ms watchThrottled). */
+  function syncFormDataToParent() {
+    if (deps.readonly()) return
+    deps.emitModelValue({ ...formData.value })
+  }
+
+  const handleLookupSelect = async (fieldKey: string, row: Record<string, any>) => {
     lookupSelectedData.value[fieldKey] = row
-    handleFieldChange(fieldKey, row)
+    const field = deps.allFields.value.find((f) => f.key === fieldKey)
+    const isMulti = (field as { _lookupMultiple?: boolean } | undefined)?._lookupMultiple === true
+    // Multi LOOKUP already updated via @update:modelValue — do not overwrite the array.
+    if (!isMulti) {
+      handleFieldChange(fieldKey, row)
+    } else {
+      // Critical: multi skips handleFieldChange, so parent sync was only via watchThrottled(150ms).
+      // Start Process ensureMainPrimaryKey / submit read parent formData and would drop test_status.
+      syncFormDataToParent()
+    }
+    await processLookupCascadeSelect(
+      fieldKey,
+      row,
+      deps.allFields.value,
+      formData,
+      lookupSelectedData,
+      handleFieldChange,
+    )
   }
+
+  /**
+   * Multi LOOKUP tag remove / toggle only emits update:modelValue (no @select).
+   * Keep parent formData in sync so submit/draft/PK allocate cannot drop the array.
+   */
+  function handleLookupModelUpdate(fieldKey: string, value: unknown) {
+    const field = deps.allFields.value.find((f) => f.key === fieldKey)
+    if ((field as { _lookupMultiple?: boolean } | undefined)?._lookupMultiple !== true) return
+    formData.value[fieldKey] = value
+    if (Array.isArray(value) && value[0] != null && typeof value[0] === 'object') {
+      lookupSelectedData.value[fieldKey] = value[0] as Record<string, any>
+    } else if (!Array.isArray(value) || value.length === 0) {
+      delete lookupSelectedData.value[fieldKey]
+    }
+    syncFormDataToParent()
+  }
+
   const handleLookupClear = (fieldKey: string) => {
+    processLookupCascadeClear(
+      fieldKey,
+      deps.allFields.value,
+      formData,
+      lookupSelectedData,
+      handleFieldChange,
+    )
     delete lookupSelectedData.value[fieldKey]
-    handleFieldChange(fieldKey, null)
+    const empty = emptyLookupModelValue(deps.allFields.value.find((f) => f.key === fieldKey))
+    handleFieldChange(fieldKey, empty)
   }
+  const lookupFilterConditionsFor = (field: FormField) =>
+    lookupFilterConditionsForField(field, lookupSelectedData.value)
 
   // Manage file upload lists independently to avoid re-render issues when deriving from formData
   const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; uid?: number }>>>({})
@@ -87,6 +143,21 @@ export function useFormData(deps: FormDataDeps) {
         if (computed !== undefined) data[REQUEST_ID_FIELD] = computed
       }
     }
+    // Seed lookupSelectedData from object-shaped LOOKUP values so cascade filters
+    // work on To Do / Completed / Start when parent is already filled.
+    // Multi LOOKUP stores an array of rows — use the first row as cascade parent context.
+    const seededLookupRows: Record<string, Record<string, any>> = {}
+    for (const field of deps.allFields.value) {
+      if (field.type !== 'lookup') continue
+      const v = data[field.key]
+      if (v != null && typeof v === 'object' && !Array.isArray(v)) {
+        seededLookupRows[field.key] = v as Record<string, any>
+      } else if (Array.isArray(v) && v[0] != null && typeof v[0] === 'object') {
+        seededLookupRows[field.key] = v[0] as Record<string, any>
+      }
+    }
+    lookupSelectedData.value = seededLookupRows
+
     deps.setInternalUpdate(true)
     formData.value = data
     setTimeout(() => { deps.setInternalUpdate(false) }, 0)
@@ -272,8 +343,11 @@ export function useFormData(deps: FormDataDeps) {
     lookupSelectedData,
     lookupLoadedViewFields,
     lookupShowBackfillView,
+    lookupFilterConditionsFor,
     handleLookupSelect,
+    handleLookupModelUpdate,
     handleLookupClear,
+    syncFormDataToParent,
     uploadFileLists,
     initFormData,
     formRules,

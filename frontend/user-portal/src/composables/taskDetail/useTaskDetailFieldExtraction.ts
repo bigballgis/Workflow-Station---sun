@@ -199,6 +199,11 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
           _lookupDisplayFields: lookupCfg.displayFields || [],
           _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
           _lookupFilterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
+          _lookupDerivedFrom: lookupCfg.derivedFrom,
+          _lookupMultiple: lookupCfg.multiple === true,
+          _lookupConfig: typeof item.props?.lookupConfig === 'string'
+            ? item.props.lookupConfig
+            : JSON.stringify(lookupCfg || {}),
           _lookupViewFields: lookupCfg.showBackfillView === false ? [] : resolvedViewFields,
           _lookupShowBackfillView: lookupCfg.showBackfillView !== false
         }

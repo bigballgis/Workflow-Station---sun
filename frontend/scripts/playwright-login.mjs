@@ -85,11 +85,24 @@ export async function loginViaPortalPassword(page, opts = {}) {
 
   await page.goto(`${origin}/portal/`, { waitUntil: 'domcontentloaded' }).catch(() => {})
 
-  const res = await page.request.post(`${origin}/api/portal/auth/login`, {
+  let res = await page.request.post(`${origin}/api/portal/auth/login`, {
     data: { username: user, password: pass },
   })
-  const body = await res.json().catch(() => ({}))
-  if (!res.ok()) {
+  let body = await res.json().catch(() => ({}))
+  // FALLBACK(ux): multi-BU users must pick workspace before session is issued
+  if (body.loginErrorCode === 'WORKSPACE_CONTEXT_REQUIRED' && body.workspaceContexts?.[0]) {
+    const c = body.workspaceContexts[0]
+    res = await page.request.post(`${origin}/api/portal/auth/login`, {
+      data: {
+        username: user,
+        password: pass,
+        workspaceBusinessUnitId: c.businessUnitId,
+        workspaceRoleId: c.roleId,
+      },
+    })
+    body = await res.json().catch(() => ({}))
+  }
+  if (!res.ok() && body.loginErrorCode !== 'WORKSPACE_CONTEXT_REQUIRED') {
     throw new Error(`Portal password login failed: ${body.message || `HTTP ${res.status()}`} (user=${user})`)
   }
   const u = body.user || body.data?.user

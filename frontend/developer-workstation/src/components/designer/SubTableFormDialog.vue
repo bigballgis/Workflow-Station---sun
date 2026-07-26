@@ -333,6 +333,11 @@ function handleSave() {
   overflow-y: auto;
 }
 
+/* form-create adjacent elCard (e.g. Participants Title cards) — parity with Portal */
+.sub-table-form-preview :deep(.el-card) {
+  margin-bottom: 10px;
+}
+
 .form-loading {
   display: flex;
   align-items: center;

@@ -137,7 +137,13 @@ export function useSubTableRowDialog(
   }
 
   async function handleDialogSave(rowData: Record<string, any>) {
-    let savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
+    // Add: prefer-filled seed merge keeps PK/FK when empty inputs omit them.
+    // Edit: dialog values are authoritative — including intentional clears ('' / null).
+    // Re-running mergeFormRowWithSeed against the pre-edit snapshot restores cleared fields.
+    let savedRow =
+      dialogMode.value === 'edit'
+        ? ({ ...(dialogInitialData.value || {}), ...rowData } as Record<string, any>)
+        : mergeFormRowWithSeed(dialogInitialData.value, rowData)
     if (dialogMode.value === 'add') {
       const allocate = createAllocatePrimaryKeysFn()
       if (allocate && props.tableId != null && props.fieldDefinitions?.length) {

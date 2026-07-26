@@ -2,6 +2,13 @@ import { Calendar, Document, Coin, Switch as SwitchIcon, EditPen } from '@elemen
 import type { ComputedRef } from 'vue'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { resolveBindingDisplayName } from '@/utils/bindingDisplayHelpers'
+import {
+  buildPreviewAutofillModelValue,
+  effectiveLookupFilterConditionsForRow,
+  normalizeLookupRow,
+  type LookupCascadeConfig,
+} from '@/utils/lookupCascade'
+import { parseLookupConfig } from '@/utils/formPreview'
 import type {
   LookupPreviewConfig,
   SubTableBindingOption,
@@ -66,10 +73,60 @@ export function useColumnHelpers(options: UseColumnHelpersOptions) {
     filterConditions: [],
     viewFields: [],
     fieldDefs: [],
-    showBackfillView: true
+    showBackfillView: true,
+    multiple: false,
   }
   const getLookupPreviewConfig = (column: SubTableListColumnDTO): LookupPreviewConfig => {
-    return props.resolveLookupPreviewConfig?.(column.lookupConfig || '{}') || defaultLookupPreviewConfig
+    const base = props.resolveLookupPreviewConfig?.(column.lookupConfig || '{}') || defaultLookupPreviewConfig
+    const cfg = parseLookupConfig(column.lookupConfig || '{}')
+    return {
+      ...base,
+      derivedFrom: base.derivedFrom || cfg.derivedFrom,
+      multiple: base.multiple === true || cfg.multiple === true,
+    }
+  }
+
+  /** List/Card design preview: cascade filters for the mock data row. */
+  const getLookupFilterConditionsForMockRow = (
+    column: SubTableListColumnDTO,
+    mockRow: Record<string, unknown>,
+  ) => {
+    const preview = getLookupPreviewConfig(column)
+    const cfg: LookupCascadeConfig = {
+      filterConditions: preview.filterConditions || [],
+      derivedFrom: preview.derivedFrom as LookupCascadeConfig['derivedFrom'],
+    }
+    return effectiveLookupFilterConditionsForRow(cfg.filterConditions || [], cfg, mockRow)
+  }
+
+  const applyLookupCascadeOnMockRow = (
+    column: SubTableListColumnDTO,
+    value: unknown,
+    mockRow: Record<string, unknown>,
+    lookupColumns: SubTableListColumnDTO[],
+  ): Record<string, unknown> => {
+    const next = { ...mockRow }
+    const parentRow = normalizeLookupRow(value)
+    next[column.fieldName] = parentRow
+    for (const dep of lookupColumns) {
+      if (dep.fieldName === column.fieldName) continue
+      const depPreview = getLookupPreviewConfig(dep)
+      if (depPreview.derivedFrom?.parentField !== column.fieldName) continue
+      if (depPreview.derivedFrom.derivedMode !== 'autofill') continue
+      const depCfg: LookupCascadeConfig = {
+        filterConditions: depPreview.filterConditions || [],
+        derivedFrom: depPreview.derivedFrom as LookupCascadeConfig['derivedFrom'],
+      }
+      next[dep.fieldName] = parentRow
+        ? buildPreviewAutofillModelValue(depCfg, parentRow, {
+          searchFields: depPreview.searchFields,
+          selectedDisplayField: depPreview.selectedDisplayField,
+          displayFields: depPreview.displayFields,
+          multiple: depPreview.multiple === true,
+        })
+        : (depPreview.multiple === true ? [] : null)
+    }
+    return next
   }
 
   const getFieldIcon = (dataType: string) => {
@@ -105,6 +162,8 @@ export function useColumnHelpers(options: UseColumnHelpersOptions) {
     resolveSubTableBindingDisplayName,
     getLinkFormBoundTableName,
     getLookupPreviewConfig,
+    getLookupFilterConditionsForMockRow,
+    applyLookupCascadeOnMockRow,
     getFieldIcon,
     getMockValue,
   }

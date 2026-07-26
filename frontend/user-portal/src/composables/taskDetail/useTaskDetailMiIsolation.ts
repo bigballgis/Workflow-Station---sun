@@ -17,6 +17,7 @@ import {
   bindingIdsPreferStrictSubTableLookup,
   normalizeSubTableName,
 } from './subTableRowUtils'
+import { isEmptySeedableFormValue } from './seedTaskFormFromProcessValues'
 import type { TaskDetailCtx } from './context'
 
 export interface TaskDetailMiIsolationFns {
@@ -127,8 +128,21 @@ export function createTaskDetailMiIsolation(ctx: TaskDetailCtx): TaskDetailMiIso
         }
         continue
       }
+      // Prefer non-empty MI row values; if the row only has an empty slot (common for
+      // Start Process LOOKUP fields mirrored onto the assignee form), keep process/task
+      // variables so readonly tags (stage / Test_status) are not wiped to "-".
       if (myRow && Object.prototype.hasOwnProperty.call(myRow, key)) {
-        cleanedFormData[key] = (myRow as Record<string, any>)[key]
+        const fromRow = (myRow as Record<string, any>)[key]
+        if (!isEmptySeedableFormValue(fromRow)) {
+          cleanedFormData[key] = fromRow
+        } else if (
+          Object.prototype.hasOwnProperty.call(originalFormData, key) &&
+          !isEmptySeedableFormValue(originalFormData[key])
+        ) {
+          cleanedFormData[key] = originalFormData[key]
+        } else {
+          cleanedFormData[key] = fromRow
+        }
       } else if (Object.prototype.hasOwnProperty.call(originalFormData, key)) {
         cleanedFormData[key] = originalFormData[key]
       } else {

@@ -377,6 +377,7 @@
       :visible="dialogVisible"
       :columns="subTableDialogColumns"
       :audit-columns="listViewColumnsForAudit"
+      :form-fields="formFields"
       :mode="dialogMode"
       :initial-data="dialogInitialData"
       :row-formulas="rowFormulas"

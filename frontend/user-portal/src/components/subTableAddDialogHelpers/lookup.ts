@@ -107,6 +107,8 @@ export function buildLookupColumnProps(
     selectedDisplayField,
     _lookupSelectedDisplayField: selectedDisplayField,
     filterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
+    derivedFrom: lookupCfg.derivedFrom,
+    multiple: lookupCfg.multiple === true,
     viewFields:
       lookupCfg.showBackfillView === false
         ? []
@@ -120,6 +122,15 @@ function lookupCellValue(row: Record<string, unknown>, field: string): unknown {
   const val = row[field]
   if (val != null && String(val).trim() !== '') return val
   return undefined
+}
+
+/**
+ * When a node form has multiple:false but process variables still hold a multi LOOKUP
+ * array (Start Process multiple:true), unwrap the first non-empty entry for single-select init.
+ */
+export function unwrapSingleLookupModelValue(val: unknown): unknown {
+  if (!Array.isArray(val)) return val
+  return val.find((v) => v != null && !(typeof v === 'string' && String(v).trim() === '')) ?? null
 }
 
 /** Tag/cell label for lookup rows — mirrors designer LookupPreview / LookupField. */

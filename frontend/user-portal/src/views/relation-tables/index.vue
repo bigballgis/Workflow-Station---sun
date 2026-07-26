@@ -148,7 +148,7 @@
               show-overflow-tooltip
             >
               <template #default="{ row }">
-                {{ isTimestampColumn(col) ? formatHKT(row[col]) : row[col] }}
+                {{ isTimestampColumn(col) ? formatHKT(row[col]) : formatRelationCellDisplay(row[col]) }}
               </template>
             </el-table-column>
             <el-table-column
@@ -397,7 +397,7 @@ import { relationTableApi, type RelationTableDTO, type RelationFieldDef, type Re
 import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
 import LookupField from '@/components/lookup/LookupField.vue'
 import LookupViewDisplay from '@/components/lookup/LookupViewDisplay.vue'
-import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, type FieldLike } from '@/components/lookup/useLookupBehaviors'
+import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, formatRelationCellDisplay, type FieldLike } from '@/components/lookup/useLookupBehaviors'
 
 const SYSTEM_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
 

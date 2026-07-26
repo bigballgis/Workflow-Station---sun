@@ -192,14 +192,17 @@
                 v-else-if="isLookupColumn(column)"
                 class="list-view-lookup-preview"
                 :label="''"
+                :model-value="lookupMockRow[column.fieldName]"
                 :placeholder="getLookupPreviewConfig(column).placeholder"
                 :search-fields="getLookupPreviewConfig(column).searchFields"
                 :display-fields="getLookupPreviewConfig(column).displayFields"
                 :selected-display-field="getLookupPreviewConfig(column).selectedDisplayField"
-                :filter-conditions="getLookupPreviewConfig(column).filterConditions"
+                :filter-conditions="getLookupFilterConditionsForMockRow(column, lookupMockRow)"
                 :view-fields="getLookupPreviewConfig(column).viewFields"
                 :field-defs="getLookupPreviewConfig(column).fieldDefs"
                 :show-backfill-view="getLookupPreviewConfig(column).showBackfillView"
+                :multiple="getLookupPreviewConfig(column).multiple === true"
+                @update:model-value="(val) => onLookupMockRowChange(column, val)"
               />
               <span v-else>{{ getMockValue(column) }}</span>
             </div>
@@ -263,16 +266,19 @@
                   v-else-if="isLookupColumn(column)"
                   class="list-view-lookup-preview"
                   :label="''"
+                  :model-value="lookupMockRow[column.fieldName]"
                   :placeholder="getLookupPreviewConfig(column).placeholder"
                   :search-fields="getLookupPreviewConfig(column).searchFields"
                   :display-fields="getLookupPreviewConfig(column).displayFields"
                   :selected-display-field="getLookupPreviewConfig(column).selectedDisplayField"
-                  :filter-conditions="getLookupPreviewConfig(column).filterConditions"
+                  :filter-conditions="getLookupFilterConditionsForMockRow(column, lookupMockRow)"
                   :view-fields="getLookupPreviewConfig(column).viewFields"
                   :field-defs="getLookupPreviewConfig(column).fieldDefs"
                   :show-backfill-view="pane.key === 'initiator' && initiatorIsSummary
                     ? false
                     : (getLookupPreviewConfig(column).showBackfillView !== false)"
+                  :multiple="getLookupPreviewConfig(column).multiple === true"
+                  @update:model-value="(val) => onLookupMockRowChange(column, val)"
                 />
                 <span v-else>{{ getMockValue(column) }}</span>
               </div>
@@ -380,7 +386,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Search, Close, Menu, DArrowRight, EditPen, Link, Operation } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -436,9 +442,14 @@ const {
   resolveSubTableBindingDisplayName,
   getLinkFormBoundTableName,
   getLookupPreviewConfig,
+  getLookupFilterConditionsForMockRow,
+  applyLookupCascadeOnMockRow,
   getFieldIcon,
   getMockValue,
 } = useColumnHelpers({ props, subTableBindingOptions, t })
+
+/** Shared mock row for List/Card lookup cascade preview. */
+const lookupMockRow = reactive<Record<string, unknown>>({})
 
 // --- View columns, available fields, and field/action add/remove/clear ---
 const {
@@ -464,6 +475,15 @@ const {
   getLinkColumnKey,
   t,
 })
+
+function onLookupMockRowChange(column: import('@/composables/subTableListView/types').SubTableListColumnDTO, value: unknown) {
+  const lookupCols = viewColumns.value.filter(isLookupColumn)
+  const next = applyLookupCascadeOnMockRow(column, value, lookupMockRow, lookupCols)
+  for (const key of Object.keys(lookupMockRow)) {
+    if (!(key in next)) delete lookupMockRow[key]
+  }
+  Object.assign(lookupMockRow, next)
+}
 
 // --- Drag from panel to grid + column reorder ---
 const {

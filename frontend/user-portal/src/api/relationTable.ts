@@ -41,6 +41,8 @@ export interface LookupConfig {
   showBackfillView?: boolean
   multiple?: boolean
   derivedFrom?: LookupDerivedFrom
+  /** DW form-create binding uses tableId instead of refTableId */
+  tableId?: number
 }
 
 export interface RelationFieldDef {

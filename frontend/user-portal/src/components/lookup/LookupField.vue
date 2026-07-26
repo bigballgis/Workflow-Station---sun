@@ -115,7 +115,11 @@ import { useZIndex } from 'element-plus'
 import { Close, Check } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
 import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
-import { getLookupSelectedDisplayFieldFromProps, resolveLookupCellTagText } from '../subTableAddDialogHelpers'
+import {
+  getLookupSelectedDisplayFieldFromProps,
+  resolveLookupCellTagText,
+  unwrapSingleLookupModelValue,
+} from '../subTableAddDialogHelpers'
 import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
 
 export interface LookupViewField {
@@ -325,7 +329,9 @@ function tagTextFor(row: Record<string, any>): string {
 }
 
 function emitMultiModel() {
-  emit('update:modelValue', selectedRows.value.map(r => rowPk(r)))
+  // Portal forms store full row objects (same as single-select) so tags can use
+  // designer selectedDisplayField without a racey hydrate-by-PK round-trip.
+  emit('update:modelValue', selectedRows.value.map(r => ({ ...r })))
 }
 
 function handleSelect(row: Record<string, any>) {
@@ -375,29 +381,39 @@ function initFromModelValue(val: any) {
     initMultiFromModelValue(val)
     return
   }
+  // Start Process may persist multi LOOKUP as an array while a later node form
+  // (e.g. Assign Task) still has multiple:false — unwrap so we don't treat the
+  // Array itself as a row (Object.keys → "0","1"…; getDisplayValue → "-").
+  if (Array.isArray(val)) {
+    initFromModelValue(unwrapSingleLookupModelValue(val))
+    return
+  }
+  // Sync from model only — never emit('clear') here. FormRenderer runs initFormData in onMounted,
+  // so LookupField can mount with a briefly-empty internal formData; emitting clear would cascade
+  // wipe parent process/task variables (stage → null, multi test_status → []) before init copies them in.
   if (val == null || val === '') {
-    clearLookupSelectionFromModel()
+    clearLookupSelectionFromModel(false)
     return
   }
   // Process variables often persist lookup as a scalar id/string — readonly inline rows otherwise render "-" forever.
+  // Do NOT emit('select') here: FormRenderer handleLookupSelect would overwrite formData / re-enter cascade
+  // (autofill PK → synthetic object → hydrate aborted → blank Test_status tag).
   if (typeof val === 'number' || typeof val === 'bigint' || typeof val === 'boolean') {
     const scalarRow = buildSyntheticLookupRow(val)
     selectedRow.value = scalarRow
     searchKeyword.value = String(getDisplayValue(scalarRow) || '')
-    emit('select', scalarRow)
     void hydrateScalarFromRelationTable(val)
     return
   }
   if (typeof val === 'string') {
     const trimmed = val.trim()
     if (trimmed === '') {
-      clearLookupSelectionFromModel()
+      clearLookupSelectionFromModel(false)
       return
     }
     const scalarRow = buildSyntheticLookupRow(trimmed)
     selectedRow.value = scalarRow
     searchKeyword.value = String(getDisplayValue(scalarRow) || '')
-    emit('select', scalarRow)
     void hydrateScalarFromRelationTable(trimmed)
     return
   }
@@ -405,33 +421,39 @@ function initFromModelValue(val: any) {
     selectedRow.value = val
     const displayVal = getDisplayValue(val)
     searchKeyword.value = String(displayVal ?? '')
-    emit('select', val)
   }
 }
 
-/** Multi-select init: modelValue is an array of PKs (or a JSON-array string). */
+/** Multi-select init: modelValue is row objects, PK scalars, or a JSON-array string. */
 function initMultiFromModelValue(val: any) {
-  let pks: any[] = []
+  let items: any[] = []
   if (Array.isArray(val)) {
-    pks = val
+    items = val
   } else if (typeof val === 'string' && val.trim() !== '') {
-    // Tolerate a persisted JSON-array string or a single scalar.
     try {
       const parsed = JSON.parse(val)
-      pks = Array.isArray(parsed) ? parsed : [val]
+      items = Array.isArray(parsed) ? parsed : [val]
     } catch {
-      pks = [val]
+      items = [val]
     }
   } else if (val != null && val !== '') {
-    pks = [val]
+    items = [val]
   }
-  pks = pks.filter(p => p != null && String(p).trim() !== '')
-  if (!pks.length) {
+  items = items.filter(p => p != null && !(typeof p === 'string' && p.trim() === ''))
+  if (!items.length) {
     selectedRows.value = []
     searchKeyword.value = ''
     return
   }
-  // Seed synthetic rows immediately so tags render, then hydrate each to a full row.
+  // Full row objects from cascade autofill / prior selects — use as-is for tag text.
+  if (items.every(p => typeof p === 'object' && !Array.isArray(p))) {
+    selectedRows.value = items as Record<string, any>[]
+    searchKeyword.value = ''
+    return
+  }
+  // Legacy / engine PK arrays — seed synthetics then hydrate for display fields.
+  const pks = items.map(p => (typeof p === 'object' && p != null ? rowPk(p) : p))
+    .filter(p => p != null && String(p).trim() !== '')
   selectedRows.value = pks.map(p => buildSyntheticLookupRow(p))
   pks.forEach((p, idx) => void hydrateMultiRowAt(idx, p))
 }
@@ -439,10 +461,13 @@ function initMultiFromModelValue(val: any) {
 async function hydrateMultiRowAt(index: number, scalar: any) {
   if (!props.tableId) return
   try {
+    // Omit derived filterConditions: cascade autofill already chose these PKs;
+    // re-applying parent filters can leave tags stuck on "-".
     const row = await fetchLookupRowByPrimaryKey(props.tableId, scalar, {
       searchFields: props.searchFields || [],
       displayField: props.displayField || '',
-      filterConditions: props.filterConditions || []
+      filterConditions: [],
+      primaryKeyField: pkField(),
     })
     if (!row || !Object.keys(row).length) return
     // Only replace if the slot still holds the same PK (guard against races/edits).
@@ -462,19 +487,26 @@ async function hydrateScalarFromRelationTable(scalar: string | number) {
   if (!props.tableId) return
   const want = String(scalar).trim()
   try {
+    // Omit derived filterConditions here: cascade autofill already chose this PK; re-applying
+    // parent filters can race with parent clear/select and leave the tag blank.
     const row = await fetchLookupRowByPrimaryKey(props.tableId, scalar, {
       searchFields: props.searchFields || [],
       displayField: props.displayField || '',
-      filterConditions: props.filterConditions || []
+      filterConditions: [],
+      primaryKeyField: pkField(),
     })
     if (!row || !Object.keys(row).length) return
     const cur = props.modelValue
     if (cur == null || cur === '') return
-    if (typeof cur === 'object') return
-    if (String(cur).trim() !== want) return
+    if (typeof cur === 'object' && !Array.isArray(cur)) {
+      const curPk = String(rowPk(cur) ?? '').trim()
+      if (curPk && curPk !== want) return
+    } else if (String(cur).trim() !== want) {
+      return
+    }
     selectedRow.value = row
     searchKeyword.value = String(getDisplayValue(row) ?? '')
-    emit('select', row)
+    // Display-only hydrate — do not emit select (avoids FormRenderer cascade / formData overwrite).
   } catch {
     /* 保持合成行回退 */
   }

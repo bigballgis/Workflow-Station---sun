@@ -30,9 +30,24 @@
       label-position="left"
     >
       <template
-        v-for="col in visibleColumns"
-        :key="col.field"
+        v-for="group in dialogLayoutGroups"
+        :key="group.key"
       >
+        <component
+          :is="group.title !== null ? 'el-card' : 'div'"
+          v-bind="group.title !== null ? { shadow: 'never' } : {}"
+          :class="group.title !== null ? 'sub-table-dialog-card' : undefined"
+        >
+          <template
+            v-if="group.title"
+            #header
+          >
+            <span class="sub-table-dialog-card-title">{{ group.title }}</span>
+          </template>
+          <template
+            v-for="col in group.columns"
+            :key="col.field"
+          >
         <!-- MI 场景 C：分派方式 radio 插在分派字段组（Assignee/BU/Role）正上方 -->
         <el-form-item
           v-if="showAssignModeRadio && col.field === firstAssignField"
@@ -424,12 +439,14 @@
             :display-field="col.props?.displayField || ''"
             :display-fields="col.props?.displayFields || []"
             :selected-display-field="getLookupSelectedDisplayField(col)"
-            :filter-conditions="col.props?.filterConditions || []"
+            :filter-conditions="effectiveLookupFilterConditions(col)"
             :lookup-config="col.props?.lookupConfig"
             :view-fields="col.props?.viewFields || []"
             :placeholder="col.placeholder || col.label"
             :readonly="isColDisabled(col)"
+            :multiple="col.props?.multiple === true"
             @select="(row: Record<string, any>) => onLookupSelect(col.field, row)"
+            @clear="() => onLookupClear(col.field)"
             @view-fields-loaded="(fields: any[]) => onLookupViewFieldsLoaded(col.field, fields)"
           />
           <LookupViewDisplay
@@ -486,6 +503,8 @@
           :clearable="!isColDisabled(col)"
         />
         </el-form-item>
+          </template>
+        </component>
       </template>
     </el-form>
 
@@ -540,13 +559,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
 import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
+import { buildDialogLayoutGroups } from './subTableAddDialogHelpers/dialogFormLayout'
 import type { FormField, RowFormulaRule, ValidationRule } from './formRendererHelpers'
 import { resolveRowStableId } from './formRendererHelpers/recordNoteFields'
 import RecordNoteField from './RecordNoteField.vue'
@@ -596,6 +616,11 @@ const props = defineProps<{
   columns: DialogColumn[]
   /** List-view columns for audit auto-fill on save (created_at / updated_at etc.). */
   auditColumns?: DialogColumn[]
+  /**
+   * Designer form-field tree for this binding (includes elCard). When present with cards,
+   * Add/Edit dialog wraps fields in the same card layout as DW Form Preview.
+   */
+  formFields?: FormField[]
   title?: string
   mode: 'add' | 'edit'
   initialData?: Record<string, any>
@@ -651,11 +676,13 @@ function onNestedRowsUpdate(nested: NestedSubTableDescriptor, nestedRows: unknow
 // ─── Lookup backfill ────────────────────────────────────────────────────────
 const {
   effectiveLookupViewFieldsForDialog,
+  effectiveLookupFilterConditions,
   onLookupViewFieldsLoaded,
   onLookupSelect,
+  onLookupClear,
   effectiveLookupSelectedRow,
   resetLookupState,
-} = useSubTableDialogLookup(formData)
+} = useSubTableDialogLookup(formData, toRef(props, 'columns'))
 
 // ─── Signature canvas ─────────────────────────────────────────────────────────
 const {
@@ -765,6 +792,12 @@ const visibleColumns = computed(() => {
     return c.field !== 'assignee'
   })
 })
+
+/** DW Form Preview parity: group columns under designer elCard titles when present. */
+const dialogLayoutGroups = computed(() =>
+  buildDialogLayoutGroups(props.formFields, visibleColumns.value),
+)
+
 // 分派字段组的首列（radio 插在它正上方，与分派字段成一体）。
 const ASSIGN_FIELDS = new Set(['assignee', 'bu_code', 'role_code'])
 const firstAssignField = computed(() => {
@@ -813,6 +846,17 @@ const {
 
 .sub-table-color-popper {
   z-index: 2050;
+}
+
+/* Adjacent designer cards — same 10px gap as FormRenderer / DW Preview */
+.sub-table-dialog-card {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.sub-table-dialog-card-title {
+  font-weight: 500;
+  color: #303133;
 }
 
 .signature-canvas {

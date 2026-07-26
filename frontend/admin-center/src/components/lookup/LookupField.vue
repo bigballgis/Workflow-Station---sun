@@ -374,8 +374,9 @@ function initFromModelValue(val: any) {
     initMultiFromModelValue(val)
     return
   }
+  // Sync from model only — never emit('clear') on empty init (avoids cascade wipe before parent hydrate).
   if (val == null || val === '') {
-    clearLookupSelectionFromModel()
+    clearLookupSelectionFromModel(false)
     return
   }
   // Process variables often persist lookup as a scalar id/string — readonly inline rows otherwise render "-" forever.
@@ -390,7 +391,7 @@ function initFromModelValue(val: any) {
   if (typeof val === 'string') {
     const trimmed = val.trim()
     if (trimmed === '') {
-      clearLookupSelectionFromModel()
+      clearLookupSelectionFromModel(false)
       return
     }
     const scalarRow = buildSyntheticLookupRow(trimmed)

@@ -352,7 +352,7 @@ function buildPreviewItems(
         items.push({ kind: 'subTable', binding: { ...binding, portalViews: mergedPv } })
         localBindingMap.delete(Number(itemBindingId))
       }
-    } else if (isCardRule(ruleItem) && containsSubTableRule(ruleItem)) {
+    } else if (isCardRule(ruleItem)) {
       flushSegment()
       items.push({
         kind: 'card',

@@ -13,6 +13,7 @@ import {
   cloneAndFlattenSubTablesMap,
   yieldToMain,
 } from './subTableRowUtils'
+import { seedTaskFormFromProcessValues } from './seedTaskFormFromProcessValues'
 import type { TaskDetailCtx } from './context'
 
 /**
@@ -190,6 +191,18 @@ export function createTaskDetailLoader(
                 }
               }
               ctx.patchFormDataSubTablesFromCurrentBindings()
+              // MI isolate may clear Start Process LOOKUP slots that exist as empty keys on
+              // the participant row; re-seed from processFormValues before FormRenderer mounts.
+              {
+                const { next, patched } = seedTaskFormFromProcessValues(
+                  formData.value as Record<string, unknown>,
+                  ctx.processFormValues.value as Record<string, unknown>,
+                  getCurrentFormFieldKeys(),
+                )
+                if (patched) {
+                  formData.value = next as Record<string, any>
+                }
+              }
               // nodeFormMap refresh deferred until diagram panel (buildNodeFormMapIfNeeded)
               const formKeys = getCurrentFormFieldKeys()
               miFilled.value = formKeys.some(key => {
