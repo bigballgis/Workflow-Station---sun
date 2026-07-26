@@ -8,6 +8,7 @@ import com.workflow.service.EmailSenderService;
 import com.platform.common.mail.MailDiagnostics;
 import com.workflow.util.BpmnExtensionUtils;
 import com.workflow.util.EmailTemplateResolver;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
@@ -34,6 +35,7 @@ public class SendEmailTaskDelegate implements JavaDelegate {
     private final RepositoryService repositoryService;
     private final AdminCenterClient adminCenterClient;
     private final EmailSenderService emailSenderService;
+    private final I18nService i18nService;
 
     @Override
     public void execute(DelegateExecution execution) {
@@ -43,7 +45,8 @@ public class SendEmailTaskDelegate implements JavaDelegate {
 
         FlowElement flowElement = getFlowElement(execution);
         if (flowElement == null) {
-            throw new BpmnError("EMAIL_SEND_FAILED", "无法解析流程节点: " + activityId);
+            throw new BpmnError("EMAIL_SEND_FAILED",
+                    i18nService.getMessage("email.send_task.flow_element_unresolved", activityId));
         }
 
         String connectionId = BpmnExtensionUtils.getExtensionProperty(flowElement, "connectionId");
@@ -60,16 +63,20 @@ public class SendEmailTaskDelegate implements JavaDelegate {
         String emailBody = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailBody");
 
         if (!StringUtils.hasText(connectionId)) {
-            throw new BpmnError("EMAIL_CONFIG_INVALID", "Send Task 未配置邮件连接 (connectionId)");
+            throw new BpmnError("EMAIL_CONFIG_INVALID",
+                    i18nService.getMessage("email.send_task.missing_connection"));
         }
         if (!StringUtils.hasText(emailTo)) {
-            throw new BpmnError("EMAIL_CONFIG_INVALID", "Send Task 未配置收件人 (emailTo)");
+            throw new BpmnError("EMAIL_CONFIG_INVALID",
+                    i18nService.getMessage("email.send_task.missing_recipient"));
         }
         if (!StringUtils.hasText(emailFrom)) {
-            throw new BpmnError("EMAIL_CONFIG_INVALID", "Send Task 未配置发件邮箱 (emailFrom)");
+            throw new BpmnError("EMAIL_CONFIG_INVALID",
+                    i18nService.getMessage("email.send_task.missing_from"));
         }
         if (!StringUtils.hasText(emailSubject)) {
-            throw new BpmnError("EMAIL_CONFIG_INVALID", "Send Task 未配置邮件主题 (emailSubject)");
+            throw new BpmnError("EMAIL_CONFIG_INVALID",
+                    i18nService.getMessage("email.send_task.missing_subject"));
         }
 
         Map<String, Object> variables = new HashMap<>(execution.getVariables());
@@ -89,14 +96,16 @@ public class SendEmailTaskDelegate implements JavaDelegate {
 
         String functionUnitId = resolveFunctionUnitId(variables);
         if (!StringUtils.hasText(functionUnitId)) {
-            throw new BpmnError("EMAIL_CONFIG_INVALID", "流程变量中缺少 functionUnitId");
+            throw new BpmnError("EMAIL_CONFIG_INVALID",
+                    i18nService.getMessage("email.send_task.missing_function_unit_id"));
         }
 
         Optional<Map<String, Object>> credentialsOpt =
                 adminCenterClient.getEmailConnectionCredentials(functionUnitId, connectionId);
         if (credentialsOpt.isEmpty()) {
             throw new BpmnError("EMAIL_CONNECTION_NOT_FOUND",
-                    "未找到邮件连接: functionUnitId=" + functionUnitId + ", connectionId=" + connectionId);
+                    i18nService.getMessage("email.send_task.connection_not_found",
+                            functionUnitId, connectionId));
         }
 
         try {
@@ -136,7 +145,8 @@ public class SendEmailTaskDelegate implements JavaDelegate {
                     "error", rootCause,
                     "causeChain", causeChain
             ));
-            throw new BpmnError("EMAIL_SEND_FAILED", "邮件发送失败: " + rootCause);
+            throw new BpmnError("EMAIL_SEND_FAILED",
+                    i18nService.getMessage("email.send_task.send_failed", rootCause));
         }
     }
 

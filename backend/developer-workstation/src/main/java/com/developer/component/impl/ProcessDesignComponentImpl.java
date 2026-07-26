@@ -11,8 +11,11 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.util.XmlEncodingUtil;
+import com.platform.common.i18n.I18nService;
+import com.platform.common.i18n.impl.I18nServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,7 +78,7 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
                 processDefinitionRepository,
                 functionUnitRepository,
                 new ProcessBpmnStaleIdFixer(tableDefinitionRepository, formDefinitionRepository, null),
-                new ProcessBpmnValidator(tableDefinitionRepository, formDefinitionRepository),
+                new ProcessBpmnValidator(tableDefinitionRepository, formDefinitionRepository, testI18nService()),
                 new ProcessSimulationHelper(tableDefinitionRepository),
                 new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null));
     }
@@ -177,5 +180,12 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     @Override
     public ValidationResult validateLastTaskAssigneeTopology(String bpmnXml) {
         return bpmnValidator.validateLastTaskAssigneeTopology(bpmnXml);
+    }
+
+    private static I18nService testI18nService() {
+        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+        messageSource.setBasenames("i18n/messages");
+        messageSource.setDefaultEncoding("UTF-8");
+        return new I18nServiceImpl(messageSource);
     }
 }

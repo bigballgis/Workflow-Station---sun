@@ -7,6 +7,7 @@ import com.developer.enums.TableType;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
+import com.platform.common.i18n.I18nService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -40,12 +41,15 @@ public class ProcessBpmnValidator {
 
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FormDefinitionRepository formDefinitionRepository;
+    private final I18nService i18nService;
 
     public ProcessBpmnValidator(
             TableDefinitionRepository tableDefinitionRepository,
-            FormDefinitionRepository formDefinitionRepository) {
+            FormDefinitionRepository formDefinitionRepository,
+            I18nService i18nService) {
         this.tableDefinitionRepository = tableDefinitionRepository;
         this.formDefinitionRepository = formDefinitionRepository;
+        this.i18nService = i18nService;
     }
 
     public ValidationResult validate(String bpmnXml) {
@@ -111,16 +115,20 @@ public class ProcessBpmnValidator {
             String emailFrom = extractCustomProperty(block, "emailFrom");
             String emailSubject = extractCustomProperty(block, "emailSubject");
             if (connectionId == null || connectionId.isBlank()) {
-                result.addError("SEND_TASK_MISSING_CONNECTION", "Send Task 未配置邮件连接", taskId);
+                result.addError("SEND_TASK_MISSING_CONNECTION",
+                        i18nService.getMessage("email.send_task.missing_connection"), taskId);
             }
             if (emailTo == null || emailTo.isBlank()) {
-                result.addError("SEND_TASK_MISSING_RECIPIENT", "Send Task 未配置收件人", taskId);
+                result.addError("SEND_TASK_MISSING_RECIPIENT",
+                        i18nService.getMessage("email.send_task.missing_recipient"), taskId);
             }
             if (emailFrom == null || emailFrom.isBlank()) {
-                result.addError("SEND_TASK_MISSING_FROM", "Send Task 未配置发件邮箱", taskId);
+                result.addError("SEND_TASK_MISSING_FROM",
+                        i18nService.getMessage("email.send_task.missing_from"), taskId);
             }
             if (emailSubject == null || emailSubject.isBlank()) {
-                result.addError("SEND_TASK_MISSING_SUBJECT", "Send Task 未配置邮件主题", taskId);
+                result.addError("SEND_TASK_MISSING_SUBJECT",
+                        i18nService.getMessage("email.send_task.missing_subject"), taskId);
             }
         }
     }

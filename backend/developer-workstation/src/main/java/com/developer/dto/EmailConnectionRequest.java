@@ -12,8 +12,8 @@ import lombok.Data;
 public class EmailConnectionRequest {
 
     /** Connection display name; defaults to the mailbox email address */
-    @NotBlank
-    @Email
+    @NotBlank(message = "{email.connection.sender_email_required}")
+    @Email(message = "{email.connection.invalid_sender_email}")
     private String name;
 
     private ConnectionType connectionType = ConnectionType.GMAIL;

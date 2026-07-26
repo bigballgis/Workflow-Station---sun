@@ -14,6 +14,7 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.util.SmtpMailSender;
 import com.platform.common.mail.MailDiagnostics;
 import com.platform.common.security.SsrfProtection;
+import com.platform.common.i18n.I18nService;
 import com.platform.security.encryption.EncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     private final EmailConnectionRepository emailConnectionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final EncryptionService encryptionService;
+    private final I18nService i18nService;
 
     /** Corporate SMTP relays / internal hosts permitted (same config as webhook SSRF allowlist). */
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")
@@ -64,15 +66,18 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
 
         if (emailConnectionRepository.existsByFunctionUnitIdAndName(functionUnitId, request.getName())) {
-            throw new DeveloperBusinessException("CONFLICT_CONNECTION_NAME", "连接名称已存在: " + request.getName());
+            throw new DeveloperBusinessException("CONFLICT_CONNECTION_NAME",
+                    i18nService.getMessage("email.connection.name_conflict", request.getName()));
         }
 
         if (!StringUtils.hasText(request.getUsername())) {
             if (StringUtils.hasText(request.getPassword())) {
-                throw new DeveloperBusinessException("VALIDATION_USERNAME_REQUIRED", "填写密码时必须提供用户名");
+                throw new DeveloperBusinessException("VALIDATION_USERNAME_REQUIRED",
+                        i18nService.getMessage("email.connection.password_requires_username"));
             }
         } else if (!StringUtils.hasText(request.getPassword())) {
-            throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED", "填写用户名时必须提供密码");
+            throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED",
+                    i18nService.getMessage("email.connection.username_requires_password"));
         }
 
         ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, null);
@@ -114,7 +119,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
         if (emailConnectionRepository.existsByFunctionUnitIdAndNameAndIdNot(
                 functionUnitId, request.getName(), connectionId)) {
-            throw new DeveloperBusinessException("CONFLICT_CONNECTION_NAME", "连接名称已存在: " + request.getName());
+            throw new DeveloperBusinessException("CONFLICT_CONNECTION_NAME",
+                    i18nService.getMessage("email.connection.name_conflict", request.getName()));
         }
 
         ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, connection);
@@ -147,7 +153,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         } else if (StringUtils.hasText(request.getPassword())) {
             connection.setPasswordEncrypted(encryptionService.encrypt(request.getPassword()));
         } else if (!StringUtils.hasText(connection.getUsername())) {
-            throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED", "填写用户名时必须提供密码");
+            throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED",
+                    i18nService.getMessage("email.connection.username_requires_password"));
         }
 
         return EmailConnectionResponse.fromEntity(emailConnectionRepository.save(connection));
@@ -164,7 +171,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     public Map<String, Object> testConnection(Long functionUnitId, Long connectionId, String testRecipient) {
         EmailConnection connection = getEntity(functionUnitId, connectionId);
         if (!StringUtils.hasText(testRecipient)) {
-            throw new DeveloperBusinessException("VALIDATION_RECIPIENT_REQUIRED", "测试收件人不能为空");
+            throw new DeveloperBusinessException("VALIDATION_RECIPIENT_REQUIRED",
+                    i18nService.getMessage("email.connection.test_recipient_required"));
         }
 
         log.info("[SMTP-TEST] request functionUnitId={} connectionId={} name={} host={} port={} useTls={} direction={} recipient={}",
@@ -179,7 +187,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                     "Workflow Platform - Connection Test",
                     "<p>This is a test email from connection <strong>" + connection.getName() + "</strong>.</p>");
             result.put("success", true);
-            result.put("message", "测试邮件发送成功");
+            result.put("message", i18nService.getMessage("email.connection.test_success"));
         } catch (Exception e) {
             String causeChain = MailDiagnostics.causeChain(e);
             String rootCause = MailDiagnostics.rootCause(e);
@@ -187,7 +195,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                     connectionId, connection.getHost(), connection.getPort(), connection.getUseTls(),
                     causeChain, rootCause, e);
             result.put("success", false);
-            result.put("message", "测试失败: " + rootCause);
+            result.put("detail", rootCause);
+            result.put("message", i18nService.getMessage("email.connection.test_failed", rootCause));
             result.put("causeChain", causeChain);
         }
         return result;
@@ -215,21 +224,24 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                 ? request.getHost().trim()
                 : (existing != null ? existing.getHost() : null);
         if (!StringUtils.hasText(host)) {
-            throw new DeveloperBusinessException("VALIDATION_SMTP_HOST_REQUIRED", "SMTP 主机不能为空");
+            throw new DeveloperBusinessException("VALIDATION_SMTP_HOST_REQUIRED",
+                    i18nService.getMessage("email.connection.smtp_host_required"));
         }
 
         Integer port = request.getPort() != null && request.getPort() > 0
                 ? request.getPort()
                 : (existing != null ? existing.getPort() : null);
         if (port == null || port <= 0) {
-            throw new DeveloperBusinessException("VALIDATION_SMTP_PORT_REQUIRED", "SMTP 端口不能为空");
+            throw new DeveloperBusinessException("VALIDATION_SMTP_PORT_REQUIRED",
+                    i18nService.getMessage("email.connection.smtp_port_required"));
         }
 
         Boolean useTls = request.getUseTls() != null
                 ? request.getUseTls()
                 : (existing != null ? existing.getUseTls() : null);
         if (useTls == null) {
-            throw new DeveloperBusinessException("VALIDATION_SMTP_TLS_REQUIRED", "请指定是否启用 TLS");
+            throw new DeveloperBusinessException("VALIDATION_SMTP_TLS_REQUIRED",
+                    i18nService.getMessage("email.connection.smtp_tls_required"));
         }
 
         validateSmtpHost(host);
@@ -261,10 +273,12 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
         if (inbound && !hasPreset) {
             if (!StringUtils.hasText(host)) {
-                throw new DeveloperBusinessException("VALIDATION_IMAP_HOST_REQUIRED", "入站监控需要填写 IMAP 主机");
+                throw new DeveloperBusinessException("VALIDATION_IMAP_HOST_REQUIRED",
+                        i18nService.getMessage("email.connection.imap_host_required"));
             }
             if (port == null || port <= 0) {
-                throw new DeveloperBusinessException("VALIDATION_IMAP_PORT_REQUIRED", "入站监控需要填写 IMAP 端口");
+                throw new DeveloperBusinessException("VALIDATION_IMAP_PORT_REQUIRED",
+                        i18nService.getMessage("email.connection.imap_port_required"));
             }
         }
         if (StringUtils.hasText(host)) {

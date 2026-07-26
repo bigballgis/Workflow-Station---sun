@@ -12,7 +12,8 @@
       :storage-key="`${functionUnitId}:connections`"
       :columns="listColumns"
       :rows="connections"
-      :actions-width="220"
+      :actions-width="240"
+      table-class="connection-list-table"
     >
       <template #cell-connectionType="{ row }">
         {{ t(`connection.provider.${normalizeEmailProviderType(row.connectionType)}`) }}
@@ -26,27 +27,32 @@
         </el-tag>
       </template>
       <template #actions="{ row }">
-        <el-button
-          link
-          type="primary"
-          @click="openEditDialog(row as EmailConnection)"
+        <div
+          class="row-actions"
+          @click.stop
         >
-          {{ t('common.edit') }}
-        </el-button>
-        <el-button
-          link
-          type="success"
-          @click="openTestDialog(row as EmailConnection)"
-        >
-          {{ t('connection.test') }}
-        </el-button>
-        <el-button
-          link
-          type="danger"
-          @click="handleDelete(row as EmailConnection)"
-        >
-          {{ t('common.delete') }}
-        </el-button>
+          <el-button
+            link
+            type="primary"
+            @click="openEditDialog(row as EmailConnection)"
+          >
+            {{ t('common.edit') }}
+          </el-button>
+          <el-button
+            link
+            type="success"
+            @click="openTestDialog(row as EmailConnection)"
+          >
+            {{ t('connection.test') }}
+          </el-button>
+          <el-button
+            link
+            type="danger"
+            @click="handleDelete(row as EmailConnection)"
+          >
+            {{ t('common.delete') }}
+          </el-button>
+        </div>
       </template>
     </DesignerListTable>
 
@@ -60,8 +66,15 @@
       class="connection-form-dialog"
       @opened="scrollConnectionDialogToTop"
     >
-      <el-form :model="form" label-position="top" class="connection-form">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="connectionFormRules"
+        label-position="top"
+        class="connection-form"
+      >
         <el-form-item
+          prop="senderEmail"
           class="connection-sender-email-item"
           :label="t('connection.fromEmail')"
           required
@@ -77,7 +90,7 @@
           <el-input v-model="form.fromName" :placeholder="t('connection.fromNamePlaceholder')" />
         </el-form-item>
         <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
-        <el-form-item :label="t('connection.host')" required>
+        <el-form-item prop="host" :label="t('connection.host')" required>
           <el-input
             v-model="form.host"
             placeholder="smtp.example.com"
@@ -85,7 +98,7 @@
           />
           <div class="form-tip">{{ t('connection.smtpHostHint') }}</div>
         </el-form-item>
-        <el-form-item :label="t('connection.port')" required>
+        <el-form-item prop="port" :label="t('connection.port')" required>
           <el-input-number
             v-model="form.port"
             :min="1"
@@ -95,7 +108,7 @@
           />
           <div class="form-tip">{{ t('connection.smtpPortHint') }}</div>
         </el-form-item>
-        <el-form-item :label="t('connection.useTls')" required>
+        <el-form-item prop="useTls" :label="t('connection.useTls')" required>
           <el-radio-group v-model="form.useTls">
             <el-radio :value="true">{{ t('common.yes') }}</el-radio>
             <el-radio :value="false">{{ t('common.no') }}</el-radio>
@@ -164,7 +177,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showTestDialog" :title="t('connection.test')" width="420px">
+    <el-dialog v-model="showTestDialog" :title="t('connection.testDialog')" width="420px">
       <el-form label-width="auto" label-position="left">
         <el-form-item :label="t('connection.testRecipient')" required>
           <el-input v-model="testRecipient" placeholder="test@example.com" />
@@ -181,10 +194,16 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { connectionApi, type EmailConnection, type EmailConnectionRequest } from '@/api/connection'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import {
+  formatConnectionTestFailureMessage,
+  isMessageBoxCancel,
+  isValidSenderEmail,
+  resolveConnectionSaveErrorMessage,
+} from '@/utils/connectionValidation'
 import {
   normalizeEmailProviderType,
   type EmailProviderType
@@ -194,6 +213,12 @@ import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const props = defineProps<{ functionUnitId: number }>()
 const { t } = useI18n()
+
+function resolveConnectionSaveError(error: unknown): string {
+  return resolveConnectionSaveErrorMessage(error, t, (e) => resolveUserFacingHttpMessage(e, t))
+}
+
+const formRef = ref<FormInstance>()
 
 const connections = ref<EmailConnection[]>([])
 const loading = ref(false)
@@ -230,6 +255,52 @@ const defaultForm = (): ConnectionFormState => ({
 })
 
 const form = reactive<ConnectionFormState>(defaultForm())
+
+const connectionFormRules = computed<FormRules>(() => ({
+  senderEmail: [
+    { required: true, message: t('connection.emailAddressRequired'), trigger: ['blur', 'change'] },
+    {
+      validator: (_rule, value, callback) => {
+        const text = String(value ?? '').trim()
+        if (!isValidSenderEmail(text)) {
+          callback(new Error(t('connection.emailAddressInvalid')))
+          return
+        }
+        callback()
+      },
+      trigger: ['blur', 'change'],
+    },
+  ],
+  host: [{ required: true, message: t('connection.hostRequired'), trigger: ['blur', 'change'] }],
+  port: [
+    {
+      validator: (_rule, value, callback) => {
+        if (value == null || value < 1 || value > 65535) {
+          callback(new Error(t('connection.portRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: ['blur', 'change'],
+    },
+  ],
+  useTls: [
+    {
+      validator: (_rule, value, callback) => {
+        if (value == null) {
+          callback(new Error(t('connection.tlsRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: 'change',
+    },
+  ],
+}))
+
+function clearConnectionFormValidation() {
+  nextTick(() => formRef.value?.clearValidate())
+}
 
 const listColumns = computed<DesignerListTableColumn<EmailConnection>[]>(() => [
   {
@@ -319,6 +390,7 @@ function openCreateDialog() {
   editingId.value = null
   Object.assign(form, defaultForm())
   showFormDialog.value = true
+  clearConnectionFormValidation()
 }
 
 function openEditDialog(row: EmailConnection) {
@@ -340,6 +412,7 @@ function openEditDialog(row: EmailConnection) {
     enabled: row.enabled
   })
   showFormDialog.value = true
+  clearConnectionFormValidation()
 }
 
 function openTestDialog(row: EmailConnection) {
@@ -349,32 +422,25 @@ function openTestDialog(row: EmailConnection) {
 }
 
 async function handleSave() {
-  if (!form.senderEmail.trim()) {
-    ElMessage.warning(t('connection.emailAddressRequired'))
+  const formEl = formRef.value
+  if (!formEl) return
+
+  const valid = await formEl.validate().catch(() => false)
+  if (!valid) {
+    void formEl.scrollToField('senderEmail')
     return
   }
-  if (!form.host?.trim()) {
-    ElMessage.warning(t('connection.hostRequired'))
-    return
-  }
-  if (form.port == null || form.port < 1 || form.port > 65535) {
-    ElMessage.warning(t('connection.portRequired'))
-    return
-  }
-  if (form.useTls == null) {
-    ElMessage.warning(t('connection.tlsRequired'))
-    return
-  }
+
   if (imapRequired.value && !form.imapHost?.trim()) {
-    ElMessage.warning(t('connection.imapHostRequired'))
+    ElMessage.warning({ message: t('connection.imapHostRequired'), zIndex: 10001 })
     return
   }
   if (imapRequired.value && (form.imapPort == null || form.imapPort < 1 || form.imapPort > 65535)) {
-    ElMessage.warning(t('connection.imapPortRequired'))
+    ElMessage.warning({ message: t('connection.imapPortRequired'), zIndex: 10001 })
     return
   }
   if (form.username?.trim() && !form.password && !editingId.value) {
-    ElMessage.warning(t('connection.passwordRequired'))
+    ElMessage.warning({ message: t('connection.passwordRequired'), zIndex: 10001 })
     return
   }
 
@@ -389,11 +455,16 @@ async function handleSave() {
     } else {
       await connectionApi.create(props.functionUnitId, payload)
     }
-    ElMessage.success(t('common.saveSuccess'))
+    ElMessage.success({ message: t('common.saveSuccess'), zIndex: 10001 })
     showFormDialog.value = false
     await loadConnections()
   } catch (e) {
-    ElMessage.error(resolveUserFacingHttpMessage(e, t) || t('common.saveFailed'))
+    const msg = resolveConnectionSaveError(e)
+    if (msg === t('connection.emailAddressInvalid')) {
+      void formEl.validateField('senderEmail').catch(() => {})
+      void formEl.scrollToField('senderEmail')
+    }
+    ElMessage.error({ message: msg, zIndex: 10001 })
   } finally {
     saving.value = false
   }
@@ -405,8 +476,9 @@ async function handleDelete(row: EmailConnection) {
     await connectionApi.delete(props.functionUnitId, row.id)
     ElMessage.success(t('common.deleteSuccess'))
     await loadConnections()
-  } catch {
-    // cancelled or failed
+  } catch (error) {
+    if (isMessageBoxCancel(error)) return
+    ElMessage.error(resolveUserFacingHttpMessage(error, t) || t('common.deleteFailed'))
   }
 }
 
@@ -422,10 +494,10 @@ async function handleTest() {
       ElMessage.success(res.data.message || t('connection.testSuccess'))
       showTestDialog.value = false
     } else {
-      ElMessage.error(res.data?.message || t('connection.testFailed'))
+      ElMessage.error(formatConnectionTestFailureMessage(res.data, t))
     }
-  } catch {
-    ElMessage.error(t('connection.testFailed'))
+  } catch (error) {
+    ElMessage.error(resolveUserFacingHttpMessage(error, t) || t('connection.testFailed'))
   } finally {
     testing.value = false
   }
@@ -442,6 +514,20 @@ onMounted(loadConnections)
   margin-bottom: 16px;
   display: flex;
   gap: 8px;
+}
+
+.connection-list-table {
+  :deep(.el-table__body .cell) {
+    overflow: visible;
+  }
+
+  .row-actions {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
 }
 
 .connection-form-dialog :deep(.el-dialog__body) {
@@ -470,6 +556,14 @@ onMounted(loadConnections)
     font-size: 12px;
     line-height: 1.4;
     color: #909399;
+  }
+
+  :deep(.el-form-item__error) {
+    position: static;
+    padding-top: 4px;
+    line-height: 1.4;
+    white-space: normal;
+    word-break: break-word;
   }
 }
 </style>

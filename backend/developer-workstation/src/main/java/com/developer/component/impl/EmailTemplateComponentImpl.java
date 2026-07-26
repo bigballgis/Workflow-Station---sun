@@ -9,6 +9,7 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.EmailTemplateRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,7 @@ public class EmailTemplateComponentImpl implements EmailTemplateComponent {
 
     private final EmailTemplateRepository emailTemplateRepository;
     private final FunctionUnitRepository functionUnitRepository;
+    private final I18nService i18nService;
 
     @Override
     @Transactional(readOnly = true)
@@ -47,7 +49,8 @@ public class EmailTemplateComponentImpl implements EmailTemplateComponent {
 
         String name = request.getName().trim();
         if (emailTemplateRepository.existsByFunctionUnitIdAndName(functionUnitId, name)) {
-            throw new DeveloperBusinessException("CONFLICT_TEMPLATE_NAME", "模板名称已存在: " + name);
+            throw new DeveloperBusinessException("CONFLICT_TEMPLATE_NAME",
+                    i18nService.getMessage("email.template.name_conflict", name));
         }
 
         EmailTemplate template = EmailTemplate.builder()
@@ -68,7 +71,8 @@ public class EmailTemplateComponentImpl implements EmailTemplateComponent {
 
         String name = request.getName().trim();
         if (emailTemplateRepository.existsByFunctionUnitIdAndNameAndIdNot(functionUnitId, name, templateId)) {
-            throw new DeveloperBusinessException("CONFLICT_TEMPLATE_NAME", "模板名称已存在: " + name);
+            throw new DeveloperBusinessException("CONFLICT_TEMPLATE_NAME",
+                    i18nService.getMessage("email.template.name_conflict", name));
         }
 
         template.setName(name);

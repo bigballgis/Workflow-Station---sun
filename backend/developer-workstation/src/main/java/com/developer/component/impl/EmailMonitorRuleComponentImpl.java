@@ -10,6 +10,7 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,7 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
     private final EmailMonitorRuleRepository emailMonitorRuleRepository;
     private final EmailConnectionRepository emailConnectionRepository;
     private final FunctionUnitRepository functionUnitRepository;
+    private final I18nService i18nService;
 
     @Override
     @Transactional(readOnly = true)
@@ -63,7 +65,8 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
 
         if (emailMonitorRuleRepository.existsByFunctionUnitIdAndName(functionUnitId, request.getName())) {
-            throw new DeveloperBusinessException("CONFLICT_RULE_NAME", "监听规则名称已存在: " + request.getName());
+            throw new DeveloperBusinessException("CONFLICT_RULE_NAME",
+                    i18nService.getMessage("email.monitor.name_conflict", request.getName()));
         }
         validateConnection(functionUnitId, request.getConnectionUid());
         validateStartEventBinding(functionUnitId, request.getStartEventId(), null);
@@ -83,7 +86,8 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
 
         if (emailMonitorRuleRepository.existsByFunctionUnitIdAndNameAndIdNot(
                 functionUnitId, request.getName(), ruleId)) {
-            throw new DeveloperBusinessException("CONFLICT_RULE_NAME", "监听规则名称已存在: " + request.getName());
+            throw new DeveloperBusinessException("CONFLICT_RULE_NAME",
+                    i18nService.getMessage("email.monitor.name_conflict", request.getName()));
         }
         validateConnection(functionUnitId, request.getConnectionUid());
         validateStartEventBinding(functionUnitId, request.getStartEventId(), ruleId);
@@ -135,20 +139,21 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
                         functionUnitId, trimmed, excludeRuleId);
         if (taken) {
             throw new DeveloperBusinessException("CONFLICT_START_EVENT",
-                    "该开始事件已绑定其他邮件监听规则: " + trimmed);
+                    i18nService.getMessage("email.monitor.start_event_conflict", trimmed));
         }
     }
 
     private void validateConnection(Long functionUnitId, String connectionUid) {
         if (!StringUtils.hasText(connectionUid)) {
-            throw new DeveloperBusinessException("VALIDATION_CONNECTION_REQUIRED", "必须选择入站邮箱连接");
+            throw new DeveloperBusinessException("VALIDATION_CONNECTION_REQUIRED",
+                    i18nService.getMessage("email.monitor.connection_required"));
         }
         boolean belongs = emailConnectionRepository.findByConnectionUid(connectionUid)
                 .map(conn -> conn.getFunctionUnit().getId().equals(functionUnitId))
                 .orElse(false);
         if (!belongs) {
             throw new DeveloperBusinessException("VALIDATION_CONNECTION_INVALID",
-                    "连接不存在或不属于该功能单元: " + connectionUid);
+                    i18nService.getMessage("email.monitor.connection_invalid", connectionUid));
         }
     }
 

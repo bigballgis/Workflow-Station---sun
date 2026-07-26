@@ -22,6 +22,13 @@ export interface EmailConnection {
   imapUseSsl?: boolean
 }
 
+export interface EmailConnectionTestResult {
+  success: boolean
+  message: string
+  detail?: string
+  causeChain?: string
+}
+
 export interface EmailConnectionRequest {
   name: string
   connectionType?: string
@@ -63,7 +70,7 @@ export const connectionApi = {
     )
   },
   test(functionUnitId: number, connectionId: number, testRecipient: string) {
-    return functionUnitAxios.post<any, { data: { success: boolean; message: string } }>(
+    return functionUnitAxios.post<any, { data: EmailConnectionTestResult }>(
       `/api/v1/function-units/${functionUnitId}/connections/${connectionId}/test`,
       { testRecipient }
     )
