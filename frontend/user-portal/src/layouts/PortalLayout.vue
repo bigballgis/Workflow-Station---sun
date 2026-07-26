@@ -6,7 +6,11 @@
       :class="{ 'is-collapsed': isCollapsed }"
     >
       <div class="brand">
-        <span class="brand-mark" />
+        <img
+          class="brand-mark"
+          :src="brandMarkUrl"
+          alt=""
+        >
         <span class="brand-name">{{ t('app.name') }}</span>
       </div>
       <el-scrollbar class="aside-scroll">
@@ -246,6 +250,8 @@ const { count: pendingApprovalCount } = storeToRefs(pendingApprovalStore)
 const pendingTaskStore = usePendingTaskStore()
 const { count: pendingTaskCount } = storeToRefs(pendingTaskStore)
 
+const brandMarkUrl = `${import.meta.env.BASE_URL}hermes-mark.svg`
+
 const isCollapsed = ref(false)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
 const hasBiDashboards = ref(false)
@@ -453,10 +459,9 @@ $aside-collapsed-width: 64px;
     border-bottom: 1px solid #f0f0f0;
 
     .brand-mark {
+      display: block;
       width: 28px;
       height: 28px;
-      border-radius: 8px;
-      background: var(--hsbc-red);
       flex-shrink: 0;
     }
 

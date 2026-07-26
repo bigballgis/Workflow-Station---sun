@@ -6,7 +6,11 @@
       :class="{ 'is-collapsed': isCollapsed }"
     >
       <div class="brand">
-        <span class="brand-mark" />
+        <img
+          class="brand-mark"
+          :src="brandMarkUrl"
+          alt=""
+        >
         <span class="brand-name">{{ t('app.name') }}</span>
       </div>
       <el-scrollbar class="aside-scroll">
@@ -75,6 +79,8 @@ import { redirectToUnifiedLogin } from '@/utils/sso'
 
 const { t } = useI18n()
 const route = useRoute()
+
+const brandMarkUrl = `${import.meta.env.BASE_URL}hermes-mark.svg`
 
 const isCollapsed = ref(false)
 
@@ -163,10 +169,9 @@ $aside-collapsed-width: 64px;
   border-bottom: 1px solid #f0f0f0;
 
   .brand-mark {
+    display: block;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
-    background: var(--primary-color);
     flex-shrink: 0;
   }
 

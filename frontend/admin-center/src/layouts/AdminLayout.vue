@@ -6,7 +6,11 @@
       :class="{ 'is-collapsed': isCollapse }"
     >
       <div class="brand">
-        <span class="brand-mark" />
+        <img
+          class="brand-mark"
+          :src="brandMarkUrl"
+          alt=""
+        >
         <span class="brand-name">{{ t('app.name') }}</span>
       </div>
 
@@ -230,6 +234,8 @@ import { launchServiceTask } from '@/api/serviceTask'
 const route = useRoute()
 const { t } = useI18n()
 
+const brandMarkUrl = `${import.meta.env.BASE_URL}hermes-mark.svg`
+
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
 
@@ -329,10 +335,9 @@ $primary-dark: #8b0000;
   border-bottom: 1px solid #f0f0f0;
 
   .brand-mark {
+    display: block;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
-    background: var(--primary-color);
     flex-shrink: 0;
   }
 
