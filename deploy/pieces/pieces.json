@@ -42,5 +42,9 @@
   {
     "name": "@activepieces/piece-postgres",
     "version": "0.2.6"
+  },
+  {
+    "name": "@activepieces/piece-biz-calendar",
+    "version": "1.0.0"
   }
 ]

@@ -20,7 +20,9 @@ fail-closed 的 `NPM_CONFIG_REGISTRY`（见 `deploy/ACTIVEPIECES_INTEGRATION.md`
 ## 文件
 
 - `pieces.json` — 白名单清单（name + version），**唯一需要手改的文件**
-- `fetch-pieces.sh` — 在有外网的机器上下载 tarball + 元数据 JSON
+- `fetch-pieces.sh` — 在有外网的机器上下载 tarball + 元数据 JSON（**仅官方云端件**）
+- `serialize-piece-metadata.js` — **自研件**的元数据半：本地加载 build-piece 产物序列化出
+  `metadata/piece-<name>.json`（自研件公网/云 API 都没有，见 `docs/ap-integration/PIECE_DEVELOPMENT_HOWTO.md` §3.2）
 - `tarballs/` — npm 包原件（审计留档；将来接 Nexus npm repo 时的发布源）
 - `metadata/*.json` — AP 云 API 的完整元数据（版本已 pin）
 - `generate-metadata-seed.js` — 由 metadata JSON 生成幂等的 `metadata/pieces-seed.sql`

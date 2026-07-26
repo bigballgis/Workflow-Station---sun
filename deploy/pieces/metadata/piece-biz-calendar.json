@@ -1,0 +1,164 @@
+{
+  "name": "@activepieces/piece-biz-calendar",
+  "version": "1.0.0",
+  "displayName": "Business Calendar",
+  "logoUrl": "https://cdn.activepieces.com/pieces/calendar.svg",
+  "description": "工作日 / SLA 到期日计算（纯本地，无外网）。",
+  "minimumSupportedRelease": "0.82.0",
+  "auth": null,
+  "actions": {
+    "add_business_days": {
+      "name": "add_business_days",
+      "displayName": "Add Business Days",
+      "description": "从起始日期起加 N 个工作日（跳过周末与节假日），算出到期日。",
+      "props": {
+        "startDate": {
+          "displayName": "Start Date",
+          "description": "起始日期（ISO / yyyy-MM-dd）。",
+          "required": true,
+          "type": "DATE_TIME"
+        },
+        "days": {
+          "displayName": "Business Days",
+          "description": "要顺延的工作日数；负数表示往前推。",
+          "required": true,
+          "type": "NUMBER"
+        },
+        "holidays": {
+          "displayName": "Holidays",
+          "description": "额外节假日清单，格式 yyyy-MM-dd，如 '2026-10-01'。",
+          "required": false,
+          "type": "ARRAY"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "business_days_between": {
+      "name": "business_days_between",
+      "displayName": "Business Days Between",
+      "description": "计算两个日期之间的工作日数（含结束日、不含起始日）。",
+      "props": {
+        "startDate": {
+          "displayName": "Start Date",
+          "required": true,
+          "type": "DATE_TIME"
+        },
+        "endDate": {
+          "displayName": "End Date",
+          "required": true,
+          "type": "DATE_TIME"
+        },
+        "holidays": {
+          "displayName": "Holidays",
+          "required": false,
+          "type": "ARRAY"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "is_business_day": {
+      "name": "is_business_day",
+      "displayName": "Is Business Day",
+      "description": "判断给定日期是否工作日。",
+      "props": {
+        "date": {
+          "displayName": "Date",
+          "required": true,
+          "type": "DATE_TIME"
+        },
+        "holidays": {
+          "displayName": "Holidays",
+          "required": false,
+          "type": "ARRAY"
+        },
+        "onFalse": {
+          "displayName": "When Not a Business Day",
+          "description": "非工作日时的行为。",
+          "required": false,
+          "defaultValue": "return",
+          "options": {
+            "options": [
+              {
+                "label": "正常返回 false",
+                "value": "return"
+              },
+              {
+                "label": "抛错中断流程",
+                "value": "throw"
+              }
+            ]
+          },
+          "type": "STATIC_DROPDOWN"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    }
+  },
+  "triggers": {
+    "sla_due_soon": {
+      "name": "sla_due_soon",
+      "displayName": "SLA Due Soon",
+      "description": "轮询内网待办 API，发现 N 小时内到期的单据即触发。",
+      "requireAuth": true,
+      "props": {
+        "apiBaseUrl": {
+          "displayName": "Internal API Base URL",
+          "description": "内网服务地址（须已在网关放行；勿填公网地址）。",
+          "required": true,
+          "type": "SHORT_TEXT"
+        },
+        "withinHours": {
+          "displayName": "Within Hours",
+          "description": "到期阈值（小时）。",
+          "required": true,
+          "defaultValue": 24,
+          "type": "NUMBER"
+        }
+      },
+      "type": "POLLING",
+      "handshakeConfiguration": {
+        "strategy": "NONE"
+      },
+      "renewConfiguration": {
+        "strategy": "NONE"
+      },
+      "sampleData": {
+        "id": "TODO-1001",
+        "dueAt": "2026-07-26T09:00:00Z",
+        "title": "示例待办"
+      },
+      "testStrategy": "TEST_FUNCTION"
+    }
+  },
+  "categories": [
+    "CORE"
+  ],
+  "authors": [
+    "workflow-station"
+  ],
+  "i18n": null
+}
