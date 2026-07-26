@@ -16,11 +16,31 @@ export const pkgRunner = (log: Logger) => ({
         const filterArgs: string[] = filtersPath
             .map(sanitizeFilterPath)
             .flatMap((p) => ['--filter', `./${p}`])
+        // HERMES-PATCH(piece-admin P3): air-gapped runtime install. When
+        // AP_PIECES_OFFLINE_INSTALL=true, resolve exclusively from the pnpm store
+        // baked into the image (Dockerfile seeds it with the pieces-framework/-common/
+        // shared/tslib closure — exactly what build-piece pins into a piece tarball).
+        // ARCHIVE piece installs then need no registry at all (X-3); anything outside
+        // the baked closure fails loudly instead of silently reaching for a registry.
+        // Default off: dev keeps resolving REGISTRY whitelist pieces from npm.
+        // --registry here is a cache NAMESPACE, not a network target: pnpm keys its
+        // offline metadata cache by registry hostname (~/.cache/pnpm/metadata-v1.3/<host>/),
+        // so this must match the registry used by the Dockerfile store-bake step, and it
+        // must override the fail-closed NPM_CONFIG_REGISTRY env (CLI wins over env).
+        // --offline still guarantees zero network access.
+        const offlineArgs = process.env['AP_PIECES_OFFLINE_INSTALL'] === 'true'
+            ? [
+                '--offline',
+                '--registry=https://registry.npmjs.org/',
+                `--config.store-dir=${process.env['AP_PIECES_OFFLINE_STORE_DIR'] ?? '/usr/src/app/pnpm-offline-store'}`,
+            ]
+            : []
         const args = [
             'install',
             '--ignore-scripts',
             '--config.node-linker=isolated',
             '--config.confirmModulesPurge=false',
+            ...offlineArgs,
             ...filterArgs,
         ]
         await fileSystemUtils.threadSafeMkdir(path)

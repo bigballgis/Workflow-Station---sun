@@ -189,6 +189,11 @@ services:
       # piece catalog is empty anyway); k8s uses a fail-closed value instead. Set this
       # to the internal Nexus npm repo URL to test the offline piece-provisioning flow.
       NPM_CONFIG_REGISTRY: ${ACTIVEPIECES_NPM_REGISTRY:-}
+      # HERMES piece-admin P3: true = runtime piece installs resolve ONLY from the
+      # pnpm offline store baked into the image (framework closure) — the air-gap
+      # posture. Dev default false so REGISTRY whitelist pieces still install from
+      # public npm on demand; flip to true to rehearse the air-gapped path locally.
+      AP_PIECES_OFFLINE_INSTALL: ${AP_PIECES_OFFLINE_INSTALL:-false}
     volumes:
       - activepieces_data:/app/packages/server/data
     healthcheck:

@@ -177,6 +177,13 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: ACTIVEPIECES_NPM_REGISTRY
+        # HERMES piece-admin P3 (X-3 air-gap): runtime piece installs resolve ONLY from
+        # the pnpm offline store baked into the image (pieces-framework/-common/shared/
+        # tslib closure — what build-piece pins into self-developed ARCHIVE tarballs).
+        # REGISTRY whitelist pieces are prewarmed at image build and never install at
+        # runtime; NPM_CONFIG_REGISTRY above stays fail-closed as the last-resort fence.
+        - name: AP_PIECES_OFFLINE_INSTALL
+          value: "true"
         ports:
         - containerPort: 80
           name: http

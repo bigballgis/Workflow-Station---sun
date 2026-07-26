@@ -112,6 +112,27 @@ COPY --from=build /usr/src/app/dist/packages/engine/ ./dist/packages/engine/
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --prod
 
+# HERMES-PATCH(piece-admin P3): bake a pnpm offline store holding the exact
+# dependency closure that build-piece pins into every self-developed piece tarball
+# (@activepieces/pieces-framework / pieces-common / shared + tslib, versions read
+# from the vendored tree so they can never drift). With AP_PIECES_OFFLINE_INSTALL=true
+# the worker's pkg-runner resolves ARCHIVE piece installs from this store only —
+# runtime stays fully offline (X-3), registry access happens here at build time only.
+RUN set -e && \
+    FW=$(node -p "require('/usr/src/app/packages/pieces/framework/package.json').version") && \
+    CM=$(node -p "require('/usr/src/app/packages/pieces/common/package.json').version") && \
+    SH=$(node -p "require('/usr/src/app/packages/shared/package.json').version") && \
+    mkdir -p /tmp/ap-store-seed && cd /tmp/ap-store-seed && \
+    printf '{"name":"ap-offline-store-seed","version":"1.0.0","dependencies":{"@activepieces/pieces-framework":"%s","@activepieces/pieces-common":"%s","@activepieces/shared":"%s","tslib":"2.6.2"}}' "$FW" "$CM" "$SH" > package.json && \
+    pnpm install --ignore-scripts --ignore-workspace \
+      --registry=https://registry.npmjs.org/ \
+      --config.node-linker=isolated \
+      --config.store-dir=/usr/src/app/pnpm-offline-store && \
+    cd / && rm -rf /tmp/ap-store-seed
+# The bake above also writes pnpm's offline METADATA cache under /root/.cache/pnpm/
+# (keyed by registry hostname) — pkg-runner pins the same --registry at runtime so
+# --offline resolution hits it. Both must stay registry.npmjs.org, in lockstep.
+
 # Copy frontend files
 COPY --from=build /usr/src/app/dist/packages/web ./dist/packages/web/
 
