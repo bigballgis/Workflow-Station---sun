@@ -2,7 +2,6 @@ import { type ComponentType } from 'react';
 
 import { BotIcon } from '@/components/icons/bot';
 import { ChartLineIcon } from '@/components/icons/chart-line';
-import { CompassIcon } from '@/components/icons/compass';
 import { FileHeartIcon } from '@/components/icons/file-heart';
 import { FileJson2Icon } from '@/components/icons/file-json2';
 import { FrameIcon } from '@/components/icons/frame';
@@ -37,12 +36,6 @@ export const STATIC_PAGES: StaticPage[] = [
     label: 'Automations',
     href: '/automations',
     icon: WorkflowIcon,
-  },
-  {
-    id: 'page-explore',
-    label: 'Explore Templates',
-    href: '/templates',
-    icon: CompassIcon,
   },
   {
     id: 'page-impact',

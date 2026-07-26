@@ -88,6 +88,10 @@ onMounted(async () => {
   const container = document.createElement('div');
   container.style.height = '100%';
   container.style.width = '100%';
+  // Size container so the 100cqh rewrite in adaptCssForShadowRoot() resolves
+  // against THIS element (cqh pierces the builder's class-less height:auto
+  // wrappers, which break a plain % chain).
+  container.style.containerType = 'size';
   shadow.appendChild(container);
 
   const mod: ApBuilderModule = await import(/* @vite-ignore */ props.bundleUrl);
@@ -110,7 +114,7 @@ onBeforeUnmount(() => {
 });
 
 /**
- * Two shadow-root adaptations the stock stylesheet needs (both no-ops outside
+ * Three shadow-root adaptations the stock stylesheet needs (all no-ops outside
  * a shadow tree, which is why upstream never hits them):
  *
  * 1. `:root` → `:host`. AP declares its theme variables (--background/--border/…)
@@ -123,9 +127,17 @@ onBeforeUnmount(() => {
  *    — inputs and cards lose their borders. Re-emit each registered initial value
  *    as a universal-selector rule appended to the low-priority `properties` layer:
  *    the exact fallback Tailwind ships for browsers without @property support.
+ *
+ * 3. `100svh/100dvh/100vh` → `100cqh`. Viewport units track the browser window,
+ *    not the embed container, so the builder's `h-svh` SidebarProvider wrapper
+ *    overflows the canvas section: the step-settings panel believes the clipped
+ *    area is visible and its ScrollArea stops scrolling. cqh resolves against
+ *    the mount container (container-type: size above).
  */
 function adaptCssForShadowRoot(css: string): string {
-  const hostCss = css.replace(/:root\b/g, ':host');
+  const hostCss = css
+    .replace(/:root\b/g, ':host')
+    .replace(/\b100(?:s|d)?vh\b/g, '100cqh');
 
   const fallbackDecls: string[] = [];
   const propertyRulePattern = /@property\s+(--[\w-]+)\s*\{([^}]*)\}/g;

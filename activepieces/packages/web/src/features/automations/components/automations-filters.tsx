@@ -17,7 +17,6 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { AnimatedIconButton } from '@/components/custom/animated-icon-button';
 import { PermissionNeededTooltip } from '@/components/custom/permission-needed-tooltip';
@@ -101,7 +100,6 @@ export const AutomationsFilters = ({
   isCreatingFlow = false,
   isCreatingTable = false,
 }: AutomationsFiltersProps) => {
-  const navigate = useNavigate();
   const { embedState } = useEmbedding();
   const ownerOptions = useOwnerOptions();
   const [isTemplatesBrowseDialogOpen, setIsTemplatesBrowseDialogOpen] =
@@ -306,11 +304,7 @@ export const AutomationsFilters = ({
               onImportFlow={onImportFlow}
               onImportTable={onImportTable}
               onSelectTemplate={() => {
-                if (embedState.isEmbedded) {
-                  setIsTemplatesBrowseDialogOpen(true);
-                } else {
-                  navigate('/templates');
-                }
+                setIsTemplatesBrowseDialogOpen(true);
               }}
             >
               <AnimatedIconButton

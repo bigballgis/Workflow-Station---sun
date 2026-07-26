@@ -14,6 +14,7 @@
 #   .\build-and-deploy.ps1 -Clean             # Destroy everything and rebuild
 #   .\build-and-deploy.ps1 -ServicesOnly      # Only restart backend+frontend (no Maven, no infra)
 #   .\build-and-deploy.ps1 -SkipMavenClean    # Maven package without clean (avoids clean delete failures)
+#   .\build-and-deploy.ps1 -RebuildServiceTaskBuilder  # Force-rebuild the AP Automation builder bundle
 #
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
@@ -31,7 +32,11 @@ param(
     [switch]$Clean,
     [switch]$ServicesOnly,
     # Skip "mvn clean" only (still runs package). Use when clean fails on locked/corrupt target dirs.
-    [switch]$SkipMavenClean
+    [switch]$SkipMavenClean,
+    # Force-rebuild the vendored AP ServiceTask/Automation builder bundle even when present
+    # (activepieces/dist/packages/web-embed). Pass this after changing the AP builder source
+    # or host-config; otherwise the existing bundle is reused (the build is heavy).
+    [switch]$RebuildServiceTaskBuilder
 )
 
 $ErrorActionPreference = "Stop"
@@ -300,6 +305,44 @@ function Resolve-BaseImage {
     throw "Cannot pull any base image from candidates: $($Candidates -join ', '). Check Docker network/proxy."
 }
 
+# Build the vendored Activepieces "ServiceTask / Automation" builder bundle
+# (activepieces/packages/web -> activepieces/dist/packages/web-embed). The DW frontend's
+# `prebuild` hook (scripts/sync-service-task-builder.mjs) copies it into
+# public/service-task-builder (gitignored), so a clean checkout has NOTHING to copy unless
+# this runs first — the Automation tab would then report the builder assets unavailable.
+# Heavy (full AP web bundle), so build only when the bundle is missing, or when forced.
+function Ensure-ServiceTaskBuilderBundle {
+    param([switch]$Force)
+
+    $embedMarker = Join-Path $RootDir "activepieces/dist/packages/web-embed/ap-builder.mjs"
+    if (-not $Force -and (Test-Path $embedMarker)) {
+        Write-Host "  ServiceTask builder bundle present (reuse; pass -RebuildServiceTaskBuilder to force)." -ForegroundColor DarkGray
+        return
+    }
+
+    $webDir = Join-Path $RootDir "activepieces/packages/web"
+    if (-not (Test-Path (Join-Path $webDir "vite.embed.config.mts"))) {
+        Write-Host "  WARNING: activepieces embed config not found; DW Automation builder will be unavailable." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "  Building ServiceTask/Automation builder bundle (activepieces/packages/web, heavy)..." -ForegroundColor Yellow
+    Push-Location $webDir
+    try {
+        # X-4: npx/pnpm toolchain only, never bun.
+        npx vite build --config vite.embed.config.mts
+        if ($LASTEXITCODE -ne 0) {
+            # Non-fatal: the DW build still succeeds; the Automation tab just reports the
+            # builder unavailable (the sync hook is deliberately tolerant). Flag it loudly.
+            Write-Host "  WARNING: embed bundle build failed — DW Automation tab will lack the builder." -ForegroundColor Yellow
+        } else {
+            Write-Host "  ServiceTask builder bundle built." -ForegroundColor Green
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
 # ==================== Single Service Mode ====================
 if ($Service) {
     $svc = $ServiceRegistry[$Service]
@@ -319,6 +362,11 @@ if ($Service) {
         }
     } elseif ($svc.Type -eq "frontend" -and -not $SkipFrontend) {
         Write-Host "`n[1/2] Building $Service (npm + Docker)..." -ForegroundColor Yellow
+        # DW's Automation tab embeds the vendored AP builder; stage its bundle first so the
+        # `prebuild` hook has something to copy into public/service-task-builder.
+        if ($Service -eq "developer-workstation-frontend") {
+            Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
+        }
         $feDir = "$RootDir/$($svc.FrontendDir)"
         Push-Location $feDir
         try {
@@ -331,8 +379,10 @@ if ($Service) {
             if ($npmExit -ne 0) { throw "npm install failed: $Service (exit code $npmExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
             Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-            npx vite build
-            if ($LASTEXITCODE -ne 0) { throw "vite build failed: $Service" }
+            # `npm run build` (not bare `npx vite build`) so the DW `prebuild` hook runs and
+            # stages the ServiceTask builder bundle; a no-op difference for the other frontends.
+            npm run build
+            if ($LASTEXITCODE -ne 0) { throw "npm run build failed: $Service" }
         } finally {
             Pop-Location
         }
@@ -456,7 +506,13 @@ if (-not $SkipFrontend) {
     
     foreach ($fe in $frontends) {
         $feDir = "$RootDir/$($fe.Dir)"
-        
+
+        # DW's Automation tab embeds the vendored AP builder; stage its bundle first so the
+        # `prebuild` hook has something to copy into public/service-task-builder.
+        if ($fe.Name -eq "developer-workstation-frontend") {
+            Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
+        }
+
         Write-Host "  npm install & build $($fe.Name)..."
         Push-Location $feDir
         try {
@@ -469,8 +525,10 @@ if (-not $SkipFrontend) {
             if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name) (exit code $npmExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
             Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-            npx vite build
-            if ($LASTEXITCODE -ne 0) { throw "vite build failed: $($fe.Name)" }
+            # `npm run build` (not bare `npx vite build`) so the DW `prebuild` hook runs and
+            # stages the ServiceTask builder bundle; a no-op difference for the other frontends.
+            npm run build
+            if ($LASTEXITCODE -ne 0) { throw "npm run build failed: $($fe.Name)" }
         } finally {
             Pop-Location
         }
@@ -715,6 +773,14 @@ Write-Host "  Redis:                  localhost:6379"
 Write-Host "  Kafka:                  localhost:9092"
 Write-Host "  Superset (direct):      http://localhost:8088/superset/welcome/"
 Write-Host "  Superset (edge):        http://localhost:$EdgePort/superset/"
+Write-Host ""
+# AP piece catalog is provisioned internally (AP_PIECES_SYNC_MODE=NONE): a fresh DB / -Clean
+# starts EMPTY, so the DW Automation tab shows no pieces until piece_metadata is seeded.
+$pgUser = if ($env:POSTGRES_USER) { $env:POSTGRES_USER } else { "platform_dev" }
+$pgDb = if ($env:POSTGRES_DB) { $env:POSTGRES_DB } else { "workflow_platform_dev" }
+Write-Host "Automation pieces (empty after a fresh DB / -Clean — seed to populate the catalog):" -ForegroundColor Yellow
+Write-Host "  Get-Content ../../pieces/metadata/pieces-seed.sql | docker exec -i platform-postgres-dev psql -U $pgUser -d $pgDb"
+Write-Host "  then restart AP:  docker restart platform-activepieces-dev   (piece registry is cached in-process)"
 Write-Host ""
 Write-Host "Commands:" -ForegroundColor DarkGray
 Write-Host "  Logs:   docker compose -f docker-compose.dev.yml --env-file .env logs -f [service]"

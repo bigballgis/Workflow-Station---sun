@@ -130,7 +130,7 @@
             v-if="isSystemAdmin"
             index="/automation-pieces"
           >
-            <el-icon><Connection /></el-icon>
+            <el-icon><Cpu /></el-icon>
             <template #title>
               {{ t('menu.automationPieces') }}
             </template>
@@ -210,7 +210,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   Fold, Expand,
-  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Connection
+  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Connection, Cpu
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'

@@ -59,13 +59,6 @@ export function ProjectDashboardLayout({
 
   const itemsWithoutHeader: ProjectDashboardLayoutHeaderTab[] = [
     {
-      to: '/templates',
-      label: t('Explore'),
-      show: !isEmbedded,
-      icon: CompassIcon,
-      hasPermission: true,
-    },
-    {
       to: '/impact',
       label: t('Impact'),
       show: !isEmbedded,

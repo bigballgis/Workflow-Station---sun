@@ -14,7 +14,6 @@ import {
   Workflow,
 } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { PermissionNeededTooltip } from '@/components/custom/permission-needed-tooltip';
 import { TagWithBright } from '@/components/custom/tag-with-bright';
@@ -201,7 +200,6 @@ type AutomationsEmptyStateProps = {
 export const AutomationsEmptyState = ({
   onRefresh,
 }: AutomationsEmptyStateProps) => {
-  const navigate = useNavigate();
   const { embedState } = useEmbedding();
   const [isImportTableDialogOpen, setIsImportTableDialogOpen] = useState(false);
   const [isTemplatesBrowseDialogOpen, setIsTemplatesBrowseDialogOpen] =
@@ -230,20 +228,12 @@ export const AutomationsEmptyState = ({
     tableHooks.useCreateTable(UncategorizedFolderId);
 
   const handleTemplateSelect = (template: Template) => {
-    if (embedState.isEmbedded) {
-      setSelectedTemplate(template);
-      setUseTemplateDialogOpen(true);
-    } else {
-      navigate(`/templates/${template.id}`);
-    }
+    setSelectedTemplate(template);
+    setUseTemplateDialogOpen(true);
   };
 
   const handleViewAllTemplates = () => {
-    if (embedState.isEmbedded) {
-      setIsTemplatesBrowseDialogOpen(true);
-    } else {
-      navigate('/templates');
-    }
+    setIsTemplatesBrowseDialogOpen(true);
   };
 
   const topTemplates = templates?.slice(0, 3) || [];
@@ -298,11 +288,7 @@ export const AutomationsEmptyState = ({
               icon={<Sparkles className="h-4 w-4" />}
               label={t('Use Templates')}
               onClick={() => {
-                if (embedState.isEmbedded) {
-                  setIsTemplatesBrowseDialogOpen(true);
-                } else {
-                  navigate('/templates');
-                }
+                setIsTemplatesBrowseDialogOpen(true);
               }}
               hasPermission={userHasPermissionToWriteFlow}
             />
