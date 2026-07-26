@@ -181,24 +181,15 @@
             >
               {{ t('automationPiece.export') }}
             </el-button>
-            <el-tooltip
-              :disabled="row.pieceType !== 'OFFICIAL'"
-              :content="t('automationPiece.officialDeleteTip')"
-              placement="top"
+            <el-button
+              link
+              type="danger"
+              size="small"
+              :loading="deletingKey === rowKey(row)"
+              @click="handleDelete(row)"
             >
-              <span>
-                <el-button
-                  link
-                  type="danger"
-                  size="small"
-                  :disabled="row.pieceType === 'OFFICIAL'"
-                  :loading="deletingKey === rowKey(row)"
-                  @click="handleDelete(row)"
-                >
-                  {{ t('common.delete') }}
-                </el-button>
-              </span>
-            </el-tooltip>
+              {{ t('common.delete') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -305,11 +296,15 @@ const handleToggle = async (row: AutomationPieceSummary, enabled: boolean) => {
 
 const handleDelete = async (row: AutomationPieceSummary) => {
   try {
-    await ElMessageBox.confirm(
-      t('automationPiece.deleteConfirm', { name: row.displayName, version: row.version }),
-      t('common.delete'),
-      { type: 'warning' }
-    )
+    // 烘焙件(OFFICIAL/REGISTRY)删的是目录元数据:镜像里的运行时包不受影响,
+    // 且若重跑 pieces-seed.sql 或白名单未变,会再次出现 —— 用更重的警告文案
+    const message = row.pieceType === 'OFFICIAL'
+      ? t('automationPiece.deleteOfficialConfirm', { name: row.displayName, version: row.version })
+      : t('automationPiece.deleteConfirm', { name: row.displayName, version: row.version })
+    await ElMessageBox.confirm(message, t('common.delete'), {
+      type: 'warning',
+      confirmButtonText: t('common.delete')
+    })
   } catch {
     return
   }

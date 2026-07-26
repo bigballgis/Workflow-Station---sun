@@ -112,7 +112,7 @@ export default {
     deleteInUse: '該組件被 {count} 個 flow 引用,強制刪除後這些 flow 執行會失敗。仍要刪除?',
     forceDelete: '強制刪除',
     deleted: '組件已刪除',
-    officialDeleteTip: '烘焙件由映像白名單管理,不支援線上刪除'
+    deleteOfficialConfirm: '確認把烘焙件 {name} v{version} 從目錄中刪除?映像內預裝的執行時套件不受影響;若它仍在白名單(deploy/pieces/pieces.json)且重跑 seed SQL,該組件會再次出現。仍要刪除?'
   },
   dashboard: {
     totalUsers: '使用者總數',

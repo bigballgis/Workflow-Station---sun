@@ -112,7 +112,7 @@ export default {
     deleteInUse: 'This piece is referenced by {count} flow(s). Force-deleting will break those flows at runtime. Delete anyway?',
     forceDelete: 'Force Delete',
     deleted: 'Piece deleted',
-    officialDeleteTip: 'Baked pieces are managed by the image whitelist and cannot be deleted online'
+    deleteOfficialConfirm: 'Delete baked piece {name} v{version} from the catalog? The runtime package baked into the image is not affected, and the piece will REAPPEAR if the seed SQL is re-run while it is still in the whitelist (deploy/pieces/pieces.json). Continue?'
   },
   dashboard: {
     totalUsers: 'Total Users',
