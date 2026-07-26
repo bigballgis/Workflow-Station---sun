@@ -39,6 +39,34 @@ public interface AutomationFlowService {
      */
     List<ConnectionCheckItem> checkConnections(List<String> externalIds);
 
+    /**
+     * 启停：prod 日常运维的主控制。可逆、保留执行历史、保留 flowId，
+     * 已部署 BPMN 的引用不会因此失效（只是不再被触发）。
+     * 启用要求已有发布版本（webhook 只触发已发布版本），否则 AP 侧报错。
+     */
+    void setFlowEnabled(String flowId, boolean enabled);
+
+    /**
+     * 删除（不可逆）：AP 侧 {@code flow_run} 对 flow 是 ON DELETE CASCADE，
+     * 执行历史会一并消失。{@code force=false} 时先做引用检查，被 FU 的 BPMN
+     * 引用则抛 {@link FlowInUseException}。
+     */
+    void deleteFlow(String flowId, boolean force);
+
+    /** 引用检查未通过：列出占用该 flow 的 Function Unit 名称 */
+    class FlowInUseException extends RuntimeException {
+        private final transient List<String> functionUnitNames;
+
+        public FlowInUseException(String flowId, List<String> functionUnitNames) {
+            super("flow " + flowId + " is referenced by " + functionUnitNames.size() + " function unit(s)");
+            this.functionUnitNames = functionUnitNames;
+        }
+
+        public List<String> getFunctionUnitNames() {
+            return functionUnitNames;
+        }
+    }
+
     record FlowExportFile(String filename, byte[] content) {}
 
     record ConnectionCheckItem(String externalId, boolean exists,

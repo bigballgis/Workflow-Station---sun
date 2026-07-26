@@ -1,4 +1,4 @@
-import { get, post } from './request'
+import { del, get, post } from './request'
 
 /** 后端 ApiResponse 包装(与 automationPiece 同构) */
 interface ApiEnvelope<T> {
@@ -51,6 +51,14 @@ export const automationFlowApi = {
   /** 导出可携带 JSON(优先已发布版本);uat 导出 → prod 导入 */
   exportFlow: (flowId: string) =>
     get<Blob>(`/automation/flows/${flowId}/export`, { responseType: 'blob' }),
+
+  /** 启停:可逆,保留执行历史与 flowId(已部署 BPMN 的引用不失效);启用要求已发布 */
+  setEnabled: (flowId: string, enabled: boolean) =>
+    post<ApiEnvelope<unknown>>(`/automation/flows/${flowId}/status`, null, { params: { enabled } }),
+
+  /** 删除:不可逆(执行历史随 CASCADE 消失);被 FU 引用时 409(code=FLOW_IN_USE) */
+  deleteFlow: (flowId: string, force = false) =>
+    del<ApiEnvelope<unknown>>(`/automation/flows/${flowId}`, { params: { force } }),
 
   /** 导入前预检:导出包 connections 清单在本环境的存在性(仅提示,不阻塞导入) */
   connectionsCheck: (externalIds: string[]) =>

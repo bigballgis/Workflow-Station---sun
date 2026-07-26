@@ -35,74 +35,71 @@
         stripe
         style="width: 100%"
       >
+        <!-- 窄面板下把次要元数据折进名称行第二行,避免 6 列硬塞进 500px 全被截断 -->
         <el-table-column
           prop="displayName"
           :label="t('automationFlow.displayName')"
-          min-width="150"
-          show-overflow-tooltip
-        />
+          min-width="160"
+          :show-overflow-tooltip="!isCompact"
+        >
+          <template #default="{ row }">
+            <div class="flow-name">
+              <span class="flow-name__title">{{ row.displayName }}</span>
+              <span
+                v-if="isCompact"
+                class="flow-name__meta"
+              >{{ compactMeta(row) }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <!-- flowId 与迁移键同属"这条 flow 是谁"，合成一列：迁移来的才显示来源键，
+             本环境原生 flow 只有一行 id，避免两列 21 位随机串互相干扰阅读 -->
         <el-table-column
-          prop="id"
+          v-if="!isCompact"
           :label="t('automationFlow.flowId')"
-          min-width="180"
-          show-overflow-tooltip
+          min-width="210"
         >
           <template #default="{ row }">
-            <code>{{ row.id }}</code>
+            <div class="flow-identity">
+              <code class="flow-identity__id">{{ row.id }}</code>
+              <span
+                v-if="row.flowKey && row.flowKey !== row.id"
+                class="flow-identity__origin"
+                :title="row.flowKey"
+              >{{ t('automationFlow.migratedFrom', { key: row.flowKey }) }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <!-- 发布态与启停本质是同一条就绪阶梯（草稿 → 已发布未启用 → 运行中），
+             拆成两列会逼读者自己做组合判断 -->
+        <el-table-column
+          :label="t('automationFlow.state')"
+          width="120"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-tag
+              :type="readiness(row).type"
+              size="small"
+              :effect="readiness(row).effect"
+              disable-transitions
+            >
+              {{ t(readiness(row).labelKey) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column
-          :label="t('automationFlow.flowKey')"
-          min-width="180"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            <code v-if="row.flowKey">{{ row.flowKey }}</code>
-            <span
-              v-else
-              class="muted"
-            >—</span>
-          </template>
-        </el-table-column>
-        <el-table-column
+          v-if="!isCompact"
           prop="projectName"
           :label="t('automationFlow.project')"
-          min-width="130"
+          min-width="120"
           show-overflow-tooltip
         />
         <el-table-column
-          :label="t('automationFlow.status')"
-          width="100"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-tag
-              :type="row.status === 'ENABLED' ? 'success' : 'info'"
-              size="small"
-            >
-              {{ row.status === 'ENABLED' ? t('automationFlow.enabled') : t('automationFlow.disabled') }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('automationFlow.published')"
-          width="100"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-tag
-              :type="row.published ? 'success' : 'warning'"
-              size="small"
-              effect="plain"
-            >
-              {{ row.published ? t('automationFlow.publishedYes') : t('automationFlow.publishedNo') }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
+          v-if="!isCompact"
           prop="ownerName"
           :label="t('automationFlow.owner')"
-          width="130"
+          width="120"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -110,30 +107,64 @@
           </template>
         </el-table-column>
         <el-table-column
+          v-if="!isCompact"
           prop="updated"
           :label="t('automationFlow.updated')"
-          width="150"
+          width="140"
           show-overflow-tooltip
         >
           <template #default="{ row }">
             {{ formatDate(row.updated) }}
           </template>
         </el-table-column>
+        <!-- fixed:主行动点必须一直够得着;停用/删除收进下拉——删除不可逆,多一次点击是有意的 -->
         <el-table-column
           :label="t('common.operation')"
-          width="90"
+          width="140"
           align="center"
+          fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              size="small"
-              :loading="exportingId === row.id"
-              @click="handleExport(row)"
-            >
-              {{ t('automationFlow.export') }}
-            </el-button>
+            <div class="row-actions">
+              <el-button
+                link
+                type="primary"
+                size="small"
+                :loading="exportingId === row.id"
+                @click="handleExport(row)"
+              >
+                {{ t('automationFlow.export') }}
+              </el-button>
+              <el-dropdown
+                trigger="click"
+                @command="(cmd: string) => handleRowCommand(cmd, row)"
+              >
+                <el-button
+                  link
+                  size="small"
+                  :loading="actingId === row.id"
+                  :aria-label="t('common.operation')"
+                >
+                  <el-icon><MoreFilled /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      command="toggle"
+                      :disabled="!row.published"
+                    >
+                      {{ row.status === 'ENABLED' ? t('automationFlow.disable') : t('automationFlow.enable') }}
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      command="delete"
+                      divided
+                    >
+                      <span class="danger-item">{{ t('common.delete') }}</span>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -210,10 +241,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, type UploadFile } from 'element-plus'
-import { Refresh, Search, Upload } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
+import { MoreFilled, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { formatDate } from '@/utils/format'
 import {
@@ -229,6 +260,7 @@ const loading = ref(false)
 const keyword = ref('')
 const flowList = ref<AutomationFlowSummary[]>([])
 const exportingId = ref('')
+const actingId = ref('')
 
 const importDialogVisible = ref(false)
 const importFile = ref<File | null>(null)
@@ -242,6 +274,32 @@ const hasMissingConnections = computed(() =>
 /** \@activepieces/piece-x → piece-x,自研短名原样 */
 const shortPieceName = (name: string) =>
   name.includes('/') ? name.split('/')[1] : name
+
+/**
+ * 密度自适应:管理端常在窄面板(内嵌浏览器/分屏)里打开,全列铺开需 ~950px。
+ * 窄于阈值时只留「名称 / 就绪状态 / 导出」,其余元数据折进名称行第二行。
+ */
+const viewportWidth = ref(window.innerWidth)
+const syncViewportWidth = () => {
+  viewportWidth.value = window.innerWidth
+}
+const isCompact = computed(() => viewportWidth.value < 1180)
+
+const compactMeta = (row: AutomationFlowSummary) =>
+  [row.id, row.ownerName, formatDate(row.updated)].filter(Boolean).join(' · ')
+
+/**
+ * 就绪阶梯:webhook 只触发已发布版本,故「有无发布版本」是第一道门槛,
+ * 启停是第二道。未发布时 status 无意义,一律归为草稿。
+ */
+const readiness = (row: AutomationFlowSummary) => {
+  if (!row.published) {
+    return { type: 'info' as const, effect: 'plain' as const, labelKey: 'automationFlow.stateDraft' }
+  }
+  return row.status === 'ENABLED'
+    ? { type: 'success' as const, effect: 'light' as const, labelKey: 'automationFlow.stateLive' }
+    : { type: 'warning' as const, effect: 'plain' as const, labelKey: 'automationFlow.stateStopped' }
+}
 
 const filteredList = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
@@ -279,6 +337,68 @@ const handleExport = async (row: AutomationFlowSummary) => {
     ElMessage.error(t('automationFlow.exportFailed'))
   } finally {
     exportingId.value = ''
+  }
+}
+
+const handleRowCommand = (command: string, row: AutomationFlowSummary) => {
+  if (command === 'toggle') {
+    void handleToggle(row)
+  } else if (command === 'delete') {
+    void handleDelete(row)
+  }
+}
+
+const handleToggle = async (row: AutomationFlowSummary) => {
+  const enable = row.status !== 'ENABLED'
+  actingId.value = row.id
+  try {
+    await automationFlowApi.setEnabled(row.id, enable)
+    row.status = enable ? 'ENABLED' : 'DISABLED'
+    ElMessage.success(t(enable ? 'automationFlow.enabled' : 'automationFlow.disabled',
+      { name: row.displayName }))
+  } catch {
+    // 拦截器已提示（如未发布就启用会被 AP 拒绝）
+  } finally {
+    actingId.value = ''
+  }
+}
+
+const handleDelete = async (row: AutomationFlowSummary) => {
+  try {
+    await ElMessageBox.confirm(
+      t('automationFlow.deleteConfirm', { name: row.displayName }),
+      t('common.delete'),
+      { type: 'warning', confirmButtonText: t('common.delete') }
+    )
+  } catch {
+    return
+  }
+  actingId.value = row.id
+  try {
+    await automationFlowApi.deleteFlow(row.id)
+    ElMessage.success(t('automationFlow.deleted', { name: row.displayName }))
+    await fetchList()
+  } catch (e: unknown) {
+    const status = (e as { status?: number })?.status
+    // 409：被 FU 的 BPMN 引用，message 携带 FU 名称清单
+    if (status !== 409) {
+      return
+    }
+    const units = (e as { message?: string })?.message ?? ''
+    try {
+      await ElMessageBox.confirm(
+        t('automationFlow.deleteInUse', { units }),
+        t('common.delete'),
+        { type: 'error', confirmButtonText: t('automationFlow.forceDelete') }
+      )
+      await automationFlowApi.deleteFlow(row.id, true)
+      ElMessage.success(t('automationFlow.deleted', { name: row.displayName }))
+      await fetchList()
+    } catch {
+      // 用户取消或强删失败（拦截器已提示）
+    }
+  } finally {
+    actingId.value = ''
   }
 }
 
@@ -323,7 +443,12 @@ const handleImport = async () => {
   }
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  window.addEventListener('resize', syncViewportWidth)
+  void fetchList()
+})
+
+onBeforeUnmount(() => window.removeEventListener('resize', syncViewportWidth))
 </script>
 
 <style scoped>
@@ -339,8 +464,60 @@ onMounted(fetchList)
   font-size: 13px;
 }
 
-.muted {
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.danger-item {
+  color: var(--el-color-danger);
+}
+
+.flow-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.flow-name__title,
+.flow-name__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-name__meta {
   color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-family: var(--el-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.flow-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.flow-identity__id,
+.flow-identity__origin {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-identity__origin {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+/* macOS 的覆盖式滚动条默认隐藏,列宽超出面板时用户会以为表格卡死——常驻显示 */
+.table-card :deep(.el-scrollbar__bar.is-horizontal) {
+  opacity: 1;
+  height: 8px;
 }
 
 .import-hint {

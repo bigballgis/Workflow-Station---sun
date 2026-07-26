@@ -26,6 +26,7 @@ import java.sql.Array;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -95,6 +96,25 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             "SELECT id FROM project WHERE \"externalId\" = ? LIMIT 1";
 
     private static final String FLOW_METADATA_SQL = "SELECT metadata::text FROM flow WHERE id = ?";
+
+    /** 删除前取 flow 自身 id 与迁移键——BPMN 里可能引用其中任意一个（见 findReferencingUnits） */
+    private static final String FLOW_REF_KEYS_SQL =
+            "SELECT id, metadata->>'hermesFlowKey' AS \"flowKey\" FROM flow WHERE id = ?";
+
+    /**
+     * 引用检查候选集。content_data 历史上明文 XML 与 base64 混存，故 SQL 只做
+     * 粗筛（明文直接 LIKE 命中 + 所有非 '<' 开头的 base64 行），最终判定在 Java
+     * 里 smartDecode 后做——只用 LIKE 会漏掉全部 base64 行，得出"无引用"的假结论。
+     */
+    private static final String PROCESS_CONTENT_CANDIDATES_SQL = """
+            SELECT fu.name AS "unitName", c.content_data AS "contentData"
+            FROM sys_function_unit_contents c
+            JOIN sys_function_units fu ON fu.id = c.function_unit_id
+            WHERE c.content_type = 'PROCESS'
+              AND c.content_data IS NOT NULL
+              AND (c.content_data LIKE ? OR c.content_data LIKE ?
+                   OR left(ltrim(c.content_data), 1) <> '<')
+            """;
 
     private static final int EXPORT_FORMAT_VERSION = 1;
 
@@ -204,6 +224,93 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             applyFlowOperation(session, flowId, "LOCK_AND_PUBLISH", publishRequest);
         }
         return new FlowImportResult(flowId, flowKey, displayName, created, publish);
+    }
+
+    @Override
+    public void setFlowEnabled(String flowId, boolean enabled) {
+        ObjectNode request = objectMapper.createObjectNode();
+        request.put("status", enabled ? "ENABLED" : "DISABLED");
+        applyFlowOperation(serviceTaskApiClient.signInShared(), flowId, "CHANGE_STATUS", request);
+    }
+
+    @Override
+    public void deleteFlow(String flowId, boolean force) {
+        if (!force) {
+            List<String> units = findReferencingUnits(flowId);
+            if (!units.isEmpty()) {
+                throw new FlowInUseException(flowId, units);
+            }
+        }
+        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
+        // 不带 Content-Type：AP(Fastify) 对无 body 却声明 application/json 的请求直接 400
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(session.token());
+        ResponseEntity<String> response = restTemplate.exchange(
+                apUrl("/api/v1/flows/" + flowId), HttpMethod.DELETE,
+                new HttpEntity<>(headers), String.class);
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new ServiceTaskApiException("AP delete flow failed: HTTP " + response.getStatusCode());
+        }
+    }
+
+    /**
+     * 找出 BPMN 里引用了该 flow 的 Function Unit。
+     *
+     * <p>同时匹配 flow 自身 id 与其迁移键：跨环境导入后，FU 的 BPMN 携带的仍是<b>源环境</b>
+     * flowId（=迁移键），本环境实值只在部署产物里（Q7 部署期改写）。只查本地 id 会让
+     * 恰恰正在使用的迁移 flow 被判成"无引用"。</p>
+     */
+    private List<String> findReferencingUnits(String flowId) {
+        Map<String, Object> keys;
+        try {
+            keys = jdbcTemplate.queryForMap(FLOW_REF_KEYS_SQL, flowId);
+        } catch (EmptyResultDataAccessException e) {
+            throw new IllegalArgumentException("flow not found: " + flowId);
+        }
+        List<String> refs = new ArrayList<>();
+        refs.add(flowId);
+        String flowKey = (String) keys.get("flowKey");
+        if (flowKey != null && !flowKey.isBlank() && !flowKey.equals(flowId)) {
+            refs.add(flowKey);
+        }
+
+        List<Map<String, Object>> candidates = jdbcTemplate.queryForList(
+                PROCESS_CONTENT_CANDIDATES_SQL, "%" + refs.get(0) + "%",
+                "%" + refs.get(refs.size() - 1) + "%");
+
+        List<String> hits = new ArrayList<>();
+        for (Map<String, Object> row : candidates) {
+            String decoded = smartDecodeXml((String) row.get("contentData"));
+            if (decoded == null) {
+                continue;
+            }
+            boolean referenced = refs.stream().anyMatch(decoded::contains);
+            if (referenced) {
+                String unitName = (String) row.get("unitName");
+                if (unitName != null && !hits.contains(unitName)) {
+                    hits.add(unitName);
+                }
+            }
+        }
+        return hits;
+    }
+
+    /** 与 DW 的 XmlEncodingUtil.smartDecode 同语义：'<' 开头即明文，否则按 base64 解 */
+    private String smartDecodeXml(String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+        String trimmed = content.trim();
+        if (trimmed.startsWith("<")) {
+            return content;
+        }
+        try {
+            return new String(Base64.getDecoder().decode(trimmed), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            // 既非明文也非合法 base64：无法判定引用，按"可能引用"保守处理
+            log.warn("Function unit process content is neither plain XML nor base64; treating as a reference");
+            return content;
+        }
     }
 
     @Override

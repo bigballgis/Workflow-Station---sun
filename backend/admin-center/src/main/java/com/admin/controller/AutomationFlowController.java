@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -89,6 +90,44 @@ public class AutomationFlowController {
                 "displayName", result.displayName(),
                 "created", result.created(),
                 "published", result.published())));
+    }
+
+    /**
+     * 启停:prod 运维的主控制,可逆且保留执行历史。启用要求已有发布版本。
+     */
+    @PostMapping("/{flowId}/status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> setFlowStatus(
+            @PathVariable String flowId,
+            @RequestParam boolean enabled) {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        automationFlowService.setFlowEnabled(flowId, enabled);
+        log.info("Automation flow {}: {} by {}", enabled ? "enabled" : "disabled", flowId,
+                SecurityContextUtils.getCurrentUsername());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("flowId", flowId, "enabled", enabled)));
+    }
+
+    /**
+     * 删除（不可逆,执行历史随 CASCADE 一并消失）。被 FU 的 BPMN 引用时 409,
+     * 响应体带占用它的 FU 名称;{@code force=true} 强删。
+     */
+    @DeleteMapping("/{flowId}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteFlow(
+            @PathVariable String flowId,
+            @RequestParam(defaultValue = "false") boolean force) {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        try {
+            automationFlowService.deleteFlow(flowId, force);
+        } catch (AutomationFlowService.FlowInUseException e) {
+            return ResponseEntity.status(409).body(ApiResponse.error("FLOW_IN_USE",
+                    String.join(", ", e.getFunctionUnitNames())));
+        }
+        log.info("Automation flow deleted: {} (force={}) by {}", flowId, force,
+                SecurityContextUtils.getCurrentUsername());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("flowId", flowId)));
     }
 
     /**
