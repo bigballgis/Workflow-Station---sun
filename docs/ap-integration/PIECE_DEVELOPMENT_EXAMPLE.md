@@ -284,13 +284,20 @@ export const bizCalendar = createPiece({
   description: '工作日 / SLA 到期日计算（纯本地，无外网）。',
   auth: PieceAuth.None(),                 // 纯计算件无需鉴权
   minimumSupportedRelease: '0.36.1',      // 必须 ≤ 我们的 0.84.0
-  logoUrl: 'https://cdn.activepieces.com/pieces/calendar.svg', // 气隙里图标会裂，纯外观
+  logoUrl: '/ap-cdn/pieces/hermes/biz-calendar.svg', // 自研件自带图标，见下注
   authors: ['workflow-station'],
   categories: [PieceCategory.CORE],
   actions: [addBusinessDaysAction, businessDaysBetweenAction, isBusinessDayAction],
   triggers: [slaDueSoonTrigger],          // 若不做触发器，这里给 []
 });
 ```
+
+> **图标别指向上游 CDN。** 本件早期写的是 `https://cdn.activepieces.com/pieces/calendar.svg`，
+> 但上游根本没有这个文件——**联网也是 404**，任何环境都碎图（2026-07-26 排查气隙资产时才
+> 发现，hash-helper 同病）。自研件把 svg 放进
+> `activepieces/packages/web/public/ap-cdn/pieces/hermes/biz-calendar.svg`，
+> `logoUrl` 写该同源路径即可。云端件不用管：CDN 资产已整体镜像 + 构建期重写
+> （见 HOWTO §1.2 / §3.3）。
 
 ---
 

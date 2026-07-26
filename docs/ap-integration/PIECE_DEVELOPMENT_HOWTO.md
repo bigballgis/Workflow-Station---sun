@@ -84,7 +84,7 @@ export const textHelper = createPiece({
   description: 'Tools for text processing',
   auth: PieceAuth.None(),                 // 无鉴权；下节讲有鉴权的写法
   minimumSupportedRelease: '0.36.1',      // 兼容下限，务必 ≤ 我们的 0.84.0
-  logoUrl: 'https://cdn.activepieces.com/pieces/new-core/text-helper.svg',
+  logoUrl: '/ap-cdn/pieces/hermes/text-helper.svg',   // 自研件：本地路径，见下方说明
   authors: ['your-team'],
   categories: [PieceCategory.CORE],
   actions: [concat, replace],
@@ -92,8 +92,19 @@ export const textHelper = createPiece({
 });
 ```
 
-> `logoUrl`：气隙环境访问不到 `cdn.activepieces.com`，图标会裂——**纯外观问题**，不影响功能。
-> 想要离线也有图标，把 svg 内联成 data-URI 或指向 DW 自有静态资源。
+> **`logoUrl` 对自研件是必做项，不是"纯外观"。** 生产完全断网（X-2/X-3），所有 CDN 图标
+> 都由 `deploy/pieces/mirror-ap-cdn.mjs` 镜像到 `activepieces/packages/web/public/ap-cdn/`
+> （保留原路径），构建期由 vite 插件 `ap-cdn-rewrite` 把源码里的
+> `https://cdn.activepieces.com` 改写成同源的 `/ap-cdn`。**云端件因此不用管**。
+>
+> 但**自研件上游 CDN 上根本没有你的图**——写 `cdn.activepieces.com/pieces/<你的件>.svg`
+> 联网也是 404（biz-calendar / hash-helper 早期就踩过，两处 404 直到 2026-07-26 才发现）。
+> 所以自研件必须自带图标，两步：
+>
+> 1. 把 svg 放进 `activepieces/packages/web/public/ap-cdn/pieces/hermes/<name>.svg`
+> 2. `logoUrl` 直接写这个同源路径 `/ap-cdn/pieces/hermes/<name>.svg`
+>
+> 生成器（§5）只改写 `http(s)://cdn.activepieces.com/` 开头的值，本地路径原样透传。
 
 ### 1.3 写一个 Action
 
@@ -271,6 +282,19 @@ node serialize-piece-metadata.js <name>     # 前置：§3.1 的 build-piece 已
 actions, triggers, auth, categories, authors, i18n`。**`name`/`version` 必须与 pieces.json 里逐字一致**，
 否则 §5 的生成器会报错拒绝（脚本直接从 dist/package.json 取，天然一致）。
 
+### 3.3 图标半（自研件必做）
+
+`logoUrl` 若指向 `cdn.activepieces.com`，§5 生成器会改写成 `/ap-cdn/<原路径>`，而该文件由
+`mirror-ap-cdn.mjs` 从上游镜像而来——**上游没有自研件的图，镜像必然抓不到**。所以自研件
+自己把图标放进镜像目录：
+
+```bash
+cp <你的图>.svg <repo>/activepieces/packages/web/public/ap-cdn/pieces/hermes/<name>.svg
+```
+
+`src/index.ts` 里 `logoUrl` 写同源路径 `/ap-cdn/pieces/hermes/<name>.svg`（§1.2），
+metadata JSON 会带着它，生成器原样透传。漏这步的症状：**任何环境**该件都是碎图。
+
 ---
 
 ## 4. 登记进白名单
@@ -281,9 +305,10 @@ actions, triggers, auth, categories, authors, i18n`。**`name`/`version` 必须�
 { "name": "@activepieces/piece-<name>", "version": "<ver>" }
 ```
 
-确认此时 `deploy/pieces/` 下已就位（§3 产出的）：
-- `metadata/piece-<name>.json`（元数据半，注意 `piece-` 前缀）
-- `tarballs/activepieces-piece-<name>-<ver>.tgz`（运行时半留档）
+确认此时已就位（§3 产出的）：
+- `deploy/pieces/metadata/piece-<name>.json`（元数据半，注意 `piece-` 前缀）
+- `deploy/pieces/tarballs/activepieces-piece-<name>-<ver>.tgz`（运行时半留档）
+- `activepieces/packages/web/public/ap-cdn/pieces/hermes/<name>.svg`（图标半，§3.3）
 
 ---
 
@@ -389,7 +414,7 @@ curl -s http://localhost:3000/api/ap/v1/pieces/@activepieces/piece-<name> | head
 | i18n 放在 piece 顶层 `i18n/` | 打包后 tarball 里没有 i18n | 放 `src/i18n/`（§1.6） |
 | 引入依赖 bun 的脚本/piece | 违反 X-4、构建或运行失败 | 只用 pnpm/npm；de-bun 见 vendored `activepieces/Dockerfile` |
 | action 里外呼/提权 | 气隙生产失败、沙箱拦截 | `SANDBOX_CODE_ONLY` 下不提权、不外网；外呼件须走内网+网关放行 |
-| `logoUrl` 指向 cdn | 离线图标裂 | 纯外观；要离线图标就内联 data-URI |
+| 自研件 `logoUrl` 指向 cdn | **任何环境**都碎图（上游 CDN 没有你的件，联网也 404） | 图标放 `public/ap-cdn/pieces/hermes/`，`logoUrl` 写该同源路径（§1.2 / §3.3） |
 | 自研件想复用 fetch-pieces.sh | curl 云 API / npm pack 公网都 404；问本地 AP 也 404（鸡生蛋） | §3：build-piece 出 tarball、serialize-piece-metadata.js 出 metadata |
 | 生产联网拉包 | 违反 X-3 | 运行时永远命中镜像预装；联网只在构建机 |
 
@@ -404,6 +429,7 @@ curl -s http://localhost:3000/api/ap/v1/pieces/@activepieces/piece-<name> | head
 构建        npm run build-piece -- <name>          # → packages/pieces/community/<name>/dist/（已自动 pack）
 出物料      cp packages/.../<name>/dist/*.tgz ../deploy/pieces/tarballs/          # 运行时半
             cd ../deploy/pieces && node serialize-piece-metadata.js <name>        # 元数据半
+            cp <图>.svg activepieces/packages/web/public/ap-cdn/pieces/hermes/<name>.svg  # 图标半(自研必做)
 登记        编辑 deploy/pieces/pieces.json 追加 {name, version}
 生成 seed   node generate-metadata-seed.js                      # → metadata/pieces-seed.sql
 本地跑通    psql < pieces-seed.sql → docker restart AP → DW 搜到（试运行需 §2 手工预装）
