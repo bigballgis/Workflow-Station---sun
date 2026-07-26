@@ -80,7 +80,7 @@ export default {
     tableStructure: '表結構管理',
     tableData: '表資料管理',
     biManagement: 'BI 管理',
-    serviceTask: '自動化流程',
+    serviceTask: '自動化工作台',
     biDashboardRegistry: '儀表板註冊',
     biDashboardAssignment: '儀表板分配',
     biRbacMapping: 'RBAC 對應',
