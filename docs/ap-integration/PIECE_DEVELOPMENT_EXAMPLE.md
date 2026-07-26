@@ -67,6 +67,7 @@ CommonJS，**不要**加 `"type": "module"`。改完长这样（实测可构建�
 {
   "name": "@activepieces/piece-biz-calendar",
   "version": "1.0.0",
+  "type": "commonjs",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "dependencies": {
