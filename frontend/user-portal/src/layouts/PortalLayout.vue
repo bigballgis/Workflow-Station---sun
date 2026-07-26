@@ -495,6 +495,8 @@ $aside-collapsed-width: 64px;
 
     :deep(.el-menu-item.is-active) {
       font-weight: 600;
+      background-color: rgba(219, 0, 17, 0.1);
+      color: var(--hsbc-red);
 
       &::before {
         content: '';
@@ -590,22 +592,8 @@ $aside-collapsed-width: 64px;
       text-overflow: ellipsis;
     }
     
-    .el-menu-item.is-active {
-      background-color: rgba(219, 0, 17, 0.1);
-      color: var(--hsbc-red);
-      
-      &::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 3px;
-        background-color: var(--hsbc-red);
-      }
-    }
   }
-  
+
   .collapse-btn {
     display: flex;
     justify-content: center;
