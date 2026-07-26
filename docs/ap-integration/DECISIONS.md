@@ -32,7 +32,7 @@
 | [Q4a](#q4a) | 共享 project 放行方式 | **CE core 层 RBAC 小补丁**（两处切点） | 07-22 |
 | [Q5](#q5) | 数据库 | 独立 schema `activepieces`（同实例） | 07-22 |
 | [Q6](#q6) | 网关与桥的终局 | Kong 收编，:8085 桥并行一版后退役 | 07-22 |
-| [Q7](#q7) | flowId 治理 | flow 注册表 + **部署期解析** | 07-22 |
+| [Q7](#q7) | flowId 治理 | flow 注册表 + **部署期解析**（✅ 已实施，见正文） | 07-22 / 07-26 |
 | [Q8](#q8) | AP 版本演进 | **经 D1 重定义为 Frozen Baseline + Controlled Fork** | 07-22 |
 | [Q9](#q9) | approval/todos piece | 从 v1 白名单移除 | 07-22 |
 | [D1](#d1) | EE 发现对 Q1/Q8 成本模型的冲击 | 承认性质变化：**受控 fork**，Q1/Q8 保留但重定义 | 07-23 |
@@ -461,6 +461,23 @@ AP server-api 经 Kong 收进平台域；:8085 edge 桥与 nonce 握手**并行�
 ### <a id="q7"></a>Q7 — flowId 治理
 建平台侧 flow 注册表，v1 采用**部署期解析**：`ProcessDeploymentManager` 在 BPMN 部署期
 把逻辑 flow 引用改写为当前环境实 flowId。代价：映射变更后须重新部署流程定义。
+
+**✅ 已实施（2026-07-26，dev E2E PASS）**。落地形态与裁决略有具体化：
+
+- **"注册表" = flow 迁移键**：不建独立表。跨环境迁移经 admin-center 的
+  `/automation/flows` 管理面（uat 导出 JSON → prod 导入），导入时把源环境 flowId 写进
+  目标 flow 的 `metadata.hermesFlowKey`（选 metadata 而非 externalId：AP REST 创建接口
+  只收 metadata，**零 fork 补丁**，合 Q8 Frozen Baseline）。
+- **部署期解析**：引擎 `ServiceTaskFlowRefResolver` 凭 C-3 `X-Service-Token` 调
+  admin-center `/automation/flows/resolve?ref=`（本环境同 id 直查 → 迁移键查找），
+  `ProcessDeploymentManager` 把部署产物里的 `ap:flowId` 改写为实值；源 BPMN 不动。
+  解析失败/不可达时保留原引用 WARN 继续（缺失最终在运行时由执行记录暴露）。
+- **拓扑适配**：DW 不上 prod；prod 的 FU 经 admin-center Function Unit 管理导入并
+  经 `WorkflowEngineClient.deployProcess` 部署——正好命中改写切点，全链无 DW 依赖。
+  k8s 接线：`ACTIVEPIECES_FLOW_RESOLVE_URL` 入 uat/preprod configmap；
+  `SERVICE_INTERNAL_TOKEN` 引擎经 envFrom 天然持有（AP 仍拿不到，C-3 边界不变）。
+- **顺序约束**：flow 须先导入再部署 FU；若倒置，flow 导入后重新部署即可（即裁决中
+  "映射变更后须重新部署"的代价）。connection 不随包走（设计使然，prod 用生产凭据重建）。
 
 ### <a id="q8"></a>Q8 — AP 版本演进 → **Frozen Baseline + Controlled Fork**
 **旧表述（作废）**："完全放弃跟随上游，因为我们只维护一份 vendor 代码。"

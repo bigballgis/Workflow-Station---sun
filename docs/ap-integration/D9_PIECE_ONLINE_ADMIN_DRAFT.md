@@ -26,6 +26,11 @@
 3. **prod 投放自研件可以免烘焙**:uat 定稿的同一 tarball 在 prod 经 admin-center 导入
    (ARCHIVE),P3 离线 store 保证装载过程零联网——这是本管理面对 prod 的核心价值,
    也是 C-2 需要重述的原因。
+4. **(07-26 补充,已实施)prod 管理面还承载 flow 迁移页**(`/admin/automation-flows`,
+   与 piece 管理并列):uat 导出 flow JSON → prod 导入(发布并启用),配合引擎部署期
+   flowId 解析([Q7 已实施](DECISIONS.md#q7))构成 FU 自动化上 prod 的完整投放链。
+   flow 导入走 AP API(IMPORT_FLOW/LOCK_AND_PUBLISH),不涉 piece 安装,不受本 ADR
+   「运行时禁止安装」边界约束;但与 piece 管理共用「prod 有管理面」这一拓扑前提。
 
 ## 1. 背景
 
