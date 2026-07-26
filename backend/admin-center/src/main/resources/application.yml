@@ -291,6 +291,15 @@ service-task:
   shared-account:
     email: ${ACTIVEPIECES_SHARED_EMAIL:}
     password: ${ACTIVEPIECES_SHARED_PASSWORD:}
+  # Per-user provisioning（L7 审计到人）。开启后 /internal/ap/launch|token 按当前平台用户
+  # 换取其专属 AP token（flow.ownerId 才会落到真实创建人），关闭则回退共享账号。
+  # signing-key-id / private-key 来自一次性 POST /v1/signing-keys（平台 admin）。
+  managed:
+    enabled: ${ACTIVEPIECES_MANAGED_ENABLED:false}
+    signing-key-id: ${ACTIVEPIECES_MANAGED_SIGNING_KEY_ID:}
+    private-key: ${ACTIVEPIECES_MANAGED_PRIVATE_KEY:}
+    project-external-id: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:hermes-shared}
+    token-ttl-seconds: ${ACTIVEPIECES_MANAGED_TOKEN_TTL:120}
 
 # JWT Configuration
 jwt:
