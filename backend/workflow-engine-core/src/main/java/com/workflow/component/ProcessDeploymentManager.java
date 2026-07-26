@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.flowable.bpmn.converter.BpmnXMLConverter;
 import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.ExtensionAttribute;
 import org.flowable.bpmn.model.ExtensionElement;
 import org.flowable.bpmn.model.ImplementationType;
 import org.flowable.bpmn.model.FlowElement;
@@ -55,6 +56,9 @@ public class ProcessDeploymentManager {
 
     @Autowired
     private RuntimeService runtimeService;
+
+    @Autowired
+    private ServiceTaskFlowRefResolver serviceTaskFlowRefResolver;
 
     /**
      * Deploy process definition
@@ -414,12 +418,17 @@ public class ProcessDeploymentManager {
             boolean changed = false;
             for (Process process : model.getProcesses()) {
                 for (ServiceTask st : process.findFlowElementsOfType(ServiceTask.class, true)) {
-                    if (isActivepiecesServiceTask(st)
-                            && (st.getImplementation() == null || st.getImplementation().isBlank())) {
+                    if (!isActivepiecesServiceTask(st)) {
+                        continue;
+                    }
+                    if (st.getImplementation() == null || st.getImplementation().isBlank()) {
                         st.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
                         st.setImplementation("${apTaskExecutor}");
                         changed = true;
                         log.info("Bound AP service task '{}' to ${{}}", st.getId(), "apTaskExecutor");
+                    }
+                    if (resolveApFlowRef(st)) {
+                        changed = true;
                     }
                 }
             }
@@ -461,6 +470,68 @@ public class ProcessDeploymentManager {
                 }
                 if ("serviceType".equals(name) && "ap".equalsIgnoreCase(value)) {
                     return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 部署期 flowId 解析（DECISIONS Q7）：BPMN 里的 {@code ap:flowId} 是源环境的引用，
+     * 经 admin-center 解析为本环境实际 flowId 后改写进部署产物（源 BPMN 不动）。
+     * 解析不到时保留原引用继续部署——引用可能本就指向本环境 flow（同环境场景由
+     * resolve 的 id 直查覆盖），真正缺失会在运行时由执行器以失败记录暴露。
+     */
+    private boolean resolveApFlowRef(ServiceTask serviceTask) {
+        Map<String, List<ExtensionElement>> extensionElements = serviceTask.getExtensionElements();
+        if (extensionElements == null) {
+            return false;
+        }
+        List<ExtensionElement> propertiesElements = extensionElements.get("properties");
+        if (propertiesElements == null) {
+            return false;
+        }
+        for (ExtensionElement propertiesElement : propertiesElements) {
+            List<ExtensionElement> propertyElements = propertiesElement.getChildElements().get("property");
+            if (propertyElements == null) {
+                continue;
+            }
+            for (ExtensionElement propertyElement : propertyElements) {
+                if (!"ap:flowId".equals(propertyElement.getAttributeValue(null, "name"))) {
+                    continue;
+                }
+                String flowRef = propertyElement.getAttributeValue(null, "value");
+                if (flowRef == null || flowRef.isBlank()) {
+                    return false;
+                }
+                ServiceTaskFlowRefResolver.Resolution resolution =
+                        serviceTaskFlowRefResolver.resolve(flowRef);
+                switch (resolution.outcome()) {
+                    case RESOLVED -> {
+                        if (resolution.flowId().equals(flowRef)) {
+                            return false;
+                        }
+                        List<ExtensionAttribute> valueAttrs =
+                                propertyElement.getAttributes().get("value");
+                        if (valueAttrs == null || valueAttrs.isEmpty()) {
+                            return false;
+                        }
+                        valueAttrs.get(0).setValue(resolution.flowId());
+                        log.info("Resolved AP flow ref on task '{}': {} -> {}",
+                                serviceTask.getId(), flowRef, resolution.flowId());
+                        return true;
+                    }
+                    case NOT_FOUND -> {
+                        log.warn("AP flow ref '{}' on task '{}' has no flow nor migration mapping "
+                                        + "in this environment; deploying original ref (runtime will "
+                                        + "fail until the flow is imported via admin-center)",
+                                flowRef, serviceTask.getId());
+                        return false;
+                    }
+                    case UNAVAILABLE -> {
+                        log.debug("AP flow ref resolution unavailable; keeping original ref '{}'", flowRef);
+                        return false;
+                    }
                 }
             }
         }

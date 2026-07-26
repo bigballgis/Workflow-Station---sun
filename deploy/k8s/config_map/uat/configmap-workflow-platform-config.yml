@@ -14,6 +14,9 @@ metadata:
 data:
   ADMIN_CENTER_BACKEND_URL: "http://admin-center-service.__NAMESPACE__:8080"
   ADMIN_CENTER_URL: "http://admin-center-service.__NAMESPACE__:8080"
+  # Q7 部署期 flowId 解析:引擎凭 SERVICE_INTERNAL_TOKEN(共享 secret,envFrom 已注入)调 admin-center;
+  # 空/缺省 = 解析关闭,部署按 BPMN 原 ap:flowId 继续
+  ACTIVEPIECES_FLOW_RESOLVE_URL: "http://admin-center-service.__NAMESPACE__:8080/api/v1/admin/automation/flows/resolve"
   API_GATEWAY_BACKEND_URL: "http://kong-service.__NAMESPACE__:8000"
   API_GATEWAY_URL: "http://kong-service.__NAMESPACE__:8000"
   KONG_PROXY_URL: "http://kong-service.__NAMESPACE__:8000"

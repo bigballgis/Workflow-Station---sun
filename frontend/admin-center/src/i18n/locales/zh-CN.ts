@@ -84,7 +84,8 @@ export default {
     biDashboardRegistry: '仪表盘注册',
     biDashboardAssignment: '仪表盘分配',
     biRbacMapping: 'RBAC 映射',
-    automationPieces: '自动化组件'
+    automationPieces: '自动化组件',
+    automationFlows: '自动化流程迁移'
   },
   automationPiece: {
     title: '自动化组件',
@@ -113,6 +114,35 @@ export default {
     forceDelete: '强制删除',
     deleted: '组件已删除',
     deleteOfficialConfirm: '确认把烘焙件 {name} v{version} 从目录中删除?镜像内预装的运行时包不受影响;若它仍在白名单(deploy/pieces/pieces.json)且重跑 seed SQL,该组件会再次出现。仍要删除?'
+  },
+  automationFlow: {
+    title: '自动化流程迁移',
+    searchPlaceholder: '搜索名称 / flowId / 迁移键',
+    total: '共 {count} 个流程',
+    displayName: '名称',
+    flowId: 'Flow ID',
+    flowKey: '迁移键',
+    project: '项目',
+    status: '状态',
+    enabled: '已启用',
+    disabled: '已停用',
+    published: '发布',
+    publishedYes: '已发布',
+    publishedNo: '仅草稿',
+    owner: '创建人',
+    updated: '更新时间',
+    export: '导出',
+    import: '导入流程(.json)',
+    importTitle: '导入自动化流程',
+    importFile: '导出包文件',
+    chooseFile: '选择 .json 文件',
+    publishLabel: '发布并启用',
+    publishHint: '导入后立即发布并启用(webhook 只触发已发布版本)',
+    importConfirm: '导入',
+    importCreated: '已新建流程 {name}({id}),迁移键已登记',
+    importUpdated: '已更新流程 {name}({id})的草稿',
+    loadFailed: '流程列表加载失败',
+    exportFailed: '导出失败'
   },
   dashboard: {
     totalUsers: '用户总数',

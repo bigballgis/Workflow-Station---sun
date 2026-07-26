@@ -84,7 +84,8 @@ export default {
     biDashboardRegistry: 'Dashboard Registry',
     biDashboardAssignment: 'Dashboard Assignment',
     biRbacMapping: 'RBAC Mapping',
-    automationPieces: 'Automation Pieces'
+    automationPieces: 'Automation Pieces',
+    automationFlows: 'Automation Flow Migration'
   },
   automationPiece: {
     title: 'Automation Pieces',
@@ -113,6 +114,35 @@ export default {
     forceDelete: 'Force Delete',
     deleted: 'Piece deleted',
     deleteOfficialConfirm: 'Delete baked piece {name} v{version} from the catalog? The runtime package baked into the image is not affected, and the piece will REAPPEAR if the seed SQL is re-run while it is still in the whitelist (deploy/pieces/pieces.json). Continue?'
+  },
+  automationFlow: {
+    title: 'Automation Flow Migration',
+    searchPlaceholder: 'Search name / flowId / migration key',
+    total: '{count} flows',
+    displayName: 'Name',
+    flowId: 'Flow ID',
+    flowKey: 'Migration Key',
+    project: 'Project',
+    status: 'Status',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    published: 'Published',
+    publishedYes: 'Published',
+    publishedNo: 'Draft only',
+    owner: 'Owner',
+    updated: 'Updated',
+    export: 'Export',
+    import: 'Import Flow (.json)',
+    importTitle: 'Import Automation Flow',
+    importFile: 'Export file',
+    chooseFile: 'Choose .json file',
+    publishLabel: 'Publish & enable',
+    publishHint: 'Publish and enable right after import (webhooks only trigger published versions)',
+    importConfirm: 'Import',
+    importCreated: 'Flow {name} ({id}) created; migration key registered',
+    importUpdated: 'Draft of flow {name} ({id}) updated',
+    loadFailed: 'Failed to load flow list',
+    exportFailed: 'Export failed'
   },
   dashboard: {
     totalUsers: 'Total Users',

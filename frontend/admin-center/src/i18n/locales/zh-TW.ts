@@ -84,7 +84,8 @@ export default {
     biDashboardRegistry: '儀表板註冊',
     biDashboardAssignment: '儀表板分配',
     biRbacMapping: 'RBAC 對應',
-    automationPieces: '自動化組件'
+    automationPieces: '自動化組件',
+    automationFlows: '自動化流程遷移'
   },
   automationPiece: {
     title: '自動化組件',
@@ -113,6 +114,35 @@ export default {
     forceDelete: '強制刪除',
     deleted: '組件已刪除',
     deleteOfficialConfirm: '確認把烘焙件 {name} v{version} 從目錄中刪除?映像內預裝的執行時套件不受影響;若它仍在白名單(deploy/pieces/pieces.json)且重跑 seed SQL,該組件會再次出現。仍要刪除?'
+  },
+  automationFlow: {
+    title: '自動化流程遷移',
+    searchPlaceholder: '搜尋名稱 / flowId / 遷移鍵',
+    total: '共 {count} 個流程',
+    displayName: '名稱',
+    flowId: 'Flow ID',
+    flowKey: '遷移鍵',
+    project: '專案',
+    status: '狀態',
+    enabled: '已啟用',
+    disabled: '已停用',
+    published: '發布',
+    publishedYes: '已發布',
+    publishedNo: '僅草稿',
+    owner: '建立人',
+    updated: '更新時間',
+    export: '匯出',
+    import: '匯入流程(.json)',
+    importTitle: '匯入自動化流程',
+    importFile: '匯出包檔案',
+    chooseFile: '選擇 .json 檔案',
+    publishLabel: '發布並啟用',
+    publishHint: '匯入後立即發布並啟用(webhook 只觸發已發布版本)',
+    importConfirm: '匯入',
+    importCreated: '已新建流程 {name}({id}),遷移鍵已登記',
+    importUpdated: '已更新流程 {name}({id})的草稿',
+    loadFailed: '流程列表載入失敗',
+    exportFailed: '匯出失敗'
   },
   dashboard: {
     totalUsers: '使用者總數',

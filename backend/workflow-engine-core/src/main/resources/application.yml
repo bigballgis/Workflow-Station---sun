@@ -97,6 +97,12 @@ file-service:
 # <webhook-base-url>/api/v1/webhooks/<flowId>/sync at runtime.
 service-task:
   webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://localhost:8086}
+  # Q7 部署期解析：admin-center /automation/flows/resolve。空 = 关闭（部署按原 ap:flowId 继续）。
+  flow-resolve-url: ${ACTIVEPIECES_FLOW_RESOLVE_URL:}
+
+# C-3 服务间共享密钥（与 admin-center 的 SERVICE_INTERNAL_TOKEN 同值）；flow-resolve 调用凭此过门禁
+service:
+  internal-token: ${SERVICE_INTERNAL_TOKEN:}
 
 # 本地/开发联调测试账号（默认关闭 fail-closed；生产严禁设置这两个变量）
 # accounts 格式：user1:pass1,user2:pass2 —— 仅在 Redis 无该用户口令时回退匹配
