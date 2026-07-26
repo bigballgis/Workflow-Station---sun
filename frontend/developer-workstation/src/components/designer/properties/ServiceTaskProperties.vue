@@ -312,6 +312,11 @@ function loadProperties() {
   const ext = getExtensionProperties(props.element)
   taskDescription.value = ext.description || ''
   serviceType.value = ext.serviceType || 'ap'
+  // 默认类型也必须落盘：只在 change 时写会让从未切换过下拉的任务缺 serviceType，
+  // Automation 页按该标记识别任务，缺失则整个 tab 显示空态。
+  if (!ext.serviceType && props.modeler) {
+    updateExtProp('serviceType', serviceType.value)
+  }
   httpUrl.value = ext.httpUrl || ''
   httpMethod.value = ext.httpMethod || 'POST'
   httpHeadersStr.value = ext.httpHeaders ? JSON.stringify(ext.httpHeaders, null, 2) : ''

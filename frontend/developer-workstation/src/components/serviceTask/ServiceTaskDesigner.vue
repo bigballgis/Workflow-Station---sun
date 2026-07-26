@@ -201,7 +201,13 @@ function parseApServiceTasks(bpmnXml: string): ApServiceTask[] {
         props[propAttrs.name] = propAttrs.value ?? ''
       }
     }
-    if (props['serviceType'] !== 'ap') {
+    // 存量 BPMN 兼容：属性面板曾只在 change 时落盘 serviceType，默认 'ap' 从未写入，
+    // 导致任务只有 ap:* 配置而无类型标记。无显式类型但带 ap:* 属性的也按自动化任务收。
+    const isApTask =
+      props['serviceType'] === 'ap' ||
+      (props['serviceType'] === undefined &&
+        Object.keys(props).some((key) => key.startsWith('ap:')))
+    if (!isApTask) {
       continue
     }
     const taskAttrs = parseTagAttributes(attrs)
