@@ -116,6 +116,9 @@ public class DeveloperSsoExchangeService {
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("username", user.getUsername())
+                // platform-security 的 UserPrincipal 从此 claim 取显示名；缺失时下游
+                // (如 AP per-user provisioning 的影子用户)只能落 username
+                .claim("displayName", resolveDisplayName(user))
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .claim("language", user.getLanguage())
@@ -123,6 +126,16 @@ public class DeveloperSsoExchangeService {
                 .expiration(expiry)
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    private static String resolveDisplayName(User user) {
+        if (user.getFullName() != null && !user.getFullName().isEmpty()) {
+            return user.getFullName();
+        }
+        if (user.getDisplayName() != null && !user.getDisplayName().isEmpty()) {
+            return user.getDisplayName();
+        }
+        return user.getUsername();
     }
 
     private String generateRefreshToken(String userId) {
