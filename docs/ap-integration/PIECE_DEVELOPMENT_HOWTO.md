@@ -6,6 +6,7 @@
 >
 > 关联文档：本目录 `INTEGRATION_DESIGN.md`（九层集成 L1–L9）、`DECISIONS.md`（约束 X-3/X-4 等）、
 > `deploy/pieces/README.md`（离线白名单投放，本文是它的「上游开发」补篇）。
+> **要一份能直接抄的完整例子** → [`PIECE_DEVELOPMENT_EXAMPLE.md`](./PIECE_DEVELOPMENT_EXAMPLE.md)（业务日历 piece，三动作+一触发器全码）。
 
 ---
 
