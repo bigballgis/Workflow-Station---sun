@@ -9,6 +9,7 @@
 
 | Skill | 用途 |
 |-------|------|
+| [code-review](code-review/SKILL.md) | 证据驱动的 staged/PR 只读审查：规则编排、FU 完整性、安全/性能/secret 门禁 |
 | [fallback-audit](fallback-audit/SKILL.md) | 复扫静默兜底反模式,对比 2026-07 基线量化治理降幅 |
 | [function-unit-portability](function-unit-portability/SKILL.md) | FU 导出/导入/clone/版本快照必须带全部设计配置 |
 | [function-unit-version-rollback](function-unit-version-rollback/SKILL.md) | DW 版本回滚必须还原目标版本完整 FU 设计 |
