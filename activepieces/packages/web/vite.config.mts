@@ -7,12 +7,15 @@ import { defineConfig } from 'vite';
 import checker from 'vite-plugin-checker';
 import tailwindcss from '@tailwindcss/vite';
 import customHtmlPlugin from './vite-plugins/html-plugin';
+import apCdnRewritePlugin from './vite-plugins/ap-cdn-rewrite';
 
 export default defineConfig(({ command, mode }) => {
   const isDev = command === 'serve' || mode === 'development';
 
-  const AP_TITLE = 'Activepieces';
-  const AP_FAVICON = 'https://activepieces.com/favicon.ico';
+  // HERMES 白标：与 defaultTheme.websiteName / admin-center 入口菜单一致
+  const AP_TITLE = 'Automation Studio';
+  // 同源资产：生产完全断网，外部 favicon 必然加载失败
+  const AP_FAVICON = '/hermes-mark.svg';
 
   return {
     root: __dirname,
@@ -111,6 +114,7 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     plugins: [
+      apCdnRewritePlugin(),
       react(),
       tailwindcss(),
       tsconfigPaths(),

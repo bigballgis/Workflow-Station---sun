@@ -2,7 +2,7 @@
   "name": "@activepieces/piece-biz-calendar",
   "version": "1.0.0",
   "displayName": "Business Calendar",
-  "logoUrl": "https://cdn.activepieces.com/pieces/calendar.svg",
+  "logoUrl": "/ap-cdn/pieces/hermes/biz-calendar.svg",
   "description": "工作日 / SLA 到期日计算（纯本地，无外网）。",
   "minimumSupportedRelease": "0.82.0",
   "auth": null,

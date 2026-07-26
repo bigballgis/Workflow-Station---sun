@@ -66,8 +66,11 @@ export function generateTheme({
 export const defaultTheme = generateTheme({
     // Workflow Station 品牌红 —— 与三端前端主题统一（platform 表无自定义色时的默认值）
     primaryColor: '#db0011',
-    websiteName: 'Activepieces',
-    fullLogoUrl: 'https://cdn.activepieces.com/brand/full-logo.png',
-    favIconUrl: 'https://cdn.activepieces.com/brand/logo.svg',
-    logoIconUrl: 'https://cdn.activepieces.com/brand/logo.svg',
+    // HERMES 白标：名称与 admin-center 的入口菜单一致（Automation Studio）。
+    // logo 走同源相对路径（packages/web/public/），不再指向 cdn.activepieces.com——
+    // 生产完全断网（X-2/X-3），外部 CDN 资源必然加载失败。
+    websiteName: 'Automation Studio',
+    fullLogoUrl: '/hermes-full-logo.svg',
+    favIconUrl: '/hermes-mark.svg',
+    logoIconUrl: '/hermes-mark.svg',
 })

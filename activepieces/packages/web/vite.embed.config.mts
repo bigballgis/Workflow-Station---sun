@@ -10,6 +10,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import apCdnRewritePlugin from './vite-plugins/ap-cdn-rewrite';
 
 export default defineConfig({
   root: __dirname,
@@ -36,7 +37,7 @@ export default defineConfig({
       ),
     },
   },
-  plugins: [react(), tailwindcss(), tsconfigPaths()],
+  plugins: [apCdnRewritePlugin(), react(), tailwindcss(), tsconfigPaths()],
   define: {
     'process.env.NODE_ENV': JSON.stringify('production'),
     // Read by src/i18n.ts to load translations relative to the bundle URL

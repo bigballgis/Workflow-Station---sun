@@ -18,6 +18,19 @@ function pieceId(name, version) {
     return crypto.createHash('sha256').update(`${name}@${version}`).digest('base64url').slice(0, 21)
 }
 
+// Piece icons are mirrored into the AP web bundle by mirror-ap-cdn.mjs and served
+// from AP's own origin: production is air-gapped (X-2/X-3) and cdn.activepieces.com
+// is unreachable there, so every step icon would render broken. The mirror preserves
+// the CDN path, hence a pure prefix swap. In-house pieces already carry a local path.
+const CDN_PREFIX = 'https://cdn.activepieces.com/'
+const LOCAL_PREFIX = '/ap-cdn/'
+
+function localizeLogoUrl(logoUrl) {
+    if (!logoUrl) return ''
+    if (!logoUrl.startsWith(CDN_PREFIX)) return logoUrl
+    return LOCAL_PREFIX + logoUrl.slice(CDN_PREFIX.length)
+}
+
 // Dollar-quote instead of escaping: piece JSON is full of quotes/backslashes.
 function lit(value) {
     if (value === null || value === undefined) return 'NULL'
@@ -55,7 +68,7 @@ for (const { name, version } of manifest) {
             lit(m.updated ?? new Date(0).toISOString()),
             lit(name),
             lit(m.displayName ?? short),
-            lit(m.logoUrl ?? ''),
+            lit(localizeLogoUrl(m.logoUrl)),
             lit(m.description ?? ''),
             lit(version),
             lit(m.minimumSupportedRelease ?? '0.0.0'),

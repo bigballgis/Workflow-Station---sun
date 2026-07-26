@@ -2,7 +2,7 @@
   "name": "@activepieces/piece-hash-helper",
   "version": "1.0.0",
   "displayName": "Hash Helper",
-  "logoUrl": "https://cdn.activepieces.com/pieces/hash-helper.png",
+  "logoUrl": "/ap-cdn/pieces/hermes/hash-helper.svg",
   "description": "文本摘要与 Base64 编解码(纯本地,无外网)。",
   "minimumSupportedRelease": "0.82.0",
   "auth": null,
