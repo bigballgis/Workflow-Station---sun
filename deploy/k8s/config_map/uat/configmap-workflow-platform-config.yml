@@ -7,8 +7,8 @@ metadata:
 # UAT ConfigMap
 # =====================================================================
 # 本文件由 preprod 复制并按 UAT 调整。LDAP/SSO/DSP/CORS/profile 已填 UAT 真实值（非敏感）。
-# 注意：除 LDAP/SSO/DSP/CORS/profile 外的「基础设施」键（DB / Redis / Kafka / N8N / Superset）
-#       仍需按实际 UAT 环境 review；其中数据库/N8N 连接已按 UAT 值配置。
+# 注意：除 LDAP/SSO/DSP/CORS/profile 外的「基础设施」键（DB / Redis / Kafka / Superset）
+#       仍需按实际 UAT 环境 review；其中数据库连接已按 UAT 值配置。
 # 敏感值（bind 密码 / DSP client secret / keystore 口令 / SSO 内部令牌 / DB 密码等）一律在
 #       deploy/k8s/secret/uat/secret-workflow-platform.yml，本 ConfigMap 不含任何密钥。
 data:
@@ -64,26 +64,6 @@ data:
   WORKFLOW_ENGINE_BACKEND_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   WORKFLOW_ENGINE_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   FILE_UPLOAD_BASE_URL: "/api/v1/upload/files"
-  N8N_PORT: "5678"
-  DB_TYPE: "postgresdb"
-  N8N_DB_TYPE: "postgresdb"
-  DB_POSTGRESDB_HOST: "uat-postgres.internal"
-  N8N_DB_POSTGRESDB_HOST: "uat-postgres.internal"
-  DB_POSTGRESDB_PORT: "25011"
-  N8N_DB_POSTGRESDB_PORT: "25011"
-  DB_POSTGRESDB_DATABASE: "workflow_platform_uat"
-  DB_POSTGRESDB_USER: "platform_uat"
-  N8N_DB_POSTGRESDB_DATABASE: "workflow_platform_uat"
-  N8N_DB_POSTGRESDB_USER: "platform_uat"
-  N8N_DB_POSTGRESDB_SCHEMA: "n8n"
-  WEBHOOK_URL: "https://uat-n8n.company.com"
-  N8N_WEBHOOK_URL: "https://uat-n8n.company.com"
-  N8N_SERVICE_URL: "http://n8n-service:5678"
-  N8N_RUNNERS_ENABLED: "true"
-  N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
-  N8N_DIAGNOSTICS_ENABLED: "false"
-  N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
-  N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
   # Activepieces (uat: UI exposed via login bridge). DB/Redis = 共享平台那套(同 SPRING_DATASOURCE_*)。
   ACTIVEPIECES_POSTGRES_HOST: "uat-postgres.internal"
   ACTIVEPIECES_POSTGRES_PORT: "5432"
@@ -99,7 +79,7 @@ data:
   JWT_COOKIE_DOMAIN: ".__BASE_DOMAIN__"
   ACTIVEPIECES_BRIDGE_ENABLED: "true"
   ACTIVEPIECES_INTERNAL_URL: "http://activepieces-service:80"
-  # AI Generate 对话(developer-workstation)已从 n8n 迁移到 Activepieces 同步 webhook。
+  # AI Generate 对话(developer-workstation)走 Activepieces 同步 webhook。
   # flowId 每环境不同:先把 deploy/ap-flows/ai-function-unit-gen.json 经 Jenkins 导入本环境 AP,
   # 再把 ap-import 打印出的 flowId 回填 __AI_GEN_FLOW_ID__。
   AI_GENERATION_WEBHOOK_URL: "http://activepieces-service:80/api/v1/webhooks/__AI_GEN_FLOW_ID__/sync"

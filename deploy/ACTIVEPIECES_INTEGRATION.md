@@ -145,7 +145,7 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 > **前置:先把 AP 镜像同步进私有 registry。** AP 是**第三方镜像**(不像平台自研服务由 `build-and-push-k8s.ps1` 构建);
 > k8s manifest 引用的是 `<Registry>/activepieces:0.84.0`(私有 Nexus),需从上游 `activepieces/activepieces:0.84.0`
 > 拉下来改 tag 再推。用 [deploy/scripts/mirror-thirdparty-images-k8s.ps1](scripts/mirror-thirdparty-images-k8s.ps1):
-> `./mirror-thirdparty-images-k8s.ps1 -Registry <nexus基址> -Images activepieces`(同脚本也覆盖 redis/kafka/kong/n8n 等第三方镜像)。
+> `./mirror-thirdparty-images-k8s.ps1 -Registry <nexus基址> -Images activepieces`(同脚本也覆盖 redis/kafka/kong 等第三方镜像)。
 > `ap-bootstrap-job.yaml` 用的也是同一个 AP 镜像,一并就位。
 
 **生产（runtime only）**：照常部署（`activepieces.yaml` 在默认集里），Istio 只放 `/api/v1/webhooks`，

@@ -14,12 +14,6 @@ echo "========================================="
 echo "  Database Initialization Starting..."
 echo "========================================="
 
-# --- Step 0: Create N8N database ---
-echo ""
-echo "[0/6] Creating N8N database..."
-psql -U $POSTGRES_USER -d $POSTGRES_DB -tc "SELECT 1 FROM pg_database WHERE datname = 'n8n_dev'" | grep -q 1 || psql -U $POSTGRES_USER -d $POSTGRES_DB -c "CREATE DATABASE n8n_dev OWNER $POSTGRES_USER"
-echo "  N8N database 'n8n_dev' ready."
-
 # --- Step 1: Base schemas ---
 echo ""
 echo "[1/6] Creating base schemas..."

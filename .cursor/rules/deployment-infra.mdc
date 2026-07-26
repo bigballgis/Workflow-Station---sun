@@ -74,7 +74,6 @@ Dev 部署脚本 `deploy/environments/dev/build-and-deploy.ps1` 会顺序 pre-pu
 | 镜像 | compose 引用 | 限流时的替代 |
 |------|-------------|-------------|
 | Activepieces | `activepieces/activepieces:0.84.0` | `docker pull ghcr.io/activepieces/activepieces:0.84.0` 后 `docker tag … activepieces/activepieces:0.84.0` |
-| n8n | `docker.n8n.io/n8nio/n8n:latest` | 脚本会 fallback 到 `n8nio/n8n:latest` 并 retag |
 | 其他 | 见 compose | `docker login` 或公司私有 registry（`deploy/scripts/mirror-thirdparty-images-k8s.ps1`） |
 
 K8s 侧第三方镜像走私有 Nexus，见 `deploy/k8s/activepieces.yaml` 与各 manifest 的 `image:`。

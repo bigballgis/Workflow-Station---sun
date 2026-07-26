@@ -66,8 +66,6 @@
 
 - `kong.yaml`
 
-- `n8n.yaml`
-
 - `workflow-station-superset.yaml`
 
 - `redis.yaml`

@@ -17,9 +17,9 @@
 6. **URL 变量分工** — 三个前端 nginx 使用 **`KONG_PROXY_URL`**（指向 Kong，代理 `/api/*`）。后端**服务间**调用仍用 `ADMIN_CENTER_URL`、`WORKFLOW_ENGINE_URL` 等（与各服务 `application*.yml` 一致）。没有 `*_BACKEND_URL` 变量。
 7. **`.sh` 和 `.sql` 文件必须是 LF 换行** — `.gitattributes` 已配置强制 LF。如果手动创建 `.sh` 文件，确保是 LF 而非 CRLF，否则容器内执行会报 `/bin/sh: bad interpreter`。
 8. **admin-center 有 context-path** — healthcheck 路径是 `/api/v1/admin/actuator/health`，不是 `/actuator/health`。
-9. **API 边缘为 Kong Gateway** — 与 Ingress 等入口协同；各前端 nginx 可按环境直连后端或经 Kong。Kafka 使用 KRaft 模式（无 ZooKeeper），N8N 使用独立 PostgreSQL 数据库。
+9. **API 边缘为 Kong Gateway** — 与 Ingress 等入口协同；各前端 nginx 可按环境直连后端或经 Kong。Kafka 使用 KRaft 模式（无 ZooKeeper）。
 10. **环境变量名必须是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`。
-11. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有 PostgreSQL 数据库。Redis、Kafka、N8N 在 K8S 中自行部署。
+11. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有 PostgreSQL 数据库。Redis、Kafka 在 K8S 中自行部署。
 12. **后端运行时基础镜像可覆盖** — 各后端 `Dockerfile` 使用 `ARG JAVA_BASE_IMAGE`（默认 `eclipse-temurin:17-jre`）。`deploy/environments/dev/build-and-deploy.ps1` 与 `deploy/scripts/build-and-push-k8s.ps1` 支持 **`-JavaBaseImage`**，默认优先使用 **`docker.m.daocloud.io/library/eclipse-temurin:17-jre`**：构建前预拉取，并传 `--build-arg JAVA_BASE_IMAGE=...` 与 `docker build --pull=false`，减轻对 Docker Hub 元数据的依赖。
 
 ---
@@ -36,7 +36,7 @@
 | user-portal-frontend | Vue 3 + Vite + Element Plus | 用户门户 UI |
 | developer-workstation-frontend | Vue 3 + Vite + Element Plus + BPMN.js | 开发者工作台 UI |
 
-基础设施：PostgreSQL 16（公司现有）+ Redis 7（K8S 部署）+ Kafka 7.5（KRaft 模式，K8S 部署）+ N8N 自动化引擎（K8S 部署）。
+基础设施：PostgreSQL 16（公司现有）+ Redis 7（K8S 部署）+ Kafka 7.5（KRaft 模式，K8S 部署）。
 
 不部署的组件：PostgreSQL（使用公司现有数据库）。API 路由与网关插件由 **Kong** 提供（见 `deploy/kong/`、`deploy/k8s/kong.yaml`）。
 
@@ -50,12 +50,12 @@
 
 ### 2.1 各环境部署方式
 
-| 环境 | 平台 | PostgreSQL | Redis | Kafka | N8N | 后端 (×4) | 前端 (×3) |
-|------|------|-----------|-------|-------|-----|----------|----------|
-| dev | Docker Desktop | 本地容器 | 本地容器 | 本地容器 | 本地容器 | 本地容器 | 本地容器 |
-| sit | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
-| uat | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
-| prod | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
+| 环境 | 平台 | PostgreSQL | Redis | Kafka | 后端 (×4) | 前端 (×3) |
+|------|------|-----------|-------|-------|----------|----------|
+| dev | Docker Desktop | 本地容器 | 本地容器 | 本地容器 | 本地容器 | 本地容器 |
+| sit | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
+| uat | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
+| prod | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
 
 > ⚠️ PostgreSQL 使用公司现有数据库，需要 DBA 提前创建好数据库和用户。
 
@@ -65,7 +65,7 @@
 ┌─────────────────────────────────────────────────────────┐
 │                    Ingress (K8S) / Nginx                │
 │         admin.company.com  portal.company.com         │
-│         dev.company.com    n8n.company.com              │
+│         dev.company.com                                 │
 └──────┬──────────────┬──────────────────┬────────────────┘
        │              │                  │
 ┌──────▼──────┐ ┌─────▼──────┐ ┌────────▼────────┐
@@ -102,7 +102,6 @@
 
 * K8S 默认清单不部署 developer-workstation；仅本地 Dev 或 optional YAML。
 
-PostgreSQL ── N8N (独立数据库 n8n_{env})
 ```
 
 ### 2.3 需要部署的服务清单（K8S 默认）
@@ -117,14 +116,13 @@ PostgreSQL ── N8N (独立数据库 n8n_{env})
 |---|------|------|---------|------------|
 | 1 | Redis | 基础设施 | `deployment-redis.yaml` | `redis:7.2-alpine` |
 | 2 | Kafka | 基础设施 | `deployment-kafka.yaml` | `confluentinc/cp-kafka:7.5.3` |
-| 3 | N8N | 基础设施 | `deployment-n8n.yaml` | `n8nio/n8n`（官方） |
-| 4 | workflow-engine | 后端 | `deployment-workflow-engine.yaml` | 自建 JAR |
-| 5 | admin-center | 后端 | `deployment-admin-center.yaml` | 自建 JAR |
-| 6 | user-portal | 后端 | `deployment-user-portal.yaml` | 自建 JAR |
-| 7 | Kong | API 边缘 | `deployment-kong.yaml` | 见清单 |
-| 8 | admin-center-frontend | 前端 | `deployment-frontend.yaml` | `Dockerfile.local` 构建 |
-| 9 | user-portal-frontend | 前端 | `deployment-frontend.yaml` | 同上 |
-| 10 | platform-login-frontend | 前端（统一 `/login/`） | `deployment-platform-login-frontend.yaml` | `frontend/login` + `Dockerfile.local` |
+| 3 | workflow-engine | 后端 | `deployment-workflow-engine.yaml` | 自建 JAR |
+| 4 | admin-center | 后端 | `deployment-admin-center.yaml` | 自建 JAR |
+| 5 | user-portal | 后端 | `deployment-user-portal.yaml` | 自建 JAR |
+| 6 | Kong | API 边缘 | `deployment-kong.yaml` | 见清单 |
+| 7 | admin-center-frontend | 前端 | `deployment-frontend.yaml` | `Dockerfile.local` 构建 |
+| 8 | user-portal-frontend | 前端 | `deployment-frontend.yaml` | 同上 |
+| 9 | platform-login-frontend | 前端（统一 `/login/`） | `deployment-platform-login-frontend.yaml` | `frontend/login` + `Dockerfile.local` |
 
 `deploy/scripts/build-and-push-k8s.ps1` 仍会构建 **developer-workstation** 与 **developer-workstation-frontend** 镜像，供本地或实验环境使用。
 
@@ -203,7 +201,7 @@ Workflow-Station---sun/
 │   │   ├── README.md
 │   │   ├── kustomization.yaml
 │   │   ├── workflow-platform-ingress-gateway.yaml
-│   │   ├── *.yaml                   # 各服务（redis、kafka、n8n、kong、各后端与前端等）
+│   │   ├── *.yaml                   # 各服务（redis、kafka、kong、各后端与前端等）
 │   │   ├── config_map/<Environment>/  # 如 preprod；应用与 Kong 等配置
 │   │   ├── secret/<Environment>/
 │   │   ├── init-data/               # 离线 SQL：init-flowable、init-platform-schema（DDL）、init-platform-seed（种子）；见 README
@@ -424,7 +422,6 @@ cd deploy/environments/dev
 | PostgreSQL | 5432 | `POSTGRES_PORT`（5432） | `localhost:5432` |
 | Redis | 6379 | `REDIS_PORT`（6379） | `localhost:6379` |
 | Kafka (KRaft) | 容器内 9092 / 29092 | `KAFKA_PORT`（**19092** → 映射到容器 9092） | `localhost:19092`（宿主机客户端） |
-| N8N | 5678 | `N8N_PORT`（5678） | `http://localhost:5678` |
 | Kong proxy / admin | 8000 / 8001 | `KONG_PROXY_PORT` / `KONG_ADMIN_PORT`（8000 / 8001） | 例如 `http://localhost:8000` |
 | workflow-engine | 8080 | `WORKFLOW_ENGINE_PORT`（8081） | `http://localhost:8081` |
 | admin-center | 8080 | `ADMIN_CENTER_PORT`（8090） | `http://localhost:8090` |
@@ -528,13 +525,9 @@ PostgreSQL 使用公司现有数据库，需要 DBA 提前完成以下操作：
 -- 1. 创建应用数据库
 CREATE DATABASE workflow_platform_{env} OWNER platform_{env};
 
--- 2. 创建 N8N 专用数据库
-CREATE DATABASE n8n_{env} OWNER platform_{env};
-
--- 3. 创建数据库用户（如果不存在）
+-- 2. 创建数据库用户（如果不存在）
 CREATE USER platform_{env} WITH PASSWORD 'your_strong_password';
 GRANT ALL PRIVILEGES ON DATABASE workflow_platform_{env} TO platform_{env};
-GRANT ALL PRIVILEGES ON DATABASE n8n_{env} TO platform_{env};
 ```
 
 其中 `{env}` 替换为 `sit` / `uat` / `prod`。
@@ -575,13 +568,7 @@ psql -h {host} -p 5432 -U platform_{env} -d workflow_platform_{env} -v ON_ERROR_
    SPRING_DATASOURCE_URL: "jdbc:postgresql://{your-postgres-host}:5432/workflow_platform_{env}"
    ```
 
-2. 修改 `deploy/k8s/configmap-{env}.yaml` 中的 N8N 数据库地址：
-   ```yaml
-   DB_POSTGRESDB_HOST: "{your-postgres-host}"
-   DB_POSTGRESDB_DATABASE: "n8n_{env}"
-   ```
-
-3. 修改 `deploy/k8s/secret-{env}.yaml` 中所有 `CHANGE_ME` 值为真实密码。
+2. 修改 `deploy/k8s/secret-{env}.yaml` 中所有 `CHANGE_ME` 值为真实密码。
 
 ### 9.2 构建并推送镜像
 
@@ -655,12 +642,12 @@ cd deploy/k8s
 2. 应用 ConfigMap
 3. 应用 Secret
 4. 创建 Kong 声明式配置 ConfigMap（`deploy/kong/`）
-5. 依次 apply：`deployment-redis` → `deployment-kafka` → `deployment-n8n` → `deployment-workflow-engine` → `deployment-admin-center` → `deployment-user-portal` → `deployment-kong` → `deployment-frontend`（内含 admin + user-portal 前端）→ `deployment-platform-login-frontend` → `pdb.yaml`
+5. 依次 apply：`deployment-redis` → `deployment-kafka` → `deployment-workflow-engine` → `deployment-admin-center` → `deployment-user-portal` → `deployment-kong` → `deployment-frontend`（内含 admin + user-portal 前端）→ `deployment-platform-login-frontend` → `pdb.yaml`
 6. 应用 Ingress
 
 **说明**：默认清单 **不包含** `developer-workstation`；可选清单见 `deployment-developer-workstation-optional.yaml`。
 
-**Istio 路径**：无 `deploy.ps1` 的固定顺序；若需分阶段，建议按 `deploy/k8s/ps1/README.md` 中的批次（如 redis / n8n / kafka / superset → kong → workflow-engine → 其余后端 → 前端，Gateway 与前端同批时注意包含 `workflow-platform-ingress-gateway.yaml`）。
+**Istio 路径**：无 `deploy.ps1` 的固定顺序；若需分阶段，建议按 `deploy/k8s/ps1/README.md` 中的批次（如 redis / kafka / superset → kong → workflow-engine → 其余后端 → 前端，Gateway 与前端同批时注意包含 `workflow-platform-ingress-gateway.yaml`）。
 
 ### 9.5 验证部署
 
@@ -689,7 +676,6 @@ kubectl describe pod -l app=workflow-engine -n workflow-platform-{env}
 |-------------|------|------|
 | `redis-service` | 6379 | Redis 缓存 |
 | `kafka-service` | 29092 | Kafka 消息队列 |
-| `n8n-service` | 5678 | N8N 自动化引擎 |
 | `workflow-engine-service` | 8080 | 工作流引擎 |
 | `admin-center-service` | 8080 | 管理后台 API |
 | `user-portal-service` | 8080 | 用户门户 API |
@@ -716,7 +702,6 @@ harbor.company.com/workflow/
 # 基础设施使用官方镜像（不推送到 Harbor）
 redis:7.2-alpine                      # Docker Hub
 confluentinc/cp-kafka:7.5.3           # Docker Hub
-n8nio/n8n                             # Docker Hub
 ```
 
 自建后端镜像的 **JRE 层** 可通过 `JAVA_BASE_IMAGE` / `-JavaBaseImage` 指向私有 Registry 或镜像加速地址，无需与上表基础设施镜像同源。
@@ -750,10 +735,9 @@ Redis(K8S) ────────┘                    ├── user-portal 
                                         └── developer-workstation ── developer-workstation-frontend
 Kafka(K8S) ─────────────────────────────── workflow-engine + user-portal
 
-PostgreSQL(公司) ── N8N(K8S) (独立数据库 n8n_{env})
 ```
 
-启动顺序：Redis + Kafka → N8N → workflow-engine → admin-center → (user-portal, developer-workstation) → 前端。
+启动顺序：Redis + Kafka → workflow-engine → admin-center → (user-portal, developer-workstation) → 前端。
 
 ---
 
@@ -802,21 +786,6 @@ PostgreSQL(公司) ── N8N(K8S) (独立数据库 n8n_{env})
 | 变量名 | 使用者 | 说明 |
 |--------|--------|------|
 | `KONG_PROXY_URL` | 各前端 nginx 容器（含 `frontend/login`） | Kong 代理入口（HTTP），用于 `proxy_pass`；**不再**用 `*_BACKEND_URL` 直连后端 API |
-
-### 12.4 N8N 相关环境变量
-
-| 变量名 | 说明 | 示例值 |
-|--------|------|--------|
-| `DB_TYPE` | 数据库类型 | `postgresdb` |
-| `DB_POSTGRESDB_HOST` | N8N 数据库主机 | `sit-postgres.internal` |
-| `DB_POSTGRESDB_PORT` | N8N 数据库端口 | `5432` |
-| `DB_POSTGRESDB_DATABASE` | N8N 数据库名 | `n8n_sit` |
-| `DB_POSTGRESDB_USER` | N8N 数据库用户 | Secret |
-| `DB_POSTGRESDB_PASSWORD` | N8N 数据库密码 | Secret |
-| `N8N_ENCRYPTION_KEY` | N8N 加密密钥 | Secret |
-| `WEBHOOK_URL` | N8N Webhook 外部访问地址 | `https://sit-n8n.company.com` |
-| `DOUBAO_MODEL_ID` | 豆包模型 ID（发票识别） | Secret |
-| `DOUBAO_API_KEY` | 豆包 API Key（发票识别） | Secret |
 
 ---
 
@@ -905,7 +874,6 @@ cd deploy/k8s
 | 问题 | 原因 | 解决 |
 |------|------|------|
 | 后端启动报 `Connection refused` | PostgreSQL 地址配置错误 | 检查 `SPRING_DATASOURCE_URL` 中的主机地址 |
-| N8N 启动报数据库连接失败 | N8N 数据库未创建 | 让 DBA 创建 `n8n_{env}` 数据库 |
 | Flowable 表不存在 | Schema 未初始化 | 运行 `init-database.ps1` 或设置 `FLOWABLE_SCHEMA_UPDATE=true` |
 
 ---

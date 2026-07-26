@@ -4,7 +4,6 @@ resources:
   - workflow-platform-ingress-gateway.yaml
   - redis.yaml
   - kafka.yaml
-  - n8n.yaml
   - activepieces.yaml
   - workflow-station-superset.yaml
   - workflow-engine.yaml

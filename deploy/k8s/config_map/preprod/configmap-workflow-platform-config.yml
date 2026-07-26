@@ -56,26 +56,6 @@ data:
   WORKFLOW_ENGINE_BACKEND_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   WORKFLOW_ENGINE_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   FILE_UPLOAD_BASE_URL: "/api/v1/upload/files"
-  N8N_PORT: "5678"
-  DB_TYPE: "postgresdb"
-  N8N_DB_TYPE: "postgresdb"
-  DB_POSTGRESDB_HOST: "hkl25243602.hc.cloud.hk.hsbc"
-  N8N_DB_POSTGRESDB_HOST: "hkl25243602.hc.cloud.hk.hsbc"
-  DB_POSTGRESDB_PORT: "25011"
-  N8N_DB_POSTGRESDB_PORT: "25011"
-  DB_POSTGRESDB_DATABASE: "hmhkdev"
-  DB_POSTGRESDB_USER: "hmhkodev1"
-  N8N_DB_POSTGRESDB_DATABASE: "hmhkdev"
-  N8N_DB_POSTGRESDB_USER: "hmhkodev1"
-  N8N_DB_POSTGRESDB_SCHEMA: "n8n"
-  WEBHOOK_URL: "https://sit-n8n.company.com"
-  N8N_WEBHOOK_URL: "https://sit-n8n.company.com"
-  N8N_SERVICE_URL: "http://n8n-service:5678"
-  N8N_RUNNERS_ENABLED: "true"
-  N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
-  N8N_DIAGNOSTICS_ENABLED: "false"
-  N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
-  N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
   # Activepieces (PROD runtime only — UI not exposed; Istio routes only /api/v1/webhooks).
   ACTIVEPIECES_POSTGRES_HOST: "hkl25243602.hc.cloud.hk.hsbc"
   ACTIVEPIECES_POSTGRES_PORT: "25011"
@@ -90,7 +70,7 @@ data:
   JWT_COOKIE_DOMAIN: ".__BASE_DOMAIN__"
   ACTIVEPIECES_BRIDGE_ENABLED: "true"
   ACTIVEPIECES_INTERNAL_URL: "http://activepieces-service:80"
-  # AI Generate 对话(developer-workstation)已从 n8n 迁移到 Activepieces 同步 webhook。
+  # AI Generate 对话(developer-workstation)走 Activepieces 同步 webhook。
   # flowId 每环境不同:先把 deploy/ap-flows/ai-function-unit-gen.json 经 Jenkins 导入本环境 AP,
   # 再把 ap-import 打印出的 flowId 回填 __AI_GEN_FLOW_ID__。
   AI_GENERATION_WEBHOOK_URL: "http://activepieces-service:80/api/v1/webhooks/__AI_GEN_FLOW_ID__/sync"

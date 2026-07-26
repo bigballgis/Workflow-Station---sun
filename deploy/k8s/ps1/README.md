@@ -42,7 +42,7 @@
 
 如需按组件分阶段部署，建议顺序为：
 
-1. 第一批：`redis`、`n8n`、`kafka`、`workflow-station-superset`
+1. 第一批：`redis`、`kafka`、`workflow-station-superset`
 2. 第二批：`kong`
 3. 第三批：`workflow-engine`
 4. 第四批：其余 backend
@@ -269,7 +269,7 @@
 ### 3a. 第一批先部署基础组件 + Superset
 
 ```powershell
-.\deploy\k8s\ps1\apply-workflow-station-istio-generated.ps1 -Namespace ame-hase-hermes-preprod -ImageTag sit-20260414 -IngressHost hermes-sit.hk.hsbc -IngressTlsSecret workflow-platform-tls -BaseDomain ikp401xnp.cloud.hk.hsbc -Select redis,n8n,kafka,workflow-station-superset
+.\deploy\k8s\ps1\apply-workflow-station-istio-generated.ps1 -Namespace ame-hase-hermes-preprod -ImageTag sit-20260414 -IngressHost hermes-sit.hk.hsbc -IngressTlsSecret workflow-platform-tls -BaseDomain ikp401xnp.cloud.hk.hsbc -Select redis,kafka,workflow-station-superset
 ```
 
 ### 4. 只渲染，不真正部署

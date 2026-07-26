@@ -2,7 +2,7 @@
 # 把第三方镜像同步(拉 → 改 tag → 推)到私有 K8S registry。
 #
 # 背景:build-and-push-k8s.ps1 只 build+push 平台**自研**的 8 个服务;Activepieces / redis /
-# kafka / kong / n8n 这些**第三方镜像不是 build 出来的**,而是从上游拉下来、改 tag 后推进私有
+# kafka / kong 这些**第三方镜像不是 build 出来的**,而是从上游拉下来、改 tag 后推进私有
 # registry(k8s manifest 全部引用 <Registry>/<name>:<tag>)。这套同步原先没有脚本——本脚本补上。
 #
 # 用法:
@@ -22,7 +22,7 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$Registry,                 # 目标 registry 基址(到 .../workflow-station2 为止)
-    [string]$Images = "all",           # 逗号分隔:activepieces,redis,kafka,kong,n8n  或 all
+    [string]$Images = "all",           # 逗号分隔:activepieces,redis,kafka,kong  或 all
     [switch]$NoPush = $false            # 只拉+改 tag,不 push
 )
 
@@ -31,7 +31,6 @@ $ThirdParty = @(
     @{ Name = "activepieces"; Tag = "0.84.0";  Upstream = "activepieces/activepieces:0.84.0"; Confirmed = $true  },  # ✅ 已确认
     @{ Name = "redis";        Tag = "7.2";     Upstream = "redis:7.2";                        Confirmed = $false },  # dev 用 7.2-alpine,确认要不要 alpine
     @{ Name = "kong";         Tag = "3.7";     Upstream = "kong:3.7";                         Confirmed = $false },
-    @{ Name = "n8n";          Tag = "1.89.2";  Upstream = "n8nio/n8n:1.89.2";                 Confirmed = $false },  # AI 生成用的独立 n8n
     @{ Name = "kafka";        Tag = "3.6.2";   Upstream = "apache/kafka:3.6.2";               Confirmed = $false }   # ⚠️ dev 是 cp-kafka:7.5.3,发行版不同,务必确认
     # superset 不在此列:它是 deploy/superset/Dockerfile **自建**,走 build 而非 mirror。
 )
@@ -44,7 +43,7 @@ $wanted = if ($Images -eq "all") { $ThirdParty } else {
     $set = $Images.Split(",") | ForEach-Object { $_.Trim() }
     $ThirdParty | Where-Object { $set -contains $_.Name }
 }
-if (-not $wanted) { Write-Fail "没有匹配的镜像:$Images(可选 activepieces,redis,kafka,kong,n8n 或 all)" }
+if (-not $wanted) { Write-Fail "没有匹配的镜像:$Images(可选 activepieces,redis,kafka,kong 或 all)" }
 
 Write-Host "Registry: $Registry   NoPush: $NoPush" -ForegroundColor Yellow
 

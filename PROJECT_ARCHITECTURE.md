@@ -35,7 +35,7 @@
 ┌─────────────────────────────────────────────────────────┐
 │                    Ingress (K8S) / Nginx                │
 │         admin.company.com  portal.company.com           │
-│         dev.company.com    n8n.company.com              │
+│         dev.company.com                                 │
 └──────┬──────────────┬──────────────────┬────────────────┘
        │              │                  │
 ┌──────▼──────┐ ┌─────▼──────┐ ┌────────▼────────┐
@@ -62,8 +62,6 @@
 │PostgreSQL│  │  Redis  │  │  Kafka   │
 │(公司现有) │  │(K8S部署) │  │(K8S部署) │
 └─────────┘  └─────────┘  └──────────┘
-
-PostgreSQL ── N8N (独立数据库 n8n_{env})
 ```
 
 ## 1.3 Gateway Governance 演进时序（Phase 1 -> Phase 5）

@@ -12,7 +12,6 @@ $images = @(
     @{ Mirror = "docker.m.daocloud.io/library/postgres:16.5-alpine";          Target = "postgres:16.5-alpine"          },
     @{ Mirror = "docker.m.daocloud.io/library/redis:7.2-alpine";              Target = "redis:7.2-alpine"              },
     @{ Mirror = "docker.m.daocloud.io/confluentinc/cp-kafka:7.5.3";           Target = "confluentinc/cp-kafka:7.5.3"     },
-    @{ Mirror = "docker.m.daocloud.io/n8nio/n8n:latest";                      Target = "docker.n8n.io/n8nio/n8n:latest" },
     @{ Mirror = "docker.m.daocloud.io/apache/superset:6.0.0";                 Target = "apache/superset:6.0.0"          }
 )
 

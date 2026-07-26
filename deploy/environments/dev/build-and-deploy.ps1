@@ -101,7 +101,7 @@ $ServiceRegistry = @{
 }
 
 # Services whose build/start may be skipped when optional deps (private npm, heavy images) fail.
-$OptionalComposeServices = @('activepieces', 'superset-final', 'n8n')
+$OptionalComposeServices = @('activepieces', 'superset-final')
 
 # Validate -Service parameter
 if ($Service -and -not $ServiceRegistry.ContainsKey($Service)) {
@@ -614,7 +614,7 @@ if (-not $SkipImagePull) {
     foreach ($img in $images) {
         # Skip locally built / optional images that may be unavailable offline
         if ($img -like 'dev-*' -or $img -like 'activepieces:*') { continue }
-        if ($img -match 'n8n|superset|activepieces') {
+        if ($img -match 'superset|activepieces') {
             Write-Host "  Skipping optional image pull: $img" -ForegroundColor DarkGray
             continue
         }

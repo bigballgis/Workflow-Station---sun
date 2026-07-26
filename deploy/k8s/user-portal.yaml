@@ -158,7 +158,7 @@ spec:
 # P0-2: 按 CPU 自动扩缩(基于 requests.cpu=500m 的百分比)。需集群已装 metrics-server。
 #
 # maxReplicas 上限由**数据库连接数**决定，不是由流量决定：
-#   Postgres max_connections=100 - 3(超级用户保留) - 约 6(n8n/activepieces/superset/运维) = 91
+#   Postgres max_connections=100 - 3(超级用户保留) - 约 6(activepieces/superset/运维) = 91
 #   固定开销: workflow-engine 20 + admin-center 20 + developer-workstation 10 = 50
 #   留给 user-portal: 41 → 每副本 Hikari maximum-pool-size=20 → 最多 2 副本
 # 想调大 maxReplicas，必须**先**把各服务的 maximum-pool-size 降下来

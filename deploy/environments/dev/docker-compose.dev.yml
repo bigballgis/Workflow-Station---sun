@@ -100,46 +100,6 @@ services:
     networks:
       - platform-dev-network
 
-  # N8N Automation Engine
-  n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
-    container_name: platform-n8n-dev
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "${N8N_PORT:-5678}:5678"
-    environment:
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n_dev}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      # Public URL via edge (http://localhost:3000/n8n/). Do not set N8N_PATH — nginx strips /n8n/ prefix.
-      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://localhost:3000/n8n/}
-      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:3000/n8n/}
-      N8N_PROXY_HOPS: ${N8N_PROXY_HOPS:-1}
-      N8N_PORT: 5678
-      N8N_SECURE_COOKIE: "false"
-      N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-      NODE_FUNCTION_ALLOW_EXTERNAL: "pg"
-      DOUBAO_MODEL_ID: ${DOUBAO_MODEL_ID:-doubao-1-5-vision-pro-32k-250115}
-      DOUBAO_API_KEY: ${DOUBAO_API_KEY:-your-doubao-api-key-here}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5678/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    networks:
-      - platform-dev-network
-    restart: unless-stopped
-
   # Activepieces (workflow automation, community edition).
   # Non-prod: UI login via the edge gateway shared-account (see nginx :8085 + bridge).
   # Shares the platform Postgres/Redis. Runs the engine + UI + API on container :80.
@@ -539,10 +499,10 @@ services:
       # C-3 (DECISIONS.md#d6): 可信服务密钥；调用 admin-center 时附带，使其信任转发的 X-User-Id。
       SERVICE_INTERNAL_TOKEN: ${SERVICE_INTERNAL_TOKEN:-dev-service-internal-token-change-me}
       FILE_UPLOAD_BASE_URL: /api/v1/upload/files
-      # AI Generate 对话已从 n8n 迁移到 Activepieces 同步 webhook(flowId 按环境不同)。
+      # AI Generate 对话走 Activepieces 同步 webhook(flowId 按环境不同)。
       AI_GENERATION_WEBHOOK_URL: ${AI_GENERATION_WEBHOOK_URL:-http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
       # SMTP/IMAP connection test: allow internal relay hostnames (resolve to private IPs on corp VPN).
-      SSRF_ALLOWED_HOSTS: ${SSRF_ALLOWED_HOSTS:-activepieces,n8n}
+      SSRF_ALLOWED_HOSTS: ${SSRF_ALLOWED_HOSTS:-activepieces}
     networks:
       - platform-dev-network
     restart: unless-stopped
@@ -710,7 +670,6 @@ services:
 volumes:
   postgres_dev_data:
   redis_dev_data:
-  n8n_data:
   activepieces_data:
   superset_home:   # persists load_examples SQLite data across superset container rebuilds
 

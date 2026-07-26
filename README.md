@@ -79,7 +79,7 @@ Enterprise low-code workflow platform for HSBC, providing visual process design,
 
 ### Local Development
 
-**推荐**：使用开发 Compose 一键构建并启动（含 PostgreSQL、Redis、Kafka、N8N、Kong、四后端、三业务前端、**platform-login**、**edge-nginx** 单源入口等），见 `BUILD_GUIDE.md` §8。
+**推荐**：使用开发 Compose 一键构建并启动（含 PostgreSQL、Redis、Kafka、Kong、四后端、三业务前端、**platform-login**、**edge-nginx** 单源入口等），见 `BUILD_GUIDE.md` §8。
 
 ```powershell
 cd deploy/environments/dev
@@ -90,7 +90,7 @@ cd deploy/environments/dev
 
 ```powershell
 cd deploy/environments/dev
-docker compose -f docker-compose.dev.yml --env-file .env up -d postgres redis kafka n8n
+docker compose -f docker-compose.dev.yml --env-file .env up -d postgres redis kafka
 ```
 
 （Kafka 为 KRaft 模式，**不需要** ZooKeeper。）

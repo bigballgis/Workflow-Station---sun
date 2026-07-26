@@ -20,4 +20,4 @@ services:
 
   developer-workstation:
     environment:
-      SSRF_ALLOWED_HOSTS: n8n,mailpit
+      SSRF_ALLOWED_HOSTS: mailpit

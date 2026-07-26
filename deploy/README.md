@@ -8,7 +8,7 @@
 ┌─────────────────────────────────────────────────────────┐
 │                    Ingress (K8S) / Nginx                │
 │         admin.company.com  portal.company.com           │
-│         dev.company.com    n8n.company.com              │
+│         dev.company.com                                 │
 └──────┬──────────────┬──────────────────┬────────────────┘
        │              │                  │
 ┌──────▼──────┐ ┌─────▼──────┐ ┌────────▼────────┐
@@ -56,7 +56,6 @@
 |---------|------|-------------|-------------|
 | redis | Infrastructure | `deployment-redis.yaml` | exec：`redis-cli -a $REDIS_PASSWORD ping`（见清单） |
 | kafka | Infrastructure | `deployment-kafka.yaml` | 见清单内 `kafka-broker-api-versions` |
-| n8n | Infrastructure | `deployment-n8n.yaml` | HTTP `GET /healthz`（port 5678） |
 | workflow-engine | Backend | `deployment-workflow-engine.yaml` | `/actuator/health` |
 | admin-center | Backend | `deployment-admin-center.yaml` | `/api/v1/admin/actuator/health` |
 | user-portal | Backend | `deployment-user-portal.yaml` | `/api/portal/actuator/health` |
@@ -77,7 +76,7 @@
 
 ## Environments
 
-| Environment | Platform | PostgreSQL | Redis/Kafka/N8N | Config |
+| Environment | Platform | PostgreSQL | Redis/Kafka | Config |
 |-------------|----------|-----------|-----------------|--------|
 | dev | Docker Desktop | 本地容器 | 本地容器 | `environments/dev/` |
 | sit | Company K8S | 公司现有 | K8S 自行部署 | `k8s/configmap-sit.yaml` + `secret-sit.yaml` |
@@ -109,7 +108,7 @@ cd deploy/environments/dev
 
 ```powershell
 # 0. DBA 准备数据库（PostgreSQL 不部署）
-#    创建 workflow_platform_{env} 和 n8n_{env} 数据库
+#    创建 workflow_platform_{env} 数据库
 
 # 1. 初始化数据库 Schema（首次部署）
 cd deploy/init-scripts
@@ -123,7 +122,7 @@ cd deploy/init-scripts
 cd deploy/scripts
 .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests
 
-# 4. Deploy（Redis + Kafka + N8N + 三后端 + Kong + 三前端 Deployment + login，共 10 个 Deployment；见上文清单）
+# 4. Deploy（Redis + Kafka + 三后端 + Kong + 三前端 Deployment + login；见上文清单）
 cd deploy/k8s
 .\deploy.ps1 -Environment sit -Tag v1.0.0
 ```
@@ -131,7 +130,7 @@ cd deploy/k8s
 ## Key Rules
 
 1. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有数据库
-2. **Redis / Kafka / N8N 自行部署** — K8S 清单已包含
+2. **Redis / Kafka 自行部署** — K8S 清单已包含
 3. **Docker 多阶段构建不可用** — 本地构建 + 复制
 4. **前端使用 `Dockerfile.local`** — 不是 `Dockerfile`
 5. **前端 `.dockerignore` 不能排除 `dist`**
@@ -158,7 +157,6 @@ deploy/
 │   ├── secret-{sit,uat,prod}.yaml
 │   ├── deployment-redis.yaml       # Redis (自行部署)
 │   ├── deployment-kafka.yaml       # Kafka KRaft (自行部署)
-│   ├── deployment-n8n.yaml         # N8N (自行部署)
 │   ├── deployment-workflow-engine.yaml
 │   ├── deployment-admin-center.yaml
 │   ├── deployment-user-portal.yaml
