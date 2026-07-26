@@ -24,7 +24,7 @@
       v-if="tasks.length > 0"
       class="service-task-designer__toolbar"
     >
-      <span class="service-task-designer__label">{{ t('functionUnit.serviceTaskFlow') }}</span>
+      <span class="service-task-designer__label">{{ t('functionUnit.serviceTaskSelector') }}</span>
       <el-select
         v-model="selectedTaskId"
         size="default"
@@ -35,8 +35,40 @@
           :key="task.id"
           :label="task.name || task.id"
           :value="task.id"
-        />
+        >
+          <div class="service-task-designer__option">
+            <span class="service-task-designer__option-name">{{ task.name || task.id }}</span>
+            <el-tag
+              :type="task.flowId ? 'success' : 'info'"
+              size="small"
+              effect="light"
+              disable-transitions
+            >
+              {{ task.flowId ? t('functionUnit.serviceTaskBound') : t('functionUnit.serviceTaskUnbound') }}
+            </el-tag>
+          </div>
+        </el-option>
       </el-select>
+      <el-tag
+        v-if="selectedTask"
+        :type="selectedTask.flowId ? 'success' : 'info'"
+        size="small"
+        effect="plain"
+        disable-transitions
+        class="service-task-designer__status"
+      >
+        {{ selectedTask.flowId ? t('functionUnit.serviceTaskBound') : t('functionUnit.serviceTaskUnbound') }}
+      </el-tag>
+    </div>
+
+    <!-- One flow per service task; the list above switches between them. New automations
+         are born from a Service Task in Process Design, not created free-floating here. -->
+    <div
+      v-if="tasks.length > 0"
+      class="service-task-designer__hint"
+    >
+      <el-icon><InfoFilled /></el-icon>
+      <span>{{ t('functionUnit.serviceTaskAddHint') }}</span>
     </div>
 
     <el-alert
@@ -94,6 +126,7 @@
 </template>
 
 <script setup lang="ts">
+import { InfoFilled } from '@element-plus/icons-vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -306,6 +339,32 @@ onMounted(load)
 
 .service-task-designer__select {
   width: 280px;
+}
+
+.service-task-designer__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-task-designer__option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-task-designer__status {
+  flex-shrink: 0;
+}
+
+.service-task-designer__hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .service-task-designer__canvas {
