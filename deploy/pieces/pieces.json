@@ -46,5 +46,9 @@
   {
     "name": "@activepieces/piece-biz-calendar",
     "version": "1.0.0"
+  },
+  {
+    "name": "@activepieces/piece-hash-helper",
+    "version": "1.0.0"
   }
 ]

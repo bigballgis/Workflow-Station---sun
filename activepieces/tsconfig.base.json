@@ -593,6 +593,9 @@
       "@activepieces/piece-harvest": [
         "packages/pieces/community/harvest/src/index.ts"
       ],
+      "@activepieces/piece-hash-helper": [
+        "packages/pieces/community/hash-helper/src/index.ts"
+      ],
       "@activepieces/piece-heartbeat": [
         "packages/pieces/community/heartbeat/src/index.ts"
       ],

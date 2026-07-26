@@ -1,0 +1,127 @@
+{
+  "name": "@activepieces/piece-hash-helper",
+  "version": "1.0.0",
+  "displayName": "Hash Helper",
+  "logoUrl": "https://cdn.activepieces.com/pieces/hash-helper.png",
+  "description": "文本摘要与 Base64 编解码(纯本地,无外网)。",
+  "minimumSupportedRelease": "0.82.0",
+  "auth": null,
+  "actions": {
+    "hash_text": {
+      "name": "hash_text",
+      "displayName": "Hash Text",
+      "description": "计算文本摘要(SHA-256/SHA-512/SHA-1/MD5),纯本地。",
+      "props": {
+        "text": {
+          "displayName": "Text",
+          "description": "要计算摘要的文本。",
+          "required": true,
+          "type": "LONG_TEXT"
+        },
+        "algorithm": {
+          "displayName": "Algorithm",
+          "required": true,
+          "defaultValue": "sha256",
+          "options": {
+            "options": [
+              {
+                "label": "SHA-256",
+                "value": "sha256"
+              },
+              {
+                "label": "SHA-512",
+                "value": "sha512"
+              },
+              {
+                "label": "SHA-1",
+                "value": "sha1"
+              },
+              {
+                "label": "MD5",
+                "value": "md5"
+              }
+            ]
+          },
+          "type": "STATIC_DROPDOWN"
+        },
+        "encoding": {
+          "displayName": "Output Encoding",
+          "required": false,
+          "defaultValue": "hex",
+          "options": {
+            "options": [
+              {
+                "label": "Hex",
+                "value": "hex"
+              },
+              {
+                "label": "Base64",
+                "value": "base64"
+              }
+            ]
+          },
+          "type": "STATIC_DROPDOWN"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "base64_encode": {
+      "name": "base64_encode",
+      "displayName": "Base64 Encode",
+      "description": "把 UTF-8 文本编码为 Base64。",
+      "props": {
+        "text": {
+          "displayName": "Text",
+          "required": true,
+          "type": "LONG_TEXT"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    },
+    "base64_decode": {
+      "name": "base64_decode",
+      "displayName": "Base64 Decode",
+      "description": "把 Base64 解码为 UTF-8 文本;非法输入抛错中断。",
+      "props": {
+        "encoded": {
+          "displayName": "Base64 Text",
+          "required": true,
+          "type": "LONG_TEXT"
+        }
+      },
+      "requireAuth": true,
+      "errorHandlingOptions": {
+        "continueOnFailure": {
+          "defaultValue": false
+        },
+        "retryOnFailure": {
+          "defaultValue": false
+        }
+      }
+    }
+  },
+  "triggers": {},
+  "categories": [
+    "CORE"
+  ],
+  "authors": [
+    "workflow-station"
+  ],
+  "i18n": null
+}

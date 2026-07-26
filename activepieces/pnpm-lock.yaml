@@ -5932,6 +5932,21 @@ importers:
         specifier: 4.3.6
         version: 4.3.6
 
+  packages/pieces/community/hash-helper:
+    dependencies:
+      '@activepieces/pieces-common':
+        specifier: workspace:*
+        version: link:../../common
+      '@activepieces/pieces-framework':
+        specifier: workspace:*
+        version: link:../../framework
+      '@activepieces/shared':
+        specifier: workspace:*
+        version: link:../../../shared
+      tslib:
+        specifier: 2.6.2
+        version: 2.6.2
+
   packages/pieces/community/hashi-corp-vault:
     dependencies:
       '@activepieces/pieces-common':
