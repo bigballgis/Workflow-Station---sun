@@ -32,7 +32,17 @@ public interface AutomationFlowService {
      */
     Optional<String> resolveFlowRef(String ref);
 
+    /**
+     * connection 清单比对（导入前预检）：按 externalId 查目标 project 里是否已有
+     * 同名 connection。connection 凭据不随导出包走（设计使然），缺失项须在本环境
+     * 手工重建后 flow 才能运行——导入本身不被阻塞。
+     */
+    List<ConnectionCheckItem> checkConnections(List<String> externalIds);
+
     record FlowExportFile(String filename, byte[] content) {}
+
+    record ConnectionCheckItem(String externalId, boolean exists,
+                               String displayName, String pieceName, String status) {}
 
     record FlowImportResult(String flowId, String flowKey, String displayName,
                             boolean created, boolean published) {}

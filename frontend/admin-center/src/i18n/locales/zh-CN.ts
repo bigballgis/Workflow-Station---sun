@@ -141,6 +141,10 @@ export default {
     importConfirm: '导入',
     importCreated: '已新建流程 {name}({id}),迁移键已登记',
     importUpdated: '已更新流程 {name}({id})的草稿',
+    connectionsTitle: '连接清单',
+    connectionExists: '已存在',
+    connectionMissing: '缺失',
+    connectionsHint: '缺失的连接须在本环境用生产凭据重建(名称须一致),否则该流程运行会失败;不影响导入。',
     loadFailed: '流程列表加载失败',
     exportFailed: '导出失败'
   },

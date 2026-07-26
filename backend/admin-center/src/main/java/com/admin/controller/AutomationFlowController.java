@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -89,6 +90,23 @@ public class AutomationFlowController {
                 "created", result.created(),
                 "published", result.published())));
     }
+
+    /**
+     * connection 清单比对（导入前预检）:前端解析导出包的 connections 清单后调用,
+     * 返回各 externalId 在目标 project 是否已存在。仅提示,不阻塞导入。
+     */
+    @PostMapping("/connections-check")
+    public ResponseEntity<ApiResponse<List<AutomationFlowService.ConnectionCheckItem>>> checkConnections(
+            @RequestBody ConnectionsCheckRequest request) {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        List<String> ids = request != null && request.externalIds() != null
+                ? request.externalIds() : List.of();
+        return ResponseEntity.ok(ApiResponse.success(automationFlowService.checkConnections(ids)));
+    }
+
+    public record ConnectionsCheckRequest(List<String> externalIds) {}
 
     /**
      * 引擎部署期解析:BPMN 里的 {@code ap:flowId} → 本环境实际 flowId（Q7）。

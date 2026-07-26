@@ -162,6 +162,37 @@
           <el-switch v-model="importPublish" />
           <span class="import-hint">{{ t('automationFlow.publishHint') }}</span>
         </el-form-item>
+        <el-form-item
+          v-if="connectionChecks.length > 0"
+          :label="t('automationFlow.connectionsTitle')"
+        >
+          <div class="connection-list">
+            <div
+              v-for="item in connectionChecks"
+              :key="item.externalId"
+              class="connection-item"
+            >
+              <el-tag
+                :type="item.exists ? 'success' : 'danger'"
+                size="small"
+                disable-transitions
+              >
+                {{ item.exists ? t('automationFlow.connectionExists') : t('automationFlow.connectionMissing') }}
+              </el-tag>
+              <code>{{ item.externalId }}</code>
+              <span
+                v-if="item.pieceName"
+                class="connection-piece"
+              >{{ shortPieceName(item.pieceName) }}</span>
+            </div>
+            <div
+              v-if="hasMissingConnections"
+              class="connection-warning"
+            >
+              {{ t('automationFlow.connectionsHint') }}
+            </div>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="importDialogVisible = false">{{ t('common.cancel') }}</el-button>
@@ -185,7 +216,12 @@ import { ElMessage, type UploadFile } from 'element-plus'
 import { Refresh, Search, Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { formatDate } from '@/utils/format'
-import { automationFlowApi, type AutomationFlowSummary } from '@/api/automationFlow'
+import {
+  automationFlowApi,
+  type AutomationFlowSummary,
+  type ConnectionCheckItem,
+  type FlowExportConnection
+} from '@/api/automationFlow'
 
 const { t } = useI18n()
 
@@ -198,6 +234,14 @@ const importDialogVisible = ref(false)
 const importFile = ref<File | null>(null)
 const importPublish = ref(true)
 const importing = ref(false)
+const connectionChecks = ref<ConnectionCheckItem[]>([])
+
+const hasMissingConnections = computed(() =>
+  connectionChecks.value.some(item => !item.exists))
+
+/** \@activepieces/piece-x → piece-x,自研短名原样 */
+const shortPieceName = (name: string) =>
+  name.includes('/') ? name.split('/')[1] : name
 
 const filteredList = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
@@ -238,13 +282,26 @@ const handleExport = async (row: AutomationFlowSummary) => {
   }
 }
 
-const onImportFileChange = (file: UploadFile) => {
+const onImportFileChange = async (file: UploadFile) => {
   importFile.value = file.raw ?? null
+  connectionChecks.value = []
+  if (!file.raw) return
+  // 预检:解析导出包里的 connection 清单,查本环境缺口(失败静默——导入时后端会给出具体错误)
+  try {
+    const pkg = JSON.parse(await file.raw.text()) as { connections?: FlowExportConnection[] }
+    const ids = (pkg.connections ?? []).map(c => c.externalId).filter(Boolean)
+    if (ids.length === 0) return
+    const res = await automationFlowApi.connectionsCheck(ids)
+    connectionChecks.value = res.data ?? []
+  } catch {
+    connectionChecks.value = []
+  }
 }
 
 const resetImportDialog = () => {
   importFile.value = null
   importPublish.value = true
+  connectionChecks.value = []
 }
 
 const handleImport = async () => {
@@ -290,5 +347,30 @@ onMounted(fetchList)
   color: var(--el-text-color-secondary);
   font-size: 12px;
   margin-left: 10px;
+}
+
+.connection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.connection-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 22px;
+}
+
+.connection-piece {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.connection-warning {
+  color: var(--el-color-warning);
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

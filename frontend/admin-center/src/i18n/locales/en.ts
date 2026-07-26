@@ -141,6 +141,10 @@ export default {
     importConfirm: 'Import',
     importCreated: 'Flow {name} ({id}) created; migration key registered',
     importUpdated: 'Draft of flow {name} ({id}) updated',
+    connectionsTitle: 'Connections',
+    connectionExists: 'Exists',
+    connectionMissing: 'Missing',
+    connectionsHint: 'Missing connections must be recreated in this environment with production credentials (same name), or the flow will fail at runtime. Import itself is not blocked.',
     loadFailed: 'Failed to load flow list',
     exportFailed: 'Export failed'
   },

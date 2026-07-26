@@ -22,7 +22,12 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.Array;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -63,6 +68,7 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             SELECT f.id, f.metadata->>'hermesFlowKey' AS "flowKey",
                    fv."displayName", fv.trigger::text AS trigger,
                    fv."schemaVersion", fv.notes::text AS notes,
+                   fv."connectionIds",
                    (fv.id = f."publishedVersionId") IS TRUE AS "fromPublished"
             FROM flow f
             JOIN LATERAL (SELECT * FROM flow_version v WHERE v."flowId" = f.id
@@ -142,6 +148,8 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         export.put("exportedAt", OffsetDateTime.now().toString());
         export.set("trigger", parseJson((String) row.get("trigger")));
         export.set("notes", parseJson((String) row.get("notes")));
+        // connection 清单只作预检信息:凭据不随包走,目标环境导入前据此比对缺口
+        export.set("connections", connectionManifest(sqlArrayToList(row.get("connectionIds"))));
 
         String slug = String.valueOf(row.get("displayName"))
                 .replaceAll("[^\\p{IsAlphabetic}\\p{IsDigit}_-]+", "-")
@@ -196,6 +204,40 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             applyFlowOperation(session, flowId, "LOCK_AND_PUBLISH", publishRequest);
         }
         return new FlowImportResult(flowId, flowKey, displayName, created, publish);
+    }
+
+    @Override
+    public List<ConnectionCheckItem> checkConnections(List<String> externalIds) {
+        if (externalIds == null || externalIds.isEmpty()) {
+            return List.of();
+        }
+        if (externalIds.size() > 200) {
+            throw new IllegalArgumentException("connection 清单过大(>200)");
+        }
+        String projectId = resolveTargetProjectIdLazily();
+        String placeholders = String.join(",", Collections.nCopies(externalIds.size(), "?"));
+        // 占位符数量随入参生成,值全部绑定——无标识符拼接
+        String sql = "SELECT \"externalId\", \"displayName\", \"pieceName\", status "
+                + "FROM app_connection WHERE ? = ANY(\"projectIds\") AND \"externalId\" IN ("
+                + placeholders + ")";
+        Object[] args = new Object[externalIds.size() + 1];
+        args[0] = projectId;
+        for (int i = 0; i < externalIds.size(); i++) {
+            args[i + 1] = externalIds.get(i);
+        }
+        Map<String, Map<String, Object>> found = new HashMap<>();
+        for (Map<String, Object> row : jdbcTemplate.queryForList(sql, args)) {
+            found.put((String) row.get("externalId"), row);
+        }
+        return externalIds.stream().map(id -> {
+            Map<String, Object> row = found.get(id);
+            return row == null
+                    ? new ConnectionCheckItem(id, false, null, null, null)
+                    : new ConnectionCheckItem(id, true,
+                            (String) row.get("displayName"),
+                            (String) row.get("pieceName"),
+                            (String) row.get("status"));
+        }).toList();
     }
 
     @Override
@@ -260,6 +302,77 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     }
 
     // ==================== helpers ====================
+
+    /** 源环境侧的 connection 清单（导出信息用；查不到的 id 仍列出,只带 externalId） */
+    private JsonNode connectionManifest(List<String> connectionIds) {
+        var manifest = objectMapper.createArrayNode();
+        if (connectionIds.isEmpty()) {
+            return manifest;
+        }
+        List<ConnectionCheckItem> items = checkConnectionsAgainstAnyProject(connectionIds);
+        for (ConnectionCheckItem item : items) {
+            ObjectNode node = objectMapper.createObjectNode();
+            node.put("externalId", item.externalId());
+            if (item.pieceName() != null) {
+                node.put("pieceName", item.pieceName());
+            }
+            if (item.displayName() != null) {
+                node.put("displayName", item.displayName());
+            }
+            manifest.add(node);
+        }
+        return manifest;
+    }
+
+    /** 导出侧无"目标 project"概念,按 externalId 全平台查（platform 单例部署） */
+    private List<ConnectionCheckItem> checkConnectionsAgainstAnyProject(List<String> externalIds) {
+        String placeholders = String.join(",", Collections.nCopies(externalIds.size(), "?"));
+        String sql = "SELECT \"externalId\", \"displayName\", \"pieceName\", status "
+                + "FROM app_connection WHERE \"externalId\" IN (" + placeholders + ")";
+        Map<String, Map<String, Object>> found = new HashMap<>();
+        for (Map<String, Object> row : jdbcTemplate.queryForList(sql, externalIds.toArray())) {
+            found.put((String) row.get("externalId"), row);
+        }
+        return externalIds.stream().map(id -> {
+            Map<String, Object> row = found.get(id);
+            return row == null
+                    ? new ConnectionCheckItem(id, false, null, null, null)
+                    : new ConnectionCheckItem(id, true,
+                            (String) row.get("displayName"),
+                            (String) row.get("pieceName"),
+                            (String) row.get("status"));
+        }).toList();
+    }
+
+    private List<String> sqlArrayToList(Object sqlArray) {
+        if (!(sqlArray instanceof Array array)) {
+            return List.of();
+        }
+        try {
+            List<String> result = new ArrayList<>();
+            for (Object item : (Object[]) array.getArray()) {
+                if (item != null) {
+                    result.add(String.valueOf(item));
+                }
+            }
+            return result;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to read connectionIds array", e);
+        }
+    }
+
+    /** 同 {@link #resolveTargetProjectId} 但按需才做共享账号 sign-in（比对预检不必然需要会话） */
+    private String resolveTargetProjectIdLazily() {
+        String externalId = serviceTaskProperties.getManaged().getProjectExternalId();
+        if (externalId != null && !externalId.isBlank()) {
+            List<String> ids = jdbcTemplate.queryForList(
+                    PROJECT_BY_EXTERNAL_ID_SQL, String.class, externalId);
+            if (!ids.isEmpty()) {
+                return ids.get(0);
+            }
+        }
+        return resolveTargetProjectId(serviceTaskApiClient.signInShared());
+    }
 
     /**
      * 导入目标 project：managed（审计到人）配置的共享 project 优先，
