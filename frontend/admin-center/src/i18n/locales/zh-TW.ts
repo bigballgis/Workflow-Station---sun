@@ -105,7 +105,14 @@ export default {
     authors: '作者',
     export: '匯出',
     loadFailed: '組件目錄載入失敗',
-    exportFailed: '匯出失敗'
+    exportFailed: '匯出失敗',
+    import: '匯入組件(.tgz)',
+    importSuccess: '已匯入 {name} v{version},設計器立即可見',
+    deleteConfirm: '確認刪除 {name} v{version}?其中繼資料與執行時套件將被移除。',
+    deleteInUse: '該組件被 {count} 個 flow 引用,強制刪除後這些 flow 執行會失敗。仍要刪除?',
+    forceDelete: '強制刪除',
+    deleted: '組件已刪除',
+    officialDeleteTip: '烘焙件由映像白名單管理,不支援線上刪除'
   },
   dashboard: {
     totalUsers: '使用者總數',

@@ -5,6 +5,19 @@
         <el-button @click="fetchList">
           <el-icon><Refresh /></el-icon>{{ t('common.refresh') }}
         </el-button>
+        <el-upload
+          :show-file-list="false"
+          :auto-upload="false"
+          accept=".tgz,.tar.gz"
+          @change="handleImportFile"
+        >
+          <el-button
+            type="primary"
+            :loading="importing"
+          >
+            <el-icon><Upload /></el-icon>{{ t('automationPiece.import') }}
+          </el-button>
+        </el-upload>
       </template>
     </PageHeader>
 
@@ -56,6 +69,19 @@
                 <span class="detail-label">{{ t('automationPiece.packageName') }}:</span>
                 <code>{{ row.name }}</code>
               </div>
+              <div class="detail-line">
+                <span class="detail-label">{{ t('automationPiece.runtime') }}:</span>
+                <el-tag
+                  :type="row.hasArchive ? 'success' : 'info'"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ row.hasArchive ? t('automationPiece.runtimeArchive') : t('automationPiece.runtimeBaked') }}
+                </el-tag>
+                <span class="detail-hint">
+                  {{ row.hasArchive ? t('automationPiece.runtimeArchiveTip') : t('automationPiece.runtimeBakedTip') }}
+                </span>
+              </div>
               <div v-if="row.authors.length" class="detail-line">
                 <span class="detail-label">{{ t('automationPiece.authors') }}:</span>
                 {{ row.authors.join(', ') }}
@@ -100,25 +126,16 @@
           </template>
         </el-table-column>
         <el-table-column
-          :label="t('automationPiece.runtime')"
-          width="110"
+          :label="t('common.enabled')"
+          width="85"
           align="center"
         >
           <template #default="{ row }">
-            <el-tooltip
-              :content="row.hasArchive
-                ? t('automationPiece.runtimeArchiveTip')
-                : t('automationPiece.runtimeBakedTip')"
-              placement="top"
-            >
-              <el-tag
-                :type="row.hasArchive ? 'success' : 'info'"
-                size="small"
-                effect="plain"
-              >
-                {{ row.hasArchive ? t('automationPiece.runtimeArchive') : t('automationPiece.runtimeBaked') }}
-              </el-tag>
-            </el-tooltip>
+            <el-switch
+              :model-value="!row.disabled"
+              :loading="togglingKey === rowKey(row)"
+              @change="(val: string | number | boolean) => handleToggle(row, val as boolean)"
+            />
           </template>
         </el-table-column>
         <el-table-column
@@ -151,7 +168,7 @@
         </el-table-column>
         <el-table-column
           :label="t('common.operation')"
-          min-width="105"
+          min-width="140"
           align="center"
         >
           <template #default="{ row }">
@@ -164,6 +181,24 @@
             >
               {{ t('automationPiece.export') }}
             </el-button>
+            <el-tooltip
+              :disabled="row.pieceType !== 'OFFICIAL'"
+              :content="t('automationPiece.officialDeleteTip')"
+              placement="top"
+            >
+              <span>
+                <el-button
+                  link
+                  type="danger"
+                  size="small"
+                  :disabled="row.pieceType === 'OFFICIAL'"
+                  :loading="deletingKey === rowKey(row)"
+                  @click="handleDelete(row)"
+                >
+                  {{ t('common.delete') }}
+                </el-button>
+              </span>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
@@ -174,8 +209,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
+import { Refresh, Search, Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { formatDate } from '@/utils/format'
 import {
@@ -190,6 +225,9 @@ const loading = ref(false)
 const keyword = ref('')
 const pieceList = ref<AutomationPieceSummary[]>([])
 const exportingKey = ref('')
+const togglingKey = ref('')
+const deletingKey = ref('')
+const importing = ref(false)
 
 const rowKey = (row: AutomationPieceSummary) => `${row.name}@${row.version}`
 
@@ -232,6 +270,76 @@ const handleExport = async (row: AutomationPieceSummary) => {
   }
 }
 
+const handleImportFile = async (file: UploadFile) => {
+  if (!file.raw) return
+  importing.value = true
+  try {
+    const res = await automationPieceApi.importPiece(file.raw)
+    const info = res.data
+    ElMessage.success(t('automationPiece.importSuccess', {
+      name: info?.displayName ?? '',
+      version: info?.version ?? ''
+    }))
+    await fetchList()
+  } catch {
+    // request.ts 拦截器已 notify 具体错误
+  } finally {
+    importing.value = false
+  }
+}
+
+const handleToggle = async (row: AutomationPieceSummary, enabled: boolean) => {
+  togglingKey.value = rowKey(row)
+  try {
+    await automationPieceApi.togglePiece(row.name, !enabled)
+    // 同名多版本共享一个启停开关(黑名单按包名),本地同步全部同名行
+    pieceList.value.forEach(p => {
+      if (p.name === row.name) p.disabled = !enabled
+    })
+  } catch {
+    // 拦截器已提示
+  } finally {
+    togglingKey.value = ''
+  }
+}
+
+const handleDelete = async (row: AutomationPieceSummary) => {
+  try {
+    await ElMessageBox.confirm(
+      t('automationPiece.deleteConfirm', { name: row.displayName, version: row.version }),
+      t('common.delete'),
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  deletingKey.value = rowKey(row)
+  try {
+    await automationPieceApi.deletePiece(row.name, row.version)
+    ElMessage.success(t('automationPiece.deleted'))
+    await fetchList()
+  } catch (e: unknown) {
+    const status = (e as { status?: number })?.status
+    const refCount = (e as { message?: string })?.message
+    if (status === 409) {
+      try {
+        await ElMessageBox.confirm(
+          t('automationPiece.deleteInUse', { count: refCount ?? '?' }),
+          t('common.delete'),
+          { type: 'error', confirmButtonText: t('automationPiece.forceDelete') }
+        )
+        await automationPieceApi.deletePiece(row.name, row.version, true)
+        ElMessage.success(t('automationPiece.deleted'))
+        await fetchList()
+      } catch {
+        // 用户取消或强删失败(拦截器已提示)
+      }
+    }
+  } finally {
+    deletingKey.value = ''
+  }
+}
+
 onMounted(fetchList)
 </script>
 
@@ -269,5 +377,11 @@ onMounted(fetchList)
 
 .detail-tag {
   margin-right: 6px;
+}
+
+.detail-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-left: 8px;
 }
 </style>

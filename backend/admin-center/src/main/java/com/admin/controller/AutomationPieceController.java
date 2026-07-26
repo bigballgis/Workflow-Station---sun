@@ -9,12 +9,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 自动化组件(piece)管理 — P1 只读目录 + 导出。
@@ -57,6 +62,56 @@ public class AutomationPieceController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + file.filename())
                 .contentType(MediaType.parseMediaType(file.contentType()))
                 .body(file.content());
+    }
+
+    // ==================== P2 写路径(均代理 AP API,SYS_ADMIN 专属) ====================
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<Map<String, String>>> importPiece(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        AutomationPieceService.PieceImportResult result =
+                automationPieceService.importPiece(file.getBytes(), file.getOriginalFilename());
+        log.info("Automation piece imported: {}@{} by {}", result.name(), result.version(),
+                SecurityContextUtils.getCurrentUsername());
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+                "name", result.name(),
+                "version", result.version(),
+                "displayName", result.displayName())));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deletePiece(
+            @RequestParam String name,
+            @RequestParam String version,
+            @RequestParam(defaultValue = "false") boolean force) {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        try {
+            automationPieceService.deletePiece(name, version, force);
+        } catch (AutomationPieceService.PieceInUseException e) {
+            return ResponseEntity.status(409).body(ApiResponse.error("PIECE_IN_USE",
+                    String.valueOf(e.getFlowCount())));
+        }
+        log.info("Automation piece deleted: {}@{} (force={}) by {}", name, version, force,
+                SecurityContextUtils.getCurrentUsername());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("name", name, "version", version)));
+    }
+
+    @PostMapping("/toggle")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> togglePiece(
+            @RequestParam String name,
+            @RequestParam boolean disabled) {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        automationPieceService.setPieceDisabled(name, disabled);
+        log.info("Automation piece {}: {} by {}", disabled ? "disabled" : "enabled", name,
+                SecurityContextUtils.getCurrentUsername());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("name", name, "disabled", disabled)));
     }
 
     private boolean isSystemAdmin() {

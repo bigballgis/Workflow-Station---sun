@@ -31,6 +31,8 @@ public class AutomationPieceSummary {
     private String packageType;
     /** 运行时包是否以 archive 形式存于库中(ARCHIVE 件);烘焙件为 false */
     private boolean hasArchive;
+    /** 是否已停用(在 AP platform.filteredPieceNames 黑名单里,设计器目录不可见) */
+    private boolean disabled;
     private String platformId;
     private int actionCount;
     private int triggerCount;

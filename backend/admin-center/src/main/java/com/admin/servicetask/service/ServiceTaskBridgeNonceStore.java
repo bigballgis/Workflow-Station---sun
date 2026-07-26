@@ -76,7 +76,7 @@ public class ServiceTaskBridgeNonceStore {
         }
         try {
             NoncePayload payload = objectMapper.readValue(json, NoncePayload.class);
-            return Optional.of(new ApSession(payload.token(), payload.projectId()));
+            return Optional.of(new ApSession(payload.token(), payload.projectId(), null));
         } catch (Exception e) {
             log.warn("Corrupt AP bridge nonce payload in redis");
             return Optional.empty();

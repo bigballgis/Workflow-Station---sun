@@ -105,7 +105,14 @@ export default {
     authors: '作者',
     export: '导出',
     loadFailed: '组件目录加载失败',
-    exportFailed: '导出失败'
+    exportFailed: '导出失败',
+    import: '导入组件(.tgz)',
+    importSuccess: '已导入 {name} v{version},设计器立即可见',
+    deleteConfirm: '确认删除 {name} v{version}?其元数据与运行时包将被移除。',
+    deleteInUse: '该组件被 {count} 个 flow 引用,强制删除后这些 flow 运行会失败。仍要删除?',
+    forceDelete: '强制删除',
+    deleted: '组件已删除',
+    officialDeleteTip: '烘焙件由镜像白名单管理,不支持在线删除'
   },
   dashboard: {
     totalUsers: '用户总数',

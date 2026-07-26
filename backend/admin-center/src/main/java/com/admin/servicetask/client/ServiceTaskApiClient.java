@@ -43,7 +43,7 @@ public class ServiceTaskApiClient {
      * 共享账号 sign-in 的结果。AP 的一个完整前端会话需要 token + projectId
      * （AP 的 clearSession 同时清这两个 key），故桥页必须两者都写入 localStorage。
      */
-    public record ApSession(String token, String projectId) {}
+    public record ApSession(String token, String projectId, String platformId) {}
 
     /**
      * 调用 AP {@code POST /api/v1/authentication/sign-in}，用共享账号换取 AP 会话。
@@ -79,9 +79,12 @@ public class ServiceTaskApiClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Object token = response.getBody().get("token");
                 Object projectId = response.getBody().get("projectId");
+                Object platformId = response.getBody().get("platformId");
                 if (token != null && !token.toString().isBlank()) {
                     log.debug("Activepieces shared sign-in successful (projectId={})", projectId);
-                    return new ApSession(token.toString(), projectId != null ? projectId.toString() : null);
+                    return new ApSession(token.toString(),
+                            projectId != null ? projectId.toString() : null,
+                            platformId != null ? platformId.toString() : null);
                 }
             }
             throw new ServiceTaskApiException("Activepieces sign-in failed: no token in response");
@@ -137,10 +140,13 @@ public class ServiceTaskApiClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Object token = response.getBody().get("token");
                 Object projectId = response.getBody().get("projectId");
+                Object platformId = response.getBody().get("platformId");
                 if (token != null && !token.toString().isBlank()) {
                     log.debug("Activepieces managed exchange successful (externalUserId={}, projectId={})",
                             user.getUserId(), projectId);
-                    return new ApSession(token.toString(), projectId != null ? projectId.toString() : null);
+                    return new ApSession(token.toString(),
+                            projectId != null ? projectId.toString() : null,
+                            platformId != null ? platformId.toString() : null);
                 }
             }
             throw new ServiceTaskApiException("Activepieces managed exchange failed: no token in response");

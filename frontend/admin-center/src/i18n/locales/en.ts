@@ -105,7 +105,14 @@ export default {
     authors: 'Authors',
     export: 'Export',
     loadFailed: 'Failed to load piece catalog',
-    exportFailed: 'Export failed'
+    exportFailed: 'Export failed',
+    import: 'Import Piece (.tgz)',
+    importSuccess: 'Imported {name} v{version} — visible in the designer immediately',
+    deleteConfirm: 'Delete {name} v{version}? Its metadata and runtime archive will be removed.',
+    deleteInUse: 'This piece is referenced by {count} flow(s). Force-deleting will break those flows at runtime. Delete anyway?',
+    forceDelete: 'Force Delete',
+    deleted: 'Piece deleted',
+    officialDeleteTip: 'Baked pieces are managed by the image whitelist and cannot be deleted online'
   },
   dashboard: {
     totalUsers: 'Total Users',
