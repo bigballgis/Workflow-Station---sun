@@ -42,6 +42,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/virtual-group': [PERMISSIONS.USER_READ],
   '/role': [PERMISSIONS.ROLE_READ],
   '/function-unit': [PERMISSIONS.SYSTEM_ADMIN],
+  '/automation-pieces': [PERMISSIONS.SYSTEM_ADMIN],
   '/monitor': [PERMISSIONS.SYSTEM_ADMIN],
   '/audit': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
   '/config': [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],

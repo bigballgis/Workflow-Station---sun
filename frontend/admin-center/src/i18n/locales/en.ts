@@ -83,7 +83,29 @@ export default {
     serviceTask: 'Automation Flow',
     biDashboardRegistry: 'Dashboard Registry',
     biDashboardAssignment: 'Dashboard Assignment',
-    biRbacMapping: 'RBAC Mapping'
+    biRbacMapping: 'RBAC Mapping',
+    automationPieces: 'Automation Pieces'
+  },
+  automationPiece: {
+    title: 'Automation Pieces',
+    searchPlaceholder: 'Search package / action / trigger',
+    total: '{count} pieces',
+    displayName: 'Name',
+    packageName: 'Package',
+    version: 'Version',
+    type: 'Type',
+    runtime: 'Runtime',
+    runtimeBaked: 'Baked in image',
+    runtimeArchive: 'Archive in DB',
+    runtimeBakedTip: 'Runtime half pre-installed into the AP image (REGISTRY whitelist piece)',
+    runtimeArchiveTip: 'Runtime package stored in DB as archive, installed on demand',
+    actions: 'Actions',
+    triggers: 'Triggers',
+    updated: 'Updated',
+    authors: 'Authors',
+    export: 'Export',
+    loadFailed: 'Failed to load piece catalog',
+    exportFailed: 'Export failed'
   },
   dashboard: {
     totalUsers: 'Total Users',

@@ -125,6 +125,17 @@
             </el-menu-item>
           </el-sub-menu>
 
+          <!-- Automation Pieces - read-only piece catalog + export, requires system:admin -->
+          <el-menu-item
+            v-if="isSystemAdmin"
+            index="/automation-pieces"
+          >
+            <el-icon><Connection /></el-icon>
+            <template #title>
+              {{ t('menu.automationPieces') }}
+            </template>
+          </el-menu-item>
+
           <!-- ServiceTask - external tool (non-prod), opens the :8085 login bridge
                in a new tab. el-menu is in router mode, so bind :route to the current
                path (no-op navigation) and do the real action in @click. -->

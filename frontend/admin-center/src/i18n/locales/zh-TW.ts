@@ -83,7 +83,29 @@ export default {
     serviceTask: '自動化流程',
     biDashboardRegistry: '儀表板註冊',
     biDashboardAssignment: '儀表板分配',
-    biRbacMapping: 'RBAC 對應'
+    biRbacMapping: 'RBAC 對應',
+    automationPieces: '自動化組件'
+  },
+  automationPiece: {
+    title: '自動化組件',
+    searchPlaceholder: '搜尋套件名 / 動作 / 觸發器',
+    total: '共 {count} 個組件',
+    displayName: '顯示名',
+    packageName: '套件名',
+    version: '版本',
+    type: '類型',
+    runtime: '執行時套件',
+    runtimeBaked: '映像烘焙',
+    runtimeArchive: '庫內套件',
+    runtimeBakedTip: '執行時半已預裝進 AP 映像(REGISTRY 白名單件)',
+    runtimeArchiveTip: '執行時套件以 archive 存於資料庫,按需安裝',
+    actions: '動作',
+    triggers: '觸發器',
+    updated: '更新時間',
+    authors: '作者',
+    export: '匯出',
+    loadFailed: '組件目錄載入失敗',
+    exportFailed: '匯出失敗'
   },
   dashboard: {
     totalUsers: '使用者總數',

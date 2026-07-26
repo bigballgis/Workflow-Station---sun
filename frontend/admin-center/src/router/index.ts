@@ -111,6 +111,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: "automation-pieces",
+        name: "AutomationPieces",
+        component: () => import("@/views/automation-piece/index.vue"),
+        meta: {
+          titleKey: "menu.automationPieces",
+          icon: "Connection",
+          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+        },
+      },
+      {
         path: "audit",
         name: "Audit",
         component: () => import("@/views/audit/index.vue"),

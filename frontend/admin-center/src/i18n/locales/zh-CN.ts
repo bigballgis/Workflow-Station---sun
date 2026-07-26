@@ -83,7 +83,29 @@ export default {
     serviceTask: '自动化流程',
     biDashboardRegistry: '仪表盘注册',
     biDashboardAssignment: '仪表盘分配',
-    biRbacMapping: 'RBAC 映射'
+    biRbacMapping: 'RBAC 映射',
+    automationPieces: '自动化组件'
+  },
+  automationPiece: {
+    title: '自动化组件',
+    searchPlaceholder: '搜索包名 / 动作 / 触发器',
+    total: '共 {count} 个组件',
+    displayName: '显示名',
+    packageName: '包名',
+    version: '版本',
+    type: '类型',
+    runtime: '运行时包',
+    runtimeBaked: '镜像烘焙',
+    runtimeArchive: '库内包',
+    runtimeBakedTip: '运行时半已预装进 AP 镜像(REGISTRY 白名单件)',
+    runtimeArchiveTip: '运行时包以 archive 存于数据库,按需安装',
+    actions: '动作',
+    triggers: '触发器',
+    updated: '更新时间',
+    authors: '作者',
+    export: '导出',
+    loadFailed: '组件目录加载失败',
+    exportFailed: '导出失败'
   },
   dashboard: {
     totalUsers: '用户总数',
