@@ -27,21 +27,20 @@
 ```
 activepieces/packages/pieces/community/biz-calendar/
 ├── package.json
-├── tsconfig.lib.json          # create-piece 生成，通常不用改
-├── .babelrc                   # 同上
-├── src/
-│   ├── index.ts               # createPiece(...) 入口
-│   └── lib/
-│       ├── common/
-│       │   └── business-days.ts     # 纯函数工具，好写单测
-│       ├── actions/
-│       │   ├── add-business-days.ts
-│       │   ├── business-days-between.ts
-│       │   └── is-business-day.ts
-│       └── triggers/
-│           └── sla-due-soon.ts       # 进阶章节
-└── i18n/
-    └── zh.json
+├── tsconfig.json / tsconfig.lib.json / .eslintrc.json   # create-piece 生成，不用改
+└── src/
+    ├── index.ts               # createPiece(...) 入口
+    ├── i18n/
+    │   └── zh.json            # 注意在 src/ 下——顶层 i18n/ 不会被打包
+    └── lib/
+        ├── common/
+        │   └── business-days.ts     # 纯函数工具，好写单测
+        ├── actions/
+        │   ├── add-business-days.ts
+        │   ├── business-days-between.ts
+        │   └── is-business-day.ts
+        └── triggers/
+            └── sla-due-soon.ts       # 进阶章节
 ```
 
 用脚手架生成骨架（X-4：用 npx，不碰 bun）：
@@ -49,28 +48,41 @@ activepieces/packages/pieces/community/biz-calendar/
 ```bash
 cd activepieces
 npm run create-piece
-# 包名填 @activepieces/piece-biz-calendar，显示名 Business Calendar，类型选 community
+# piece 名填 biz-calendar，包名回车取默认 @activepieces/piece-biz-calendar，类型选 community
+# （displayName 是后面在 src/index.ts 里写的，脚手架不问）
+
+# 【不能省】脚手架不装依赖，回 monorepo 根链接 workspace 包，否则编译报 TS2307：
+pnpm install
 ```
 
 ---
 
 ## 2. `package.json`
 
-`create-piece` 会生成，核对成这样（依赖都是 `workspace:*`，不引外部包 → 气隙友好）：
+`create-piece` 会生成。**只把 `version` 从 `0.0.1` 改成 `1.0.0`，其余字段一律保留**——
+`build-piece` 走 turbo 调这里的 `build` script，删了直接报 `no dist output`；真实件全是
+CommonJS，**不要**加 `"type": "module"`。改完长这样（实测可构建）：
 
 ```json
 {
   "name": "@activepieces/piece-biz-calendar",
   "version": "1.0.0",
-  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "dependencies": {
     "@activepieces/pieces-common": "workspace:*",
     "@activepieces/pieces-framework": "workspace:*",
-    "@activepieces/shared": "workspace:*"
+    "@activepieces/shared": "workspace:*",
+    "tslib": "2.6.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.lib.json && cp package.json dist/",
+    "lint": "eslint 'src/**/*.ts'"
   }
 }
 ```
 
+> 依赖都是 `workspace:*`、不引外部包 → 气隙友好（build-piece 打包时会把它们 pin 成具体版本）。
 > **`version` 会一路流到白名单**（pieces.json / 元数据 / 预装目录三处必须逐字一致，见 how-to §0）。
 > 改逻辑就升这个版本号，别原地覆盖。
 
@@ -281,9 +293,10 @@ export const bizCalendar = createPiece({
 
 ---
 
-## 6. i18n（可选）`i18n/zh.json`
+## 6. i18n（可选）`src/i18n/zh.json`
 
-key 对应各 `displayName`/`description`，不做也能跑（回退英文）：
+key 对应各 `displayName`/`description`，不做也能跑（回退英文）。
+**必须放 `src/i18n/`**——打包只拷贝 `src/i18n/`，放顶层 `i18n/` 会被静默忽略（实测 tarball 里没有）：
 
 ```json
 {
@@ -301,21 +314,33 @@ key 对应各 `displayName`/`description`，不做也能跑（回退英文）：
 
 ## 7. 本地构建 & 试运行（开发内环）
 
+dev 与生产是同一套白名单机制（目录 DB-only，**没有**「从源码加载」捷径，见 how-to §2）。
+内环 = 构建 → 出两半 → seed dev 库 → 重启 AP（以下命令 2026-07 全部实测通过）：
+
 ```bash
 cd activepieces
-npm run build-piece -- biz-calendar          # → dist/packages/pieces/biz-calendar/
+npm run build-piece -- biz-calendar
+# → packages/pieces/community/biz-calendar/dist/（CLI 已自动 npm pack 出 tgz）
 
-# 让 dev AP 从源码加载（dev 非白名单锁定）
-cd deploy/environments/dev
-docker compose build activepieces && docker compose up -d activepieces
-docker restart platform-activepieces-dev     # 刷进程内 piece 缓存（见 how-to §7 缓存坑）
+cd ../deploy/pieces
+node serialize-piece-metadata.js biz-calendar       # → metadata/piece-biz-calendar.json
+# pieces.json 追加 { "name": "@activepieces/piece-biz-calendar", "version": "1.0.0" }
+node generate-metadata-seed.js
+docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_dev \
+  < metadata/pieces-seed.sql
+docker restart platform-activepieces-dev            # 不重启则「列表有、单查 404」
 ```
 
-到 DW：打开任一 Function Unit → **Automation** 标签 → 新建/编辑 flow → 左侧搜 “Business Calendar”
-→ 拖入 `Add Business Days` → 填 Start Date / Business Days → **试运行**看输出 `{ dueDate }`。
+到 DW：打开任一 Function Unit →（Process Design 里需有一个类型为 Automation 的 Service Task）
+→ **Automation** 标签 → 创建/编辑 flow → 左侧搜 “Business Calendar”
+→ 拖入 `Add Business Days` → 填 Start Date / Business Days。
 
 props → builder 表单的映射一目了然：`DateTime`→日期选择器、`Number`→数字框、`Array`→可增删的列表、
 `StaticDropdown`→下拉。**改代码后 Cmd+Shift+R 硬刷新**，否则吃旧 builder JS 缓存。
+
+**试运行**（真实执行 `run()`）还需运行时半进 worker 预装目录——正式路径烘镜像（how-to §6），
+dev 快路径按 how-to §2 把 tarball 手工预装进容器；装好后触发 flow 即可看到输出
+`{ "dueDate": "2026-07-27" }`（2026-07-24 周五 +1 工作日 = 下周一，实测）。
 
 ---
 
@@ -387,22 +412,20 @@ export const slaDueSoonTrigger = createTrigger({
 这个例子对应的具体命令：
 
 ```bash
-# §3.1 运行时半：build → pack → 留档（并 publish 到内网 Nexus 供构建机解析）
+# §3.1 运行时半：build（CLI 自动 pack）→ 留档（并 publish 到内网 Nexus 供构建机解析）
 cd activepieces && npm run build-piece -- biz-calendar
-cd dist/packages/pieces/biz-calendar && npm pack
-cp *.tgz <repo>/deploy/pieces/tarballs/
+cp packages/pieces/community/biz-calendar/dist/activepieces-piece-biz-calendar-1.0.0.tgz \
+   ../deploy/pieces/tarballs/
 
-# §3.2 元数据半：从本地 AP 抓序列化元数据
-docker exec platform-activepieces-dev node -e "
-  require('http').get('http://127.0.0.1:80/api/v1/pieces/@activepieces/piece-biz-calendar?version=1.0.0',
-    r=>{let d='';r.on('data',c=>d+=c);r.on('end',()=>process.stdout.write(d));})
-" > <repo>/deploy/pieces/metadata/biz-calendar.json
+# §3.2 元数据半：本地序列化（不能问本地 AP 要——新件不在 DB，单查 404）
+cd ../deploy/pieces
+node serialize-piece-metadata.js biz-calendar   # → metadata/piece-biz-calendar.json
 
 # §4 白名单：deploy/pieces/pieces.json 追加
 #   { "name": "@activepieces/piece-biz-calendar", "version": "1.0.0" }
 
 # §5 生成 seed
-cd <repo>/deploy/pieces && node generate-metadata-seed.js
+node generate-metadata-seed.js
 
 # §6 烘镜像 → §7 投放（起 AP 建表 → psql < pieces-seed.sql → 重启 AP）→ §8 在 DW 验证
 ```
@@ -436,8 +459,11 @@ test('工作日间隔', () => {
 
 - ✅ **纯本地**：三个 action 无外网、无子进程、无系统路径 → 落在 `SANDBOX_CODE_ONLY` 内。
 - ✅ **无 bun**：全程 npx/pnpm（X-4）。
-- ✅ **无外部依赖**：`package.json` 只有 `workspace:*` → 气隙镜像预装零障碍。
+- ✅ **无外部依赖**：deps 只有 `workspace:*`（+tslib）→ 气隙镜像预装零障碍。
+- ⚠️ **create-piece 后先 `pnpm install`**：否则编译报 TS2307（脚手架不装依赖）。
+- ⚠️ **package.json 保留脚手架字段**：删 `build` script 会让 build-piece 报 `no dist output`；不加 `"type":"module"`。
+- ⚠️ **i18n 放 `src/i18n/`**：顶层 `i18n/` 不会被打包。
+- ⚠️ **元数据文件名 `piece-biz-calendar.json`**：存成 `biz-calendar.json` 生成器 ENOENT（脚本自动命名）。
 - ⚠️ **触发器一旦外呼**：目标必须内网 + 网关放行（X-3），否则生产失败。
 - ⚠️ **两半版本一致**：`package.json` / `pieces.json` / 元数据 JSON 三处 `1.0.0` 逐字对齐。
 - ⚠️ **跑完 seed 必须重启 AP**：否则列表有、单查 404（进程内 `cachedRegistry`，见 how-to §7）。
-```

@@ -47,16 +47,24 @@
 ```bash
 cd activepieces
 npm run create-piece
-# 交互式提问：piece 显示名、包名 @activepieces/piece-<name>、作者等
-# 生成： packages/pieces/community/<name>/
-#   ├── src/index.ts          # createPiece(...) 汇总入口
-#   ├── src/lib/actions/      # 每个 action 一个文件
-#   ├── src/lib/triggers/     # 每个 trigger 一个文件
-#   ├── i18n/                 # 多语言（可选）
-#   ├── package.json          # deps 已填 @activepieces/pieces-framework 等 workspace:*
-#   ├── tsconfig.lib.json
-#   └── .babelrc
+# 交互式提问：piece 名（kebab）、包名 @activepieces/piece-<name>、类型选 community
+# 实际生成（2026-07 实测）： packages/pieces/community/<name>/
+#   ├── src/index.ts          # createPiece(...) 骨架（actions/triggers 为空）
+#   ├── src/lib/              # 空目录；action/trigger 文件自己建（每个一个文件）
+#   ├── src/i18n/             # 多语言（可选）。注意在 src/ 下——顶层 i18n/ 不会被打包
+#   ├── package.json          # version 0.0.1、CommonJS、workspace:* deps、含 build script
+#   └── tsconfig.json / tsconfig.lib.json / .eslintrc.json    #（没有 .babelrc）
+
+# 【不能省】脚手架不装依赖——回 monorepo 根链接 workspace 包，否则编译报 TS2307：
+pnpm install
 ```
+
+> **package.json 只改 `version`，别删字段**。`build-piece` 走 turbo 调 package.json 的
+> `build` script，删掉它构建直接报 `no dist output`；`main`/`types`/`tslib` 同样要保留，
+> 也不要加 `"type": "module"`（所有真实件都是 CommonJS）。
+> 另按 `packages/pieces/CLAUDE.md` 约定，在 `tsconfig.base.json` 加 path 映射：
+> `"@activepieces/piece-<name>": ["packages/pieces/community/<name>/src/index.ts"]`
+> （`build-piece` 不加也能过，但 builder/web 侧解析需要它，照约定加上）。
 
 > 命名：包名统一 `@activepieces/piece-<kebab-name>`，与现有件对齐（builder 目录、预装目录都按它推导）。
 > **不要**在包名里放公司敏感字样——它会出现在离线 tarball 与镜像层里。
@@ -155,32 +163,63 @@ action 里通过 `ctx.auth` 拿到；builder 会引导用户在「连接」里�
 
 ### 1.6 i18n（可选）
 
-`i18n/` 下按语言放 JSON，key 对应 `displayName`/`description`。不做也能跑（回退英文）。
+`src/i18n/` 下按语言放 JSON（如 `zh.json`；英文基准是 `translation.json`），key 对应
+`displayName`/`description`。**必须放 `src/` 下**——打包只拷贝 `src/i18n/`，放顶层 `i18n/`
+会被静默忽略（tarball 里不会有）。不做也能跑（回退英文）。
 
 ---
 
 ## 2. 本地跑通（开发内环，最快反馈）
 
-目的：不碰离线投放那套，先在 dev 把 piece 调对。dev 环境有外网、AP 从源码加载 piece。
+**dev 和生产走的是同一套白名单机制**：dev compose 同样 `AP_PIECES_SYNC_MODE=NONE`，
+目录只来自 `piece_metadata` 表；而且 vendored 镜像构建时会**删除**绝大多数 community
+piece 源码（`activepieces/Dockerfile` 只保留 4 个 api 直接 import 的上游件）。
+所以**不存在**「dev 从源码自动加载」这条捷径——`docker compose build` 完 DW 里照样看不到。
+dev 内环 = 把 §3–§5、§7 那套走一遍，只是全部命中本地：
 
 ```bash
-# 1. 编译你的 piece（X-4：npx，不碰 bun）
+# 1. 编译（X-4：npx，不碰 bun）。产物在 piece 目录内的 dist/，CLI 已自动 npm pack
 cd activepieces
-npm run build-piece -- <name>          # 产物在 activepieces/dist/packages/pieces/<name>/
+npm run build-piece -- <name>     # → packages/pieces/community/<name>/dist/
 
-# 2. 让 dev AP 加载它（dev 非白名单锁定，可从源码/本地包解析）
-cd deploy/environments/dev
-docker compose build activepieces && docker compose up -d activepieces
-docker restart platform-activepieces-dev        # 刷新进程内 piece 缓存（见 §7 缓存坑）
+# 2. 本地序列化元数据半（脚本详见 §3.2；文件名自动落成 metadata/piece-<name>.json）
+cd ../deploy/pieces
+node serialize-piece-metadata.js <name>
 
-# 3. 在 DW 里验证：dev 打开某 Function Unit → Automation 标签 → 新建/编辑 flow
-#    左侧组件面板应能搜到你的 piece，拖进去、配 props、试运行
+# 3. 登记白名单 + 生成 seed（同 §4/§5）
+#    编辑 pieces.json 追加 { "name": "@activepieces/piece-<name>", "version": "<ver>" }
+node generate-metadata-seed.js
+
+# 4. 灌 dev 库 + 重启 AP（同 §7；不重启则「列表有、单查 404」）
+docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_dev \
+  < metadata/pieces-seed.sql
+docker restart platform-activepieces-dev
+
+# 5. 在 DW 里验证：打开某 Function Unit → Automation 标签 → 新建/编辑 flow
+#    左侧组件面板应能搜到你的 piece，拖进去、配 props
 ```
 
-> 迭代技巧：改代码 → `build-piece` → `docker restart platform-activepieces-dev` → DW 里 **Cmd+Shift+R 硬刷新**。
-> builder bundle 缓存很顽固，不硬刷会吃旧 JS。
+到这一步 piece 在**设计器里**已可用。要在 dev **试运行**（运行时半），worker 还需要拿到包。
+正式路径是 §6 烘镜像；开发期的快路径是把 tarball 手工预装进运行中的容器
+（布局与 §6 prewarm 完全一致，容器重建后失效，仅 dev 调试用）：
 
-本地跑通后，再进入 §3 起的「离线投放」正式流程——这才是能进 UAT/生产的路径。
+```bash
+cd <repo>
+docker cp deploy/pieces/tarballs/activepieces-piece-<name>-<ver>.tgz \
+  platform-activepieces-dev:/tmp/piece.tgz
+docker exec platform-activepieces-dev sh -c '
+  P=/usr/src/app/cache/v11/common/pieces/@activepieces/piece-<name>-<ver>
+  mkdir -p "$P" && cp /tmp/piece.tgz "$P/archive.tgz"
+  printf "{\"name\":\"@activepieces/piece-<name>-<ver>\",\"version\":\"<ver>\",\"dependencies\":{\"@activepieces/piece-<name>\":\"file:./archive.tgz\"}}" > "$P/package.json"
+  cd "$P" && pnpm install --config.node-linker=isolated --ignore-workspace && echo true > ready'
+# 之后在 DW 的 flow 里试运行该 piece 的 action 即可真实执行
+```
+
+> 迭代技巧：改代码 → `build-piece` → 重跑上面 2–4 步 → DW 里 **Cmd+Shift+R 硬刷新**。
+> builder bundle 缓存很顽固，不硬刷会吃旧 JS。改了 `run()` 逻辑还要重做手工预装
+> （先删容器里的 piece 目录再装，或直接升 version 走新目录）。
+
+dev 跑通后，§3 产出的两半物料已经就位，直接进 §6 烘镜像 → §7 投放 UAT/生产。
 
 ---
 
@@ -194,11 +233,11 @@ docker restart platform-activepieces-dev        # 刷新进程内 piece 缓存�
 
 ```bash
 cd activepieces
-npm run build-piece -- <name>                 # → dist/packages/pieces/<name>/
-cd dist/packages/pieces/<name>
-npm pack                                       # → activepieces-piece-<name>-<ver>.tgz
-# 放进白名单物料区留档：
-cp *.tgz <repo>/deploy/pieces/tarballs/
+npm run build-piece -- <name>
+# 产物在 piece 目录内（不是仓库根的 dist/）：packages/pieces/community/<name>/dist/
+# CLI 已在 dist/ 里自动跑过 npm pack（workspace:* 依赖也已 pin 成具体版本），直接留档：
+cp packages/pieces/community/<name>/dist/activepieces-piece-<name>-<ver>.tgz \
+   ../deploy/pieces/tarballs/
 ```
 
 `tarballs/` 是**审计留档 + 内网发布源**（README 原话）。真正让镜像装上你的包，二选一：
@@ -213,20 +252,24 @@ cp *.tgz <repo>/deploy/pieces/tarballs/
 
 ### 3.2 元数据半（metadata JSON）
 
-元数据就是 AP 对你的 piece 序列化后的 actions/triggers 声明。云端件靠 curl 云 API，自研件**指向本地 AP 抓同一个接口**：
+元数据就是 AP 对你的 piece 序列化后的 actions/triggers 声明。云端件靠 curl 云 API。
+自研新件**不能**问本地 AP 要——目录 DB-only，piece 还没 seed 进库，单查必 404（鸡生蛋）。
+正确做法是**本地序列化**（与引擎加载方式等价：加载 `dist/src/index.js`、找到 Piece 导出、
+调 `.metadata()`），仓库里已有现成脚本：
 
 ```bash
-# §2 里 dev AP 已加载你的 piece。直接问它要序列化元数据（等价于 fetch-pieces.sh 的 curl，只是换成本地）：
-docker exec platform-activepieces-dev node -e "
-  require('http').get('http://127.0.0.1:80/api/v1/pieces/@activepieces/piece-<name>?version=<ver>',
-    r => { let d=''; r.on('data',c=>d+=c); r.on('end',()=>process.stdout.write(d)); })
-" > <repo>/deploy/pieces/metadata/<name>.json
+cd <repo>/deploy/pieces
+node serialize-piece-metadata.js <name>     # 前置：§3.1 的 build-piece 已跑过
+# → 写出 metadata/piece-<name>.json，并打印可直接抄进 pieces.json 的条目
 ```
+
+> **文件名必须是 `piece-<name>.json`**（生成器按包名 `split('/')[1]` 找文件），
+> 手工另存为 `<name>.json` 会 ENOENT。脚本已自动按此命名。
 
 产出的 JSON 顶层字段（generate-metadata-seed.js 会读这些）：
 `name, version, displayName, logoUrl, description, minimumSupportedRelease, maximumSupportedRelease,
-actions, triggers, auth, categories, i18n`。**`name`/`version` 必须与 pieces.json 里逐字一致**，
-否则 §5 的生成器会报错拒绝。
+actions, triggers, auth, categories, authors, i18n`。**`name`/`version` 必须与 pieces.json 里逐字一致**，
+否则 §5 的生成器会报错拒绝（脚本直接从 dist/package.json 取，天然一致）。
 
 ---
 
@@ -239,7 +282,7 @@ actions, triggers, auth, categories, i18n`。**`name`/`version` 必须与 pieces
 ```
 
 确认此时 `deploy/pieces/` 下已就位（§3 产出的）：
-- `metadata/<name>.json`（元数据半）
+- `metadata/piece-<name>.json`（元数据半，注意 `piece-` 前缀）
 - `tarballs/activepieces-piece-<name>-<ver>.tgz`（运行时半留档）
 
 ---
@@ -248,17 +291,17 @@ actions, triggers, auth, categories, i18n`。**`name`/`version` 必须与 pieces
 
 ```bash
 cd deploy/pieces
-node generate-metadata-seed.js        # 读 pieces.json + metadata/<name>.json → metadata/pieces-seed.sql
+node generate-metadata-seed.js        # 读 pieces.json + metadata/piece-<name>.json → metadata/pieces-seed.sql
 ```
 
 生成器是**幂等**的（按 `name+version` 先 DELETE 后 INSERT，单事务）；`pieceType=OFFICIAL`、id 由
-`sha256(name@version)` 定死，重跑不churn。若它报 `metadata/<name>.json is X@Y, expected ...`——
+`sha256(name@version)` 定死，重跑不churn。若它报 `metadata/piece-<name>.json is X@Y, expected ...`——
 就是两半版本没对齐，回 §3.2/§4 修。
 
 把改动入库（tarball 也一起，都很小）：
 
 ```bash
-git add deploy/pieces/pieces.json deploy/pieces/metadata/<name>.json \
+git add deploy/pieces/pieces.json deploy/pieces/metadata/piece-<name>.json \
         deploy/pieces/tarballs/*.tgz deploy/pieces/metadata/pieces-seed.sql
 ```
 
@@ -339,10 +382,15 @@ curl -s http://localhost:3000/api/ap/v1/pieces/@activepieces/piece-<name> | head
 | 两半版本不一致 | 运行时 `PieceNotFound` | pieces.json / metadata JSON / 预装目录三处 `version` 逐字对齐 |
 | 跑完 seed 没重启 AP | 列表有、单查 404 | §7 第 4 步重启 AP |
 | 空库直接跑 seed | `relation "piece_metadata" does not exist` | 先起一次 AP 建表，再 seed |
+| create-piece 后没跑 `pnpm install` | 编译报 TS2307 找不到 `@activepieces/pieces-framework` | monorepo 根 `pnpm install`（§1.1） |
+| 删/精简了 package.json 的 `build` script 等字段 | `build-piece` 报 `no dist output` | 保留脚手架生成的全部字段，只改 `version`（§1.1） |
+| 期望 dev「从源码加载」 | `compose build` 后 DW 仍看不到 piece | dev 同样白名单锁定（DB-only），走 §2 的 seed 内环 |
+| metadata 文件存成 `<name>.json` | 生成器 ENOENT | 必须 `piece-<name>.json`；用 serialize-piece-metadata.js 自动命名 |
+| i18n 放在 piece 顶层 `i18n/` | 打包后 tarball 里没有 i18n | 放 `src/i18n/`（§1.6） |
 | 引入依赖 bun 的脚本/piece | 违反 X-4、构建或运行失败 | 只用 pnpm/npm；de-bun 见 vendored `activepieces/Dockerfile` |
 | action 里外呼/提权 | 气隙生产失败、沙箱拦截 | `SANDBOX_CODE_ONLY` 下不提权、不外网；外呼件须走内网+网关放行 |
 | `logoUrl` 指向 cdn | 离线图标裂 | 纯外观；要离线图标就内联 data-URI |
-| 自研件想复用 fetch-pieces.sh | curl 云 API / npm pack 公网都 404 | §3：本地 build+pack 出 tarball、本地 AP 抓 metadata |
+| 自研件想复用 fetch-pieces.sh | curl 云 API / npm pack 公网都 404；问本地 AP 也 404（鸡生蛋） | §3：build-piece 出 tarball、serialize-piece-metadata.js 出 metadata |
 | 生产联网拉包 | 违反 X-3 | 运行时永远命中镜像预装；联网只在构建机 |
 
 ---
@@ -351,14 +399,15 @@ curl -s http://localhost:3000/api/ap/v1/pieces/@activepieces/piece-<name> | head
 
 ```
 开发        cd activepieces && npm run create-piece            # 骨架 → community/<name>/
-            编辑 src/index.ts + src/lib/actions|triggers/*.ts   # createPiece / createAction
-构建        npm run build-piece -- <name>                       # → dist/.../<name>/
-本地跑通    compose build+up+restart activepieces → DW Automation 调试
-出物料      cd dist/.../<name> && npm pack → cp *.tgz deploy/pieces/tarballs/     # 运行时半
-            docker exec ap ... /api/v1/pieces/<name> > deploy/pieces/metadata/<name>.json  # 元数据半
+            pnpm install                                        # 【不能省】链接 workspace 依赖
+            编辑 src/index.ts + src/lib/*.ts                    # createPiece / createAction
+构建        npm run build-piece -- <name>          # → packages/pieces/community/<name>/dist/（已自动 pack）
+出物料      cp packages/.../<name>/dist/*.tgz ../deploy/pieces/tarballs/          # 运行时半
+            cd ../deploy/pieces && node serialize-piece-metadata.js <name>        # 元数据半
 登记        编辑 deploy/pieces/pieces.json 追加 {name, version}
-生成 seed   cd deploy/pieces && node generate-metadata-seed.js  # → pieces-seed.sql
-烘镜像      docker build -t activepieces:0.84.0-pieces .         # 构建机联网/连 Nexus
+生成 seed   node generate-metadata-seed.js                      # → metadata/pieces-seed.sql
+本地跑通    psql < pieces-seed.sql → docker restart AP → DW 搜到（试运行需 §2 手工预装）
+烘镜像      cd deploy/pieces && docker build -t activepieces:0.84.0-pieces .   # 构建机联网/连 Nexus
 投放        上镜像 → 起 AP 建表 → psql < pieces-seed.sql → 重启 AP
 验证        /api/v1/pieces 数 +1 → DW Automation 面板搜到 → 硬刷新
 ```
