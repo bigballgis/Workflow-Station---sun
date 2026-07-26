@@ -241,4 +241,16 @@ describe('buildRules', () => {
     expect(rules.name[0].required).toBe(true)
     expect(rules.status[0].required).toBe(true)
   })
+
+  it('prefers Form Design column.rules (len) over required-only synthesis', () => {
+    const col: DialogColumn = {
+      field: 'card_number',
+      label: 'Card Number',
+      type: 'text',
+      required: false,
+      rules: [{ len: 1, trigger: 'blur' }],
+    }
+    const rules = buildRules([col])
+    expect(rules.card_number).toEqual([{ len: 1, trigger: 'blur' }])
+  })
 })

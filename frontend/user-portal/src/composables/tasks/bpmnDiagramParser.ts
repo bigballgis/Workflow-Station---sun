@@ -106,7 +106,7 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       const childElements = sp.getElementsByTagName('*')
       for (let i = 0; i < childElements.length; i++) {
         const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
-        if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
+        if (childLocal !== 'userTask' && childLocal !== 'serviceTask' && childLocal !== 'sendTask') continue
         const taskName = childElements[i].getAttribute('name') || ''
         const taskId = childElements[i].getAttribute('id') || ''
         if ((showCurrentStep && normLabel(taskName) === normLabel(currentTaskName)) || inputs.historyRecords.some((h: any) => h.nodeName === taskName || h.nodeId === taskId)) {
@@ -359,6 +359,27 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
         if (hm && hm.status === 'completed' && !sameOpenMi) {
           if (shouldSuppressSiblingAggregationComplete(task, id)) status = 'pending'
           else { status = 'completed'; completed.push(id) }
+        }
+      }
+      nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+    })
+
+    // Service / send tasks (designer keeps sendTask; deploy converts email sendTask → serviceTask)
+    doc.querySelectorAll('serviceTask, sendTask').forEach((task: Element, index: number) => {
+      const id = task.getAttribute('id') || `service_${index}`
+      const name = task.getAttribute('name') || inputs.t('task.taskFallbackName', { index: index + 1 })
+      const pos = positionMap.get(id)
+      let status: ProcessNode['status'] = 'pending'
+      if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
+        status = 'completed'
+        completed.push(id)
+      } else {
+        const hm = inputs.historyRecords.find(
+          (h: any) => normLabel(h.nodeName) === normLabel(name) || ck(h.nodeId) === ck(id),
+        )
+        if (hm && (hm.status === 'completed' || hm.status === 'rejected')) {
+          status = hm.status
+          completed.push(id)
         }
       }
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })

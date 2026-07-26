@@ -374,7 +374,8 @@ export const getHistoryStatus = (operationType: string): 'completed' | 'current'
     'DELEGATE': 'completed',
     'TRANSFER': 'completed',
     'CLAIM': 'completed',
-    'PENDING': 'current'
+    'PENDING': 'current',
+    'SEND': 'completed',
   }
   return map[operationType] || 'completed'
 }
@@ -390,6 +391,7 @@ export const getHistoryAction = (operationType: string): HistoryRecord['action']
     'RETURN': 'return',
     'DRAFT': 'draft',
     'DRAFT_TASK': 'draft',
+    'SEND': 'send',
   }
   return map[operationType]
 }

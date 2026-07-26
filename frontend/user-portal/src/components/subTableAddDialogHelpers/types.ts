@@ -37,6 +37,8 @@ export interface DialogColumn {
   type?: ColumnType
   required?: boolean
   readonly?: boolean
+  /** Element Plus rules from Form Design `rule.validate`; preferred by buildRules over required-only. */
+  rules?: Array<Record<string, unknown>>
   placeholder?: string
   minWidth?: number
   options?: Array<{ label: string; value: string | number }>

@@ -1,4 +1,5 @@
 import type { FormRules } from 'element-plus'
+import { isTableAuditField } from '@/utils/tableAuditFields'
 
 export type ColumnType =
   | 'text'
@@ -38,6 +39,8 @@ export interface DialogColumn {
   type?: ColumnType
   required?: boolean
   readonly?: boolean
+  /** Element Plus rules from Form Design validate[]; preferred by buildRules over required-only. */
+  rules?: Array<Record<string, unknown>>
   placeholder?: string
   minWidth?: number
   options?: Array<{ label: string; value: string | number }>
@@ -141,6 +144,11 @@ export function mergeFormRowWithSeed(
 export function buildRules(columns: DialogColumn[]): FormRules {
   const rules: FormRules = {}
   for (const col of columns) {
+    if (col.readonly || isTableAuditField(col.field)) continue
+    if (Array.isArray(col.rules) && col.rules.length > 0) {
+      rules[col.field] = col.rules as FormRules[string]
+      continue
+    }
     if (col.required) {
       const trigger =
         col.type === 'select' || col.type === 'date' || col.type === 'datetime' || col.type === 'checkbox' || col.type === 'timerange' || col.type === 'treeselect'

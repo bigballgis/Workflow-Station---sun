@@ -6,7 +6,7 @@ export interface HistoryRecord {
   assigneeId?: string
   assigneeName?: string
   status: 'completed' | 'current' | 'pending' | 'rejected' | 'cancelled'
-  action?: 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft'
+  action?: 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft' | 'send'
   comment?: string
   createdTime: string
   completedTime?: string

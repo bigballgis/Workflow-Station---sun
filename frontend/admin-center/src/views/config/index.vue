@@ -27,11 +27,25 @@
             />
             <span class="form-tip">MB</span>
           </el-form-item>
-          <el-form-item :label="t('config.mailServer')">
+          <el-form-item :label="t('config.smtpHost')" required>
             <el-input
-              v-model="systemConfig.smtpServer"
+              v-model="systemConfig.smtpHost"
               style="width: 300px"
+              placeholder="smtp.example.com"
             />
+          </el-form-item>
+          <el-form-item :label="t('config.smtpPort')" required>
+            <el-input-number
+              v-model="systemConfig.smtpPort"
+              :min="1"
+              :max="65535"
+            />
+          </el-form-item>
+          <el-form-item :label="t('config.smtpUseTls')" required>
+            <el-radio-group v-model="systemConfig.smtpUseTls">
+              <el-radio :value="true">{{ t('common.yes') }}</el-radio>
+              <el-radio :value="false">{{ t('common.no') }}</el-radio>
+            </el-radio-group>
           </el-form-item>
           <el-form-item>
             <el-button

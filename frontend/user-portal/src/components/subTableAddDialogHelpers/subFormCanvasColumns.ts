@@ -1,5 +1,8 @@
 import { isFormCreateRuleReadonly } from '../formRendererHelpers'
-import { isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
+import {
+  isFormCreateRuleRequired,
+  mapFormCreateValidateToElementPlusRules,
+} from '@/utils/formCreateValidateRules'
 import {
   buildLookupColumnProps,
   enrichLookupColumnPropsFromSubFormRule,
@@ -178,6 +181,7 @@ export function mapSubFormRuleToDialogColumns(
 
     const required = isFormCreateRuleRequired(r)
     const readonly = isFormCreateRuleReadonly(r)
+    const elRules = mapFormCreateValidateToElementPlusRules(r, type)
 
     return {
       field,
@@ -185,6 +189,7 @@ export function mapSubFormRuleToDialogColumns(
       type: type as DialogColumn['type'],
       required,
       ...(readonly ? { readonly } : {}),
+      ...(elRules.length > 0 ? { rules: elRules } : {}),
       ...(options ? { options: options as DialogColumn['options'] } : {}),
       ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
     }

@@ -898,6 +898,7 @@ export default {
     submit: 'Submit',
     return: 'Rollback',
     draft: 'Draft',
+    send: 'Send Task',
     completed: 'Completed'
   },
   upload: {

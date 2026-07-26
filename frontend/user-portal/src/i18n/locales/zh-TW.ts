@@ -872,6 +872,7 @@ export default {
     submit: '提交',
     return: '回退',
     draft: '起草',
+    send: '發送任務',
     completed: '已完成'
   },
   upload: {

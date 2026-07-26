@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.client.AdminCenterSystemSmtpClient;
 import com.developer.component.EmailConnectionComponent;
 import com.developer.dto.EmailConnectionRequest;
 import com.developer.dto.EmailConnectionResponse;
@@ -39,6 +40,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final EncryptionService encryptionService;
     private final I18nService i18nService;
+    private final AdminCenterSystemSmtpClient adminCenterSystemSmtpClient;
 
     /** Corporate SMTP relays / internal hosts permitted (same config as webhook SSRF allowlist). */
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")
@@ -80,11 +82,11 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                     i18nService.getMessage("email.connection.username_requires_password"));
         }
 
-        ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, null);
         String emailAddress = request.getName().trim();
         String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : null;
         EmailConnectionDirection direction = request.getDirection() != null
                 ? request.getDirection() : EmailConnectionDirection.OUTBOUND;
+        ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, null, direction);
         ResolvedImapEndpoint imap = resolveImapEndpoint(request, null, direction);
 
         EmailConnection connection = EmailConnection.builder()
@@ -123,11 +125,14 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                     i18nService.getMessage("email.connection.name_conflict", request.getName()));
         }
 
-        ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, connection);
         String emailAddress = request.getName().trim();
         String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : null;
         EmailConnectionDirection direction = request.getDirection() != null
                 ? request.getDirection() : connection.getDirection();
+        if (direction == null) {
+            direction = EmailConnectionDirection.OUTBOUND;
+        }
+        ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, connection, direction);
         ResolvedImapEndpoint imap = resolveImapEndpoint(request, connection, direction);
 
         connection.setName(emailAddress);
@@ -175,14 +180,15 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                     i18nService.getMessage("email.connection.test_recipient_required"));
         }
 
+        ResolvedSmtpEndpoint endpoint = resolveRuntimeSmtpEndpoint(connection);
         log.info("[SMTP-TEST] request functionUnitId={} connectionId={} name={} host={} port={} useTls={} direction={} recipient={}",
-                functionUnitId, connectionId, connection.getName(), connection.getHost(), connection.getPort(),
-                connection.getUseTls(), connection.getDirection(), testRecipient);
+                functionUnitId, connectionId, connection.getName(), endpoint.host(), endpoint.port(),
+                endpoint.useTls(), connection.getDirection(), testRecipient);
 
         Map<String, Object> result = new HashMap<>();
         try {
-            validateSmtpHost(connection.getHost());
-            SmtpMailSender.SmtpConfig config = toSmtpConfig(connection);
+            validateSmtpHost(endpoint.host());
+            SmtpMailSender.SmtpConfig config = toSmtpConfig(connection, endpoint);
             SmtpMailSender.send(config, testRecipient, null,
                     "Workflow Platform - Connection Test",
                     "<p>This is a test email from connection <strong>" + connection.getName() + "</strong>.</p>");
@@ -192,7 +198,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             String causeChain = MailDiagnostics.causeChain(e);
             String rootCause = MailDiagnostics.rootCause(e);
             log.error("[SMTP-TEST] FAILED connectionId={} host={} port={} useTls={} | causeChain={} | rootCause={}",
-                    connectionId, connection.getHost(), connection.getPort(), connection.getUseTls(),
+                    connectionId, endpoint.host(), endpoint.port(), endpoint.useTls(),
                     causeChain, rootCause, e);
             result.put("success", false);
             result.put("detail", rootCause);
@@ -219,7 +225,13 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                 .collect(java.util.stream.Collectors.toCollection(HashSet::new));
     }
 
-    private ResolvedSmtpEndpoint resolveSmtpEndpoint(EmailConnectionRequest request, EmailConnection existing) {
+    private ResolvedSmtpEndpoint resolveSmtpEndpoint(
+            EmailConnectionRequest request,
+            EmailConnection existing,
+            EmailConnectionDirection direction) {
+        if (isOutboundCapable(direction)) {
+            return resolveSystemSmtpEndpoint();
+        }
         String host = StringUtils.hasText(request.getHost())
                 ? request.getHost().trim()
                 : (existing != null ? existing.getHost() : null);
@@ -246,6 +258,39 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
         validateSmtpHost(host);
         return new ResolvedSmtpEndpoint(host, port, useTls);
+    }
+
+    private ResolvedSmtpEndpoint resolveRuntimeSmtpEndpoint(EmailConnection connection) {
+        EmailConnectionDirection direction = connection.getDirection() != null
+                ? connection.getDirection() : EmailConnectionDirection.OUTBOUND;
+        if (isOutboundCapable(direction)) {
+            return resolveSystemSmtpEndpoint();
+        }
+        validateSmtpHost(connection.getHost());
+        return new ResolvedSmtpEndpoint(
+                connection.getHost(),
+                connection.getPort(),
+                Boolean.TRUE.equals(connection.getUseTls()));
+    }
+
+    private ResolvedSmtpEndpoint resolveSystemSmtpEndpoint() {
+        try {
+            AdminCenterSystemSmtpClient.SystemSmtpEndpoint endpoint =
+                    adminCenterSystemSmtpClient.fetchSystemSmtpEndpoint();
+            validateSmtpHost(endpoint.host());
+            return new ResolvedSmtpEndpoint(endpoint.host(), endpoint.port(), endpoint.useTls());
+        } catch (IllegalStateException ex) {
+            throw new DeveloperBusinessException(
+                    "VALIDATION_SYSTEM_SMTP_REQUIRED",
+                    i18nService.getMessage("email.connection.system_smtp_required",
+                            ex.getMessage() != null ? ex.getMessage() : ""));
+        }
+    }
+
+    private static boolean isOutboundCapable(EmailConnectionDirection direction) {
+        return direction == null
+                || direction == EmailConnectionDirection.OUTBOUND
+                || direction == EmailConnectionDirection.BOTH;
     }
 
     /**
@@ -306,19 +351,19 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
     private record ResolvedImapEndpoint(String host, Integer port, Boolean useSsl) {}
 
-    private SmtpMailSender.SmtpConfig toSmtpConfig(EmailConnection connection) {
+    private SmtpMailSender.SmtpConfig toSmtpConfig(EmailConnection connection, ResolvedSmtpEndpoint endpoint) {
         String password = null;
         if (connection.getPasswordEncrypted() != null) {
             password = encryptionService.decrypt(connection.getPasswordEncrypted());
         }
         return new SmtpMailSender.SmtpConfig(
-                connection.getHost(),
-                connection.getPort(),
+                endpoint.host(),
+                endpoint.port(),
                 connection.getUsername(),
                 password,
                 connection.getFromEmail(),
                 connection.getFromName(),
-                connection.getUseTls()
+                endpoint.useTls()
         );
     }
 }

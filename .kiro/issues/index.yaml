@@ -1410,3 +1410,131 @@
       frontend/user-portal/verification-screenshots/2026-07-26_lookup-multi-persist-todo.png
       frontend/developer-workstation/verification-screenshots/2026-07-25_lookup-cascade-autofill-display-dw.png
       frontend/developer-workstation/verification-screenshots/2026-07-26_lookup-filter-cascade-dw-dropdown.png
+
+- id: "1489"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "MI SubProcess 内 Send Task deploy 失败：cvc-id.2 duplicate ID"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/ProcessDeploymentManager.java"
+  note: |
+    现象：Process Design 在 Multi-Instance Sub-Process 内添加 Send Task 后 Deploy 停在
+    deploy.step.validate / deploy.validate_failed（MI 校验已通过）。
+    根因：bindSendEmailTasks 用 process.findFlowElementsOfType(..., true) 找到嵌套 SendTask，
+    却对 Process 根做 remove/add，子流程内原 SendTask 未移除，根上又写入同 ID ServiceTask，
+    Flowable dry-run 报 cvc-id.2 multiple occurrences of ID（如 Activity_00auiyo）。
+    修复：按所属 FlowElementsContainer（SubProcess/Process）原地替换；单测覆盖 MI 嵌套场景。
+    关联：#1462（顶层 SendTask 转换）。验证：ProcessDeploymentManagerSendEmailTest 2/2 pass；
+    workflow-engine compose rebuild。
+
+- id: "1490"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "DW 保存 Outbound 邮件连接 toast「name resolution failed」（Kong 上游 DNS 缓存）"
+  file: "deploy/environments/dev/docker-compose.dev.yml"
+  note: |
+    现象：Edit Connection → Save 出现英文 name resolution failed，与 QQ/SMTP 配置无关。
+    根因：Kong 日志 PUT /api/v1/function-units/48/connections/4 在 developer-workstation
+    容器重建期间无法刷新 developer-workstation DNS（stale upstream IP）。
+    修复：KONG_DNS_STALE_TTL/NOT_FOUND/ERROR_TTL=0/1；build-and-deploy 后端部署后 restart kong；
+    前端映射 gatewayUpstreamUnavailable；已 restart kong 恢复。
+
+- id: "1491"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "MI SubProcess 内 Send Email 报 EMAIL_SEND_FAILED（FlowElement 解析失败）"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/delegate/SendEmailTaskDelegate.java"
+  note: |
+    现象：case 8ff53852… 在 MI SubProcess 完成任务后 SendEmailTaskDelegate 立即失败，
+    Flowable 报 No catching boundary event for errorCode EMAIL_SEND_FAILED。
+    根因：getFlowElement 仅用 bpmnModel.getMainProcess().getFlowElement()，
+    嵌套在 SubProcess 内的 Activity_00auiyo 查不到 → 误判 flow element unresolved 并抛 BpmnError。
+    修复：改用 bpmnModel.getFlowElement()（与 TaskAssignmentListener 等一致）；
+    单测 SendEmailTaskDelegateFlowElementTest。验证：mvn test SendEmailTaskDelegateFlowElementTest pass；
+    workflow-engine compose rebuild + kong restart。
+
+- id: "1492"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "Send Email 拉模板用 Admin UUID 导致 EMAIL_CONFIG_INVALID（DW 400）"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/delegate/SendEmailTaskDelegate.java"
+  note: |
+    现象：FlowElement 修复后仍报 EMAIL_CONFIG_INVALID / no catching boundary。
+    根因：引擎用 process.functionUnitId（Admin UUID）调 DW
+    /internal/function-units/{id}/email-templates/{tid}，DW PathVariable 为 Long → 400
+    MethodArgumentTypeMismatchException；模板实际在 DW FU 48 / code fu-20260505-thwmut。
+    修复：SendEmail 模板查询优先 functionUnitCode；DW InternalEmailTemplateController
+    支持 numeric id 或 code。验证：相关单测 pass；rebuild workflow-engine + DW + kong。
+
+- id: "1493"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "Send Email EMAIL_CONNECTION_NOT_FOUND：连接随 redeploy 挪到新 FU 版本"
+  file: "backend/admin-center/src/main/java/com/admin/component/EmailConnectionSyncComponentImpl.java"
+  note: |
+    现象：流程 functionUnitId=26f58e33…(1.0.131) 查凭据 404；connectionUid=ad35bb02 存在。
+    根因：sys_email_connections 以 connectionUid 为 PK，redeploy sync 把行挪到最新 catalog FU
+    （byIdFu≠请求 fuId）；getCredentials 仅 findByFunctionUnitIdAndId → empty。
+    运行时证据：[DBG-853d06] byPair=false byId=true。
+    修复：精确匹配失败时按 connectionId 回退；单测覆盖 fallback。
+
+
+- id: "1492"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: minor
+  category: bug
+  summary: "Send Email 成功后 Flow History 未记录 Send Task（操作人 system）"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/controller/TaskHistoryAssembler.java"
+  note: |
+    现象：邮件发送成功后 Portal Flow History 不显示 Send Email 节点。
+    根因：TaskHistoryAssembler 只纳入 userTask/start/end/gateway，过滤掉已转换为
+    serviceTask 的 Send Email（${sendEmailTaskDelegate}）。
+    修复：按 BPMN 识别已完成 Send Email serviceTask，写入 operationType=SEND、
+    operator=system；Portal 映射 SEND→action.send（i18n Send Task / 发送任务 / 發送任務）。
+    验证：TaskHistoryAssemblerSendEmailTest 2/2、historyActionSend.test.ts 2/2；
+    compose rebuild workflow-engine + user-portal-frontend。
+
+- id: "1493"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: minor
+  category: bug
+  summary: "流程已发信后 Workflow Diagram 的 Send Task 仍显示 Pending（未变绿）"
+  file: "frontend/user-portal/src/composables/applicationDetail/useApplicationDetailDiagramParser.ts"
+  note: |
+    现象：Case Submission 已绿、Transaction Assignment 为当前橙，中间 Send Task 仍白边 Pending，
+    尽管邮件已发送成功且 Flow History 有 SEND（#1492）。
+    根因：设计器 BPMN 保留 sendTask；部署时才转为 serviceTask。Portal 解析只 querySelector
+    serviceTask，sendTask 未进入 processNodes，ProcessDiagram.applyStatusColors 无法着色。
+    修复：application / task / processStart 解析器均纳入 sendTask，并按 history nodeId/name
+    映射 completed；单测 diagramParserSendTask + bpmnDiagramParserSendTask。
+    验证：vitest 6/6 pass；npm run build + rebuild user-portal-frontend。
+    运行时截图：admin-center 因无关 WIP（EmailConnection ClassNotFound）SSO 不可用，未拍到图。
+
+- id: "1494"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "子表 Add/Edit Record 弹窗忽略 Form Design 校验（Validation+ 全模式）"
+  file: "frontend/user-portal/src/components/subTableAddDialogHelpers/subFormCanvasColumns.ts"
+  note: |
+    现象：子表 Form Design 配置 length(len)=1 等校验后，Portal Task Detail Add Record
+    （如 Card Number 填 11）失焦/保存均无校验提示。
+    根因：mapSubFormRuleToDialogColumns 只映射 required；buildRules 仅合成 required 规则，
+    丢弃 form-create validate[]；DW Preview 精简 mapper 也缺 uppercase/ip/phone/正负数等；
+    自定义 validator 未在弹窗 materialize。
+    修复：Portal mapFormCreateValidateToElementPlusRules + dialog materialize；
+    DW mapDesignerValidateForDialog 对齐 Validation+ 全部内置模式（validator 走 form-create Preview）。
+    验证：subFormDialogValidationModes 20/20（17 模式 fixture+pass/fail）、
+    mapDesignerValidateForDialog 19/19；rebuild 两端 frontend。

@@ -19,12 +19,13 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
       'RETURN': 'completed',
       'DRAFT': 'completed',
       'DRAFT_TASK': 'completed',
+      'SEND': 'completed',
     }
     return map[operationType] || 'completed'
   }
 
-  function getHistoryAction(operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft' | undefined {
-    const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft'> = {
+  function getHistoryAction(operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft' | 'send' | undefined {
+    const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft' | 'send'> = {
       'SUBMIT': 'submit',
       'APPROVE': 'approve',
       'REJECT': 'reject',
@@ -34,6 +35,7 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
       'RETURN': 'return',
       'DRAFT': 'draft',
       'DRAFT_TASK': 'draft',
+      'SEND': 'send',
     }
     return map[operationType]
   }

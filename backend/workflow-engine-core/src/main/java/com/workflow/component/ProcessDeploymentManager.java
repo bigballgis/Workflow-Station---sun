@@ -15,6 +15,7 @@ import org.flowable.bpmn.model.ExtensionAttribute;
 import org.flowable.bpmn.model.ExtensionElement;
 import org.flowable.bpmn.model.ImplementationType;
 import org.flowable.bpmn.model.FlowElement;
+import org.flowable.bpmn.model.FlowElementsContainer;
 import org.flowable.bpmn.model.Process;
 import org.flowable.bpmn.model.SendTask;
 import org.flowable.bpmn.model.ServiceTask;
@@ -574,9 +575,19 @@ public class ProcessDeploymentManager {
                     }
                 }
                 for (SendTask sendTask : emailSendTasks) {
+                    // Must replace in the owning container (e.g. Multi-Instance SubProcess).
+                    // process.remove/add only touches the process root map — nested SendTasks
+                    // would remain and a duplicate-ID ServiceTask would be added at root
+                    // (cvc-id.2), which is what breaks admin-center dry-run validate/deploy.
+                    FlowElementsContainer container = findFlowElementsContainer(process, sendTask.getId());
+                    if (container == null) {
+                        log.warn("Skip Send Email conversion: parent container not found for '{}'",
+                                sendTask.getId());
+                        continue;
+                    }
                     ServiceTask serviceTask = toSendEmailServiceTask(sendTask);
-                    process.removeFlowElement(sendTask.getId());
-                    process.addFlowElement(serviceTask);
+                    container.removeFlowElement(sendTask.getId());
+                    container.addFlowElement(serviceTask);
                     changed = true;
                     log.info("Converted Send Email task '{}' to serviceTask with sendEmailTaskDelegate",
                             sendTask.getId());
@@ -592,6 +603,30 @@ public class ProcessDeploymentManager {
                     e.getMessage());
             return bpmnXml;
         }
+    }
+
+    /**
+     * Locate the direct {@link FlowElementsContainer} that owns {@code elementId}
+     * (process root or a nested SubProcess / Transaction / AdhocSubProcess).
+     */
+    private FlowElementsContainer findFlowElementsContainer(FlowElementsContainer root, String elementId) {
+        if (root == null || elementId == null || elementId.isBlank()) {
+            return null;
+        }
+        for (FlowElement child : root.getFlowElements()) {
+            if (elementId.equals(child.getId())) {
+                return root;
+            }
+        }
+        for (FlowElement child : root.getFlowElements()) {
+            if (child instanceof FlowElementsContainer nested) {
+                FlowElementsContainer found = findFlowElementsContainer(nested, elementId);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     private boolean isSendEmailTask(SendTask sendTask) {

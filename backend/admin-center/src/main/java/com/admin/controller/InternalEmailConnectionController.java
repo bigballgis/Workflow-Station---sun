@@ -25,9 +25,16 @@ public class InternalEmailConnectionController {
     public ResponseEntity<Map<String, Object>> getCredentials(
             @PathVariable String functionUnitId,
             @PathVariable String connectionId) {
-        return emailConnectionSyncComponent.getCredentials(functionUnitId, connectionId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        try {
+            return emailConnectionSyncComponent.getCredentials(functionUnitId, connectionId)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(503).body(Map.of(
+                    "error", "SYSTEM_SMTP_NOT_CONFIGURED",
+                    "message", ex.getMessage() != null ? ex.getMessage() : "System SMTP not configured"
+            ));
+        }
     }
 
     @GetMapping("/by-code/{functionUnitCode}/id")

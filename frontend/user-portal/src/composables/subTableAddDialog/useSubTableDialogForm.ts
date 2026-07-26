@@ -1,6 +1,5 @@
 import { ref, computed, watch, nextTick, type Ref } from 'vue'
-import type { FormInstance } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import {
   applyAuditFieldDefaults,
   applyEditAuditDefaults,
@@ -12,6 +11,7 @@ import {
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from '@/components/formRendererHelpers'
 import { evaluateFormula, validateField } from '@/components/businessLogicEngine'
+import { materializeFormCreateValidationRules } from '@/utils/formCreateValidateRules'
 
 /** i18n translate signature (kept loose to match the SFC's useI18n usage). */
 type DialogT = (key: string) => string
@@ -57,7 +57,24 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
   const saving = ref(false)
   const dialogKey = ref(0)
 
-  const formRules = computed(() => buildRules(props.columns))
+  /**
+   * Prefer Form Design validate rules on columns; materialize deferred custom
+   * {@code validator} scripts the same way FormRenderer does (needs live formData).
+   */
+  const formRules = computed<FormRules>(() => {
+    const base = buildRules(props.columns)
+    const out: FormRules = {}
+    for (const [field, rules] of Object.entries(base)) {
+      if (!Array.isArray(rules)) continue
+      out[field] = materializeFormCreateValidationRules(
+        rules as Array<Record<string, unknown>>,
+        () => formData.value,
+        () => props.columns.map((c) => ({ key: c.field, label: c.label })),
+      ) as FormRules[string]
+    }
+    return out
+  })
+
 
   // ─── Row formula calculation (Task 8.6) ─────────────────────────────────────
   const calculatedColumns = computed(() => {

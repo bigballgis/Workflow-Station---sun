@@ -34,7 +34,7 @@ public class TaskHistoryInfo {
     /** 活动类型 */
     private String activityType;
 
-    /** 操作类型：SUBMIT, APPROVE, REJECT, DELEGATE, TRANSFER, CLAIM, RETURN */
+    /** 操作类型：SUBMIT, APPROVE, REJECT, DELEGATE, TRANSFER, CLAIM, RETURN, SEND */
     private String operationType;
 
     /** 操作人ID */

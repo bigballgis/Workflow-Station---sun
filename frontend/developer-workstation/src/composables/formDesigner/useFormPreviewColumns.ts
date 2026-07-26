@@ -6,6 +6,8 @@ import { flattenRuleLayoutContainers } from '@/utils/formDesigner'
 import { parseLookupConfig } from '@/utils/formPreview'
 import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
 import { resolveRuleDefaultValue } from '@/utils/formCreateRuleDefaults'
+import { isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
+import { mapDesignerValidateForDialog } from '@/utils/mapDesignerValidateForDialog'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 
 interface UseFormPreviewColumnsOptions {
@@ -97,12 +99,15 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         if (options) passProps.options = options
         const readonly = isFormCreateRuleReadonly(r)
         const defaultValue = resolveRuleDefaultValue(r as Record<string, unknown>)
+        const required = isFormCreateRuleRequired(r as Record<string, unknown>)
+        const elRules = mapDesignerValidateForDialog(r as Record<string, unknown>, type)
         return {
           field: r.field,
           label: r.title || r.field,
           type,
-          required: r.validate?.some((v: any) => v.required) || false,
+          required,
           ...(readonly ? { readonly: true } : {}),
+          ...(elRules.length > 0 ? { rules: elRules } : {}),
           ...(options ? { options } : {}),
           ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
           ...(defaultValue !== undefined ? { defaultValue } : {}),

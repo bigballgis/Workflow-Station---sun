@@ -24,6 +24,7 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
     private final EmailConnectionRepository emailConnectionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final EncryptionService encryptionService;
+    private final SystemSmtpConfigResolver systemSmtpConfigResolver;
 
     @Override
     @Transactional
@@ -86,23 +87,60 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
     @Override
     @Transactional(readOnly = true)
     public Optional<Map<String, Object>> getCredentials(String functionUnitId, String connectionId) {
-        return emailConnectionRepository.findByFunctionUnitIdAndId(functionUnitId, connectionId)
-                .filter(EmailConnection::getEnabled)
-                .map(conn -> {
-                    Map<String, Object> creds = new HashMap<>();
-                    creds.put("connectionId", conn.getId());
-                    creds.put("connectionType", conn.getConnectionType());
-                    creds.put("host", conn.getHost());
-                    creds.put("port", conn.getPort());
-                    creds.put("username", conn.getUsername());
-                    creds.put("fromEmail", conn.getFromEmail());
-                    creds.put("fromName", conn.getFromName());
-                    creds.put("useTls", conn.getUseTls());
-                    if (conn.getPasswordEncrypted() != null) {
-                        creds.put("password", encryptionService.decrypt(conn.getPasswordEncrypted()));
-                    }
-                    return creds;
-                });
+        Optional<EmailConnection> byPair =
+                emailConnectionRepository.findByFunctionUnitIdAndId(functionUnitId, connectionId);
+        // FALLBACK(migration): connectionUid is the global PK. Redeploy sync moves the row to the
+        // latest catalog functionUnitId while long-running process instances still carry the
+        // start-time functionUnitId — prefer exact FU+id match, then resolve by connection id
+        // only when both FUs share the same code (same design lineage).
+        Optional<EmailConnection> resolved = byPair.isPresent()
+                ? byPair
+                : emailConnectionRepository.findById(connectionId)
+                        .filter(conn -> sameFunctionUnitFamily(functionUnitId, conn));
+        return resolved.filter(EmailConnection::getEnabled).map(this::toCredentialMap);
+    }
+
+    private boolean sameFunctionUnitFamily(String requestFunctionUnitId, EmailConnection conn) {
+        if (requestFunctionUnitId == null || requestFunctionUnitId.isBlank() || conn.getFunctionUnit() == null) {
+            return false;
+        }
+        FunctionUnit connFu = conn.getFunctionUnit();
+        if (requestFunctionUnitId.equals(connFu.getId())) {
+            return true;
+        }
+        String connCode = connFu.getCode();
+        if (connCode == null || connCode.isBlank()) {
+            return false;
+        }
+        return functionUnitRepository.findById(requestFunctionUnitId)
+                .map(FunctionUnit::getCode)
+                .filter(code -> !code.isBlank() && connCode.equals(code))
+                .isPresent();
+    }
+
+    private Map<String, Object> toCredentialMap(EmailConnection conn) {
+        Map<String, Object> creds = new HashMap<>();
+        creds.put("connectionId", conn.getId());
+        creds.put("connectionType", conn.getConnectionType());
+        creds.put("username", conn.getUsername());
+        creds.put("fromEmail", conn.getFromEmail());
+        creds.put("fromName", conn.getFromName());
+        if (conn.getPasswordEncrypted() != null) {
+            creds.put("password", encryptionService.decrypt(conn.getPasswordEncrypted()));
+        }
+
+        if (SystemSmtpConfigResolver.isOutboundCapable(conn.getDirection())) {
+            SystemSmtpConfigResolver.SystemSmtpEndpoint endpoint =
+                    systemSmtpConfigResolver.requireSystemSmtpEndpoint();
+            creds.put("host", endpoint.host());
+            creds.put("port", endpoint.port());
+            creds.put("useTls", endpoint.useTls());
+        } else {
+            creds.put("host", conn.getHost());
+            creds.put("port", conn.getPort());
+            creds.put("useTls", conn.getUseTls());
+        }
+        return creds;
     }
 
     @Override

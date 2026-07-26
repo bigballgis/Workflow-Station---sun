@@ -169,26 +169,45 @@ export function mergeFormRowWithSeed(
   return row
 }
 
+function defaultRequiredTrigger(col: DialogColumn): 'blur' | 'change' {
+  return col.type === 'select' || col.type === 'date' || col.type === 'datetime' || col.type === 'checkbox'
+    || col.type === 'cascader' || col.type === 'transfer' || col.type === 'lookup' || col.type === 'switch'
+    ? 'change'
+    : 'blur'
+}
+
+function buildRequiredOnlyRules(col: DialogColumn): Array<Record<string, unknown>> {
+  const trigger = defaultRequiredTrigger(col)
+  if (col.type === 'switch') {
+    return [{
+      type: 'boolean',
+      required: true,
+      message: `${col.label} is required`,
+      trigger,
+    }]
+  }
+  return [{ required: true, message: `${col.label} is required`, trigger }]
+}
+
+/**
+ * Build Element Plus form rules for the Add/Edit dialog.
+ * Prefer Form Design validate rules on {@link DialogColumn.rules}; fall back to
+ * required-only synthesis for columns that only carry the required flag (e.g. list-view schema).
+ */
 export function buildRules(columns: DialogColumn[]): FormRules {
   const rules: FormRules = {}
   for (const col of columns) {
     // Auto-PK / readonly FK / audit fields are system-filled (audit values only appear at save);
     // form-create disabled fields often fail required checks.
-    if (col.required && !col.readonly && !isAuditField(col.field)) {
-      const trigger =
-        col.type === 'select' || col.type === 'date' || col.type === 'datetime' || col.type === 'checkbox'
-        || col.type === 'cascader' || col.type === 'transfer' || col.type === 'lookup' || col.type === 'switch'
-          ? 'change'
-          : 'blur'
-      const rule = col.type === 'switch'
-        ? [{
-            type: 'boolean' as const,
-            required: true,
-            message: `${col.label} is required`,
-            trigger,
-          }]
-        : [{ required: true, message: `${col.label} is required`, trigger }]
-      setOwnField(rules as unknown as Record<string, unknown>, col.field, rule)
+    if (col.readonly || isAuditField(col.field)) continue
+
+    if (Array.isArray(col.rules) && col.rules.length > 0) {
+      setOwnField(rules as unknown as Record<string, unknown>, col.field, col.rules)
+      continue
+    }
+
+    if (col.required) {
+      setOwnField(rules as unknown as Record<string, unknown>, col.field, buildRequiredOnlyRules(col))
     }
   }
   return rules

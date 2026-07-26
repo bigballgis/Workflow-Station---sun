@@ -418,6 +418,13 @@ if ($Service) {
         Wait-ForContainerRunning -ServiceName $Service -DisplayName $Service -MaxRetries 15
     }
 
+    # Kong caches upstream A records; after backend recreate Docker DNS may change before Kong refreshes.
+    if ($svc.Type -eq "backend") {
+        Write-Host "  Restarting kong to refresh upstream DNS..." -ForegroundColor DarkGray
+        docker compose -f $ComposeFile --env-file $EnvFile restart kong
+        if ($LASTEXITCODE -ne 0) { throw "Failed to restart kong after deploying $Service" }
+    }
+
     Write-Host "`n========================================" -ForegroundColor Green
     Write-Host " $Service deployed successfully!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green

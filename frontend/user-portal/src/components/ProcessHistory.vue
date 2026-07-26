@@ -237,7 +237,8 @@ const getActionText = (action: string) => {
     withdraw: t('action.withdraw'),
     submit: t('action.submit'),
     return: t('action.return'),
-    draft: t('action.draft')
+    draft: t('action.draft'),
+    send: t('action.send')
   }
   return actionMap[action] || action
 }

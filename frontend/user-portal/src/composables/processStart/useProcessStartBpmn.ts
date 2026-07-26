@@ -216,8 +216,8 @@ export function createBpmnDiagramParser(deps: {
         nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       })
 
-      // Parse service tasks
-      doc.querySelectorAll('serviceTask').forEach((task, index) => {
+      // Parse service / send tasks (designer keeps sendTask; deploy converts email sendTask → serviceTask)
+      doc.querySelectorAll('serviceTask, sendTask').forEach((task, index) => {
         const id = task.getAttribute('id') || `service_${index}`
         const name = task.getAttribute('name') || t('processStart.serviceFallbackName', { index: index + 1 })
         const pos = positionMap.get(id)

@@ -550,6 +550,10 @@ services:
       # See: https://docs.konghq.com/gateway/latest/reference/configuration/#dns_valid_ttl
       KONG_DNS_ORDER: "LAST,A,SRV,CNAME"
       KONG_DNS_VALID_TTL: "5"
+      # Do not keep stale upstream IPs when Docker DNS refresh fails (e.g. backend recreate).
+      KONG_DNS_STALE_TTL: "0"
+      KONG_DNS_NOT_FOUND_TTL: "1"
+      KONG_DNS_ERROR_TTL: "1"
       # Environment variables used by entrypoint script for sed replacement
       JWT_SECRET: ${JWT_SECRET}
       REDIS_HOST: redis

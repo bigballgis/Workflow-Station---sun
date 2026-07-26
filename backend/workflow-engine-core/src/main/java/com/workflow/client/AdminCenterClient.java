@@ -14,6 +14,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -675,11 +676,16 @@ public class AdminCenterClient {
 
     /**
      * 获取功能单元邮件连接凭据（内部 API）
+     *
+     * @throws IllegalStateException when admin-center reports system SMTP is not configured
      */
     public Optional<Map<String, Object>> getEmailConnectionCredentials(String functionUnitId, String connectionId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/internal/function-units/"
-                    + functionUnitId + "/connections/" + connectionId + "/credentials";
+                    + SafeUrlInput.requirePathToken(functionUnitId)
+                    + "/connections/"
+                    + SafeUrlInput.requirePathToken(connectionId)
+                    + "/credentials";
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -690,12 +696,46 @@ public class AdminCenterClient {
                 return Optional.of(response.getBody());
             }
             return Optional.empty();
+        } catch (HttpStatusCodeException e) {
+            if (isSystemSmtpNotConfigured(e.getResponseBodyAsString())) {
+                String detail = extractErrorMessage(e.getResponseBodyAsString());
+                throw new IllegalStateException(
+                        detail != null && !detail.isBlank() ? detail : "System SMTP not configured",
+                        e);
+            }
+            // FALLBACK(external): 其他凭据获取失败降级为 empty，调用方按连接不存在处理。
+            log.error("Failed to get email connection credentials for {} / {}: status={} {}",
+                    functionUnitId, connectionId, e.getStatusCode(), e.getMessage());
+            return Optional.empty();
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             // FALLBACK(external): 邮件凭据获取失败降级为 empty，邮件轮询本轮跳过、下轮重试。
             log.error("Failed to get email connection credentials for {} / {}: {}",
                     functionUnitId, connectionId, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    private static boolean isSystemSmtpNotConfigured(String body) {
+        return body != null && body.contains("SYSTEM_SMTP_NOT_CONFIGURED");
+    }
+
+    private static String extractErrorMessage(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        int keyIdx = body.indexOf("\"message\"");
+        if (keyIdx < 0) {
+            return null;
+        }
+        int colon = body.indexOf(':', keyIdx);
+        int firstQuote = body.indexOf('"', colon + 1);
+        int secondQuote = firstQuote >= 0 ? body.indexOf('"', firstQuote + 1) : -1;
+        if (firstQuote < 0 || secondQuote < 0) {
+            return null;
+        }
+        return body.substring(firstQuote + 1, secondQuote).trim();
     }
 
     /**

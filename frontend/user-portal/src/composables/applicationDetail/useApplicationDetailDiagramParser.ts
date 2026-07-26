@@ -133,7 +133,7 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
         const childElements = sp.getElementsByTagName('*')
         for (let i = 0; i < childElements.length; i++) {
           const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
-          if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
+          if (childLocal !== 'userTask' && childLocal !== 'serviceTask' && childLocal !== 'sendTask') continue
           const taskName = childElements[i].getAttribute('name') || ''
           const taskId = childElements[i].getAttribute('id') || ''
           const taskNameNorm = taskName.trim().replace(/\s+/g, ' ')
@@ -536,15 +536,18 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
 
         nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       })
-      // Parse service tasks
-      doc.querySelectorAll('serviceTask').forEach((task, index) => {
+      // Parse service / send tasks (designer keeps sendTask; deploy converts email sendTask → serviceTask)
+      doc.querySelectorAll('serviceTask, sendTask').forEach((task, index) => {
         const id = task.getAttribute('id') || `service_${index}`
         const name = task.getAttribute('name') || t('applicationDetail.serviceFallbackName', { index: index + 1 })
         const pos = positionMap.get(id)
-        const historyStatus = nodeStatusMap.get(name)
-        const status = historyStatus === 'completed' ? 'completed' : 'pending'
+        const historyMatch = historyRecords.value.find(h => h.nodeName === name || h.nodeId === id)
+        const historyStatus = historyMatch?.status || nodeStatusMap.get(name)
+        const status = historyStatus === 'completed' || historyStatus === 'rejected'
+          ? historyStatus
+          : 'pending'
         nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-        if (status === 'completed') completed.push(id)
+        if (status === 'completed' || status === 'rejected') completed.push(id)
       })
 
       // Parse subProcess elements

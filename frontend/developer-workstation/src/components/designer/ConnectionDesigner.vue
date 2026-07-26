@@ -89,32 +89,38 @@
         <el-form-item :label="t('connection.fromName')">
           <el-input v-model="form.fromName" :placeholder="t('connection.fromNamePlaceholder')" />
         </el-form-item>
-        <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
-        <el-form-item prop="host" :label="t('connection.host')" required>
-          <el-input
-            v-model="form.host"
-            placeholder="smtp.example.com"
-            autocomplete="off"
-          />
-          <div class="form-tip">{{ t('connection.smtpHostHint') }}</div>
-        </el-form-item>
-        <el-form-item prop="port" :label="t('connection.port')" required>
-          <el-input-number
-            v-model="form.port"
-            :min="1"
-            :max="65535"
-            controls-position="right"
-            style="width: 100%"
-          />
-          <div class="form-tip">{{ t('connection.smtpPortHint') }}</div>
-        </el-form-item>
-        <el-form-item prop="useTls" :label="t('connection.useTls')" required>
-          <el-radio-group v-model="form.useTls">
-            <el-radio :value="true">{{ t('common.yes') }}</el-radio>
-            <el-radio :value="false">{{ t('common.no') }}</el-radio>
-          </el-radio-group>
-          <div class="form-tip">{{ t('connection.smtpTlsHint') }}</div>
-        </el-form-item>
+        <template v-if="isOutboundCapable">
+          <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
+          <p class="form-tip connection-system-smtp-hint">{{ t('connection.systemSmtpFromAdminHint') }}</p>
+        </template>
+        <template v-if="!isOutboundCapable">
+          <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
+          <el-form-item prop="host" :label="t('connection.host')" required>
+            <el-input
+              v-model="form.host"
+              placeholder="smtp.example.com"
+              autocomplete="off"
+            />
+            <div class="form-tip">{{ t('connection.smtpHostHint') }}</div>
+          </el-form-item>
+          <el-form-item prop="port" :label="t('connection.port')" required>
+            <el-input-number
+              v-model="form.port"
+              :min="1"
+              :max="65535"
+              controls-position="right"
+              style="width: 100%"
+            />
+            <div class="form-tip">{{ t('connection.smtpPortHint') }}</div>
+          </el-form-item>
+          <el-form-item prop="useTls" :label="t('connection.useTls')" required>
+            <el-radio-group v-model="form.useTls">
+              <el-radio :value="true">{{ t('common.yes') }}</el-radio>
+              <el-radio :value="false">{{ t('common.no') }}</el-radio>
+            </el-radio-group>
+            <div class="form-tip">{{ t('connection.smtpTlsHint') }}</div>
+          </el-form-item>
+        </template>
         <el-form-item :label="t('connection.username')">
           <el-input v-model="form.username" autocomplete="off" :placeholder="t('connection.usernamePlaceholder')" />
           <div class="form-tip">{{ t('connection.usernameHint') }}</div>
@@ -256,47 +262,57 @@ const defaultForm = (): ConnectionFormState => ({
 
 const form = reactive<ConnectionFormState>(defaultForm())
 
-const connectionFormRules = computed<FormRules>(() => ({
-  senderEmail: [
-    { required: true, message: t('connection.emailAddressRequired'), trigger: ['blur', 'change'] },
-    {
-      validator: (_rule, value, callback) => {
-        const text = String(value ?? '').trim()
-        if (!isValidSenderEmail(text)) {
-          callback(new Error(t('connection.emailAddressInvalid')))
-          return
-        }
-        callback()
+/** Outbound-capable connections use System Config for SMTP host/port/TLS. */
+const isOutboundCapable = computed(
+  () => form.direction === 'OUTBOUND' || form.direction === 'BOTH' || !form.direction,
+)
+
+const connectionFormRules = computed<FormRules>(() => {
+  const rules: FormRules = {
+    senderEmail: [
+      { required: true, message: t('connection.emailAddressRequired'), trigger: ['blur', 'change'] },
+      {
+        validator: (_rule, value, callback) => {
+          const text = String(value ?? '').trim()
+          if (!isValidSenderEmail(text)) {
+            callback(new Error(t('connection.emailAddressInvalid')))
+            return
+          }
+          callback()
+        },
+        trigger: ['blur', 'change'],
       },
-      trigger: ['blur', 'change'],
-    },
-  ],
-  host: [{ required: true, message: t('connection.hostRequired'), trigger: ['blur', 'change'] }],
-  port: [
-    {
-      validator: (_rule, value, callback) => {
-        if (value == null || value < 1 || value > 65535) {
-          callback(new Error(t('connection.portRequired')))
-          return
-        }
-        callback()
+    ],
+  }
+  if (!isOutboundCapable.value) {
+    rules.host = [{ required: true, message: t('connection.hostRequired'), trigger: ['blur', 'change'] }]
+    rules.port = [
+      {
+        validator: (_rule, value, callback) => {
+          if (value == null || value < 1 || value > 65535) {
+            callback(new Error(t('connection.portRequired')))
+            return
+          }
+          callback()
+        },
+        trigger: ['blur', 'change'],
       },
-      trigger: ['blur', 'change'],
-    },
-  ],
-  useTls: [
-    {
-      validator: (_rule, value, callback) => {
-        if (value == null) {
-          callback(new Error(t('connection.tlsRequired')))
-          return
-        }
-        callback()
+    ]
+    rules.useTls = [
+      {
+        validator: (_rule, value, callback) => {
+          if (value == null) {
+            callback(new Error(t('connection.tlsRequired')))
+            return
+          }
+          callback()
+        },
+        trigger: 'change',
       },
-      trigger: 'change',
-    },
-  ],
-}))
+    ]
+  }
+  return rules
+})
 
 function clearConnectionFormValidation() {
   nextTick(() => formRef.value?.clearValidate())
@@ -347,12 +363,13 @@ function buildPayload(): EmailConnectionRequest {
   const emailAddress = form.senderEmail.trim()
   const smtpUsername = form.username?.trim()
   const inbound = form.direction === 'INBOUND' || form.direction === 'BOTH'
+  const outboundCapable = isOutboundCapable.value
   return {
     name: emailAddress,
     connectionType: SMTP_CONNECTION_TYPE,
-    host: form.host?.trim(),
-    port: form.port,
-    useTls: form.useTls,
+    host: outboundCapable ? undefined : form.host?.trim(),
+    port: outboundCapable ? undefined : form.port,
+    useTls: outboundCapable ? undefined : form.useTls,
     username: smtpUsername || undefined,
     password: form.password,
     fromName: form.fromName?.trim() || undefined,

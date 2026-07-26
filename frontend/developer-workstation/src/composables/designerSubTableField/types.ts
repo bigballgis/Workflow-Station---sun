@@ -8,6 +8,8 @@ export interface ColumnConfig {
   width?: number
   minWidth?: number
   required?: boolean
+  /** Element Plus rules from Form Design validate (simple dialog path). */
+  rules?: Array<Record<string, unknown>>
   placeholder?: string
   options?: Array<{ label: string; value: any }>
   props?: Record<string, any>

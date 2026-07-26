@@ -3,7 +3,10 @@ package com.workflow.controller;
 import com.workflow.component.TaskManagerComponent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.ServiceTask;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.RepositoryService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.history.HistoricProcessInstance;
@@ -24,20 +27,23 @@ import java.util.stream.Collectors;
 /**
  * Controller-layer support for assembling process instance flow history.
  *
- * <p>Pure request/response adaptation extracted verbatim from {@link TaskController}: it shapes
- * Flowable historic activity/task/comment data into the portal UI timeline payload. Behaviour,
- * field names, ordering, and operation-type derivation are unchanged from the original controller
- * implementation. It only reads through {@link HistoryService}/{@link TaskService} and resolves
- * display names via {@link TaskManagerComponent}; it does not access repositories directly.
+ * <p>Shapes Flowable historic activity/task/comment data into the portal UI timeline payload.
+ * Includes completed Send Email {@code serviceTask} rows ({@code operationType=SEND}, operator
+ * {@code system}). Reads through {@link HistoryService}/{@link TaskService}/{@link RepositoryService}
+ * and resolves display names via {@link TaskManagerComponent}.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 class TaskHistoryAssembler {
 
+    private static final String SEND_EMAIL_DELEGATE = "${sendEmailTaskDelegate}";
+    private static final String SYSTEM_OPERATOR = "system";
+
     private final HistoryService historyService;
     private final TaskService taskService;
     private final TaskManagerComponent taskManagerComponent;
+    private final RepositoryService repositoryService;
 
     /**
      * Assemble the complete flow-history timeline for a process instance, including synthetic
@@ -114,6 +120,8 @@ class TaskHistoryAssembler {
             .processInstanceId(processInstanceId)
             .singleResult();
         String processStartUserId = processInstance != null ? processInstance.getStartUserId() : null;
+        String processDefinitionId = processInstance != null ? processInstance.getProcessDefinitionId() : null;
+        Set<String> sendEmailActivityIds = resolveSendEmailActivityIds(processDefinitionId);
 
         Set<String> userIdsToResolve = new LinkedHashSet<>();
         if (processStartUserId != null && !processStartUserId.isBlank()) {
@@ -140,12 +148,7 @@ class TaskHistoryAssembler {
 
         // Shape response for the portal UI
         List<Map<String, Object>> historyList = activities.stream()
-            .filter(activity -> "userTask".equals(activity.getActivityType()) ||
-                               "startEvent".equals(activity.getActivityType()) ||
-                               "endEvent".equals(activity.getActivityType()) ||
-                               "exclusiveGateway".equals(activity.getActivityType()) ||
-                               "parallelGateway".equals(activity.getActivityType()) ||
-                               "inclusiveGateway".equals(activity.getActivityType()))
+            .filter(activity -> shouldIncludeInHistory(activity, sendEmailActivityIds))
             .map(activity -> {
                 Map<String, Object> item = new HashMap<>();
                 item.put("id", activity.getId());
@@ -157,6 +160,7 @@ class TaskHistoryAssembler {
 
                 // Derive operation type from activity type and deleteReason
                 String activityType = activity.getActivityType();
+                boolean sendEmailTask = isCompletedSendEmailTask(activity, sendEmailActivityIds);
                 String operationType = "PENDING";
                 if (activity.getEndTime() != null) {
                     if ("startEvent".equals(activityType)) {
@@ -165,6 +169,8 @@ class TaskHistoryAssembler {
                                "parallelGateway".equals(activityType) ||
                                "inclusiveGateway".equals(activityType)) {
                         operationType = "GATEWAY";
+                    } else if (sendEmailTask) {
+                        operationType = "SEND";
                     } else if ("userTask".equals(activityType)) {
                         String taskIdForActivity = activity.getTaskId();
                         if (taskIdForActivity != null && taskDraftComments.containsKey(taskIdForActivity)) {
@@ -199,20 +205,25 @@ class TaskHistoryAssembler {
                 }
                 item.put("operationType", operationType);
 
-                // startEvent has no assignee in Flowable; use process initiator
-                String assignee = activity.getAssignee();
-                if ((assignee == null || assignee.isEmpty()) && "startEvent".equals(activityType)) {
-                    assignee = processStartUserId;
-                }
-                item.put("operatorId", assignee);
+                if (sendEmailTask) {
+                    item.put("operatorId", SYSTEM_OPERATOR);
+                    item.put("operatorName", SYSTEM_OPERATOR);
+                } else {
+                    // startEvent has no assignee in Flowable; use process initiator
+                    String assignee = activity.getAssignee();
+                    if ((assignee == null || assignee.isEmpty()) && "startEvent".equals(activityType)) {
+                        assignee = processStartUserId;
+                    }
+                    item.put("operatorId", assignee);
 
-                String operatorName = assignee;
-                if (assignee != null && !assignee.isEmpty()) {
-                    operatorName = displayNamesByUserId.getOrDefault(assignee.trim(), assignee);
-                } else if ("startEvent".equals(activityType) && processStartUserId != null) {
-                    operatorName = displayNamesByUserId.getOrDefault(processStartUserId.trim(), processStartUserId);
+                    String operatorName = assignee;
+                    if (assignee != null && !assignee.isEmpty()) {
+                        operatorName = displayNamesByUserId.getOrDefault(assignee.trim(), assignee);
+                    } else if ("startEvent".equals(activityType) && processStartUserId != null) {
+                        operatorName = displayNamesByUserId.getOrDefault(processStartUserId.trim(), processStartUserId);
+                    }
+                    item.put("operatorName", operatorName);
                 }
-                item.put("operatorName", operatorName);
 
                 item.put("operationTime", activity.getEndTime() != null ?
                     activity.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString() :
@@ -287,6 +298,55 @@ class TaskHistoryAssembler {
         }
 
         return historyList;
+    }
+
+    /**
+     * Collect activity IDs of Send Email service tasks from the process definition BPMN.
+     * // FALLBACK(ux): BPMN lookup failure omits Send Email rows rather than failing the whole history API.
+     */
+    private Set<String> resolveSendEmailActivityIds(String processDefinitionId) {
+        if (processDefinitionId == null || processDefinitionId.isBlank()) {
+            return Set.of();
+        }
+        try {
+            BpmnModel model = repositoryService.getBpmnModel(processDefinitionId);
+            if (model == null || model.getMainProcess() == null) {
+                return Set.of();
+            }
+            Set<String> ids = new LinkedHashSet<>();
+            for (ServiceTask serviceTask : model.getMainProcess().findFlowElementsOfType(ServiceTask.class, true)) {
+                if (SEND_EMAIL_DELEGATE.equals(serviceTask.getImplementation())) {
+                    ids.add(serviceTask.getId());
+                }
+            }
+            return ids;
+        } catch (Exception e) {
+            log.warn("Failed to resolve send-email activity ids for processDefinition {}: {}",
+                    processDefinitionId, e.getMessage());
+            return Set.of();
+        }
+    }
+
+    private static boolean shouldIncludeInHistory(
+            HistoricActivityInstance activity, Set<String> sendEmailActivityIds) {
+        String type = activity.getActivityType();
+        if ("userTask".equals(type)
+                || "startEvent".equals(type)
+                || "endEvent".equals(type)
+                || "exclusiveGateway".equals(type)
+                || "parallelGateway".equals(type)
+                || "inclusiveGateway".equals(type)) {
+            return true;
+        }
+        return isCompletedSendEmailTask(activity, sendEmailActivityIds);
+    }
+
+    private static boolean isCompletedSendEmailTask(
+            HistoricActivityInstance activity, Set<String> sendEmailActivityIds) {
+        return "serviceTask".equals(activity.getActivityType())
+                && activity.getEndTime() != null
+                && activity.getActivityId() != null
+                && sendEmailActivityIds.contains(activity.getActivityId());
     }
 
     /** Flowable changeActivityState sets deleteReason like "Change activity to Activity_xxx". */

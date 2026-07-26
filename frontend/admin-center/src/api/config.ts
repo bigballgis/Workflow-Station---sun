@@ -31,8 +31,10 @@ export interface ConfigHistory {
 export interface ConfigCreateRequest {
   configKey: string
   configValue: string
+  /** UI alias mapped to backend valueType */
   configType: 'STRING' | 'NUMBER' | 'BOOLEAN' | 'JSON'
   category: string
+  configName?: string
   environment?: string
   description?: string
   isEncrypted?: boolean
@@ -94,9 +96,19 @@ export const configApi = {
   getByEnvironment: (environment: string) =>
     get<SystemConfig[]>(`/configs/environment/${environment}`),
 
-  // 创建配置
+  // 创建配置（后端字段为 valueType / configName / encrypted）
   create: (data: ConfigCreateRequest) =>
-    post<SystemConfig>('/configs', data),
+    post<SystemConfig>('/configs', {
+      category: data.category,
+      configKey: data.configKey,
+      configName: data.configName || data.configKey,
+      configValue: data.configValue,
+      valueType: data.configType,
+      description: data.description,
+      encrypted: data.isEncrypted ?? false,
+      editable: true,
+      environment: data.environment || 'DEV',
+    }),
 
   // 更新配置
   update: (key: string, data: ConfigUpdateRequest) =>

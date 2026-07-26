@@ -89,6 +89,28 @@ describe('resolveSubFormDialogColumnsForBinding', () => {
     expect(dialogCols.map(c => c.field)).toEqual(['shipment_name', 'carrier'])
     expect(dialogCols.map(c => c.label)).toEqual(['Shipment Name', 'Carrier'])
   })
+
+  it('maps Form Design len validate onto dialog column.rules (sub-form Add Record)', () => {
+    const binding = { bindingId: 88 }
+    const subForms = {
+      88: {
+        rule: [
+          {
+            type: 'input',
+            field: 'card_number',
+            title: 'Card Number',
+            validate: [{ mode: 'len', len: 1, adapter: true, trigger: 'blur' }],
+          },
+        ],
+      },
+    }
+    const dialogCols = resolveSubFormDialogColumnsForBinding(binding, subForms, ctx)
+    expect(dialogCols).toHaveLength(1)
+    expect(dialogCols[0].required).toBe(false)
+    expect(dialogCols[0].rules).toEqual([
+      { len: 1, trigger: 'blur' },
+    ])
+  })
 })
 
 describe('flattenSubFormRuleLayoutContainers', () => {

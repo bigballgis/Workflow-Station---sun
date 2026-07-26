@@ -65,6 +65,12 @@ export function pickHttpErrorBodyMessage(data: unknown): string | undefined {
 
 const AXIOS_STATUS_ONLY = /^Request failed with status code \d+$/i
 
+/** Kong upstream DNS failure after backend container recreate (raw body: "name resolution failed"). */
+export function isGatewayUpstreamDnsFailure(message: string | undefined): boolean {
+  if (!message) return false
+  return /name resolution failed|dns\/balancer resolver/i.test(message)
+}
+
 export function resolveUserFacingHttpMessage(error: unknown, t: (key: string) => string): string {
   const ax = error as {
     response?: { status?: number; data?: unknown }
@@ -74,7 +80,12 @@ export function resolveUserFacingHttpMessage(error: unknown, t: (key: string) =>
   const status = ax.response?.status
   const fromBody =
     ax.response?.data !== undefined ? pickHttpErrorBodyMessage(ax.response.data) : undefined
-  if (fromBody) return fromBody
+  if (fromBody) {
+    if (isGatewayUpstreamDnsFailure(fromBody)) {
+      return t('api.gatewayUpstreamUnavailable')
+    }
+    return fromBody
+  }
 
   if (status === 401) return t('api.unauthorized')
   if (status === 403) return t('api.noPermission')
@@ -84,7 +95,7 @@ export function resolveUserFacingHttpMessage(error: unknown, t: (key: string) =>
   if (status === 422) return t('api.businessError')
   if (status === 429) return t('api.tooManyRequests')
   if (status === 500) return t('api.serverError')
-  if (status === 502 || status === 503) return t('api.serviceUnavailable')
+  if (status === 502 || status === 503) return t('api.gatewayUpstreamUnavailable')
 
   const raw = ax.message?.trim()
   if (raw && !AXIOS_STATUS_ONLY.test(raw)) return raw

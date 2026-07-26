@@ -1,8 +1,8 @@
 package com.workflow.delegate;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflow.client.AdminCenterClient;
+import com.workflow.client.DeveloperWorkstationEmailTemplateClient;
+import com.workflow.service.EmailAttachmentResolver;
 import com.workflow.service.EmailSendOptions;
 import com.workflow.service.EmailSenderService;
 import com.platform.common.mail.MailDiagnostics;
@@ -30,10 +30,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SendEmailTaskDelegate implements JavaDelegate {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private final RepositoryService repositoryService;
     private final AdminCenterClient adminCenterClient;
+    private final DeveloperWorkstationEmailTemplateClient emailTemplateClient;
+    private final EmailAttachmentResolver emailAttachmentResolver;
     private final EmailSenderService emailSenderService;
     private final I18nService i18nService;
 
@@ -59,8 +59,7 @@ public class SendEmailTaskDelegate implements JavaDelegate {
         String emailFrom = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailFrom");
         String emailFromName = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailFromName");
         String emailAttachmentsJson = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailAttachments");
-        String emailSubject = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailSubject");
-        String emailBody = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailBody");
+        String emailTemplateId = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailTemplateId");
 
         if (!StringUtils.hasText(connectionId)) {
             throw new BpmnError("EMAIL_CONFIG_INVALID",
@@ -70,38 +69,42 @@ public class SendEmailTaskDelegate implements JavaDelegate {
             throw new BpmnError("EMAIL_CONFIG_INVALID",
                     i18nService.getMessage("email.send_task.missing_recipient"));
         }
-        if (!StringUtils.hasText(emailFrom)) {
-            throw new BpmnError("EMAIL_CONFIG_INVALID",
-                    i18nService.getMessage("email.send_task.missing_from"));
-        }
-        if (!StringUtils.hasText(emailSubject)) {
-            throw new BpmnError("EMAIL_CONFIG_INVALID",
-                    i18nService.getMessage("email.send_task.missing_subject"));
-        }
 
         Map<String, Object> variables = new HashMap<>(execution.getVariables());
-        String resolvedTo = resolveRecipients(BpmnExtensionUtils.resolveExpression(emailTo, variables));
-        String resolvedCc = emailCc != null ? resolveRecipients(BpmnExtensionUtils.resolveExpression(emailCc, variables)) : null;
-        String resolvedBcc = emailBcc != null ? resolveRecipients(BpmnExtensionUtils.resolveExpression(emailBcc, variables)) : null;
-        String resolvedReplyTo = emailReplyTo != null
-                ? resolveRecipients(BpmnExtensionUtils.resolveExpression(emailReplyTo, variables)) : null;
-        String resolvedFrom = BpmnExtensionUtils.resolveExpression(emailFrom, variables);
-        String resolvedFromName = emailFromName != null
-                ? BpmnExtensionUtils.resolveExpression(emailFromName, variables) : null;
-        String resolvedSubject = EmailTemplateResolver.resolve(emailSubject, variables);
-        String resolvedBody = EmailTemplateResolver.resolve(
-                emailBody != null ? emailBody : "", variables);
-        List<EmailSendOptions.EmailAttachmentPart> attachments =
-                parseAttachments(emailAttachmentsJson, variables);
-
+        // Admin-center catalog id (UUID) for connection credentials; DW uses Long id / code for templates.
         String functionUnitId = resolveFunctionUnitId(variables);
         if (!StringUtils.hasText(functionUnitId)) {
             throw new BpmnError("EMAIL_CONFIG_INVALID",
                     i18nService.getMessage("email.send_task.missing_function_unit_id"));
         }
+        String dwFunctionUnitRef = resolveDwFunctionUnitRef(variables);
+        if (!StringUtils.hasText(dwFunctionUnitRef)) {
+            throw new BpmnError("EMAIL_CONFIG_INVALID",
+                    i18nService.getMessage("email.send_task.missing_function_unit_id"));
+        }
 
-        Optional<Map<String, Object>> credentialsOpt =
-                adminCenterClient.getEmailConnectionCredentials(functionUnitId, connectionId);
+        ResolvedContent content = resolveEmailContent(flowElement, dwFunctionUnitRef, emailTemplateId, variables);
+        String resolvedTo = resolveRecipients(BpmnExtensionUtils.resolveExpression(emailTo, variables));
+        String resolvedCc = emailCc != null ? resolveRecipients(BpmnExtensionUtils.resolveExpression(emailCc, variables)) : null;
+        String resolvedBcc = emailBcc != null ? resolveRecipients(BpmnExtensionUtils.resolveExpression(emailBcc, variables)) : null;
+        String resolvedReplyTo = emailReplyTo != null
+                ? resolveRecipients(BpmnExtensionUtils.resolveExpression(emailReplyTo, variables)) : null;
+        // Optional override; EmailSenderService falls back to connection fromEmail when blank.
+        String resolvedFrom = StringUtils.hasText(emailFrom)
+                ? BpmnExtensionUtils.resolveExpression(emailFrom, variables) : null;
+        String resolvedFromName = emailFromName != null
+                ? BpmnExtensionUtils.resolveExpression(emailFromName, variables) : null;
+        List<EmailSendOptions.EmailAttachmentPart> attachments =
+                emailAttachmentResolver.resolve(emailAttachmentsJson, variables);
+
+        Optional<Map<String, Object>> credentialsOpt;
+        try {
+            credentialsOpt = adminCenterClient.getEmailConnectionCredentials(functionUnitId, connectionId);
+        } catch (IllegalStateException ex) {
+            throw new BpmnError("EMAIL_CONFIG_INVALID",
+                    i18nService.getMessage("email.send_task.system_smtp_required",
+                            ex.getMessage() != null ? ex.getMessage() : ""));
+        }
         if (credentialsOpt.isEmpty()) {
             throw new BpmnError("EMAIL_CONNECTION_NOT_FOUND",
                     i18nService.getMessage("email.send_task.connection_not_found",
@@ -113,8 +116,8 @@ public class SendEmailTaskDelegate implements JavaDelegate {
                     resolvedTo,
                     resolvedCc,
                     resolvedBcc,
-                    resolvedSubject,
-                    resolvedBody,
+                    content.subject(),
+                    content.body(),
                     resolvedReplyTo,
                     emailImportance != null ? emailImportance : "normal",
                     emailSensitivity != null ? emailSensitivity : "normal",
@@ -122,8 +125,8 @@ public class SendEmailTaskDelegate implements JavaDelegate {
                     resolvedFrom,
                     resolvedFromName
             );
-            log.info("[SEND-EMAIL-TASK] activity={} connectionId={} functionUnitId={} to={} cc={} bcc={} from={}",
-                    activityId, connectionId, functionUnitId,
+            log.info("[SEND-EMAIL-TASK] activity={} connectionId={} functionUnitId={} templateId={} to={} cc={} bcc={} from={}",
+                    activityId, connectionId, functionUnitId, emailTemplateId,
                     com.platform.common.util.StringUtils.maskEmail(resolvedTo),
                     com.platform.common.util.StringUtils.maskEmail(resolvedCc),
                     com.platform.common.util.StringUtils.maskEmail(resolvedBcc),
@@ -134,11 +137,15 @@ public class SendEmailTaskDelegate implements JavaDelegate {
                     "activityId", activityId,
                     "to", resolvedTo
             ));
+        } catch (BpmnError bpmnError) {
+            throw bpmnError;
         } catch (Exception e) {
             String causeChain = MailDiagnostics.causeChain(e);
             String rootCause = MailDiagnostics.rootCause(e);
             log.error("[SEND-EMAIL-TASK] FAILED activity={} connectionId={} functionUnitId={} to={} | causeChain={} | rootCause={}",
-                    activityId, connectionId, functionUnitId, resolvedTo, causeChain, rootCause, e);
+                    activityId, connectionId, functionUnitId,
+                    com.platform.common.util.StringUtils.maskEmail(resolvedTo),
+                    causeChain, rootCause, e);
             execution.setVariable("emailSendResult", Map.of(
                     "success", false,
                     "activityId", activityId,
@@ -150,12 +157,55 @@ public class SendEmailTaskDelegate implements JavaDelegate {
         }
     }
 
+    /**
+     * Prefer live Email Template content; legacy BPMN emailSubject/emailBody kept for already-deployed flows.
+     */
+    private ResolvedContent resolveEmailContent(
+            FlowElement flowElement,
+            String functionUnitId,
+            String emailTemplateId,
+            Map<String, Object> variables) {
+        if (StringUtils.hasText(emailTemplateId)) {
+            Optional<DeveloperWorkstationEmailTemplateClient.EmailTemplateContent> templateOpt =
+                    emailTemplateClient.getTemplate(functionUnitId, emailTemplateId);
+            if (templateOpt.isEmpty()) {
+                throw new BpmnError("EMAIL_CONFIG_INVALID",
+                        i18nService.getMessage("email.send_task.template_not_found",
+                                functionUnitId, emailTemplateId));
+            }
+            DeveloperWorkstationEmailTemplateClient.EmailTemplateContent tpl = templateOpt.get();
+            String subject = EmailTemplateResolver.resolve(
+                    tpl.subject() != null ? tpl.subject() : "", variables);
+            String body = EmailTemplateResolver.resolve(
+                    tpl.bodyHtml() != null ? tpl.bodyHtml() : "", variables);
+            if (!StringUtils.hasText(subject)) {
+                throw new BpmnError("EMAIL_CONFIG_INVALID",
+                        i18nService.getMessage("email.send_task.missing_subject"));
+            }
+            return new ResolvedContent(subject, body);
+        }
+
+        // FALLBACK(migration): pre-template-required deployments may still carry inline subject/body.
+        String emailSubject = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailSubject");
+        String emailBody = BpmnExtensionUtils.getExtensionProperty(flowElement, "emailBody");
+        if (!StringUtils.hasText(emailSubject)) {
+            throw new BpmnError("EMAIL_CONFIG_INVALID",
+                    i18nService.getMessage("email.send_task.missing_template"));
+        }
+        return new ResolvedContent(
+                EmailTemplateResolver.resolve(emailSubject, variables),
+                EmailTemplateResolver.resolve(emailBody != null ? emailBody : "", variables));
+    }
+
+    private record ResolvedContent(String subject, String body) {}
+
     private FlowElement getFlowElement(DelegateExecution execution) {
         BpmnModel bpmnModel = repositoryService.getBpmnModel(execution.getProcessDefinitionId());
         if (bpmnModel == null) {
             return null;
         }
-        return bpmnModel.getMainProcess().getFlowElement(execution.getCurrentActivityId());
+        // Nested Send Tasks (e.g. inside Multi-Instance SubProcess) are not on the main process.
+        return bpmnModel.getFlowElement(execution.getCurrentActivityId());
     }
 
     private String resolveFunctionUnitId(Map<String, Object> variables) {
@@ -166,6 +216,25 @@ public class SendEmailTaskDelegate implements JavaDelegate {
         Object functionUnitCode = variables.get("functionUnitCode");
         if (functionUnitCode != null && StringUtils.hasText(functionUnitCode.toString())) {
             return adminCenterClient.resolveFunctionUnitIdByCode(functionUnitCode.toString()).orElse(null);
+        }
+        return null;
+    }
+
+    /**
+     * DW email-template API expects a Long id or function-unit {@code code}.
+     * Process variables usually carry Admin-center UUID in {@code functionUnitId}, so prefer code.
+     */
+    private static String resolveDwFunctionUnitRef(Map<String, Object> variables) {
+        Object functionUnitCode = variables.get("functionUnitCode");
+        if (functionUnitCode != null && StringUtils.hasText(functionUnitCode.toString())) {
+            return functionUnitCode.toString().trim();
+        }
+        Object functionUnitId = variables.get("functionUnitId");
+        if (functionUnitId != null) {
+            String raw = functionUnitId.toString().trim();
+            if (!raw.isEmpty() && raw.chars().allMatch(Character::isDigit)) {
+                return raw;
+            }
         }
         return null;
     }
@@ -211,27 +280,5 @@ public class SendEmailTaskDelegate implements JavaDelegate {
             log.warn("admin-center unavailable resolving email recipient {}: {}", value, e.getMessage());
         }
         return value;
-    }
-
-    private List<EmailSendOptions.EmailAttachmentPart> parseAttachments(
-            String rawJson, Map<String, Object> variables) {
-        if (!StringUtils.hasText(rawJson)) {
-            return List.of();
-        }
-        try {
-            String resolved = BpmnExtensionUtils.resolveExpression(rawJson, variables);
-            List<Map<String, Object>> items = OBJECT_MAPPER.readValue(resolved, new TypeReference<>() {});
-            return items.stream()
-                    .map(item -> new EmailSendOptions.EmailAttachmentPart(
-                            item.get("name") != null ? item.get("name").toString() : "",
-                            item.get("content") != null
-                                    ? BpmnExtensionUtils.resolveExpression(item.get("content").toString(), variables)
-                                    : ""))
-                    .filter(part -> StringUtils.hasText(part.name()) && StringUtils.hasText(part.content()))
-                    .toList();
-        } catch (Exception e) {
-            log.warn("Failed to parse email attachments: {}", e.getMessage());
-            return List.of();
-        }
     }
 }

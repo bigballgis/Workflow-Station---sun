@@ -7,6 +7,8 @@ import com.developer.enums.TableType;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.i18n.I18nService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -31,6 +33,8 @@ import java.util.regex.Pattern;
 @Component
 @Slf4j
 public class ProcessBpmnValidator {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private static final Pattern FLOW_NODE_ID_PATTERN = Pattern.compile(
             "<bpmn:(startEvent|endEvent|userTask|serviceTask|scriptTask|manualTask|sendTask|receiveTask|"
@@ -112,8 +116,7 @@ public class ProcessBpmnValidator {
             }
             String connectionId = extractCustomProperty(block, "connectionId");
             String emailTo = extractCustomProperty(block, "emailTo");
-            String emailFrom = extractCustomProperty(block, "emailFrom");
-            String emailSubject = extractCustomProperty(block, "emailSubject");
+            String emailTemplateId = extractCustomProperty(block, "emailTemplateId");
             if (connectionId == null || connectionId.isBlank()) {
                 result.addError("SEND_TASK_MISSING_CONNECTION",
                         i18nService.getMessage("email.send_task.missing_connection"), taskId);
@@ -122,15 +125,61 @@ public class ProcessBpmnValidator {
                 result.addError("SEND_TASK_MISSING_RECIPIENT",
                         i18nService.getMessage("email.send_task.missing_recipient"), taskId);
             }
-            if (emailFrom == null || emailFrom.isBlank()) {
-                result.addError("SEND_TASK_MISSING_FROM",
-                        i18nService.getMessage("email.send_task.missing_from"), taskId);
+            if (emailTemplateId == null || emailTemplateId.isBlank()) {
+                result.addError("SEND_TASK_MISSING_TEMPLATE",
+                        i18nService.getMessage("email.send_task.missing_template"), taskId);
             }
-            if (emailSubject == null || emailSubject.isBlank()) {
-                result.addError("SEND_TASK_MISSING_SUBJECT",
-                        i18nService.getMessage("email.send_task.missing_subject"), taskId);
+            validateSendEmailAttachments(block, taskId, result);
+        }
+    }
+
+    /**
+     * Attachments (optional) must reference MAIN/lookup upload fields — not legacy Base64 content.
+     */
+    private void validateSendEmailAttachments(String block, String taskId, ValidationResult result) {
+        String raw = extractCustomProperty(block, "emailAttachments");
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        String json = raw.replace("&quot;", "\"").replace("&#34;", "\"");
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(json);
+            if (!root.isArray() || !attachmentItemsValid(root)) {
+                result.addError("SEND_TASK_INVALID_ATTACHMENTS",
+                        i18nService.getMessage("email.send_task.invalid_attachments"), taskId);
+            }
+        } catch (Exception e) {
+            result.addError("SEND_TASK_INVALID_ATTACHMENTS",
+                    i18nService.getMessage("email.send_task.invalid_attachments"), taskId);
+        }
+    }
+
+    private static boolean attachmentItemsValid(JsonNode root) {
+        for (JsonNode item : root) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            String source = item.path("source").asText("").trim();
+            if ("main".equalsIgnoreCase(source)) {
+                if (item.path("fieldName").asText("").isBlank()) {
+                    return false;
+                }
+            } else if ("sub".equalsIgnoreCase(source)) {
+                if (item.path("fieldName").asText("").isBlank()
+                        || item.path("bindingId").isMissingNode()
+                        || item.path("bindingId").asText("").isBlank()) {
+                    return false;
+                }
+            } else if ("lookup".equalsIgnoreCase(source)) {
+                if (item.path("lookupField").asText("").isBlank()
+                        || item.path("targetField").asText("").isBlank()) {
+                    return false;
+                }
+            } else {
+                return false;
             }
         }
+        return true;
     }
 
     private String extractCustomProperty(String block, String propertyName) {
