@@ -2372,6 +2372,21 @@ importers:
         specifier: ^2.3.0
         version: 2.6.2
 
+  packages/pieces/community/biz-calendar:
+    dependencies:
+      '@activepieces/pieces-common':
+        specifier: workspace:*
+        version: link:../../common
+      '@activepieces/pieces-framework':
+        specifier: workspace:*
+        version: link:../../framework
+      '@activepieces/shared':
+        specifier: workspace:*
+        version: link:../../../shared
+      tslib:
+        specifier: 2.6.2
+        version: 2.6.2
+
   packages/pieces/community/bland-ai:
     dependencies:
       '@activepieces/pieces-common':
