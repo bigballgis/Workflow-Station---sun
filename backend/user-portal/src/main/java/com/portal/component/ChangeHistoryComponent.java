@@ -94,7 +94,8 @@ public class ChangeHistoryComponent {
     private static final String[] ROW_ID_FALLBACK_FIELDS = {"row_id", "rowId", "rowID", "id_idw", "_rowKey", "rowKey"};
     private static final Set<String> SUB_TABLE_ROW_METADATA_FIELDS = Set.of(
             "id", "row_id", "rowid", "rowkey", "id_idw", "_rowkey",
-            "created_at", "created_by", "updated_at", "updated_by", "case_row_id"
+            "created_at", "created_by", "updated_at", "updated_by", "case_row_id",
+            "task_current_node", "sub_task_current_node", "task_status", "sub_task_status"
     );
 
     /**

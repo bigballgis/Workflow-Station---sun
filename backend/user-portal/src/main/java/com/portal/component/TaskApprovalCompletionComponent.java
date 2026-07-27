@@ -71,6 +71,9 @@ public class TaskApprovalCompletionComponent {
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
+        // Only sub-tables supplied by the client can represent an intentional user edit.
+        // Later MI/engine hydration may add __subTables__ solely to preserve engine state.
+        boolean submittedSubTables = variables.containsKey("__subTables__");
 
         variables.put("action", action);
         if ("APPROVE".equals(action)) {
@@ -130,6 +133,7 @@ public class TaskApprovalCompletionComponent {
         // Capture sub-table baseline stored on first save for consolidated change history
         String baselineKey = "_baseline_subTables_" + task.getTaskDefinitionKey();
         AtomicReference<Object> baselineSubTablesRef = new AtomicReference<>();
+        AtomicReference<Map<String, Object>> preSyncVariablesRef = new AtomicReference<>(Map.of());
 
         // Sync approval variables to local ProcessInstance for Completed Tasks / My Requests
         // Must copy into a new HashMap; in-place edit breaks Hibernate JSON dirty detection
@@ -141,6 +145,7 @@ public class TaskApprovalCompletionComponent {
                 ProcessInstance syncInstance = syncOpt.get();
                 Map<String, Object> existingVars = syncInstance.getVariables();
                 baselineSubTablesRef.set(existingVars != null ? existingVars.get(baselineKey) : null);
+                preSyncVariablesRef.set(existingVars != null ? new HashMap<>(existingVars) : Map.of());
                 log.debug("Sub-table baseline for task {}: key={}, found={}",
                         taskId, baselineKey, baselineSubTablesRef.get() != null);
                 Map<String, Object> mergedVars = new HashMap<>();
@@ -203,10 +208,17 @@ public class TaskApprovalCompletionComponent {
                     // Record top-level field changes
                     changeHistoryComponent.recordFieldChanges(chContext, chOldVars, chSubmitted);
                     // Record sub-table changes using the pre-saves baseline so all
-                    // incremental saves are consolidated into one change per row.
+                    // incremental saves are consolidated into one change per row. If this task
+                    // has no save baseline, compare with the local pre-sync process state.
+                    // Never audit a sub-table added only by MI/engine hydration on completion.
                     Object chNewSubTables = chSubmitted.get("__subTables__");
-                    if (chNewSubTables != null) {
-                        recordSubTableChangeHistory(chContext, baselineSubTablesRef.get(), chNewSubTables);
+                    if (submittedSubTables && chNewSubTables != null) {
+                        recordSubTableChangeHistory(chContext,
+                                resolveSubTableHistoryBaseline(baselineSubTablesRef.get(), preSyncVariablesRef.get()),
+                                chNewSubTables);
+                    } else if (chNewSubTables != null) {
+                        log.debug("Skipping sub-table change history for task {}: data was merged internally, not submitted by the user",
+                                taskId);
                     }
                 }
             }
@@ -356,6 +368,19 @@ public class TaskApprovalCompletionComponent {
     }
 
     // ========== Sub-table change history helpers ==========
+    /**
+     * Prefer the task-save baseline for consolidated history. A user can also complete a task
+     * without first saving the form; in that case the process state before the completion sync is
+     * the only reliable comparison point. Falling back to {@code null} would mark every existing
+     * engine row as a fresh ROW_ADD.
+     */
+    static Object resolveSubTableHistoryBaseline(Object taskSaveBaseline,
+                                                 Map<String, Object> preSyncVariables) {
+        if (taskSaveBaseline != null) {
+            return taskSaveBaseline;
+        }
+        return preSyncVariables != null ? preSyncVariables.get("__subTables__") : null;
+    }
 
     @SuppressWarnings("unchecked")
     private void recordSubTableChangeHistory(ChangeHistoryContext context,
@@ -476,7 +501,7 @@ public class TaskApprovalCompletionComponent {
     }
 
     @SuppressWarnings("unchecked")
-    private List<SubTableChange> computeSubTableRowChanges(
+    static List<SubTableChange> computeSubTableRowChanges(
             List<Map<String, Object>> oldRows,
             List<Map<String, Object>> newRows) {
         List<SubTableChange> changes = new ArrayList<>();
