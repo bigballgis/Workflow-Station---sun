@@ -8,7 +8,6 @@ import com.admin.servicetask.config.ServiceTaskProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpEntity;
@@ -18,6 +17,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import com.admin.config.RestTemplateConfig;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
@@ -44,7 +45,6 @@ import java.util.Optional;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AutomationFlowServiceImpl implements AutomationFlowService {
 
     /** 每 flow 取最新版本做展示；发布态看 publishedVersionId */
@@ -135,7 +135,20 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     private final ObjectMapper objectMapper;
     private final ServiceTaskApiClient serviceTaskApiClient;
     private final ServiceTaskProperties serviceTaskProperties;
+    /** AP control-plane calls only — long read timeout, own breaker (see RestTemplateConfig). */
     private final RestTemplate restTemplate;
+
+    public AutomationFlowServiceImpl(JdbcTemplate jdbcTemplate,
+                                          ObjectMapper objectMapper,
+                                          ServiceTaskApiClient serviceTaskApiClient,
+                                          ServiceTaskProperties serviceTaskProperties,
+                                          @Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
+        this.serviceTaskApiClient = serviceTaskApiClient;
+        this.serviceTaskProperties = serviceTaskProperties;
+        this.restTemplate = restTemplate;
+    }
 
     @Override
     public List<AutomationFlowSummary> listFlows() {
