@@ -98,6 +98,7 @@ public class SecurityAuditController {
     /** All known resource types produced by AdminAuditAspect, returned to the UI for the filter dropdown */
     static final List<String> ALL_RESOURCE_TYPES = List.of(
             "AUTH",
+            "AUTOMATION_FLOW", "AUTOMATION_PIECE",
             "BI_ASSIGNMENT", "BI_DASHBOARD", "BI_RBAC",
             "BUSINESS_UNIT",
             "RELATION_TABLE", "RELATION_TABLE_ROW",

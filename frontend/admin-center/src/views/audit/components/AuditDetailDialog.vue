@@ -110,7 +110,7 @@
         class="detail-section section-after"
       >
         <div class="section-title">
-          {{ t('audit.newValue') }}
+          {{ afterSectionTitle }}
           <span
             v-if="actionCategory(log.action) === 'create'"
             class="section-badge"
@@ -141,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditLog } from '@/api/audit'
 
@@ -171,6 +171,13 @@ const emit = defineEmits<{
 const visible = ref(props.modelValue)
 watch(() => props.modelValue, (v) => { visible.value = v })
 watch(visible, (v) => { emit('update:modelValue', v) })
+
+// For DELETE/QUERY the "after" block holds the operation parameters, not a
+// post-change state (see getAfterData) — label it accordingly.
+const afterSectionTitle = computed(() => {
+  const cat = props.log ? props.actionCategory(props.log.action) : 'other'
+  return cat === 'delete' || cat === 'query' ? t('audit.requestParams') : t('audit.newValue')
+})
 
 // Local expand/collapse state (purely UI concern)
 const beforeExpanded = ref(false)

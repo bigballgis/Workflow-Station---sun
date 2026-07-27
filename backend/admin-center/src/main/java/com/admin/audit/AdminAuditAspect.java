@@ -175,6 +175,25 @@ public class AdminAuditAspect {
         return audit(pjp, "BI_RBAC");
     }
 
+    /**
+     * Automation flow migration. {@code resolveFlowRef} is excluded: it is the
+     * engine's service-to-service lookup at deploy time (X-Service-Token, no user
+     * context), so auditing it would only produce anonymous noise.
+     */
+    @Around("within(com.admin.controller.AutomationFlowController) "
+            + "&& !execution(* *.listFlows(..)) "
+            + "&& !execution(* *.checkConnections(..)) "
+            + "&& !execution(* *.resolveFlowRef(..))")
+    public Object auditAutomationFlow(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "AUTOMATION_FLOW");
+    }
+
+    @Around("within(com.admin.controller.AutomationPieceController) "
+            + "&& !execution(* *.listPieces(..))")
+    public Object auditAutomationPiece(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "AUTOMATION_PIECE");
+    }
+
     // =========================================================================
     // Core audit logic
     // =========================================================================
@@ -195,6 +214,11 @@ public class AdminAuditAspect {
         Object result = null;
         try {
             result = pjp.proceed();
+            String httpFailure = errorReasonOf(result);
+            if (httpFailure != null) {
+                success = false;
+                failureReason = httpFailure;
+            }
             return result;
         } catch (Throwable t) {
             success = false;
@@ -237,6 +261,8 @@ public class AdminAuditAspect {
             case "BI_DASHBOARD"        -> resolveBiDashboardMeta(methodName, args);
             case "BI_ASSIGNMENT"       -> resolveBiAssignmentMeta(methodName, args);
             case "BI_RBAC"             -> resolveBiRbacMeta(methodName, args);
+            case "AUTOMATION_FLOW"     -> resolveAutomationFlowMeta(methodName, args);
+            case "AUTOMATION_PIECE"    -> resolveAutomationPieceMeta(methodName, args);
             default -> new AuditMeta(AuditAction.QUERY, domain, null);
         };
     }
@@ -376,6 +402,59 @@ public class AdminAuditAspect {
         };
     }
 
+    /**
+     * Automation flow migration. The flow itself lives in the Activepieces
+     * database, so {@link #fetchEntityJson} cannot produce before/after state —
+     * the operation parameters are captured explicitly instead (a bare
+     * {@code /status} request path does not say whether it enabled or disabled).
+     * {@code importFlow} deliberately carries no detail: its response body
+     * (flowId / flowKey / created / published) is richer than the arguments.
+     */
+    private AuditMeta resolveAutomationFlowMeta(String method, Object[] args) {
+        String flowId = args.length > 0 && args[0] instanceof String s ? s : null;
+        return switch (method) {
+            case "importFlow"    -> new AuditMeta(AuditAction.CREATE, "AUTOMATION_FLOW", null);
+            case "setFlowStatus" -> new AuditMeta(AuditAction.UPDATE, "AUTOMATION_FLOW", flowId,
+                    detailJson("flowId", flowId, "enabled", args.length > 1 ? args[1] : null));
+            case "deleteFlow"    -> new AuditMeta(AuditAction.DELETE, "AUTOMATION_FLOW", flowId,
+                    detailJson("flowId", flowId, "force", args.length > 1 ? args[1] : null));
+            // Export carries the flow definition (incl. connection references) out of
+            // the environment — a read worth recording in an air-gapped deployment.
+            case "exportFlow"    -> new AuditMeta(AuditAction.QUERY, "AUTOMATION_FLOW", flowId);
+            default              -> AuditMeta.skip();
+        };
+    }
+
+    private AuditMeta resolveAutomationPieceMeta(String method, Object[] args) {
+        String name    = args.length > 0 && args[0] instanceof String s ? s : null;
+        String version = args.length > 1 && args[1] instanceof String s ? s : null;
+        String pieceId = version != null ? name + "@" + version : name;
+        return switch (method) {
+            case "importPiece" -> new AuditMeta(AuditAction.CREATE, "AUTOMATION_PIECE", null);
+            case "deletePiece" -> new AuditMeta(AuditAction.DELETE, "AUTOMATION_PIECE", pieceId,
+                    detailJson("name", name, "version", version,
+                            "force", args.length > 2 ? args[2] : null));
+            case "togglePiece" -> new AuditMeta(AuditAction.UPDATE, "AUTOMATION_PIECE", name,
+                    detailJson("name", name, "disabled", args.length > 1 ? args[1] : null));
+            case "exportPiece" -> new AuditMeta(AuditAction.QUERY, "AUTOMATION_PIECE", pieceId);
+            default            -> AuditMeta.skip();
+        };
+    }
+
+    /** Build a small JSON object from alternating key/value pairs; null on failure. */
+    private String detailJson(Object... keyValuePairs) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < keyValuePairs.length; i += 2) {
+            fields.put(String.valueOf(keyValuePairs[i]), keyValuePairs[i + 1]);
+        }
+        try {
+            return mapper.writeValueAsString(fields);
+        } catch (Exception e) {
+            log.debug("Failed to serialize audit detail: {}", e.getMessage());
+            return null;
+        }
+    }
+
     // =========================================================================
     // Old value — fetch entity state BEFORE the operation
     // =========================================================================
@@ -438,6 +517,7 @@ public class AdminAuditAspect {
 
     private String resolveNewValue(AuditMeta meta, Object[] args, Object result, boolean success) {
         if (!success) return null;
+        if (meta.detailJson != null) return meta.detailJson;
         if (meta.action == AuditAction.QUERY) {
             return buildQueryDescription(args);
         }
@@ -457,6 +537,36 @@ public class AdminAuditAspect {
             }
         }
         return null;
+    }
+
+    /**
+     * Failure reason for controllers that signal rejection by <em>returning</em> a
+     * non-2xx {@link ResponseEntity} instead of throwing (the Automation
+     * controllers return 403 on a non-admin caller and 409 when a flow/piece is
+     * still in use). Without this such calls would be filed as SUCCESS, which is
+     * precisely the event an audit trail exists to record. Returns null for
+     * successful responses and for non-ResponseEntity results.
+     */
+    private String errorReasonOf(Object result) {
+        if (!(result instanceof ResponseEntity<?> re) || !re.getStatusCode().isError()) {
+            return null;
+        }
+        String reason = "HTTP " + re.getStatusCode().value();
+        Object body = re.getBody();
+        // byte[] bodies (file downloads) carry nothing useful and must never be serialised.
+        if (body == null || body instanceof byte[]) {
+            return reason;
+        }
+        try {
+            var error = mapper.readTree(mapper.writeValueAsString(body)).path("error");
+            String code = error.path("errorCode").asText(null);
+            String message = error.path("message").asText(null);
+            if (code != null) reason += ": " + code;
+            if (message != null && !message.isBlank()) reason += " (" + message + ")";
+        } catch (Exception e) {
+            log.debug("Failed to extract audit failure reason: {}", e.getMessage());
+        }
+        return reason.length() > 255 ? reason.substring(0, 255) : reason;
     }
 
     /** Unwrap Spring {@link ResponseEntity#getBody()} if present; otherwise return the raw result. */
@@ -653,7 +763,17 @@ public class AdminAuditAspect {
     // Inner meta holder
     // =========================================================================
 
-    private record AuditMeta(AuditAction action, String resourceType, String resourceId) {
+    /**
+     * @param detailJson explicit "new value" for resources whose state cannot be
+     *                   re-read from a local repository (e.g. Automation flows and
+     *                   pieces, which live in the Activepieces database). Null for
+     *                   everything else, which keeps the generic arg/response-body
+     *                   resolution in {@link #resolveNewValue}.
+     */
+    private record AuditMeta(AuditAction action, String resourceType, String resourceId, String detailJson) {
+        AuditMeta(AuditAction action, String resourceType, String resourceId) {
+            this(action, resourceType, resourceId, null);
+        }
         boolean shouldRecord() { return action != null; }
         static AuditMeta skip() { return new AuditMeta(null, null, null); }
     }

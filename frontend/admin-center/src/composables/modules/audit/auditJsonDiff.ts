@@ -79,7 +79,14 @@ export const getBeforeData = (log: AuditLog): Record<string, unknown> | null => 
 
 export const getAfterData = (log: AuditLog): Record<string, unknown> | null => {
   const cat = actionCategory(log.action)
-  if (cat === 'delete' || cat === 'query') return null
+  // DELETE/QUERY normally have no meaningful "after" state — the before-image says
+  // everything. Exception: resources with no local entity to read a before-image
+  // from (Automation flows/pieces live in the Activepieces DB) record the operation
+  // parameters in newValue instead; without this the force flag and the exported
+  // piece name/version would never surface in the UI. Shown as "Request Params".
+  if (cat === 'delete' || cat === 'query') {
+    return log.oldValue ? null : parseJson(log.newValue)
+  }
   if (cat === 'create') return parseJson(log.newValue)
   const old = parseJson(log.oldValue)
   const nw  = parseJson(log.newValue)
