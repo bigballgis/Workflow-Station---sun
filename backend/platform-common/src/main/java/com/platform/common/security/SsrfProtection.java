@@ -39,7 +39,7 @@ public final class SsrfProtection {
     /** Allowed schemes */
     private static final Set<String> ALLOWED_SCHEMES = new HashSet<>(Arrays.asList("http", "https"));
 
-    /** Optional allowed domains (e.g., N8N SaaS domains). Empty = none allowed beyond basic checks. */
+    /** Optional allowed domains (e.g., third-party SaaS domains). Empty = none allowed beyond basic checks. */
     private static final Set<String> allowedDomains = new HashSet<>();
 
     private SsrfProtection() {}
@@ -56,7 +56,7 @@ public final class SsrfProtection {
 
     /**
      * Validate a URL for SSRF safety, allowing configured internal service hostnames
-     * (e.g. Docker Compose service names like {@code n8n}) without DNS private-IP checks.
+     * (e.g. Docker Compose service names like {@code activepieces}) without DNS private-IP checks.
      *
      * @param urlString    the URL to validate
      * @param allowedHosts hostnames permitted to resolve to private addresses (case-insensitive)

@@ -28,7 +28,7 @@ public class RestTemplateConfig {
     @Value("${portal.http.connect-timeout-ms:10000}")
     private int connectTimeoutMs;
 
-    // 默认 10 分钟：外部 n8n 工作流可能跑数分钟（保留原值，可配置）
+    // 默认 10 分钟：外部自动化工作流（Activepieces）可能跑数分钟（保留原值，可配置）
     @Value("${portal.http.read-timeout-ms:600000}")
     private int readTimeoutMs;
 

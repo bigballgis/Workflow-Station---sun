@@ -647,34 +647,6 @@ public class AdminCenterClient {
     }
 
     /**
-     * 获取 N8N 连接配置（含解密后 apiKey）
-     * 调用 admin-center 的内部 API 获取完整的 N8N 连接配置信息
-     * @param configId N8N 配置ID
-     * @return N8N 配置信息Map，包含 id, name, baseUrl, apiKey, isActive 等；调用失败时返回 null
-     */
-    public Map<String, Object> getN8nConfig(String configId) {
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/n8n-config/" + SafeUrlInput.requirePathToken(configId) + "/internal";
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<Map<String, Object>>() {}
-            );
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return response.getBody();
-            }
-            return null;
-
-        } catch (Exception e) {
-            // FALLBACK(external): N8N 集成配置获取失败降级为 null，调用方(委托节点)按"集成不可用"处理。
-            log.error("Failed to get N8N config {}: {}", configId, e.getMessage());
-            return null;
-        }
-    }
-
-    /**
      * 获取功能单元邮件连接凭据（内部 API）
      *
      * @throws IllegalStateException when admin-center reports system SMTP is not configured
