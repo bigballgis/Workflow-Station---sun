@@ -48,11 +48,25 @@ const MI_DASHBOARD_STATUS_FIELDS = new Set([
   'sub_task_current_node',
 ])
 
-/** True when designer schema declares this binding as a multi-instance participant dashboard (not a plain related table). */
+/**
+ * True when designer schema declares this binding as a multi-instance participant dashboard (not a plain related table).
+ *
+ * <p>Everything below is a <b>guess from column names</b>, so it misfires on tables that merely look
+ * like a participant list — e.g. a Function Unit copied from the MI meeting demo keeps
+ * {@code assignee_user_id} columns long after its MI sub-process is gone, and every row without the
+ * sub-table PK then gets dropped as an MI ghost row (rows produced by an AP service task carry no PK,
+ * so the whole grid rendered empty). {@code miCollection === false} is the escape hatch: callers that
+ * KNOW the truth — the task detail loader reads the BPMN, which either has a multi-instance
+ * sub-process or does not — stamp it on the binding and the guessing is skipped. Left undefined the
+ * heuristic applies unchanged, so contexts without BPMN (My Requests, application detail) keep
+ * today's behaviour.
+ */
 export function isMiDashboardSubTableBinding(binding: {
   columns?: Array<{ field?: string }> | null
   tableName?: string
+  miCollection?: boolean | null
 }): boolean {
+  if (binding.miCollection === false) return false
   const cols = binding.columns ?? []
   if (cols.some(c => c?.field != null && MI_DASHBOARD_STATUS_FIELDS.has(String(c.field)))) return true
   const assigneeField = resolveAssigneeFieldForBinding(cols, binding.tableName)
