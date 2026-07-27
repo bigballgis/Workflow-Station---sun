@@ -1871,8 +1871,10 @@ export default {
     bodyPlaceholder: 'Compose the email body; use Insert Variable to add data.',
     enabled: 'Enabled',
     insertVariable: 'Insert Variable',
-    insertVariableHint: 'Pick a field (single value) or a sub-table (rendered as a table).',
+    insertVariableHint:
+      'Pick a main field, a Lookup/Related attribute, or a sub-table (rendered as a table).',
     subTableGroup: 'Sub-tables (rendered as table)',
+    lookupGroup: 'Lookup / Related — {source}',
     preview: 'Preview',
     showPreview: 'Show preview',
     hidePreview: 'Hide preview',

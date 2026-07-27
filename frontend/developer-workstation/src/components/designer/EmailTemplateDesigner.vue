@@ -128,6 +128,7 @@ import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 import {
   EMAIL_FIELD_VAR_PATTERN,
   EMAIL_SUBJECT_VAR_EXAMPLE,
+  resolveEmailVariableGroupLabel,
   useEmailTemplateVariables,
   type EmailVariableGroup,
 } from '@/composables/email/useEmailTemplateVariables'
@@ -198,7 +199,7 @@ async function loadTemplates() {
 }
 
 function subjectGroupLabel(label: string): string {
-  return label === '__SUBTABLES__' ? t('emailTemplate.subTableGroup') : label
+  return resolveEmailVariableGroupLabel(label, t)
 }
 
 function insertSubjectVariable(token: string) {
