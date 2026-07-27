@@ -4,6 +4,7 @@
  */
 
 import { SUB_TABLE_ROW_META_KEYS } from './internal'
+import { subTableFieldValueKey } from './subTableCore'
 
 function countSubstantiveSubTableRowFields(row: Record<string, unknown>): number {
   let n = 0
@@ -32,9 +33,19 @@ function countSubstantiveSubTableRowFields(row: Record<string, unknown>): number
   return n
 }
 
+/**
+ * Cell equality for ghost-row collapse. Object cells (LOOKUP selections, file descriptors) are
+ * compared structurally — {@code String(obj)} made every lookup {@code "[object Object]"}, so a row
+ * whose only difference from a fatter sibling was its lookup selection was collapsed away.
+ */
 function subTableRowFieldValuesEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (a == null || b == null) return false
+  if (typeof a === 'object' || typeof b === 'object') {
+    const ka = subTableFieldValueKey(a)
+    const kb = subTableFieldValueKey(b)
+    return ka != null && ka === kb
+  }
   return String(a).trim() === String(b).trim()
 }
 

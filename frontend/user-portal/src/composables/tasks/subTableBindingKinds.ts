@@ -13,10 +13,28 @@ export function isSubTableRowMetaField(key: string): boolean {
   return SUB_TABLE_ROW_META_KEYS.has(key)
 }
 
-/** Remove MI / runtime meta fields from a sub-table row (non-MI bindings after hydration). */
+/** True for a non-empty nested `__subTables__` payload (grandchild rows of a sub-table-in-sub-table). */
+function hasNestedSubTableRows(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.values(value as Record<string, unknown>).some(v => Array.isArray(v) && v.length > 0)
+}
+
+/**
+ * Remove MI / runtime meta fields from a sub-table row (non-MI bindings after hydration).
+ *
+ * A row's `__subTables__` is NOT meta: for sub-table-in-sub-table it holds the grandchild rows
+ * (Add/Edit dialog reads them back via {@code pullNestedRowsForBindingFromParentRows}, and persist
+ * carries them on the parent row). Stripping it detached the innermost level from its parent —
+ * the nested grid rendered empty on the next task and the next save dropped the link. Empty maps
+ * are still removed so they don't linger as noise.
+ */
 export function stripSubTableRowMetaFields(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(row)) {
+    if (k === '__subTables__') {
+      if (hasNestedSubTableRows(v)) out[k] = v
+      continue
+    }
     if (isSubTableRowMetaField(k)) continue
     out[k] = v
   }
