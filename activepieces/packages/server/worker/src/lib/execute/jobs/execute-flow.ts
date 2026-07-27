@@ -10,6 +10,7 @@ import {
     ExecutionType,
     FlowRunStatus,
     FlowVersion,
+    isFlowRunStateTerminal,
     isNil,
     ResumeExecuteFlowOperation,
     tryCatch,
@@ -157,6 +158,8 @@ async function reportFlowStatus(
         finishTime: new Date().toISOString(),
     })
 
+    await releaseSyncWebhook(ctx, data, status)
+
     if (status === FlowRunStatus.INTERNAL_ERROR && isDedicatedWorker()) {
         onCallService(ctx.log, workerSettings.getSettings().PAGE_ONCALL_WEBHOOK).page({
             code: ErrorCode.ENGINE_OPERATION_FAILURE,
@@ -166,6 +169,43 @@ async function reportFlowStatus(
     }
 }
 
+/**
+ * HERMES-PATCH: companion to the engine-side release in `flow.operation.ts`.
+ *
+ * The engine hook cannot cover failures that happen before the engine runs at all — piece
+ * provisioning, a missing flow version, a sandbox timeout or OOM. Those end the run here in the
+ * worker, so a caller blocked on the sync webhook would still wait out the full
+ * `AP_WEBHOOK_TIMEOUT_SECONDS` for its 204. Both hooks are needed and they overlap harmlessly:
+ * `oneTimeListener` deletes itself on the first response and a publish with no listener is a no-op.
+ *
+ * Best-effort, same as the engine side — the run is already reported, and the webhook timeout is
+ * still there as the backstop.
+ */
+async function releaseSyncWebhook(ctx: JobContext, data: ExecuteFlowJobData, status: FlowRunStatus): Promise<void> {
+    const { workerHandlerId, httpRequestId } = data
+    if (isNil(workerHandlerId) || isNil(httpRequestId)) {
+        return
+    }
+    if (!isFlowRunStateTerminal({ status, ignoreInternalError: false })) {
+        return
+    }
+    const { error } = await tryCatch(() => ctx.apiClient.sendFlowResponse({
+        workerHandlerId,
+        httpRequestId,
+        runResponse: {
+            status: NO_CONTENT_STATUS,
+            body: {},
+            headers: {},
+        },
+    }))
+    if (error) {
+        ctx.log.error({ runId: data.runId, error: inspect(error) }, '[HERMES-PATCH] Failed to release sync webhook')
+    }
+}
+
 function isDedicatedWorker(): boolean {
     return !isNil(system.get(WorkerSystemProp.WORKER_GROUP_ID))
 }
+
+/** Mirrors the fallback `handleSync` returns on timeout, so the caller sees one outcome either way. */
+const NO_CONTENT_STATUS = 204

@@ -39,9 +39,9 @@ import java.util.*;
  * back into process variables inline — there is no callback token / async wait / Redis state.
  *
  * <p>That "must end with Return Response" is <b>enforced, not advisory</b>: AP publishes the sync
- * response only from that step, so a run that fails earlier returns {@code 204 No Content} once
- * AP's webhook listener expires. HTTP 2xx alone therefore says nothing about whether the
- * automation succeeded — see {@link ApFlowNoResponseException}.
+ * response only from that step, so a run that fails earlier returns {@code 204 No Content}. HTTP
+ * 2xx alone therefore says nothing about whether the automation succeeded — see
+ * {@link ApFlowNoResponseException}.
  *
  * <p><b>Who owns the wait:</b> AP does, via {@code AP_WEBHOOK_TIMEOUT_SECONDS} (300s here). The
  * shared {@code RestTemplate}'s 10-minute read timeout is deliberately longer so AP always answers
@@ -50,6 +50,12 @@ import java.util.*;
  * (BPMN, default 120) is therefore <b>recorded but not enforced</b>: wiring it to the HTTP client
  * would abort live flows at 60-120s and break every automation slower than that (the AI-generation
  * flow alone needs ~230s). Shortening the wait must be done on the AP side, not here.
+ *
+ * <p>That 300s is the <i>ceiling</i>, not the cost of a failure. A HERMES-PATCH in the vendored AP
+ * (engine {@code flow.operation.ts} + worker {@code execute-flow.ts}) publishes the sync response
+ * as soon as a run reaches a terminal state, so a flow that dies in 3s answers in ~3s instead of
+ * burning the full timeout with the process instance wedged. The timeout survives only as the
+ * backstop for a run that never terminates at all.
  *
  * <p>The AP instance is a single shared runtime per environment: the webhook base URL is
  * resolved from {@code activepieces.webhook-base-url}; the Service Task only stores the
