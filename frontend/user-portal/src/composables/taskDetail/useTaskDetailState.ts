@@ -8,6 +8,7 @@ import type {
   CompletedTaskFormData,
 } from '@/api/processForm'
 import type { RelationFieldDef } from '@/components/subTableAddDialogHelpers'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime/types'
 import type { MiSubProcessScopeConfig } from '@/composables/tasks/miSubProcessScope'
 import { isMiDashboardSubTableBinding } from '@/composables/tasks/shared'
 
@@ -226,7 +227,7 @@ export function createTaskDetailState(options: { taskId: string }) {
   const primaryTableBinding = ref<{
     tableId?: number | null
     tableName?: string
-    fieldDefinitions?: Array<Record<string, unknown>>
+    fieldDefinitions?: BindingFieldDefinition[]
   } | null>(null)
   /** PRIMARY table field names — MI isolate/save must not treat collection-row keys as main-record scalars. */
   const primaryTableFieldNames = ref<Set<string>>(new Set())

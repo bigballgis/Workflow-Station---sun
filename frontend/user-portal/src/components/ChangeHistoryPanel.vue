@@ -2,6 +2,7 @@
   <el-collapse
     v-model="sectionExpandedNames"
     class="ch-root-collapse"
+    :class="{ 'ch-root-collapse--headerless': !showHeader }"
   >
     <el-collapse-item name="history">
       <template #title>
@@ -95,7 +96,7 @@
                 <span v-else>{{ resolveOperator(row) }}</span>
               </template>
             </el-table-column>
-<el-table-column
+            <el-table-column
               :label="t('changeHistory.colEvent')"
               min-width="150"
               show-overflow-tooltip
@@ -180,9 +181,12 @@ interface Props {
   processInstanceId: string
   snapshotTime?: string
   taskInstanceId?: string
+  showHeader?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  showHeader: true,
+})
 
 // 展示格式化、字段标签与变更类型映射（纯函数）
 const formatting = useChangeHistoryFormatting(t, dayjs)
@@ -238,6 +242,12 @@ const sectionExpandedNames = ref(['history'])
   }
 }
 
+.ch-root-collapse--headerless {
+  :deep(.el-collapse-item__header) {
+    display: none;
+  }
+}
+
 .ch-collapse-title {
   display: inline-flex;
   align-items: center;
@@ -260,16 +270,10 @@ const sectionExpandedNames = ref(['history'])
 }
 
 
-
 .concurrent-icon {
   font-size: 16px;
 
-
-
-
-  
   color: var(--el-color-warning);
-
 
   margin-left: 6px;
   vertical-align: middle;

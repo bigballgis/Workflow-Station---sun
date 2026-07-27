@@ -154,6 +154,16 @@
         </WorkflowDiagramCollapsibleSection>
       </div>
 
+      <el-tabs
+        v-if="detailUiPhase >= 2"
+        v-model="activeDetailTab"
+        class="detail-navigation"
+      >
+        <el-tab-pane
+          :label="t('process.general')"
+          name="general"
+          lazy
+        >
       <!-- Selected node form (click a node in the diagram to show its form) -->
       <div
         v-if="detailUiPhase >= 2 && selectedNodeId && selectedNodeForm"
@@ -243,8 +253,7 @@
           </div>
         </div>
       </div>
-
-      <!-- Task 17.1 / 17.4: Collapsible Process Form panel -->
+<!-- Task 17.1 / 17.4: Collapsible Process Form panel -->
       <div
         v-if="detailUiPhase >= 2 && showProcessFormPanel && processFormData"
         class="section process-form-section"
@@ -348,7 +357,6 @@
           <el-empty :description="t('task.noFormData')" />
         </div>
       </div>
-
       <!-- Task 17.3: Completed task snapshot comparison view -->
       <TaskSnapshotSection
         v-if="detailUiPhase >= 3"
@@ -358,25 +366,42 @@
         :form-tabs="formTabs"
       />
 
+        </el-tab-pane>
+
       <!-- Task 19.2: Change history panel (title and collapse handled internally by ChangeHistoryPanel) -->
-      <div
-        v-if="detailUiPhase >= 3 && taskInfo.processInstanceId"
-        class="section change-history-section"
-      >
-        <ChangeHistoryPanel
-          :process-instance-id="taskInfo.processInstanceId"
-          :snapshot-time="completedHistorySnapshotTime"
-          :task-id="taskId"
-          :task-instance-id="completedHistoryTaskId"
-        />
-      </div>
+        <el-tab-pane
+          :label="t('changeHistory.title')"
+          name="change-history"
+          lazy
+        >
+          <div
+            v-if="detailUiPhase >= 3 && taskInfo.processInstanceId"
+            class="section change-history-section"
+          >
+            <ChangeHistoryPanel
+              :process-instance-id="taskInfo.processInstanceId"
+              :snapshot-time="completedHistorySnapshotTime"
+              :task-id="taskId"
+              :task-instance-id="completedHistoryTaskId"
+              :show-header="false"
+            />
+          </div>
+        </el-tab-pane>
 
       <!-- Section 4: Flow history -->
-      <TaskHistorySection
-        v-if="detailUiPhase >= 3"
-        :history-records="historyRecords"
-        :history-error="historyError"
-      />
+        <el-tab-pane
+          :label="t('task.flowHistory')"
+          name="flow-history"
+          lazy
+        >
+          <TaskHistorySection
+            v-if="detailUiPhase >= 3"
+            :history-records="historyRecords"
+            :history-error="historyError"
+            :show-header="false"
+          />
+        </el-tab-pane>
+      </el-tabs>
 
       <!-- Section 5: Action buttons (hidden for completed tasks) -->
       <TaskActionBar
@@ -435,8 +460,7 @@
       @update:sub-table-data="handleFormPopupSubTableUpdate"
       @submit="submitFormPopup"
     />
-
-    <!-- MI subtask fill-form dialog -->
+<!-- MI subtask fill-form dialog -->
     <MiFillDialog
       v-model="miFillDialogVisible"
       :title="currentFormName || t('task.taskForm')"
@@ -454,7 +478,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, computed, nextTick, watch, defineAsyncComponent } from 'vue'
+import { onMounted, onBeforeUnmount, computed, nextTick, ref, watch, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -508,6 +532,7 @@ const { t } = useI18n()
 const route = useRoute()
 
 const taskId = route.params.id as string
+const activeDetailTab = ref('general')
 const fallbackProcessInstanceId = computed(() => {
   const v = route.query.processInstanceId
   return typeof v === 'string' && v.trim() ? v.trim() : ''
@@ -571,7 +596,6 @@ const {
   mainFormNativeSubTableBindingIds,
   allowSubTableAssignForCurrentTask,
 } = state
-
 // Main-table Request ID config — enables live recompute of the readonly __request_id field
 // on the To-Do form; completed/process forms reuse it for display parity.
 const requestIdConfig = computed<{ fieldNames: string[]; separator?: string } | null>(() => {
@@ -679,6 +703,7 @@ const {
 // ── Node click handlers for diagram ──────────────────────────────────────
 
 const handleNodeClick = (node: ProcessNode) => {
+  activeDetailTab.value = 'general'
   if (selectedNodeId.value === node.id) {
     clearNodeSelection()
     return
@@ -695,7 +720,6 @@ const clearNodeSelection = () => {
 /** Top-level load orchestrator — extracted to composables/taskDetail/useTaskDetailLoader.ts (behavior unchanged). */
 const { loadTaskDetail } = createTaskDetailLoader(ctx, { fallbackProcessInstanceId })
 ctx.loadTaskDetail = loadTaskDetail
-
 const taskActions = useTaskActions({
   taskId: effectiveTaskId,
   taskInfo: taskInfo as any,
@@ -798,6 +822,8 @@ onBeforeUnmount(() => {
 
 
 <style lang="scss" scoped>
+@use '@/styles/detail-navigation' as detailNavigation;
+
 .task-detail-page {
   width: 100%;
   max-width: 100%;
@@ -864,8 +890,11 @@ onBeforeUnmount(() => {
       padding: 20px;
     }
   }
-  
-  .form-section {
+
+  .detail-navigation {
+    @include detailNavigation.compact-detail-navigation;
+  }
+.form-section {
     .form-container {
       width: 100%;
     }

@@ -4,7 +4,9 @@ import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
 import type { HistoryRecord } from '@/components/ProcessHistory.vue'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
 import type { RelationFieldDef } from '@/components/subTableAddDialogHelpers'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime/types'
 import type { MiSubProcessScopeConfig } from '@/composables/tasks/miSubProcessScope'
+import type { Column } from '@/composables/subTableField/subTableFieldTypes'
 
 // Previous node forms (read-only display, ordered)
 export interface PreviousFormEntry {
@@ -25,7 +27,7 @@ export interface PreviousFormEntry {
     tableName: string
     tableType: string
     tableDescription: string
-    columns: Array<{ field: string; label: string; type?: string }>
+    columns: Column[]
     data: any[]
     /** When FORM_ONLY and not in form rule, binding exists for Link Form only (no standalone block). */
     subMode?: string
@@ -108,7 +110,7 @@ export function createApplicationDetailState(options: {
     tableName: string
     tableType: string
     tableDescription: string
-    columns: Array<{ field: string; label: string; type?: string }>
+    columns: Column[]
     data: any[]
     subMode?: string
     formFields?: FormField[]
@@ -117,7 +119,7 @@ export function createApplicationDetailState(options: {
     portalViews?: Record<string, any> | null
     /** From dw_field_definitions via admin assembleFunctionUnitContent; drives row merge / PK resolution. */
     primaryKeyFields?: string[]
-    fieldDefinitions?: Array<Record<string, unknown>>
+    fieldDefinitions?: BindingFieldDefinition[]
   }>>([])
 
   const primaryTableBinding = ref<{ tableId?: number | null; tableName?: string } | null>(null)
@@ -171,7 +173,7 @@ export function createApplicationDetailState(options: {
     physicalTableName?: string
     tableType: string
     tableDescription: string
-    columns: Array<{ field: string; label: string; type?: string }>
+    columns: Column[]
     data: any[]
     subMode?: string
     formFields?: FormField[]
