@@ -10,7 +10,6 @@ import {
     FlowRunStatus,
     flowStructureUtil,
     GenericStepOutput,
-    isFlowRunStateTerminal,
     isNil,
     JobPayload,
     LoopStepOutput,
@@ -20,7 +19,6 @@ import {
     StepOutputStatus,
     TriggerHookType,
     TriggerPayload,
-    tryCatch,
 } from '@activepieces/shared'
 import { engineFileApi } from '../engine-file-api'
 import { EngineConstants, ResolvedBeginExecuteFlowOperation, ResolvedExecuteFlowOperation } from '../handler/context/engine-constants'
@@ -29,7 +27,7 @@ import { testExecutionContext } from '../handler/context/test-execution-context'
 import { flowExecutor } from '../handler/flow-executor'
 import { flowRunProgressReporter } from '../helper/flow-run-progress-reporter'
 import { triggerHelper } from '../helper/trigger-helper'
-import { workerSocket } from '../worker-socket'
+import { syncWebhookRelease } from './sync-webhook-release'
 
 export const flowOperation = {
     execute: async (operation: ExecuteFlowOperation): Promise<EngineResponse<undefined>> => {
@@ -41,7 +39,11 @@ export const flowOperation = {
             flowExecutorContext: output,
         })
         await flowRunProgressReporter.backup()
-        await releaseSyncWebhookOnTerminalState({ constants, status: output.verdict.status })
+        await syncWebhookRelease.onRunSettled({
+            workerHandlerId: constants.workerHandlerId,
+            httpRequestId: constants.httpRequestId,
+            status: output.verdict.status,
+        })
         const status = output.verdict.status === FlowRunStatus.LOG_SIZE_EXCEEDED
             ? EngineResponseStatus.LOG_SIZE_EXCEEDED
             : EngineResponseStatus.OK
@@ -50,47 +52,6 @@ export const flowOperation = {
             response: undefined,
         }
     },
-}
-
-/**
- * HERMES-PATCH: unblock a sync webhook as soon as the run is over.
- *
- * Only the "Return Response" piece publishes a sync response (see piece-executor). A run that
- * fails, times out, or simply has no such step publishes nothing, so the caller blocked in
- * `handleSync` waits out the whole `WEBHOOK_TIMEOUT_MS` before getting the 204 fallback — 300s
- * here. Hermes' BPMN service task reads that 204 correctly (the flow produced no response) but
- * only learns it five minutes after the flow actually died, and the process instance stays wedged
- * the whole time.
- *
- * The run is terminal at this point and every response it was ever going to publish already went
- * out, so releasing the listener now changes only the latency. Publishing twice is harmless:
- * `oneTimeListener` deletes itself on the first response, and a publish with no listener is a
- * no-op. Non-terminal verdicts (PAUSED at a waitpoint/approval, QUEUED) must keep waiting — the
- * response is still to come after the resume.
- */
-async function releaseSyncWebhookOnTerminalState({ constants, status }: ReleaseSyncWebhookParams): Promise<void> {
-    const { workerHandlerId, httpRequestId } = constants
-    if (isNil(workerHandlerId) || isNil(httpRequestId)) {
-        return
-    }
-    if (!isFlowRunStateTerminal({ status, ignoreInternalError: false })) {
-        return
-    }
-    // Best-effort on purpose: the run is already finished and reported. Throwing here would
-    // turn a completed run into an INTERNAL_ERROR over a latency optimisation, and the 300s
-    // timeout still delivers the same 204 if this never lands.
-    const { error } = await tryCatch(() => workerSocket.getWorkerClient().sendFlowResponse({
-        workerHandlerId,
-        httpRequestId,
-        runResponse: {
-            status: NO_CONTENT_STATUS,
-            body: {},
-            headers: {},
-        },
-    }))
-    if (error) {
-        console.error('[HERMES-PATCH] Failed to release sync webhook on terminal run', error)
-    }
 }
 
 const executieSingleStepOrFlowOperation = async (input: ResolvedExecuteFlowOperation, constants: EngineConstants): Promise<FlowExecutorContext> => {
@@ -254,12 +215,4 @@ type IsStepRestorableParams = {
 type InsertStepsParams = {
     stepOutput: StepOutput
     isWaitpointResume: boolean
-}
-
-/** Matches the fallback `handleSync` returns on timeout, so the caller sees one outcome either way. */
-const NO_CONTENT_STATUS = 204
-
-type ReleaseSyncWebhookParams = {
-    constants: EngineConstants
-    status: FlowRunStatus
 }

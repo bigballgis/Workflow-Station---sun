@@ -170,7 +170,7 @@ async function reportFlowStatus(
 }
 
 /**
- * HERMES-PATCH: companion to the engine-side release in `flow.operation.ts`.
+ * HERMES-PATCH-008: companion to HERMES-PATCH-007 (engine `sync-webhook-release.ts`).
  *
  * The engine hook cannot cover failures that happen before the engine runs at all — piece
  * provisioning, a missing flow version, a sandbox timeout or OOM. Those end the run here in the
@@ -199,7 +199,7 @@ async function releaseSyncWebhook(ctx: JobContext, data: ExecuteFlowJobData, sta
         },
     }))
     if (error) {
-        ctx.log.error({ runId: data.runId, error: inspect(error) }, '[HERMES-PATCH] Failed to release sync webhook')
+        ctx.log.error({ runId: data.runId, error: inspect(error) }, '[HERMES-PATCH-008] Failed to release sync webhook')
     }
 }
 

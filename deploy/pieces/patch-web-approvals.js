@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HERMES-PATCH-001 (build-time; docs/ap-integration/HERMES_PATCHES.md)
 // Patches the AP web bundle for the offline/allowlist deployment (runs in Dockerfile).
 //
 // The piece selector's "Approvals" tab (approvals-tab-content.tsx) hardcodes SIX SaaS

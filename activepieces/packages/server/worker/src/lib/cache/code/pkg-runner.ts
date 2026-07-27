@@ -16,7 +16,7 @@ export const pkgRunner = (log: Logger) => ({
         const filterArgs: string[] = filtersPath
             .map(sanitizeFilterPath)
             .flatMap((p) => ['--filter', `./${p}`])
-        // HERMES-PATCH(piece-admin P3): air-gapped runtime install. When
+        // HERMES-PATCH-005 (piece-admin P3): air-gapped runtime install. When
         // AP_PIECES_OFFLINE_INSTALL=true, resolve exclusively from the pnpm store
         // baked into the image (Dockerfile seeds it with the pieces-framework/-common/
         // shared/tslib closure — exactly what build-piece pins into a piece tarball).

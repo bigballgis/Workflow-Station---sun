@@ -48,7 +48,7 @@ async function maybeStartProxyAllowingApiHost({ log, apiUrl, settings }: StartPr
 }
 
 /**
- * HERMES-PATCH: let AP_SSRF_ALLOW_LIST take hostnames, not just IPs / CIDRs.
+ * HERMES-PATCH-006: let AP_SSRF_ALLOW_LIST take hostnames, not just IPs / CIDRs.
  *
  * The proxy matches RESOLVED addresses (see ssrfIpClassifier), so a bare hostname in the allow list
  * silently never matched — the one thing every operator writes first. Requiring a literal IP instead

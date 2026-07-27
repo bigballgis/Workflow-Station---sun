@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// HERMES-PATCH-002 (build-time; docs/ap-integration/HERMES_PATCHES.md)
 // Patches the prewarmed @activepieces/piece-ai run_agent action (runs in Dockerfile).
 //
 // Two defects for our DeepSeek reasoning-model usage (deepseek-v4-pro via the

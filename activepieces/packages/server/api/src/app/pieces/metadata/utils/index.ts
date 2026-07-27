@@ -22,7 +22,7 @@ export const pieceListUtils = (log: FastifyBaseLogger) => ({
 
         // HERMES: EE piece white/blacklist filtering removed (AG-EE / G12). CE governs the
         // available piece set via build-time offline pre-install (FR-F01).
-        // HERMES-PATCH(piece-admin P2): restore the minimal platform-level visibility
+        // HERMES-PATCH-004 (piece-admin P2): restore the minimal platform-level visibility
         // filter (upstream EE filterPiecesBasedPlatform semantics, verbatim) so the
         // Admin Center enable/disable toggle works via platform.filteredPieceNames.
         // Deliberately list-only: get() stays unfiltered so flows referencing a

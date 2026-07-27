@@ -450,14 +450,17 @@ worker 的 piece 安装阶段，引擎根本没跑起来。
 | 步骤内失败（HTTP 拿不到文件） | 300s | 0-1s / 204 |
 | happy path（有 Return Response） | 4s | 2s / 200 + 完整 body，未被覆盖 |
 
-**未覆盖**：PAUSED 分支无实测 —— dev 无带 waitpoint / 审批的 enabled flow，目前只有代码保证。
+**PAUSED 分支（2026-07-27 补齐）**：dev 环境**测不到**——能暂停的 piece（`core/delay`、
+`core/approval`、`core/subflows`）都不在已装白名单里，唯一装了的 `core/webhook` 是「先答后停」
+（`createWaitpoint({ responseToSend })` 在同一步就发出响应），调用方在暂停前已被回答，那里即使
+判断写反也观察不到症状。故改由单测逐 `FlowRunStatus` 穷举锁定（见 HERMES_PATCHES.md 的回归网一节）。
+**一旦 `core/delay` 进白名单**，暂停变成"还没人回答过"，这条判断立刻承重——这是白名单准入时
+必须连带复核的一项。
 
-**代价**（[Q8](#q8) 记在案）：vendor 源码树的 `HERMES-PATCH` 注释点由 4 增至 **6 个文件** ——
-`pieces/community-piece-module.ts`、`pieces/metadata/utils/index.ts`、`worker/cache/code/pkg-runner.ts`
-（以上 piece-admin P2/P3）、`worker/egress/lifecycle.ts`（SSRF 白名单收主机名），加本次两处。
-另有 2 个**构建期**改写脚本不带注释标记，易漏：`deploy/pieces/patch-web-approvals.js`、
-`patch-piece-ai-run-agent.js`。Q8 只画了 `HERMES-PATCH-00N` 的结构、尚无实体清单，
-建议 D9 评审时一并把这 8 处建成编号台账。
+**代价**：vendor 的补丁面增至 8 处（本次两处即 HERMES-PATCH-007 / 008）。借此把 [Q8](#q8) 只画了
+结构、一直没有实体的编号台账建了出来：**[HERMES_PATCHES.md](HERMES_PATCHES.md)**，8 处全部登记、
+代码侧标记统一为 `HERMES-PATCH-0NN`。其中 001/002 是构建期改写脚本、不在 vendor 树里，
+是此前最容易在盘点时漏掉的两个。
 
 ---
 
@@ -551,6 +554,10 @@ AP 0.84.0 官方 Tag（frozen baseline）
    └── ...
 ```
 即：不追求未来版本升级兼容，但**保留完整的 baseline、patch、变更原因与许可审计能力**。
+
+**实体清单见 [HERMES_PATCHES.md](HERMES_PATCHES.md)**（2026-07-27 建，首批 8 条）。加补丁时取下一个
+编号写进代码并登记入表；`grep -rn "HERMES-PATCH-0" activepieces/ deploy/` 应与该表逐条对上。
+注意其中 001/002 是**构建期改写脚本**、不在 vendor 树里，只按源码注释盘点会漏。
 
 ### <a id="q9"></a>Q9 — approval / todos piece
 从 v1 白名单**移除**（12→10），`patch-web-approvals` 一并移除；vendor 源码树不物理删除。
