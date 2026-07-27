@@ -121,6 +121,8 @@ export default {
   functionUnit: {
     serviceTaskCreateFailed: '创建自动化流程失败',
     serviceTaskCreateFlow: '创建自动化流程',
+    serviceTaskFlowMissing: '绑定的自动化流程已不存在（{id}）。它可能在 Admin Center 的流程迁移页被删除。新建一个以替换该绑定。',
+    serviceTaskRecreateFlow: '新建流程并重新绑定',
     serviceTaskNoFlow: '该自动化任务还没有流程，创建一个即可开始设计。',
     automation: '自动化',
     newGroup: '新建分组',

@@ -108,6 +108,21 @@
       </el-button>
     </el-empty>
 
+    <!-- Bound to a flow that no longer exists. Without this the builder mounts and shows
+         AP's own "Flow not found", leaving no way to rebind from here. -->
+    <el-empty
+      v-else-if="!loading && danglingFlowId"
+      :description="t('functionUnit.serviceTaskFlowMissing', { id: danglingFlowId })"
+    >
+      <el-button
+        type="primary"
+        :loading="creating"
+        @click="createFlow"
+      >
+        {{ t('functionUnit.serviceTaskRecreateFlow') }}
+      </el-button>
+    </el-empty>
+
     <ServiceTaskBuilderCanvas
       v-else-if="session && selectedFlowId"
       :key="selectedFlowId"
@@ -127,13 +142,14 @@
 
 <script setup lang="ts">
 import { InfoFilled } from '@element-plus/icons-vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { functionUnitApi } from '@/api/functionUnit'
 import {
   createServiceTaskFlow,
   fetchServiceTaskSession,
+  serviceTaskFlowExists,
   type ServiceTaskSession,
 } from '@/api/serviceTask'
 import ServiceTaskBuilderCanvas from '@/components/serviceTask/ServiceTaskBuilderCanvas.vue'
@@ -168,7 +184,11 @@ const cssUrl = `${import.meta.env.BASE_URL}service-task-builder/web.css`
 const selectedTask = computed(() =>
   tasks.value.find((task) => task.id === selectedTaskId.value),
 )
-const selectedFlowId = computed(() => selectedTask.value?.flowId || '')
+/** Set when the bound flow is gone; suppresses the canvas in favour of the rebind prompt. */
+const danglingFlowId = ref('')
+const selectedFlowId = computed(() =>
+  danglingFlowId.value ? '' : selectedTask.value?.flowId || '',
+)
 
 /** Parse one XML tag's attributes (order-independent). */
 function parseTagAttributes(tag: string): Record<string, string> {
@@ -272,11 +292,24 @@ async function load() {
       selectedTaskId.value = tasks.value[0].id
     }
     session.value = await fetchServiceTaskSession()
+    await refreshDanglingState()
   } catch (error) {
     errorMessage.value = t('functionUnit.serviceTaskLoadFailed')
     console.error('[ServiceTaskDesigner] load failed', error)
   } finally {
     loading.value = false
+  }
+}
+
+/** Probe the selected task's bound flow so a deleted one shows a rebind prompt, not a dead builder. */
+async function refreshDanglingState() {
+  danglingFlowId.value = ''
+  const flowId = selectedTask.value?.flowId
+  if (!flowId || !session.value) {
+    return
+  }
+  if (!(await serviceTaskFlowExists(flowId, session.value.token))) {
+    danglingFlowId.value = flowId
   }
 }
 
@@ -305,6 +338,7 @@ async function createFlow() {
       bpmnXml: updatedXml,
     })
     task.flowId = flowId
+    danglingFlowId.value = ''
   } catch (error) {
     errorMessage.value = t('functionUnit.serviceTaskCreateFailed')
     console.error('[ServiceTaskDesigner] create flow failed', error)
@@ -319,6 +353,11 @@ function onUnauthorized() {
   session.value = null
   void load()
 }
+
+// Each task has its own flow, so the dangling check is per-selection.
+watch(selectedTaskId, () => {
+  void refreshDanglingState()
+})
 
 onMounted(load)
 </script>

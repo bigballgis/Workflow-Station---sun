@@ -121,6 +121,8 @@ export default {
   functionUnit: {
     serviceTaskCreateFailed: 'Failed to create the automation flow',
     serviceTaskCreateFlow: 'Create automation flow',
+    serviceTaskFlowMissing: 'The bound automation flow no longer exists ({id}). It may have been deleted in Admin Center\'s flow migration page. Create a new one to replace the binding.',
+    serviceTaskRecreateFlow: 'Create replacement flow',
     serviceTaskNoFlow: 'This automation task has no flow yet. Create one to start designing.',
     automation: 'Automation',
     newGroup: 'New Group',

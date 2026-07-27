@@ -71,6 +71,30 @@ export async function fetchServiceTaskSession(): Promise<ServiceTaskSession> {
 }
 
 /**
+ * Does this flow still exist in the shared runtime?
+ *
+ * A BPMN can carry a flow id whose flow was since deleted (e.g. via Admin Center's
+ * flow migration page) or was never valid (a hand-typed id). Either way the id still
+ * reads as "bound", so without this probe the tab mounts the builder and the user only
+ * sees AP's own "Flow not found" with no way back.
+ *
+ * Any 4xx means this binding is unusable — AP answers 404 for a deleted flow and 400
+ * for an id that isn't even a valid flow id. 5xx / network errors are treated as
+ * "exists" instead: a transient outage must not prompt replacing a healthy binding.
+ */
+export async function serviceTaskFlowExists(flowId: string, token: string): Promise<boolean> {
+  try {
+    await serviceTaskAxios.get(`${window.location.origin}/api/ap/v1/flows/${flowId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    return true
+  } catch (error) {
+    const status = (error as { response?: { status?: number } })?.response?.status
+    return !(status !== undefined && status >= 400 && status < 500)
+  }
+}
+
+/**
  * Create a new (empty) automation flow in the shared runtime and return its id.
  *
  * The bridge session's token authorises the call; it goes through the Kong /api/ap
