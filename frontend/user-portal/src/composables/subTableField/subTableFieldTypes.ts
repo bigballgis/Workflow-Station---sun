@@ -43,6 +43,18 @@ export interface NestedSubTableDescriptor {
   columns: Column[]
   dialogColumns?: Column[]
   primaryKeyFields?: string[]
+  /**
+   * FK/PK runtime inputs. Without these the nested field cannot build an allocate function,
+   * so grandchild rows are saved with no auto primary key and no structural FK — the flat
+   * `__subTables__` slice then gets a server-side key the nested copy never learns about,
+   * and later edits to the nested row are dropped on reload.
+   */
+  tableId?: number | null
+  fieldDefinitions?: BindingFieldDefinition[]
+  physicalTableName?: string
+  bindingMode?: string
+  foreignKeyField?: string | null
+  formFields?: FormField[]
 }
 
 /** Structural mirror of SubTableField.vue props — composables accept the component's props object. */
@@ -125,6 +137,8 @@ export interface SubTableFieldProps {
 export interface SubTableFieldEmit {
   (e: 'update:modelValue', val: any[]): void
   (e: 'update:primaryFormData', val: Record<string, unknown>): void
+  /** Nested sub-table: auto PK allocated on the (still unsaved) parent row while saving a child. */
+  (e: 'update:parentRow', val: Record<string, unknown>): void
   (e: 'assignmentChanged'): void
   (e: 'dataRefreshed', rows: any[]): void
   (e: 'viewDetail', row: any, index: number): void

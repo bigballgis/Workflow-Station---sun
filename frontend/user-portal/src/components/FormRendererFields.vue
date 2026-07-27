@@ -346,6 +346,12 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
             :sub-table-bindings="ctx.subTableBindings as any[]"
             :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
             :suppress-link-only-standalone-sub-tables="ctx.viewContext === 'initiatorRequest'"
+            :host-table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
+            :host-field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
+            :host-function-unit-id="ctx.functionUnitId as string | undefined"
+            :host-task-id="ctx.taskId as string | undefined"
+            :host-primary-form-data="ctx.primaryFormData as Record<string, unknown> | undefined"
+            :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
             @update:row="(row: Record<string, any>) => ctx.handleInlineFormUpdate(field, row)"
             @save="ctx.handleInlineFormSave?.()"
           />

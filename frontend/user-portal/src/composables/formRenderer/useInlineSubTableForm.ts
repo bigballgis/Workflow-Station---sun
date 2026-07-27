@@ -14,6 +14,7 @@ import {
 } from '../tasks/shared'
 import { resolveMiLinkIsolateInlineRow } from '../../utils/inlineFormBelowTableRuntime'
 import type { FormField } from '../../components/formRendererHelpers'
+import { collectSubTableFieldsFromLayout } from '../../components/formRendererHelpers'
 import type { SubTableBinding } from './useSubTableBindings'
 import {
   seedMiLinkInlineRowFkFromParent,
@@ -505,6 +506,41 @@ export function useInlineSubTableForm(deps: InlineSubTableFormDeps) {
       rows.push(fresh)
     }
     deps.handleSubTableUpdate(target.bindingId, rows)
+    syncNestedSubTableBindings(target, rows)
+  }
+
+  /**
+   * Sub-tables placed inside this binding's own form design keep their rows under
+   * {@code parentRow.__subTables__}, but they also own a top-level slice, and that flat slice is
+   * what wins on save ({@code flattenNestedSubTableRowsIntoPayload}). Mirror the nested rows onto
+   * it, or an edit made in the inline form is overwritten by the stale flat copy on reload.
+   *
+   * Recomputed as the union over every parent row — one parent's slice alone would drop the
+   * children of the other parent rows.
+   */
+  function syncNestedSubTableBindings(target: SubTableBinding, parentRows: any[]) {
+    const layout = (target as { formFields?: FormField[] }).formFields
+    if (!Array.isArray(layout) || layout.length === 0) return
+    const seen = new Set<number>()
+    for (const f of collectSubTableFieldsFromLayout(layout)) {
+      const bindingId = f._bindingId
+      if (bindingId == null || seen.has(Number(bindingId))) continue
+      seen.add(Number(bindingId))
+      const nested = resolveBinding(Number(bindingId))
+      if (!nested) continue
+      deps.handleSubTableUpdate(
+        Number(bindingId),
+        pullNestedRowsForBindingFromParentRows(
+          {
+            bindingId: Number(bindingId),
+            tableName: nested.tableName,
+            physicalTableName: nested.physicalTableName,
+            tableId: nested.tableId ?? null,
+          },
+          parentRows,
+        ),
+      )
+    }
   }
 
   function handleInlineFormSave() {

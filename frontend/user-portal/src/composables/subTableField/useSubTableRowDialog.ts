@@ -171,6 +171,7 @@ export function useSubTableRowDialog(
           miParticipantRowId: props.miParticipantRowId,
           miParentParticipantRow: props.miParentParticipantRow,
           miParentTableId: props.miParentTableId,
+          parentTableId: props.parentTableId,
           t,
         })
         if (!result.ok) {
@@ -179,6 +180,11 @@ export function useSubTableRowDialog(
         savedRow = result.row
         if (result.primaryFormDataPatch && Object.keys(result.primaryFormDataPatch).length > 0) {
           emit('update:primaryFormData', result.primaryFormDataPatch)
+        }
+        // Nested sub-table: hand the parent row's freshly allocated PK back to the host dialog
+        // so the parent saves with the same key this child's FK now points at.
+        if (result.parentRowPatch && Object.keys(result.parentRowPatch).length > 0) {
+          emit('update:parentRow', result.parentRowPatch)
         }
       }
       rows.value.push(savedRow)

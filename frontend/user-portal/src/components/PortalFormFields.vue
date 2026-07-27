@@ -16,6 +16,7 @@ import {
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shared'
 import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
 import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 
 export interface PortalSubTableBindingLite {
   bindingId: number
@@ -29,6 +30,8 @@ export interface PortalSubTableBindingLite {
   formFields?: FormField[]
   data: unknown[]
   primaryKeyFields?: string[]
+  /** Field FK/PK metadata from tableBindings — drives auto PK allocation and FK seeding. */
+  fieldDefinitions?: BindingFieldDefinition[]
 }
 
 const props = withDefaults(
@@ -49,6 +52,16 @@ const props = withDefaults(
     rowColumns?: boolean
     /** Inside fcCol — stack fields vertically. */
     inColumn?: boolean
+    /**
+     * FK/PK runtime context of the row being edited here. Nested sub-tables need it to allocate
+     * their own auto primary key and to seed the structural FK back to this row.
+     */
+    hostTableId?: number | null
+    hostFieldDefinitions?: BindingFieldDefinition[]
+    hostFunctionUnitId?: string
+    hostTaskId?: string
+    hostPrimaryFormData?: Record<string, unknown>
+    hostPrimaryTableId?: number | null
   }>(),
   {
     readonly: false,
@@ -139,7 +152,29 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
     { bindingId: binding.bindingId, tableName: binding.tableName },
     rows,
   )
+  // The host mirrors these onto the nested binding's own top-level slice (SubTableInlineForm →
+  // handleInlineFormUpdate → syncNestedSubTableBindings); that flat slice is what wins on save.
   emit('update:field', '__subTables__', sto)
+}
+
+/** Host row's own table joins the ancestor pool so a nested FK to it can be auto-filled. */
+const nestedParentTablesById = computed(() => {
+  if (props.hostTableId == null || !props.hostFieldDefinitions?.length) return undefined
+  return { [Number(props.hostTableId)]: { fieldDefinitions: props.hostFieldDefinitions } }
+})
+
+/**
+ * Saving a nested row forces this row's auto PK to be allocated early (the child's FK needs it).
+ * Adopt it as a field update so the host persists the row under the key the child references.
+ */
+function onNestedParentRowPatch(patch: Record<string, unknown>) {
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === '__subTables__') continue
+    if (value == null || String(value).trim() === '') continue
+    const current = props.model?.[key]
+    if (current != null && String(current).trim() !== '') continue
+    emit('update:field', key, value)
+  }
 }
 </script>
 
@@ -168,8 +203,18 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
         :show-link-form-dialog-footer="showLinkFormDialogFooter"
         :compact-lookup-cells="compactLookupCells"
         :primary-key-fields="resolveBinding(field._bindingId)?.primaryKeyFields"
+        :table-id="resolveBinding(field._bindingId)?.tableId ?? null"
+        :field-definitions="resolveBinding(field._bindingId)?.fieldDefinitions"
+        :function-unit-id="hostFunctionUnitId"
+        :task-id="hostTaskId"
+        :parent-row="model"
+        :parent-table-id="hostTableId ?? null"
+        :parent-tables-by-id="nestedParentTablesById"
+        :primary-form-data="hostPrimaryFormData"
+        :primary-table-id="hostPrimaryTableId ?? null"
         style="margin-bottom: 16px;"
         @update:model-value="(rows: any[]) => onNestedSubTableRowsUpdate(field, rows)"
+        @update:parent-row="onNestedParentRowPatch"
       />
     </el-col>
     <el-col

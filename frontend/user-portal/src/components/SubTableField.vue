@@ -275,7 +275,7 @@
               link
               type="danger"
               size="small"
-              @click="deleteRow(scope.$index)"
+              @click="deleteRowAndSyncNested(scope.$index)"
             >
               {{ t('subTable.delete') }}
             </el-button>
@@ -384,13 +384,23 @@
       :column-validation-rules="validationConfig?.columnRules"
       :upload-url="uploadUrl"
       :nested-sub-tables="nestedSubTableDescriptors"
+      :host-table-id="tableId ?? null"
+      :host-field-definitions="fieldDefinitions"
+      :host-function-unit-id="functionUnitId"
+      :host-task-id="taskId"
+      :host-primary-form-data="primaryFormData"
+      :host-primary-table-id="primaryTableId ?? null"
+      :host-primary-table-display-name="primaryTableDisplayName"
+      :host-sub-table-bindings-for-context="subTableBindingsForContext ?? linkedSubTableBindings"
+      :host-parent-tables-by-id="parentTablesById"
+      :host-linked-sub-table-bindings="linkedSubTableBindings"
       :record-note-fields="recordNoteFields"
       :record-note-table-id="tableId ?? null"
       :record-note-instance-id="recordNoteInstanceId"
       :record-note-function-unit-id="functionUnitId ?? null"
       :primary-key-fields="primaryKeyFields"
       @update:visible="dialogVisible = $event"
-      :save-row="handleDialogSave"
+      :save-row="handleDialogSaveAndSyncNested"
     />
 
     <Teleport to="body">
@@ -565,6 +575,7 @@ import {
 } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { collectSubTableFieldsFromLayout } from './formRendererHelpers'
+import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
 import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
 import { collectRecordNoteFields, resolveRowStableId } from './formRendererHelpers/recordNoteFields'
 import RecordNoteField from './RecordNoteField.vue'
@@ -691,6 +702,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', val: any[]): void
   (e: 'update:primaryFormData', val: Record<string, unknown>): void
+  /** Nested sub-table: auto PK allocated on the (still unsaved) parent row while saving a child. */
+  (e: 'update:parentRow', val: Record<string, unknown>): void
   (e: 'assignmentChanged'): void
   (e: 'dataRefreshed', rows: any[]): void
   (e: 'viewDetail', row: any, index: number): void
@@ -1012,10 +1025,52 @@ const nestedSubTableDescriptors = computed<NestedSubTableDescriptor[]>(() => {
       columns: b.columns,
       dialogColumns: b.dialogColumns,
       primaryKeyFields: b.primaryKeyFields,
+      // FK/PK runtime inputs — the nested field needs them to allocate its own auto PK
+      // and to seed the structural FK back to this binding's row.
+      tableId: b.tableId ?? null,
+      fieldDefinitions: (b as { fieldDefinitions?: BindingFieldDefinition[] }).fieldDefinitions,
+      physicalTableName: b.physicalTableName,
+      bindingMode: b.bindingMode,
+      foreignKeyField: b.foreignKeyField,
+      formFields: b.formFields,
     })
   }
   return out
 })
+
+/**
+ * Nested rows live under the edited row's `__subTables__`, but the nested binding also has its
+ * own top-level `__subTables__` slice, and {@code flattenNestedSubTableRowsIntoPayload} treats
+ * that flat slice as authoritative on save. Without this write-back a nested edit reaches the
+ * parent row and is then overwritten by the untouched flat copy on the next load.
+ *
+ * The union across every parent row is what the binding holds, so recompute from {@code rows} —
+ * emitting only the edited row's slice would drop the other parents' children.
+ */
+function syncNestedSubTableBindings() {
+  for (const d of nestedSubTableDescriptors.value) {
+    const union = pullNestedRowsForBindingFromParentRows(
+      {
+        bindingId: d.bindingId,
+        tableName: d.tableName,
+        physicalTableName: d.physicalTableName,
+        tableId: d.tableId ?? null,
+      },
+      rows.value,
+    )
+    emit('update:linkedSubTableData', d.bindingId, union)
+  }
+}
+
+async function handleDialogSaveAndSyncNested(row: Record<string, unknown>) {
+  await handleDialogSave(row)
+  syncNestedSubTableBindings()
+}
+
+async function deleteRowAndSyncNested(i: number) {
+  await deleteRow(i)
+  syncNestedSubTableBindings()
+}
 
 // ─── RecordNote panels placed in this binding's form design ──────────────────
 // Rendered inside the row Add/Edit dialog: RECORD scope binds the edited row,

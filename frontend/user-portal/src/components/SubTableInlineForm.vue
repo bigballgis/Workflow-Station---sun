@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PortalFormFields, { type PortalSubTableBindingLite } from './PortalFormFields.vue'
 import type { FormField } from './formRendererHelpers'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 
 /**
  * Inline form rendered **below** a SubTableField when the designer chose
@@ -19,6 +20,13 @@ interface Props {
   subTableBindings?: PortalSubTableBindingLite[]
   linkedSubTableBindings?: PortalSubTableBindingLite[]
   suppressLinkOnlyStandaloneSubTables?: boolean
+  /** FK/PK runtime context of the sub-table row this form edits — needed by nested sub-tables. */
+  hostTableId?: number | null
+  hostFieldDefinitions?: BindingFieldDefinition[]
+  hostFunctionUnitId?: string
+  hostTaskId?: string
+  hostPrimaryFormData?: Record<string, unknown>
+  hostPrimaryTableId?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -89,6 +97,12 @@ const cardTitle = computed(() =>
           :linked-sub-table-bindings="linkedSubTableBindings"
           :parent-row="currentRow"
           :suppress-link-only-standalone-sub-tables="suppressLinkOnlyStandaloneSubTables"
+          :host-table-id="hostTableId ?? null"
+          :host-field-definitions="hostFieldDefinitions"
+          :host-function-unit-id="hostFunctionUnitId"
+          :host-task-id="hostTaskId"
+          :host-primary-form-data="hostPrimaryFormData"
+          :host-primary-table-id="hostPrimaryTableId ?? null"
           @update:field="handleFieldUpdate"
         />
       </el-row>
