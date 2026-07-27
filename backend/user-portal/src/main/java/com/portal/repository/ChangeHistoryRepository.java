@@ -33,6 +33,6 @@ public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Lo
      * Find the most recent change record for a specific sub-table row change,
      * ordered by timestamp descending. Used for deduplication on re-save.
      */
-    ChangeHistory findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndChangeTypeOrderByTimestampDesc(
-            String processInstanceId, String subTableName, String rowIdentifier, ChangeType changeType);
+        ChangeHistory findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndFieldNameAndChangeTypeOrderByTimestampDesc(
+            String processInstanceId, String subTableName, String rowIdentifier, String fieldName, ChangeType changeType);
 }

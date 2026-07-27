@@ -114,7 +114,7 @@ export function useChangeHistoryFormatting(
   }
 
   function objectDisplayName(value: Record<string, unknown>): string | null {
-    for (const key of ['dropdown_name', 'name', 'label', 'displayName', 'row_id', 'id']) {
+    for (const key of ['dropdown_name', 'name', 'label', 'displayName', 'display_name', 'fullName', 'username']) {
       const v = value[key]
       if (v !== null && v !== undefined && typeof v !== 'object' && String(v).trim()) {
         return String(v).trim()
@@ -122,14 +122,24 @@ export function useChangeHistoryFormatting(
     }
     return null
   }
-
+  function lookupDisplayName(value: Record<string, unknown>): string | null {
+    const displayName = value.dropdown_name
+    if (displayName === null || displayName === undefined || typeof displayName === 'object') {
+      return null
+    }
+    const normalized = String(displayName).trim()
+    return normalized || null
+  }
   function formatObjectDiff(value: Record<string, unknown>, maxLen: number): string {
     const parts = Object.entries(value)
       .filter(([key]) => key !== 'row_id' && key !== 'id')
       .map(([key, v]) => `${key}: ${formatScalarValue(v, Math.max(32, Math.floor(maxLen / 2)))}`)
     if (parts.length === 0) {
-      const fallbackName = objectDisplayName(value)
-      return fallbackName ? truncateText(fallbackName, maxLen) : '—'
+      const idCandidate = value.id ?? value.userId ?? value.user_id ?? value.value
+      if (idCandidate !== null && idCandidate !== undefined && String(idCandidate).trim()) {
+        return truncateText(String(idCandidate).trim(), maxLen)
+      }
+      return '—'
     }
     return truncateText(parts.join('; '), maxLen)
   }
@@ -145,7 +155,7 @@ export function useChangeHistoryFormatting(
   function truncateText(value: string, maxLen: number): string {
     return value.length <= maxLen ? value : `${value.slice(0, maxLen)}…`
   }
-
+  
   function formatDisplayValue(raw: string | null | undefined, maxLen = 240): string {
     if (raw === null || raw === undefined || raw === '') return '—'
     const s = String(raw).trim()
@@ -158,6 +168,10 @@ export function useChangeHistoryFormatting(
       try {
         const parsed = JSON.parse(s) as unknown
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const displayName = lookupDisplayName(parsed as Record<string, unknown>)
+          if (displayName) {
+            return truncateText(displayName, maxLen)
+          }
           return formatObjectDiff(parsed as Record<string, unknown>, maxLen)
         }
         const compact = JSON.stringify(parsed)

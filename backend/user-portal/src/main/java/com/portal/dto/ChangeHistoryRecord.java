@@ -22,6 +22,7 @@ public class ChangeHistoryRecord {
     private Instant timestamp;
     private String fieldName;
     private String fieldLabel;
+    private Integer fieldOrder;
     private String oldValue;
     private String newValue;
     private String changeType;
