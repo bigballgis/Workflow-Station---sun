@@ -41,6 +41,7 @@ public class FormDesignPropertyTest {
         SubTableViewService subTableViewService = mock(SubTableViewService.class);
         FormDesignComponent component = new FormDesignComponentImpl(
                 mock(com.developer.component.impl.FormTableBindingRestorer.class),
+                mock(com.developer.component.impl.FormConfigJsonTableProvisioner.class),
                 repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository,
                 subTableViewConfigRepository, objectMapper, i18nService, jdbcTemplate, subTableViewService);
         

@@ -590,6 +590,27 @@ export default {
     selectOrCreateForm: '請先選擇或建立表單，然後在設計器中匯入欄位',
     manageBindingsTitle: '管理表綁定',
     manageBindings: '管理表綁定',
+    pasteFormConfig: '貼上表單 JSON',
+    repairStaleBindings: '修復綁定',
+    pasteFormConfigTitle: '貼上表單配置 JSON',
+    pasteFormConfigHint:
+      '貼上來自其他功能單元的 configJson。系統會將 bindingId / Lookup tableId 對應到目前表單的表綁定。若表尚不存在，請手動點擊 Save 以建立表並綁定。',
+    pasteFormConfigPlaceholder: '在此貼上表單配置 JSON…',
+    pasteFormConfigApply: '修復並套用',
+    pasteConfigEmpty: '請先貼上表單配置 JSON',
+    pasteConfigInvalid: '無效的 JSON，需要表單配置物件',
+    pasteConfigFailed: '修復貼上的表單配置失敗',
+    pasteConfigSuccess: '已套用：對應 {mapped} 個綁定、{tables} 個表 ID。請儲存表單以持久化。',
+    pasteConfigCreatedTables: '已建立 {created} 張表並對應 {mapped} 個綁定。請儲存表單以持久化。',
+    pasteConfigPartial:
+      '已套用但有缺口：對應 {mapped} 個綁定、{tables} 個表 ID；仍有 {unmapped} 個綁定未匹配。請檢查表綁定。',
+    pasteConfigNoRemap: '已套用。無需重對應綁定 ID。',
+    pasteConfigMixedSource: '貼上的配置已引用本表單的部分綁定（混源）。',
+    saveBlockingProvisioning: '正在建立表並建立綁定…',
+    saveBlockingProvisioningHint: '系統正在依貼上的配置建立缺失的表，請稍候，期間請勿離開本頁或點擊其他操作。',
+    saveBlockingSaving: '正在儲存表單…',
+    saveBlockingHint: '請稍候，完成前請勿點擊其他地方。',
+    selectFormFirst: '請先選擇表單',
     importTableFields: '匯入表欄位',
     closeButton: '關閉',
     tabGroupTables: '張表',
@@ -651,6 +672,9 @@ export default {
     recordNoteDuplicateScope: '同一表單同一作用域只能放置一個 Record Note 元件',
     recordNoteScopeMainHint: 'Single record 僅在子表表單可用；主表單僅支援整表',
     recordNoteRecordScopeMainForm: '主表單的 Record Note 僅支援整表作用域，Single record 請放在子表表單中',
+    // Select 等 — 右側元件面板從 Options 選擇預設值
+    componentDefaultValue: '預設值',
+    componentDefaultValuePlaceholder: '從選項中選擇預設值',
     // 子表逐操作權限（右側屬性面板）：獨立控制 新增 / 編輯 / 刪除
     subTablePermission: {
       allowAdd: '允許新增',

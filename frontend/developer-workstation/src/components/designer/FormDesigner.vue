@@ -74,6 +74,19 @@
             {{ t('form.manageBindings') }}
           </el-button>
           <el-button
+            :disabled="!selectedForm.id"
+            @click="openPasteConfigDialog"
+          >
+            {{ t('form.pasteFormConfig') }}
+          </el-button>
+          <el-button
+            :disabled="!selectedForm.id"
+            :loading="pasteRepairing"
+            @click="repairCurrentDesignerBindings(true)"
+          >
+            {{ t('form.repairStaleBindings') }}
+          </el-button>
+          <el-button
             :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)"
             @click="handleImportFieldsToDesigner"
           >
@@ -87,6 +100,8 @@
           </el-button>
           <el-button
             type="primary"
+            :loading="savingForm"
+            :disabled="savingForm"
             @click="handleSaveForm(true)"
           >
             {{ t('common.save') }}
@@ -691,7 +706,37 @@
       </template>
     </el-dialog>
 
-    <!-- Manage table bindings dialog -->
+    <!-- Paste form configJson (cross-FU) with live binding repair -->
+    <el-dialog
+      v-model="showPasteConfigDialog"
+      :title="t('form.pasteFormConfigTitle')"
+      width="640px"
+      destroy-on-close
+      class="form-designer-dialog"
+    >
+      <p class="paste-config-hint">
+        {{ t('form.pasteFormConfigHint') }}
+      </p>
+      <el-input
+        v-model="pasteConfigText"
+        type="textarea"
+        :rows="14"
+        :placeholder="t('form.pasteFormConfigPlaceholder')"
+      />
+      <template #footer>
+        <el-button @click="showPasteConfigDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="pasteRepairing"
+          @click="handleConfirmPasteConfig"
+        >
+          {{ t('form.pasteFormConfigApply') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog
       v-model="showBindingManagerDialog"
       :title="t('form.manageBindingsTitle')"
@@ -714,6 +759,12 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <BlockingProgressOverlay
+      :visible="blockingProgressVisible"
+      :message="blockingProgressMessage"
+      :detail="blockingProgressDetail"
+    />
   </div>
 </template>
 <script setup lang="ts">
@@ -730,6 +781,7 @@ import {
   ensureEmptyRuleComponentEvents,
   walkRulesEnsureComponentEvents,
 } from '@/utils/formCreateDefaultEvents'
+import { buildSelectDefaultValuePropRule } from '@/utils/formCreateSelectDefaultValue'
 import {
   flushDesignerValidatePanelToActiveRule,
   installFcDesignerPreviewCapture,
@@ -767,11 +819,14 @@ import { useTableFieldRules } from '@/composables/formDesigner/useTableFieldRule
 import { useSubTableViews } from '@/composables/formDesigner/useSubTableViews'
 import { useSubTablePortalViews } from '@/composables/formDesigner/useSubTablePortalViews'
 import { useFieldImport } from '@/composables/formDesigner/useFieldImport'
+import { useFormConfigPaste } from '@/composables/formDesigner/useFormConfigPaste'
 import { useFormPreviewColumns } from '@/composables/formDesigner/useFormPreviewColumns'
 import { useFormPreviewBuild } from '@/composables/formDesigner/useFormPreviewBuild'
 import { useFormSave } from '@/composables/formDesigner/useFormSave'
 import { useFormNodeBinding } from '@/composables/formDesigner/useFormNodeBinding'
 import { useFormLifecycle } from '@/composables/formDesigner/useFormLifecycle'
+import { useBlockingProgress } from '@/composables/useBlockingProgress'
+import BlockingProgressOverlay from '@/components/common/BlockingProgressOverlay.vue'
 
 const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
@@ -1017,7 +1072,13 @@ function onDesignerStructureChange() {
   nextTick(() => {
     patchDesignerRulesDefaultEvents()
   })
+  // Assigned after useFormConfigPaste — remaps stale _bindingId from left JSON paste.
+  scheduleAutoRepairStaleBindingsFn()
 }
+
+/** Filled by useFormConfigPaste; no-op until then. */
+let scheduleAutoRepairStaleBindingsFn: () => void = () => {}
+
 
 function installDesignerPreviewCaptureHooks() {
   installPreviewValidationDomProbe()
@@ -1217,6 +1278,40 @@ const {
   t,
 })
 
+const {
+  showPasteConfigDialog,
+  pasteConfigText,
+  pasteRepairing,
+  openPasteConfigDialog,
+  handleConfirmPasteConfig,
+  repairCurrentDesignerBindings,
+  scheduleAutoRepairStaleBindings,
+  willProvisionOnSave,
+  provisionAndRepairForSave,
+} = useFormConfigPaste({
+  functionUnitId: props.functionUnitId,
+  selectedForm,
+  getMainDesignerRule: () => {
+    const designer = designerRef.value as { getRule?: () => unknown[] } | null | undefined
+    const rules = designer?.getRule?.()
+    return Array.isArray(rules) ? rules : []
+  },
+  getKnownBindingIds: () =>
+    (selectedForm.value?.tableBindings || [])
+      .map((b) => b.id)
+      .filter((id): id is number => id != null),
+  handleSelectForm: (row) => formLifecycle.handleSelectForm(row),
+  t,
+})
+scheduleAutoRepairStaleBindingsFn = scheduleAutoRepairStaleBindings
+
+const blockingProgress = useBlockingProgress()
+const {
+  visible: blockingProgressVisible,
+  message: blockingProgressMessage,
+  detail: blockingProgressDetail,
+} = blockingProgress
+
 // ── Form persistence + field permissions ────────────────────────────────────
 const formSave = useFormSave({
   functionUnitId: props.functionUnitId,
@@ -1236,6 +1331,9 @@ const formSave = useFormSave({
   loadForms: () => formLifecycle.loadForms(),
   autoSaving,
   lastAutoSaveTime,
+  provisionAndRepairForSave,
+  willProvisionOnSave,
+  blockingProgress,
   t,
 })
 const {
@@ -1244,6 +1342,7 @@ const {
   getFieldPermission,
   setFieldPermission,
   handleSaveForm,
+  savingForm,
 } = formSave
 
 // ── Form ↔ BPMN node binding ────────────────────────────────────────────────
@@ -1566,6 +1665,8 @@ const designerConfig = computed(() => ({
     ensureEmptyRuleComponentEvents(rule)
   },
   updateDefaultRule: buildDesignerUpdateDefaultRule(),
+  // formCreateValue → rule.value (Select Default Value). Required by fc-designer mapping.
+  appendConfigData: ['formCreateValue'],
   componentRule: {
     // Hide is handled by form-create's built-in top toggle (toolHidden → rule-level `_hidden`),
     // which marks the field with a badge WITHOUT collapsing its content. We only append Readonly.
@@ -1576,6 +1677,19 @@ const designerConfig = computed(() => ({
         const builtInReadonly = new Set(['input', 'textarea', 'password', 'timePicker', 'datePicker', 'lookup'])
         if (builtInReadonly.has(String(rule.type ?? ''))) return []
         return [{ type: 'switch', field: 'readonly', title: 'Readonly' }]
+      },
+    },
+    // Select: append Default Value (options → rule.value + props.value) + Readonly (default rule is skipped for typed overrides).
+    select: {
+      append: true,
+      rule(activeRule: Record<string, unknown>) {
+        return [
+          buildSelectDefaultValuePropRule(activeRule, {
+            title: t('form.componentDefaultValue'),
+            placeholder: t('form.componentDefaultValuePlaceholder'),
+          }),
+          { type: 'switch', field: 'readonly', title: 'Readonly' },
+        ]
       },
     },
     // 子表：右侧属性面板追加 新增/编辑/删除 三个逐操作开关（写入 rule.props.allowAdd/allowEdit/allowDelete）。
@@ -1856,6 +1970,13 @@ onMounted(() => {
     display: flex;
     gap: 8px;
     align-items: center;
+  }
+
+  .paste-config-hint {
+    margin: 0 0 12px;
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+    line-height: 1.5;
   }
 
   .auto-save-status {

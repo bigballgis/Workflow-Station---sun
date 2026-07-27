@@ -6,6 +6,7 @@ import { functionUnitApi } from '@/api/functionUnit'
 import type { FormDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
+import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
 import {
   prepareFormCreateRulesForPersist,
   serializeFormCreateOptionsForPersist,
@@ -22,6 +23,7 @@ import { isRequestIdRule } from '@/utils/formFieldMeta'
 import { TABLE_AUDIT_FIELD_NAMES } from '@/utils/tableAuditFields'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 import type { PortalViewsValue } from './useSubTablePortalViews'
+import type { BlockingProgressApi } from '@/composables/useBlockingProgress'
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
@@ -43,6 +45,12 @@ interface UseFormSaveOptions {
   loadForms: () => Promise<void>
   autoSaving: Ref<boolean>
   lastAutoSaveTime: Ref<Date | null>
+  /** When set, Save provisions missing tables/bindings for cross-FU pasted rules before updateForm. */
+  provisionAndRepairForSave?: (nextConfig: Record<string, unknown>) => Promise<Record<string, unknown> | null>
+  /** Predict whether Save will create tables (drives blocking progress copy). */
+  willProvisionOnSave?: (nextConfig: Record<string, unknown>) => boolean
+  /** Manual Save only: top-bar + fullscreen lock while provisioning / persisting. */
+  blockingProgress?: BlockingProgressApi
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -56,8 +64,11 @@ export function useFormSave(options: UseFormSaveOptions) {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, designerSubBindings,
     subFormCache, relationViewState, subTableViewState, subTableListViewRefs,
     subTablePortalViewsState, getActiveDesignerRef, getPrimaryBindingFieldDefinitions,
-    syncSubTableListViewFromFormRules, loadForms, autoSaving, lastAutoSaveTime, t,
+    syncSubTableListViewFromFormRules, loadForms, autoSaving, lastAutoSaveTime,
+    provisionAndRepairForSave, willProvisionOnSave, blockingProgress, t,
   } = options
+
+  const savingForm = ref(false)
 
   // Data_Table columns for field name autocomplete/validation
   const dataTableColumns = ref<string[]>([])
@@ -174,19 +185,8 @@ export function useFormSave(options: UseFormSaveOptions) {
         return
       }
 
-      // 子表占位符必须绑定 SUB 类型表绑定（流程/任务表单下一主多子，数据走子表单增删改）
-      if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
-        const boundSubTableRules = subTableRules.filter((r: any) => r._bindingId)
-        // Use designerSubBindings for validation (includes latest bindings from store)
-        const bindingMap = new Map(designerSubBindings.value.map(b => [b.bindingId, b.bindingType]))
-        for (const st of boundSubTableRules) {
-          const bindingType = bindingMap.get(st._bindingId)
-          if (!bindingType || bindingType !== 'SUB') {
-            if (isManual) ElMessage.error(t('form.subTableOnlySubBinding'))
-            return
-          }
-        }
-      }
+      // SUB-type check runs AFTER provisionAndRepairForSave: cross-FU paste may carry
+      // stale _bindingId that only become valid SUB bindings once missing tables are created.
 
       // RecordNote: at most one component per scope (TABLE / RECORD) on a form
       const recordNoteScopes = collectRecordNoteScopes(rule)
@@ -220,7 +220,22 @@ export function useFormSave(options: UseFormSaveOptions) {
       // Collect sub form rules — prefer live ref, then cache, then previously saved.
       // A failed collection must NEVER drop the binding from subForms entirely (that would
       // erase the sub-form design on save); always fall through live -> cache -> saved config.
+      // Seed from configJson first so paste/repair payloads keep subForms when the target FU
+      // still has no designerSubBindings tabs (empty binding list would otherwise drop them).
       const subForms: Record<number, { rule: any[]; options: any }> = {}
+      const savedSubForms = selectedForm.value.configJson?.subForms || {}
+      for (const [key, existing] of Object.entries(savedSubForms)) {
+        const bindingId = Number(key)
+        if (!Number.isFinite(bindingId) || !existing) continue
+        const existingRule = stripFormCreateRulesDisabledDeep((existing as { rule?: unknown[] }).rule || []) as any[]
+        prepareFormCreateRulesForPersist(existingRule)
+        subForms[bindingId] = {
+          rule: existingRule,
+          options: serializeFormCreateOptionsForPersist(
+            (existing as { options?: Record<string, unknown> }).options,
+          ),
+        }
+      }
       designerSubBindings.value.forEach((binding, index) => {
         const subRef = subDesignerRefs.value[index]
         let collected: { rule: any[]; options: any } | null = null
@@ -344,32 +359,103 @@ export function useFormSave(options: UseFormSaveOptions) {
         return
       }
 
-      const nextConfig = { rule, options, subForms, relationViews, subListViews, subTablePortalViews }
-      const updated = await store.updateForm(functionUnitId, selectedForm.value.id, {
-        formName: selectedForm.value.formName,
-        formType: selectedForm.value.formType,
-        description: selectedForm.value.description,
-        configJson: nextConfig,
-        ...(selectedForm.value.formType === 'TASK' && selectedForm.value.fieldPermissions
-          ? { fieldPermissions: selectedForm.value.fieldPermissions }
-          : {})
-      })
-      // Only write back if the user is still on the same form — updateForm yields, and the
-      // selection may have moved on; overlaying this form's configJson onto the newly
-      // selected form would show this table's fields there until its own load finishes.
-      if (selectedForm.value?.id === targetFormId) {
-        selectedForm.value = {
-          ...selectedForm.value,
-          configJson: updated.configJson || nextConfig
+      let nextConfig: Record<string, unknown> = { rule, options, subForms, relationViews, subListViews, subTablePortalViews }
+
+      // Manual Save: full-screen lock when provisioning tables (slow); always mark savingForm.
+      let blockingOpened = false
+      if (isManual) {
+        savingForm.value = true
+        const needsProvision = !!provisionAndRepairForSave
+          && (willProvisionOnSave?.(nextConfig) === true)
+        if (needsProvision && blockingProgress) {
+          blockingProgress.open(
+            t('form.saveBlockingProvisioning'),
+            t('form.saveBlockingProvisioningHint'),
+          )
+          blockingOpened = true
         }
       }
 
-      if (isManual) {
-        ElMessage.success(t('form.saveSuccess'))
-        await loadForms()
-      } else {
-        lastAutoSaveTime.value = new Date()
-        autoSaveFailureNotified.value = false
+      try {
+        // Manual Save only: provision missing tables + remap. Auto-save must not create tables.
+        if (isManual && provisionAndRepairForSave) {
+          try {
+            const repaired = await provisionAndRepairForSave(nextConfig)
+            if (repaired && typeof repaired === 'object') {
+              nextConfig = repaired
+            }
+          } catch (e: unknown) {
+            console.error('[FormDesigner] provision/repair before save failed', e)
+            ElMessage.error(t('form.pasteConfigFailed'))
+            return
+          }
+        }
+
+        // 子表占位符必须绑定 SUB 类型表绑定（流程/任务表单下一主多子）— after provision so
+        // newly created SUB bindings and remapped _bindingId are visible in designerSubBindings.
+        if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
+          const ruleAfter = Array.isArray(nextConfig.rule) ? nextConfig.rule as any[] : rule
+          const bindingMap = new Map<number, string>()
+          for (const b of designerSubBindings.value) {
+            const id = normalizeBindingId(b.bindingId)
+            if (id != null) bindingMap.set(id, b.bindingType)
+          }
+          for (const st of collectSubTableRules(ruleAfter)) {
+            const bindingId = normalizeBindingId(st._bindingId)
+            if (bindingId == null) continue
+            const bindingType = bindingMap.get(bindingId)
+            if (!bindingType || bindingType !== 'SUB') {
+              if (isManual) ElMessage.error(t('form.subTableOnlySubBinding'))
+              return
+            }
+          }
+        }
+
+        if (selectedForm.value?.id !== targetFormId) {
+          console.warn(`[FormDesigner] form switched (${targetFormId} -> ${selectedForm.value?.id ?? 'none'}) while collecting save payload; aborting to avoid saving one table's fields onto another form`)
+          return
+        }
+
+        if (blockingOpened) {
+          blockingProgress!.setMessage(
+            t('form.saveBlockingSaving'),
+            t('form.saveBlockingHint'),
+          )
+        }
+
+        const updated = await store.updateForm(functionUnitId, selectedForm.value.id, {
+          formName: selectedForm.value.formName,
+          formType: selectedForm.value.formType,
+          description: selectedForm.value.description,
+          configJson: nextConfig,
+          ...(selectedForm.value.formType === 'TASK' && selectedForm.value.fieldPermissions
+            ? { fieldPermissions: selectedForm.value.fieldPermissions }
+            : {})
+        })
+        // Only write back if the user is still on the same form — updateForm yields, and the
+        // selection may have moved on; overlaying this form's configJson onto the newly
+        // selected form would show this table's fields there until its own load finishes.
+        if (selectedForm.value?.id === targetFormId) {
+          selectedForm.value = {
+            ...selectedForm.value,
+            configJson: updated.configJson || nextConfig
+          }
+        }
+
+        if (isManual) {
+          ElMessage.success(t('form.saveSuccess'))
+          await loadForms()
+        } else {
+          lastAutoSaveTime.value = new Date()
+          autoSaveFailureNotified.value = false
+        }
+      } finally {
+        if (blockingOpened) {
+          blockingProgress!.close()
+        }
+        if (isManual) {
+          savingForm.value = false
+        }
       }
     } catch (e: any) {
       // 保存失败不许静默：用户以为已自动保存、离开页面即丢工作。
@@ -384,6 +470,9 @@ export function useFormSave(options: UseFormSaveOptions) {
       if (!isManual) {
         autoSaving.value = false
       }
+      if (isManual) {
+        savingForm.value = false
+      }
     }
   }
 
@@ -395,5 +484,6 @@ export function useFormSave(options: UseFormSaveOptions) {
     getFieldPermission,
     setFieldPermission,
     handleSaveForm,
+    savingForm,
   }
 }

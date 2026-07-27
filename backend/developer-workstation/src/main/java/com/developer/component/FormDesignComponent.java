@@ -1,5 +1,7 @@
 package com.developer.component;
 
+import com.developer.dto.FormConfigPasteRepairRequest;
+import com.developer.dto.FormConfigPasteRepairResponse;
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
 import com.developer.dto.FormTableBindingResponse;
@@ -117,4 +119,15 @@ public interface FormDesignComponent {
      * @return relation table name, or null if not RELATED type or not found
      */
     String resolveRelationTableName(FormTableBinding binding);
+
+    /**
+     * Repair a pasted {@code configJson} against the target form's table bindings
+     * (cross-FU paste). Remaps stale SubTable / Lookup bindingIds and lookup tableIds.
+     *
+     * @param functionUnitId owning FU (ownership check)
+     * @param formId         target form that already has bindings
+     * @param request        pasted config (+ optional persist flag)
+     */
+    FormConfigPasteRepairResponse repairPastedConfig(
+            Long functionUnitId, Long formId, FormConfigPasteRepairRequest request);
 }

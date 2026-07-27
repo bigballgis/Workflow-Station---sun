@@ -41,6 +41,8 @@ export interface DialogColumn {
   readonly?: boolean
   /** Element Plus rules from Form Design validate[]; preferred by buildRules over required-only. */
   rules?: Array<Record<string, unknown>>
+  /** Form Design Basis / rule default; used by buildInitialRow for Add dialog. */
+  defaultValue?: unknown
   placeholder?: string
   minWidth?: number
   options?: Array<{ label: string; value: string | number }>
@@ -70,52 +72,49 @@ export function isColReadonly(col: Pick<DialogColumn, 'readonly'>): boolean {
   return col.readonly === true
 }
 
+function initialValueFor(col: DialogColumn): unknown {
+  if (col.defaultValue !== undefined) {
+    return typeof col.defaultValue === 'object' && col.defaultValue !== null
+      ? JSON.parse(JSON.stringify(col.defaultValue))
+      : col.defaultValue
+  }
+  switch (col.type) {
+    case 'number':
+      return undefined
+    case 'switch':
+      return false
+    case 'checkbox':
+      return []
+    case 'date':
+    case 'datetime':
+    case 'timerange':
+      return null
+    case 'treeselect':
+      return col.props?.multiple ? [] : ''
+    case 'rate':
+    case 'slider':
+      return 0
+    case 'colorPicker':
+      return ''
+    case 'tree':
+      return []
+    case 'transfer':
+      return []
+    case 'cascader':
+      return []
+    case 'editor':
+      return ''
+    case 'signature':
+      return ''
+    default:
+      return ''
+  }
+}
+
 export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown> {
   const row: Record<string, unknown> = {}
   for (const col of columns) {
-    switch (col.type) {
-      case 'number':
-        row[col.field] = undefined
-        break
-      case 'switch':
-        row[col.field] = false
-        break
-      case 'checkbox':
-        row[col.field] = []
-        break
-      case 'date':
-      case 'datetime':
-      case 'timerange':
-        row[col.field] = null
-        break
-      case 'treeselect':
-        row[col.field] = col.props?.multiple ? [] : ''
-        break
-      case 'rate':
-      case 'slider':
-        row[col.field] = 0
-        break
-      case 'colorPicker':
-        row[col.field] = ''
-        break
-      case 'tree':
-        row[col.field] = []
-        break
-      case 'transfer':
-        row[col.field] = []
-        break
-      case 'cascader':
-        row[col.field] = []
-        break
-      case 'editor':
-        row[col.field] = ''
-        break
-      case 'signature':
-        row[col.field] = ''
-        break
-      default:
-        row[col.field] = ''
-    }
+    row[col.field] = initialValueFor(col)
   }
   return row
 }

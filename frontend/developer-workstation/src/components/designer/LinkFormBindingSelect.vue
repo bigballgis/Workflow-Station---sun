@@ -30,7 +30,7 @@ const allComponents = computed(() => props.components?.length ? props.components
   <el-select
     :model-value="modelValue"
     clearable
-    :placeholder="t('designer.linkFormSelectPlaceholder')"
+    :placeholder="t('form.linkFormSelectPlaceholder')"
     @change="emit('update:modelValue', $event ?? null)"
   >
     <el-option
@@ -43,7 +43,7 @@ const allComponents = computed(() => props.components?.length ? props.components
       v-if="allComponents.length === 0"
       #empty
     >
-      <span class="el-select-dropdown__empty">{{ t('designer.linkFormSelectEmpty') }}</span>
+      <span class="el-select-dropdown__empty">{{ t('form.linkFormSelectEmpty') }}</span>
     </template>
   </el-select>
 </template>

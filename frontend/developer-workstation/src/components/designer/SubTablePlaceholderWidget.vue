@@ -14,13 +14,13 @@
     <span
       v-else-if="state === 'unconfigured'"
       class="hint-text"
-    >{{ t('designer.subTablePlaceholderUnconfigured') }}</span>
+    >{{ t('form.subTablePlaceholderUnconfigured') }}</span>
     <el-tag
       v-else
       type="warning"
       size="small"
     >
-      {{ t('designer.subTablePlaceholderStale') }}
+      {{ t('form.subTablePlaceholderStale') }}
     </el-tag>
 
     <!-- 跳转按钮（仅 valid 状态显示） -->

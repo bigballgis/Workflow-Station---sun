@@ -12,7 +12,7 @@ import {
 } from '@/utils/formCreateDefaultEvents'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
-import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
+import { resolveRelationViewEntry, resolveBindingKeyedEntry } from '@/utils/formConfigBindingResolve'
 import type { TableFieldDefLike } from '@/utils/formCreateRuleDefaults'
 import { parseProcessNodesFromBpmnXml, type BpmnProcessNode } from '@/utils/bpmnFormBindingUpdate'
 import type { SubTableListColumnDTO } from './useSubTableViews'
@@ -162,7 +162,8 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
     for (const b of bindings) {
       if (b.bindingType === 'SUB') {
         const id = b.id as number
-        const saved = savedSubListViews[id]
+        const saved = resolveBindingKeyedEntry(savedSubListViews, id, bindings, 'SUB')
+          ?? savedSubListViews[id]
         initialSubTableViewState[id] = {
           allFields: [],
           viewFields: Array.isArray(saved?.columns) ? saved.columns : []

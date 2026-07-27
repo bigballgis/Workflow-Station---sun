@@ -512,6 +512,29 @@ export default {
     readOnly: 'Read Only',
     importTableFields: 'Import Table Fields',
     manageBindings: 'Manage Table Bindings',
+    pasteFormConfig: 'Paste Form JSON',
+    repairStaleBindings: 'Repair Bindings',
+    pasteFormConfigTitle: 'Paste Form Config JSON',
+    pasteFormConfigHint:
+      'Paste configJson from another Function Unit. Binding IDs and lookup table IDs will be remapped to this form’s table bindings. If tables do not exist yet, click Save manually to create them and bind.',
+    pasteFormConfigPlaceholder: 'Paste form config JSON here…',
+    pasteFormConfigApply: 'Repair & Apply',
+    pasteConfigEmpty: 'Paste a form config JSON first',
+    pasteConfigInvalid: 'Invalid JSON — expected a form config object',
+    pasteConfigFailed: 'Failed to repair pasted form config',
+    pasteConfigSuccess: 'Applied. Remapped {mapped} binding(s), {tables} table id(s). Save the form to persist.',
+    pasteConfigCreatedTables:
+      'Created {created} table(s) and remapped {mapped} binding(s). Save the form to persist.',
+    pasteConfigPartial:
+      'Applied with gaps: remapped {mapped} binding(s), {tables} table id(s); {unmapped} binding(s) still unmatched. Check table bindings.',
+    pasteConfigNoRemap: 'Applied. No stale binding ids needed remapping.',
+    pasteConfigMixedSource: 'Pasted config already referenced some of this form’s bindings (mixed source).',
+    saveBlockingProvisioning: 'Creating tables and bindings…',
+    saveBlockingProvisioningHint:
+      'Missing tables from the pasted config are being created. Please wait and do not leave this page.',
+    saveBlockingSaving: 'Saving form…',
+    saveBlockingHint: 'Please wait. Do not click elsewhere until this finishes.',
+    selectFormFirst: 'Select a form first',
     bindProcessNode: 'Bind Process Node',
     createFormTitle: 'Create Form',
     formNameLabel: 'Form Name',
@@ -615,6 +638,9 @@ export default {
     recordNoteDuplicateScope: 'Only one Record Note per scope is allowed on a form',
     recordNoteScopeMainHint: 'Single record is available on sub-table forms only; the main form is whole-table',
     recordNoteRecordScopeMainForm: 'Record Note on the main form supports whole-table scope only; use Single record inside a sub-table form',
+    // Select (and similar) — right-side Component panel default from Options
+    componentDefaultValue: 'Default Value',
+    componentDefaultValuePlaceholder: 'Select a default from Options',
     // Sub-Table per-operation permissions (right-side props panel) — gate Add / Edit / Delete independently.
     subTablePermission: {
       allowAdd: 'Allow Add',
