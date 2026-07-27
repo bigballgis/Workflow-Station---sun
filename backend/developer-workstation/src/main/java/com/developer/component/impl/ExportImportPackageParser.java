@@ -95,6 +95,17 @@ public class ExportImportPackageParser {
                         rawFiles.get("link-form-components/link_form_components.json"), List.class));
             }
 
+            // Parse Automation (Activepieces) flow payloads carried by the package
+            List<Map<String, Object>> automationFlows = new ArrayList<>();
+            for (String fileName : rawFiles.keySet().stream().sorted().toList()) {
+                if (fileName.startsWith("automation-flows/") && fileName.endsWith(".json")) {
+                    automationFlows.add(objectMapper.readValue(rawFiles.get(fileName), Map.class));
+                }
+            }
+            if (!automationFlows.isEmpty()) {
+                result.put("automationFlows", automationFlows);
+            }
+
             // Parse "View Design" main-table view configs
             if (rawFiles.containsKey("views/main_table_views.json")) {
                 result.put("mainTableViews", objectMapper.readValue(

@@ -413,8 +413,6 @@ README 附**集群内验证流程**（AP pod 打 admin-center 须失败、打 re
 **需要认证主体**的端点（如 DW 的 `/api/v1/auth/me`）判定是否真登录——多数 admin 端点从 URL 取 userId、不需主体，
 **它们返回 200 并不能证明已认证**。
 
----
-
 ### <a id="d10"></a>D10 — sync webhook 终态释放：第一批 HERMES-PATCH 落在运行时（2026-07-27）
 
 > 编号跳过 D9 —— 该号已由 `D9_PIECE_ONLINE_ADMIN_DRAFT.md` 预留。
@@ -526,6 +524,16 @@ AP server-api 经 Kong 收进平台域；:8085 edge 桥与 nonce 握手**并行�
   `SERVICE_INTERNAL_TOKEN` 引擎经 envFrom 天然持有（AP 仍拿不到，C-3 边界不变）。
 - **顺序约束**：flow 须先导入再部署 FU；若倒置，flow 导入后重新部署即可（即裁决中
   "映射变更后须重新部署"的代价）。connection 不随包走（设计使然，prod 用生产凭据重建）。
+- **flow 随 FU 导出包走（2026-07-27 补齐）**：`/automation/flows` 管理面仍是独立发布通道，
+  但 FU 导出不再只带一个解析不到的 `ap:flowId`——`FunctionUnitExporter` 按 BPMN 里的
+  `ap:flowId` 经 admin-center `/automation/flows/internal/export`（同 C-3 门禁）取可携带
+  JSON，打进 ZIP 的 `automation-flows/flow_*.json`（登记于 manifest `components.automationFlows`）；
+  DW 导入与 admin-center 的 FU ZIP 导入在写任何 FU 内容<b>之前</b>还原它们
+  （`/automation/flows/internal/restore` → `AutomationFlowService.restoreFlows`）。
+  规则：**只补缺、不覆盖**——迁移键已能解析到本环境 flow 的一律跳过，同环境重导不会用包里的
+  旧快照盖掉正在维护的草稿；源环境引用不到 flow（已删）时导出直接失败，不产出缺自动化的包。
+  connection 依旧不随包走，故新建的 flow 可能发布失败 → 结果里回传 `PUBLISH_FAILED` +
+  原因，补齐凭据后在管理面手工发布。flow 本体不进版本快照（AP 侧自带版本，同库回滚引用不变）。
 
 ### <a id="q8"></a>Q8 — AP 版本演进 → **Frozen Baseline + Controlled Fork**
 **旧表述（作废）**："完全放弃跟随上游，因为我们只维护一份 vendor 代码。"

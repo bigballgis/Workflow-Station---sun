@@ -560,7 +560,7 @@ export const functionUnitApi = {
   importFunctionUnit: (file: File, changeLog?: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    return functionUnitAxios.post<any, { data: { status: string; message?: string; functionUnitId?: number; version?: string; versioned?: boolean } }>(
+    return functionUnitAxios.post<any, { data: { status: string; message?: string; functionUnitId?: number; version?: string; versioned?: boolean; automationFlows?: AutomationFlowRestoreResult[] } }>(
       '/api/v1/export-import/import',
       formData,
       { params: changeLog ? { changeLog } : {} }
@@ -575,6 +575,18 @@ export const functionUnitApi = {
   
   getDeploymentHistory: (functionUnitId: number) =>
     functionUnitAxios.get<any, { data: DeployResponse[] }>(`/api/v1/function-units/${functionUnitId}/deployments`)
+}
+
+/**
+ * 导入包携带的 Automation flow 在本环境的还原结果。
+ * PUBLISH_FAILED = 草稿已建但未发布（多为本环境缺 connection 凭据），需人工补齐后发布。
+ */
+export interface AutomationFlowRestoreResult {
+  flowKey: string
+  displayName: string
+  flowId: string
+  status: 'CREATED' | 'ALREADY_PRESENT' | 'PUBLISH_FAILED'
+  detail?: string
 }
 
 // Deploy types

@@ -14,6 +14,7 @@ import com.admin.entity.FunctionUnitDeployment;
 import com.admin.enums.DeploymentEnvironment;
 import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
+import com.admin.service.AutomationFlowService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -55,6 +56,7 @@ public class FunctionUnitImportController {
     private final ActionDefinitionImportWriter actionDefinitionImportWriter;
     private final EmailConnectionSyncComponent emailConnectionSyncComponent;
     private final EmailMonitorSyncComponent emailMonitorSyncComponent;
+    private final AutomationFlowService automationFlowService;
     private final ObjectMapper objectMapper;
     private final I18nService i18nService;
     
@@ -88,6 +90,21 @@ public class FunctionUnitImportController {
                 return ResponseEntity.badRequest().body(result);
             }
             
+            // Restore the packaged Automation (Activepieces) flows before writing any function unit
+            // content: the flow bodies live outside this database, and a package whose automation
+            // cannot be restored must not land as a half-working function unit. Flows already
+            // present in this environment are left untouched.
+            List<AutomationFlowService.FlowRestoreResult> automationFlows;
+            try {
+                automationFlows = restorePackagedAutomationFlows(packageData);
+            } catch (RuntimeException e) {
+                log.error("Automation flow restore failed while importing function unit", e);
+                result.put("status", "FAILED");
+                result.put("message", i18nService.getMessage(
+                        "admin.fu.import_automation_flow_failed", String.valueOf(e.getMessage())));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(result);
+            }
+
             String name = trimToNull((String) manifest.get("name"));
             String code = trimToNull((String) manifest.get("code"));
             String version = trimToNull((String) manifest.get("version"));
@@ -167,6 +184,7 @@ public class FunctionUnitImportController {
                 result.put("name", importResult.getFunctionUnit().getName());
                 result.put("version", importResult.getFunctionUnit().getVersion());
                 result.put("versioned", importResult.isVersioned());
+                result.put("automationFlows", automationFlows);
                 result.put("message", i18nService.getMessage("admin.fu.import_success"));
                 return ResponseEntity.ok(result);
             } else {
@@ -472,6 +490,25 @@ public class FunctionUnitImportController {
         }
     }
     
+    /**
+     * 还原包里携带的 Automation flow。已存在的跳过、缺失的建到 AP；发布失败（多为本环境
+     * 缺 connection 凭据）以 PUBLISH_FAILED 随结果回传，供导入方展示后手工补齐。
+     */
+    private List<AutomationFlowService.FlowRestoreResult> restorePackagedAutomationFlows(
+            Map<String, Object> packageData) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> flows = (List<Map<String, Object>>) packageData.get("automationFlows");
+        if (flows == null || flows.isEmpty()) {
+            return List.of();
+        }
+        List<com.fasterxml.jackson.databind.JsonNode> payloads = flows.stream()
+                .map(flow -> (com.fasterxml.jackson.databind.JsonNode) objectMapper.valueToTree(flow))
+                .toList();
+        List<AutomationFlowService.FlowRestoreResult> results = automationFlowService.restoreFlows(payloads);
+        log.info("Restored {} automation flow(s) from function unit package: {}", results.size(), results);
+        return results;
+    }
+
     /** Walk workstation bundle layout and hydrate manifest/forms/actions payloads. */
     private Map<String, Object> parseZipFile(MultipartFile file) throws IOException {
         Map<String, Object> result = new HashMap<>();
@@ -502,7 +539,21 @@ public class FunctionUnitImportController {
                 break;
             }
         }
-        
+
+        // Automation (Activepieces) flows referenced by the service tasks. Unlike the entries below,
+        // a malformed payload is NOT swallowed: the flow is what makes the service task runnable.
+        List<Map<String, Object>> automationFlows = new ArrayList<>();
+        for (String fileName : rawFiles.keySet().stream().sorted().toList()) {
+            if (fileName.startsWith("automation-flows/") && fileName.endsWith(".json")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> flowData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
+                automationFlows.add(flowData);
+            }
+        }
+        if (!automationFlows.isEmpty()) {
+            result.put("automationFlows", automationFlows);
+        }
+
         List<Map<String, Object>> forms = new ArrayList<>();
         for (String fileName : rawFiles.keySet()) {
             if (fileName.startsWith("forms/") && fileName.endsWith(".json")) {

@@ -84,6 +84,8 @@ public class ExportManifest {
         private List<String> decisions;
         private List<String> connections;
         private List<String> emailMonitors;
+        /** {@code automation-flows/flow_*.json} — Activepieces flows referenced by service tasks */
+        private List<String> automationFlows;
         /** {@code views/main_table_views.json} when present */
         private String mainTableViews;
     }
