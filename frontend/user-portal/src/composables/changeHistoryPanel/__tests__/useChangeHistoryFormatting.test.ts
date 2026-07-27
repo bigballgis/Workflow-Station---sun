@@ -23,4 +23,23 @@ describe('useChangeHistoryFormatting', () => {
     })
     expect(formatDisplayValue(value)).toBe('incoming_channel: Branch; file: lilong.JPG')
   })
+  it('labels Record Note change types instead of echoing the raw enum', () => {
+    const { getChangeTypeLabel, getChangeTypeTag } = useChangeHistoryFormatting(t, dayjs)
+    expect(getChangeTypeLabel('RECORD_NOTE_ADD')).toBe('changeHistory.recordNoteAdd')
+    expect(getChangeTypeLabel('RECORD_NOTE_UPDATE')).toBe('changeHistory.recordNoteUpdate')
+    expect(getChangeTypeLabel('RECORD_NOTE_DELETE')).toBe('changeHistory.recordNoteDelete')
+    expect(getChangeTypeTag('RECORD_NOTE_ADD')).toBe('success')
+    expect(getChangeTypeTag('RECORD_NOTE_DELETE')).toBe('danger')
+  })
+  it('locates a Record Note entry, pinning RECORD-scope notes to their row', () => {
+    const { fieldLocationLabel } = useChangeHistoryFormatting(t, dayjs)
+    const base = { fieldName: 'Record Note', userId: 'u1', timestamp: '2026-07-27T00:00:00Z' }
+    expect(fieldLocationLabel({ ...base, changeType: 'RECORD_NOTE_ADD' } as never))
+      .toBe('changeHistory.recordNote')
+    expect(fieldLocationLabel({
+      ...base,
+      changeType: 'RECORD_NOTE_ADD',
+      rowIdentifier: 'row-77',
+    } as never)).toBe('changeHistory.recordNote · changeHistory.row: row-77')
+  })
 })

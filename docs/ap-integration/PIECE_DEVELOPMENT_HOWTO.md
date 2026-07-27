@@ -17,7 +17,7 @@
 | 半边 | 内容 | 给谁用 | 投放载体 |
 |---|---|---|---|
 | **元数据**（designer half） | actions / triggers / props 的声明 | 设计器 UI（DW Automation builder） | `piece_metadata` 表（`pieces-seed.sql` 导入） |
-| **运行时包**（runtime half） | 真正执行的 JS 代码（`run()`） | AP worker 进程 | 预装进 AP 镜像（`deploy/pieces/Dockerfile`） |
+| **运行时包**（runtime half） | 真正执行的 JS 代码（`run()`） | AP worker 进程 | 预装进 AP 镜像（`activepieces/Dockerfile` 末尾的 prewarm 步骤） |
 
 两条铁律，先记住：
 
@@ -198,7 +198,7 @@ cd ../deploy/pieces
 node serialize-piece-metadata.js <name>
 
 # 3. 登记白名单 + 生成 seed（同 §4/§5）
-#    编辑 pieces.json 追加 { "name": "@activepieces/piece-<name>", "version": "<ver>" }
+#    编辑 activepieces/hermes/pieces.json 追加 { "name": "@activepieces/piece-<name>", "version": "<ver>" }
 node generate-metadata-seed.js
 
 # 4. 灌 dev 库 + 重启 AP（同 §7；不重启则「列表有、单查 404」）
@@ -216,7 +216,7 @@ docker restart platform-activepieces-dev
 
 ```bash
 cd <repo>
-docker cp deploy/pieces/tarballs/activepieces-piece-<name>-<ver>.tgz \
+docker cp activepieces/hermes/tarballs/activepieces-piece-<name>-<ver>.tgz \
   platform-activepieces-dev:/tmp/piece.tgz
 docker exec platform-activepieces-dev sh -c '
   P=/usr/src/app/cache/v11/common/pieces/@activepieces/piece-<name>-<ver>
@@ -248,16 +248,16 @@ npm run build-piece -- <name>
 # 产物在 piece 目录内（不是仓库根的 dist/）：packages/pieces/community/<name>/dist/
 # CLI 已在 dist/ 里自动跑过 npm pack（workspace:* 依赖也已 pin 成具体版本），直接留档：
 cp packages/pieces/community/<name>/dist/activepieces-piece-<name>-<ver>.tgz \
-   ../deploy/pieces/tarballs/
+   hermes/tarballs/
 ```
 
-`tarballs/` 是**审计留档 + 内网发布源**（README 原话）。真正让镜像装上你的包，二选一：
+`hermes/tarballs/` 既是**审计留档**，也是自研件的**安装源**：在 §4 的白名单条目里加一个
+`"tarball": "activepieces-piece-<name>-<ver>.tgz"` 字段，`prewarm-pieces.sh` 就把它拷进
+`pieces/<name>-<ver>/` 并以本地路径依赖安装（与 installer 的 ARCHIVE 分支同构），
+构建机**不需要**能解析这个包名。声明了却找不到文件即 fail-loud。
 
-- **推荐 · 内网 Nexus npm**：把这个 tarball `npm publish` 到公司内网 Nexus npm registry。
-  之后 §6 的镜像构建（`prewarm-pieces.sh` 跑 `pnpm install`）在**构建机**上就能从 Nexus 解析到它，
-  完全复用现有流程、零改脚本。
-- **备选 · 本地 tarball 装入**：若暂时没有内网 Nexus，改 `prewarm-pieces.sh` 让对应 piece 从
-  `pieces/<name>-<ver>/` 的 `file:` 依赖（指向 tarball）安装。属于脚本改动，需评审——优先走 Nexus。
+若公司内网有 Nexus npm registry，也可以把 tarball `npm publish` 上去、白名单条目不写
+`tarball` 字段，让构建机按版本号解析——两条路都只在**构建机**联网。
 
 > 无论哪种，**联网只发生在构建机**。生产运行时永远命中镜像里预装好的 `node_modules`+`ready`，不碰任何 registry（X-3）。
 
@@ -299,7 +299,8 @@ metadata JSON 会带着它，生成器原样透传。漏这步的症状：**任�
 
 ## 4. 登记进白名单
 
-改**唯一需要手改的文件** `deploy/pieces/pieces.json`，追加一项：
+改**唯一需要手改的文件** `activepieces/hermes/pieces.json`（它跟着「烘进镜像」那一半走，
+Docker 构建上下文只能是 `activepieces/`），追加一项：
 
 ```json
 { "name": "@activepieces/piece-<name>", "version": "<ver>" }
@@ -307,7 +308,7 @@ metadata JSON 会带着它，生成器原样透传。漏这步的症状：**任�
 
 确认此时已就位（§3 产出的）：
 - `deploy/pieces/metadata/piece-<name>.json`（元数据半，注意 `piece-` 前缀）
-- `deploy/pieces/tarballs/activepieces-piece-<name>-<ver>.tgz`（运行时半留档）
+- `activepieces/hermes/tarballs/activepieces-piece-<name>-<ver>.tgz`（运行时半：留档 + 自研件安装源）
 - `activepieces/packages/web/public/ap-cdn/pieces/hermes/<name>.svg`（图标半，§3.3）
 
 ---
@@ -316,7 +317,7 @@ metadata JSON 会带着它，生成器原样透传。漏这步的症状：**任�
 
 ```bash
 cd deploy/pieces
-node generate-metadata-seed.js        # 读 pieces.json + metadata/piece-<name>.json → metadata/pieces-seed.sql
+node generate-metadata-seed.js        # 读 ../../activepieces/hermes/pieces.json + metadata/piece-<name>.json → metadata/pieces-seed.sql
 ```
 
 生成器是**幂等**的（按 `name+version` 先 DELETE 后 INSERT，单事务）；`pieceType=OFFICIAL`、id 由
@@ -326,8 +327,8 @@ node generate-metadata-seed.js        # 读 pieces.json + metadata/piece-<name>.
 把改动入库（tarball 也一起，都很小）：
 
 ```bash
-git add deploy/pieces/pieces.json deploy/pieces/metadata/piece-<name>.json \
-        deploy/pieces/tarballs/*.tgz deploy/pieces/metadata/pieces-seed.sql
+git add activepieces/hermes/pieces.json deploy/pieces/metadata/piece-<name>.json \
+        activepieces/hermes/tarballs/*.tgz deploy/pieces/metadata/pieces-seed.sql
 ```
 
 ---
@@ -335,16 +336,18 @@ git add deploy/pieces/pieces.json deploy/pieces/metadata/piece-<name>.json \
 ## 6. 烘进 AP 镜像（在有网/能连 Nexus 的构建机上）
 
 `prewarm-pieces.sh` 在 **docker build 时**按 worker `piece-installer.ts` 的**原样布局**，
-用 `pnpm install --config.node-linker=isolated`（X-4：非 bun）把 pieces.json 里每个件装进
+用 `pnpm install --config.node-linker=isolated`（X-4：非 bun）把 `hermes/pieces.json` 里每个件装进
 `cache/v11/common/pieces/<name>-<ver>/`，并写 `ready` 标记。运行时 installer 一看到 `ready`+`node_modules`
 就**直接跳过、任何 registry 都不碰**——这就是气隙成立的机制。
 
+预装是镜像的**最后一层**（`activepieces/Dockerfile`），所以只改白名单时，本机有构建缓存的话很快。
+
 ```bash
-cd deploy/pieces
-docker build -t activepieces:0.84.0-pieces .
+cd activepieces
+docker build -t activepieces:0.84.0-ee-removed .
 # 集群版（基础镜像换 nexus3 mirror，再照常 push nexus3）：
-docker build --build-arg BASE_IMAGE=nexus3.<...>/workflow-station2/activepieces:0.84.0 \
-  -t nexus3.<...>/workflow-station2/activepieces:0.84.0-pieces .
+docker build --build-arg NODE_IMAGE=nexus3.<...>/workflow-station2/node:24.14.0-bullseye-slim \
+  -t nexus3.<...>/workflow-station2/activepieces:0.84.0-ee-removed .
 ```
 
 > 若走 §3.1 的 Nexus 方案，构建机的 npm/pnpm registry 要指向内网 Nexus，才能在 install 时解析到你的自研包。
@@ -358,7 +361,7 @@ docker build --build-arg BASE_IMAGE=nexus3.<...>/workflow-station2/activepieces:
 顺序不能乱（`piece_metadata` 表由 AP 首启的 TypeORM 迁移建，空库直接跑 seed 会报表不存在）：
 
 ```bash
-# 1. 上镜像：docker load < ...tar.gz  或  docker pull nexus3.../activepieces:0.84.0-pieces
+# 1. 上镜像：docker load < ...tar.gz  或  docker pull nexus3.../activepieces:0.84.0-ee-removed
 #    把 deploy/k8s/activepieces.yaml 的 image: 换成新 tag（dev compose 换 image:）
 
 # 2. 起一次 AP 建表（首启自动迁移；等 healthcheck 变绿）
@@ -404,7 +407,7 @@ curl -s http://localhost:3000/api/ap/v1/pieces/@activepieces/piece-<name> | head
 
 | 坑 | 现象 | 处置 |
 |---|---|---|
-| 两半版本不一致 | 运行时 `PieceNotFound` | pieces.json / metadata JSON / 预装目录三处 `version` 逐字对齐 |
+| 两半版本不一致 | 运行时 `PieceNotFound` | hermes/pieces.json / metadata JSON / 预装目录三处 `version` 逐字对齐 |
 | 跑完 seed 没重启 AP | 列表有、单查 404 | §7 第 4 步重启 AP |
 | 空库直接跑 seed | `relation "piece_metadata" does not exist` | 先起一次 AP 建表，再 seed |
 | create-piece 后没跑 `pnpm install` | 编译报 TS2307 找不到 `@activepieces/pieces-framework` | monorepo 根 `pnpm install`（§1.1） |
@@ -427,13 +430,13 @@ curl -s http://localhost:3000/api/ap/v1/pieces/@activepieces/piece-<name> | head
             pnpm install                                        # 【不能省】链接 workspace 依赖
             编辑 src/index.ts + src/lib/*.ts                    # createPiece / createAction
 构建        npm run build-piece -- <name>          # → packages/pieces/community/<name>/dist/（已自动 pack）
-出物料      cp packages/.../<name>/dist/*.tgz ../deploy/pieces/tarballs/          # 运行时半
+出物料      cp packages/.../<name>/dist/*.tgz hermes/tarballs/                    # 运行时半
             cd ../deploy/pieces && node serialize-piece-metadata.js <name>        # 元数据半
             cp <图>.svg activepieces/packages/web/public/ap-cdn/pieces/hermes/<name>.svg  # 图标半(自研必做)
-登记        编辑 deploy/pieces/pieces.json 追加 {name, version}
+登记        编辑 activepieces/hermes/pieces.json 追加 {name, version, tarball}
 生成 seed   node generate-metadata-seed.js                      # → metadata/pieces-seed.sql
 本地跑通    psql < pieces-seed.sql → docker restart AP → DW 搜到（试运行需 §2 手工预装）
-烘镜像      cd deploy/pieces && docker build -t activepieces:0.84.0-pieces .   # 构建机联网/连 Nexus
+烘镜像      cd activepieces && docker build -t activepieces:0.84.0-ee-removed .  # 构建机联网/连 Nexus
 投放        上镜像 → 起 AP 建表 → psql < pieces-seed.sql → 重启 AP
 验证        /api/v1/pieces 数 +1 → DW Automation 面板搜到 → 硬刷新
 ```

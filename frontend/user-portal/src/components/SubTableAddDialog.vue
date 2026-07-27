@@ -12,7 +12,7 @@
   <el-dialog
     :model-value="visible"
     :title="title || (mode === 'edit' ? t('subTable.editRecord') : t('subTable.addRecord'))"
-    width="600px"
+    :width="dialogWidth"
     :close-on-click-modal="false"
     :modal="false"
     :z-index="2010"
@@ -523,6 +523,9 @@
         :primary-key-fields="nested.primaryKeyFields"
         :upload-url="uploadUrl"
         editable
+        :allow-add="nested.allowAdd"
+        :allow-edit="nested.allowEdit"
+        :allow-delete="nested.allowDelete"
         :table-id="nested.tableId ?? null"
         :field-definitions="nested.fieldDefinitions"
         :function-unit-id="hostFunctionUnitId"
@@ -694,6 +697,14 @@ const editingRowStableId = computed<string | null>(() =>
   props.mode === 'edit' ? resolveRowStableId(formData.value, props.primaryKeyFields) : null)
 
 // ─── Nested sub-tables (sub-table-in-sub-table inside the row dialog) ────────
+/**
+ * A nested sub-table brings a whole table (plus its Operation column) into the dialog, which
+ * a 600px form-sized shell cannot fit — its rightmost columns land outside the viewport.
+ * Widen the shell whenever nested tables are present; plain field-only rows keep 600px.
+ */
+const dialogWidth = computed(() =>
+  props.nestedSubTables?.length ? 'min(1100px, calc(100vw - 48px))' : '600px')
+
 /** Rows for one nested table, read from the edited row's `__subTables__` (alias keys). */
 function nestedRowsFor(nested: NestedSubTableDescriptor): Record<string, unknown>[] {
   return pullNestedRowsForBindingFromParentRows(

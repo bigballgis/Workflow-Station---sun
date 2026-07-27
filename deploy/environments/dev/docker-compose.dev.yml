@@ -105,10 +105,12 @@ services:
   # Shares the platform Postgres/Redis. Runs the engine + UI + API on container :80.
   activepieces:
     # HERMES vendored image: EE-removed + de-bunned Activepieces 0.84.0, built from the
-    # in-repo source tree (activepieces/) via its own Dockerfile. Replaces the old
-    # deploy/pieces image (upstream binary + pre-installed pieces + Approvals-tab patch):
-    # EE is stripped (AG-EE), bun is gone (X-4, pnpm/Node), the Approvals/Todos piece is
-    # out of the v1 whitelist (Q9), and pieces install at runtime via pnpm (isolated linker).
+    # in-repo source tree (activepieces/) via its own Dockerfile. EE is stripped (AG-EE),
+    # bun is gone (X-4, pnpm/Node), the Approvals tab is patched out at the source level
+    # (HERMES-PATCH-001, Q9), and the allowlisted pieces (activepieces/hermes/pieces.json)
+    # are PRE-INSTALLED by the last layer — the runtime installer is a no-op for them, so
+    # an air-gapped cluster never reaches a registry. Custom (ARCHIVE) pieces imported via
+    # Admin Center resolve from the baked pnpm offline store instead.
     # Build (heavy — full monorepo): docker compose build activepieces
     build:
       context: ../../../activepieces

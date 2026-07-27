@@ -5,7 +5,6 @@ import {
 } from '@activepieces/shared';
 import { t } from 'i18next';
 import {
-  CheckCircle2Icon,
   LayoutGridIcon,
   PuzzleIcon,
   SparklesIcon,
@@ -36,7 +35,7 @@ import { platformHooks } from '@/hooks/platform-hooks';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 import { AITabContent } from './ai-tab-content';
-import { ApprovalsTabContent } from './approvals-tab-content';
+// HERMES-PATCH-001: ApprovalsTabContent is deliberately NOT imported — see below.
 import { ExploreTabContent } from './explore-tab-content';
 import { PiecesCardList } from './pieces-card-list';
 
@@ -74,13 +73,13 @@ const getTabsList = (
       icon: <SparklesIcon className="size-5" />,
     });
   }
-  if (replaceOrAddAction) {
-    baseTabs.push({
-      value: PieceSelectorTabType.APPROVALS,
-      name: t('Approvals'),
-      icon: <CheckCircle2Icon className="size-5" />,
-    });
-  }
+  // HERMES-PATCH-001 (docs/ap-integration/HERMES_PATCHES.md): the Approvals tab is
+  // dropped. approvals-tab-content.tsx hardcodes six SaaS pieces (slack / discord /
+  // ms-teams / ms-outlook / gmail / telegram-bot) and renders a skeleton until ALL of
+  // them load; under our piece allowlist all six 404 forever, so the tab spins and
+  // floods the console. The feature ("request approval via a Slack/Teams/Gmail
+  // message") cannot work in an air-gapped cluster at all. Restoring it = re-add this
+  // push, the <ApprovalsTabContent> render below, and both imports.
   return baseTabs;
 };
 
@@ -220,7 +219,9 @@ const PieceSelectorContent = ({
             >
               <ExploreTabContent operation={operation} />
               <AITabContent operation={operation} />
-              <ApprovalsTabContent operation={operation} />
+              {/* HERMES-PATCH-001: <ApprovalsTabContent> not rendered — it fires its
+                  six piece queries before the selected-tab early return, so merely
+                  hiding the tab would still 404-spam. */}
 
               <PiecesCardList
                 //this is done to avoid debounced results when user clears search

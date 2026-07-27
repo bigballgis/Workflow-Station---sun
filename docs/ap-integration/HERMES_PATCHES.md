@@ -19,17 +19,17 @@ AP 0.84.0 官方 Tag（frozen baseline）
 - **许可审计**：下表即"我们对 MIT 上游做了哪些修改"的完整回答。
 - **将来 rebase 到新 tag**：下表是逐条重放与重验的施工图。
 
-> **⚠️ 两类补丁，别只 grep 源码。** 001/002 是**构建期改写脚本**，不在 vendor 树里 ——
-> 它们在 Dockerfile 里重写已构建的产物。只按源码注释盘点会**漏掉这两个**，而它们恰恰改的是
-> web 产物与 piece 运行时行为。二者都是 fail-loud（模式匹配不上就 `process.exit(1)`），
-> 所以 AP 升级时构建会红，不会静默失效 —— 但它们不会主动告诉你自己的存在。
+> **⚠️ 002 是构建期改写脚本，别只 grep 源码。** 它不改 vendor 源码，而是重写已构建的产物
+> （fail-loud：模式匹配不上就 `process.exit(1)`）。它现在**没有挂在任何构建里**，见下表备注。
+> 001 原本也是这一类（`deploy/pieces/patch-web-approvals.js` 正则改压缩后的 web bundle），
+> AP 源码 vendor 进仓库后已**改写为源码补丁**，脚本删除。
 
 ## 清单
 
 | # | 类型 | 位置 | 内容 | 落地 | 裁决 |
 |---|---|---|---|---|---|
-| 001 | 构建期 | `deploy/pieces/patch-web-approvals.js` | 清空 `APPROVAL_PIECES_CONFIG` 并隐藏 Approvals 标签页。该标签页硬编码 6 个 SaaS piece，全部加载成功才渲染；白名单下 6 个全 404 → 永久骨架屏 | 2026-07-02 `821cf33c` | [Q9](DECISIONS.md#q9) |
-| 002 | 构建期 | `deploy/pieces/patch-piece-ai-run-agent.js` | `piece-ai` 的 `run_agent`：补 `maxOutputTokens`（DeepSeek 把 reasoning token 计入预算，默认额度会让文档还没输出就耗尽）+ reasoning-delta 不再拼进输出 | 2026-07-16 `e5da4738` | — |
+| 001 | 源码 | `web/src/app/builder/pieces-selector/index.tsx` | 摘掉 Approvals 标签页与 `<ApprovalsTabContent>` 渲染。该标签页硬编码 6 个 SaaS piece，全部加载成功才渲染；白名单下 6 个全 404 → 永久骨架屏。**不渲染**而非仅隐藏标签：组件在 tab 判断之前就发这 6 个查询 | 2026-07-02 `821cf33c`；2026-07-27 由构建期脚本改为源码补丁 | [Q9](DECISIONS.md#q9) |
+| 002 | 构建期 | `activepieces/hermes/patch-piece-ai-run-agent.js` | `piece-ai` 的 `run_agent`：补 `maxOutputTokens`（DeepSeek 把 reasoning token 计入预算，默认额度会让文档还没输出就耗尽）+ reasoning-delta 不再拼进输出。**⚠️ 当前未挂载**：`piece-ai` 在 `669f7207` 已出白名单 → 镜像里没有可打的副本，接进构建会 exit(1)。dev 里该 piece 由运行时联网安装，缺陷仍在；气隙环境则装不上 | 2026-07-16 `e5da4738`；2026-07-27 随预烘焙层迁入 vendor 树 | — |
 | 003 | 源码 | `api/src/app/pieces/community-piece-module.ts` | 开放 piece 删除端点给 Admin Center | 2026-07-26 `277f15ae` | [D9 草案](D9_PIECE_ONLINE_ADMIN_DRAFT.md) |
 | 004 | 源码 | `api/src/app/pieces/metadata/utils/index.ts` | 恢复最小 platform 级 piece 可见性 | 2026-07-26 `277f15ae` | [D9 草案](D9_PIECE_ONLINE_ADMIN_DRAFT.md) |
 | 005 | 源码 | `worker/src/lib/cache/code/pkg-runner.ts` | 气隙运行时 piece 安装（pnpm offline store） | 2026-07-26 `3811061d` | [D9 草案](D9_PIECE_ONLINE_ADMIN_DRAFT.md) |
@@ -37,7 +37,7 @@ AP 0.84.0 官方 Tag（frozen baseline）
 | 007 | 源码 | `engine/src/lib/operations/sync-webhook-release.ts` | run 进终态即释放 sync webhook 监听器（步骤内失败） | 2026-07-27 `6a50f83c` | [D10](DECISIONS.md#d10) |
 | 008 | 源码 | `worker/src/lib/execute/jobs/execute-flow.ts` | 同上，覆盖引擎启动之前就终结的 run | 2026-07-27 `6a50f83c` | [D10](DECISIONS.md#d10) |
 
-源码类的路径均相对 `activepieces/packages/server/`。
+源码类的路径相对 `activepieces/packages/`（003–008 均在 `server/` 下，001 在 `web/` 下）。
 
 ## 回归网
 

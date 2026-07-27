@@ -10,7 +10,7 @@ const path = require('path')
 const crypto = require('crypto')
 
 const dir = path.join(__dirname, 'metadata')
-const manifest = require('./pieces.json')
+const manifest = require('../../activepieces/hermes/pieces.json')
 
 // Deterministic 21-char id (nanoid-shaped) from name@version, so re-running the
 // generator never churns ids.

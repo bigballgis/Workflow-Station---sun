@@ -1,4 +1,7 @@
-FROM node:24.14.0-bullseye-slim AS base
+# HERMES: overridable so a build machine that cannot reach Docker Hub can point at the
+# internal mirror, e.g. --build-arg NODE_IMAGE=nexus3.hk.hsbc:18080/.../node:24.14.0-bullseye-slim
+ARG NODE_IMAGE=node:24.14.0-bullseye-slim
+FROM ${NODE_IMAGE} AS base
 
 # Set environment variables early for better layer caching
 ENV LANG=en_US.UTF-8 \
@@ -135,6 +138,15 @@ RUN set -e && \
 
 # Copy frontend files
 COPY --from=build /usr/src/app/dist/packages/web ./dist/packages/web/
+
+# HERMES: pre-install the allowlisted pieces (hermes/pieces.json) into the worker's
+# piece cache, replicating piece-installer.ts byte-for-byte so the runtime install is a
+# no-op and no registry is reached in an air-gapped cluster (X-3, FR-F03A). Registry
+# access happens HERE, at build time, on a networked machine; in-house pieces install
+# from hermes/tarballs/ and need no registry at all.
+# Kept LAST so a whitelist edit only invalidates this layer, not the monorepo build.
+COPY hermes/ ./hermes/
+RUN sh /usr/src/app/hermes/prewarm-pieces.sh /usr/src/app/hermes/pieces.json
 
 LABEL service=activepieces
 

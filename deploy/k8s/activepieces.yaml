@@ -48,9 +48,13 @@ spec:
         # in-repo source (activepieces/Dockerfile) — mirrors the dev compose activepieces
         # service. Replaces the upstream 0.84.0 image; must be pushed to this Nexus path at
         # the :0.84.0-ee-removed tag.
-        # ⚠️ AIR-GAP (X-3): this image installs pieces at RUNTIME via pnpm from the npm
-        # registry. For a disconnected prod, pieces must be pre-baked into the image or
-        # served from a private mirror before this is deployed (tracked separately).
+        # AIR-GAP (X-3): the allowlisted pieces (activepieces/hermes/pieces.json) are
+        # PRE-INSTALLED by the image's last layer, so the runtime installer never reaches
+        # a registry for them; ACTIVEPIECES_NPM_REGISTRY stays fail-closed as a backstop.
+        # ⚠️ Not yet validated on a genuinely disconnected cluster — prod red line.
+        # The designer half (piece_metadata rows) is NOT in the image: run
+        # deploy/pieces/metadata/pieces-seed.sql against this environment's DB, then
+        # restart AP (the piece registry is cached in-process).
         #image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:__IMAGE_TAG__
         image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed
         imagePullPolicy: Always

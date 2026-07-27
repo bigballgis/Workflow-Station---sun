@@ -73,6 +73,8 @@ export interface FormField {
     allowAttachment?: boolean
     maxFileSizeMb?: number
     allowEditOwn?: boolean
+    /** Opt-in delete switch; absent/false hides the note Delete button. */
+    allowDelete?: boolean
     pageSize?: number
   }
   /** Designer-driven portal display strategy; only present when type === 'subTable'. */

@@ -49,7 +49,7 @@
 - **G2 授权忠实表驱动重写**（AP principal 无 permissions，Q4a/JWT 零回调后置）；**ee-authorization 是混合体**（所有权授权必须保留）。
 - **G16 迁移安全**：20 ee 迁移是历史迁移，CE 表由保留的 MIT `Unify` 迁移重建 → 全新库自足（实测 354 条通）。
 - **去 bun 两处运行时坑**：piece 安装器 spawn `bun`（改 pnpm **isolated linker**，非 npm——npm hoist 致 `PieceNotFound`）；Dockerfile 全三阶段。
-- **⚠️ air-gap 未闭合**：镜像运行时经 pnpm 从 registry 装 piece → 断网 prod 会断，须**构建期预烘焙 11 piece**（已删 14 个 AI/搜索 piece，见 §pieces）（机制现成 `deploy/pieces/`，待 prewarm 去 bun）。
+- **air-gap 预烘焙已并入主镜像**（2026-07-27）：prewarm 是 `activepieces/Dockerfile` 的最后一层，白名单 13 个（已删 14 个 AI/搜索 piece，见 §pieces）；**尚待断网环境实测**。
 
 **L7 身份供给已实施**（2026-07-24，Option A）：AP 侧 CE 重写 managed-authn+signing-key（tsc/eslint 0 error）、
 HERMES 侧 :8085 桥加 per-user 分流（admin-center BUILD SUCCESS）；余重建镜像 + signing-key 引导 + AG-06 端到端（见 §7.2.1）。
@@ -205,18 +205,18 @@ dev 已据此把 `csv` flow 的 Fetch File 步改为 http piece 并实跑 SUCCEE
   npm hoist 会让 engine 的 `piece-loader.ts` 找不到 piece：它在 `pieces/<name>-<ver>/node_modules/<name>` 解析，
   正是 pnpm isolated / 原 bun 的**每-成员 node_modules** 布局）。CODE step 由同文件 `build`（esbuild）编译。
 - piece 跑在 engine 进程内（非 isolated-vm），走完整 Node + 应用层 egress 代理；**其出网由 C-1 在 L5 兜底**。
-- 白名单：25 个（`deploy/pieces/pieces.json` 27 − approval/todos，[Q9](DECISIONS.md#q9)）；http piece 是 CODE step 的 HTTP 替代（T3）。
-- **⚠️ 偏差：当前镜像运行时从 npm registry 装 piece，air-gap（X-3）未闭合。** 设计要求**构建期离线预装**
-  （FR-F03A / C-2）。机制现成（`deploy/pieces/` 的 prewarm 层），**唯一待改 = prewarm 脚本去 bun**
-  （`bun install` → `pnpm install --config.node-linker=isolated` + 写 pnpm-workspace.yaml/.npmrc，
-  base 换 `activepieces:0.84.0-ee-removed`）。见记忆 `ap-debun-runtime-piece-installer`。**这是 prod 部署前的红线。**
+- 白名单：13 个（`activepieces/hermes/pieces.json`，approval/todos 已按 [Q9](DECISIONS.md#q9) 移出）；http piece 是 CODE step 的 HTTP 替代（T3）。
+- **构建期离线预装已就位**（FR-F03A / C-2）：`activepieces/hermes/prewarm-pieces.sh` 由
+  `activepieces/Dockerfile` 的最后一层调用（原先是 `deploy/pieces/` 上的第二层镜像，2026-07-27 合并），
+  `pnpm install --config.node-linker=isolated` 复刻 installer 布局并写 `ready`，运行时不碰 registry。
+  见记忆 `ap-debun-runtime-piece-installer`。**余项：断网环境实测**——prod 部署前的红线。
 
 ### 3.5 施工清单（L4/L5/L6）
 
 1. ✅ 三合一运行体（api+engine+worker 单容器 pm2）——**已实施，dev 实跑**。
 2. ✅ D6 基线环境变量（`docker-compose.dev.yml` / `activepieces.yaml` 均已落）。
 3. ✅ 去 bun 运行时（pkg-runner pnpm isolated + esbuild）——**AI Generate/csv 端到端验证**。
-4. 🔴 **air-gap piece 构建期预烘焙**（11 piece，AI piece 已删，prewarm 去 bun）——**prod 前必做**。
+4. 🟡 **air-gap piece 构建期预烘焙**（13 piece，AI piece 已删）——已并入 `activepieces/Dockerfile`，**待断网实测**。
 5. 🟡 C-1 NetworkPolicy 填环境 CIDR + 集群验证（生产依赖前必须跑通）。
 6. 🟡 flow 编写规范（T3 + FR-F03B）写入开发者文档。
 
@@ -472,7 +472,7 @@ AG-04 的框架级 PoC（AG-04.2/.3/.4）在**小样本**上全绿，但真实 b
 - **C-1 集群验证**：manifest 静态校验通过（1 个 NetworkPolicy、`policyTypes:[Egress]`、5 条 egress 规则），
   但需 operator 填 `__NAMESPACE__` / `__AP_EGRESS_POSTGRES_CIDR__` / `__AP_EGRESS_LLM_CIDR__` 并在真实集群 apply
   （**未纳入 kustomization**，需显式 apply）。
-- **air-gap 预烘焙镜像**：实现缺口已闭合（prewarm 去 bun + BASE_IMAGE + 11 piece（AI piece 已删）），但**预烘焙镜像尚未构建与断网验证**。
+- **air-gap 预烘焙镜像**：实现缺口已闭合（prewarm 去 bun + 并入主镜像 + 13 piece（AI piece 已删）），但**尚未在断网环境验证**。
 
 ---
 
@@ -616,7 +616,7 @@ L7 (per-user 身份供给)  →  L3 (per-user RBAC 回归)  →  L2 (per-user bu
 | **P0 基座** | Vendor + 去 bun + Docker 镜像 + dev/k8s 部署接入 | ✅ **完成**（`de4f6469`…`5dcb33fc`） |
 | **P1 地基** | L8 EE 剥离、L4/L5/L6 执行沙箱、L9 持久化（迁移） | ✅ **已实施并 dev 实跑**；余 air-gap 预烘焙 + C-1 集群 |
 | **P2 上层并行** | L1 builder（AG-04 真实挂载）、L2 网关、L3 RBAC 回归（AG-03）、L7 供给（AG-06） | 🟡 **未施工**（下一阶段，各自黄门） |
-| **P-prod 前置** | ① air-gap piece 预烘焙（25，prewarm 去 bun）② C-1 集群 NetworkPolicy + C-3 已就位 ③ 独立 schema/Redis（Q5） | 🔴 **prod 红线**，dev 不阻塞 |
+| **P-prod 前置** | ① air-gap piece 预烘焙断网实测（13，已并入主镜像）② C-1 集群 NetworkPolicy + C-3 已就位 ③ 独立 schema/Redis（Q5） | 🔴 **prod 红线**，dev 不阻塞 |
 | **P4 收编** | X-Bridge-Retire（:8085 桥退役，Kong 收编） | [Q6](DECISIONS.md#q6)，L2 稳定后 |
 
 > **地基（P0/P1）已完成并在 dev 实跑**；下一步是 **P2 上层**（builder/网关/身份，本 session 未动）

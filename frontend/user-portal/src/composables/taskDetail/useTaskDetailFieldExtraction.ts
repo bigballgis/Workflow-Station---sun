@@ -168,6 +168,8 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
             allowAttachment: rnProps.allowAttachment !== false,
             maxFileSizeMb: Number(rnProps.maxFileSizeMb) || 10,
             allowEditOwn: rnProps.allowEditOwn !== false,
+            // Delete is opt-in (see RecordNoteField): only an explicit true enables it.
+            allowDelete: rnProps.allowDelete === true,
             pageSize: Number(rnProps.pageSize) || 5,
           },
         } as any)

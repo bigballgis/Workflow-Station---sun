@@ -255,10 +255,14 @@
           </template>
         </el-table-column>
 
+        <!-- fixed=right: a nested sub-table sits in a narrow row dialog, where the last
+             column falls outside the visible area (Element Plus hides the horizontal
+             scrollbar until hover) — pinning keeps Edit/Delete reachable. -->
         <el-table-column
           v-if="canEdit || canDelete"
           :label="t('common.operation')"
           width="120"
+          fixed="right"
         >
           <template #default="scope">
             <el-button
@@ -574,8 +578,8 @@ import {
   isUploadColumn
 } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
-import { collectSubTableFieldsFromLayout } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
+import { buildNestedSubTableDescriptors } from '@/composables/subTableField/nestedSubTableDescriptors'
 import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
 import { collectRecordNoteFields, resolveRowStableId } from './formRendererHelpers/recordNoteFields'
 import RecordNoteField from './RecordNoteField.vue'
@@ -1010,33 +1014,9 @@ void editingRowIndex
  * dialog. Bindings resolve from the linked pool; rows persist under the edited row's
  * `__subTables__` (same convention as form-below-table / Link Form).
  */
-const nestedSubTableDescriptors = computed<NestedSubTableDescriptor[]>(() => {
-  const fields = props.formFields
-  if (!Array.isArray(fields) || fields.length === 0) return []
-  const pool = props.linkedSubTableBindings ?? []
-  const out: NestedSubTableDescriptor[] = []
-  for (const f of collectSubTableFieldsFromLayout(fields as FormField[])) {
-    if (f._bindingId == null) continue
-    const b = pool.find(x => Number(x.bindingId) === Number(f._bindingId))
-    if (!b || out.some(d => d.bindingId === Number(b.bindingId))) continue
-    out.push({
-      bindingId: Number(b.bindingId),
-      tableName: b.tableName,
-      columns: b.columns,
-      dialogColumns: b.dialogColumns,
-      primaryKeyFields: b.primaryKeyFields,
-      // FK/PK runtime inputs — the nested field needs them to allocate its own auto PK
-      // and to seed the structural FK back to this binding's row.
-      tableId: b.tableId ?? null,
-      fieldDefinitions: (b as { fieldDefinitions?: BindingFieldDefinition[] }).fieldDefinitions,
-      physicalTableName: b.physicalTableName,
-      bindingMode: b.bindingMode,
-      foreignKeyField: b.foreignKeyField,
-      formFields: b.formFields,
-    })
-  }
-  return out
-})
+const nestedSubTableDescriptors = computed<NestedSubTableDescriptor[]>(() =>
+  buildNestedSubTableDescriptors(props.formFields as FormField[] | undefined, props.linkedSubTableBindings),
+)
 
 /**
  * Nested rows live under the edited row's `__subTables__`, but the nested binding also has its

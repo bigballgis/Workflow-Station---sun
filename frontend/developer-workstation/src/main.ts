@@ -400,6 +400,11 @@ FcDesigner.addDragRule({
     if (rule.props.scope !== 'TABLE' && rule.props.scope !== 'RECORD') {
       rule.props.scope = 'TABLE'
     }
+    // Forms designed before Allow Delete existed must load with the switch OFF
+    // (the runtime reads `=== true`, so this only keeps the panel in sync).
+    if (rule.props.allowDelete !== true) {
+      rule.props.allowDelete = false
+    }
   },
   rule() {
     return {
@@ -413,6 +418,8 @@ FcDesigner.addDragRule({
         allowAttachment: true,
         maxFileSizeMb: 10,
         allowEditOwn: true,
+        // Notes are an audit trail: deletion stays off unless the designer opts in.
+        allowDelete: false,
         pageSize: 5
       }
     }
@@ -428,6 +435,7 @@ FcDesigner.addDragRule({
       { type: 'switch', field: 'allowAttachment', title: 'Allow Attachments' },
       { type: 'inputNumber', field: 'maxFileSizeMb', title: 'Max File Size (MB)', props: { min: 1, max: 10 } },
       { type: 'switch', field: 'allowEditOwn', title: 'Allow Edit Own Notes' },
+      { type: 'switch', field: 'allowDelete', title: 'Allow Delete', value: false },
       { type: 'inputNumber', field: 'pageSize', title: 'Visible Notes', props: { min: 1, max: 20 } }
     ]
   }

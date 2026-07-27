@@ -55,6 +55,13 @@ export interface NestedSubTableDescriptor {
   bindingMode?: string
   foreignKeyField?: string | null
   formFields?: FormField[]
+  /**
+   * 逐操作权限，来自放置在父表单设计里的那个 subTable 组件（props.allowAdd/allowEdit/allowDelete）。
+   * 与顶层一致：只有显式 false 才下发，undefined 表示放开（SubTableField 的 withDefaults 兜住）。
+   */
+  allowAdd?: boolean
+  allowEdit?: boolean
+  allowDelete?: boolean
 }
 
 /** Structural mirror of SubTableField.vue props — composables accept the component's props object. */

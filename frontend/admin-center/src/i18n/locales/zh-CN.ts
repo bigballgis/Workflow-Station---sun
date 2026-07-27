@@ -113,7 +113,7 @@ export default {
     deleteInUse: '该组件被 {count} 个 flow 引用,强制删除后这些 flow 运行会失败。仍要删除?',
     forceDelete: '强制删除',
     deleted: '组件已删除',
-    deleteOfficialConfirm: '确认把烘焙件 {name} v{version} 从目录中删除?镜像内预装的运行时包不受影响;若它仍在白名单(deploy/pieces/pieces.json)且重跑 seed SQL,该组件会再次出现。仍要删除?'
+    deleteOfficialConfirm: '确认把烘焙件 {name} v{version} 从目录中删除?镜像内预装的运行时包不受影响;若它仍在白名单(activepieces/hermes/pieces.json)且重跑 seed SQL,该组件会再次出现。仍要删除?'
   },
   automationFlow: {
     title: '自动化流程迁移',

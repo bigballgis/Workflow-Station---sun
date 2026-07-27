@@ -5,6 +5,18 @@ import type { FormField } from './formRendererTypes'
  * dialog, form-below-table inline form, Link Form modal).
  */
 
+/**
+ * Broadcast after a note is added / edited / deleted so the Change History panel can
+ * refresh. A window event rather than props: the panel is a page-level sibling while the
+ * panels that mutate notes sit arbitrarily deep inside forms and stacked row dialogs.
+ */
+export const RECORD_NOTE_CHANGED_EVENT = 'ws:record-note-changed'
+
+export function notifyRecordNoteChanged(processInstanceId?: string | null): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(RECORD_NOTE_CHANGED_EVENT, { detail: { processInstanceId } }))
+}
+
 /** All recordNote components in a sub-form field tree, layout containers included. */
 export function collectRecordNoteFields(fields: FormField[] | undefined | null): FormField[] {
   if (!Array.isArray(fields)) return []

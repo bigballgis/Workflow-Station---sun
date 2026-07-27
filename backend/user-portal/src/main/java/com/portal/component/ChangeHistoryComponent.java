@@ -90,6 +90,13 @@ public class ChangeHistoryComponent {
      */
     private final ThreadLocal<Set<String>> dedupSeenKeys = ThreadLocal.withInitial(HashSet::new);
 
+    /**
+     * Field name stamped on Record Note audit rows. Must stay outside
+     * {@link #INTERNAL_FIELD_BLACKLIST} and free of the {@code __} / {@code _snapshot_}
+     * prefixes, otherwise {@link #isInternalField} would filter the entries back out.
+     */
+    static final String RECORD_NOTE_FIELD_NAME = "Record Note";
+
     /** Fallback row-id field names when the canonical {@code id} column is absent. */
     private static final String[] ROW_ID_FALLBACK_FIELDS = {"row_id", "rowId", "rowID", "id_idw", "_rowKey", "rowKey"};
     private static final Set<String> SUB_TABLE_ROW_METADATA_FIELDS = Set.of(
@@ -328,6 +335,42 @@ public class ChangeHistoryComponent {
             } catch (Exception e) {
                 log.warn("Failed to record sub-table changes for process {}, table {}: {}",
                         context.getProcessInstanceId(), subTableName, e.getMessage());
+                status.setRollbackOnly();
+            }
+        });
+    }
+
+    /**
+     * Record a Record Note (comment / attachment) mutation in the instance's change history.
+     *
+     * Notes live outside the form payload, so they never surface through
+     * {@link #recordFieldChanges}; this is the only path that audits them.
+     * {@code rowIdentifier} carries the sub-table row id for RECORD-scope notes so the
+     * multi-instance row filter in {@link #getChangeHistory(String, String)} keeps the entry
+     * with its own row; TABLE-scope notes pass {@code null} (process-wide stream).
+     * Best-effort like every other writer here: a failure never breaks the note operation.
+     */
+    public void recordNoteChange(String processInstanceId, String userId, ChangeType changeType,
+                                 String rowIdentifier, String oldValue, String newValue) {
+        if (processInstanceId == null || processInstanceId.isBlank()
+                || userId == null || userId.isBlank() || changeType == null) {
+            return;
+        }
+        ChangeHistory record = ChangeHistory.builder()
+                .processInstanceId(processInstanceId)
+                .userId(userId)
+                .timestamp(Instant.now())
+                .fieldName(RECORD_NOTE_FIELD_NAME)
+                .oldValue(oldValue)
+                .newValue(newValue)
+                .changeType(changeType)
+                .rowIdentifier(rowIdentifier)
+                .build();
+        requiresNewTx.executeWithoutResult(status -> {
+            try {
+                changeHistoryRepository.save(record);
+            } catch (Exception e) {
+                log.warn("Failed to record note change for process {}: {}", processInstanceId, e.getMessage());
                 status.setRollbackOnly();
             }
         });

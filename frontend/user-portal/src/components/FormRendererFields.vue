@@ -259,6 +259,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :config="field._recordNote"
           :table-id="(ctx.primaryTableId ?? null) as number | null"
           :record-id="(ctx.processInstanceId ?? null) as string | null"
+          :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
           :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
           :readonly="false"
         />
@@ -268,6 +269,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
         :config="field._recordNote"
         :table-id="(ctx.primaryTableId ?? null) as number | null"
         :record-id="(ctx.processInstanceId ?? null) as string | null"
+        :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
         :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
         :readonly="false"
       />

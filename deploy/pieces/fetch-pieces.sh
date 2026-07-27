@@ -1,21 +1,34 @@
 #!/bin/sh
-# Downloads the pieces listed in pieces.json onto an INTERNET-CONNECTED machine
-# (dev laptop). Produces:
-#   tarballs/<pkg>-<version>.tgz   — npm package (audit trail / Nexus publish source)
+# Downloads the pieces listed in the allowlist onto an INTERNET-CONNECTED machine
+# (dev laptop). The allowlist lives with the image build that bakes the runtime half:
+# activepieces/hermes/pieces.json. Produces:
+#   ../../activepieces/hermes/tarballs/<pkg>-<version>.tgz
+#                                  — npm package (audit trail / Nexus publish source;
+#                                    also the install source for in-house pieces)
 #   metadata/<short-name>.json     — full designer metadata from the AP cloud API,
-#                                    pinned to the version in pieces.json
+#                                    pinned to the version in the allowlist
+#
+# ONLY handles official cloud pieces. Entries carrying a "tarball" field are in-house:
+# they exist on no public registry (npm pack and the cloud API would both 404), their
+# tarball comes from `npm run build-piece` and their metadata from
+# serialize-piece-metadata.js — see docs/ap-integration/PIECE_DEVELOPMENT_HOWTO.md.
+#
 # Run from deploy/pieces/:  sh fetch-pieces.sh
 # Then regenerate the DB seed:  node generate-metadata-seed.js
 set -eu
 cd "$(dirname "$0")"
-mkdir -p tarballs metadata
+TARBALL_DIR=../../activepieces/hermes/tarballs
+mkdir -p "$TARBALL_DIR" metadata
 
 node -e '
-const pieces = require("./pieces.json");
-for (const p of pieces) console.log(p.name + " " + p.version + " " + p.name.split("/")[1]);
+const pieces = require("../../activepieces/hermes/pieces.json");
+for (const p of pieces) {
+    if (p.tarball) { console.error(`--- skip ${p.name}@${p.version} (in-house, built locally)`); continue; }
+    console.log(p.name + " " + p.version + " " + p.name.split("/")[1]);
+}
 ' | while read -r name version short; do
     echo "==> $name@$version"
-    (cd tarballs && npm pack "$name@$version" --silent)
+    (cd "$TARBALL_DIR" && npm pack "$name@$version" --silent)
     curl -sf "https://cloud.activepieces.com/api/v1/pieces/$name?version=$version" -o "metadata/$short.json"
 done
 
@@ -27,7 +40,7 @@ ICON_DIR=../../activepieces/packages/web/public/piece-icons
 mkdir -p "$ICON_DIR"
 node -e '
 const fs = require("fs"), path = require("path");
-const pieces = require("./pieces.json");
+const pieces = require("../../activepieces/hermes/pieces.json");
 for (const p of pieces) {
     const short = p.name.split("/")[1];
     const file = path.join("metadata", short + ".json");

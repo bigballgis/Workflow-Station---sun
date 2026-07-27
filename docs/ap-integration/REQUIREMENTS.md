@@ -36,7 +36,7 @@
 | BPMN Service Task → AP 同步 webhook（Path B） | `backend/workflow-engine-core`：`ApTaskExecutor`、`ProcessDeploymentManager#bindActivepiecesServiceTasks`（部署期注入 delegate）、`wf_ap_execution_record` | 已提交，dev 端到端实测通过 |
 | DW 设计器 AP 配置面板 | `frontend/developer-workstation`：`ServiceTaskProperties.vue`、`ApTaskPropertiesPanel.vue`、`apConfigSerializer.ts`、`api/ap.ts` | 已提交 |
 | AI Generate 走 AP flow | DW 后端 `AiGenerationServiceImpl` → AP 同步 webhook（flow `QnU0ytf5oBaxL9rbwOU2Z`，deepseek-v4-pro，`AP_WEBHOOK_TIMEOUT_SECONDS=300`） | 生产依赖，**不得破坏** |
-| 离线 pieces 管线 | `deploy/pieces/`（白名单 12 piece、预装镜像 `activepieces:0.84.0-pieces`、`patch-web-approvals.js`、`patch-piece-ai-run-agent.js`、断外网 `AP_PIECES_SYNC_MODE=NONE`；0.84 无 `AP_PIECES_SOURCE` 变量，曾配的已删） | 已提交，dev 验证 |
+| 离线 pieces 管线 | 白名单 `activepieces/hermes/pieces.json`（13 piece）+ 同目录 `prewarm-pieces.sh`（并入 `activepieces/Dockerfile` 末层，镜像 `activepieces:0.84.0-ee-removed`）；元数据半 `deploy/pieces/`（seed SQL / tarball 留档）；断外网 `AP_PIECES_SYNC_MODE=NONE`（0.84 无 `AP_PIECES_SOURCE` 变量，曾配的已删） | 已提交，dev 验证；断网实测待做 |
 | Flow 发布通道 | `deploy/ap-flows/`（导出 JSON 入 git）+ `ap-export.js` / `ap-import.js` / `ap-import-to-id.js` + `deploy/ci/Jenkinsfile.ap-flows-publish` | 已提交 |
 | 文档 | `deploy/ACTIVEPIECES_INTEGRATION.md`、`deploy/ACTIVEPIECES_USER_GUIDE.md` | 已提交 |
 
