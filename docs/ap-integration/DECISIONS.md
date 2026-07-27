@@ -415,6 +415,54 @@ README 附**集群内验证流程**（AP pod 打 admin-center 须失败、打 re
 
 ---
 
+### <a id="d10"></a>D10 — sync webhook 终态释放：第一批 HERMES-PATCH 落在运行时（2026-07-27）
+
+> 编号跳过 D9 —— 该号已由 `D9_PIECE_ONLINE_ADMIN_DRAFT.md` 预留。
+
+**背景**：AP 只在 "Return Response" 一步发布 sync 响应。跑挂的 flow 什么都不发，阻塞在 `handleSync` 的
+调用方要等满 `AP_WEBHOOK_TIMEOUT_SECONDS`（dev 300s）才拿到兜底 204。实测：flow **3 秒** FAILED，
+BPMN 服务任务 **300 秒**后才知道，期间流程实例一直卡着。204 的语义本身没错（flow 确实没产出响应，
+见 `ServiceTaskExecutor.ApFlowNoResponseException`），坏的只是延迟。
+
+**候选与否决理由**：
+- *调小 `AP_WEBHOOK_TIMEOUT_SECONDS`* —— 否决。它同时是慢 flow 的上限，AI 生成那条要 ~230s（见 [Q7](#q7) 上下文）。
+- *引擎侧改异步回调 + 等待态* —— 否决。与 [D7](#d7) 确立的同步 service-task 模型冲突，为一个延迟问题重开架构。
+- **采用：改 vendor 运行时，run 进终态即主动发布响应。** 语义不变（仍是 204），只把等待从固定超时改成跟随 run 生命周期。
+
+**裁决**：这是 [Q8](#q8) controlled-fork 模式下的第一批运行时补丁，两处，缺一不可：
+
+| 补丁点 | 覆盖 |
+|---|---|
+| `packages/server/engine/src/lib/operations/flow.operation.ts` | 步骤内失败。此类 run 的 sandbox 仍返回 `EngineResponseStatus.OK`，**不走** worker 的 `reportFlowStatus` |
+| `packages/server/worker/src/lib/execute/jobs/execute-flow.ts` | 引擎启动之前就死的：piece 安装失败、flow version 缺失、sandbox 超时 / OOM |
+
+"两处" 是**被测试打出来的**，不是推出来的：只打 engine 一侧时，biz-calendar flow 仍然 300s，查出它死在
+worker 的 piece 安装阶段，引擎根本没跑起来。
+
+**约束**：只在 `isFlowRunStateTerminal` 时释放 —— PAUSED（waitpoint / 审批）必须继续等，响应在 resume 之后
+才来。重复发布无害：`oneTimeListener` 首次响应即自注销，无监听者的 publish 是空操作。两处都做成
+**best-effort**——run 已经报完状态，不能为了省延迟把已完成的 run 判成 `INTERNAL_ERROR`；真发不出去时
+`AP_WEBHOOK_TIMEOUT_SECONDS` 仍是兜底。
+
+**dev 实测**（同一条 flow、同一份 payload，镜像重建后复测）：
+
+| 场景 | 前 | 后 |
+|---|---|---|
+| worker 侧失败（piece 安装） | 300s | 3s / 204 |
+| 步骤内失败（HTTP 拿不到文件） | 300s | 0-1s / 204 |
+| happy path（有 Return Response） | 4s | 2s / 200 + 完整 body，未被覆盖 |
+
+**未覆盖**：PAUSED 分支无实测 —— dev 无带 waitpoint / 审批的 enabled flow，目前只有代码保证。
+
+**代价**（[Q8](#q8) 记在案）：vendor 源码树的 `HERMES-PATCH` 注释点由 4 增至 **6 个文件** ——
+`pieces/community-piece-module.ts`、`pieces/metadata/utils/index.ts`、`worker/cache/code/pkg-runner.ts`
+（以上 piece-admin P2/P3）、`worker/egress/lifecycle.ts`（SSRF 白名单收主机名），加本次两处。
+另有 2 个**构建期**改写脚本不带注释标记，易漏：`deploy/pieces/patch-web-approvals.js`、
+`patch-piece-ai-run-agent.js`。Q8 只画了 `HERMES-PATCH-00N` 的结构、尚无实体清单，
+建议 D9 评审时一并把这 8 处建成编号台账。
+
+---
+
 ## 3. Q 系列裁决（2026-07-22，正文见各条）
 
 ### <a id="q1"></a>Q1 — Vendor 边界与位置
