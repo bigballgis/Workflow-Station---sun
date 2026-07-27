@@ -32,6 +32,7 @@ import {
   resolveSubFormDialogColumnsForBinding,
 } from '@/components/subTableAddDialogHelpers'
 import { createFuContentCache } from './fuContentCache'
+import { stampMiCollectionFromBpmn } from './miCollectionStamp'
 import {
   cloneSubTableRows,
   cloneAndFlattenSubTablesMap,
@@ -300,15 +301,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         }
         // Link Form columns may reference bindings omitted from this form's tableBindings; merge from FU forms so bindingMap resolves subtable2.
         ctx.mergeLinkFormTargetBindingsInto(bindings, content.forms, formConfigForSubTables, subForms)
-        // We parsed the BPMN above, so MI membership is a fact here, not a guess: no multi-instance
-        // sub-process means no binding of this process can be an MI dashboard. Stamp it so the
-        // column-name heuristic in isMiDashboardSubTableBinding stops firing on look-alike tables
-        // (a FU copied from the MI meeting demo keeps assignee_* columns forever, and its MI ghost-row
-        // filter then discards every row that carries no sub-table PK). Only stamp when the BPMN was
-        // actually parsed — a missing/unparsable diagram is "unknown", and must keep the heuristic.
-        if (bpmnXml.value && !miSubProcessScope.value) {
-          for (const b of bindings) b.miCollection = false
-        }
+        stampMiCollectionFromBpmn(ctx, bindings)
         const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(content.forms as any[])
         lastBindingRelationTableMap.value = bindingRelationTableMap
         const rawSubTables = coerceSubTablesVariableToMap(formData.value.__subTables__)
@@ -402,9 +395,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         }
         ctx.ensureSubTableBindingsFromLayoutAndConfig(bindings, formConfigForSubTables)
         // ensure* appends layout-only bindings after the stamp above — re-apply so they carry it too.
-        if (bpmnXml.value && !miSubProcessScope.value) {
-          for (const b of bindings) b.miCollection = false
-        }
+        stampMiCollectionFromBpmn(ctx, bindings)
         subTableBindings.value = bindings
         ctx.syncFormLayoutWithSubTableBindings()
         // Previous-node read-only form collection — moved verbatim to useTaskDetailPrevForms.ts.

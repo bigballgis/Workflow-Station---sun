@@ -14,6 +14,7 @@ import {
 } from './subTableRowUtils'
 import type { PreviousFormEntry } from './useTaskDetailState'
 import type { TaskDetailCtx } from './context'
+import { stampMiCollectionFromBpmn } from './miCollectionStamp'
 
 export interface TaskDetailPrevFormsFns {
   collectPreviousFormsFromContent: (
@@ -120,6 +121,8 @@ export function createTaskDetailPrevForms(ctx: TaskDetailCtx): TaskDetailPrevFor
           }
           prevBindings.push(binding)
         }
+        // Must precede the MI ghost-row filter below: isMiDashboardSubTableBinding reads this flag.
+        stampMiCollectionFromBpmn(ctx, prevBindings)
         const ambiguousPrev = bindingIdsPreferStrictSubTableLookup(prevBindings as any[])
         if (savedSubTables && typeof savedSubTables === 'object') {
           for (const binding of prevBindings) {

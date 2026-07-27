@@ -57,6 +57,8 @@ export interface PreviousFormEntry {
     formOptions?: Record<string, any>
     portalViews?: Record<string, any> | null
     primaryKeyFields?: string[]
+    /** 见 subTableBindings 上的同名字段：BPMN 给出的 MI 归属事实，覆盖列名启发式。 */
+    miCollection?: boolean | null
     data: any[]
   }>
 }
