@@ -403,6 +403,8 @@ export default {
     pleaseCompleteForm: 'Please complete the form',
     pkGenerateFailed: 'Failed to generate the primary key, please retry',
     processSubmitSuccess: 'Process submitted successfully',
+    firstStepIncomplete:
+      'Request created, but its first step did not complete. It is waiting in your To Do — open it and submit again. If it keeps failing, contact your administrator.',
     submitFailed: 'Submission failed',
     serviceFallbackName: 'Service {index}',
     workspaceGuardTitle: 'Cannot submit: workspace identity incomplete',

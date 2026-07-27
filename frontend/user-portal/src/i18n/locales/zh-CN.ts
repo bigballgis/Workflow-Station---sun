@@ -403,6 +403,8 @@ export default {
     pleaseCompleteForm: '请完善表单信息',
     pkGenerateFailed: '主键生成失败，请重试',
     processSubmitSuccess: '流程提交成功',
+    firstStepIncomplete:
+      '申请已创建，但首个步骤未完成。该步骤已回到您的待办，请打开后重新提交；若持续失败请联系管理员。',
     submitFailed: '提交失败',
     serviceFallbackName: '服务{index}',
     workspaceGuardTitle: '无法提交：缺少完整工作台身份',

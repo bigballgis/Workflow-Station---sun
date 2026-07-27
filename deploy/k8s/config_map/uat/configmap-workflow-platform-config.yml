@@ -90,6 +90,17 @@ data:
   AI_GENERATION_TIMEOUT: "300"
   # developer-workstation 出站 SSRF 白名单(仅该服务读取 ssrf.allowed-hosts)。
   SSRF_ALLOWED_HOSTS: "localhost,activepieces-service"
+  # workflow-engine 把 Service Task 入参里的相对文件路径(/api/...)改写成绝对 URL 交给 AP 下载。
+  # 不配则回落到 application-docker.yml 的 http://developer-workstation:8080——该主机名在 k8s
+  # 里不存在,AP 的 HTTP 步会直接解析失败。
+  FILE_SERVICE_BASE_URL: "http://developer-workstation-service.__NAMESPACE__:8080"
+  # Activepieces sandbox 出站白名单(AP_NETWORK_MODE=STRICT 下 egress 代理拦截一切私网地址)。
+  # 逗号分隔,只认 IP / CIDR——代理比对的是解析后的地址,写主机名永远不匹配。
+  # 上面 FILE_SERVICE_BASE_URL 指向的地址必须在此列出,否则 flow 取不到平台文件,
+  # 报 "403 Egress blocked" 并在 HTTP 步失败。
+  # 填 developer-workstation-service 的 ClusterIP(kubectl get svc 查),或退一步填 service CIDR。
+  # 空值 = fail-closed:宁可这条链路不通,也不默认放开整个内网。
+  ACTIVEPIECES_SSRF_ALLOW_LIST: ""
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
   # npm registry for AP runtime piece installs (bun honors NPM_CONFIG_REGISTRY).
   # REPLACE with the internal Nexus npm repo URL before provisioning pieces.

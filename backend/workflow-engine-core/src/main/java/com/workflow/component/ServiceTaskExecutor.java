@@ -18,6 +18,9 @@ import org.flowable.engine.delegate.JavaDelegate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
@@ -34,6 +37,19 @@ import java.util.*;
  * <i>sync</i> webhook ({@code /api/v1/webhooks/{flowId}/sync}); the flow must end with a
  * "Return Response" step so the result comes back in the HTTP response. The output is mapped
  * back into process variables inline — there is no callback token / async wait / Redis state.
+ *
+ * <p>That "must end with Return Response" is <b>enforced, not advisory</b>: AP publishes the sync
+ * response only from that step, so a run that fails earlier returns {@code 204 No Content} once
+ * AP's webhook listener expires. HTTP 2xx alone therefore says nothing about whether the
+ * automation succeeded — see {@link ApFlowNoResponseException}.
+ *
+ * <p><b>Who owns the wait:</b> AP does, via {@code AP_WEBHOOK_TIMEOUT_SECONDS} (300s here). The
+ * shared {@code RestTemplate}'s 10-minute read timeout is deliberately longer so AP always answers
+ * first — its 204 is a clean, attributable outcome, whereas a client-side abort leaves a flow still
+ * running in AP with no way to tell whether its side effects happened. {@code ap:timeoutSeconds}
+ * (BPMN, default 120) is therefore <b>recorded but not enforced</b>: wiring it to the HTTP client
+ * would abort live flows at 60-120s and break every automation slower than that (the AI-generation
+ * flow alone needs ~230s). Shortening the wait must be done on the AP side, not here.
  *
  * <p>The AP instance is a single shared runtime per environment: the webhook base URL is
  * resolved from {@code activepieces.webhook-base-url}; the Service Task only stores the
@@ -57,6 +73,25 @@ public class ServiceTaskExecutor implements JavaDelegate {
     private final ServiceTaskExecutionRecordRepository executionRecordRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final PlatformTransactionManager transactionManager;
+
+    /** REQUIRES_NEW template for the failure record — see {@link #persistFailureOutsideCallerTx}. */
+    private volatile TransactionTemplate failureTx;
+
+    private TransactionTemplate failureTx() {
+        TransactionTemplate local = failureTx;
+        if (local == null) {
+            synchronized (this) {
+                local = failureTx;
+                if (local == null) {
+                    local = new TransactionTemplate(transactionManager);
+                    local.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                    failureTx = local;
+                }
+            }
+        }
+        return local;
+    }
 
     /** Per-environment AP runtime base URL; the sync webhook path is appended to it. */
     @Value("${service-task.webhook-base-url:http://localhost:8086}")
@@ -78,6 +113,8 @@ public class ServiceTaskExecutor implements JavaDelegate {
         String webhookUrlOverride = getExtensionProperty(execution, "ap:webhookUrl");
         String inputMappingJson = getExtensionProperty(execution, "ap:inputMapping");
         String outputMappingJson = getExtensionProperty(execution, "ap:outputMapping");
+        // ap:timeoutSeconds is RECORDED, NOT ENFORCED — see the class javadoc. It is kept only so
+        // the execution record shows what the designer asked for; do not wire it to the HTTP client.
         int timeoutSeconds = parseIntOrDefault(getExtensionProperty(execution, "ap:timeoutSeconds"), 120);
         int retryCount = parseIntOrDefault(getExtensionProperty(execution, "ap:retryCount"), 3);
 
@@ -241,7 +278,9 @@ public class ServiceTaskExecutor implements JavaDelegate {
     private Map<String, Object> invokeWebhookWithRetry(String webhookUrl, Map<String, Object> inputData,
                                                        ServiceTaskExecutionRecord record, int maxRetries) {
         Exception lastException = null;
+        int attemptsMade = 0;
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
+            attemptsMade = attempt + 1;
             try {
                 if (attempt > 0) {
                     long delay = calculateRetryDelay(attempt - 1);
@@ -256,21 +295,63 @@ public class ServiceTaskExecutor implements JavaDelegate {
                 Thread.currentThread().interrupt();
                 lastException = ie;
                 break;
+            } catch (ApFlowNoResponseException nre) {
+                // Deterministic, and every attempt blocks for the whole AP webhook timeout —
+                // retrying only multiplies how long the process instance stays wedged.
+                lastException = nre;
+                log.warn("AP flow produced no response; not retrying: flowId={}", record.getApFlowId());
+                break;
             } catch (Exception e) {
                 lastException = e;
                 log.warn("AP webhook call exception: attempt {}/{}, error={}", attempt, maxRetries, e.getMessage());
             }
         }
 
-        String errorMsg = "All " + (maxRetries + 1) + " attempts to call AP webhook failed"
+        String errorMsg = "All " + attemptsMade + " attempt(s) to call AP webhook failed"
                 + (lastException != null ? ": " + extractErrorMessage(lastException) : "");
         record.setStatus(STATUS_FAILED);
         record.setErrorMessage(errorMsg);
-        record.setRetryCount(maxRetries);
+        record.setRetryCount(Math.max(0, attemptsMade - 1));
         record.setCompletedAt(Instant.now());
-        executionRecordRepository.save(record);
-        log.error("AP webhook invocation failed after all retries: flowId={}", record.getApFlowId());
+        persistFailureOutsideCallerTx(record);
+        log.error("AP webhook invocation failed after {} attempt(s): flowId={}", attemptsMade, record.getApFlowId());
         throw new RuntimeException(errorMsg, lastException);
+    }
+
+    /**
+     * Write the FAILED record in its own transaction, so it survives the rollback we are about to
+     * cause by throwing.
+     *
+     * <p>This delegate runs inside Flowable's {@code complete()} transaction. Saving the record on
+     * that connection means the row dies with the rollback — which is why {@code wf_ap_execution_record}
+     * historically held nothing but SUCCESS rows: every failure erased its own evidence, exactly when
+     * the evidence mattered. A fresh row (id left null) is inserted instead of re-saving the managed
+     * instance, because the caller's PENDING insert is rolled back too — merging onto it would target
+     * a row that never commits.
+     *
+     * <p>Best-effort by design: losing the audit row must not replace the real AP failure with a
+     * persistence error, so failures here are logged, not thrown.
+     */
+    private void persistFailureOutsideCallerTx(ServiceTaskExecutionRecord inFlight) {
+        try {
+            ServiceTaskExecutionRecord row = new ServiceTaskExecutionRecord();
+            row.setProcessInstanceId(inFlight.getProcessInstanceId());
+            row.setTaskId(inFlight.getTaskId());
+            row.setApFlowId(inFlight.getApFlowId());
+            row.setWebhookUrl(inFlight.getWebhookUrl());
+            row.setSourceType(inFlight.getSourceType());
+            row.setInputData(inFlight.getInputData());
+            row.setStatus(inFlight.getStatus());
+            row.setErrorMessage(inFlight.getErrorMessage());
+            row.setRetryCount(inFlight.getRetryCount());
+            row.setStartedAt(inFlight.getStartedAt());
+            row.setCompletedAt(inFlight.getCompletedAt());
+            row.setTimeoutSeconds(inFlight.getTimeoutSeconds());
+            failureTx().executeWithoutResult(status -> executionRecordRepository.save(row));
+        } catch (Exception e) {
+            log.warn("Failed to persist AP failure record for flowId={}: {}",
+                    inFlight.getApFlowId(), e.getMessage());
+        }
     }
 
     /**
@@ -286,8 +367,30 @@ public class ServiceTaskExecutor implements JavaDelegate {
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new RuntimeException("AP webhook returned HTTP " + response.getStatusCode());
         }
+        // 204 is AP's "the run produced no flow response" signal, NOT a success with an empty
+        // result: the sync webhook's response is published only by the "Return Response" piece
+        // action, so a run that fails earlier (or a flow missing that step) leaves the listener
+        // to expire and fall back to 204 + empty body. Treating it as success is what let a
+        // failed automation advance the process with no imported data and no error anywhere.
+        if (response.getStatusCode().equals(HttpStatus.NO_CONTENT)) {
+            throw new ApFlowNoResponseException(webhookUrl);
+        }
         Map<String, Object> body = response.getBody();
         return body != null ? body : Collections.emptyMap();
+    }
+
+    /**
+     * The AP sync webhook returned 204 — the flow run never reached its "Return Response" step.
+     *
+     * <p>Deterministic by nature (a failing step fails the same way on the next call), and each
+     * attempt costs the full AP webhook timeout, so callers must not retry it.
+     */
+    public static class ApFlowNoResponseException extends RuntimeException {
+        public ApFlowNoResponseException(String webhookUrl) {
+            super("AP flow returned no response (HTTP 204) from " + webhookUrl
+                    + " — the run failed before its \"Return Response\" step, or the flow has no such step. "
+                    + "Check the run history for this flow in Automation Studio.");
+        }
     }
 
     /**

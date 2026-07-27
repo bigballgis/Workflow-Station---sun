@@ -29,6 +29,17 @@ export default defineConfig({
       '@platform-shared': resolve(__dirname, '../shared/src')
     }
   },
+  // sockjs-client (pulled in by the STOMP/WebSocket client) is CommonJS written for a Node/webpack
+  // world and dereferences the bare identifier `global` at module load. `vite build` shims it, the
+  // dev server does not — so `npm run dev` died on "ReferenceError: global is not defined" before
+  // the router could even start (blank page, no portal dev server at all).
+  // The define must sit on optimizeDeps.esbuildOptions: sockjs-client is PRE-BUNDLED, and the
+  // top-level `define` is only applied to app sources, never to deps in node_modules/.vite/deps.
+  optimizeDeps: {
+    esbuildOptions: {
+      define: { global: 'globalThis' }
+    }
+  },
   server: {
     port: 3001,
     // Allow the dev server to serve ../shared sources (outside the app root).

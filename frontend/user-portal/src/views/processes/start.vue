@@ -886,8 +886,22 @@ const handleSubmit = async () => {
       // 忽略删除草稿失败
     }
     
-    ElMessage.success(t('processStart.processSubmitSuccess'))
-    
+    // The instance exists either way, but a first step that did not complete is not a successful
+    // submission — saying "submitted successfully" here is how a failed automation used to look fine.
+    const firstStepError = startResponse?.data?.firstStepError || startResponse?.firstStepError
+    if (firstStepError) {
+      // Marker only — the reason is server-side (it names the AP webhook URL, which is a credential).
+      console.warn('[processStart] first step did not complete; see user-portal logs')
+      ElMessage({
+        type: 'warning',
+        message: t('processStart.firstStepIncomplete'),
+        duration: 0,
+        showClose: true
+      })
+    } else {
+      ElMessage.success(t('processStart.processSubmitSuccess'))
+    }
+
     // Task 16.2: 提交成功后清除 FormRenderer 自动保存数据
     if (formRendererRef.value) {
       formRendererRef.value.clearAutoSave()

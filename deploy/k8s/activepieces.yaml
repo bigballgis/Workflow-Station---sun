@@ -184,6 +184,15 @@ spec:
         # runtime; NPM_CONFIG_REGISTRY above stays fail-closed as the last-resort fence.
         - name: AP_PIECES_OFFLINE_INSTALL
           value: "true"
+        # STRICT-mode egress proxy blocks every private IP, our own services included, so a
+        # flow cannot fetch the uploaded file the engine hands it (FILE_SERVICE_BASE_URL).
+        # IPs / CIDRs only — matched against RESOLVED addresses, a hostname never matches.
+        # Empty = fail-closed; set ACTIVEPIECES_SSRF_ALLOW_LIST in the configmap per cluster.
+        - name: AP_SSRF_ALLOW_LIST
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_SSRF_ALLOW_LIST
         ports:
         - containerPort: 80
           name: http

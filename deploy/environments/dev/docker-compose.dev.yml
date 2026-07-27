@@ -194,6 +194,13 @@ services:
       # posture. Dev default false so REGISTRY whitelist pieces still install from
       # public npm on demand; flip to true to rehearse the air-gapped path locally.
       AP_PIECES_OFFLINE_INSTALL: ${AP_PIECES_OFFLINE_INSTALL:-false}
+      # STRICT mode runs an egress proxy that blocks every private IP, including our own
+      # services — so a flow could not fetch the uploaded file the engine hands it
+      # (FILE_SERVICE_BASE_URL -> http://developer-workstation:8080/api/v1/upload/files/...).
+      # The sandbox got "403 Egress blocked: developer-workstation" and the flow died at the
+      # HTTP step. Entries are IPs or CIDRs only (matched against RESOLVED addresses — a
+      # hostname here would never match); empty = fail-closed. See docs/ap-integration D9-4.
+      AP_SSRF_ALLOW_LIST: ${AP_SSRF_ALLOW_LIST:-}
     volumes:
       - activepieces_data:/app/packages/server/data
     healthcheck:

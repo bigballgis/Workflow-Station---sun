@@ -43,6 +43,19 @@ public class ProcessInstanceInfo {
      */
     private String requestId;
 
+    /**
+     * 首个发起人任务是否自动完成失败：成功（或本就不该自动完成）为 null，失败为固定标记
+     * {@code FIRST_STEP_NOT_COMPLETED}。
+     *
+     * <p>实例此时确实已创建并 RUNNING，任务退回发起人待办可重试，所以 {@code /start} 不报错——
+     * 但也不能让前端弹「提交成功」。非 null 即表示「申请已建、首步未完成」，前端据此改提示。
+     * 典型来源：服务任务里的 AP 自动化失败（见 workflow-engine 的 ApFlowNoResponseException）。
+     *
+     * <p><b>刻意不回传具体原因</b>：引擎原文里带 AP sync webhook URL，而 AP CE 的 webhook
+     * 无鉴权、URL 即凭据，且经 Kong 的 {@code /api/ap/*} 浏览器可直达。真实原因只写服务端日志。
+     */
+    private String firstStepError;
+
     /** 发起时钉死的功能单元目录 ID（admin sys_function_units.id） */
     private String functionUnitCatalogId;
     private String functionUnitCode;
