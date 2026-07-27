@@ -2,6 +2,8 @@ package com.developer.controller;
 
 import com.developer.component.FormDesignComponent;
 import com.platform.common.dto.ApiResponse;
+import com.developer.dto.FormConfigPasteRepairRequest;
+import com.developer.dto.FormConfigPasteRepairResponse;
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
 import com.developer.dto.FormTableBindingResponse;
@@ -179,6 +181,18 @@ public class FormDesignController {
             @PathVariable Long formId) {
         FormDefinition copied = formDesignComponent.copyProcessToTaskForm(formId);
         return ResponseEntity.ok(ApiResponse.success(copied));
+    }
+
+    @PostMapping("/{formId}/repair-config")
+    @Operation(summary = "Repair pasted form configJson against this form's table bindings (cross-FU paste)")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<FormConfigPasteRepairResponse>> repairPastedConfig(
+            @PathVariable Long functionUnitId,
+            @PathVariable Long formId,
+            @Valid @RequestBody FormConfigPasteRepairRequest request) {
+        FormConfigPasteRepairResponse result =
+                formDesignComponent.repairPastedConfig(functionUnitId, formId, request);
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 
 }

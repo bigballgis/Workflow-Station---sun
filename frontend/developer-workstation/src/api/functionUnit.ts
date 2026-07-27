@@ -552,6 +552,24 @@ export const functionUnitApi = {
   copyProcessToTaskForm: (functionUnitId: number, formId: number) =>
     functionUnitAxios.post<any, { data: FormDefinition }>(`/api/v1/function-units/${functionUnitId}/forms/${formId}/copy-to-task`),
 
+  /** Remap stale bindingId/tableId in a pasted form configJson against this form's bindings. */
+  repairFormConfig: (
+    functionUnitId: number,
+    formId: number,
+    data: { configJson: Record<string, unknown>; apply?: boolean; createMissingTables?: boolean },
+  ) =>
+    functionUnitAxios.post<any, {
+      data: {
+        configJson: Record<string, unknown>
+        bindingIdMapping: Record<string, string>
+        relationTableIdMapping: Record<string, string>
+        warnings: string[]
+        mixedSource: boolean
+        applied: boolean
+        createdTableNames?: string[]
+      }
+    }>(`/api/v1/function-units/${functionUnitId}/forms/${formId}/repair-config`, data),
+
   // Export, Import and Deploy
   exportFunctionUnit: (functionUnitId: number) =>
     functionUnitAxios.get(`/api/v1/function-units/${functionUnitId}/export`, { responseType: 'blob' }),

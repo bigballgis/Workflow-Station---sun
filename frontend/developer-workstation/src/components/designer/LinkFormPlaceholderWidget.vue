@@ -13,13 +13,13 @@
     <span
       v-else-if="state === 'unconfigured'"
       class="hint-text"
-    >{{ t('designer.linkFormPlaceholderUnconfigured') }}</span>
+    >{{ t('form.linkFormPlaceholderUnconfigured') }}</span>
     <el-tag
       v-else
       type="warning"
       size="small"
     >
-      {{ t('designer.linkFormPlaceholderStale') }}
+      {{ t('form.linkFormPlaceholderStale') }}
     </el-tag>
   </div>
 </template>

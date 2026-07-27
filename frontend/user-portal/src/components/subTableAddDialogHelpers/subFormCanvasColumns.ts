@@ -3,6 +3,7 @@ import {
   isFormCreateRuleRequired,
   mapFormCreateValidateToElementPlusRules,
 } from '@/utils/formCreateValidateRules'
+import { resolveRuleDefaultValue } from '@/utils/formCreateRuleDefaults'
 import {
   buildLookupColumnProps,
   enrichLookupColumnPropsFromSubFormRule,
@@ -182,6 +183,7 @@ export function mapSubFormRuleToDialogColumns(
     const required = isFormCreateRuleRequired(r)
     const readonly = isFormCreateRuleReadonly(r)
     const elRules = mapFormCreateValidateToElementPlusRules(r, type)
+    const defaultValue = resolveRuleDefaultValue(r)
 
     return {
       field,
@@ -192,6 +194,7 @@ export function mapSubFormRuleToDialogColumns(
       ...(elRules.length > 0 ? { rules: elRules } : {}),
       ...(options ? { options: options as DialogColumn['options'] } : {}),
       ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
+      ...(defaultValue !== undefined ? { defaultValue } : {}),
     }
   })
 }

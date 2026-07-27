@@ -1538,3 +1538,25 @@
     DW mapDesignerValidateForDialog 对齐 Validation+ 全部内置模式（validator 走 form-create Preview）。
     验证：subFormDialogValidationModes 20/20（17 模式 fixture+pass/fail）、
     mapDesignerValidateForDialog 19/19；rebuild 两端 frontend。
+
+- id: "1495"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "跨 FU 粘贴表单 JSON 后 SubTable/Lookup 仍指向旧 bindingId/tableId"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/FormConfigJsonPasteBindingMapper.java"
+  note: |
+    现象：DW 将表单 configJson 粘贴到另一 Function Unit 后，SubTable/Lookup 绑定丢失或指向旧 ID。
+    根因：粘贴配置保留源 FU bindingId/tableId；缺 live 修复 API、dialog defaultValue、list-view 合并 sub-form 元数据。
+    修复：FormConfigJsonPasteBindingMapper + POST .../repair-config（混源检测、orphan repair）；
+    FormDesigner「Paste Form JSON」live 回填；DW/Portal DialogColumn.defaultValue + buildInitialRow；
+    useFormPreviewColumns list-view 合并 defaultValue/options/props/rules。
+    验证：FormConfigJsonPasteBindingMapperTest pass；useFormConfigPaste + buildInitialRowDefaultValue vitest；
+    mvn package -DskipTests；两端 npm run build；compose rebuild developer-workstation + 两端 frontend。
+    续：左侧 form-create JSON 编辑器粘贴绕过 Paste 对话框 → 自动/手动 Repair Bindings；
+    修正 designer.* → form.* i18n（Binding stale 文案）；SubTableBindingSelect 对 stale 选值提示。
+    续 2026-07-28：createMissingTables — FormConfigJsonTableProvisioner + FormCreateRuleToFieldMapper；
+    Paste/Repair/Save 缺表时先建 MAIN/SUB（含 main_id FK）与 RELATED sys_users 再 remap 绑定；
+    左侧粘贴 rule 数组亦可走 repair；Save 调 provisionAndRepairForSave。
+    续：建表优先用源 binding→table_name（占用则 _2/_3 后缀）；FormConfigJsonTableProvisionerTest 覆盖。

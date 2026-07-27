@@ -32,6 +32,11 @@ const allSubBindings = computed(() => props.subBindings?.length ? props.subBindi
 // Only show SUB type bindings for sub-table widget binding selection
 const subBindings = computed(() => allSubBindings.value.filter(b => b.bindingType === 'SUB'))
 const normalizedModelValue = computed(() => normalizeBindingId(props.modelValue))
+const isStaleSelection = computed(() => {
+  const id = normalizedModelValue.value
+  if (id == null) return false
+  return !subBindings.value.some((b) => b.id === id)
+})
 
 // Use module-level store instead of inject — fc-designer registers this component in its own
 // Vue app context, so provide/inject from FormDesigner doesn't reach here.
@@ -66,8 +71,16 @@ function handleChange(val: number | null) {
       <span class="el-select-dropdown__empty">{{ t('form.subTableSelectEmpty') }}</span>
     </template>
   </el-select>
+  <el-tag
+    v-if="isStaleSelection"
+    type="warning"
+    size="small"
+    class="stale-binding-tag"
+  >
+    {{ t('form.subTablePlaceholderStale') }}
+  </el-tag>
   <a
-    v-if="normalizedModelValue && lookupStore.switchToBinding"
+    v-if="normalizedModelValue && lookupStore.switchToBinding && !isStaleSelection"
     class="binding-nav-link"
     href="#"
     @click.prevent="goToDesigner"
@@ -75,6 +88,11 @@ function handleChange(val: number | null) {
 </template>
 
 <style scoped>
+.stale-binding-tag {
+  display: inline-block;
+  margin-top: 4px;
+  margin-right: 8px;
+}
 .binding-nav-link {
   display: inline-block;
   margin-top: 4px;
