@@ -14,6 +14,7 @@
   --ws-card-bg: #ffffff;
   --ws-card-border: #ececea;
   --ws-line: #f0f0ee;           // 表格行分隔线
+  --ws-line-strong: #e1e1dd;    // 表头分隔线（比行线深一档，仍属浅灰族）
   --ws-text: #1a1a1a;
   --ws-text-secondary: #6f6f6f;
   --ws-text-muted: #9c9c9c;
@@ -72,7 +73,7 @@ html, body, #app {
 }
 
 // ==================== 表格：编辑部风格 ====================
-// 表头不用色块：小号大写字距标签 + 表头下 2px 墨色规则线；行距放宽，hover 冷灰。
+// 表头不用色块：小号大写字距标签 + 表头下一条稍深的灰细线；行距放宽，hover 冷灰。
 .el-table.el-table {
   --el-table-border-color: var(--ws-line);
   --el-table-header-bg-color: #ffffff;
@@ -83,7 +84,7 @@ html, body, #app {
     background-color: #ffffff; // sticky 固定列需要实色底
     color: #8f8f8a;
     font-weight: 600;
-    border-bottom: 2px solid var(--ws-ink);
+    border-bottom: 1px solid var(--ws-line-strong);
 
     .cell {
       font-size: 11px;
