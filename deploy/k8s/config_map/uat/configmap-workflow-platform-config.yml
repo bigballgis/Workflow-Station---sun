@@ -95,12 +95,13 @@ data:
   # 里不存在,AP 的 HTTP 步会直接解析失败。
   FILE_SERVICE_BASE_URL: "http://developer-workstation-service.__NAMESPACE__:8080"
   # Activepieces sandbox 出站白名单(AP_NETWORK_MODE=STRICT 下 egress 代理拦截一切私网地址)。
-  # 逗号分隔,只认 IP / CIDR——代理比对的是解析后的地址,写主机名永远不匹配。
-  # 上面 FILE_SERVICE_BASE_URL 指向的地址必须在此列出,否则 flow 取不到平台文件,
+  # 逗号分隔,接受主机名 / IP / CIDR;主机名在 worker 启动时解析
+  # (HERMES-PATCH: packages/server/worker/src/lib/egress/lifecycle.ts)。
+  # 上面 FILE_SERVICE_BASE_URL 指向的主机必须在此列出,否则 flow 取不到平台文件,
   # 报 "403 Egress blocked" 并在 HTTP 步失败。
-  # 填 developer-workstation-service 的 ClusterIP(kubectl get svc 查),或退一步填 service CIDR。
-  # 空值 = fail-closed:宁可这条链路不通,也不默认放开整个内网。
-  ACTIVEPIECES_SSRF_ALLOW_LIST: ""
+  # 用主机名而非 ClusterIP:Service 重建后 ClusterIP 会变,主机名不会。
+  # 只列 flow 确实需要的主机——填 CIDR 等于把整个集群内网开放给 flow 作者写的 HTTP 步。
+  ACTIVEPIECES_SSRF_ALLOW_LIST: "developer-workstation-service.__NAMESPACE__"
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
   # npm registry for AP runtime piece installs (bun honors NPM_CONFIG_REGISTRY).
   # REPLACE with the internal Nexus npm repo URL before provisioning pieces.

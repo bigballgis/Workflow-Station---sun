@@ -8,7 +8,6 @@ import com.admin.servicetask.config.ServiceTaskProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -21,6 +20,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import com.admin.config.RestTemplateConfig;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.ByteArrayInputStream;
@@ -51,7 +52,6 @@ import java.util.zip.ZipOutputStream;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AutomationPieceServiceImpl implements AutomationPieceService {
 
     private static final String LIST_SQL = """
@@ -89,7 +89,20 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
     private final ObjectMapper objectMapper;
     private final ServiceTaskApiClient serviceTaskApiClient;
     private final ServiceTaskProperties serviceTaskProperties;
+    /** AP control-plane calls only — long read timeout, own breaker (see RestTemplateConfig). */
     private final RestTemplate restTemplate;
+
+    public AutomationPieceServiceImpl(JdbcTemplate jdbcTemplate,
+                                          ObjectMapper objectMapper,
+                                          ServiceTaskApiClient serviceTaskApiClient,
+                                          ServiceTaskProperties serviceTaskProperties,
+                                          @Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
+        this.serviceTaskApiClient = serviceTaskApiClient;
+        this.serviceTaskProperties = serviceTaskProperties;
+        this.restTemplate = restTemplate;
+    }
 
     @Override
     public List<AutomationPieceSummary> listPieces() {

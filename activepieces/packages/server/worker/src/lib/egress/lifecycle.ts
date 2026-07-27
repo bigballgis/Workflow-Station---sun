@@ -40,10 +40,50 @@ async function maybeStartProxyAllowingApiHost({ log, apiUrl, settings }: StartPr
             failureMessage,
         )
     }
-    const allowList = [...new Set([...settings.SSRF_ALLOW_LIST, ...apiHostIps])]
+    const configuredIps = await resolveAllowListEntries({ entries: settings.SSRF_ALLOW_LIST, log })
+    const allowList = [...new Set([...configuredIps, ...apiHostIps])]
     const proxy = await startEgressProxy({ log, allowList })
-    log.info({ apiHostIps, port: proxy.port }, 'Egress proxy started')
+    log.info({ apiHostIps, allowList, port: proxy.port }, 'Egress proxy started')
     return proxy
+}
+
+/**
+ * HERMES-PATCH: let AP_SSRF_ALLOW_LIST take hostnames, not just IPs / CIDRs.
+ *
+ * The proxy matches RESOLVED addresses (see ssrfIpClassifier), so a bare hostname in the allow list
+ * silently never matched — the one thing every operator writes first. Requiring a literal IP instead
+ * means hand-copying a Kubernetes ClusterIP that changes whenever the Service is recreated, and the
+ * failure mode is a runtime "403 Egress blocked" long after deploy. Resolve hostnames here, exactly
+ * the way the API host above is already handled, so the config can stay declarative
+ * (e.g. developer-workstation-service.<ns>).
+ *
+ * IPs and CIDRs pass through untouched. A hostname that does not resolve is logged and skipped
+ * rather than thrown: unlike the API host, an unreachable allow-list entry does not stop the worker
+ * from doing its job — it only means traffic to that destination stays blocked, and the operator
+ * needs to see why.
+ */
+async function resolveAllowListEntries({ entries, log }: ResolveAllowListParams): Promise<string[]> {
+    const resolved: string[] = []
+    for (const raw of entries) {
+        const entry = raw.trim()
+        if (!entry) continue
+        if (entry.includes('/') || net.isIP(entry) > 0) {
+            resolved.push(entry)
+            continue
+        }
+        const rawUrl = entry.includes('://') ? entry : `http://${entry}`
+        const { data: ips, error } = await tryCatch(() => resolveHostToIps({ rawUrl }))
+        if (error) {
+            log.error(
+                { host: entry, error: error.message },
+                'AP_SSRF_ALLOW_LIST entry did not resolve — egress to that host stays blocked',
+            )
+            continue
+        }
+        log.info({ host: entry, ips }, 'AP_SSRF_ALLOW_LIST host resolved')
+        resolved.push(...ips)
+    }
+    return resolved
 }
 
 async function maybeApplyIptablesLockdown({ log, proxy, settings }: ApplyLockdownParams): Promise<IptablesLockdown | null> {
@@ -180,6 +220,11 @@ type CloseProxyQuietlyParams = {
 
 type ResolveHostParams = {
     rawUrl: string
+}
+
+type ResolveAllowListParams = {
+    entries: string[]
+    log: Logger
 }
 
 export type EgressStack = {
