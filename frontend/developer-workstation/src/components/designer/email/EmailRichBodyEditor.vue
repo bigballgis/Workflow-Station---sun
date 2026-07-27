@@ -47,7 +47,11 @@ import { shallowRef, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
-import { useEmailTemplateVariables, type EmailVariableGroup } from '@/composables/email/useEmailTemplateVariables'
+import {
+  resolveEmailVariableGroupLabel,
+  useEmailTemplateVariables,
+  type EmailVariableGroup,
+} from '@/composables/email/useEmailTemplateVariables'
 import { buildEmailRichEditorConfig, buildEmailRichToolbarConfig } from './emailRichEditorConfig'
 
 const props = defineProps<{
@@ -73,7 +77,7 @@ const editorConfig = computed(() =>
 const { groups, load } = useEmailTemplateVariables(props.functionUnitId)
 
 function groupLabel(label: string): string {
-  return label === '__SUBTABLES__' ? t('emailTemplate.subTableGroup') : label
+  return resolveEmailVariableGroupLabel(label, t)
 }
 
 function onCreated(editor: any) {
