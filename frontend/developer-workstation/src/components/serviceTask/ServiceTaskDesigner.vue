@@ -49,15 +49,23 @@
           </div>
         </el-option>
       </el-select>
+      <!-- Three states, not two: a dangling binding still has a flowId, so keying only on that
+           painted a green "Flow ready" right above the "flow no longer exists" recovery prompt. -->
       <el-tag
         v-if="selectedTask"
-        :type="selectedTask.flowId ? 'success' : 'info'"
+        :type="danglingFlowId ? 'warning' : selectedTask.flowId ? 'success' : 'info'"
         size="small"
         effect="plain"
         disable-transitions
         class="service-task-designer__status"
       >
-        {{ selectedTask.flowId ? t('functionUnit.serviceTaskBound') : t('functionUnit.serviceTaskUnbound') }}
+        {{
+          danglingFlowId
+            ? t('functionUnit.serviceTaskFlowMissingTag')
+            : selectedTask.flowId
+              ? t('functionUnit.serviceTaskBound')
+              : t('functionUnit.serviceTaskUnbound')
+        }}
       </el-tag>
     </div>
 

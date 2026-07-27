@@ -80,9 +80,18 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
             "SELECT \"filteredPieceNames\" FROM platform LIMIT 1";
 
     /** flow_version 的 trigger JSON 内嵌整条 step 链,包名以带引号字符串出现 */
+    /**
+     * 占用该 piece 的 flow 名称。取每个 flow 最新版本的 displayName——报"被 1 个 flow 占用"
+     * 而不给名字时,管理员无从判断能不能删。
+     */
     private static final String FLOW_REF_SQL = """
-            SELECT count(DISTINCT "flowId") FROM flow_version
-            WHERE trigger::text LIKE '%"' || ? || '"%'
+            SELECT DISTINCT ON (v."flowId") coalesce(nullif(v."displayName", ''), v."flowId")
+            FROM flow_version v
+            WHERE v."flowId" IN (
+                SELECT DISTINCT "flowId" FROM flow_version
+                WHERE trigger::text LIKE '%"' || ? || '"%'
+            )
+            ORDER BY v."flowId", v.created DESC
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -222,8 +231,8 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
     @Override
     public void deletePiece(String name, String version, boolean force) {
         if (!force) {
-            Integer refs = jdbcTemplate.queryForObject(FLOW_REF_SQL, Integer.class, name);
-            if (refs != null && refs > 0) {
+            List<String> refs = jdbcTemplate.queryForList(FLOW_REF_SQL, String.class, name);
+            if (!refs.isEmpty()) {
                 throw new PieceInUseException(name, refs);
             }
         }

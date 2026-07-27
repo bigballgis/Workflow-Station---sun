@@ -64,8 +64,12 @@ for (const { name, version } of manifest) {
         '  "archiveId", "platformId", categories, authors, "projectUsage", i18n)',
         `VALUES (${[
             lit(pieceId(name, version)),
-            lit(m.created ?? new Date(0).toISOString()),
-            lit(m.updated ?? new Date(0).toISOString()),
+            // Self-developed pieces carry no upstream publish date. Falling back to epoch 0 put
+            // "1969/12/31" in the Admin Center piece list — a wrong date reads as broken data,
+            // whereas the seed time is both truthful (that IS when this catalog row appeared)
+            // and stable, since each seed run DELETEs and re-INSERTs the row.
+            m.created ? lit(m.created) : 'now()',
+            m.updated ? lit(m.updated) : 'now()',
             lit(name),
             lit(m.displayName ?? short),
             lit(localizeLogoUrl(m.logoUrl)),
