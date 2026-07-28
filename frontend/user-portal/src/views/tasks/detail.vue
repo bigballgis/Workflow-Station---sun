@@ -725,6 +725,7 @@ const taskActions = useTaskActions({
   taskInfo: taskInfo as any,
   subTableBindings,
   formData,
+  formReadOnly,
   submitting,
   approveDialogVisible,
   approveDialogTitle,

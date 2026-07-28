@@ -19,7 +19,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,7 +30,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 /**
@@ -42,7 +40,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 @Slf4j
 @Component
 public class ChangeHistoryComponent {
-
+    /**
+     * Stable compatibility quarantine for internal records written before
+     * submission filtering.
+     */
+    private static final Set<String> INTERNAL_FIELD_BLACKLIST = Set.of(
+            "__subTables__", "subTableName", "foreignKey", "assigneeField",
+            "mainRecordId", "activeBusinessUnitId", "activeRoleId",
+            "requestItemsHasHighValue", "totalPrice", "maxItemPrice", "itemCount",
+            "initiator", "participant_assigner_user_id", "id", "currentUserId");
     private final ChangeHistoryRepository changeHistoryRepository;
     private final ProcessInstanceRepository processInstanceRepository;
     private final UserRepository userRepository;
@@ -75,24 +81,26 @@ public class ChangeHistoryComponent {
     }
 
     /**
-     * Internal/engine variable names that should never appear in user-visible
-     * change history.
-     */
-    private static final Set<String> INTERNAL_FIELD_BLACKLIST = Set.of(
-            "__subTables__", "subTableName", "foreignKey", "assigneeField",
-            "mainRecordId", "activeBusinessUnitId", "activeRoleId",
-            "requestItemsHasHighValue", "totalPrice", "maxItemPrice", "itemCount",
-            "initiator", "participant_assigner_user_id",
-            "id", "currentUserId");
-    /**
      * Fallback row-id field names when the canonical {@code id} column is absent.
      */
     private static final String[] ROW_ID_FALLBACK_FIELDS = { "row_id", "rowId", "rowID", "id_idw", "_rowKey",
             "rowKey" };
     private static final Set<String> SUB_TABLE_ROW_METADATA_FIELDS = Set.of(
-            "id", "row_id", "rowid", "rowkey", "id_idw", "_rowkey",
-            "created_at", "created_by", "updated_at", "updated_by", "case_row_id",
-            "task_current_node", "sub_task_current_node", "task_status", "sub_task_status");
+            "id", "rowid", "rowkey", "ididw",
+            "createdat", "createdby", "updatedat", "updatedby", "caserowid",
+            "taskcurrentnode", "subtaskcurrentnode", "taskstatus", "subtaskstatus",
+            "subtables");
+    /**
+     * Read-only quarantine for records written by older MI implementations. New
+     * writes are governed by
+     * {@link ChangeHistorySubmissionFilter}, so Function Unit field names never
+     * become a global policy.
+     */
+    private static final Set<String> LEGACY_SYSTEM_FIELD_ALIASES = Set.of(
+            "mainid", "subtaskid", "participantid", "meetingparticipantid", "parentid",
+            "assigneedisplayname", "taskid", "taskdefinitionkey");
+    private static final Set<String> ASSIGNEE_VALUE_FIELDS = Set.of(
+            "assignee", "assigneeuserid", "assigneeid");
 
     /**
      * Record field changes.
@@ -104,7 +112,6 @@ public class ChangeHistoryComponent {
             Map<String, Object> newValues) {
         Instant now = Instant.now();
         List<ChangeHistory> records = new ArrayList<>();
-
         for (Map.Entry<String, Object> entry : newValues.entrySet()) {
             String fieldName = entry.getKey();
             if (isInternalField(fieldName)) {
@@ -112,8 +119,7 @@ public class ChangeHistoryComponent {
             }
             Object newValue = entry.getValue();
             Object oldValue = oldValues.get(fieldName);
-
-            if (!Objects.equals(oldValue, newValue)) {
+            if (!semanticallyEqual(fieldName, oldValue, newValue)) {
                 ChangeHistory record = ChangeHistory.builder()
                         .processInstanceId(context.getProcessInstanceId())
                         .taskInstanceId(context.getTaskInstanceId())
@@ -128,11 +134,9 @@ public class ChangeHistoryComponent {
                 records.add(record);
             }
         }
-
         if (records.isEmpty()) {
             return;
         }
-
         requiresNewTx.executeWithoutResult(status -> {
             try {
                 changeHistoryRepository.saveAll(records);
@@ -148,9 +152,10 @@ public class ChangeHistoryComponent {
     private static boolean isInternalField(String fieldName) {
         if (fieldName == null)
             return true;
-        if (INTERNAL_FIELD_BLACKLIST.contains(fieldName))
-            return true;
-        return fieldName.startsWith("_snapshot_") || fieldName.startsWith("__");
+        return INTERNAL_FIELD_BLACKLIST.contains(fieldName)
+                || fieldName.startsWith("_snapshot_")
+                || fieldName.startsWith("_baseline_")
+                || fieldName.startsWith("__");
     }
 
     /**
@@ -216,6 +221,11 @@ public class ChangeHistoryComponent {
                 }
                 String oldVal = toDisplayString(valueForField(change.getOldValues(), fieldName));
                 String newVal = toDisplayString(valueForField(change.getNewValues(), fieldName));
+                if (semanticallyEqual(fieldName,
+                        valueForField(change.getOldValues(), fieldName),
+                        valueForField(change.getNewValues(), fieldName))) {
+                    continue;
+                }
                 ChangeHistory lastRecord = changeHistoryRepository
                         .findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndFieldNameAndChangeTypeOrderByTimestampDesc(
                                 context.getProcessInstanceId(), normalizedName, change.getRowIdentifier(),
@@ -244,11 +254,9 @@ public class ChangeHistoryComponent {
                         .build());
             }
         }
-
         if (records.isEmpty()) {
             return;
         }
-
         requiresNewTx.executeWithoutResult(status -> {
             try {
                 changeHistoryRepository.saveAll(records);
@@ -288,8 +296,9 @@ public class ChangeHistoryComponent {
         // place
         entities = entities.stream()
                 .filter(e -> !isInternalField(e.getFieldName()))
+                .filter(e -> e.getSubTableName() == null || !isSubTableRowMetadataField(e.getFieldName()))
+                .filter(e -> !semanticallyEqual(e.getFieldName(), e.getOldValue(), e.getNewValue()))
                 .toList();
-
         // When a row identifier is given (e.g. from a multi-instance Todo task),
         // keep only records for that specific row plus top-level field changes.
         if (rowIdentifier != null && !rowIdentifier.isBlank()) {
@@ -298,12 +307,18 @@ public class ChangeHistoryComponent {
                             || rowIdentifier.equals(e.getRowIdentifier()))
                     .toList();
         }
-        
-        Map<String, String> userDisplayById = resolveUserDisplayNames(entities);
-        StageNameMaps stageNames = resolveStageNames(processInstanceId);
         HistoryFieldMetadata fieldMetadata = resolveHistoryFieldMetadata(processInstanceId);
+        entities = entities.stream()
+                .filter(entity -> !isLegacySystemFieldAlias(entity.getFieldName())
+                        || fieldMetadata.isExplicitlyConfigured(
+                                entity.getSubTableName(), entity.getFieldName()))
+                .toList();
+        UserDisplayMaps userDisplays = resolveUserDisplayNames(entities);
+        StageNameMaps stageNames = resolveStageNames(processInstanceId);
         return entities.stream()
-                .flatMap(e -> toRecords(e, userDisplayById, stageNames, fieldMetadata).stream())
+                .flatMap(e -> toRecords(e, userDisplays, stageNames, fieldMetadata).stream())
+                .filter(record -> !isLegacySystemFieldAlias(record.getFieldName())
+                        || fieldMetadata.isExplicitlyConfigured(record))
                 .filter(record -> fieldMetadata.isUserVisible(record))
                 .toList();
     }
@@ -397,11 +412,11 @@ public class ChangeHistoryComponent {
      * one-field-per-row table without mutating audit evidence.
      */
     private List<ChangeHistoryRecord> toRecords(ChangeHistory entity,
-            Map<String, String> userDisplayById,
+            UserDisplayMaps userDisplays,
             StageNameMaps stageNames,
             HistoryFieldMetadata fieldMetadata) {
         if (!isLegacySubTablePayload(entity)) {
-            return List.of(toRecord(entity, userDisplayById, stageNames, fieldMetadata,
+            return List.of(toRecord(entity, userDisplays, stageNames, fieldMetadata,
                     entity.getFieldName(), entity.getOldValue(), entity.getNewValue()));
         }
         Map<String, Object> oldFields = parseJsonObject(entity.getOldValue());
@@ -411,11 +426,14 @@ public class ChangeHistoryComponent {
         fieldNames.addAll(newFields.keySet());
         fieldNames.removeIf(ChangeHistoryComponent::isSubTableRowMetadataField);
         if (fieldNames.isEmpty()) {
-            return List.of(toRecord(entity, userDisplayById, stageNames, fieldMetadata,
+            return List.of(toRecord(entity, userDisplays, stageNames, fieldMetadata,
                     entity.getFieldName(), entity.getOldValue(), entity.getNewValue()));
         }
         return fieldNames.stream()
-                .map(fieldName -> toRecord(entity, userDisplayById, stageNames, fieldMetadata, fieldName,
+                .filter(fieldName -> !isSubTableRowMetadataField(fieldName))
+                .filter(fieldName -> !semanticallyEqual(fieldName,
+                        oldFields.get(fieldName), newFields.get(fieldName)))
+                .map(fieldName -> toRecord(entity, userDisplays, stageNames, fieldMetadata, fieldName,
                         toDisplayString(oldFields.get(fieldName)), toDisplayString(newFields.get(fieldName))))
                 .toList();
     }
@@ -447,13 +465,13 @@ public class ChangeHistoryComponent {
     }
 
     private ChangeHistoryRecord toRecord(ChangeHistory entity,
-            Map<String, String> userDisplayById,
+            UserDisplayMaps userDisplays,
             StageNameMaps stageNames,
             HistoryFieldMetadata fieldMetadata,
             String fieldName,
             String oldValue,
             String newValue) {
-        String userName = userDisplayById.get(entity.getUserId());
+        String userName = userDisplays.standard().get(entity.getUserId());
         String stageName = null;
         if (entity.getTaskInstanceId() != null && !entity.getTaskInstanceId().isBlank()) {
             stageName = stageNames.taskInstanceIdToName().get(entity.getTaskInstanceId());
@@ -476,8 +494,8 @@ public class ChangeHistoryComponent {
                 .fieldName(fieldName)
                 .fieldLabel(fieldLabel)
                 .fieldOrder(fieldOrder)
-                .oldValue(displayValueForKnownUser(oldValue, userDisplayById))
-                .newValue(displayValueForKnownUser(newValue, userDisplayById))
+                .oldValue(displayHistoryValue(fieldName, oldValue, userDisplays))
+                .newValue(displayHistoryValue(fieldName, newValue, userDisplays))
                 .changeType(entity.getChangeType().name())
                 .subTableName(entity.getSubTableName())
                 .rowIdentifier(entity.getRowIdentifier())
@@ -485,7 +503,7 @@ public class ChangeHistoryComponent {
                 .build();
     }
 
-    private Map<String, String> resolveUserDisplayNames(List<ChangeHistory> entities) {
+    private UserDisplayMaps resolveUserDisplayNames(List<ChangeHistory> entities) {
         Set<String> ids = entities.stream()
                 .flatMap(entity -> java.util.stream.Stream.of(
                         entity.getUserId(), entity.getOldValue(), entity.getNewValue()))
@@ -493,16 +511,36 @@ public class ChangeHistoryComponent {
                 .map(String::trim)
                 .filter(this::isPotentialUserId)
                 .collect(Collectors.toCollection(HashSet::new));
+        entities.stream()
+                .filter(entity -> isAssigneeValueField(entity.getFieldName()))
+                .flatMap(entity -> java.util.stream.Stream.of(entity.getOldValue(), entity.getNewValue()))
+                .map(this::extractAssigneeUserId)
+                .filter(Objects::nonNull)
+                .forEach(ids::add);
+        entities.stream()
+                .filter(ChangeHistoryComponent::isLegacySubTablePayload)
+                .forEach(entity -> {
+                    Map<String, Object> oldFields = parseJsonObject(entity.getOldValue());
+                    Map<String, Object> newFields = parseJsonObject(entity.getNewValue());
+                    String oldAssignee = extractAssigneeUserId(oldFields.get("assignee"));
+                    String newAssignee = extractAssigneeUserId(newFields.get("assignee"));
+                    if (oldAssignee != null)
+                        ids.add(oldAssignee);
+                    if (newAssignee != null)
+                        ids.add(newAssignee);
+                });
         if (ids.isEmpty()) {
-            return Map.of();
+            return new UserDisplayMaps(Map.of(), Map.of());
         }
-        Map<String, String> out = new HashMap<>();
+        Map<String, String> standard = new HashMap<>();
+        Map<String, String> assignee = new HashMap<>();
         for (User u : userRepository.findAllById(ids)) {
             if (u != null && u.getId() != null) {
-                out.put(u.getId(), displayNameForUser(u));
+                standard.put(u.getId(), displayNameForUser(u));
+                assignee.put(u.getId(), canonicalAssigneeDisplayName(u));
             }
         }
-        return out;
+        return new UserDisplayMaps(standard, assignee);
     }
 
     private boolean isPotentialUserId(String value) {
@@ -516,6 +554,22 @@ public class ChangeHistoryComponent {
         return userDisplayById.getOrDefault(value, value);
     }
 
+    private String displayHistoryValue(String fieldName, String value, UserDisplayMaps userDisplays) {
+        if (!isAssigneeValueField(fieldName) || value == null) {
+            return displayValueForKnownUser(value, userDisplays.standard());
+        }
+        String userId = extractAssigneeUserId(value);
+        if (userId != null) {
+            String canonical = userDisplays.assignee().get(userId);
+            if (canonical != null) {
+                return canonical;
+            }
+        }
+        Map<String, Object> userValue = parseJsonObject(value);
+        String embedded = canonicalAssigneeDisplayName(userValue);
+        return embedded != null ? embedded : displayValueForKnownUser(value, userDisplays.standard());
+    }
+
     private static String displayNameForUser(User u) {
         if (u.getFullName() != null && !u.getFullName().isBlank()) {
             return u.getFullName().trim();
@@ -524,6 +578,83 @@ public class ChangeHistoryComponent {
             return u.getDisplayName().trim();
         }
         return u.getUsername();
+    }
+
+    private static String canonicalAssigneeDisplayName(User user) {
+        String name = firstNonBlank(user.getFullName(), user.getDisplayName(), user.getUsername());
+        String username = trimToNull(user.getUsername());
+        if (name == null)
+            return username;
+        return username != null && !name.equals(username) ? name + " (" + username + ")" : name;
+    }
+
+    private static String canonicalAssigneeDisplayName(Map<String, Object> value) {
+        if (value == null || value.isEmpty())
+            return null;
+        String name = firstNonBlank(
+                stringOrNull(value.get("full_name")), stringOrNull(value.get("fullName")),
+                stringOrNull(value.get("display_name")), stringOrNull(value.get("displayName")),
+                stringOrNull(value.get("username")));
+        String username = trimToNull(stringOrNull(value.get("username")));
+        if (name == null)
+            return username;
+        return username != null && !name.equals(username) ? name + " (" + username + ")" : name;
+    }
+
+    private boolean semanticallyEqual(String fieldName, Object oldValue, Object newValue) {
+        if (!isAssigneeValueField(fieldName)) {
+            return Objects.equals(oldValue, newValue);
+        }
+        String oldUserId = extractAssigneeUserId(oldValue);
+        String newUserId = extractAssigneeUserId(newValue);
+        if (oldUserId != null || newUserId != null) {
+            return Objects.equals(oldUserId, newUserId);
+        }
+        return Objects.equals(oldValue, newValue);
+    }
+
+    private String extractAssigneeUserId(Object value) {
+        if (value == null)
+            return null;
+        if (value instanceof Map<?, ?> map) {
+            return firstNonBlank(
+                    stringOrNull(map.get("id")), stringOrNull(map.get("userId")),
+                    stringOrNull(map.get("user_id")), stringOrNull(map.get("value")));
+        }
+        String raw = trimToNull(String.valueOf(value));
+        if (raw == null)
+            return null;
+        if (raw.startsWith("{") && raw.endsWith("}")) {
+            Map<String, Object> parsed = parseJsonObject(raw);
+            if (!parsed.isEmpty())
+                return extractAssigneeUserId(parsed);
+        }
+        return raw;
+    }
+
+    private static boolean isAssigneeValueField(String fieldName) {
+        return fieldName != null
+                && ASSIGNEE_VALUE_FIELDS.contains(normalizeFieldKey(fieldName));
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            String normalized = trimToNull(value);
+            if (normalized != null)
+                return normalized;
+        }
+        return null;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null)
+            return null;
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private record UserDisplayMaps(Map<String, String> standard,
+            Map<String, String> assignee) {
     }
 
     private StageNameMaps resolveStageNames(String processInstanceId) {
@@ -570,6 +701,7 @@ public class ChangeHistoryComponent {
      */
     private HistoryFieldMetadata resolveHistoryFieldMetadata(String processInstanceId) {
         Map<String, FieldMetadata> topLevelFields = new HashMap<>();
+        Set<String> editableFormFields = resolveEditableFormFields(processInstanceId);
         Map<String, String> labels = resolveFieldLabels(processInstanceId);
         Map<String, Integer> orders = resolveFieldOrders(processInstanceId);
         Set<String> formFields = new HashSet<>();
@@ -582,7 +714,7 @@ public class ChangeHistoryComponent {
         try {
             ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId).orElse(null);
             if (processInstance == null || processInstance.getProcessDefinitionKey() == null) {
-                return new HistoryFieldMetadata(topLevelFields, subTableFields);
+                return new HistoryFieldMetadata(topLevelFields, subTableFields, editableFormFields);
             }
             List<SubTableFieldMetadataRow> rows = jdbcTemplate.query(
                     """
@@ -611,7 +743,7 @@ public class ChangeHistoryComponent {
         } catch (Exception e) {
             log.debug("Could not resolve configured sub-table fields for {}: {}", processInstanceId, e.getMessage());
         }
-        return new HistoryFieldMetadata(topLevelFields, subTableFields);
+        return new HistoryFieldMetadata(topLevelFields, subTableFields, editableFormFields);
     }
 
     private record FieldMetadata(String label, Integer order) {
@@ -622,7 +754,8 @@ public class ChangeHistoryComponent {
     }
 
     private record HistoryFieldMetadata(Map<String, FieldMetadata> topLevelFields,
-            Map<String, Map<String, FieldMetadata>> subTableFields) {
+            Map<String, Map<String, FieldMetadata>> subTableFields,
+            Set<String> editableFormFields) {
         FieldMetadata resolve(String subTableName, String fieldName) {
             if (fieldName == null || fieldName.isBlank()) {
                 return null;
@@ -649,6 +782,131 @@ public class ChangeHistoryComponent {
             }
             return topLevelFields.isEmpty() || topLevelFields.containsKey(fieldName);
         }
+
+        boolean isExplicitlyConfigured(ChangeHistoryRecord record) {
+            return isExplicitlyConfigured(record.getSubTableName(), record.getFieldName());
+        }
+
+        boolean isExplicitlyConfigured(String subTableName, String fieldName) {
+            return editableFormFields.contains(editableFieldKey(subTableName, fieldName));
+        }
+    }
+
+    private Set<String> resolveEditableFormFields(String processInstanceId) {
+        Set<String> fields = new HashSet<>();
+        try {
+            ProcessInstance pi = processInstanceRepository.findById(processInstanceId).orElse(null);
+            if (pi == null || pi.getProcessDefinitionKey() == null)
+                return fields;
+            List<FormConfigRow> configs = jdbcTemplate.query(
+                    """
+                            SELECT fd.id, fd.config_json::text AS config_json
+                            FROM dw_form_definitions fd
+                            INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
+                            WHERE fu.code = ?
+                            """,
+                    (rs, rowNum) -> new FormConfigRow(
+                            rs.getLong("id"), rs.getString("config_json")),
+                    pi.getProcessDefinitionKey().trim());
+            Map<String, String> bindingHistoryNames = resolveBindingHistoryNames(
+                    pi.getProcessDefinitionKey().trim());
+            for (FormConfigRow form : configs) {
+                String raw = form.configJson();
+                if (raw == null || raw.isBlank())
+                    continue;
+                Map<String, Object> config = objectMapper.readValue(raw, new TypeReference<>() {
+                });
+                collectEditableHistoryFields(config, null, bindingHistoryNames, fields);
+            }
+        } catch (Exception e) {
+            log.debug("Could not resolve editable history fields for {}: {}", processInstanceId, e.getMessage());
+        }
+        return fields;
+    }
+
+    private Map<String, String> resolveBindingHistoryNames(String functionUnitCode) {
+        Map<String, String> names = new HashMap<>();
+        List<BindingHistoryNameRow> rows = jdbcTemplate.query(
+                """
+                        SELECT binding.id,
+                            COALESCE(td.table_name, rt.table_name) AS table_name,
+                            COALESCE(td.table_display_name, rt.display_name) AS table_display_name
+                        FROM dw_form_table_bindings binding
+                        INNER JOIN dw_form_definitions form ON form.id = binding.form_id
+                        INNER JOIN dw_function_units fu ON fu.id = form.function_unit_id
+                        LEFT JOIN dw_table_definitions td ON td.id = binding.table_id
+                        LEFT JOIN rt_table_definitions rt ON rt.id = binding.relation_table_id
+                        WHERE fu.code = ?
+                        """,
+                (rs, rowNum) -> new BindingHistoryNameRow(
+                        rs.getString("id"), rs.getString("table_name"),
+                        rs.getString("table_display_name")),
+                functionUnitCode);
+        for (BindingHistoryNameRow row : rows) {
+            String historyName = normalizeSubTableNameForHistory(row.tableName());
+            if (historyName == null)
+                continue;
+            registerHistoryName(names, row.bindingId(), historyName);
+            registerHistoryName(names, row.tableName(), historyName);
+            registerHistoryName(names, row.tableDisplayName(), historyName);
+        }
+        return names;
+    }
+
+    private static void registerHistoryName(Map<String, String> names, String alias, String historyName) {
+        String normalizedAlias = normalizeSubTableNameForHistory(alias);
+        if (normalizedAlias != null)
+            names.putIfAbsent(normalizedAlias, historyName);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void collectEditableHistoryFields(Map<String, Object> config,
+            String subTableName,
+            Map<String, String> bindingHistoryNames,
+            Set<String> fields) {
+        Object rulesValue = config.get("rule");
+        if (rulesValue instanceof List<?> rules) {
+            for (Object value : rules) {
+                if (!(value instanceof Map<?, ?> rule))
+                    continue;
+                Object field = rule.get("field");
+                boolean readonly = Boolean.TRUE.equals(rule.get("readonly"))
+                        || Boolean.TRUE.equals(rule.get("disabled"))
+                        || (rule.get("props") instanceof Map<?, ?> props
+                                && (Boolean.TRUE.equals(props.get("readonly"))
+                                        || Boolean.TRUE.equals(props.get("disabled"))));
+                if (!readonly && field instanceof String name && !name.isBlank()) {
+                    fields.add(editableFieldKey(subTableName, name));
+                }
+                Object children = rule.get("children");
+                if (children instanceof List<?>) {
+                    collectEditableHistoryFields(
+                            Map.of("rule", children), subTableName, bindingHistoryNames, fields);
+                }
+            }
+        }
+        Object subForms = config.get("subForms");
+        if (subForms instanceof Map<?, ?> forms) {
+            for (Map.Entry<?, ?> entry : forms.entrySet()) {
+                if (entry.getValue() instanceof Map<?, ?> form) {
+                    String rawAlias = normalizeSubTableNameForHistory(String.valueOf(entry.getKey()));
+                    String historyName = bindingHistoryNames.getOrDefault(rawAlias, rawAlias);
+                    collectEditableHistoryFields(
+                            (Map<String, Object>) form, historyName, bindingHistoryNames, fields);
+                }
+            }
+        }
+    }
+
+    private static String editableFieldKey(String subTableName, String fieldName) {
+        String tableName = normalizeSubTableNameForHistory(subTableName);
+        return (tableName != null ? tableName : "") + "\u0000" + fieldName;
+    }
+
+    private record FormConfigRow(Long formId, String configJson) {
+    }
+
+    private record BindingHistoryNameRow(String bindingId, String tableName, String tableDisplayName) {
     }
 
     /**
@@ -664,7 +922,6 @@ public class ChangeHistoryComponent {
                 return labels;
             }
             String processDefKey = pi.getProcessDefinitionKey();
-
             List<String> configJsonStrings = jdbcTemplate.query(
                     """
                             SELECT fd.config_json::text AS config_json
@@ -674,7 +931,6 @@ public class ChangeHistoryComponent {
                             """,
                     (rs, rowNum) -> rs.getString("config_json"),
                     processDefKey.trim());
-
             for (String raw : configJsonStrings) {
                 if (raw == null || raw.isBlank())
                     continue;
@@ -765,7 +1021,6 @@ public class ChangeHistoryComponent {
     }
 
     // ==================== display helpers ====================
-
     /**
      * Converts a value to a user-friendly display string for change history.
      * Maps and Lists are serialized as JSON; scalars use {@code toString()}.
@@ -820,7 +1075,7 @@ public class ChangeHistoryComponent {
             return Map.of();
         }
         Map<String, List<Map<String, Object>>> rowsByName = new LinkedHashMap<>();
-        Set<String> seenRowIds = new HashSet<>();
+        Map<String, Set<String>> seenRowIdsByTable = new HashMap<>();
         // Sort keys so old and new snapshots assign the same row to the same
         // normalized-name group regardless of HashMap iteration order.
         List<Map.Entry<?, ?>> sortedEntries = new ArrayList<>(rawMap.entrySet());
@@ -837,6 +1092,8 @@ public class ChangeHistoryComponent {
             if (!(entry.getValue() instanceof List<?> rawRows)) {
                 continue;
             }
+            Set<String> seenRowIds = seenRowIdsByTable.computeIfAbsent(
+                    normalizedName, ignored -> new HashSet<>());
             List<Map<String, Object>> rows = rowsByName.computeIfAbsent(normalizedName, ignored -> new ArrayList<>());
             for (Object rawRow : rawRows) {
                 if (rawRow instanceof Map<?, ?> row) {
@@ -896,6 +1153,14 @@ public class ChangeHistoryComponent {
         if (fieldName == null || fieldName.isBlank()) {
             return true;
         }
-        return SUB_TABLE_ROW_METADATA_FIELDS.contains(fieldName.trim().toLowerCase());
+        return SUB_TABLE_ROW_METADATA_FIELDS.contains(normalizeFieldKey(fieldName));
+    }
+
+    private static boolean isLegacySystemFieldAlias(String fieldName) {
+        return fieldName != null && LEGACY_SYSTEM_FIELD_ALIASES.contains(normalizeFieldKey(fieldName));
+    }
+
+    private static String normalizeFieldKey(String fieldName) {
+        return fieldName.trim().toLowerCase().replaceAll("[^a-z0-9]", "");
     }
 }

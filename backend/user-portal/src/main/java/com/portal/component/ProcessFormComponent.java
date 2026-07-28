@@ -46,6 +46,17 @@ public class ProcessFormComponent {
     private final JdbcTemplate jdbcTemplate;
     private final PlatformTransactionManager platformTransactionManager;
 
+    @Lazy
+    @Autowired
+    private ChangeHistorySubmissionFilter changeHistorySubmissionFilter;
+    private ChangeHistorySubmissionFilter changeHistorySubmissionFilter() {
+        ChangeHistorySubmissionFilter filter = changeHistorySubmissionFilter;
+        if (filter == null) {
+            filter = new ChangeHistorySubmissionFilter(jdbcTemplate, objectMapper);
+            changeHistorySubmissionFilter = filter;
+        }
+        return filter;
+    }
     /** Lazy: computes the readonly Request ID value; injected as a field to keep ctor arity stable for tests. */
     @Lazy
     @Autowired
@@ -203,6 +214,9 @@ public class ProcessFormComponent {
             throw new PortalException("403", "Process form can only be updated in Return_To_Requester state. Current state: " + gate.getStatus());
         }
 
+        Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
+            gate.getFunctionUnitCode(), formData, formData);
+
         AtomicReference<Map<String, Object>> oldValuesRef = new AtomicReference<>();
 
         processFormWriteTx().executeWithoutResult(status -> {
@@ -238,10 +252,12 @@ public class ProcessFormComponent {
                 .build();
 
         try {
-            changeHistoryComponent.recordFieldChanges(context, snapshotOldValues, formData);
+            changeHistoryComponent.recordFieldChanges(context, snapshotOldValues, userChanges);
+                    Object filteredOldSubTables = changeHistorySubmissionFilter().filterProcessSubTableBaseline(
+                        gate.getFunctionUnitCode(), snapshotOldValues.get("__subTables__"));
             recordSubTableChangeHistory(context,
-                    snapshotOldValues.get("__subTables__"),
-                    formData.get("__subTables__"));
+                        filteredOldSubTables,
+                    userChanges.get("__subTables__"));
         } catch (RuntimeException ex) {
             log.warn("process form change-history skipped for {}: {}", processInstanceId, ex.getMessage());
         }

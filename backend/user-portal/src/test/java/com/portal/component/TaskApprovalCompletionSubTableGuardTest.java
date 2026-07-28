@@ -3,12 +3,10 @@ package com.portal.component;
 import com.portal.client.WorkflowEngineClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -18,17 +16,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Guards the completion write-path against wiping a service task's {@code __subTables__} output:
- * a bare approval whose outbound variables carry an empty sub-table slice must be refilled from the
- * live engine before {@code completeTask}, never sent as {@code []} (which would overwrite engine rows).
+ * Guards the completion write-path against wiping a service task's
+ * {@code __subTables__} output:
+ * a bare approval whose outbound variables carry an empty sub-table slice must
+ * be refilled from the
+ * live engine before {@code completeTask}, never sent as {@code []} (which
+ * would overwrite engine rows).
  */
 @DisplayName("TaskApprovalCompletionComponent.preserveEngineSubTablesOnComplete")
 class TaskApprovalCompletionSubTableGuardTest {
-
     private static final String PID = "pi-1";
 
     private TaskApprovalCompletionComponent newComponent(WorkflowEngineClient client) {
-        // The guard delegates its fill-empty merge to EngineSubTableHydrator (over the same engine
+        // The guard delegates its fill-empty merge to EngineSubTableHydrator (over the
+        // same engine
         // client); the remaining collaborators are unused here.
         return new TaskApprovalCompletionComponent(
                 client, new EngineSubTableHydrator(client), null, null, null, null, null);
@@ -54,17 +55,46 @@ class TaskApprovalCompletionSubTableGuardTest {
     @SuppressWarnings("unchecked")
     void fillsEmptySliceFromEngine() {
         WorkflowEngineClient client = engineWithRows(Map.of("50111", fourRows()));
-
         Map<String, Object> variables = new LinkedHashMap<>();
         Map<String, Object> outSubTables = new LinkedHashMap<>();
         outSubTables.put("50111", List.of()); // empty slice — would overwrite the engine's 4 rows with []
         variables.put("__subTables__", outSubTables);
-
         newComponent(client).preserveEngineSubTablesOnComplete(PID, variables);
-
         Map<String, Object> after = (Map<String, Object>) variables.get("__subTables__");
         List<?> slice = (List<?>) after.get("50111");
         assertEquals(4, slice.size(), "empty slice must be refilled from the engine");
+    }
+
+    @Test
+    @DisplayName("keeps an explicitly submitted empty slice as an intentional delete-all operation")
+    @SuppressWarnings("unchecked")
+    void keepsExplicitlySubmittedEmptySlice() {
+        WorkflowEngineClient client = engineWithRows(Map.of("50111", fourRows()));
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("__subTables__", new LinkedHashMap<>(Map.of("50111", List.of())));
+        newComponent(client).preserveEngineSubTablesOnComplete(
+                PID, variables, Map.of("50111", List.of()));
+        verify(client, never()).getProcessInstance(anyString());
+        Map<String, Object> after = (Map<String, Object>) variables.get("__subTables__");
+        assertEquals(List.of(), after.get("50111"));
+    }
+
+    @Test
+    @DisplayName("preserves engine-only empty siblings while keeping an explicit delete-all slice")
+    @SuppressWarnings("unchecked")
+    void preservesEngineOnlySiblingAlongsideExplicitDeleteAll() {
+        WorkflowEngineClient client = engineWithRows(Map.of(
+                "50111", fourRows(),
+                "50222", List.of(Map.of("id", "engine-only"))));
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("__subTables__", new LinkedHashMap<>(Map.of(
+                "50111", List.of(),
+                "50222", List.of())));
+        newComponent(client).preserveEngineSubTablesOnComplete(
+                PID, variables, Map.of("50111", List.of()));
+        Map<String, Object> after = (Map<String, Object>) variables.get("__subTables__");
+        assertEquals(List.of(), after.get("50111"));
+        assertEquals(List.of(Map.of("id", "engine-only")), after.get("50222"));
     }
 
     @Test
@@ -72,14 +102,11 @@ class TaskApprovalCompletionSubTableGuardTest {
     @SuppressWarnings("unchecked")
     void leavesNonEmptySliceUntouched() {
         WorkflowEngineClient client = mock(WorkflowEngineClient.class);
-
         Map<String, Object> variables = new LinkedHashMap<>();
         Map<String, Object> outSubTables = new LinkedHashMap<>();
         outSubTables.put("50111", List.of(Map.of("id", "user-edit-1")));
         variables.put("__subTables__", outSubTables);
-
         newComponent(client).preserveEngineSubTablesOnComplete(PID, variables);
-
         // No empty slice → no round-trip, user edits preserved verbatim.
         verify(client, never()).getProcessInstance(anyString());
         List<?> slice = (List<?>) ((Map<String, Object>) variables.get("__subTables__")).get("50111");
@@ -90,12 +117,9 @@ class TaskApprovalCompletionSubTableGuardTest {
     @DisplayName("no __subTables__ in outbound variables is a no-op (engine keeps its own value)")
     void absentSubTablesIsNoOp() {
         WorkflowEngineClient client = mock(WorkflowEngineClient.class);
-
         Map<String, Object> variables = new LinkedHashMap<>();
         variables.put("decision", "yes");
-
         newComponent(client).preserveEngineSubTablesOnComplete(PID, variables);
-
         verify(client, never()).getProcessInstance(anyString());
         assertEquals(Map.of("decision", "yes"), variables);
     }
@@ -108,15 +132,12 @@ class TaskApprovalCompletionSubTableGuardTest {
         engineSubTables.put("50111", fourRows());
         engineSubTables.put("50222", fourRows()); // engine also has rows here, but the user edited it
         WorkflowEngineClient client = engineWithRows(engineSubTables);
-
         Map<String, Object> variables = new LinkedHashMap<>();
         Map<String, Object> outSubTables = new LinkedHashMap<>();
-        outSubTables.put("50111", List.of());                       // empty → should be filled to 4
+        outSubTables.put("50111", List.of()); // empty → should be filled to 4
         outSubTables.put("50222", List.of(Map.of("id", "kept-1"))); // non-empty → must stay as-is
         variables.put("__subTables__", outSubTables);
-
         newComponent(client).preserveEngineSubTablesOnComplete(PID, variables);
-
         Map<String, Object> after = (Map<String, Object>) variables.get("__subTables__");
         assertEquals(4, ((List<?>) after.get("50111")).size(), "empty slice filled from engine");
         List<?> kept = (List<?>) after.get("50222");

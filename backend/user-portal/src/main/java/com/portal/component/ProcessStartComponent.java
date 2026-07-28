@@ -1,6 +1,5 @@
 package com.portal.component;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ChangeHistoryContext;
@@ -21,7 +20,6 @@ import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.util.PortalUserSecurityUtils;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +33,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
-
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -47,12 +44,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
- * Process start flow: active catalog pin resolution, BPMN deployment, engine start,
- * first-task auto-completion and start bookkeeping. Extracted from {@link ProcessComponent}
- * (the original 330-line {@code startProcess} body is decomposed into sequential steps
+ * Process start flow: active catalog pin resolution, BPMN deployment, engine
+ * start,
+ * first-task auto-completion and start bookkeeping. Extracted from
+ * {@link ProcessComponent}
+ * (the original 330-line {@code startProcess} body is decomposed into
+ * sequential steps
  * with unchanged order and logic).
  */
 @Slf4j
@@ -75,16 +74,38 @@ public class ProcessStartComponent {
     private final I18nService i18nService;
     private final PlatformTransactionManager transactionManager;
 
+    @Lazy
+    @Autowired
+    private ChangeHistorySubmissionFilter changeHistorySubmissionFilter;
+
+    private ChangeHistorySubmissionFilter changeHistorySubmissionFilter() {
+        ChangeHistorySubmissionFilter filter = changeHistorySubmissionFilter;
+        if (filter == null) {
+            filter = new ChangeHistorySubmissionFilter(jdbcTemplate, new ObjectMapper());
+            changeHistorySubmissionFilter = filter;
+        }
+        return filter;
+    }
+
     /**
      * Programmatic short transactions for the DB-write phases of a start.
      *
-     * <p>{@code startProcess} makes ~4-5 sequential blocking HTTP calls (admin-center FU checks, engine
-     * deploy/start/auto-complete). Previously the whole method was {@code @Transactional}, so one JDBC
-     * connection was pinned across all of that — capping start throughput at {@code pool / holdTime}
-     * (~30-60 TPS on pool=20; thread dumps showed most workers parked in {@code Hikari.borrow} while a
-     * few held a connection blocked on an engine/admin socket read). Now the HTTP runs with no ambient
-     * transaction and only the actual writes run inside these short {@link TransactionTemplate} blocks,
-     * so a connection is held for milliseconds, not the whole flow. Lazily built (Lombok owns the ctor).</p>
+     * <p>
+     * {@code startProcess} makes ~4-5 sequential blocking HTTP calls (admin-center
+     * FU checks, engine
+     * deploy/start/auto-complete). Previously the whole method was
+     * {@code @Transactional}, so one JDBC
+     * connection was pinned across all of that — capping start throughput at
+     * {@code pool / holdTime}
+     * (~30-60 TPS on pool=20; thread dumps showed most workers parked in
+     * {@code Hikari.borrow} while a
+     * few held a connection blocked on an engine/admin socket read). Now the HTTP
+     * runs with no ambient
+     * transaction and only the actual writes run inside these short
+     * {@link TransactionTemplate} blocks,
+     * so a connection is held for milliseconds, not the whole flow. Lazily built
+     * (Lombok owns the ctor).
+     * </p>
      */
     private volatile TransactionTemplate txTemplate;
 
@@ -97,7 +118,10 @@ public class ProcessStartComponent {
         return t;
     }
 
-    /** Lazy: breaks cycle with {@link ProcessComponent}, which keeps the FU content cache. */
+    /**
+     * Lazy: breaks cycle with {@link ProcessComponent}, which keeps the FU content
+     * cache.
+     */
     @Lazy
     @Autowired
     private ProcessComponent processComponent;
@@ -106,28 +130,41 @@ public class ProcessStartComponent {
     private String adminCenterUrl;
 
     /**
-     * Deploy-once cache: {@code processKey + ":" + sha256(bpmnXml)} -> resolved Flowable process definition key.
+     * Deploy-once cache: {@code processKey + ":" + sha256(bpmnXml)} -> resolved
+     * Flowable process definition key.
      *
-     * <p>Before: {@code deployProcess} was called on <em>every</em> start. A 200-concurrent start burst of the
-     * same function unit therefore fired 200 simultaneous engine deploys of an identical BPMN; Flowable dedups
-     * identical resources but concurrent deploys race on {@code ACT_RE_DEPLOYMENT}/{@code ACT_RE_PROCDEF}
-     * (unique key / optimistic lock / deadlock) and surface to the portal as HTTP 500 =
-     * {@code portal.deploy_process_failed}. Keying by BPMN content hash means exactly one request deploys an
-     * unchanged definition and every other reuses the resolved key; a changed BPMN (new hash) redeploys once.
-     * Entry is evicted if the subsequent start fails, so a lost/rolled-back engine deployment self-heals.</p>
+     * <p>
+     * Before: {@code deployProcess} was called on <em>every</em> start. A
+     * 200-concurrent start burst of the
+     * same function unit therefore fired 200 simultaneous engine deploys of an
+     * identical BPMN; Flowable dedups
+     * identical resources but concurrent deploys race on
+     * {@code ACT_RE_DEPLOYMENT}/{@code ACT_RE_PROCDEF}
+     * (unique key / optimistic lock / deadlock) and surface to the portal as HTTP
+     * 500 =
+     * {@code portal.deploy_process_failed}. Keying by BPMN content hash means
+     * exactly one request deploys an
+     * unchanged definition and every other reuses the resolved key; a changed BPMN
+     * (new hash) redeploys once.
+     * Entry is evicted if the subsequent start fails, so a lost/rolled-back engine
+     * deployment self-heals.
+     * </p>
      */
-    private final java.util.concurrent.ConcurrentHashMap<String, String> deployedProcessKeyCache =
-            new java.util.concurrent.ConcurrentHashMap<>();
-    /** Per-cache-key locks so concurrent starts of the same definition serialize the single deploy (not the map bin). */
-    private final java.util.concurrent.ConcurrentHashMap<String, Object> deployLocks =
-            new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, String> deployedProcessKeyCache = new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * Per-cache-key locks so concurrent starts of the same definition serialize the
+     * single deploy (not the map bin).
+     */
+    private final java.util.concurrent.ConcurrentHashMap<String, Object> deployLocks = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Starts process
      * Via WorkflowEngineClient calling Flowable engine
      */
-    // NOT @Transactional: the ~4-5 engine/admin HTTP calls below must not run while holding a DB
-    // connection (that pins the pool and throttles start throughput). DB writes are confined to the
+    // NOT @Transactional: the ~4-5 engine/admin HTTP calls below must not run while
+    // holding a DB
+    // connection (that pins the pool and throttles start throughput). DB writes are
+    // confined to the
     // short tx() blocks; all HTTP runs connection-free. See txTemplate javadoc.
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
         if (processKey == null || processKey.isEmpty()) {
@@ -144,31 +181,37 @@ public class ProcessStartComponent {
         // actualProcessKey is the key used to start (Flowable uses BPMN <process id>)
         final String actualProcessKey = deployAndResolveProcessKey(processKey, def);
 
-        // Start instance: strip forged workspace keys; UBR users need valid JWT workspace context (matches hasContext)
-        Map<String, Object> variables = request.getFormData() != null ? new HashMap<>(request.getFormData()) : new HashMap<>();
+        // Start instance: strip forged workspace keys; UBR users need valid JWT
+        // workspace context (matches hasContext)
+        Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(request.getFormData());
+        Map<String, Object> variables = changeHistorySubmissionFilter().copyPayload(request.getFormData());
         variables.remove("activeBusinessUnitId");
         variables.remove("activeRoleId");
         applyCatalogContextToVariables(variables, userId, pin.catalogId(), pin.code());
-        // Demo FU fu-20260403-a1b2c5: assign-participants node uses INITIATOR; scripts still read participant_assigner_user_id
+        // Demo FU fu-20260403-a1b2c5: assign-participants node uses INITIATOR; scripts
+        // still read participant_assigner_user_id
         if ("fu-20260403-a1b2c5".equals(pin.code())) {
             variables.put("participant_assigner_user_id", userId);
         }
-
         applyWorkspaceContextVariables(userId, variables);
         processSubTablePrimaryKeyEnricherComponent.allocateMissingPrimaryKeysInVariables(pin.code(), variables);
-
-        // System audit fields are generated server-side at the real insert (never pre-filled by
-        // the portal dialog); only fields present on the form (submitted keys) receive values.
+        // System audit fields are generated server-side at the real insert (never
+        // pre-filled by
+        // the portal dialog); only fields present on the form (submitted keys) receive
+        // values.
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         SystemAuditFieldFiller.fillOnInsert(variables, startUserDisplayName);
-
+        Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(
+                pin.code(), submittedSnapshot, variables);
         Map<String, Object> data;
         try {
             data = workflowEngineClient.startProcess(
                     actualProcessKey, request.getBusinessKey(), userId, variables);
         } catch (RuntimeException ex) {
-            // If the start failed (e.g. engine no longer has the deployment we cached), drop the cache entry
-            // so the next attempt redeploys instead of being permanently poisoned by a stale "deployed" flag.
+            // If the start failed (e.g. engine no longer has the deployment we cached),
+            // drop the cache entry
+            // so the next attempt redeploys instead of being permanently poisoned by a
+            // stale "deployed" flag.
             evictDeploymentCache(processKey, def.bpmnXml());
             throw ex;
         }
@@ -176,31 +219,35 @@ public class ProcessStartComponent {
             evictDeploymentCache(processKey, def.bpmnXml());
             throw new IllegalStateException("Process start returned empty data: " + processKey);
         }
-
         String flowableProcessInstanceId = (String) data.get("processInstanceId");
         log.info("Process started via Flowable: {}", flowableProcessInstanceId);
-
-        // TX1 (short): persist instance as RUNNING so ProcessCompletionListener callback finds a row.
-        // Committing here (before auto-complete) is stronger than the old single-tx behaviour, where the
-        // row was not visible until the whole method committed after all the engine round-trips.
+        // TX1 (short): persist instance as RUNNING so ProcessCompletionListener
+        // callback finds a row.
+        // Committing here (before auto-complete) is stronger than the old single-tx
+        // behaviour, where the
+        // row was not visible until the whole method committed after all the engine
+        // round-trips.
         tx().executeWithoutResult(status -> persistRunningProcessInstance(
                 flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, variables, pin));
-
-        // Engine HTTP (claim/complete first task, query next) — runs with NO ambient tx / no connection held.
-        // Its own internal writes are individually transactional (captureTaskFormSnapshot is @Transactional;
-        // the meeting-path save auto-commits); autoCompleteFirstTask never throws (see its catch).
+        // Engine HTTP (claim/complete first task, query next) — runs with NO ambient tx
+        // / no connection held.
+        // Its own internal writes are individually transactional
+        // (captureTaskFormSnapshot is @Transactional;
+        // the meeting-path save auto-commits); autoCompleteFirstTask never throws (see
+        // its catch).
         FirstTaskOutcome outcome = autoCompleteFirstTask(flowableProcessInstanceId, userId, variables, pin);
-
-        // TX2 (short): change history + current-node update grouped atomically (the node update is a
-        // @Modifying query that requires a transaction). First task completed via engine API.
+        // TX2 (short): change history + current-node update grouped atomically (the
+        // node update is a
+        // @Modifying query that requires a transaction). First task completed via
+        // engine API.
         tx().executeWithoutResult(status -> {
             recordInitialSubmitChangeHistory(
                     flowableProcessInstanceId,
                     outcome.initiatorTaskIdForHistory,
                     outcome.initiatorTaskDefKeyForHistory,
                     userId,
-                    variables);
+                    userChanges);
             updateInstanceNodeAndRecordStartHistory(flowableProcessInstanceId, outcome, userId, startUserDisplayName);
         });
 
@@ -208,12 +255,20 @@ public class ProcessStartComponent {
                 userId, startUserDisplayName, outcome, pin);
     }
 
-    record ActiveCatalogPin(String catalogId, String code, String versionLabel) {}
+    record ActiveCatalogPin(String catalogId, String code, String versionLabel) {
+    }
 
-    /** Process name / BPMN XML / deployed process key loaded from FU content for one start request. */
-    private record LoadedStartDefinition(String processName, String bpmnXml, String flowableProcessKey) {}
+    /**
+     * Process name / BPMN XML / deployed process key loaded from FU content for one
+     * start request.
+     */
+    private record LoadedStartDefinition(String processName, String bpmnXml, String flowableProcessKey) {
+    }
 
-    /** Mutable holder mirroring the original {@code startProcess} locals around first-task auto-completion. */
+    /**
+     * Mutable holder mirroring the original {@code startProcess} locals around
+     * first-task auto-completion.
+     */
     private static final class FirstTaskOutcome {
         String currentNodeName;
         ProcessAssigneeSnapshot nextAssigneeSnapshot = ProcessAssigneeSnapshot.empty();
@@ -221,7 +276,10 @@ public class ProcessStartComponent {
         String initiatorTaskDefKeyForHistory;
     }
 
-    /** Catalog context required by Send Email delegate and other FU-scoped service tasks. */
+    /**
+     * Catalog context required by Send Email delegate and other FU-scoped service
+     * tasks.
+     */
     static void applyCatalogContextToVariables(
             Map<String, Object> variables, String userId, String catalogId, String catalogCode) {
         variables.put("initiator", userId);
@@ -233,7 +291,8 @@ public class ProcessStartComponent {
         Optional<ActiveCatalogPin> activePinOpt = fetchActiveCatalogForStart(processKey);
         if (activePinOpt.isEmpty()) {
             throw new IllegalStateException(
-                    "No deployed and enabled function unit version available for this process. Please deploy and activate in Admin Center: " + processKey);
+                    "No deployed and enabled function unit version available for this process. Please deploy and activate in Admin Center: "
+                            + processKey);
         }
         ActiveCatalogPin pin = activePinOpt.get();
 
@@ -253,7 +312,8 @@ public class ProcessStartComponent {
         String bpmnXml = null;
 
         // Prefer deployed process definition key from API response (most reliable).
-        // admin-center API returns this in ProcessContentDTO.flowableProcessDefinitionKey.
+        // admin-center API returns this in
+        // ProcessContentDTO.flowableProcessDefinitionKey.
         String flowableProcessKey = null;
 
         try {
@@ -274,8 +334,8 @@ public class ProcessStartComponent {
                     bpmnXml = (String) dataObj;
                 }
             }
-        } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException |
-                 FunctionUnitAccessComponent.FunctionUnitAccessDeniedException e) {
+        } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException
+                | FunctionUnitAccessComponent.FunctionUnitAccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             log.warn("Failed to get process info for {}: {}", processKey, e.getMessage(), e);
@@ -290,7 +350,8 @@ public class ProcessStartComponent {
     private String deployAndResolveProcessKey(String processKey, LoadedStartDefinition def) {
         // Check Flowable engine availability
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Workflow engine unavailable, please check if workflow-engine-core service is running");
+            throw new IllegalStateException(
+                    "Workflow engine unavailable, please check if workflow-engine-core service is running");
         }
 
         log.info("Using Flowable engine to start process: {}", processKey);
@@ -305,22 +366,25 @@ public class ProcessStartComponent {
             }
         }
 
-        // Deploy once per unchanged BPMN (see deployedProcessKeyCache). Fast path: already deployed.
+        // Deploy once per unchanged BPMN (see deployedProcessKeyCache). Fast path:
+        // already deployed.
         final String cacheKey = deploymentCacheKey(processKey, def.bpmnXml());
         String cached = deployedProcessKeyCache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
-        // Double-checked locking on a per-key lock: concurrent starts of the same definition wait for the
-        // single in-flight deploy instead of each POSTing /deploy (which is what raced and 500'd under load).
+        // Double-checked locking on a per-key lock: concurrent starts of the same
+        // definition wait for the
+        // single in-flight deploy instead of each POSTing /deploy (which is what raced
+        // and 500'd under load).
         Object lock = deployLocks.computeIfAbsent(cacheKey, k -> new Object());
         synchronized (lock) {
             cached = deployedProcessKeyCache.get(cacheKey);
             if (cached != null) {
                 return cached;
             }
-            Optional<Map<String, Object>> deployResult =
-                    workflowEngineClient.deployProcess(processKey, def.bpmnXml(), def.processName());
+            Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, def.bpmnXml(),
+                    def.processName());
             if (deployResult.isEmpty()) {
                 throw new IllegalStateException("Process deployment returned empty data: " + processKey);
             }
@@ -337,13 +401,17 @@ public class ProcessStartComponent {
         }
     }
 
-    /** Cache key for a deployed definition: process key + BPMN content hash (a changed BPMN redeploys once). */
+    /**
+     * Cache key for a deployed definition: process key + BPMN content hash (a
+     * changed BPMN redeploys once).
+     */
     private static String deploymentCacheKey(String processKey, String bpmnXml) {
         return processKey + ":" + sha256(bpmnXml);
     }
 
     /**
-     * Force a redeploy of this definition on the next start (e.g. after a start failed because the engine
+     * Force a redeploy of this definition on the next start (e.g. after a start
+     * failed because the engine
      * lost/rolled back the deployment). Cheap no-op if the entry was never cached.
      */
     private void evictDeploymentCache(String processKey, String bpmnXml) {
@@ -360,13 +428,15 @@ public class ProcessStartComponent {
             }
             return sb.toString();
         } catch (java.security.NoSuchAlgorithmException e) {
-            // SHA-256 is always present on a JRE; fall back to identity hash rather than fail the start.
+            // SHA-256 is always present on a JRE; fall back to identity hash rather than
+            // fail the start.
             return Integer.toHexString(java.util.Objects.hashCode(s));
         }
     }
 
     private void applyWorkspaceContextVariables(String userId, Map<String, Object> variables) {
-        List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+        List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService
+                .listWorkspaceContexts(userId);
         boolean jwtUserMatches = SecurityContextUtils.getCurrentUserId().map(uid -> uid.equals(userId)).orElse(false);
         if (!jwtUserMatches && userId != null && !userId.isEmpty()) {
             log.warn("Process start: path userId={} does not match JWT subject={} — active BU will not be applied",
@@ -427,12 +497,15 @@ public class ProcessStartComponent {
 
     private FirstTaskOutcome autoCompleteFirstTask(
             String flowableProcessInstanceId, String userId, Map<String, Object> variables, ActiveCatalogPin pin) {
-        // Auto-complete only when the first user task is a true initiator / start-form node.
-        // Approval-first flows (BU_ROLE, INITIATOR_BU_ROLE, etc.) must stay open for assignees.
+        // Auto-complete only when the first user task is a true initiator / start-form
+        // node.
+        // Approval-first flows (BU_ROLE, INITIATOR_BU_ROLE, etc.) must stay open for
+        // assignees.
         FirstTaskOutcome outcome = new FirstTaskOutcome();
 
         try {
-            Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
+            Optional<Map<String, Object>> tasksResult = workflowEngineClient
+                    .getProcessInstanceTasks(flowableProcessInstanceId);
             if (tasksResult.isPresent()) {
                 Map<String, Object> tasksData = tasksResult.get();
                 if (tasksData != null) {
@@ -463,7 +536,8 @@ public class ProcessStartComponent {
     private void captureFirstTaskWithoutAutoComplete(FirstTaskOutcome outcome, Map<String, Object> firstTask) {
         outcome.currentNodeName = (String) firstTask.get("taskName");
         outcome.nextAssigneeSnapshot = ProcessAssigneeSnapshot.fromEngineTask(firstTask);
-        log.info("Skipping auto-complete for first approval task: node={}, assignee={}, candidates={}, bpmnAssigneeType={}",
+        log.info(
+                "Skipping auto-complete for first approval task: node={}, assignee={}, candidates={}, bpmnAssigneeType={}",
                 outcome.currentNodeName,
                 outcome.nextAssigneeSnapshot.getAssigneeUserId(),
                 outcome.nextAssigneeSnapshot.getCandidateUserIds(),
@@ -498,10 +572,12 @@ public class ProcessStartComponent {
             });
         }
 
-        // User field may deserialize as { userId } without id; Map#toString can exceed Flowable varchar(255)
+        // User field may deserialize as { userId } without id; Map#toString can exceed
+        // Flowable varchar(255)
         coerceUserRefVariablesForEngine(variables);
 
-        // Compute sub-table condition variables (e.g. requestItemsHasHighValue) and inject
+        // Compute sub-table condition variables (e.g. requestItemsHasHighValue) and
+        // inject
         computeSubTableConditionVariables(variables);
 
         // Complete first task
@@ -526,7 +602,8 @@ public class ProcessStartComponent {
     }
 
     private void captureNextTaskAfterAutoComplete(FirstTaskOutcome outcome, String flowableProcessInstanceId) {
-        Optional<Map<String, Object>> nextTasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
+        Optional<Map<String, Object>> nextTasksResult = workflowEngineClient
+                .getProcessInstanceTasks(flowableProcessInstanceId);
         if (nextTasksResult.isPresent()) {
             Map<String, Object> nextTasksData = nextTasksResult.get();
             if (nextTasksData != null) {
@@ -548,7 +625,8 @@ public class ProcessStartComponent {
     private void updateInstanceNodeAndRecordStartHistory(
             String flowableProcessInstanceId, FirstTaskOutcome outcome, String userId, String startUserDisplayName) {
         // Update process instance (current node and assignee)
-        // Conditional UPDATE avoids overwriting COMPLETED set by ProcessCompletionListener (race)
+        // Conditional UPDATE avoids overwriting COMPLETED set by
+        // ProcessCompletionListener (race)
         // JPA L1 cache stale findById — use @Modifying native update to bypass cache
         int updated = processInstanceRepository.updateCurrentNodeAndAssigneesIfNotCompleted(
                 flowableProcessInstanceId,
@@ -558,7 +636,8 @@ public class ProcessStartComponent {
         if (updated > 0) {
             log.info("Process instance updated in local database: {} with currentNode={}, assignee={}, candidates={}",
                     flowableProcessInstanceId, outcome.currentNodeName,
-                    outcome.nextAssigneeSnapshot.getAssigneeUserId(), outcome.nextAssigneeSnapshot.getCandidateUserIds());
+                    outcome.nextAssigneeSnapshot.getAssigneeUserId(),
+                    outcome.nextAssigneeSnapshot.getCandidateUserIds());
         } else {
             log.info("Process instance {} already COMPLETED, skipped currentNode update (race condition avoided)",
                     flowableProcessInstanceId);
@@ -611,7 +690,8 @@ public class ProcessStartComponent {
     }
 
     /**
-     * Fetches highest semantic-version deployed+enabled catalog row for code (same as /deployed/latest)
+     * Fetches highest semantic-version deployed+enabled catalog row for code (same
+     * as /deployed/latest)
      */
     private Optional<ActiveCatalogPin> fetchActiveCatalogForStart(String code) {
         try {
@@ -621,7 +701,8 @@ public class ProcessStartComponent {
                     url,
                     HttpMethod.GET,
                     null,
-                    new ParameterizedTypeReference<Map<String, Object>>() {});
+                    new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
                 return Optional.empty();
             }
@@ -650,15 +731,18 @@ public class ProcessStartComponent {
      * Extracts <process id="..."> from BPMN XML
      */
     private String extractProcessIdFromBpmn(String bpmnXml) {
-        if (bpmnXml == null) return null;
+        if (bpmnXml == null)
+            return null;
         try {
             int processTagIdx = bpmnXml.indexOf("<process ");
             if (processTagIdx == -1) {
                 processTagIdx = bpmnXml.indexOf("<bpmn:process ");
             }
-            if (processTagIdx == -1) return null;
+            if (processTagIdx == -1)
+                return null;
             int tagEnd = bpmnXml.indexOf('>', processTagIdx);
-            if (tagEnd == -1) return null;
+            if (tagEnd == -1)
+                return null;
             String tag = bpmnXml.substring(processTagIdx, tagEnd + 1);
             return ProcessStartAssigneeResolver.extractAttribute(tag, "id");
         } catch (Exception e) {
@@ -668,42 +752,35 @@ public class ProcessStartComponent {
     }
 
     /**
-     * Writes start-form variables to up_change_history for application detail change-history display.
-     * Records only user-visible form fields; excludes engine/snapshot internal keys to reduce noise.
+     * Writes start-form variables to up_change_history for application detail
+     * change-history display.
+     * Records only user-visible form fields; excludes engine/snapshot internal keys
+     * to reduce noise.
      */
     private void recordInitialSubmitChangeHistory(String processInstanceId,
-                                                String taskInstanceId,
-                                                String taskDefinitionKey,
-                                                String userId,
-                                                Map<String, Object> variables) {
-        if (variables == null || variables.isEmpty()) {
+            String taskInstanceId,
+            String taskDefinitionKey,
+            String userId,
+            Map<String, Object> userChanges) {
+        if (userChanges == null || userChanges.isEmpty()) {
             return;
         }
-
         ChangeHistoryContext context = ChangeHistoryContext.builder()
                 .processInstanceId(processInstanceId)
                 .taskInstanceId(taskInstanceId)
                 .stageId(taskDefinitionKey)
                 .userId(userId)
                 .build();
-
         // Record top-level field changes
         try {
-            // Resolve actual form field names from form definitions; only record those.
-            Set<String> formFieldNames = resolveFormFieldNames(variables);
-
             Map<String, Object> filtered = new LinkedHashMap<>();
-            for (Map.Entry<String, Object> e : variables.entrySet()) {
+            for (Map.Entry<String, Object> e : userChanges.entrySet()) {
                 String k = e.getKey();
                 if ("__subTables__".equals(k)) {
                     continue; // handled separately below
                 }
-                if (!formFieldNames.isEmpty() && !formFieldNames.contains(k)) {
-                    continue;
-                }
                 filtered.put(k, e.getValue());
             }
-
             if (!filtered.isEmpty()) {
                 changeHistoryComponent.recordFieldChanges(context, Collections.emptyMap(), filtered);
             }
@@ -711,12 +788,14 @@ public class ProcessStartComponent {
             log.warn("Failed to record initial submit change history for process {}: {}",
                     processInstanceId, e.getMessage());
         }
-
-        // Record sub-table (subform) rows submitted during process initiation as ROW_ADD.
-        // Text-key aliases are preferred; when only numeric binding IDs are present, merge
-        // all rows into one comparison keyed by the first binding ID to avoid duplication.
+        // Record sub-table (subform) rows submitted during process initiation as
+        // ROW_ADD.
+        // Text-key aliases are preferred; when only numeric binding IDs are present,
+        // merge
+        // all rows into one comparison keyed by the first binding ID to avoid
+        // duplication.
         try {
-            Object subTablesObj = variables.get("__subTables__");
+            Object subTablesObj = userChanges.get("__subTables__");
             if (subTablesObj instanceof Map<?, ?>) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
@@ -731,7 +810,8 @@ public class ProcessStartComponent {
                     }
                 }
                 if (!textKeys.isEmpty()) {
-                    // Text keys exist — record only those (normalization merges aliases, dedup handles duplicates)
+                    // Text keys exist — record only those (normalization merges aliases, dedup
+                    // handles duplicates)
                     for (String subTableKey : textKeys) {
                         recordStartSubTableAdds(context, subTables, subTableKey);
                     }
@@ -741,9 +821,11 @@ public class ProcessStartComponent {
                     java.util.Set<Object> seen = new java.util.HashSet<>();
                     for (String subTableKey : numericKeys) {
                         Object rowsObj = subTables.get(subTableKey);
-                        if (!(rowsObj instanceof List<?>)) continue;
+                        if (!(rowsObj instanceof List<?>))
+                            continue;
                         for (Object row : (List<?>) rowsObj) {
-                            if (!(row instanceof Map<?, ?>)) continue;
+                            if (!(row instanceof Map<?, ?>))
+                                continue;
                             @SuppressWarnings("unchecked")
                             Map<String, Object> rowMap = (Map<String, Object>) row;
                             String rowId = ChangeHistoryComponent.resolveRowIdentifier(rowMap);
@@ -770,12 +852,14 @@ public class ProcessStartComponent {
     }
 
     private void recordStartSubTableAdds(ChangeHistoryContext context,
-                                          Map<String, Object> subTables, String subTableKey) {
+            Map<String, Object> subTables, String subTableKey) {
         Object rowsObj = subTables.get(subTableKey);
-        if (!(rowsObj instanceof List<?>)) return;
+        if (!(rowsObj instanceof List<?>))
+            return;
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rows = (List<Map<String, Object>>) rowsObj;
-        if (rows.isEmpty()) return;
+        if (rows.isEmpty())
+            return;
         List<SubTableChange> changes = new ArrayList<>();
         for (Map<String, Object> row : rows) {
             String rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
@@ -790,71 +874,22 @@ public class ProcessStartComponent {
     }
 
     /**
-     * Extract user-visible form field names from the PROCESS form configJson for a given function unit code.
-     * Returns an empty set on failure (caller falls back to ChangeHistoryComponent blacklist).
-     */
-    private Set<String> resolveFormFieldNames(Map<String, Object> variables) {
-        Set<String> fields = new HashSet<>();
-        ObjectMapper mapper = new ObjectMapper();
-        try {
-            String sql = """
-                    SELECT fd.config_json::text AS config_json
-                    FROM dw_form_definitions fd
-                    WHERE fd.form_type = 'PROCESS'
-                    """;
-            List<String> configs = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("config_json"));
-            for (String raw : configs) {
-                if (raw == null || raw.isBlank()) continue;
-                try {
-                    Map<String, Object> config = mapper.readValue(raw, new TypeReference<>() {});
-                    extractFieldNames(config, fields);
-                } catch (Exception ignored) { /* skip malformed */ }
-            }
-        } catch (Exception e) {
-            log.debug("resolveFormFieldNames failed: {}", e.getMessage());
-        }
-        return fields;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void extractFieldNames(Map<String, Object> config, Set<String> fields) {
-        Object rule = config.get("rule");
-        if (rule instanceof List<?> rules) {
-            for (Object item : rules) {
-                if (item instanceof Map<?, ?> ruleItem) {
-                    Object field = ruleItem.get("field");
-                    if (field instanceof String f && !f.isBlank()) {
-                        fields.add(f);
-                    }
-                }
-            }
-        }
-        Object subForms = config.get("subForms");
-        if (subForms instanceof Map<?, ?> subMap) {
-            for (Object subConfig : subMap.values()) {
-                if (subConfig instanceof Map<?, ?> sc) {
-                    extractFieldNames((Map<String, Object>) sc, fields);
-                }
-            }
-        }
-    }
-
-    /**
-     * Coerces portal form "user" objects (id / userId / user_id / value) to plain strings so workflow-engine
+     * Coerces portal form "user" objects (id / userId / user_id / value) to plain
+     * strings so workflow-engine
      * ASSIGNEE_FROM_VARIABLE parse failures or oversized identifiers.
      */
     private void coerceUserRefVariablesForEngine(Map<String, Object> variables) {
         if (variables == null || variables.isEmpty()) {
             return;
         }
-        String[] keys = {"participant_assigner_user_id"};
+        String[] keys = { "participant_assigner_user_id" };
         for (String key : keys) {
             Object v = variables.get(key);
             if (!(v instanceof Map<?, ?> m)) {
                 continue;
             }
             String uid = null;
-            for (String k : new String[]{"id", "userId", "user_id", "value"}) {
+            for (String k : new String[] { "id", "userId", "user_id", "value" }) {
                 Object part = m.get(k);
                 if (part != null) {
                     String s = String.valueOf(part).trim();
@@ -875,12 +910,13 @@ public class ProcessStartComponent {
     }
 
     /**
-     * Computes sub-table condition variables from form data and injects them for gateway conditions.
+     * Computes sub-table condition variables from form data and injects them for
+     * gateway conditions.
      * Supported variables:
-     *   requestItemsHasHighValue — any row with total_price > 10000 (Boolean)
-     *   totalPrice               — sum of total_price (Double, for BPMN comparisons)
-     *   maxItemPrice             — max total_price across rows (Double)
-     *   itemCount                — sub-table row count (Integer)
+     * requestItemsHasHighValue — any row with total_price > 10000 (Boolean)
+     * totalPrice — sum of total_price (Double, for BPMN comparisons)
+     * maxItemPrice — max total_price across rows (Double)
+     * itemCount — sub-table row count (Integer)
      */
     @SuppressWarnings("unchecked")
     private void computeSubTableConditionVariables(Map<String, Object> variables) {
@@ -902,27 +938,38 @@ public class ProcessStartComponent {
             int itemCount = 0;
 
             for (Object tableData : subTables.values()) {
-                if (!(tableData instanceof List)) continue;
+                if (!(tableData instanceof List))
+                    continue;
                 List<Object> rows = (List<Object>) tableData;
                 for (Object rowObj : rows) {
-                    if (!(rowObj instanceof Map)) continue;
+                    if (!(rowObj instanceof Map))
+                        continue;
                     Map<String, Object> row = (Map<String, Object>) rowObj;
                     itemCount++;
 
                     // Support both snake_case and camelCase field names for total_price
                     Object priceVal = row.get("total_price");
-                    if (priceVal == null) priceVal = row.get("totalPrice");
-                    if (priceVal == null) priceVal = row.get("total_Price");
+                    if (priceVal == null)
+                        priceVal = row.get("totalPrice");
+                    if (priceVal == null)
+                        priceVal = row.get("total_Price");
                     // Also check unit_price as fallback
-                    if (priceVal == null) priceVal = row.get("unit_price");
-                    if (priceVal == null) priceVal = row.get("unitPrice");
-                    if (priceVal == null) continue;
+                    if (priceVal == null)
+                        priceVal = row.get("unit_price");
+                    if (priceVal == null)
+                        priceVal = row.get("unitPrice");
+                    if (priceVal == null)
+                        continue;
 
                     double price = 0;
                     if (priceVal instanceof Number) {
                         price = ((Number) priceVal).doubleValue();
                     } else {
-                        try { price = Double.parseDouble(priceVal.toString()); } catch (NumberFormatException e) { log.debug("Failed to parse price value: {}", priceVal); }
+                        try {
+                            price = Double.parseDouble(priceVal.toString());
+                        } catch (NumberFormatException e) {
+                            log.debug("Failed to parse price value: {}", priceVal);
+                        }
                     }
 
                     totalPrice += price;

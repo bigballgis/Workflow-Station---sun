@@ -13,14 +13,14 @@ import com.portal.entity.ProcessInstance;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.platform.security.entity.User;
 import com.portal.testsupport.PortalTransactionTestSupport;
 import net.jqwik.api.*;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
-
+import java.sql.ResultSet;
 import java.util.*;
-
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -36,12 +36,10 @@ import static org.mockito.Mockito.*;
  * Validates: Requirements 6.8
  */
 public class SubTableChangeHistoryPropertyTest {
-
         private static final Set<ChangeType> VALID_SUB_TABLE_CHANGE_TYPES = Set.of(
                         ChangeType.SUB_TABLE_ROW_ADD,
                         ChangeType.SUB_TABLE_ROW_UPDATE,
                         ChangeType.SUB_TABLE_ROW_DELETE);
-
         private ChangeHistoryRepository changeHistoryRepository;
         private ChangeHistoryComponent changeHistoryComponent;
         private ProcessInstanceRepository processInstanceRepository;
@@ -77,41 +75,31 @@ public class SubTableChangeHistoryPropertyTest {
         @Label("Feature: process-task-form-separation, Property 11: Sub-table Change_History includes table metadata")
         void subTableChangeHistoryIncludesMetadata(
                         @ForAll("subTableChangeSets") SubTableChangeSet changeSet) {
-
                 setUp();
-
                 ChangeHistoryContext context = ChangeHistoryContext.builder()
                                 .processInstanceId(changeSet.processInstanceId)
                                 .taskInstanceId(changeSet.taskInstanceId)
                                 .stageId(changeSet.stageId)
                                 .userId(changeSet.userId)
                                 .build();
-
                 changeHistoryComponent.recordSubTableChanges(context, changeSet.subTableName, changeSet.changes);
-
                 if (changeSet.changes.isEmpty()) {
                         verify(changeHistoryRepository, never()).saveAll(anyList());
                 } else {
                         @SuppressWarnings("unchecked")
                         ArgumentCaptor<List<ChangeHistory>> captor = ArgumentCaptor.forClass(List.class);
                         verify(changeHistoryRepository, times(1)).saveAll(captor.capture());
-
                         List<ChangeHistory> saved = captor.getValue();
                         assertThat(saved).hasSize(changeSet.changes.size());
-
                         for (ChangeHistory record : saved) {
                                 // subTableName must be non-null (normalized to lowercase; pure-numeric keys are
                                 // skipped)
                                 assertThat(record.getSubTableName()).isNotNull();
-
                                 assertThat(record.getSubTableName()).isEqualTo(changeSet.subTableName.toLowerCase());
-
                                 // rowIdentifier must be non-null
                                 assertThat(record.getRowIdentifier()).isNotNull();
-
                                 // changeType must be one of the valid sub-table types
                                 assertThat(record.getChangeType()).isIn(VALID_SUB_TABLE_CHANGE_TYPES);
-
                                 // Verify context fields
                                 assertThat(record.getProcessInstanceId()).isEqualTo(changeSet.processInstanceId);
                                 assertThat(record.getUserId()).isEqualTo(changeSet.userId);
@@ -161,6 +149,150 @@ public class SubTableChangeHistoryPropertyTest {
                                         assertThat(record.getOldValue()).doesNotContain("{");
                                         assertThat(record.getNewValue()).doesNotContain("{");
                                 });
+        }
+
+        @Example
+        @Label("Assignee object and matching user ID are the same semantic value")
+        void matchingAssigneeObjectAndUserIdDoNotCreateHistory() {
+                setUp();
+                ChangeHistoryContext context = ChangeHistoryContext.builder()
+                                .processInstanceId("process-1")
+                                .taskInstanceId("task-1")
+                                .stageId("assignment")
+                                .userId("user-1")
+                                .build();
+                SubTableChange change = SubTableChange.builder()
+                                .changeType("ROW_UPDATE")
+                                .rowIdentifier("Test-000002")
+                                .oldValues(Map.of("assignee", Map.of(
+                                                "id", "user-1", "username", "123456", "full_name", "liam")))
+                                .newValues(Map.of("assignee", "user-1"))
+                                .build();
+                changeHistoryComponent.recordSubTableChanges(context, "participants", List.of(change));
+                verify(changeHistoryRepository, never()).saveAll(anyList());
+        }
+
+        @Example
+        @Label("Stable platform row metadata never creates user-visible audit rows")
+        void platformRowMetadataDoesNotCreateHistory() {
+                setUp();
+                ChangeHistoryContext context = ChangeHistoryContext.builder()
+                                .processInstanceId("process-1")
+                                .taskInstanceId("task-1")
+                                .stageId("sub form1")
+                                .userId("user-1")
+                                .build();
+                Map<String, Object> generated = new LinkedHashMap<>();
+                generated.put("__subTables__", Map.of("people", List.of()));
+                generated.put("id", "Test-000002");
+                generated.put("created_at", "2026-07-24T10:00:00Z");
+                generated.put("created_by", "system");
+                generated.put("updated_at", "2026-07-24T10:00:00Z");
+                generated.put("updated_by", "system");
+                generated.put("task_status", "PENDING");
+                generated.put("task_current_node", "sub form1");
+                SubTableChange change = SubTableChange.builder()
+                                .changeType("ROW_UPDATE")
+                                .rowIdentifier("Test-000002")
+                                .oldValues(Map.of())
+                                .newValues(generated)
+                                .build();
+                changeHistoryComponent.recordSubTableChanges(context, "participants", List.of(change));
+                verify(changeHistoryRepository, never()).saveAll(anyList());
+        }
+
+        @Example
+        @Label("True assignee changes use the canonical full name and username")
+        void trueAssigneeChangeUsesCanonicalUserLabel() {
+                setUp();
+                ChangeHistory record = ChangeHistory.builder()
+                                .id(1L)
+                                .processInstanceId("process-1")
+                                .userId("actor-1")
+                                .timestamp(java.time.Instant.parse("2026-07-24T09:33:50Z"))
+                                .fieldName("assignee")
+                                .subTableName("participants")
+                                .rowIdentifier("Test-000002")
+                                .oldValue("old-user")
+                                .newValue("new-user")
+                                .changeType(ChangeType.SUB_TABLE_ROW_UPDATE)
+                                .build();
+                User oldUser = User.builder().id("old-user").username("100001").fullName("Alice").build();
+                User newUser = User.builder().id("new-user").username("123456").fullName("liam").build();
+                when(changeHistoryRepository.findByProcessInstanceIdOrderByTimestampAsc("process-1"))
+                                .thenReturn(List.of(record));
+                when(userRepository.findAllById(any(Iterable.class))).thenReturn(List.of(oldUser, newUser));
+                when(workflowEngineClient.getTaskHistory("process-1")).thenReturn(Optional.empty());
+                when(processInstanceRepository.findById("process-1")).thenReturn(Optional.empty());
+                List<ChangeHistoryRecord> records = changeHistoryComponent.getChangeHistory("process-1");
+                assertThat(records).singleElement().satisfies(item -> {
+                        assertThat(item.getOldValue()).isEqualTo("Alice (100001)");
+                        assertThat(item.getNewValue()).isEqualTo("liam (123456)");
+                });
+        }
+
+        @Example
+        @Label("Legacy semantic and system-only audit rows are hidden on read")
+        void legacyNoiseIsHiddenOnRead() {
+                setUp();
+                ChangeHistory semanticNoop = ChangeHistory.builder()
+                                .id(1L)
+                                .processInstanceId("process-1")
+                                .userId("user-1")
+                                .timestamp(java.time.Instant.parse("2026-07-24T09:33:50Z"))
+                                .fieldName("assignee")
+                                .subTableName("participants")
+                                .rowIdentifier("Test-000002")
+                                .oldValue("{\"id\":\"user-1\",\"username\":\"123456\",\"full_name\":\"liam\"}")
+                                .newValue("user-1")
+                                .changeType(ChangeType.SUB_TABLE_ROW_UPDATE)
+                                .build();
+                ChangeHistory systemAlias = ChangeHistory.builder()
+                                .id(2L)
+                                .processInstanceId("process-1")
+                                .userId("user-1")
+                                .timestamp(java.time.Instant.parse("2026-07-24T09:35:17Z"))
+                                .fieldName("participantId")
+                                .subTableName("participants")
+                                .rowIdentifier("Test-000002")
+                                .oldValue(null)
+                                .newValue("Test-000002")
+                                .changeType(ChangeType.SUB_TABLE_ROW_UPDATE)
+                                .build();
+                when(changeHistoryRepository.findByProcessInstanceIdOrderByTimestampAsc("process-1"))
+                                .thenReturn(List.of(semanticNoop, systemAlias));
+                List<ChangeHistoryRecord> records = changeHistoryComponent.getChangeHistory("process-1");
+                assertThat(records).isEmpty();
+                verify(userRepository, never()).findAllById(any(Iterable.class));
+        }
+
+        @Example
+        @Label("Legacy whole-row payloads suppress semantic assignee no-ops after splitting")
+        void legacyWholeRowAssigneeNoopIsHiddenAfterSplit() {
+                setUp();
+                ChangeHistory legacyRecord = ChangeHistory.builder()
+                                .id(1L)
+                                .processInstanceId("process-1")
+                                .userId("user-1")
+                                .timestamp(java.time.Instant.parse("2026-07-24T09:33:50Z"))
+                                .fieldName("participants")
+                                .subTableName("participants")
+                                .rowIdentifier("Test-000002")
+                                .oldValue("{\"assignee\":{\"id\":\"user-1\",\"username\":\"123456\",\"full_name\":\"liam\"},\"name\":\"1\"}")
+                                .newValue("{\"assignee\":\"user-1\",\"name\":\"12\"}")
+                                .changeType(ChangeType.SUB_TABLE_ROW_UPDATE)
+                                .build();
+                when(changeHistoryRepository.findByProcessInstanceIdOrderByTimestampAsc("process-1"))
+                                .thenReturn(List.of(legacyRecord));
+                when(userRepository.findAllById(any(Iterable.class))).thenReturn(List.of());
+                when(workflowEngineClient.getTaskHistory("process-1")).thenReturn(Optional.empty());
+                when(processInstanceRepository.findById("process-1")).thenReturn(Optional.empty());
+                List<ChangeHistoryRecord> records = changeHistoryComponent.getChangeHistory("process-1");
+                assertThat(records).singleElement().satisfies(item -> {
+                        assertThat(item.getFieldName()).isEqualTo("name");
+                        assertThat(item.getOldValue()).isEqualTo("1");
+                        assertThat(item.getNewValue()).isEqualTo("12");
+                });
         }
 
         @Example
@@ -240,8 +372,8 @@ public class SubTableChangeHistoryPropertyTest {
         }
 
         @Example
-        @Label("Technical rows do not inherit a label from another configured field")
-        void technicalFieldDoesNotInheritAnotherFieldMetadata() {
+        @Label("Technical rows are not exposed as user changes")
+        void technicalFieldIsNotUserVisible() {
                 setUp();
                 ChangeHistory record = ChangeHistory.builder()
                                 .id(1L)
@@ -270,14 +402,12 @@ public class SubTableChangeHistoryPropertyTest {
                                 .thenReturn(List.of(
                                                 "{\"rule\":[{\"field\":\"assignee\",\"title\":\"Assign To\"}],\"subForms\":{\"64\":{\"rule\":[{\"field\":\"assignee\",\"title\":\"Assign To\"}]}}}"));
                 List<ChangeHistoryRecord> records = changeHistoryComponent.getChangeHistory("process-1");
-                assertThat(records).hasSize(1);
-                assertThat(records.get(0).getFieldLabel()).isNull();
-                assertThat(records.get(0).getFieldOrder()).isNull();
+                assertThat(records).isEmpty();
         }
 
         @Example
-        @Label("Ordinary ID fields do not inherit metadata from a base field")
-        void ordinaryIdFieldDoesNotUseBaseFieldMetadata() {
+        @Label("Unconfigured ID fields are not exposed as user changes")
+        void unconfiguredIdFieldIsNotUserVisible() {
                 setUp();
                 ChangeHistory record = ChangeHistory.builder()
                                 .id(1L)
@@ -301,9 +431,50 @@ public class SubTableChangeHistoryPropertyTest {
                 when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("FU_CUSTOMER")))
                                 .thenReturn(List.of("{\"rule\":[{\"field\":\"customer\",\"title\":\"Customer\"}]}"));
                 List<ChangeHistoryRecord> records = changeHistoryComponent.getChangeHistory("process-1");
-                assertThat(records).hasSize(1);
-                assertThat(records.get(0).getFieldLabel()).isNull();
-                assertThat(records.get(0).getFieldOrder()).isNull();
+                assertThat(records).isEmpty();
+        }
+
+        @Example
+        @Label("Editable legacy alias in one sub-table does not expose the same field in another")
+        @SuppressWarnings("unchecked")
+        void legacyAliasEditabilityIsScopedToItsPhysicalSubTable() throws Exception {
+                setUp();
+                ChangeHistory record = ChangeHistory.builder()
+                                .id(1L).processInstanceId("process-1").userId("user-1")
+                                .timestamp(java.time.Instant.parse("2026-07-23T00:00:00Z"))
+                                .fieldName("participant_id").subTableName("beta").rowIdentifier("ROW-1")
+                                .oldValue("OLD").newValue("NEW")
+                                .changeType(ChangeType.SUB_TABLE_ROW_UPDATE).build();
+                when(changeHistoryRepository.findByProcessInstanceIdOrderByTimestampAsc("process-1"))
+                                .thenReturn(List.of(record));
+                when(userRepository.findAllById(any(Iterable.class))).thenReturn(List.of());
+                when(workflowEngineClient.getTaskHistory("process-1")).thenReturn(Optional.empty());
+                when(processInstanceRepository.findById("process-1")).thenReturn(Optional.of(
+                                ProcessInstance.builder().id("process-1").processDefinitionKey("FU_SCOPE").build()));
+                when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq("FU_SCOPE")))
+                                .thenAnswer(invocation -> {
+                                        String sql = invocation.getArgument(0);
+                                        RowMapper<Object> mapper = invocation.getArgument(1);
+                                        ResultSet rs = mock(ResultSet.class);
+                                        String config = "{\"rule\":[],\"subForms\":{\"alpha\":{\"rule\":[{\"field\":\"participant_id\"}]}}}";
+                                        if (sql.contains("SELECT binding.id")) {
+                                                when(rs.getString("id")).thenReturn("50001");
+                                                when(rs.getString("table_name")).thenReturn("alpha");
+                                                when(rs.getString("table_display_name")).thenReturn("Alpha");
+                                        } else if (sql.contains("SELECT fd.id,")) {
+                                                when(rs.getLong("id")).thenReturn(60001L);
+                                                when(rs.getString("config_json")).thenReturn(config);
+                                        } else if (sql.contains("SELECT td.table_name")) {
+                                                when(rs.getString("table_name")).thenReturn("beta");
+                                                when(rs.getString("field_name")).thenReturn("participant_id");
+                                                when(rs.getString("display_name")).thenReturn("Participant");
+                                                when(rs.getInt("sort_order")).thenReturn(1);
+                                        } else {
+                                                when(rs.getString("config_json")).thenReturn(config);
+                                        }
+                                        return List.of(mapper.mapRow(rs, 0));
+                                });
+                assertThat(changeHistoryComponent.getChangeHistory("process-1")).isEmpty();
         }
 
         @Example
@@ -355,7 +526,6 @@ public class SubTableChangeHistoryPropertyTest {
         }
 
         // ========== Data class ==========
-
         static class SubTableChangeSet {
                 String processInstanceId;
                 String taskInstanceId;
@@ -366,7 +536,6 @@ public class SubTableChangeHistoryPropertyTest {
         }
 
         // ========== Arbitraries ==========
-
         @Provide
         Arbitrary<SubTableChangeSet> subTableChangeSets() {
                 Arbitrary<String> processIds = Arbitraries.strings().alpha().ofMinLength(5).ofMaxLength(15)
@@ -380,7 +549,6 @@ public class SubTableChangeHistoryPropertyTest {
                 Arbitrary<String> tableNames = Arbitraries.strings().alpha().ofMinLength(3).ofMaxLength(15)
                                 .map(s -> "table_" + s);
                 Arbitrary<Integer> changeCounts = Arbitraries.integers().between(1, 8);
-
                 return Combinators
                                 .combine(processIds, taskIds.injectNull(0.3), stageIds, userIds, tableNames,
                                                 changeCounts)
@@ -392,7 +560,6 @@ public class SubTableChangeHistoryPropertyTest {
                                         set.userId = userId;
                                         set.subTableName = tableName;
                                         set.changes = new ArrayList<>();
-
                                         String[] changeTypes = { "ROW_ADD", "ROW_UPDATE", "ROW_DELETE" };
                                         for (int i = 0; i < count; i++) {
                                                 String changeType = changeTypes[i % changeTypes.length];
@@ -400,7 +567,6 @@ public class SubTableChangeHistoryPropertyTest {
                                                                 : Map.of("col_" + i, "old_" + i);
                                                 Map<String, Object> newVals = "ROW_DELETE".equals(changeType) ? null
                                                                 : Map.of("col_" + i, "new_" + i);
-
                                                 SubTableChange change = SubTableChange.builder()
                                                                 .changeType(changeType)
                                                                 .rowIdentifier("row_" + i)

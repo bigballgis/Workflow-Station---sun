@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -71,9 +72,22 @@ public class TaskApprovalCompletionComponent {
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
-        // Only sub-tables supplied by the client can represent an intentional user edit.
-        // Later MI/engine hydration may add __subTables__ solely to preserve engine state.
-        boolean submittedSubTables = variables.containsKey("__subTables__");
+        Map<String, Object> submittedSnapshot = taskFormComponent.copyChangeHistorySubmission(request.getFormData());
+        if (submittedSnapshot == null) {
+            submittedSnapshot = request.getFormData() == null
+                ? new HashMap<>()
+                : new HashMap<>(request.getFormData());
+        }
+        // Only a sub-table explicitly submitted through formData and authorized by the current
+        // Task Form contract can represent user intent. variables may contain engine/MI state.
+        Map<String, Object> initialFilteredSubmission = taskFormComponent.filterTaskSubmissionForChangeHistory(
+            task.getProcessInstanceId(), task.getTaskDefinitionKey(), submittedSnapshot, variables);
+        boolean submittedSubTables = initialFilteredSubmission != null
+            && initialFilteredSubmission.containsKey("__subTables__");
+        Map<String, Object> explicitlySubmittedSubTables = submittedSubTables
+            && submittedSnapshot.get("__subTables__") instanceof Map<?, ?> submittedMap
+                ? copyStringKeyMap(submittedMap)
+                : Map.of();
 
         variables.put("action", action);
         if ("APPROVE".equals(action)) {
@@ -106,7 +120,8 @@ public class TaskApprovalCompletionComponent {
         // Guard against wiping a service task's output: a bare/empty approval (e.g. an action button that
         // never loaded or edited the grid) can carry an empty __subTables__ slice which, sent to Flowable,
         // overwrites populated engine rows with []. Fill empty outbound slices from the live engine first.
-        preserveEngineSubTablesOnComplete(task.getProcessInstanceId(), variables);
+        preserveEngineSubTablesOnComplete(
+            task.getProcessInstanceId(), variables, explicitlySubmittedSubTables);
 
         log.info("Variables before calling workflowEngineClient: {}", variables);
 
@@ -130,9 +145,7 @@ public class TaskApprovalCompletionComponent {
         log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})",
                 taskId, userId, action, variables.get("approvalStatus"));
 
-        // Capture sub-table baseline stored on first save for consolidated change history
-        String baselineKey = "_baseline_subTables_" + task.getTaskDefinitionKey();
-        AtomicReference<Object> baselineSubTablesRef = new AtomicReference<>();
+        
         AtomicReference<Map<String, Object>> preSyncVariablesRef = new AtomicReference<>(Map.of());
 
         // Sync approval variables to local ProcessInstance for Completed Tasks / My Requests
@@ -144,17 +157,15 @@ public class TaskApprovalCompletionComponent {
             if (syncOpt.isPresent()) {
                 ProcessInstance syncInstance = syncOpt.get();
                 Map<String, Object> existingVars = syncInstance.getVariables();
-                baselineSubTablesRef.set(existingVars != null ? existingVars.get(baselineKey) : null);
+                
                 preSyncVariablesRef.set(existingVars != null ? new HashMap<>(existingVars) : Map.of());
-                log.debug("Sub-table baseline for task {}: key={}, found={}",
-                        taskId, baselineKey, baselineSubTablesRef.get() != null);
+                
                 Map<String, Object> mergedVars = new HashMap<>();
                 if (existingVars != null) {
                     mergedVars.putAll(existingVars);
                 }
                 mergedVars.putAll(variables);
-                // Clean up the baseline key so it does not persist in process variables
-                mergedVars.remove(baselineKey);
+                
                 taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
                         taskId, userId, task.getTaskDefinitionKey(), mergedVars);
                 // Prevent geometric __subTables__ bloat: collapse deep nested copies to the canonical
@@ -187,17 +198,14 @@ public class TaskApprovalCompletionComponent {
             Optional<ProcessInstance> chOpt = processInstanceRepository.findById(chProcessId);
             if (chOpt.isPresent()) {
                 ProcessInstance chInstance = chOpt.get();
-                Map<String, Object> chOldVars = chInstance.getVariables() != null
-                        ? new HashMap<>(chInstance.getVariables())
-                        : new HashMap<>();
-                // Rebuild the change payload: only the newly submitted variables (exclude system keys)
-                Map<String, Object> chSubmitted = new HashMap<>(variables);
-                chSubmitted.remove("action");
-                chSubmitted.remove("decision");
-                chSubmitted.remove("approvalStatus");
-                chSubmitted.remove("approval_result");
-                chSubmitted.remove("approved");
-                chSubmitted.remove("approval_comment");
+                Map<String, Object> chOldVars = new HashMap<>(preSyncVariablesRef.get());
+                // Audit the immutable user payload through the current form's editable-field contract.
+                // Variables now also contain workflow outcomes, MI collection data and preservation overlays.
+                Map<String, Object> chSubmitted = taskFormComponent.filterTaskSubmissionForChangeHistory(
+                    chProcessId, task.getTaskDefinitionKey(), submittedSnapshot, variables);
+                if (chSubmitted == null) {
+                    chSubmitted = new HashMap<>(submittedSnapshot);
+                }
                 if (!chSubmitted.isEmpty()) {
                     ChangeHistoryContext chContext = ChangeHistoryContext.builder()
                             .processInstanceId(chProcessId)
@@ -207,14 +215,17 @@ public class TaskApprovalCompletionComponent {
                             .build();
                     // Record top-level field changes
                     changeHistoryComponent.recordFieldChanges(chContext, chOldVars, chSubmitted);
-                    // Record sub-table changes using the pre-saves baseline so all
-                    // incremental saves are consolidated into one change per row. If this task
-                    // has no save baseline, compare with the local pre-sync process state.
+                    // Saves already write their own immutable history. Completion therefore
+                    // compares with the latest pre-sync state, recording only edits made since
+                    // the last save instead of replaying saved UPDATEs as new ROW_ADD events.
                     // Never audit a sub-table added only by MI/engine hydration on completion.
                     Object chNewSubTables = chSubmitted.get("__subTables__");
                     if (submittedSubTables && chNewSubTables != null) {
+                        Object historyBaseline = resolveSubTableHistoryBaseline(preSyncVariablesRef.get());
+                        Object filteredBaseline = taskFormComponent.filterTaskSubTableBaselineForChangeHistory(
+                            chProcessId, task.getTaskDefinitionKey(), historyBaseline);
                         recordSubTableChangeHistory(chContext,
-                                resolveSubTableHistoryBaseline(baselineSubTablesRef.get(), preSyncVariablesRef.get()),
+                            filteredBaseline,
                                 chNewSubTables);
                     } else if (chNewSubTables != null) {
                         log.debug("Skipping sub-table change history for task {}: data was merged internally, not submitted by the user",
@@ -339,14 +350,19 @@ public class TaskApprovalCompletionComponent {
      * Prevents a task completion from wiping a service task's sub-table output. When the outbound
      * {@code variables} carry a {@code __subTables__} with an empty slice (e.g. a bare approval that
      * never loaded or edited the grid), sending it to Flowable would overwrite the populated engine
-     * rows with {@code []}. Fills only those empty/missing slices from the live engine's {@code __subTables__};
-     * non-empty slices (real user edits, including deletions) are left untouched. Best-effort — a failed
+    * rows with {@code []}. Fills only internally produced empty/missing slices from the live engine's
+    * {@code __subTables__}; explicitly submitted slices, including delete-all, are left untouched. Best-effort — a failed
      * engine round-trip leaves {@code variables} unchanged. Shares the fill-empty merge with the
      * read paths via {@link EngineSubTableHydrator}; the {@code hasEmptySlice} pre-check keeps this
      * write path from making the engine round-trip when there is nothing to protect.
      */
-    @SuppressWarnings("unchecked")
     void preserveEngineSubTablesOnComplete(String processInstanceId, Map<String, Object> variables) {
+        preserveEngineSubTablesOnComplete(processInstanceId, variables, Map.of());
+    }
+    @SuppressWarnings("unchecked")
+    void preserveEngineSubTablesOnComplete(String processInstanceId,
+                                           Map<String, Object> variables,
+                                           Map<String, Object> explicitlySubmittedSubTables) {
         if (processInstanceId == null || variables == null) {
             return;
         }
@@ -354,31 +370,35 @@ public class TaskApprovalCompletionComponent {
         if (!(variables.get("__subTables__") instanceof Map<?, ?> outMap) || outMap.isEmpty()) {
             return;
         }
-        boolean hasEmptySlice = outMap.values().stream()
-                .anyMatch(v -> !(v instanceof List<?> l) || l.isEmpty());
+        Set<String> explicitKeys = explicitlySubmittedSubTables != null
+                ? explicitlySubmittedSubTables.keySet() : Set.of();
+        boolean hasEmptySlice = outMap.entrySet().stream()
+                .anyMatch(entry -> !explicitKeys.contains(String.valueOf(entry.getKey()))
+                        && (!(entry.getValue() instanceof List<?> rows) || rows.isEmpty()));
         if (!hasEmptySlice) {
             return; // every outbound slice already carries rows — nothing to protect, skip the round-trip
         }
         engineSubTableHydrator.mergeFromEngine(processInstanceId, (Map<String, Object>) outMap)
                 .ifPresent(result -> {
-                    variables.put("__subTables__", result.mergedSubTables());
+                    Map<String, Object> merged = new LinkedHashMap<>(result.mergedSubTables());
+                    if (explicitlySubmittedSubTables != null) {
+                        merged.putAll(explicitlySubmittedSubTables);
+                    }
+                    variables.put("__subTables__", merged);
                     log.info("[MI] Preserved engine __subTables__ slices on completion for process {} "
                             + "(filled empty outbound slice(s) to avoid overwriting service-task output)", processInstanceId);
                 });
     }
-
+    private static Map<String, Object> copyStringKeyMap(Map<?, ?> source) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        source.forEach((key, value) -> {
+            if (key != null) copy.put(String.valueOf(key), value);
+        });
+        return copy;
+    }
     // ========== Sub-table change history helpers ==========
-    /**
-     * Prefer the task-save baseline for consolidated history. A user can also complete a task
-     * without first saving the form; in that case the process state before the completion sync is
-     * the only reliable comparison point. Falling back to {@code null} would mark every existing
-     * engine row as a fresh ROW_ADD.
-     */
-    static Object resolveSubTableHistoryBaseline(Object taskSaveBaseline,
-                                                 Map<String, Object> preSyncVariables) {
-        if (taskSaveBaseline != null) {
-            return taskSaveBaseline;
-        }
+    /** Compare completion against the latest process state because incremental saves already emitted history. */
+    static Object resolveSubTableHistoryBaseline(Map<String, Object> preSyncVariables) {
         return preSyncVariables != null ? preSyncVariables.get("__subTables__") : null;
     }
 

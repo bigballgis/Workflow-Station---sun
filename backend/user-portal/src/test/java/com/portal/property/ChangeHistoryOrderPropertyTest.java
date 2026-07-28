@@ -36,6 +36,31 @@ import static org.mockito.Mockito.*;
  */
 public class ChangeHistoryOrderPropertyTest {
 
+    @Example
+    @Label("Legacy internal fields remain hidden when form metadata is unavailable")
+    void legacyInternalFieldsRemainHiddenWithoutMetadata() {
+    ChangeHistoryRepository repository = mock(ChangeHistoryRepository.class);
+    UserRepository userRepository = mock(UserRepository.class);
+    WorkflowEngineClient workflowEngineClient = mock(WorkflowEngineClient.class);
+    when(userRepository.findAllById(any())).thenReturn(Collections.emptyList());
+    when(workflowEngineClient.getTaskHistory(anyString())).thenReturn(Optional.empty());
+    Instant now = Instant.parse("2026-01-01T00:00:00Z");
+    when(repository.findByProcessInstanceIdOrderByTimestampAsc("process-1")).thenReturn(List.of(
+        ChangeHistory.builder().id(1L).processInstanceId("process-1").userId("user-1")
+            .timestamp(now).fieldName("currentUserId").newValue("system-user")
+            .changeType(ChangeType.FIELD_UPDATE).build(),
+        ChangeHistory.builder().id(2L).processInstanceId("process-1").userId("user-1")
+            .timestamp(now.plusSeconds(1)).fieldName("description").newValue("visible")
+            .changeType(ChangeType.FIELD_UPDATE).build()));
+    ChangeHistoryComponent component = new ChangeHistoryComponent(
+        repository, mock(ProcessInstanceRepository.class), userRepository, workflowEngineClient,
+        mock(JdbcTemplate.class), new ObjectMapper(),
+        PortalTransactionTestSupport.noopPlatformTransactionManager());
+    assertThat(component.getChangeHistory("process-1"))
+        .extracting(ChangeHistoryRecord::getFieldName)
+        .containsExactly("description");
+    }
+
     /**
      * Property 10: Records are returned in chronological (ascending timestamp) order.
      *
