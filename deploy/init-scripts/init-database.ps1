@@ -112,7 +112,14 @@ $migrations = @(
     "00-schema/48-dw-email-monitor-rules.sql",
     "00-schema/49-sys-email-monitor-rules.sql",
     "00-schema/50-we-email-inbound.sql",
-    "00-schema/51-dw-main-table-view-access.sql"
+    "00-schema/51-dw-main-table-view-access.sql",
+    "00-schema/52-add-rt-lookup-config.sql",
+    "00-schema/53-dw-process-definitions-fu-unique.sql",
+    "00-schema/54-up-record-notes.sql",
+    "00-schema/55-dw-main-table-view-lookup-display-columns.sql",
+    "00-schema/56-dw-user-preferences.sql",
+    "00-schema/57-smtp-system-config.sql",
+    "00-schema/58-widen-wf-assignment-target-to-text.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

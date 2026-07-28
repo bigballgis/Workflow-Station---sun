@@ -185,6 +185,47 @@ class TaskAssignmentListenerMiRoleModeTest {
     }
 
     @Test
+    @DisplayName("role 解析出 13 个长用户 ID（拼接 >255）→ ExtendedTaskInfo 完整保存 assignment_target")
+    void multiUserRolePool_preservesLongCandidateTargetBeyond255() {
+        TaskEntity task = createMockTask();
+        when(task.getAssignee()).thenReturn(null);
+        when(task.getExecutionId()).thenReturn(EXECUTION_ID);
+        when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(roleModeBpmn());
+
+        Map<String, Object> currentItem = new HashMap<>();
+        currentItem.put("rowId", 205L);
+        currentItem.put(ROLE_FIELD, "REVIEWER");
+        currentItem.put(BU_FIELD, "HR");
+        when(runtimeService.getVariable(EXECUTION_ID, "currentItem")).thenReturn(currentItem);
+
+        List<String> longCandidateIds = new ArrayList<>();
+        for (int i = 1; i <= 13; i++) {
+            longCandidateIds.add(String.format("aaaaaaaa-bbbb-cccc-dddd-%012d", i));
+        }
+        String expectedJoined = String.join(",", longCandidateIds);
+        assertThat(expectedJoined.length()).isGreaterThan(255);
+
+        when(taskAssigneeResolver.resolveWithRoleIds(eq("BU_ROLE"), any(), eq("HR"), any(), any(), eq("HR")))
+            .thenReturn(TaskAssigneeResolver.ResolveResult.builder()
+                    .candidateUsers(new ArrayList<>(longCandidateIds))
+                    .requiresClaim(true)
+                    .build());
+
+        listener.onEvent(createTaskCreatedEvent(task));
+
+        for (String uid : longCandidateIds) {
+            verify(taskService).addCandidateUser(TASK_ID, uid);
+        }
+
+        ArgumentCaptor<ExtendedTaskInfo> captor = ArgumentCaptor.forClass(ExtendedTaskInfo.class);
+        verify(extendedTaskInfoRepository).save(captor.capture());
+        ExtendedTaskInfo saved = captor.getValue();
+        assertThat(saved.getAssignmentType()).isEqualTo(AssignmentType.CANDIDATE_USERS);
+        assertThat(saved.getAssignmentTarget()).isEqualTo(expectedJoined);
+        assertThat(saved.getAssignmentTarget().split(",")).containsExactlyElementsOf(longCandidateIds);
+    }
+
+    @Test
     @DisplayName("解析空池 → 任务保持 CREATED（不落地、不写 ExtendedTaskInfo）")
     void emptyRolePool_leavesTaskCreated() {
         TaskEntity task = createMockTask();

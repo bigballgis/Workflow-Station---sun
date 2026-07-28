@@ -1,6 +1,6 @@
 /**
  * MI collection (Sub Task / participant dashboard) sub-table helpers: leak filtering,
- * stale sibling slice sync decisions and collection slice key sets.
+ * designer-PK merge choke point, stale sibling slice sync decisions and collection slice key sets.
  */
 
 import { pickNonEmptyAttachmentFile } from './internal'
@@ -12,37 +12,70 @@ import {
   isSubTableMiDashboardRow,
 } from './subTableBindingKinds'
 import { dropSubsumedSubTableRows } from './subTableRowNormalize'
+import { mergeSubTableRowsByRowId, rowResolvesDesignerPrimaryKey } from './subTableRowMerge'
 import { collectSubTableSliceArraysDeep } from './subTableSliceResolve'
 
-/** Drop attachment/file-only leak rows from an MI collection binding slice (stale sibling sync pollution). */
-export function filterRowsForMiCollectionSubTableBinding(
-  rows: any[] | undefined | null,
-  binding: { primaryKeyFields?: string[] | null; columns?: Array<{ field?: string }> | null },
-): any[] {
-  if (!Array.isArray(rows) || rows.length === 0) return []
-  const pkCols = (binding.primaryKeyFields ?? ['id_idw'])
+export type MiCollectionBindingPk = {
+  primaryKeyFields?: string[] | null
+  columns?: Array<{ field?: string }> | null
+}
+
+/**
+ * Designer PK columns for an MI collection binding.
+ * FALLBACK(migration): legacy collections without API PK metadata used {@code id_idw}.
+ */
+export function resolveMiCollectionPrimaryKeyFields(binding: MiCollectionBindingPk): string[] {
+  const fromBinding = (binding.primaryKeyFields ?? [])
     .map(f => String(f).trim())
     .filter(Boolean)
+  if (fromBinding.length > 0) return fromBinding
+  return ['id_idw']
+}
+
+/** Drop attachment/file-only leak rows and rows missing a complete designer PK. */
+export function filterRowsForMiCollectionSubTableBinding(
+  rows: any[] | undefined | null,
+  binding: MiCollectionBindingPk,
+): any[] {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+  const pkCols = resolveMiCollectionPrimaryKeyFields(binding)
   return rows.filter(row => {
     if (!row || typeof row !== 'object') return false
     const rec = row as Record<string, unknown>
-    const hasPk = pkCols.some(col => {
-      const v = rec[col]
-      if (v == null) return false
-      const s = String(v).trim()
-      return s !== '' && s !== '-'
-    })
-    if (!hasPk) return false
+    if (!rowResolvesDesignerPrimaryKey(rec, pkCols)) return false
     if (pickNonEmptyAttachmentFile(rec)) return false
     return true
   })
 }
 
+/**
+ * Unified MI collection dedupe: merge sources by designer PK (later sources win on conflicts;
+ * filled fields beat empty thin snapshots), drop rows without a complete PK, then drop ghost subsets.
+ *
+ * Call sites that previously did {@code mergeSubTableRowsByRowId} + {@link finalizeMiCollectionSubTableBindingRows}
+ * should prefer this single choke point (current task / snapshot / resync slices as separate sources).
+ */
+export function mergeMiCollectionSubTableRows(
+  sources: Array<any[] | undefined | null>,
+  binding: MiCollectionBindingPk,
+): any[] {
+  const pkCols = resolveMiCollectionPrimaryKeyFields(binding)
+  let merged: any[] = []
+  for (const src of sources) {
+    if (!Array.isArray(src) || src.length === 0) continue
+    const cleaned = filterRowsForMiCollectionSubTableBinding(src, binding)
+    if (cleaned.length === 0) continue
+    merged = mergeSubTableRowsByRowId(merged, cleaned, pkCols)
+  }
+  return dropSubsumedSubTableRows(merged)
+}
+
+/** Collapse one MI collection slice by designer PK (same semantics as multi-source merge). */
 export function finalizeMiCollectionSubTableBindingRows(
   rows: any[] | undefined | null,
-  binding: { primaryKeyFields?: string[] | null; columns?: Array<{ field?: string }> | null },
+  binding: MiCollectionBindingPk,
 ): any[] {
-  return dropSubsumedSubTableRows(filterRowsForMiCollectionSubTableBinding(rows, binding))
+  return mergeMiCollectionSubTableRows([rows], binding)
 }
 
 /**
@@ -67,7 +100,7 @@ export function shouldSyncStaleSiblingSubTableSlice(
   sliceKey: string,
 ): boolean {
   if (!isMiDashboardSubTableBinding(sourceBinding)) return false
-  const pkCol = sourceBinding.primaryKeyFields?.[0] ?? 'id_idw'
+  const pkCol = resolveMiCollectionPrimaryKeyFields(sourceBinding)[0] ?? 'id_idw'
   const bid = Number(sliceKey)
   const peer = allBindings.find(b => Number(b.bindingId) === bid)
   if (peer) {
@@ -84,7 +117,7 @@ export function shouldSyncStaleSiblingSubTableSlice(
     return isMiDashboardSubTableBinding(peer)
   }
   const hasPk = target.some(
-    r => r && typeof r === 'object' && (r as Record<string, unknown>)[pkCol] != null,
+    r => r && typeof r === 'object' && rowResolvesDesignerPrimaryKey(r, [pkCol]),
   )
   if (!hasPk) return false
   return !target.every(

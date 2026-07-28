@@ -3,9 +3,12 @@
 本目录是项目 skill 的**唯一真源**(入库、随 clone 分发)。
 
 - **Cursor** 直接读本目录 `.cursor/skills/`。
-- **Claude Code** 读 `.claude/skills/`——该目录由 `.claude/scripts/sync-cursor-rules.mjs`
-  (SessionStart 钩子)从本目录**镜像生成**,**不入库**(见 `.gitignore`)。
-- 新增 / 修改 skill:**只改本目录**;`.claude/skills` 下次会话自动同步,请勿手改。
+- **同步镜像**（由 `.claude/scripts/sync-cursor-rules.mjs` 生成，勿手改）：
+  - Claude Code → `.claude/skills/`
+  - GitHub Copilot → `.github/skills/`
+  - Kiro → `.kiro/skills/`
+- 触发：打开工作区 `folderOpen`、Claude/Copilot SessionStart、或手动跑同步脚本。
+- 新增 / 修改 skill：**只改本目录**，再同步并提交镜像。详见 `docs/ai-rules/ai-guidance-sync.md`。
 
 | Skill | 用途 |
 |-------|------|

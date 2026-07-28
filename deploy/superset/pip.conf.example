@@ -1,0 +1,12 @@
+# Example pip.conf for Superset image builds (BuildKit secret id=pip_conf).
+# Copy to deploy/superset/pip.conf (gitignored) or set SUPERSET_PIP_CONF_FILE.
+#
+# Enterprise (Nexus) — put credentials ONLY here, never in Dockerfile / compose ARG:
+#   [global]
+#   index-url = https://USER:TOKEN@nexus.example.com/repository/pypi-proxy/simple
+#   trusted-host = nexus.example.com
+#
+# Local / no Nexus (public PyPI):
+[global]
+index-url = https://pypi.org/simple
+trusted-host = pypi.org files.pythonhosted.org

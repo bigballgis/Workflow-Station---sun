@@ -12,6 +12,7 @@ import {
   applySharedAttachmentFinalizeAndMaterialize,
   isSharedAttachmentFileBinding,
   finalizeMiCollectionSubTableBindingRows,
+  mergeMiCollectionSubTableRows,
 } from '@/composables/tasks/shared'
 import {
   cloneSubTableRows,
@@ -264,19 +265,13 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
               mergeSiblingSlices: !isMiSubTaskMode.value,
             }) ?? []
           const existing = Array.isArray(binding.data) ? binding.data : []
-          let combined: any[]
           if (isMiSubTaskMode.value) {
             /** MI sub-task: own slice only — global allSlices merge injects attachment / ghost rows. */
-            combined = mergeSubTableRowsByRowId(existing, resolved, binding.primaryKeyFields ?? null)
+            binding.data = mergeMiCollectionSubTableRows([existing, resolved], binding)
           } else {
             const merged = mergeAllSlicesForSharedProcessSubTableBinding(flattened, binding, rtMap)
-            combined = mergeSubTableRowsByRowId(
-              mergeSubTableRowsByRowId(resolved, merged, binding.primaryKeyFields ?? null),
-              existing,
-              binding.primaryKeyFields ?? null,
-            )
+            binding.data = mergeMiCollectionSubTableRows([resolved, merged, existing], binding)
           }
-          binding.data = finalizeMiCollectionSubTableBindingRows(combined, binding)
           continue
         }
         if (isMiParticipantScopedSubTableBinding(binding)) continue

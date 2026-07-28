@@ -16,7 +16,7 @@ export {
   cloneSubTableBindings,
 } from './subTableCore'
 
-export { mergeSubTableRowsByRowId } from './subTableRowMerge'
+export { mergeSubTableRowsByRowId, rowResolvesDesignerPrimaryKey } from './subTableRowMerge'
 
 export {
   isSubTableRowMetaField,
@@ -66,6 +66,8 @@ export {
 export {
   filterRowsForMiCollectionSubTableBinding,
   finalizeMiCollectionSubTableBindingRows,
+  mergeMiCollectionSubTableRows,
+  resolveMiCollectionPrimaryKeyFields,
   shouldSyncStaleSiblingSubTableSlice,
   subTableVariablesIncludeMiRows,
   buildMiCollectionSliceKeySet,

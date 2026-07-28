@@ -1,12 +1,13 @@
 # AI 协作开发手册 — Workflow Station
 
 本手册说明**如何在日常开发中**与 Cursor / AI Agent 协作，使变更可控、可验收、可回归。  
-规则的单一事实来源仍是 [`.cursor/rules/`](../../.cursor/rules/)（经 SessionStart 同步进各级 `CLAUDE.md`）；本文为**操作流程摘要**。
+规则的单一事实来源仍是 [`.cursor/rules/`](../../.cursor/rules/) + [`.cursor/skills/`](../../.cursor/skills/)（经同步脚本生成 Claude / Copilot / Kiro 副本）；本文为**操作流程摘要**。
 
 > **Cursor 自动加载：** [`.cursor/rules/ai-development-playbook.mdc`](../../.cursor/rules/ai-development-playbook.mdc)（`alwaysApply: true`）— 开新会话即生效，无需每次粘贴全文。
 
 相关文档：
 
+- [ai-guidance-sync.md](./ai-guidance-sync.md) — Cursor 真源 → Copilot / Kiro / Claude 同步与 CI 防漂移
 - [frontend-ai-rules.md](./frontend-ai-rules.md) — 前端治理摘要
 - [backend-ai-rules.md](./backend-ai-rules.md) — 后端治理摘要
 - [../guides/form-script-api.md](../guides/form-script-api.md) — 表单脚本 API

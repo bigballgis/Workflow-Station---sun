@@ -1,0 +1,138 @@
+name: AI guidance drift check
+
+# Ensures Copilot / Kiro / Claude native copies stay in sync with Cursor
+# sources (.cursor/rules + .cursor/skills). Fail if regenerating produces a diff.
+
+on:
+  push:
+    paths:
+      - '.cursor/rules/**'
+      - '.cursor/skills/**'
+      - '.claude/scripts/sync-cursor-rules.mjs'
+      - '.claude/settings.json'
+      - '.github/copilot-instructions.md'
+      - '.github/instructions/**'
+      - '.github/skills/**'
+      - '.github/hooks/**'
+      - '.kiro/steering/**'
+      - '.kiro/skills/**'
+      - '.vscode/tasks.json'
+      - 'CLAUDE.md'
+      - 'frontend/CLAUDE.md'
+      - 'backend/CLAUDE.md'
+      - 'deploy/CLAUDE.md'
+      - '.github/workflows/ai-guidance-sync.yml'
+  pull_request:
+    paths:
+      - '.cursor/rules/**'
+      - '.cursor/skills/**'
+      - '.claude/scripts/sync-cursor-rules.mjs'
+      - '.claude/settings.json'
+      - '.github/copilot-instructions.md'
+      - '.github/instructions/**'
+      - '.github/skills/**'
+      - '.github/hooks/**'
+      - '.kiro/steering/**'
+      - '.kiro/skills/**'
+      - '.vscode/tasks.json'
+      - 'CLAUDE.md'
+      - 'frontend/CLAUDE.md'
+      - 'backend/CLAUDE.md'
+      - 'deploy/CLAUDE.md'
+      - '.github/workflows/ai-guidance-sync.yml'
+
+concurrency:
+  group: ai-guidance-sync-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-check:
+    name: Regenerate and detect drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify folderOpen auto-sync task
+        run: |
+          set -euo pipefail
+          test -f .vscode/tasks.json
+          node -e "
+            const t = require('./.vscode/tasks.json');
+            const hit = (t.tasks || []).some(
+              (x) => x.runOptions && x.runOptions.runOn === 'folderOpen'
+                && String(x.command || '').includes('sync-cursor-rules')
+            );
+            if (!hit) {
+              console.error('Missing folderOpen task that runs sync-cursor-rules.mjs');
+              process.exit(1);
+            }
+            console.log('OK: VS Code folderOpen sync task present');
+          "
+
+      - name: Verify Copilot SessionStart hook
+        run: |
+          set -euo pipefail
+          test -f .github/hooks/sync-ai-guidance.json
+          node -e "
+            const h = require('./.github/hooks/sync-ai-guidance.json');
+            const hooks = (h.hooks && h.hooks.sessionStart) || [];
+            const hit = hooks.some((x) =>
+              (x.bash && x.bash.includes('sync-cursor-rules'))
+              || (x.powershell && x.powershell.includes('sync-cursor-rules'))
+            );
+            if (!hit) {
+              console.error('Missing Copilot sessionStart hook that runs sync-cursor-rules.mjs');
+              process.exit(1);
+            }
+            console.log('OK: Copilot sessionStart sync hook present');
+          "
+
+      - name: Verify Claude SessionStart hook
+        run: |
+          set -euo pipefail
+          test -f .claude/settings.json
+          node -e "
+            const s = require('./.claude/settings.json');
+            const groups = (s.hooks && s.hooks.SessionStart) || [];
+            const cmds = groups.flatMap((g) => g.hooks || []);
+            const hit = cmds.some((x) =>
+              x.type === 'command' && String(x.command || '').includes('sync-cursor-rules')
+            );
+            if (!hit) {
+              console.error('Missing Claude SessionStart hook that runs sync-cursor-rules.mjs');
+              process.exit(1);
+            }
+            console.log('OK: Claude SessionStart sync hook present');
+          "
+
+      - name: Regenerate native copies
+        run: node .claude/scripts/sync-cursor-rules.mjs
+
+      - name: Fail on uncommitted drift
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- \
+            CLAUDE.md \
+            frontend/CLAUDE.md \
+            backend/CLAUDE.md \
+            deploy/CLAUDE.md \
+            .github/copilot-instructions.md \
+            .github/instructions \
+            .github/skills \
+            .claude/skills \
+            .kiro/steering \
+            .kiro/skills
+          then
+            echo ''
+            echo 'ERROR: Cursor sources and generated AI guidance copies have drifted.'
+            echo 'Fix: run  node .claude/scripts/sync-cursor-rules.mjs  and commit the result.'
+            echo 'Only edit .cursor/rules and .cursor/skills — never hand-edit generated copies.'
+            exit 1
+          fi
+          echo 'OK: no drift after regenerate'

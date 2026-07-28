@@ -19,7 +19,7 @@ cd frontend && npm run regression:mi:screenshots
 
 | 场景 ID | Issue | Playwright 脚本 | 覆盖单测 | 截图 slug |
 |---------|-------|-----------------|----------|-----------|
-| 1441-myrequest-details | #1441 | `verify-myrequest-details-modal.mjs` | mcyInitiator, mergeMi, dropSubsumed | `app-*-details-060-unprocessed.png`, `…-061-filled.png` |
+| 1441-myrequest-details | #1441 | `verify-myrequest-details-modal.mjs` | mcyInitiator, mergeMi, mergeMiCollection, dropSubsumed | `app-*-details-060-unprocessed.png`, `…-061-filled.png` |
 | 1440-sex-toggle | #1440 | `verify-sex-toggle-isolation.mjs` | linkFormMiIsolation, inlineFormBelowTable | `task-6c6c-sex-before/after.png` |
 | 1438-attachment | #1438 | `verify-mi-attachment-rows.mjs` | subTableRowMetaFields | `task-093962-attachment-table.png`, `…-subtask-grid.png` |
 | 1439-subform2 | #1439 | `verify-subform2-people-carry-forward.mjs` | subForm2CarryForward | `task-75d662-subform2-people.png` |

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "node .claude/scripts/sync-cursor-rules.mjs",
+        "powershell": "node .claude/scripts/sync-cursor-rules.mjs",
+        "cwd": ".",
+        "timeoutSec": 60
+      }
+    ]
+  }
+}

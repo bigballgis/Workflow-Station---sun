@@ -56,7 +56,14 @@ cd deploy/environments/dev && docker compose -f docker-compose.dev.yml --env-fil
 - [ ] 已补单测 / verify 脚本 / 专项 rule（至少一项）
 - [ ] `.kiro/issues` 已更新（验证通过后一条 `fixed`）
 
+## AI 指导同步（改动了 `.cursor/rules` 或 `.cursor/skills` 时）
+
+- [ ] 已运行 `node .claude/scripts/sync-cursor-rules.mjs`
+- [ ] 已提交生成副本（`.github/instructions` / `.kiro/steering` / skills 镜像等）
+- [ ] 不适用（未改 Cursor 真源）
+
 ## 参考
 
 - 协作流程：[docs/ai-rules/ai-development-playbook.md](../docs/ai-rules/ai-development-playbook.md)
+- AI 指导同步：[docs/ai-rules/ai-guidance-sync.md](../docs/ai-rules/ai-guidance-sync.md)
 - MI 回归：[frontend/user-portal/MI_REGRESSION.md](../frontend/user-portal/MI_REGRESSION.md)

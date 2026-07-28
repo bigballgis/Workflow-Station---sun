@@ -23,7 +23,8 @@ import java.time.LocalDateTime;
 @Table(name = "wf_extended_task_info", indexes = {
     @Index(name = "idx_task_id", columnList = "taskId", unique = true),
     @Index(name = "idx_assignment_type", columnList = "assignmentType"),
-    @Index(name = "idx_assignment_target", columnList = "assignmentTarget"),
+    // assignment_target: partial index idx_assignment_target_non_candidate_users is managed in
+    // deploy/init-scripts (exclude CANDIDATE_USERS long comma-separated pools); not expressible via @Index
     @Index(name = "idx_delegated_to", columnList = "delegatedTo"),
     @Index(name = "idx_claimed_by", columnList = "claimedBy"),
     @Index(name = "idx_process_instance", columnList = "processInstanceId"),
@@ -90,8 +91,10 @@ public class ExtendedTaskInfo {
      * - When assignmentType is USER, stores user ID
      * - When assignmentType is VIRTUAL_GROUP, stores virtual group ID
      * - When assignmentType is DEPT_ROLE, stores "departmentId:roleId" format
+     * - When assignmentType is CANDIDATE_USERS, stores comma-separated user IDs (may exceed 255)
+     * TEXT: large candidate pools from role/BU resolution must not be truncated.
      */
-    @Column(name = "assignment_target", nullable = false, length = 255)
+    @Column(name = "assignment_target", nullable = false, columnDefinition = "TEXT")
     private String assignmentTarget;
 
     /**

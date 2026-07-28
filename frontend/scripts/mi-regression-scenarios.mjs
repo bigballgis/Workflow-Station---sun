@@ -6,7 +6,12 @@ export const MI_REGRESSION_SCENARIOS = [
   {
     id: '1441-myrequest-details',
     issue: '#1441',
-    unitTests: ['mcyInitiatorMyRequest.test.ts', 'mergeSubTableRowsMiMerge.test.ts', 'dropSubsumedSubTableRows.test.ts'],
+    unitTests: [
+      'mcyInitiatorMyRequest.test.ts',
+      'mergeSubTableRowsMiMerge.test.ts',
+      'mergeMiCollectionSubTableRows.test.ts',
+      'dropSubsumedSubTableRows.test.ts',
+    ],
     script: 'verify-myrequest-details-modal.mjs',
     screenshots: ['app-*-details-060-unprocessed.png', 'app-*-details-061-filled.png'],
   },

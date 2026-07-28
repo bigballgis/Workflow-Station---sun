@@ -16,6 +16,7 @@ import {
   isSharedAttachmentFileBinding,
   finalizeSharedProcessSubTableBindingRows,
   finalizeMiCollectionSubTableBindingRows,
+  mergeMiCollectionSubTableRows,
   collapseMiLinkChildRowsToOnePerParticipant,
   backfillMiLinkChildPrimaryKeysFromVariables,
   repairMisassignedLinkChildStructuralFk,
@@ -92,7 +93,7 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
           rowMatchesSubTablePrimaryKey(row, myRowId, participantPk),
         )
         if (scoped.length > 0) {
-          current.data = cloneSubTableRows(finalizeMiCollectionSubTableBindingRows(scoped, current))
+          current.data = cloneSubTableRows(mergeMiCollectionSubTableRows([scoped], current))
         }
         continue
       }
@@ -373,10 +374,10 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
       const existing = Array.isArray(binding.data) ? binding.data : []
       if (isCollection) {
         binding.data = cloneSubTableRows(
-          finalizeMiCollectionSubTableBindingRows(
-            mergeSubTableRowsByRowId(existing, scoped, participantPk ?? binding.primaryKeyFields ?? null),
-            binding,
-          ),
+          mergeMiCollectionSubTableRows([existing, scoped], {
+            ...binding,
+            primaryKeyFields: participantPk ?? binding.primaryKeyFields,
+          }),
         )
       } else if (participantScoped) {
         binding.data = cloneSubTableRows(
