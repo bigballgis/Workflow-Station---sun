@@ -110,13 +110,13 @@ export default {
     testUserHint: '测试环境快速登录'
   },
   devGroup: {
-    current: '团队',
+    current: '工作区',
     switch: '切换',
     allGroups: '全部团队',
     publicGroup: '公共',
-    noTeam: '无团队',
-    selectTitle: '选择团队',
-    selectHint: '你属于多个团队，请选择要查看功能单元的团队。随时可在顶部切换团队或单独查看公共（Public）功能单元。',
+    noTeam: '无工作区',
+    selectTitle: '选择工作区',
+    selectHint: '你属于多个工作区，请选择要查看功能单元的工作区。随时可在顶部切换工作区或单独查看公共（Public）功能单元。',
     confirm: '进入'
   },
   functionUnit: {
@@ -163,9 +163,9 @@ export default {
     decisions: '决策设计',
     filterByTags: '按标签筛选',
     selectTags: '选择标签',
-    team: '所属团队',
-    selectTeam: '选择团队',
-    selectTeamRequired: '请至少选择一个团队',
+    team: '工作区',
+    selectTeam: '选择工作区',
+    selectTeamRequired: '请至少选择一个工作区',
     loadFailed: '加载功能单元失败，请重试',
     noData: '暂无功能单元',
     noResults: '没有匹配的功能单元',

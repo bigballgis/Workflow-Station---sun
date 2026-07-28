@@ -99,6 +99,7 @@ public class ChangeHistoryComponent {
     private static final Set<String> LEGACY_SYSTEM_FIELD_ALIASES = Set.of(
             "mainid", "subtaskid", "participantid", "meetingparticipantid", "parentid",
             "assigneedisplayname", "taskid", "taskdefinitionkey");
+    private static final String RECORD_NOTE_FIELD_NAME = "__record_note__";
     private static final Set<String> ASSIGNEE_VALUE_FIELDS = Set.of(
             "assignee", "assigneeuserid", "assigneeid");
 

@@ -110,13 +110,13 @@ export default {
     testUserHint: 'Quick login for test environment'
   },
   devGroup: {
-    current: 'Team',
+    current: 'Workspace',
     switch: 'Switch',
     allGroups: 'All groups',
     publicGroup: 'Public',
-    noTeam: 'No team',
-    selectTitle: 'Select a team',
-    selectHint: 'You belong to multiple teams. Choose the team whose function units you want to view. You can switch teams or view Public function units anytime from the top bar.',
+    noTeam: 'No workspace',
+    selectTitle: 'Select a workspace',
+    selectHint: 'You belong to multiple workspaces. Choose the workspace whose function units you want to view. You can switch workspaces or view Public function units anytime from the top bar.',
     confirm: 'Enter'
   },
   functionUnit: {
@@ -163,9 +163,9 @@ export default {
     decisions: 'Decision Design',
     filterByTags: 'Filter by Tags',
     selectTags: 'Select Tags',
-    team: 'Team',
-    selectTeam: 'Select team(s)',
-    selectTeamRequired: 'Please select at least one team',
+    team: 'Workspace',
+    selectTeam: 'Select workspace(s)',
+    selectTeamRequired: 'Please select at least one workspace',
     loadFailed: 'Failed to load function units, please retry',
     noData: 'No function units',
     noResults: 'No matching function units',
