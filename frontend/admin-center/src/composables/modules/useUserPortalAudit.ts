@@ -188,6 +188,8 @@ export function useUserPortalAudit() {
       case 'processInstanceId': return row.processInstanceId || '-'
       case 'stageName': return row.stageName || row.stageId || '-'
       case 'fieldName': return row.fieldLabel || row.fieldName || '-'
+      case 'formName': return row.formName || '-'
+      case 'subTableName': return row.subTableName || '-'
       case 'oldValue': return truncateValue(row.oldValue, 100)
       case 'newValue': return truncateValue(row.newValue, 100)
       default: return '-'
