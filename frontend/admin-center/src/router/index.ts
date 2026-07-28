@@ -133,12 +133,29 @@ const routes: RouteRecordRaw[] = [
       {
         path: "audit",
         name: "Audit",
-        component: () => import("@/views/audit/index.vue"),
-        meta: {
-          titleKey: "menu.audit",
-          icon: "Document",
-          permissions: [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
-        },
+        redirect: "/audit/admin-center",
+        children: [
+          {
+            path: "admin-center",
+            name: "AuditAdminCenter",
+            component: () => import("@/views/audit/index.vue"),
+            meta: {
+              titleKey: "menu.auditAdminCenter",
+              icon: "Document",
+              permissions: [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
+            },
+          },
+          {
+            path: "user-portal",
+            name: "AuditUserPortal",
+            component: () => import("@/views/audit/user-portal/index.vue"),
+            meta: {
+              titleKey: "menu.auditUserPortal",
+              icon: "Document",
+              permissions: [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
+            },
+          },
+        ],
       },
       {
         path: "config",

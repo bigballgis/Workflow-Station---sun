@@ -6,6 +6,8 @@ import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.ChangeHistoryRecord;
 import com.portal.dto.SubTableChange;
+import com.portal.dto.UserPortalAuditQueryRequest;
+import com.portal.dto.UserPortalAuditRecord;
 import com.portal.entity.ChangeHistory;
 import com.portal.entity.ProcessInstance;
 import com.portal.enums.ChangeType;
@@ -13,13 +15,20 @@ import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.platform.security.entity.User;
 import com.platform.security.repository.UserRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1199,5 +1208,211 @@ public class ChangeHistoryComponent {
 
     private static String normalizeFieldKey(String fieldName) {
         return fieldName.trim().toLowerCase().replaceAll("[^a-z0-9]", "");
+    }
+
+    // ==================== global cross-process audit query ====================
+
+    /**
+     * Returns distinct FU codes that have at least one change history record.
+     */
+    public List<String> getDistinctFunctionUnitCodes() {
+        return changeHistoryRepository.findDistinctFunctionUnitCodes();
+    }
+
+    /**
+     * Cross-process global audit log query with server-side pagination.
+     * Does NOT resolve per-form field labels/orders — this is a summary view
+     * designed for the admin audit list.  For per-field label resolution see
+     * {@link #getChangeHistory(String)}.
+     */
+    public Page<UserPortalAuditRecord> queryGlobalAuditLogs(UserPortalAuditQueryRequest request) {
+        int page = Math.max(request.getPage(), 0);
+        int size = Math.min(Math.max(request.getSize(), 1), 200);
+        Sort sort = buildAuditSort(request.getSortField(), request.getSortOrder());
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Specification<ChangeHistory> spec = buildAuditSpecification(request);
+        Page<ChangeHistory> entityPage = changeHistoryRepository.findAll(spec, pageable);
+
+        // Batch-resolve process instances for FU codes
+        Set<String> processInstanceIds = entityPage.getContent().stream()
+                .map(ChangeHistory::getProcessInstanceId)
+                .collect(Collectors.toSet());
+        Map<String, ProcessInstance> piMap = new HashMap<>();
+        if (!processInstanceIds.isEmpty()) {
+            processInstanceRepository.findAllById(processInstanceIds)
+                    .forEach(pi -> piMap.put(pi.getId(), pi));
+        }
+
+        // Batch-resolve usernames
+        Set<String> userIds = entityPage.getContent().stream()
+                .map(ChangeHistory::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, String> usernameMap = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            userRepository.findAllById(userIds).forEach(u -> {
+                if (u != null && u.getId() != null) {
+                    usernameMap.put(u.getId(), displayNameForUser(u));
+                }
+            });
+        }
+
+        // Page-scoped stage name enrichment (unique process instances on this page only)
+        Map<String, StageNameMaps> stageMapsByPi = new HashMap<>();
+        for (String piId : processInstanceIds) {
+            stageMapsByPi.put(piId, resolveStageNames(piId));
+        }
+
+        List<UserPortalAuditRecord> records = entityPage.getContent().stream()
+                .map(entity -> toAuditRecord(
+                        entity,
+                        piMap.get(entity.getProcessInstanceId()),
+                        usernameMap,
+                        stageMapsByPi.getOrDefault(
+                                entity.getProcessInstanceId(),
+                                new StageNameMaps(Map.of(), Map.of()))))
+                .collect(Collectors.toList());
+
+        return new org.springframework.data.domain.PageImpl<>(
+                records, pageable, entityPage.getTotalElements());
+    }
+
+    private UserPortalAuditRecord toAuditRecord(
+            ChangeHistory entity,
+            ProcessInstance pi,
+            Map<String, String> usernameMap,
+            StageNameMaps stageNames) {
+        String stageName = null;
+        if (entity.getTaskInstanceId() != null && !entity.getTaskInstanceId().isBlank()) {
+            stageName = stageNames.taskInstanceIdToName().get(entity.getTaskInstanceId());
+        }
+        if (stageName == null && entity.getStageId() != null && !entity.getStageId().isBlank()) {
+            stageName = stageNames.taskDefinitionKeyToName().get(entity.getStageId());
+        }
+        String formName = pi != null ? pi.getProcessDefinitionName() : null;
+        String subTable = entity.getSubTableName();
+        boolean hasSubTable = subTable != null && !subTable.isBlank();
+        return UserPortalAuditRecord.builder()
+                .id(entity.getId())
+                .processInstanceId(entity.getProcessInstanceId())
+                .taskInstanceId(entity.getTaskInstanceId())
+                .stageId(entity.getStageId())
+                .stageName(stageName)
+                .userId(entity.getUserId())
+                .userName(usernameMap.getOrDefault(entity.getUserId(), entity.getUserId()))
+                .timestamp(entity.getTimestamp())
+                .fieldName(entity.getFieldName())
+                .oldValue(entity.getOldValue())
+                .newValue(entity.getNewValue())
+                .changeType(entity.getChangeType() != null ? entity.getChangeType().name() : null)
+                .subTableName(subTable)
+                .rowIdentifier(entity.getRowIdentifier())
+                .functionUnitCode(pi != null ? pi.getFunctionUnitCode() : null)
+                .functionUnitName(null)
+                .formName(formName)
+                .tableName(hasSubTable ? subTable : formName)
+                .build();
+    }
+
+    private Specification<ChangeHistory> buildAuditSpecification(UserPortalAuditQueryRequest request) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            // Always exclude internal fields
+            Predicate notInternal = cb.not(root.get("fieldName").in(INTERNAL_FIELD_BLACKLIST));
+            predicates.add(notInternal);
+
+            if (request.getUserId() != null && !request.getUserId().isBlank()) {
+                predicates.add(cb.equal(root.get("userId"), request.getUserId().trim()));
+            }
+
+            if (request.getChangeType() != null && !request.getChangeType().isBlank()) {
+                try {
+                    ChangeType ct = ChangeType.valueOf(request.getChangeType().trim());
+                    predicates.add(cb.equal(root.get("changeType"), ct));
+                } catch (IllegalArgumentException ignored) {
+                    // Invalid change type → empty result (do not silently drop the filter)
+                    predicates.add(cb.disjunction());
+                }
+            }
+
+            if (request.getStartTime() != null && !request.getStartTime().isBlank()) {
+                Instant start = parseIsoInstant(request.getStartTime());
+                if (start != null) {
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), start));
+                }
+            }
+
+            if (request.getEndTime() != null && !request.getEndTime().isBlank()) {
+                Instant end = parseIsoInstant(request.getEndTime());
+                if (end != null) {
+                    predicates.add(cb.lessThanOrEqualTo(root.get("timestamp"), end));
+                }
+            }
+
+            if (request.getProcessInstanceId() != null && !request.getProcessInstanceId().isBlank()) {
+                predicates.add(cb.equal(root.get("processInstanceId"), request.getProcessInstanceId().trim()));
+            }
+
+            // functionUnitCode filter requires sub-select on process_instance_id
+            if (request.getFunctionUnitCode() != null && !request.getFunctionUnitCode().isBlank()) {
+                List<String> matchingPiIds = jdbcTemplate.query(
+                        "SELECT id FROM up_process_instance WHERE function_unit_code = ?",
+                        (rs, rowNum) -> rs.getString("id"),
+                        request.getFunctionUnitCode().trim());
+                if (matchingPiIds.isEmpty()) {
+                    predicates.add(cb.disjunction()); // no match → empty result
+                } else {
+                    predicates.add(root.get("processInstanceId").in(matchingPiIds));
+                }
+            }
+
+            // username filter: resolve userIds from sys_users, then filter
+            if (request.getUsername() != null && !request.getUsername().isBlank()) {
+                String keyword = request.getUsername().trim().toLowerCase();
+                List<String> matchingUserIds = jdbcTemplate.query(
+                        "SELECT id FROM sys_users WHERE LOWER(username) LIKE ? OR LOWER(full_name) LIKE ?",
+                        (rs, rowNum) -> rs.getString("id"),
+                        "%" + keyword + "%", "%" + keyword + "%");
+                if (matchingUserIds.isEmpty()) {
+                    predicates.add(cb.disjunction());
+                } else {
+                    predicates.add(root.get("userId").in(matchingUserIds));
+                }
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private static Sort buildAuditSort(String sortField, String sortOrder) {
+        String field = sortField != null && !sortField.isBlank() ? sortField : "timestamp";
+        boolean asc = "asc".equalsIgnoreCase(sortOrder);
+        // Map frontend sort field names to entity field names
+        String entityField = switch (field) {
+            case "createdAt", "timestamp" -> "timestamp";
+            case "username", "userName", "userId" -> "userId";
+            case "changeType" -> "changeType";
+            default -> "timestamp";
+        };
+        return asc ? Sort.by(Sort.Direction.ASC, entityField)
+                   : Sort.by(Sort.Direction.DESC, entityField);
+    }
+
+    private static Instant parseIsoInstant(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Instant.from(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(value));
+        } catch (Exception e) {
+            try {
+                // Try without timezone, assume UTC
+                return java.time.LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                        .atZone(java.time.ZoneOffset.UTC)
+                        .toInstant();
+            } catch (Exception e2) {
+                return null;
+            }
+        }
     }
 }

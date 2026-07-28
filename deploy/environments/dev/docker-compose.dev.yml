@@ -438,6 +438,9 @@ services:
       DSP_EMPLOYEE_ID_CLAIMS: ${DSP_EMPLOYEE_ID_CLAIMS:-employeeID,employeeNumber,sub}
       DSP_USERNAME_CLAIMS: ${DSP_USERNAME_CLAIMS:-uid,preferred_username,sub}
       ADMIN_DEV_BYPASS_ROLE_CHECK: ${ADMIN_DEV_BYPASS_ROLE_CHECK:-true}
+      # Cross-service portal audit / runtime purge (must match user-portal portal.internal.api-token)
+      USER_PORTAL_BASE_URL: ${USER_PORTAL_BASE_URL:-http://user-portal:8080/api/portal}
+      PORTAL_INTERNAL_API_TOKEN: ${PORTAL_INTERNAL_API_TOKEN:-dev-portal-internal-token-change-me}
     volumes:
       - ./logs:/app/logs
       - ./certs/ldap-prod.jks:/app/ldap-prod.jks:ro

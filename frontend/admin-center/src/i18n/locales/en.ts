@@ -75,6 +75,8 @@ export default {
     functionUnit: 'Function Unit',
     monitor: 'System Monitor',
     audit: 'Audit Log',
+    auditAdminCenter: 'Admin Center Audit Logs',
+    auditUserPortal: 'User Portal Audit Logs',
     config: 'System Config',
     relationTables: 'Relation Tables',
     tableStructure: 'Table Structure',
@@ -677,6 +679,33 @@ export default {
     pauseAutoRefresh: 'Click to pause auto-refresh',
     resumeAutoRefresh: 'Click to resume auto-refresh',
     paused: 'Paused'
+  },
+
+  // ==================== User Portal Audit ====================
+  upAudit: {
+    title: 'User Portal Audit Logs',
+    functionUnit: 'Function Unit',
+    tableForm: 'Table / Form',
+    subTableName: 'Sub-table',
+    processInstanceId: 'Process Instance',
+    stage: 'Stage',
+    fieldName: 'Field',
+    changeType: 'Change Type',
+    oldValue: 'Before Change',
+    newValue: 'After Change',
+    rowIdentifier: 'Row',
+    taskInstanceId: 'Task Instance',
+    emptyText: 'No user portal audit logs found',
+    resetFilter: 'Reset Filter',
+    viewDetail: 'Audit Detail',
+    actionFIELD_UPDATE: 'Field Update',
+    actionSUB_TABLE_ROW_ADD: 'Row Add',
+    actionSUB_TABLE_ROW_UPDATE: 'Row Update',
+    actionSUB_TABLE_ROW_DELETE: 'Row Delete',
+    actionPROCESS_INITIATION: 'Process Start',
+    actionRECORD_NOTE_ADD: 'Note Added',
+    actionRECORD_NOTE_UPDATE: 'Note Updated',
+    actionRECORD_NOTE_DELETE: 'Note Deleted',
   },
 
   businessUnit: {

@@ -3,6 +3,7 @@ package com.portal.repository;
 import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,7 +15,7 @@ import java.util.List;
  * 变更历史 Repository
  */
 @Repository
-public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Long> {
+public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Long>, JpaSpecificationExecutor<ChangeHistory> {
 
     List<ChangeHistory> findByProcessInstanceIdOrderByTimestampAsc(String processInstanceId);
 
@@ -35,4 +36,13 @@ public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Lo
      */
         ChangeHistory findTopByProcessInstanceIdAndSubTableNameAndRowIdentifierAndFieldNameAndChangeTypeOrderByTimestampDesc(
             String processInstanceId, String subTableName, String rowIdentifier, String fieldName, ChangeType changeType);
+
+    /**
+     * Find all distinct function unit codes that have change history records,
+     * resolved through the process instance link.
+     */
+    @Query("SELECT DISTINCT pi.functionUnitCode FROM ProcessInstance pi " +
+           "WHERE pi.id IN (SELECT DISTINCT ch.processInstanceId FROM ChangeHistory ch) " +
+           "AND pi.functionUnitCode IS NOT NULL")
+    List<String> findDistinctFunctionUnitCodes();
 }
