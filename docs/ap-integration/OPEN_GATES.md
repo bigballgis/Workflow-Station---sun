@@ -214,7 +214,7 @@ EXTRACT / REIMPLEMENT / REPLACE 解决，使 CE 可在"无 EE 专有业务功能
 - **须证明**：安全**候选**基线 `SANDBOX_CODE_AND_PROCESS` + `NETWORK_MODE=STRICT` 与
   离线预装 piece（FR-F03A）+ 断外网 + Path B / AI Generate 生产链路**能同时成立**。
 - **背景**：0.84 默认 `UNSANDBOXED` + `UNRESTRICTED`（两层不隔离、无出网限制），不可上生产。
-- **环境**：dev 环境完整在线（`platform-activepieces-dev` 已跑 6 天健康，镜像 `activepieces:0.84.0-pieces`）。
+- **环境**：dev 环境完整在线（`platform-activepieces-dev` 健康，镜像 `activepieces:0.84.0-ee-removed`——2026-07-27 起 piece 预烘焙已并入该镜像最后一层，不再有独立的 `0.84.0-pieces` 派生镜像）。
 
 ### ✅ 已实测结论
 

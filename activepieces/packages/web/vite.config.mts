@@ -7,6 +7,7 @@ import { defineConfig } from 'vite';
 import checker from 'vite-plugin-checker';
 import tailwindcss from '@tailwindcss/vite';
 import customHtmlPlugin from './vite-plugins/html-plugin';
+// HERMES-PATCH-009: rewrite cdn.activepieces.com -> /ap-cdn at build time (air-gap).
 import apCdnRewritePlugin from './vite-plugins/ap-cdn-rewrite';
 
 export default defineConfig(({ command, mode }) => {

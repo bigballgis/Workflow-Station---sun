@@ -21,6 +21,9 @@
 10. **环境变量名必须是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`。
 11. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有 PostgreSQL 数据库。Redis、Kafka 在 K8S 中自行部署。
 12. **后端运行时基础镜像可覆盖** — 各后端 `Dockerfile` 使用 `ARG JAVA_BASE_IMAGE`（默认 `eclipse-temurin:17-jre`）。`deploy/environments/dev/build-and-deploy.ps1` 与 `deploy/scripts/build-and-push-k8s.ps1` 支持 **`-JavaBaseImage`**，默认优先使用 **`docker.m.daocloud.io/library/eclipse-temurin:17-jre`**：构建前预拉取，并传 `--build-arg JAVA_BASE_IMAGE=...` 与 `docker build --pull=false`，减轻对 Docker Hub 元数据的依赖。
+    **Activepieces 同理但入口不同**：`activepieces/Dockerfile` 使用 `ARG NODE_IMAGE`（默认 `node:24.14.0-bullseye-slim`）。
+    它经 Compose 构建（`docker compose build activepieces`），**两个 ps1 脚本都不管它**，故没有对应的 `-NodeBaseImage` 开关；
+    构建机够不到 Docker Hub 时手工传 `--build-arg NODE_IMAGE=<nexus3 镜像>`。
 
 ---
 

@@ -29,15 +29,19 @@ AP 0.84.0 官方 Tag（frozen baseline）
 | # | 类型 | 位置 | 内容 | 落地 | 裁决 |
 |---|---|---|---|---|---|
 | 001 | 源码 | `web/src/app/builder/pieces-selector/index.tsx` | 摘掉 Approvals 标签页与 `<ApprovalsTabContent>` 渲染。该标签页硬编码 6 个 SaaS piece，全部加载成功才渲染；白名单下 6 个全 404 → 永久骨架屏。**不渲染**而非仅隐藏标签：组件在 tab 判断之前就发这 6 个查询 | 2026-07-02 `821cf33c`；2026-07-27 由构建期脚本改为源码补丁 | [Q9](DECISIONS.md#q9) |
-| 002 | 构建期 | `activepieces/hermes/patch-piece-ai-run-agent.js` | `piece-ai` 的 `run_agent`：补 `maxOutputTokens`（DeepSeek 把 reasoning token 计入预算，默认额度会让文档还没输出就耗尽）+ reasoning-delta 不再拼进输出。**⚠️ 当前未挂载**：`piece-ai` 在 `669f7207` 已出白名单 → 镜像里没有可打的副本，接进构建会 exit(1)。dev 里该 piece 由运行时联网安装，缺陷仍在；气隙环境则装不上 | 2026-07-16 `e5da4738`；2026-07-27 随预烘焙层迁入 vendor 树 | — |
+| 002 | 构建期（**仅联网环境手工执行**） | `activepieces/hermes/patch-piece-ai-run-agent.js` | `piece-ai` 的 `run_agent`：补 `maxOutputTokens`（DeepSeek 把 reasoning token 计入预算，默认额度会让文档还没输出就耗尽）+ reasoning-delta 不再拼进输出。**不接进 Dockerfile 是裁决，不是欠账**：`piece-ai` 在 `669f7207` 已按「气隙下 AI 件无用」移出白名单，镜像里没有可打的副本。dev 里该 piece 仍由运行时联网安装，需要时按文件头的 `docker cp` + `docker exec` 手工打 | 2026-07-16 `e5da4738`；2026-07-27 随预烘焙层迁入 vendor 树 | — |
 | 003 | 源码 | `api/src/app/pieces/community-piece-module.ts` | 开放 piece 删除端点给 Admin Center | 2026-07-26 `277f15ae` | [D9 草案](D9_PIECE_ONLINE_ADMIN_DRAFT.md) |
 | 004 | 源码 | `api/src/app/pieces/metadata/utils/index.ts` | 恢复最小 platform 级 piece 可见性 | 2026-07-26 `277f15ae` | [D9 草案](D9_PIECE_ONLINE_ADMIN_DRAFT.md) |
 | 005 | 源码 | `worker/src/lib/cache/code/pkg-runner.ts` | 气隙运行时 piece 安装（pnpm offline store） | 2026-07-26 `3811061d` | [D9 草案](D9_PIECE_ONLINE_ADMIN_DRAFT.md) |
 | 006 | 源码 | `worker/src/lib/egress/lifecycle.ts` | `AP_SSRF_ALLOW_LIST` 接受主机名，不再只认 IP / CIDR | 2026-07-27 `d6ec1e33` | [D6](DECISIONS.md#d6) |
 | 007 | 源码 | `engine/src/lib/operations/sync-webhook-release.ts` | run 进终态即释放 sync webhook 监听器（步骤内失败） | 2026-07-27 `6a50f83c` | [D10](DECISIONS.md#d10) |
 | 008 | 源码 | `worker/src/lib/execute/jobs/execute-flow.ts` | 同上，覆盖引擎启动之前就终结的 run | 2026-07-27 `6a50f83c` | [D10](DECISIONS.md#d10) |
+| 009 | 源码（构建插件） | `web/vite-plugins/ap-cdn-rewrite.js` + `web/vite.config.mts` + `web/vite.embed.config.mts` | 构建期把硬编码的 `https://cdn.activepieces.com` 改写成同源 `/ap-cdn`。上游在 16 个文件约 47 处写死该域名，气隙下全部加载失败；改写而非逐处改源码，是为了保持 vendor diff 干净（[Q8](DECISIONS.md#q8)）并自动覆盖将来合并进来的新引用。资产由 `deploy/pieces/mirror-ap-cdn.mjs` 联网抓进 `web/public/ap-cdn/` | 2026-07-26 `7df25489` | X-2 / X-3 |
+| 010 | 源码 | `api/src/app/flags/theme.ts` + `web/index.html`（+ `web/public/hermes-*.svg`） | 白标：`websiteName` 改 Automation Studio（与 admin-center 入口菜单一致），logo / favicon 从 `cdn.activepieces.com/brand/*` 改同源相对路径 | 2026-07-26 `7df25489` | X-2 / X-3 |
 
-源码类的路径相对 `activepieces/packages/`（003–008 均在 `server/` 下，001 在 `web/` 下）。
+源码类的路径相对 `activepieces/packages/`（003–008 在 `server/` 下，001 / 009 在 `web/` 下，010 两侧都有）。
+
+009 归为源码类而非构建期：插件本身在 vendor 树里、随 `vite build` 自动生效，无需外部脚本挂载 —— 这正是 002 还没做到的形态。
 
 ## 回归网
 

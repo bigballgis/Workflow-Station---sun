@@ -2,17 +2,18 @@
 // HERMES-PATCH-002 (build-time; docs/ap-integration/HERMES_PATCHES.md)
 // Patches the prewarmed @activepieces/piece-ai run_agent action.
 //
-// ⚠️ CURRENTLY NOT WIRED INTO ../Dockerfile. It rewrites the piece's npm package
-// inside the image's piece cache, so it can only run AFTER prewarm-pieces.sh has
-// baked that piece — and @activepieces/piece-ai left the allowlist in 669f7207
-// ("remove the AI/search pieces from the automation catalog"). With no copy to
-// patch it would exit(1) and fail the build (fail-loud, by design).
-// The "AI Function Unit Generation" flow still uses run_agent, so in dev the piece
-// is installed at RUNTIME from npm — unpatched, i.e. both DeepSeek defects below
-// are live there, and in an air-gapped cluster the piece would not install at all.
-// To re-enable: add @activepieces/piece-ai to hermes/pieces.json (which also puts it
-// back in the designer catalog via the metadata seed) and restore the COPY+RUN pair
-// after the prewarm step in ../Dockerfile.
+// NOT WIRED INTO ../Dockerfile, and that is deliberate — do NOT "fix" it by adding
+// piece-ai back to the allowlist. @activepieces/piece-ai was removed in 669f7207
+// ("remove the AI/search pieces from the automation catalog") because the target
+// deployment is air-gapped: an AI piece that cannot reach a model provider is dead
+// weight in the designer. No baked copy exists, so wiring this in would exit(1).
+//
+// It is kept for NETWORKED environments only (dev), where piece-ai still installs at
+// runtime from npm and both defects below are therefore live. Applying it there is a
+// manual step against a running container, not a build step:
+//   docker cp patch-piece-ai-run-agent.js <ap-container>:/tmp/ && \
+//     docker exec <ap-container> node /tmp/patch-piece-ai-run-agent.js
+// (lost on container recreation, like any runtime-installed piece).
 //
 // Two defects for our DeepSeek reasoning-model usage (deepseek-v4-pro via the
 // platform "custom" OpenAI-compatible provider):

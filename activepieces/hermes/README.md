@@ -9,7 +9,7 @@ frozen baseline + controlled fork）加进来的构建期物料。rebase 到新�
 | `pieces.json` | **piece 白名单**（`name` + `version`，自研件另加 `tarball`）——手改的唯一入口 | 下面两处共用 |
 | `prewarm-pieces.sh` | 构建期把白名单里的 piece 按 worker `piece-installer.ts` 的原样布局装进 `cache/v11/common` 并写 `ready`，使运行时安装成为 no-op（气隙必需，X-3 / FR-F03A） | `../Dockerfile` run 阶段最后一步 |
 | `tarballs/*.tgz` | npm 包留档（审计 / 内网发布源）；**声明了 `tarball` 的自研件直接从这里装**——它们不在任何公共 registry 上 | 同上 |
-| `patch-piece-ai-run-agent.js` | HERMES-PATCH-002，DeepSeek reasoning 模型的 `run_agent` 修正 | **当前未挂载**，原因见文件头 |
+| `patch-piece-ai-run-agent.js` | HERMES-PATCH-002，DeepSeek reasoning 模型的 `run_agent` 修正 | **不接进 Dockerfile**（`piece-ai` 已按「气隙下 AI 件无用」移出白名单），仅联网 dev 手工执行 |
 
 白名单条目两种形态：
 

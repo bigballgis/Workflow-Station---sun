@@ -319,7 +319,7 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 | CODE step 内置依赖 | ✅ | 运行时已有/预打包的依赖可用 |
 | CODE step 外部 npm 依赖 | ❌ | FR-F03B，设计期校验拒绝 |
 | 任何运行时 npm/bun install | ❌ | CR-01 禁 bun + 断外网红线的共同结论 |
-| FR-F04 | 既有 patch 升级为源码修改 | MUST | piece-ai（run_agent） | vendor 源码直接改 | `patch-piece-ai-run-agent.js`（maxOutputTokens+reasoning 剥离）改为源码级修改并保留测试；`patch-web-approvals.js` **按 Q9 移除不再维护**（approvals 相关 UI 在源码里隐藏/禁用，纯 builder 组件本身不含该 tab） |
+| FR-F04 | 既有 patch 升级为源码修改 | MUST | piece-ai（run_agent） | vendor 源码直接改 | **部分达成（2026-07-27）**，逐条状态见 [HERMES_PATCHES.md](HERMES_PATCHES.md)。✅ `patch-web-approvals.js` 已按 Q9 处置：脚本删除，改为源码级摘掉 Approvals 标签页（HERMES-PATCH-001）——产物里 `APPROVAL_PIECES_CONFIG` 与 6 个 SaaS piece 名已被 tree-shake，比原先「置空数组」更彻底。🚫 `patch-piece-ai-run-agent.js`（maxOutputTokens + reasoning 剥离）**本条已失去对象**：`piece-ai` 于 `669f7207` 移出白名单——气隙下 AI 件够不到模型提供方，留在目录里是死重。镜像里没有该 piece 的副本，转源码无从谈起。脚本保留仅供**联网 dev** 手工对运行中容器施用（该环境下 piece 仍由 npm 运行时安装，两个缺陷是活的）。**不要为满足本条而把 piece-ai 加回白名单** |
 
 ### G 组 — Connections / Secrets
 
