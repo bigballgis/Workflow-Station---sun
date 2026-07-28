@@ -83,6 +83,7 @@ import { functionUnitApi, type DevGroupOption } from '@/api/functionUnit'
 import { ALL_GROUPS, getActiveGroupRaw, setActiveGroup } from '@/utils/devGroupContext'
 
 const { t } = useI18n()
+const emit = defineEmits<{ ready: [] }>()
 
 const groups = ref<DevGroupOption[]>([])
 const canSeeAll = ref(false)
@@ -140,6 +141,7 @@ async function resolveContext() {
     groups.value = []
     canSeeAll.value = false
     publicGroupId.value = null
+    emit('ready')
     return
   }
 
@@ -150,6 +152,7 @@ async function resolveContext() {
 
   if (stored && validIds.has(stored)) {
     currentId.value = stored
+    emit('ready')
     return
   }
 
@@ -157,12 +160,15 @@ async function resolveContext() {
   if (canSeeAll.value) {
     currentId.value = ALL_GROUPS
     setActiveGroup(ALL_GROUPS)
+    emit('ready')
   } else if (groups.value.length === 1) {
     currentId.value = groups.value[0]!.id
     setActiveGroup(currentId.value)
+    emit('ready')
   } else if (groups.value.length === 0) {
     currentId.value = publicGroupId.value
     if (currentId.value) setActiveGroup(currentId.value)
+    emit('ready')
   } else {
     // Multiple teams and no prior choice → force a selection.
     pendingGroupId.value = groups.value[0]!.id
