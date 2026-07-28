@@ -195,6 +195,8 @@ export default {
   max-width: 320px;
 }
 .ctx-text {
+  font-size: 14px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
