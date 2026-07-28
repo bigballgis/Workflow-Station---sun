@@ -299,8 +299,9 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
   ③元数据行获取：dev 临时开 `AP_PIECES_SYNC_MODE=OFFICIAL_AUTO` 同步→ `COPY (SELECT ... WHERE name IN (白名单))`
   导出→改回 NONE 清表→导入集群库；`piece_metadata` 表即 piece 白名单。
   ④镜像根 `bunfig.toml` 有 `minimumReleaseAge=3天`——新发到 Nexus 的包若被拒装先查这个。
-  ⑤**已落地的投放通道 = `deploy/pieces/`**（白名单 pieces.json + 元数据 seed SQL + 预装镜像 Dockerfile，
-  运行时零联网，详见 `deploy/pieces/README.md`）；Nexus npm 源改为兜底防线，非必需。
+  ⑤**已落地的投放通道**：白名单 + 预装脚本在 `activepieces/hermes/`（预装是 `activepieces/Dockerfile`
+  的最后一层），元数据 seed SQL 在 `deploy/pieces/`，运行时零联网，详见 `deploy/pieces/README.md`；
+  Nexus npm 源改为兜底防线，非必需。
 
 ---
 

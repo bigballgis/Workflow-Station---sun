@@ -121,11 +121,12 @@ BPMN service task with extension properties `serviceType=ap`, `ap:flowId`, optio
 
 ---
 
-## 4. n8n — Status: Dead (legacy; infra remnants still deployed)
+## 4. n8n — Status: Removed (2026-07; only dormant seed data remains)
 
 - Engine/service-task channel: **removed** — "n8n 已整体移除，仅 developer-workstation 的 AI 生成 webhook 例外保留" (`ACTIVEPIECES_INTEGRATION.md` §11 preamble), and that exception has itself since been migrated to AP (the `AiN8N*` → `AiWebhook*` test renames in this working tree are the tail end of the cleanup).
-- Remaining code traces: enum constant `N8N_ACTION` in `backend/developer-workstation/src/main/java/com/developer/enums/ActionType.java:37` (no runtime handler anywhere — grep of user-portal + workflow-engine-core finds only a comment in `RestTemplateConfig.java:31` and a legacy unit test) → dead vocabulary.
-- Remaining infra: `deploy/k8s/n8n.yaml` (image `n8n:1.89.2`) still listed in `deploy/k8s/kustomization.yaml:7`; dev compose still starts `platform-n8n-dev` (`deploy/environments/dev/docker-compose.dev.yml:104-132`). `deploy/n8n-workflows/` keeps two templates: `ai-function-unit-gen-workflow.json` (superseded by the AP flow) and `travel-expense-invoice-recognition.json` (Doubao vision LLM invoice OCR — **no live caller in code**; import/credential steps are manual per its README). Verdict: the n8n container is deployed-but-orphaned; candidates for removal.
+- Remaining code traces: enum constant `N8N_ACTION` in `backend/developer-workstation/src/main/java/com/developer/enums/ActionType.java:37` — **intentionally kept**: the name is persisted in `dw_action_definitions.action_type` and in seed scripts, so renaming needs a data migration; the runtime is now carried by Activepieces. No other live n8n code remains (`AdminCenterClient#getN8nConfig` was deleted 2026-07 as dead code — the `/api/v1/admin/n8n-config` endpoint it called never existed in admin-center).
+- Remaining infra: **none**. No `deploy/k8s/n8n.yaml`, no entry in `deploy/k8s/kustomization.yaml`, no service in `deploy/environments/dev/docker-compose.dev.yml`; no build or mirror script pulls an n8n image.
+- Remaining files: **none**. `deploy/n8n-workflows/` and the dormant seed package `deploy/init-scripts/14-travel-expense-reimbursement/` were deleted 2026-07 (the latter was never invoked by `00-init-all.sh`, and its `N8N_ACTION` config pointed at `localhost:5678`), together with `TravelExpenseReimbursementUnitTest`, which only asserted on their text. Historical mentions survive in `12-simple-approval/03-form-table-bindings.sql:74` (a comment — init-scripts are append-only) and in `deploy/ACTIVEPIECES_INTEGRATION.md`, where the n8n→AP contrast is deliberate.
 
 ---
 

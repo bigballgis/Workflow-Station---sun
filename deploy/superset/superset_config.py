@@ -1,16 +1,45 @@
 import os
+import re
 
 from flask_appbuilder.security.manager import AUTH_REMOTE_USER
 
 from superset_security_manager import PlatformRemoteUserSecurityManager
 
 # ==============================================================================
-# Database
+# Database — fail closed; no hardcoded credentials
+# ------------------------------------------------------------------------------
+# Require SUPERSET_DATABASE_URI (compose .env / k8s Secret). Only postgresql+psycopg2
+# is allowed. Schema name must be a safe PostgreSQL identifier; search_path is
+# injected when missing so metadata never lands in public by accident.
 # ==============================================================================
-SQLALCHEMY_DATABASE_URI = os.getenv(
-    "SQLALCHEMY_DATABASE_URI",
-    "postgresql+psycopg2://platform_dev:dev_password_123@host.docker.internal:5432/workflow_platform_dev?options=-csearch_path%3Dsuperset",
-)
+_REQUIRED_DB_PREFIX = "postgresql+psycopg2://"
+_SCHEMA_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _build_sqlalchemy_database_uri() -> str:
+    uri = os.environ.get("SUPERSET_DATABASE_URI", "").strip()
+    if not uri:
+        raise RuntimeError(
+            "SUPERSET_DATABASE_URI is required (inject via .env or k8s Secret; "
+            "no default credentials)"
+        )
+    if not uri.startswith(_REQUIRED_DB_PREFIX):
+        raise RuntimeError(
+            "SUPERSET_DATABASE_URI must use the postgresql+psycopg2 driver "
+            f"(got prefix {uri.split(':', 1)[0]!r})"
+        )
+    schema = os.environ.get("SUPERSET_DB_SCHEMA", "superset").strip() or "superset"
+    if not _SCHEMA_NAME_RE.fullmatch(schema):
+        raise RuntimeError(
+            f"SUPERSET_DB_SCHEMA must be a safe PostgreSQL identifier, got {schema!r}"
+        )
+    if "search_path" not in uri:
+        sep = "&" if "?" in uri else "?"
+        uri = f"{uri}{sep}options=-csearch_path%3D{schema}"
+    return uri
+
+
+SQLALCHEMY_DATABASE_URI = _build_sqlalchemy_database_uri()
 
 # ==============================================================================
 # Secret key
@@ -57,7 +86,7 @@ FEATURE_FLAGS = {
 # ==============================================================================
 # Native-UI authentication — platform SSO via trusted edge-gateway headers.
 # ------------------------------------------------------------------------------
-# Authors/admins opening the Superset UI (/superset/) are authenticated by the
+# Authors/admins opening the Superset UI (/bi/) are authenticated by the
 # edge gateway (validates platform JWT, injects X-Remote-User / X-Remote-Roles,
 # strips client-forged headers). See superset_security_manager.py.
 # The embedded guest-token viewer path is unaffected (no login session).

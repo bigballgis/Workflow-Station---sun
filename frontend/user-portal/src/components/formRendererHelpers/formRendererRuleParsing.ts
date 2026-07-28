@@ -216,6 +216,8 @@ export function extractFieldsRecursive(
           allowAttachment: props?.allowAttachment !== false,
           maxFileSizeMb: Number(props?.maxFileSizeMb) || 10,
           allowEditOwn: props?.allowEditOwn !== false,
+          // Delete is opt-in (see RecordNoteField): only an explicit true enables it.
+          allowDelete: props?.allowDelete === true,
           pageSize: Number(props?.pageSize) || 5,
         },
       }

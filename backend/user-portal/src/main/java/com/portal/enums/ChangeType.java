@@ -13,5 +13,11 @@ public enum ChangeType {
     /** 子表行删除 */
     SUB_TABLE_ROW_DELETE,
     /** 流程发起 */
-    PROCESS_INITIATION
+    PROCESS_INITIATION,
+    /** Record Note 新增（评论 / 附件） */
+    RECORD_NOTE_ADD,
+    /** Record Note 编辑 */
+    RECORD_NOTE_UPDATE,
+    /** Record Note 删除 */
+    RECORD_NOTE_DELETE
 }

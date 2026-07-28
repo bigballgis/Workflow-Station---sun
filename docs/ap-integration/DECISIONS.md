@@ -413,6 +413,55 @@ README 附**集群内验证流程**（AP pod 打 admin-center 须失败、打 re
 **需要认证主体**的端点（如 DW 的 `/api/v1/auth/me`）判定是否真登录——多数 admin 端点从 URL 取 userId、不需主体，
 **它们返回 200 并不能证明已认证**。
 
+### <a id="d10"></a>D10 — sync webhook 终态释放：第一批 HERMES-PATCH 落在运行时（2026-07-27）
+
+> 编号跳过 D9 —— 该号已由 `D9_PIECE_ONLINE_ADMIN_DRAFT.md` 预留。
+
+**背景**：AP 只在 "Return Response" 一步发布 sync 响应。跑挂的 flow 什么都不发，阻塞在 `handleSync` 的
+调用方要等满 `AP_WEBHOOK_TIMEOUT_SECONDS`（dev 300s）才拿到兜底 204。实测：flow **3 秒** FAILED，
+BPMN 服务任务 **300 秒**后才知道，期间流程实例一直卡着。204 的语义本身没错（flow 确实没产出响应，
+见 `ServiceTaskExecutor.ApFlowNoResponseException`），坏的只是延迟。
+
+**候选与否决理由**：
+- *调小 `AP_WEBHOOK_TIMEOUT_SECONDS`* —— 否决。它同时是慢 flow 的上限，AI 生成那条要 ~230s（见 [Q7](#q7) 上下文）。
+- *引擎侧改异步回调 + 等待态* —— 否决。与 [D7](#d7) 确立的同步 service-task 模型冲突，为一个延迟问题重开架构。
+- **采用：改 vendor 运行时，run 进终态即主动发布响应。** 语义不变（仍是 204），只把等待从固定超时改成跟随 run 生命周期。
+
+**裁决**：这是 [Q8](#q8) controlled-fork 模式下的第一批运行时补丁，两处，缺一不可：
+
+| 补丁点 | 覆盖 |
+|---|---|
+| `packages/server/engine/src/lib/operations/flow.operation.ts` | 步骤内失败。此类 run 的 sandbox 仍返回 `EngineResponseStatus.OK`，**不走** worker 的 `reportFlowStatus` |
+| `packages/server/worker/src/lib/execute/jobs/execute-flow.ts` | 引擎启动之前就死的：piece 安装失败、flow version 缺失、sandbox 超时 / OOM |
+
+"两处" 是**被测试打出来的**，不是推出来的：只打 engine 一侧时，biz-calendar flow 仍然 300s，查出它死在
+worker 的 piece 安装阶段，引擎根本没跑起来。
+
+**约束**：只在 `isFlowRunStateTerminal` 时释放 —— PAUSED（waitpoint / 审批）必须继续等，响应在 resume 之后
+才来。重复发布无害：`oneTimeListener` 首次响应即自注销，无监听者的 publish 是空操作。两处都做成
+**best-effort**——run 已经报完状态，不能为了省延迟把已完成的 run 判成 `INTERNAL_ERROR`；真发不出去时
+`AP_WEBHOOK_TIMEOUT_SECONDS` 仍是兜底。
+
+**dev 实测**（同一条 flow、同一份 payload，镜像重建后复测）：
+
+| 场景 | 前 | 后 |
+|---|---|---|
+| worker 侧失败（piece 安装） | 300s | 3s / 204 |
+| 步骤内失败（HTTP 拿不到文件） | 300s | 0-1s / 204 |
+| happy path（有 Return Response） | 4s | 2s / 200 + 完整 body，未被覆盖 |
+
+**PAUSED 分支（2026-07-27 补齐）**：dev 环境**测不到**——能暂停的 piece（`core/delay`、
+`core/approval`、`core/subflows`）都不在已装白名单里，唯一装了的 `core/webhook` 是「先答后停」
+（`createWaitpoint({ responseToSend })` 在同一步就发出响应），调用方在暂停前已被回答，那里即使
+判断写反也观察不到症状。故改由单测逐 `FlowRunStatus` 穷举锁定（见 HERMES_PATCHES.md 的回归网一节）。
+**一旦 `core/delay` 进白名单**，暂停变成"还没人回答过"，这条判断立刻承重——这是白名单准入时
+必须连带复核的一项。
+
+**代价**：vendor 的补丁面增至 8 处（本次两处即 HERMES-PATCH-007 / 008）。借此把 [Q8](#q8) 只画了
+结构、一直没有实体的编号台账建了出来：**[HERMES_PATCHES.md](HERMES_PATCHES.md)**，8 处全部登记、
+代码侧标记统一为 `HERMES-PATCH-0NN`。其中 001/002 是构建期改写脚本、不在 vendor 树里，
+是此前最容易在盘点时漏掉的两个。
+
 ---
 
 ## 3. Q 系列裁决（2026-07-22，正文见各条）
@@ -478,6 +527,16 @@ AP server-api 经 Kong 收进平台域；:8085 edge 桥与 nonce 握手**并行�
   `SERVICE_INTERNAL_TOKEN` 引擎经 envFrom 天然持有（AP 仍拿不到，C-3 边界不变）。
 - **顺序约束**：flow 须先导入再部署 FU；若倒置，flow 导入后重新部署即可（即裁决中
   "映射变更后须重新部署"的代价）。connection 不随包走（设计使然，prod 用生产凭据重建）。
+- **flow 随 FU 导出包走（2026-07-27 补齐）**：`/automation/flows` 管理面仍是独立发布通道，
+  但 FU 导出不再只带一个解析不到的 `ap:flowId`——`FunctionUnitExporter` 按 BPMN 里的
+  `ap:flowId` 经 admin-center `/automation/flows/internal/export`（同 C-3 门禁）取可携带
+  JSON，打进 ZIP 的 `automation-flows/flow_*.json`（登记于 manifest `components.automationFlows`）；
+  DW 导入与 admin-center 的 FU ZIP 导入在写任何 FU 内容<b>之前</b>还原它们
+  （`/automation/flows/internal/restore` → `AutomationFlowService.restoreFlows`）。
+  规则：**只补缺、不覆盖**——迁移键已能解析到本环境 flow 的一律跳过，同环境重导不会用包里的
+  旧快照盖掉正在维护的草稿；源环境引用不到 flow（已删）时导出直接失败，不产出缺自动化的包。
+  connection 依旧不随包走，故新建的 flow 可能发布失败 → 结果里回传 `PUBLISH_FAILED` +
+  原因，补齐凭据后在管理面手工发布。flow 本体不进版本快照（AP 侧自带版本，同库回滚引用不变）。
 
 ### <a id="q8"></a>Q8 — AP 版本演进 → **Frozen Baseline + Controlled Fork**
 **旧表述（作废）**："完全放弃跟随上游，因为我们只维护一份 vendor 代码。"
@@ -495,6 +554,10 @@ AP 0.84.0 官方 Tag（frozen baseline）
    └── ...
 ```
 即：不追求未来版本升级兼容，但**保留完整的 baseline、patch、变更原因与许可审计能力**。
+
+**实体清单见 [HERMES_PATCHES.md](HERMES_PATCHES.md)**（2026-07-27 建，首批 8 条）。加补丁时取下一个
+编号写进代码并登记入表；`grep -rn "HERMES-PATCH-0" activepieces/ deploy/` 应与该表逐条对上。
+注意其中 001/002 是**构建期改写脚本**、不在 vendor 树里，只按源码注释盘点会漏。
 
 ### <a id="q9"></a>Q9 — approval / todos piece
 从 v1 白名单**移除**（12→10），`patch-web-approvals` 一并移除；vendor 源码树不物理删除。

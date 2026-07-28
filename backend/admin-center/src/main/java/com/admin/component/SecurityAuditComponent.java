@@ -152,6 +152,25 @@ public class SecurityAuditComponent {
     
     // ==================== 审计日志记录 ====================
     
+    /** {@code admin_audit_logs} varchar widths — see deploy/init-scripts/00-schema/05-admin-center-schema.sql. */
+    private static final int MAX_RESOURCE_NAME = 200;
+    private static final int MAX_IP_ADDRESS = 50;
+    private static final int MAX_USER_AGENT = 500;
+    private static final int MAX_FAILURE_REASON = 500;
+    private static final int MAX_REQUEST_PATH = 500;
+
+    /**
+     * Trim to a varchar column's width, marking the cut so a truncated value is not mistaken for
+     * the whole story. {@code oldValue} / {@code newValue} / {@code changeDetails} are TEXT and
+     * stay untouched.
+     */
+    private static String fitColumn(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max - 3) + "...";
+    }
+
     @Transactional
     public AuditLog recordAudit(AuditLogRequest request) {
         AuditActorResolver.OperatorIdentity operator = AuditActorResolver.normalizeOperator(
@@ -161,19 +180,23 @@ public class SecurityAuditComponent {
                 .action(request.getAction())
                 .resourceType(request.getResourceType())
                 .resourceId(request.getResourceId())
-                .resourceName(request.getResourceName())
+                .resourceName(fitColumn(request.getResourceName(), MAX_RESOURCE_NAME))
                 .userId(operator.userId())
                 .userName(operator.userName())
-                .ipAddress(request.getIpAddress())
-                .userAgent(request.getUserAgent())
+                .ipAddress(fitColumn(request.getIpAddress(), MAX_IP_ADDRESS))
+                .userAgent(fitColumn(request.getUserAgent(), MAX_USER_AGENT))
                 .oldValue(request.getOldValue())
                 .newValue(request.getNewValue())
                 .changeDetails(request.getChangeDetails())
                 .success(request.getSuccess())
-                .failureReason(request.getFailureReason())
+                // An upstream failure message is arbitrary length — AP hands back whole pnpm stderr
+                // dumps. Untrimmed it blew the varchar(500) and the INSERT failed, so the audit row
+                // for a FAILED operation was dropped entirely (a WARN was all that remained).
+                // Losing the record of a failure is precisely the case auditing exists for.
+                .failureReason(fitColumn(request.getFailureReason(), MAX_FAILURE_REASON))
                 .durationMs(request.getDurationMs())
                 .requestMethod(request.getRequestMethod())
-                .requestPath(request.getRequestPath())
+                .requestPath(fitColumn(request.getRequestPath(), MAX_REQUEST_PATH))
                 .build();
         return auditLogRepository.save(auditLog);
     }

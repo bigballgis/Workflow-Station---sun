@@ -71,7 +71,7 @@ function serializeOne(folderName) {
     fs.writeFileSync(outPath, JSON.stringify(out, null, 2) + '\n')
     console.log(`wrote ${path.relative(process.cwd(), outPath)} (${pkg.name}@${pkg.version}, ` +
         `${Object.keys(out.actions).length} actions, ${Object.keys(out.triggers).length} triggers)`)
-    console.log(`  pieces.json entry: { "name": "${pkg.name}", "version": "${pkg.version}" }`)
+    console.log(`  activepieces/hermes/pieces.json entry: { "name": "${pkg.name}", "version": "${pkg.version}" }`)
 }
 
 const folders = process.argv.slice(2)

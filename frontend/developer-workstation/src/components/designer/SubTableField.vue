@@ -178,10 +178,13 @@
         </template>
       </el-table-column>
 
+      <!-- fixed=right keeps Edit/Delete reachable when the columns overflow horizontally
+           (parity with the portal's SubTableField). -->
       <el-table-column
         v-if="canEdit || canDelete"
         :label="t('common.operation')"
         width="120"
+        fixed="right"
       >
         <template #default="scope">
           <el-button

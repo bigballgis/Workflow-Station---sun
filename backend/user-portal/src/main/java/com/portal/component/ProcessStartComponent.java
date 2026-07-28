@@ -274,6 +274,8 @@ public class ProcessStartComponent {
         ProcessAssigneeSnapshot nextAssigneeSnapshot = ProcessAssigneeSnapshot.empty();
         String initiatorTaskIdForHistory;
         String initiatorTaskDefKeyForHistory;
+        /** Non-null when auto-completion of the first task failed; surfaced to the caller. */
+        String firstStepError;
     }
 
     /**
@@ -528,7 +530,11 @@ public class ProcessStartComponent {
             }
         } catch (Exception e) {
             log.warn("Failed to auto-complete first task: {}", e.getMessage());
-            // Do not throw; process already started successfully
+            // Do not throw; the instance already exists and its first task stays open for retry.
+            // Still report it — swallowing this is what made a failed submission look successful.
+            if (outcome.firstStepError == null) {
+                outcome.firstStepError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            }
         }
         return outcome;
     }
@@ -583,8 +589,8 @@ public class ProcessStartComponent {
         // Complete first task
         Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
                 taskId, userId, "SUBMIT", variables);
-        if (completeResult.isPresent()
-                && !Boolean.FALSE.equals(completeResult.get().get("success"))) {
+        String failure = firstStepErrorOf(completeResult);
+        if (failure == null) {
             log.info("First task completed successfully: {}", taskId);
             taskFormComponent.captureTaskFormSnapshot(
                     taskId, userId, firstTaskDefKey, flowableProcessInstanceId, variables);
@@ -592,13 +598,34 @@ public class ProcessStartComponent {
             // After first task, query current task (next approval node)
             captureNextTaskAfterAutoComplete(outcome, flowableProcessInstanceId);
         } else {
-            if (completeResult.isPresent() && Boolean.FALSE.equals(completeResult.get().get("success"))) {
-                Object em = completeResult.get().get("message");
-                log.warn("Failed to complete first task (engine): {} — {}", taskId, em);
-            } else {
-                log.warn("Failed to complete first task: {}", taskId);
-            }
+            log.warn("Failed to complete first task: {} — {}", taskId, failure);
+            outcome.firstStepError = failure;
         }
+    }
+
+    /** Opaque marker returned to the browser; the real reason stays in the server log. */
+    static final String FIRST_STEP_NOT_COMPLETED = "FIRST_STEP_NOT_COMPLETED";
+
+    /**
+     * Whether the first task failed to auto-complete: {@code null} when it completed, otherwise the
+     * engine's reason — <b>for logging only</b>, see {@link #FIRST_STEP_NOT_COMPLETED}.
+     *
+     * <p>The instance exists and the task is back in the initiator's To Do, so this is recoverable
+     * and {@code /start} must not fail — but it is not a successful submission either. The caller
+     * needs to know so it can say "created, first step did not complete" instead of "submitted
+     * successfully"; a WARN in the log is invisible to whoever clicked Submit.
+     */
+    static String firstStepErrorOf(Optional<Map<String, Object>> completeResult) {
+        if (completeResult.isEmpty() || completeResult.get() == null) {
+            return "no response from workflow engine";
+        }
+        Map<String, Object> body = completeResult.get();
+        if (!Boolean.FALSE.equals(body.get("success"))) {
+            return null;
+        }
+        Object message = body.get("message");
+        String text = message != null ? message.toString().trim() : "";
+        return text.isEmpty() ? "workflow engine rejected task completion" : text;
     }
 
     private void captureNextTaskAfterAutoComplete(FirstTaskOutcome outcome, String flowableProcessInstanceId) {
@@ -683,6 +710,11 @@ public class ProcessStartComponent {
                 .currentNode(outcome.currentNodeName)
                 .currentAssignee(startAssigneeDisplay)
                 .candidateUsers(outcome.nextAssigneeSnapshot.getCandidateUserIds())
+                // Opaque on purpose: the engine's text names the AP sync-webhook URL, and an AP CE
+                // webhook URL *is* the credential (unauthenticated, reachable through Kong at
+                // /api/ap/*). Handing it to every initiator would let them fire the automation
+                // directly. The full reason is in the WARN log above.
+                .firstStepError(outcome.firstStepError != null ? FIRST_STEP_NOT_COMPLETED : null)
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())

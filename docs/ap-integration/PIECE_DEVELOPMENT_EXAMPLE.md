@@ -423,14 +423,15 @@ export const slaDueSoonTrigger = createTrigger({
 # §3.1 运行时半：build（CLI 自动 pack）→ 留档（并 publish 到内网 Nexus 供构建机解析）
 cd activepieces && npm run build-piece -- biz-calendar
 cp packages/pieces/community/biz-calendar/dist/activepieces-piece-biz-calendar-1.0.0.tgz \
-   ../deploy/pieces/tarballs/
+   hermes/tarballs/
 
 # §3.2 元数据半：本地序列化（不能问本地 AP 要——新件不在 DB，单查 404）
 cd ../deploy/pieces
 node serialize-piece-metadata.js biz-calendar   # → metadata/piece-biz-calendar.json
 
-# §4 白名单：deploy/pieces/pieces.json 追加
-#   { "name": "@activepieces/piece-biz-calendar", "version": "1.0.0" }
+# §4 白名单：activepieces/hermes/pieces.json 追加
+#   { "name": "@activepieces/piece-biz-calendar", "version": "1.0.0",
+#     "tarball": "activepieces-piece-biz-calendar-1.0.0.tgz" }
 
 # §5 生成 seed
 node generate-metadata-seed.js

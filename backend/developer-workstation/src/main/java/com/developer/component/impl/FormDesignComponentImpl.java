@@ -1,6 +1,8 @@
 package com.developer.component.impl;
 
 import com.developer.component.FormDesignComponent;
+import com.developer.dto.FormConfigPasteRepairRequest;
+import com.developer.dto.FormConfigPasteRepairResponse;
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
 import com.developer.dto.FormTableBindingResponse;
@@ -28,6 +30,7 @@ import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.SubTableViewService;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.FormConfigJsonOrphanBindingRepair;
+import com.developer.util.FormConfigJsonPasteBindingMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,6 +71,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             com.platform.common.audit.SystemAuditFields.ALL;
 
     private final FormTableBindingRestorer formTableBindingRestorer;
+    private final FormConfigJsonTableProvisioner formConfigJsonTableProvisioner;
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -801,5 +805,105 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    @Override
+    @Transactional
+    public FormConfigPasteRepairResponse repairPastedConfig(
+            Long functionUnitId, Long formId, FormConfigPasteRepairRequest request) {
+        FormDefinition form = getById(formId);
+        if (form.getFunctionUnit() == null
+                || !Objects.equals(form.getFunctionUnit().getId(), functionUnitId)) {
+            throw new ResourceNotFoundException("FormDefinition", formId);
+        }
+        Map<String, Object> pasted = deepCopyMap(request.getConfigJson());
+        List<FormTableBinding> bindings = formTableBindingRepository.findByFormIdWithTable(formId);
+        List<String> createdTables = new ArrayList<>();
+
+        Map<Long, Long> provisionBindingMap = new LinkedHashMap<>();
+        // Provision mutates Table Design; only when apply=true (persist path / confirmed save).
+        if (request.isCreateMissingTables() && request.isApply()) {
+            FormConfigJsonTableProvisioner.ProvisionResult provision =
+                    formConfigJsonTableProvisioner.provision(functionUnitId, form, pasted);
+            provisionBindingMap.putAll(provision.bindingIdMapping());
+            createdTables.addAll(provision.createdTableNames());
+            if (!provisionBindingMap.isEmpty()) {
+                FormConfigJsonBindingIdRewriter.remapIds(
+                        pasted, provisionBindingMap, Map.of(), Map.of(), Map.of());
+            }
+            bindings = formTableBindingRepository.findByFormIdWithTable(formId);
+            form = getById(formId);
+        }
+
+        if (bindings.isEmpty()) {
+            throw new DeveloperBusinessException(
+                    "FORM_BINDINGS_REQUIRED",
+                    i18nService.getMessage("form.bindings_required_for_paste_repair"),
+                    i18nService.getMessage("form.create_bindings_before_paste"));
+        }
+
+        Map<Long, Set<String>> tableFields = new HashMap<>();
+        for (TableDefinition table : tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId)) {
+            if (table.getId() == null || table.getFieldDefinitions() == null) {
+                continue;
+            }
+            tableFields.put(
+                    table.getId(),
+                    table.getFieldDefinitions().stream()
+                            .map(FieldDefinition::getFieldName)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toCollection(LinkedHashSet::new)));
+        }
+
+        FormConfigJsonPasteBindingMapper.MappingResult mapping =
+                FormConfigJsonPasteBindingMapper.buildMapping(pasted, bindings, tableFields);
+
+        Map<Long, Long> bindingMap = new LinkedHashMap<>(provisionBindingMap);
+        bindingMap.putAll(mapping.bindingIdMapping());
+
+        if (!mapping.bindingIdMapping().isEmpty() || !mapping.relationTableIdMapping().isEmpty()) {
+            FormConfigJsonBindingIdRewriter.remapIds(
+                    pasted,
+                    mapping.bindingIdMapping(),
+                    Map.of(),
+                    Map.of(),
+                    mapping.relationTableIdMapping());
+        }
+        FormConfigJsonOrphanBindingRepair.repairOrphanedBindingKeys(pasted, bindings);
+
+        List<String> warnings = new ArrayList<>();
+        for (Long stale : mapping.unmappedStaleBindingIds()) {
+            if (!bindingMap.containsKey(stale)) {
+                warnings.add("UNMAPPED_BINDING:" + stale);
+            }
+        }
+        if (mapping.mixedSource()) {
+            warnings.add("MIXED_SOURCE");
+        }
+        for (String tableName : createdTables) {
+            warnings.add("CREATED_TABLE:" + tableName);
+        }
+
+        boolean applied = false;
+        if (request.isApply()) {
+            form.setConfigJson(pasted);
+            formDefinitionRepository.save(form);
+            applied = true;
+        }
+
+        Map<String, String> bindingOut = new LinkedHashMap<>();
+        bindingMap.forEach((k, v) -> bindingOut.put(String.valueOf(k), String.valueOf(v)));
+        Map<String, String> tableOut = new LinkedHashMap<>();
+        mapping.relationTableIdMapping().forEach((k, v) -> tableOut.put(String.valueOf(k), String.valueOf(v)));
+
+        return FormConfigPasteRepairResponse.builder()
+                .configJson(pasted)
+                .bindingIdMapping(bindingOut)
+                .relationTableIdMapping(tableOut)
+                .warnings(warnings)
+                .mixedSource(mapping.mixedSource())
+                .applied(applied)
+                .createdTableNames(createdTables)
+                .build();
     }
 }

@@ -97,7 +97,6 @@ spring:
       idle-timeout: 300000
       connection-timeout: 20000
       max-lifetime: 1200000
-      pool-name: AdminCenterHikariPool
 
   jpa:
     hibernate:

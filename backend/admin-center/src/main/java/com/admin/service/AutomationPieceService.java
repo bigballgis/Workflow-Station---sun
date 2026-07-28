@@ -37,17 +37,21 @@ public interface AutomationPieceService {
     record PieceImportResult(String name, String version, String displayName) {
     }
 
-    /** 删除被 flow 引用拦截。 */
+    /** 删除被 flow 引用拦截：列出占用该组件的 flow 名称（与 FlowInUseException 同形）。 */
     class PieceInUseException extends RuntimeException {
-        private final int flowCount;
+        private final transient java.util.List<String> flowNames;
 
-        public PieceInUseException(String name, int flowCount) {
-            super("piece " + name + " is referenced by " + flowCount + " flow(s)");
-            this.flowCount = flowCount;
+        public PieceInUseException(String name, java.util.List<String> flowNames) {
+            super("piece " + name + " is referenced by " + flowNames.size() + " flow(s)");
+            this.flowNames = flowNames;
+        }
+
+        public java.util.List<String> getFlowNames() {
+            return flowNames;
         }
 
         public int getFlowCount() {
-            return flowCount;
+            return flowNames.size();
         }
     }
 

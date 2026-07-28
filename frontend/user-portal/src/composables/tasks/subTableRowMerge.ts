@@ -123,6 +123,23 @@ function compositePkMergeKey(row: Record<string, unknown>, pkFieldNames: string[
 }
 
 /**
+ * True when every designer PK column resolves on the row (incl. nested {@code rowKey} /
+ * {@code id}↔{@code id_idw} aliases used by {@link mergeSubTableRowsByRowId}).
+ */
+export function rowResolvesDesignerPrimaryKey(
+  row: unknown,
+  pkFieldNames?: string[] | null,
+): boolean {
+  if (!row || typeof row !== 'object') return false
+  const pkCols =
+    Array.isArray(pkFieldNames) && pkFieldNames.length > 0
+      ? pkFieldNames.map(f => String(f).trim()).filter(Boolean)
+      : []
+  if (pkCols.length === 0) return false
+  return compositePkMergeKey(row as Record<string, unknown>, pkCols) != null
+}
+
+/**
  * Merge sub-table rows for the same logical table. Later rows win on field conflicts.
  *
  * {@code task_status} / {@code task_current_node} (multi-instance dashboard mirrors) use terminal-wins merge so a stale

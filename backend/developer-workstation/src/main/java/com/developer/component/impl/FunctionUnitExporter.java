@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.client.AdminCenterAutomationFlowClient;
 import com.developer.dto.ExportManifest;
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
@@ -32,6 +33,7 @@ import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.util.BpmnServiceTaskFlowRefs;
 import com.developer.util.XmlEncodingUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -81,6 +83,7 @@ public class FunctionUnitExporter {
     private final RelationTableStructurePortability relationTablePortability;
     private final MainTableViewPortability mainTableViewPortability;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    private final AdminCenterAutomationFlowClient automationFlowClient;
     private final ObjectMapper objectMapper;
 
     @Value("${platform.version:1.0.0}")
@@ -142,6 +145,10 @@ public class FunctionUnitExporter {
         if (processDefinition != null) {
             payload.put("process", XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml()));
         }
+        // Automation flows are intentionally NOT snapshotted: the flow body is an environment-level
+        // resource with its own versioning in AP, and a same-database rollback leaves the BPMN's
+        // ap:flowId pointing at the very same flow. Cross-environment portability is served by the
+        // ZIP's automation-flows/ entries instead.
 
         payload.put("tables", tables.stream()
                 .map(table -> serializeTable(table, tableIdToName))
@@ -241,15 +248,34 @@ public class FunctionUnitExporter {
             List<String> actionFiles = new ArrayList<>();
             List<String> connectionFiles = new ArrayList<>();
             List<String> monitorFiles = new ArrayList<>();
+            List<String> automationFlowFiles = new ArrayList<>();
 
             // Export process definition — decode Base64 to raw XML
             String processFile = null;
+            String decodedBpmn = null;
             if (processDefinition != null) {
-                String bpmnXml = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
+                decodedBpmn = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
                 processFile = "process/process.bpmn";
-                byte[] processData = bpmnXml.getBytes(StandardCharsets.UTF_8);
+                byte[] processData = decodedBpmn.getBytes(StandardCharsets.UTF_8);
                 fileContents.put(processFile, processData);
                 addZipEntry(zos, processFile, processData);
+            }
+
+            // Export the Automation (Activepieces) flows the service tasks reference. The flow body
+            // lives in AP, not in the DW schema, so it is fetched through admin-center's migration
+            // channel; without it the package would carry an ap:flowId that resolves to nothing in
+            // the target environment.
+            int flowIndex = 0;
+            for (String flowRef : BpmnServiceTaskFlowRefs.extract(decodedBpmn)) {
+                byte[] flowData = automationFlowClient.exportFlow(flowRef)
+                        .orElseThrow(() -> new DeveloperBusinessException("AP_FLOW_EXPORT_UNRESOLVED",
+                                "Service task references automation flow '" + flowRef
+                                        + "', which no longer exists in this environment"));
+                String fileName = "automation-flows/flow_" + flowIndex + ".json";
+                fileContents.put(fileName, flowData);
+                addZipEntry(zos, fileName, flowData);
+                automationFlowFiles.add(fileName);
+                flowIndex++;
             }
 
             // Export table definitions
@@ -404,6 +430,7 @@ public class FunctionUnitExporter {
                             .decisions(decisionFiles)
                             .connections(connectionFiles)
                             .emailMonitors(monitorFiles)
+                            .automationFlows(automationFlowFiles)
                             .mainTableViews(viewsFile)
                             .build())
                     .dependencies(new ArrayList<>())

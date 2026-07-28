@@ -150,4 +150,36 @@ class EmailTemplateResolverTest {
         assertThat(result).contains("card_number").contains(">9</td>");
         assertThat(result).doesNotContain("case_type").doesNotContain(">Z</td>");
     }
+
+    @Test
+    void resolve_lookupField_singleRowAttribute() {
+        Map<String, Object> vars = Map.of(
+                "user", Map.of("id", "u1", "name", "Alice", "email", "a@example.com"),
+                "case_number", "CASE-1"
+        );
+        String result = EmailTemplateResolver.resolve(
+                "Case ${case_number}, User ${lookupField:user:name}", vars);
+        assertThat(result).isEqualTo("Case CASE-1, User Alice");
+    }
+
+    @Test
+    void resolve_lookupField_joinsMultiSelectRows() {
+        Map<String, Object> vars = Map.of(
+                "assignees", List.of(
+                        Map.of("id", "1", "name", "Alice"),
+                        Map.of("id", "2", "name", "Bob")
+                )
+        );
+        String result = EmailTemplateResolver.resolve("${lookupField:assignees:name}", vars);
+        assertThat(result).isEqualTo("Alice, Bob");
+    }
+
+    @Test
+    void resolve_lookupField_missingAttrOrValueLeavesEmpty() {
+        Map<String, Object> vars = Map.of(
+                "user", Map.of("id", "u1", "name", "Alice")
+        );
+        assertThat(EmailTemplateResolver.resolve("${lookupField:user:missing}", vars)).isEqualTo("");
+        assertThat(EmailTemplateResolver.resolve("${lookupField:nobody:name}", vars)).isEqualTo("");
+    }
 }

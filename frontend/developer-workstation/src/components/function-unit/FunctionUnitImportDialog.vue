@@ -117,6 +117,18 @@ async function handleStartImport() {
     ElMessage.success(
       result.versioned ? t('functionUnit.importVersioned') : t('functionUnit.importSuccess')
     )
+    // 包里的 flow 已建但未发布（本环境缺 connection 凭据）：必须让导入人看见，否则
+    // service task 到运行时才失败
+    const unpublished = (result.automationFlows ?? []).filter((f) => f.status === 'PUBLISH_FAILED')
+    if (unpublished.length > 0) {
+      ElMessage.warning({
+        message: t('functionUnit.importAutomationFlowUnpublished', {
+          flows: unpublished.map((f) => f.displayName).join(', '),
+        }),
+        duration: 0,
+        showClose: true,
+      })
+    }
     visible.value = false
     emit('imported')
   } catch (e: unknown) {

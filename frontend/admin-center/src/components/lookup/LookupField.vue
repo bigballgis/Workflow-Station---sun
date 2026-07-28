@@ -362,11 +362,11 @@ function handleClear() {
   emit('clear')
 }
 
-// Initialize selectedRow and searchKeyword from modelValue (for saved form data)
-function clearLookupSelectionFromModel(emitClearEvent = true) {
+// Sync empty parent modelValue into local UI only — never emit('clear').
+// emit('clear') is reserved for user-initiated handleClear (cascade wipe in parent).
+function clearLookupSelectionFromModel() {
   selectedRow.value = null
   searchKeyword.value = ''
-  if (emitClearEvent) emit('clear')
 }
 
 function initFromModelValue(val: any) {
@@ -376,7 +376,7 @@ function initFromModelValue(val: any) {
   }
   // Sync from model only — never emit('clear') on empty init (avoids cascade wipe before parent hydrate).
   if (val == null || val === '') {
-    clearLookupSelectionFromModel(false)
+    clearLookupSelectionFromModel()
     return
   }
   // Process variables often persist lookup as a scalar id/string — readonly inline rows otherwise render "-" forever.
@@ -391,7 +391,7 @@ function initFromModelValue(val: any) {
   if (typeof val === 'string') {
     const trimmed = val.trim()
     if (trimmed === '') {
-      clearLookupSelectionFromModel(false)
+      clearLookupSelectionFromModel()
       return
     }
     const scalarRow = buildSyntheticLookupRow(trimmed)

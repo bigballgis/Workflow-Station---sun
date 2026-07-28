@@ -138,6 +138,7 @@ export default {
     serviceTaskSelector: 'Service task',
     serviceTaskBound: 'Flow ready',
     serviceTaskUnbound: 'No flow yet',
+    serviceTaskFlowMissingTag: 'Flow missing',
     serviceTaskAddHint: 'Each service task has its own flow. To add another automation, add a Service Task in Process Design and set its type to Automation.',
     serviceTask: 'Service Task',
     title: 'Function Units',
@@ -234,6 +235,7 @@ export default {
     importSuccess: 'Import successful',
     importFailed: 'Import failed',
     importVersioned: 'A function unit with this name exists; imported as a new version',
+    importAutomationFlowUnpublished: 'Automation flows imported but not published: {flows}. Recreate their connections in this environment, then publish them from Automation management.',
     importVersionHint: 'If the name does not exist, a new function unit is created; if it exists, the import is added as a new version.',
     importPackage: 'Import Function Unit Package',
     dragPackageHere: 'Drag package here, or ',
@@ -511,6 +513,29 @@ export default {
     readOnly: 'Read Only',
     importTableFields: 'Import Table Fields',
     manageBindings: 'Manage Table Bindings',
+    pasteFormConfig: 'Paste Form JSON',
+    repairStaleBindings: 'Repair Bindings',
+    pasteFormConfigTitle: 'Paste Form Config JSON',
+    pasteFormConfigHint:
+      'Paste configJson from another Function Unit. Binding IDs and lookup table IDs will be remapped to this form’s table bindings. If tables do not exist yet, click Save manually to create them and bind.',
+    pasteFormConfigPlaceholder: 'Paste form config JSON here…',
+    pasteFormConfigApply: 'Repair & Apply',
+    pasteConfigEmpty: 'Paste a form config JSON first',
+    pasteConfigInvalid: 'Invalid JSON — expected a form config object',
+    pasteConfigFailed: 'Failed to repair pasted form config',
+    pasteConfigSuccess: 'Applied. Remapped {mapped} binding(s), {tables} table id(s). Save the form to persist.',
+    pasteConfigCreatedTables:
+      'Created {created} table(s) and remapped {mapped} binding(s). Save the form to persist.',
+    pasteConfigPartial:
+      'Applied with gaps: remapped {mapped} binding(s), {tables} table id(s); {unmapped} binding(s) still unmatched. Check table bindings.',
+    pasteConfigNoRemap: 'Applied. No stale binding ids needed remapping.',
+    pasteConfigMixedSource: 'Pasted config already referenced some of this form’s bindings (mixed source).',
+    saveBlockingProvisioning: 'Creating tables and bindings…',
+    saveBlockingProvisioningHint:
+      'Missing tables from the pasted config are being created. Please wait and do not leave this page.',
+    saveBlockingSaving: 'Saving form…',
+    saveBlockingHint: 'Please wait. Do not click elsewhere until this finishes.',
+    selectFormFirst: 'Select a form first',
     bindProcessNode: 'Bind Process Node',
     createFormTitle: 'Create Form',
     formNameLabel: 'Form Name',
@@ -614,6 +639,9 @@ export default {
     recordNoteDuplicateScope: 'Only one Record Note per scope is allowed on a form',
     recordNoteScopeMainHint: 'Single record is available on sub-table forms only; the main form is whole-table',
     recordNoteRecordScopeMainForm: 'Record Note on the main form supports whole-table scope only; use Single record inside a sub-table form',
+    // Select (and similar) — right-side Component panel default from Options
+    componentDefaultValue: 'Default Value',
+    componentDefaultValuePlaceholder: 'Select a default from Options',
     // Sub-Table per-operation permissions (right-side props panel) — gate Add / Edit / Delete independently.
     subTablePermission: {
       allowAdd: 'Allow Add',
@@ -1844,8 +1872,10 @@ export default {
     bodyPlaceholder: 'Compose the email body; use Insert Variable to add data.',
     enabled: 'Enabled',
     insertVariable: 'Insert Variable',
-    insertVariableHint: 'Pick a field (single value) or a sub-table (rendered as a table).',
+    insertVariableHint:
+      'Pick a main field, a Lookup/Related attribute, or a sub-table (rendered as a table).',
     subTableGroup: 'Sub-tables (rendered as table)',
+    lookupGroup: 'Lookup / Related — {source}',
     preview: 'Preview',
     showPreview: 'Show preview',
     hidePreview: 'Hide preview',

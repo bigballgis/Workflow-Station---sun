@@ -5,21 +5,15 @@
 # SIT/UAT/PROD use company K8S — see deploy/k8s/
 # developer-workstation（设计器）仅 DEV 使用；K8S 部署脚本已不包含该服务，勿将设计器发布到 SIT/UAT/PROD。
 #
-# IMPORTANT: All images use "local build + copy" approach.
-# Docker multi-stage builds are NOT used due to local Docker limitations.
-# You MUST build artifacts locally before running docker compose:
+# IMPORTANT: Full local stack MUST be built/started via:
+#   .\build-and-deploy.ps1
+# That script does incremental Maven/Vite/Docker builds, waits for Postgres init
+# (PID 1 = postgres), applies content-hashed schema migrations, and fails closed
+# on missing SUPERSET_DATABASE_URI / Superset init errors.
 #
-# Backend (requires Maven):
-#   mvn clean package -DskipTests -pl backend/workflow-engine-core,backend/admin-center,backend/user-portal,backend/developer-workstation -am
-#
-# Frontend (requires Node.js):
-#   cd frontend/admin-center && npm run build
-#   cd frontend/user-portal && npm run build
-#   cd frontend/developer-workstation && npm run build
-#   cd frontend/login && npm run build
-#
-# Then start:
-#   docker compose -f docker-compose.dev.yml --env-file .env up -d --build
+# All images use "local build + copy" (no Docker multi-stage). Raw
+# `docker compose up --build` skips those gates and may race Postgres init or
+# miss BuildKit pip secrets for Superset — prefer the deploy script.
 #
 # Demo / 演示约定：界面与种子数据以英文为准（无单独的 LOCALE 环境变量；
 # 前端语言在 frontend/*/src/i18n/index.ts 固定为 en，需改语言请改源码后重建镜像）。
@@ -43,7 +37,10 @@ services:
       - postgres_dev_data:/var/lib/postgresql/data
       - ../../../deploy/init-scripts:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # Require PID 1 to be the real postgres server, not a temporary init process that
+      # can still answer pg_isready while docker-entrypoint-initdb.d is mid-flight.
+      # Otherwise host-side schema migrations race the container init scripts on first boot.
+      test: ["CMD-SHELL", "test \"$$(cat /proc/1/comm)\" = postgres && pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -105,10 +102,12 @@ services:
   # Shares the platform Postgres/Redis. Runs the engine + UI + API on container :80.
   activepieces:
     # HERMES vendored image: EE-removed + de-bunned Activepieces 0.84.0, built from the
-    # in-repo source tree (activepieces/) via its own Dockerfile. Replaces the old
-    # deploy/pieces image (upstream binary + pre-installed pieces + Approvals-tab patch):
-    # EE is stripped (AG-EE), bun is gone (X-4, pnpm/Node), the Approvals/Todos piece is
-    # out of the v1 whitelist (Q9), and pieces install at runtime via pnpm (isolated linker).
+    # in-repo source tree (activepieces/) via its own Dockerfile. EE is stripped (AG-EE),
+    # bun is gone (X-4, pnpm/Node), the Approvals tab is patched out at the source level
+    # (HERMES-PATCH-001, Q9), and the allowlisted pieces (activepieces/hermes/pieces.json)
+    # are PRE-INSTALLED by the last layer — the runtime installer is a no-op for them, so
+    # an air-gapped cluster never reaches a registry. Custom (ARCHIVE) pieces imported via
+    # Admin Center resolve from the baked pnpm offline store instead.
     # Build (heavy — full monorepo): docker compose build activepieces
     build:
       context: ../../../activepieces
@@ -194,6 +193,13 @@ services:
       # posture. Dev default false so REGISTRY whitelist pieces still install from
       # public npm on demand; flip to true to rehearse the air-gapped path locally.
       AP_PIECES_OFFLINE_INSTALL: ${AP_PIECES_OFFLINE_INSTALL:-false}
+      # STRICT mode runs an egress proxy that blocks every private IP, including our own
+      # services — so a flow could not fetch the uploaded file the engine hands it
+      # (FILE_SERVICE_BASE_URL -> http://developer-workstation:8080/api/v1/upload/files/...).
+      # The sandbox got "403 Egress blocked: developer-workstation" and the flow died at the
+      # HTTP step. Entries are IPs or CIDRs only (matched against RESOLVED addresses — a
+      # hostname here would never match); empty = fail-closed. See docs/ap-integration D9-4.
+      AP_SSRF_ALLOW_LIST: ${AP_SSRF_ALLOW_LIST:-}
     volumes:
       - activepieces_data:/app/packages/server/data
     healthcheck:
@@ -212,6 +218,11 @@ services:
     build:
       context: ../../superset
       dockerfile: Dockerfile
+      # BuildKit secret: pip.conf (Nexus/PyPI) — never bake credentials into image layers.
+      # Prefer .\build-and-deploy.ps1 which resolves SUPERSET_PIP_CONF_FILE; raw compose
+      # build requires that env var to point at a readable pip.conf.
+      secrets:
+        - pip_conf
     image: dev-superset
     container_name: platform-superset-dev
     depends_on:
@@ -223,10 +234,12 @@ services:
     expose:
       - "8088"
     environment:
-      # Keep Superset metadata in dedicated schema.
-      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?options=-csearch_path%3D${SUPERSET_DB_SCHEMA:-superset}
+      # Fail-closed DB URI (no compose-interpolated password fallback in config code).
+      # Injected from local .env / K8s Secret. Must be postgresql+psycopg2://…
+      SUPERSET_DATABASE_URI: ${SUPERSET_DATABASE_URI:?SUPERSET_DATABASE_URI is required}
+      SUPERSET_DB_SCHEMA: ${SUPERSET_DB_SCHEMA:-superset}
       # No insecure default: superset_config.py fails closed if this is unset (see .env).
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?SUPERSET_SECRET_KEY is required}
       SUPERSET_CORS_ORIGINS: ${SUPERSET_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       # Served under /bi on the shared FQDN: Superset 6.0 reads SUPERSET_APP_ROOT natively
       # (-> APPLICATION_ROOT) so routes/assets/redirects carry the /bi prefix.
@@ -240,7 +253,11 @@ services:
       - superset_home:/app/superset_home
     healthcheck:
       # This superset:6.0.0 image has no wget/curl — use the bundled venv python.
-      test: ["CMD-SHELL", "/app/.venv/bin/python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8088/health').status==200 else 1)\""]
+      # The probe path must carry SUPERSET_APP_ROOT: Superset mounts the WHOLE app under
+      # APPLICATION_ROOT, so with /bi the health endpoint is /bi/health and a hardcoded
+      # /health 404s forever — container reads "unhealthy" while Superset is perfectly fine.
+      # Read the env inside python (not the shell) so an empty APP_ROOT degrades to /health.
+      test: ["CMD-SHELL", "/app/.venv/bin/python -c \"import os,urllib.request,sys; root=os.environ.get('SUPERSET_APP_ROOT','').rstrip('/'); sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8088'+root+'/health').status==200 else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -689,6 +706,12 @@ volumes:
   redis_dev_data:
   activepieces_data:
   superset_home:   # persists load_examples SQLite data across superset container rebuilds
+
+# Pip config for Superset image build (Nexus credentials stay in the secret file, not layers).
+# build-and-deploy.ps1 sets SUPERSET_PIP_CONF_FILE before compose build.
+secrets:
+  pip_conf:
+    file: ${SUPERSET_PIP_CONF_FILE}
 
 networks:
   platform-dev-network:

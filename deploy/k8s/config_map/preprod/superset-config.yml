@@ -60,9 +60,21 @@ data:
         "Content-Security-Policy": f"frame-ancestors {_frame_ancestors};",
     }
 
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "SUPERSET_DATABASE_URI",
-        "postgresql+psycopg2://platform_dev:dev_password_123@host.docker.internal:5432/workflow_platform_dev?options=-csearch_path%3Dsuperset",
-    )
+    # Fail-closed DB URI — inject SUPERSET_DATABASE_URI via Secret (never bake
+    # credentials into this ConfigMap). Only postgresql+psycopg2; safe schema id;
+    # search_path appended when missing.
+    import re as _re
+    _uri = os.environ.get("SUPERSET_DATABASE_URI", "").strip()
+    if not _uri:
+        raise RuntimeError("SUPERSET_DATABASE_URI is required (k8s Secret); no default credentials")
+    if not _uri.startswith("postgresql+psycopg2://"):
+        raise RuntimeError("SUPERSET_DATABASE_URI must use postgresql+psycopg2")
+    _schema = os.environ.get("SUPERSET_DB_SCHEMA", "superset").strip() or "superset"
+    if not _re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", _schema):
+        raise RuntimeError(f"Invalid SUPERSET_DB_SCHEMA: {_schema!r}")
+    if "search_path" not in _uri:
+        _sep = "&" if "?" in _uri else "?"
+        _uri = f"{_uri}{_sep}options=-csearch_path%3D{_schema}"
+    SQLALCHEMY_DATABASE_URI = _uri
 
     MAPBOX_API_KEY = os.getenv("MAPBOX_API_KEY", "")

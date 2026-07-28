@@ -37,8 +37,9 @@ frontend/*/verification-screenshots/*.png
 .metadata/
 bin/
 
-# VS Code
-.vscode/
+# VS Code — ignore workspace junk; keep folderOpen sync task committed
+.vscode/*
+!.vscode/tasks.json
 *.code-workspace
 
 # NetBeans
@@ -144,6 +145,12 @@ desktop.ini
 !deploy/environments/**/.env
 !deploy/environments/**/.env.*
 
+# Superset BuildKit pip secret (Nexus credentials) — never commit real pip.conf
+deploy/superset/pip.conf
+
+# Dev schema-migration SHA markers (isolated per Postgres Docker volume)
+deploy/environments/dev/.schema-migration-markers/
+
 # Secret/credential files
 secrets/
 credentials/
@@ -219,15 +226,6 @@ application-local.properties
 *-local.yml
 *-local.yaml
 *-local.properties
-
-# =============================================================================
-# Docker
-# =============================================================================
-.docker/
-docker-compose.override.yml
-docker-compose.local.yml
-# Local dev overlay (Mailpit etc.) — copy from docker-compose.local.example.yml
-deploy/environments/dev/docker-compose.local.yml
 
 # =============================================================================
 # Kubernetes secrets (actual secrets, not templates)
@@ -315,21 +313,21 @@ BOOT-INF/
 !package.json
 !package-lock.json
 !tsconfig.json
-backend/admin-center/Dockerfile
-backend/developer-workstation/Dockerfile
-backend/user-portal/Dockerfile
-backend/workflow-engine-core/Dockerfile
 frontend/admin-center/package-lock.json
 frontend/developer-workstation/package-lock.json
 frontend/user-portal/package-lock.json
-.kiro
+# Kiro local artifacts — ignore by default; commit generated AI guidance mirrors
+.kiro/*
+!.kiro/steering/
+!.kiro/steering/**
+!.kiro/skills/
+!.kiro/skills/**
 !documentation/*.md
 # Windows 上 core.ignorecase 会导致 *.MD 误匹配小写 .md；显式放行版本库文档目录
 !docs/**/*.md
 # Claude Code personal settings
 .claude/settings.local.json
-# .claude/skills 是由 sync-cursor-rules.mjs 从 .cursor/skills(唯一真源)镜像生成的产物，不入库
-.claude/skills/
+# .claude/skills 由 sync-cursor-rules.mjs 从 .cursor/skills 镜像；入库以便 CI 防漂移
 # Local ad-hoc Playwright dumps / underscore-prefixed scratch verify scripts (not product)
 frontend/scripts/_*.json
 frontend/scripts/_*.mjs

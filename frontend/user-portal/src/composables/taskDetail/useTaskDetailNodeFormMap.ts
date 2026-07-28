@@ -21,6 +21,7 @@ import {
 } from './subTableRowUtils'
 import type { NodeFormInfo, PreviousFormEntry } from './useTaskDetailState'
 import type { TaskDetailCtx } from './context'
+import { stampMiCollectionFromBpmn } from './miCollectionStamp'
 
 export interface TaskDetailNodeFormMapFns {
   buildNodeFormMapIfNeeded: () => Promise<void>
@@ -49,6 +50,10 @@ export function createTaskDetailNodeFormMap(ctx: TaskDetailCtx): TaskDetailNodeF
     await yieldToMain()
     try {
       nodeFormMap.value = buildNodeFormMapFromContent(pending.content, pending.bindingRelationTableMap)
+      // Same BPMN verdict the live bindings get — the read-only diagram view of a node must not
+      // classify its sub-table as an MI dashboard when the process has no MI sub-process.
+      // Later rebuilds spread each binding, so stamping once at build time carries through.
+      nodeFormMap.value.forEach(info => stampMiCollectionFromBpmn(ctx, info.subTableBindings))
       alignNodeFormMapSubTableBindingsOnly()
       refreshNodeFormMapFromFormData({
         subTablesSource: formData.value.__subTables__ as Record<string, unknown> | undefined,

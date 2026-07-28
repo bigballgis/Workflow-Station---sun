@@ -97,6 +97,11 @@ export function applyEditAuditDefaults(row: Record<string, unknown>, columns: Di
 }
 
 function initialValueFor(col: DialogColumn): unknown {
+  if (col.defaultValue !== undefined) {
+    return typeof col.defaultValue === 'object' && col.defaultValue !== null
+      ? JSON.parse(JSON.stringify(col.defaultValue))
+      : col.defaultValue
+  }
   switch (col.type) {
     case 'number':
       return undefined

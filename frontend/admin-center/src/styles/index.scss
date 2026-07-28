@@ -30,6 +30,7 @@ html, body, #app {
   --ws-card-bg: #ffffff;
   --ws-card-border: #ececea;
   --ws-line: #f0f0ee;           // 表格行分隔线
+  --ws-line-strong: #e1e1dd;    // 表头分隔线（比行线深一档，仍属浅灰族）
   --ws-text: #1a1a1a;
   --ws-text-secondary: #6f6f6f;
   --ws-text-muted: #9c9c9c;
@@ -81,8 +82,8 @@ html, body, #app {
   }
 }
 
-// 表格：编辑部风格 —— 表头不用色块，用「小号大写字距标签 + 表头下 2px 墨色规则线」
-// 区分表头与数据；行距放宽，hover 暖灰。墨色规则线呼应侧栏的深墨，红色只留给动作与状态。
+// 表格：编辑部风格 —— 表头不用色块，用「小号大写字距标签 + 表头下一条稍深的灰细线」
+// 区分表头与数据；行距放宽，hover 暖灰。分隔线与卡片描边同族，红色只留给动作与状态。
 // 注意：Element Plus 的 per-component CSS 是懒加载 chunk，会晚于本文件加载并重置
 // .el-table 上的 CSS 变量，所以这里一律用提权选择器（双类名 / thead）压住。
 .el-table.el-table {
@@ -95,7 +96,7 @@ html, body, #app {
     background-color: #ffffff; // sticky 固定列需要实色底
     color: #8f8f8a;
     font-weight: 600;
-    border-bottom: 2px solid var(--ws-ink);
+    border-bottom: 1px solid var(--ws-line-strong);
 
     .cell {
       font-size: 11px;

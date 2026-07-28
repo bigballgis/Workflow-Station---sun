@@ -27,6 +27,7 @@ import { testExecutionContext } from '../handler/context/test-execution-context'
 import { flowExecutor } from '../handler/flow-executor'
 import { flowRunProgressReporter } from '../helper/flow-run-progress-reporter'
 import { triggerHelper } from '../helper/trigger-helper'
+import { syncWebhookRelease } from './sync-webhook-release'
 
 export const flowOperation = {
     execute: async (operation: ExecuteFlowOperation): Promise<EngineResponse<undefined>> => {
@@ -38,6 +39,11 @@ export const flowOperation = {
             flowExecutorContext: output,
         })
         await flowRunProgressReporter.backup()
+        await syncWebhookRelease.onRunSettled({
+            workerHandlerId: constants.workerHandlerId,
+            httpRequestId: constants.httpRequestId,
+            status: output.verdict.status,
+        })
         const status = output.verdict.status === FlowRunStatus.LOG_SIZE_EXCEEDED
             ? EngineResponseStatus.LOG_SIZE_EXCEEDED
             : EngineResponseStatus.OK

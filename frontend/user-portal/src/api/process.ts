@@ -29,6 +29,12 @@ export interface ProcessInstance {
   candidateUsers?: string
   /** Request ID: main-table configured human-readable identifier (e.g. HR-2026-001); null when unconfigured. */
   requestId?: string | null
+  /**
+   * 仅 startProcess 返回：首个发起人任务自动完成失败时为固定标记 `FIRST_STEP_NOT_COMPLETED`，成功时为空。
+   * 实例已创建且任务退回待办可重试，故 /start 不报错——但非空即「已创建、首步未完成」，不可提示提交成功。
+   * 不含具体原因（原文带 AP webhook URL，等同凭据），排查看服务端日志。
+   */
+  firstStepError?: string | null
   variables?: Record<string, unknown>
 }
 

@@ -13,10 +13,28 @@ export function isSubTableRowMetaField(key: string): boolean {
   return SUB_TABLE_ROW_META_KEYS.has(key)
 }
 
-/** Remove MI / runtime meta fields from a sub-table row (non-MI bindings after hydration). */
+/** True for a non-empty nested `__subTables__` payload (grandchild rows of a sub-table-in-sub-table). */
+function hasNestedSubTableRows(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.values(value as Record<string, unknown>).some(v => Array.isArray(v) && v.length > 0)
+}
+
+/**
+ * Remove MI / runtime meta fields from a sub-table row (non-MI bindings after hydration).
+ *
+ * A row's `__subTables__` is NOT meta: for sub-table-in-sub-table it holds the grandchild rows
+ * (Add/Edit dialog reads them back via {@code pullNestedRowsForBindingFromParentRows}, and persist
+ * carries them on the parent row). Stripping it detached the innermost level from its parent —
+ * the nested grid rendered empty on the next task and the next save dropped the link. Empty maps
+ * are still removed so they don't linger as noise.
+ */
 export function stripSubTableRowMetaFields(row: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(row)) {
+    if (k === '__subTables__') {
+      if (hasNestedSubTableRows(v)) out[k] = v
+      continue
+    }
     if (isSubTableRowMetaField(k)) continue
     out[k] = v
   }
@@ -30,11 +48,25 @@ const MI_DASHBOARD_STATUS_FIELDS = new Set([
   'sub_task_current_node',
 ])
 
-/** True when designer schema declares this binding as a multi-instance participant dashboard (not a plain related table). */
+/**
+ * True when designer schema declares this binding as a multi-instance participant dashboard (not a plain related table).
+ *
+ * <p>Everything below is a <b>guess from column names</b>, so it misfires on tables that merely look
+ * like a participant list — e.g. a Function Unit copied from the MI meeting demo keeps
+ * {@code assignee_user_id} columns long after its MI sub-process is gone, and every row without the
+ * sub-table PK then gets dropped as an MI ghost row (rows produced by an AP service task carry no PK,
+ * so the whole grid rendered empty). {@code miCollection === false} is the escape hatch: callers that
+ * KNOW the truth — the task detail loader reads the BPMN, which either has a multi-instance
+ * sub-process or does not — stamp it on the binding and the guessing is skipped. Left undefined the
+ * heuristic applies unchanged, so contexts without BPMN (My Requests, application detail) keep
+ * today's behaviour.
+ */
 export function isMiDashboardSubTableBinding(binding: {
   columns?: Array<{ field?: string }> | null
   tableName?: string
+  miCollection?: boolean | null
 }): boolean {
+  if (binding.miCollection === false) return false
   const cols = binding.columns ?? []
   if (cols.some(c => c?.field != null && MI_DASHBOARD_STATUS_FIELDS.has(String(c.field)))) return true
   const assigneeField = resolveAssigneeFieldForBinding(cols, binding.tableName)

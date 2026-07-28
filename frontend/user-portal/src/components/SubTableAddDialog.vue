@@ -12,7 +12,7 @@
   <el-dialog
     :model-value="visible"
     :title="title || (mode === 'edit' ? t('subTable.editRecord') : t('subTable.addRecord'))"
-    width="600px"
+    :width="dialogWidth"
     :close-on-click-modal="false"
     :modal="false"
     :z-index="2010"
@@ -518,11 +518,30 @@
         :title="nested.tableName"
         :columns="nested.columns"
         :dialog-columns="nested.dialogColumns"
+        :form-fields="nested.formFields"
         :model-value="nestedRowsFor(nested)"
         :primary-key-fields="nested.primaryKeyFields"
         :upload-url="uploadUrl"
         editable
+        :allow-add="nested.allowAdd"
+        :allow-edit="nested.allowEdit"
+        :allow-delete="nested.allowDelete"
+        :table-id="nested.tableId ?? null"
+        :field-definitions="nested.fieldDefinitions"
+        :function-unit-id="hostFunctionUnitId"
+        :task-id="hostTaskId"
+        :binding-link-mode="nested.bindingMode"
+        :binding-foreign-key-field="nested.foreignKeyField"
+        :parent-row="formData"
+        :parent-table-id="hostTableId ?? null"
+        :parent-tables-by-id="nestedParentTablesById"
+        :primary-form-data="hostPrimaryFormData"
+        :primary-table-id="hostPrimaryTableId ?? null"
+        :primary-table-display-name="hostPrimaryTableDisplayName"
+        :sub-table-bindings-for-context="hostSubTableBindingsForContext"
+        :linked-sub-table-bindings="hostLinkedSubTableBindings"
         @update:model-value="(nestedRows: unknown[]) => onNestedRowsUpdate(nested, nestedRows)"
+        @update:parent-row="onNestedParentRowPatch"
       />
     </div>
 
@@ -582,7 +601,8 @@ import { useSubTableDialogUpload } from '@/composables/subTableAddDialog/useSubT
 import { useSubTableDialogForm } from '@/composables/subTableAddDialog/useSubTableDialogForm'
 import { mergeNestedSubTableRowsIntoSto } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
-import type { NestedSubTableDescriptor } from '@/composables/subTableField/subTableFieldTypes'
+import type { NestedSubTableDescriptor, SubTableBinding } from '@/composables/subTableField/subTableFieldTypes'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 
 // SubTableField hosts this dialog and the dialog hosts nested SubTableField — resolve the
 // circular SFC pair lazily.
@@ -629,6 +649,26 @@ const props = defineProps<{
   uploadUrl?: string
   /** Nested sub-tables from this binding's form design — rows save under the row's `__subTables__`. */
   nestedSubTables?: NestedSubTableDescriptor[]
+  /**
+   * Host binding's FK/PK runtime context, forwarded to nested sub-tables so a grandchild row
+   * goes through the same allocate/seed path as a top-level one: `host*` describes the row this
+   * dialog edits (it is the nested rows' parent), the rest is the host's own ancestor chain.
+   */
+  hostTableId?: number | null
+  hostFieldDefinitions?: BindingFieldDefinition[]
+  hostFunctionUnitId?: string
+  hostTaskId?: string
+  hostPrimaryFormData?: Record<string, unknown>
+  hostPrimaryTableId?: number | null
+  hostPrimaryTableDisplayName?: string
+  hostSubTableBindingsForContext?: Array<{
+    tableId?: number | null
+    bindingType?: string
+    tableName?: string
+    tableDisplayName?: string
+  }>
+  hostParentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+  hostLinkedSubTableBindings?: SubTableBinding[]
   /** When set, awaited before closing (supports async PK allocate on Save). */
   saveRow?: (row: Record<string, unknown>) => void | Promise<void>
   /** RecordNote components placed in this binding's form design. */
@@ -657,10 +697,23 @@ const editingRowStableId = computed<string | null>(() =>
   props.mode === 'edit' ? resolveRowStableId(formData.value, props.primaryKeyFields) : null)
 
 // ─── Nested sub-tables (sub-table-in-sub-table inside the row dialog) ────────
+/**
+ * A nested sub-table brings a whole table (plus its Operation column) into the dialog, which
+ * a 600px form-sized shell cannot fit — its rightmost columns land outside the viewport.
+ * Widen the shell whenever nested tables are present; plain field-only rows keep 600px.
+ */
+const dialogWidth = computed(() =>
+  props.nestedSubTables?.length ? 'min(1100px, calc(100vw - 48px))' : '600px')
+
 /** Rows for one nested table, read from the edited row's `__subTables__` (alias keys). */
 function nestedRowsFor(nested: NestedSubTableDescriptor): Record<string, unknown>[] {
   return pullNestedRowsForBindingFromParentRows(
-    { bindingId: nested.bindingId, tableName: nested.tableName, tableId: null },
+    {
+      bindingId: nested.bindingId,
+      tableName: nested.tableName,
+      physicalTableName: nested.physicalTableName,
+      tableId: nested.tableId ?? null,
+    },
     [formData.value],
   )
 }
@@ -672,6 +725,34 @@ function onNestedRowsUpdate(nested: NestedSubTableDescriptor, nestedRows: unknow
     __subTables__: mergeNestedSubTableRowsIntoSto([formData.value], nested, nestedRows),
   }
 }
+
+/**
+ * The edited row is the nested rows' parent. Saving a grandchild forces this row's auto PK to
+ * be allocated early (the child's FK needs it); adopt that value here so Save persists the row
+ * under the very key the child now references instead of allocating a second one.
+ */
+function onNestedParentRowPatch(patch: Record<string, unknown>) {
+  const next = { ...formData.value }
+  let changed = false
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === '__subTables__') continue
+    const current = next[key]
+    if (current != null && String(current).trim() !== '') continue
+    if (value == null || String(value).trim() === '') continue
+    next[key] = value
+    changed = true
+  }
+  if (changed) formData.value = next
+}
+
+/** Host row's own table joins the ancestor pool so a grandchild FK to it can be auto-filled. */
+const nestedParentTablesById = computed(() => {
+  const base = { ...(props.hostParentTablesById ?? {}) }
+  if (props.hostTableId != null && props.hostFieldDefinitions?.length) {
+    base[Number(props.hostTableId)] = { fieldDefinitions: props.hostFieldDefinitions }
+  }
+  return base
+})
 
 // ─── Lookup backfill ────────────────────────────────────────────────────────
 const {

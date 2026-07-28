@@ -32,6 +32,7 @@ import {
   resolveSubFormDialogColumnsForBinding,
 } from '@/components/subTableAddDialogHelpers'
 import { createFuContentCache } from './fuContentCache'
+import { stampMiCollectionFromBpmn } from './miCollectionStamp'
 import {
   cloneSubTableRows,
   cloneAndFlattenSubTablesMap,
@@ -300,6 +301,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         }
         // Link Form columns may reference bindings omitted from this form's tableBindings; merge from FU forms so bindingMap resolves subtable2.
         ctx.mergeLinkFormTargetBindingsInto(bindings, content.forms, formConfigForSubTables, subForms)
+        stampMiCollectionFromBpmn(ctx, bindings)
         const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(content.forms as any[])
         lastBindingRelationTableMap.value = bindingRelationTableMap
         const rawSubTables = coerceSubTablesVariableToMap(formData.value.__subTables__)
@@ -392,6 +394,8 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
           )
         }
         ctx.ensureSubTableBindingsFromLayoutAndConfig(bindings, formConfigForSubTables)
+        // ensure* appends layout-only bindings after the stamp above — re-apply so they carry it too.
+        stampMiCollectionFromBpmn(ctx, bindings)
         subTableBindings.value = bindings
         ctx.syncFormLayoutWithSubTableBindings()
         // Previous-node read-only form collection — moved verbatim to useTaskDetailPrevForms.ts.

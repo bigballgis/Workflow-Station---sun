@@ -114,6 +114,7 @@ function makeMockContext(apiOverrides?: Record<string, vi.Mock>) {
         apiClient: {
             getPayloadFile: vi.fn(),
             uploadRunLog: vi.fn(),
+            sendFlowResponse: vi.fn().mockResolvedValue(undefined),
             ...apiOverrides,
         },
         sandboxManager: {
@@ -215,6 +216,72 @@ describe('executeFlowJob', () => {
             )
 
             expect(ctx.sandboxManager.acquire).not.toHaveBeenCalled()
+        })
+    })
+    /**
+     * HERMES-PATCH-008 —— 见 docs/ap-integration/HERMES_PATCHES.md。
+     *
+     * engine 侧的释放（HERMES-PATCH-007）够不到引擎启动之前就死掉的 run：piece 安装失败、
+     * flow version 缺失、sandbox 超时 / OOM 都终结在 worker 里。少了这一半，调用方仍要等满
+     * AP_WEBHOOK_TIMEOUT_SECONDS —— 这正是 dev 实测时 biz-calendar flow 打了 engine 补丁
+     * 后仍然 300s 的原因。
+     */
+    describe('HERMES-PATCH-008 — 引擎启动前就终结的 run 也释放 sync webhook', () => {
+        const SYNC_IDS = { workerHandlerId: 'handler-1', httpRequestId: 'req-1' }
+        const NO_CONTENT = { status: 204, body: {}, headers: {} }
+
+        it('flow version 缺失 —— 引擎没跑起来,仍然释放', async () => {
+            mockGetVersion.mockResolvedValue(null)
+            const ctx = makeMockContext()
+
+            await executeFlowJob.execute(ctx, makeResumeJobData({
+                executionType: ExecutionType.BEGIN,
+                ...SYNC_IDS,
+            }))
+
+            expect(ctx.sandboxManager.acquire).not.toHaveBeenCalled()
+            expect(ctx.apiClient.sendFlowResponse).toHaveBeenCalledTimes(1)
+            expect(ctx.apiClient.sendFlowResponse).toHaveBeenCalledWith({
+                ...SYNC_IDS,
+                runResponse: NO_CONTENT,
+            })
+        })
+
+        it('没有 workerHandlerId / httpRequestId 就没人在等,不发', async () => {
+            mockGetVersion.mockResolvedValue(null)
+            const ctx = makeMockContext()
+
+            await executeFlowJob.execute(ctx, makeResumeJobData({ executionType: ExecutionType.BEGIN }))
+
+            expect(ctx.apiClient.uploadRunLog).toHaveBeenCalled()
+            expect(ctx.apiClient.sendFlowResponse).not.toHaveBeenCalled()
+        })
+
+        it('run 正常跑完时 worker 不插手 —— 响应由 engine 侧决定', async () => {
+            const ctx = makeMockContext()
+
+            await executeFlowJob.execute(ctx, makeResumeJobData({
+                executionType: ExecutionType.BEGIN,
+                ...SYNC_IDS,
+            }))
+
+            expect(ctx.apiClient.uploadRunLog).not.toHaveBeenCalled()
+            expect(ctx.apiClient.sendFlowResponse).not.toHaveBeenCalled()
+        })
+
+        it('发布失败不改判已完成的 run —— best-effort,超时仍是兜底', async () => {
+            mockGetVersion.mockResolvedValue(null)
+            const ctx = makeMockContext({
+                sendFlowResponse: vi.fn().mockRejectedValue(new Error('api down')),
+            })
+
+            const result = await executeFlowJob.execute(ctx, makeResumeJobData({
+                executionType: ExecutionType.BEGIN,
+                ...SYNC_IDS,
+            }))
+
+            expect(result.kind).toBe(JobResultKind.FIRE_AND_FORGET)
+            expect(ctx.log.error).toHaveBeenCalled()
         })
     })
 })

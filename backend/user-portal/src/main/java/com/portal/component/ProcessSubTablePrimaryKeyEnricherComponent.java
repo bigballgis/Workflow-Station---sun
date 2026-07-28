@@ -25,6 +25,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ProcessSubTablePrimaryKeyEnricherComponent {
 
+    /** Slice map key used both at the top level of variables and on a row that hosts nested sub-tables. */
+    private static final String NESTED_SUB_TABLES_KEY = "__subTables__";
+
     private record AutoPkField(String fieldName, PkGenerationConfig config) {}
 
     private final JdbcTemplate jdbcTemplate;
@@ -41,7 +44,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
         if (variables == null || variables.isEmpty()) {
             return;
         }
-        Object subTablesObj = variables.get("__subTables__");
+        Object subTablesObj = variables.get(NESTED_SUB_TABLES_KEY);
         if (!(subTablesObj instanceof Map<?, ?>)) {
             return;
         }
@@ -58,21 +61,7 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
         }
 
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
-        int allocated = 0;
-        for (Map.Entry<String, Object> entry : subTables.entrySet()) {
-            Long tableId = sliceKeyToTableId.get(entry.getKey());
-            if (tableId == null) {
-                tableId = sliceKeyToTableId.get(entry.getKey().toLowerCase(Locale.ROOT));
-            }
-            if (tableId == null) {
-                continue;
-            }
-            List<AutoPkField> fields = autoPkByTable.get(tableId);
-            if (fields == null || fields.isEmpty()) {
-                continue;
-            }
-            allocated += enrichRows(entry.getValue(), tableId, fields);
-        }
+        int allocated = enrichSubTableMap(subTables, sliceKeyToTableId, autoPkByTable);
         if (allocated > 0) {
             log.info("Allocated {} missing sub-table PK value(s) for functionUnit={}", allocated, functionUnitIdOrCode);
         }
@@ -86,8 +75,39 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
         }
     }
 
+    /**
+     * Enrich one {@code __subTables__} map. Rows of a sub-table may themselves carry a nested
+     * {@code __subTables__} map (sub-table inside a sub-table); those grandchild rows are real
+     * rows of their own table and need their auto PKs just as much, so recurse into them.
+     */
+    private int enrichSubTableMap(Map<String, Object> subTables,
+                                  Map<String, Long> sliceKeyToTableId,
+                                  Map<Long, List<AutoPkField>> autoPkByTable) {
+        int allocated = 0;
+        for (Map.Entry<String, Object> entry : subTables.entrySet()) {
+            Long tableId = sliceKeyToTableId.get(entry.getKey());
+            if (tableId == null) {
+                tableId = sliceKeyToTableId.get(entry.getKey().toLowerCase(Locale.ROOT));
+            }
+            // Unmapped keys are display-name aliases holding duplicate copies of a mapped slice's
+            // rows. Walking them too would allocate a second, different key for every logical row.
+            if (tableId == null) {
+                continue;
+            }
+            // A mapped slice with no auto PK of its own is still walked — its rows may host
+            // nested slices that do have one.
+            List<AutoPkField> fields = autoPkByTable.get(tableId);
+            allocated += enrichRows(entry.getValue(), tableId, fields, sliceKeyToTableId, autoPkByTable);
+        }
+        return allocated;
+    }
+
     @SuppressWarnings("unchecked")
-    private int enrichRows(Object rowsObj, Long tableId, List<AutoPkField> fields) {
+    private int enrichRows(Object rowsObj,
+                           Long tableId,
+                           List<AutoPkField> fields,
+                           Map<String, Long> sliceKeyToTableId,
+                           Map<Long, List<AutoPkField>> autoPkByTable) {
         if (!(rowsObj instanceof List<?> list)) {
             return 0;
         }
@@ -97,16 +117,22 @@ public class ProcessSubTablePrimaryKeyEnricherComponent {
                 continue;
             }
             Map<String, Object> row = (Map<String, Object>) item;
-            for (AutoPkField pk : fields) {
-                if (!isBlank(row.get(pk.fieldName()))) {
-                    continue;
+            if (fields != null) {
+                for (AutoPkField pk : fields) {
+                    if (!isBlank(row.get(pk.fieldName()))) {
+                        continue;
+                    }
+                    List<String> values = primaryKeyAllocationService.allocate(
+                            tableId, pk.fieldName(), pk.config(), 1, "");
+                    if (values != null && !values.isEmpty()) {
+                        row.put(pk.fieldName(), values.get(0));
+                        allocated++;
+                    }
                 }
-                List<String> values = primaryKeyAllocationService.allocate(
-                        tableId, pk.fieldName(), pk.config(), 1, "");
-                if (values != null && !values.isEmpty()) {
-                    row.put(pk.fieldName(), values.get(0));
-                    allocated++;
-                }
+            }
+            if (row.get(NESTED_SUB_TABLES_KEY) instanceof Map<?, ?> nested) {
+                allocated += enrichSubTableMap(
+                        (Map<String, Object>) nested, sliceKeyToTableId, autoPkByTable);
             }
         }
         return allocated;

@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
  *   <li>{@code ${subTableHtml:bindingId}} — sub-table as HTML table (all columns)</li>
  *   <li>{@code ${subTableHtml:bindingId:col1=Header 1,col2=Header 2}} — selected columns with custom headers</li>
  *   <li>{@code ${subTableField:bindingId:fieldName}} — scalar from sub-table rows</li>
+ *   <li>{@code ${lookupField:sourceField:targetAttr}} — attribute on Lookup/Related embedded RT row</li>
  *   <li>{@code ${variable}} — top-level process variable; sub-table columns fallback when absent</li>
  * </ul>
  */
@@ -21,6 +22,7 @@ public final class EmailTemplateResolver {
 
     private static final Pattern SUB_TABLE_HTML = Pattern.compile("\\$\\{subTableHtml:([^}]+)}");
     private static final Pattern SUB_TABLE_FIELD = Pattern.compile("\\$\\{subTableField:([^:}]+):([^}]+)}");
+    private static final Pattern LOOKUP_FIELD = Pattern.compile("\\$\\{lookupField:([^:}]+):([^}]+)}");
     private static final Pattern BARE_PLACEHOLDER = Pattern.compile("\\$\\{([^{}:]+)}");
 
     private EmailTemplateResolver() {
@@ -32,7 +34,8 @@ public final class EmailTemplateResolver {
         }
         String withTables = replaceSubTableHtml(template, variables);
         String withSubFields = replaceSubTableFields(withTables, variables);
-        String withTopLevel = BpmnExtensionUtils.resolveExpression(withSubFields, variables);
+        String withLookupFields = replaceLookupFields(withSubFields, variables);
+        String withTopLevel = BpmnExtensionUtils.resolveExpression(withLookupFields, variables);
         return resolveBareSubTableFields(withTopLevel, variables);
     }
 
@@ -87,6 +90,19 @@ public final class EmailTemplateResolver {
         return out.toString();
     }
 
+    private static String replaceLookupFields(String template, Map<String, Object> variables) {
+        Matcher matcher = LOOKUP_FIELD.matcher(template);
+        StringBuilder out = new StringBuilder();
+        while (matcher.find()) {
+            String sourceField = matcher.group(1).trim();
+            String targetAttr = matcher.group(2).trim();
+            String value = LookupFieldResolver.resolve(variables, sourceField, targetAttr);
+            matcher.appendReplacement(out, Matcher.quoteReplacement(value));
+        }
+        matcher.appendTail(out);
+        return out.toString();
+    }
+
     private static String resolveBareSubTableFields(String template, Map<String, Object> variables) {
         if (!StringUtils.hasText(template) || variables == null) {
             return template;
@@ -95,7 +111,9 @@ public final class EmailTemplateResolver {
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
             String name = matcher.group(1).trim();
-            if (name.startsWith("subTableHtml:") || name.startsWith("subTableField:")) {
+            if (name.startsWith("subTableHtml:")
+                    || name.startsWith("subTableField:")
+                    || name.startsWith("lookupField:")) {
                 matcher.appendReplacement(out, Matcher.quoteReplacement(matcher.group(0)));
                 continue;
             }

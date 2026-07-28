@@ -1,6 +1,7 @@
 package com.admin.service;
 
 import com.admin.dto.response.AutomationFlowSummary;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +32,33 @@ public interface AutomationFlowService {
      * 的 flow 时原样返回；否则按迁移键查找映射。找不到返回 empty。
      */
     Optional<String> resolveFlowRef(String ref);
+
+    /**
+     * 按 BPMN 引用导出（FU 导出包随带 flow 时由 DW 调用）：ref 是 {@code ap:flowId}，
+     * 可能是源环境 id，故先按 {@link #resolveFlowRef} 落到本环境 flow 再导出。
+     * 引用在本环境解析不到（flow 已删）时返回 empty。
+     */
+    Optional<FlowExportFile> exportFlowByRef(String ref);
+
+    /**
+     * FU 导入包随带 flow 的还原：只补齐本环境<b>缺失</b>的 flow。迁移键已能解析到本环境
+     * flow 的一律跳过（{@link FlowRestoreStatus#ALREADY_PRESENT}）——同环境重导/加版本时
+     * 不能用包里的旧快照盖掉正在维护的草稿。
+     *
+     * <p>草稿写入失败即抛（FU 的自动化会因此不可用，不做静默跳过）；发布失败是可预期的
+     * 环境差异（本环境缺 connection 凭据），以 {@link FlowRestoreStatus#PUBLISH_FAILED}
+     * 连同原因回传，由调用方展示、运维在 Automation 管理页补齐后手工发布。</p>
+     */
+    List<FlowRestoreResult> restoreFlows(List<JsonNode> flowExports);
+
+    enum FlowRestoreStatus {
+        /** 本环境原本没有，已新建并发布 */
+        CREATED,
+        /** 本环境已有同 id/同迁移键的 flow，未改动 */
+        ALREADY_PRESENT,
+        /** 草稿已落地，发布未过（多为缺 connection 凭据） */
+        PUBLISH_FAILED
+    }
 
     /**
      * connection 清单比对（导入前预检）：按 externalId 查目标 project 里是否已有
@@ -74,4 +102,7 @@ public interface AutomationFlowService {
 
     record FlowImportResult(String flowId, String flowKey, String displayName,
                             boolean created, boolean published) {}
+
+    record FlowRestoreResult(String flowKey, String displayName, String flowId,
+                             FlowRestoreStatus status, String detail) {}
 }

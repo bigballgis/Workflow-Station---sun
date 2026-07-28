@@ -136,6 +136,15 @@ export function useTaskForm(options: {
         subTables[normalizeSubTableName(binding.tableName)] = out
         subTableData[binding.tableName] = out
       }
+      // The physical table name is a slice alias too (process start writes it, and nested-row
+      // lookups accept it). Leaving it behind kept a pre-edit copy of the rows in variables,
+      // which hydration then merged back over the fresh slice — the edit looked lost on reload.
+      const physical = (binding as { physicalTableName?: string }).physicalTableName
+      if (physical && physical !== binding.tableName) {
+        subTables[physical] = out
+        subTables[normalizeSubTableName(physical)] = out
+        subTableData[physical] = out
+      }
     }
 
     if (!options.isMiSubTaskMode.value) {

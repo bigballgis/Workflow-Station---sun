@@ -1,14 +1,12 @@
 import { nextTick, ref, watch, type Ref } from 'vue'
 import {
-  getLookupSelectedDisplayField,
+  getLookupPrimaryKeyFieldFromProps,
   isUserSnapshotLikeObject,
-  parseLookupConfig,
   resolveDisplayValue,
   resolveLookupCellTagText,
   userObjectTagDisplayString,
   userSnapshotViewFieldsFromRow
 } from '@/components/subTableAddDialogHelpers'
-import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import { fetchLookupRowByPrimaryKey } from '@/components/lookup/fetchLookupRowByPrimaryKey'
 import type { Column, SubTableFieldProps } from './subTableFieldTypes'
 
@@ -36,27 +34,52 @@ export function columnMinWidth(col: Column): number {
   }
 }
 
-function getLookupPrimaryDisplayField(col: Column): string {
-  return getLookupSelectedDisplayField(col as DialogColumn)
+/**
+ * 关联表主键列名（**目标表**，不是宿主子表）。设计器显式配置优先，其余与
+ * {@link getLookupPrimaryKeyFieldFromProps} / LookupField.pkField() 同一优先级：searchFields[0] → id。
+ */
+function lookupPrimaryKeyField(col: Column): string {
+  const explicit = typeof col.props?.primaryKeyField === 'string' ? col.props.primaryKeyField.trim() : ''
+  if (explicit) return explicit
+  return getLookupPrimaryKeyFieldFromProps(col.props ?? null)
+}
+
+/** 主键标量的缓存键必须带主键列名：同一 tableId 的两列若主键列不同，否则会互相串行。 */
+function scalarCacheKey(tableId: number, pkField: string, rawValue: string | number): string {
+  return `${Number(tableId)}:${pkField}:${String(rawValue).trim()}`
 }
 
 export function lookupSelectedRow(col: Column, rawValue: unknown): Record<string, any> | null {
   if (rawValue == null || rawValue === '') return null
   if (typeof rawValue === 'object' && !Array.isArray(rawValue)) return rawValue as Record<string, any>
-  const cfg = parseLookupConfig(col.props?.lookupConfig)
-  const pk = String(col.props?.searchFields?.[0] || cfg.searchFields?.[0] || 'id').trim() || 'id'
-  return { [pk]: rawValue }
+  return { [lookupPrimaryKeyField(col)]: rawValue }
 }
 
-function lookupDisplayViewFields(col: Column): Array<{ fieldName: string; displayLabel?: string; sortOrder?: number; visible?: boolean }> {
+/** 回填视图列（与 LookupField/designer 的 viewFields 同构）。 */
+export interface LookupCellViewField {
+  fieldName: string
+  displayLabel?: string
+  sortOrder?: number
+  visible?: boolean
+}
+
+function lookupDisplayViewFields(col: Column): LookupCellViewField[] {
   const fields = col.props?.viewFields
   if (!Array.isArray(fields)) return []
   return [...fields]
     .filter((field: any) => field?.visible !== false)
     .sort((a: any, b: any) => (a?.sortOrder ?? 0) - (b?.sortOrder ?? 0))
+    .map((field: any) => ({
+      fieldName: String(field?.fieldName ?? ''),
+      displayLabel: typeof field?.displayLabel === 'string' ? field.displayLabel : undefined,
+      sortOrder: typeof field?.sortOrder === 'number' ? field.sortOrder : undefined,
+      visible: field?.visible,
+    }))
+    // 无 fieldName 的条目取不到值，还会让 el-descriptions-item 的 :key 撞车
+    .filter(field => field.fieldName !== '')
 }
 
-export function effectiveLookupViewFields(col: Column, rawValue: unknown): Array<{ fieldName: string; displayLabel?: string; sortOrder?: number; visible?: boolean }> {
+export function effectiveLookupViewFields(col: Column, rawValue: unknown): LookupCellViewField[] {
   const configured = lookupDisplayViewFields(col)
   if (configured.length > 0) return configured
   if (isUserSnapshotLikeObject(rawValue)) {
@@ -80,9 +103,8 @@ export function useSubTableLookupCells(props: SubTableFieldProps, rows: Ref<any[
 
   function effectiveLookupRowForCell(col: Column, rawValue: unknown): Record<string, any> | null {
     const tid = col.props?.tableId
-    if (tid != null && rawValue != null && (typeof rawValue === 'string' || typeof rawValue === 'number')) {
-      const ck = `${Number(tid)}:${String(rawValue).trim()}`
-      const hit = lookupHydratedScalar.value[ck]
+    if (tid != null && rawValue !== '' && (typeof rawValue === 'string' || typeof rawValue === 'number')) {
+      const hit = lookupHydratedScalar.value[scalarCacheKey(Number(tid), lookupPrimaryKeyField(col), rawValue)]
       if (hit) return hit
     }
     return lookupSelectedRow(col, rawValue)
@@ -114,23 +136,25 @@ export function useSubTableLookupCells(props: SubTableFieldProps, rows: Ref<any[
 
   async function hydrateLookupScalarsInTable() {
     const tableRows = rows.value || []
-    const pending: Promise<void>[] = []
+    // Thunks, not live promises: the fetch must start inside the batch loop, otherwise every
+    // row fires at once and BATCH throttling is dead code.
+    const pending: Array<() => Promise<void>> = []
+    const queued = new Set<string>()
     const resolvedScalars: Record<string, Record<string, any>> = {}
     for (const col of props.columns || []) {
       if (col.type !== 'lookup') continue
       const tableId = col.props?.tableId
       if (tableId == null || !Number.isFinite(Number(tableId))) continue
-      const pk =
-        (typeof (col.props as { primaryKeyField?: string }).primaryKeyField === 'string' &&
-          (col.props as { primaryKeyField?: string }).primaryKeyField) ||
-        (props.primaryKeyFields?.length === 1 ? props.primaryKeyFields[0] : undefined) ||
-        'id'
+      // 关联表主键 —— 绝不能用 props.primaryKeyFields（那是宿主子表自己的主键列，
+      // 拿去查关联表会让 eq 条件落到不存在的列上，行永远解析不出来）。
+      const pk = lookupPrimaryKeyField(col)
       for (const row of tableRows) {
         const raw = row[col.field]
-        if (raw == null || typeof raw === 'object') continue
-        const ck = `${Number(tableId)}:${String(raw).trim()}`
-        if (lookupHydratedScalar.value[ck]) continue
-        pending.push(
+        if (raw == null || raw === '' || typeof raw === 'object') continue
+        const ck = scalarCacheKey(Number(tableId), pk, raw)
+        if (lookupHydratedScalar.value[ck] || queued.has(ck)) continue
+        queued.add(ck)
+        pending.push(() =>
           fetchLookupRowByPrimaryKey(Number(tableId), raw, {
             searchFields: (col.props?.searchFields as string[]) || [],
             displayField: (col.props?.displayField as string) || '',
@@ -145,7 +169,7 @@ export function useSubTableLookupCells(props: SubTableFieldProps, rows: Ref<any[
     if (pending.length === 0) return
     const BATCH = 12
     for (let i = 0; i < pending.length; i += BATCH) {
-      await Promise.all(pending.slice(i, i + BATCH))
+      await Promise.all(pending.slice(i, i + BATCH).map(run => run()))
     }
     if (Object.keys(resolvedScalars).length > 0) {
       lookupHydratedScalar.value = { ...lookupHydratedScalar.value, ...resolvedScalars }

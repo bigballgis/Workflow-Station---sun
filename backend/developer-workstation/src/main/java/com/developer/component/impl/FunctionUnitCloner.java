@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.dto.RequestIdConfig;
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.FieldDefinition;
@@ -117,6 +118,9 @@ class FunctionUnitCloner {
                 sourceToNewTableName.put(sourceTable.getTableName(), newTableName);
             }
         }
+
+        // Field-level FK metadata points at table ids, so it can only be remapped once every table exists
+        remapClonedFieldRefTableIds(sourceTables, tableMapping);
 
         // Clone FK relations after all tables (FKs may cross tables)
         Map<Long, Map<String, FieldDefinition>> clonedFieldLookup = new HashMap<>();
@@ -265,12 +269,13 @@ class FunctionUnitCloner {
                 .tableType(source.getTableType())
                 .tableDisplayName(source.getTableDisplayName())
                 .displayName(source.getDisplayName())
+                .requestIdConfig(copyRequestIdConfig(source.getRequestIdConfig()))
                 .build();
         cloned = tableDefinitionRepository.save(cloned);
 
         // Clone fields
         for (FieldDefinition sourceField : source.getFieldDefinitions()) {
-            FieldDefinition clonedField = FieldDefinition.builder()
+            FieldDefinition.FieldDefinitionBuilder fieldBuilder = FieldDefinition.builder()
                     .tableDefinition(cloned)
                     .fieldName(sourceField.getFieldName())
                     .dataType(sourceField.getDataType())
@@ -283,11 +288,68 @@ class FunctionUnitCloner {
                     .isUnique(sourceField.getIsUnique())
                     .displayName(sourceField.getDisplayName())
                     .sortOrder(sourceField.getSortOrder())
-                    .build();
-            cloned.getFieldDefinitions().add(clonedField);
+                    // FK/PK runtime metadata — the runtime FK auto-fill and PK generation strategy
+                    // (uuid / autoIncrement / prefixedSequence) read the field-level columns, not dw_foreign_keys.
+                    // refTableId still points at the SOURCE table here; remapClonedFieldRefTableIds
+                    // rewrites it once every table of the FU has been cloned.
+                    .isForeignKey(sourceField.getIsForeignKey())
+                    .refTableId(sourceField.getRefTableId())
+                    .refPrimaryKeyFields(sourceField.getRefPrimaryKeyFields() != null
+                            ? new ArrayList<>(sourceField.getRefPrimaryKeyFields()) : null)
+                    .pkGenerationJson(deepCopyMap(sourceField.getPkGenerationJson()))
+                    .relationCardinality(sourceField.getRelationCardinality());
+            if (sourceField.getFkDisplayMode() != null) {
+                fieldBuilder.fkDisplayMode(sourceField.getFkDisplayMode());
+            }
+            cloned.getFieldDefinitions().add(fieldBuilder.build());
         }
 
         return tableDefinitionRepository.save(cloned);
+    }
+
+    private RequestIdConfig copyRequestIdConfig(RequestIdConfig source) {
+        if (source == null) {
+            return null;
+        }
+        return RequestIdConfig.builder()
+                .fieldNames(source.getFieldNames() != null ? new ArrayList<>(source.getFieldNames()) : null)
+                .separator(source.getSeparator())
+                .build();
+    }
+
+    /**
+     * Rewrite each cloned field's {@code refTableId} from the source table id to the clone's id.
+     * Runs after every table is cloned because a field may reference a table that is cloned later —
+     * the same reason {@code dw_foreign_keys} rows are cloned in a second pass.
+     */
+    private void remapClonedFieldRefTableIds(List<TableDefinition> sourceTables,
+                                             Map<Long, TableDefinition> tableMapping) {
+        for (TableDefinition sourceTable : sourceTables) {
+            TableDefinition clonedTable = tableMapping.get(sourceTable.getId());
+            if (clonedTable == null) {
+                continue;
+            }
+            boolean dirty = false;
+            for (FieldDefinition clonedField : clonedTable.getFieldDefinitions()) {
+                Long sourceRefTableId = clonedField.getRefTableId();
+                if (sourceRefTableId == null) {
+                    continue;
+                }
+                TableDefinition clonedRefTable = tableMapping.get(sourceRefTableId);
+                if (clonedRefTable == null) {
+                    // Reference outside this FU (dirty legacy data). Keep the id so the clone resolves
+                    // exactly like the source instead of silently dropping the FK metadata.
+                    log.warn("Clone: field {}.{} references table id {} outside the cloned function unit; keeping source id",
+                            clonedTable.getTableName(), clonedField.getFieldName(), sourceRefTableId);
+                    continue;
+                }
+                clonedField.setRefTableId(clonedRefTable.getId());
+                dirty = true;
+            }
+            if (dirty) {
+                tableDefinitionRepository.save(clonedTable);
+            }
+        }
     }
 
     private void cloneTableRelations(List<TableRelation> sourceRelations,
@@ -412,7 +474,7 @@ class FunctionUnitCloner {
                     new TypeReference<Map<String, Object>>() {});
         } catch (JsonProcessingException e) {
             throw new DeveloperBusinessException("SYS_JSON_ERROR",
-                    "Failed to deep copy form configJson: " + e.getMessage());
+                    "Failed to deep copy JSON configuration during clone: " + e.getMessage());
         }
     }
 

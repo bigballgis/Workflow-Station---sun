@@ -32,7 +32,7 @@ const communityPiecesController: FastifyPluginAsyncZod = async (app) => {
         },
     )
 
-    // HERMES-PATCH(piece-admin P2): expose piece deletion for the Admin Center
+    // HERMES-PATCH-003 (piece-admin P2): expose piece deletion for the Admin Center
     // management surface. Upstream CE has bulkDelete() in the service layer but no
     // HTTP route (only the EE platform module ever surfaced pieces management).
     // Scope note: deletes by (name, version) without a platformId filter so the

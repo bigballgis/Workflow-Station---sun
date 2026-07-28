@@ -4,7 +4,6 @@ import com.admin.servicetask.config.ServiceTaskProperties;
 import com.admin.exception.ServiceTaskApiException;
 import com.platform.common.dto.UserPrincipal;
 import io.jsonwebtoken.Jwts;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -15,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
+import com.admin.config.RestTemplateConfig;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestTemplate;
 
 import java.security.KeyFactory;
@@ -33,11 +34,17 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ServiceTaskApiClient {
 
+    /** AP control-plane calls only — long read timeout, own breaker (see RestTemplateConfig). */
     private final RestTemplate restTemplate;
     private final ServiceTaskProperties properties;
+
+    public ServiceTaskApiClient(@Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate,
+                                ServiceTaskProperties properties) {
+        this.restTemplate = restTemplate;
+        this.properties = properties;
+    }
 
     /**
      * 共享账号 sign-in 的结果。AP 的一个完整前端会话需要 token + projectId

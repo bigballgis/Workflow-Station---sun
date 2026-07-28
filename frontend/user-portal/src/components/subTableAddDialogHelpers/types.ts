@@ -39,6 +39,8 @@ export interface DialogColumn {
   readonly?: boolean
   /** Element Plus rules from Form Design `rule.validate`; preferred by buildRules over required-only. */
   rules?: Array<Record<string, unknown>>
+  /** Form Design Basis / rule default; used by buildInitialRow for Add dialog. */
+  defaultValue?: unknown
   placeholder?: string
   minWidth?: number
   options?: Array<{ label: string; value: string | number }>

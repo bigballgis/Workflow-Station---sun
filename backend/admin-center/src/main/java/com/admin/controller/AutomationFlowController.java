@@ -2,6 +2,7 @@ package com.admin.controller;
 
 import com.admin.dto.response.AutomationFlowSummary;
 import com.admin.service.AutomationFlowService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.platform.common.dto.ApiResponse;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,9 @@ public class AutomationFlowController {
 
     private static final String ERR_FORBIDDEN = "FORBIDDEN";
     private static final String SYSTEM_ADMIN_PERMISSION = "system:admin";
+
+    /** 单个 FU 的 service task 数量级远低于此；上限只为挡异常大包 */
+    private static final int MAX_RESTORE_FLOWS = 50;
 
     private final AutomationFlowService automationFlowService;
 
@@ -146,6 +150,50 @@ public class AutomationFlowController {
     }
 
     public record ConnectionsCheckRequest(List<String> externalIds) {}
+
+    /**
+     * FU 导出随包携带 flow（DW 的 FunctionUnitExporter 调用）：按 BPMN 里的
+     * {@code ap:flowId} 取可携带 JSON。与 {@code /resolve} 同门禁——服务间调用,
+     * 无用户上下文,以 C-3 的 X-Service-Token 把关。
+     */
+    @GetMapping("/internal/export")
+    public ResponseEntity<byte[]> exportFlowForService(
+            @RequestParam String ref,
+            @RequestHeader(value = "X-Service-Token", required = false) String serviceToken) {
+        if (!isValidServiceToken(serviceToken)) {
+            return ResponseEntity.status(403).build();
+        }
+        return automationFlowService.exportFlowByRef(ref)
+                .map(file -> ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(file.content()))
+                .orElseGet(() -> ResponseEntity.<byte[]>notFound().build());
+    }
+
+    /**
+     * FU 导入随包还原 flow（DW 的 FunctionUnitImporter 调用；admin-center 自身的
+     * ZIP 导入直接走 service）。只补齐本环境缺失的 flow,不覆盖既有草稿。
+     */
+    @PostMapping("/internal/restore")
+    public ResponseEntity<ApiResponse<List<AutomationFlowService.FlowRestoreResult>>> restoreFlows(
+            @RequestBody FlowRestoreRequest request,
+            @RequestHeader(value = "X-Service-Token", required = false) String serviceToken) {
+        if (!isValidServiceToken(serviceToken)) {
+            return ResponseEntity.status(403)
+                    .body(ApiResponse.error(ERR_FORBIDDEN, "valid X-Service-Token required"));
+        }
+        List<JsonNode> flows = request != null && request.flows() != null ? request.flows() : List.of();
+        if (flows.size() > MAX_RESTORE_FLOWS) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(
+                    "BAD_REQUEST", "too many flows in one request (>" + MAX_RESTORE_FLOWS + ")"));
+        }
+        List<AutomationFlowService.FlowRestoreResult> results =
+                automationFlowService.restoreFlows(flows);
+        log.info("Automation flows restored from function unit package: {}", results);
+        return ResponseEntity.ok(ApiResponse.success(results));
+    }
+
+    public record FlowRestoreRequest(List<JsonNode> flows) {}
 
     /**
      * 引擎部署期解析:BPMN 里的 {@code ap:flowId} → 本环境实际 flowId（Q7）。

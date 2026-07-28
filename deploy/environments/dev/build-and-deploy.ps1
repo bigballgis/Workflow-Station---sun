@@ -3,7 +3,7 @@
 # Dev Environment - Build and Deploy Script
 # =====================================================
 # Usage:
-#   .\build-and-deploy.ps1                    # Full build & deploy
+#   .\build-and-deploy.ps1                    # Incremental build & deploy (skip fresh artifacts)
 #   .\build-and-deploy.ps1 -Service admin-center  # Build & deploy only admin-center
 #   .\build-and-deploy.ps1 -Service admin-center -SkipMaven  # Redeploy without Maven rebuild
 #   .\build-and-deploy.ps1 -SkipMaven         # Skip Maven, rebuild Docker only
@@ -11,10 +11,17 @@
 #   .\build-and-deploy.ps1 -SkipInfra         # Skip infra startup (PG/Redis already running)
 #   .\build-and-deploy.ps1 -SkipImagePull     # Skip pre-pulling base images (if already cached)
 #   .\build-and-deploy.ps1 -JavaBaseImage "docker.m.daocloud.io/library/eclipse-temurin:17-jre"  # Backend FROM / compose build-arg
-#   .\build-and-deploy.ps1 -Clean             # Destroy everything and rebuild
+#   .\build-and-deploy.ps1 -Clean             # Destroy volumes + full clean rebuild (Maven clean, all images)
 #   .\build-and-deploy.ps1 -ServicesOnly      # Only restart backend+frontend (no Maven, no infra)
 #   .\build-and-deploy.ps1 -SkipMavenClean    # Maven package without clean (avoids clean delete failures)
 #   .\build-and-deploy.ps1 -RebuildServiceTaskBuilder  # Force-rebuild the AP Automation builder bundle
+#   .\build-and-deploy.ps1 -ForceBuild        # Ignore freshness checks; rebuild everything once
+#
+# Incremental strategy (default, without -Clean / -ForceBuild):
+#   - Skip Maven when backend JARs are newer than sources/poms
+#   - Skip Vite when frontend dist is newer than sources/config
+#   - Skip Docker build when image is newer than Dockerfile + build inputs
+#   - Schema SQL runs only when file content SHA-256 changed (per Postgres volume)
 #
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
@@ -36,7 +43,9 @@ param(
     # Force-rebuild the vendored AP ServiceTask/Automation builder bundle even when present
     # (activepieces/dist/packages/web-embed). Pass this after changing the AP builder source
     # or host-config; otherwise the existing bundle is reused (the build is heavy).
-    [switch]$RebuildServiceTaskBuilder
+    [switch]$RebuildServiceTaskBuilder,
+    # Ignore artifact/image freshness; rebuild Maven/Vite/Docker once (still no -v unless -Clean).
+    [switch]$ForceBuild
 )
 
 $ErrorActionPreference = "Stop"
@@ -105,8 +114,9 @@ $ServiceRegistry = @{
     }
 }
 
-# Services whose build/start may be skipped when optional deps (private npm, heavy images) fail.
-$OptionalComposeServices = @('activepieces', 'superset-final')
+# Services whose start may be skipped when optional deps (private npm) fail.
+# Superset is REQUIRED (fail-closed on missing URI / init); keep Activepieces optional.
+$OptionalComposeServices = @('activepieces')
 
 # Validate -Service parameter
 if ($Service -and -not $ServiceRegistry.ContainsKey($Service)) {
@@ -343,6 +353,229 @@ function Ensure-ServiceTaskBuilderBundle {
     }
 }
 
+# ==================== Incremental build helpers ====================
+
+function Get-NewestFileTime {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+    $newest = [datetime]::MinValue
+    foreach ($p in $Paths) {
+        if (-not $p -or -not (Test-Path -LiteralPath $p)) { continue }
+        Get-ChildItem -LiteralPath $p -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch '[\\/](node_modules|target|\.git|dist)[\\/]' -or $p -match 'dist$' } |
+            ForEach-Object {
+                if ($_.LastWriteTimeUtc -gt $newest) { $newest = $_.LastWriteTimeUtc }
+            }
+        $item = Get-Item -LiteralPath $p -ErrorAction SilentlyContinue
+        if ($item -and $item.LastWriteTimeUtc -gt $newest) { $newest = $item.LastWriteTimeUtc }
+    }
+    return $newest
+}
+
+function Get-BackendJarPath {
+    param([Parameter(Mandatory = $true)][string]$MavenModule)
+    $target = Join-Path $RootDir "$MavenModule/target"
+    if (-not (Test-Path $target)) { return $null }
+    $jar = Get-ChildItem -Path $target -Filter "*.jar" -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notlike "*.jar.original" -and $_.Name -notlike "*-sources.jar" -and $_.Name -notlike "*-javadoc.jar" } |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+    if ($jar) { return $jar.FullName }
+    return $null
+}
+
+function Test-BackendJarsFresh {
+    $modules = @(
+        "backend/platform-common",
+        "backend/platform-cache",
+        "backend/platform-security",
+        "backend/platform-messaging",
+        "backend/workflow-engine-core",
+        "backend/admin-center",
+        "backend/developer-workstation",
+        "backend/user-portal"
+    )
+    foreach ($mod in $modules) {
+        $jar = Get-BackendJarPath -MavenModule $mod
+        if (-not $jar) { return $false }
+        $jarTime = (Get-Item -LiteralPath $jar).LastWriteTimeUtc
+        $srcDir = Join-Path $RootDir "$mod/src"
+        $pom = Join-Path $RootDir "$mod/pom.xml"
+        $srcTime = Get-NewestFileTime -Paths @($srcDir, $pom)
+        if ($srcTime -gt $jarTime) { return $false }
+    }
+    $rootPom = Join-Path $RootDir "pom.xml"
+    $oldestJar = $null
+    foreach ($mod in $modules) {
+        $jar = Get-BackendJarPath -MavenModule $mod
+        $t = (Get-Item -LiteralPath $jar).LastWriteTimeUtc
+        if ($null -eq $oldestJar -or $t -lt $oldestJar) { $oldestJar = $t }
+    }
+    if ((Test-Path $rootPom) -and ((Get-Item $rootPom).LastWriteTimeUtc -gt $oldestJar)) {
+        return $false
+    }
+    return $true
+}
+
+function Test-FrontendDistFresh {
+    param([Parameter(Mandatory = $true)][string]$FrontendDir)
+    $feRoot = Join-Path $RootDir $FrontendDir
+    $distIndex = Join-Path $feRoot "dist/index.html"
+    if (-not (Test-Path -LiteralPath $distIndex)) { return $false }
+    $distTime = (Get-Item -LiteralPath $distIndex).LastWriteTimeUtc
+    $watch = @(
+        (Join-Path $feRoot "src"),
+        (Join-Path $feRoot "public"),
+        (Join-Path $feRoot "index.html"),
+        (Join-Path $feRoot "package.json"),
+        (Join-Path $feRoot "package-lock.json"),
+        (Join-Path $feRoot "vite.config.ts"),
+        (Join-Path $feRoot "vite.config.js"),
+        (Join-Path $feRoot "tsconfig.json"),
+        (Join-Path $feRoot "tsconfig.app.json")
+    )
+    $srcTime = Get-NewestFileTime -Paths $watch
+    return ($srcTime -le $distTime)
+}
+
+function Get-DockerImageCreatedUtc {
+    param([Parameter(Mandatory = $true)][string]$ImageName)
+    $raw = docker image inspect $ImageName --format "{{.Created}}" 2>$null
+    if (-not $raw -or $LASTEXITCODE -ne 0) { return $null }
+    try {
+        return [datetime]::Parse($raw.Trim(), $null, [System.Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime()
+    } catch {
+        return $null
+    }
+}
+
+function Test-DockerImageFresh {
+    param(
+        [Parameter(Mandatory = $true)][string]$ImageName,
+        [Parameter(Mandatory = $true)][string[]]$InputPaths
+    )
+    $created = Get-DockerImageCreatedUtc -ImageName $ImageName
+    if ($null -eq $created) { return $false }
+    $inputTime = Get-NewestFileTime -Paths $InputPaths
+    if ($inputTime -eq [datetime]::MinValue) { return $false }
+    return ($inputTime -le $created)
+}
+
+function Resolve-SupersetPipConfFile {
+    if ($env:SUPERSET_PIP_CONF_FILE -and (Test-Path -LiteralPath $env:SUPERSET_PIP_CONF_FILE)) {
+        return (Resolve-Path -LiteralPath $env:SUPERSET_PIP_CONF_FILE).Path
+    }
+    $local = Join-Path $RootDir "deploy/superset/pip.conf"
+    if (Test-Path -LiteralPath $local) {
+        return (Resolve-Path -LiteralPath $local).Path
+    }
+    $example = Join-Path $RootDir "deploy/superset/pip.conf.example"
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "hermes-superset-pip.conf"
+    if (Test-Path -LiteralPath $example) {
+        Copy-Item -LiteralPath $example -Destination $tmp -Force
+    } else {
+        @"
+[global]
+index-url = https://pypi.org/simple
+trusted-host = pypi.org files.pythonhosted.org
+"@ | Set-Content -LiteralPath $tmp -Encoding ascii
+    }
+    Write-Host "  Using ephemeral pip.conf for Superset build (copy pip.conf.example -> deploy/superset/pip.conf for Nexus)." -ForegroundColor DarkGray
+    return $tmp
+}
+
+function Get-PostgresVolumeMarkerDir {
+    $volName = docker volume ls -q 2>$null | Where-Object { $_ -match 'postgres_dev_data$' } | Select-Object -First 1
+    if (-not $volName) {
+        return (Join-Path $PSScriptRoot ".schema-migration-markers\_no_volume")
+    }
+    $created = docker volume inspect $volName --format "{{.CreatedAt}}" 2>$null
+    if (-not $created) { $created = "unknown" }
+    $safe = (($volName + "_" + $created) -replace '[^A-Za-z0-9._-]', '_')
+    return (Join-Path $PSScriptRoot ".schema-migration-markers\$safe")
+}
+
+function Invoke-SchemaMigrations {
+    param(
+        [Parameter(Mandatory = $true)][string]$PostgresContainerId
+    )
+
+    $InitScriptsDir = Join-Path $RootDir "deploy/init-scripts/00-schema"
+    if (-not (Test-Path $InitScriptsDir)) {
+        Write-Host "  No schema dir at $InitScriptsDir — skipping." -ForegroundColor DarkGray
+        return
+    }
+
+    $markerDir = Get-PostgresVolumeMarkerDir
+    New-Item -ItemType Directory -Force -Path $markerDir | Out-Null
+    Write-Host "  Schema migration markers: $markerDir" -ForegroundColor DarkGray
+
+    # Orchestrators use psql \i includes; they are for host-side `psql -f` only.
+    # This runner pipes SQL via stdin into docker exec, so \i cannot resolve paths —
+    # and the numbered 01-*.sql / 06-*.sql files are already applied individually below
+    # (same approach as 00-init-all.sh / init-database.ps1).
+    $orchestratorNames = @(
+        "00-init-all-schemas.sql",
+        "00-init-all-schemas-standalone.sql"
+    )
+
+    $files = Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name
+    foreach ($file in $files) {
+        if ($orchestratorNames -contains $file.Name) {
+            Write-Host "    skip (orchestrator) $($file.Name)" -ForegroundColor DarkGray
+            continue
+        }
+
+        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $markerPath = Join-Path $markerDir ($file.Name + ".sha256")
+        if ((Test-Path -LiteralPath $markerPath) -and ((Get-Content -LiteralPath $markerPath -Raw).Trim().ToLowerInvariant() -eq $hash)) {
+            Write-Host "    skip (unchanged) $($file.Name)" -ForegroundColor DarkGray
+            continue
+        }
+
+        Write-Host "    apply $($file.Name)" -ForegroundColor DarkGray
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $output = Get-Content -LiteralPath $file.FullName -Raw | docker exec -i $PostgresContainerId `
+            psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=1 2>&1
+        $exit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEAP
+        if ($exit -ne 0) {
+            Write-Host $output -ForegroundColor Red
+            throw "Schema migration failed: $($file.Name) (exit $exit). Aborting — will not treat as idempotent warning."
+        }
+        Set-Content -LiteralPath $markerPath -Value $hash -Encoding ascii -NoNewline
+    }
+    Write-Host "  Schema migrations complete." -ForegroundColor Green
+}
+
+function Invoke-SupersetBootstrap {
+    $container = "platform-superset-dev"
+    Write-Host "  Bootstrapping Superset (db upgrade + init)..." -ForegroundColor Yellow
+    Wait-ForContainerHealth -ServiceName "superset-final" -DisplayName "Superset" -MaxRetries 90 -SleepSeconds 3
+
+    docker exec $container superset db upgrade
+    if ($LASTEXITCODE -ne 0) { throw "superset db upgrade failed" }
+
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    docker exec $container superset fab create-admin `
+        --username admin --firstname Admin --lastname User `
+        --email admin@superset.com --password admin123 2>&1 | Out-Null
+    $createExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+    # create-admin exits non-zero when the user already exists — that is OK.
+    if ($createExit -ne 0) {
+        Write-Host "    create-admin exited $createExit (OK if admin already exists)." -ForegroundColor DarkGray
+    }
+
+    docker exec $container superset init
+    if ($LASTEXITCODE -ne 0) { throw "superset init failed — aborting (no longer treated as warning)" }
+    Write-Host "  Superset bootstrap complete." -ForegroundColor Green
+}
+
+$env:DOCKER_BUILDKIT = "1"
+$env:SUPERSET_PIP_CONF_FILE = Resolve-SupersetPipConfFile
+
 # ==================== Single Service Mode ====================
 if ($Service) {
     $svc = $ServiceRegistry[$Service]
@@ -459,45 +692,49 @@ if ($Clean) {
     Write-Host "  Done." -ForegroundColor Green
 }
 
-# Step 1: Maven build
+$env:SUPERSET_PIP_CONF_FILE = Resolve-SupersetPipConfFile
+# (DOCKER_BUILDKIT already set above)
+
+# Step 1: Maven build (incremental unless -Clean / -ForceBuild)
 if (-not $SkipMaven) {
-    Write-Host "`n[1/4] Building backend JARs (Maven)..." -ForegroundColor Yellow
-    Push-Location $RootDir
-    try {
-        # Remove backend/*/target before Maven — avoids maven-clean-plugin "Failed to delete target"
-        # on macOS (IDE file locks, iCloud duplicates like "classes 2", odd permissions).
-        if (-not $SkipMavenClean) {
-            Write-Host "  Pre-clean: removing backend/*/target..." -ForegroundColor DarkGray
-            Get-ChildItem -Path (Join-Path $RootDir "backend") -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-                $targetDir = Join-Path $_.FullName "target"
-                if (Test-Path -LiteralPath $targetDir) {
-                    Remove-Item -LiteralPath $targetDir -Recurse -Force -ErrorAction SilentlyContinue
+    $mavenFresh = (-not $Clean) -and (-not $ForceBuild) -and (Test-BackendJarsFresh)
+    if ($mavenFresh) {
+        Write-Host "`n[1/4] Skipping Maven (backend JARs are fresh)." -ForegroundColor DarkGray
+    } else {
+        Write-Host "`n[1/4] Building backend JARs (Maven)..." -ForegroundColor Yellow
+        Push-Location $RootDir
+        try {
+            # Full `mvn clean` only with -Clean. Otherwise package (optionally without clean plugin wipe).
+            if ($Clean -and -not $SkipMavenClean) {
+                Write-Host "  Pre-clean: removing backend/*/target..." -ForegroundColor DarkGray
+                Get-ChildItem -Path (Join-Path $RootDir "backend") -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                    $targetDir = Join-Path $_.FullName "target"
+                    if (Test-Path -LiteralPath $targetDir) {
+                        Remove-Item -LiteralPath $targetDir -Recurse -Force -ErrorAction SilentlyContinue
+                    }
                 }
             }
-        }
 
-        $pl = "backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging,backend/workflow-engine-core,backend/admin-center,backend/developer-workstation,backend/user-portal"
-        # Quote -D... for PowerShell — unquoted `-Dmaven...` is split into a bogus lifecycle phase.
-        # maven.clean.failOnError=false: if clean still hits an undeletable file, continue (pre-clean usually fixes it).
-        if ($SkipMavenClean) {
-            mvn package '-DskipTests' '-Dmaven.clean.failOnError=false' -pl $pl -am
-        } else {
-            mvn clean package '-DskipTests' '-Dmaven.clean.failOnError=false' -pl $pl -am
+            $pl = "backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging,backend/workflow-engine-core,backend/admin-center,backend/developer-workstation,backend/user-portal"
+            if ($Clean -and -not $SkipMavenClean) {
+                mvn clean package '-DskipTests' '-Dmaven.clean.failOnError=false' -pl $pl -am
+            } else {
+                mvn package '-DskipTests' '-Dmaven.clean.failOnError=false' -pl $pl -am
+            }
+            if ($LASTEXITCODE -ne 0) { throw "Maven build failed" }
+            Write-Host "  Maven build complete." -ForegroundColor Green
+        } finally {
+            Pop-Location
         }
-        if ($LASTEXITCODE -ne 0) { throw "Maven build failed" }
-        Write-Host "  Maven build complete." -ForegroundColor Green
-    } finally {
-        Pop-Location
     }
 } else {
     Write-Host "`n[1/4] Skipping Maven build" -ForegroundColor DarkGray
 }
 
-# Step 2: Build frontend
+# Step 2: Build frontend (incremental Vite + Docker)
 if (-not $SkipFrontend) {
-    Write-Host "`n[2/4] Building frontend (local npm build + Docker)..." -ForegroundColor Yellow
+    Write-Host "`n[2/4] Building frontend (incremental npm + Docker)..." -ForegroundColor Yellow
 
-    # Pre-pull nginx:alpine (used by all frontend Dockerfile.local) with fallback mirrors
     $resolvedNginx = Resolve-BaseImage -Candidates @(
         "nginx:alpine",
         "docker.m.daocloud.io/library/nginx:alpine"
@@ -510,42 +747,56 @@ if (-not $SkipFrontend) {
         @{ Name = "developer-workstation-frontend"; Dir = "frontend/developer-workstation" },
         @{ Name = "platform-login-frontend"; Dir = "frontend/login" }
     )
-    
+
     foreach ($fe in $frontends) {
         $feDir = "$RootDir/$($fe.Dir)"
+        $imageName = "dev-$($fe.Name)"
 
-        # DW's Automation tab embeds the vendored AP builder; stage its bundle first so the
-        # `prebuild` hook has something to copy into public/service-task-builder.
         if ($fe.Name -eq "developer-workstation-frontend") {
             Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
         }
 
-        Write-Host "  npm install & build $($fe.Name)..."
-        Push-Location $feDir
-        try {
-            Write-Host "  npm install..." -ForegroundColor DarkGray
-            $prev = $ErrorActionPreference
-            $ErrorActionPreference = "Continue"
-            npm install --prefer-offline --no-audit
-            $npmExit = $LASTEXITCODE
-            $ErrorActionPreference = $prev
-            if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name) (exit code $npmExit)" }
-            # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
-            Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-            # `npm run build` (not bare `npx vite build`) so the DW `prebuild` hook runs and
-            # stages the ServiceTask builder bundle; a no-op difference for the other frontends.
-            npm run build
-            if ($LASTEXITCODE -ne 0) { throw "npm run build failed: $($fe.Name)" }
-        } finally {
-            Pop-Location
+        $needVite = $Clean -or $ForceBuild -or -not (Test-FrontendDistFresh -FrontendDir $fe.Dir)
+        if ($needVite) {
+            Write-Host "  npm install & build $($fe.Name)..."
+            Push-Location $feDir
+            try {
+                Write-Host "  npm install..." -ForegroundColor DarkGray
+                $prev = $ErrorActionPreference
+                $ErrorActionPreference = "Continue"
+                npm install --prefer-offline --no-audit
+                $npmExit = $LASTEXITCODE
+                $ErrorActionPreference = $prev
+                if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name) (exit code $npmExit)" }
+                Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
+                npm run build
+                if ($LASTEXITCODE -ne 0) { throw "npm run build failed: $($fe.Name)" }
+            } finally {
+                Pop-Location
+            }
+        } else {
+            Write-Host "  Skipping Vite for $($fe.Name) (dist fresh)." -ForegroundColor DarkGray
         }
-        
-        Write-Host "  Docker build $($fe.Name) (Dockerfile.local, --no-cache)..."
-        docker build --no-cache -f "$feDir/Dockerfile.local" -t "dev-$($fe.Name)" $feDir
-        if ($LASTEXITCODE -ne 0) { throw "$($fe.Name) docker build failed" }
+
+        $dockerInputs = @(
+            (Join-Path $feDir "dist"),
+            (Join-Path $feDir "Dockerfile.local"),
+            (Join-Path $feDir "nginx.conf"),
+            (Join-Path $feDir "docker-entrypoint.sh")
+        )
+        $needDocker = $Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName $imageName -InputPaths $dockerInputs)
+        if ($needDocker) {
+            $noCache = @()
+            if ($Clean -or $ForceBuild) { $noCache = @("--no-cache") }
+            Write-Host "  Docker build $($fe.Name) (Dockerfile.local)..."
+            docker build @noCache -f "$feDir/Dockerfile.local" -t $imageName $feDir
+            if ($LASTEXITCODE -ne 0) { throw "$($fe.Name) docker build failed" }
+        } else {
+            Write-Host "  Skipping Docker build for $($fe.Name) (image fresh)." -ForegroundColor DarkGray
+        }
     }
-    
-    Write-Host "  Frontend images built." -ForegroundColor Green
+
+    Write-Host "  Frontend images ready." -ForegroundColor Green
 } else {
     Write-Host "`n[2/4] Skipping frontend build" -ForegroundColor DarkGray
 }
@@ -554,7 +805,6 @@ if (-not $SkipFrontend) {
 if (-not $SkipInfra) {
     Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka)..." -ForegroundColor Yellow
 
-    # Pre-pull infra images sequentially to avoid concurrent registry failures
     $infraImages = @(
         "postgres:16.5-alpine",
         "redis:7.2-alpine",
@@ -572,29 +822,12 @@ if (-not $SkipInfra) {
 
     Invoke-ComposeUpSequential -ServiceNames @('postgres', 'redis', 'kafka')
 
-    # First boot runs large init-scripts (demo data + Flowable schema); allow more time.
+    # Healthcheck requires PID 1 = postgres AND pg_isready (init scripts finished).
     $postgresContainerId = Wait-ForContainerHealth -ServiceName "postgres" -DisplayName "PostgreSQL" -MaxRetries 180
-    
-    # Run incremental schema migrations (docker-entrypoint-initdb.d only runs on first init)
-    Write-Host "  Running DB schema migrations..." -ForegroundColor DarkGray
-    $InitScriptsDir = "$RootDir/deploy/init-scripts/00-schema"
-    if (Test-Path $InitScriptsDir) {
-        Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name | ForEach-Object {
-            $scriptName = $_.Name
-            Write-Host "    $scriptName" -ForegroundColor DarkGray
-            # Temporarily relax error-action so docker/psql stderr (NOTICE, WARNING)
-            # doesn't kill the script in Windows PowerShell 5.1. We check $LASTEXITCODE below.
-            $prevEAP = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            Get-Content $_.FullName | docker exec -i $postgresContainerId psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=0 2>&1 | Out-Null
-            $ErrorActionPreference = $prevEAP
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "    WARNING: $scriptName had errors (may be expected for idempotent scripts)" -ForegroundColor Yellow
-            }
-        }
-        Write-Host "  Schema migrations complete." -ForegroundColor Green
-    }
-    
+
+    Write-Host "  Running DB schema migrations (content-hashed, volume-scoped)..." -ForegroundColor DarkGray
+    Invoke-SchemaMigrations -PostgresContainerId $postgresContainerId
+
     Wait-ForContainerHealth -ServiceName "redis" -DisplayName "Redis" -MaxRetries 20
     Wait-ForContainerHealth -ServiceName "kafka" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3
 
@@ -607,7 +840,6 @@ if (-not $SkipInfra) {
 Write-Host "`n[4/4] Starting all services..." -ForegroundColor Yellow
 
 # Resolve Java base image with fallback mirrors before the compose build.
-# DaoCloud and other domestic mirrors may be unreliable; fall back to Docker Hub.
 $resolvedJavaImage = Resolve-BaseImage -Candidates @(
     $JavaBaseImage,
     "eclipse-temurin:17-jre",
@@ -615,56 +847,98 @@ $resolvedJavaImage = Resolve-BaseImage -Candidates @(
 )
 Write-Host "  Java base image resolved: $resolvedJavaImage" -ForegroundColor DarkGray
 
-$buildOk = $false
-$attemptedImages = @($resolvedJavaImage)
-
-while (-not $buildOk -and $attemptedImages.Count -le 3) {
-    $tryImage = $attemptedImages[-1]
-    if ($tryImage -ne $resolvedJavaImage) {
-        Write-Host "  Retrying build with Java base image: $tryImage" -ForegroundColor Yellow
+# Decide which compose services need an image rebuild (skip fresh ones).
+$backendBuildSpecs = @(
+    @{ Service = "workflow-engine"; Image = "dev-workflow-engine"; Module = "backend/workflow-engine-core" },
+    @{ Service = "admin-center"; Image = "dev-admin-center"; Module = "backend/admin-center" },
+    @{ Service = "user-portal"; Image = "dev-user-portal"; Module = "backend/user-portal" },
+    @{ Service = "developer-workstation"; Image = "dev-developer-workstation"; Module = "backend/developer-workstation" }
+)
+$servicesToBuild = [System.Collections.Generic.List[string]]::new()
+foreach ($spec in $backendBuildSpecs) {
+    $jar = Get-BackendJarPath -MavenModule $spec.Module
+    $dockerfile = Join-Path $RootDir "$($spec.Module)/Dockerfile"
+    $inputs = @($dockerfile)
+    if ($jar) { $inputs += $jar }
+    if ($Clean -or $ForceBuild -or -not $jar -or -not (Test-DockerImageFresh -ImageName $spec.Image -InputPaths $inputs)) {
+        $servicesToBuild.Add($spec.Service) | Out-Null
+    } else {
+        Write-Host "  Skipping Docker build for $($spec.Service) (image fresh)." -ForegroundColor DarkGray
     }
+}
 
-    docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage"
-    if ($LASTEXITCODE -eq 0) {
-        $buildOk = $true
-        $resolvedJavaImage = $tryImage
-        break
-    }
+$supersetDockerfile = Join-Path $RootDir "deploy/superset/Dockerfile"
+$supersetInputs = @(
+    $supersetDockerfile,
+    (Join-Path $RootDir "deploy/superset/superset_config.py"),
+    (Join-Path $RootDir "deploy/superset/superset_security_manager.py"),
+    $env:SUPERSET_PIP_CONF_FILE
+)
+if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "dev-superset" -InputPaths $supersetInputs)) {
+    $servicesToBuild.Add("superset-final") | Out-Null
+} else {
+    Write-Host "  Skipping Docker build for superset-final (image fresh)." -ForegroundColor DarkGray
+}
 
-    Write-Host "  docker compose build failed with image: $tryImage" -ForegroundColor Yellow
+$apDockerfile = Join-Path $RootDir "activepieces/Dockerfile"
+if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "activepieces:0.84.0-ee-removed" -InputPaths @($apDockerfile))) {
+    $servicesToBuild.Add("activepieces") | Out-Null
+} else {
+    Write-Host "  Skipping Docker build for activepieces (image fresh)." -ForegroundColor DarkGray
+}
 
-    # Fallback 1: skip optional services (superset-final, activepieces private npm build, etc.)
-    Write-Host "  Attempting fallback: rebuild excluding optional services ($($OptionalComposeServices -join ', '))..." -ForegroundColor Yellow
-    $svcList = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null | Where-Object { $OptionalComposeServices -notcontains $_ }
-    if ($svcList -and $svcList.Count -gt 0) {
-        Write-Host "  Rebuilding services: $($svcList -join ', ')" -ForegroundColor DarkGray
-        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage" $svcList
+$buildOk = $true
+if ($servicesToBuild.Count -eq 0) {
+    Write-Host "  No compose image builds required." -ForegroundColor DarkGray
+} else {
+    Write-Host "  Building services: $($servicesToBuild -join ', ')" -ForegroundColor Yellow
+    $attemptedImages = @($resolvedJavaImage)
+    $buildOk = $false
+    while (-not $buildOk -and $attemptedImages.Count -le 3) {
+        $tryImage = $attemptedImages[-1]
+        if ($tryImage -ne $resolvedJavaImage) {
+            Write-Host "  Retrying build with Java base image: $tryImage" -ForegroundColor Yellow
+        }
+
+        $toBuild = @($servicesToBuild.ToArray())
+        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage" @toBuild
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "  Fallback build succeeded (optional services skipped)." -ForegroundColor Green
             $buildOk = $true
             $resolvedJavaImage = $tryImage
             break
         }
-    }
 
-    # Fallback 2: try next Java base image candidate
-    $nextCandidates = @(
-        "eclipse-temurin:17-jre",
-        "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
-    ) | Where-Object { $_ -notin $attemptedImages }
-    if ($nextCandidates.Count -gt 0) {
-        $nextImage = $nextCandidates[0]
-        Write-Host "  Trying alternative Java base image: $nextImage" -ForegroundColor Yellow
-        docker pull $nextImage 2>&1 | Select-Object -Last 3
-        if ($LASTEXITCODE -eq 0) {
-            $attemptedImages += $nextImage
-            continue
+        Write-Host "  docker compose build failed with image: $tryImage" -ForegroundColor Yellow
+
+        # Fallback: drop optional services from this build batch only
+        $required = @($servicesToBuild | Where-Object { $OptionalComposeServices -notcontains $_ })
+        if ($required.Count -gt 0 -and $required.Count -lt $servicesToBuild.Count) {
+            Write-Host "  Retrying without optional services ($($OptionalComposeServices -join ', '))..." -ForegroundColor Yellow
+            docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage" @required
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  Fallback build succeeded (optional services skipped for this build)." -ForegroundColor Green
+                $buildOk = $true
+                $resolvedJavaImage = $tryImage
+                break
+            }
         }
-        Write-Host "  Cannot pull $nextImage either." -ForegroundColor Yellow
-    }
 
-    # All fallbacks exhausted
-    break
+        $nextCandidates = @(
+            "eclipse-temurin:17-jre",
+            "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+        ) | Where-Object { $_ -notin $attemptedImages }
+        if ($nextCandidates.Count -gt 0) {
+            $nextImage = $nextCandidates[0]
+            Write-Host "  Trying alternative Java base image: $nextImage" -ForegroundColor Yellow
+            docker pull $nextImage 2>&1 | Select-Object -Last 3
+            if ($LASTEXITCODE -eq 0) {
+                $attemptedImages += $nextImage
+                continue
+            }
+            Write-Host "  Cannot pull $nextImage either." -ForegroundColor Yellow
+        }
+        break
+    }
 }
 
 if (-not $buildOk) {
@@ -690,7 +964,6 @@ if (-not $SkipImagePull) {
         Write-Host "  Some images failed to pull:" -ForegroundColor Red
         $failedImages | ForEach-Object { Write-Host "    $_" }
         Write-Host "  You may need to check Docker proxy/network or pull these images manually." -ForegroundColor Yellow
-        # Continue so fallback rebuild can still proceed for local images, but flag error for full up
     } else {
         Write-Host "  All external images pulled." -ForegroundColor Green
     }
@@ -698,7 +971,7 @@ if (-not $SkipImagePull) {
 
 if ($ServicesOnly -or $SkipInfra) {
     Write-Host "  Starting only non-infra services (skip infra)..." -ForegroundColor Yellow
-    $infra = @('postgres','redis','kafka','superset-final')
+    $infra = @('postgres','redis','kafka')
     $allSvcs = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null
     $startSvcs = $allSvcs | Where-Object { $infra -notcontains $_ }
     if ($startSvcs -and $startSvcs.Count -gt 0) {
@@ -727,6 +1000,9 @@ Wait-ForContainerHealth -ServiceName "admin-center" -DisplayName "Admin Center"
 Wait-ForContainerHealth -ServiceName "user-portal" -DisplayName "User Portal"
 Wait-ForContainerHealth -ServiceName "developer-workstation" -DisplayName "Developer Workstation"
 Wait-ForContainerHealth -ServiceName "edge-frontend" -DisplayName "Edge frontend (single-origin)"
+
+# Superset is required: URI fail-closed + bootstrap must succeed (no warning soft-pass).
+Invoke-SupersetBootstrap
 
 Write-Host "  Current service status:" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps
@@ -759,6 +1035,7 @@ Write-Host "    Login:                http://localhost:$EdgePort/login/"
 Write-Host "    Admin:                http://localhost:$EdgePort/admin/"
 Write-Host "    Portal:               http://localhost:$EdgePort/portal/"
 Write-Host "    Developer:            http://localhost:$EdgePort/dev/"
+Write-Host "    BI (Superset):        http://localhost:$EdgePort/bi/"
 Write-Host "    API (via Kong):       http://localhost:$EdgePort/api/"
 Write-Host ""
 
@@ -778,8 +1055,8 @@ Write-Host "Infrastructure:" -ForegroundColor Cyan
 Write-Host "  PostgreSQL:             localhost:5432"
 Write-Host "  Redis:                  localhost:6379"
 Write-Host "  Kafka:                  localhost:9092"
-Write-Host "  Superset (direct):      http://localhost:8088/superset/welcome/"
-Write-Host "  Superset (edge):        http://localhost:$EdgePort/superset/"
+Write-Host "  Superset (edge only):   http://localhost:$EdgePort/bi/"
+Write-Host "  Superset health:        http://localhost:$EdgePort/bi/health"
 Write-Host ""
 # AP piece catalog is provisioned internally (AP_PIECES_SYNC_MODE=NONE): a fresh DB / -Clean
 # starts EMPTY, so the DW Automation tab shows no pieces until piece_metadata is seeded.
@@ -794,3 +1071,4 @@ Write-Host "  Logs:   docker compose -f docker-compose.dev.yml --env-file .env l
 Write-Host "  Superset logs: docker compose -f docker-compose.dev.yml --env-file .env logs -f superset-final"
 Write-Host "  Stop:   docker compose -f docker-compose.dev.yml --env-file .env down"
 Write-Host "  Reset:  .\build-and-deploy.ps1 -Clean"
+Write-Host "  Force rebuild (no volume wipe): .\build-and-deploy.ps1 -ForceBuild"

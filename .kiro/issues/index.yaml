@@ -1403,6 +1403,9 @@
     wrote Flowable null. Fix: syncFormDataToParent + handleLookupModelUpdate; start.vue uses getFormData().
     Assign Task form multiple:false while Start stores array → single init treated Array as row → tag "-".
     Fix: unwrapSingleLookupModelValue in LookupField init.
+    2026-07-27 harden: clearLookupSelectionFromModel never emits clear (sync-from-model only clears
+    selectedRow/searchKeyword); handleClear still emits for user X. Component tests:
+    LookupField.test.ts — empty init no clear; async hydrate shows "Developer Tester".
     Verify: useFormDataLookupMultiSync.test.ts; _verify-lookup-multi-persist-todo.mjs; To Do tag "A llll".
     screenshots:
       frontend/user-portal/verification-screenshots/2026-07-25_lookup-cascade-autofill-test-status.png
@@ -1538,3 +1541,96 @@
     DW mapDesignerValidateForDialog 对齐 Validation+ 全部内置模式（validator 走 form-create Preview）。
     验证：subFormDialogValidationModes 20/20（17 模式 fixture+pass/fail）、
     mapDesignerValidateForDialog 19/19；rebuild 两端 frontend。
+
+- id: "1495"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "Admin Center UAT 启动后绑定 Hikari pool-name 触发不可变属性异常"
+  file: "backend/admin-center/src/main/resources/application.yml"
+  note: |
+    现象：UAT 启动路径中 Hikari 连接池可能已初始化，再绑定
+    spring.datasource.hikari.pool-name 会尝试修改不可变属性，导致启动异常。
+    根因：application.yml 显式设置 pool-name: AdminCenterHikariPool，与池已创建后的
+    晚绑定冲突。
+    修复：删除显式 pool-name，创建时采用 Hikari 默认池名称；不改动 maximum-pool-size /
+    timeout 等运行参数。
+    验证：
+      - 产物 jar 内 application.yml 无 pool-name / AdminCenterHikariPool
+      - 本地：mvn -pl backend/admin-center -am package -DskipTests；
+        docker compose build --no-cache admin-center && up -d；
+        容器 healthy；日志 Started AdminCenterApplication，无 Hikari 不可变属性/pool-name 报错
+      - UAT：构建 → 镜像部署 → rollout → 服务正常启动（同路径验收）
+    关联未修：#1496（启动诊断未关 JDBC 连接）。
+
+- id: "1496"
+  status: open
+  severity: minor
+  category: quality
+  summary: "DataSourceDiagnosticRunner 取得 JDBC 连接后未关闭，可能触发 Hikari 泄漏告警"
+  file: "backend/admin-center/src/main/java/com/admin/bi/config/DataSourceDiagnosticRunner.java"
+  note: |
+    dataSource.getConnection().getMetaData().getURL() 未 try-with-resources / close，
+    连接归还依赖泄漏检测超时。与 #1495 独立，本轮不顺手修复，避免与启动绑定修复混提交。
+
+- id: "1497"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "Portal MI collection 子表重复行：按设计器主键统一收口去重"
+  file: "frontend/user-portal/src/composables/tasks/miCollectionSubTable.ts"
+  note: |
+    现象：MI Sub Task / collection 网格在当前任务、快照与重同步切片叠加后出现同 PK 重复行，
+    薄快照可能冲掉已填字段，无主键幽灵行/附件泄漏行残留。
+    根因：多处仅 mergeSubTableRowsByRowId 或 finalize 过滤，finalize 未先按设计器 PK 折叠；
+    无主键行靠 content fingerprint 存活；复合主键用 some() 误放行缺列行。
+    修复：新增 mergeMiCollectionSubTableRows 统一收口（滤无完整 PK → PK merge 保完整字段 → dropSubsumed）；
+    finalize 改为该 choke point 的单切片别名；hydrate/resync/isolation 多源合并走此入口；
+    rowResolvesDesignerPrimaryKey 与 merge 的 id↔id_idw / rowKey 解析对齐。
+    验证：npm run test:regression:mi → 117 passed（含 mergeMiCollectionSubTableRows 8）；
+    useTaskFormSiblingSliceSync + miDashboardBindingBpmnOverride；npm run build；
+    docker compose up -d --build user-portal-frontend。
+
+- id: "1498"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "wf_extended_task_info.assignment_target VARCHAR(255) 截断大候选人池导致任务创建失败"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/entity/ExtendedTaskInfo.java"
+  note: |
+    现象：角色/BU 解析出较多候选用户时，逗号拼接 assignment_target 超过 255，
+    数据库写入截断或失败，任务创建失败。
+    根因：列与 JPA 映射均为 VARCHAR(255)；全列 btree 索引对超长 CANDIDATE_USERS 串无价值。
+    修复：列改为 TEXT；删除 idx_assignment_target；新建部分索引
+    idx_assignment_target_non_candidate_users（WHERE assignment_type <> 'CANDIDATE_USERS'）；
+    脚本 58-widen-wf-assignment-target-to-text.sql 注册进 00-init-all.sh / init-database.ps1。
+    验证：
+      - mvn -pl backend/workflow-engine-core -Dtest=ExtendedTaskInfoAssignmentTargetTextTest,TaskAssignmentListenerMiRoleModeTest test → 10 passed
+      - 已有库执行迁移：assignment_target=text；部分索引存在
+      - package + docker compose up -d --build workflow-engine
+
+- id: "1499"
+  status: fixed
+  fixed_at: "2026-07-27"
+  severity: major
+  category: bug
+  summary: "跨 FU 粘贴表单 JSON 后 SubTable/Lookup 仍指向旧 bindingId/tableId"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/FormConfigJsonPasteBindingMapper.java"
+  note: |
+    现象：DW 将表单 configJson 粘贴到另一 Function Unit 后，SubTable/Lookup 绑定丢失或指向旧 ID。
+    根因：粘贴配置保留源 FU bindingId/tableId；缺 live 修复 API、dialog defaultValue、list-view 合并 sub-form 元数据。
+    修复：FormConfigJsonPasteBindingMapper + POST .../repair-config（混源检测、orphan repair）；
+    FormDesigner「Paste Form JSON」live 回填；DW/Portal DialogColumn.defaultValue + buildInitialRow；
+    useFormPreviewColumns list-view 合并 defaultValue/options/props/rules。
+    验证：FormConfigJsonPasteBindingMapperTest pass；useFormConfigPaste + buildInitialRowDefaultValue vitest；
+    mvn package -DskipTests；两端 npm run build；compose rebuild developer-workstation + 两端 frontend。
+    续：左侧 form-create JSON 编辑器粘贴绕过 Paste 对话框 → 自动/手动 Repair Bindings；
+    修正 designer.* → form.* i18n（Binding stale 文案）；SubTableBindingSelect 对 stale 选值提示。
+    续 2026-07-28：createMissingTables — FormConfigJsonTableProvisioner + FormCreateRuleToFieldMapper；
+    Paste/Repair/Save 缺表时先建 MAIN/SUB（含 main_id FK）与 RELATED sys_users 再 remap 绑定；
+    左侧粘贴 rule 数组亦可走 repair；Save 调 provisionAndRepairForSave。
+    续：建表优先用源 binding→table_name（占用则 _2/_3 后缀）；FormConfigJsonTableProvisionerTest 覆盖。
+

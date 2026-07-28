@@ -4,6 +4,7 @@ import {
   isMiParticipantScopedSubTableBinding,
   collectNestedSlicesForBindingFromSubTablesWalk,
   finalizeMiCollectionSubTableBindingRows,
+  mergeMiCollectionSubTableRows,
   collapseMiLinkChildRowsToOnePerParticipant,
   backfillMiLinkChildPrimaryKeysFromVariables,
   filterRowsForMiParticipantSubTableBinding,
@@ -281,7 +282,9 @@ export function createTaskDetailMiIsolation(ctx: TaskDetailCtx): TaskDetailMiIso
         const nestRows = ctx.getSavedSubTableRows(nextRowSub as any, binding, forbid)
         if (nestRows?.length) {
           binding.data = cloneSubTableRows(
-            mergeSubTableRowsByRowId(binding.data, nestRows, binding.primaryKeyFields ?? null)
+            ctx.isCurrentMiCollectionSubTableBinding(binding)
+              ? mergeMiCollectionSubTableRows([binding.data, nestRows], binding)
+              : mergeSubTableRowsByRowId(binding.data, nestRows, binding.primaryKeyFields ?? null),
           )
         }
       }

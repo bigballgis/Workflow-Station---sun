@@ -61,7 +61,7 @@ socket 绕过应用层 egress 代理。C-2 用「固定集合 + 无安装面」�
 |---|---|---|
 | D9-1 | **单一安装面**:piece 在线导入/删除的唯一入口是 admin-center `/automation/pieces/*`(平台 JWT + SYS_ADMIN gate);AP 自身 `POST /v1/pieces`、`DELETE /v1/pieces` 不经 Kong `/api/ap` 对浏览器放行,保持 `platformAdminOnly`(共享服务账号专用)双保险;不得引入其它调用方(含脚本化"临时通道") | Kong 路由 + fastify securityAccess |
 | D9-2 | **仅 ARCHIVE**:管理面只提供 ARCHIVE(上传 tarball)安装;REGISTRY 安装面永不开放(那才是"从 registry 拉任意包") | admin-center 硬编码 `packageType=ARCHIVE` |
-| D9-3 | **供应链约束**:tarball 必须是仓库 CI `build-piece` 产物;导入时记录 SHA-256、上传人、时间(审计)。**prod 加严:仅接受与 uat 已导入记录(或 git `deploy/pieces/tarballs/` 留档)哈希一致的包**——prod 不是新代码的首发环境,只接受 uat 已验证的同一物料。**依赖闭包由离线 store 机械强制**:依赖超出 framework 闭包则 `--offline` 安装 fail-loud,无静默拉包路径 | P3 offline store 固有性质 + 审计记录 |
+| D9-3 | **供应链约束**:tarball 必须是仓库 CI `build-piece` 产物;导入时记录 SHA-256、上传人、时间(审计)。**prod 加严:仅接受与 uat 已导入记录(或 git `activepieces/hermes/tarballs/` 留档)哈希一致的包**——prod 不是新代码的首发环境,只接受 uat 已验证的同一物料。**依赖闭包由离线 store 机械强制**:依赖超出 framework 闭包则 `--offline` 安装 fail-loud,无静默拉包路径 | P3 offline store 固有性质 + 审计记录 |
 | D9-4 | **零联网不变量**:uat/prod `AP_PIECES_OFFLINE_INSTALL=true` + `NPM_CONFIG_REGISTRY` fail-closed;`--offline` 下 registry 值仅为缓存命名空间,无网络语义。**方案 C(运行时可达内网 Nexus)否决** | pkg-runner HERMES-PATCH + k8s env(a602b51c 已就位) |
 | D9-5 | **C-2 重述**(拍板后修订 DECISIONS.md):由「piece 白名单冻结 + 离线预装 ⇒ 固定集合、无运行时安装面」改为「**受控集合:烘焙白名单(REGISTRY,镜像预装)+ 经 D9 安装面投放的自研 ARCHIVE 件;单一经审计的安装面;安装过程零联网;prod 仅接受 uat 已验证物料**」。C-1(NetworkPolicy)与 C-3(X-Service-Token)不受影响、仍为必须 | — |
 | D9-6 | **prod 投放路径**:自研件在 dev/uat 在线迭代定稿后,**推荐经 prod admin-center 导入同一 tarball**(免烘焙免发版);烘焙管道(pieces.json 白名单 + prewarm + seed)保留为**官方件投放 / 气隙首装 / 灾备重建**路径,两者按 piece 类型分工(OFFICIAL=烘焙,CUSTOM=在线),不混用 | P1 导出物与 seed 工具链同构(实测) |
@@ -84,7 +84,7 @@ socket 绕过应用层 egress 代理。C-2 用「固定集合 + 无安装面」�
 - [ ] **权限模型**:SYS_ADMIN 单角色是否足够;**prod 导入是否要求四眼原则**(上传者≠批准者);
 - [ ] **审计设计**:log.info 是否升格为审计表(候选 P4:`admin_ap_piece_audit`,含 SHA-256、
       环境、操作类型)——D9-3 的"prod 哈希比对 uat 记录"依赖它,**建议列为拍板前置**;
-- [ ] **供应链校验落地形态**:哈希比对的权威源选 git 留档(`tarballs/`)还是 uat 审计表;
+- [ ] **供应链校验落地形态**:哈希比对的权威源选 git 留档(`activepieces/hermes/tarballs/`)还是 uat 审计表;
       是否需要 CI 签名;
 - [ ] **数据生命周期**:file 表 ARCHIVE 孤儿行(删 piece 后遗留)是否需要清理任务;
 - [ ] **prod 纵深(可选)**:AP community-piece 模块是否加环境开关(评审若对 prod 安装面

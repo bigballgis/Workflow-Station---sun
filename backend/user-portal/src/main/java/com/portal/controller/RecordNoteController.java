@@ -91,10 +91,11 @@ public class RecordNoteController {
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String bodyHtml,
             @RequestParam(required = false) List<String> inlineImageIds,
-            @RequestParam(required = false) List<MultipartFile> files) {
+            @RequestParam(required = false) List<MultipartFile> files,
+            @RequestParam(required = false) String processInstanceId) {
         NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
-        return ApiResponse.success(
-                recordNoteComponent.createComment(userId, target, subject, bodyHtml, files, inlineImageIds));
+        return ApiResponse.success(recordNoteComponent.createComment(
+                userId, target, subject, bodyHtml, files, inlineImageIds, processInstanceId));
     }
 
     @Operation(summary = "Upload an inline image referenced from a rich-text body")
@@ -123,14 +124,17 @@ public class RecordNoteController {
     @PutMapping("/{noteId}")
     public ApiResponse<NoteDetail> update(@CurrentUserId String userId, @PathVariable String noteId,
                                           @RequestBody Map<String, String> body) {
-        return ApiResponse.success(
-                recordNoteComponent.update(userId, noteId, body.get("subject"), body.get("bodyHtml")));
+        // processInstanceId only anchors the change-history entry for RECORD-scope notes
+        // (sub-table rows); it is re-validated against the participant gate server-side.
+        return ApiResponse.success(recordNoteComponent.update(
+                userId, noteId, body.get("subject"), body.get("bodyHtml"), body.get("processInstanceId")));
     }
 
     @Operation(summary = "Soft-delete own note (admin may delete any)")
     @DeleteMapping("/{noteId}")
-    public ApiResponse<Void> delete(@CurrentUserId String userId, @PathVariable String noteId) {
-        recordNoteComponent.delete(userId, noteId);
+    public ApiResponse<Void> delete(@CurrentUserId String userId, @PathVariable String noteId,
+                                    @RequestParam(required = false) String processInstanceId) {
+        recordNoteComponent.delete(userId, noteId, processInstanceId);
         return ApiResponse.success();
     }
 

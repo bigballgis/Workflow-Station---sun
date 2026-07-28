@@ -264,9 +264,22 @@ export async function finalizeSubTableRowOnSave(options: {
   miParticipantRowId?: string | number | null
   miParentParticipantRow?: Record<string, unknown> | null
   miParentTableId?: number | null
+  /**
+   * Sub-table-in-sub-table: the table id of the row this child is nested under. When the
+   * parent row is still unsaved, ensureParentRowsForChildAdd allocates its auto PK so this
+   * child's structural FK can be filled — that allocation must travel back to the host row,
+   * otherwise the parent allocates a second, different PK on its own save and this child's
+   * FK points at a value no row ever carries.
+   */
+  parentTableId?: number | null
   t?: (key: string, params?: Record<string, unknown>) => string
 }): Promise<
-  | { ok: true; row: Record<string, unknown>; primaryFormDataPatch?: Record<string, unknown> }
+  | {
+      ok: true
+      row: Record<string, unknown>
+      primaryFormDataPatch?: Record<string, unknown>
+      parentRowPatch?: Record<string, unknown>
+    }
   | { ok: false; message: string }
 > {
   const {
@@ -285,6 +298,7 @@ export async function finalizeSubTableRowOnSave(options: {
   })
 
   let primaryFormDataPatch: Record<string, unknown> | undefined
+  let parentRowPatch: Record<string, unknown> | undefined
 
   if (fkMetas.length > 0) {
     let missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
@@ -294,6 +308,9 @@ export async function finalizeSubTableRowOnSave(options: {
       && parentTablesById
       && Object.keys(parentTablesById).length > 0
     ) {
+      const parentTid = options.parentTableId != null ? Number(options.parentTableId) : null
+      const parentRowBefore =
+        parentTid != null ? rowAddContext.ancestorRowsByTableId?.[parentTid] : undefined
       const ensured = await ensureParentRowsForChildAdd({
         fkMetas,
         rowAddContext,
@@ -304,6 +321,12 @@ export async function finalizeSubTableRowOnSave(options: {
       })
       rowAddContext = ensured.rowAddContext
       primaryFormDataPatch = ensured.primaryFormDataPatch
+      if (parentTid != null) {
+        const parentRowAfter = rowAddContext.ancestorRowsByTableId?.[parentTid]
+        if (parentRowAfter && parentRowAfter !== parentRowBefore) {
+          parentRowPatch = { ...parentRowAfter }
+        }
+      }
       missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
     }
     if (missing.length > 0) {
@@ -343,5 +366,6 @@ export async function finalizeSubTableRowOnSave(options: {
     ok: true,
     row,
     ...(primaryFormDataPatch ? { primaryFormDataPatch } : {}),
+    ...(parentRowPatch ? { parentRowPatch } : {}),
   }
 }

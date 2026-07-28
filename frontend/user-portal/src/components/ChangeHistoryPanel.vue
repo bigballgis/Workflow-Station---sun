@@ -169,6 +169,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Document, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import { RECORD_NOTE_CHANGED_EVENT } from './formRendererHelpers/recordNoteFields'
 import { useChangeHistoryFormatting } from '@/composables/changeHistoryPanel/useChangeHistoryFormatting'
 import { useChangeHistoryLoader } from '@/composables/changeHistoryPanel/useChangeHistoryLoader'
 
@@ -201,7 +202,15 @@ const {
 } = formatting
 
 // 拉取历史并按快照时间/任务过滤
-const { loading, error, records } = useChangeHistoryLoader(props, t, dayjs)
+const { loading, error, records, loadHistory } = useChangeHistoryLoader(props, t, dayjs)
+
+// Record Note 的增删改不经过表单保存，故由 RecordNoteField 广播后就地重取，
+// 否则新写的备注要等整页刷新才出现在变更历史里。
+function onRecordNoteChanged() {
+  void loadHistory()
+}
+onMounted(() => window.addEventListener(RECORD_NOTE_CHANGED_EVENT, onRecordNoteChanged))
+onBeforeUnmount(() => window.removeEventListener(RECORD_NOTE_CHANGED_EVENT, onRecordNoteChanged))
 
 const sectionExpandedNames = ref(['history'])
 </script>

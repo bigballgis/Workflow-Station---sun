@@ -92,12 +92,20 @@ export async function getRecordNoteDetail(noteId: string): Promise<RecordNoteDet
 
 export async function createRecordNote(
   target: RecordNoteTargetParams,
-  payload: { subject?: string; bodyHtml?: string; inlineImageIds?: string[]; files?: File[] },
+  payload: {
+    subject?: string
+    bodyHtml?: string
+    inlineImageIds?: string[]
+    files?: File[]
+    /** Anchors the change-history entry for RECORD-scope notes (row-id targets). */
+    processInstanceId?: string | null
+  },
 ): Promise<RecordNoteItem | null> {
   const form = new FormData()
   Object.entries(targetQuery(target)).forEach(([k, v]) => form.append(k, String(v)))
   if (payload.subject) form.append('subject', payload.subject)
   if (payload.bodyHtml) form.append('bodyHtml', payload.bodyHtml)
+  if (payload.processInstanceId) form.append('processInstanceId', payload.processInstanceId)
   payload.inlineImageIds?.forEach((id) => form.append('inlineImageIds', id))
   payload.files?.forEach((f) => form.append('files', f))
   const res = (await service.post('/record-notes', form, {
@@ -121,7 +129,7 @@ export async function uploadInlineImage(
 
 export async function updateRecordNote(
   noteId: string,
-  payload: { subject?: string; bodyHtml: string },
+  payload: { subject?: string; bodyHtml: string; processInstanceId?: string | null },
 ): Promise<RecordNoteDetail | null> {
   const res = (await service.put(
     `/record-notes/${encodeURIComponent(noteId)}`,
@@ -130,8 +138,10 @@ export async function updateRecordNote(
   return res?.data ?? null
 }
 
-export async function deleteRecordNote(noteId: string): Promise<void> {
-  await service.delete(`/record-notes/${encodeURIComponent(noteId)}`)
+export async function deleteRecordNote(noteId: string, processInstanceId?: string | null): Promise<void> {
+  await service.delete(`/record-notes/${encodeURIComponent(noteId)}`, {
+    ...(processInstanceId ? { params: { processInstanceId } } : {}),
+  })
 }
 
 /** Re-anchors New-Request draft notes onto the freshly started process instance. */

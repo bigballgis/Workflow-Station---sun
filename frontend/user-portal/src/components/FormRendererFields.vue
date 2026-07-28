@@ -259,6 +259,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :config="field._recordNote"
           :table-id="(ctx.primaryTableId ?? null) as number | null"
           :record-id="(ctx.processInstanceId ?? null) as string | null"
+          :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
           :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
           :readonly="false"
         />
@@ -268,6 +269,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
         :config="field._recordNote"
         :table-id="(ctx.primaryTableId ?? null) as number | null"
         :record-id="(ctx.processInstanceId ?? null) as string | null"
+        :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
         :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
         :readonly="false"
       />
@@ -346,6 +348,12 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
             :sub-table-bindings="ctx.subTableBindings as any[]"
             :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
             :suppress-link-only-standalone-sub-tables="ctx.viewContext === 'initiatorRequest'"
+            :host-table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
+            :host-field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
+            :host-function-unit-id="ctx.functionUnitId as string | undefined"
+            :host-task-id="ctx.taskId as string | undefined"
+            :host-primary-form-data="ctx.primaryFormData as Record<string, unknown> | undefined"
+            :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
             @update:row="(row: Record<string, any>) => ctx.handleInlineFormUpdate(field, row)"
             @save="ctx.handleInlineFormSave?.()"
           />

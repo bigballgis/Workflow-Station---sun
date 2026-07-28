@@ -1,7 +1,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { FormDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
-import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
+import { resolveRelationViewEntry, resolveBindingKeyedEntry } from '@/utils/formConfigBindingResolve'
 import { flattenRuleLayoutContainers } from '@/utils/formDesigner'
 import { parseLookupConfig } from '@/utils/formPreview'
 import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
@@ -224,7 +224,10 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
 
   function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
     const liveColumns = subTableViewState.value[bindingId]?.viewFields
-    const savedColumns = (config.subListViews || {})[bindingId]?.columns
+    const bindings = selectedForm.value?.tableBindings ?? []
+    const savedEntry = resolveBindingKeyedEntry(config.subListViews, bindingId, bindings, 'SUB')
+      ?? (config.subListViews || {})[bindingId]
+    const savedColumns = savedEntry?.columns
     const listColumns = liveColumns?.length ? liveColumns : savedColumns
     if (Array.isArray(listColumns) && listColumns.length) {
       const ruleByField = new Map(flattenRuleLayoutContainers(rule).map((ruleItem: any) => [ruleItem?.field, ruleItem]))
@@ -276,12 +279,14 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig) {
           const lookupPreviewConfig = resolveLookupPreviewConfig(fieldRule.props?.lookupConfig || '{}', config)
           const lookupCfg = parseLookupConfig(fieldRule.props?.lookupConfig || '{}')
+          const defaultValue = resolveRuleDefaultValue(fieldRule as Record<string, unknown>)
           return {
             field: column.fieldName,
             label: column.displayName || column.columnLabel || fieldRule.title || column.fieldName,
             type: 'lookup',
             minWidth: 260,
             placeholder: fieldRule.props?.placeholder || lookupPreviewConfig.placeholder,
+            ...(defaultValue !== undefined ? { defaultValue } : {}),
             props: {
               lookupConfig: fieldRule.props?.lookupConfig || '{}',
               searchFields: lookupPreviewConfig.searchFields,
@@ -309,13 +314,45 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
                 : {}),
             }
           : null
+        const passProps: Record<string, unknown> = { ...(uploadProps || {}) }
+        const rawOptions = fieldRule?.options || fieldRule?.props?.options
+        const options = rawOptions
+          ? (colType === 'cascader'
+            ? rawOptions
+            : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
+          : undefined
+        if (options) passProps.options = options
+        if (fieldRule?.props) {
+          for (const key of [
+            'precision', 'min', 'max', 'rows', 'maxlength', 'multiple',
+            'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder',
+            'treeData', 'checkStrictly', 'showAlpha', 'allowHalf', 'step',
+          ]) {
+            if (fieldRule.props[key] !== undefined && passProps[key] === undefined) {
+              passProps[key] = fieldRule.props[key]
+            }
+          }
+        }
+        const defaultValue = fieldRule
+          ? resolveRuleDefaultValue(fieldRule as Record<string, unknown>)
+          : undefined
+        const required = fieldRule
+          ? isFormCreateRuleRequired(fieldRule as Record<string, unknown>)
+          : undefined
+        const elRules = fieldRule
+          ? mapDesignerValidateForDialog(fieldRule as Record<string, unknown>, colType)
+          : []
         return {
           field: column.fieldName,
           label: column.displayName || column.columnLabel || fieldRule?.title || column.fieldName,
           type: colType,
           minWidth: colType === 'upload' ? 180 : 100,
+          ...(required ? { required: true } : {}),
           ...(fieldRule && isFormCreateRuleReadonly(fieldRule) ? { readonly: true } : {}),
-          ...(uploadProps ? { props: uploadProps } : {}),
+          ...(elRules.length > 0 ? { rules: elRules } : {}),
+          ...(options ? { options } : {}),
+          ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
+          ...(defaultValue !== undefined ? { defaultValue } : {}),
         }
       })
     }

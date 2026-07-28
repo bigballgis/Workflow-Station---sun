@@ -110,6 +110,26 @@ export function collectNestedSlicesForBindingFromSubTablesWalk(
   return out
 }
 
+/** True when a `__subTables__` slice key addresses this binding (numeric id or table-name alias). */
+function subTableSliceKeyBelongsToBinding(
+  key: string,
+  binding: { bindingId: number; tableName?: string; physicalTableName?: string },
+): boolean {
+  const k = String(key).trim()
+  if (!k) return false
+  if (k === String(binding.bindingId)) return true
+  const norm = normalizeSubTableName(k)
+  for (const name of [binding.tableName, binding.physicalTableName]) {
+    if (!name) continue
+    const raw = String(name).trim()
+    if (!raw) continue
+    if (k === raw || norm === normalizeSubTableName(raw)) return true
+    const stripped = stripLinkFormDesignerTableLabel(raw)
+    if (stripped !== raw && (k === stripped || norm === normalizeSubTableName(stripped))) return true
+  }
+  return false
+}
+
 export function pullNestedRowsForBindingFromParentRows(
   child: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
   parentRows: any[],
@@ -152,6 +172,15 @@ export function pullNestedRowsForBindingFromParentRows(
       for (const [k, v] of Object.entries(sto)) {
         const kid = Number(k)
         if (!Number.isFinite(kid) || kid === child.bindingId) continue
+        // A slice we can positively attribute to ANOTHER table is never this binding's rows.
+        // Without this, a 3-level nest fed the grandchild slice (nst_package) to the middle
+        // binding (nst_shipment) — phantom parent rows, grandchild rows detached from the parent.
+        if (bindingTableById != null && childTid != null) {
+          const otid = bindingTableById.get(kid)
+          if (otid != null && !Number.isNaN(Number(otid)) && Number(otid) !== Number(childTid)) {
+            continue
+          }
+        }
         if (Array.isArray(v) && v.length > 0) ambiguous.push(v)
       }
       if (ambiguous.length === 1) {
@@ -217,6 +246,19 @@ export function hydrateChildSubTablesFromParentsNestedRows<
   savedSubTables?: Record<string, unknown> | null,
   bindingTableById?: Map<number, number | null>
 ): void {
+  // Peers already carry tableId; deriving the map when the caller passes none lets the
+  // "sole nested slice" fallback reject slices that belong to a different table.
+  const tableById =
+    bindingTableById ??
+    (() => {
+      const m = new Map<number, number | null>()
+      for (const b of bindings) {
+        const tid = b.tableId != null ? Number(b.tableId) : null
+        if (tid != null && Number.isFinite(tid)) m.set(Number(b.bindingId), tid)
+      }
+      return m.size > 0 ? m : undefined
+    })()
+
   for (const child of bindings) {
     /**
      * Flat {@code __subTables__[childBindingId]} may contain thin placeholder rows (assignee-only).
@@ -232,7 +274,7 @@ export function hydrateChildSubTablesFromParentsNestedRows<
         ...pullNestedRowsForBindingFromParentRows(
           child,
           Array.isArray(parent.data) ? parent.data : [],
-          bindingTableById
+          tableById
         )
       )
     }
@@ -243,10 +285,15 @@ export function hydrateChildSubTablesFromParentsNestedRows<
       typeof savedSubTables === 'object'
     ) {
       const flattened: any[] = []
-      for (const val of Object.values(savedSubTables)) {
-        if (Array.isArray(val)) flattened.push(...val)
+      for (const [key, val] of Object.entries(savedSubTables)) {
+        if (!Array.isArray(val)) continue
+        // Skip the child's OWN slices (numeric id / table-name aliases): those rows are the
+        // binding's own data, not parents. Scanning them made a middle sub-table adopt its
+        // grandchildren (nst_shipment pulling nst_package rows) once nesting is 3 levels deep.
+        if (subTableSliceKeyBelongsToBinding(key, child)) continue
+        flattened.push(...val)
       }
-      mergedIncoming = pullNestedRowsForBindingFromParentRows(child, flattened, bindingTableById)
+      mergedIncoming = pullNestedRowsForBindingFromParentRows(child, flattened, tableById)
     }
 
     if (mergedIncoming.length === 0) continue

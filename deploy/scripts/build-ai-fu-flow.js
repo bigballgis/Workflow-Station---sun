@@ -24,8 +24,8 @@ const path = require('path');
 const AI_PROVIDER_MODEL = { model: 'deepseek-v4-pro', provider: 'custom' };
 
 // ============================================================================
-// 三个阶段的 system prompt(从 deploy/n8n-workflows/ai-function-unit-gen-workflow.json
-// 移植;删去「必须调用 DB 查询工具」段落,改为「数据已在下方提供」——因为后端已把上下文喂进来)。
+// 三个阶段的 system prompt(自旧 n8n `ai-function-unit-gen` workflow 移植,该模板已随 n8n 一并删除;
+// 移植时删去「必须调用 DB 查询工具」段落,改为「数据已在下方提供」——因为后端已把上下文喂进来)。
 // ============================================================================
 
 const DATA_NOTE = [

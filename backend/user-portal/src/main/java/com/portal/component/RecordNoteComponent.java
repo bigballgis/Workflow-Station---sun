@@ -6,14 +6,17 @@ import com.portal.dto.RecordNoteDtos.NoteDetail;
 import com.portal.dto.RecordNoteDtos.NoteItem;
 import com.portal.dto.RecordNoteDtos.NoteTarget;
 import com.portal.entity.RecordNote;
+import com.portal.enums.ChangeType;
 import com.portal.service.RecordNoteService;
 import com.portal.service.RecordNoteService.RecordNoteException;
 import com.portal.service.UserDisplayNameResolver;
+import com.portal.util.RecordNoteAuditSummary;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -41,6 +44,7 @@ public class RecordNoteComponent {
     private final ProcessComponent processComponent;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
+    private final ChangeHistoryComponent changeHistoryComponent;
 
     public PageResponse<NoteItem> list(String userId, NoteTarget target, int page, int size) {
         checkTargetShape(target);
@@ -65,11 +69,15 @@ public class RecordNoteComponent {
     }
 
     public NoteItem createComment(String userId, NoteTarget target, String subject, String bodyHtml,
-                                  List<MultipartFile> files, List<String> adoptInlineIds) {
+                                  List<MultipartFile> files, List<String> adoptInlineIds,
+                                  String processInstanceId) {
         checkTargetShape(target);
         checkAccess(userId, target);
-        return recordNoteService.createComment(target, subject, bodyHtml, files, adoptInlineIds,
+        NoteItem created = recordNoteService.createComment(target, subject, bodyHtml, files, adoptInlineIds,
                 userId, resolveName(userId));
+        audit(userId, target, processInstanceId, ChangeType.RECORD_NOTE_ADD,
+                null, RecordNoteAuditSummary.created(created, uploadedFileNames(files)));
+        return created;
     }
 
     public NoteItem createInlineImage(String userId, NoteTarget target, MultipartFile file) {
@@ -78,20 +86,27 @@ public class RecordNoteComponent {
         return recordNoteService.createAttachment(target, file, true, userId, resolveName(userId));
     }
 
-    public NoteDetail update(String userId, String noteId, String subject, String bodyHtml) {
+    public NoteDetail update(String userId, String noteId, String subject, String bodyHtml,
+                             String processInstanceId) {
         RecordNote note = requireLive(noteId);
         checkAccess(userId, targetOf(note));
-        return recordNoteService.update(noteId, subject, bodyHtml, userId);
+        String before = RecordNoteAuditSummary.existing(note);
+        NoteDetail updated = recordNoteService.update(noteId, subject, bodyHtml, userId);
+        audit(userId, targetOf(note), processInstanceId, ChangeType.RECORD_NOTE_UPDATE,
+                before, RecordNoteAuditSummary.updated(updated));
+        return updated;
     }
 
-    public void delete(String userId, String noteId) {
+    public void delete(String userId, String noteId, String processInstanceId) {
         RecordNote note = requireLive(noteId);
         checkAccess(userId, targetOf(note));
         boolean owner = note.getCreatedBy().equals(userId);
         if (!owner && !functionUnitAccessComponent.isSystemAdministrator(userId)) {
             throw new RecordNoteException("NOT_OWNER", "Only the author or an administrator can delete a note");
         }
+        String before = RecordNoteAuditSummary.existing(note);
         recordNoteService.softDelete(noteId, userId);
+        audit(userId, targetOf(note), processInstanceId, ChangeType.RECORD_NOTE_DELETE, before, null);
     }
 
     /**
@@ -128,6 +143,65 @@ public class RecordNoteComponent {
             throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
         }
         return detail;
+    }
+
+    /**
+     * Mirror the note mutation into the hosting instance's change history.
+     * Silent no-op when no instance can be established — a New-Request draft has none yet
+     * (its notes are re-anchored by {@link #adoptDraftNotes}), and change history is
+     * per-instance by definition.
+     */
+    private void audit(String userId, NoteTarget target, String claimedProcessInstanceId,
+                       ChangeType changeType, String oldValue, String newValue) {
+        String processInstanceId = resolveAuditInstanceId(userId, target, claimedProcessInstanceId);
+        if (processInstanceId == null) {
+            return;
+        }
+        // RECORD scope: keep the entry pinned to its sub-table row so the multi-instance
+        // row filter in ChangeHistoryComponent does not leak it onto sibling rows.
+        String rowIdentifier = RecordNote.TARGET_RECORD.equals(target.getTargetType())
+                && !processInstanceId.equals(target.getTargetId())
+                ? target.getTargetId()
+                : null;
+        changeHistoryComponent.recordNoteChange(processInstanceId, userId, changeType,
+                rowIdentifier, oldValue, newValue);
+    }
+
+    /**
+     * The instance an audit row belongs to. A TABLE-scope target id *is* the instance id
+     * (also true of legacy RECORD-on-instance rows). RECORD-scope targets are sub-table row
+     * ids, so the caller supplies the hosting instance — accepted only after the same
+     * participant/admin gate that guards note access, never on the client's word alone.
+     */
+    private String resolveAuditInstanceId(String userId, NoteTarget target, String claimedProcessInstanceId) {
+        if (target != null && processComponent.getProcessDetail(target.getTargetId()) != null) {
+            return target.getTargetId();
+        }
+        if (claimedProcessInstanceId == null || claimedProcessInstanceId.isBlank()) {
+            return null;
+        }
+        ProcessInstanceInfo detail = processComponent.getProcessDetail(claimedProcessInstanceId);
+        if (detail == null) {
+            return null;
+        }
+        if (functionUnitAccessComponent.isSystemAdministrator(userId)
+                || processComponent.isProcessParticipant(userId, detail)) {
+            return claimedProcessInstanceId;
+        }
+        return null;
+    }
+
+    private static List<String> uploadedFileNames(List<MultipartFile> files) {
+        List<String> names = new ArrayList<>();
+        if (files == null) {
+            return names;
+        }
+        for (MultipartFile file : files) {
+            if (file != null && !file.isEmpty() && file.getOriginalFilename() != null) {
+                names.add(file.getOriginalFilename());
+            }
+        }
+        return names;
     }
 
     private void checkAccess(String userId, NoteTarget target) {

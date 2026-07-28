@@ -1,4 +1,6 @@
 /**
+ * HERMES-PATCH-009 (docs/ap-integration/HERMES_PATCHES.md)
+ *
  * Rewrites hardcoded `https://cdn.activepieces.com` references to the local mirror
  * served from our own origin (`/ap-cdn`).
  *

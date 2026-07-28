@@ -14,6 +14,7 @@ const MI_REGRESSION_FILES = [
   'src/composables/tasks/__tests__/subTableRowMetaFields.predicates.test.ts',
   'src/composables/tasks/__tests__/subTableRowMetaFields.merge.test.ts',
   'src/composables/tasks/__tests__/mergeSubTableRowsMiMerge.test.ts',
+  'src/composables/tasks/__tests__/mergeMiCollectionSubTableRows.test.ts',
   'src/composables/tasks/__tests__/mcyInitiatorMyRequest.test.ts',
   'src/composables/tasks/__tests__/subForm2CarryForward.test.ts',
   'src/composables/tasks/__tests__/miCollectionIdIdwScrub.test.ts',

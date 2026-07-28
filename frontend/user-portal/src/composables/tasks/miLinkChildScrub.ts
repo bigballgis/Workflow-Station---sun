@@ -4,6 +4,7 @@
  */
 
 import { isAllocatedUuidPrimaryKey, MI_LINK_CHILD_SCALAR_KEYS } from './internal'
+import { subTableFieldValueKey } from './subTableCore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { stripForeignParticipantIdIdwFromLinkChildRow } from './miLinkChildIdentity'
 
@@ -115,13 +116,6 @@ export function scrubMiCorruptLinkChildRowsForParent(
   }
 }
 
-function nonEmptyScalarText(v: unknown): string | null {
-  if (v === undefined || v === null) return null
-  if (typeof v === 'object') return null
-  const s = String(v).trim()
-  return s === '' ? null : s
-}
-
 /**
  * A previously hoisted nested row that went through backend PK/FK enrichment gains fields the
  * still-un-enriched nested origin lacks (row_id, FK column, audit columns). The row_id-based merge
@@ -129,6 +123,10 @@ function nonEmptyScalarText(v: unknown): string | null {
  * attachment doubled in the TODO top-level table). Detect that shape: every non-empty business field
  * of the nested copy equals the flat row's value, and the flat row carries at least one extra
  * non-empty field — then the flat row IS this nested row, post-enrichment.
+ *
+ * Object-valued cells (LOOKUP selections, file descriptors) take part in the comparison via
+ * {@link subTableFieldValueKey}: skipping them made two grandchild rows that differ ONLY by their
+ * lookup selection look identical, so the second one was dropped instead of hoisted.
  */
 function nestedCopyMatchesEnrichedFlatRow(
   nested: Record<string, unknown>,
@@ -137,17 +135,17 @@ function nestedCopyMatchesEnrichedFlatRow(
   let comparedFields = 0
   for (const [k, v] of Object.entries(nested)) {
     if (k.startsWith('__')) continue
-    const nv = nonEmptyScalarText(v)
+    const nv = subTableFieldValueKey(v)
     if (nv == null) continue
-    const fv = nonEmptyScalarText(flat[k])
+    const fv = subTableFieldValueKey(flat[k])
     if (fv == null || fv !== nv) return false
     comparedFields++
   }
   if (comparedFields === 0) return false
   for (const [k, v] of Object.entries(flat)) {
     if (k.startsWith('__')) continue
-    if (nonEmptyScalarText(v) == null) continue
-    if (nonEmptyScalarText(nested[k]) == null) return true
+    if (subTableFieldValueKey(v) == null) continue
+    if (subTableFieldValueKey(nested[k]) == null) return true
   }
   return false
 }

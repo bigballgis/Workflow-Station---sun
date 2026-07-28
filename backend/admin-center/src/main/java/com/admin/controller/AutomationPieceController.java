@@ -94,7 +94,7 @@ public class AutomationPieceController {
             automationPieceService.deletePiece(name, version, force);
         } catch (AutomationPieceService.PieceInUseException e) {
             return ResponseEntity.status(409).body(ApiResponse.error("PIECE_IN_USE",
-                    String.valueOf(e.getFlowCount())));
+                    String.join(", ", e.getFlowNames())));
         }
         log.info("Automation piece deleted: {}@{} (force={}) by {}", name, version, force,
                 SecurityContextUtils.getCurrentUsername());

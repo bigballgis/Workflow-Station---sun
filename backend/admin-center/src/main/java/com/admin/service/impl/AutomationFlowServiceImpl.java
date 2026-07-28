@@ -8,7 +8,6 @@ import com.admin.servicetask.config.ServiceTaskProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpEntity;
@@ -18,6 +17,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import com.admin.config.RestTemplateConfig;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
@@ -44,7 +47,6 @@ import java.util.Optional;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AutomationFlowServiceImpl implements AutomationFlowService {
 
     /** 每 flow 取最新版本做展示；发布态看 publishedVersionId */
@@ -135,7 +137,20 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     private final ObjectMapper objectMapper;
     private final ServiceTaskApiClient serviceTaskApiClient;
     private final ServiceTaskProperties serviceTaskProperties;
+    /** AP control-plane calls only — long read timeout, own breaker (see RestTemplateConfig). */
     private final RestTemplate restTemplate;
+
+    public AutomationFlowServiceImpl(JdbcTemplate jdbcTemplate,
+                                          ObjectMapper objectMapper,
+                                          ServiceTaskApiClient serviceTaskApiClient,
+                                          ServiceTaskProperties serviceTaskProperties,
+                                          @Qualifier(RestTemplateConfig.AP_REST_TEMPLATE) RestTemplate restTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
+        this.serviceTaskApiClient = serviceTaskApiClient;
+        this.serviceTaskProperties = serviceTaskProperties;
+        this.restTemplate = restTemplate;
+    }
 
     @Override
     public List<AutomationFlowSummary> listFlows() {
@@ -197,12 +212,61 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     }
 
     @Override
+    public Optional<FlowExportFile> exportFlowByRef(String ref) {
+        return resolveFlowRef(ref).map(this::exportFlow);
+    }
+
+    @Override
     public FlowImportResult importFlow(byte[] json, boolean publish) {
-        JsonNode export = readExport(json);
+        return upsertFlow(serviceTaskApiClient.signInShared(), readExport(json), publish);
+    }
+
+    @Override
+    public List<FlowRestoreResult> restoreFlows(List<JsonNode> flowExports) {
+        if (flowExports == null || flowExports.isEmpty()) {
+            return List.of();
+        }
+        List<FlowRestoreResult> results = new ArrayList<>();
+        // 全部已存在时不必登录 AP：延迟到第一个真正要写的 flow
+        ServiceTaskApiClient.ApSession session = null;
+        for (JsonNode export : flowExports) {
+            validateExport(export);
+            String flowKey = export.path("flowKey").asText();
+            String displayName = export.path("displayName").asText();
+
+            // 与引擎部署期同一把解析尺（跨 project 按迁移键全局查）：解析得到就意味着
+            // 部署期能接上,无须再造一份
+            Optional<String> existing = resolveFlowRef(flowKey);
+            if (existing.isPresent()) {
+                results.add(new FlowRestoreResult(flowKey, displayName, existing.get(),
+                        FlowRestoreStatus.ALREADY_PRESENT, null));
+                continue;
+            }
+            if (session == null) {
+                session = serviceTaskApiClient.signInShared();
+            }
+            FlowImportResult drafted = upsertFlow(session, export, false);
+            try {
+                publishFlow(session, drafted.flowId());
+                results.add(new FlowRestoreResult(flowKey, displayName, drafted.flowId(),
+                        FlowRestoreStatus.CREATED, null));
+            } catch (ServiceTaskApiException e) {
+                // 草稿已落地,只是发布未过(多为本环境缺 connection 凭据——凭据设计上不随包走)。
+                // 不吞:状态与原因随结果回传给调用方展示,运维补齐凭据后在 Automation 管理页发布。
+                log.warn("Restored flow '{}' ({}) imported but not published: {}",
+                        displayName, drafted.flowId(), e.getMessage());
+                results.add(new FlowRestoreResult(flowKey, displayName, drafted.flowId(),
+                        FlowRestoreStatus.PUBLISH_FAILED, e.getMessage()));
+            }
+        }
+        return results;
+    }
+
+    private FlowImportResult upsertFlow(ServiceTaskApiClient.ApSession session,
+                                        JsonNode export, boolean publish) {
         String flowKey = export.path("flowKey").asText();
         String displayName = export.path("displayName").asText();
 
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
         String projectId = resolveTargetProjectId(session);
 
         List<Map<String, Object>> matches =
@@ -232,11 +296,15 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         applyFlowOperation(session, flowId, "IMPORT_FLOW", importRequest);
 
         if (publish) {
-            ObjectNode publishRequest = objectMapper.createObjectNode();
-            publishRequest.put("status", "ENABLED");
-            applyFlowOperation(session, flowId, "LOCK_AND_PUBLISH", publishRequest);
+            publishFlow(session, flowId);
         }
         return new FlowImportResult(flowId, flowKey, displayName, created, publish);
+    }
+
+    private void publishFlow(ServiceTaskApiClient.ApSession session, String flowId) {
+        ObjectNode publishRequest = objectMapper.createObjectNode();
+        publishRequest.put("status", "ENABLED");
+        applyFlowOperation(session, flowId, "LOCK_AND_PUBLISH", publishRequest);
     }
 
     @Override
@@ -408,14 +476,30 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         applyFlowOperation(session, flowId, "UPDATE_METADATA", request);
     }
 
+    /**
+     * AP 失败一律以 {@link ServiceTaskApiException}（→502，带 AP 原始信息）出场。
+     *
+     * <p>RestTemplate 默认错误处理对非 2xx <b>抛 {@link HttpStatusCodeException}</b> 而非返回
+     * 状态码，所以下方的状态判断只是兜底；真正的失败路径是 catch。调用方据此区分"AP 拒绝"
+     * 与其它异常（如 restoreFlows 把发布失败降级成 PUBLISH_FAILED 而非中断整包导入）。</p>
+     */
     private void applyFlowOperation(ServiceTaskApiClient.ApSession session, String flowId,
                                     String type, JsonNode request) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("type", type);
         body.set("request", request);
-        ResponseEntity<String> response = restTemplate.exchange(
-                apUrl("/api/v1/flows/" + flowId), HttpMethod.POST,
-                new HttpEntity<>(body.toString(), jsonHeaders(session.token())), String.class);
+        ResponseEntity<String> response;
+        try {
+            response = restTemplate.exchange(
+                    apUrl("/api/v1/flows/" + flowId), HttpMethod.POST,
+                    new HttpEntity<>(body.toString(), jsonHeaders(session.token())), String.class);
+        } catch (HttpStatusCodeException e) {
+            throw new ServiceTaskApiException("AP flow operation " + type + " failed: HTTP "
+                    + e.getStatusCode() + " " + e.getResponseBodyAsString(), e);
+        } catch (RestClientException e) {
+            throw new ServiceTaskApiException(
+                    "AP flow operation " + type + " failed: " + e.getMessage(), e);
+        }
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new ServiceTaskApiException(
                     "AP flow operation " + type + " failed: HTTP " + response.getStatusCode());
@@ -521,7 +605,12 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         } catch (IOException e) {
             throw new IllegalArgumentException("导入文件不是合法 JSON", e);
         }
-        if (export.path("hermesFlowExport").asInt() != EXPORT_FORMAT_VERSION) {
+        validateExport(export);
+        return export;
+    }
+
+    private void validateExport(JsonNode export) {
+        if (export == null || export.path("hermesFlowExport").asInt() != EXPORT_FORMAT_VERSION) {
             throw new IllegalArgumentException(
                     "导入文件不是 flow 导出包(缺 hermesFlowExport=" + EXPORT_FORMAT_VERSION + ")");
         }
@@ -530,7 +619,6 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
                 || !export.hasNonNull("trigger")) {
             throw new IllegalArgumentException("flow 导出包缺少 flowKey / displayName / trigger");
         }
-        return export;
     }
 
     private JsonNode parseJson(String json) {

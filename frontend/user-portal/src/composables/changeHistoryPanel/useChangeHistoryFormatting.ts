@@ -91,6 +91,14 @@ export function useChangeHistoryFormatting(
     if (row.changeType === 'PROCESS_INITIATION') {
       return t('changeHistory.processInitiation')
     }
+    // Notes carry a fixed backend field name ("Record Note"); localise it here and keep the
+    // row id suffix so a sub-table-row (RECORD scope) note points at its own row.
+    if (row.changeType?.startsWith('RECORD_NOTE')) {
+      const label = t('changeHistory.recordNote')
+      return row.rowIdentifier
+        ? `${label} · ${t('changeHistory.row')}: ${row.rowIdentifier}`
+        : label
+    }
     if (row.subTableName) {
       const parts = [
         `${t('changeHistory.subTable')}: ${row.subTableName}`,
@@ -196,6 +204,9 @@ export function useChangeHistoryFormatting(
       SUB_TABLE_ROW_UPDATE: t('changeHistory.subTableRowUpdate'),
       SUB_TABLE_ROW_DELETE: t('changeHistory.subTableRowDelete'),
       PROCESS_INITIATION: t('changeHistory.processInitiation'),
+      RECORD_NOTE_ADD: t('changeHistory.recordNoteAdd'),
+      RECORD_NOTE_UPDATE: t('changeHistory.recordNoteUpdate'),
+      RECORD_NOTE_DELETE: t('changeHistory.recordNoteDelete'),
     }
     return map[changeType] || changeType
   }
@@ -207,6 +218,9 @@ export function useChangeHistoryFormatting(
       SUB_TABLE_ROW_UPDATE: 'warning',
       SUB_TABLE_ROW_DELETE: 'danger',
       PROCESS_INITIATION: 'success',
+      RECORD_NOTE_ADD: 'success',
+      RECORD_NOTE_UPDATE: 'warning',
+      RECORD_NOTE_DELETE: 'danger',
     }
     return map[changeType] || 'info'
   }

@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.client.AdminCenterAutomationFlowClient;
 import com.developer.component.VersionComponent;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
@@ -57,6 +58,7 @@ public class FunctionUnitImporter {
     private final RelationTableStructurePortability relationTablePortability;
     private final MainTableViewPortability mainTableViewPortability;
     private final MainTableViewService mainTableViewService;
+    private final AdminCenterAutomationFlowClient automationFlowClient;
 
     /**
      * 导入功能单元。无冲突策略选项：
@@ -85,6 +87,18 @@ public class FunctionUnitImporter {
         String code = (String) manifest.get("code");
         String version = (String) manifest.get("version");
         String description = (String) manifest.get("description");
+
+        // Restore the packaged Automation flows FIRST: it is the only step that writes outside this
+        // transaction (Activepieces, via admin-center), so a failure here must abort before any
+        // function unit content is touched. Flows already resolvable in this environment are left
+        // untouched — a re-import must not overwrite the draft someone is editing.
+        List<Map<String, Object>> automationFlowResults = List.of();
+        if (packageData.containsKey("automationFlows")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> automationFlows =
+                    (List<Map<String, Object>>) packageData.get("automationFlows");
+            automationFlowResults = automationFlowClient.restoreFlows(automationFlows);
+        }
 
         // Name exists → replace the existing unit's content with the imported package (snapshotting the
         // old content for rollback); the version number is NOT changed here — deploy/publish owns version
@@ -273,6 +287,7 @@ public class FunctionUnitImporter {
         result.put("name", functionUnit.getName());
         result.put("version", functionUnit.getCurrentVersion());
         result.put("versioned", versioned);
+        result.put("automationFlows", automationFlowResults);
         return result;
     }
 

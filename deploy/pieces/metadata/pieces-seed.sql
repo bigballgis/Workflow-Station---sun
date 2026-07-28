@@ -281,8 +281,8 @@ INSERT INTO piece_metadata (id, created, updated, "name", "displayName", "logoUr
   "minimumSupportedRelease", "maximumSupportedRelease", actions, triggers, auth, "pieceType", "packageType",
   "archiveId", "platformId", categories, authors, "projectUsage", i18n)
 VALUES ($ap$RmLXjIJvW1LidUIO8Gj-d$ap$,
-        $ap$1970-01-01T00:00:00.000Z$ap$,
-        $ap$1970-01-01T00:00:00.000Z$ap$,
+        now(),
+        now(),
         $ap$@activepieces/piece-biz-calendar$ap$,
         $ap$Business Calendar$ap$,
         $ap$/ap-cdn/pieces/hermes/biz-calendar.svg$ap$,
@@ -306,8 +306,8 @@ INSERT INTO piece_metadata (id, created, updated, "name", "displayName", "logoUr
   "minimumSupportedRelease", "maximumSupportedRelease", actions, triggers, auth, "pieceType", "packageType",
   "archiveId", "platformId", categories, authors, "projectUsage", i18n)
 VALUES ($ap$VwopNnaTURbvdxAwV-MF6$ap$,
-        $ap$1970-01-01T00:00:00.000Z$ap$,
-        $ap$1970-01-01T00:00:00.000Z$ap$,
+        now(),
+        now(),
         $ap$@activepieces/piece-hash-helper$ap$,
         $ap$Hash Helper$ap$,
         $ap$/ap-cdn/pieces/hermes/hash-helper.svg$ap$,
