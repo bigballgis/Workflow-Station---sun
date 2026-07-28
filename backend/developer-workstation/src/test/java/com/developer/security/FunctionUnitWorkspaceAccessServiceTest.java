@@ -4,6 +4,7 @@ import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.RoleRepository;
 import com.developer.repository.VirtualGroupMembershipDao;
+import com.developer.dto.DevGroupOptionDTO;
 import com.platform.common.dto.UserPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,11 +18,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -31,15 +33,16 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class FunctionUnitWorkspaceAccessServiceTest {
-
     private static final String USER_ID = "u-1";
     private static final Long FU_ID = 100L;
-
-    @Mock private RoleRepository roleRepository;
-    @Mock private FunctionUnitRepository functionUnitRepository;
-    @Mock private FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
-    @Mock private VirtualGroupMembershipDao virtualGroupMembershipDao;
-
+    @Mock
+    private RoleRepository roleRepository;
+    @Mock
+    private FunctionUnitRepository functionUnitRepository;
+    @Mock
+    private FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
+    @Mock
+    private VirtualGroupMembershipDao virtualGroupMembershipDao;
     private FunctionUnitWorkspaceAccessService service;
 
     @BeforeEach
@@ -53,6 +56,7 @@ class FunctionUnitWorkspaceAccessServiceTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        RequestContextHolder.resetRequestAttributes();
     }
 
     private void authenticateAs(String userId) {
@@ -87,12 +91,12 @@ class FunctionUnitWorkspaceAccessServiceTest {
     }
 
     @Test
-    void techLead_hasGlobalAccessWithoutTeamMembership() {
+    void techLead_withoutTeamMembershipCannotAccessFunctionUnits() {
         when(roleRepository.hasRoleByUserId(USER_ID, "TECH_LEAD")).thenReturn(true);
         for (WorkspaceAccessAction a : WorkspaceAccessAction.values()) {
-            assertTrue(service.canAccess(FU_ID, a), "tech lead should pass " + a);
+            assertFalse(service.canAccess(FU_ID, a), "tech lead should be team scoped for " + a);
         }
-        assertNull(service.visibleFunctionUnitIds());
+        assertEquals(Set.of(), service.visibleFunctionUnitIds());
     }
 
     @Test
@@ -144,8 +148,55 @@ class FunctionUnitWorkspaceAccessServiceTest {
     }
 
     @Test
+    void selectedPublicGroup_returnsOnlyPublicFunctionUnits() {
+        selectGroup(DevGroupConstants.PUBLIC_GROUP_ID);
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(List.of("vg-team-a"));
+        when(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(
+                List.of(DevGroupConstants.PUBLIC_GROUP_ID))).thenReturn(List.of(FU_ID));
+        assertEquals(Set.of(FU_ID), service.visibleFunctionUnitIds());
+    }
+
+    @Test
+    void selectedTeam_doesNotIncludePublicFunctionUnits() {
+        selectGroup("vg-team-a");
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(List.of("vg-team-a"));
+        when(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(List.of("vg-team-a")))
+                .thenReturn(List.of(FU_ID));
+        assertEquals(Set.of(FU_ID), service.visibleFunctionUnitIds());
+        verify(devGroupAssignmentRepository, never()).findDistinctFunctionUnitIdsByVirtualGroupIdIn(
+                List.of(DevGroupConstants.PUBLIC_GROUP_ID));
+    }
+
+    @Test
+    void adminSelectedTeam_returnsOnlyThatTeamFunctionUnits() {
+        selectGroup("vg-team-b");
+        when(roleRepository.userHasActiveAdminTypeRole(USER_ID)).thenReturn(true);
+        when(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(List.of("vg-team-b")))
+                .thenReturn(List.of(FU_ID));
+        assertEquals(Set.of(FU_ID), service.visibleFunctionUnitIds());
+        verify(devGroupAssignmentRepository, never()).findDistinctFunctionUnitIdsByVirtualGroupIdIn(
+                List.of(DevGroupConstants.PUBLIC_GROUP_ID));
+    }
+
+    @Test
+    void admin_canSwitchToAnyActiveTeam() {
+        when(roleRepository.userHasActiveAdminTypeRole(USER_ID)).thenReturn(true);
+        List<DevGroupOptionDTO> allTeams = List.of(new DevGroupOptionDTO("vg-team-b", "Team B"));
+        when(virtualGroupMembershipDao.findAllSelectableTeams(DevGroupConstants.PUBLIC_GROUP_ID))
+                .thenReturn(allTeams);
+        assertEquals(allTeams, service.getSelectableTeams(USER_ID));
+        verify(virtualGroupMembershipDao, never()).findSelectableTeamsByUserId(anyString(), anyString());
+    }
+
+    @Test
     void missingFunctionUnit_denied() {
         when(functionUnitRepository.existsById(FU_ID)).thenReturn(false);
         assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+    }
+
+    private void selectGroup(String groupId) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(DevGroupContextHolder.HEADER, groupId);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 }

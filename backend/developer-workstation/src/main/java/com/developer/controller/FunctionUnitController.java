@@ -73,8 +73,8 @@ public class FunctionUnitController extends BaseController {
 
     @GetMapping("/my-dev-groups")
     @Operation(summary = "Current user's selectable dev teams (for the entry dialog / header switcher)",
-            description = "Returns the CUSTOM virtual groups the user belongs to (excluding the built-in Public group), "
-                    + "whether they may view all function units (ADMIN), and the Public group id. "
+                description = "Returns selectable CUSTOM virtual groups (all active groups for ADMIN; otherwise the user's groups), "
+                    + "the ADMIN all-groups capability, and the Public group id. "
                     + "Not gated by @RequireDeveloperPermission so role-less team members can resolve their teams.")
     public ResponseEntity<ApiResponse<com.developer.dto.MyDevGroupsResponse>> myDevGroups() {
         return handleRequest(functionUnitComponent::getMyDevGroups);

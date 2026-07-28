@@ -8,6 +8,8 @@
  *
  * Special value {@link ALL_GROUPS} (`__ALL__`) — admins only — means "do not filter to a
  * single team" (see all function units). It is stored locally but never sent as a header.
+ * The Public group is a concrete group id and is sent so the backend can return only public
+ * function units.
  */
 
 const ACTIVE_GROUP_KEY = 'ws_dw_active_group'

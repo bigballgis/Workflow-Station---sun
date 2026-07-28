@@ -113,9 +113,10 @@ export default {
     current: 'Team',
     switch: 'Switch',
     allGroups: 'All groups',
+    publicGroup: 'Public',
     noTeam: 'No team',
     selectTitle: 'Select a team',
-    selectHint: 'You belong to multiple teams. Choose the team to work in — you will only see this team\'s function units plus public ones. You can switch anytime from the top bar.',
+    selectHint: 'You belong to multiple teams. Choose the team whose function units you want to view. You can switch teams or view Public function units anytime from the top bar.',
     confirm: 'Enter'
   },
   functionUnit: {

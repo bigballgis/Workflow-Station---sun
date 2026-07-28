@@ -4,7 +4,6 @@ import com.developer.dto.DevGroupOptionDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-
 import java.util.List;
 
 /**
@@ -13,7 +12,6 @@ import java.util.List;
 @Repository
 @RequiredArgsConstructor
 public class VirtualGroupMembershipDao {
-
     private final JdbcTemplate jdbcTemplate;
 
     public List<String> findVirtualGroupIdsByUserId(String userId) {
@@ -35,6 +33,19 @@ public class VirtualGroupMembershipDao {
                         + "ORDER BY g.name",
                 (rs, rowNum) -> new DevGroupOptionDTO(rs.getString("id"), rs.getString("name")),
                 userId,
+                publicGroupId);
+    }
+
+    /**
+     * All active CUSTOM teams, excluding the built-in Public group, for ADMIN
+     * switching.
+     */
+    public List<DevGroupOptionDTO> findAllSelectableTeams(String publicGroupId) {
+        return jdbcTemplate.query(
+                "SELECT g.id, g.name FROM sys_virtual_groups g "
+                        + "WHERE g.status = 'ACTIVE' AND g.type = 'CUSTOM' AND g.id <> ? "
+                        + "ORDER BY g.name",
+                (rs, rowNum) -> new DevGroupOptionDTO(rs.getString("id"), rs.getString("name")),
                 publicGroupId);
     }
 }
