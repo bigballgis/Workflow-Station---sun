@@ -70,6 +70,7 @@ export interface ChangeHistoryRecord {
   timestamp: string
   fieldName: string
   fieldLabel: string | null
+  fieldOrder?: number | null
   oldValue: string | null
   newValue: string | null
   changeType: string

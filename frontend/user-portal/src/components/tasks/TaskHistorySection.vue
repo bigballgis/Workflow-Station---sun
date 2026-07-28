@@ -1,6 +1,9 @@
 <template>
   <div class="section history-section">
-    <div class="section-header">
+    <div
+      v-if="showHeader"
+      class="section-header"
+    >
       <el-icon><Clock /></el-icon>
       <span>{{ $t('task.flowHistory') }}</span>
     </div>
@@ -37,7 +40,10 @@ import type { HistoryRecord } from '@/types/historyRecord'
 const props = defineProps<{
   historyRecords: HistoryRecord[]
   historyError: string | null
+  showHeader?: boolean
 }>()
+
+const showHeader = computed(() => props.showHeader !== false)
 
 const filteredRecords = computed(() =>
   props.historyRecords.filter(r => !r.activityType?.includes('Gateway'))

@@ -27,12 +27,16 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Task Form component.
- * Loads Task Form data, submit handling, snapshot capture, and completed-task form queries.
+ * Loads Task Form data, submit handling, snapshot capture, and completed-task
+ * form queries.
  *
- * <p>本类为门面：保留全部 public 方法签名与 public 内部类型，方法体委托同包协作类——
+ * <p>
+ * 本类为门面：保留全部 public 方法签名与 public 内部类型，方法体委托同包协作类——
  * {@link TaskFormFieldMapper}（字段/快照纯函数）、{@link TaskFormDefinitionLoader}（表单定义加载）、
- * {@link TaskFormSubTableChangeRecorder}（子表变更历史）。协作类以 {@code @Lazy @Autowired} 字段注入，
- * 不拓宽构造器，沿用仓库既定破环模式（见 {@code processComponent}）。</p>
+ * {@link TaskFormSubTableChangeRecorder}（子表变更历史）。协作类以 {@code @Lazy @Autowired}
+ * 字段注入，
+ * 不拓宽构造器，沿用仓库既定破环模式（见 {@code processComponent}）。
+ * </p>
  */
 @Slf4j
 @Component
@@ -50,7 +54,10 @@ public class TaskFormComponent {
 
     private volatile TransactionTemplate taskFormWriteTxTemplate;
 
-    /** Single write txn for task-form persistence — avoids UnexpectedRollbackException vs nested listeners/history. */
+    /**
+     * Single write txn for task-form persistence — avoids
+     * UnexpectedRollbackException vs nested listeners/history.
+     */
     private TransactionTemplate taskFormWriteTx() {
         TransactionTemplate t = taskFormWriteTxTemplate;
         if (t == null) {
@@ -65,13 +72,17 @@ public class TaskFormComponent {
         return t;
     }
 
-    /** Lazy: merges physical relation-table rows into task-form variable payloads without widening ctor for tests. */
+    /**
+     * Lazy: merges physical relation-table rows into task-form variable payloads
+     * without widening ctor for tests.
+     */
     @Lazy
     @Autowired
     private ProcessComponent processComponent;
 
     /**
-     * 协作类以 {@code @Lazy @Autowired} 字段注入——保持 8 参 {@code @RequiredArgsConstructor} 不变，不破坏测试构造点。
+     * 协作类以 {@code @Lazy @Autowired} 字段注入——保持 8 参 {@code @RequiredArgsConstructor}
+     * 不变，不破坏测试构造点。
      * 测试以 {@code new TaskFormComponent(...)} 构造时 Spring 不参与注入，这些字段为 null；
      * 故下方 accessor 在为 null 时用门面自身已持有的依赖按需构造一份（协作类无额外状态），行为与注入版本一致。
      */
@@ -87,17 +98,30 @@ public class TaskFormComponent {
     @Autowired
     private TaskFormSubTableChangeRecorder subTableChangeRecorder;
 
-    /** Lazy: computes the readonly Request ID value so the form field matches DW preview / portal lists. */
+    @Lazy
+    @Autowired
+    private ChangeHistorySubmissionFilter changeHistorySubmissionFilter;
+
+    /**
+     * Lazy: computes the readonly Request ID value so the form field matches DW
+     * preview / portal lists.
+     */
     @Lazy
     @Autowired
     private RequestIdEnricher requestIdEnricher;
 
-    /** Lazy: resolves updated_by display names for system audit fields (null in `new`-constructed tests). */
+    /**
+     * Lazy: resolves updated_by display names for system audit fields (null in
+     * `new`-constructed tests).
+     */
     @Lazy
     @Autowired
     private UserDisplayNameResolver userDisplayNameResolver;
 
-    /** Display name for audit fields; falls back to the raw user id when the resolver is unavailable. */
+    /**
+     * Display name for audit fields; falls back to the raw user id when the
+     * resolver is unavailable.
+     */
     private String resolveAuditUserDisplay(String userId) {
         UserDisplayNameResolver resolver = userDisplayNameResolver;
         if (resolver == null) {
@@ -118,6 +142,34 @@ public class TaskFormComponent {
 
     private ProcessSubTablePrimaryKeyEnricherComponent subTablePrimaryKeyEnricher() {
         return processSubTablePrimaryKeyEnricherComponent;
+    }
+
+    private ChangeHistorySubmissionFilter changeHistorySubmissionFilter() {
+        ChangeHistorySubmissionFilter filter = changeHistorySubmissionFilter;
+        if (filter == null) {
+            filter = new ChangeHistorySubmissionFilter(jdbcTemplate, objectMapper);
+            changeHistorySubmissionFilter = filter;
+        }
+        return filter;
+    }
+
+    Map<String, Object> filterTaskSubmissionForChangeHistory(String processInstanceId,
+            String stageId,
+            Map<String, Object> submitted,
+            Map<String, Object> enriched) {
+        return changeHistorySubmissionFilter().filterTaskSubmission(
+                processInstanceId, stageId, submitted, enriched);
+    }
+
+    Map<String, Object> copyChangeHistorySubmission(Map<String, Object> submitted) {
+        return changeHistorySubmissionFilter().copyPayload(submitted);
+    }
+
+    Object filterTaskSubTableBaselineForChangeHistory(String processInstanceId,
+            String stageId,
+            Object storedSubTables) {
+        return changeHistorySubmissionFilter().filterTaskSubTableBaseline(
+                processInstanceId, stageId, storedSubTables);
     }
 
     private RequestIdEnricher requestIdEnricher() {
@@ -156,7 +208,10 @@ public class TaskFormComponent {
         return r;
     }
 
-    /** Lazy: hydrates {@code up_process_instance} for engine-only starts (email monitor). */
+    /**
+     * Lazy: hydrates {@code up_process_instance} for engine-only starts (email
+     * monitor).
+     */
     @Lazy
     @Autowired
     private ProcessInstanceHydrationComponent processInstanceHydration;
@@ -172,10 +227,14 @@ public class TaskFormComponent {
     }
 
     /**
-     * Fills {@code target} with process variables that live only in the Flowable engine (e.g. a service
-     * task's {@code __subTables__} output) and are absent from the portal's own {@code up_process_instance}
-     * store. Gap-fill only: values already present win, so portal form submissions and user edits are never
-     * overwritten. Best-effort — a failed engine round-trip leaves the portal-store values untouched.
+     * Fills {@code target} with process variables that live only in the Flowable
+     * engine (e.g. a service
+     * task's {@code __subTables__} output) and are absent from the portal's own
+     * {@code up_process_instance}
+     * store. Gap-fill only: values already present win, so portal form submissions
+     * and user edits are never
+     * overwritten. Best-effort — a failed engine round-trip leaves the portal-store
+     * values untouched.
      */
     private void mergeEngineOnlyVariables(String processInstanceId, Map<String, Object> target) {
         if (workflowEngineClient == null || processInstanceId == null) {
@@ -202,7 +261,8 @@ public class TaskFormComponent {
 
     /**
      * Returns Task Form layout and current process variable values (field subset).
-     * Resolves FormStageBinding by taskDefinitionKey; falls back to read-only Process Form when unbound.
+     * Resolves FormStageBinding by taskDefinitionKey; falls back to read-only
+     * Process Form when unbound.
      *
      * @param taskId task instance ID
      * @return TaskFormData DTO
@@ -226,9 +286,12 @@ public class TaskFormComponent {
                 ? processInstance.getVariables()
                 : Collections.emptyMap();
         Map<String, Object> hydratedVariables = new HashMap<>(allVariables);
-        // Service-task outputs (e.g. an Activepieces task that sets __subTables__) live in the Flowable
-        // engine but never reach the portal's up_process_instance store, which is only written on portal
-        // form submissions. Gap-fill from the live engine variables so task forms render those results.
+        // Service-task outputs (e.g. an Activepieces task that sets __subTables__) live
+        // in the Flowable
+        // engine but never reach the portal's up_process_instance store, which is only
+        // written on portal
+        // form submissions. Gap-fill from the live engine variables so task forms
+        // render those results.
         mergeEngineOnlyVariables(taskInfo.processInstanceId, hydratedVariables);
         if (processComponent != null) {
             __t = System.nanoTime();
@@ -242,7 +305,8 @@ public class TaskFormComponent {
         log.info("[PERF] form-data.nested.getProcessFormData took {} ms", (System.nanoTime() - __t) / 1_000_000L);
 
         if (formDefinition == null) {
-            // Fallback: no Task Form binding, return only ProcessFormData in read-only mode.
+            // Fallback: no Task Form binding, return only ProcessFormData in read-only
+            // mode.
             // Still surface the readonly Request ID so the rendered field isn't blank.
             log.info("No Task Form binding found for stage '{}', falling back to Process Form",
                     taskInfo.taskDefinitionKey);
@@ -276,14 +340,19 @@ public class TaskFormComponent {
                 ? (Boolean) formDefinition.get("readOnly")
                 : false;
 
-        // Get field values from process variables (subset based on fieldPermissions keys)
-        Map<String, Object> fieldValues = fieldMapper().extractFieldSubset(hydratedVariables, fieldPermissions.keySet());
-        // Mirror persistTaskFormSnapshot: always attach live __subTables__ when present so nested /
-        // copied-task bindings hydrate even if fieldPermissions omits or carries a stale __subTables__ entry.
+        // Get field values from process variables (subset based on fieldPermissions
+        // keys)
+        Map<String, Object> fieldValues = fieldMapper().extractFieldSubset(hydratedVariables,
+                fieldPermissions.keySet());
+        // Mirror persistTaskFormSnapshot: always attach live __subTables__ when present
+        // so nested /
+        // copied-task bindings hydrate even if fieldPermissions omits or carries a
+        // stale __subTables__ entry.
         if (hydratedVariables.containsKey("__subTables__")) {
             fieldValues.put("__subTables__", hydratedVariables.get("__subTables__"));
         }
-        // Readonly Request ID synthetic field: render the same value as DW preview / portal lists.
+        // Readonly Request ID synthetic field: render the same value as DW preview /
+        // portal lists.
         applyRequestIdFieldValue(fieldValues, processInstance, hydratedVariables);
 
         return TaskFormData.builder()
@@ -301,12 +370,14 @@ public class TaskFormComponent {
     }
 
     /**
-     * Fill the synthetic {@code __request_id} field value when the main table configures a Request ID.
-     * No-op (leaves the field absent) when unconfigured — the readonly input then shows empty.
+     * Fill the synthetic {@code __request_id} field value when the main table
+     * configures a Request ID.
+     * No-op (leaves the field absent) when unconfigured — the readonly input then
+     * shows empty.
      */
     private void applyRequestIdFieldValue(Map<String, Object> fieldValues,
-                                          ProcessInstance processInstance,
-                                          Map<String, Object> variables) {
+            ProcessInstance processInstance,
+            Map<String, Object> variables) {
         String requestId = requestIdEnricher()
                 .buildRequestId(processInstance.getFunctionUnitCode(), variables);
         if (requestId != null) {
@@ -320,22 +391,25 @@ public class TaskFormComponent {
      *
      * @param taskId   task instance ID
      * @param userId   acting user ID
-     * @param formData form payload (may include read-only fields; they are filtered out)
+     * @param formData form payload (may include read-only fields; they are filtered
+     *                 out)
      */
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData) {
         submitTaskForm(taskId, userId, formData, null);
     }
 
     /**
-     * Submits Task Form updates (editable fields only) with optional concurrent-modification detection.
+     * Submits Task Form updates (editable fields only) with optional
+     * concurrent-modification detection.
      *
      * @param taskId         task instance ID
      * @param userId         acting user ID
      * @param formData       form payload (read-only fields filtered)
-     * @param baselineValues field snapshot from client load for concurrency check; null skips detection
+     * @param baselineValues field snapshot from client load for concurrency check;
+     *                       null skips detection
      */
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
-                               Map<String, Object> baselineValues) {
+            Map<String, Object> baselineValues) {
         log.info("Submitting task form for task: {}, user: {}", taskId, userId);
 
         TaskInfo taskInfo = getTaskInfo(taskId);
@@ -345,6 +419,8 @@ public class TaskFormComponent {
         Map<String, String> fieldPermissions = formDefinition != null
                 ? fieldMapper().extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
+
+        Map<String, Object> submittedSnapshot = changeHistorySubmissionFilter().copyPayload(formData);
 
         // Filter: only accept EDITABLE fields
         Map<String, Object> editableData = filterEditableFields(formData, fieldPermissions);
@@ -366,6 +442,8 @@ public class TaskFormComponent {
             });
         }
 
+        Map<String, Object> userChanges = changeHistorySubmissionFilter().filterTaskSubmission(
+                taskInfo.processInstanceId, taskInfo.taskDefinitionKey, submittedSnapshot, editableData);
         AtomicReference<Map<String, Object>> snapshotOldVarsRef = new AtomicReference<>();
         AtomicReference<Set<String>> concurrentFieldsRef = new AtomicReference<>(Set.of());
 
@@ -390,23 +468,14 @@ public class TaskFormComponent {
             Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
             updatedVariables.putAll(editableData);
 
-            // Store initial __subTables__ baseline on first save so completion can produce a
-            // single consolidated change history record instead of one per save.
-            String baselineKey = "_baseline_subTables_" + taskInfo.taskDefinitionKey;
-            if (!updatedVariables.containsKey(baselineKey)) {
-                Object subTables = currentVariables.get("__subTables__");
-                if (subTables != null) {
-                    updatedVariables.put(baselineKey, subTables);
-                    log.info("Stored sub-table baseline for task {}: key={}, rowCount={}",
-                            taskId, baselineKey,
-                            subTables instanceof Map ? ((Map<?, ?>) subTables).size() : "?");
-                }
-            }
-            // System audit fields: refresh updated_at/updated_by at the real update (key present
+            // System audit fields: refresh updated_at/updated_by at the real update (key
+            // present
             // only when the field is on the form); created_* is preserved from the insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
-            // Prevent geometric __subTables__ bloat: drop deep nested copies before persisting so each
-            // task save stores the canonical one-level structure instead of compounding prior rounds.
+            // Prevent geometric __subTables__ bloat: drop deep nested copies before
+            // persisting so each
+            // task save stores the canonical one-level structure instead of compounding
+            // prior rounds.
             SubTableNestingSanitizer.stripDeepNestedSubTables(updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
@@ -415,8 +484,10 @@ public class TaskFormComponent {
         });
 
         /*
-         * Change history runs after the write TransactionTemplate commits so failures cannot mark it rollback-only.
-         * Sub-table change history is deferred to task completion for consolidated recording.
+         * Change history runs after the write TransactionTemplate commits so failures
+         * cannot mark it rollback-only.
+         * Sub-table change history is deferred to task completion for consolidated
+         * recording.
          */
         ChangeHistoryContext context = ChangeHistoryContext.builder()
                 .processInstanceId(taskInfo.processInstanceId)
@@ -440,16 +511,20 @@ public class TaskFormComponent {
                         taskInfo.processInstanceId, field, "unknown", userId);
             }
             // Record top-level field changes
-            changeHistoryComponent.recordFieldChanges(context, snapshotOldVars, editableData);
+            changeHistoryComponent.recordFieldChanges(context, snapshotOldVars, userChanges);
             // Record sub-table row changes immediately so users see per-save
             // history; completion-time consolidation against the first-save
             // baseline is still recorded (cross-save dedup prevents identical
             // old+new pairs from duplicating when the final state equals the
             // last save).
             Object oldSubTables = snapshotOldVars.get("__subTables__");
-            Object newSubTables = editableData.get("__subTables__");
+            Object newSubTables = userChanges.get("__subTables__");
             if (newSubTables != null || oldSubTables != null) {
-                subTableChangeRecorder().recordSubTableChangeHistory(context, oldSubTables, newSubTables);
+                Object filteredOldSubTables = changeHistorySubmissionFilter()
+                        .filterTaskSubTableBaseline(taskInfo.processInstanceId,
+                                taskInfo.taskDefinitionKey, oldSubTables);
+                subTableChangeRecorder().recordSubTableChangeHistory(
+                        context, filteredOldSubTables, newSubTables);
             }
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
@@ -457,17 +532,19 @@ public class TaskFormComponent {
     }
 
     /**
-     * Detects concurrent edits by comparing baseline values to current process variables.
-     * When current value != baseline, another user changed the field during editing.
+     * Detects concurrent edits by comparing baseline values to current process
+     * variables.
+     * When current value != baseline, another user changed the field during
+     * editing.
      *
-     * @param baselineValues field snapshot from client load (may be null)
-     * @param currentVariables current process variables
+     * @param baselineValues      field snapshot from client load (may be null)
+     * @param currentVariables    current process variables
      * @param submittedFieldNames field names in this submit
      * @return field names modified concurrently
      */
     public Set<String> detectConcurrentModifications(Map<String, Object> baselineValues,
-                                                      Map<String, Object> currentVariables,
-                                                      Set<String> submittedFieldNames) {
+            Map<String, Object> currentVariables,
+            Set<String> submittedFieldNames) {
         return fieldMapper().detectConcurrentModifications(baselineValues, currentVariables, submittedFieldNames);
     }
 
@@ -501,7 +578,8 @@ public class TaskFormComponent {
             liveValues = Collections.emptyMap();
         }
 
-        // Readonly Request ID synthetic field: same value as DW preview / portal lists (frozen variables).
+        // Readonly Request ID synthetic field: same value as DW preview / portal lists
+        // (frozen variables).
         String requestId = requestIdEnricher().buildRequestId(processInstance.getFunctionUnitCode(), allVariables);
         if (requestId != null) {
             if (!(liveValues instanceof HashMap)) {
@@ -536,25 +614,38 @@ public class TaskFormComponent {
     }
 
     /**
-     * Merges a Task Form field-subset snapshot as {@code _snapshot_{taskId}} into process variables before approval completion.
-     * <p>Callers should {@code save} {@link ProcessInstance} <strong>once</strong> to avoid {@link ProcessInstance#lockVersion}
-     * optimistic-lock conflicts (back-to-back UPDATEs on the same row can cause UnexpectedRollback).</p>
-     * <p><b>Anti-bloat guardrails:</b></p>
+     * Merges a Task Form field-subset snapshot as {@code _snapshot_{taskId}} into
+     * process variables before approval completion.
+     * <p>
+     * Callers should {@code save} {@link ProcessInstance} <strong>once</strong> to
+     * avoid {@link ProcessInstance#lockVersion}
+     * optimistic-lock conflicts (back-to-back UPDATEs on the same row can cause
+     * UnexpectedRollback).
+     * </p>
+     * <p>
+     * <b>Anti-bloat guardrails:</b>
+     * </p>
      * <ul>
-     *   <li>When the stage has <em>no</em> Task Form binding ({@code fetchTaskFormByStageId} null or empty fieldPermissions),
-     *       the snapshot stores <strong>empty fieldValues</strong>—no fallback to copying all process variables and no
-     *       {@code __subTables__}. Live {@code __subTables__} already lives on root variables; duplicating it in snapshots
-     *       inflates the {@code variables} JSON column (frontend alias keys per binding, multiplied by MI child completions →
-     *       PostgreSQL parameter encoding OOM).</li>
-     *   <li>When the stage <em>has</em> a Task Form binding, the snapshot keeps the fieldPermissions subset plus
-     *       {@code __subTables__} so Portal can fully render the completed form.</li>
+     * <li>When the stage has <em>no</em> Task Form binding
+     * ({@code fetchTaskFormByStageId} null or empty fieldPermissions),
+     * the snapshot stores <strong>empty fieldValues</strong>—no fallback to copying
+     * all process variables and no
+     * {@code __subTables__}. Live {@code __subTables__} already lives on root
+     * variables; duplicating it in snapshots
+     * inflates the {@code variables} JSON column (frontend alias keys per binding,
+     * multiplied by MI child completions →
+     * PostgreSQL parameter encoding OOM).</li>
+     * <li>When the stage <em>has</em> a Task Form binding, the snapshot keeps the
+     * fieldPermissions subset plus
+     * {@code __subTables__} so Portal can fully render the completed form.</li>
      * </ul>
      *
-     * @param mergedVariables merged process variables map (snapshot key written in place)
+     * @param mergedVariables merged process variables map (snapshot key written in
+     *                        place)
      * @return form field names included in the snapshot (for logging)
      */
     public Set<String> mergeCompletedTaskSnapshotIntoVariables(String taskId, String userId, String taskDefinitionKey,
-                                                               Map<String, Object> mergedVariables) {
+            Map<String, Object> mergedVariables) {
         if (mergedVariables == null || taskId == null || taskDefinitionKey == null) {
             return Set.of();
         }
@@ -563,7 +654,8 @@ public class TaskFormComponent {
                 ? fieldMapper().extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
 
-        // Empty snapshot when no Task Form binding—avoid writing __subTables__ (with alias copies) with no UI consumer.
+        // Empty snapshot when no Task Form binding—avoid writing __subTables__ (with
+        // alias copies) with no UI consumer.
         Map<String, Object> fieldValues;
         if (fieldPermissions.isEmpty()) {
             fieldValues = new HashMap<>();
@@ -589,7 +681,8 @@ public class TaskFormComponent {
 
     /**
      * Captures snapshot on task completion.
-     * Persists current process variables (Task Form field subset) as _snapshot_{taskId}.
+     * Persists current process variables (Task Form field subset) as
+     * _snapshot_{taskId}.
      *
      * @param taskId task instance ID
      * @param userId acting user ID (assignee)
@@ -599,16 +692,20 @@ public class TaskFormComponent {
         log.info("Capturing task form snapshot for task: {}, user: {}", taskId, userId);
 
         TaskInfo taskInfo = getTaskInfo(taskId);
-        persistTaskFormSnapshot(taskId, userId, taskInfo.taskDefinitionKey, taskInfo.processInstanceId, Collections.emptyMap());
+        persistTaskFormSnapshot(taskId, userId, taskInfo.taskDefinitionKey, taskInfo.processInstanceId,
+                Collections.emptyMap());
     }
 
     /**
      * Captures snapshot after task completion.
-     * <p>Flowable runtime task is gone after completion; caller must pass stage/process info captured beforehand.</p>
+     * <p>
+     * Flowable runtime task is gone after completion; caller must pass
+     * stage/process info captured beforehand.
+     * </p>
      */
     @Transactional
     public void captureTaskFormSnapshot(String taskId, String userId, String taskDefinitionKey,
-                                        String processInstanceId, Map<String, Object> completedVariables) {
+            String processInstanceId, Map<String, Object> completedVariables) {
         log.info("Capturing completed task form snapshot for task: {}, stage: {}", taskId, taskDefinitionKey);
 
         persistTaskFormSnapshot(taskId, userId, taskDefinitionKey, processInstanceId,
@@ -616,7 +713,7 @@ public class TaskFormComponent {
     }
 
     private void persistTaskFormSnapshot(String taskId, String userId, String taskDefinitionKey,
-                                         String processInstanceId, Map<String, Object> completedVariables) {
+            String processInstanceId, Map<String, Object> completedVariables) {
         ProcessInstance processInstance = requireProcessInstance(processInstanceId);
 
         Map<String, Object> merged = new HashMap<>();
@@ -625,7 +722,8 @@ public class TaskFormComponent {
         }
         merged.putAll(completedVariables != null ? completedVariables : Collections.emptyMap());
 
-        Set<String> snapshotFieldKeys = mergeCompletedTaskSnapshotIntoVariables(taskId, userId, taskDefinitionKey, merged);
+        Set<String> snapshotFieldKeys = mergeCompletedTaskSnapshotIntoVariables(taskId, userId, taskDefinitionKey,
+                merged);
         SubTableNestingSanitizer.stripDeepNestedSubTables(merged);
         processInstance.setVariables(merged);
         processInstanceRepository.save(processInstance);
@@ -640,7 +738,7 @@ public class TaskFormComponent {
      * When fieldPermissions is empty, accepts all fields (backward compatible).
      */
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
-                                                     Map<String, String> fieldPermissions) {
+            Map<String, String> fieldPermissions) {
         return fieldMapper().filterEditableFields(formData, fieldPermissions);
     }
 
@@ -648,7 +746,7 @@ public class TaskFormComponent {
      * Extracts a field subset from full process variables.
      */
     public Map<String, Object> extractFieldSubset(Map<String, Object> allVariables,
-                                                   Set<String> fieldNames) {
+            Set<String> fieldNames) {
         return fieldMapper().extractFieldSubset(allVariables, fieldNames);
     }
 
@@ -676,7 +774,8 @@ public class TaskFormComponent {
     // ==================== Private Helper Methods ====================
 
     /**
-     * Loads task info (taskDefinitionKey, processInstanceId) via WorkflowEngineClient from Flowable.
+     * Loads task info (taskDefinitionKey, processInstanceId) via
+     * WorkflowEngineClient from Flowable.
      */
     @SuppressWarnings("unchecked")
     protected TaskInfo getTaskInfo(String taskId) {
@@ -685,7 +784,8 @@ public class TaskFormComponent {
             if (result.isPresent()) {
                 Map<String, Object> body = result.get();
                 Map<String, Object> data = body.containsKey("data")
-                        ? (Map<String, Object>) body.get("data") : body;
+                        ? (Map<String, Object>) body.get("data")
+                        : body;
 
                 String taskDefinitionKey = (String) data.get("taskDefinitionKey");
                 String processInstanceId = (String) data.get("processInstanceId");
@@ -701,7 +801,8 @@ public class TaskFormComponent {
 
     /**
      * Loads Task Form definition by stageId (taskDefinitionKey).
-     * Prefers developer-workstation; falls back to local {@code dw_form_stage_bindings} when unreachable (shared PostgreSQL with DW).
+     * Prefers developer-workstation; falls back to local
+     * {@code dw_form_stage_bindings} when unreachable (shared PostgreSQL with DW).
      */
     private Map<String, Object> fetchTaskFormByStageId(String stageId) {
         return formDefinitionLoader().fetchTaskFormByStageId(stageId, developerWorkstationUrl);

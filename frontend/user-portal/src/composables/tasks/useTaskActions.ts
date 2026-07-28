@@ -8,16 +8,13 @@ import {
   resolveAssigneeFieldForBinding,
   allSubTableRowsHaveAssignee
 } from '@/utils/subTableAssignment'
-
 function resolveProcessTaskId(source: MaybeRef<string>): string {
   const v = unref(source)
   return typeof v === 'string' ? v.trim() : ''
 }
-
 function isDigitsKey(key: string): boolean {
   return /^\d+$/.test(key)
 }
-
 /**
  * Canonicalize __subTables__ slices for persistence:
  * if numeric bindingId keys exist, keep only numeric keys to avoid alias fan-out.
@@ -33,13 +30,14 @@ function canonicalizeSubTablesForSubmit(input: Record<string, any>): Record<stri
   }
   return out
 }
-
 export function useTaskActions(options: {
   /** Flowable task id (prefer backend detail {@link TaskInfo.taskId}, not only route param). */
   taskId: MaybeRef<string>
   taskInfo: Ref<Record<string, any>>
   subTableBindings: Ref<any[]>
   formData: Ref<Record<string, any>>
+  /** Whether the current Task Form is entirely read-only. */
+  formReadOnly?: MaybeRef<boolean>
   submitting: Ref<boolean>
   approveDialogVisible: Ref<boolean>
   approveDialogTitle: Ref<string>
@@ -64,7 +62,6 @@ export function useTaskActions(options: {
 }) {
   const { t } = useI18n()
   const router = useRouter()
-
   function validateSubTableAssigneesForComplete(): boolean {
     for (const b of options.subTableBindings.value) {
       const af = resolveAssigneeFieldForBinding(b.columns, b.tableName)
@@ -76,7 +73,6 @@ export function useTaskActions(options: {
     }
     return true
   }
-
   async function searchUsers(keyword: string) {
     options.userSearchLoading.value = true
     try {
@@ -88,11 +84,9 @@ export function useTaskActions(options: {
       options.userSearchLoading.value = false
     }
   }
-
   function onActionDialogOpened() {
     searchUsers('')
   }
-
   function handleApprove() {
     if (!validateSubTableAssigneesForComplete()) return
     options.currentApproveAction.value = 'APPROVE'
@@ -100,14 +94,12 @@ export function useTaskActions(options: {
     options.approveForm.comment = ''
     options.approveDialogVisible.value = true
   }
-
   function handleReject() {
     options.currentApproveAction.value = 'REJECT'
     options.approveDialogTitle.value = t('task.reject')
     options.approveForm.comment = ''
     options.approveDialogVisible.value = true
   }
-
   function handleDelegate() {
     options.currentAction.value = 'delegate'
     options.actionDialogTitle.value = t('task.delegate')
@@ -116,7 +108,6 @@ export function useTaskActions(options: {
     options.userOptions.value = []
     options.actionDialogVisible.value = true
   }
-
   function handleTransfer() {
     options.currentAction.value = 'transfer'
     options.actionDialogTitle.value = t('task.transfer')
@@ -125,14 +116,12 @@ export function useTaskActions(options: {
     options.userOptions.value = []
     options.actionDialogVisible.value = true
   }
-
   function handleUrge() {
     options.currentAction.value = 'urge'
     options.actionDialogTitle.value = t('task.urge')
     options.actionForm.reason = ''
     options.actionDialogVisible.value = true
   }
-
   function buildLegacyCompleteFormData(): Record<string, any> {
     const currentFormData: Record<string, any> = {}
     for (const key of Object.keys(options.formData.value)) {
@@ -159,7 +148,27 @@ export function useTaskActions(options: {
     currentFormData.__subTables__ = mergedSub
     return currentFormData
   }
-
+  function buildUserSubmittedFormData(engineFormData: Record<string, any>): Record<string, any> {
+    const submitted: Record<string, any> = { ...engineFormData }
+    delete submitted.__subTables__
+    if (unref(options.formReadOnly ?? false)) return submitted
+    const engineSubTables = (engineFormData.__subTables__ as Record<string, any>) || {}
+    const submittedSubTables: Record<string, any> = {}
+    for (const binding of options.subTableBindings.value) {
+      if (binding?.bindingMode === 'READONLY') continue
+      const bindingId = binding?.bindingId
+      if (bindingId === null || bindingId === undefined || bindingId === '') continue
+      const key = String(bindingId)
+      if (Object.prototype.hasOwnProperty.call(engineSubTables, key)) {
+        // Keep []: an empty current editable grid is an explicit delete-all submission.
+        submittedSubTables[key] = engineSubTables[key]
+      }
+    }
+    if (Object.keys(submittedSubTables).length > 0) {
+      submitted.__subTables__ = submittedSubTables
+    }
+    return submitted
+  }
   async function submitApprove() {
     if (options.currentApproveAction.value === 'APPROVE' && !validateSubTableAssigneesForComplete()) return
     if (options.currentApproveAction.value === 'APPROVE' && options.validateTaskForm) {
@@ -174,7 +183,6 @@ export function useTaskActions(options: {
       if (options.prepareBeforeComplete) {
         await options.prepareBeforeComplete()
       }
-
       const variables: Record<string, any> = {}
       if (options.currentApproveAction.value === 'APPROVE') {
         variables.approval_result = 'approved'
@@ -186,16 +194,15 @@ export function useTaskActions(options: {
       if (options.approveForm.comment) {
         variables.approval_comment = options.approveForm.comment
       }
-
       const built = options.buildFormPayloadForComplete
         ? options.buildFormPayloadForComplete()
         : buildLegacyCompleteFormData()
-      const currentFormData: Record<string, any> = { ...built }
-      currentFormData.__subTables__ = canonicalizeSubTablesForSubmit(
+      const engineFormData: Record<string, any> = { ...built }
+      engineFormData.__subTables__ = canonicalizeSubTablesForSubmit(
         (built.__subTables__ as Record<string, any>) || {}
       )
-      Object.assign(variables, currentFormData)
-
+      const submittedFormData = buildUserSubmittedFormData(engineFormData)
+      Object.assign(variables, engineFormData)
       const pid = resolveProcessTaskId(options.taskId)
       if (!pid) {
         ElMessage.warning(t('task.operationFailed'))
@@ -206,7 +213,7 @@ export function useTaskActions(options: {
         action: options.currentApproveAction.value,
         comment: options.approveForm.comment,
         variables,
-        formData: currentFormData
+        formData: submittedFormData
       })
       ElMessage.success(t('task.operationSuccess'))
       options.approveDialogVisible.value = false
@@ -221,7 +228,6 @@ export function useTaskActions(options: {
       options.submitting.value = false
     }
   }
-
   async function submitAction() {
     if (options.currentAction.value !== 'urge' && !options.actionForm.targetUserId) {
       ElMessage.warning(t('task.selectUser'))
@@ -252,7 +258,6 @@ export function useTaskActions(options: {
       options.submitting.value = false
     }
   }
-
   return {
     validateSubTableAssigneesForComplete,
     searchUsers,

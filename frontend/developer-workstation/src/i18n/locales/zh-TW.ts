@@ -113,9 +113,10 @@ export default {
     current: '團隊',
     switch: '切換',
     allGroups: '全部團隊',
+    publicGroup: '公共',
     noTeam: '無團隊',
     selectTitle: '選擇團隊',
-    selectHint: '你屬於多個團隊，請選擇要進入的團隊——你將只看到該團隊的功能單元以及公共（Public）功能單元。隨時可在頂部切換。',
+    selectHint: '你屬於多個團隊，請選擇要查看功能單元的團隊。隨時可在頂部切換團隊或單獨查看公共（Public）功能單元。',
     confirm: '進入'
   },
   functionUnit: {

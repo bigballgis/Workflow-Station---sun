@@ -24,6 +24,7 @@ import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -91,6 +92,7 @@ class TaskQueryProperties {
             new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate, requestIdEnricher),
             requestIdEnricher
         );
+        ReflectionTestUtils.setField(taskQueryComponent, "taskQueryExecutor", (java.util.concurrent.Executor) Runnable::run);
         random = new Random();
         
         // 默认 Flowable 引擎可用

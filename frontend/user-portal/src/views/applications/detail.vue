@@ -123,19 +123,28 @@
           :selected-node-id="selectedNodeId ?? ''"
           :show-toolbar="true"
           :show-legend="true"
-          @node-click="handleDiagramNodeClick"
+          @node-click="handleWorkflowNodeClick"
         />
         <el-empty
           v-else-if="diagramReady"
           :description="t('applicationDetail.noProcessDefinition')"
         />
       </WorkflowDiagramCollapsibleSection>
-
-      <!-- Click a workflow node to preview that step's bound form (read-only) -->
-      <div
-        v-if="selectedNodeId && selectedNodeForm"
-        class="section form-section"
+<!-- Detail navigation: history panels are lazy so their content and requests do not block General. -->
+      <el-tabs
+        v-model="activeDetailTab"
+        class="detail-navigation"
       >
+        <el-tab-pane
+          :label="t('process.general')"
+          name="general"
+          lazy
+        >
+          <!-- Click a workflow node to preview that step's bound form (read-only) -->
+          <div
+            v-if="selectedNodeId && selectedNodeForm"
+            class="section form-section"
+          >
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ selectedNodeForm.formName }}</span>
@@ -232,12 +241,12 @@
               />
             </div>
           </template>
-        </div>
-      </div>
-      <div
-        v-else-if="selectedNodeId && !selectedNodeForm"
-        class="section form-section"
-      >
+</div>
+          </div>
+          <div
+            v-else-if="selectedNodeId && !selectedNodeForm"
+            class="section form-section"
+          >
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ selectedNodeId }}</span>
@@ -253,13 +262,13 @@
             </el-button>
           </div>
         </div>
-      </div>
+          </div>
 
-      <!-- Form data (Completed Tasks renders the same form as To Do, but readonly) -->
-      <div
-        v-if="showCurrentFormSection && !selectedNodeId"
-        class="section form-section"
-      >
+          <!-- Form data (Completed Tasks renders the same form as To Do, but readonly) -->
+          <div
+            v-if="showCurrentFormSection && !selectedNodeId"
+            class="section form-section"
+          >
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ currentFormName || t('applicationDetail.applicationForm') }}</span>
@@ -333,27 +342,39 @@
             </div>
           </template>
         </div>
-      </div>
+          </div>
+</el-tab-pane>
 
-      <!-- Change history panel (title and collapse handled internally by ChangeHistoryPanel) -->
-      <div class="section change-history-section">
-        <ChangeHistoryPanel :process-instance-id="processId" />
-      </div>
+        <el-tab-pane
+          :label="t('changeHistory.title')"
+          name="change-history"
+          lazy
+        >
+          <!-- Data is loaded only after this tab is first opened. -->
+          <div class="section change-history-section">
+            <ChangeHistoryPanel
+              :process-instance-id="processId"
+              :show-header="false"
+            />
+          </div>
+        </el-tab-pane>
 
-      <!-- Section 4: Flow history -->
-      <div class="section history-section">
-        <div class="section-header">
-          <el-icon><Clock /></el-icon>
-          <span>{{ t('applicationDetail.flowHistory') }}</span>
-        </div>
-        <div class="section-content">
-          <ProcessHistory
-            :records="historyRecords.filter(r => !r.activityType?.includes('Gateway'))"
-            :show-header="false"
-            :show-refresh="false"
-          />
-        </div>
-      </div>
+        <el-tab-pane
+          :label="t('applicationDetail.flowHistory')"
+          name="flow-history"
+          lazy
+        >
+          <div class="section history-section">
+            <div class="section-content">
+              <ProcessHistory
+                :records="historyRecords.filter(r => !r.activityType?.includes('Gateway'))"
+                :show-header="false"
+                :show-refresh="false"
+              />
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
 
       <!-- Sub-task form detail dialog -->
       <el-dialog
@@ -422,10 +443,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, InfoFilled, Document, Clock, Bell, RefreshLeft, Refresh } from '@element-plus/icons-vue'
+import { ArrowLeft, InfoFilled, Document, Bell, RefreshLeft, Refresh } from '@element-plus/icons-vue'
 import WorkflowDiagramCollapsibleSection from '@/components/WorkflowDiagramCollapsibleSection.vue'
 import ProcessDiagram from '@/components/ProcessDiagram.vue'
 import ProcessHistory from '@/components/ProcessHistory.vue'
@@ -452,6 +473,7 @@ import { createApplicationDetailSecondary } from '@/composables/applicationDetai
 import { createApplicationDetailLoaders } from '@/composables/applicationDetail/useApplicationDetailLoaders'
 import { createApplicationDetailActions } from '@/composables/applicationDetail/useApplicationDetailActions'
 import { createApplicationDetailDiagramParser } from '@/composables/applicationDetail/useApplicationDetailDiagramParser'
+import type { ProcessNode } from '@/components/ProcessDiagram.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -463,6 +485,7 @@ const snapshotTime = route.query.snapshotTime as string | undefined
 const snapshotTaskName = route.query.snapshotTaskName as string | undefined
 const snapshotTaskId = route.query.snapshotTaskId as string | undefined
 const snapshotTaskDefinitionKey = route.query.snapshotTaskDefinitionKey as string | undefined
+const activeDetailTab = ref('general')
 
 /**
  * Shared context: state refs + late-registered cross-module functions. Created once per
@@ -549,10 +572,17 @@ const {
   diagramSelectedBottomSubTables,
 } = ctx
 
+const handleWorkflowNodeClick = (node: ProcessNode) => {
+  activeDetailTab.value = 'general'
+  handleDiagramNodeClick(node)
+}
+
 onMounted(() => { loadProcessDetail() })
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/detail-navigation' as detailNavigation;
+
 .application-detail-page {
   width: 100%;
   max-width: 100%;
@@ -583,6 +613,9 @@ onMounted(() => { loadProcessDetail() })
   .section { background: white; border-radius: 8px; border: 1px solid var(--border-color);
     .section-header { display: flex; align-items: center; gap: 8px; padding: 16px 20px; background: #fafafa; border-bottom: 1px solid var(--border-color); font-size: 16px; font-weight: 500; color: var(--text-primary); .el-icon { color: var(--hsbc-red); } }
     .section-content { padding: 20px; }
+  }
+  .detail-navigation {
+    @include detailNavigation.compact-detail-navigation(var(--border-color));
   }
   .form-section .form-container { width: 100%; }
   .form-section .sub-table-section { margin-top: 16px; }

@@ -14,6 +14,7 @@ import net.jqwik.api.*;
 import net.jqwik.api.constraints.IntRange;
 import net.jqwik.api.constraints.StringLength;
 import org.mockito.Mockito;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -69,6 +70,9 @@ class DashboardPreservationProperties {
                 businessUnitRepository, userBusinessUnitRepository, processInstanceRepository,
                 Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
 
+        ReflectionTestUtils.setField(dashboardComponent, "aggregationExecutor",
+                (java.util.concurrent.Executor) Runnable::run);
+                
         // Generate tasks with random overdue flags
         Random rng = new Random(userId.hashCode() + taskCount);
         List<TaskInfo> tasks = new ArrayList<>();

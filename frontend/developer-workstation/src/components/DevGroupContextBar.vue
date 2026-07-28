@@ -83,27 +83,33 @@ import { functionUnitApi, type DevGroupOption } from '@/api/functionUnit'
 import { ALL_GROUPS, getActiveGroupRaw, setActiveGroup } from '@/utils/devGroupContext'
 
 const { t } = useI18n()
+const emit = defineEmits<{ ready: [] }>()
 
 const groups = ref<DevGroupOption[]>([])
 const canSeeAll = ref(false)
+const publicGroupId = ref<string | null>(null)
 const currentId = ref<string | null>(null)
 const selectDialogVisible = ref(false)
 const pendingGroupId = ref<string>('')
 
-// Options shown in the header switcher: "All groups" (admin only) + the user's teams.
+// Options shown in the header switcher: "All groups" (admin only), Public, and the user's teams.
 const switchOptions = computed<DevGroupOption[]>(() => {
   const opts: DevGroupOption[] = []
   if (canSeeAll.value) {
     opts.push({ id: ALL_GROUPS, name: t('devGroup.allGroups') })
   }
+  if (publicGroupId.value) {
+    opts.push({ id: publicGroupId.value, name: t('devGroup.publicGroup') })
+  }
   opts.push(...groups.value)
   return opts
 })
 
-const showBar = computed(() => canSeeAll.value || groups.value.length > 0)
+const showBar = computed(() => canSeeAll.value || Boolean(publicGroupId.value) || groups.value.length > 0)
 
 const currentName = computed(() => {
   if (currentId.value === ALL_GROUPS) return t('devGroup.allGroups')
+  if (currentId.value === publicGroupId.value) return t('devGroup.publicGroup')
   const match = groups.value.find(g => g.id === currentId.value)
   if (match) return match.name
   return t('devGroup.noTeam')
@@ -130,18 +136,23 @@ async function resolveContext() {
     const res = await functionUnitApi.getMyDevGroups()
     groups.value = res?.data?.groups ?? []
     canSeeAll.value = res?.data?.canSeeAllGroups === true
+    publicGroupId.value = res?.data?.publicGroupId || null
   } catch {
     groups.value = []
     canSeeAll.value = false
+    publicGroupId.value = null
+    emit('ready')
     return
   }
 
   const stored = getActiveGroupRaw()
   const validIds = new Set<string>(groups.value.map(g => g.id))
   if (canSeeAll.value) validIds.add(ALL_GROUPS)
+  if (publicGroupId.value) validIds.add(publicGroupId.value)
 
   if (stored && validIds.has(stored)) {
     currentId.value = stored
+    emit('ready')
     return
   }
 
@@ -149,11 +160,15 @@ async function resolveContext() {
   if (canSeeAll.value) {
     currentId.value = ALL_GROUPS
     setActiveGroup(ALL_GROUPS)
+    emit('ready')
   } else if (groups.value.length === 1) {
     currentId.value = groups.value[0]!.id
     setActiveGroup(currentId.value)
+    emit('ready')
   } else if (groups.value.length === 0) {
-    currentId.value = null
+    currentId.value = publicGroupId.value
+    if (currentId.value) setActiveGroup(currentId.value)
+    emit('ready')
   } else {
     // Multiple teams and no prior choice → force a selection.
     pendingGroupId.value = groups.value[0]!.id

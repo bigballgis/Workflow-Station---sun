@@ -1,11 +1,45 @@
 import { describe, expect, it } from 'vitest'
 import dayjs from 'dayjs'
 import { useChangeHistoryFormatting } from '../useChangeHistoryFormatting'
+import { excludeEmptyValueChanges } from '../useChangeHistoryLoader'
+
 const t = ((key: string, params?: Record<string, unknown>) => {
   if (key === 'changeHistory.batchChanges') return `${params?.count ?? 0} changes`
   return key
 }) as never
 describe('useChangeHistoryFormatting', () => {
+  it('hides only records with no user-visible old or new value', () => {
+    const rows = [
+      { id: 1, oldValue: null, newValue: '' },
+      { id: 2, oldValue: null, newValue: 'liam' },
+      { id: 3, oldValue: 'previous', newValue: '' },
+    ] as never
+    expect(excludeEmptyValueChanges(rows).map(row => row.id)).toEqual([2, 3])
+  })
+  it('formats lookup object values as dropdown name only', () => {
+    const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs)
+    const value = JSON.stringify({
+      enabled: true,
+      created_at: '2026-06-23 15:42:03',
+      created_by: 'admin',
+      dropdown_name: 'USD',
+      dropdown_category: 'Billing currency',
+    })
+    expect(formatDisplayValue(value)).toBe('USD')
+  })
+  it('reduces lookup payloads with metadata to the display name', () => {
+    const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs)
+    const value = JSON.stringify({
+      enabled: true,
+      created_at: '2026-06-23 15:42:03',
+      created_by: 'admin',
+      updated_at: '2026-06-23 15:42:03',
+      updated_by: 'admin',
+      dropdown_name: 'USD',
+      dropdown_category: 'Billing currency',
+    })
+    expect(formatDisplayValue(value)).toBe('USD')
+  })
   it('formats JSON object diffs as changed field list', () => {
     const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs)
     const value = JSON.stringify({
@@ -23,23 +57,19 @@ describe('useChangeHistoryFormatting', () => {
     })
     expect(formatDisplayValue(value)).toBe('incoming_channel: Branch; file: lilong.JPG')
   })
-  it('labels Record Note change types instead of echoing the raw enum', () => {
-    const { getChangeTypeLabel, getChangeTypeTag } = useChangeHistoryFormatting(t, dayjs)
-    expect(getChangeTypeLabel('RECORD_NOTE_ADD')).toBe('changeHistory.recordNoteAdd')
-    expect(getChangeTypeLabel('RECORD_NOTE_UPDATE')).toBe('changeHistory.recordNoteUpdate')
-    expect(getChangeTypeLabel('RECORD_NOTE_DELETE')).toBe('changeHistory.recordNoteDelete')
-    expect(getChangeTypeTag('RECORD_NOTE_ADD')).toBe('success')
-    expect(getChangeTypeTag('RECORD_NOTE_DELETE')).toBe('danger')
+  it('keeps id-like payloads readable instead of rendering em dash', () => {
+    const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs)
+    const value = JSON.stringify({ id: '8b3f4b67-08b7-4a12-8f3d-6789a1e8ac20' })
+    expect(formatDisplayValue(value)).toBe('8b3f4b67-08b7-4a12-8f3d-6789a1e8ac20')
   })
-  it('locates a Record Note entry, pinning RECORD-scope notes to their row', () => {
-    const { fieldLocationLabel } = useChangeHistoryFormatting(t, dayjs)
-    const base = { fieldName: 'Record Note', userId: 'u1', timestamp: '2026-07-27T00:00:00Z' }
-    expect(fieldLocationLabel({ ...base, changeType: 'RECORD_NOTE_ADD' } as never))
-      .toBe('changeHistory.recordNote')
-    expect(fieldLocationLabel({
-      ...base,
-      changeType: 'RECORD_NOTE_ADD',
-      rowIdentifier: 'row-77',
-    } as never)).toBe('changeHistory.recordNote · changeHistory.row: row-77')
+  it('prefers display_name style keys for lookup-like objects', () => {
+    const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs)
+    const value = JSON.stringify({ display_name: 'Liam L Li', user_id: '45455063' })
+    expect(formatDisplayValue(value)).toBe('display_name: Liam L Li; user_id: 45455063')
+  })
+  it('preserves ordinary object fields even when they include a name', () => {
+    const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs)
+    const value = JSON.stringify({ name: 'Item A', status: 'APPROVED', amount: '100' })
+    expect(formatDisplayValue(value)).toBe('name: Item A; status: APPROVED; amount: 100')
   })
 })

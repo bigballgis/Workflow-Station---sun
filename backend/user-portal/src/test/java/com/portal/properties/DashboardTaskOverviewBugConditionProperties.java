@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.RepeatedTest;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
@@ -64,9 +65,9 @@ class DashboardTaskOverviewBugConditionProperties {
         dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
                 businessUnitRepository, userBusinessUnitRepository, processInstanceRepository,
                 mock(com.portal.service.UserDisplayNameResolver.class));
+        ReflectionTestUtils.setField(dashboardComponent, "aggregationExecutor", (java.util.concurrent.Executor) Runnable::run);
         random = new Random();
     }
-
 
     /**
      * Property 1: Bug Condition — 团队任务指标缺失
