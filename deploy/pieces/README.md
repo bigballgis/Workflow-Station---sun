@@ -176,3 +176,14 @@ docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_d
   加载成功才渲染，白名单环境下 6 个全 404 → 无限骨架屏 + console 刷屏。该功能=「经 Slack/Teams/Gmail
   发消息审批」，离线集群里本质不可用。
 - 剩余的 console 404 噪音（Explore 页热门推荐位查 `piece-ai` 等）不影响功能，不要为了消音引入 SaaS piece。
+- **Redis 里有个只增不删的预热清单 `usedPieces:<workerGroup|shared>`**：worker 启动时按它预装
+  （`worker.ts#warmupPiecesOnStartup`），而写它的 `markPieceAsUsed`
+  （`worker-rpc-service.ts`）**只追加、从不移除**。于是任何历史上跑过一次的 piece 会永远留在
+  预热清单里 —— 即使引用它的 flow 早已删除。**气隙下的后果**：清单里只要有一个白名单外的条目，
+  每次 worker 启动都会尝试联网安装并失败（非致命，但每次都发生）。
+  排查/清理（dev 写法，键会按实际运行重新累积）：
+
+  ```sh
+  docker exec platform-redis-dev redis-cli -a "$REDIS_PASSWORD" --no-auth-warning GET usedPieces:shared
+  docker exec platform-redis-dev redis-cli -a "$REDIS_PASSWORD" --no-auth-warning DEL usedPieces:shared
+  ```
