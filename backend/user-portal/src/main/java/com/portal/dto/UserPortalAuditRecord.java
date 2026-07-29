@@ -41,4 +41,11 @@ public class UserPortalAuditRecord {
     private String formName;
     /** 主表 / 子表名称 */
     private String tableName;
+    /**
+     * Human-readable process label for audit list.
+     * Priority: Request ID → title → businessKey → definitionName · shortId.
+     */
+    private String processTitle;
+    /** Sub-table display name from table metadata; UI prefers this over {@link #subTableName}. */
+    private String subTableDisplayName;
 }

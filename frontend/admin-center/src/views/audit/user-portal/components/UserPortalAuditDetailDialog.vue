@@ -15,7 +15,7 @@
           {{ record.userName || record.userId }}
         </el-descriptions-item>
         <el-descriptions-item :label="t('upAudit.functionUnit')">
-          {{ record.functionUnitCode || '-' }}
+          {{ record.functionUnitName || record.functionUnitCode || '-' }}
         </el-descriptions-item>
         <el-descriptions-item :label="t('upAudit.changeType')">
           <el-tag :type="changeTypeTag(record.changeType)" size="small">
@@ -23,19 +23,19 @@
           </el-tag>
         </el-descriptions-item>
         <el-descriptions-item :label="t('upAudit.processInstanceId')">
-          {{ record.processInstanceId }}
+          <div>{{ record.processTitle || record.processInstanceId }}</div>
+          <div v-if="record.processTitle && record.processInstanceId" class="muted-id">
+            {{ record.processInstanceId }}
+          </div>
         </el-descriptions-item>
         <el-descriptions-item :label="t('upAudit.stage')">
           {{ record.stageName || record.stageId || '-' }}
         </el-descriptions-item>
         <el-descriptions-item :label="t('upAudit.fieldName')">
-          {{ record.fieldLabel || record.fieldName }}
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('upAudit.tableForm')">
-          {{ record.formName || record.tableName || '-' }}
+          {{ record.fieldLabel || record.fieldName || '-' }}
         </el-descriptions-item>
         <el-descriptions-item :label="t('upAudit.subTableName')">
-          {{ record.subTableName || '-' }}
+          {{ record.subTableDisplayName || record.subTableName || '-' }}
         </el-descriptions-item>
         <el-descriptions-item v-if="record.rowIdentifier" :label="t('upAudit.rowIdentifier')">
           {{ record.rowIdentifier }}
@@ -117,5 +117,12 @@ const { t } = useI18n()
   word-break: break-all;
   max-height: 240px;
   overflow-y: auto;
+}
+
+.muted-id {
+  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  word-break: break-all;
 }
 </style>

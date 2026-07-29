@@ -49,6 +49,7 @@ public class ChangeHistoryCreationPropertyTest {
                 mock(WorkflowEngineClient.class),
                 mock(JdbcTemplate.class),
                 new ObjectMapper(),
+                mock(com.portal.component.UserPortalAuditEnricher.class),
                 PortalTransactionTestSupport.noopPlatformTransactionManager());
     }
 

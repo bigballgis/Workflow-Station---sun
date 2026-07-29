@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <PageHeader :title="t('menu.audit')" />
+    <PageHeader :title="t('menu.auditAdminCenter')" />
 
     <!-- Filter Area -->
     <div class="filter-card">

@@ -102,10 +102,9 @@ export function useUserPortalAudit() {
     { key: 'timestamp', label: t('audit.time') },
     { key: 'userName', label: t('audit.operator') },
     { key: 'functionUnitCode', label: t('upAudit.functionUnit') },
-    { key: 'formName', label: t('upAudit.tableForm') },
     { key: 'subTableName', label: t('upAudit.subTableName') },
     { key: 'changeType', label: t('upAudit.changeType') },
-    { key: 'processInstanceId', label: t('upAudit.processInstanceId') },
+    { key: 'processTitle', label: t('upAudit.processInstanceId') },
     { key: 'stageName', label: t('upAudit.stage') },
     { key: 'fieldName', label: t('upAudit.fieldName') },
     { key: 'oldValue', label: t('upAudit.oldValue') },
@@ -183,13 +182,13 @@ export function useUserPortalAudit() {
     switch (key) {
       case 'timestamp': return formatTimestamp(row.timestamp)
       case 'userName': return row.userName || row.userId || '-'
-      case 'functionUnitCode': return row.functionUnitCode || row.functionUnitName || '-'
+      case 'functionUnitCode': return row.functionUnitName || row.functionUnitCode || '-'
       case 'changeType': return changeTypeText(t, row.changeType)
-      case 'processInstanceId': return row.processInstanceId || '-'
+      case 'processTitle': return row.processTitle || row.processInstanceId || '-'
+      case 'processInstanceId': return row.processTitle || row.processInstanceId || '-'
       case 'stageName': return row.stageName || row.stageId || '-'
       case 'fieldName': return row.fieldLabel || row.fieldName || '-'
-      case 'formName': return row.formName || '-'
-      case 'subTableName': return row.subTableName || '-'
+      case 'subTableName': return row.subTableDisplayName || row.subTableName || '-'
       case 'oldValue': return truncateValue(row.oldValue, 100)
       case 'newValue': return truncateValue(row.newValue, 100)
       default: return '-'

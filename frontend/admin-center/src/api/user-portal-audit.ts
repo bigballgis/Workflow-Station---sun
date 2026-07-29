@@ -25,6 +25,8 @@ export interface UserPortalAuditRecord {
   functionUnitVersionLabel?: string
   formName?: string
   tableName?: string
+  processTitle?: string
+  subTableDisplayName?: string
 }
 
 export interface UserPortalAuditQueryRequest {

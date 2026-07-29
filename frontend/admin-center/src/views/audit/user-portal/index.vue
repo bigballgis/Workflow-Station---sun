@@ -97,7 +97,12 @@
           <el-button @click="handleReset">
             {{ t('common.reset') }}
           </el-button>
-          <el-button type="primary" :loading="exporting" @click="openExportDialog">
+          <el-button
+            type="primary"
+            :loading="exporting"
+            style="margin-left: 8px"
+            @click="openExportDialog"
+          >
             <el-icon><Download /></el-icon>{{ t('audit.batchExport') }}
           </el-button>
         </el-form-item>
@@ -110,43 +115,16 @@
       v-loading="loading"
       :data="logs"
       stripe
-      border
+      size="small"
+      highlight-current-row
       style="width: 100%"
+      :header-cell-style="{ background: '#f5f7fa', whiteSpace: 'nowrap' }"
       @sort-change="handleSortChange"
     >
       <el-table-column
-        prop="timestamp"
-        :label="t('audit.time')"
-        width="170"
-        sortable="custom"
-      >
-        <template #default="{ row }">
-          {{ formatTimestamp(row.timestamp) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="userName"
-        :label="t('audit.operator')"
-        width="120"
-      >
-        <template #default="{ row }">
-          {{ row.userName || row.userId || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="functionUnitCode"
-        :label="t('upAudit.functionUnit')"
-        width="150"
-      >
-        <template #default="{ row }">
-          <span v-if="row.functionUnitCode">{{ row.functionUnitCode }}</span>
-          <span v-else>-</span>
-        </template>
-      </el-table-column>
-      <el-table-column
         prop="changeType"
         :label="t('upAudit.changeType')"
-        width="150"
+        min-width="140"
         sortable="custom"
       >
         <template #default="{ row }">
@@ -156,32 +134,29 @@
         </template>
       </el-table-column>
       <el-table-column
-        :label="t('upAudit.tableForm')"
-        width="140"
+        prop="functionUnitCode"
+        :label="t('upAudit.functionUnit')"
+        min-width="150"
         show-overflow-tooltip
       >
         <template #default="{ row }">
-          {{ row.formName || row.tableName || '-' }}
+          {{ row.functionUnitName || row.functionUnitCode || '-' }}
         </template>
       </el-table-column>
       <el-table-column
-        :label="t('upAudit.subTableName')"
-        width="120"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ row.subTableName || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="processInstanceId"
         :label="t('upAudit.processInstanceId')"
-        width="170"
+        min-width="170"
         show-overflow-tooltip
-      />
+      >
+        <template #default="{ row }">
+          <span :title="row.processInstanceId">
+            {{ row.processTitle || row.processInstanceId || '-' }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column
         :label="t('upAudit.stage')"
-        width="120"
+        min-width="140"
         show-overflow-tooltip
       >
         <template #default="{ row }">
@@ -189,8 +164,17 @@
         </template>
       </el-table-column>
       <el-table-column
+        :label="t('upAudit.subTableName')"
+        min-width="120"
+        show-overflow-tooltip
+      >
+        <template #default="{ row }">
+          {{ row.subTableDisplayName || row.subTableName || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column
         :label="t('upAudit.fieldName')"
-        width="140"
+        min-width="140"
         show-overflow-tooltip
       >
         <template #default="{ row }">
@@ -199,7 +183,7 @@
       </el-table-column>
       <el-table-column
         :label="t('upAudit.oldValue')"
-        width="150"
+        min-width="150"
         show-overflow-tooltip
       >
         <template #default="{ row }">
@@ -208,19 +192,43 @@
       </el-table-column>
       <el-table-column
         :label="t('upAudit.newValue')"
-        width="150"
+        min-width="150"
         show-overflow-tooltip
       >
         <template #default="{ row }">
           {{ truncateValue(row.newValue, 50) }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="80" fixed="right">
+      <el-table-column
+        prop="userName"
+        :label="t('audit.operator')"
+        min-width="120"
+        show-overflow-tooltip
+      >
+        <template #default="{ row }">
+          {{ row.userName || row.userId || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column
+        prop="timestamp"
+        :label="t('audit.time')"
+        min-width="170"
+        sortable="custom"
+        show-overflow-tooltip
+      >
+        <template #default="{ row }">
+          <span style="white-space: nowrap">{{ formatTimestamp(row.timestamp) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        :label="t('common.actions')"
+        width="80"
+        fixed="right"
+      >
         <template #default="{ row }">
           <el-button
-            type="primary"
             link
-            size="small"
+            type="primary"
             @click="showDetail(row)"
           >
             {{ t('common.view') }}
@@ -229,28 +237,27 @@
       </el-table-column>
     </el-table>
 
-    <!-- Empty State -->
-    <div v-if="!loading && logs.length === 0" class="empty-state">
+    <div
+      v-if="!loading && logs.length === 0"
+      class="empty-state"
+    >
       <el-empty :description="t('upAudit.emptyText')">
-        <el-button type="primary" @click="handleReset">
+        <el-button
+          type="primary"
+          @click="handleReset"
+        >
           {{ t('audit.resetFilter') }}
         </el-button>
       </el-empty>
     </div>
 
-    <!-- Pagination -->
-    <div
-      v-if="total > 0"
-      class="pagination-wrapper"
-      style="display: flex; justify-content: flex-end; margin-top: 16px"
-    >
+    <div class="pagination-container">
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="size"
-        :page-sizes="[10, 20, 50, 100]"
         :total="total"
-        layout="total, sizes, prev, pager, next, jumper"
-        background
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
         @size-change="handleSizeChange"
         @current-change="handleSearch"
       />
@@ -300,32 +307,15 @@ const {
 </script>
 
 <style scoped>
-.page-container {
-  padding: 0;
-}
-
 .filter-card {
-  background: var(--el-bg-color);
-  border-radius: 8px;
-  padding: 16px 16px 0 16px;
-  margin-bottom: 16px;
-  box-shadow: var(--el-box-shadow-lighter);
-}
-
-.search-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 0;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 16px 16px 0;
+  margin-bottom: 12px;
 }
 
 .empty-state {
-  padding: 60px 0;
-}
-
-.pagination-wrapper {
-  background: var(--el-bg-color);
-  border-radius: 8px;
-  padding: 12px 16px;
-  box-shadow: var(--el-box-shadow-lighter);
+  padding: 20px 0;
 }
 </style>

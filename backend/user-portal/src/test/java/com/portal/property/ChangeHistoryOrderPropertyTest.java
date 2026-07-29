@@ -3,6 +3,7 @@ package com.portal.property;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
+import com.portal.component.UserPortalAuditEnricher;
 import com.portal.dto.ChangeHistoryRecord;
 import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -52,9 +54,12 @@ public class ChangeHistoryOrderPropertyTest {
         ChangeHistory.builder().id(2L).processInstanceId("process-1").userId("user-1")
             .timestamp(now.plusSeconds(1)).fieldName("description").newValue("visible")
             .changeType(ChangeType.FIELD_UPDATE).build()));
+    UserPortalAuditEnricher auditEnricher = mock(UserPortalAuditEnricher.class);
+    when(auditEnricher.resolveStageNamesFromDb(any())).thenReturn(Map.of());
     ChangeHistoryComponent component = new ChangeHistoryComponent(
         repository, mock(ProcessInstanceRepository.class), userRepository, workflowEngineClient,
         mock(JdbcTemplate.class), new ObjectMapper(),
+        auditEnricher,
         PortalTransactionTestSupport.noopPlatformTransactionManager());
     assertThat(component.getChangeHistory("process-1"))
         .extracting(ChangeHistoryRecord::getFieldName)
@@ -84,6 +89,8 @@ public class ChangeHistoryOrderPropertyTest {
         when(repository.findByProcessInstanceIdOrderByTimestampAsc(historyList.processInstanceId))
                 .thenReturn(sorted);
 
+        UserPortalAuditEnricher auditEnricher = mock(UserPortalAuditEnricher.class);
+        when(auditEnricher.resolveStageNamesFromDb(any())).thenReturn(Map.of());
         ChangeHistoryComponent component = new ChangeHistoryComponent(
                 repository,
                 mock(ProcessInstanceRepository.class),
@@ -91,6 +98,7 @@ public class ChangeHistoryOrderPropertyTest {
                 workflowEngineClient,
                 mock(JdbcTemplate.class),
                 new ObjectMapper(),
+                auditEnricher,
                 PortalTransactionTestSupport.noopPlatformTransactionManager());
         List<ChangeHistoryRecord> result = component.getChangeHistory(historyList.processInstanceId);
 
