@@ -1,0 +1,428 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-declarative-config
+  namespace: __NAMESPACE__
+# =====================================================================
+# UAT Kong 声明式配置
+# =====================================================================
+# 本文件由 preprod 复制，正文逐字一致——本配置全部由占位符驱动，没有环境特有值：
+#   __NAMESPACE__  -> apply 时由 apply-workflow-station-configmap.ps1 渲染
+#   __REDIS_HOST__ / __REDIS_PASSWORD__ / __CORS_ALLOWED_ORIGINS__
+#                  -> Kong 容器启动时由本文件自带的 docker-entrypoint-kong.sh，从
+#                     workflow-platform-config / workflow-platform-secrets 注入
+# 所以「按 UAT 调整」不改本文件，改上面两个来源即可；与 preprod 的差异应恒为空，
+# 直接 diff 两份文件即可发现漂移。
+#
+# ⚠️ 改完必须重启 Kong：KONG_DATABASE=off 只在容器启动时读一次声明式配置，
+#    更新 ConfigMap 不会热生效。
+#      kubectl -n <ns> rollout restart deployment/kong
+#
+# 已知遗留（两环境同存，非本文件引入）：Kong 在 Istio sidecar 后面，limit_by: ip 取到的
+# 是固定来源地址，所有 rate-limiting 实际退化为「全平台共享一个桶」（登录 10/min 尤其
+# 敏感）。修法在 deploy/k8s/kong.yaml 配 KONG_REAL_IP_HEADER=X-Forwarded-For +
+# KONG_TRUSTED_IPS（只信任 sidecar 来源，切勿用 0.0.0.0/0，那等于让客户端自报 IP）。
+data:
+  kong.yml.template: |
+    _format_version: "3.0"
+    _transform: true
+    # ============================================================
+    # Services (上游后端服务)
+    # ============================================================
+    services:
+      # --- admin-center ---
+      - name: admin-center-service
+        url: http://admin-center-service.__NAMESPACE__:8080
+        connect_timeout: 60000
+        write_timeout: 60000
+        read_timeout: 60000
+        routes:
+          - name: admin-center-route
+            paths:
+              - /api/v1/admin
+            strip_path: false
+            preserve_host: false
+      # --- developer-workstation ---
+      # 同一路径前缀的多条路由：具体路径必须列在 /api/v1 通配之前，保证 /api/v1/auth/* 等到正确上游
+      - name: developer-workstation-service
+        url: http://developer-workstation-service.__NAMESPACE__:8080
+        connect_timeout: 60000
+        write_timeout: 60000
+        read_timeout: 60000
+        routes:
+          - name: dw-auth-login-route
+            paths:
+              - /api/v1/auth/login
+            strip_path: false
+            preserve_host: false
+          - name: dw-auth-refresh-route
+            paths:
+              - /api/v1/auth/refresh
+            strip_path: false
+            preserve_host: false
+          - name: upload-route
+            paths:
+              - /api/v1/upload
+              - /api/v1/import
+            strip_path: false
+            preserve_host: false
+          - name: developer-workstation-route
+            paths:
+              - /api/v1
+            strip_path: false
+            preserve_host: false
+      # --- developer-workstation SSE (AI 生成) ---
+      - name: developer-workstation-sse-service
+        url: http://developer-workstation-service.__NAMESPACE__:8080
+        connect_timeout: 60000
+        write_timeout: 300000
+        read_timeout: 300000
+        routes:
+          - name: developer-workstation-sse-route
+            paths:
+              - /api/v1/ai-generation
+            strip_path: false
+            preserve_host: false
+      # --- user-portal ---
+      - name: user-portal-service
+        url: http://user-portal-service.__NAMESPACE__:8080
+        connect_timeout: 60000
+        write_timeout: 600000
+        read_timeout: 600000
+        routes:
+          - name: user-portal-route
+            paths:
+              - /api/portal
+            strip_path: false
+            preserve_host: false
+      # --- user-portal WebSocket ---
+      - name: user-portal-ws-service
+        url: http://user-portal-service.__NAMESPACE__:8080
+        connect_timeout: 60000
+        write_timeout: 86400000
+        read_timeout: 86400000
+        routes:
+          - name: user-portal-ws-route
+            paths:
+              - /api/portal/ws
+            strip_path: false
+            preserve_host: false
+            protocols:
+              - http
+              - https
+      # --- workflow-engine-core ---
+      - name: workflow-engine-service
+        url: http://workflow-engine-service.__NAMESPACE__:8080
+        connect_timeout: 60000
+        write_timeout: 60000
+        read_timeout: 60000
+        routes:
+          - name: workflow-engine-route
+            paths:
+              - /api/workflow
+            strip_path: false
+            preserve_host: false
+      # --- Activepieces builder API (L2, per-user) ---
+      # DW 设计态嵌入的 AP builder 经此访问 AP REST + socket.io。AP 原生 API 在
+      # /api/v1/* + /api/socket.io，与平台自身 /api/v1/* 冲突，故用独立前缀 /api/ap/*
+      # 收编（替代 :8085 独立 origin 桥，见 X-Bridge-Retire / Q6）。鉴权由 AP 自身完成
+      # （浏览器持 L7 per-user AP token：REST 走 Authorization: Bearer，socket.io 握手走
+      # auth {token}）——Kong 不验 JWT，仅透明路由（与本网关既有约定一致）。
+      # ⚠️ 仅设计态环境需要；纯运行态 prod（portal only）应删除本两 service（Doc4 §4.1，
+      # 生产只经 Istio 暴露 /api/v1/webhooks）。硬约束落点见 dev kong.yml.template 注释。
+      - name: activepieces-builder-service
+        url: http://activepieces-service.__NAMESPACE__:80/api
+        connect_timeout: 60000
+        write_timeout: 300000
+        read_timeout: 300000
+        routes:
+          - name: activepieces-builder-route
+            paths:
+              - /api/ap
+            strip_path: true
+            preserve_host: false
+      # --- Activepieces builder socket.io (WebSocket) ---
+      # service url 带完整 /api/socket.io base，route strip /api/ap/socket.io，保住段：
+      #   /api/ap/socket.io/?EIO=4 -> strip -> /?EIO=4 -> service /api/socket.io + /?EIO=4
+      - name: activepieces-builder-ws-service
+        url: http://activepieces-service.__NAMESPACE__:80/api/socket.io
+        connect_timeout: 60000
+        write_timeout: 86400000
+        read_timeout: 86400000
+        routes:
+          - name: activepieces-builder-ws-route
+            paths:
+              - /api/ap/socket.io
+            strip_path: true
+            preserve_host: false
+            protocols:
+              - http
+              - https
+      # --- 公开路由 (不启用 JWT 插件) ---
+      # admin-center 登录
+      - name: admin-center-auth-service
+        url: http://admin-center-service.__NAMESPACE__:8080
+        connect_timeout: 60000
+        write_timeout: 60000
+        read_timeout: 60000
+        routes:
+          - name: admin-auth-login-route
+            paths:
+              - /api/v1/admin/auth/login
+            strip_path: false
+            preserve_host: false
+          - name: admin-auth-refresh-route
+            paths:
+              - /api/v1/admin/auth/refresh
+            strip_path: false
+            preserve_host: false
+          - name: admin-sso-login-route
+            paths:
+              - /api/v1/admin/sso/login
+            strip_path: false
+            preserve_host: false
+          - name: admin-auth-sso-exchange-route
+            paths:
+              - /api/v1/admin/auth/sso/exchange
+            strip_path: false
+            preserve_host: false
+      # user-portal 登录
+      - name: user-portal-auth-service
+        url: http://user-portal-service.__NAMESPACE__:8080
+        connect_timeout: 60000
+        write_timeout: 60000
+        read_timeout: 60000
+        routes:
+          - name: portal-auth-login-route
+            paths:
+              - /api/portal/auth/login
+            strip_path: false
+            preserve_host: false
+          - name: portal-auth-refresh-route
+            paths:
+              - /api/portal/auth/refresh
+            strip_path: false
+            preserve_host: false
+    # ============================================================
+    # Plugins (全局插件)
+    # ============================================================
+    plugins:
+      # --- correlation-id: 分布式追踪 ---
+      - name: correlation-id
+        config:
+          header_name: X-Trace-Id
+          generator: uuid#counter
+          echo_downstream: true
+      # --- CORS ---
+      - name: cors
+        config:
+          origins:
+            - __CORS_ALLOWED_ORIGINS__
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+            - X-Trace-Id
+            - Accept
+            - Origin
+            - X-Requested-With
+          exposed_headers:
+            - X-RateLimit-Limit
+            - X-RateLimit-Remaining
+            - X-RateLimit-Reset
+            - X-Trace-Id
+          max_age: 3600
+          credentials: true
+      # --- 全局限流 (默认 600/分钟) ---
+      - name: rate-limiting
+        config:
+          minute: 600
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+          hide_client_headers: false
+          fault_tolerant: true
+      # --- JWT 认证已由后端 JwtAuthenticationFilter 处理 ---
+      # Kong 不做 JWT 验证,仅做路由转发、CORS、限流和追踪
+      # --- Prometheus 监控 ---
+      - name: prometheus
+        config:
+          per_consumer: false
+          status_code_metrics: true
+          latency_metrics: true
+          bandwidth_metrics: true
+          upstream_health_metrics: true
+      # --- HSTS (pre-production with HTTPS) ---
+      - name: response-transformer
+        config:
+          add:
+            headers:
+              - "Strict-Transport-Security:max-age=31536000; includeSubDomains"
+      # --- 登录端点路由级限流 (10/分钟) ---
+      - name: rate-limiting
+        route: admin-auth-login-route
+        config:
+          minute: 10
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+      - name: rate-limiting
+        route: portal-auth-login-route
+        config:
+          minute: 10
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+      - name: rate-limiting
+        route: dw-auth-login-route
+        config:
+          minute: 10
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+      - name: rate-limiting
+        route: admin-sso-login-route
+        config:
+          minute: 10
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+      # --- Token 刷新端点路由级限流 (20/分钟) ---
+      - name: rate-limiting
+        route: admin-auth-refresh-route
+        config:
+          minute: 20
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+      - name: rate-limiting
+        route: portal-auth-refresh-route
+        config:
+          minute: 20
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+      - name: rate-limiting
+        route: dw-auth-refresh-route
+        config:
+          minute: 20
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+
+      # --- Activepieces builder REST 路由级限流 (放宽) ---
+      # builder 首屏放大 ≈ 2N+2M + 长轮询/心跳 -> 全局 600/min 误伤，放宽 3000/min。
+      # socket.io（WS 路由）不限流。（删本 service 时一并删本 plugin。）
+      - name: rate-limiting
+        route: activepieces-builder-route
+        config:
+          minute: 3000
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+          fault_tolerant: true
+    # ============================================================
+    # Upstreams — removed (not referenced by services)
+    # ============================================================
+    # Services use direct URLs (e.g. http://admin-center-service.__NAMESPACE__:8080).
+    # To enable health checks, change service URLs to upstream names
+    # and uncomment the upstream definitions.
+    # See: https://docs.konghq.com/gateway/latest/how-kong-works/load-balancing/
+  docker-entrypoint-kong.sh: |
+    #!/bin/sh
+    set -e
+    # =====================================================
+    # 环境变量验证
+    # CORS_ALLOWED_ORIGINS 为必须
+    # REDIS_PASSWORD 允许为空（开发环境可能不设密码）
+    # =====================================================
+    if [ -z "$JWT_SECRET" ]; then
+      echo "WARN: JWT_SECRET is not set. This deployment does not rely on Kong-side JWT validation, continuing." >&2
+    fi
+    if [ -z "$CORS_ALLOWED_ORIGINS" ]; then
+      echo "ERROR: CORS_ALLOWED_ORIGINS is not set. Kong CORS plugin will not work." >&2
+      exit 1
+    fi
+    escape_sed_replacement() {
+      printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'
+    }
+    # =====================================================
+    # 将逗号分隔的 CORS_ALLOWED_ORIGINS 转换为 YAML 数组格式
+    # 例: "http://localhost:3000,http://localhost:3001"
+    # 转换为:
+    #         - http://localhost:3000
+    #         - http://localhost:3001
+    # =====================================================
+    build_cors_yaml() {
+      echo "$CORS_ALLOWED_ORIGINS" | tr ',' '\n' | while read -r origin; do
+        origin=$(echo "$origin" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [ -n "$origin" ]; then
+          echo "        - ${origin}"
+        fi
+      done
+    }
+    CORS_YAML_LINES=$(build_cors_yaml)
+    JWT_SECRET_ESCAPED=$(escape_sed_replacement "${JWT_SECRET}")
+    REDIS_HOST_ESCAPED=$(escape_sed_replacement "${REDIS_HOST:-redis-service.__NAMESPACE__}")
+    REDIS_PASSWORD_ESCAPED=$(escape_sed_replacement "${REDIS_PASSWORD}")
+    # =====================================================
+    # 第一步: 替换简单占位符(JWT_SECRET, REDIS_HOST, REDIS_PASSWORD）
+    # =====================================================
+    sed -e "s|__JWT_SECRET__|${JWT_SECRET_ESCAPED}|g" \
+      -e "s|__REDIS_HOST__|${REDIS_HOST_ESCAPED}|g" \
+      -e "s|__REDIS_PASSWORD__|${REDIS_PASSWORD_ESCAPED}|g" \
+        /kong/kong.yml.template > /tmp/kong.yml.tmp
+    # =====================================================
+    # 第二步: 将 CORS origins 占位符行替换为多行 YAML 数组
+    # =====================================================
+    awk -v origins="$CORS_YAML_LINES" '
+      /- __CORS_ALLOWED_ORIGINS__/ { print origins; next }
+      { print }
+    ' /tmp/kong.yml.tmp > /tmp/kong.yml
+    rm -f /tmp/kong.yml.tmp
+    # 设置 Kong 使用生成的配置文件
+    export KONG_DECLARATIVE_CONFIG=/tmp/kong.yml
+    # 启动 Kong
+    exec /docker-entrypoint.sh kong docker-start
