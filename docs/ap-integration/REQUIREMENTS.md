@@ -368,7 +368,7 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 
 | ID | 能力 | 级别 | Source in AP | Target System | 说明 |
 |---|---|---|---|---|---|
-| FR-K01 | AI Generate 全链路不回归（契约 {reply,document,…} 不变） | MUST | webhooks /sync + **HTTP piece** | DW 后端 + AP flow | 超时 300s、SSE 心跳保持。**2026-07-28 更新**：模型调用由 `piece-ai` run_agent 改为 HTTP piece 直连，run_agent patch 一并作废（见 FR-K02）。⚠️ 仓库里 `deploy/ap-flows/ai-function-unit-gen.json` 与 `deploy/scripts/build-ai-fu-flow.js` 仍是旧的 piece-ai 版本，**尚未与新链路对齐**，见 [VT-15](VENDOR_TRIM_CHECKLIST.md) |
+| FR-K01 | AI Generate 全链路不回归（契约 {reply,document,…} 不变） | MUST | webhooks /sync + **HTTP piece** | DW 后端 + AP flow | 超时 300s、SSE 心跳保持。**2026-07-28 更新**：模型调用由 `piece-ai` run_agent 改为 HTTP piece 直连，run_agent patch 一并作废（见 FR-K02）。**2026-07-29：功能整体停用**（`ai-generation.enabled` 缺省 false + 前端 feature flag），旧的 piece-ai 版产物（flow JSON / 生成脚本 / 导出件）已删除，prompt 可从 git `6436f537` 取回。恢复时按新链路重建，见 [VT-15](VENDOR_TRIM_CHECKLIST.md) |
 | ~~FR-K02~~ | ~~run_agent 修改源码化（maxOutputTokens、reasoning-delta 剥离）~~ | **作废** | ~~piece-ai~~ | — | **2026-07-28 作废**：AI Generate 已改用 HTTP piece 直连模型端点，`run_agent` 链路不复存在 → 需求失去标的。`piece-ai` 已从 vendor 树删除，HERMES-PATCH-002 同时作废并删除脚本。**这不是欠账，是标的消失** |
 | FR-K03 | AI provider 断外网可控（仅配置的 baseUrl 可出网） | MUST | server（网络策略） | k8s NetworkPolicy/Istio | 安全评审项 |
 

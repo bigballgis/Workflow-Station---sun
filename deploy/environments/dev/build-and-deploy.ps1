@@ -748,11 +748,15 @@ function req(method, path, body, token) {
         docker exec platform-postgres-dev psql -U $pgUser -d $pgDb -v ON_ERROR_STOP=1 -q -f /tmp/pieces-seed.sql
         if ($LASTEXITCODE -ne 0) { throw "pieces-seed.sql failed" }
         $pieceCount = Get-PgScalar "select count(*) from piece_metadata;"
-        # No AP restart: /v1/pieces queries piece_metadata directly, there is no in-process
-        # registry cache. Verified 2026-07-29 — emptying the table makes the endpoint return 0
-        # immediately and re-seeding makes it return 13 immediately, with AP untouched. The
-        # long-standing "restart AP, the registry is cached" note in this script was wrong.
-        Write-Host "    Seeded $pieceCount piece(s)." -ForegroundColor Green
+        # The registry cache MUST be invalidated, but a restart is not the way to do it: publish
+        # to the same Redis channel AP itself uses when a piece is installed. Do not be fooled by
+        # /v1/pieces looking correct straight after seeding — that endpoint queries the DB, while
+        # single-piece lookup goes through the lazily-populated in-process cachedRegistry. If
+        # anything touched a single piece while the table was empty, that cache is pinned to []
+        # and /v1/pieces/<name> returns 404 forever. Verified both orderings on 2026-07-29.
+        docker exec $apContainer node -e "const R=require('/usr/src/app/node_modules/ioredis');const c=new R({host:process.env.AP_REDIS_HOST||'redis',port:+(process.env.AP_REDIS_PORT||6379),password:process.env.AP_REDIS_PASSWORD||undefined});c.publish('piece-registry-invalidation','1').then(n=>{console.log('subscribers reached: '+n);return c.quit()}).catch(e=>{console.error(e.message);process.exit(1)})"
+        if ($LASTEXITCODE -ne 0) { throw "piece registry invalidation failed — restart $apContainer or single-piece lookups will 404" }
+        Write-Host "    Seeded $pieceCount piece(s) and invalidated the registry cache." -ForegroundColor Green
     } else {
         Write-Host "    piece_metadata already seeded ($pieceCount piece(s))." -ForegroundColor DarkGray
     }

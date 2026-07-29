@@ -201,10 +201,13 @@ node serialize-piece-metadata.js <name>
 #    编辑 activepieces/hermes/pieces.json 追加 { "name": "@activepieces/piece-<name>", "version": "<ver>" }
 node generate-metadata-seed.js
 
-# 4. 灌 dev 库 + 重启 AP（同 §7；不重启则「列表有、单查 404」）
+# 4. 灌 dev 库 + 让 registry 缓存失效（同 §7；不失效则「列表有、单查 404」）
 docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_dev \
   < metadata/pieces-seed.sql
 docker restart platform-activepieces-dev
+#    （更轻的做法：往 Redis 频道 piece-registry-invalidation publish 一条消息即可，
+#      不用重启——build-and-deploy.ps1 的 Invoke-ApProvisioning 走的就是这条，
+#      见 deploy/pieces/README.md「导入后必须让 registry 缓存失效」）
 
 # 5. 在 DW 里验证：打开某 Function Unit → Automation 标签 → 新建/编辑 flow
 #    左侧组件面板应能搜到你的 piece，拖进去、配 props

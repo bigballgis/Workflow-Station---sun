@@ -35,7 +35,7 @@
 | VT-11 | **公司机器报错原文**（VT-12 的前置） | **P0** | ⬜ 未取得 |
 | VT-12 | `@ai-sdk/*` 仍在 api/worker/engine 硬依赖 | P1 | ⬜ 阻塞于 VT-11（**未被 HTTP piece 迁移解决**） |
 | VT-13 | `piece-ai` 保留与否的政策裁决 | P1 | ✅ **已关闭（2026-07-28，已删除）** |
-| VT-15 | AI Generate 产物与功能开关 | **P0** | 🟡 **功能已停用（2026-07-28），产物待用户后续处理** |
+| VT-15 | AI Generate 产物与功能开关 | **P0** | ✅ **已完成（2026-07-29）**：功能停用 + 产物清理 |
 | VT-14 | 17876 个删除独立成 commit | P1 | ✅ **已完成（`a2194c06`）** |
 
 > ⚠️ **VT-11 是整件事的根因位**。VT-01～VT-10 都是这次改动自身的收尾，值得做；
@@ -466,7 +466,7 @@ git checkout de4f6469 -- activepieces/packages/pieces/community/<name>        # 
 
 ---
 
-## VT-15 AI Generate：功能已停用，产物待处理 🟡
+## VT-15 AI Generate：功能已停用，产物已清理 ✅
 
 **2026-07-28 用户裁决：先停用整个 AI Generate，之后自行处理。** 已落地的停用（默认即生效，
 各环境不需要加任何环境变量）：
@@ -486,10 +486,37 @@ git checkout de4f6469 -- activepieces/packages/pieces/community/<name>        # 
 > **恢复时必须两侧同开**：只开后端 = 看不到入口；只开前端 = 点进去全 404。两处注释里都写了这句。
 > 会话 / 文档 / 锁的历史数据都还在库里，业务逻辑没动，恢复不需要数据迁移。
 
-### 剩下的（用户自行处理时再定）
+### 产物清理 ✅（2026-07-29）
 
-- [ ] 这几处 piece-ai 版产物没动，因为**里面那三段 system prompt 是仅存的一份**
-      （旧 n8n 模板已随 n8n 删除，Java 侧无副本）——重做 AI Generate 时要从这里取：
+**当初留着它们是因为"三段 system prompt 是仅存的一份"。这个顾虑在 VT-09 里已经被推翻过一次：
+源码不在工作区不等于丢了，git 里全在。** 所以三个产物全部删除，取回方式写在下面。
+
+删除的直接理由比"陈旧"严重得多 —— **`ai-function-unit-gen.json` 是 CI 流水线里的活雷**：
+[`Jenkinsfile.ap-flows-publish`](../../deploy/ci/Jenkinsfile.ap-flows-publish:67) 的 `FLOWS` 默认值是
+`all`，而 `all` 就是 `ls deploy/ap-flows/*.json`。只要它还躺在那个目录里，**任何一次常规的
+"发布全部 flow" 都会把 piece-ai 版的 flow 推进生产 AP** —— 而 piece-ai 既不在白名单、
+也已不在 vendor 树里，推上去必然哑火。
+
+- [x] 删 `deploy/ap-flows/ai-function-unit-gen.json`（拆掉上面那颗雷）
+- [x] 删 `deploy/pieces/AI Function Unit Generation.json`（BOM 前缀的编辑器导出副本）
+- [x] 删 `deploy/scripts/build-ai-fu-flow.js`（重建脚本；此前只加了闸门，现在整个删掉）
+- [x] 连带修掉 5 处引用，复扫零悬空：`ap-import-to-id.js` 的用法示例、uat/preprod 两份
+      configmap 的注释、`docs/x-ray/architecture/ai-and-integrations.md` 三处、`REQUIREMENTS.md` 的 FR-K01
+
+**三段 prompt 的取回方式**（与 [VT-09](#vt-09-上游-piece-源码的取回约定--已完成2026-07-29) 同一套路）：
+
+```bash
+git show 6436f537:deploy/scripts/build-ai-fu-flow.js        # 三段 phase prompt 都在里面
+git show 6436f537:deploy/ap-flows/ai-function-unit-gen.json # flow 定义本体
+```
+
+> uat/preprod 的 `__AI_GEN_FLOW_ID__` **有意保留**：占位符不替换也不影响部署（configmap 脚本
+> 只校验 `__BASE_DOMAIN__` / `__INGRESS_HOST__` 两个），功能关着就没有东西会去调它。
+> 注释里写清了恢复时的顺序。
+
+### 原先记录的其余项（保留作参照）
+
+- [x] ~~这几处 piece-ai 版产物没动~~ —— 已于 2026-07-29 全部删除，见上：
 
 | 文件 | 危险度 |
 |---|---|

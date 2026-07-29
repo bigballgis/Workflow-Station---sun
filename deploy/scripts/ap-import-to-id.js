@@ -5,9 +5,12 @@
  *
  * 用法(dev,经 stdin 喂进 AP 容器):
  *   docker exec -e AP_INTERNAL_URL=http://localhost:80 -e ACTIVEPIECES_SHARED_EMAIL=... \
- *     -e ACTIVEPIECES_SHARED_PASSWORD="$PW" -e TARGET_FLOW_ID=QnU0ytf5oBaxL9rbwOU2Z \
- *     -e FLOW_JSON="$(cat deploy/ap-flows/ai-function-unit-gen.json)" -i platform-activepieces-dev \
+ *     -e ACTIVEPIECES_SHARED_PASSWORD="$PW" -e TARGET_FLOW_ID=<目标 flowId> \
+ *     -e FLOW_JSON="$(cat deploy/ap-flows/<flow>.json)" -i platform-activepieces-dev \
  *     node - < deploy/scripts/ap-import-to-id.js
+ *
+ * (本脚本与具体 flow 无关。此前的例子用的是 AI Generate 的 flow,该产物已于 2026-07-29
+ *  随 AI Generate 停用一并删除 —— 见 docs/ap-integration/VENDOR_TRIM_CHECKLIST.md 的 VT-15。)
  */
 'use strict';
 const http = require('http');

@@ -90,9 +90,13 @@ psql -h <db-host> -U <user> -d <database> < deploy/pieces/metadata/pieces-seed.s
 #    （dev compose 写法：docker exec -i platform-postgres-dev psql -U platform_dev \
 #      -d workflow_platform_dev < deploy/pieces/metadata/pieces-seed.sql）
 
-# 4. 不需要重启 AP。
-#    /v1/pieces 和单件查询都是直接查库的,没有进程内缓存——2026-07-29 实测:先清空 piece_metadata
-#    再重启 AP(让它在"什么都没有"的状态下冷启),然后灌 seed,列表与单查立刻都通。
+# 4. 让 AP 的 registry 缓存失效 —— 不能省,但**不需要重启**：发一条 Redis 消息即可
+#    （部署脚本已自动做；手工灌 seed 时才需要自己发）
+docker exec <ap容器> node -e "const R=require('/usr/src/app/node_modules/ioredis');\
+const c=new R({host:process.env.AP_REDIS_HOST,port:+process.env.AP_REDIS_PORT,\
+password:process.env.AP_REDIS_PASSWORD||undefined});\
+c.publish('piece-registry-invalidation','1').then(n=>{console.log(n);return c.quit()})"
+#    k8s 同理（在 activepieces pod 里执行）；重启 deployment/activepieces 也行,只是更重。
 ```
 
 验证（应输出白名单条数；浏览器要**硬刷新** Cmd+Shift+R，否则吃旧 JS 缓存）：
@@ -149,16 +153,27 @@ docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_d
 
 数据库侧**只需要跑这一个文件**，但有三个配套条件：
 1. **顺序**：`piece_metadata` 表由 AP 首启自动建（TypeORM 迁移）。全新环境必须
-   先起一次 AP（建表）→ 跑 seed → 重启 AP；空库上直接跑会报表不存在。
-2. **跑完必须重启 AP**（见下）。
+   先起一次 AP（建表）→ 跑 seed；空库上直接跑会报表不存在。
+2. **跑完必须让 registry 缓存失效**（见下）。
 3. seed 只增删自己清单里的 name+version，**不清理表里其它行**。若目标库有历史
    实验残留的外部元数据，先一次性 `DELETE FROM piece_metadata;` 清场再跑 seed。
 
-**导入后必须重启 AP**（dev：`docker restart platform-activepieces-dev`；k8s：
-`kubectl rollout restart deployment/activepieces`）。AP 把 piece registry 缓存在**进程内存**
-（`piece-cache.ts` 的 `cachedRegistry`），只在走 AP 自身 API 装 piece 时经 Redis pubsub 失效；
-直接 psql 写表不会触发。症状：列表 `/api/v1/pieces` 有、单查
-`/api/v1/pieces/<name>` 404 `piece_metadata_not_found`（列表直查 DB、单查走缓存）。
+**导入后必须让 registry 缓存失效。** AP 把 piece registry 缓存在**进程内存**
+（`pieces/metadata/piece-cache.ts` 的 `cachedRegistry`），只在走 AP 自身 API 装 piece 时经 Redis
+pubsub 失效；直接 psql 写表不会触发。症状：列表 `/api/v1/pieces` 有、单查
+`/api/v1/pieces/<name>` 404 `piece_metadata_not_found`（列表直查 DB、单查走
+`findExactVersion` → `loadRegistry` → 缓存）。
+
+**做法二选一**，部署脚本走的是前者：
+
+- **发失效消息**（轻，推荐）：往 Redis 频道 `piece-registry-invalidation` publish 任意消息，
+  与 AP 自己 `invalidate()` 做的事完全一致，pub/sub 会打到所有副本，无需重启、无需 RBAC。
+- **重启 AP**：`docker restart platform-activepieces-dev` / `kubectl rollout restart deployment/activepieces`。
+
+> **⚠️ 这个坑很容易误判成"不需要处理"**：`cachedRegistry` 是**懒加载**的。若在灌 seed 之前
+> 没有任何请求碰过单查/registry 端点，缓存还是 `null`，灌完一查全对，看起来毫无问题；
+> 只要有人（AP worker、或先打开画布的用户）在空表期间调过一次，缓存就被钉成 `[]`，
+> 此后单查恒 404 直到失效或重启。2026-07-29 两种顺序都实测复现过。
 
 ## 注意
 

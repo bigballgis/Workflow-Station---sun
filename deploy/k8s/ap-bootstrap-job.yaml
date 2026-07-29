@@ -130,6 +130,24 @@ spec:
             secretKeyRef:
               name: workflow-platform-secrets
               key: ACTIVEPIECES_POSTGRES_PASSWORD
+        # 灌完 seed 要让 AP 的进程内 piece registry 失效——发一条 Redis 消息即可,不用重启
+        # (重启 Deployment 才需要 RBAC)。少了这一步:列表正常、单件查询恒 404,画布点开是空的。
+        - name: AP_REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_REDIS_HOST
+        - name: AP_REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_REDIS_PORT
+        - name: AP_REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ACTIVEPIECES_REDIS_PASSWORD
+              optional: true
         - name: ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID
           valueFrom:
             configMapKeyRef:

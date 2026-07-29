@@ -182,8 +182,8 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 >
 > 镜像只含**运行时半**(piece 的可执行包)。**元数据半**(`piece_metadata` 行)不在镜像里,但**已不需要手工灌**:
 > `ap-bootstrap-job.yaml` 的 `ap-provision-db` initContainer 会从 `ap-pieces-seed` ConfigMap
-> (渲染时由 `pieces-seed.sql` gzip 注入)自动执行。**灌完不用重启 AP**——`/v1/pieces` 与单件查询都是
-> 直接查库的,没有进程内缓存(2026-07-29 实测:空表冷启 AP 后灌 seed,列表和单查立刻都通)。
+> (渲染时由 `pieces-seed.sql` gzip 注入)自动执行,**并在灌完发一条 Redis 消息让 AP 的 registry 缓存失效**
+> ——不用重启 AP(重启 Deployment 才需要 RBAC)。缓存失效不能省,原因见 §8 末行。
 
 **生产（runtime only）**：照常部署（`activepieces.yaml` 在默认集里），Istio 只放 `/api/v1/webhooks`，
 不带 `-IncludeApBridgeGateway` → 无 UI 网关、无共享账号 Job。configmap/secret 不设 bridge → admin-center 端点 404。

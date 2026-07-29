@@ -12,15 +12,23 @@
  * 不新增任何权限。（signing-key 仍然只报不改：私钥要写进 Secret，那个才真的需要 RBAC，
  * 且重跑会轮换正在用的密钥——见 ap-verify-provisioning.js 头注释。）
  *
- * **不需要重启 AP**：`/v1/pieces` 是直接查库的，没有进程内缓存（2026-07-29 实测：删空
- * piece_metadata 后接口立刻返回 0，重新灌完立刻返回 13，全程没重启）。历史注释里"piece
- * registry is cached in-process，改完要重启"是错的。
+ * **灌完必须让 AP 的 registry 缓存失效**，但不用重启：直接往 Redis 频道
+ * `piece-registry-invalidation` 发一条消息即可——这正是 AP 自己在装/删 piece 时做的事
+ * （`pieces/metadata/piece-cache.ts` 的 `invalidate()`）。pub/sub 会打到所有副本。
+ *
+ * 这一步不能省，而且很容易误判成"不需要"：列表 `/v1/pieces` 是**直接查库**的，灌完立刻就对；
+ * 单件查询 `/v1/pieces/<name>` 走 `findExactVersion` → `loadRegistry` → 进程内 `cachedRegistry`。
+ * 那个缓存是**懒加载**的：只有真正调过单查/registry 的进程才会填上它。所以如果在灌 seed 之前
+ * 没人碰过这类端点，缓存还是 null，灌完自然全对——**看起来像不需要失效**。一旦有人（worker、
+ * 或先打开画布的用户）在空表期间调过一次，`cachedRegistry` 就被钉成 `[]`，此后列表有、单查
+ * 恒 404 `piece_metadata_not_found`，直到重启或收到失效消息。2026-07-29 两种顺序都实测过。
  *
  * 幂等：stamp 只动 `externalId IS NULL` 的行；seed SQL 本身是逐件 DELETE+INSERT，可反复执行，
  * 因此每次部署都跑一遍——这样白名单变了（增删件、升版本）也会跟着同步，而不是只在空库时才生效。
  *
  * 环境变量：
  *   AP_POSTGRES_HOST / _PORT / _DATABASE / _USERNAME / _PASSWORD   与 AP Deployment 同源
+ *   AP_REDIS_HOST / _PORT / _PASSWORD                               同上；用于发缓存失效消息
  *   ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID                        默认 hermes-main
  *   AP_PIECES_SEED_FILE                                             seed SQL 路径；可为 .sql 或 .sql.gz
  *   AP_PROVISION_DB_TIMEOUT_MS                                      连库重试窗口（默认 120000）
@@ -137,7 +145,47 @@ async function seedPieces(client) {
   if (after === 0) {
     throw new Error('piece seed ran but piece_metadata is still empty');
   }
-  // No AP restart needed here — /v1/pieces queries the table directly (verified 2026-07-29).
+}
+
+/**
+ * Tell every running AP instance to drop its in-process piece registry, the same way AP does
+ * when a piece is installed through its own API. Cheaper and less privileged than restarting
+ * the Deployment (which would need RBAC), and it reaches all replicas.
+ */
+async function invalidatePieceRegistry() {
+  const host = process.env.AP_REDIS_HOST;
+  if (!host) {
+    console.warn(
+      '[ap-provision-db] AP_REDIS_HOST not set -> CANNOT invalidate the piece registry cache. ' +
+        'If anything queried a single piece while piece_metadata was empty, /v1/pieces/<name> will ' +
+        'keep returning 404 until Activepieces is restarted.'
+    );
+    return;
+  }
+  let Redis;
+  try {
+    Redis = require('ioredis');
+  } catch (_) {
+    Redis = require('/usr/src/app/node_modules/ioredis');
+  }
+  const client = new Redis({
+    host,
+    port: parseInt(process.env.AP_REDIS_PORT || '6379', 10),
+    password: process.env.AP_REDIS_PASSWORD || undefined,
+    lazyConnect: true,
+    maxRetriesPerRequest: 3,
+  });
+  try {
+    await client.connect();
+    // Channel + payload copied from piece-cache.ts (PIECE_REGISTRY_INVALIDATION_CHANNEL).
+    const reached = await client.publish('piece-registry-invalidation', '1');
+    console.log('[ap-provision-db] piece registry invalidated (' + reached + ' subscriber(s) reached).');
+    if (reached === 0) {
+      console.warn('[ap-provision-db] no subscriber received it — was Activepieces running?');
+    }
+  } finally {
+    try { await client.quit(); } catch (_) { /* already closing */ }
+  }
 }
 
 async function main() {
@@ -145,6 +193,7 @@ async function main() {
   try {
     await stampProjectExternalId(client);
     await seedPieces(client);
+    await invalidatePieceRegistry();
     console.log('[ap-provision-db] done.');
   } finally {
     await client.end();

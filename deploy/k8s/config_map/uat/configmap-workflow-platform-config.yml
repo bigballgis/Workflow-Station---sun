@@ -90,8 +90,12 @@ data:
   ACTIVEPIECES_BRIDGE_ENABLED: "true"
   ACTIVEPIECES_INTERNAL_URL: "http://activepieces-service:80"
   # AI Generate 对话(developer-workstation)走 Activepieces 同步 webhook。
-  # flowId 每环境不同:先把 deploy/ap-flows/ai-function-unit-gen.json 经 Jenkins 导入本环境 AP,
-  # 再把 ap-import 打印出的 flowId 回填 __AI_GEN_FLOW_ID__。
+  # ⚠️ 2026-07-29 起 AI Generate **已停用**(ai-generation.enabled 缺省 false,DW 侧控制器不注册),
+  #    下面这个地址因此是**惰性配置**:占位符不替换也不影响部署,没有任何东西会去调它。
+  #    原先那份 piece-ai 版的 flow 定义(deploy/ap-flows/ai-function-unit-gen.json)已随功能停用删除
+  #    —— 它留在 ap-flows/ 里会被 Jenkinsfile.ap-flows-publish 的默认 'all' 推进生产。
+  #    恢复功能时:先把新链路的 flow 导出到 deploy/ap-flows/,经 Jenkins 导入本环境 AP,
+  #    再把 ap-import 打印出的 flowId 回填 __AI_GEN_FLOW_ID__。详见 VT-15。
   AI_GENERATION_WEBHOOK_URL: "http://activepieces-service:80/api/v1/webhooks/__AI_GEN_FLOW_ID__/sync"
   # 300s: deepseek-v4-pro DESIGN 文档实测 ~230s;与 activepieces.yaml 的 AP_WEBHOOK_TIMEOUT_SECONDS 对齐。
   AI_GENERATION_TIMEOUT: "300"
