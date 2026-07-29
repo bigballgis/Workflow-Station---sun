@@ -1,6 +1,9 @@
 # Activepieces 0.84 集成需求规格（Requirements Specification）
 
-> **Document 1 / 10** — 对应根目录 [AP_integration.md](../../AP_integration.md) §4 与 §16 要求的首个交付物。
+> **Document 1 / 10** — 对应立项文档 `AP_integration.md` §4 与 §16 要求的首个交付物。
+> **⚠️ `AP_integration.md` 是仓库外的立项文档**（本仓库从未收录，git 全历史无记录）；下文所有
+> 「AP_integration.md §x」引用均指该外部文档，本仓库内**无法跳转**。其内容已被本文吸收并就本仓库具体化，
+> 因此**不影响使用**；其中 §0 关于微前端的表述**与本仓库事实不符**，已在下方 §1 表格中纠正留档。
 > 状态：**待冻结**。决策见 **[DECISIONS.md](DECISIONS.md)**（ADR，全局约束唯一来源）；
 > 阻塞项见 **[OPEN_GATES.md](OPEN_GATES.md)**；当前状态见 **[STATUS.md](STATUS.md)**。
 > 日期：2026-07-22（末次更新 07-23）　分支：`common_0710_AP_independent`（该分支已合流，现行分支见仓库）
@@ -195,7 +198,8 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 
 ## 4. 业务需求（BR，MoSCoW）
 
-对 AP_integration.md §4.1 列出的全部能力逐项分级。分级依据：DW 场景实际需要 + brownfield 已依赖。
+对 AP_integration.md（仓库外立项文档，见文首说明）§4.1 列出的全部能力逐项分级。
+分级依据：DW 场景实际需要 + brownfield 已依赖。
 
 ### 4.1 设计态（Authoring）
 
@@ -421,7 +425,7 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 
 ## 8. 约束与"不得破坏"规则
 
-继承 AP_integration.md §15，结合本仓库具体化：
+继承 AP_integration.md（仓库外立项文档，见文首说明）§15，结合本仓库具体化：
 
 1. 不替换现有认证/RBAC/Kong/用户/BU 模型；不引入第二套身份或权限系统。
 2. **公司明令禁止 bun**：全仓（含 `activepieces/` 子树）、CI、镜像运行时任何环节不得使用或包含 bun；`frontend/` 与根构建链保持 npm/pnpm 不变。
