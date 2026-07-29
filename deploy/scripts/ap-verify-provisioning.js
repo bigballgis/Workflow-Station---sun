@@ -132,9 +132,13 @@ async function main() {
       detail: 'no project carries it (found: '
         + (projects.map((p) => p.displayName + '=' + (p.externalId || 'null')).join(', ') || 'none') + ')',
       fix: [
-        'kubectl -n <ns> exec deploy/postgres -- psql -U <user> -d <db> -c \\',
-        '  "update project set \\"externalId\\"=\'' + PROJECT_EXTERNAL_ID + '\' where \\"externalId\\" is null;"',
-        '# must run BEFORE anyone opens the Automation tab, or a second project gets created',
+        '# ap-provision-db (initContainer of this Job) stamps this automatically — it only',
+        '# refuses when some project already carries a DIFFERENT externalId, because',
+        '# re-pointing one would move every managed user to another project.',
+        'kubectl -n <ns> logs job/ap-bootstrap-shared-account -c ap-provision-db',
+        '# resolve the conflict by hand against the AP database, then re-run the Job:',
+        'kubectl -n <ns> delete job ap-bootstrap-shared-account --ignore-not-found',
+        'kubectl -n <ns> apply -f ap-bootstrap-job.yaml',
       ],
     });
   } else {
@@ -197,9 +201,12 @@ async function main() {
       what: 'piece catalog (piece_metadata)',
       detail: 'zero pieces — the Automation canvas will offer no steps at all',
       fix: [
-        'kubectl -n <ns> cp deploy/pieces/metadata/pieces-seed.sql <postgres-pod>:/tmp/pieces-seed.sql',
-        'kubectl -n <ns> exec <postgres-pod> -- psql -U <user> -d <db> -v ON_ERROR_STOP=1 -f /tmp/pieces-seed.sql',
-        'kubectl -n <ns> rollout restart deploy/activepieces   # registry is cached in-process',
+        '# ap-provision-db (initContainer of this Job) seeds this automatically from the',
+        '# ap-pieces-seed ConfigMap; reaching here means that step did not run or failed.',
+        'kubectl -n <ns> logs job/ap-bootstrap-shared-account -c ap-provision-db',
+        'kubectl -n <ns> delete job ap-bootstrap-shared-account --ignore-not-found',
+        'kubectl -n <ns> apply -f ap-bootstrap-job.yaml',
+        '# no AP restart needed: /v1/pieces reads the table directly, there is no cache.',
       ],
     });
   } else {

@@ -368,12 +368,42 @@ function Render-ManifestContent {
 			$rendered = Expand-EmbeddedScript -Content $rendered -Placeholder $injected.Key -ScriptName $injected.Value
 		}
 	}
+	if ($rendered.Contains('__AP_PIECES_SEED_GZ__')) {
+		$rendered = Expand-ApPiecesSeed -Content $rendered
+	}
 	return $rendered
 }
 # placeholder -> file under deploy/scripts/, injected into ap-bootstrap-job.yaml's ConfigMap.
 $apEmbeddedScripts = [ordered]@{
-	'__AP_BOOTSTRAP_SCRIPT__' = 'ap-bootstrap-shared-account.js'
-	'__AP_VERIFY_SCRIPT__'    = 'ap-verify-provisioning.js'
+	'__AP_BOOTSTRAP_SCRIPT__'   = 'ap-bootstrap-shared-account.js'
+	'__AP_PROVISION_DB_SCRIPT__' = 'ap-provision-db.js'
+	'__AP_VERIFY_SCRIPT__'      = 'ap-verify-provisioning.js'
+}
+function Expand-ApPiecesSeed {
+	param(
+		[Parameter(Mandatory = $true)][string]$Content
+	)
+	$seedPath = Join-Path $baseDir (Join-Path 'pieces' (Join-Path 'metadata' 'pieces-seed.sql'))
+	if (-not (Test-Path -LiteralPath $seedPath)) {
+		throw "ap-bootstrap-job.yaml needs $seedPath, which was not found. Regenerate it with deploy/pieces/generate-metadata-seed.js."
+	}
+	# gzip before base64: the raw seed is ~558KB and a ConfigMap object is capped at 1MiB, so
+	# plain base64 (~744KB) would leave almost no headroom as the allowlist grows. ~78KB gzipped.
+	$raw = [System.IO.File]::ReadAllBytes($seedPath)
+	$ms = [System.IO.MemoryStream]::new()
+	try {
+		$gz = [System.IO.Compression.GZipStream]::new($ms, [System.IO.Compression.CompressionLevel]::Optimal)
+		try { $gz.Write($raw, 0, $raw.Length) } finally { $gz.Dispose() }
+		$b64 = [System.Convert]::ToBase64String($ms.ToArray())
+	} finally {
+		$ms.Dispose()
+	}
+	if ($b64.Length -gt 900000) {
+		throw "pieces-seed.sql is too large for a ConfigMap even gzipped ($($b64.Length) base64 chars, 1MiB object cap). Ship it another way."
+	}
+	Write-Host ("      pieces-seed.sql {0} KB -> {1} KB gzip+base64" -f [int]($raw.Length / 1KB), [int]($b64.Length / 1KB)) -ForegroundColor DarkGray
+	# binaryData values are a single-line base64 scalar — no indentation handling needed.
+	return $Content.Replace('__AP_PIECES_SEED_GZ__', $b64)
 }
 function Expand-EmbeddedScript {
 	param(
@@ -626,9 +656,9 @@ foreach ($file in $targetFiles) {
 	}
 	# Hard failure, not a warning: a surviving placeholder means the ConfigMap would ship the
 	# literal token as the script body and the Job would crash on startup.
-	foreach ($placeholder in $apEmbeddedScripts.Keys) {
+	foreach ($placeholder in (@($apEmbeddedScripts.Keys) + '__AP_PIECES_SEED_GZ__')) {
 		if (Test-UnresolvedPlaceholder -Content $renderedContent -Placeholder $placeholder) {
-			throw "$($file.Name) still contains $placeholder after rendering — the embedded script was not injected."
+			throw "$($file.Name) still contains $placeholder after rendering — the embedded payload was not injected."
 		}
 	}
 }

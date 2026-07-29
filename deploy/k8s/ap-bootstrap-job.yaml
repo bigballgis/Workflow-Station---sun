@@ -21,8 +21,21 @@ metadata:
 data:
   ap-bootstrap-shared-account.js: |
     __AP_BOOTSTRAP_SCRIPT__
+  ap-provision-db.js: |
+    __AP_PROVISION_DB_SCRIPT__
   ap-verify-provisioning.js: |
     __AP_VERIFY_SCRIPT__
+---
+# piece seed 走 binaryData + gzip:原文 558KB,ConfigMap 整个对象上限 1MiB,直接塞进去只剩很少
+# 余量且会随白名单增长;gzip 后约 78KB。渲染时由 apply-workflow-station-istio-generated.ps1
+# 从 deploy/pieces/metadata/pieces-seed.sql 压缩注入,ap-provision-db.js 读文件时自动解压。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ap-pieces-seed
+  namespace: __NAMESPACE__
+binaryData:
+  pieces-seed.sql.gz: __AP_PIECES_SEED_GZ__
 ---
 apiVersion: batch/v1
 kind: Job
@@ -80,9 +93,68 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
-      # 校验:bootstrap 只补了 platform/project 这一项,另外三项(project externalId、signing-key、
-      # piece_metadata)在 k8s 上仍是手工步骤。这个容器只读检查、绝不写入,缺了就让整个 Job 失败,
-      # 并在日志里打印逐条 kubectl 修复命令——否则缺口要等有人点开 DW Automation 页签才暴露。
+      # 要写库的两步:project externalId stamp + piece_metadata seed。AP 没有对应的写接口,
+      # 只能直连库;用的是 AP Deployment 本来就在用的那组 DB 凭据,不新增任何 k8s 权限
+      # (RBAC 只有"写 Secret"才需要,那一步仍然只报不改)。幂等,每次部署都跑一遍,
+      # 这样白名单变了也会跟着同步。跑完不需要重启 AP——/v1/pieces 是直接查库的。
+      - name: ap-provision-db
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed
+        imagePullPolicy: IfNotPresent
+        # pg 装在镜像的 /usr/src/app/node_modules,脚本从 /scripts 挂载进来解析不到。
+        command: ["node", "/scripts/ap-provision-db.js"]
+        env:
+        - name: NODE_PATH
+          value: "/usr/src/app/node_modules"
+        - name: AP_POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_POSTGRES_HOST
+        - name: AP_POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_POSTGRES_PORT
+        - name: AP_POSTGRES_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_POSTGRES_DATABASE
+        - name: AP_POSTGRES_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_POSTGRES_USERNAME
+        - name: AP_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ACTIVEPIECES_POSTGRES_PASSWORD
+        - name: ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID
+              optional: true
+        - name: AP_PIECES_SEED_FILE
+          value: "/seed/pieces-seed.sql.gz"
+        volumeMounts:
+        - name: script
+          mountPath: /scripts
+          readOnly: true
+        - name: pieces-seed
+          mountPath: /seed
+          readOnly: true
+        resources:
+          requests:
+            memory: "192Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      # 校验:上面两个 initContainer 补齐了三项,signing-key 仍是手工。这个容器只读检查、
+      # 绝不写入,缺了就让整个 Job 失败,并在日志里打印逐条 kubectl 修复命令——否则缺口要等
+      # 有人点开 DW Automation 页签才暴露。
       # 不自动修 signing-key 是裁决:私钥只返回一次、写 Secret 需要 RBAC,且重跑会轮换正在用的密钥。
       containers:
       - name: ap-verify
@@ -130,6 +202,9 @@ spec:
             memory: "256Mi"
             cpu: "200m"
       volumes:
+      - name: pieces-seed
+        configMap:
+          name: ap-pieces-seed
       - name: script
         configMap:
           name: ap-bootstrap-script

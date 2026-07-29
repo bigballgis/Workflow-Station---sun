@@ -745,10 +745,11 @@ function req(method, path, body, token) {
         docker exec platform-postgres-dev psql -U $pgUser -d $pgDb -v ON_ERROR_STOP=1 -q -f /tmp/pieces-seed.sql
         if ($LASTEXITCODE -ne 0) { throw "pieces-seed.sql failed" }
         $pieceCount = Get-PgScalar "select count(*) from piece_metadata;"
-        # AP caches the piece registry in-process; without a restart the canvas stays empty.
-        docker restart $apContainer | Out-Null
-        Wait-ForContainerHealth -ServiceName "activepieces" -DisplayName "Activepieces" -MaxRetries 90 -SleepSeconds 3 | Out-Null
-        Write-Host "    Seeded $pieceCount piece(s) and restarted AP." -ForegroundColor Green
+        # No AP restart: /v1/pieces queries piece_metadata directly, there is no in-process
+        # registry cache. Verified 2026-07-29 — emptying the table makes the endpoint return 0
+        # immediately and re-seeding makes it return 13 immediately, with AP untouched. The
+        # long-standing "restart AP, the registry is cached" note in this script was wrong.
+        Write-Host "    Seeded $pieceCount piece(s)." -ForegroundColor Green
     } else {
         Write-Host "    piece_metadata already seeded ($pieceCount piece(s))." -ForegroundColor DarkGray
     }
