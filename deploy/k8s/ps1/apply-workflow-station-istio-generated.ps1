@@ -358,7 +358,52 @@ function Render-ManifestContent {
 	if (-not [string]::IsNullOrWhiteSpace($IngressTlsSecret)) {
 		$rendered = $rendered.Replace('__INGRESS_TLS_SECRET__', $IngressTlsSecret)
 	}
+	# ap-bootstrap-job.yaml ships its node scripts in a ConfigMap. Inject them from the canonical
+	# copies under deploy/scripts/ rather than hand-pasting them into the manifest: the pasted
+	# copy silently drifted once (it stopped at sign-up and skipped POST /v1/platforms, so the
+	# Job "succeeded" against an empty cluster while AP had no platform/project at all). The
+	# same files are what dev's build-and-deploy.ps1 runs — one source, no drift.
+	foreach ($injected in $apEmbeddedScripts.GetEnumerator()) {
+		if ($rendered.Contains($injected.Key)) {
+			$rendered = Expand-EmbeddedScript -Content $rendered -Placeholder $injected.Key -ScriptName $injected.Value
+		}
+	}
 	return $rendered
+}
+# placeholder -> file under deploy/scripts/, injected into ap-bootstrap-job.yaml's ConfigMap.
+$apEmbeddedScripts = [ordered]@{
+	'__AP_BOOTSTRAP_SCRIPT__' = 'ap-bootstrap-shared-account.js'
+	'__AP_VERIFY_SCRIPT__'    = 'ap-verify-provisioning.js'
+}
+function Expand-EmbeddedScript {
+	param(
+		[Parameter(Mandatory = $true)][string]$Content,
+		[Parameter(Mandatory = $true)][string]$Placeholder,
+		[Parameter(Mandatory = $true)][string]$ScriptName
+	)
+	$scriptPath = Join-Path $baseDir (Join-Path 'scripts' $ScriptName)
+	if (-not (Test-Path -LiteralPath $scriptPath)) {
+		throw "ap-bootstrap-job.yaml needs $scriptPath, which was not found."
+	}
+	$scriptLines = [System.IO.File]::ReadAllText($scriptPath) -split "`r`n|`n"
+	# Trailing blank lines would emit stray whitespace-only lines into the YAML block scalar.
+	while ($scriptLines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($scriptLines[$scriptLines.Count - 1])) {
+		$scriptLines = $scriptLines[0..($scriptLines.Count - 2)]
+	}
+	return [regex]::Replace(
+		$Content,
+		'(?m)^([ \t]*)' + [regex]::Escape($Placeholder) + '[ \t]*$',
+		{
+			param($match)
+			# Re-indent to the placeholder's own column so the block scalar stays valid; blank
+			# lines stay truly empty (trailing indent on an empty line is legal but noisy).
+			$indent = $match.Groups[1].Value
+			$body = foreach ($line in $scriptLines) {
+				if ([string]::IsNullOrWhiteSpace($line)) { '' } else { $indent + $line }
+			}
+			return ($body -join "`n")
+		}
+	)
 }
 function Ensure-OutputDirectory {
 	param([string]$Dir)
@@ -578,6 +623,13 @@ foreach ($file in $targetFiles) {
 	}
 	if (Test-UnresolvedPlaceholder -Content $renderedContent -Placeholder '__INGRESS_TLS_SECRET__') {
 		$unresolvedIngressTlsSecretFiles += $file.Name
+	}
+	# Hard failure, not a warning: a surviving placeholder means the ConfigMap would ship the
+	# literal token as the script body and the Job would crash on startup.
+	foreach ($placeholder in $apEmbeddedScripts.Keys) {
+		if (Test-UnresolvedPlaceholder -Content $renderedContent -Placeholder $placeholder) {
+			throw "$($file.Name) still contains $placeholder after rendering — the embedded script was not injected."
+		}
 	}
 }
 if ($unresolvedNamespaceFiles.Count -gt 0) {
