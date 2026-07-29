@@ -33,8 +33,8 @@
     "publish-piece-to-api": "npx ts-node -r tsconfig-paths/register --project packages/cli/tsconfig.json packages/cli/src/index.ts pieces publish piece",
     "publish-piece": "npx ts-node -r tsconfig-paths/register --project tools/tsconfig.tools.json tools/scripts/pieces/publish-piece.ts",
     "workers": "npx ts-node -r tsconfig-paths/register --project packages/cli/tsconfig.json packages/cli/src/index.ts workers",
-    "pull-i18n": "crowdin pull --config crowdin.yml",
-    "push-i18n": "crowdin upload sources",
+    "pull-i18n": "node -e \"console.error('REFUSED (HERMES-PATCH-014): this fork never syncs with the upstream Activepieces Crowdin project. pull would overwrite the Q8 frozen baseline i18n. Reasoning in crowdin.yml.'); process.exit(1)\"",
+    "push-i18n": "node -e \"console.error('REFUSED (HERMES-PATCH-014): this fork never syncs with the upstream Activepieces Crowdin project. push would rewrite it from a tree where HERMES-PATCH-013 left 29 of ~700 source files. Reasoning in crowdin.yml.'); process.exit(1)\"",
     "i18n:extract": "i18next --config packages/web/i18next-parser.config.js",
     "bump-translated-pieces": "npx ts-node --project tools/tsconfig.tools.json tools/scripts/pieces/bump-translated-pieces.ts",
     "bump-all-pieces-patch-version": "npx ts-node --project tools/tsconfig.tools.json tools/scripts/pieces/bump-all-pieces-patch-version.ts"

@@ -29,8 +29,8 @@
 | VT-05 | app-events 死链无提示 | P1 | ✅ **已完成（2026-07-29）** |
 | VT-06 | `--check` 接进 CI | P1 | ✅ **已完成（2026-07-29）** |
 | VT-07 | `SUPPORTED_APP_WEBHOOKS` flag 说谎 | P1 | ⬜ 未做 |
-| VT-08 | crowdin 翻译源塌缩 | P2 | ⬜ 待裁决 |
-| VT-09 | 上游 piece 源码不再可读的补救约定 | P2 | ⬜ 待裁决 |
+| VT-08 | crowdin 翻译源塌缩 | P2 | ✅ **已处置（2026-07-29，HERMES-PATCH-014）** |
+| VT-09 | 上游 piece 源码不再可读的补救约定 | P2 | ✅ **已完成（2026-07-29）** |
 | VT-10 | codegraph 索引重建 | P2 | ✅ **已自愈（2026-07-29 复查）** |
 | VT-11 | **公司机器报错原文**（VT-12 的前置） | **P0** | ⬜ 未取得 |
 | VT-12 | `@ai-sdk/*` 仍在 api/worker/engine 硬依赖 | P1 | ⬜ 阻塞于 VT-11（**未被 HTTP piece 迁移解决**） |
@@ -359,21 +359,45 @@ job 里还加了第二步 **`pnpm install --frozen-lockfile --lockfile-only`**�
 
 ## P2 — 治理面（不阻塞，但会慢慢发霉）
 
-### VT-08 crowdin 翻译源塌缩
+### VT-08 crowdin 同步已关停 ✅ HERMES-PATCH-014（2026-07-29）
 
-- [ ] 裁决：调整 [`crowdin.yml:11`](../../activepieces/crowdin.yml:11) 的 glob，还是接受现状
+**查下去发现问题不是"数量塌缩"，而是这个配置指向公网 SaaS，而 fork 跑它两个方向都是错的。**
+所以没有去调 glob 让数字好看，而是把两个入口堵死：
 
-`packages/pieces/**/**/src/i18n/translation.json` 现在只剩 4 个 community 件（加 `core/*`）的翻译源。
-如果还有人跑 crowdin 同步，行为会与裁剪前显著不同。
+- [x] [`package.json`](../../activepieces/package.json) 的 `pull-i18n` / `push-i18n` 改为 fail-loud 拒跑（实测两条均 exit 1）
+- [x] [`crowdin.yml`](../../activepieces/crowdin.yml) 头部写明理由；文件保留以维持 vendor diff 干净
 
-### VT-09 上游 piece 源码不再本地可读
+| 方向 | 跑了会怎样 |
+|---|---|
+| `push-i18n`（`crowdin upload sources`） | 拿**本仓库的**源串改写**上游 Activepieces** 的 Crowdin 项目。013 之后 source 匹配只剩 **29** 个（裁剪前约 700）—— 一次上传在上游项目里等同于批量删除源串 |
+| `pull-i18n`（`crowdin pull`） | 把上游最新译文灌进 [Q8](DECISIONS.md#q8) 冻结基线，静默改掉 vendored i18n |
 
-- [ ] 裁决并写进 [PIECE_DEVELOPMENT_HOWTO.md](PIECE_DEVELOPMENT_HOWTO.md)：
-      将来要对某个白名单件做**源码级**补丁时，先把该件重新 vendor 回来的操作约定
+两者都需要 `CROWDIN_PERSONAL_TOKEN` 且目标是 `api.crowdin.com`，气隙部署下既不需要也不该发生。
+
+> **自研件不在 source 匹配里，不会外泄**：`biz-calendar` / `hash-helper` 只有手写的
+> `src/i18n/zh.json`，**没有 `translation.json`** —— 29 个 source 全部是上游件。
+> 这一条是查出来的，不是假设：先前担心的"in-house 串被推到上游项目"并不成立。
+
+### VT-09 上游 piece 源码的取回约定 ✅ 已完成（2026-07-29）
+
+- [x] [PIECE_DEVELOPMENT_HOWTO.md](PIECE_DEVELOPMENT_HOWTO.md) 新增 §10「需要读或改**上游** piece 的源码时」，
+      §9 的坑表补两行
+
+**立项时的判断偏悲观了：源码根本没丢，也不需要"重新 vendor"。** 冻结基线 commit
+`de4f6469` 里 692 个件全在，一条命令就取得回来：
+
+```bash
+git show de4f6469:activepieces/packages/pieces/community/<name>/src/index.ts   # 只读一眼
+git checkout de4f6469 -- activepieces/packages/pieces/community/<name>        # 取回整个件
+```
 
 **不受影响的**：自研件流程完好——`community/<name>/` 目录仍在，样例件 `biz-calendar` 在保留清单里，
 文档里的路径全部仍然成立（已逐条核过）。加白名单件也不需要源码（走 npm 版本号解析）。
 **受影响的**只有"照着上游某个件抄写法"和"对上游件打源码补丁"这两件事。
+
+文档里写清了取回之后的二选一：**只是参考**就看完删掉；**要长期保留**则必须走四步
+（`KEEP` 加条目并写理由 → `pnpm install --lockfile-only` → 需要时登记 HERMES-PATCH → `--check` 自检），
+并点明**忘了第一步会被 VT-06 的 CI job 挡下，那是设计好的**。
 
 ### VT-10 codegraph 索引 ✅ 已自愈（2026-07-29 复查）
 

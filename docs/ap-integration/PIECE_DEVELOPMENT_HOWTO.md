@@ -420,6 +420,53 @@ curl -s http://localhost:3000/api/ap/v1/pieces/@activepieces/piece-<name> | head
 | 自研件 `logoUrl` 指向 cdn | **任何环境**都碎图（上游 CDN 没有你的件，联网也 404） | 图标放 `public/ap-cdn/pieces/hermes/`，`logoUrl` 写该同源路径（§1.2 / §3.3） |
 | 自研件想复用 fetch-pieces.sh | curl 云 API / npm pack 公网都 404；问本地 AP 也 404（鸡生蛋） | §3：build-piece 出 tarball、serialize-piece-metadata.js 出 metadata |
 | 生产联网拉包 | 违反 X-3 | 运行时永远命中镜像预装；联网只在构建机 |
+| 想抄某个上游件的写法，却找不到目录 | `packages/pieces/community/` 只剩 4 个件 | HERMES-PATCH-013 裁掉了 690 个；源码在基线 commit 里，见 §10 |
+| 取回上游件后忘了加进 `KEEP` | CI 的 vendor-trim-check 报 `FAIL: N 个未收敛的 community piece` | 按 §10 的 B 方案四步补齐，别关 job |
+
+---
+
+## 10. 需要读或改**上游** piece 的源码时
+
+[HERMES-PATCH-013](HERMES_PATCHES.md#清单) 把 `packages/pieces/community/` 从 694 个件收敛到 4 个
+（`biz-calendar` / `hash-helper` / `json` / `postgres`）。**先说不受影响的**，免得误判：
+
+| 事情 | 受影响？ |
+|---|---|
+| 开发自研件（本文 §1–§8 全流程） | ❌ 不受影响。`community/<name>/` 目录还在，样例件 `biz-calendar` 在保留清单里 |
+| 把某个上游件加进白名单 | ❌ 不受影响。白名单按**版本号从 registry 解析**，不需要本地源码 |
+| 照着某个上游件抄写法 | ✅ 需要先取回源码 |
+| 对某个白名单件打**源码级**补丁 | ✅ 需要先取回源码，且要长期保留 |
+
+**源码没有丢，都在 git 里。** 冻结基线 commit `de4f6469`（`vendor(ap): pristine Activepieces
+0.84.0 source baseline`）保有全部 692 个件：
+
+```bash
+# 只想读一眼（不落盘）
+git show de4f6469:activepieces/packages/pieces/community/<name>/src/index.ts
+
+# 取回整个件到工作区
+git checkout de4f6469 -- activepieces/packages/pieces/community/<name>
+```
+
+### 取回之后必须二选一
+
+**A. 只是参考** —— 看完把目录删掉即可，不需要动任何配置。
+
+**B. 要长期保留**（打源码补丁、或它成了自研件的基底）——**四步缺一不可**：
+
+1. 在 [`activepieces/hermes/trim-vendor-pieces.mjs`](../../activepieces/hermes/trim-vendor-pieces.mjs)
+   的 `KEEP` 里加一条，**写明理由**（那个对象里每条都有理由，没理由的不许加）；
+2. `pnpm install --lockfile-only` 重生成锁文件 —— 该件的依赖要重新进入解析；
+3. 若做了源码修改，按 [HERMES_PATCHES.md](HERMES_PATCHES.md) 的规矩取下一个补丁号并登记；
+4. `node hermes/trim-vendor-pieces.mjs --check` 自检。
+
+> **忘了第 1 步会被 CI 挡下**，这是设计好的：`.github/workflows/vendor-trim-check.yml` 在每次
+> `activepieces/**` 改动上跑 `--check`，未登记的件会报
+> `FAIL: N 个未收敛的 community piece`。别去关掉这个 job —— 它的作用正是防止 690 个件
+> 连同它们的第三方 SDK 悄悄回潮（这是最初 `pnpm install` 在公司内网装不下来的根因）。
+
+> **第 2 步不能省**：`pnpm install --frozen-lockfile` 在镜像构建阶段会因为工作区与锁文件对不上
+> 而失败，而那要等到构建才暴露。CI 的第二步（`--frozen-lockfile --lockfile-only`）就是为它准备的。
 
 ---
 
