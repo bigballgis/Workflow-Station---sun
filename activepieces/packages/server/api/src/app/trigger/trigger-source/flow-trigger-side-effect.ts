@@ -138,19 +138,22 @@ export const flowTriggerSideEffect = (log: FastifyBaseLogger) => {
     }
 }
 
-async function handleAppWebhookTrigger({ engineHelperResponse, flowId, projectId, pieceName }: ActiveTriggerParams): Promise<ActiveTriggerReturn> {
-    for (const listener of engineHelperResponse.response?.listeners ?? []) {
-        await appEventRoutingService.createListeners({
-            projectId,
-            flowId,
-            appName: pieceName,
-            events: listener.events,
-            identifierValue: listener.identifierValue,
-        })
-    }
-    return {
-        scheduleOptions: undefined,
-    }
+// HERMES-PATCH-012 摘掉了 /v1/app-events/:pieceUrl —— APP_WEBHOOK 策略唯一的入口。
+// 这条链路的其余部分（app_event_routing 表与 service、worker 的 getAppWebhookUrl、下面 disable
+// 分支里的 deleteListeners）都保留着，因为它们是与具体 piece 无关的通用逻辑，删了编译不过。
+// 于是留下一个陷阱：一旦有人把 APP_WEBHOOK 策略的件加进 hermes/pieces.json 白名单，用户会拿到
+// 一个**必然 404 且毫无线索**的 webhook URL —— 启用全绿、监听器行也写进去了，只是事件永远不来。
+//
+// 与其在运行时无声失败，不如在启用时当场炸掉。这里是唯一同时拿得到 flowId 和 pieceName 的地方，
+// 报错能直接指向真正的决策点（012 与白名单），而不是丢一个 404 让人从头猜。
+// 原先写 app_event_routing 行的逻辑一并删除：既然到不了这一步，留着只会让人误以为它还有效。
+function handleAppWebhookTrigger({ flowId, pieceName }: ActiveTriggerParams): Promise<ActiveTriggerReturn> {
+    throw new ActivepiecesError({
+        code: ErrorCode.FEATURE_DISABLED,
+        params: {
+            message: `App-webhook triggers are not available in this deployment: the /v1/app-events endpoint was removed by HERMES-PATCH-012. Piece "${pieceName}" (flow ${flowId}) uses TriggerStrategy.APP_WEBHOOK, so its events could never arrive. Either drop that piece from hermes/pieces.json, or revert HERMES-PATCH-012 and re-expose the endpoint deliberately.`,
+        },
+    })
 }
 
 async function handleWebhookTrigger({ flowId, flowVersionId, projectId, pieceTrigger, log }: ActiveTriggerParams): Promise<ActiveTriggerReturn> {

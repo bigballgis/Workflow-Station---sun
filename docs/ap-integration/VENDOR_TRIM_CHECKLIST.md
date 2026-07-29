@@ -26,7 +26,7 @@
 | VT-02 | `test-api` 三套集成测试 | **P0** | 🟡 **check-migrations 绿；三套集成测试被存量断裂挡住，跑不起来** |
 | VT-03 | 容器启动 + builder 冒烟 | **P0** | ✅ **全绿（2026-07-29）**：服务端 + dev 真实环境 + 经 Kong + **浏览器渲染** |
 | VT-04 | rebase 重放顺序陷阱（脚本加断言） | P1 | ✅ **已完成（2026-07-29）** |
-| VT-05 | app-events 死链无提示 | P1 | ⬜ 未做 |
+| VT-05 | app-events 死链无提示 | P1 | ✅ **已完成（2026-07-29）** |
 | VT-06 | `--check` 接进 CI | P1 | ✅ **已完成（2026-07-29）** |
 | VT-07 | `SUPPORTED_APP_WEBHOOKS` flag 说谎 | P1 | ⬜ 未做 |
 | VT-08 | crowdin 翻译源塌缩 | P2 | ⬜ 待裁决 |
@@ -276,9 +276,28 @@ Playwright 在 FU 50030 的 Automation tab 上录到 **12 个不同 `/ap-cdn` �
 `app.ts` 是否还 import `appEventRoutingModule`；命中就 `process.exit(1)` 并直接告诉施工者
 「先重放 HERMES-PATCH-012，再跑本脚本」。十几行，一次写好永久受用。
 
-### VT-05 app-events 只焊死了出口，管子还在
+### VT-05 app-events 死链已 fail-loud ✅ 已完成（2026-07-29）
 
-- [ ] 决定：要么在生成侧 fail-loud，要么在文档里把这条死链写成显式约束
+- [x] `handleAppWebhookTrigger()` 改为**启用即抛** `ErrorCode.FEATURE_DISABLED`
+      （[flow-trigger-side-effect.ts:150](../../activepieces/packages/server/api/src/app/trigger/trigger-source/flow-trigger-side-effect.ts:150)）
+- [x] 专属单测 3 例，已登记进 [HERMES_PATCHES.md 的回归网](HERMES_PATCHES.md#回归网)
+
+**为什么选在启用时炸，而不是在生成 URL 处**：`handleAppWebhookTrigger` 是唯一同时拿得到
+`flowId` 和 `pieceName` 的地方，报错能指名道姓：
+
+> `Piece "@activepieces/piece-x" (flow abc) uses TriggerStrategy.APP_WEBHOOK … removed by
+> HERMES-PATCH-012. Either drop that piece from hermes/pieces.json, or revert 012 …`
+
+而 `webhook-url.ts` 只是个纯字符串拼接工具，在那里抛会波及它的既有测试，且拿不到足够上下文
+——报错会退化成"另一种说法的 404"。
+
+**原先写 `app_event_routing` 行的逻辑一并删掉**：既然到不了那一步，留着只会让人误以为它还有效。
+
+**disable 路径刻意不拦**，并有专门用例守着：012 之前建过监听器的项目必须还能清掉存量行，
+在 disable 上抛错会留下永远删不掉的孤儿行。
+
+实测：单测 10/10 通过；`turbo build --filter=api --filter=worker` 7/7；
+eslint 对该文件 3 条 warning **与 HEAD 逐条相同**（只有行号从 216 挪到 219），零新增。
 
 **现状**：整条链完好无损，只有尽头的门被摘了——
 - [`webhook-url.ts:9`](../../activepieces/packages/server/worker/src/lib/execute/utils/webhook-url.ts:9) 仍在生成 `/v1/app-events/<appName>`

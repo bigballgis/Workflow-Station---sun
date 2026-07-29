@@ -108,6 +108,62 @@ describe('flowTriggerSideEffect', () => {
         mockGetPlatformId.mockResolvedValue('platform-1')
     })
 
+    describe('HERMES-PATCH-012 — APP_WEBHOOK 启用即 fail-loud', () => {
+        it('拒绝启用 APP_WEBHOOK 触发器，报错指名 piece 与 flow', async () => {
+            mockSubmitAndWaitForResponse.mockResolvedValue(okEngineResponse())
+
+            const error = await flowTriggerSideEffect(mockLog).enable({
+                ...BASE_PARAMS,
+                pieceTrigger: {
+                    ...makePollingTrigger(),
+                    type: TriggerStrategy.APP_WEBHOOK,
+                },
+                simulate: false,
+            } as any).catch((e: unknown) => e)
+
+            expect(error).toBeInstanceOf(ActivepiecesError)
+            // ActivepiecesError 的 message 就是错误码，可读文案在 params.message 里。
+            expect((error as ActivepiecesError).error.code).toBe(ErrorCode.FEATURE_DISABLED)
+            // 报错必须带上排查所需的三样东西，否则等于换了个说法的 404。
+            const detail = (error as ActivepiecesError).error.params.message
+            expect(detail).toContain('HERMES-PATCH-012')
+            expect(detail).toContain('@activepieces/piece-test')
+            expect(detail).toContain('flow-1')
+        })
+
+        it('其余策略不受影响 —— MANUAL 仍能正常启用', async () => {
+            mockSubmitAndWaitForResponse.mockResolvedValue(okEngineResponse())
+
+            const result = await flowTriggerSideEffect(mockLog).enable({
+                ...BASE_PARAMS,
+                pieceTrigger: makeManualTrigger(),
+                simulate: false,
+            } as any)
+
+            expect(result.scheduleOptions).toBeUndefined()
+        })
+
+        // disable 刻意不拦：存量 app_event_routing 行必须还能清掉，
+        // 否则 012 之前建过监听器的项目会永远留着孤儿行。
+        it('disable 仍会删除监听器，不被 fail-loud 挡住', async () => {
+            mockSubmitAndWaitForResponse.mockResolvedValue(okEngineResponse())
+
+            await flowTriggerSideEffect(mockLog).disable({
+                ...BASE_PARAMS,
+                pieceTrigger: {
+                    ...makePollingTrigger(),
+                    type: TriggerStrategy.APP_WEBHOOK,
+                },
+                ignoreError: false,
+            })
+
+            expect(mockDeleteListeners).toHaveBeenCalledWith({
+                projectId: 'proj-1',
+                flowId: 'flow-1',
+            })
+        })
+    })
+
     describe('disable', () => {
         it('should complete successfully when engine responds OK', async () => {
             mockSubmitAndWaitForResponse.mockResolvedValue(okEngineResponse())

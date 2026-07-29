@@ -58,12 +58,13 @@ VirtualService 补 `/ap-cdn/` 前缀。**动 embed 挂载点或新起一个 host
 
 ## 回归网
 
-只有 007 / 008 带专属测试。其余是补登记时的既有状态，不是"已验证"的意思。
+只有 007 / 008 / 012 带专属测试。其余是补登记时的既有状态，不是"已验证"的意思。
 
 | # | 测试 | 覆盖 |
 |---|---|---|
 | 007 | `engine/test/operations/sync-webhook-release.test.ts` | 逐 `FlowRunStatus` 穷举：终态释放、非终态（PAUSED / QUEUED）不释放、缺 id 不发、发布失败不外溢 |
 | 008 | `worker/test/lib/execute/jobs/execute-flow.test.ts` | 引擎启动前终结的 run 也释放；正常跑完 worker 不插手；缺 id 不发；best-effort |
+| 012 | `api/test/unit/app/flows/trigger/flow-trigger-side-effect.test.ts` | APP_WEBHOOK 启用即抛 `FEATURE_DISABLED`，报错含 patch 号 / piece 名 / flowId；MANUAL 等其余策略不受影响；**disable 仍能删监听器**（存量孤儿行必须清得掉） |
 
 **007 的非终态分支在 dev 环境测不到**，故必须靠单测：能暂停的 piece（`core/delay`、`core/approval`、
 `core/subflows`）都不在已装白名单里，唯一装了的 `core/webhook` 是「先答后停」——
