@@ -10,6 +10,11 @@
 >
 > **本文件只收"这次裁剪留下的待办"**，不是 AP 集成的总账——那是
 > [OPEN_GATES.md](OPEN_GATES.md)（阻塞门）和 [STATUS.md](STATUS.md)（现状）。
+>
+> **2026-07-29 更新**：裁剪已落为独立 commit
+> [`a2194c06`](#vt-14-独立成-commit--已完成2026-07-28)（VT-14 关闭）；VT-03b 的浏览器渲染在验的过程中
+> 反而挖出一个**与裁剪无关的存量缺口**（`/ap-cdn` 图标路由，`7d7e55f6` 已修，VT-03 全绿）；
+> VT-10 由 codegraph 文件监听自愈。**P0 现在只剩 VT-11 与 VT-15 的产物尾巴。**
 
 ---
 
@@ -19,29 +24,34 @@
 |---|---|---|---|
 | VT-01 | 镜像构建实测 | **P0** | ✅ **通过（2026-07-28）** |
 | VT-02 | `test-api` 三套集成测试 | **P0** | 🟡 **check-migrations 绿；三套集成测试被存量断裂挡住，跑不起来** |
-| VT-03 | 容器启动 + builder 冒烟 | **P0** | 🟢 **服务端已验（含 dev 真实环境替换 + 经 Kong）**；仅剩浏览器渲染未看 |
+| VT-03 | 容器启动 + builder 冒烟 | **P0** | ✅ **全绿（2026-07-29）**：服务端 + dev 真实环境 + 经 Kong + **浏览器渲染** |
 | VT-04 | rebase 重放顺序陷阱（脚本加断言） | P1 | ⬜ 未做 |
 | VT-05 | app-events 死链无提示 | P1 | ⬜ 未做 |
 | VT-06 | `--check` 接进 CI | P1 | ⬜ 未做 |
 | VT-07 | `SUPPORTED_APP_WEBHOOKS` flag 说谎 | P1 | ⬜ 未做 |
 | VT-08 | crowdin 翻译源塌缩 | P2 | ⬜ 待裁决 |
 | VT-09 | 上游 piece 源码不再可读的补救约定 | P2 | ⬜ 待裁决 |
-| VT-10 | codegraph 索引重建 | P2 | ⬜ 未做 |
+| VT-10 | codegraph 索引重建 | P2 | ✅ **已自愈（2026-07-29 复查）** |
 | VT-11 | **公司机器报错原文**（VT-12 的前置） | **P0** | ⬜ 未取得 |
 | VT-12 | `@ai-sdk/*` 仍在 api/worker/engine 硬依赖 | P1 | ⬜ 阻塞于 VT-11（**未被 HTTP piece 迁移解决**） |
 | VT-13 | `piece-ai` 保留与否的政策裁决 | P1 | ✅ **已关闭（2026-07-28，已删除）** |
 | VT-15 | AI Generate 产物与功能开关 | **P0** | 🟡 **功能已停用（2026-07-28），产物待用户后续处理** |
-| VT-14 | 17876 个删除独立成 commit | P1 | ⬜ 未做 |
+| VT-14 | 17876 个删除独立成 commit | P1 | ✅ **已完成（`a2194c06`）** |
 
 > ⚠️ **VT-11 是整件事的根因位**。VT-01～VT-10 都是这次改动自身的收尾，值得做；
 > 但"公司装不上"这个原始问题是否已解决，在 VT-11 之前**没有任何证据**。
+> 现在 VT-01/03/10/13/14 全部闭合，这一点反而更刺眼：**自身收尾快做完了，原问题一步没动。**
 
 ---
 
 ## P0 — 验证缺口（改完从没在真实构建路径上跑过）
 
 这一类最危险，因为宿主机 `pnpm install` + `turbo build` 全绿会让人误以为已经验证。
-实际覆盖到的只有"宿主机能装能编"，**镜像、集成测试、运行时三层全空**。
+立项时覆盖到的只有"宿主机能装能编"，**镜像、集成测试、运行时三层全空**。
+
+> **2026-07-29 结算**：镜像层（VT-01）与运行时层（VT-03，含浏览器）都已补上并全绿；
+> 集成测试层（VT-02）**至今是空的**，且不是本次改动的锅——见下文那条归属 AG-EE 的存量断裂。
+> 也就是说：这个仓库的 api 集成测试对本轮裁剪**没有提供过任何回归信号**，运行时证据全部来自手工 A/B。
 
 ### VT-01 镜像构建实测 ✅ 通过（2026-07-28）
 
@@ -165,13 +175,45 @@ dev 的 AP 正跑着，第二个实例会抢 BullMQ 任务、写 worker 注册�
 docker tag activepieces:pre-vt01-rollback activepieces:0.84.0-ee-removed && docker compose -f deploy/environments/dev/docker-compose.dev.yml up -d --no-deps activepieces
 ```
 
-### VT-03b 浏览器渲染 —— 仍未看
+### VT-03b 浏览器渲染 ✅ 已验（2026-07-29，commit `7d7e55f6`）
 
-- [ ] DW 设计态里嵌的 AP builder 在浏览器里正常渲染（web bundle 这次重新构建过，6774 modules）
+- [x] DW 设计态里嵌的 AP builder 在浏览器里正常渲染（web bundle 这次重新构建过，6774 modules）
 
-服务端与 Kong 链路都已验通，**剩下的只有"画面对不对"**：Shadow DOM 挂载、
-`:root`→`:host` 主题变量重写（这一条历史上出过事——不重写会导致 AP 主题变量全空、builder 整体静默降级）。
-这要走仓库自己的 `/verify-ui`（Playwright 截图）流程，需要登录 DW，未擅自执行。
+走仓库自己的 `/verify-ui`（Playwright）流程验的，截图在
+`frontend/developer-workstation/verification-screenshots/2026-07-29_ap-cdn-*.png`（5 张：
+Automation tab + piece picker 的 apps / utility / 滚动态）。Shadow DOM 挂载与
+`:root`→`:host` 主题变量重写**都正常**——历史上那个"主题变量全空、builder 整体静默降级"的坑没有复发。
+
+> **但这一轮不是白看的：它挖出了一个此前无人发现的存量缺口。**
+
+#### 顺带发现：`/ap-cdn` piece 图标全裂（**与本次裁剪无关**）
+
+打开 Automation tab，凡是 `logoUrl` 指向 `/ap-cdn/` 的件（HTTP、Webhook、Text Helper、CSV…）
+图标**全是灰色占位方块**。Router 和 Code 看着正常，只因为它们的图标是内联 SVG——
+这个巧合把"整条路由缺失"伪装成了"少数几个件坏了"，很容易误判。
+
+**归属要说清楚：这不是 `a2194c06` 引入的回归，而是 embed 路径从第一天起就有的洞。**
+镜像里 `/ap-cdn` 的镜像盘在 AP 自己的 `publicDir`（`packages/web/public/ap-cdn`），
+而 DW 内嵌的 builder 是 **Vite lib-mode 产物，根本不产出 publicDir**；
+Kong 与 edge 也从来没有路由过 `/ap-cdn`。独立 AP 应用一直是好的，所以没人碰到。
+
+**修法**（已落 `7d7e55f6`）：把 `/ap-cdn` 路由回 AP 服务，而不是把资源拷进 DW 镜像——
+DW 的两个 Dockerfile 对 dist 落点不一致（`Dockerfile.local` → `html/dev`，`Dockerfile` → html 根），
+拷进去会在 dev 变成 `/dev/ap-cdn/`，而 `logoUrl` 是**根绝对路径**，改了就会让独立 AP 应用 404。
+两种方案都躲不掉 edge/Istio 路由，于是取路由方案：
+
+| 层 | 改动 |
+|---|---|
+| Kong | `activepieces-cdn-service` + `activepieces-cdn-route`（`/ap-cdn`，`strip_path false`），**route 级 3000/min** —— piece picker 一帧内拉全部已装件的图标，全局 600/min 会把它们变回灰块（429） |
+| DW nginx + dev edge nginx | `location ^~ /ap-cdn/` → Kong（走 Kong 而非直连 AP，DW nginx 只有 `KONG_PROXY_URL`，不必新增上游环境变量） |
+| k8s | preprod/uat 两份 Kong configmap 同路由；DEV-only 的 DW-frontend VirtualService 加 `/ap-cdn/` 前缀 |
+
+证据：`/ap-cdn/pieces/new-core/webhooks.svg` 在 `:3000`（edge）与 `:3102`（DW 直连）均 200，未知路径仍 404；
+Playwright 在 FU 50030 的 Automation tab 上录到 **12 个不同 `/ap-cdn` 资源全部 200**，含自研件的
+`/ap-cdn/pieces/hermes/*.svg`。
+
+> **给将来搬 embed 宿主的人**：`/ap-cdn` 是**根绝对**的跨应用引用，宿主一换就得重新接这条路由。
+> 这条约定已写进 [HERMES_PATCHES.md](HERMES_PATCHES.md) 的 009 条目。
 
 ---
 
@@ -243,11 +285,20 @@ docker tag activepieces:pre-vt01-rollback activepieces:0.84.0-ee-removed && dock
 文档里的路径全部仍然成立（已逐条核过）。加白名单件也不需要源码（走 npm 版本号解析）。
 **受影响的**只有"照着上游某个件抄写法"和"对上游件打源码补丁"这两件事。
 
-### VT-10 codegraph 索引重建
+### VT-10 codegraph 索引 ✅ 已自愈（2026-07-29 复查）
 
-- [ ] 重建索引
+- [x] 无需手工重建 —— daemon 的文件监听在删除发生时就把符号摘掉了
 
-索引里还留着 690 个已删件，符号搜索会返回幽灵结果。
+原先担心"索引里还留着 690 个已删件，符号搜索会返回幽灵结果"。实测**没有幽灵**：
+
+| 探针 | 结果 |
+|---|---|
+| `zuora` | 零命中 |
+| `salesforce` | 仅 1 条，`web/src/features/authentication/…/auth-animation.tsx`（活文件里的字符串常量） |
+| `runAgent` | 仅 1 条，`web/src/app/builder/test-step/agent-test-step/index.tsx`（活文件；`community/ai` 的符号已消失） |
+
+> 结论：codegraph daemon 当时正在运行（`.codegraph/daemon.pid` 早于裁剪），删除被实时消费掉了。
+> **前提是删除发生时 daemon 在跑**——若将来在 daemon 停止期间做同等规模的删除，这条得重新验。
 
 ---
 
@@ -347,13 +398,19 @@ docker tag activepieces:pre-vt01-rollback activepieces:0.84.0-ee-removed && dock
 
 ## 提交面
 
-### VT-14 独立成 commit
+### VT-14 独立成 commit ✅ 已完成（2026-07-28）
 
-- [ ] 17876 个删除 + 8 个修改 + 1 个新文件单独成 commit
+- [x] `a2194c06 build(ap): trim vendored community pieces to 4; disable AI Generate`
+      —— **17920 files changed, 1002 insertions(+), 1354004 deletions(-)**
 
-分支 `common_0726_UIUX_AP` 上还混着无关改动（`frontend/pnpm-workspace.yaml` 已 staged 删除、
-`frontend/pnpm-lock.yaml` 未跟踪）。这么大的删除**必须**跟前端那摊分开，否则 review 和将来
-`git log` 追溯都会非常难受。
+担心的那摊前端改动确实分开了，各自成 commit：`4416e951 build(frontend): move the frontends from
+npm to pnpm` + `3da0e767 build(deploy): finish the pnpm switch in the two build scripts`。
+
+> **一处如实说明**：`a2194c06` 并不是"纯删除"commit——它同时带上了 VT-15 的 AI Generate 停用
+> （DW 后端 `@ConditionalOnProperty` + 前端 feature flag + `build-ai-fu-flow.js` 闸门）和本 checklist 本身。
+> 这是刻意的：停用 AI Generate 是**删 `piece-ai` 的直接后果**，拆开会让任一半单独 checkout 时处于不自洽状态
+> （树里没有 `piece-ai`，功能却还开着并指向它）。review 时按 `docs/` 与 `backend/`+`frontend/`
+> 两组路径过滤即可绕开那 17876 个删除。
 
 ---
 
