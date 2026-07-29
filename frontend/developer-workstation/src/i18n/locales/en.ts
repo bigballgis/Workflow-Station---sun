@@ -96,7 +96,10 @@ export default {
   },
   sidebar: {
     collapse: 'Collapse sidebar',
-    expand: 'Expand sidebar'
+    expand: 'Expand sidebar',
+    recent: 'Recent',
+    recentEmpty: 'Function units you open show up here.',
+    clearRecent: 'Clear'
   },
   login: {
     title: 'Developer Workstation',

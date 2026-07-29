@@ -1,14 +1,16 @@
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 
 const STORAGE_KEY = 'sidebar-collapsed'
 
 /**
  * Composable for managing sidebar collapse state
  * Extracted for testability
+ *
+ * The collapsed/expanded widths live in AppSidebar's stylesheet (248px / 64px, shared with
+ * admin-center and user-portal) so the transition is pure CSS — this owns only the state.
  */
 export function useSidebarState() {
   const isCollapsed = ref(false)
-  const sidebarWidth = computed(() => isCollapsed.value ? '64px' : '240px')
 
   /**
    * Toggle sidebar collapse state
@@ -17,7 +19,7 @@ export function useSidebarState() {
     isCollapsed.value = !isCollapsed.value
     try {
       localStorage.setItem(STORAGE_KEY, String(isCollapsed.value))
-    } catch (e) {
+    } catch {
       // localStorage not available, ignore
     }
   }
@@ -29,7 +31,7 @@ export function useSidebarState() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       isCollapsed.value = stored === 'true'
-    } catch (e) {
+    } catch {
       // localStorage not available, use default
       isCollapsed.value = false
     }
@@ -37,7 +39,6 @@ export function useSidebarState() {
 
   return {
     isCollapsed,
-    sidebarWidth,
     toggleSidebar,
     initSidebarState
   }

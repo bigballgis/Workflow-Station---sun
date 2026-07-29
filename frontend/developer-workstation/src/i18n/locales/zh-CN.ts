@@ -96,7 +96,10 @@ export default {
   },
   sidebar: {
     collapse: '收起侧边栏',
-    expand: '展开侧边栏'
+    expand: '展开侧边栏',
+    recent: '最近打开',
+    recentEmpty: '打开过的功能单元会出现在这里。',
+    clearRecent: '清空'
   },
   login: {
     title: '开发工作站',

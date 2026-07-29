@@ -496,15 +496,11 @@ const store = useFunctionUnitStore()
 
 const functionUnitId = computed(() => Number(route.params.id))
 
-// Deep links (URL pasted into a new tab) have no in-app history entry —
-// vue-router leaves history.state.back null, so go to the FU list instead
-// of walking the browser history out of the app.
+// Back always means "up to the Function Unit list", never "the previous page": jumping
+// between function units from the sidebar's Recent list would otherwise make Back walk
+// backwards through those function units instead of leaving the designer.
 const goBack = () => {
-  if (window.history.state?.back) {
-    router.back()
-  } else {
-    router.push('/function-units')
-  }
+  router.push('/function-units')
 }
 const activeTab = ref('process')
 

@@ -451,10 +451,12 @@ import {
 } from '@/composables/functionUnitList/useLaunchpadLayout'
 import { useFunctionUnitForm } from '@/composables/functionUnitList/useFunctionUnitForm'
 import { useFunctionUnitExport } from '@/composables/functionUnitList/useFunctionUnitExport'
+import { useRecentFunctionUnits } from '@/composables/useRecentFunctionUnits'
 
 const { t } = useI18n()
 const router = useRouter()
 const store = useFunctionUnitStore()
+const { removeRecent } = useRecentFunctionUnits()
 
 const pagination = reactive({ page: 1, size: 20 })
 const showImportDialog = ref(false)
@@ -630,6 +632,10 @@ async function handleDelete(item: FunctionUnitResponse) {
     )
   }
   await store.remove(item.id)
+  // A permanent delete leaves the sidebar's "Recent" entry pointing at a function unit that
+  // no longer exists, so drop it. Archiving only changes status (it stays openable) — keep
+  // the entry and let the next list load refresh it.
+  if (isArchived) removeRecent(item.id)
   ElMessage.success(isArchived ? t('functionUnit.deletePermanentSuccess') : t('functionUnit.archiveSuccess'))
   loadData()
 }
