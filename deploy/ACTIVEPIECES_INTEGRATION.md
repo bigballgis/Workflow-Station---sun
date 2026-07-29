@@ -237,7 +237,8 @@ schema 建回来但**数据一条不剩**——没有 platform / project / signi
 > **第 2 步的顺序很关键**：`getOrCreateProject` 按 `externalId` 查项目，查不到就**自己新建一个**。
 > 若在第一次 managed 换取之后才 stamp，共享账号和 per-user 账号会分处两个 project，互相看不见对方的 flow。
 
-> **signing-key 为什么不自动化**（裁决 2026-07-29）：私钥只在创建时返回一次，要写进
+> **signing-key 为什么不自动化**（裁决 [D11](../docs/ap-integration/DECISIONS.md#d11)，2026-07-29——
+> **已定案，不是暂缓**）：私钥只在创建时返回一次，要写进
 > `workflow-platform-secrets`。让 Job 自动写 Secret 需要一个能改 Secret 的 ServiceAccount + RBAC，
 > 气隙/合规集群未必批得下来；且 Job 重跑会轮换掉正在使用的密钥。
 > **另注：k8s 侧 admin-center 目前根本没接 managed 鉴权**——`admin-center.yaml` 与各环境

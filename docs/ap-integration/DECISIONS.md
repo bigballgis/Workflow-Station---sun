@@ -42,9 +42,12 @@
 | [D5](#d5) | **AP 代码树位置与 workspace 归属**（Q1 位置部分的修订） | AP 子树 → 仓库根 `activepieces/`（自有 workspace）；前端只留 `ap-contracts` 裁剪层 | 07-23 |
 | [D6](#d6) | **沙箱基线降级**（安全策略不允许提权） | 候选基线 → **`SANDBOX_CODE_ONLY` + `STRICT`**（降级阶梯第 3 级）；**内核级出网管控丧失，须由 NetworkPolicy + 桥加固补偿** | 07-23 |
 
+| [D11](#d11) | **signing-key 是否自动供给** | **不自动化** — 只读检测 + fail-loud；私钥只返回一次、写 Secret 需 RBAC、重跑会轮换活密钥；且 k8s 尚未接 `ACTIVEPIECES_MANAGED_*` | 07-29 |
+
 ---
 
 > **D7** — HERMES 侧命名改为 ServiceTask（含明确不改清单）｜**D8** — admin-center 接受 DW 平台 JWT cookie
+> ｜**D10** — sync webhook 终态释放
 
 ## 2. 决策正文
 
@@ -461,6 +464,32 @@ worker 的 piece 安装阶段，引擎根本没跑起来。
 结构、一直没有实体的编号台账建了出来：**[HERMES_PATCHES.md](HERMES_PATCHES.md)**，8 处全部登记、
 代码侧标记统一为 `HERMES-PATCH-0NN`。其中 001/002 是构建期改写脚本、不在 vendor 树里，
 是此前最容易在盘点时漏掉的两个。
+
+### <a id="d11"></a>D11 — signing-key 供给保持手工，不自动化（2026-07-29）
+
+**背景**：AP 供给共四项——① platform + 默认 project、② project `externalId`、③ `piece_metadata`、
+④ **signing-key**（L7 per-user 换 token 用）。空库/重建卷/手工 drop 掉 AP 表之后四项全空，而
+**重打镜像一项都不恢复**；症状是 DW 的 Automation 页签报错、各处日志却全绿（桥拿着一个已不存在的
+key 去签名，AP 只回 401）。①②③ 已在 dev（`build-and-deploy.ps1` 的 `Invoke-ApProvisioning`）与
+k8s（`ap-bootstrap-job.yaml` 的两个 initContainer）自动化。
+
+**裁决**：**第 ④ 项不自动化**。`ap-verify-provisioning.js` 只做只读检测，缺了就让 Job 失败并打印
+逐条手工命令；不 mint、不写 Secret。
+
+**理由**（三条独立成立，任一条都足够）：
+
+1. **私钥只在创建时返回一次**，必须落进 `workflow-platform-secrets`。让 Job 自动写 Secret 需要一个
+   能改 Secret 的 ServiceAccount + RBAC——气隙/合规集群未必批得下来。注意这与 ②③ 不同：**写库要的是
+   DB 凭据（AP Deployment 本来就在用），不是 k8s 权限**，所以那两项自动化没有引入任何新权限。
+2. **重跑会轮换正在使用的密钥**。即便加"只在 `signing_key` 为空时 mint"的闸门，也只能挡住最常见的
+   情形；密钥是活凭据，自动轮换的爆炸半径远大于省下的一次手工操作。
+3. **k8s 侧目前根本没接这条线**：`admin-center.yaml` 没有任何 `ACTIVEPIECES_MANAGED_*` env，
+   preprod/uat 的 configmap 与 secret 里也没有这三个键。L7 只在 dev 启用。现在自动写 Secret，
+   等于往没人读的地方写值。**要在集群上用 L7，得先补这套接线**——那是另一件事，且应先于任何自动化。
+
+**含义**：新集群部署后，若启用了 L7，必须人工执行一次 mint + 回填 Secret/ConfigMap + 重启
+admin-center。Job 会明确告诉你这件事没做（退 1 + 打印命令），不会静默放过。dev 不受影响——
+那边私钥写的是 `.env`，`Invoke-ApProvisioning` 照常自动处理。
 
 ---
 

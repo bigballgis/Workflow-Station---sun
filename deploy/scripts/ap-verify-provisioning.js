@@ -10,7 +10,8 @@
  * `ap-bootstrap-shared-account.js` 只补第一项（platform + project）。剩下三项在 k8s 上仍是手工步骤，
  * 本脚本负责**在部署时把缺口喊出来**，而不是等有人点开 Automation 页签才发现。
  *
- * 为什么只检不修（裁决，2026-07-29）：
+ * 为什么只检不修（裁决 D11，2026-07-29 —— **已定案，不是暂缓**；正文见
+ * docs/ap-integration/DECISIONS.md#d11）：
  *   - signing-key 的私钥只在创建时返回一次，要落进 `workflow-platform-secrets`。让 Job 自动写
  *     Secret 需要给它一个能改 Secret 的 ServiceAccount + RBAC，在气隙/合规集群里未必批得下来，
  *     且一旦 Job 重跑就有轮换掉正在用的密钥的风险。故只报告，由人执行。
