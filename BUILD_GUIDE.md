@@ -314,13 +314,25 @@ Push-Location frontend/admin-center; npm install --prefer-offline --no-audit; np
 Push-Location frontend/user-portal; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
 
 # developer-workstation-frontend
-Push-Location frontend/developer-workstation; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
+# ① 先构建内嵌的 Activepieces builder（产物 gitignore，干净 checkout 上不存在）
+Push-Location activepieces/packages/web; npx vite build --config vite.embed.config.mts; Pop-Location
+# ② 必须用 npm run build（不是 npx vite build）——只有前者会触发 prebuild 钩子，
+#    把 ① 的产物拷进 public/service-task-builder/
+Push-Location frontend/developer-workstation; npm install --prefer-offline --no-audit; npm run build; Pop-Location
 
 # platform-login-frontend（K8S 统一登录 /login/）
 Push-Location frontend/login; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
 ```
 
 成功标志：每个前端输出 `✓ built in XXs`，`dist/` 目录生成。
+
+> ⚠️ **developer-workstation-frontend 的两步顺序不能省**。Function Unit 的 Automation 标签
+> 直接挂 AP builder，其 bundle 走「构建期拷贝」交付（AG-02.8）：AP 产物 →
+> `public/service-task-builder/` → `dist/` → 镜像。产物是 gitignore 的构建物，**不入库**。
+> 漏掉任一步，构建仍然全绿、镜像照推，但运行时 `/dev/service-task-builder/web.css` 返回 404。
+> 打镜像前可先自查：`ls frontend/developer-workstation/dist/service-task-builder/web.css`。
+> 走 `deploy/scripts/build-and-push-k8s.ps1` 则这两步已内置，且缺产物会直接构建失败
+> （`SERVICE_TASK_BUILDER_REQUIRED`），不会静默放过。
 
 ### 7.3 Docker 镜像构建
 

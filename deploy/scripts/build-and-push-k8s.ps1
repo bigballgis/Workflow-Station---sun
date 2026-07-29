@@ -157,6 +157,29 @@ if (-not $SkipBackend) {
 if (-not $SkipFrontend) {
     Write-Step "Building frontend (local npm build + Docker, parallel x$MaxParallel)..."
 
+    # The developer-workstation frontend embeds the Activepieces builder. That bundle is
+    # produced by the AP workspace (outside frontend/) into activepieces/dist/packages/
+    # web-embed and is gitignored, so a clean checkout never has it; DW's npm `prebuild`
+    # hook only COPIES it into public/. Nothing else builds it, so build it here — before
+    # the per-service jobs start, since DW's build consumes it. Skip this and the image
+    # ships without the bundle and 404s on /dev/service-task-builder/web.css.
+    $needsApBuilder = @($selectedFrontend | Where-Object { $_.Name -eq "developer-workstation-frontend" }).Count -gt 0
+    if ($needsApBuilder -and -not $PushOnly) {
+        $apWebDir = Join-Path $ProjectRoot "activepieces/packages/web"
+        if (-not (Test-Path (Join-Path $apWebDir "node_modules"))) {
+            Write-Fail "Activepieces workspace deps are missing ($apWebDir/node_modules). Install them before building developer-workstation-frontend, or exclude it with -Services."
+        }
+        Write-Host "   >> [ap-builder] vite build (web-embed)" -ForegroundColor Gray
+        Push-Location $apWebDir
+        try {
+            npx vite build --config vite.embed.config.mts
+            if ($LASTEXITCODE -ne 0) { Write-Fail "Activepieces web-embed build failed" }
+        } finally {
+            Pop-Location
+        }
+        Write-Ok "ap-builder (web-embed)"
+    }
+
     $frontendJobs = foreach ($svc in $selectedFrontend) {
         Start-ThreadJob -ThrottleLimit $MaxParallel -Name $svc.Name -ArgumentList @(
             $svc.Name, (Join-Path $ProjectRoot $svc.Dir), "$Registry/$($svc.Name):$Tag",
@@ -183,9 +206,17 @@ if (-not $SkipFrontend) {
                     }
                     # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
                     Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-                    $log += ">> [$Name] vite build"
-                    npx vite build 2>&1 | ForEach-Object { $log += "[$Name] $_" }
-                    if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "vite build"; Log = $log } }
+                    # `npm run build`, not `npx vite build`: the latter bypasses npm's
+                    # `prebuild` hook, which is what copies the Activepieces builder bundle
+                    # into DW's public/. All three frontends declare "build": "vite build",
+                    # so this is equivalent for the others.
+                    # SERVICE_TASK_BUILDER_REQUIRED makes DW's prebuild FAIL on a missing
+                    # bundle rather than warn-and-continue — a release build must not
+                    # silently produce an image without it.
+                    if ($Name -eq "developer-workstation-frontend") { $env:SERVICE_TASK_BUILDER_REQUIRED = "1" }
+                    $log += ">> [$Name] npm run build"
+                    npm run build 2>&1 | ForEach-Object { $log += "[$Name] $_" }
+                    if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "npm run build"; Log = $log } }
                 } finally {
                     Pop-Location
                 }
