@@ -27,7 +27,7 @@
 | VT-03 | 容器启动 + builder 冒烟 | **P0** | ✅ **全绿（2026-07-29）**：服务端 + dev 真实环境 + 经 Kong + **浏览器渲染** |
 | VT-04 | rebase 重放顺序陷阱（脚本加断言） | P1 | ✅ **已完成（2026-07-29）** |
 | VT-05 | app-events 死链无提示 | P1 | ⬜ 未做 |
-| VT-06 | `--check` 接进 CI | P1 | ⬜ 未做 |
+| VT-06 | `--check` 接进 CI | P1 | ✅ **已完成（2026-07-29）** |
 | VT-07 | `SUPPORTED_APP_WEBHOOKS` flag 说谎 | P1 | ⬜ 未做 |
 | VT-08 | crowdin 翻译源塌缩 | P2 | ⬜ 待裁决 |
 | VT-09 | 上游 piece 源码不再可读的补救约定 | P2 | ⬜ 待裁决 |
@@ -291,11 +291,29 @@ Playwright 在 FU 50030 的 Automation tab 上录到 **12 个不同 `/ap-cdn` �
 这些代码**不能删**（`APP_WEBHOOK` 分支是与具体 piece 无关的通用逻辑，删了编译不过），
 所以修法是在 `webhook-url.ts` 或白名单校验处加一条显式的「本部署不支持 APP_WEBHOOK 策略」断言。
 
-### VT-06 `--check` 接进 CI
+### VT-06 `--check` 接进 CI ✅ 已完成（2026-07-29）
 
-- [ ] 把 `node hermes/trim-vendor-pieces.mjs --check` 加进 CI
+- [x] 新增 [`.github/workflows/vendor-trim-check.yml`](../../.github/workflows/vendor-trim-check.yml)
+      （风格对齐仓库既有的 `ai-guidance-sync.yml`；触发条件 `activepieces/**`，只读文件系统，秒级）
 
-否则防回潮完全靠人记得跑；一次漏跑，690 个件连同它们的依赖就悄悄回来了。
+**先把 `--check` 补成完整不变量再接进去**，否则接了也白接 —— 它原先只查 piece 收敛，
+查不出 VT-04 修掉的那类死映射，正是同一个坑会二次漏过的地方。现在一次调用查三条：
+
+1. `community/` 只剩 `KEEP` 里那几个件；
+2. 三个 tsconfig 里没有指向已删目录的 path 映射（**单行与三行两种写法都查**）；
+3. 没有任何 workspace manifest 还依赖待删件 —— 即 VT-04 那条重放顺序断言。
+
+job 里还加了第二步 **`pnpm install --frozen-lockfile --lockfile-only`**：
+`--check` 只保证"树是收敛的"，不保证锁文件跟着走。少了这步，一次漏跑
+`pnpm install --lockfile-only` 就会让镜像构建阶段的 `--frozen-lockfile` 失败，
+而那要等到构建才暴露 —— 这个 job 秒级就能挡下。
+
+实测：
+- `--check` 正向通过，且**确认是只读的**（跑完 `git status` 对三个 tsconfig 为空）
+- 负向注入一条指向已删目录的映射 → `FAIL: 1 条指向已删目录的 tsconfig path 映射`，exit 1
+- 两个 workflow 的 YAML 都能解析；`packageManager: pnpm@9.15.9` 已在
+  `activepieces/package.json` 里声明，`corepack enable` 能拿到正确版本
+- 本地模拟第二步：`Scope: all 43 workspace projects`，497ms
 
 ### VT-07 `SUPPORTED_APP_WEBHOOKS` flag 会说谎
 

@@ -1,0 +1,56 @@
+name: AP vendor trim check
+
+# HERMES-PATCH-013 的防回潮闸门。上游 0.84.0 在 packages/pieces/community/ 下带了 694 个件，
+# 我们只保留 4 个（理由逐条写在 activepieces/hermes/trim-vendor-pieces.mjs 的 KEEP 里）。
+# 其余的既不在 pieces.json 白名单、也不进成品镜像，唯一效果是把上百个第三方 SDK
+# （含 @anthropic-ai/sdk、openai、@google/genai …）拖进每一次 pnpm install ——
+# 在受限内网 / 气隙环境里这是纯粹的失败面。
+#
+# rebase 到新上游 tag 会把它们整批带回来，而重放全靠人记得跑脚本。这个 job 就是那个"记得"。
+# 它只读文件系统，不装依赖、不构建，秒级完成。
+
+on:
+  push:
+    paths:
+      - 'activepieces/**'
+      - '.github/workflows/vendor-trim-check.yml'
+  pull_request:
+    paths:
+      - 'activepieces/**'
+      - '.github/workflows/vendor-trim-check.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: vendor-trim-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trim-check:
+    name: Community pieces converged, no dangling tsconfig paths
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 一次调用同时把三条不变量查掉：
+      #   1. community/ 只剩 KEEP 里那几个件；
+      #   2. 三个 tsconfig 里没有指向已删目录的 path 映射（单行与三行两种写法都查）；
+      #   3. 没有任何 workspace manifest 还依赖待删件 —— 即 HERMES-PATCH-012 的重放顺序。
+      # 失败信息里已带修复步骤，这里不重复。
+      - name: Run trim invariant check
+        run: node activepieces/hermes/trim-vendor-pieces.mjs --check
+
+      # --check 只保证"树是收敛的"，不保证锁文件跟着走。少了这步，一次漏跑
+      # `pnpm install --lockfile-only` 就会让镜像构建阶段的 --frozen-lockfile 失败，
+      # 而那要等到构建才暴露。
+      - name: Lockfile matches the trimmed workspace
+        working-directory: activepieces
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile --lockfile-only

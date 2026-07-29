@@ -69,12 +69,22 @@ const doomed = present.filter((n) => !(n in KEEP))
 assertNothingStillNeedsDoomedPieces(doomed)
 
 if (check) {
+    const failures = []
     if (doomed.length > 0) {
-        console.error(`FAIL: ${doomed.length} 个未收敛的 community piece: ${doomed.slice(0, 10).join(', ')}${doomed.length > 10 ? ' …' : ''}`)
-        console.error('跑 `node hermes/trim-vendor-pieces.mjs` 收敛，然后重生成 pnpm-lock.yaml')
+        failures.push(`${doomed.length} 个未收敛的 community piece: ${doomed.slice(0, 10).join(', ')}${doomed.length > 10 ? ' …' : ''}`)
+    }
+    // 死映射要单独查：piece 收敛了不代表 tsconfig 干净 —— 单行写法的 8 条悬空映射
+    // 就是这么活过一整轮裁剪的（见 VT-04）。
+    const dead = TSCONFIGS.reduce((sum, relPath) => sum + pruneDeadPieceMappings(relPath, { dryRun: true }), 0)
+    if (dead > 0) {
+        failures.push(`${dead} 条指向已删目录的 tsconfig path 映射`)
+    }
+    if (failures.length > 0) {
+        for (const f of failures) console.error('FAIL: ' + f)
+        console.error('跑 `node hermes/trim-vendor-pieces.mjs` 收敛，然后 `pnpm install --lockfile-only`')
         process.exit(1)
     }
-    console.log(`OK: community 已收敛到 ${present.length} 个件（${present.join(', ')}）`)
+    console.log(`OK: community 已收敛到 ${present.length} 个件（${present.join(', ')}），无悬空 tsconfig 映射`)
     process.exit(0)
 }
 
@@ -166,7 +176,7 @@ function collectWorkspaceManifests() {
 
 // paths 里逐个 piece 一条三行映射；目标路径已不存在的整条摘掉。
 // 行级删除而不是 JSON.parse/stringify —— 后者会把这些文件整体重排，vendor diff 没法看。
-function pruneDeadPieceMappings(relPath) {
+function pruneDeadPieceMappings(relPath, { dryRun = false } = {}) {
     const abs = path.join(root, relPath)
     if (!fs.existsSync(abs)) {
         // 上游删掉/改名了某个 tsconfig：不致命，但必须说出来，否则悬空映射会静默留下。
@@ -200,7 +210,10 @@ function pruneDeadPieceMappings(relPath) {
         }
         kept.push(lines[i])
     }
-    if (removed === 0) return 0
+    if (removed === 0 || dryRun) {
+        if (dryRun && removed > 0) console.error(`  ${relPath}: ${removed} 条悬空映射`)
+        return removed
+    }
 
     // 摘掉的若是 paths 里最后一条，前一条的尾逗号会变成悬空逗号 —— JSON 不允许。
     for (let i = 0; i < kept.length - 1; i++) {
