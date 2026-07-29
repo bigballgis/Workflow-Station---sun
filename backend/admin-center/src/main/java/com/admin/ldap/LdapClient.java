@@ -484,7 +484,11 @@ public class LdapClient {
                 Attribute attr = all.next();
                 Object value = attr.size() > 0 ? attr.get(0) : null;
                 if (value != null) {
-                    map.put(attr.getID(), String.valueOf(value));
+                    if (value instanceof byte[] bytes) {
+                        map.put(attr.getID(), java.util.Base64.getEncoder().encodeToString(bytes));
+                    } else {
+                        map.put(attr.getID(), String.valueOf(value));
+                    }
                 }
             }
         } finally {

@@ -30,6 +30,7 @@ public class LoginResponse {
         private List<String> permissions;
         private List<RoleWithSource> rolesWithSources;
         private String language;
+        private boolean hasAvatar;
     }
     
     @Data

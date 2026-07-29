@@ -177,6 +177,18 @@ public class LdapUserSyncService {
         }
         user.setUpdatedBy(LdapConstants.LDAP_SYNC_ACTOR);
         user.setDeleted(false);
+
+        // Sync LDAP jpegPhoto → avatar (preserve existing photo if LDAP has none)
+        if (data.getPhotoBase64() != null && !data.getPhotoBase64().isEmpty()) {
+            try {
+                user.setAvatar(java.util.Base64.getDecoder().decode(data.getPhotoBase64()));
+            } catch (IllegalArgumentException e) {
+                log.warn("Failed to decode jpegPhoto for user {} ({} bytes): {}",
+                        user.getId(),
+                        data.getPhotoBase64() != null ? data.getPhotoBase64().length() : 0,
+                        e.getMessage());
+            }
+        }
     }
 
     private String resolveUsername(LdapUserData data) {

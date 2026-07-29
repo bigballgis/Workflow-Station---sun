@@ -4,6 +4,9 @@ import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
 import com.admin.service.AuthService;
 import com.platform.security.config.JwtProperties;
+import com.admin.repository.UserRepository;
+import com.platform.security.entity.User;
+import com.platform.security.service.JwtTokenService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,6 +31,8 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtProperties jwtProperties;
+    private final UserRepository userRepository;
+    private final JwtTokenService jwtTokenService;
 
     /** Where /auth/logout-redirect bounces after clearing the session (relative -> resolved
      *  against the host the browser used). Used as Superset's LOGOUT_REDIRECT_URL. */
@@ -250,6 +255,33 @@ public class AuthController {
             if ("INVALID_OLD_PASSWORD".equals(msg) || "USER_NOT_FOUND".equals(msg)) {
                 return ResponseEntity.badRequest().build();
             }
+            return ResponseEntity.status(401).build();
+        }
+    }
+
+    /**
+     * Get current user's avatar image from database (LDAP jpegPhoto).
+     */
+    @GetMapping("/me/avatar")
+    public ResponseEntity<byte[]> getAvatar(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest httpRequest) {
+        String token = extractAccessToken(authHeader, httpRequest);
+        if (token == null || token.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
+        try {
+            String userId = jwtTokenService.extractUserId(token);
+            User user = userRepository.findById(userId).orElse(null);
+            if (user == null || user.getAvatar() == null || user.getAvatar().length == 0) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok()
+                    .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                    .cacheControl(org.springframework.http.CacheControl.maxAge(1, java.util.concurrent.TimeUnit.HOURS).cachePrivate())
+                    .body(user.getAvatar());
+        } catch (Exception e) {
+            log.debug("Avatar resolve failed: {}", e.getMessage());
             return ResponseEntity.status(401).build();
         }
     }

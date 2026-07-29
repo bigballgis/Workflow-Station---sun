@@ -53,6 +53,7 @@ public class LoginResponse {
          * FULL：完整门户；PERMISSION_SELF_SERVICE_ONLY：无 UBR（|C|=0），仅权限自助等白名单能力
          */
         private String portalAccessMode;
+        private boolean hasAvatar;
     }
 
     @Data

@@ -121,6 +121,7 @@ public class AuthServiceImpl implements AuthService {
                         // Set when user has a single UBR business unit; null with multiple BUs and no preferred (same as TaskAssignmentQueryService)
                         .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                         .language(user.getLanguage())
+                        .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
                         .build())
                 .build();
     }
@@ -191,6 +192,7 @@ public class AuthServiceImpl implements AuthService {
                         .rolesWithSources(rolesWithSources)
                         .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                         .language(user.getLanguage())
+                        .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
                         .build())
                 .build();
     }
@@ -249,6 +251,7 @@ public class AuthServiceImpl implements AuthService {
                             // Set when user has a single UBR business unit; null with multiple BUs and no preferred
                             .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                             .language(user.getLanguage())
+                            .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
                             .build())
                     .build();
         } catch (Exception e) {
@@ -284,6 +287,7 @@ public class AuthServiceImpl implements AuthService {
                     // Set when user has a single UBR business unit; null with multiple BUs and no preferred
                     .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                     .language(user.getLanguage())
+                    .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
                     .build();
         } catch (Exception e) {
             log.error("Failed to get current user", e);

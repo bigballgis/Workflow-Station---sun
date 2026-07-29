@@ -3867,3 +3867,223 @@ CREATE TABLE IF NOT EXISTS dw_user_preferences (
 );
 
 COMMENT ON TABLE dw_user_preferences IS 'Per-user UI preferences for developer workstation (e.g. launchpad layout)';
+
+-- =============================================================================
+-- 18-add-read-only-to-form-stage-bindings.sql
+-- Source file: deploy/init-scripts/00-schema/18-add-read-only-to-form-stage-bindings.sql
+-- =============================================================================
+-- Add read_only column to dw_form_stage_bindings
+-- This column stores the form node binding's readonly flag
+-- so the user portal can determine form editability independently of BPMN
+
+ALTER TABLE dw_form_stage_bindings 
+ADD COLUMN IF NOT EXISTS read_only BOOLEAN NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN dw_form_stage_bindings.read_only IS 'Whether the form bound to this stage is read-only';
+
+-- =============================================================================
+-- 42-add-dw-binding-link-mode.sql
+-- Source file: deploy/init-scripts/00-schema/42-add-dw-binding-link-mode.sql
+-- =============================================================================
+\set ON_ERROR_STOP on
+
+-- =====================================================
+-- Developer Workstation: Add binding_link_mode column
+-- =====================================================
+-- The column is already in 04-developer-workstation-schema.sql base DDL
+-- but older databases initialized before the column was added to the base
+-- schema are missing it.  This script backfills the column for those
+-- databases so that cascading JPA operations (delete, list) on
+-- dw_form_table_bindings do not fail with "column does not exist".
+--
+-- Keep idempotent via IF NOT EXISTS.
+-- =====================================================
+
+ALTER TABLE dw_form_table_bindings
+  ADD COLUMN IF NOT EXISTS binding_link_mode VARCHAR(32) NOT NULL DEFAULT 'structuralFk';
+
+COMMENT ON COLUMN dw_form_table_bindings.binding_link_mode IS
+  'Link mode: structuralFk (FK via table structure) or customField (user-managed FK field)';
+
+-- =============================================================================
+-- 43-add-dw-field-fk-pk-metadata.sql
+-- Source file: deploy/init-scripts/00-schema/43-add-dw-field-fk-pk-metadata.sql
+-- =============================================================================
+\set ON_ERROR_STOP on
+
+-- =====================================================
+-- Developer Workstation: Add FieldDefinition FK/PK metadata columns
+-- =====================================================
+-- These columns exist in 04-developer-workstation-schema.sql base DDL but were
+-- added later (Flyway V317 migration).  Older databases initialized before the
+-- columns were added to the base DDL are missing them, causing cascading JPA
+-- operations (delete, list) on dw_field_definitions to fail with
+-- "column does not exist".
+--
+-- Keep idempotent via ADD COLUMN IF NOT EXISTS.
+-- =====================================================
+
+ALTER TABLE dw_field_definitions
+    ADD COLUMN IF NOT EXISTS is_foreign_key        BOOLEAN   NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS ref_table_id           BIGINT,
+    ADD COLUMN IF NOT EXISTS ref_primary_key_fields JSONB,
+    ADD COLUMN IF NOT EXISTS pk_generation_json     JSONB,
+    ADD COLUMN IF NOT EXISTS fk_display_mode        VARCHAR(20) DEFAULT 'readonly',
+    ADD COLUMN IF NOT EXISTS relation_cardinality   VARCHAR(20);
+
+COMMENT ON COLUMN dw_field_definitions.is_foreign_key IS
+    'Whether this column is a foreign key reference to another table';
+COMMENT ON COLUMN dw_field_definitions.ref_table_id IS
+    'Target table ID when is_foreign_key = true';
+COMMENT ON COLUMN dw_field_definitions.ref_primary_key_fields IS
+    'List of primary-key fields in the referenced table (JSONB)';
+COMMENT ON COLUMN dw_field_definitions.pk_generation_json IS
+    'Primary key generation configuration (JSONB)';
+COMMENT ON COLUMN dw_field_definitions.fk_display_mode IS
+    'FK display mode: readonly, select, search, etc.';
+COMMENT ON COLUMN dw_field_definitions.relation_cardinality IS
+    'Relationship cardinality: ONE_TO_ONE, ONE_TO_MANY, MANY_TO_MANY';
+
+-- =============================================================================
+-- 52-add-rt-lookup-config.sql
+-- Source file: deploy/init-scripts/00-schema/52-add-rt-lookup-config.sql
+-- =============================================================================
+\set ON_ERROR_STOP on
+
+-- =====================================================
+-- Relation Tables: Add per-column LOOKUP field config
+-- =====================================================
+-- Adds a JSONB `lookup_config` column to rt_field_definitions so a Relation
+-- Table column can be typed as LOOKUP (references another Relation Table).
+-- The config carries: refTableId, searchFields, displayFields,
+-- selectedDisplayField, filterConditions, showBackfillView, multiple, and the
+-- derivedFrom block (parentField + join columns) that drives derived
+-- auto-fill / cascade filtering between two lookup columns.
+--
+-- Keep idempotent via ADD COLUMN IF NOT EXISTS.
+-- =====================================================
+
+ALTER TABLE rt_field_definitions
+    ADD COLUMN IF NOT EXISTS lookup_config JSONB;
+
+COMMENT ON COLUMN rt_field_definitions.lookup_config IS
+    'LOOKUP field configuration (JSONB): refTableId, searchFields, displayFields, '
+    'selectedDisplayField, filterConditions, showBackfillView, multiple, derivedFrom '
+    '{parentField, joins[{fromColumn,toColumn,matchType}], derivedMode}. '
+    'Only meaningful when data_type = LOOKUP.';
+
+-- =============================================================================
+-- 53-dw-process-definitions-fu-unique.sql
+-- Source file: deploy/init-scripts/00-schema/53-dw-process-definitions-fu-unique.sql
+-- =============================================================================
+\set ON_ERROR_STOP on
+
+-- =====================================================
+-- Developer Workstation: one process definition per FU
+-- =====================================================
+-- Enforce at most one dw_process_definitions row per
+-- function_unit_id. Idempotent via IF NOT EXISTS.
+-- =====================================================
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dw_process_definitions_fu_unique
+ON dw_process_definitions(function_unit_id);
+
+COMMENT ON INDEX idx_dw_process_definitions_fu_unique IS
+    'Ensure at most one process definition per function unit';
+
+-- =============================================================================
+-- 57-smtp-system-config.sql
+-- Source file: deploy/init-scripts/00-schema/57-smtp-system-config.sql
+-- =============================================================================
+-- Global SMTP system config keys for Admin Center System Parameters.
+-- Idempotent seed + migrate legacy smtp.server → smtp.host when host is empty.
+
+INSERT INTO admin_system_configs (
+    id, category, config_key, config_name, config_value, default_value,
+    value_type, description, encrypted, editable, version, environment
+) VALUES
+    (gen_random_uuid()::text, 'SYSTEM', 'session.timeout', 'Session Timeout', '30', '30',
+     'INTEGER', 'Session timeout in minutes', FALSE, TRUE, 1, 'DEV'),
+    (gen_random_uuid()::text, 'SYSTEM', 'file.maxSize', 'File Upload Limit', '10', '10',
+     'INTEGER', 'File upload limit in MB', FALSE, TRUE, 1, 'DEV'),
+    (gen_random_uuid()::text, 'SYSTEM', 'smtp.host', 'SMTP Host', '', '',
+     'STRING', 'Global SMTP host for outbound email connections', FALSE, TRUE, 1, 'DEV'),
+    (gen_random_uuid()::text, 'SYSTEM', 'smtp.port', 'SMTP Port', '25', '25',
+     'INTEGER', 'Global SMTP port for outbound email connections', FALSE, TRUE, 1, 'DEV'),
+    (gen_random_uuid()::text, 'SYSTEM', 'smtp.useTls', 'SMTP Use TLS', 'true', 'true',
+     'BOOLEAN', 'Global SMTP TLS for outbound email connections', FALSE, TRUE, 1, 'DEV'),
+    (gen_random_uuid()::text, 'BUSINESS', 'process.timeout', 'Process Timeout', '7', '7',
+     'INTEGER', 'Process timeout in days', FALSE, TRUE, 1, 'DEV'),
+    (gen_random_uuid()::text, 'BUSINESS', 'task.assignRule', 'Task Assignment Rule', 'ROUND_ROBIN', 'ROUND_ROBIN',
+     'STRING', 'Default task assignment rule', FALSE, TRUE, 1, 'DEV')
+ON CONFLICT (config_key) DO NOTHING;
+
+-- Copy legacy Mail Server value into smtp.host when host is still empty.
+UPDATE admin_system_configs AS host_cfg
+SET config_value = legacy.config_value,
+    updated_at = CURRENT_TIMESTAMP
+FROM admin_system_configs AS legacy
+WHERE host_cfg.config_key = 'smtp.host'
+  AND legacy.config_key = 'smtp.server'
+  AND (host_cfg.config_value IS NULL OR btrim(host_cfg.config_value) = '')
+  AND legacy.config_value IS NOT NULL
+  AND btrim(legacy.config_value) <> '';
+
+-- =============================================================================
+-- 58-widen-wf-assignment-target-to-text.sql
+-- Source file: deploy/init-scripts/00-schema/58-widen-wf-assignment-target-to-text.sql
+-- =============================================================================
+-- =============================================================================
+-- Widen wf_extended_task_info.assignment_target VARCHAR(255) → TEXT
+-- =============================================================================
+-- Symptom: Task creation fails when role/BU resolution yields many candidate
+--   user IDs joined into assignment_target (comma-separated) exceeding 255 chars.
+-- Cause: Column was VARCHAR(255); large CANDIDATE_USERS pools overflow.
+-- Fix:
+--   1) ALTER column to TEXT
+--   2) Drop btree index on the full column (low value for long candidate strings;
+--      task claiming uses Flowable identity links)
+--   3) Recreate partial index for non-CANDIDATE_USERS rows only (USER / VIRTUAL_GROUP /
+--      DEPT_ROLE still benefit from equality lookups)
+--
+-- Idempotent for existing and fresh databases.
+-- =============================================================================
+
+DROP INDEX IF EXISTS idx_assignment_target;
+
+ALTER TABLE IF EXISTS wf_extended_task_info
+    ALTER COLUMN assignment_target TYPE TEXT;
+
+DROP INDEX IF EXISTS idx_assignment_target_non_candidate_users;
+
+CREATE INDEX IF NOT EXISTS idx_assignment_target_non_candidate_users
+    ON wf_extended_task_info (assignment_target)
+    WHERE assignment_type <> 'CANDIDATE_USERS';
+
+COMMENT ON COLUMN wf_extended_task_info.assignment_target IS
+    'Assignment target: user/group/dept-role id, or comma-separated candidate user ids (TEXT for large pools)';
+
+COMMENT ON INDEX idx_assignment_target_non_candidate_users IS
+    'Equality lookup for non-CANDIDATE_USERS assignment targets; excludes long candidate-user pools';
+
+-- =============================================================================
+-- 59-add-up-change-history-indexes.sql
+-- Source file: deploy/init-scripts/00-schema/59-add-up-change-history-indexes.sql
+-- =============================================================================
+-- =====================================================
+-- User Portal: add standalone indexes on up_change_history
+-- for global cross-process audit log queries
+-- =====================================================
+
+CREATE INDEX IF NOT EXISTS idx_change_history_user_id ON up_change_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_change_history_timestamp_standalone ON up_change_history(timestamp);
+
+COMMENT ON INDEX idx_change_history_user_id IS 'Supports global audit query filtered by user';
+COMMENT ON INDEX idx_change_history_timestamp_standalone IS 'Supports global audit query filtered/sorted by time range';
+
+-- =============================================================================
+-- 60-add-user-avatar.sql
+-- Source file: deploy/init-scripts/00-schema/60-add-user-avatar.sql
+-- =============================================================================
+-- Add avatar column to sys_users for storing LDAP jpegPhoto
+ALTER TABLE sys_users ADD COLUMN IF NOT EXISTS avatar BYTEA;

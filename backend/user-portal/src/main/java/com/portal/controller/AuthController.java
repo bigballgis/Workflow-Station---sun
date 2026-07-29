@@ -240,6 +240,31 @@ public class AuthController {
         }
     }
 
+    @GetMapping("/me/avatar")
+    public ResponseEntity<byte[]> getAvatar(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest request) {
+        String token = resolveAccessToken(authHeader, request);
+        if (token == null) {
+            return ResponseEntity.status(401).build();
+        }
+        try {
+            Claims claims = parseToken(token);
+            String userId = claims.getSubject();
+            User user = userRepository.findById(userId).orElse(null);
+            if (user == null || user.getAvatar() == null || user.getAvatar().length == 0) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok()
+                    .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                    .cacheControl(org.springframework.http.CacheControl.maxAge(1, java.util.concurrent.TimeUnit.HOURS).cachePrivate())
+                    .body(user.getAvatar());
+        } catch (Exception e) {
+            log.debug("Avatar resolve failed: {}", e.getMessage());
+            return ResponseEntity.status(401).build();
+        }
+    }
+
     @GetMapping("/me")
     public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
@@ -518,6 +543,7 @@ public class AuthController {
                 .activeRoleName(bundle.activeRoleName)
                 .workspaceSwitcherVisible(workspaceSwitcherVisible)
                 .portalAccessMode(portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
+                .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
                 .build();
     }
 

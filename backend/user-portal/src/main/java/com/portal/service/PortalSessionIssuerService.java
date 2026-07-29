@@ -274,6 +274,7 @@ public class PortalSessionIssuerService {
                 .activeRoleName(bundle.activeRoleName)
                 .workspaceSwitcherVisible(workspaceSwitcherVisible)
                 .portalAccessMode(portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
+                .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
                 .build();
     }
 

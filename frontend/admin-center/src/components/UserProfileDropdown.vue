@@ -5,7 +5,7 @@
     @command="handleCommand"
   >
     <div class="user-info">
-      <el-avatar :size="32">
+      <el-avatar :size="32" :src="avatarSrc">
         {{ userName.charAt(0) }}
       </el-avatar>
       <span class="user-name">{{ userName }}</span>
@@ -15,7 +15,7 @@
       <el-dropdown-menu class="user-profile-dropdown">
         <!-- User Basic Info -->
         <div class="profile-header">
-          <el-avatar :size="48">
+          <el-avatar :size="48" :src="avatarSrc">
             {{ userName.charAt(0) }}
           </el-avatar>
           <div class="profile-info">
@@ -136,7 +136,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, Connection, Key, User, Setting, SwitchButton, Loading } from '@element-plus/icons-vue'
-import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
+import { logout as authLogout, clearAuth, getUser, AUTH_BASE_URL } from '@/api/auth'
 import { userApi } from '@/api/user'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 
@@ -150,6 +150,7 @@ const roles = ref<{ id: string; name: string; type?: string }[]>([])
 const currentUser = computed(() => getUser())
 const userName = computed(() => currentUser.value?.displayName || currentUser.value?.username || 'Admin')
 const userEmail = computed(() => currentUser.value?.email || '')
+const avatarSrc = computed(() => currentUser.value?.hasAvatar ? `${AUTH_BASE_URL}/me/avatar` : undefined)
 
 const getRoleTagType = (type?: string) => {
   if (type === 'BU_BOUNDED') return 'warning'

@@ -90,6 +90,7 @@ public class DeveloperSsoExchangeService {
                         .permissions(permissions)
                         .rolesWithSources(rolesWithSources)
                         .language(user.getLanguage())
+                        .hasAvatar(user.getAvatar() != null && user.getAvatar().length > 0)
                         .build())
                 .build();
     }

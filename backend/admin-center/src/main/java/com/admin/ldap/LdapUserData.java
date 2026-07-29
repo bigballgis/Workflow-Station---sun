@@ -39,4 +39,7 @@ public class LdapUserData {
 
     /** 由 lockoutTime 等推导：锁定→LOCKED，否则 ACTIVE。 */
     private UserStatus status;
+
+    /** LDAP jpegPhoto 的 Base64 编码。为 null 表示目录中无照片。 */
+    private String photoBase64;
 }

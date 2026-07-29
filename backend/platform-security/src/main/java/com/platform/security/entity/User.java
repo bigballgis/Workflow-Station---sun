@@ -93,6 +93,9 @@ public class User {
     @Column(length = 50)
     private String phone;
 
+    @Column(name = "avatar")
+    private byte[] avatar;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
