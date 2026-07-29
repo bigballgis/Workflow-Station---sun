@@ -111,7 +111,7 @@ cd backend/admin-center && mvn spring-boot:run
 前端（任选一应用）：
 
 ```bash
-cd frontend/user-portal && npm install && npm run dev
+cd frontend/user-portal && pnpm install && pnpm run dev
 ```
 
 ### Full Stack with Docker
@@ -123,7 +123,7 @@ cd deploy/environments/dev
 docker compose -f docker-compose.dev.yml --env-file .env up -d --build
 ```
 
-（需已按 Compose 文件头说明在宿主机完成 `mvn package` / `npm run build`。）
+（需已按 Compose 文件头说明在宿主机完成 `mvn package` / `pnpm run build`。）
 
 ## Configuration
 

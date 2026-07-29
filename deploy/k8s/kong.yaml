@@ -65,6 +65,24 @@ spec:
           value: "0.0.0.0:8100"
         - name: KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE
           value: "100m"
+        # --- 客户端真实 IP（限流分桶的依据）---
+        # Kong 跑在 Istio sidecar 后面：Envoy 以新连接把请求交给应用容器，因此 Kong 的
+        # $remote_addr 对所有客户端都是同一个值。不修正的话每条 `limit_by: ip` 都退化成
+        # 「全平台共享一个桶」——登录路由 10/min 会变成全平台每分钟只允许 10 次登录。
+        # real_ip_recursive=off ⇒ 取 X-Forwarded-For 的【最右】一项，即 Istio
+        # ingressgateway 追加的真实客户端地址；客户端自己伪造的条目都在它左边，取不到。
+        # ⚠️ 切勿把 KONG_TRUSTED_IPS 放宽成 0.0.0.0/0——那等于允许客户端自报 IP 绕过限流。
+        # optional=true + 不匹配时 real_ip 不生效、退回原状（fail-safe，不会开出伪造口子）。
+        - name: KONG_REAL_IP_HEADER
+          value: X-Forwarded-For
+        - name: KONG_REAL_IP_RECURSIVE
+          value: "off"
+        - name: KONG_TRUSTED_IPS
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: KONG_TRUSTED_IPS
+              optional: true
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:

@@ -56,7 +56,6 @@ import { projectHooks } from './project/project-hooks'
 import { storeEntryModule } from './store-entry/store-entry.module'
 import { tablesModule } from './tables/tables.module'
 import { templateModule } from './template/template.module'
-import { appEventRoutingModule } from './trigger/app-event-routing/app-event-routing.module'
 import { triggerModule } from './trigger/trigger.module'
 import { userBadgeModule } from './user/badges/badge-module'
 import { platformUserModule } from './user/platform/platform-user-module'
@@ -157,7 +156,12 @@ export const setupApp = async (app: FastifyInstance): Promise<FastifyInstance> =
     await app.register(platformAppConnectionModule)
     await app.register(variableModule)
     await app.register(openapiModule)
-    await app.register(appEventRoutingModule)
+    // HERMES-PATCH-012: appEventRoutingModule 已移除。它把 /v1/app-events/:pieceUrl 挂成
+    // securityAccess.public() 的未鉴权端点，只为 slack/square/facebook-leads/intercom 四个
+    // SaaS 件的账号级共享 webhook 服务——这四个件不在 pieces.json 白名单里（设计器选不到，
+    // app_event_routing 永远是空表），且气隙下 SaaS 打不进来。留着等于给内网多开一个匿名
+    // 入口去跑第三方解析代码。app-event-routing.service.ts 保留：flow-trigger-side-effect.ts
+    // 的 APP_WEBHOOK 分支仍引用它，那是与具体 piece 无关的通用逻辑。
     await app.register(authenticationModule)
     await app.register(triggerModule)
     await app.register(platformModule)

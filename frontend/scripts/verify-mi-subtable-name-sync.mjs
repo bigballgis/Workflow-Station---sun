@@ -67,7 +67,7 @@ async function loadPlaywright() {
   try {
     return await import('playwright')
   } catch {
-    console.error('playwright missing. From frontend/: npm install && npx playwright install chromium')
+    console.error('playwright missing. From frontend/: pnpm install && pnpm exec playwright install chromium')
     process.exit(1)
   }
 }

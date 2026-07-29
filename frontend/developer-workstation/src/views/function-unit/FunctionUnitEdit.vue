@@ -34,7 +34,9 @@
           </span>
         </div>
         <div>
+          <!-- AI Generate 入口：功能已停用，见 utils/featureFlags.ts -->
           <el-button
+            v-if="AI_GENERATION_ENABLED"
             type="primary"
             @click="showAiPanel = true"
           >
@@ -307,6 +309,7 @@
     </el-dialog>
 
     <AiPanel
+      v-if="AI_GENERATION_ENABLED"
       :function-unit-id="functionUnitId"
       :visible="showAiPanel"
       @update:visible="showAiPanel = $event"
@@ -480,6 +483,7 @@ import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import AiPanel from '@/components/ai/AiPanel.vue'
+import { AI_GENERATION_ENABLED } from '@/utils/featureFlags'
 import { useFunctionUnitStatus } from '@/composables/functionUnitEdit/useFunctionUnitStatus'
 import { useFunctionUnitSettings } from '@/composables/functionUnitEdit/useFunctionUnitSettings'
 import { useFunctionUnitActions } from '@/composables/functionUnitEdit/useFunctionUnitActions'

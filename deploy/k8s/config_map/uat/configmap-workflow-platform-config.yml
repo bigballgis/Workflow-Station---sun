@@ -20,6 +20,12 @@ data:
   API_GATEWAY_BACKEND_URL: "http://kong-service.__NAMESPACE__:8000"
   API_GATEWAY_URL: "http://kong-service.__NAMESPACE__:8000"
   KONG_PROXY_URL: "http://kong-service.__NAMESPACE__:8000"
+  # Kong 认定「可信代理」的来源地址：只有从这些地址进来的连接，Kong 才会用
+  # X-Forwarded-For 最右一项改写 $remote_addr（限流分桶依据）。见 deploy/k8s/kong.yaml 注释。
+  # 默认值按 Istio 默认 REDIRECT 拦截（sidecar 经环回交给应用容器）。若实测 Kong 访问日志里
+  # 的来源不是 127.0.0.1（例如 TPROXY 模式），把 Pod CIDR 追加进来。
+  # ⚠️ 严禁写 0.0.0.0/0：那等于允许客户端自报 IP 绕过限流。
+  KONG_TRUSTED_IPS: "127.0.0.1/32,::1/128"
   CACHE_DICTIONARY_TTL_MINUTES: "180"
   CACHE_PERMISSION_TTL_MINUTES: "90"
   CACHE_USER_TTL_MINUTES: "45"

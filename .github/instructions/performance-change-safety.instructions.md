@@ -59,7 +59,7 @@ frontend/user-portal/src/utils/inlineFormBelowTableRuntime.ts
 ### 1. 完整回归（默认）
 
 ```bash
-cd frontend && npm run regression:mi
+cd frontend && pnpm run regression:mi
 ```
 
 - Phase 1：`test:regression:mi`（9 文件 / 99 tests）
@@ -68,9 +68,9 @@ cd frontend && npm run regression:mi
 ### 2. 分项命令
 
 ```bash
-cd frontend/user-portal && npm run test:regression:mi   # 仅单元
-cd frontend && npm run regression:mi:screenshots        # 仅截图 E2E
-cd frontend && npm run regression:mi:unit-only          # 临时跳过截图（WARN）
+cd frontend/user-portal && pnpm run test:regression:mi   # 仅单元
+cd frontend && pnpm run regression:mi:screenshots        # 仅截图 E2E
+cd frontend && pnpm run regression:mi:unit-only          # 临时跳过截图（WARN）
 ```
 
 ### 3. 场景 ↔ 单测 ↔ 截图
@@ -100,7 +100,7 @@ cd frontend && npm run regression:mi:unit-only          # 临时跳过截图（W
 
 1. **与功能/fix 分 PR** — 禁止同一 diff 既优化又改 merge/filter 语义（除非 regression 全绿且 issue 明确允许）
 2. **声明动哪一层** — 仅取数层 / 还是语义层（语义层须先 failing test）
-3. **跑 `npm run regression:mi`** — PR 描述贴单元 + 截图通过结果（截图路径列表）
+3. **跑 `pnpm run regression:mi`** — PR 描述贴单元 + 截图通过结果（截图路径列表）
 4. **对照 invariant I1–I7** — 逐项勾选
 5. **截图 MUST 保留** — `verification-screenshots/` 内 PNG 禁止验证后删除
 

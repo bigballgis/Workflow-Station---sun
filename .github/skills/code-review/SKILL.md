@@ -34,7 +34,7 @@ description: >-
 
 | 情况 | 做法 |
 |---|---|
-| 本地可执行且只读（`git`、`mvn … -DskipTests`、`npm run build`、已有 test/lint、secret 扫描） | **Reviewer 应实际执行**，把命令与结果写入报告 |
+| 本地可执行且只读（`git`、`mvn … -DskipTests`、`pnpm run build`、已有 test/lint、secret 扫描） | **Reviewer 应实际执行**，把命令与结果写入报告 |
 | 作者已在对话/PR 中提供完整命令输出 | 可核验引用；抽查至少一条高风险命令，不得盲信 |
 | 环境/权限/依赖不可用（无 Docker、无 DB、无截图环境等） | 对应项标 **未执行**；结论最多 `CONDITIONAL`，不得 `PASS` |
 | 验证需要改产品代码、装未知依赖、或写生产配置 | **禁止**；标未执行并说明 |
@@ -91,7 +91,7 @@ IDE 无红线或「理论上能编译」不能代替命令输出。
 2. **最小 diff**：逐文件问「删掉后验收是否仍过？」；拒无关重构、类型混 PR、假想抽象、调试残留、改生成镜像。
 3. **影响链**：接口↔实现↔调用方；Entity→SQL→DTO→前端；i18n 三语；配置→Docker/K8s/Kong；`platform-*` 下游；删除/重命名搜残引用。
 4. **编译**：受影响模块有真实命令结果；掩盖 warning / 降严格度 = Blocker；未跑 = 未验证。
-5. **测试**：正常 + ≥1 异常/边界；bugfix 宜先有失败测试；UI 要截图；MI 热路径要完整 `npm run regression:mi`。
+5. **测试**：正常 + ≥1 异常/边界；bugfix 宜先有失败测试；UI 要截图；MI 热路径要完整 `pnpm run regression:mi`。
 6. **DB**：init-scripts 只增不改、幂等；禁破坏性删改列与业务物理表。
 7. **安全与增量 secret**：见 §5。
 8. **性能**：见 §6；perf 不与 fix/feat 语义混 PR。
@@ -220,7 +220,7 @@ PASS | CONDITIONAL | FAIL
 
 ### 结论样例（摘要）
 
-- **PASS**：无 Blocker/未接受 Major；`mvn … package` / `npm run build` 与必要测试已跑通；secret 扫描干净；非 FU 或 FU 矩阵齐全。
+- **PASS**：无 Blocker/未接受 Major；`mvn … package` / `pnpm run build` 与必要测试已跑通；secret 扫描干净；非 FU 或 FU 矩阵齐全。
 - **CONDITIONAL**：静态无 Blocker，但 Docker/UI 截图/双 FU 运行未执行，或需求正反例缺失。
 - **FAIL**：存在 Blocker（如编译失败、硬编码 FU id、staged 漏掉必要 SQL、diff 含明文 token）。
 

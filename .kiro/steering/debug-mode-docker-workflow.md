@@ -48,7 +48,7 @@ inclusion: always
 | `backend/developer-workstation/**` | `-pl backend/developer-workstation -am …` | `developer-workstation` |
 | `backend/workflow-engine-core/**` | `-pl backend/workflow-engine-core -am …` | `workflow-engine` |
 | `backend/platform-common/**` 或其它被多服务依赖的 `platform-*` | `mvn … -pl backend/<touch模块> -am package -DskipTests`，然后重建 **所有将该 jar 打进镜像的服务**（通常至少上述四个后端 service） | `user-portal` `admin-center` `developer-workstation` `workflow-engine`（按实际依赖裁剪） |
-| `frontend/user-portal/**` | `cd frontend/user-portal && npm run build` | `user-portal-frontend`；若兼改后端契约则同时重建 `user-portal` |
+| `frontend/user-portal/**` | `cd frontend/user-portal && pnpm run build` | `user-portal-frontend`；若兼改后端契约则同时重建 `user-portal` |
 | 其它 `frontend/*` | 同上 | 对应 `*-frontend` service |
 
 - **一键后端编译列表**见 **`deploy/environments/dev/docker-compose.dev.yml` 顶部注释**。

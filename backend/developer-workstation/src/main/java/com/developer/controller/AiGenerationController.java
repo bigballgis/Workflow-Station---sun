@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
@@ -31,9 +32,23 @@ import java.util.List;
 
 /**
  * AI Function Unit Generation Controller
+ *
+ * <p><b>2026-07-28 起默认停用</b>（{@code ai-generation.enabled}，环境变量
+ * {@code AI_GENERATION_ENABLED}，缺省 {@code false}）。该功能的模型调用原先经 Activepieces flow
+ * （DW POST {@code <ap>/api/v1/webhooks/<flowId>/sync} → flow 内 piece-ai 的 run_agent → deepseek），
+ * 该链路已废弃且替代实现尚未落地。保持开启只会让调用方等到 300s 超时，故整个控制器不注册——
+ * 停用期间 {@code /ai-generation/**} 全部返回 404。
+ *
+ * <p>重新启用需**前后端同时打开**：本开关置 true，且前端
+ * {@code src/utils/featureFlags.ts} 的 {@code AI_GENERATION_ENABLED} 改回 true 并重新构建。
+ * 只开一侧：只开后端 = 用户看不到入口；只开前端 = 点进去全 404。
+ *
+ * <p>注意本开关只摘入口。会话 / 文档 / 锁的历史数据都还在库里，业务逻辑（{@code AiWriteService}
+ * 等）也没有动，恢复时无需数据迁移。
  */
 @RestController
 @RequestMapping("/ai-generation")
+@ConditionalOnProperty(prefix = "ai-generation", name = "enabled", havingValue = "true")
 @Slf4j
 @Tag(name = "AI Function Unit Generation", description = "AI-driven function unit generation APIs")
 public class AiGenerationController extends BaseController {

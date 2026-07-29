@@ -56,7 +56,7 @@ describe('FunctionUnitStore', () => {
 ```bash
 mvn test -pl backend/developer-workstation              # 单模块
 mvn test -pl backend/admin-center -Dtest=UserTest       # 单类
-npm run test                                            # 前端 (vitest run)
+pnpm run test                                            # 前端 (vitest run)
 ```
 
 ## 原则

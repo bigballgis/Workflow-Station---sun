@@ -73,15 +73,12 @@ RUN node -e "\
   process.stdout.write(JSON.stringify(names));\
 " > packages/server/api/dist/src/migration-manifest.json
 
-# Remove piece directories not needed at runtime (keeps only the 4 pieces api imports)
-# Then regenerate pnpm-lock.yaml so it matches the trimmed workspace
-RUN rm -rf packages/pieces/core packages/pieces/custom && \
-    find packages/pieces/community -mindepth 1 -maxdepth 1 -type d \
-      ! -name slack \
-      ! -name square \
-      ! -name facebook-leads \
-      ! -name intercom \
-      -exec rm -rf {} + && \
+# Remove piece source directories: nothing is imported at runtime anymore.
+# HERMES-PATCH-012 摘掉了 api 对 slack / square / facebook-leads / intercom 的最后四个 import
+# （连同 /v1/app-events 未鉴权端点），HERMES-PATCH-013 把 community 收敛到 5 个件——运行期的
+# piece 一律由 hermes/prewarm-pieces.sh 从白名单以 npm 包形态烘进 cache，与源码树无关。
+# 删完重生成 pnpm-lock.yaml，让 run 阶段的 `pnpm install --prod` 对得上裁剪后的工作区。
+RUN rm -rf packages/pieces/core packages/pieces/custom packages/pieces/community && \
     rm -f pnpm-lock.yaml && pnpm install
 
 ### STAGE 2: Run ###

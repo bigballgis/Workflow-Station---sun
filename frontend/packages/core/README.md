@@ -10,7 +10,7 @@
 
 ## ⚠️ 需验证（本环境无法构建三 Vite app）
 
-本仓库前端是 **host/CI 侧 `npm run build` 产出 dist、Docker 只 COPY dist**（见各 app `Dockerfile.local`）。
+本仓库前端是 **host/CI 侧 `pnpm run build` 产出 dist、Docker 只 COPY dist**（见各 app `Dockerfile.local`）。
 切换 pnpm workspace 改变本地/CI 的依赖解析，**上线前必须验证**：
 
 ```bash

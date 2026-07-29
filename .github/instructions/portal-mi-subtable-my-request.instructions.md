@@ -244,12 +244,12 @@ cd frontend && node scripts/verify-myrequest-details-modal.mjs [applicationId]
 - [ ] **My Request Details（#1441）**：发起人 Sub Task 是否 **未** allSlices merge（仅 3 条参与者）？未处理行 `id` 空、`sub_task_id`=父 `id_idw`？已填写行 `id`=UUID？`verify-myrequest-details-modal.mjs` + 截图？
 - [ ] `tasks/detail.vue` 与 `applications/detail.vue` 是否仍行为对齐（除「发起人全案 vs 办理人切片」差异）？
 - [ ] 回归：`mcyInitiatorMyRequest.test.ts`；MCY 手测：2 条 HMDC Transaction + 1 条 HMDC Attachment（有 PDF）。
-- [ ] 回归：`npm run regression:mi`（单元 + 截图）；或分项见 `user-portal/MI_REGRESSION.md`
+- [ ] 回归：`pnpm run regression:mi`（单元 + 截图）；或分项见 `user-portal/MI_REGRESSION.md`
 
 ## 参考
 
 - 实现：`applications/detail.vue`（`isInitiatorMyRequestView`、`resyncMiDashboardFieldsFromVariablesOnBindings`、`hydrateMiLinkChildBindingsForInitiatorMyRequest`）；`SubTableField.vue`（`handleLinkFormClick`、`backfillMiLinkFormModalFieldsFromParent`、`collectLinkFormRowsFromProcessVariables`）
 - 类型/helpers：`shared.ts`（`isFileOnlySubTableBinding`、`isSharedAttachmentFileBinding`、`isMiDashboardSubTableBinding`、`collectForeignSubTableRowIdsFromVariables`、`isLeakedForeignRowOnSharedAttachment`、`filterRowsForMiParticipantSubTableBinding`、`scrubMiCorruptLinkChildRowsForParent`、`scopeMiLinkChildRowsForParentRow`、`collapseMiLinkChildRowsToOnePerParticipant`；纯 `id+file` 判定见 `collectForeignSubTableRowIdsFromRowWalk` 内联逻辑）
 - MI 范围：`miSubProcessScope.ts`（`filterBindingsToMiParticipantRow`）
-- 验证：`frontend/scripts/mi-regression-scenarios.mjs`；`npm run regression:mi`；截图 `frontend/user-portal/verification-screenshots/`
+- 验证：`frontend/scripts/mi-regression-scenarios.mjs`；`pnpm run regression:mi`；截图 `frontend/user-portal/verification-screenshots/`
 - Issue：**#1414**（MCY Debit Card Transaction Investigation）、**#1435**（People hydrate/id）、**#1438**（Attachment 新增后旧行消失）、**#1439**（sub form2 People 未继承 sub form1 字段）、**#1440**（People inline 开 sex 串上一参与者数据）、**#1441**（My Request Details 弹窗 / Sub Task 行数 / id vs sub_task_id 映射）

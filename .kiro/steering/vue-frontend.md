@@ -59,4 +59,4 @@ src/
 
 ## UI 截图验证
 
-改动可见页面后 MUST 跑 Playwright 截图（见 `frontend-screenshot-verification.mdc`）：`cd frontend && npm run verify:screenshot -- --app portal --url ... --name ...`
+改动可见页面后 MUST 跑 Playwright 截图（见 `frontend-screenshot-verification.mdc`）：`cd frontend && pnpm run verify:screenshot -- --app portal --url ... --name ...`

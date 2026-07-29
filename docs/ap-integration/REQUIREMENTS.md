@@ -1,9 +1,15 @@
 # Activepieces 0.84 集成需求规格（Requirements Specification）
 
-> **Document 1 / 10** — 对应根目录 [AP_integration.md](../../AP_integration.md) §4 与 §16 要求的首个交付物。
+> **Document 1 / 10** — 对应立项文档 `AP_integration.md` §4 与 §16 要求的首个交付物。
+> **⚠️ `AP_integration.md` 是仓库外的立项文档**（本仓库从未收录，git 全历史无记录）；下文所有
+> 「AP_integration.md §x」引用均指该外部文档，本仓库内**无法跳转**。其内容已被本文吸收并就本仓库具体化，
+> 因此**不影响使用**；其中 §0 关于微前端的表述**与本仓库事实不符**，已在下方 §1 表格中纠正留档。
 > 状态：**待冻结**。决策见 **[DECISIONS.md](DECISIONS.md)**（ADR，全局约束唯一来源）；
 > 阻塞项见 **[OPEN_GATES.md](OPEN_GATES.md)**；当前状态见 **[STATUS.md](STATUS.md)**。
-> 日期：2026-07-22（末次更新 07-23）　分支：`common_0710_AP_independent`
+> 日期：2026-07-22（末次更新 07-23）　分支：`common_0710_AP_independent`（该分支已合流，现行分支见仓库）
+>
+> ⚠️ **本文是需求规格，其中对上游现状的描述（如「运行时用 bun install 装 piece」）指的是「改造前的 0.84.0」**；
+> 需求本身（FR-F03A 等）已按 CR-01 落地为 pnpm + 构建期预装。**实施现状请看 [STATUS.md](STATUS.md)**。
 >
 > 集成路线：**不用 iframe、不用官方镜像跑 UI**。AP 0.84.0 源码 vendor 进本仓库、自维护、自构建镜像；
 > 画布以**源码级组件**进入 Developer Workstation（下称 DW）。
@@ -192,7 +198,8 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 
 ## 4. 业务需求（BR，MoSCoW）
 
-对 AP_integration.md §4.1 列出的全部能力逐项分级。分级依据：DW 场景实际需要 + brownfield 已依赖。
+对 AP_integration.md（仓库外立项文档，见文首说明）§4.1 列出的全部能力逐项分级。
+分级依据：DW 场景实际需要 + brownfield 已依赖。
 
 ### 4.1 设计态（Authoring）
 
@@ -319,7 +326,7 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 | CODE step 内置依赖 | ✅ | 运行时已有/预打包的依赖可用 |
 | CODE step 外部 npm 依赖 | ❌ | FR-F03B，设计期校验拒绝 |
 | 任何运行时 npm/bun install | ❌ | CR-01 禁 bun + 断外网红线的共同结论 |
-| FR-F04 | 既有 patch 升级为源码修改 | MUST | piece-ai（run_agent） | vendor 源码直接改 | **部分达成（2026-07-27）**，逐条状态见 [HERMES_PATCHES.md](HERMES_PATCHES.md)。✅ `patch-web-approvals.js` 已按 Q9 处置：脚本删除，改为源码级摘掉 Approvals 标签页（HERMES-PATCH-001）——产物里 `APPROVAL_PIECES_CONFIG` 与 6 个 SaaS piece 名已被 tree-shake，比原先「置空数组」更彻底。🚫 `patch-piece-ai-run-agent.js`（maxOutputTokens + reasoning 剥离）**本条已失去对象**：`piece-ai` 于 `669f7207` 移出白名单——气隙下 AI 件够不到模型提供方，留在目录里是死重。镜像里没有该 piece 的副本，转源码无从谈起。脚本保留仅供**联网 dev** 手工对运行中容器施用（该环境下 piece 仍由 npm 运行时安装，两个缺陷是活的）。**不要为满足本条而把 piece-ai 加回白名单** |
+| FR-F04 | 既有 patch 升级为源码修改 | MUST | ~~piece-ai（run_agent）~~ | vendor 源码直接改 | **部分达成（2026-07-27）**，逐条状态见 [HERMES_PATCHES.md](HERMES_PATCHES.md)。✅ `patch-web-approvals.js` 已按 Q9 处置：脚本删除，改为源码级摘掉 Approvals 标签页（HERMES-PATCH-001）——产物里 `APPROVAL_PIECES_CONFIG` 与 6 个 SaaS piece 名已被 tree-shake，比原先「置空数组」更彻底。🚫 `patch-piece-ai-run-agent.js`（maxOutputTokens + reasoning 剥离）**本条已失去对象**：`piece-ai` 于 `669f7207` 移出白名单——气隙下 AI 件够不到模型提供方，留在目录里是死重。镜像里没有该 piece 的副本，转源码无从谈起。脚本保留仅供**联网 dev** 手工对运行中容器施用（该环境下 piece 仍由 npm 运行时安装，两个缺陷是活的）。**不要为满足本条而把 piece-ai 加回白名单** |
 
 ### G 组 — Connections / Secrets
 
@@ -361,8 +368,8 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 
 | ID | 能力 | 级别 | Source in AP | Target System | 说明 |
 |---|---|---|---|---|---|
-| FR-K01 | AI Generate 全链路不回归（契约 {reply,document,…} 不变） | MUST | webhooks /sync + piece-ai | DW 后端 + AP flow `ai-function-unit-gen` | 超时 300s、SSE 心跳、run_agent patch 全部保持 |
-| FR-K02 | run_agent 修改源码化（maxOutputTokens、reasoning-delta 剥离） | MUST | piece-ai（vendor 树内） | vendor 源码 | 替代运行时 patch 脚本 |
+| FR-K01 | AI Generate 全链路不回归（契约 {reply,document,…} 不变） | MUST | webhooks /sync + **HTTP piece** | DW 后端 + AP flow | 超时 300s、SSE 心跳保持。**2026-07-28 更新**：模型调用由 `piece-ai` run_agent 改为 HTTP piece 直连，run_agent patch 一并作废（见 FR-K02）。⚠️ 仓库里 `deploy/ap-flows/ai-function-unit-gen.json` 与 `deploy/scripts/build-ai-fu-flow.js` 仍是旧的 piece-ai 版本，**尚未与新链路对齐**，见 [VT-15](VENDOR_TRIM_CHECKLIST.md) |
+| ~~FR-K02~~ | ~~run_agent 修改源码化（maxOutputTokens、reasoning-delta 剥离）~~ | **作废** | ~~piece-ai~~ | — | **2026-07-28 作废**：AI Generate 已改用 HTTP piece 直连模型端点，`run_agent` 链路不复存在 → 需求失去标的。`piece-ai` 已从 vendor 树删除，HERMES-PATCH-002 同时作废并删除脚本。**这不是欠账，是标的消失** |
 | FR-K03 | AI provider 断外网可控（仅配置的 baseUrl 可出网） | MUST | server（网络策略） | k8s NetworkPolicy/Istio | 安全评审项 |
 
 ### L 组 — 沙箱 / 代码执行
@@ -418,7 +425,7 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 
 ## 8. 约束与"不得破坏"规则
 
-继承 AP_integration.md §15，结合本仓库具体化：
+继承 AP_integration.md（仓库外立项文档，见文首说明）§15，结合本仓库具体化：
 
 1. 不替换现有认证/RBAC/Kong/用户/BU 模型；不引入第二套身份或权限系统。
 2. **公司明令禁止 bun**：全仓（含 `activepieces/` 子树）、CI、镜像运行时任何环节不得使用或包含 bun；`frontend/` 与根构建链保持 npm/pnpm 不变。

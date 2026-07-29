@@ -77,11 +77,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-# Note: package-lock.json, yarn.lock, pnpm-lock.yaml should be tracked
-# to ensure consistent dependency versions across environments
-# package-lock.json
-# yarn.lock
+# Note: pnpm-lock.yaml must be tracked to ensure consistent dependency versions
+# across environments. The frontends use pnpm (pinned via each package.json's
+# "packageManager"); activepieces/ has always used it.
 # pnpm-lock.yaml
+# yarn.lock
 
 # Vue / Vite
 .nuxt/
@@ -311,11 +311,7 @@ BOOT-INF/
 /*.sql
 /*.json
 !package.json
-!package-lock.json
 !tsconfig.json
-frontend/admin-center/package-lock.json
-frontend/developer-workstation/package-lock.json
-frontend/user-portal/package-lock.json
 # Kiro local artifacts — ignore by default; commit generated AI guidance mirrors
 .kiro/*
 !.kiro/steering/

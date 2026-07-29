@@ -574,6 +574,17 @@ services:
       KONG_DNS_STALE_TTL: "0"
       KONG_DNS_NOT_FOUND_TTL: "1"
       KONG_DNS_ERROR_TTL: "1"
+      # --- 客户端真实 IP（限流分桶的依据）---
+      # Kong 在 nginx-edge 后面，$remote_addr 恒为 edge 容器地址，不修正的话每条
+      # `limit_by: ip` 都会退化成「全平台共享一个桶」。与 K8s 侧同款配置（见
+      # deploy/k8s/kong.yaml + configmap 的 KONG_TRUSTED_IPS）。
+      # real_ip_recursive=off ⇒ 取 X-Forwarded-For 最右一项，即 nginx-edge 的
+      # `$proxy_add_x_forwarded_for` 追加的真实来源；客户端伪造的条目都在左边，取不到。
+      # ⚠️ 切勿放宽成 0.0.0.0/0——那等于允许客户端自报 IP 绕过限流。
+      KONG_REAL_IP_HEADER: X-Forwarded-For
+      KONG_REAL_IP_RECURSIVE: "off"
+      # Docker bridge 网段（nginx-edge 容器）+ 环回
+      KONG_TRUSTED_IPS: "172.16.0.0/12,127.0.0.1/32"
       # Environment variables used by entrypoint script for sed replacement
       JWT_SECRET: ${JWT_SECRET}
       REDIS_HOST: redis
@@ -595,9 +606,9 @@ services:
   # ==================== Frontend Services ====================
   # Uses Dockerfile.local — requires pre-built dist/ in each frontend project.
   # Build steps before docker compose up:
-  #   1. cd frontend/admin-center && npm run build
-  #   2. cd frontend/user-portal && npm run build
-  #   3. cd frontend/developer-workstation && npm run build
+  #   1. cd frontend/admin-center && pnpm run build
+  #   2. cd frontend/user-portal && pnpm run build
+  #   3. cd frontend/developer-workstation && pnpm run build
 
   admin-center-frontend:
     build:

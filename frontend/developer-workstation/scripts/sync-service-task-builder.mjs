@@ -9,9 +9,15 @@
  *          `npx vite build --config vite.embed.config.mts` in activepieces/packages/web)
  * Target:  public/service-task-builder            (gitignored — a build artifact)
  *
- * Runs as a `prebuild` hook and is deliberately tolerant: if the bundle has not been
- * built, it warns and exits 0 so a plain `npm run build` still works (the Service Task
- * tab then reports the builder assets are unavailable instead of breaking the build).
+ * Runs as a `prebuild` hook and is deliberately tolerant by default: if the bundle has
+ * not been built, it warns and exits 0 so a plain `npm run build` still works (the
+ * Service Task tab then reports the builder assets are unavailable instead of breaking
+ * the build).
+ *
+ * That tolerance is wrong for a release build, where the result is an image that only
+ * fails in the browser (404 on /dev/service-task-builder/web.css). Set
+ * SERVICE_TASK_BUILDER_REQUIRED=1 — deploy/scripts/build-and-push-k8s.ps1 does — to turn
+ * the missing bundle into a hard failure at build time instead.
  */
 import { cp, rm, stat, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -31,10 +37,20 @@ const exists = async (p) => {
 };
 
 if (!(await exists(SRC))) {
+  const howToBuild =
+    '  Build it first: cd activepieces/packages/web && ' +
+    'npx vite build --config vite.embed.config.mts';
+  if (process.env.SERVICE_TASK_BUILDER_REQUIRED) {
+    console.error(
+      `[sync-service-task-builder] MISSING — bundle not found at ${SRC}\n` +
+        `${howToBuild}\n` +
+        '  SERVICE_TASK_BUILDER_REQUIRED is set, so this is a hard failure: continuing\n' +
+        '  would ship an image whose Service Task tab 404s on web.css at runtime.',
+    );
+    process.exit(1);
+  }
   console.warn(
-    `[sync-service-task-builder] SKIP — bundle not found at ${SRC}\n` +
-      '  Build it first: cd activepieces/packages/web && ' +
-      'npx vite build --config vite.embed.config.mts',
+    `[sync-service-task-builder] SKIP — bundle not found at ${SRC}\n${howToBuild}`,
   );
   process.exit(0);
 }

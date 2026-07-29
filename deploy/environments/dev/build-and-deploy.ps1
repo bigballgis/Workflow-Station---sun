@@ -26,7 +26,7 @@
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
 #   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend, platform-login-frontend
-#   Edge:     edge-frontend (nginx single-origin — no Maven/npm; restarts container from compose)
+#   Edge:     edge-frontend (nginx single-origin — no Maven/pnpm; restarts container from compose)
 
 param(
     [string]$Service,
@@ -321,36 +321,47 @@ function Resolve-BaseImage {
 # public/service-task-builder (gitignored), so a clean checkout has NOTHING to copy unless
 # this runs first — the Automation tab would then report the builder assets unavailable.
 # Heavy (full AP web bundle), so build only when the bundle is missing, or when forced.
+#
+# Returns $true only when it actually produced a new bundle. Callers MUST use that to
+# force their vite step: the bundle reaches dist/ solely through DW's `prebuild` hook,
+# which runs inside `pnpm run build`, and Test-FrontendDistFresh watches DW's own sources
+# — not activepieces/dist/packages/web-embed. Ignore the return value and a rebuilt
+# bundle is silently dropped whenever DW's own dist still looks fresh.
 function Ensure-ServiceTaskBuilderBundle {
     param([switch]$Force)
 
     $embedMarker = Join-Path $RootDir "activepieces/dist/packages/web-embed/ap-builder.mjs"
     if (-not $Force -and (Test-Path $embedMarker)) {
         Write-Host "  ServiceTask builder bundle present (reuse; pass -RebuildServiceTaskBuilder to force)." -ForegroundColor DarkGray
-        return
+        return $false
     }
 
     $webDir = Join-Path $RootDir "activepieces/packages/web"
     if (-not (Test-Path (Join-Path $webDir "vite.embed.config.mts"))) {
         Write-Host "  WARNING: activepieces embed config not found; DW Automation builder will be unavailable." -ForegroundColor Yellow
-        return
+        return $false
     }
 
     Write-Host "  Building ServiceTask/Automation builder bundle (activepieces/packages/web, heavy)..." -ForegroundColor Yellow
+    $built = $false
     Push-Location $webDir
     try {
         # X-4: npx/pnpm toolchain only, never bun.
-        npx vite build --config vite.embed.config.mts
+        # Out-Host keeps vite's stdout off this function's output stream — without it the
+        # build log would be collected into the return value alongside the boolean.
+        pnpm exec vite build --config vite.embed.config.mts | Out-Host
         if ($LASTEXITCODE -ne 0) {
             # Non-fatal: the DW build still succeeds; the Automation tab just reports the
             # builder unavailable (the sync hook is deliberately tolerant). Flag it loudly.
             Write-Host "  WARNING: embed bundle build failed — DW Automation tab will lack the builder." -ForegroundColor Yellow
         } else {
             Write-Host "  ServiceTask builder bundle built." -ForegroundColor Green
+            $built = $true
         }
     } finally {
         Pop-Location
     }
+    return $built
 }
 
 # ==================== Incremental build helpers ====================
@@ -594,28 +605,33 @@ if ($Service) {
             Pop-Location
         }
     } elseif ($svc.Type -eq "frontend" -and -not $SkipFrontend) {
-        Write-Host "`n[1/2] Building $Service (npm + Docker)..." -ForegroundColor Yellow
+        Write-Host "`n[1/2] Building $Service (pnpm + Docker)..." -ForegroundColor Yellow
         # DW's Automation tab embeds the vendored AP builder; stage its bundle first so the
         # `prebuild` hook has something to copy into public/service-task-builder.
+        # Return value discarded on purpose: this path always runs vite below, so there is
+        # no freshness check to override.
         if ($Service -eq "developer-workstation-frontend") {
-            Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
+            $null = Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
         }
         $feDir = "$RootDir/$($svc.FrontendDir)"
         Push-Location $feDir
         try {
-            Write-Host "  npm install..." -ForegroundColor DarkGray
+            # Plain `pnpm install` (no --frozen-lockfile): dev is where dependencies get
+            # added, so the lockfile is allowed to move here. Release builds use
+            # --frozen-lockfile instead (deploy/scripts/build-and-push-k8s.ps1).
+            Write-Host "  pnpm install..." -ForegroundColor DarkGray
             $prev = $ErrorActionPreference
             $ErrorActionPreference = "Continue"
-            npm install --prefer-offline --no-audit
-            $npmExit = $LASTEXITCODE
+            pnpm install
+            $installExit = $LASTEXITCODE
             $ErrorActionPreference = $prev
-            if ($npmExit -ne 0) { throw "npm install failed: $Service (exit code $npmExit)" }
+            if ($installExit -ne 0) { throw "pnpm install failed: $Service (exit code $installExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
             Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-            # `npm run build` (not bare `npx vite build`) so the DW `prebuild` hook runs and
+            # `pnpm run build` (not a bare vite call) so the DW `prebuild` hook runs and
             # stages the ServiceTask builder bundle; a no-op difference for the other frontends.
-            npm run build
-            if ($LASTEXITCODE -ne 0) { throw "npm run build failed: $Service" }
+            pnpm run build
+            if ($LASTEXITCODE -ne 0) { throw "pnpm run build failed: $Service" }
         } finally {
             Pop-Location
         }
@@ -733,7 +749,7 @@ if (-not $SkipMaven) {
 
 # Step 2: Build frontend (incremental Vite + Docker)
 if (-not $SkipFrontend) {
-    Write-Host "`n[2/4] Building frontend (incremental npm + Docker)..." -ForegroundColor Yellow
+    Write-Host "`n[2/4] Building frontend (incremental pnpm + Docker)..." -ForegroundColor Yellow
 
     $resolvedNginx = Resolve-BaseImage -Candidates @(
         "nginx:alpine",
@@ -752,25 +768,31 @@ if (-not $SkipFrontend) {
         $feDir = "$RootDir/$($fe.Dir)"
         $imageName = "dev-$($fe.Name)"
 
+        $builderRebuilt = $false
         if ($fe.Name -eq "developer-workstation-frontend") {
-            Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
+            $builderRebuilt = Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
         }
 
-        $needVite = $Clean -or $ForceBuild -or -not (Test-FrontendDistFresh -FrontendDir $fe.Dir)
+        # $builderRebuilt must be part of this: a fresh bundle lands in
+        # activepieces/dist/packages/web-embed, which Test-FrontendDistFresh does not watch,
+        # and it only reaches dist/ via the `prebuild` hook inside `pnpm run build`. Without
+        # it, -RebuildServiceTaskBuilder rebuilds the bundle and then the vite step is
+        # skipped as "fresh", so the image silently keeps the previous builder.
+        $needVite = $Clean -or $ForceBuild -or $builderRebuilt -or -not (Test-FrontendDistFresh -FrontendDir $fe.Dir)
         if ($needVite) {
-            Write-Host "  npm install & build $($fe.Name)..."
+            Write-Host "  pnpm install & build $($fe.Name)..."
             Push-Location $feDir
             try {
-                Write-Host "  npm install..." -ForegroundColor DarkGray
+                Write-Host "  pnpm install..." -ForegroundColor DarkGray
                 $prev = $ErrorActionPreference
                 $ErrorActionPreference = "Continue"
-                npm install --prefer-offline --no-audit
-                $npmExit = $LASTEXITCODE
+                pnpm install
+                $installExit = $LASTEXITCODE
                 $ErrorActionPreference = $prev
-                if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name) (exit code $npmExit)" }
+                if ($installExit -ne 0) { throw "pnpm install failed: $($fe.Name) (exit code $installExit)" }
                 Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-                npm run build
-                if ($LASTEXITCODE -ne 0) { throw "npm run build failed: $($fe.Name)" }
+                pnpm run build
+                if ($LASTEXITCODE -ne 0) { throw "pnpm run build failed: $($fe.Name)" }
             } finally {
                 Pop-Location
             }

@@ -19,5 +19,5 @@
 @../.cursor/rules/vue-frontend.mdc
 <!-- END cursor-rules:auto -->
 
-> 提醒：改动可见 UI 后必跑 Playwright 截图；触达 MI 热路径必跑 `npm run regression:mi`。
+> 提醒：改动可见 UI 后必跑 Playwright 截图；触达 MI 热路径必跑 `pnpm run regression:mi`。
 > 截图存 `frontend/<app>/verification-screenshots/`，**禁止验证后删除**。见技能 `/verify-ui`。

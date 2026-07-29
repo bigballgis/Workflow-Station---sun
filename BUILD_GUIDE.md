@@ -9,9 +9,9 @@
 
 > **如果你是 GPT / Claude / Kiro 等 AI 助手，请先读完本节再执行任何操作。**
 
-1. **Docker 多阶段构建不可用** — 本地 Docker Desktop 无法在容器内执行 `npm ci` 或 `mvn package`。所有环境必须使用"本地构建 + 复制"方式。
+1. **Docker 多阶段构建不可用** — 本地 Docker Desktop 无法在容器内执行 `pnpm install --frozen-lockfile` 或 `mvn package`。所有环境必须使用"本地构建 + 复制"方式。
 2. **前端必须使用 `Dockerfile.local`** — 前端目录下有两个 Dockerfile：`Dockerfile`（多阶段，不使用）和 `Dockerfile.local`（仅复制 dist/）。**永远使用 `Dockerfile.local`**。
-3. **`npm run build` = `vite build`** — 前端 `package.json` 中 `build` 脚本已改为 `vite build`（无 `vue-tsc` 类型检查）。
+3. **`pnpm run build` = `vite build`** — 前端 `package.json` 中 `build` 脚本已改为 `vite build`（无 `vue-tsc` 类型检查）。
 4. **前端 `.dockerignore` 不能包含 `dist`** — 否则 `Dockerfile.local` 的 `COPY dist` 会失败。
 5. **nginx 环境变量替换机制** — 前端 `nginx.conf` 为模板，`docker-entrypoint.sh` 用 `envsubst` 替换 **`${KONG_PROXY_URL}`**（以及模板中出现的其它占位符）。**必须在 `envsubst` 中显式列出变量名**，否则 nginx 的 `$host`、`$uri` 等也会被替换导致 502。
 6. **URL 变量分工** — 三个前端 nginx 使用 **`KONG_PROXY_URL`**（指向 Kong，代理 `/api/*`）。后端**服务间**调用仍用 `ADMIN_CENTER_URL`、`WORKFLOW_ENGINE_URL` 等（与各服务 `application*.yml` 一致）。没有 `*_BACKEND_URL` 变量。
@@ -144,7 +144,7 @@
 | 层面 | 说明 |
 |------|------|
 | **种子数据 / 演示库** | 用户可见字段一律英文；细则见上述文档。 |
-| **三个前端（admin-center / user-portal / developer-workstation）** | 默认界面语言在源码中固定：`frontend/<app>/src/i18n/index.ts` 内 `locale` 与 `fallbackLocale` 均为 `'en'`。**不通过** Docker / K8s 环境变量切换 i18n；改语言需改源码并重新 `npm run build`。 |
+| **三个前端（admin-center / user-portal / developer-workstation）** | 默认界面语言在源码中固定：`frontend/<app>/src/i18n/index.ts` 内 `locale` 与 `fallbackLocale` 均为 `'en'`。**不通过** Docker / K8s 环境变量切换 i18n；改语言需改源码并重新 `pnpm run build`。 |
 | **本地 Compose** | `deploy/environments/dev/docker-compose.dev.yml` 顶部注释标明本约定；Compose **无** `LOCALE` 类变量——避免误以为在 compose 里设变量即可改界面语言。 |
 | **K8S 前端** | Ingress 路径：`deploy/k8s/deployment-frontend.yaml` 清单头部注释同上；Istio 路径：`deploy/k8s/*-frontend.yaml`。前端 Pod **无** `LOCALE` 环境变量。 |
 | **deploy 快速参考** | `deploy/README.md` 章节 **「Demo：界面语言与种子数据（英文）」** 汇总 Compose / K8S / 构建约定。 |
@@ -158,7 +158,7 @@
 Java 17+          (推荐 Eclipse Temurin / Microsoft OpenJDK)
 Maven 3.9+        (mvn --version)
 Node.js 18+       (node --version；推荐 20 LTS，与仓库前端 toolchain 一致)
-npm 9+            (npm --version)
+pnpm 9+            (pnpm --version)
 Docker Desktop    (docker --version, docker compose version)
 kubectl           (SIT/UAT/PROD 部署需要)
 ```
@@ -304,23 +304,39 @@ Get-ChildItem backend/developer-workstation/target/*.jar -Exclude *original*
 Get-ChildItem backend/user-portal/target/*.jar -Exclude *original*
 ```
 
-### 7.2 前端 npm 构建
+### 7.2 前端 pnpm 构建
+
+> 前端与 `activepieces/` 统一用 **pnpm 9.15.9**，版本由各 `package.json` 的
+> `"packageManager"` 锁定。构建机只需 `corepack enable`，corepack 会按该字段自动取到
+> 正确版本，无需全局装 pnpm。仓库内**不再有** `package-lock.json`。
 
 ```powershell
 # admin-center-frontend
-Push-Location frontend/admin-center; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
+Push-Location frontend/admin-center; pnpm install --frozen-lockfile; pnpm run build; Pop-Location
 
 # user-portal-frontend
-Push-Location frontend/user-portal; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
+Push-Location frontend/user-portal; pnpm install --frozen-lockfile; pnpm run build; Pop-Location
 
 # developer-workstation-frontend
-Push-Location frontend/developer-workstation; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
+# ① 先构建内嵌的 Activepieces builder（产物 gitignore，干净 checkout 上不存在）
+Push-Location activepieces/packages/web; pnpm exec vite build --config vite.embed.config.mts; Pop-Location
+# ② 必须用 pnpm run build（不是直接调 vite）——只有前者会触发 prebuild 钩子，
+#    把 ① 的产物拷进 public/service-task-builder/
+Push-Location frontend/developer-workstation; pnpm install --frozen-lockfile; pnpm run build; Pop-Location
 
 # platform-login-frontend（K8S 统一登录 /login/）
-Push-Location frontend/login; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
+Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Pop-Location
 ```
 
 成功标志：每个前端输出 `✓ built in XXs`，`dist/` 目录生成。
+
+> ⚠️ **developer-workstation-frontend 的两步顺序不能省**。Function Unit 的 Automation 标签
+> 直接挂 AP builder，其 bundle 走「构建期拷贝」交付（AG-02.8）：AP 产物 →
+> `public/service-task-builder/` → `dist/` → 镜像。产物是 gitignore 的构建物，**不入库**。
+> 漏掉任一步，构建仍然全绿、镜像照推，但运行时 `/dev/service-task-builder/web.css` 返回 404。
+> 打镜像前可先自查：`ls frontend/developer-workstation/dist/service-task-builder/web.css`。
+> 走 `deploy/scripts/build-and-push-k8s.ps1` 则这两步已内置，且缺产物会直接构建失败
+> （`SERVICE_TASK_BUILDER_REQUIRED`），不会静默放过。
 
 ### 7.3 Docker 镜像构建
 
@@ -370,7 +386,7 @@ docker images "${registry}/*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size
 ```powershell
 cd deploy/environments/dev
 
-# 完整构建 + 部署（Maven + npm + Docker + 启动容器）
+# 完整构建 + 部署（Maven + pnpm + Docker + 启动容器）
 .\build-and-deploy.ps1
 
 # 构建并部署单个服务（Maven + Docker，不影响其他服务）
@@ -802,16 +818,16 @@ Kafka(K8S) ───────────────────────
 # ============================================
 
 # 0. 确认工具版本
-java -version; mvn --version; node --version; npm --version; docker --version
+java -version; mvn --version; node --version; pnpm --version; docker --version
 
 # 1. Maven 构建后端 JAR
 mvn clean package -DskipTests -pl backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging,backend/workflow-engine-core,backend/admin-center,backend/developer-workstation,backend/user-portal -am
 
-# 2. npm 构建前端 dist
-Push-Location frontend/admin-center; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
-Push-Location frontend/user-portal; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
-Push-Location frontend/developer-workstation; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
-Push-Location frontend/login; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
+# 2. pnpm 构建前端 dist
+Push-Location frontend/admin-center; pnpm install; pnpm exec vite build; Pop-Location
+Push-Location frontend/user-portal; pnpm install; pnpm exec vite build; Pop-Location
+Push-Location frontend/developer-workstation; pnpm install; pnpm exec vite build; Pop-Location
+Push-Location frontend/login; pnpm install; pnpm exec vite build; Pop-Location
 
 # 3. Docker 构建后端镜像
 $r = "harbor.company.com/workflow"; $t = "latest"
@@ -858,7 +874,7 @@ cd deploy/k8s
 | 问题 | 原因 | 解决 |
 |------|------|------|
 | Docker build 前端报 `COPY failed: dist` | `.dockerignore` 包含了 `dist` | 从 `.dockerignore` 中删除 `dist` |
-| Docker build 前端报 `file not found` | 没有先执行 `npm run build` | 先执行 `npx vite build` 生成 `dist/` |
+| Docker build 前端报 `file not found` | 没有先执行 `pnpm run build` | 先执行 `pnpm exec vite build` 生成 `dist/` |
 | Maven build 报 `platform-common` 找不到 | 没有加 `-am` 参数 | 加 `-am` 自动构建依赖模块 |
 | 后端容器启动后立即退出 | `target/` 下没有 JAR | 先执行 `mvn package` |
 
