@@ -25,7 +25,7 @@
 | VT-01 | 镜像构建实测 | **P0** | ✅ **通过（2026-07-28）** |
 | VT-02 | `test-api` 三套集成测试 | **P0** | 🟡 **check-migrations 绿；三套集成测试被存量断裂挡住，跑不起来** |
 | VT-03 | 容器启动 + builder 冒烟 | **P0** | ✅ **全绿（2026-07-29）**：服务端 + dev 真实环境 + 经 Kong + **浏览器渲染** |
-| VT-04 | rebase 重放顺序陷阱（脚本加断言） | P1 | ⬜ 未做 |
+| VT-04 | rebase 重放顺序陷阱（脚本加断言） | P1 | ✅ **已完成（2026-07-29）** |
 | VT-05 | app-events 死链无提示 | P1 | ⬜ 未做 |
 | VT-06 | `--check` 接进 CI | P1 | ⬜ 未做 |
 | VT-07 | `SUPPORTED_APP_WEBHOOKS` flag 说谎 | P1 | ⬜ 未做 |
@@ -219,10 +219,53 @@ Playwright 在 FU 50030 的 Automation tab 上录到 **12 个不同 `/ap-cdn` �
 
 ## P1 — 这次亲手埋下的雷（现在无害，将来咬人）
 
-### VT-04 rebase 重放的顺序陷阱
+### VT-04 rebase 重放的顺序陷阱 ✅ 已完成（2026-07-29）
 
-- [ ] 在 [`trim-vendor-pieces.mjs`](../../activepieces/hermes/trim-vendor-pieces.mjs) 里加 fail-loud 前置断言
-- [ ] 顺带把 `web/tsconfig.app.json` / `tsconfig.spec.json` 纳入脚本的映射清理范围（删 `piece-ai` 时发现的盲区，见 VT-13）
+- [x] [`trim-vendor-pieces.mjs`](../../activepieces/hermes/trim-vendor-pieces.mjs) 加 fail-loud 前置断言
+      `assertNothingStillNeedsDoomedPieces()`
+- [x] `web/tsconfig.app.json` / `tsconfig.spec.json` 纳入映射清理范围（`TSCONFIGS` 常量）
+
+**闸门怎么判**（不是硬编码那 4 个件名，所以上游将来新增同类依赖也拦得住）：
+
+1. 递归扫 `packages/**/package.json`（跳过 `node_modules`、`dist`、待删目录自身），
+   任何一个 manifest 只要还依赖待删件的包名就拒跑；包名以各件 `package.json` 的 `name` 为准，
+   不靠"目录名加前缀"猜。
+2. 外加一条 012 专项探针：`app-event-routing.module.ts` 还在 = 补丁没重放。
+3. 树已收敛（无件可删）时整个断言直接返回 —— 否则日常 `--check` 会被这些探针刷噪音。
+
+拒跑时直接把正确顺序打出来（先重放 012 → 再跑本脚本 → 最后 `pnpm install --lockfile-only`），
+而不是留一句"找不到 @activepieces/piece-slack"让人自己猜。
+
+**三个场景实测**（scratchpad 里造的模拟 rebase fixture，验完即删）：
+
+| 场景 | 结果 |
+|---|---|
+| 012 未重放（api 仍依赖 slack + 控制器还在） | 拒跑，exit 1，两条问题都列出；`--check` 同样拒 |
+| 重放 012 后（去依赖 + 删控制器） | 正常删掉 slack，exit 0 |
+| 收敛后 `--check` | OK，exit 0 |
+
+> fixture 里没有 web 的两个 tsconfig，于是打出了 `WARN: … 不存在，跳过（上游布局变了？）` ——
+> 这正是设计意图：**上游改布局要吵，不能静默跳过**。
+
+#### 顺带修掉一个真实存量缺陷
+
+写断言时发现旧的映射清理器只认**三行写法**（且写死 6 空格缩进 + 必须有尾逗号），而上游把短名字的件
+格式化成了**单行**：
+
+```json
+"@activepieces/piece-ai": ["packages/pieces/community/ai/src/index.ts"],
+```
+
+结果是删 `piece-ai` 那次脚本报"摘掉 0 条"，我误以为已清理干净——**实际它压根没看见**。
+`a2194c06` 提交时树里还留着 **8 条**指向已删目录的悬空映射：
+`piece-box` `piece-dub` `piece-exa` `piece-mcp` `piece-mem` `piece-rss` `piece-zoo` `piece-ai`。
+
+已在本次一并修掉：清理器现在两种写法都认，并会把摘掉最后一条后产生的悬空逗号补正
+（`],` → `]`），写回前用 `JSON.parse` 校验，解析不过就拒写。复扫两种写法均**零残留**，
+三个 tsconfig 全部合法，`turbo build` 9/9 绿。
+
+> 这 8 条不影响编译（没有任何代码 import 它们，所以构建一直是绿的），
+> 但它正是"脚本是唯一重放机制"这个承诺的反例——静默漏掉的东西，下一轮 rebase 会原样再漏一次。
 
 **症状**：rebase 到新上游 tag 后，上游的 `app.ts` 和 `api/package.json` 会重新 import
 `slack` / `square` / `facebook-leads` / `intercom`，而 trim 脚本照样把这 4 个目录删掉

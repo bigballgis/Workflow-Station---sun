@@ -26,7 +26,6 @@
       "@activepieces/piece-biz-calendar": [
         "packages/pieces/community/biz-calendar/src/index.ts"
       ],
-      "@activepieces/piece-box": ["packages/pieces/community/box/src/index.ts"],
       "@activepieces/piece-connections": [
         "packages/pieces/core/connections/src/index.ts"
       ],
@@ -44,8 +43,6 @@
         "packages/pieces/core/date-helper/src/index.ts"
       ],
       "@activepieces/piece-delay": ["packages/pieces/core/delay/src/index.ts"],
-      "@activepieces/piece-dub": ["packages/pieces/community/dub/src/index.ts"],
-      "@activepieces/piece-exa": ["packages/pieces/community/exa/src/index.ts"],
       "@activepieces/piece-file-helper": [
         "packages/pieces/core/file-helper/src/index.ts"
       ],
@@ -66,8 +63,6 @@
       "@activepieces/piece-math-helper": [
         "packages/pieces/core/math-helper/src/index.ts"
       ],
-      "@activepieces/piece-mcp": ["packages/pieces/community/mcp/src/index.ts"],
-      "@activepieces/piece-mem": ["packages/pieces/community/mem/src/index.ts"],
       "@activepieces/piece-pdf": ["packages/pieces/core/pdf/src/index.ts"],
       "@activepieces/piece-postgres": [
         "packages/pieces/community/postgres/src/index.ts"
@@ -75,7 +70,6 @@
       "@activepieces/piece-qrcode": [
         "packages/pieces/core/qrcode/src/index.ts"
       ],
-      "@activepieces/piece-rss": ["packages/pieces/community/rss/src/index.ts"],
       "@activepieces/piece-schedule": [
         "packages/pieces/core/schedule/src/index.ts"
       ],
@@ -96,7 +90,6 @@
         "packages/pieces/core/webhook/src/index.ts"
       ],
       "@activepieces/piece-xml": ["packages/pieces/core/xml/src/index.ts"],
-      "@activepieces/piece-zoo": ["packages/pieces/community/zoo/src/index.ts"],
       "@activepieces/pieces-common": ["packages/pieces/common/src/index.ts"],
       "@activepieces/pieces-framework": [
         "packages/pieces/framework/src/index.ts"
@@ -125,12 +118,8 @@
       ],
       "ee-embed-sdk": ["packages/ee/embed-sdk/src/index.ts"],
       "ui-feature-forms": ["packages/ui/features-forms/src/index.ts"],
-      "@activepieces/piece-ai": ["packages/pieces/community/ai/src/index.ts"],
       "@activepieces/piece-manual-trigger": [
         "packages/pieces/core/manual-trigger/src/index.ts"
-      ],
-      "@activepieces/piece-connectuc": [
-        "packages/pieces/community/connectuc/src/index.ts"
       ]
     },
     "resolveJsonModule": true
