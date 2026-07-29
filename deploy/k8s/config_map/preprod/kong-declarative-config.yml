@@ -139,6 +139,23 @@ data:
             protocols:
               - http
               - https
+      # --- Activepieces 本地 CDN 镜像 (/ap-cdn) ---
+      # 气隙镜像落在 AP 自己的 publicDir，由 AP 容器静态提供。引用它的构建期重写
+      # (HERMES-PATCH-009) 与 piece 元数据 logoUrl 都写成根绝对路径 /ap-cdn/...；
+      # DW 内嵌的 builder 是 lib-mode 产物（不带 publicDir）、跑在 DW 自己的 origin 上，
+      # 不收编回 AP 就会 404 成灰块。纯静态图标，无鉴权面，不挂 JWT。
+      # ⚠️ 与上面两个 builder service 同去留：纯运行态 prod（portal only）一并删除。
+      - name: activepieces-cdn-service
+        url: http://activepieces-service.__NAMESPACE__:80
+        connect_timeout: 60000
+        write_timeout: 60000
+        read_timeout: 60000
+        routes:
+          - name: activepieces-cdn-route
+            paths:
+              - /ap-cdn
+            strip_path: false
+            preserve_host: false
       # --- 公开路由 (不启用 JWT 插件) ---
       # admin-center 登录
       - name: admin-center-auth-service
@@ -334,6 +351,22 @@ data:
       # socket.io（WS 路由）不限流。（删本 service 时一并删本 plugin。）
       - name: rate-limiting
         route: activepieces-builder-route
+        config:
+          minute: 3000
+          policy: redis
+          redis:
+            host: __REDIS_HOST__
+            port: 6379
+            password: __REDIS_PASSWORD__
+            database: 5
+          limit_by: ip
+          fault_tolerant: true
+
+      # --- Activepieces /ap-cdn 路由级限流 (放宽) ---
+      # piece 选择器一帧内并发拉全部已装 piece 的图标 -> 全局 600/min 误伤成 429。
+      # 与 builder REST 同档 3000/min。（删本 service 时一并删本 plugin。）
+      - name: rate-limiting
+        route: activepieces-cdn-route
         config:
           minute: 3000
           policy: redis

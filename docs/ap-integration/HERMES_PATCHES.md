@@ -47,6 +47,15 @@ AP 0.84.0 官方 Tag（frozen baseline）
 
 009 归为源码类而非构建期：插件本身在 vendor 树里、随 `vite build` 自动生效，无需外部脚本挂载 —— 这是构建期改写类补丁应有的归宿（002 至死没做到，最后随链路作废一起删了）。
 
+**009 的 `/ap-cdn` 是根绝对路径，跨 origin 不自带**（2026-07-29 补）：镜像资产只随 AP 独立应用发布
+（`web/public/` 是它的 publicDir → 镜像内 `dist/packages/web/ap-cdn/`），而 DW 内嵌的 builder 是
+**lib-mode 产物、不带 publicDir**，跑在 DW 自己的 origin 上；`logoUrl`（`generate-metadata-seed.js`
+落库时同样改写成 `/ap-cdn/`）于是打到 DW 而 404 —— 表现为 Automation 页 piece 图标全变灰块
+（Router / Code 是内联 SVG，不受影响，容易误判成"只坏了几个件"）。修法是把 `/ap-cdn` 收编回 AP：
+Kong `activepieces-cdn-route`（`kong.yml.template` + 两份 k8s configmap），DW nginx 与 dev edge nginx
+各加一个 `location ^~ /ap-cdn/` 转发到 Kong，k8s 侧由 `developer-workstation-frontend.yaml` 的
+VirtualService 补 `/ap-cdn/` 前缀。**动 embed 挂载点或新起一个 host origin 时，这条路由要跟着走。**
+
 ## 回归网
 
 只有 007 / 008 带专属测试。其余是补登记时的既有状态，不是"已验证"的意思。

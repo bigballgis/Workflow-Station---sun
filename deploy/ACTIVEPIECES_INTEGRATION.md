@@ -24,7 +24,7 @@
 | 能力 | 现状 | 真源 |
 |---|---|---|
 | **L1 DW 内嵌编排器** —— Function Unit 的 **Automation** 标签直接挂 AP builder（lib-mode + Shadow DOM，**非 iframe**，X-6）；bundle 由 `activepieces/packages/web` 的 `vite.embed.config.mts` 产出，DW 的 `prebuild` 钩子拷进 `public/service-task-builder/` | dev 浏览器 E2E 通过 | `INTEGRATION_DESIGN.md` |
-| **L2 Kong `/api/ap`** —— builder 的 REST + socket.io 经网关收编（socket.io path `/api/ap/socket.io`） | dev 通过 | 同上 |
+| **L2 Kong `/api/ap`** —— builder 的 REST + socket.io 经网关收编（socket.io path `/api/ap/socket.io`）；**另有 `/ap-cdn`** 把气隙镜像的 piece 图标转回 AP（lib-mode bundle 不带 publicDir，不收编则内嵌 builder 里图标全 404 成灰块） | dev 通过 | 同上 + `HERMES_PATCHES.md` 009 |
 | **L7 per-user provisioning** —— 审计到人：managed-authn + signing-key，每用户签 RS256 外部 token 换 AP 会话（flow Owner 落真实用户，不再全是共享账号）。**dev 已启用**（`ACTIVEPIECES_MANAGED_ENABLED=true`） | dev 已启用 | 同上 + `DECISIONS.md` |
 | **vendored 源码镜像** —— EE 剥离 + 去 bun + 预烘焙 pieces，`activepieces:0.84.0-ee-removed`（见 §5 前置） | 已落地 | `EE_REMOVAL_PLAN.md` |
 | **自研 piece 开发** —— 从写代码到 DW 可用的全链路 + 可直接抄的完整示例 | 已落地（biz-calendar / hash-helper 实建） | [`PIECE_DEVELOPMENT_HOWTO.md`](../docs/ap-integration/PIECE_DEVELOPMENT_HOWTO.md) / [`PIECE_DEVELOPMENT_EXAMPLE.md`](../docs/ap-integration/PIECE_DEVELOPMENT_EXAMPLE.md) |

@@ -120,6 +120,23 @@ spec:
   gateways:
   - workflow-platform-ingress-gateway
   http:
+  # Activepieces local CDN mirror — piece icons for the embedded builder. Referenced
+  # as ROOT-absolute /ap-cdn/... (build-time rewrite + piece metadata logoUrl), so it
+  # does NOT fall under the /dev/ prefix below and needs its own match; this frontend's
+  # nginx forwards it to Kong (activepieces-cdn-route) -> the AP pod, which serves the
+  # mirror out of dist/packages/web/ap-cdn. DEV-only, like the rest of this manifest.
+  - match:
+    - uri:
+        prefix: /ap-cdn/
+    retries:
+      attempts: 0
+    route:
+    - destination:
+        host: developer-workstation-frontend-service
+        subset: v1
+        port:
+          number: 80
+    timeout: 30s
   - match:
     - uri:
         exact: /dev

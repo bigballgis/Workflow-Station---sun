@@ -153,6 +153,28 @@ services:
           - http
           - https
 
+  # --- Activepieces 本地 CDN 镜像 (/ap-cdn) ---
+  # 气隙环境下 cdn.activepieces.com 不可达，镜像落在 AP 自己的 publicDir
+  # (activepieces/packages/web/public/ap-cdn -> 镜像内 dist/packages/web/ap-cdn)，
+  # 由 AP 容器直接静态提供。引用它的有两处，且都写成**根绝对路径** `/ap-cdn/...`：
+  #   1. 构建期重写（vite-plugins/ap-cdn-rewrite.js，HERMES-PATCH-009）
+  #   2. piece 元数据的 logoUrl（deploy/pieces/generate-metadata-seed.js 落库）
+  # AP 独立应用同源自取即可；但 DW 内嵌的 builder 是 lib-mode 产物（不带 publicDir），
+  # 跑在 DW 自己的 origin 上，`/ap-cdn/*` 会打到 DW 而 404 —— 步骤图标全变灰块。
+  # 故在此把 /ap-cdn 收编回 AP：DW nginx 与 edge 都只经 Kong 这一跳（无需新增 AP 上游变量）。
+  # 纯静态图标，无鉴权面（AP 自身也是公开提供），不挂 JWT。
+  - name: activepieces-cdn-service
+    url: http://activepieces:80
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      - name: activepieces-cdn-route
+        paths:
+          - /ap-cdn
+        strip_path: false
+        preserve_host: false
+
   # --- 公开路由 (不启用 JWT 插件) ---
   # admin-center 登录
   - name: admin-center-auth-service
@@ -364,6 +386,23 @@ plugins:
   # 常驻产生持续流量 -> 全局 600/min 会误伤。放宽到 3000/min。socket.io（WS 路由）不限流。
   - name: rate-limiting
     route: activepieces-builder-route
+    config:
+      minute: 3000
+      policy: redis
+      redis:
+        host: __REDIS_HOST__
+        port: 6379
+        password: __REDIS_PASSWORD__
+        database: 5
+      limit_by: ip
+      fault_tolerant: true
+
+  # --- Activepieces /ap-cdn 路由级限流 (放宽) ---
+  # 打开 piece 选择器会在一帧内并发拉全部已装 piece 的图标（当前 ~40 个），
+  # 叠加同页 builder 流量后全局 600/min 会误伤成 429（图标又变灰块）。
+  # 与 builder REST 路由同档 3000/min；命中浏览器缓存后实际请求远低于此。
+  - name: rate-limiting
+    route: activepieces-cdn-route
     config:
       minute: 3000
       policy: redis
