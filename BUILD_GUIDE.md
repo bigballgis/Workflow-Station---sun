@@ -790,6 +790,8 @@ Kafka(K8S) ───────────────────────
 |--------|--------|------|
 | `ADMIN_CENTER_URL` | workflow-engine, user-portal, developer-workstation | 管理后台地址 |
 | `WORKFLOW_ENGINE_URL` | admin-center, user-portal, developer-workstation | 工作流引擎地址 |
+| `USER_PORTAL_BASE_URL` | admin-center | user-portal 基址（含 `/api/portal`）；PortalRuntimePurge / UserPortalAudit 内部调用 |
+| `PORTAL_INTERNAL_API_TOKEN` | admin-center, user-portal, workflow-engine | 调用门户 `/internal/*` 的共享密钥（须两端一致） |
 
 #### 12.2.1 developer-workstation 专项
 

@@ -70,6 +70,7 @@ data:
   SWAGGER_ENABLED: "false"
   USER_PORTAL_BACKEND_URL: "http://user-portal-service.__NAMESPACE__:8080"
   USER_PORTAL_URL: "http://user-portal-service.__NAMESPACE__:8080"
+  USER_PORTAL_BASE_URL: "http://user-portal-service.__NAMESPACE__:8080/api/portal"
   WORKFLOW_ENGINE_BACKEND_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   WORKFLOW_ENGINE_URL: "http://workflow-engine-service.__NAMESPACE__:8080"
   FILE_UPLOAD_BASE_URL: "/api/v1/upload/files"

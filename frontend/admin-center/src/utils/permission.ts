@@ -45,6 +45,8 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/automation-pieces': [PERMISSIONS.SYSTEM_ADMIN],
   '/monitor': [PERMISSIONS.SYSTEM_ADMIN],
   '/audit': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
+  '/audit/admin-center': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
+  '/audit/user-portal': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
   '/config': [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
   '/profile': [], // Everyone can access their profile
   '/relation-tables/structure': [PERMISSIONS.SYSTEM_ADMIN],

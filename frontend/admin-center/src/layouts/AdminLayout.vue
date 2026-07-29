@@ -102,15 +102,21 @@
           </el-sub-menu>
 
           <!-- Audit Log - requires audit:read or log:read -->
-          <el-menu-item
+          <el-sub-menu
             v-if="canReadAudit"
-            index="/audit"
+            index="audit"
           >
-            <el-icon><Document /></el-icon>
             <template #title>
-              {{ t('menu.audit') }}
+              <el-icon><Document /></el-icon>
+              <span>{{ t('menu.audit') }}</span>
             </template>
-          </el-menu-item>
+            <el-menu-item index="/audit/admin-center">
+              {{ t('menu.auditAdminCenter') }}
+            </el-menu-item>
+            <el-menu-item index="/audit/user-portal">
+              {{ t('menu.auditUserPortal') }}
+            </el-menu-item>
+          </el-sub-menu>
 
           <!-- Relation Tables - requires system:admin -->
           <el-sub-menu

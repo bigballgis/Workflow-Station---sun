@@ -6,6 +6,8 @@ import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.ChangeHistoryRecord;
 import com.portal.dto.SubTableChange;
+import com.portal.dto.UserPortalAuditQueryRequest;
+import com.portal.dto.UserPortalAuditRecord;
 import com.portal.entity.ChangeHistory;
 import com.portal.entity.ProcessInstance;
 import com.portal.enums.ChangeType;
@@ -13,13 +15,20 @@ import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.platform.security.entity.User;
 import com.platform.security.repository.UserRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -55,6 +64,7 @@ public class ChangeHistoryComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final UserPortalAuditEnricher userPortalAuditEnricher;
     /**
      * Isolated commits for history writes — failures roll back only this slice
      * (never outer txn).
@@ -68,6 +78,7 @@ public class ChangeHistoryComponent {
             WorkflowEngineClient workflowEngineClient,
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
+            UserPortalAuditEnricher userPortalAuditEnricher,
             PlatformTransactionManager transactionManager) {
         this.changeHistoryRepository = changeHistoryRepository;
         this.processInstanceRepository = processInstanceRepository;
@@ -75,6 +86,7 @@ public class ChangeHistoryComponent {
         this.workflowEngineClient = workflowEngineClient;
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.userPortalAuditEnricher = userPortalAuditEnricher;
         TransactionTemplate tt = new TransactionTemplate(transactionManager);
         tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.requiresNewTx = tt;
@@ -351,7 +363,7 @@ public class ChangeHistoryComponent {
                                 entity.getSubTableName(), entity.getFieldName()))
                 .toList();
         UserDisplayMaps userDisplays = resolveUserDisplayNames(entities);
-        StageNameMaps stageNames = resolveStageNames(processInstanceId);
+        UserPortalAuditEnricher.StageNameMaps stageNames = resolveStageNames(processInstanceId);
         return entities.stream()
                 .flatMap(e -> toRecords(e, userDisplays, stageNames, fieldMetadata).stream())
                 .filter(record -> !isLegacySystemFieldAlias(record.getFieldName())
@@ -450,7 +462,7 @@ public class ChangeHistoryComponent {
      */
     private List<ChangeHistoryRecord> toRecords(ChangeHistory entity,
             UserDisplayMaps userDisplays,
-            StageNameMaps stageNames,
+            UserPortalAuditEnricher.StageNameMaps stageNames,
             HistoryFieldMetadata fieldMetadata) {
         if (!isLegacySubTablePayload(entity)) {
             return List.of(toRecord(entity, userDisplays, stageNames, fieldMetadata,
@@ -503,7 +515,7 @@ public class ChangeHistoryComponent {
 
     private ChangeHistoryRecord toRecord(ChangeHistory entity,
             UserDisplayMaps userDisplays,
-            StageNameMaps stageNames,
+            UserPortalAuditEnricher.StageNameMaps stageNames,
             HistoryFieldMetadata fieldMetadata,
             String fieldName,
             String oldValue,
@@ -694,21 +706,28 @@ public class ChangeHistoryComponent {
             Map<String, String> assignee) {
     }
 
-    private StageNameMaps resolveStageNames(String processInstanceId) {
+    private UserPortalAuditEnricher.StageNameMaps resolveStageNames(String processInstanceId) {
         Map<String, String> byTaskId = new HashMap<>();
         Map<String, String> byDefKey = new HashMap<>();
         try {
             workflowEngineClient.getTaskHistory(processInstanceId).ifPresent(tasks -> {
                 for (Map<String, Object> task : tasks) {
-                    String name = stringOrNull(task.get("name"));
+                    String name = firstNonBlank(
+                            stringOrNull(task.get("name")),
+                            stringOrNull(task.get("activityName")),
+                            stringOrNull(task.get("taskName")));
                     if (name == null || name.isBlank()) {
                         continue;
                     }
-                    String taskInstanceId = stringOrNull(task.get("id"));
+                    String taskInstanceId = firstNonBlank(
+                            stringOrNull(task.get("id")),
+                            stringOrNull(task.get("taskId")));
                     if (taskInstanceId != null && !taskInstanceId.isBlank()) {
                         byTaskId.putIfAbsent(taskInstanceId, name.trim());
                     }
-                    String defKey = stringOrNull(task.get("activityId"));
+                    String defKey = firstNonBlank(
+                            stringOrNull(task.get("activityId")),
+                            stringOrNull(task.get("taskDefinitionKey")));
                     if (defKey != null && !defKey.isBlank()) {
                         byDefKey.putIfAbsent(defKey, name.trim());
                     }
@@ -717,15 +736,22 @@ public class ChangeHistoryComponent {
         } catch (Exception e) {
             log.debug("Could not enrich change history stage names for {}: {}", processInstanceId, e.getMessage());
         }
-        return new StageNameMaps(byTaskId, byDefKey);
+        // Engine history often 403s for service-to-service calls; Flowable tables are shared.
+        if (byTaskId.isEmpty() && byDefKey.isEmpty() && processInstanceId != null && !processInstanceId.isBlank()) {
+            Map<String, UserPortalAuditEnricher.StageNameMaps> fromDb =
+                    userPortalAuditEnricher.resolveStageNamesFromDb(Set.of(processInstanceId));
+            if (fromDb == null) {
+                fromDb = Map.of();
+            }
+            return fromDb.getOrDefault(
+                    processInstanceId,
+                    new UserPortalAuditEnricher.StageNameMaps(Map.of(), Map.of()));
+        }
+        return new UserPortalAuditEnricher.StageNameMaps(byTaskId, byDefKey);
     }
 
     private static String stringOrNull(Object o) {
         return o == null ? null : o.toString();
-    }
-
-    private record StageNameMaps(Map<String, String> taskInstanceIdToName,
-            Map<String, String> taskDefinitionKeyToName) {
     }
 
     /**
@@ -1199,5 +1225,146 @@ public class ChangeHistoryComponent {
 
     private static String normalizeFieldKey(String fieldName) {
         return fieldName.trim().toLowerCase().replaceAll("[^a-z0-9]", "");
+    }
+
+    // ==================== global cross-process audit query ====================
+
+    /**
+     * Returns distinct FU codes that have at least one change history record.
+     */
+    public List<String> getDistinctFunctionUnitCodes() {
+        return changeHistoryRepository.findDistinctFunctionUnitCodes();
+    }
+
+    /**
+     * Cross-process global audit log query with server-side pagination.
+     * Does NOT resolve per-form field labels/orders — this is a summary view
+     * designed for the admin audit list.  For per-field label resolution see
+     * {@link #getChangeHistory(String)}.
+     */
+    public Page<UserPortalAuditRecord> queryGlobalAuditLogs(UserPortalAuditQueryRequest request) {
+        int page = Math.max(request.getPage(), 0);
+        int size = Math.min(Math.max(request.getSize(), 1), 200);
+        Sort sort = buildAuditSort(request.getSortField(), request.getSortOrder());
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Specification<ChangeHistory> spec = buildAuditSpecification(request);
+        Page<ChangeHistory> entityPage = changeHistoryRepository.findAll(spec, pageable);
+        List<ChangeHistory> entities = entityPage.getContent();
+
+        Set<String> processInstanceIds = entities.stream()
+                .map(ChangeHistory::getProcessInstanceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, ProcessInstance> piMap = new HashMap<>();
+        if (!processInstanceIds.isEmpty()) {
+            processInstanceRepository.findAllById(processInstanceIds)
+                    .forEach(pi -> piMap.put(pi.getId(), pi));
+        }
+
+        List<UserPortalAuditRecord> records = userPortalAuditEnricher.toAuditRecords(entities, piMap);
+        return new org.springframework.data.domain.PageImpl<>(
+                records, pageable, entityPage.getTotalElements());
+    }
+
+    private Specification<ChangeHistory> buildAuditSpecification(UserPortalAuditQueryRequest request) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            // Always exclude internal fields
+            Predicate notInternal = cb.not(root.get("fieldName").in(INTERNAL_FIELD_BLACKLIST));
+            predicates.add(notInternal);
+
+            if (request.getUserId() != null && !request.getUserId().isBlank()) {
+                predicates.add(cb.equal(root.get("userId"), request.getUserId().trim()));
+            }
+
+            if (request.getChangeType() != null && !request.getChangeType().isBlank()) {
+                try {
+                    ChangeType ct = ChangeType.valueOf(request.getChangeType().trim());
+                    predicates.add(cb.equal(root.get("changeType"), ct));
+                } catch (IllegalArgumentException ignored) {
+                    // Invalid change type → empty result (do not silently drop the filter)
+                    predicates.add(cb.disjunction());
+                }
+            }
+
+            if (request.getStartTime() != null && !request.getStartTime().isBlank()) {
+                Instant start = parseIsoInstant(request.getStartTime());
+                if (start != null) {
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), start));
+                }
+            }
+
+            if (request.getEndTime() != null && !request.getEndTime().isBlank()) {
+                Instant end = parseIsoInstant(request.getEndTime());
+                if (end != null) {
+                    predicates.add(cb.lessThanOrEqualTo(root.get("timestamp"), end));
+                }
+            }
+
+            if (request.getProcessInstanceId() != null && !request.getProcessInstanceId().isBlank()) {
+                predicates.add(cb.equal(root.get("processInstanceId"), request.getProcessInstanceId().trim()));
+            }
+
+            // functionUnitCode filter requires sub-select on process_instance_id
+            if (request.getFunctionUnitCode() != null && !request.getFunctionUnitCode().isBlank()) {
+                List<String> matchingPiIds = jdbcTemplate.query(
+                        "SELECT id FROM up_process_instance WHERE function_unit_code = ?",
+                        (rs, rowNum) -> rs.getString("id"),
+                        request.getFunctionUnitCode().trim());
+                if (matchingPiIds.isEmpty()) {
+                    predicates.add(cb.disjunction()); // no match → empty result
+                } else {
+                    predicates.add(root.get("processInstanceId").in(matchingPiIds));
+                }
+            }
+
+            // username filter: resolve userIds from sys_users, then filter
+            if (request.getUsername() != null && !request.getUsername().isBlank()) {
+                String keyword = request.getUsername().trim().toLowerCase();
+                List<String> matchingUserIds = jdbcTemplate.query(
+                        "SELECT id FROM sys_users WHERE LOWER(username) LIKE ? OR LOWER(full_name) LIKE ?",
+                        (rs, rowNum) -> rs.getString("id"),
+                        "%" + keyword + "%", "%" + keyword + "%");
+                if (matchingUserIds.isEmpty()) {
+                    predicates.add(cb.disjunction());
+                } else {
+                    predicates.add(root.get("userId").in(matchingUserIds));
+                }
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private static Sort buildAuditSort(String sortField, String sortOrder) {
+        String field = sortField != null && !sortField.isBlank() ? sortField : "timestamp";
+        boolean asc = "asc".equalsIgnoreCase(sortOrder);
+        // Map frontend sort field names to entity field names
+        String entityField = switch (field) {
+            case "createdAt", "timestamp" -> "timestamp";
+            case "username", "userName", "userId" -> "userId";
+            case "changeType" -> "changeType";
+            default -> "timestamp";
+        };
+        return asc ? Sort.by(Sort.Direction.ASC, entityField)
+                   : Sort.by(Sort.Direction.DESC, entityField);
+    }
+
+    private static Instant parseIsoInstant(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Instant.from(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(value));
+        } catch (Exception e) {
+            try {
+                // Try without timezone, assume UTC
+                return java.time.LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                        .atZone(java.time.ZoneOffset.UTC)
+                        .toInstant();
+            } catch (Exception e2) {
+                return null;
+            }
+        }
     }
 }
