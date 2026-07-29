@@ -14,6 +14,30 @@
 
 ---
 
+## 0. 新增能力索引（本文之外的设计真源）
+
+> **本文定位 = 部署 / 配置 / 排障手册**（AP 桥、共享账号、flow 发布、BPMN service-task）。
+> AP 集成后来扩成了**九层（L1–L9）源码级集成**，那部分的**设计真源在
+> [`docs/ap-integration/`](../docs/ap-integration/)**，不在本文重复（避免两处真源打架）。
+> 下表给出对照，改动相关能力时请以右列为准。
+
+| 能力 | 现状 | 真源 |
+|---|---|---|
+| **L1 DW 内嵌编排器** —— Function Unit 的 **Automation** 标签直接挂 AP builder（lib-mode + Shadow DOM，**非 iframe**，X-6）；bundle 由 `activepieces/packages/web` 的 `vite.embed.config.mts` 产出，DW 的 `prebuild` 钩子拷进 `public/service-task-builder/` | dev 浏览器 E2E 通过 | `INTEGRATION_DESIGN.md` |
+| **L2 Kong `/api/ap`** —— builder 的 REST + socket.io 经网关收编（socket.io path `/api/ap/socket.io`） | dev 通过 | 同上 |
+| **L7 per-user provisioning** —— 审计到人：managed-authn + signing-key，每用户签 RS256 外部 token 换 AP 会话（flow Owner 落真实用户，不再全是共享账号）。**dev 已启用**（`ACTIVEPIECES_MANAGED_ENABLED=true`） | dev 已启用 | 同上 + `DECISIONS.md` |
+| **vendored 源码镜像** —— EE 剥离 + 去 bun + 预烘焙 pieces，`activepieces:0.84.0-ee-removed`（见 §5 前置） | 已落地 | `EE_REMOVAL_PLAN.md` |
+| **自研 piece 开发** —— 从写代码到 DW 可用的全链路 + 可直接抄的完整示例 | 已落地（biz-calendar / hash-helper 实建） | [`PIECE_DEVELOPMENT_HOWTO.md`](../docs/ap-integration/PIECE_DEVELOPMENT_HOWTO.md) / [`PIECE_DEVELOPMENT_EXAMPLE.md`](../docs/ap-integration/PIECE_DEVELOPMENT_EXAMPLE.md) |
+| **离线 piece 白名单投放** —— 白名单 + 预装（运行时半） | 已落地 | `activepieces/hermes/README.md` |
+| **元数据 seed / 自研件元数据序列化** —— `piece_metadata` 行（设计器半） | 已落地 | `deploy/pieces/README.md` |
+| **状态 / 未决口** —— 各层进度、待验证项、开放决策 | — | `STATUS.md` / `OPEN_GATES.md` / `DECISIONS.md` |
+
+> **术语**：产品里这套能力对用户叫 **ServiceTask / 自动化流程（Automation）**，"Activepieces" 只在
+> 部署与源码层出现（改名决策 D7）。DW 的 **Automation** 标签与 BPMN 的 **Service Task** 是一一绑定关系：
+> 一个 `serviceType=ap` 的 service task 对应一条 flow，flow 不能脱离 BPMN 节点独立存在。
+
+---
+
 ## 1. 方案与数据流（跨域 SSO 握手）
 
 ```
@@ -142,11 +166,22 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 
 ## 5. k8s / 生产部署
 
-> **前置:先把 AP 镜像同步进私有 registry。** AP 是**第三方镜像**(不像平台自研服务由 `build-and-push-k8s.ps1` 构建);
-> k8s manifest 引用的是 `<Registry>/activepieces:0.84.0`(私有 Nexus),需从上游 `activepieces/activepieces:0.84.0`
-> 拉下来改 tag 再推。用 [deploy/scripts/mirror-thirdparty-images-k8s.ps1](scripts/mirror-thirdparty-images-k8s.ps1):
-> `./mirror-thirdparty-images-k8s.ps1 -Registry <nexus基址> -Images activepieces`(同脚本也覆盖 redis/kafka/kong 等第三方镜像)。
-> `ap-bootstrap-job.yaml` 用的也是同一个 AP 镜像,一并就位。
+> **前置:AP 镜像现在是「仓库内源码构建」,不再是镜像上游二进制。**
+> k8s manifest 引用的是 `<Registry>/workflow-station2/activepieces:0.84.0-ee-removed` ——
+> 由**本仓库 `activepieces/` 源码树 + `activepieces/Dockerfile`** 构建的 HERMES vendored 镜像:
+> **EE 剥离 + 去 bun(X-4,运行时装包改 pnpm) + 末层预烘焙白名单 pieces(`activepieces/hermes/pieces.json`,X-3 气隙)**。
+> 与 dev compose 的 `activepieces` 服务同源同构。
+>
+> ⚠️ **不要再用 `mirror-thirdparty-images-k8s.ps1` 同步 AP**——那条路径拉的是上游
+> `activepieces/activepieces:0.84.0` 二进制:**既没剥 EE、没去 bun、也没预装 pieces**,气隙集群里跑不通
+> (该脚本的 activepieces 条目属历史遗留,其余 redis/kafka/kong 仍照常用它)。
+>
+> 正确做法:在有网的构建机上 `docker build -t <Registry>/workflow-station2/activepieces:0.84.0-ee-removed activepieces/`
+> → push 到 Nexus;或 `docker save | gzip` 带进内网 `docker load`(见 `activepieces/hermes/README.md`)。
+> `ap-bootstrap-job.yaml` 用的也是同一个镜像,一并就位。
+>
+> 镜像只含**运行时半**(piece 的可执行包)。**元数据半**(`piece_metadata` 行)不在镜像里:部署后需对该环境的库
+> 跑 `deploy/pieces/metadata/pieces-seed.sql`,**再重启 AP**(registry 缓存在进程内存,见 §8 末行)。
 
 **生产（runtime only）**：照常部署（`activepieces.yaml` 在默认集里），Istio 只放 `/api/v1/webhooks`，
 不带 `-IncludeApBridgeGateway` → 无 UI 网关、无共享账号 Job。configmap/secret 不设 bridge → admin-center 端点 404。
@@ -291,17 +326,23 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
   **全新部署 = 空目录**。后果：flow 设计器里没有可选 piece（含 `piece-webhook`），要用 pieces 必须内部投放
   （DB ARCHIVE 或内部 npm 源）。历史外部数据已于 2026-07-02 全量清除（piece_metadata 10k+ 行与容器缓存）。
 - **离线投放 pieces = 元数据(DB) + 包(内部 npm 源) 两半**（pieces MIT 开源，可自由镜像）：
-  ①运行时装包用的是 **bun 不是 npm**（worker `piece-installer` → `bun install --ignore-scripts`，
-  workspace 在容器 `/usr/src/app/cache/v11/common/`）；bun 认 `NPM_CONFIG_REGISTRY`（bun 1.3.1 容器内实测）。
+  ①运行时装包用的是 **pnpm**（X-4：全环境禁 bun，vendored 镜像已去 bun）——worker `piece-installer` →
+  `pnpm install --ignore-scripts --config.node-linker=isolated`，workspace 在容器 `/usr/src/app/cache/v11/common/`。
+  **`node-linker=isolated` 不能改**：引擎的 piece 加载器按 `pieces/<name>-<ver>/node_modules/<name>` 解析，
+  hoist 会让它找不到（原 bun 的 isolated 布局与此一致，去 bun 时必须复刻）。pnpm 认 `NPM_CONFIG_REGISTRY`。
   ②已加 `NPM_CONFIG_REGISTRY`：k8s 走 configmap `ACTIVEPIECES_NPM_REGISTRY`（uat/preprod 默认
   **fail-closed 的 `.invalid` URL**——**空值会静默回落公网 npmjs（实测）**，接 Nexus npm repo 时替换）；
   dev compose `${ACTIVEPIECES_NPM_REGISTRY:-}` 默认空=公网（仅本机 dev 可接受）。
   ③元数据行获取：dev 临时开 `AP_PIECES_SYNC_MODE=OFFICIAL_AUTO` 同步→ `COPY (SELECT ... WHERE name IN (白名单))`
   导出→改回 NONE 清表→导入集群库；`piece_metadata` 表即 piece 白名单。
-  ④镜像根 `bunfig.toml` 有 `minimumReleaseAge=3天`——新发到 Nexus 的包若被拒装先查这个。
+  ④**气隙硬开关 `AP_PIECES_OFFLINE_INSTALL=true`**：置真后 pnpm 只从镜像内烘焙的离线 store
+  （`AP_PIECES_OFFLINE_STORE_DIR`，默认 `/usr/src/app/pnpm-offline-store`）解析，闭包外依赖 **fail-closed**（直接失败，
+  不静默回落公网）。此时命令行里的 `--registry` 只是 pnpm 离线元数据缓存的**命名空间**（按 registry 主机名归档），
+  不是网络目标——改它会让缓存找不到。
+  *（历史注记：旧版本靠镜像根 `bunfig.toml` 的 `minimumReleaseAge` 拦新包，该文件随去 bun 已删除，不必再查。）*
   ⑤**已落地的投放通道**：白名单 + 预装脚本在 `activepieces/hermes/`（预装是 `activepieces/Dockerfile`
-  的最后一层），元数据 seed SQL 在 `deploy/pieces/`，运行时零联网，详见 `deploy/pieces/README.md`；
-  Nexus npm 源改为兜底防线，非必需。
+  的最后一层），元数据 seed SQL 在 `deploy/pieces/`，运行时零联网，详见 `activepieces/hermes/README.md`
+  与 `deploy/pieces/README.md`；Nexus npm 源改为兜底防线，非必需。
 
 ---
 
