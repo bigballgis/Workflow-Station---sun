@@ -26,7 +26,7 @@
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
 #   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend, platform-login-frontend
-#   Edge:     edge-frontend (nginx single-origin — no Maven/npm; restarts container from compose)
+#   Edge:     edge-frontend (nginx single-origin — no Maven/pnpm; restarts container from compose)
 
 param(
     [string]$Service,
@@ -324,7 +324,7 @@ function Resolve-BaseImage {
 #
 # Returns $true only when it actually produced a new bundle. Callers MUST use that to
 # force their vite step: the bundle reaches dist/ solely through DW's `prebuild` hook,
-# which runs inside `npm run build`, and Test-FrontendDistFresh watches DW's own sources
+# which runs inside `pnpm run build`, and Test-FrontendDistFresh watches DW's own sources
 # — not activepieces/dist/packages/web-embed. Ignore the return value and a rebuilt
 # bundle is silently dropped whenever DW's own dist still looks fresh.
 function Ensure-ServiceTaskBuilderBundle {
@@ -349,7 +349,7 @@ function Ensure-ServiceTaskBuilderBundle {
         # X-4: npx/pnpm toolchain only, never bun.
         # Out-Host keeps vite's stdout off this function's output stream — without it the
         # build log would be collected into the return value alongside the boolean.
-        npx vite build --config vite.embed.config.mts | Out-Host
+        pnpm exec vite build --config vite.embed.config.mts | Out-Host
         if ($LASTEXITCODE -ne 0) {
             # Non-fatal: the DW build still succeeds; the Automation tab just reports the
             # builder unavailable (the sync hook is deliberately tolerant). Flag it loudly.
@@ -605,7 +605,7 @@ if ($Service) {
             Pop-Location
         }
     } elseif ($svc.Type -eq "frontend" -and -not $SkipFrontend) {
-        Write-Host "`n[1/2] Building $Service (npm + Docker)..." -ForegroundColor Yellow
+        Write-Host "`n[1/2] Building $Service (pnpm + Docker)..." -ForegroundColor Yellow
         # DW's Automation tab embeds the vendored AP builder; stage its bundle first so the
         # `prebuild` hook has something to copy into public/service-task-builder.
         # Return value discarded on purpose: this path always runs vite below, so there is
@@ -749,7 +749,7 @@ if (-not $SkipMaven) {
 
 # Step 2: Build frontend (incremental Vite + Docker)
 if (-not $SkipFrontend) {
-    Write-Host "`n[2/4] Building frontend (incremental npm + Docker)..." -ForegroundColor Yellow
+    Write-Host "`n[2/4] Building frontend (incremental pnpm + Docker)..." -ForegroundColor Yellow
 
     $resolvedNginx = Resolve-BaseImage -Candidates @(
         "nginx:alpine",
@@ -775,7 +775,7 @@ if (-not $SkipFrontend) {
 
         # $builderRebuilt must be part of this: a fresh bundle lands in
         # activepieces/dist/packages/web-embed, which Test-FrontendDistFresh does not watch,
-        # and it only reaches dist/ via the `prebuild` hook inside `npm run build`. Without
+        # and it only reaches dist/ via the `prebuild` hook inside `pnpm run build`. Without
         # it, -RebuildServiceTaskBuilder rebuilds the bundle and then the vite step is
         # skipped as "fresh", so the image silently keeps the previous builder.
         $needVite = $Clean -or $ForceBuild -or $builderRebuilt -or -not (Test-FrontendDistFresh -FrontendDir $fe.Dir)

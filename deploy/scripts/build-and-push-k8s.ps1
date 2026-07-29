@@ -153,13 +153,13 @@ if (-not $SkipBackend) {
     }
 }
 
-# 3. Docker Build & Push (Frontend — local npm build + Dockerfile.local) — parallel across services
+# 3. Docker Build & Push (Frontend — local pnpm build + Dockerfile.local) — parallel across services
 if (-not $SkipFrontend) {
-    Write-Step "Building frontend (local npm build + Docker, parallel x$MaxParallel)..."
+    Write-Step "Building frontend (local pnpm build + Docker, parallel x$MaxParallel)..."
 
     # The developer-workstation frontend embeds the Activepieces builder. That bundle is
     # produced by the AP workspace (outside frontend/) into activepieces/dist/packages/
-    # web-embed and is gitignored, so a clean checkout never has it; DW's npm `prebuild`
+    # web-embed and is gitignored, so a clean checkout never has it; DW's pnpm `prebuild`
     # hook only COPIES it into public/. Nothing else builds it, so build it here — before
     # the per-service jobs start, since DW's build consumes it. Skip this and the image
     # ships without the bundle and 404s on /dev/service-task-builder/web.css.
@@ -172,7 +172,7 @@ if (-not $SkipFrontend) {
         Write-Host "   >> [ap-builder] vite build (web-embed)" -ForegroundColor Gray
         Push-Location $apWebDir
         try {
-            npx vite build --config vite.embed.config.mts
+            pnpm exec vite build --config vite.embed.config.mts
             if ($LASTEXITCODE -ne 0) { Write-Fail "Activepieces web-embed build failed" }
         } finally {
             Pop-Location
