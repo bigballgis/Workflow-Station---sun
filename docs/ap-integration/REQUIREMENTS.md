@@ -326,7 +326,7 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 | CODE step 内置依赖 | ✅ | 运行时已有/预打包的依赖可用 |
 | CODE step 外部 npm 依赖 | ❌ | FR-F03B，设计期校验拒绝 |
 | 任何运行时 npm/bun install | ❌ | CR-01 禁 bun + 断外网红线的共同结论 |
-| FR-F04 | 既有 patch 升级为源码修改 | MUST | piece-ai（run_agent） | vendor 源码直接改 | **部分达成（2026-07-27）**，逐条状态见 [HERMES_PATCHES.md](HERMES_PATCHES.md)。✅ `patch-web-approvals.js` 已按 Q9 处置：脚本删除，改为源码级摘掉 Approvals 标签页（HERMES-PATCH-001）——产物里 `APPROVAL_PIECES_CONFIG` 与 6 个 SaaS piece 名已被 tree-shake，比原先「置空数组」更彻底。🚫 `patch-piece-ai-run-agent.js`（maxOutputTokens + reasoning 剥离）**本条已失去对象**：`piece-ai` 于 `669f7207` 移出白名单——气隙下 AI 件够不到模型提供方，留在目录里是死重。镜像里没有该 piece 的副本，转源码无从谈起。脚本保留仅供**联网 dev** 手工对运行中容器施用（该环境下 piece 仍由 npm 运行时安装，两个缺陷是活的）。**不要为满足本条而把 piece-ai 加回白名单** |
+| FR-F04 | 既有 patch 升级为源码修改 | MUST | ~~piece-ai（run_agent）~~ | vendor 源码直接改 | **部分达成（2026-07-27）**，逐条状态见 [HERMES_PATCHES.md](HERMES_PATCHES.md)。✅ `patch-web-approvals.js` 已按 Q9 处置：脚本删除，改为源码级摘掉 Approvals 标签页（HERMES-PATCH-001）——产物里 `APPROVAL_PIECES_CONFIG` 与 6 个 SaaS piece 名已被 tree-shake，比原先「置空数组」更彻底。🚫 `patch-piece-ai-run-agent.js`（maxOutputTokens + reasoning 剥离）**本条已失去对象**：`piece-ai` 于 `669f7207` 移出白名单——气隙下 AI 件够不到模型提供方，留在目录里是死重。镜像里没有该 piece 的副本，转源码无从谈起。脚本保留仅供**联网 dev** 手工对运行中容器施用（该环境下 piece 仍由 npm 运行时安装，两个缺陷是活的）。**不要为满足本条而把 piece-ai 加回白名单** |
 
 ### G 组 — Connections / Secrets
 
@@ -368,8 +368,8 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 
 | ID | 能力 | 级别 | Source in AP | Target System | 说明 |
 |---|---|---|---|---|---|
-| FR-K01 | AI Generate 全链路不回归（契约 {reply,document,…} 不变） | MUST | webhooks /sync + piece-ai | DW 后端 + AP flow `ai-function-unit-gen` | 超时 300s、SSE 心跳、run_agent patch 全部保持 |
-| FR-K02 | run_agent 修改源码化（maxOutputTokens、reasoning-delta 剥离） | MUST | piece-ai（vendor 树内） | vendor 源码 | 替代运行时 patch 脚本 |
+| FR-K01 | AI Generate 全链路不回归（契约 {reply,document,…} 不变） | MUST | webhooks /sync + **HTTP piece** | DW 后端 + AP flow | 超时 300s、SSE 心跳保持。**2026-07-28 更新**：模型调用由 `piece-ai` run_agent 改为 HTTP piece 直连，run_agent patch 一并作废（见 FR-K02）。⚠️ 仓库里 `deploy/ap-flows/ai-function-unit-gen.json` 与 `deploy/scripts/build-ai-fu-flow.js` 仍是旧的 piece-ai 版本，**尚未与新链路对齐**，见 [VT-15](VENDOR_TRIM_CHECKLIST.md) |
+| ~~FR-K02~~ | ~~run_agent 修改源码化（maxOutputTokens、reasoning-delta 剥离）~~ | **作废** | ~~piece-ai~~ | — | **2026-07-28 作废**：AI Generate 已改用 HTTP piece 直连模型端点，`run_agent` 链路不复存在 → 需求失去标的。`piece-ai` 已从 vendor 树删除，HERMES-PATCH-002 同时作废并删除脚本。**这不是欠账，是标的消失** |
 | FR-K03 | AI provider 断外网可控（仅配置的 baseUrl 可出网） | MUST | server（网络策略） | k8s NetworkPolicy/Istio | 安全评审项 |
 
 ### L 组 — 沙箱 / 代码执行

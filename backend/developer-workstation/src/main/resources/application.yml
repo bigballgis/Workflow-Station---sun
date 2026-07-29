@@ -206,6 +206,10 @@ ssrf:
 
 # AI Generation Lock Configuration
 ai-generation:
+  # 2026-07-28 起默认停用：模型调用原先经 Activepieces flow(webhook -> piece-ai run_agent -> deepseek),
+  # 该链路已废弃且替代实现未落地。false 时 AiGenerationController 整个不注册(/ai-generation/** 返回 404)。
+  # 重新启用须同时把前端 src/utils/featureFlags.ts 的 AI_GENERATION_ENABLED 改回 true 并重新构建。
+  enabled: ${AI_GENERATION_ENABLED:false}
   lock:
     ttl-seconds: ${AI_GENERATION_LOCK_TTL:1800}
     force-unlock-timeout-seconds: ${AI_GENERATION_FORCE_UNLOCK_TIMEOUT:60}

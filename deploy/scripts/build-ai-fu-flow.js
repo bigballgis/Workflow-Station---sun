@@ -15,8 +15,36 @@
  *
  * 用法: node deploy/scripts/build-ai-fu-flow.js [outFile]
  *   缺省写到 deploy/ap-flows/ai-function-unit-gen.json
+ *
+ * ============================================================================
+ * !! 已废弃(2026-07-28) —— 默认拒绝运行,见下方闸门 !!
+ *
+ * AI Generate 功能已停用(后端 `ai-generation.enabled` + 前端 featureFlags 双开关,
+ * 缺省 false),其经 Activepieces 的调用链路作废。本脚本生成的 flow 依赖 `piece-ai`,
+ * 而该 piece 既不在 hermes/pieces.json 白名单里、也已随 HERMES-PATCH-013 从 vendor 树删除
+ * —— 跑出来的 flow 在气隙环境直接哑火。
+ *
+ * **文件保留而非删除的唯一原因**:下面那三段 system prompt 是仅存的一份
+ * (旧 n8n 模板已随 n8n 删除,Java 侧没有副本)。将来重做 AI Generate 时要从这里取。
+ * ============================================================================
  */
 'use strict';
+
+// fail-loud 闸门:宁可拒跑,也不要悄悄产出一个装不出来的 flow。
+if (!process.argv.includes('--i-know-this-is-obsolete')) {
+    console.error([
+        'REFUSED: build-ai-fu-flow.js 已废弃(2026-07-28)。',
+        '',
+        '  它生成的 flow 依赖 @activepieces/piece-ai —— 该 piece 不在白名单里,',
+        '  且已随 HERMES-PATCH-013 从 vendor 树删除,产物在气隙环境无法运行。',
+        '  AI Generate 功能本身也已停用(ai-generation.enabled 缺省 false)。',
+        '',
+        '  保留本文件只为其中三段 system prompt(仅存的一份)。',
+        '  确实要跑请显式加 --i-know-this-is-obsolete。',
+    ].join('\n'));
+    process.exit(1);
+}
+
 const fs = require('fs');
 const path = require('path');
 
