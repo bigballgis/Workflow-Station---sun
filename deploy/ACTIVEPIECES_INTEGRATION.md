@@ -180,8 +180,10 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 > → push 到 Nexus;或 `docker save | gzip` 带进内网 `docker load`(见 `activepieces/hermes/README.md`)。
 > `ap-bootstrap-job.yaml` 用的也是同一个镜像,一并就位。
 >
-> 镜像只含**运行时半**(piece 的可执行包)。**元数据半**(`piece_metadata` 行)不在镜像里:部署后需对该环境的库
-> 跑 `deploy/pieces/metadata/pieces-seed.sql`,**再重启 AP**(registry 缓存在进程内存,见 §8 末行)。
+> 镜像只含**运行时半**(piece 的可执行包)。**元数据半**(`piece_metadata` 行)不在镜像里,但**已不需要手工灌**:
+> `ap-bootstrap-job.yaml` 的 `ap-provision-db` initContainer 会从 `ap-pieces-seed` ConfigMap
+> (渲染时由 `pieces-seed.sql` gzip 注入)自动执行。**灌完不用重启 AP**——`/v1/pieces` 与单件查询都是
+> 直接查库的,没有进程内缓存(2026-07-29 实测:空表冷启 AP 后灌 seed,列表和单查立刻都通)。
 
 **生产（runtime only）**：照常部署（`activepieces.yaml` 在默认集里），Istio 只放 `/api/v1/webhooks`，
 不带 `-IncludeApBridgeGateway` → 无 UI 网关、无共享账号 Job。configmap/secret 不设 bridge → admin-center 端点 404。
@@ -212,9 +214,37 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 
 ---
 
-## 6. 共享账号引导（幂等）
+## 6. 供给引导（幂等）
 
-新环境（空库）共享账号不存在。脚本 `deploy/scripts/ap-bootstrap-shared-account.js` 幂等地把它建好并**完成 onboarding**。
+**AP 把全部状态放在 Postgres 里。** 新环境、重建卷、或手工 drop 掉 AP 那套表之后，AP 自己的 migration 会把
+schema 建回来但**数据一条不剩**——没有 platform / project / signing_key / piece_metadata。**重打镜像不恢复任何一项。**
+症状是 DW 的 Automation 页签报错，而各处日志都是绿的（桥拿着一个已不存在的 signing key 去签名，AP 只回 401）。
+
+一个可用的 AP 需要四项，前三项现已自动化：
+
+| # | 项 | 谁来做 | 幂等条件 |
+|---|---|---|---|
+| 1 | platform + 默认 project | `ap-bootstrap-shared-account.js` | sign-in 带 platformId 即跳过 |
+| 2 | project `externalId`（默认 `hermes-main`） | `ap-provision-db.js` | 只填 `NULL`；已有别的值则**报错不改写** |
+| 3 | `piece_metadata`（设计器半） | `ap-provision-db.js` | seed 是逐件 DELETE+INSERT，每次部署重放 |
+| 4 | **signing-key**（L7 per-user 才需要） | ⚠️ **仍是手工** | 见下 |
+
+- **dev**：`build-and-deploy.ps1` 的 `Invoke-ApProvisioning` 自动跑全部四项（含 signing-key，私钥回写 `.env`）。
+- **k8s**：`ap-bootstrap-job.yaml`（随 `-IncludeApBridgeGateway` 纳入）——两个 initContainer 依次做 1、2、3，
+  主容器 `ap-verify` 只读校验四项，**缺哪项就让整个 Job 失败**并打印逐条修复命令。
+  用 initContainer 而不是并列容器，是因为同 Pod 的 containers 并行启动，而这几步有严格先后。
+
+> **第 2 步的顺序很关键**：`getOrCreateProject` 按 `externalId` 查项目，查不到就**自己新建一个**。
+> 若在第一次 managed 换取之后才 stamp，共享账号和 per-user 账号会分处两个 project，互相看不见对方的 flow。
+
+> **signing-key 为什么不自动化**（裁决 2026-07-29）：私钥只在创建时返回一次，要写进
+> `workflow-platform-secrets`。让 Job 自动写 Secret 需要一个能改 Secret 的 ServiceAccount + RBAC，
+> 气隙/合规集群未必批得下来；且 Job 重跑会轮换掉正在使用的密钥。
+> **另注：k8s 侧 admin-center 目前根本没接 managed 鉴权**——`admin-center.yaml` 与各环境
+> configmap/secret 里都没有 `ACTIVEPIECES_MANAGED_*` 三个键，L7 只在 dev 启用。要在集群上用，
+> 得先补这套接线，再谈 signing-key 的自动化。
+
+第 1 步的脚本 `deploy/scripts/ap-bootstrap-shared-account.js` 幂等地把共享账号建好并**完成 onboarding**。
 
 > **⚠️ AP 0.84 CE 关键行为（实测 2026-06-30）**：sign-up **只建 `user_identity`，不自动建 platform/project**——
 > 账号停在 **ONBOARDING** 态，sign-in 返回 `projectId=null` 的 ONBOARDING token。登录桥需要 projectId，缺了 AP 会循环/卡 onboarding。
@@ -226,6 +256,10 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 幂等：已 onboard（sign-in 带 platformId）直接跳过；未配置共享账号则跳过。
 
 - **k8s**：随 `-IncludeApBridgeGateway` 部署的 Job 自动跑；或手动 `kubectl exec deploy/activepieces -- node - < deploy/scripts/ap-bootstrap-shared-account.js`（带 env）。
+  Job 里的三个脚本**不是内嵌副本**——`ap-bootstrap-job.yaml` 只放占位符，渲染时由
+  `apply-workflow-station-istio-generated.ps1` 从 `deploy/scripts/` 原样注入，和 dev 跑的是同一份文件。
+  （曾经那里是手抄副本并且漂移了：停在 sign-up 就返回、缺了 `POST /v1/platforms`，于是空库上 Job 报成功
+  退出而 AP 里什么都没有。）
 - **dev**：`docker exec -e ACTIVEPIECES_SHARED_EMAIL=... -e ACTIVEPIECES_SHARED_PASSWORD=... -e AP_INTERNAL_URL=http://localhost:80 -i platform-activepieces-dev node - < deploy/scripts/ap-bootstrap-shared-account.js`
 
 **铁律**：secret 里的密码设好后别改（改了不会改 AP 已存在账号的密码 → 登录失败 → 循环）。projectId 动态取、不硬编码。

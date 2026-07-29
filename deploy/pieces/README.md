@@ -37,9 +37,13 @@ pieces 均为 MIT 开源，镜像合法。
 ## 首次执行（Quick Start）
 
 **分工原则（为什么是两台机器）**：镜像构建要 `pnpm install`（访问 npm registry），
-所以**镜像只能在有外网/能连 Nexus 的电脑上构建**；断网环境只做三件事：
-导入镜像 → 起服务（首启自动建表）→ 跑 seed SQL + 重启。
+所以**镜像只能在有外网/能连 Nexus 的电脑上构建**；断网环境只做两件事：
+导入镜像 → 部署（seed 由部署脚本自动灌）。
 仓库自带的 seed SQL / tarballs / metadata 都是现成文件，断网可用。
+
+> **多数情况下不用手工跑 seed。** dev 的 `build-and-deploy.ps1`（`Invoke-ApProvisioning`）与
+> k8s 的 `ap-bootstrap-job.yaml`（`ap-provision-db` initContainer）都会自动执行，幂等。
+> 下面场景 B 的手工步骤保留给「只想单独补一次元数据」或排障时用。
 
 ### 场景 A：外部电脑（有外网）——构建并导出镜像
 
@@ -78,14 +82,17 @@ docker load < activepieces-0.84.0-ee-removed.tar.gz                 # tar 方式
 #    compose 环境：docker compose up -d activepieces
 #    k8s：activepieces.yaml 的 image: 对上 tag 后 kubectl apply
 
-# 3. 对该环境共享库执行 seed（文件在仓库里，无需外网）
+# 3. 灌 seed —— 正常路径下这一步由部署脚本自动完成，无需手工：
+#    dev：build-and-deploy.ps1 的 Invoke-ApProvisioning
+#    k8s：ap-bootstrap-job.yaml 的 ap-provision-db initContainer（seed 由 ConfigMap 提供）
+#    只有单独补元数据或排障时才手工执行（文件在仓库里，无需外网）：
 psql -h <db-host> -U <user> -d <database> < deploy/pieces/metadata/pieces-seed.sql
 #    （dev compose 写法：docker exec -i platform-postgres-dev psql -U platform_dev \
 #      -d workflow_platform_dev < deploy/pieces/metadata/pieces-seed.sql）
 
-# 4. 重启 AP —— 不能省，registry 缓存在进程内存（见「注意」）
-#    compose：docker restart platform-activepieces-dev
-#    k8s：kubectl rollout restart deployment/activepieces
+# 4. 不需要重启 AP。
+#    /v1/pieces 和单件查询都是直接查库的,没有进程内缓存——2026-07-29 实测:先清空 piece_metadata
+#    再重启 AP(让它在"什么都没有"的状态下冷启),然后灌 seed,列表与单查立刻都通。
 ```
 
 验证（应输出白名单条数；浏览器要**硬刷新** Cmd+Shift+R，否则吃旧 JS 缓存）：
