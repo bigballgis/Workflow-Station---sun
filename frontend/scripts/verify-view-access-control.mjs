@@ -32,7 +32,7 @@ async function loadPlaywright() {
   try {
     return await import('playwright')
   } catch {
-    console.error('Install playwright from frontend/: npm install && npx playwright install chromium')
+    console.error('Install playwright from frontend/: pnpm install && pnpm exec playwright install chromium')
     process.exit(1)
   }
 }

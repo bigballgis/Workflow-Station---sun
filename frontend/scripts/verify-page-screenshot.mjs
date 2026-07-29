@@ -3,8 +3,8 @@
  * Playwright screenshot verification for frontend UI / parity changes.
  *
  * Usage (from frontend/):
- *   npm run verify:screenshot -- --app portal --url http://localhost:3000/portal/tasks/xxx --name task-detail
- *   npm run verify:screenshot -- --app portal --url ... --selector ".form-layout-card" --name title-card
+ *   pnpm run verify:screenshot -- --app portal --url http://localhost:3000/portal/tasks/xxx --name task-detail
+ *   pnpm run verify:screenshot -- --app portal --url ... --selector ".form-layout-card" --name title-card
  *
  * Screenshots are written to frontend/<app>/verification-screenshots/ and MUST NOT be deleted after verify.
  */
@@ -85,8 +85,8 @@ async function loadPlaywright() {
   } catch {
     console.error(
       'playwright is not installed. From frontend/ run:\n' +
-        '  npm install\n' +
-        '  npx playwright install chromium',
+        '  pnpm install\n' +
+        '  pnpm exec playwright install chromium',
     )
     process.exit(1)
   }

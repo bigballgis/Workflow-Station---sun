@@ -22,7 +22,7 @@ function run(cmd, args, cwd) {
 }
 
 console.log('\n[mi-regression] Phase 1/2 — unit tests\n')
-run('npm', ['run', 'test:regression:mi'], userPortalRoot)
+run('pnpm', ['run', 'test:regression:mi'], userPortalRoot)
 
 if (unitOnly) {
   console.warn('\n[mi-regression] WARN: --unit-only skips screenshot e2e — not a full regression pass\n')

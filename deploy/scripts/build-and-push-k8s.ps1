@@ -192,31 +192,35 @@ if (-not $SkipFrontend) {
             if (-not $PushOnly) {
                 Push-Location $ContextDir
                 try {
-                    # Skip npm install when node_modules is already up to date (mtime compare)
-                    $marker = Join-Path $ContextDir "node_modules\.package-lock.json"
-                    $manifests = @("package.json", "package-lock.json") |
+                    # Skip the install when node_modules is already up to date (mtime compare).
+                    # .modules.yaml is pnpm's post-install marker, the counterpart of npm's
+                    # node_modules/.package-lock.json.
+                    $marker = Join-Path $ContextDir "node_modules\.modules.yaml"
+                    $manifests = @("package.json", "pnpm-lock.yaml") |
                         ForEach-Object { Join-Path $ContextDir $_ } | Where-Object { Test-Path $_ }
                     $newestManifest = ($manifests | ForEach-Object { (Get-Item $_).LastWriteTime } | Measure-Object -Maximum).Maximum
                     if ((Test-Path $marker) -and ((Get-Item $marker).LastWriteTime -ge $newestManifest)) {
-                        $log += "[$Name] node_modules up to date, skipping npm install"
+                        $log += "[$Name] node_modules up to date, skipping pnpm install"
                     } else {
-                        $log += ">> [$Name] npm install"
-                        npm install --prefer-offline --no-audit 2>&1 | ForEach-Object { $log += "[$Name] $_" }
-                        if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "npm install"; Log = $log } }
+                        # --frozen-lockfile: a release build must fail on a lockfile that does
+                        # not match package.json rather than quietly resolving something else.
+                        $log += ">> [$Name] pnpm install"
+                        pnpm install --frozen-lockfile 2>&1 | ForEach-Object { $log += "[$Name] $_" }
+                        if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "pnpm install"; Log = $log } }
                     }
                     # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
                     Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-                    # `npm run build`, not `npx vite build`: the latter bypasses npm's
+                    # `pnpm run build`, not a bare vite call: the latter bypasses the
                     # `prebuild` hook, which is what copies the Activepieces builder bundle
-                    # into DW's public/. All three frontends declare "build": "vite build",
+                    # into DW's public/. All four frontends declare "build": "vite build",
                     # so this is equivalent for the others.
                     # SERVICE_TASK_BUILDER_REQUIRED makes DW's prebuild FAIL on a missing
                     # bundle rather than warn-and-continue — a release build must not
                     # silently produce an image without it.
                     if ($Name -eq "developer-workstation-frontend") { $env:SERVICE_TASK_BUILDER_REQUIRED = "1" }
-                    $log += ">> [$Name] npm run build"
-                    npm run build 2>&1 | ForEach-Object { $log += "[$Name] $_" }
-                    if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "npm run build"; Log = $log } }
+                    $log += ">> [$Name] pnpm run build"
+                    pnpm run build 2>&1 | ForEach-Object { $log += "[$Name] $_" }
+                    if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "pnpm run build"; Log = $log } }
                 } finally {
                     Pop-Location
                 }

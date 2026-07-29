@@ -103,11 +103,11 @@ private record CachedEntry(Object payload, long cachedAt) {
 - [ ] 后端是否有 N+1 查询模式？
 - [ ] 链式 HTTP 调用是否加了缓存？
 - [ ] 页面加载后用户多久能看到内容？（目标 ≤ 2.5s）
-- [ ] **触达 MI 热路径？** → 必跑 `npm run regression:mi`（单元 + 截图，见 `performance-change-safety.mdc`）
+- [ ] **触达 MI 热路径？** → 必跑 `pnpm run regression:mi`（单元 + 截图，见 `performance-change-safety.mdc`）
 
 ## MI 回归门禁
 
-触达 MI 热路径（`detail.vue` / `shared.ts` / `SubTableField.vue` 等）的性能改动，**MUST NOT 合并**前未通过 `npm run regression:mi`。**完整门禁规范（两层管道、invariant I1–I7、场景↔单测↔截图、PR 协议）见 `performance-change-safety.mdc`。**
+触达 MI 热路径（`detail.vue` / `shared.ts` / `SubTableField.vue` 等）的性能改动，**MUST NOT 合并**前未通过 `pnpm run regression:mi`。**完整门禁规范（两层管道、invariant I1–I7、场景↔单测↔截图、PR 协议）见 `performance-change-safety.mdc`。**
 
 ## 参考实现
 

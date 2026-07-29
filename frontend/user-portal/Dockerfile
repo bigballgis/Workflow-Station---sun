@@ -3,18 +3,22 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first for better caching
-COPY package*.json ./
+# pnpm via corepack — the exact version comes from package.json's "packageManager".
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
 
-# Install dependencies with cache mount
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit
+# Copy manifest + lockfile first for better caching
+COPY package.json pnpm-lock.yaml ./
+
+# Install dependencies with a shared pnpm store cache
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build the application (skip type check for Docker)
-RUN npx vite build
+RUN pnpm run build
 
 # Production stage
 FROM nginx:alpine

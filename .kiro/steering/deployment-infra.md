@@ -87,7 +87,7 @@ K8s 侧第三方镜像走私有 Nexus，见 `deploy/k8s/activepieces.yaml` 与�
 ## 构建部署流程
 
 1. `mvn clean package -DskipTests`（8 模块全部 BUILD SUCCESS）
-2. 每个前端: `npm install && npx vite build`
+2. 每个前端: `pnpm install && pnpm exec vite build`
 3. `docker compose up -d --build`
 4. 等待所有容器 `healthy`
 5. 冒烟验证核心功能

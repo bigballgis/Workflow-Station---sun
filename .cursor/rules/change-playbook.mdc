@@ -57,7 +57,7 @@ alwaysApply: true
 2. 与功能/fix 分 PR — 禁止同一 diff 既优化又改 MI merge/filter 语义
 3. 默认只动「取数层」— API、prefetch、TTL cache、flatten；语义层（viewContext、binding 类型、scope/backfill）须先 failing test
 4. 触达热路径（detail.vue、shared.ts、SubTableField.vue 等）→ 必跑：
-   cd frontend && npm run regression:mi
+   cd frontend && pnpm run regression:mi
 5. PR 描述：动哪一层 + invariant I1–I7 勾选 + **单元输出 + 截图路径列表**
 6. 禁止：为快跳过 isInitiatorMyRequestView；无 viewContext 的缓存 key；allSlices merge 替代 binding 分支
 ```

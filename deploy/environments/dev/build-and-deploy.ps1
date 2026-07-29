@@ -616,19 +616,22 @@ if ($Service) {
         $feDir = "$RootDir/$($svc.FrontendDir)"
         Push-Location $feDir
         try {
-            Write-Host "  npm install..." -ForegroundColor DarkGray
+            # Plain `pnpm install` (no --frozen-lockfile): dev is where dependencies get
+            # added, so the lockfile is allowed to move here. Release builds use
+            # --frozen-lockfile instead (deploy/scripts/build-and-push-k8s.ps1).
+            Write-Host "  pnpm install..." -ForegroundColor DarkGray
             $prev = $ErrorActionPreference
             $ErrorActionPreference = "Continue"
-            npm install --prefer-offline --no-audit
-            $npmExit = $LASTEXITCODE
+            pnpm install
+            $installExit = $LASTEXITCODE
             $ErrorActionPreference = $prev
-            if ($npmExit -ne 0) { throw "npm install failed: $Service (exit code $npmExit)" }
+            if ($installExit -ne 0) { throw "pnpm install failed: $Service (exit code $installExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
             Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-            # `npm run build` (not bare `npx vite build`) so the DW `prebuild` hook runs and
+            # `pnpm run build` (not a bare vite call) so the DW `prebuild` hook runs and
             # stages the ServiceTask builder bundle; a no-op difference for the other frontends.
-            npm run build
-            if ($LASTEXITCODE -ne 0) { throw "npm run build failed: $Service" }
+            pnpm run build
+            if ($LASTEXITCODE -ne 0) { throw "pnpm run build failed: $Service" }
         } finally {
             Pop-Location
         }
@@ -777,19 +780,19 @@ if (-not $SkipFrontend) {
         # skipped as "fresh", so the image silently keeps the previous builder.
         $needVite = $Clean -or $ForceBuild -or $builderRebuilt -or -not (Test-FrontendDistFresh -FrontendDir $fe.Dir)
         if ($needVite) {
-            Write-Host "  npm install & build $($fe.Name)..."
+            Write-Host "  pnpm install & build $($fe.Name)..."
             Push-Location $feDir
             try {
-                Write-Host "  npm install..." -ForegroundColor DarkGray
+                Write-Host "  pnpm install..." -ForegroundColor DarkGray
                 $prev = $ErrorActionPreference
                 $ErrorActionPreference = "Continue"
-                npm install --prefer-offline --no-audit
-                $npmExit = $LASTEXITCODE
+                pnpm install
+                $installExit = $LASTEXITCODE
                 $ErrorActionPreference = $prev
-                if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name) (exit code $npmExit)" }
+                if ($installExit -ne 0) { throw "pnpm install failed: $($fe.Name) (exit code $installExit)" }
                 Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-                npm run build
-                if ($LASTEXITCODE -ne 0) { throw "npm run build failed: $($fe.Name)" }
+                pnpm run build
+                if ($LASTEXITCODE -ne 0) { throw "pnpm run build failed: $($fe.Name)" }
             } finally {
                 Pop-Location
             }

@@ -6,13 +6,13 @@
 
 ```bash
 # 完整回归（默认，需 portal @ localhost:3000）
-cd frontend && npm run regression:mi
+cd frontend && pnpm run regression:mi
 
 # 仅单元（portal 未启动时的临时手段，不算完整回归）
-cd frontend && npm run regression:mi:unit-only
+cd frontend && pnpm run regression:mi:unit-only
 
 # 仅截图场景（跳过单元）
-cd frontend && npm run regression:mi:screenshots
+cd frontend && pnpm run regression:mi:screenshots
 ```
 
 ## 场景 ↔ 单测 ↔ 截图

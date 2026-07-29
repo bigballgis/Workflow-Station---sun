@@ -603,9 +603,9 @@ services:
   # ==================== Frontend Services ====================
   # Uses Dockerfile.local — requires pre-built dist/ in each frontend project.
   # Build steps before docker compose up:
-  #   1. cd frontend/admin-center && npm run build
-  #   2. cd frontend/user-portal && npm run build
-  #   3. cd frontend/developer-workstation && npm run build
+  #   1. cd frontend/admin-center && pnpm run build
+  #   2. cd frontend/user-portal && pnpm run build
+  #   3. cd frontend/developer-workstation && pnpm run build
 
   admin-center-frontend:
     build:

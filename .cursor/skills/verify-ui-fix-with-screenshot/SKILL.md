@@ -18,22 +18,22 @@ frontend 服务之后 **必须** 用 Playwright 截图验证，不得仅凭单�
 
 ## 快速路径
 
-1. 改代码 → 在对应 app 跑 `npm run build` → 重建 `*-frontend` Docker 服务
+1. 改代码 → 在对应 app 跑 `pnpm run build` → 重建 `*-frontend` Docker 服务
    （见根规则 `debug-mode-docker-workflow`）。
 2. 截图（仓库标准脚本 `frontend/scripts/verify-page-screenshot.mjs`）：
 
    ```bash
    cd frontend
-   npm install                       # 首次：安装 playwright devDep
-   npx playwright install chromium   # 首次：下载浏览器
+   pnpm install                       # 首次：安装 playwright devDep
+   pnpm exec playwright install chromium   # 首次：下载浏览器
 
    # 全页
-   npm run verify:screenshot -- --app portal --url "http://localhost:3000/portal/tasks/<taskId>" --name task-detail
+   pnpm run verify:screenshot -- --app portal --url "http://localhost:3000/portal/tasks/<taskId>" --name task-detail
    # 指定区域（parity：card 内 subTable）
-   npm run verify:screenshot -- --app portal --url "http://localhost:3000/portal/tasks/<taskId>" --selector ".form-layout-card" --name task-title-card
+   pnpm run verify:screenshot -- --app portal --url "http://localhost:3000/portal/tasks/<taskId>" --selector ".form-layout-card" --name task-title-card
    # admin / dw
-   npm run verify:screenshot -- --app admin --url "http://localhost:3000/admin/..." --name dashboard
-   npm run verify:screenshot -- --app dw    --url "http://localhost:3000/dev/..."   --name form-preview
+   pnpm run verify:screenshot -- --app admin --url "http://localhost:3000/admin/..." --name dashboard
+   pnpm run verify:screenshot -- --app dw    --url "http://localhost:3000/dev/..."   --name form-preview
    ```
 
    登录变量（可选）：`LOGIN_USER`、`LOGIN_PASS`（默认 `developer` / `password`）。
@@ -46,8 +46,8 @@ frontend 服务之后 **必须** 用 Playwright 截图验证，不得仅凭单�
 触达 MI 热路径（`detail.vue` / `shared.ts` / `SubTableField.vue` 等）时，跑完整回归：
 
 ```bash
-cd frontend && npm run regression:mi          # 99 unit tests + 6 截图场景
-cd frontend && npm run regression:mi:screenshots   # 仅 Playwright
+cd frontend && pnpm run regression:mi          # 99 unit tests + 6 截图场景
+cd frontend && pnpm run regression:mi:screenshots   # 仅 Playwright
 ```
 
 仅 `--unit-only` 为 portal 未启动时的临时手段，**不算**通过完整回归。
@@ -55,8 +55,8 @@ cd frontend && npm run regression:mi:screenshots   # 仅 Playwright
 
 ## 自检清单
 
-- [ ] 已 `npm run build` 并重建对应 `*-frontend` Docker 服务
-- [ ] 已跑 `npm run verify:screenshot`，截图落在 `verification-screenshots/` 且未删除
+- [ ] 已 `pnpm run build` 并重建对应 `*-frontend` Docker 服务
+- [ ] 已跑 `pnpm run verify:screenshot`，截图落在 `verification-screenshots/` 且未删除
 - [ ] parity 改动：目标 selector 的 DOM 断言通过（`--expect-selector` / `CARDS REPORT`）
 - [ ] 对话中引用了截图路径；与 DW Preview 对比时说明一致点
 

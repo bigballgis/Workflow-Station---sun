@@ -12,7 +12,7 @@ Playwright 截图输出目录。**验证后保留，不要删除。**
 
 ```bash
 
-cd frontend && npm run regression:mi
+cd frontend && pnpm run regression:mi
 
 ```
 
@@ -28,7 +28,7 @@ cd frontend && npm run regression:mi
 
 ```bash
 
-npm run verify:screenshot -- --app portal --url "http://localhost:3000/portal/..." --name my-feature
+pnpm run verify:screenshot -- --app portal --url "http://localhost:3000/portal/..." --name my-feature
 
 ```
 

@@ -53,7 +53,7 @@
 - 测试可重复执行，并正确清理数据库、timer、线程、mock 和外部资源。
 - 核心不变量适合时增加属性测试。
 - 可见 UI 必须 build、部署并保留 Playwright 截图。
-- Portal MI 热路径必须执行完整 `npm run regression:mi`；unit-only 不算完整通过。
+- Portal MI 热路径必须执行完整 `pnpm run regression:mi`；unit-only 不算完整通过。
 
 ### 数据库与迁移
 
@@ -203,7 +203,7 @@
 - 性能改动不得与 fix/feat 语义修改混 PR。
 - 提供同环境、同数据、同口径的优化前后结果；没有测量不得声称提升。
 - 不得以缓存、并行、少 clone 改变 FU、权限、MI merge/filter 或错误语义。
-- MI 热路径执行完整 `npm run regression:mi`。
+- MI 热路径执行完整 `pnpm run regression:mi`。
 
 ## 发布、回退与豁免
 

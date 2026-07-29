@@ -83,9 +83,9 @@ PR 模板：[.github/pull_request_template.md](../../.github/pull_request_templa
 
 | 模块 | 最低验证 |
 |------|----------|
-| **dw** 表单/Preview | `cd frontend/developer-workstation && npm run build`；UI 改动 + 截图 |
+| **dw** 表单/Preview | `cd frontend/developer-workstation && pnpm run build`；UI 改动 + 截图 |
 | **portal** 非 MI | build + 相关 vitest + portal 截图 |
-| **portal MI 热路径** | `cd frontend && npm run regression:mi`（单元+截图，禁止仅 unit-only 当完整通过） |
+| **portal MI 热路径** | `cd frontend && pnpm run regression:mi`（单元+截图，禁止仅 unit-only 当完整通过） |
 | **backend 单服务** | `mvn -pl backend/<m> -am package -DskipTests` + 重建 service + logs |
 | **platform-common** | 重建所有依赖 jar 的服务 |
 

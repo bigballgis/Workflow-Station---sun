@@ -328,7 +328,7 @@ Entity 字段 → SQL 脚本(deploy/init-scripts/) → MapStruct Mapper → DTO 
 2. 与功能/fix 分 PR — 禁止同一 diff 既优化又改 MI merge/filter 语义
 3. 默认只动「取数层」— API、prefetch、TTL cache、flatten；语义层（viewContext、binding 类型、scope/backfill）须先 failing test
 4. 触达热路径（detail.vue、shared.ts、SubTableField.vue 等）→ 必跑：
-   cd frontend && npm run regression:mi
+   cd frontend && pnpm run regression:mi
 5. PR 描述：动哪一层 + invariant I1–I7 勾选 + **单元输出 + 截图路径列表**
 6. 禁止：为快跳过 isInitiatorMyRequestView；无 viewContext 的缓存 key；allSlices merge 替代 binding 分支
 ```
@@ -421,9 +421,9 @@ PR 模板：[.github/pull_request_template.md](../../.github/pull_request_templa
 
 | 模块 | 最低验证 |
 |------|----------|
-| **dw** 表单/Preview | `cd frontend/developer-workstation && npm run build`；UI 改动 + 截图 |
+| **dw** 表单/Preview | `cd frontend/developer-workstation && pnpm run build`；UI 改动 + 截图 |
 | **portal** 非 MI | build + 相关 vitest + portal 截图 |
-| **portal MI 热路径** | `cd frontend && npm run regression:mi`（单元+截图，禁止仅 unit-only 当完整通过） |
+| **portal MI 热路径** | `cd frontend && pnpm run regression:mi`（单元+截图，禁止仅 unit-only 当完整通过） |
 | **backend 单服务** | `mvn -pl backend/<m> -am package -DskipTests` + 重建 service + logs |
 | **platform-common** | 重建所有依赖 jar 的服务 |
 
@@ -702,7 +702,7 @@ node .claude/scripts/sync-cursor-rules.mjs
 | `backend/developer-workstation/**` | `-pl backend/developer-workstation -am …` | `developer-workstation` |
 | `backend/workflow-engine-core/**` | `-pl backend/workflow-engine-core -am …` | `workflow-engine` |
 | `backend/platform-common/**` 或其它被多服务依赖的 `platform-*` | `mvn … -pl backend/<touch模块> -am package -DskipTests`，然后重建 **所有将该 jar 打进镜像的服务**（通常至少上述四个后端 service） | `user-portal` `admin-center` `developer-workstation` `workflow-engine`（按实际依赖裁剪） |
-| `frontend/user-portal/**` | `cd frontend/user-portal && npm run build` | `user-portal-frontend`；若兼改后端契约则同时重建 `user-portal` |
+| `frontend/user-portal/**` | `cd frontend/user-portal && pnpm run build` | `user-portal-frontend`；若兼改后端契约则同时重建 `user-portal` |
 | 其它 `frontend/*` | 同上 | 对应 `*-frontend` service |
 
 - **一键后端编译列表**见 **`deploy/environments/dev/docker-compose.dev.yml` 顶部注释**。
@@ -960,11 +960,11 @@ private record CachedEntry(Object payload, long cachedAt) {
 - [ ] 后端是否有 N+1 查询模式？
 - [ ] 链式 HTTP 调用是否加了缓存？
 - [ ] 页面加载后用户多久能看到内容？（目标 ≤ 2.5s）
-- [ ] **触达 MI 热路径？** → 必跑 `npm run regression:mi`（单元 + 截图，见 `performance-change-safety.mdc`）
+- [ ] **触达 MI 热路径？** → 必跑 `pnpm run regression:mi`（单元 + 截图，见 `performance-change-safety.mdc`）
 
 ## MI 回归门禁
 
-触达 MI 热路径（`detail.vue` / `shared.ts` / `SubTableField.vue` 等）的性能改动，**MUST NOT 合并**前未通过 `npm run regression:mi`。**完整门禁规范（两层管道、invariant I1–I7、场景↔单测↔截图、PR 协议）见 `performance-change-safety.mdc`。**
+触达 MI 热路径（`detail.vue` / `shared.ts` / `SubTableField.vue` 等）的性能改动，**MUST NOT 合并**前未通过 `pnpm run regression:mi`。**完整门禁规范（两层管道、invariant I1–I7、场景↔单测↔截图、PR 协议）见 `performance-change-safety.mdc`。**
 
 ## 参考实现
 
