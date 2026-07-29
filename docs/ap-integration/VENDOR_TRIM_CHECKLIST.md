@@ -75,6 +75,16 @@
 [`pnpm-workspace.yaml:14`](../../activepieces/pnpm-workspace.yaml:14) 仍声明 `packages/pieces/community/*`。
 当时只能靠推理判断没事，现已由上表第 3 行实测证实。
 
+> **2026-07-29 补：dev 构建脚本的新鲜度判断曾会让这些验证白做。**
+> `build-and-deploy.ps1` 里 AP 镜像的新鲜度**只看 `activepieces/Dockerfile` 一个文件的 mtime**，
+> 而 HERMES 的源码补丁全都落在 `packages/server` / `packages/web` 下 —— 在已构建过镜像的机器上
+> 拉这个分支，脚本会报 "image fresh, skipping"，然后拿旧镜像跑新代码，**无任何提示**。
+> 当场实测：旧监视集最新 mtime `04:39`，早于镜像的 `06:20`，VT-05 的改动确实不会进镜像。
+> 已改为监视 `Dockerfile` + `pnpm-lock.yaml` + `tsconfig.base.json` + `hermes/` +
+> `packages/server` + `packages/web/src`（两次扫描 438ms）。
+> **`pnpm-lock.yaml` 是其中最关键的一条**：删除不改动留存文件的 mtime，裁掉 690 个目录之后，
+> 锁文件是"vendor 树变过"唯一稳定的信号。
+
 ### VT-02 `test-api` 🟡 已执行（2026-07-28），结论是"测不了"
 
 不需要外部 Postgres / Redis —— `packages/server/api/.env.tests` 用的是 `AP_DB_TYPE=PGLITE`

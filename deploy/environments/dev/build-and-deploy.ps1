@@ -443,7 +443,10 @@ function Test-FrontendDistFresh {
         (Join-Path $feRoot "public"),
         (Join-Path $feRoot "index.html"),
         (Join-Path $feRoot "package.json"),
-        (Join-Path $feRoot "package-lock.json"),
+        # pnpm-lock.yaml, not package-lock.json: the frontends moved to pnpm in 4416e951 /
+        # 3da0e767, so the npm lockfile no longer exists anywhere and this entry was watching
+        # a path that is never there — dependency-only changes never forced a rebuild.
+        (Join-Path $feRoot "pnpm-lock.yaml"),
         (Join-Path $feRoot "vite.config.ts"),
         (Join-Path $feRoot "vite.config.js"),
         (Join-Path $feRoot "tsconfig.json"),
@@ -1075,8 +1078,25 @@ if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "dev-super
     Write-Host "  Skipping Docker build for superset-final (image fresh)." -ForegroundColor DarkGray
 }
 
-$apDockerfile = Join-Path $RootDir "activepieces/Dockerfile"
-if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "activepieces:0.84.0-ee-removed" -InputPaths @($apDockerfile))) {
+# Watching only the Dockerfile was wrong: every HERMES source patch lives under
+# packages/server or packages/web, and none of them would have triggered a rebuild — the
+# script would report "image fresh" and run last week's image against this week's source.
+# HERMES-PATCH-012 made that concrete by removing an unauthenticated endpoint, which is a
+# fix you cannot afford to silently skip.
+# pnpm-lock.yaml earns its place separately: deleting files does not touch the mtime of the
+# files that remain, so after HERMES-PATCH-013 trimmed 690 piece directories the lockfile is
+# the only stable signal that the vendor tree changed at all.
+# Get-NewestFileTime already skips node_modules/dist/.git/target, so this is ~2.5k files —
+# the same order as the frontend src scans this script already does per build.
+$apInputPaths = @(
+    (Join-Path $RootDir "activepieces/Dockerfile"),
+    (Join-Path $RootDir "activepieces/pnpm-lock.yaml"),
+    (Join-Path $RootDir "activepieces/tsconfig.base.json"),
+    (Join-Path $RootDir "activepieces/hermes"),
+    (Join-Path $RootDir "activepieces/packages/server"),
+    (Join-Path $RootDir "activepieces/packages/web/src")
+)
+if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "activepieces:0.84.0-ee-removed" -InputPaths $apInputPaths)) {
     $servicesToBuild.Add("activepieces") | Out-Null
 } else {
     Write-Host "  Skipping Docker build for activepieces (image fresh)." -ForegroundColor DarkGray
