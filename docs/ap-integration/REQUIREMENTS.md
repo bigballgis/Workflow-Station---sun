@@ -3,7 +3,10 @@
 > **Document 1 / 10** — 对应根目录 [AP_integration.md](../../AP_integration.md) §4 与 §16 要求的首个交付物。
 > 状态：**待冻结**。决策见 **[DECISIONS.md](DECISIONS.md)**（ADR，全局约束唯一来源）；
 > 阻塞项见 **[OPEN_GATES.md](OPEN_GATES.md)**；当前状态见 **[STATUS.md](STATUS.md)**。
-> 日期：2026-07-22（末次更新 07-23）　分支：`common_0710_AP_independent`
+> 日期：2026-07-22（末次更新 07-23）　分支：`common_0710_AP_independent`（该分支已合流，现行分支见仓库）
+>
+> ⚠️ **本文是需求规格，其中对上游现状的描述（如「运行时用 bun install 装 piece」）指的是「改造前的 0.84.0」**；
+> 需求本身（FR-F03A 等）已按 CR-01 落地为 pnpm + 构建期预装。**实施现状请看 [STATUS.md](STATUS.md)**。
 >
 > 集成路线：**不用 iframe、不用官方镜像跑 UI**。AP 0.84.0 源码 vendor 进本仓库、自维护、自构建镜像；
 > 画布以**源码级组件**进入 Developer Workstation（下称 DW）。

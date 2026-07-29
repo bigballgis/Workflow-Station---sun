@@ -1,14 +1,27 @@
 # Activepieces 0.84.0 集成 — 当前状态
 
-> **从这里开始读。** 更新日期：2026-07-24
+> **从这里开始读。** 更新日期：2026-07-28
 
 ---
 
 ## 一句话现状
 
 AP 0.84.0 的源码逆向已完成并证实：这**不是一次简单的 vendor，而是一个受控 fork**
-（约 1000–1300 行重实现 + Bun 迁移 + React→Vue 宿主适配 + EE 剥离 + 离线/安全改造）。
+（约 1000–1300 行重实现 + 去 bun + React→Vue 宿主适配 + EE 剥离 + 离线/安全改造）。
 **现已全部落地**：九层集成逐层实施并实测（L1 浏览器 E2E、L2/L3/L7 dev 实测、地基 L4–L9），原先卡住 Doc4 的三个红灯 Gate（AG-02 / AG-EE / AG-05）均已转绿。
+
+**07-25 → 07-28 又落了一批（本文档此前停在 07-24）**：
+- **运行时去 bun 彻底完成 + 气隙闭环**：piece 安装器改 pnpm（`node-linker=isolated`，布局须与引擎加载器一致）；
+  新增硬开关 **`AP_PIECES_OFFLINE_INSTALL`**（只认镜像内烘焙的离线 store，闭包外依赖 fail-closed）；
+  白名单与预烘焙脚本迁至 **`activepieces/hermes/`**，预烘焙并入 `activepieces/Dockerfile` 末层。
+- **气隙外观合规**：白标 + **CDN 资源本地化**（含存量数据的 DB 迁移），离线环境不再外链 cdn.activepieces.com。
+- **flow 跨环境迁移通道 + Q7**：admin-center 迁移页（启停/删除/**导入前 connection 清单比对**）+ 引擎**部署期 flowId 解析**
+  （迁移键 = `metadata.hermesFlowKey`，免打 AP 补丁）；**FU 导出包随带 Automation flow**，导入只补缺不覆盖。
+- **piece / flow 管理面与治理**：审计日志覆盖 Automation flow 与 piece、flow 删除守卫补扫 DW 侧 FU 引用、
+  悬空绑定可恢复；**在线管理的 prod 开放仍受 [D9 草案](D9_PIECE_ONLINE_ADMIN_DRAFT.md) 约束（未拍板前 prod 不得用）**。
+- **[D10](DECISIONS.md#d10)**：sync webhook 终态即释放（run 结束不再空等满 300s），第一批 HERMES-PATCH 落运行时。
+- **自研 piece 链路打通**：开发→构建→离线物料→烘焙→投放→DW 可用，全程有文档且**已实建两个件**
+  （`biz-calendar`、`hash-helper`）验证过流程可靠。
 
 **Phase 0 + AG-02 均已完成（2026-07-23）**：
 Phase 0 → 18 项能力盘点 + 13 条 EE-4 裁定 + 20 组处置，**必须重写的仅 5 项，AP 认证域可整体删除**；
@@ -32,6 +45,10 @@ AG-02 → **AP shared 独立编译零错误、零 AP 后端依赖、零 bun、DW
 | [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) | Document 3 — 依赖图与模块处置 | 初稿 |
 | [EE_REMOVAL_PLAN.md](EE_REMOVAL_PLAN.md) | **Document 3.5 — EE 剥离实施方案**（D3 新增） | ✅ §2/§3/§4/§5 完成；余 §1 两向清单 + §4.7 补测 + §6 CI Guard |
 | **[INTEGRATION_DESIGN.md](INTEGRATION_DESIGN.md)** | **Document 4 — 集成设计（九层 + §0.5 实施快照）** | 🟢 **九层全部已实施并实测：L1 浏览器 E2E PASS**（真实 builder 挂载/交互）+ L2/L3/L7 dev 实测 + 地基（L4/5/6/8/9）；余收尾（接 DW 视图/交付/C-1/air-gap） |
+| [HERMES_PATCHES.md](HERMES_PATCHES.md) | **HERMES-PATCH 台账**（[Q8](DECISIONS.md#q8) 要求的上游可追溯性：baseline / patch / 原因 / 许可） | 现行 |
+| [PIECE_DEVELOPMENT_HOWTO.md](PIECE_DEVELOPMENT_HOWTO.md) | 自研 piece 开发→部署到 DW 全链路（流程） | 现行 |
+| [PIECE_DEVELOPMENT_EXAMPLE.md](PIECE_DEVELOPMENT_EXAMPLE.md) | 配套完整示例（业务日历件，可直接抄） | 现行 |
+| [D9_PIECE_ONLINE_ADMIN_DRAFT.md](D9_PIECE_ONLINE_ADMIN_DRAFT.md) | D9 — piece 在线管理面治理 + C-2 重述 | ⚠️ **草案 v3，待评审；未拍板前不具约束力**（prod 的 import/delete 不得使用） |
 
 ---
 
@@ -80,6 +97,16 @@ AG-02 → **AP shared 独立编译零错误、零 AP 后端依赖、零 bun、DW
   "远程取策略 + 本地缓存 5min + 本地判定"，**AP 照搬即可**；且 **JWT 已带 roles/permissions ⇒ 主路径零回调**。
 - **成本口径修正**：原"1000–1300 行"**只含 EE 剥离**；另有 **HERMES 侧新建 ≈580 行**（原完全遗漏）
   + Bun 迁移 / Vue 集成 / offline / 安全基线（按工作包评估，**Vue 集成是最大不确定项**）。
+- **运行时装包 = pnpm，不是 bun**（X-4 全环境禁 bun，已彻底落地）：`node-linker=isolated` **不可改**——
+  引擎的 piece 加载器按 `pieces/<name>-<ver>/node_modules/<name>` 解析，hoist 就找不到（原 bun isolated 布局须逐字复刻）。
+  旧文档里的 `bunfig.toml` / `minimumReleaseAge` 排障线索已失效（文件随去 bun 删除）。
+- **气隙 piece 投放 = 两半**：**运行时半**（可执行包）预烘焙进镜像末层；**设计器半**（`piece_metadata` 行）
+  **不在镜像里**，需对目标库跑 seed SQL 后**重启 AP**（registry 缓存在进程内存，直接写表不失效 ⇒ 症状是列表有、单查 404）。
+  白名单唯一来源 = `activepieces/hermes/pieces.json`；`AP_PIECES_OFFLINE_INSTALL=true` 时闭包外依赖 fail-closed。
+- **k8s 镜像是自建 vendored 镜像**（`activepieces:0.84.0-ee-removed`，EE 剥离+去 bun+预烘焙），
+  **不是**上游二进制——**不要**再用 `mirror-thirdparty-images-k8s.ps1` 同步 AP（那条拉的镜像气隙下跑不通）。
+- **flow 跨环境迁移键 = `metadata.hermesFlowKey`**（不是 flowId——**flowId 跨环境必变**）；
+  引擎在**部署期**解析真实 flowId，故 BPMN 里不必按环境改绑。connection 仍不跟着迁，须目标环境预建同名。
 - **代码树布局（D5）**：AP 子树 → **仓库根 `activepieces/`**（自有锁，产物=镜像）；
   前端只留 **`frontend/packages/ap-contracts/`**（Codegen 派生，经 `file:` 依赖被 DW 消费）。
 - **AG-02 实测推翻三处前提**：① **AP shared 用 zod 4.3.6 不是 TypeBox** ⇒ 与 HERMES 的 typebox pin
@@ -105,6 +132,9 @@ AG-02 → **AP shared 独立编译零错误、零 AP 后端依赖、零 bun、DW
 | ~~5~~ | ~~AG-03 权限面回归 / AG-06 端点实现~~ **✅ 已完成（2026-07-24）**：L7 per-user 供给端到端 PASS、L3 HTTP RBAC 回归 PASS | 工程 | — |
 | ~~6~~ | ~~**L2 网关**（Kong builder API + per-user 透传）~~ **✅ 已完成（2026-07-24）**：AP `/api/ap/*` 收编进 Kong，REST/WS/per-user token dev 实测全绿 | 工程 | — |
 | ~~7~~ | ~~**L1 builder 挂载**~~ ✅ **浏览器 E2E PASS（2026-07-24）**：真实 builder Shadow-DOM 挂载/flow 加载/socket/piece 选择器全绿；余接 DW 视图 + 交付落地（AG-02.8） | 前端 | — |
+| ~~8~~ | ~~去 bun 收尾 / 气隙 piece 闭环 / flow 跨环境迁移 + Q7~~ **✅ 已完成（2026-07-25~28）**：见「一句话现状」 | 工程 | — |
+| 9 | 🔴 **气隙实证**：预烘焙镜像**尚未在真正断网的集群上验证过**（prod 红线，`activepieces.yaml` 里已标注） | 工程/运维 | 生产上线 |
+| 10 | 🟡 **[D9](D9_PIECE_ONLINE_ADMIN_DRAFT.md) 评审**：piece 在线管理面（import/delete）在 prod 的开放条件 —— **未拍板前 prod 不得使用** | 架构/安全 | piece 管理面上 prod |
 
 > **#2 合规评估仍是性价比最高且不在工程侧的待办**：若结论允许更宽用法，
 > EE 剥离的重实现范围可能显著缩小。但在得到正式意见前，**一律按 R-A 推进**。

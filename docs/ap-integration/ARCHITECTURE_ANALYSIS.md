@@ -6,6 +6,11 @@
 > 分析对象：0.84.0 源码快照（已验证与官方 tag `0.84.0` commit `05354b37` 逐字节一致）；
 > 只读分析，未做任何 install/build。
 > 日期：2026-07-22（末次更新 07-23）
+>
+> ⚠️ **本文描述的是「改造前的上游 0.84.0」，不是现状。** 文中 `bun install` / `bunfig.toml` /
+> `bun-runner.ts` 等均为**上游原貌**——HERMES 侧已按 CR-01 去 bun（运行时装包改 pnpm，
+> `bun-runner.ts` → `pkg-runner.ts`，`bunfig.toml` 已删）。**现状请看 [STATUS.md](STATUS.md)**；
+> 本文作为基线快照**刻意不随改造更新**，否则会丧失"上游长什么样"的对照价值。
 
 ## 0. 已核实基线（分析前提）
 
