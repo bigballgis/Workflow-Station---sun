@@ -16,6 +16,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -341,6 +342,63 @@ public class ProcessApplicationQueryComponent {
         });
     }
 
+    /**
+     * Gap-fills scalar process variables a service task (e.g. an Activepieces node writing back
+     * {@code output_text}) produced in the Flowable engine but that the portal's own
+     * {@code up_process_instance} store — written only by form submissions — still holds as
+     * {@code null} or misses entirely. Fill-only: any non-null portal value wins, so user input is
+     * never overwritten. {@code __subTables__} is excluded — {@link #hydrateEngineSubTablesIntoStore}
+     * owns it with its own per-slice merge rules. Persists so later reads see the output. Best-effort.
+     *
+     * <p>Unlike the sub-table hydration this also runs for ended instances: a straight-through
+     * automation (start → service task → end) leaves the store frozen at the submitted values, and
+     * the engine serves history variables for ended instances.</p>
+     */
+    private void hydrateEngineScalarsIntoStore(String processId, ProcessInstance instance, ProcessInstanceInfo info) {
+        if (workflowEngineClient == null || !workflowEngineClient.isAvailable()) {
+            return; // engine known-down: skip the read-path round-trip
+        }
+        try {
+            Map<String, Object> engineRow = workflowEngineClient.getProcessInstance(processId).orElse(null);
+            if (engineRow == null || !(engineRow.get("variables") instanceof Map<?, ?> engineVars)) {
+                return;
+            }
+            Map<String, Object> vars = info.getVariables() != null
+                    ? new HashMap<>(info.getVariables()) : new HashMap<>();
+            List<String> filled = new ArrayList<>();
+            for (Map.Entry<?, ?> e : engineVars.entrySet()) {
+                if (e.getKey() == null || e.getValue() == null) {
+                    continue;
+                }
+                String key = String.valueOf(e.getKey());
+                if ("__subTables__".equals(key) || vars.get(key) != null) {
+                    continue;
+                }
+                vars.put(key, e.getValue());
+                filled.add(key);
+            }
+            if (filled.isEmpty()) {
+                return;
+            }
+            info.setVariables(vars);
+            instance.setVariables(vars);
+            processInstanceRepository.save(instance);
+            log.info("getProcessDetail: hydrated engine-only variables {} for process {}", filled, processId);
+        } catch (RuntimeException e) {
+            log.debug("hydrateEngineScalarsIntoStore skipped for {}: {}", processId, e.getMessage());
+        }
+    }
+
+    /**
+     * True when the store holds at least one {@code null} variable value — the shape a service-task
+     * output leaves behind (the submitted form writes the key with no value). Used to keep the engine
+     * round-trip off the common path where nothing could be gap-filled anyway.
+     */
+    private boolean hasNullVariableValue(ProcessInstanceInfo info) {
+        Map<String, Object> vars = info.getVariables();
+        return vars != null && vars.containsValue(null);
+    }
+
     public ProcessInstanceInfo getProcessDetail(String processId) {
         Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
         if (optInstance.isEmpty()) {
@@ -356,6 +414,13 @@ public class ProcessApplicationQueryComponent {
         // later completion persists them instead of overwriting with an empty grid.
         if ("RUNNING".equals(instance.getStatus())) {
             hydrateEngineSubTablesIntoStore(processId, instance, info);
+        }
+        // Same gap for plain (non-sub-table) variables the service task wrote back, e.g. an
+        // Activepieces output mapped to output_text: the store keeps the null the start form
+        // submitted. Runs for ended instances too — a straight-through automation never gets a
+        // second portal write that would carry the value.
+        if (hasNullVariableValue(info)) {
+            hydrateEngineScalarsIntoStore(processId, instance, info);
         }
 
         // If the process is still running but the local DB has no currentNode stored,
