@@ -16,6 +16,7 @@
 #   .\build-and-deploy.ps1 -SkipMavenClean    # Maven package without clean (avoids clean delete failures)
 #   .\build-and-deploy.ps1 -RebuildServiceTaskBuilder  # Force-rebuild the AP Automation builder bundle
 #   .\build-and-deploy.ps1 -ForceBuild        # Ignore freshness checks; rebuild everything once
+#   .\build-and-deploy.ps1 -SkipApProvisioning # Skip AP shared-account/signing-key/piece-catalog provisioning
 #
 # Incremental strategy (default, without -Clean / -ForceBuild):
 #   - Skip Maven when backend JARs are newer than sources/poms
@@ -45,7 +46,11 @@ param(
     # or host-config; otherwise the existing bundle is reused (the build is heavy).
     [switch]$RebuildServiceTaskBuilder,
     # Ignore artifact/image freshness; rebuild Maven/Vite/Docker once (still no -v unless -Clean).
-    [switch]$ForceBuild
+    [switch]$ForceBuild,
+    # Skip the Activepieces provisioning pass (shared account / signing key / piece catalog).
+    # Each step is idempotent and gated on an emptiness check, so it normally costs a few
+    # queries; pass this only when AP is intentionally down or provisioned out-of-band.
+    [switch]$SkipApProvisioning
 )
 
 $ErrorActionPreference = "Stop"
@@ -584,6 +589,173 @@ function Invoke-SupersetBootstrap {
     Write-Host "  Superset bootstrap complete." -ForegroundColor Green
 }
 
+# ==================== Activepieces provisioning ====================
+# AP keeps ALL of its state in Postgres (same DB as HERMES). A fresh volume, a -Clean, or a
+# manual drop of the AP tables leaves the schema rebuilt by AP's own migrations but EMPTY:
+# no platform, no project, no signing_key, no piece_metadata. Rebuilding images restores none
+# of it, and the failure is silent-ish — the DW Automation tab just errors, because the bridge
+# signs with a ACTIVEPIECES_MANAGED_SIGNING_KEY_ID that no longer exists in signing_key.
+#
+# Every step below is idempotent and gated on "is it actually empty", so this is safe to run
+# on every deploy. See deploy/ACTIVEPIECES_INTEGRATION.md §6 and deploy/pieces/README.md.
+
+function Get-PgScalar {
+    param([Parameter(Mandatory = $true)][string]$Sql)
+    $pgUser = if ($env:POSTGRES_USER) { $env:POSTGRES_USER } else { "platform_dev" }
+    $pgDb = if ($env:POSTGRES_DB) { $env:POSTGRES_DB } else { "workflow_platform_dev" }
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $out = docker exec platform-postgres-dev psql -U $pgUser -d $pgDb -tAc $Sql 2>&1
+    $ErrorActionPreference = $prevEAP
+    if ($LASTEXITCODE -ne 0) { return $null }
+    return ($out | Out-String).Trim()
+}
+
+function Set-EnvFileValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Key,
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+    # Surgical single-line replace: .env is hand-maintained, so preserve every other line
+    # (comments, ordering, spacing) exactly as-is, along with the file's existing line ending
+    # and trailing-newline convention.
+    $raw = [System.IO.File]::ReadAllText($EnvFile)
+    $nl = if ($raw -match "`r`n") { "`r`n" } else { "`n" }
+    $endsWithNewline = $raw.EndsWith("`n")
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.AddRange([string[]]($raw -split "`r`n|`n"))
+    # A trailing newline yields a final empty element; drop it so an append does not land
+    # after a blank line, and re-add the newline when writing.
+    if ($endsWithNewline -and $lines.Count -gt 0 -and $lines[$lines.Count - 1] -eq "") {
+        $lines.RemoveAt($lines.Count - 1)
+    }
+    $found = $false
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match "^\s*$([regex]::Escape($Key))\s*=") {
+            $lines[$i] = "$Key=$Value"
+            $found = $true
+        }
+    }
+    if (-not $found) { $lines.Add("$Key=$Value") }
+    $out = ($lines -join $nl)
+    if ($endsWithNewline) { $out += $nl }
+    [System.IO.File]::WriteAllText($EnvFile, $out)
+    # Keep the in-process copy in sync so later compose calls interpolate the new value.
+    Set-Item -Path "env:$Key" -Value $Value
+}
+
+function Invoke-ApProvisioning {
+    $apContainer = "platform-activepieces-dev"
+    $pgUser = if ($env:POSTGRES_USER) { $env:POSTGRES_USER } else { "platform_dev" }
+    $pgDb = if ($env:POSTGRES_DB) { $env:POSTGRES_DB } else { "workflow_platform_dev" }
+
+    Write-Host "  Provisioning Activepieces (shared account / signing key / piece catalog)..." -ForegroundColor Yellow
+    Wait-ForContainerHealth -ServiceName "activepieces" -DisplayName "Activepieces" -MaxRetries 90 -SleepSeconds 3 | Out-Null
+
+    # --- 1. platform + default project (idempotent; exits early when already onboarded) ---
+    # AP 0.84 CE sign-up only creates a user_identity — POST /v1/platforms is what actually
+    # creates the platform + default project. The bootstrap script does both.
+    $bootstrap = Join-Path $RootDir "deploy/scripts/ap-bootstrap-shared-account.js"
+    if (-not (Test-Path $bootstrap)) { throw "AP bootstrap script not found: $bootstrap" }
+    Get-Content -Raw $bootstrap | docker exec `
+        -e "ACTIVEPIECES_SHARED_EMAIL=$($env:ACTIVEPIECES_SHARED_EMAIL)" `
+        -e "ACTIVEPIECES_SHARED_PASSWORD=$($env:ACTIVEPIECES_SHARED_PASSWORD)" `
+        -e "AP_INTERNAL_URL=http://localhost:80" `
+        -i $apContainer node -
+    if ($LASTEXITCODE -ne 0) { throw "ap-bootstrap-shared-account.js failed" }
+
+    # --- 2. stamp the default project's externalId ---
+    # MUST happen before the first managed-authn exchange: getOrCreateProject looks the project
+    # up by externalId and silently CREATES A SECOND ONE when it does not match, which splits
+    # the shared account and managed users into different projects that cannot see each other's
+    # flows. Stamping the existing default project keeps them on one.
+    $projectExternalId = if ($env:ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID) { $env:ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID } else { "hermes-main" }
+    $stamped = Get-PgScalar "update project set ""externalId""='$projectExternalId' where ""externalId"" is null;"
+    if ($null -ne $stamped) {
+        $projCount = Get-PgScalar "select count(*) from project where ""externalId""='$projectExternalId';"
+        Write-Host "    Project externalId=$projectExternalId ($projCount project row(s))." -ForegroundColor DarkGray
+    }
+
+    # --- 3. signing key for L7 managed auth (only when the table is empty) ---
+    # The private key is returned exactly once, at creation, so it has to be captured here and
+    # written back to .env — that is where compose interpolates it from for admin-center.
+    $keyCount = Get-PgScalar "select count(*) from signing_key;"
+    if ($keyCount -eq "0") {
+        Write-Host "    signing_key table is empty -> issuing a new key pair." -ForegroundColor Yellow
+        $mkKeyJs = @'
+'use strict';
+const http = require('http');
+function req(method, path, body, token) {
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null;
+    const headers = {};
+    if (payload) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(payload); }
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const r = http.request({ method, hostname: 'localhost', port: 80, path, headers }, (res) => {
+      let d = ''; res.on('data', c => d += c); res.on('end', () => resolve({ status: res.statusCode, body: d }));
+    });
+    r.on('error', reject); if (payload) r.write(payload); r.end();
+  });
+}
+(async () => {
+  const si = await req('POST', '/api/v1/authentication/sign-in', { email: process.env.E, password: process.env.P });
+  if (si.status !== 200) throw new Error('sign-in ' + si.status + ' ' + si.body.slice(0, 200));
+  const s = JSON.parse(si.body);
+  const r = await req('POST', '/api/v1/signing-keys', { displayName: 'hermes-dev' }, s.token);
+  if (r.status < 200 || r.status >= 300) throw new Error('signing-keys ' + r.status + ' ' + r.body.slice(0, 300));
+  const k = JSON.parse(r.body);
+  // Single-line PEM: .env cannot hold literal newlines, and the Java side re-inflates it.
+  process.stdout.write(k.id + '\n' + k.privateKey.replace(/\r?\n/g, '') + '\n');
+})().catch(e => { console.error(String(e.message || e)); process.exit(1); });
+'@
+        $tmpJs = Join-Path ([System.IO.Path]::GetTempPath()) "ap-mk-signing-key.js"
+        [System.IO.File]::WriteAllText($tmpJs, $mkKeyJs)
+        try {
+            $keyOut = Get-Content -Raw $tmpJs | docker exec `
+                -e "E=$($env:ACTIVEPIECES_SHARED_EMAIL)" `
+                -e "P=$($env:ACTIVEPIECES_SHARED_PASSWORD)" `
+                -i $apContainer node -
+            if ($LASTEXITCODE -ne 0) { throw "signing-key creation failed: $keyOut" }
+        } finally {
+            Remove-Item $tmpJs -ErrorAction SilentlyContinue
+        }
+        $keyLines = ($keyOut | Out-String) -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        if ($keyLines.Count -lt 2) { throw "unexpected signing-key output: $keyOut" }
+        Set-EnvFileValue -Key "ACTIVEPIECES_MANAGED_SIGNING_KEY_ID" -Value $keyLines[0]
+        Set-EnvFileValue -Key "ACTIVEPIECES_MANAGED_PRIVATE_KEY" -Value $keyLines[1]
+        Write-Host "    New signing key $($keyLines[0]) written to .env (admin-center will be recreated)." -ForegroundColor Green
+        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps --force-recreate admin-center
+        if ($LASTEXITCODE -ne 0) { throw "admin-center recreate failed after signing-key rotation" }
+    } else {
+        Write-Host "    signing_key already provisioned ($keyCount row(s))." -ForegroundColor DarkGray
+    }
+
+    # --- 4. piece catalog (designer half of the allowlist) ---
+    # AP_PIECES_SYNC_MODE=NONE means nothing ever populates piece_metadata on its own; without
+    # this the Automation canvas offers zero steps. The seed is DELETE+INSERT per piece, so
+    # re-running it is safe; it is regenerated from activepieces/hermes/pieces.json.
+    $pieceCount = Get-PgScalar "select count(*) from piece_metadata;"
+    $seedSql = Join-Path $RootDir "deploy/pieces/metadata/pieces-seed.sql"
+    if ($pieceCount -eq "0") {
+        if (-not (Test-Path $seedSql)) { throw "piece seed not found: $seedSql" }
+        Write-Host "    piece_metadata is empty -> seeding the piece catalog." -ForegroundColor Yellow
+        # docker cp + psql -f, not a pipe: the seed embeds newlines inside $ap$-quoted JSON.
+        docker cp $seedSql "platform-postgres-dev:/tmp/pieces-seed.sql"
+        if ($LASTEXITCODE -ne 0) { throw "docker cp of pieces-seed.sql failed" }
+        docker exec platform-postgres-dev psql -U $pgUser -d $pgDb -v ON_ERROR_STOP=1 -q -f /tmp/pieces-seed.sql
+        if ($LASTEXITCODE -ne 0) { throw "pieces-seed.sql failed" }
+        $pieceCount = Get-PgScalar "select count(*) from piece_metadata;"
+        # AP caches the piece registry in-process; without a restart the canvas stays empty.
+        docker restart $apContainer | Out-Null
+        Wait-ForContainerHealth -ServiceName "activepieces" -DisplayName "Activepieces" -MaxRetries 90 -SleepSeconds 3 | Out-Null
+        Write-Host "    Seeded $pieceCount piece(s) and restarted AP." -ForegroundColor Green
+    } else {
+        Write-Host "    piece_metadata already seeded ($pieceCount piece(s))." -ForegroundColor DarkGray
+    }
+
+    Write-Host "  Activepieces provisioning complete." -ForegroundColor Green
+}
+
 $env:DOCKER_BUILDKIT = "1"
 $env:SUPERSET_PIP_CONF_FILE = Resolve-SupersetPipConfFile
 
@@ -1026,6 +1198,16 @@ Wait-ForContainerHealth -ServiceName "edge-frontend" -DisplayName "Edge frontend
 # Superset is required: URI fail-closed + bootstrap must succeed (no warning soft-pass).
 Invoke-SupersetBootstrap
 
+# AP state lives in Postgres, so a fresh volume / -Clean leaves it empty and the DW Automation
+# tab broken. Idempotent — skipped work is a couple of COUNT queries.
+if ($SkipApProvisioning) {
+    Write-Host "  Skipping Activepieces provisioning (-SkipApProvisioning)." -ForegroundColor DarkGray
+} elseif ($OptionalComposeServices -contains 'activepieces' -and -not (Get-ComposeContainerId -ServiceName 'activepieces')) {
+    Write-Host "  Activepieces container not running; skipping AP provisioning." -ForegroundColor DarkGray
+} else {
+    Invoke-ApProvisioning
+}
+
 Write-Host "  Current service status:" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps
 
@@ -1080,14 +1262,20 @@ Write-Host "  Kafka:                  localhost:9092"
 Write-Host "  Superset (edge only):   http://localhost:$EdgePort/bi/"
 Write-Host "  Superset health:        http://localhost:$EdgePort/bi/health"
 Write-Host ""
-# AP piece catalog is provisioned internally (AP_PIECES_SYNC_MODE=NONE): a fresh DB / -Clean
-# starts EMPTY, so the DW Automation tab shows no pieces until piece_metadata is seeded.
-$pgUser = if ($env:POSTGRES_USER) { $env:POSTGRES_USER } else { "platform_dev" }
-$pgDb = if ($env:POSTGRES_DB) { $env:POSTGRES_DB } else { "workflow_platform_dev" }
-Write-Host "Automation pieces (empty after a fresh DB / -Clean — seed to populate the catalog):" -ForegroundColor Yellow
-Write-Host "  Get-Content ../../pieces/metadata/pieces-seed.sql | docker exec -i platform-postgres-dev psql -U $pgUser -d $pgDb"
-Write-Host "  then restart AP:  docker restart platform-activepieces-dev   (piece registry is cached in-process)"
-Write-Host ""
+# AP provisioning (shared account, signing key, piece catalog) runs automatically above via
+# Invoke-ApProvisioning; each step is gated on an emptiness check. Report the resulting state
+# so a broken Automation tab is obvious here rather than in the browser.
+if (-not $SkipApProvisioning) {
+    $apPieces = Get-PgScalar "select count(*) from piece_metadata;"
+    $apKeys = Get-PgScalar "select count(*) from signing_key;"
+    $apProjects = Get-PgScalar "select count(*) from project;"
+    if ($null -ne $apPieces) {
+        Write-Host "Automation (Activepieces):" -ForegroundColor Cyan
+        Write-Host "  pieces=$apPieces  signing keys=$apKeys  projects=$apProjects"
+        Write-Host "  Re-provision manually: .\build-and-deploy.ps1 -ServicesOnly"
+        Write-Host ""
+    }
+}
 Write-Host "Commands:" -ForegroundColor DarkGray
 Write-Host "  Logs:   docker compose -f docker-compose.dev.yml --env-file .env logs -f [service]"
 Write-Host "  Superset logs: docker compose -f docker-compose.dev.yml --env-file .env logs -f superset-final"
