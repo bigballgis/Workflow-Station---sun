@@ -329,3 +329,10 @@ frontend/scripts/_*.json
 frontend/scripts/_*.mjs
 
 deploy/pieces_metadata*
+
+# 前端/AP 构建产物压缩包不入库。web-embed 曾以 deploy/pieces/web-embed-<sha>.zip 提交过一次
+# （9.15 MiB，git 里删不掉），它绕开了 activepieces/.gitignore 的 `dist` 规则。产物走带外分发 +
+# build-and-push-k8s.ps1 的 -SkipApWorkspaceInstall 复用路径，见 BUILD_GUIDE 7.2。
+# 注意:activepieces/hermes/tarballs/*.tgz 是**有意**入库的（13 个件共 344 KB，气隙投放物料），
+# 与此不同——那是无法重建的审批产物,这里是每次都能从源码重建的构建产物。
+deploy/**/*.zip
