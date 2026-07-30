@@ -127,9 +127,13 @@ Write-Host "   missing     : $($missing.Count)  (404 — 私服没有这个版�
 Write-Host "   quarantined : $($quarantined.Count)  (403 — 存在但被 Firewall 扣住,需申请放行)" -ForegroundColor $(if ($quarantined.Count) { "Red" } else { "Green" })
 Write-Host "   other       : $($other.Count)  (401/5xx/超时/TLS — 环境问题,不是覆盖缺口)" -ForegroundColor $(if ($other.Count) { "Yellow" } else { "Green" })
 
-$missing | Sort-Object Spec | ForEach-Object { $_.Spec } | Set-Content $OutFile
+# 空管道时 Set-Content **不会创建文件**,于是"全绿"的一次运行会打印一个不存在的路径,
+# 而调用方要么报错,要么读到上一次运行残留的清单、把旧缺口当成本次结果。所以先建空文件再追加。
+$missingLines = @($missing | Sort-Object Spec | ForEach-Object { $_.Spec })
+Set-Content -Path $OutFile -Value "" -NoNewline
+if ($missingLines.Count -gt 0) { Add-Content -Path $OutFile -Value $missingLines }
 Write-Host ""
-Write-Host "   -> $OutFile" -ForegroundColor Cyan
+Write-Host "   -> $OutFile$(if ($missingLines.Count -eq 0) { '  (empty — no 404 gaps)' })" -ForegroundColor Cyan
 if ($quarantined.Count -gt 0) {
     $qFile = [System.IO.Path]::ChangeExtension($OutFile, ".quarantined.txt")
     $quarantined | Sort-Object Spec | ForEach-Object { "$($_.Spec)`t$($_.Error)" } | Set-Content $qFile
