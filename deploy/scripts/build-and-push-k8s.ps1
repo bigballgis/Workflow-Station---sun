@@ -10,6 +10,8 @@
 #   # host whose npm mirror cannot satisfy the AP workspace: reuse a carried-over
 #   # activepieces/dist/packages/web-embed instead of installing and rebuilding it
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipApWorkspaceInstall
+#   # deployment without Activepieces: DW frontend ships without the Automation builder
+#   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -NoServiceTaskBuilder
 # =====================================================
 
 param(
@@ -34,6 +36,12 @@ param(
     # packages the frontend lockfiles pin (axios, vitest, …). Fails per service when its
     # dist/index.html is absent rather than packing an empty image.
     [switch]$UsePrebuiltFrontendDist = $false,
+    # Deliberately ship developer-workstation-frontend WITHOUT the embedded Activepieces
+    # builder: no bundle build, and DW's prebuild hook is allowed to warn-and-continue instead
+    # of failing. For a deployment where Activepieces itself is not rolled out, so the
+    # Automation tab has no backend to talk to anyway — it then reports the builder as
+    # unavailable rather than 404ing on web.css. Default stays fail-closed.
+    [switch]$NoServiceTaskBuilder = $false,
     [switch]$SkipBackend = $false,
     [switch]$PushOnly = $false,
     [switch]$NoPush = $false,
@@ -179,8 +187,11 @@ if (-not $SkipFrontend) {
     # service-task-builder/ (its prebuild hook copied the bundle in on the host that built it),
     # and that hook does not run here at all. Without this, a host carrying a complete dist would
     # still be told to produce a bundle it does not need.
-    $needsApBuilder = (-not $UsePrebuiltFrontendDist) -and
+    $needsApBuilder = (-not $UsePrebuiltFrontendDist) -and (-not $NoServiceTaskBuilder) -and
         @($selectedFrontend | Where-Object { $_.Name -eq "developer-workstation-frontend" }).Count -gt 0
+    if ($NoServiceTaskBuilder) {
+        Write-Host "   WARNING: -NoServiceTaskBuilder — developer-workstation-frontend will ship WITHOUT the Automation builder; the tab reports it as unavailable. Use only where Activepieces is not deployed." -ForegroundColor Yellow
+    }
     if ($needsApBuilder -and -not $PushOnly) {
         $apRootDir = Join-Path $ProjectRoot "activepieces"
         $apWebDir = Join-Path $apRootDir "packages/web"
@@ -258,9 +269,9 @@ if (-not $SkipFrontend) {
     $frontendJobs = foreach ($svc in $selectedFrontend) {
         Start-ThreadJob -ThrottleLimit $MaxParallel -Name $svc.Name -ArgumentList @(
             $svc.Name, (Join-Path $ProjectRoot $svc.Dir), "$Registry/$($svc.Name):$Tag",
-            [bool]$PushOnly, [bool]$NoPush, [bool]$UsePrebuiltFrontendDist
+            [bool]$PushOnly, [bool]$NoPush, [bool]$UsePrebuiltFrontendDist, [bool]$NoServiceTaskBuilder
         ) -ScriptBlock {
-            param($Name, $ContextDir, $ImageName, $PushOnly, $NoPush, $UsePrebuiltDist)
+            param($Name, $ContextDir, $ImageName, $PushOnly, $NoPush, $UsePrebuiltDist, $NoBuilder)
             # Use a native PowerShell array (not a generic List) so this runs under
             # Constrained Language Mode, where [System.Collections.Generic.List[...]]::new() is blocked.
             $log = @()
@@ -306,7 +317,14 @@ if (-not $SkipFrontend) {
                     # SERVICE_TASK_BUILDER_REQUIRED makes DW's prebuild FAIL on a missing
                     # bundle rather than warn-and-continue — a release build must not
                     # silently produce an image without it.
-                    if ($Name -eq "developer-workstation-frontend") { $env:SERVICE_TASK_BUILDER_REQUIRED = "1" }
+                    # Thread jobs share the host process environment, so this variable also
+                    # outlives a previous run in the same shell — clear it explicitly rather
+                    # than merely not setting it, or -NoServiceTaskBuilder would still hard-fail
+                    # after a normal run in the same session.
+                    if ($Name -eq "developer-workstation-frontend") {
+                        if ($NoBuilder) { $env:SERVICE_TASK_BUILDER_REQUIRED = $null }
+                        else { $env:SERVICE_TASK_BUILDER_REQUIRED = "1" }
+                    }
                     $log += ">> [$Name] pnpm run build"
                     pnpm run build 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                     if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "pnpm run build"; Log = $log } }
