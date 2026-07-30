@@ -318,7 +318,12 @@ Push-Location frontend/admin-center; pnpm install --frozen-lockfile; pnpm run bu
 Push-Location frontend/user-portal; pnpm install --frozen-lockfile; pnpm run build; Pop-Location
 
 # developer-workstation-frontend
-# ① 先构建内嵌的 Activepieces builder（产物 gitignore，干净 checkout 上不存在）
+# ⓪ 装 Activepieces workspace 依赖（干净 checkout 上没有；只需装一次，后续构建复用）
+#    必须在 activepieces 根目录装：这是 pnpm workspace，根 install 才会给 packages/web 建好链接。
+#    .npmrc 里有 ${NPM_TOKEN}，环境变量未定义时 pnpm 直接报错退出；走公共 registry 时该值不被使用。
+$env:NPM_TOKEN = "x"
+Push-Location activepieces; pnpm install --frozen-lockfile; Pop-Location
+# ① 再构建内嵌的 Activepieces builder（产物 gitignore，干净 checkout 上不存在）
 Push-Location activepieces/packages/web; pnpm exec vite build --config vite.embed.config.mts; Pop-Location
 # ② 必须用 pnpm run build（不是直接调 vite）——只有前者会触发 prebuild 钩子，
 #    把 ① 的产物拷进 public/service-task-builder/
@@ -330,13 +335,20 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 
 成功标志：每个前端输出 `✓ built in XXs`，`dist/` 目录生成。
 
-> ⚠️ **developer-workstation-frontend 的两步顺序不能省**。Function Unit 的 Automation 标签
+> ⚠️ **⓪ 是重活也是唯一联网前置**：`activepieces/node_modules` 约 2.9 GB、几千个包，且需要能访问
+> `registry.npmjs.org`。气隙/只有内网 registry 的构建机在这一步就会断，此时改走"别处构建 bundle +
+> 拷 `activepieces/dist/packages/web-embed/` 过来"（见 7.2 末尾脚本行为说明）。想减负可只装 web 及其
+> workspace 依赖：`pnpm install --frozen-lockfile --filter web...`。
+>
+> ⚠️ **developer-workstation-frontend 的三步顺序不能省**。Function Unit 的 Automation 标签
 > 直接挂 AP builder，其 bundle 走「构建期拷贝」交付（AG-02.8）：AP 产物 →
 > `public/service-task-builder/` → `dist/` → 镜像。产物是 gitignore 的构建物，**不入库**。
 > 漏掉任一步，构建仍然全绿、镜像照推，但运行时 `/dev/service-task-builder/web.css` 返回 404。
 > 打镜像前可先自查：`ls frontend/developer-workstation/dist/service-task-builder/web.css`。
-> 走 `deploy/scripts/build-and-push-k8s.ps1` 则这两步已内置，且缺产物会直接构建失败
-> （`SERVICE_TASK_BUILDER_REQUIRED`），不会静默放过。
+> 走 `deploy/scripts/build-and-push-k8s.ps1` 则 ①② 已内置（⓪ 不内置，需按上面手工装一次），
+> 且缺产物会直接构建失败（`SERVICE_TASK_BUILDER_REQUIRED`），不会静默放过。
+> 该脚本在 AP 依赖缺失时的行为：若 `activepieces/dist/packages/web-embed/ap-builder.mjs` 已存在
+> （从别处拷来），则**告警并复用**该 bundle 继续构建；若两者都没有，才按上面的 FAIL 停下。
 
 ### 7.3 Docker 镜像构建
 

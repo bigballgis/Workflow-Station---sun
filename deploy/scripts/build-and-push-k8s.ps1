@@ -166,18 +166,31 @@ if (-not $SkipFrontend) {
     $needsApBuilder = @($selectedFrontend | Where-Object { $_.Name -eq "developer-workstation-frontend" }).Count -gt 0
     if ($needsApBuilder -and -not $PushOnly) {
         $apWebDir = Join-Path $ProjectRoot "activepieces/packages/web"
-        if (-not (Test-Path (Join-Path $apWebDir "node_modules"))) {
-            Write-Fail "Activepieces workspace deps are missing ($apWebDir/node_modules). Install them before building developer-workstation-frontend, or exclude it with -Services."
+        $embedMarker = Join-Path $ProjectRoot "activepieces/dist/packages/web-embed/ap-builder.mjs"
+        # The AP workspace install is NOT done by this script (it is heavy — ~3 GB — and the
+        # only step that needs registry.npmjs.org), so an air-gapped build host may instead
+        # carry the bundle over from a machine that can build it. Reuse it in that case;
+        # only fail when there is neither a way to build the bundle nor a bundle to reuse.
+        $canBuildBundle = Test-Path (Join-Path $apWebDir "node_modules")
+        if (-not $canBuildBundle -and -not (Test-Path $embedMarker)) {
+            Write-Fail "Activepieces workspace deps are missing ($apWebDir/node_modules) and no prebuilt bundle at $embedMarker. Run 'pnpm install --frozen-lockfile' in activepieces/ (see BUILD_GUIDE 7.2 step 0), copy a prebuilt activepieces/dist/packages/web-embed over, or exclude developer-workstation-frontend with -Services."
         }
-        Write-Host "   >> [ap-builder] vite build (web-embed)" -ForegroundColor Gray
-        Push-Location $apWebDir
-        try {
-            pnpm exec vite build --config vite.embed.config.mts
-            if ($LASTEXITCODE -ne 0) { Write-Fail "Activepieces web-embed build failed" }
-        } finally {
-            Pop-Location
+        if ($canBuildBundle) {
+            Write-Host "   >> [ap-builder] vite build (web-embed)" -ForegroundColor Gray
+            Push-Location $apWebDir
+            try {
+                pnpm exec vite build --config vite.embed.config.mts
+                if ($LASTEXITCODE -ne 0) { Write-Fail "Activepieces web-embed build failed" }
+            } finally {
+                Pop-Location
+            }
+            Write-Ok "ap-builder (web-embed)"
+        } else {
+            # Reused, not rebuilt: whoever copied it in owns its freshness. Loud on purpose —
+            # a stale bundle ships an outdated builder into the image and nothing else warns.
+            Write-Host "   WARNING: AP workspace deps absent; REUSING prebuilt bundle at $embedMarker without rebuilding it. Verify it matches this commit." -ForegroundColor Yellow
+            Write-Ok "ap-builder (web-embed, reused)"
         }
-        Write-Ok "ap-builder (web-embed)"
     }
 
     $frontendJobs = foreach ($svc in $selectedFrontend) {
