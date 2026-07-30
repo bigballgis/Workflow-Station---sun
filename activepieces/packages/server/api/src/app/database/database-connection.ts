@@ -3,7 +3,6 @@ import {
     DataSource,
     EntitySchema,
 } from 'typeorm'
-import { AIProviderEntity } from '../ai/ai-provider-entity'
 import { PlatformAnalyticsReportEntity } from '../analytics/platform-analytics-report.entity'
 import { AppConnectionEntity } from '../app-connection/app-connection.entity'
 import { UserIdentityEntity } from '../authentication/user-identity/user-identity-entity'
@@ -22,10 +21,6 @@ import { system } from '../helper/system/system'
 import { AppSystemProp } from '../helper/system/system-props'
 import { KnowledgeBaseChunkEntity } from '../knowledge-base/knowledge-base-chunk.entity'
 import { KnowledgeBaseFileEntity } from '../knowledge-base/knowledge-base-file.entity'
-import { McpServerEntity } from '../mcp/mcp-entity'
-import { McpOAuthClientEntity } from '../mcp/oauth/client/mcp-oauth-client.entity'
-import { McpOAuthAuthorizationCodeEntity } from '../mcp/oauth/code/mcp-oauth-code.entity'
-import { McpOAuthTokenEntity } from '../mcp/oauth/token/mcp-oauth-token.entity'
 import { PieceMetadataEntity } from '../pieces/metadata/piece-metadata-entity'
 import { PieceTagEntity } from '../pieces/tags/pieces/piece-tag.entity'
 import { TagEntity } from '../pieces/tags/tag-entity'
@@ -72,7 +67,6 @@ function getEntities(): EntitySchema<unknown>[] {
         TagEntity,
         PieceTagEntity,
         UserInvitationEntity,
-        AIProviderEntity,
         ProjectRoleEntity,
         TableEntity,
         FieldEntity,
@@ -81,10 +75,9 @@ function getEntities(): EntitySchema<unknown>[] {
         TableWebhookEntity,
         UserIdentityEntity,
         SigningKeyEntity,
-        McpServerEntity,
-        McpOAuthClientEntity,
-        McpOAuthAuthorizationCodeEntity,
-        McpOAuthTokenEntity,
+        // HERMES-PATCH-015: AIProviderEntity + 4 个 Mcp* 实体随 VT-17 移除。
+        // 表本身由历史迁移建出、仍留在库里（迁移是既成事实，不回改）——
+        // 这里摘掉的只是 TypeORM 的托管，不产生 schema 变更。
         KnowledgeBaseFileEntity,
         KnowledgeBaseChunkEntity,
         TriggerSourceEntity,

@@ -8,8 +8,6 @@ import { jsonSchemaTransform, jsonSchemaTransformObject } from 'fastify-type-pro
 import Mustache from 'mustache'
 import { globalRegistry } from 'zod/v4/core'
 import { agentsModule } from './agents/agents-module'
-import { aiProviderService } from './ai/ai-provider-service'
-import { aiProviderModule } from './ai/ai-provider.module'
 import { platformAnalyticsModule } from './analytics/platform-analytics.module'
 import { setPlatformOAuthService } from './app-connection/app-connection-service/oauth2'
 import { appConnectionModule } from './app-connection/app-connection.module'
@@ -39,8 +37,6 @@ import { systemJobHandlers } from './helper/system-jobs/job-handlers'
 import { systemJobsSchedule } from './helper/system-jobs/system-job'
 import { validateEnvPropsOnStartup } from './helper/system-validator'
 import { knowledgeBaseModule } from './knowledge-base/knowledge-base.module'
-import { mcpServerModule } from './mcp/mcp-module'
-import { mcpOAuthApproveController } from './mcp/oauth/code/mcp-oauth-approve.controller'
 import { communityPiecesModule } from './pieces/community-piece-module'
 import { managedAuthnModule } from './managed-authn/managed-authn-module'
 import { projectModule } from './project/project.module'
@@ -167,8 +163,9 @@ export const setupApp = async (app: FastifyInstance): Promise<FastifyInstance> =
     await app.register(platformModule)
     await app.register(humanInputModule)
     await app.register(tagsModule)
-    await app.register(mcpServerModule)
-    await app.register(mcpOAuthApproveController)
+    // HERMES-PATCH-015: MCP server 与 AI provider 代理已整体移除（VT-17 / D12）。
+    // 气隙内没有 MCP 客户端，AI Generate 也已改 HTTP piece 直连模型端点（VT-15），
+    // 两者都是零功能的常驻面；它们是 api 侧 @ai-sdk/* 的唯一 import 方（VT-12）。
     await app.register(agentsModule)
     await app.register(platformUserModule)
     // HERMES: CE shadow of the removed ee /v1/users (EE_REMOVAL_PLAN G8/R10) —
@@ -176,8 +173,6 @@ export const setupApp = async (app: FastifyInstance): Promise<FastifyInstance> =
     await app.register(userModule)
     await app.register(invitationModule)
     await app.register(workerModule)
-    await aiProviderService(app.log).setup()
-    await app.register(aiProviderModule)
     await app.register(tablesModule)
     await app.register(knowledgeBaseModule)
     await app.register(templateModule)

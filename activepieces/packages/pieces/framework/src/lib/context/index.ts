@@ -1,5 +1,4 @@
 import {
-  AgentPieceTool,
   AppConnectionType,
   AppConnectionValue,
   ExecutionType,
@@ -12,7 +11,6 @@ import {
   TriggerPayload,
   TriggerStrategy,
 } from '@activepieces/shared';
-import { LanguageModel, Tool } from 'ai'
 
 import {
   BasicAuthProperty,
@@ -223,7 +221,6 @@ type BaseActionContext<
   server: ServerContext;
   files: FilesService;
   output: OutputContext;
-  agent: AgentContext;
   run: RunContext;
   /** @deprecated Use waitpoint.buildResumeUrl() from createWaitpoint result instead */
   generateResumeUrl?: (params: {
@@ -253,15 +250,6 @@ export type ActionContext<
 
 
 
-
-export type ConstructToolParams = {
-  tools: AgentPieceTool[]
-  model: LanguageModel,
-}
-
-export interface AgentContext {
-  tools: (params: ConstructToolParams) => Promise<Record<string, Tool>>;
-}
 
 export interface FilesService {
   write({

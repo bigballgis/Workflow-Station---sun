@@ -39,9 +39,6 @@ export function createMockActionContext<
         return;
       },
     },
-    agent: {
-      tools: async () => ({}),
-    },
     run: {
       id: 'test-run-id' as string,
       stop: () => {

@@ -20,8 +20,6 @@ import { networkUtils } from './helper/network-utils'
 import { rejectedPromiseHandler } from './helper/promise-handler'
 import { system } from './helper/system/system'
 import { AppSystemProp } from './helper/system/system-props'
-import { mcpOAuthHttpController, mcpPlatformHttpController } from './mcp/oauth/mcp-oauth.controller'
-import { mcpOAuthRootModule } from './mcp/oauth/mcp-oauth.module'
 
 
 export let app: FastifyInstance | undefined = undefined
@@ -29,12 +27,10 @@ export let app: FastifyInstance | undefined = undefined
 export const setupServer = async (): Promise<FastifyInstance> => {
     app = await setupBaseApp()
 
-    // MCP OAuth endpoints at domain root (required by MCP spec)
-    if (system.isApp()) {
-        await app.register(mcpOAuthRootModule)
-        await app.register(mcpOAuthHttpController, { prefix: '/mcp' })
-        await app.register(mcpPlatformHttpController, { prefix: '/mcp/platform' })
-    }
+    // HERMES-PATCH-015: 上游在**域名根路径**（不是 /api 之下）注册了 MCP OAuth 的三组端点
+    // —— /.well-known/*、/mcp/*、/mcp/platform/*。整个 MCP 模块已随 VT-17 移除，
+    // 这段注册一并删除。注意根路径这个位置：Kong 的 /api/ap 路由按约定不验 JWT，
+    // 而这些端点连 /api 前缀都没有，属于另一条更靠外的暴露路径（同 HERMES-PATCH-012 的顾虑）。
 
     await app.register(async (apiApp) => {
         await apiApp.register(healthModule)
