@@ -166,4 +166,26 @@ describe('formCreateEventRuntime', () => {
       'clear:enddate',
     ])
   })
+
+  it('runs $FNX component body with bare api (designer Event panel style)', () => {
+    const vis = { hidden: new Map<string, boolean>(), display: new Map<string, boolean>() }
+    const formData: Record<string, unknown> = { select: '1', lookup: null }
+    const api = createPortalFormApi(
+      () => formData,
+      (patch) => Object.assign(formData, patch),
+      undefined,
+      {
+        state: vis,
+        notify: () => {},
+        getAllFieldKeys: () => ['select', 'lookup'],
+      },
+    )
+    runFormOnChangeHandler(
+      '$FNX:\napi.hidden(true, "lookup")',
+      'select',
+      '1',
+      api,
+    )
+    expect(vis.hidden.get('lookup')).toBe(true)
+  })
 })

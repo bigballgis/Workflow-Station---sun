@@ -382,6 +382,7 @@
       :columns="subTableDialogColumns"
       :audit-columns="listViewColumnsForAudit"
       :form-fields="formFields"
+      :form-options="formOptions"
       :mode="dialogMode"
       :initial-data="dialogInitialData"
       :row-formulas="rowFormulas"
@@ -617,6 +618,8 @@ const props = withDefaults(defineProps<{
   dialogColumns?: Column[]
   /** This binding's own form-design fields — nested subTable widgets here render inside the Add/Edit dialog. */
   formFields?: FormField[]
+  /** Sub-form Form Design options — Add/Edit dialog Form-level onCreated / onMounted. */
+  formOptions?: Record<string, unknown> | null
   /** Form-below-table hosts: row click highlights + drives the inline form via currentRowChange. */
   enableRowSelect?: boolean
   modelValue?: any[]

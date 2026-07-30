@@ -15,6 +15,7 @@ import {
   buildRequestIdFormRule,
   isRequestIdSyntheticField,
 } from '@/utils/formFieldMeta'
+import { inflateComponentEventsForDesigner } from '@/utils/formCreateDefaultEvents'
 import type { RequestIdConfig } from '@/api/functionUnit'
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
@@ -123,6 +124,9 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
         try {
           const currentRules = designerRef.value.getRule() || []
           const synced = syncFormRulesWithTableFields(currentRules, fields)
+          // getRule() exports `on`/`hook`; setRule/loadRule expects them so it can
+          // rebuild `_on`/`_hook` for the Event panel. Inflate first so either shape works.
+          inflateComponentEventsForDesigner(synced as unknown[])
           injectUploadButtonLabels(synced as any[], t('form.clickToUpload'))
           designerRef.value.setRule(synced)
           mergeTaskPermissionsForFields(fields)
@@ -140,6 +144,7 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
       try {
         const currentRules = subRef.getRule() || []
         const synced = syncFormRulesWithTableFields(currentRules, fields)
+        inflateComponentEventsForDesigner(synced as unknown[])
         injectUploadButtonLabels(synced as any[], t('form.clickToUpload'))
         subRef.setRule(synced)
         mergeTaskPermissionsForFields(fields)

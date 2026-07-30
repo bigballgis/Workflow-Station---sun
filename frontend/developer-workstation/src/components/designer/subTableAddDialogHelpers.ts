@@ -43,6 +43,8 @@ export interface DialogColumn {
   rules?: Array<Record<string, unknown>>
   /** Form Design Basis / rule default; used by buildInitialRow for Add dialog. */
   defaultValue?: unknown
+  /** Form-create rule node — carries on/_on/hook/_hook for dialog component events. */
+  sourceRule?: Record<string, unknown>
   placeholder?: string
   minWidth?: number
   options?: Array<{ label: string; value: string | number }>

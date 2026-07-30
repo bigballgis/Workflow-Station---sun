@@ -15,6 +15,7 @@ import {
   computeRequestId,
   type RequestIdConfig,
 } from '../../utils/formFieldMeta'
+import { subTableComponentEventFieldKey } from '../../utils/formCreateComponentEvents'
 import { isAuditField } from '../../components/subTableAddDialogHelpers/rowInit'
 
 interface FormDataDeps {
@@ -298,6 +299,19 @@ export function useFormData(deps: FormDataDeps) {
 
   function handleSubTableUpdate(bindingId: number, rows: any[]) {
     deps.emitSubTableData(bindingId, rows)
+
+    // Form Design SubTable on.change / hook_value (keyed as __subTable_${bindingId}).
+    const eventKey = subTableComponentEventFieldKey(bindingId)
+    deps.runComponentEventsOnFieldChange(eventKey, rows)
+    const onChangeHandler = deps.formOptionsOnChange()
+    if (onChangeHandler) {
+      deps.runFormOptionsOnChange(eventKey, rows)
+    }
+    if (onChangeHandler || deps.fieldComponentEventsHas(eventKey)) {
+      if (!deps.readonly()) {
+        deps.emitModelValue({ ...formData.value })
+      }
+    }
 
     // Trigger engine summary calculations
     if (deps.config()) {

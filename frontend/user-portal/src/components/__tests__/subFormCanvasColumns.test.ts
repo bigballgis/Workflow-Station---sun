@@ -68,6 +68,25 @@ describe('resolveSubFormDialogColumnsForBinding', () => {
     expect(dialogCols.map(c => c.field)).toEqual(['custom_field'])
   })
 
+  it('attaches sourceRule so dialog can run component events', () => {
+    const subForms = {
+      3: {
+        rule: [
+          {
+            type: 'select',
+            field: 'case_type',
+            title: 'Case Type',
+            options: [{ label: 'CNP', value: 1 }],
+            _on: { blur: '$FNX:\n$inject.api.setValue("card_number", "111")' },
+          },
+        ],
+      },
+    }
+    const dialogCols = resolveSubFormDialogColumnsForBinding({ bindingId: 3 }, subForms, ctx)
+    expect(dialogCols[0].sourceRule).toMatchObject({ field: 'case_type', type: 'select' })
+    expect((dialogCols[0].sourceRule as Record<string, unknown>)._on).toBeDefined()
+  })
+
   it('includes fields nested inside a Card layout container (FU 50013 regression)', () => {
     const binding = { bindingId: 50113 }
     const subForms = {

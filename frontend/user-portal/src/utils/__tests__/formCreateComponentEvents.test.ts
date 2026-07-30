@@ -155,4 +155,34 @@ describe('formCreateComponentEvents', () => {
     })
     expect(formData.legal_hold).toBe(false)
   })
+
+  it('collects SubTable on.change by __subTable_${bindingId} when rule has no field', () => {
+    const rules = [
+      {
+        type: 'subTable',
+        _bindingId: 42,
+        on: {
+          change: emptyFn('value, api', 'api.setValue("flag", Array.isArray(value) ? value.length : 0)'),
+        },
+      },
+      { type: 'input', field: 'flag' },
+    ]
+    const map = collectFieldComponentEventsFromRules(rules)
+    expect(map.get('__subTable_42')?.on.change).toBeDefined()
+
+    const formData: Record<string, unknown> = { flag: 0 }
+    const api = createPortalFormApi(
+      () => formData,
+      (patch) => Object.assign(formData, patch),
+    )
+    runComponentFieldEventsOnValueChange(map.get('__subTable_42'), {
+      field: '__subTable_42',
+      value: [{ id: 1 }, { id: 2 }],
+      api,
+      onEvent: 'change',
+      hookEvent: 'value',
+      fieldType: 'subTable',
+    })
+    expect(formData.flag).toBe(2)
+  })
 })

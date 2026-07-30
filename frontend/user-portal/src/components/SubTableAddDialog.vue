@@ -115,6 +115,8 @@
           :maxlength="col.props?.maxlength"
           :disabled="isColDisabled(col)"
           :clearable="!isColDisabled(col)"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
 
         <!-- textarea -->
@@ -126,6 +128,8 @@
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
           :disabled="isColDisabled(col)"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
 
         <!-- number -->
@@ -138,6 +142,7 @@
           :placeholder="col.placeholder || col.label"
           :disabled="isColDisabled(col)"
           style="width: 100%"
+          @change="(v: number | undefined) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- select -->
@@ -150,6 +155,7 @@
           :disabled="isColDisabled(col)"
           :teleported="true"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         >
           <el-option
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -164,6 +170,7 @@
           v-else-if="col.type === 'radio'"
           v-model="formData[col.field]"
           :disabled="isColDisabled(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         >
           <el-radio
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -179,6 +186,7 @@
           v-else-if="col.type === 'checkbox'"
           v-model="formData[col.field]"
           :disabled="isColDisabled(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         >
           <el-checkbox
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -198,6 +206,8 @@
           :placeholder="col.placeholder || col.label"
           :disabled="isColDisabled(col)"
           :clearable="!isColDisabled(col)"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
 
         <!-- timerange -->
@@ -212,6 +222,7 @@
           :teleported="true"
           popper-class="sub-table-date-popper"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- treeselect -->
@@ -226,6 +237,7 @@
           :disabled="isColDisabled(col)"
           :teleported="true"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- tree -->
@@ -236,7 +248,11 @@
           :node-key="col.props?.nodeKey || 'id'"
           :show-checkbox="col.props?.showCheckbox !== false && !isColDisabled(col)"
           :class="{ 'tree-readonly': isColDisabled(col) }"
-          @check="(node: any, state: any) => { if (!isColDisabled(col)) formData[col.field] = state.checkedKeys }"
+          @check="(node: any, state: any) => {
+            if (isColDisabled(col)) return
+            formData[col.field] = state.checkedKeys
+            onDialogFieldChange(col.field, state.checkedKeys)
+          }"
         />
 
         <!-- switch -->
@@ -244,6 +260,7 @@
           v-else-if="col.type === 'switch'"
           v-model="formData[col.field]"
           :disabled="isColDisabled(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- date -->
@@ -257,6 +274,7 @@
           :teleported="true"
           popper-class="sub-table-date-popper"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- datetime -->
@@ -270,6 +288,7 @@
           :teleported="true"
           popper-class="sub-table-date-popper"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- upload (readonly) -->
@@ -317,6 +336,7 @@
           :show-alpha="col.props?.showAlpha || false"
           :disabled="isColDisabled(col)"
           popper-class="sub-table-color-popper"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- rate -->
@@ -326,6 +346,7 @@
           :max="col.props?.max || 5"
           :allow-half="col.props?.allowHalf || false"
           :disabled="isColDisabled(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- slider -->
@@ -337,6 +358,7 @@
           :step="col.props?.step || 1"
           :disabled="isColDisabled(col)"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- editor (readonly) -->
@@ -411,6 +433,7 @@
           :titles="[col.props?.leftTitle || t('subTable.transferSource'), col.props?.rightTitle || t('subTable.transferTarget')]"
           :filterable="!isColDisabled(col)"
           :disabled="isColDisabled(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- cascader -->
@@ -425,6 +448,7 @@
           :teleported="true"
           popper-class="sub-table-date-popper"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- lookup -->
@@ -445,8 +469,8 @@
             :placeholder="col.placeholder || col.label"
             :readonly="isColDisabled(col)"
             :multiple="col.props?.multiple === true"
-            @select="(row: Record<string, any>) => onLookupSelect(col.field, row)"
-            @clear="() => onLookupClear(col.field)"
+            @select="(row: Record<string, any>) => onLookupSelectWithEvents(col.field, row)"
+            @clear="() => onLookupClearWithEvents(col.field)"
             @view-fields-loaded="(fields: any[]) => onLookupViewFieldsLoaded(col.field, fields)"
           />
           <LookupViewDisplay
@@ -469,6 +493,7 @@
           :disabled="isColDisabled(col)"
           :teleported="true"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         >
           <el-option
             v-for="user in (userSearchOptions[col.field] || [])"
@@ -492,6 +517,7 @@
           filterable
           :teleported="true"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- fallback -->
@@ -519,6 +545,7 @@
         :columns="nested.columns"
         :dialog-columns="nested.dialogColumns"
         :form-fields="nested.formFields"
+        :form-options="nested.formOptions"
         :model-value="nestedRowsFor(nested)"
         :primary-key-fields="nested.primaryKeyFields"
         :upload-url="uploadUrl"
@@ -599,6 +626,7 @@ import { useSubTableDialogEditor } from '@/composables/subTableAddDialog/useSubT
 import { useSubTableDialogRelations } from '@/composables/subTableAddDialog/useSubTableDialogRelations'
 import { useSubTableDialogUpload } from '@/composables/subTableAddDialog/useSubTableDialogUpload'
 import { useSubTableDialogForm } from '@/composables/subTableAddDialog/useSubTableDialogForm'
+import { useSubTableDialogComponentEvents } from '@/composables/subTableAddDialog/useSubTableDialogComponentEvents'
 import { mergeNestedSubTableRowsIntoSto } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
 import type { NestedSubTableDescriptor, SubTableBinding } from '@/composables/subTableField/subTableFieldTypes'
@@ -641,6 +669,8 @@ const props = defineProps<{
    * Add/Edit dialog wraps fields in the same card layout as DW Form Preview.
    */
   formFields?: FormField[]
+  /** Sub-form Form Design options (onCreated / onMounted / …). */
+  formOptions?: Record<string, unknown> | null
   title?: string
   mode: 'add' | 'edit'
   initialData?: Record<string, any>
@@ -688,6 +718,17 @@ const emit = defineEmits<{
 
 // Shared model owned by the SFC and threaded through the composables below.
 const formData = ref<Record<string, any>>({})
+
+const {
+  onDialogFieldChange,
+  onDialogFieldBlur,
+  isDialogFieldVisible,
+  resetDialogEventVisibility,
+  bootstrapDialogFormLifecycle,
+} = useSubTableDialogComponentEvents(
+  formData,
+  () => props.columns,
+)
 
 // Stable identity of the row being edited — RECORD-scope note anchor. Resolution
 // mirrors subTableRowMerge: declared PK first, then rowId, then the platform
@@ -764,6 +805,16 @@ const {
   effectiveLookupSelectedRow,
   resetLookupState,
 } = useSubTableDialogLookup(formData, toRef(props, 'columns'))
+
+async function onLookupSelectWithEvents(field: string, row: Record<string, any>) {
+  await onLookupSelect(field, row)
+  onDialogFieldChange(field, formData.value[field])
+}
+
+function onLookupClearWithEvents(field: string) {
+  onLookupClear(field)
+  onDialogFieldChange(field, formData.value[field])
+}
 
 // ─── Signature canvas ─────────────────────────────────────────────────────────
 const {
@@ -865,13 +916,16 @@ function onAssignModeChange(mode: string | number | boolean | undefined) {
 }
 
 // 按 radio 过滤要渲染的列：场景 C 下 person 隐藏 bu/role，role 隐藏 assignee；A/B 全显。
+// Also drop fields hidden by Form Design component events (api.hidden / api.display).
 const ROLE_GROUP_FIELDS = ['bu_code', 'role_code']
 const visibleColumns = computed(() => {
-  if (!showAssignModeRadio.value) return props.columns
-  return props.columns.filter(c => {
-    if (assignMode.value === 'person') return !ROLE_GROUP_FIELDS.includes(c.field)
-    return c.field !== 'assignee'
-  })
+  const byAssign = !showAssignModeRadio.value
+    ? props.columns
+    : props.columns.filter(c => {
+      if (assignMode.value === 'person') return !ROLE_GROUP_FIELDS.includes(c.field)
+      return c.field !== 'assignee'
+    })
+  return byAssign.filter(c => isDialogFieldVisible(c.field))
 })
 
 /** DW Form Preview parity: group columns under designer elCard titles when present. */
@@ -903,6 +957,8 @@ const {
   resetLookupState,
   destroyEditors,
   fetchDepartmentTree,
+  resetDialogEventVisibility,
+  bootstrapDialogFormLifecycle: () => bootstrapDialogFormLifecycle(props.formOptions),
 })
 </script>
 

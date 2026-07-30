@@ -357,19 +357,22 @@ export default defineComponent({
         },
         applyEventsToRule() {
             if (this.activeData && !this.commitActiveEditor()) {
-                return;
+                return false;
             }
             const {on, hooks} = this.parseFN(this.event);
             const rule = this.activeRule;
             if (!rule) {
-                return;
+                return false;
             }
             rule._on = on;
             rule._hook = hooks;
             this.$emit('update:modelValue', on);
+            return true;
         },
         submit() {
-            this.applyEventsToRule();
+            if (!this.applyEventsToRule()) {
+                return;
+            }
             this.visible = false;
         },
     },

@@ -71,7 +71,10 @@ export function dispatchLookupComponentFieldEvents(
   if (!formCreateInject || typeof formCreateInject !== 'object') return
   const inject = formCreateInject as Record<string, unknown>
   const fcApi = resolveFcApi(inject)
-  if (!fcApi) return
+  if (!fcApi) {
+    console.warn('[formCreateLookupComponentEvents] missing form-create api for lookup events')
+    return
+  }
 
   const rule = (inject.rule && typeof inject.rule === 'object'
     ? inject.rule
