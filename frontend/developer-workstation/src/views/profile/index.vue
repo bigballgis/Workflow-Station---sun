@@ -12,7 +12,7 @@
         class="profile-content"
       >
         <div class="avatar-section">
-          <el-avatar :size="100">
+          <el-avatar :size="100" :src="userInfo?.hasAvatar ? `${AUTH_BASE_URL}/me/avatar` : undefined">
             {{ (userInfo?.displayName || userInfo?.username || 'U').charAt(0).toUpperCase() }}
           </el-avatar>
           <h2>{{ userInfo?.displayName || userInfo?.username || t('user.username') }}</h2>
@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getUser } from '@/api/auth'
+import { getUser, AUTH_BASE_URL } from '@/api/auth'
 import { languageLabelFor } from '@/utils/languageLabel'
 
 const { t, locale } = useI18n()

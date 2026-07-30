@@ -92,7 +92,10 @@ export interface UserInfo {
   workspaceSwitcherVisible?: boolean
   /** FULL | PERMISSION_SELF_SERVICE_ONLY */
   portalAccessMode?: string
+  hasAvatar: boolean
 }
+
+export const AUTH_BASE_URL = '/api/portal/auth'
 
 export interface TokenResponse {
   accessToken: string

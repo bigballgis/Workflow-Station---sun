@@ -132,6 +132,8 @@ public class LdapProperties {
         private String lockoutTime = "lockoutTime";
         /** 增量同步水位属性（AD whenChanged）。 */
         private String whenChanged = "whenChanged";
+        /** LDAP/AD 二进制头像属性。 */
+        private String jpegPhoto = "jpegPhoto";
     }
 
     /**

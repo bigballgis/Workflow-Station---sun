@@ -63,6 +63,7 @@ public class LdapUserMapper {
                 .entityManagerId(entityManager)
                 .functionManagerId(functionManager)
                 .status(resolveStatus(attrs.get(names.getLockoutTime())))
+                .photoBase64(trimToNull(attrs.get(names.getJpegPhoto())))
                 .build());
     }
     /** displayName → (givenName + ' ' + sn)，去重空格。 */

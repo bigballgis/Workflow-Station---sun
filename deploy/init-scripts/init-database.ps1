@@ -119,7 +119,9 @@ $migrations = @(
     "00-schema/55-dw-main-table-view-lookup-display-columns.sql",
     "00-schema/56-dw-user-preferences.sql",
     "00-schema/57-smtp-system-config.sql",
-    "00-schema/58-widen-wf-assignment-target-to-text.sql"
+    "00-schema/58-widen-wf-assignment-target-to-text.sql",
+    "00-schema/59-add-up-change-history-indexes.sql",
+    "00-schema/60-add-user-avatar.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

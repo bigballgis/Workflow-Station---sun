@@ -5,7 +5,7 @@
     @command="handleCommand"
   >
     <div class="user-info">
-      <el-avatar :size="32">
+      <el-avatar :size="32" :src="avatarSrc">
         {{ userName.charAt(0) }}
       </el-avatar>
       <span class="user-name">{{ userName }}</span>
@@ -15,7 +15,7 @@
       <el-dropdown-menu class="user-profile-dropdown">
         <!-- User Basic Info -->
         <div class="profile-header">
-          <el-avatar :size="48">
+          <el-avatar :size="48" :src="avatarSrc">
             {{ userName.charAt(0) }}
           </el-avatar>
           <div class="profile-info">
@@ -104,7 +104,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, OfficeBuilding, Key, User, Setting, SwitchButton, Loading } from '@element-plus/icons-vue'
-import { logout as authLogout, clearAuth, getCurrentUser, getUser, saveUser } from '@/api/auth'
+import { logout as authLogout, clearAuth, getCurrentUser, getUser, saveUser, AUTH_BASE_URL } from '@/api/auth'
 import { permissionApi } from '@/api/permission'
 import { parseMyPermissionViewPayload, type PortalBuBoundedRow } from '@/utils/myPermissionView'
 import { redirectToUnifiedLogin } from '@/utils/sso'
@@ -143,6 +143,7 @@ watch(
 const currentUser = computed(() => portalUser.value)
 const userName = computed(() => currentUser.value?.displayName || currentUser.value?.username || 'User')
 const userEmail = computed(() => currentUser.value?.email || '')
+const avatarSrc = computed(() => currentUser.value?.hasAvatar ? `${AUTH_BASE_URL}/me/avatar` : undefined)
 const workspaceSummary = computed(() => {
   const u = currentUser.value
   if (!u?.activeBusinessUnitName && !u?.activeRoleName) {

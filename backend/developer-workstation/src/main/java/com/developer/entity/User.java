@@ -41,7 +41,10 @@ public class User {
     
     @Column(name = "last_login_ip")
     private String lastLoginIp;
-    
+
+    @Column(name = "avatar")
+    private byte[] avatar;
+
     @Column(name = "failed_login_count")
     private Integer failedLoginCount;
     

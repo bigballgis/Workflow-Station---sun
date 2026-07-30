@@ -14,7 +14,7 @@
         <div class="avatar-section">
           <el-avatar
             :size="100"
-            :src="userInfo?.avatar || defaultAvatar"
+            :src="userInfo?.hasAvatar ? `${AUTH_BASE_URL}/me/avatar` : undefined"
           >
             {{ (userInfo?.displayName || userInfo?.username || 'U').charAt(0).toUpperCase() }}
           </el-avatar>
@@ -125,6 +125,7 @@
 import { onActivated, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProfile } from '@/composables/modules/useProfile'
+import { AUTH_BASE_URL } from '@/api/auth'
 
 const { t } = useI18n()
 

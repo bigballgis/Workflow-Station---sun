@@ -65,7 +65,10 @@ export interface UserInfo {
   permissions: string[];
   rolesWithSources?: RoleWithSource[];
   language: string;
+  hasAvatar: boolean;
 }
+
+export const AUTH_BASE_URL = '/api/v1/admin/auth';
 
 export interface TokenResponse {
   accessToken: string;

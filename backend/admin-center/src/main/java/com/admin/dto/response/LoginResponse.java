@@ -37,6 +37,7 @@ public class LoginResponse {
         private List<RoleWithSource> rolesWithSources;
         private String businessUnitId;
         private String language;
+        private boolean hasAvatar;
     }
     
     /**
