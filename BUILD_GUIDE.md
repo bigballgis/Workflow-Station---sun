@@ -320,7 +320,10 @@ Push-Location frontend/user-portal; pnpm install --frozen-lockfile; pnpm run bui
 # developer-workstation-frontend
 # ⓪ 装 Activepieces workspace 依赖（干净 checkout 上没有；只需装一次，后续构建复用）
 #    必须在 activepieces 根目录装：这是 pnpm workspace，根 install 才会给 packages/web 建好链接。
-#    .npmrc 里有 ${NPM_TOKEN}，环境变量未定义时 pnpm 直接报错退出；走公共 registry 时该值不被使用。
+#    activepieces/.npmrc 里有 ${NPM_TOKEN}。该变量未定义时 pnpm 9.15.9 只打一行 WARN，然后
+#    **静默丢弃整个 activepieces/.npmrc** —— 连带 auto-install-peers / strict-peer-dependencies /
+#    save-exact / @activepieces:registry 全部失效，install 仍会跑但解析行为已不是仓库预期的那套。
+#    走公共 registry 时该 token 值不被使用，给个占位即可。
 $env:NPM_TOKEN = "x"
 Push-Location activepieces; pnpm install --frozen-lockfile; Pop-Location
 # ① 再构建内嵌的 Activepieces builder（产物 gitignore，干净 checkout 上不存在）
@@ -339,6 +342,16 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 > `registry.npmjs.org`。气隙/只有内网 registry 的构建机在这一步就会断，此时改走"别处构建 bundle +
 > 拷 `activepieces/dist/packages/web-embed/` 过来"（见 7.2 末尾脚本行为说明）。想减负可只装 web 及其
 > workspace 依赖：`pnpm install --frozen-lockfile --filter web...`。
+>
+> ⚠️ **公司 Nexus 私服要注意 scope 覆盖**：`activepieces/.npmrc` 写死
+> `@activepieces:registry=https://registry.npmjs.org/`，其优先级高于全局 `~/.npmrc` 的默认 registry，
+> 因此 `@activepieces/*` 这几个包会绕过 Nexus 直连公网（lockfile 里只有 4 个走 registry：
+> `import-fresh-webpack@3.3.0` 及传递依赖 `pieces-framework@0.32.0`、`shared@0.95.1/0.96.2`；
+> workspace 内的同名包是 `workspace:*` 本地链接，不走网络）。其余数千个包用默认 registry，
+> 即 Nexus —— pnpm-lock v9 只存 integrity、不存 resolved URL，registry 在 install 时由配置决定，
+> 所以 Nexus 必须能代理 npm 公共库。Nexus 是 npmjs.org 的 proxy/group 时可让该 scope 也走 Nexus：
+> `pnpm install --frozen-lockfile --config.@activepieces:registry=https://<nexus>/repository/npm-group/`。
+> 大装之前先探一下可达性：`pnpm info @activepieces/import-fresh-webpack@3.3.0 dist.tarball`。
 >
 > ⚠️ **developer-workstation-frontend 的三步顺序不能省**。Function Unit 的 Automation 标签
 > 直接挂 AP builder，其 bundle 走「构建期拷贝」交付（AG-02.8）：AP 产物 →
