@@ -16,7 +16,6 @@ src="https://github.com/activepieces/activepieces/assets/1812998/76c97441-c285-4
 
 
 <p align="center">
-<a href="/LICENSE" target="_blank"><img src='https://img.shields.io/badge/license-MIT-green?style=for-the-badge' /></a>&nbsp;<img src='https://img.shields.io/github/commit-activity/w/activepieces/activepieces/main?style=for-the-badge' />&nbsp;<a href='https://discord.gg/2jUXBKDdP8'><img src='https://img.shields.io/discord/966798490984382485?style=for-the-badge' /></a>
 </p>
 <p align="center">
    An open source replacement for Zapier
@@ -108,17 +107,6 @@ You can easily create your own integration using our TypeScript framework. For d
 <br>
 <br>
 <br>
-
-
-# License
-
-Activepieces' Community Edition is released as open source under the [MIT license](https://github.com/activepieces/activepieces/blob/main/LICENSE) and enterprise features are released under [Commercial License](https://github.com/activepieces/activepieces/blob/main/packages/ee/LICENSE)
-
-
-Read more about the feature comparison here https://www.activepieces.com/pricing
-<br>
-<br>
-
 
 # 💭 Join Our Community
 

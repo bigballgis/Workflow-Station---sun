@@ -37,7 +37,6 @@
     "dmn-js": "^17.7.0",
     "dompurify": "^3.3.3",
     "element-plus": "^2.4.4",
-    "lodash-es": "^4.17.21",
     "marked": "^17.0.4",
     "monaco-editor": "^0.45.0",
     "pinia": "^2.1.7",
@@ -49,7 +48,6 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/dompurify": "^3.0.5",
-    "@types/lodash-es": "^4.17.12",
     "@types/node": "^20.10.5",
     "@vitejs/plugin-vue": "^4.5.2",
     "@vue/test-utils": "^2.4.6",
@@ -75,7 +73,8 @@
   },
   "pnpm": {
     "overrides": {
-      "axios": "1.13.6"
+      "axios": "1.13.6",
+      "lodash-es": "4.18.1"
     }
   }
 }
