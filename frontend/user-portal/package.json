@@ -70,5 +70,10 @@
     "rollup": "4.60.1",
     "@sinclair/typebox": "0.34.52",
     "ws": "8.21.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "axios": "1.13.6"
+    }
   }
 }
