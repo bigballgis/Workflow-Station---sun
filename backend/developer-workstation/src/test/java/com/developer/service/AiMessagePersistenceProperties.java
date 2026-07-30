@@ -7,7 +7,10 @@ import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.IntRange;
@@ -51,7 +54,7 @@ class AiMessagePersistenceProperties {
 
         AiGenerationServiceImpl service = new AiGenerationServiceImpl(
                 aiSessionRepository, aiMessageRepository, aiDocumentRepository, functionUnitRepository,
-                new ObjectMapper(), 102400);
+                new ObjectMapper(), mock(AiPromptBuilder.class), mock(AiGatewayClient.class), mock(AiResponseParser.class), 102400);
 
         UUID sessionId = UUID.randomUUID();
         List<AiMessage> storedMessages = new ArrayList<>();

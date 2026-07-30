@@ -14,7 +14,6 @@ import com.developer.enums.AiMode;
 import com.developer.enums.AiPhase;
 import com.developer.enums.AiSessionStatus;
 import com.developer.exception.AiGenerationException;
-import com.platform.common.security.SsrfProtection;
 import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
@@ -22,20 +21,13 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.service.AiGenerationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Instant;
@@ -43,7 +35,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -61,24 +52,13 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     private final ObjectMapper objectMapper;
     private final int maxContextSizeBytes;
 
-    // AI 生成 webhook 目标:Activepieces 同步 webhook
-    // (POST <base>/api/v1/webhooks/<flowId>/sync,flowId 随环境不同)。
-    @Value("${service-task.ai-generation.webhook-url:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}")
-    private String aiWebhookUrl;
+    // 单次模型调用的超时上限,同时决定对话 SSE emitter 的存活时长。
+    // 300s: 推理模型生成 DESIGN 文档实测可达 ~230s。
+    @Value("${ai-generation.gateway.timeout-seconds:300}")
+    private int aiCallTimeoutSeconds;
 
-    // 300s: deepseek-v4-pro 推理模型生成 DESIGN 文档实测可达 ~230s;须与 AP 的
-    // AP_WEBHOOK_TIMEOUT_SECONDS 保持一致(AP 先到期会返回 204 空响应)。
-    @Value("${service-task.ai-generation.timeout-seconds:300}")
-    private int aiWebhookTimeoutSeconds;
-
-    @Value("${ssrf.allowed-hosts:localhost,activepieces}")
-    private List<String> ssrfAllowedHosts;
-
-    /** Cached AI webhook RestTemplate (initialized at startup via @PostConstruct) */
-    private RestTemplate aiWebhookRestTemplate;
-
-    /** Timestamp of the last successful AI webhook call, used for degradation info (requirements 45 linkage) */
-    private volatile Instant lastAiWebhookSuccessTime;
+    /** Timestamp of the last successful AI call, used for degradation info (requirements 45 linkage) */
+    private volatile Instant lastAiCallSuccessTime;
 
     // 协作类（单一职责拆分）。Spring 通过字段注入用容器托管的 Bean 覆盖默认实例；
     // 默认实例保证脱离 Spring 上下文直接 new 本类时（单元测试）委托路径仍可用。
@@ -92,35 +72,31 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Autowired
     private AiSseEmitterManager sseEmitterManager = new AiSseEmitterManager();
 
+    // AI gateway 三件套(原 Activepieces flow 的 Build Prompt / Send Http request / Parse Response
+    // 三个步骤的 Java 移植)。构造器注入,缺一个就启动失败——不做可空判空。
+    private final AiPromptBuilder aiPromptBuilder;
+    private final AiGatewayClient aiGatewayClient;
+    private final AiResponseParser aiResponseParser;
+
     public AiGenerationServiceImpl(
             AiSessionRepository aiSessionRepository,
             AiMessageRepository aiMessageRepository,
             AiDocumentRepository aiDocumentRepository,
             FunctionUnitRepository functionUnitRepository,
             ObjectMapper objectMapper,
+            AiPromptBuilder aiPromptBuilder,
+            AiGatewayClient aiGatewayClient,
+            AiResponseParser aiResponseParser,
             @Value("${ai-generation.context.max-size-bytes:102400}") int maxContextSizeBytes) {
         this.aiSessionRepository = aiSessionRepository;
         this.aiMessageRepository = aiMessageRepository;
         this.aiDocumentRepository = aiDocumentRepository;
         this.functionUnitRepository = functionUnitRepository;
         this.objectMapper = objectMapper;
+        this.aiPromptBuilder = aiPromptBuilder;
+        this.aiGatewayClient = aiGatewayClient;
+        this.aiResponseParser = aiResponseParser;
         this.maxContextSizeBytes = maxContextSizeBytes;
-    }
-
-    @PostConstruct
-    void initAiWebhookRestTemplate() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        int timeoutMs = aiWebhookTimeoutSeconds * 1000;
-        factory.setConnectTimeout(timeoutMs);
-        factory.setReadTimeout(timeoutMs);
-        this.aiWebhookRestTemplate = new RestTemplate(factory);
-        Set<String> allowedHosts = ssrfAllowedHosts.stream()
-                .map(h -> h.trim().toLowerCase())
-                .filter(h -> !h.isEmpty())
-                .collect(Collectors.toSet());
-        SsrfProtection.validate(aiWebhookUrl, allowedHosts);
-        log.info("Initialized AI webhook RestTemplate with timeout={}ms, webhookUrl validated (allowedHosts={})",
-                timeoutMs, allowedHosts);
     }
 
     // ==================== Session Management ====================
@@ -375,7 +351,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         }
     }
 
-    // ==================== AI webhook Session Memory Rebuild ====================
+    // ==================== Conversation History (chat/completions 无服务端会话) ====================
 
     @Override
     @Transactional(readOnly = true)
@@ -390,7 +366,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     /**
      * 构建"仅历史"对话记录:与 {@link #buildConversationHistory} 相同,但剔除末尾那条正是本轮
-     * 用户消息的记录(它已由 message 字段单独下发),避免 Activepieces agent 看到当前消息两次。
+     * 用户消息的记录(它已由 message 字段单独下发),避免模型在 prompt 里看到当前消息两次。
      */
     @Transactional(readOnly = true)
     protected List<Map<String, String>> buildPriorConversationHistory(UUID sessionId, String currentMessage) {
@@ -450,38 +426,22 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> callAiWebhook(UUID sessionId, String message, AiPhase phase, AiMode mode,
-                                               FunctionUnitContextDTO context, Long functionUnitId,
-                                               List<Map<String, String>> existingDocuments,
-                                               String regenerateScope) {
-        // Activepieces 的 sync webhook 每次调用都是全新一次 agent 运行,没有跨调用的对话记忆。
-        // 因此每次都把完整对话历史一并带上,保证多轮连续性。saveMessage 已在调用本方法前持久化本轮用户消息,
-        // 故构建后剔除末尾这条"当前用户消息",避免与单独传的 message 字段重复。
+    public Map<String, Object> callAiModel(UUID sessionId, String message, AiPhase phase, AiMode mode,
+                                           FunctionUnitContextDTO context, Long functionUnitId,
+                                           List<Map<String, String>> existingDocuments,
+                                           String regenerateScope, String amToken) {
+        // chat/completions 是无状态的:每次调用都要把完整对话历史一并带上,才有多轮连续性。
+        // saveMessage 已在调用本方法前持久化本轮用户消息,故构建后剔除末尾这条"当前用户消息",
+        // 避免与单独传的 message 字段重复。
         List<Map<String, String>> priorHistory = buildPriorConversationHistory(sessionId, message);
 
-        Map<String, Object> requestBody = buildAiWebhookRequestBody(sessionId, message, phase, mode,
+        Map<String, Object> requestBody = buildAiRequestBody(sessionId, message, phase, mode,
                 context, functionUnitId, existingDocuments, priorHistory, regenerateScope);
 
-        Map<String, Object> response = doCallAiWebhookWithRetry(requestBody);
-
-        if (isSessionNotFoundError(response)) {
-            log.warn("AI webhook session not found for sessionId={}, rebuilding", sessionId);
-            List<Map<String, String>> conversationHistory = buildConversationHistory(sessionId);
-
-            // Reload context and documents using functionUnitId
-            FunctionUnitContextDTO rebuiltContext = serializeFunctionUnitContext(functionUnitId);
-            List<Map<String, String>> rebuiltDocs = getLatestDocuments(functionUnitId, phase, mode);
-
-            Map<String, Object> retryBody = buildAiWebhookRequestBody(sessionId, message, phase, mode,
-                    rebuiltContext, functionUnitId, rebuiltDocs, conversationHistory, regenerateScope);
-            response = doCallAiWebhookWithRetry(retryBody);
-        }
-
-        return response;
+        return doCallAiWithRetry(requestBody, amToken);
     }
 
-    private Map<String, Object> buildAiWebhookRequestBody(UUID sessionId, String message, AiPhase phase, AiMode mode,
+    private Map<String, Object> buildAiRequestBody(UUID sessionId, String message, AiPhase phase, AiMode mode,
                                                      FunctionUnitContextDTO context, Long functionUnitId,
                                                      List<Map<String, String>> existingDocuments,
                                                      List<Map<String, String>> conversationHistory,
@@ -573,19 +533,21 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     /**
-     * Wraps doCallAiWebhook with an automatic retry (2-second delay) for AI_WEBHOOK_TIMEOUT
-     * and AI_WEBHOOK_CALL_FAILED exceptions.
+     * Wraps doCallAi with an automatic retry (2-second delay) for AI_WEBHOOK_TIMEOUT
+     * and AI_WEBHOOK_CALL_FAILED — the two transport-level codes the frontend treats as retryable.
      * On retry failure, builds degradation info and passes it to the caller via
      * AiGenerationException extraData (requirements 23 + 45 linkage).
+     *
+     * <p>模型侧的失败(4xx/5xx、空回答、BPMN 无任务节点)不重试:重试同一个 prompt 只会得到同样的拒绝。</p>
      */
-    private Map<String, Object> doCallAiWebhookWithRetry(Map<String, Object> requestBody) {
+    private Map<String, Object> doCallAiWithRetry(Map<String, Object> requestBody, String amToken) {
         try {
-            Map<String, Object> response = doCallAiWebhook(requestBody);
-            lastAiWebhookSuccessTime = Instant.now();
+            Map<String, Object> response = doCallAi(requestBody, amToken);
+            lastAiCallSuccessTime = Instant.now();
             return response;
         } catch (AiGenerationException e) {
             if ("AI_WEBHOOK_TIMEOUT".equals(e.getErrorCode()) || "AI_WEBHOOK_CALL_FAILED".equals(e.getErrorCode())) {
-                log.warn("AI webhook call failed with {}, retrying in 2 seconds...", e.getErrorCode());
+                log.warn("AI gateway call failed with {}, retrying in 2 seconds...", e.getErrorCode());
                 try {
                     Thread.sleep(2000);
                 } catch (InterruptedException ie) {
@@ -593,15 +555,15 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                     throw e;
                 }
                 try {
-                    Map<String, Object> response = doCallAiWebhook(requestBody);
-                    lastAiWebhookSuccessTime = Instant.now();
+                    Map<String, Object> response = doCallAi(requestBody, amToken);
+                    lastAiCallSuccessTime = Instant.now();
                     return response;
                 } catch (AiGenerationException retryEx) {
-                    log.warn("AI webhook retry also failed with {}: {}", retryEx.getErrorCode(), retryEx.getMessage());
+                    log.warn("AI gateway retry also failed with {}: {}", retryEx.getErrorCode(), retryEx.getMessage());
                     // Build degradation info (requirements 45 linkage)
                     Map<String, Object> degradationInfo = new LinkedHashMap<>();
                     degradationInfo.put("lastSuccessTime",
-                            lastAiWebhookSuccessTime != null ? lastAiWebhookSuccessTime.toString() : null);
+                            lastAiCallSuccessTime != null ? lastAiCallSuccessTime.toString() : null);
                     degradationInfo.put("degradationOptions", List.of("SAVE_DRAFT", "MANUAL_CREATE"));
                     throw new AiGenerationException(e.getErrorCode(), e.getMessage(), degradationInfo);
                 }
@@ -610,50 +572,11 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> doCallAiWebhook(Map<String, Object> requestBody) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            ResponseEntity<Map> responseEntity = aiWebhookRestTemplate.postForEntity(aiWebhookUrl, entity, Map.class);
-            Map<String, Object> responseBody = responseEntity.getBody();
-            if (responseBody == null) {
-                throw new AiGenerationException("AI_WEBHOOK_EMPTY_RESPONSE", "AI webhook returned empty response");
-            }
-            return responseBody;
-        } catch (AiGenerationException e) {
-            throw e;
-        } catch (org.springframework.web.client.ResourceAccessException e) {
-            throw new AiGenerationException("AI_WEBHOOK_TIMEOUT", "AI webhook call timed out: " + e.getMessage());
-        } catch (Exception e) {
-            throw new AiGenerationException("AI_WEBHOOK_CALL_FAILED", "AI webhook call failed: " + e.getMessage());
-        }
-    }
-
-    private boolean isSessionNotFoundError(Map<String, Object> response) {
-        if (response == null) {
-            return false;
-        }
-        // Check for error field indicating session not found
-        Object error = response.get("error");
-        if (error instanceof String errorStr) {
-            String lower = errorStr.toLowerCase();
-            return lower.contains("session") && lower.contains("not found");
-        }
-        // Check for error code
-        Object errorCode = response.get("errorCode");
-        if (errorCode instanceof String codeStr) {
-            return "SESSION_NOT_FOUND".equalsIgnoreCase(codeStr);
-        }
-        // Check message field as fallback
-        Object msg = response.get("message");
-        if (msg instanceof String msgStr) {
-            String lower = msgStr.toLowerCase();
-            return lower.contains("session") && (lower.contains("not found") || lower.contains("not exist") || lower.contains("does not exist"));
-        }
-        return false;
+    /** Build prompt → POST chat/completions → parse response，对应原 AP flow 的中间三步。 */
+    private Map<String, Object> doCallAi(Map<String, Object> requestBody, String amToken) {
+        String prompt = aiPromptBuilder.build(requestBody);
+        Map<String, Object> httpResult = aiGatewayClient.chat(prompt, amToken);
+        return aiResponseParser.parse(httpResult);
     }
 
     // ==================== SSE Emitter Management ====================
@@ -662,9 +585,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     @Override
     public SseEmitter createChatEmitter(Long functionUnitId, String userId) {
-        // Compute timeout here so it stays aligned with the configured AI webhook timeout (incl. one retry),
+        // Compute timeout here so it stays aligned with the configured AI gateway timeout (incl. one retry),
         // then delegate emitter lifecycle management to the SSE collaborator.
-        long chatEmitterTimeout = (long) aiWebhookTimeoutSeconds * 2 * 1000 + 60_000L;
+        long chatEmitterTimeout = (long) aiCallTimeoutSeconds * 2 * 1000 + 60_000L;
         return sseEmitterManager.createChatEmitter(functionUnitId, userId, chatEmitterTimeout);
     }
 

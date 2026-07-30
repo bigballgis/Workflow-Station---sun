@@ -190,26 +190,28 @@ management:
     redis:
       enabled: true
 
-# AI Generation webhook — Activepieces sync webhook.
-# The backend POSTs to <base>/api/v1/webhooks/<flowId>/sync; the response contract is unchanged
-# ({reply, document, documentType, phaseComplete, generatedData}). flowId is environment-specific.
-service-task:
-  ai-generation:
-    webhook-url: ${AI_GENERATION_WEBHOOK_URL:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
-    # 300s: deepseek-v4-pro 生成 DESIGN 文档实测 ~230s;须 >= AP 的 AP_WEBHOOK_TIMEOUT_SECONDS,
-    # 否则 AP 侧先超时返回 204 空响应(表现为 "returned empty response")。
-    timeout-seconds: ${AI_GENERATION_TIMEOUT:300}
-
-# Trusted hostnames for configured outbound webhooks (localhost for local dev, activepieces for Docker)
+# Trusted hostnames for configured outbound calls (localhost for local dev, activepieces for Docker).
+# AI gateway 的 FQDN 若在集群内解析到内网地址，须一并加进来，否则启动时 SSRF 校验直接拒绝。
 ssrf:
   allowed-hosts: ${SSRF_ALLOWED_HOSTS:localhost,activepieces}
 
 # AI Generation Lock Configuration
 ai-generation:
-  # 2026-07-28 起默认停用：模型调用原先经 Activepieces flow(webhook -> piece-ai run_agent -> deepseek),
-  # 该链路已废弃且替代实现未落地。false 时 AiGenerationController 整个不注册(/ai-generation/** 返回 404)。
-  # 重新启用须同时把前端 src/utils/featureFlags.ts 的 AI_GENERATION_ENABLED 改回 true 并重新构建。
-  enabled: ${AI_GENERATION_ENABLED:false}
+  # false 时 AiGenerationController 整个不注册(/ai-generation/** 返回 404)。
+  # 须与前端 src/utils/featureFlags.ts 的 AI_GENERATION_ENABLED 保持一致(编译期常量,当前 true),
+  # 否则只开前端 = 点进去全 404,只开后端 = 用户看不到入口。
+  enabled: ${AI_GENERATION_ENABLED:true}
+  # 集团 AI gateway(OpenAI 兼容 chat/completions)。凭证是每用户的 DSP AMToken,
+  # 由前端经 X-AM-Token 头透传(或浏览器 AMToken cookie),后端不持有共享密钥。
+  gateway:
+    # 完整端点 URL,模型名已在路径里。未配置时每轮对话以 AI_GATEWAY_NOT_CONFIGURED 失败。
+    url: ${AI_GATEWAY_URL:}
+    # 可选:body 里的 model 字段。留空则不发——URL 路径已经选定了模型。
+    model: ${AI_GATEWAY_MODEL:}
+    # 300s: 推理模型生成 DESIGN 文档实测可达 ~230s。同时决定对话 SSE emitter 的存活时长。
+    timeout-seconds: ${AI_GATEWAY_TIMEOUT_SECONDS:300}
+    # AMToken 在 Cookie 中的名字,与 admin-center 的 sso.dsp.am-token-name 对齐。
+    am-token-name: ${DSP_AM_TOKEN_NAME:AMToken}
   lock:
     ttl-seconds: ${AI_GENERATION_LOCK_TTL:1800}
     force-unlock-timeout-seconds: ${AI_GENERATION_FORCE_UNLOCK_TIMEOUT:60}

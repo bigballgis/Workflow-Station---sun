@@ -1,7 +1,10 @@
 package com.developer.service;
 
 import com.developer.dto.FunctionUnitContextDTO;
+import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
 import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
@@ -33,6 +36,9 @@ class AiTruncationProperties {
                 mock(AiDocumentRepository.class),
                 mock(FunctionUnitRepository.class),
                 new ObjectMapper(),
+                mock(AiPromptBuilder.class),
+                mock(AiGatewayClient.class),
+                mock(AiResponseParser.class),
                 102400
         );
     }
@@ -190,6 +196,9 @@ class AiTruncationProperties {
                 mock(AiDocumentRepository.class),
                 mock(FunctionUnitRepository.class),
                 new ObjectMapper(),
+                mock(AiPromptBuilder.class),
+                mock(AiGatewayClient.class),
+                mock(AiResponseParser.class),
                 500 // Very small limit to force tier-2
         );
 

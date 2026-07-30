@@ -5,7 +5,10 @@ import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,15 +33,18 @@ class AiSseEmitterManagementTest {
                 mock(AiDocumentRepository.class),
                 mock(FunctionUnitRepository.class),
                 new ObjectMapper(),
+                mock(AiPromptBuilder.class),
+                mock(AiGatewayClient.class),
+                mock(AiResponseParser.class),
                 102400);
-        ReflectionTestUtils.setField(service, "aiWebhookTimeoutSeconds", 120);
+        ReflectionTestUtils.setField(service, "aiCallTimeoutSeconds", 120);
     }
 
     @Test
     void createChatEmitter_shouldReturnNonNullEmitter() {
         SseEmitter emitter = service.createChatEmitter(1L, "user1");
         assertThat(emitter).isNotNull();
-        // Dynamic timeout: aiWebhookTimeoutSeconds * 2 * 1000 + 60_000 = 120 * 2 * 1000 + 60_000 = 300_000
+        // Dynamic timeout: aiCallTimeoutSeconds * 2 * 1000 + 60_000 = 120 * 2 * 1000 + 60_000 = 300_000
         assertThat(emitter.getTimeout()).isEqualTo(300_000L);
     }
 

@@ -70,14 +70,18 @@ class AiGenerationControllerTest {
                 .mode(AiMode.NEW)
                 .build();
 
-        when(aiGenerationComponent.chatStream(any(AiChatRequest.class), anyString()))
+        when(aiGenerationComponent.chatStream(any(AiChatRequest.class), anyString(), anyString()))
                 .thenReturn(new SseEmitter(120_000L));
 
         mockMvc.perform(post("/ai-generation/chat/stream")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-User-Id", "user1")
+                        .header("X-AM-Token", "am-token-for-test")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
+
+        // AMToken 必须原样透传到编排层——丢了它 gateway 调用就没有凭证。
+        verify(aiGenerationComponent).chatStream(any(AiChatRequest.class), anyString(), eq("am-token-for-test"));
     }
 
     @Test

@@ -1279,12 +1279,17 @@ AI 生成模块通过 **N8N Webhook** 与大语言模型交互，在对话中辅
 ### 配置
 
 ```yaml
-n8n:
-  ai-generation:
-    webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://localhost:5678/webhook/ai-function-unit-gen}
-    timeout-seconds: ${N8N_AI_GENERATION_TIMEOUT:120}
-
 ai-generation:
+  # AI Generate 入口开关：false 时 AiGenerationController 整个不注册（/ai-generation/** 返回 404），
+  # 且前端 src/utils/featureFlags.ts 的 AI_GENERATION_ENABLED 必须同步。
+  enabled: ${AI_GENERATION_ENABLED:false}
+  # 集团 AI gateway（OpenAI 兼容 chat/completions）。凭证是每用户的 DSP AMToken，
+  # 由前端经 X-AM-Token 头透传，后端不持有共享密钥。
+  gateway:
+    url: ${AI_GATEWAY_URL:}
+    model: ${AI_GATEWAY_MODEL:}
+    timeout-seconds: ${AI_GATEWAY_TIMEOUT_SECONDS:300}
+    am-token-name: ${DSP_AM_TOKEN_NAME:AMToken}
   lock:
     ttl-seconds: ${AI_GENERATION_LOCK_TTL:1800}
     force-unlock-timeout-seconds: ${AI_GENERATION_FORCE_UNLOCK_TIMEOUT:60}
@@ -1574,14 +1579,14 @@ platform:
   encryption:
     secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
 
-# N8N AI 生成
-n8n:
-  ai-generation:
-    webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://localhost:5678/webhook/ai-function-unit-gen}
-    timeout-seconds: ${N8N_AI_GENERATION_TIMEOUT:120}
-
-# AI 编辑锁
+# AI 生成（直连集团 AI gateway）+ AI 编辑锁
 ai-generation:
+  enabled: ${AI_GENERATION_ENABLED:false}
+  gateway:
+    url: ${AI_GATEWAY_URL:}
+    model: ${AI_GATEWAY_MODEL:}
+    timeout-seconds: ${AI_GATEWAY_TIMEOUT_SECONDS:300}
+    am-token-name: ${DSP_AM_TOKEN_NAME:AMToken}
   lock:
     ttl-seconds: ${AI_GENERATION_LOCK_TTL:1800}
     force-unlock-timeout-seconds: ${AI_GENERATION_FORCE_UNLOCK_TIMEOUT:60}
@@ -1652,8 +1657,10 @@ management:
 | `SECURITY_PERMISSION_MAX_NAME_LENGTH` | 权限名最大长度 | 100 |
 | `SECURITY_ROLE_MAX_NAME_LENGTH` | 角色名最大长度 | 100 |
 | `WORKFLOW_ENGINE_URL` | 工作流引擎地址 | http://localhost:8081 |
-| `N8N_AI_GENERATION_WEBHOOK_URL` | N8N webhook | http://localhost:5678/webhook/... |
-| `N8N_AI_GENERATION_TIMEOUT` | N8N 超时 (秒) | 120 |
+| `AI_GENERATION_ENABLED` | AI Generate 入口开关（前后端须一致） | false |
+| `AI_GATEWAY_URL` | 集团 AI gateway 端点（OpenAI 兼容 chat/completions） | 空（空则调用报 AI_GATEWAY_NOT_CONFIGURED） |
+| `AI_GATEWAY_MODEL` | body 里的 model 字段；空则不发（URL 路径已选定模型） | 空 |
+| `AI_GATEWAY_TIMEOUT_SECONDS` | 单次模型调用超时 (秒) | 300 |
 | `AI_GENERATION_LOCK_TTL` | AI 编辑锁 TTL (秒) | 1800 |
 | `AI_GENERATION_FORCE_UNLOCK_TIMEOUT` | AI 强制解锁超时 (秒) | 60 |
 | `AI_GENERATION_CONTEXT_MAX_SIZE` | AI 上下文最大字节数 | 102400 |

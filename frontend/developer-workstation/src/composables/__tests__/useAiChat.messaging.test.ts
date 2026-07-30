@@ -26,6 +26,36 @@ describe('useAiChat', () => {
     vi.restoreAllMocks()
   })
 
+  it('sendMessage should forward the browser AMToken as X-AM-Token', async () => {
+    // AI gateway 的 Bearer 凭证就是这个 token；掉了它后端只能以 AI_GATEWAY_TOKEN_MISSING 失败。
+    vi.stubGlobal('document', { cookie: 'foo=1; AMToken=am-token-abc; bar=2' })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: createMockSSEStream(['event:done\ndata:{}\n\n'])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { sendMessage } = useAiChat()
+    await sendMessage(mockRequest)
+
+    const headers = fetchMock.mock.calls[0][1].headers
+    expect(headers['X-AM-Token']).toBe('am-token-abc')
+  })
+
+  it('sendMessage should omit X-AM-Token when the browser has none', async () => {
+    vi.stubGlobal('document', { cookie: '' })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: createMockSSEStream(['event:done\ndata:{}\n\n'])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { sendMessage } = useAiChat()
+    await sendMessage(mockRequest)
+
+    expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty('X-AM-Token')
+  })
+
   it('should initialize with default state', () => {
     const { messages, isStreaming, streamingContent, error, canRetry } = useAiChat()
 

@@ -8,7 +8,10 @@ import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,14 +54,12 @@ class AiSessionMemoryRebuildTest {
         objectMapper = new ObjectMapper();
         generationService = new AiGenerationServiceImpl(
                 aiSessionRepository, aiMessageRepository, aiDocumentRepository,
-                functionUnitRepository, objectMapper, 102400);
-        ReflectionTestUtils.setField(generationService, "aiWebhookUrl",
-                "http://localhost:5678/webhook/ai-function-unit-gen");
-        ReflectionTestUtils.setField(generationService, "aiWebhookTimeoutSeconds", 120);
+                functionUnitRepository, objectMapper, mock(AiPromptBuilder.class), mock(AiGatewayClient.class), mock(AiResponseParser.class), 102400);
+        ReflectionTestUtils.setField(generationService, "aiCallTimeoutSeconds", 120);
     }
 
     /**
-     * 验证会话重建时 buildAiWebhookRequestBody 包含 conversationHistory、context 和 existingDocuments
+     * 验证会话重建时 buildAiRequestBody 包含 conversationHistory、context 和 existingDocuments
      */
     @Test
     @SuppressWarnings("unchecked")
@@ -91,7 +92,7 @@ class AiSessionMemoryRebuildTest {
                 Map.of("documentType", "REQUIREMENTS", "content", "req content"));
 
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildAiWebhookRequestBody",
+                generationService, "buildAiRequestBody",
                 sessionId, "new message", AiPhase.DESIGN, AiMode.MODIFY,
                 context, functionUnitId, existingDocuments, history, (String) null);
 
@@ -111,26 +112,4 @@ class AiSessionMemoryRebuildTest {
         assertEquals(2, historyInBody.size());
     }
 
-    /**
-     * 验证 isSessionNotFoundError 能正确检测各种 session-not-found 错误格式
-     */
-    @Test
-    void isSessionNotFoundError_detectsVariousFormats() {
-        // error field
-        assertTrue(invokeIsSessionNotFoundError(Map.of("error", "Session not found for id xyz")));
-        // errorCode field
-        assertTrue(invokeIsSessionNotFoundError(Map.of("errorCode", "SESSION_NOT_FOUND")));
-        // message field
-        assertTrue(invokeIsSessionNotFoundError(Map.of("message", "Session does not exist")));
-        // normal response
-        assertFalse(invokeIsSessionNotFoundError(Map.of("reply", "ok")));
-        // null
-        assertFalse(invokeIsSessionNotFoundError(null));
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean invokeIsSessionNotFoundError(Map<String, Object> response) {
-        return (boolean) ReflectionTestUtils.invokeMethod(
-                generationService, "isSessionNotFoundError", response);
-    }
 }

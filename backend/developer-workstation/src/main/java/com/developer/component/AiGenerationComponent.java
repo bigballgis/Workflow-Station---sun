@@ -19,9 +19,12 @@ public interface AiGenerationComponent {
 
     /**
      * 对话流式传输
-     * 编排: 锁续期 → 消息持久化 → AI webhook 调用 → SSE 事件流 → 文档保存
+     * 编排: 锁续期 → 消息持久化 → AI gateway 调用 → SSE 事件流 → 文档保存
+     *
+     * @param amToken 该用户的 DSP AMToken，透传给 AI gateway 作 Bearer 凭证；缺失时本轮以
+     *                {@code AI_GATEWAY_TOKEN_MISSING} 失败（不做匿名调用）
      */
-    SseEmitter chatStream(AiChatRequest request, String userId);
+    SseEmitter chatStream(AiChatRequest request, String userId, String amToken);
 
     /**
      * 注册独立事件 SSE emitter（长连接）

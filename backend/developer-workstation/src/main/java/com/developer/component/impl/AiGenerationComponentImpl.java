@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * AI Generation Component Implementation
- * Orchestrates lock management, session management, AI webhook calls, SSE event streaming, data validation, and write services
+ * Orchestrates lock management, session management, AI gateway calls, SSE event streaming, data validation, and write services
  */
 @Component
 @Slf4j
@@ -81,7 +81,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     }
 
     @Override
-    public SseEmitter chatStream(AiChatRequest request, String userId) {
+    public SseEmitter chatStream(AiChatRequest request, String userId, String amToken) {
         functionUnitWorkspaceAccessService.assertCanAccess(request.getFunctionUnitId(), WorkspaceAccessAction.MODIFY);
         // 1. Renew the lock
         aiLockService.extendLock(request.getFunctionUnitId(), userId);
@@ -141,7 +141,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         };
         CompletableFuture.runAsync(() -> {
             try {
-                log.info("chatStream async: starting AI webhook call, functionUnitId={}, sessionId={}, contextPresent={}, docsCount={}",
+                log.info("chatStream async: starting AI gateway call, functionUnitId={}, sessionId={}, contextPresent={}, docsCount={}",
                         request.getFunctionUnitId(), session.getSessionId(),
                         finalContext != null, finalExistingDocuments.size());
 
@@ -149,13 +149,13 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 emitIfCurrent.accept(AiChatSseEvent.builder().eventType("session")
                                 .data(Map.of("sessionId", session.getSessionId().toString())).build());
 
-                // 6b. Call AI webhook
-                Map<String, Object> aiResponse = aiGenerationService.callAiWebhook(
+                // 6b. Call the AI gateway
+                Map<String, Object> aiResponse = aiGenerationService.callAiModel(
                         session.getSessionId(), request.getMessage(), request.getPhase(), request.getMode(),
                         finalContext, request.getFunctionUnitId(), finalExistingDocuments,
-                        request.getRegenerateScope());
+                        request.getRegenerateScope(), amToken);
 
-                // 6b. Parse AI webhook response and send SSE events
+                // 6b. Parse the AI response and send SSE events
                 // Blank replies are legal (the model may put everything inside the document
                 // markers); skip both the token event and persistence so the chat history
                 // doesn't accumulate empty assistant bubbles.
@@ -227,7 +227,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 }
 
             } catch (Exception e) {
-                log.error("AI webhook call failed: functionUnitId={}, sessionId={}", request.getFunctionUnitId(), session.getSessionId(), e);
+                log.error("AI gateway call failed: functionUnitId={}, sessionId={}", request.getFunctionUnitId(), session.getSessionId(), e);
                 // Send structured error event with errorCode and message
                 try {
                     String errorCode = (e instanceof com.developer.exception.AiGenerationException aiEx)
@@ -237,7 +237,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     errorData.put("errorCode", errorCode);
                     errorData.put("message", e.getMessage());
 
-                    // Check if the exception carries degradation info (graceful degradation after AI webhook retry failure)
+                    // Check if the exception carries degradation info (graceful degradation after AI retry failure)
                     if (e instanceof com.developer.exception.AiGenerationException aiEx2
                             && aiEx2.getExtraData() != null) {
                         Object degradationOptions = aiEx2.getExtraData().get("degradationOptions");

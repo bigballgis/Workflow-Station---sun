@@ -6,7 +6,10 @@ import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.StringLength;
@@ -21,13 +24,13 @@ import static org.mockito.Mockito.mock;
 /**
  * Property-based tests for AI webhook request body completeness.
  *
- * <p>Verifies that {@code buildAiWebhookRequestBody()} includes complete {@code schemaMetadata},
+ * <p>Verifies that {@code buildAiRequestBody()} includes complete {@code schemaMetadata},
  * {@code includeExplanations}, and {@code regenerateScope} fields.</p>
  *
  * <p><b>Validates: Requirements 15</b></p>
  */
 @Tag("Feature: ai-function-unit-generation-refactor, Property 12: AI webhook request body contains complete schemaMetadata")
-class AiWebhookRequestBodyProperties {
+class AiRequestBodyProperties {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -40,13 +43,15 @@ class AiWebhookRequestBodyProperties {
                 mock(AiDocumentRepository.class),
                 mock(FunctionUnitRepository.class),
                 OBJECT_MAPPER,
+                mock(AiPromptBuilder.class),
+                mock(AiGatewayClient.class),
+                mock(AiResponseParser.class),
                 102400);
-        ReflectionTestUtils.setField(generationService, "aiWebhookUrl", "http://localhost:5678/webhook/ai-function-unit-gen");
-        ReflectionTestUtils.setField(generationService, "aiWebhookTimeoutSeconds", 120);
+        ReflectionTestUtils.setField(generationService, "aiCallTimeoutSeconds", 120);
     }
 
     /**
-     * Invoke the private buildAiWebhookRequestBody method via reflection.
+     * Invoke the private buildAiRequestBody method via reflection.
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> invokeBuildAiWebhookRequestBody(
@@ -56,7 +61,7 @@ class AiWebhookRequestBodyProperties {
             List<Map<String, String>> conversationHistory,
             String regenerateScope) {
         return (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildAiWebhookRequestBody",
+                generationService, "buildAiRequestBody",
                 sessionId, message, phase, mode, context, functionUnitId,
                 existingDocuments, conversationHistory, regenerateScope);
     }

@@ -103,12 +103,7 @@ logging:
     com.developer: INFO
     org.hibernate.SQL: WARN
 
-# AI Generation webhook (Docker) — Activepieces sync webhook.
-# flowId is environment-specific; override via AI_GENERATION_WEBHOOK_URL per environment.
-service-task:
-  ai-generation:
-    webhook-url: ${AI_GENERATION_WEBHOOK_URL:http://activepieces:80/api/v1/webhooks/QnU0ytf5oBaxL9rbwOU2Z/sync}
-
 # Docker Compose service hostnames resolve to private IPs; allow trusted internal targets only.
+# 集团 AI gateway 的 FQDN 若在集群内解析到内网地址，要在各环境的 SSRF_ALLOWED_HOSTS 里补上。
 ssrf:
   allowed-hosts: ${SSRF_ALLOWED_HOSTS:activepieces}

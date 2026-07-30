@@ -12,8 +12,11 @@ import com.developer.dto.SaveDocumentRequest;
 import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,18 +36,16 @@ import java.util.List;
 /**
  * AI Function Unit Generation Controller
  *
- * <p><b>2026-07-28 起默认停用</b>（{@code ai-generation.enabled}，环境变量
- * {@code AI_GENERATION_ENABLED}，缺省 {@code false}）。该功能的模型调用原先经 Activepieces flow
- * （DW POST {@code <ap>/api/v1/webhooks/<flowId>/sync} → flow 内 piece-ai 的 run_agent → deepseek），
- * 该链路已废弃且替代实现尚未落地。保持开启只会让调用方等到 300s 超时，故整个控制器不注册——
- * 停用期间 {@code /ai-generation/**} 全部返回 404。
+ * <p>模型调用直连集团 AI gateway（OpenAI 兼容 {@code /chat/completions}），凭证是该用户的 DSP
+ * AMToken。2026-07-28～2026-07-29 之间曾因旧的 Activepieces flow 链路（DW POST
+ * {@code <ap>/api/v1/webhooks/<flowId>/sync} → piece-ai 的 run_agent → deepseek）废弃而整体停用，
+ * 现已由 {@code AiPromptBuilder} / {@code AiGatewayClient} / {@code AiResponseParser} 三件套接回。
  *
- * <p>重新启用需**前后端同时打开**：本开关置 true，且前端
- * {@code src/utils/featureFlags.ts} 的 {@code AI_GENERATION_ENABLED} 改回 true 并重新构建。
+ * <p>开关 {@code ai-generation.enabled}（环境变量 {@code AI_GENERATION_ENABLED}）为 false 时整个控制器
+ * 不注册，{@code /ai-generation/**} 全部返回 404。开关须**前后端同时打开**：本开关置 true，且前端
+ * {@code src/utils/featureFlags.ts} 的 {@code AI_GENERATION_ENABLED} 为 true 并重新构建。
  * 只开一侧：只开后端 = 用户看不到入口；只开前端 = 点进去全 404。
- *
- * <p>注意本开关只摘入口。会话 / 文档 / 锁的历史数据都还在库里，业务逻辑（{@code AiWriteService}
- * 等）也没有动，恢复时无需数据迁移。
+ * 另外还须配 {@code AI_GATEWAY_URL}，否则每轮对话以 {@code AI_GATEWAY_NOT_CONFIGURED} 失败。
  */
 @RestController
 @RequestMapping("/ai-generation")
@@ -53,8 +54,18 @@ import java.util.List;
 @Tag(name = "AI Function Unit Generation", description = "AI-driven function unit generation APIs")
 public class AiGenerationController extends BaseController {
 
+    /** 前端从浏览器侧读到 AMToken 后用这个头透传（见 developer-workstation 的 useAiChat）。 */
+    private static final String AM_TOKEN_HEADER = "X-AM-Token";
+
     private final AiGenerationComponent aiGenerationComponent;
     private final I18nService i18nService;
+
+    /**
+     * AMToken 在 Cookie 中的名字，与 admin-center 的 {@code sso.dsp.am-token-name} 对齐。
+     * 初值不是兜底而是默认：脱离 Spring 直接 new 本控制器（单元测试）时也有可用的名字。
+     */
+    @Value("${ai-generation.gateway.am-token-name:AMToken}")
+    private String amTokenCookieName = "AMToken";
 
     public AiGenerationController(AiGenerationComponent aiGenerationComponent, I18nService i18nService) {
         this.aiGenerationComponent = aiGenerationComponent;
@@ -64,11 +75,38 @@ public class AiGenerationController extends BaseController {
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "SSE chat stream")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
-    public SseEmitter chatStream(@Valid @RequestBody AiChatRequest request) {
+    public SseEmitter chatStream(@Valid @RequestBody AiChatRequest request,
+                                 HttpServletRequest httpRequest) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
-        log.info("Chat stream request for functionUnitId={}, userId={}", request.getFunctionUnitId(), userId);
-        return aiGenerationComponent.chatStream(request, userId);
+        String amToken = resolveAmToken(httpRequest);
+        log.info("Chat stream request for functionUnitId={}, userId={}, amTokenPresent={}",
+                request.getFunctionUnitId(), userId, amToken != null);
+        return aiGenerationComponent.chatStream(request, userId, amToken);
+    }
+
+    /**
+     * 取该用户的 DSP AMToken，作 AI gateway 的 Bearer 凭证。
+     *
+     * <p>顺序：前端显式透传的 {@code X-AM-Token} 头 → 浏览器带上来的 AMToken cookie。
+     * 两处都没有时返回 null，由 {@code AiGatewayClient} 以 {@code AI_GATEWAY_TOKEN_MISSING} 显式失败——
+     * 绝不退化成匿名调用。token 只在内存里流转，不落库、不进日志。</p>
+     */
+    private String resolveAmToken(HttpServletRequest httpRequest) {
+        String header = httpRequest.getHeader(AM_TOKEN_HEADER);
+        if (header != null && !header.isBlank()) {
+            return header.trim();
+        }
+        Cookie[] cookies = httpRequest.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if (amTokenCookieName.equalsIgnoreCase(cookie.getName())
+                        && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+                    return cookie.getValue().trim();
+                }
+            }
+        }
+        return null;
     }
 
     @GetMapping(value = "/events/{functionUnitId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

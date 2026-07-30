@@ -31,6 +31,9 @@ import static org.mockito.Mockito.*;
  */
 class AiGenerationComponentImplPropertyTest {
 
+    /** 每用户 AMToken：由 controller 从 X-AM-Token 头/cookie 取出后透传给编排层。 */
+    private static final String AM_TOKEN = "am-token-for-test";
+
     /**
      * Property 1: 首条消息始终加载上下文
      */
@@ -64,7 +67,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
@@ -73,7 +76,7 @@ class AiGenerationComponentImplPropertyTest {
                 .functionUnitId(1L).sessionId(null).message("hello")
                 .phase(phase).mode(mode).build();
 
-        component.chatStream(request, "user1");
+        component.chatStream(request, "user1", AM_TOKEN);
         latch.await(5, TimeUnit.SECONDS);
 
         verify(aiGenerationService).serializeFunctionUnitContext(1L);
@@ -114,7 +117,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
@@ -124,7 +127,7 @@ class AiGenerationComponentImplPropertyTest {
                 .functionUnitId(1L).sessionId(sessionUuid.toString()).message("follow up")
                 .phase(phase).mode(mode).build();
 
-        component.chatStream(request, "user1");
+        component.chatStream(request, "user1", AM_TOKEN);
         latch.await(5, TimeUnit.SECONDS);
 
         // Context and documents are ALWAYS loaded (AI webhook systemMessage re-renders each request)
@@ -167,7 +170,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
@@ -176,7 +179,7 @@ class AiGenerationComponentImplPropertyTest {
                 .functionUnitId(1L).sessionId(sessionUuid.toString()).message("next phase")
                 .phase(requestPhase).mode(mode).build();
 
-        component.chatStream(request, "user1");
+        component.chatStream(request, "user1", AM_TOKEN);
         latch.await(5, TimeUnit.SECONDS);
 
         verify(aiGenerationService).serializeFunctionUnitContext(1L);

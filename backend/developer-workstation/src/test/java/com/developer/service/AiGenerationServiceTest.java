@@ -8,7 +8,13 @@ import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.impl.AiGatewayClient;
+import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +34,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * AiGenerationService 单元测试
- * AI webhook 调用模拟、SSE 事件生成、会话恢复
+ * 会话管理、SSE 事件生成、对话历史组装
  */
 @ExtendWith(MockitoExtension.class)
 class AiGenerationServiceTest {
@@ -45,6 +51,15 @@ class AiGenerationServiceTest {
     @Mock
     private FunctionUnitRepository functionUnitRepository;
 
+    @Mock
+    private AiPromptBuilder aiPromptBuilder;
+
+    @Mock
+    private AiGatewayClient aiGatewayClient;
+
+    @Mock
+    private AiResponseParser aiResponseParser;
+
     private ObjectMapper objectMapper;
 
     private AiGenerationServiceImpl generationService;
@@ -58,11 +73,12 @@ class AiGenerationServiceTest {
                 aiDocumentRepository,
                 functionUnitRepository,
                 objectMapper,
+                aiPromptBuilder,
+                aiGatewayClient,
+                aiResponseParser,
                 102400 // 100KB max context size
         );
-        ReflectionTestUtils.setField(generationService, "aiWebhookUrl",
-                "http://localhost:5678/webhook/ai-function-unit-gen");
-        ReflectionTestUtils.setField(generationService, "aiWebhookTimeoutSeconds", 120);
+        ReflectionTestUtils.setField(generationService, "aiCallTimeoutSeconds", 120);
     }
 
     // ==================== Session Management ====================
@@ -102,48 +118,6 @@ class AiGenerationServiceTest {
         assertEquals("AI_SESSION_NOT_FOUND", ex.getErrorCode());
     }
 
-    // ==================== AI webhook ====================
-
-    @Test
-    void callAiWebhook_sessionNotFound_shouldRetryWithHistory() {
-        UUID sessionId = UUID.randomUUID();
-
-        // Mock message history for rebuild
-        AiMessage msg1 = AiMessage.builder()
-                .sessionId(sessionId)
-                .role(AiMessageRole.USER)
-                .content("hello")
-                .phase(AiPhase.REQUIREMENTS)
-                .createdAt(Instant.now())
-                .build();
-        AiMessage msg2 = AiMessage.builder()
-                .sessionId(sessionId)
-                .role(AiMessageRole.ASSISTANT)
-                .content("hi there")
-                .phase(AiPhase.REQUIREMENTS)
-                .createdAt(Instant.now())
-                .build();
-        when(aiMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId))
-                .thenReturn(List.of(msg1, msg2));
-
-        // Use a spy to intercept doCallAiWebhook
-        AiGenerationServiceImpl spyService = spy(generationService);
-
-        // First call returns session-not-found error, second call returns success
-        Map<String, Object> errorResponse = Map.of("error", "Session not found for id xyz");
-        Map<String, Object> successResponse = Map.of("reply", "Generated response");
-
-        // We need to mock the private doCallAiWebhook via the public callAiWebhook
-        // Since doCallAiWebhook makes real HTTP calls, we test buildConversationHistory instead
-        List<Map<String, String>> history = generationService.buildConversationHistory(sessionId);
-
-        assertEquals(2, history.size());
-        assertEquals("user", history.get(0).get("role"));
-        assertEquals("hello", history.get(0).get("content"));
-        assertEquals("assistant", history.get(1).get("role"));
-        assertEquals("hi there", history.get(1).get("content"));
-    }
-
     // ==================== SSE Emitter ====================
 
     @Test
@@ -151,7 +125,7 @@ class AiGenerationServiceTest {
         SseEmitter emitter = generationService.createChatEmitter(1L, "user1");
 
         assertNotNull(emitter);
-        // Dynamic timeout: aiWebhookTimeoutSeconds(120) * 2 * 1000 + 60_000 = 300_000
+        // Dynamic timeout: aiCallTimeoutSeconds(120) * 2 * 1000 + 60_000 = 300_000
         assertEquals(300_000L, emitter.getTimeout());
     }
 

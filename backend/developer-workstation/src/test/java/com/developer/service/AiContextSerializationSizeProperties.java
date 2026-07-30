@@ -8,7 +8,10 @@ import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.IntRange;
@@ -62,6 +65,9 @@ class AiContextSerializationSizeProperties {
                 mock(AiDocumentRepository.class),
                 repo,
                 OBJECT_MAPPER,
+                mock(AiPromptBuilder.class),
+                mock(AiGatewayClient.class),
+                mock(AiResponseParser.class),
                 MAX_CONTEXT_SIZE_BYTES
         );
     }

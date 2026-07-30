@@ -183,23 +183,25 @@ public interface AiGenerationService {
     List<Map<String, String>> getLatestDocuments(Long functionUnitId, AiPhase phase, AiMode mode);
 
     /**
-     * 调用 AI webhook，包含会话不存在错误检测与自动重建逻辑。
-     * 如果 AI webhook 返回会话不存在错误，自动从数据库加载对话历史并重新发送请求。
+     * 调用集团 AI gateway（OpenAI 兼容 chat/completions），失败时按可重试错误码自动重试一次。
+     *
+     * <p>chat/completions 无会话状态，故每次调用都把完整对话历史随 prompt 一起送出。</p>
      *
      * @param sessionId          会话 ID
      * @param message            用户消息
      * @param phase              当前阶段
      * @param mode               AI 模式
      * @param context            功能单元上下文（首次请求时提供，后续为 null）
-     * @param functionUnitId     功能单元 ID（用于会话重建时重新加载上下文）
+     * @param functionUnitId     功能单元 ID
      * @param existingDocuments  前序文档列表（首次请求时提供，后续为空列表）
      * @param regenerateScope    增量重新生成范围（ALL/TABLES/FORMS/ACTIONS/DECISIONS/PROCESS/TABLE_RELATIONS，null 等同于 ALL）
-     * @return AI webhook 响应体（Map 格式）
+     * @param amToken            该用户的 DSP AMToken，作 gateway 的 Bearer 凭证；缺失即失败
+     * @return 解析后的响应：{@code {reply, document, documentType, phaseComplete, generatedData}}
      */
-    Map<String, Object> callAiWebhook(UUID sessionId, String message, AiPhase phase, AiMode mode,
-                                        FunctionUnitContextDTO context, Long functionUnitId,
-                                        List<Map<String, String>> existingDocuments,
-                                        String regenerateScope);
+    Map<String, Object> callAiModel(UUID sessionId, String message, AiPhase phase, AiMode mode,
+                                    FunctionUnitContextDTO context, Long functionUnitId,
+                                    List<Map<String, String>> existingDocuments,
+                                    String regenerateScope, String amToken);
 
     // ==================== SSE Emitter Management ====================
 

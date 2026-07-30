@@ -7,7 +7,10 @@ import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.impl.AiGatewayClient;
 import com.developer.service.impl.AiGenerationServiceImpl;
+import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiResponseParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
@@ -38,9 +41,8 @@ class AiContextAwarenessProperties {
 
         generationService = new AiGenerationServiceImpl(
                 aiSessionRepository, aiMessageRepository, aiDocumentRepository,
-                functionUnitRepository, objectMapper, 102400);
-        ReflectionTestUtils.setField(generationService, "aiWebhookUrl", "http://localhost:5678/webhook/ai-function-unit-gen");
-        ReflectionTestUtils.setField(generationService, "aiWebhookTimeoutSeconds", 120);
+                functionUnitRepository, objectMapper, mock(AiPromptBuilder.class), mock(AiGatewayClient.class), mock(AiResponseParser.class), 102400);
+        ReflectionTestUtils.setField(generationService, "aiCallTimeoutSeconds", 120);
     }
 
     /**
@@ -132,13 +134,13 @@ class AiContextAwarenessProperties {
     }
 
     /**
-     * Feature: ai-context-awareness, Property 3: buildAiWebhookRequestBody 正确包含 existingDocuments
+     * Feature: ai-context-awareness, Property 3: buildAiRequestBody 正确包含 existingDocuments
      *
      * Validates: Requirements 3.1, 3.2, 3.3
      */
     @Property(tries = 100)
-    @Label("Property 3: buildAiWebhookRequestBody correctly includes existingDocuments")
-    void buildAiWebhookRequestBodyIncludesExistingDocuments(
+    @Label("Property 3: buildAiRequestBody correctly includes existingDocuments")
+    void buildAiRequestBodyIncludesExistingDocuments(
             @ForAll AiPhase phase, @ForAll AiMode mode,
             @ForAll @StringLength(min = 1, max = 100) String docContent) {
         setupService();
@@ -154,7 +156,7 @@ class AiContextAwarenessProperties {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildAiWebhookRequestBody",
+                generationService, "buildAiRequestBody",
                 sessionId, "test message", phase, mode, context, 1L, existingDocuments,
                 (List<Map<String, String>>) null, (String) null);
 
@@ -165,7 +167,7 @@ class AiContextAwarenessProperties {
         // Test with empty list
         @SuppressWarnings("unchecked")
         Map<String, Object> bodyEmpty = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildAiWebhookRequestBody",
+                generationService, "buildAiRequestBody",
                 sessionId, "test message", phase, mode, context, 1L, List.of(),
                 (List<Map<String, String>>) null, (String) null);
 
@@ -181,7 +183,7 @@ class AiContextAwarenessProperties {
      */
     @Property(tries = 100)
     @Label("Property 4: context pre-serialized as string, existingDocuments formatted as readable text")
-    void buildAiWebhookRequestBodyPreSerializesContextAndDocuments(
+    void buildAiRequestBodyPreSerializesContextAndDocuments(
             @ForAll AiPhase phase, @ForAll AiMode mode) {
         setupService();
 
@@ -196,7 +198,7 @@ class AiContextAwarenessProperties {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
-                generationService, "buildAiWebhookRequestBody",
+                generationService, "buildAiRequestBody",
                 sessionId, "test message", phase, mode, context, 1L, existingDocuments,
                 (List<Map<String, String>>) null, (String) null);
 

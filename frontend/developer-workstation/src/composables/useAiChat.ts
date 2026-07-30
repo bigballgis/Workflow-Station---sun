@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import type { AiMessage, AiChatRequest, AiPhase, AiGeneratedData, GenerationPreviewData } from '@/types/aiGeneration'
 import { AI_CHAT_STREAM_URL } from '@/api/aiGeneration'
 import { getUser } from '@/api/auth'
+import { readAmToken } from '@/utils/amToken'
 
 /** Draft data structure stored in localStorage */
 export interface AiGenerationDraft {
@@ -88,6 +89,12 @@ export function useAiChat() {
     const user = getUser()
     if (user?.userId) {
       headers['X-User-Id'] = user.userId
+    }
+    // AI gateway 的 Bearer 凭证是每用户的 DSP AMToken：后端不持有共享密钥，只透传这个头。
+    // 读不到就不带，后端会以 AI_GATEWAY_TOKEN_MISSING 显式失败（不做匿名调用）。
+    const amToken = readAmToken()
+    if (amToken) {
+      headers['X-AM-Token'] = amToken
     }
     return headers
   }

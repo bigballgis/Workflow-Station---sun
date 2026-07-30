@@ -42,6 +42,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AiGenerationComponentImplTest {
 
+    /** 每用户 AMToken：由 controller 从 X-AM-Token 头/cookie 取出后透传给编排层。 */
+    private static final String AM_TOKEN = "am-token-for-test";
+
     @Mock private AiGenerationService aiGenerationService;
     @Mock private AiLockService aiLockService;
     @Mock private AiValidationService aiValidationService;
@@ -77,7 +80,7 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.REQUIREMENTS, AiMode.NEW)).thenReturn(List.of());
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -85,7 +88,7 @@ class AiGenerationComponentImplTest {
 
         AiChatRequest request = AiChatRequest.builder()
                 .functionUnitId(1L).sessionId(null).message("hello").phase(AiPhase.REQUIREMENTS).mode(AiMode.NEW).build();
-        component.chatStream(request, "user1");
+        component.chatStream(request, "user1", AM_TOKEN);
         latch.await(5, TimeUnit.SECONDS);
 
         verify(aiGenerationService).serializeFunctionUnitContext(1L);
@@ -107,7 +110,7 @@ class AiGenerationComponentImplTest {
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.DESIGN, AiMode.MODIFY))
                 .thenReturn(List.of(Map.of("documentType", "REQUIREMENTS", "content", "req doc")));
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -115,7 +118,7 @@ class AiGenerationComponentImplTest {
 
         AiChatRequest request = AiChatRequest.builder()
                 .functionUnitId(1L).sessionId(null).message("hello").phase(AiPhase.DESIGN).mode(AiMode.MODIFY).build();
-        component.chatStream(request, "user1");
+        component.chatStream(request, "user1", AM_TOKEN);
         latch.await(5, TimeUnit.SECONDS);
 
         verify(aiGenerationService).serializeFunctionUnitContext(1L);
@@ -137,7 +140,7 @@ class AiGenerationComponentImplTest {
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.DESIGN, AiMode.NEW))
                 .thenReturn(List.of(Map.of("documentType", "REQUIREMENTS", "content", "req doc")));
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -146,7 +149,7 @@ class AiGenerationComponentImplTest {
         // Request with DESIGN phase, but session.currentPhase is REQUIREMENTS → phase transition
         AiChatRequest request = AiChatRequest.builder()
                 .functionUnitId(1L).sessionId(sessionUuid.toString()).message("start design").phase(AiPhase.DESIGN).mode(AiMode.NEW).build();
-        component.chatStream(request, "user1");
+        component.chatStream(request, "user1", AM_TOKEN);
         latch.await(5, TimeUnit.SECONDS);
 
         verify(aiGenerationService).serializeFunctionUnitContext(1L);
@@ -166,7 +169,7 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.REQUIREMENTS, AiMode.NEW)).thenReturn(List.of());
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -174,7 +177,7 @@ class AiGenerationComponentImplTest {
 
         AiChatRequest request = AiChatRequest.builder()
                 .functionUnitId(1L).sessionId(sessionUuid.toString()).message("follow up").phase(AiPhase.REQUIREMENTS).mode(AiMode.NEW).build();
-        component.chatStream(request, "user1");
+        component.chatStream(request, "user1", AM_TOKEN);
         latch.await(5, TimeUnit.SECONDS);
 
         verify(aiGenerationService).serializeFunctionUnitContext(1L);
@@ -194,7 +197,7 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenThrow(new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "功能单元不存在"));
         // AI webhook should still be called with null context and empty documents
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), isNull(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), isNull(), anyLong(), anyList(), any(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -202,12 +205,12 @@ class AiGenerationComponentImplTest {
 
         AiChatRequest request = AiChatRequest.builder()
                 .functionUnitId(1L).sessionId(null).message("hello").phase(AiPhase.REQUIREMENTS).mode(AiMode.NEW).build();
-        component.chatStream(request, "user1");
+        component.chatStream(request, "user1", AM_TOKEN);
         latch.await(5, TimeUnit.SECONDS);
 
         // Verify AI webhook was still called (graceful degradation, not failure)
-        verify(aiGenerationService).callAiWebhook(any(), eq("hello"), eq(AiPhase.REQUIREMENTS), eq(AiMode.NEW),
-                isNull(), eq(1L), eq(List.of()), isNull());
+        verify(aiGenerationService).callAiModel(any(), eq("hello"), eq(AiPhase.REQUIREMENTS), eq(AiMode.NEW),
+                isNull(), eq(1L), eq(List.of()), isNull(), eq(AM_TOKEN));
     }
 
     @Test

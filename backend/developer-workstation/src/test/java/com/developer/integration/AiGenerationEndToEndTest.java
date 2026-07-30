@@ -44,6 +44,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AiGenerationEndToEndTest {
 
+    /** 每用户 AMToken：由 controller 从 X-AM-Token 头/cookie 取出后透传给编排层。 */
+    private static final String AM_TOKEN = "am-token-for-test";
+
     @Mock private AiGenerationService aiGenerationService;
     @Mock private AiLockService aiLockService;
     @Mock private AiValidationService aiValidationService;
@@ -104,9 +107,9 @@ class AiGenerationEndToEndTest {
         aiResponse.put("reply", "Here is your generated application");
         aiResponse.put("generatedData", generatedData);
 
-        when(aiGenerationService.callAiWebhook(
+        when(aiGenerationService.callAiModel(
                 eq(sessionUuid), eq("Generate CRUD app"), eq(AiPhase.GENERATION), eq(AiMode.NEW),
-                any(), eq(1L), anyList(), isNull()))
+                any(), eq(1L), anyList(), isNull(), eq(AM_TOKEN)))
                 .thenReturn(aiResponse);
 
         // 3. Quality score computation
@@ -127,7 +130,7 @@ class AiGenerationEndToEndTest {
                 .phase(AiPhase.GENERATION).mode(AiMode.NEW).build();
 
         // Execute
-        SseEmitter emitter = component.chatStream(request, "test-user");
+        SseEmitter emitter = component.chatStream(request, "test-user", AM_TOKEN);
 
         assertTrue(latch.await(5, TimeUnit.SECONDS), "Stream should complete");
         assertNotNull(emitter);
@@ -139,9 +142,9 @@ class AiGenerationEndToEndTest {
         verify(aiGenerationService).serializeFunctionUnitContext(1L);
 
         // Verify: AI webhook called
-        verify(aiGenerationService).callAiWebhook(
+        verify(aiGenerationService).callAiModel(
                 eq(sessionUuid), eq("Generate CRUD app"), eq(AiPhase.GENERATION), eq(AiMode.NEW),
-                any(), eq(1L), anyList(), isNull());
+                any(), eq(1L), anyList(), isNull(), eq(AM_TOKEN));
 
         // Verify: SSE events sent (token, generated_data, done)
         ArgumentCaptor<AiChatSseEvent> eventCaptor = ArgumentCaptor.forClass(AiChatSseEvent.class);
@@ -471,7 +474,7 @@ class AiGenerationEndToEndTest {
         when(aiGenerationService.getLatestDocuments(anyLong(), any(), any())).thenReturn(List.of());
 
         // AI webhook throws timeout
-        when(aiGenerationService.callAiWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
                 .thenThrow(new AiGenerationException("AI_WEBHOOK_TIMEOUT", "AI webhook call timed out"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -482,7 +485,7 @@ class AiGenerationEndToEndTest {
                 .functionUnitId(1L).sessionId(null).message("test")
                 .phase(AiPhase.GENERATION).mode(AiMode.NEW).build();
 
-        component.chatStream(request, "test-user");
+        component.chatStream(request, "test-user", AM_TOKEN);
         assertTrue(latch.await(5, TimeUnit.SECONDS));
 
         // Verify: structured error event sent
