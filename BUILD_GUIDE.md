@@ -379,6 +379,12 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 >    才 FAIL 停下。
 > 4. 私服注定装不成的机器可以直接 **`-SkipApWorkspaceInstall`**：跳过那十几分钟必败的 install，
 >    直接用拷过来的 bundle。此时若连 bundle 也没有，仍然 FAIL（不会静默出一个缺 builder 的镜像）。
+> 5. **四个前端同理**：`-UsePrebuiltFrontendDist` 让每个前端镜像直接用现成的 `dist/` 打包，
+>    不跑 `pnpm install`、不跑 vite。用于私服隔离/缺失了前端 lockfile 钉的包（实测过 `axios@1.13.2`
+>    被 FOSS Guard 隔离）。产物在能装的机器上构建后按 `frontend/<app>/dist/` 原路径拷过去；
+>    缺 `dist/index.html` 的服务会**单独失败**，不会打出一个空壳镜像。
+>    ⚠️ 这两个开关都把"产物新鲜度"的责任转移给拷产物的人 —— 脚本分不出今天构建的和一个月前的，
+>    只会打一行黄色 WARNING。常态发布仍应走能联网装依赖的构建机。
 
 ### 7.3 Docker 镜像构建
 

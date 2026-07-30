@@ -29,6 +29,11 @@ param(
     # install or the builder-bundle build. Requires a prebuilt activepieces/dist/packages/
     # web-embed carried over from a host that can build it, which is then reused as-is.
     [switch]$SkipApWorkspaceInstall = $false,
+    # Same idea for the four frontends: pack each image from a dist/ built elsewhere instead of
+    # running pnpm install + vite here. For a host whose npm mirror quarantines or lacks
+    # packages the frontend lockfiles pin (axios, vitest, …). Fails per service when its
+    # dist/index.html is absent rather than packing an empty image.
+    [switch]$UsePrebuiltFrontendDist = $false,
     [switch]$SkipBackend = $false,
     [switch]$PushOnly = $false,
     [switch]$NoPush = $false,
@@ -170,7 +175,12 @@ if (-not $SkipFrontend) {
     # hook only COPIES it into public/. Nothing else builds it, so build it here — before
     # the per-service jobs start, since DW's build consumes it. Skip this and the image
     # ships without the bundle and 404s on /dev/service-task-builder/web.css.
-    $needsApBuilder = @($selectedFrontend | Where-Object { $_.Name -eq "developer-workstation-frontend" }).Count -gt 0
+    # -UsePrebuiltFrontendDist makes this whole step moot: DW's dist/ already contains
+    # service-task-builder/ (its prebuild hook copied the bundle in on the host that built it),
+    # and that hook does not run here at all. Without this, a host carrying a complete dist would
+    # still be told to produce a bundle it does not need.
+    $needsApBuilder = (-not $UsePrebuiltFrontendDist) -and
+        @($selectedFrontend | Where-Object { $_.Name -eq "developer-workstation-frontend" }).Count -gt 0
     if ($needsApBuilder -and -not $PushOnly) {
         $apRootDir = Join-Path $ProjectRoot "activepieces"
         $apWebDir = Join-Path $apRootDir "packages/web"
@@ -248,13 +258,27 @@ if (-not $SkipFrontend) {
     $frontendJobs = foreach ($svc in $selectedFrontend) {
         Start-ThreadJob -ThrottleLimit $MaxParallel -Name $svc.Name -ArgumentList @(
             $svc.Name, (Join-Path $ProjectRoot $svc.Dir), "$Registry/$($svc.Name):$Tag",
-            [bool]$PushOnly, [bool]$NoPush
+            [bool]$PushOnly, [bool]$NoPush, [bool]$UsePrebuiltFrontendDist
         ) -ScriptBlock {
-            param($Name, $ContextDir, $ImageName, $PushOnly, $NoPush)
+            param($Name, $ContextDir, $ImageName, $PushOnly, $NoPush, $UsePrebuiltDist)
             # Use a native PowerShell array (not a generic List) so this runs under
             # Constrained Language Mode, where [System.Collections.Generic.List[...]]::new() is blocked.
             $log = @()
-            if (-not $PushOnly) {
+            if (-not $PushOnly -and $UsePrebuiltDist) {
+                # Host whose npm mirror cannot satisfy this frontend's lockfile: the dist/ was
+                # built elsewhere and carried over, so install and build are both skipped and the
+                # image is packed from what is on disk. index.html is the marker of a real vite
+                # build; without it there is nothing to pack, and packing an empty dist would
+                # produce an image that only fails in a browser.
+                if (-not (Test-Path (Join-Path $ContextDir "dist/index.html"))) {
+                    $log += "[$Name] -UsePrebuiltFrontendDist but no dist/index.html in $ContextDir"
+                    return @{ Name = $Name; Ok = $false; Stage = "prebuilt dist missing"; Log = $log }
+                }
+                # Loud on purpose: whoever carried the dist in owns its freshness, and nothing
+                # else in this script can tell a current dist from a month-old one.
+                $log += "[$Name] WARNING: -UsePrebuiltFrontendDist — packing the existing dist/ as-is, no pnpm install, no vite build. Verify it matches this commit."
+            }
+            if (-not $PushOnly -and -not $UsePrebuiltDist) {
                 Push-Location $ContextDir
                 try {
                     # Skip the install when node_modules is already up to date (mtime compare).
@@ -289,7 +313,12 @@ if (-not $SkipFrontend) {
                 } finally {
                     Pop-Location
                 }
+            }
 
+            # Outside the build block on purpose: with -UsePrebuiltFrontendDist there is no
+            # install and no vite run, but the image must still be packed from the carried-over
+            # dist/ — skipping this would push a tag that was never built.
+            if (-not $PushOnly) {
                 $log += ">> [$Name] docker build (Dockerfile.local)"
                 docker build -f "$ContextDir/Dockerfile.local" -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "docker build"; Log = $log } }
