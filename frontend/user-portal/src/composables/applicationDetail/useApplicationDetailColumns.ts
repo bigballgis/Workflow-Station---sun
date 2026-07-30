@@ -14,6 +14,7 @@ import {
   isAssigneeLikeLabel,
 } from './subTableRowHelpers'
 import type { ApplicationDetailCtx } from './context'
+import { assignSensitiveMaskColumnProps } from '@/utils/applySensitiveMaskFromRule'
 
 type DerivedColumn = {
   field: string
@@ -145,6 +146,7 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
         for (const key of propKeys) {
           if (rProps[key] !== undefined) passProps[key] = rProps[key]
         }
+        assignSensitiveMaskColumnProps(passProps, type, rProps)
         if (rProps.data !== undefined) passProps.treeData = rProps.data
         if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
         if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox

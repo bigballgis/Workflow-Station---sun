@@ -101,6 +101,18 @@ export interface FormField {
   hidden?: boolean
   /** Row layout gutter (type === 'row'). */
   gutter?: number
+  /**
+   * Display-only sensitive mask from designer Input props.sensitiveMask.
+   * Present only when enabled for plain text Input (not textarea/password).
+   */
+  sensitiveMask?: {
+    enabled: boolean
+    preset: 'last4' | 'first4Last4' | 'first3Last4' | 'all' | 'custom'
+    keepPrefix?: number
+    keepSuffix?: number
+    maskChar?: string
+    revealPlainOnFocus?: boolean
+  }
 }
 
 export interface FormTab {

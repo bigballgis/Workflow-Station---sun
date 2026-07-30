@@ -7,7 +7,7 @@
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **11** | `index.yaml` |
+| 🔓 Open | **12** | `index.yaml` |
 | ⏸️ Wontfix | **1** | `index.yaml` |
 | ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1499 等） |
 
@@ -26,6 +26,7 @@
 | 1407 | minor | quality | 动作测试仍为占位实现（流程 simulate 已接入 BpmnProcessSimulator） |
 | 1408 | minor | quality | 表单 boundTable 深绑定校验缺失 |
 | 1496 | minor | quality | DataSourceDiagnosticRunner 取得 JDBC 连接后未关闭 |
+| 1501 | major | bug | Main Table View / Relation Tables 列表未应用 Input 敏感打码 |
 
 ### Wontfix
 

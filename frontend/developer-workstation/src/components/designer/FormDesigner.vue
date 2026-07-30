@@ -1705,6 +1705,31 @@ const designerConfig = computed(() => ({
         ]
       },
     },
+    // Input（单行）：敏感信息打码。textarea / password 不展示、运行时也不打码。
+    input: {
+      append: true,
+      rule(activeRule: Record<string, unknown>) {
+        const props = (activeRule?.props && typeof activeRule.props === 'object')
+          ? activeRule.props as Record<string, unknown>
+          : {}
+        if (props.type === 'textarea' || props.type === 'password') return []
+        return [
+          {
+            type: 'SensitiveMaskPropsEditor',
+            field: 'sensitiveMask',
+            title: t('form.sensitiveMask.panelTitle'),
+            value: props.sensitiveMask ?? {
+              enabled: false,
+              preset: 'last4',
+              keepPrefix: 0,
+              keepSuffix: 4,
+              maskChar: '*',
+              revealPlainOnFocus: false,
+            },
+          },
+        ]
+      },
+    },
   },
   hiddenItemConfig: {
     // Hide the built-in Basic "Hidden" (rule-level `hidden`) — it collapses field content on the

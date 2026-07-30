@@ -18,6 +18,7 @@ import {
   resolveSubListViewColumnsForBinding,
 } from '@/components/subTableAddDialogHelpers'
 import type { TaskDetailCtx } from './context'
+import { assignSensitiveMaskColumnProps } from '@/utils/applySensitiveMaskFromRule'
 
 export interface TaskDetailFormSchemaFns {
   deriveColumnsFromBinding: (
@@ -152,6 +153,7 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
         for (const key of propKeys) {
           if (rProps[key] !== undefined) passProps[key] = rProps[key]
         }
+        assignSensitiveMaskColumnProps(passProps, type, rProps)
         // 'tree' and 'elTreeSelect' store tree data in props.data — map to treeData
         if (rProps.data !== undefined) passProps.treeData = rProps.data
         // pass through nodeKey and showCheckbox for tree type

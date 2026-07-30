@@ -1634,3 +1634,24 @@
     左侧粘贴 rule 数组亦可走 repair；Save 调 provisionAndRepairForSave。
     续：建表优先用源 binding→table_name（占用则 _2/_3 后缀）；FormConfigJsonTableProvisionerTest 覆盖。
 
+- id: "1500"
+  status: fixed
+  fixed_at: "2026-07-30"
+  severity: minor
+  category: quality
+  summary: "process-start rule converter 仍含 console.log 调试输出"
+  file: "frontend/user-portal/src/composables/processStart/useProcessStartRuleConverter.ts"
+  note: |
+    convertFormCreateRule 末尾 console.log 已删除（敏感打码 PR 同批清理）。
+
+- id: "1501"
+  status: open
+  severity: major
+  category: bug
+  summary: "Main Table View / Relation Tables 列表未应用 Input 敏感打码"
+  file: "frontend/user-portal/src/utils/mainTableViewCsvExport.ts"
+  note: |
+    Change History / Snapshot Diff / FormRenderer / 子表单元格已打码；MTV 与 Relation
+    Tables 列 DTO 无 sensitiveMask，formatMainTableViewCell / formatRelationCellDisplay
+    仍明文。需后端列元数据带 mask 或前端按 FU form config 按 fieldName join。
+

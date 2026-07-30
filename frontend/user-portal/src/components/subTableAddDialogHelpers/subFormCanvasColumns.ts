@@ -10,6 +10,7 @@ import {
   parseLookupConfig,
 } from './lookup'
 import type { DialogColumn } from './types'
+import { assignSensitiveMaskColumnProps } from '@/utils/applySensitiveMaskFromRule'
 
 export type SubFormColumnLookupContext = {
   lookupDbConfigs: Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: unknown[] }>
@@ -154,6 +155,7 @@ export function mapSubFormRuleToDialogColumns(
     for (const key of propKeys) {
       if (rProps[key] !== undefined) passProps[key] = rProps[key]
     }
+    assignSensitiveMaskColumnProps(passProps, type, rProps)
     if (rProps.data !== undefined) passProps.treeData = rProps.data
     if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
     if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox

@@ -57,7 +57,6 @@ export function useChangeHistoryLoader(
     loading.value = true
     error.value = null
     try {
-      console.warn('[changeHistory] loadHistory: pid=', props.processInstanceId, 'rowId=', props.rowIdentifier, 'taskId=', props.taskId)
       const res = await getChangeHistory(props.processInstanceId, props.rowIdentifier, props.taskId) as Record<string, unknown>
       const raw = res?.data ?? res
       const filtered = Array.isArray(raw) ? raw.filter(shouldKeepRecordInSnapshot) : []

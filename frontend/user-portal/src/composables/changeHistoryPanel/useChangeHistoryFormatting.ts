@@ -1,5 +1,13 @@
 import type { useI18n } from 'vue-i18n'
 import type { ChangeHistoryRecord } from '@/api/processForm'
+import {
+  applySensitiveMask,
+  isSensitiveMaskActive,
+} from '@/utils/sensitiveMask'
+import {
+  getSensitiveMask,
+  type SensitiveMaskLookup,
+} from '@/utils/sensitiveMaskLookup'
 
 type TranslateFn = ReturnType<typeof useI18n>['t']
 
@@ -22,7 +30,11 @@ export interface ChangeHistoryFormatting {
   resolveTaskDisplayLabel: (row: ChangeHistoryRecord) => string
   batchHeaderFields: (row: ChangeHistoryRecord) => BatchHeaderFields
   fieldLocationLabel: (row: ChangeHistoryRecord) => string
-  formatDisplayValue: (raw: string | null | undefined, maxLen?: number) => string
+  formatDisplayValue: (
+    raw: string | null | undefined,
+    maxLen?: number,
+    fieldName?: string | null,
+  ) => string
   formatTimestamp: (ts: string) => string
   getChangeTypeLabel: (changeType: string) => string
   getChangeTypeTag: (changeType: string) => 'success' | 'warning' | 'danger' | 'info'
@@ -32,6 +44,7 @@ export interface ChangeHistoryFormatting {
 export function useChangeHistoryFormatting(
   t: TranslateFn,
   dayjs: typeof import('dayjs'),
+  getMaskLookup?: () => SensitiveMaskLookup | null | undefined,
 ): ChangeHistoryFormatting {
   function shortId(id: string): string {
     if (!id || id.length <= 14) return id
@@ -111,14 +124,25 @@ export function useChangeHistoryFormatting(
     return row.fieldLabel?.trim() || row.fieldName || '—'
   }
 
- function formatScalarValue(value: unknown, maxLen: number): string {
+  function currentLookup(): SensitiveMaskLookup | null | undefined {
+    return getMaskLookup?.()
+  }
+
+  function maskPlainText(text: string, fieldName: string | null | undefined): string {
+    const cfg = getSensitiveMask(currentLookup(), fieldName)
+    if (!isSensitiveMaskActive(cfg)) return text
+    return applySensitiveMask(text, cfg!)
+  }
+
+  function formatScalarValue(value: unknown, maxLen: number, fieldName?: string | null): string {
     if (value === null || value === undefined || value === '') return '—'
     if (typeof value === 'object') {
       const displayName = objectDisplayName(value as Record<string, unknown>)
       if (displayName) return truncateText(displayName, maxLen)
       return truncateText(JSON.stringify(value), maxLen)
     }
-    return formatFileOrText(String(value), maxLen)
+    const masked = maskPlainText(String(value), fieldName)
+    return formatFileOrText(masked, maxLen)
   }
 
   function objectDisplayName(value: Record<string, unknown>): string | null {
@@ -139,9 +163,10 @@ export function useChangeHistoryFormatting(
     return normalized || null
   }
   function formatObjectDiff(value: Record<string, unknown>, maxLen: number): string {
+    const partMax = Math.max(32, Math.floor(maxLen / 2))
     const parts = Object.entries(value)
       .filter(([key]) => key !== 'row_id' && key !== 'id')
-      .map(([key, v]) => `${key}: ${formatScalarValue(v, Math.max(32, Math.floor(maxLen / 2)))}`)
+      .map(([key, v]) => `${key}: ${formatScalarValue(v, partMax, key)}`)
     if (parts.length === 0) {
       const idCandidate = value.id ?? value.userId ?? value.user_id ?? value.value
       if (idCandidate !== null && idCandidate !== undefined && String(idCandidate).trim()) {
@@ -164,11 +189,15 @@ export function useChangeHistoryFormatting(
     return value.length <= maxLen ? value : `${value.slice(0, maxLen)}…`
   }
   
-  function formatDisplayValue(raw: string | null | undefined, maxLen = 240): string {
+  function formatDisplayValue(
+    raw: string | null | undefined,
+    maxLen = 240,
+    fieldName?: string | null,
+  ): string {
     if (raw === null || raw === undefined || raw === '') return '—'
     const s = String(raw).trim()
     if (!s) return '—'
-    
+
     // JSON object/array first — sub-table row data is serialised as JSON
     // and may contain file URLs; we must parse JSON before the file-upload
     // regex, otherwise the regex greedily captures JSON tail content.
@@ -188,7 +217,7 @@ export function useChangeHistoryFormatting(
         /* fall through */
       }
     }
-    return formatFileOrText(s, maxLen)
+    return formatFileOrText(maskPlainText(s, fieldName), maxLen)
   }
 
   function formatTimestamp(ts: string): string {

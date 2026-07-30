@@ -115,7 +115,7 @@ export default {
   devGroup: {
     current: 'Workspace',
     switch: 'Switch',
-    allGroups: 'All groups',
+    allGroups: 'All Groups',
     publicGroup: 'Public',
     noTeam: 'No workspace',
     selectTitle: 'Select a workspace',
@@ -650,6 +650,25 @@ export default {
       allowAdd: 'Allow Add',
       allowEdit: 'Allow Edit',
       allowDelete: 'Allow Delete',
+    },
+    // Input sensitive display mask (Props panel) — display-only; submit/store keep plaintext
+    sensitiveMask: {
+      panelTitle: 'Sensitive Mask',
+      enabled: 'Mask sensitive value',
+      preset: 'Mask rule',
+      keepPrefix: 'Keep prefix length',
+      keepSuffix: 'Keep suffix length',
+      maskChar: 'Mask character',
+      preview: 'Preview',
+      revealPlainOnFocus: 'Reveal plain text on focus',
+      revealPlainOnFocusHint: 'When off: edit shows plain text; readonly and list cells stay masked. When on: blur masks, focus shows plain.',
+      presets: {
+        last4: 'Keep last 4 only',
+        first4Last4: 'Keep first 4 and last 4',
+        first3Last4: 'Keep first 3 and last 4',
+        all: 'Mask all',
+        custom: 'Custom',
+      },
     },
     // Sub-Table portal display (user-portal To Do / My Request) — SubTablePortalViewsEditor
     portalViews: {

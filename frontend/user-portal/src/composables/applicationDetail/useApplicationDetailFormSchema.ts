@@ -21,6 +21,7 @@ import {
 } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import { applyFormCreateValidationToFormField } from '@/utils/formCreateValidateRules'
+import { applySensitiveMaskFromRule } from '@/utils/applySensitiveMaskFromRule'
 import { resolveSubTableSchemaByTableId } from '@/components/subTableAddDialogHelpers'
 import type { ApplicationDetailCtx } from './context'
 
@@ -277,6 +278,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
     if (rule.type === 'cascader') { field.cascaderProps = rule.props?.props || rule.props?.cascaderProps }
     if (rule.type === 'input' && rule.props?.type === 'textarea') { field.type = 'textarea'; field.rows = rule.props?.rows || 3 }
     if (rule.type === 'input' && rule.props?.type === 'password') { field.type = 'password' }
+    applySensitiveMaskFromRule(field, rule)
     if (rule.type === 'timePicker' && rule.props?.isRange === true) { field.type = 'timerange' }
     if (rule.type === 'rate') { field.max = rule.props?.max || 5 }
     if (rule.type === 'slider') { field.min = rule.props?.min ?? 0; field.max = rule.props?.max ?? 100; field.step = rule.props?.step || 1 }
