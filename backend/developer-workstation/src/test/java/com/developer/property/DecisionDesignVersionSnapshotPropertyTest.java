@@ -292,7 +292,10 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
                 mock(com.developer.service.MainTableViewService.class),
                 mock(com.developer.repository.ForeignKeyRepository.class),
                 mock(com.developer.component.impl.FunctionUnitExporter.class),
-                mock(com.developer.component.TableDesignComponent.class)
+                mock(com.developer.component.TableDesignComponent.class),
+                mock(com.developer.repository.EmailConnectionRepository.class),
+                mock(com.developer.repository.EmailMonitorRuleRepository.class),
+                mock(com.developer.repository.EmailTemplateRepository.class)
         );
 
         // Mock: functionUnitRepository.save returns the entity with an ID.

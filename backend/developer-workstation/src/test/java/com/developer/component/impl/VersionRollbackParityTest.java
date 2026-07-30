@@ -50,6 +50,7 @@ class VersionRollbackParityTest {
                 mock(DecisionDefinitionRepository.class),
                 mock(com.developer.repository.EmailConnectionRepository.class),
                 emailMonitorRuleRepository,
+                mock(com.developer.repository.EmailTemplateRepository.class),
                 mock(FormTableBindingRepository.class),
                 mock(LinkFormComponentRepository.class),
                 mock(TableRelationRepository.class),
@@ -74,7 +75,7 @@ class VersionRollbackParityTest {
 
     @Test
     void importEmailMonitorRule_remapsFormAndBindingIds() {
-        FunctionUnit functionUnit = FunctionUnit.builder().id(48L).build();
+        FunctionUnit functionUnit = FunctionUnit.builder().id(48L).code("fu_demo").build();
         Map<Long, Long> formIdMapping = Map.of(10L, 110L);
         Map<Long, Long> bindingIdMapping = Map.of(20L, 220L);
 
@@ -95,6 +96,7 @@ class VersionRollbackParityTest {
         EmailMonitorRule saved = captor.getValue();
         assertThat(saved.getTargetFormId()).isEqualTo(110L);
         assertThat(saved.getTargetBindingId()).isEqualTo("220");
+        assertThat(saved.getProcessDefinitionKey()).isEqualTo("fu_demo");
         assertThat(saved.getFunctionUnit()).isSameAs(functionUnit);
     }
 }

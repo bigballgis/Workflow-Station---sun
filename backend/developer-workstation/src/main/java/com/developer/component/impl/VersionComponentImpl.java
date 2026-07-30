@@ -9,6 +9,7 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
+import com.developer.repository.EmailTemplateRepository;
 import com.developer.repository.ForeignKeyRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.LinkFormComponentRepository;
@@ -48,6 +49,7 @@ public class VersionComponentImpl implements VersionComponent {
     private final LinkFormComponentRepository linkFormComponentRepository;
     private final EmailConnectionRepository emailConnectionRepository;
     private final EmailMonitorRuleRepository emailMonitorRuleRepository;
+    private final EmailTemplateRepository emailTemplateRepository;
     private final TableRelationRepository tableRelationRepository;
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final EntityManager entityManager;
@@ -268,6 +270,7 @@ public class VersionComponentImpl implements VersionComponent {
         Long functionUnitId = functionUnit.getId();
         emailMonitorRuleRepository.deleteByFunctionUnitId(functionUnitId);
         emailConnectionRepository.deleteByFunctionUnitId(functionUnitId);
+        emailTemplateRepository.deleteByFunctionUnitId(functionUnitId);
         tableRelationRepository.deleteByFunctionUnitId(functionUnitId);
         // Explicit delete of the OneToOne process definition. Relying on orphanRemoval via
         // functionUnit.setProcessDefinition(null) does NOT fire after refreshFunctionUnitAfterNativeClear
@@ -280,6 +283,7 @@ public class VersionComponentImpl implements VersionComponent {
         processDefinitionRepository.deleteByFunctionUnitId(functionUnitId);
         emailMonitorRuleRepository.flush();
         emailConnectionRepository.flush();
+        emailTemplateRepository.flush();
         tableRelationRepository.flush();
         processDefinitionRepository.flush();
         if (functionUnit.getEmailConnections() != null) {

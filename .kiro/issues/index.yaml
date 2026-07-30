@@ -1634,3 +1634,33 @@
     左侧粘贴 rule 数组亦可走 repair；Save 调 provisionAndRepairForSave。
     续：建表优先用源 binding→table_name（占用则 _2/_3 后缀）；FormConfigJsonTableProvisionerTest 覆盖。
 
+- id: "1500"
+  status: fixed
+  fixed_at: "2026-07-28"
+  severity: major
+  category: bug
+  summary: "FU clone/导出/导入缺失 EmailTemplate，ZIP 未导入 monitors，BPMN connectionId/emailTemplateId 未 remap"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitExporter.java"
+  note: |
+    现象：含 Send Email / 邮件连接 / 入站监控的 Function Unit 经 clone 或导出再导入后，邮件模板丢失或 BPMN 仍指向源 ID，无法发信。
+    根因：EmailTemplate 未纳入 export/import/clone/version；ZIP parser 未解析 email-monitors/；
+    Clone 完全不复制 email；BpmnIdRewriter 不重写 connectionId/emailTemplateId；re-import 未删 dw_email_templates。
+    修复：三条路径补全 templates + monitors；serialize connectionId/templateId；BPMN remap；
+    clone 生成新 connectionUid/ruleUid；monitor processDefinitionKey=目标 FU code；
+    clearChildCollections 删除 templates。
+    验证：EmailPortabilityTest + VersionRollbackParityTest + BpmnIdRewriterTest + clone 相关单测 pass；
+    mvn -pl backend/developer-workstation -am package -DskipTests；compose rebuild developer-workstation。
+
+- id: "1504"
+  status: fixed
+  fixed_at: "2026-07-31"
+  severity: major
+  category: bug
+  summary: "Deploy Upload to admin center 500 — EMAIL_TEMPLATE 违反 chk_content_type"
+  file: "deploy/init-scripts/00-schema/61-widen-chk-content-type-email-template.sql"
+  note: |
+    现象：Debit Card_20260525 Deploy 在 Upload to admin center 失败，admin.fu.import_unexpected_error。
+    根因：导入写入 ContentType.EMAIL_TEMPLATE，但 sys_function_unit_contents.chk_content_type
+    未包含该值。修复：append-only 脚本 DROP/ADD 约束加入 EMAIL_TEMPLATE；00-init-all 注册 59–61；
+    dev 库已手工执行并通过 INSERT EMAIL_TEMPLATE 冒烟（ROLLBACK）。
+

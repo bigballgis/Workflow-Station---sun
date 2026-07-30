@@ -31,8 +31,8 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * 功能单元属性测试
- * Property 1-3: 名称唯一性、发布状态一致性、克隆完整性
+ * ?????????
+ * Property 1-3: ????????????????????
  */
 public class FunctionUnitPropertyTest {
     
@@ -58,19 +58,22 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.TableRelationRepository.class),
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.impl.FunctionUnitExporter.class), mock(com.developer.component.TableDesignComponent.class));
+                workspaceAccessService, devGroupAssignmentRepository,                 mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.impl.FunctionUnitExporter.class), mock(com.developer.component.TableDesignComponent.class),
+                mock(com.developer.repository.EmailConnectionRepository.class),
+                mock(com.developer.repository.EmailMonitorRuleRepository.class),
+                mock(com.developer.repository.EmailTemplateRepository.class));
     }
     
     /**
-     * Property 1: 功能单元名称唯一性
-     * 对于任意有效名称，创建后再次创建相同名称应抛出异常
+     * Property 1: ??????????
+     * ??????????????????????????
      */
     @Property(tries = 20)
     void nameUniquenessProperty(@ForAll("validNames") String name) {
         FunctionUnitRepository repository = mock(FunctionUnitRepository.class);
         FunctionUnitComponent component = createComponent(repository);
         
-        // 第一次检查名称不存在
+        // ??????????
         when(repository.existsByName(name)).thenReturn(false);
         when(repository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit fu = invocation.getArgument(0);
@@ -86,7 +89,7 @@ public class FunctionUnitPropertyTest {
         assertThat(created).isNotNull();
         assertThat(created.getName()).isEqualTo(name);
         
-        // 第二次检查名称已存在
+        // ??????????
         when(repository.existsByName(name)).thenReturn(true);
         
         assertThatThrownBy(() -> component.create(request))
@@ -94,8 +97,8 @@ public class FunctionUnitPropertyTest {
     }
     
     /**
-     * Property 2: 功能单元发布状态一致性
-     * 新创建的功能单元状态应为DRAFT
+     * Property 2: ????????????
+     * ????????????DRAFT
      */
     @Property(tries = 20)
     void initialStatusProperty(@ForAll("validNames") String name) {
@@ -118,8 +121,8 @@ public class FunctionUnitPropertyTest {
     }
 
     /**
-     * Property 3: 功能单元克隆完整性
-     * 克隆后的功能单元应具有新名称但保留原有描述
+     * Property 3: ??????????
+     * ??????????????????????
      */
     @Property(tries = 20)
     void cloneIntegrityProperty(
@@ -131,7 +134,7 @@ public class FunctionUnitPropertyTest {
         FunctionUnitRepository repository = mock(FunctionUnitRepository.class);
         FunctionUnitComponent component = createComponent(repository);
         
-        // 创建原始功能单元
+        // ????????
         FunctionUnit original = new FunctionUnit();
         original.setId(1L);
         original.setName(originalName);
@@ -141,7 +144,7 @@ public class FunctionUnitPropertyTest {
         when(repository.findById(1L)).thenReturn(Optional.of(original));
         when(repository.existsByName(cloneName)).thenReturn(false);
         
-        // 使用不同的 ID 生成器确保克隆的 ID 不同
+        // ??????ID ???????? ID ??
         final long[] nextId = {2L};
         when(repository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit fu = invocation.getArgument(0);
@@ -160,8 +163,8 @@ public class FunctionUnitPropertyTest {
     }
 
     /**
-     * Property 4: 克隆带流程定义的功能单元时，ProcessDefinition.functionUnitVersionId 必须非空
-     * 防止回归 dw_process_definitions.function_unit_version_id NOT NULL 约束违反
+     * Property 4: ??????????????ProcessDefinition.functionUnitVersionId ????
+     * ???? dw_process_definitions.function_unit_version_id NOT NULL ????
      */
     @Property(tries = 10)
     void cloneProcessDefinitionVersionIdProperty(
@@ -194,9 +197,12 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
                 workspaceAccessService, devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.impl.FunctionUnitExporter.class), mock(com.developer.component.TableDesignComponent.class));
+                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.impl.FunctionUnitExporter.class), mock(com.developer.component.TableDesignComponent.class),
+                mock(com.developer.repository.EmailConnectionRepository.class),
+                mock(com.developer.repository.EmailMonitorRuleRepository.class),
+                mock(com.developer.repository.EmailTemplateRepository.class));
 
-        // 原始功能单元 + 流程定义
+        // ?????? + ????
         FunctionUnit original = new FunctionUnit();
         original.setId(1L);
         original.setName(originalName);
@@ -231,7 +237,7 @@ public class FunctionUnitPropertyTest {
         ProcessDefinition saved = captor.getValue();
 
         assertThat(saved.getFunctionUnitVersionId())
-                .as("functionUnitVersionId 不能为空，否则违反数据库 NOT NULL 约束")
+                .as("functionUnitVersionId ???????????? NOT NULL ??")
                 .isNotNull();
         assertThat(saved.getFunctionUnitVersionId()).isEqualTo(cloned.getId());
         assertThat(saved.getFunctionUnit()).isEqualTo(cloned);
@@ -239,8 +245,8 @@ public class FunctionUnitPropertyTest {
     }
 
     /**
-     * Property 5: 克隆时 BPMN 中的 subTableId / formId / actionIds 必须重写为新功能单元的 ID
-     * 防止回归 deploy 阶段 SUBTABLE_WRONG_FUNCTION_UNIT / FORM_WRONG_FUNCTION_UNIT 校验失败
+     * Property 5: ????BPMN ?? subTableId / formId / actionIds ????????????ID
+     * ???? deploy ?? SUBTABLE_WRONG_FUNCTION_UNIT / FORM_WRONG_FUNCTION_UNIT ????
      */
     @Property(tries = 5)
     void cloneBpmnIdRewritingProperty(@ForAll("validNames") String cloneName) {
@@ -264,7 +270,7 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.TableRelationRepository.class);
 
         // Clone renames cloned tables to a free name; the cloner asks this component whether a candidate
-        // is available, so it must report true (an unstubbed mock returns false → "name exhausted").
+        // is available, so it must report true (an unstubbed mock returns false ??"name exhausted").
         com.developer.component.TableDesignComponent tableDesignComponent =
                 mock(com.developer.component.TableDesignComponent.class);
         org.mockito.Mockito.when(tableDesignComponent.isTableNameAvailable(
@@ -280,10 +286,13 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
                 workspaceAccessService, devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.impl.FunctionUnitExporter.class), tableDesignComponent);
+                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.impl.FunctionUnitExporter.class), tableDesignComponent,
+                mock(com.developer.repository.EmailConnectionRepository.class),
+                mock(com.developer.repository.EmailMonitorRuleRepository.class),
+                mock(com.developer.repository.EmailTemplateRepository.class));
 
-        // 源功能单元：含 1 sub 表（id=13）、1 表单（id=11）、1 动作（id=12），
-        // BPMN 中 subTableId=13 / formId=11 / actionIds=[12]
+        // ????????1 sub ??id=13??? ???id=11??? ???id=12??
+        // BPMN ??subTableId=13 / formId=11 / actionIds=[12]
         FunctionUnit original = new FunctionUnit();
         original.setId(1L);
         original.setName("Original");
@@ -391,19 +400,19 @@ public class FunctionUnitPropertyTest {
         String savedBpmn = captor.getValue().getBpmnXml();
 
         assertThat(savedBpmn)
-                .as("克隆后 BPMN 必须使用新功能单元的 subTableId 而非源 ID")
+                .as("????BPMN ?????????? subTableId ????ID")
                 .doesNotContain("name=\"subTableId\" value=\"13\"")
                 .contains("name=\"subTableId\" value=\"213\"");
         assertThat(savedBpmn)
-                .as("克隆后 BPMN 必须使用新功能单元的 formId 而非源 ID")
+                .as("????BPMN ?????????? formId ????ID")
                 .doesNotContain("name=\"formId\" value=\"11\"")
                 .contains("name=\"formId\" value=\"211\"");
         assertThat(savedBpmn)
-                .as("克隆后 BPMN 必须使用新功能单元的 actionIds 而非源 ID")
+                .as("????BPMN ?????????? actionIds ????ID")
                 .doesNotContain("name=\"actionIds\" value=\"[12]\"")
                 .contains("name=\"actionIds\" value=\"[212]\"");
         assertThat(savedBpmn)
-                .as("BPMN 节点 id 属性不应被改写（id 中含的 13 仅是命名巧合）")
+                .as("BPMN element id attributes must not be rewritten (e.g. MI_UserTask_13)")
                 .contains("id=\"MI_UserTask_13\"");
     }
 

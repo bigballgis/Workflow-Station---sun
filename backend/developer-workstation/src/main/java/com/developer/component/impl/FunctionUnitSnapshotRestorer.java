@@ -155,10 +155,24 @@ public class FunctionUnitSnapshotRestorer {
             }
         }
 
+        Map<Long, Long> connectionIdMapping = new HashMap<>();
         if (snapshot.containsKey("connections")) {
             List<Map<String, Object>> connections = (List<Map<String, Object>>) snapshot.get("connections");
             for (Map<String, Object> connectionData : connections) {
-                importWriter.importEmailConnection(functionUnit, connectionData);
+                var connection = importWriter.importEmailConnection(functionUnit, connectionData);
+                importWriter.recordSourceIdMapping(connectionData.get("connectionId"), connection.getId(),
+                        connectionIdMapping);
+            }
+        }
+
+        Map<Long, Long> emailTemplateIdMapping = new HashMap<>();
+        if (snapshot.containsKey("emailTemplates")) {
+            List<Map<String, Object>> emailTemplates =
+                    (List<Map<String, Object>>) snapshot.get("emailTemplates");
+            for (Map<String, Object> templateData : emailTemplates) {
+                var template = importWriter.importEmailTemplate(functionUnit, templateData);
+                importWriter.recordSourceIdMapping(templateData.get("templateId"), template.getId(),
+                        emailTemplateIdMapping);
             }
         }
 
@@ -170,7 +184,7 @@ public class FunctionUnitSnapshotRestorer {
         }
 
         restoreProcess(functionUnit, snapshot, tableIdMapping, formIdMapping, actionIdMapping,
-                importedTableNameToId, importedFormNameToId);
+                importedTableNameToId, importedFormNameToId, connectionIdMapping, emailTemplateIdMapping);
 
         formTableBindingRestorer.repairFunctionUnitForms(functionUnit.getId());
 
@@ -239,7 +253,9 @@ public class FunctionUnitSnapshotRestorer {
                                 Map<Long, Long> formIdMapping,
                                 Map<Long, Long> actionIdMapping,
                                 Map<String, Long> importedTableNameToId,
-                                Map<String, Long> importedFormNameToId) {
+                                Map<String, Long> importedFormNameToId,
+                                Map<Long, Long> connectionIdMapping,
+                                Map<Long, Long> emailTemplateIdMapping) {
         String bpmnXml = resolveProcessXml(snapshot);
         if (bpmnXml == null || bpmnXml.isBlank()) {
             return;
@@ -250,7 +266,10 @@ public class FunctionUnitSnapshotRestorer {
                 formIdMapping,
                 actionIdMapping,
                 importedTableNameToId,
-                importedFormNameToId);
+                importedFormNameToId,
+                Map.of(),
+                connectionIdMapping,
+                emailTemplateIdMapping);
         rewrittenBpmn = staleIdFixer.fixStaleIds(functionUnit.getId(), XmlEncodingUtil.smartDecode(rewrittenBpmn));
         rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, functionUnit.getCode());
         assertLastTaskAssigneeTopologyOrThrow(XmlEncodingUtil.smartDecode(rewrittenBpmn));

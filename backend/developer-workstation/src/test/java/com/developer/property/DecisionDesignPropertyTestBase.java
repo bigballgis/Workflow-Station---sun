@@ -88,7 +88,10 @@ public abstract class DecisionDesignPropertyTestBase {
                 mock(com.developer.service.MainTableViewService.class),
                 mock(com.developer.repository.ForeignKeyRepository.class),
                 mock(FunctionUnitExporter.class),
-                mock(com.developer.component.TableDesignComponent.class)
+                mock(com.developer.component.TableDesignComponent.class),
+                mock(com.developer.repository.EmailConnectionRepository.class),
+                mock(com.developer.repository.EmailMonitorRuleRepository.class),
+                mock(com.developer.repository.EmailTemplateRepository.class)
         );
 
         idGenerator = new AtomicLong(1L);
