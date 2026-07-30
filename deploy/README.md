@@ -171,7 +171,9 @@ deploy/
 │   ├── kong.yml.template           # Kong declarative config template
 │   └── docker-entrypoint-kong.sh   # Kong entrypoint (env substitution)
 ├── scripts/
-│   └── build-and-push-k8s.ps1     # Build & push images
+│   ├── build-and-push-k8s.ps1     # Build & push images
+│   ├── mirror-thirdparty-images-k8s.ps1  # Mirror 3rd-party images to the private registry
+│   └── probe-npm-registry-coverage.ps1   # List every lockfile package a private npm mirror lacks
 ├── init-scripts/
 │   ├── 00-init-all.sh             # Docker entrypoint (auto-run)
 │   ├── init-database.ps1          # Standalone psql init

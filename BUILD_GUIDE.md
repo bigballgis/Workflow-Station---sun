@@ -351,6 +351,13 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 > —— 这个包连同传递依赖 `pieces-framework@0.32.0`、`shared@0.95.1/0.96.2` 是 lockfile 里仅有的 4 个
 > 走 registry 的 `@activepieces/*`；workspace 内的同名包是 `workspace:*` 本地链接，不走网络。
 >
+> ⚠️ **内网私服只部分镜像了公共 npm 时**（某个版本干脆不存在，`ERR_PNPM_FETCH_404`）：`pnpm install`
+> 是 fail-fast，一轮只暴露一个包，而五个 lockfile 合计几千个包。先用
+> `deploy/scripts/probe-npm-registry-coverage.ps1 -Registry <私服地址>` 一次探全，拿到完整缺口清单
+> 再决定——批量申请入库，还是像 `mdurl` 那样在 `activepieces/package.json` 的 `pnpm.overrides` 里降到
+> 私服有的版本（只有语义化范围收得住时才安全，降完必须重算并提交 lockfile）。缺口太多就别硬降，
+> 改走"带 `web-embed` 产物过去"那条路。
+>
 > ⚠️ **developer-workstation-frontend 的三步顺序不能省**。Function Unit 的 Automation 标签
 > 直接挂 AP builder，其 bundle 走「构建期拷贝」交付（AG-02.8）：AP 产物 →
 > `public/service-task-builder/` → `dist/` → 镜像。产物是 gitignore 的构建物，**不入库**。
