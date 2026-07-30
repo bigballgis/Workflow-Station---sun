@@ -424,7 +424,16 @@ git checkout de4f6469 -- activepieces/packages/pieces/community/<name>        # 
 
 **整轮裁剪是在根因未确认的情况下做的。** 已排除的一个嫌疑：`.npmrc` 里
 `//registry.npmjs.org/:_authToken=${NPM_TOKEN}` 的 `NPM_TOKEN` 未设**只是 WARN 不是 error**
-（本机未设，照样装通）。剩下两种可能，解法完全不同：
+（本机未设，照样装通）。
+
+> 2026-07-29 更新：这条嫌疑已彻底消除 —— 该 token 行连同 `@activepieces:registry` 公网 pin
+> **已从 `activepieces/.npmrc` 删除**（理由见该文件顶部 HERMES-PATCH 注释）。补充实测：token 未设时
+> pnpm 9.15.9 虽只 WARN，但会**丢弃整个 `.npmrc`**，所以那两行此前在任何路径（含 AP 镜像构建）
+> 都是不生效的 —— 既不会导致 install 失败，也从未真的把 scope 顶到公网。删除后 registry 完全跟随
+> 机器默认配置（公司私服可直接代理）。同期公司机器报的 `Activepieces workspace deps are missing`
+> 与本条无关：那是 `build-and-push-k8s.ps1` 在跑 pnpm 之前的目录存在性检查（AP workspace 从未装依赖）。
+
+剩下两种可能，解法完全不同：
 
 | 若报错是 | 含义 | 那么 |
 |---|---|---|
