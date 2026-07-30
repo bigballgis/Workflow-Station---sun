@@ -6,8 +6,10 @@
 
 ## 一句话现状
 
-AP 0.84.0 的源码逆向已完成并证实：这**不是一次简单的 vendor，而是一个受控 fork**
+AP 0.84.0 的源码逆向已完成并证实：这**不是一次简单的 vendor，而是一个 fork**
 （约 1000–1300 行重实现 + 去 bun + React→Vue 宿主适配 + EE 剥离 + 离线/安全改造）。
+**2026-07-30（[D12](DECISIONS.md#d12)）起该 fork 不再是"受控 fork"，而是硬分叉 + 深度裁剪**：
+`activepieces/` 视为 HERMES 自有源码，按"是否真的在跑"持续收敛，不再以对齐上游 tag 为设计约束。
 **现已全部落地**：九层集成逐层实施并实测（L1 浏览器 E2E、L2/L3/L7 dev 实测、地基 L4–L9），原先卡住 Doc4 的三个红灯 Gate（AG-02 / AG-EE / AG-05）均已转绿。
 
 **07-25 → 07-28 又落了一批（本文档此前停在 07-24）**：
@@ -45,7 +47,7 @@ AG-02 → **AP shared 独立编译零错误、零 AP 后端依赖、零 bun、DW
 | [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) | Document 3 — 依赖图与模块处置 | 初稿 |
 | [EE_REMOVAL_PLAN.md](EE_REMOVAL_PLAN.md) | **Document 3.5 — EE 剥离实施方案**（D3 新增） | ✅ §2/§3/§4/§5 完成；余 §1 两向清单 + §4.7 补测 + §6 CI Guard |
 | **[INTEGRATION_DESIGN.md](INTEGRATION_DESIGN.md)** | **Document 4 — 集成设计（九层 + §0.5 实施快照）** | 🟢 **九层全部已实施并实测：L1 浏览器 E2E PASS**（真实 builder 挂载/交互）+ L2/L3/L7 dev 实测 + 地基（L4/5/6/8/9）；余收尾（接 DW 视图/交付/C-1/air-gap） |
-| [HERMES_PATCHES.md](HERMES_PATCHES.md) | **HERMES-PATCH 台账**（[Q8](DECISIONS.md#q8) 要求的上游可追溯性：baseline / patch / 原因 / 许可） | 现行 |
+| [HERMES_PATCHES.md](HERMES_PATCHES.md) | **HERMES-PATCH 变更日志**——记录改 AP 代码的**动机与踩坑**。[D12](DECISIONS.md#d12) 后不再承担重放施工图职责（"改了什么"由 `git diff de4f6469..HEAD -- activepieces/` 免费给出） | 现行 |
 | [PIECE_DEVELOPMENT_HOWTO.md](PIECE_DEVELOPMENT_HOWTO.md) | 自研 piece 开发→部署到 DW 全链路（流程） | 现行 |
 | [PIECE_DEVELOPMENT_EXAMPLE.md](PIECE_DEVELOPMENT_EXAMPLE.md) | 配套完整示例（业务日历件，可直接抄） | 现行 |
 | [D9_PIECE_ONLINE_ADMIN_DRAFT.md](D9_PIECE_ONLINE_ADMIN_DRAFT.md) | D9 — piece 在线管理面治理 + C-2 重述 | ⚠️ **草案 v3，待评审；未拍板前不具约束力**（prod 的 import/delete 不得使用） |

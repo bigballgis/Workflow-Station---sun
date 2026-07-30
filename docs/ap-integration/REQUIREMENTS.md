@@ -13,7 +13,10 @@
 >
 > 集成路线：**不用 iframe、不用官方镜像跑 UI**。AP 0.84.0 源码 vendor 进本仓库、自维护、自构建镜像；
 > 画布以**源码级组件**进入 Developer Workstation（下称 DW）。
-> **性质（D1）**：这是 *frozen vendor + controlled fork*，非简单 vendor。
+> **性质（[D12](DECISIONS.md#d12)，2026-07-30 起）**：这是 **硬分叉 + 深度裁剪** —— `activepieces/`
+> 视为 HERMES 自有源码，按"是否真的在跑"持续收敛，不再以对齐上游 tag 为设计约束。
+> （原表述 *frozen vendor + controlled fork*（D1）已作废：VT-11 证明内网 FOSS Guard 隔离的正是上游 pin
+> 的精确版本，"冻结基线"在依赖层面做不到；而 rebase 在 X-2/X-3 下不会发生。）
 
 ---
 
@@ -467,9 +470,9 @@ remote = github.com/activepieces/activepieces）的 tag `0.84.0`（commit `05354
 > （ADR，全局约束唯一事实来源），并在那里补充了项目性质约束 X-1~X-7。
 > 本文档只做引用，不再重复裁决正文。
 
-**摘要索引**：Q1 vendor 边界（→ frozen vendor + controlled fork）｜Q2 禁 bun｜Q3 纯 builder 组件｜
+**摘要索引**：Q1 vendor 边界（→ **D12 硬分叉 + 深度裁剪**）｜Q2 禁 bun｜Q3 纯 builder 组件｜
 Q4 per-user 身份 + Q4a CE core RBAC 补丁｜Q5 独立 schema｜Q6 Kong 收编、旧桥并行一版后退役｜
-Q7 flow 注册表 + 部署期解析｜Q8 Frozen Baseline + Controlled Fork｜Q9 移除 approval/todos piece｜
+Q7 flow 注册表 + 部署期解析｜~~Q8 Frozen Baseline + Controlled Fork~~ **已由 D12 取代**｜Q9 移除 approval/todos piece｜
 D1 成本模型重估｜D2 AG-02 重定义｜D3 新增 Doc3.5｜D4 合规评估尚未启动。
 
 ---

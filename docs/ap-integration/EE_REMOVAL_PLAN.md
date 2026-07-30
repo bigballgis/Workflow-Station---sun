@@ -34,9 +34,6 @@ EE API 替代 + 数据库模型替代 + 前端/运行时/构建期依赖替代 +
 
 ### 1.1 许可边界（原文引述，**非法律解释**）
 
-根 `LICENSE:5` 逐字点名**两个**路径受 Enterprise License 约束：
-`packages/ee/` 与 `packages/server/api/src/app/ee`。其余为 MIT Expat（`LICENSE:6`）。
-
 **条款未覆盖的三处 "ee" 目录**（按条款文本属 MIT，**须法务确认**）：
 `packages/shared/src/lib/ee/**`（40 文件，含 `rolePermissions`）、
 `server/worker/src/lib/execute/jobs/ee/`（3 文件）、各测试目录下的 `ee/`。
@@ -225,7 +222,7 @@ D3 要求把"1000–1300 行"拆成 EE removal / Bun→pnpm / Vue 集成 / offli
 | EE 剥离本体 | ≈ 1000–1300 行，**因 Phase 0 的三处简化预期落在下限** |
 | **HERMES 侧新建** | **≈ 580 行（原估算完全遗漏）** |
 | 其余工作包 | Bun 迁移 / Vue 集成 / offline / 安全基线——**按工作包而非行数评估**，其中 **Vue 集成是最大不确定项** |
-| **对 [Q8](DECISIONS.md#q8) 的影响** | **不改变裁决**。总量上升但结构清晰：EE 剥离是**一次性**的，HERMES 侧新建是**平台能力补齐**（本就该有，AP 只是触发器），二者都不产生"持续跟随上游"的义务 ⇒ **frozen baseline + controlled fork 仍是正确方向** |
+| **对 [Q8](DECISIONS.md#q8) 的影响** | **不改变裁决**。总量上升但结构清晰：EE 剥离是**一次性**的，HERMES 侧新建是**平台能力补齐**（本就该有，AP 只是触发器），二者都不产生"持续跟随上游"的义务 ⇒ ~~frozen baseline + controlled fork 仍是正确方向~~ **（2026-07-30：Q8 已由 [D12](DECISIONS.md#d12) 取代为硬分叉 + 深度裁剪；本行"不产生跟随义务"的论证在新裁决下同样成立，只是结论更进一步）** |
 
 ### 4.4 ✅ EE-4 硬依赖裁定（13 条，**已依 Phase 0 能力盘点定案**）
 

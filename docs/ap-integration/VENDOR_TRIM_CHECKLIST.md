@@ -25,7 +25,7 @@
 | VT-01 | 镜像构建实测 | **P0** | ✅ **通过（2026-07-28）** |
 | VT-02 | `test-api` 三套集成测试 | **P0** | 🟡 **check-migrations 绿；三套集成测试被存量断裂挡住，跑不起来** |
 | VT-03 | 容器启动 + builder 冒烟 | **P0** | ✅ **全绿（2026-07-29）**：服务端 + dev 真实环境 + 经 Kong + **浏览器渲染** |
-| VT-04 | rebase 重放顺序陷阱（脚本加断言） | P1 | ✅ **已完成（2026-07-29）** |
+| VT-04 | rebase 重放顺序陷阱（脚本加断言） | P1 | ⛔ **已作废（2026-07-30，[D12](DECISIONS.md#d12)）** — rebase 不会发生；**但它发现的 11 条悬空 tsconfig 映射转入 VT-16** |
 | VT-05 | app-events 死链无提示 | P1 | ✅ **已完成（2026-07-29）** |
 | VT-06 | `--check` 接进 CI | P1 | ✅ **已完成（2026-07-29）** |
 | VT-07 | `SUPPORTED_APP_WEBHOOKS` flag 说谎 | P1 | ⬜ 未做 |
@@ -33,13 +33,25 @@
 | VT-09 | 上游 piece 源码不再可读的补救约定 | P2 | ✅ **已完成（2026-07-29）** |
 | VT-10 | codegraph 索引重建 | P2 | ✅ **已自愈（2026-07-29 复查）** |
 | VT-11 | **公司机器报错原文** (VT-12 的前置) | **P0** | ✅ **已取得（2026-07-30）**：见下方实测记录 |
-| VT-12 | `@ai-sdk/*` 仍在 api/worker/engine 硬依赖 | P1 | ⏳ **待结合 VT-11 继续处置（**未被 HTTP piece 迁移解决**）** |
+| VT-12 | `@ai-sdk/*` 仍在 api/worker/engine 硬依赖 | **P0** | ✅ **已关闭（2026-07-30，VT-17）**：10 个厂商 provider 包在锁文件里**归零**；`ai` 仅剩 web 一个显式声明 |
+| VT-16 | tsconfig 悬空映射 11 条 + `--check` 漏检单行写法 | P1 | ⬜ 未做（VT-04 的遗产） |
+| VT-17 | **裁剪批 A**：AP AI 代理 / MCP server / EE chat / engine agent tools | **P0** | ✅ **已完成（2026-07-30，HERMES-PATCH-015）**：api + worker + engine + framework + server-utils + 根 package.json |
+| VT-21 | `fast-xml-parser@5.2.5`：升 S3 链（`xml-builder@3.972.36+` 改用 `fast-xml-builder`） | **P0** | ✅ **已完成（2026-07-30，HERMES-PATCH-016）**：锁中 0 次；顺带摘掉 2 个零 import 的 aws 包 |
+| VT-22 | `isolated-vm@6.0.2` Nexus 元数据不全（**卡着 `vitest@3.0.8` 的升级路径**） | **P0** | ⬜ 未做——不由我们控制，需 Nexus 管理方补全/重同步 |
+| VT-18 | **裁剪批 B**：`packages/pieces/core/` 27 个件 | P1 | ⬜ 未做 |
+| VT-19 | **裁剪批 C**：上游工程脚手架与 AP 自有 agent 规则 | P2 | ⬜ 未做 |
+| VT-20 | **裁剪批 D**：AP 自带 embed 路由 + `packages/ee/embed-sdk` | P2 | ⬜ 未做（风险最高，需 builder 回归） |
 | VT-13 | `piece-ai` 保留与否的政策裁决 | P1 | ✅ **已关闭（2026-07-28，已删除）** |
 | VT-15 | AI Generate 产物与功能开关 | **P0** | ✅ **已完成（2026-07-29）**：功能停用 + 产物清理 |
 | VT-14 | 17876 个删除独立成 commit | P1 | ✅ **已完成（`a2194c06`）** |
 
-> ⚠️ VT-11 已证明这不是单一 `@authropic-ai/sdk` 问题，而是公司 FOSS Guard 对锁文件中多个精准版本的
-> 供应链隔离。 删除无用 piece 仍然正确，但不能替代对保留依赖的升级、放行或内网镜像治理。
+> ⚠️ VT-11 已证明这不是单一 `@anthropic-ai/sdk` 问题，而是公司 FOSS Guard 对锁文件中多个精准版本的
+> 供应链隔离。删除无用 piece 仍然正确，但不能替代对**真正在跑的**依赖的升级、放行或内网镜像治理。
+>
+> **2026-07-30 修订（[D12](DECISIONS.md#d12)）**：这句话里的"保留依赖"当时被默认成不可动。
+> 复查后发现被隔离的 `fast-xml-parser` 那条链上，**没有一个包是我们在跑的功能需要的**——
+> 它们属于 AP 的 AI 代理 / MCP server / EE chat，全部无消费方。裁剪范围因此从 piece 扩到功能面
+> （VT-17～VT-20），"隔离项"与"该删的东西"在很大程度上是同一批。
 
 ### VT-11 公司环境原始失败与依赖链（2026-07-30）
 
@@ -61,6 +73,291 @@
 
 因此 VT-11 的结论是：`expr-eval` 根因已从代码摘除，但完整 install 仍需继续升级上述保留依赖，
 或由 FOSS Guard/Nexus 管理方对冻结版本完成风险复核与放行；不得通过绕过 Nexus 或放宽生产运行时联网解决。
+
+> **⚠️ 2026-07-30 补充 —— VT-11 触发了策略变更 [D12](DECISIONS.md#d12)，并因此多出第三条路径。**
+> 上面这段结论只列了两条路（升级 / 求放行），前提是"保留依赖"必须保留。**但那批依赖没有一个是我们
+> 在跑的功能需要的**，见下方 VT-17。硬分叉之后，**删掉持有依赖的功能面**优于另外两条：依赖随功能消失，
+> 不需要放行、不需要升级、install 面永久缩小。原结论的最后一句（不得绕过 Nexus / 不得放宽生产联网）
+> **仍然有效**。
+
+---
+
+## 裁剪批次（D12 之后，2026-07-30 立项）
+
+> 判定标准：**不在成品镜像里跑，或跑但没有消费方 ⇒ 删**。
+> 每批的闸门（缺一不可）：`pnpm install` → `turbo run build --filter=web --filter=@activepieces/engine
+> --filter=api --filter=worker` → 镜像构建 → dev 起容器 + builder 冒烟。**分批过闸，不许攒着一起验。**
+>
+> **明确保留，别误删**（每条都有实证，不是保守）：
+> - `packages/cli` —— 自研件开发链路依赖它（[PIECE_DEVELOPMENT_HOWTO](PIECE_DEVELOPMENT_HOWTO.md)），
+>   且 VT-11 的 `workspace:*` 修复正落在这里；
+> - `packages/web` 的 AP 独立应用形态 —— `/ap-cdn` 资产只随它发布，砍掉内嵌 builder 图标全裂；
+> - `app-event-routing.service.ts` + `app_event_routing` 表 —— HERMES-PATCH-012 已论证删了编译不过。
+
+### <a id="vt-16"></a>VT-16 — tsconfig 悬空映射（P1，VT-04 的遗产）
+
+`node -e` 逐条 `existsSync` 校验 `tsconfig.base.json` 的 `paths`，**当前 11 条指向已不存在的目录**：
+
+| 悬空映射 | 来源 |
+|---|---|
+| `activepieces/piece-{microsoft-dynamics-365-business-central, microsoft-dynamics-crm, microsoft-sharepoint, snowflake, zuora, cashfree-payments}` | HERMES-PATCH-013 裁剪的漏网 —— **无 `@` 前缀 + 单行写法**，`pruneDeadPieceMappings` 只认多行的 `@activepieces/piece-*` |
+| `Aminos` | 同上，连包名规范都不符（上游遗留） |
+| `@ee/*`、`@activepieces/ee-auth`、`@activepieces/ee/billing/ui` | EE 剥离（AG-EE）的漏网 |
+| `ui-feature-forms` | 上游早已删除的包 |
+
+**做法**：直接删这 11 条；`--check` 的检测逻辑改为**遍历全部 `paths` 做存在性校验**
+（不再按前缀匹配 piece），这样将来任何形态的悬空映射都逃不掉。
+
+### <a id="vt-17"></a>VT-17 — 裁剪批 A：AP AI 代理 / MCP server / EE chat（**P0，= VT-12 的解法**）
+
+> **⚠️ 立项时的依赖链写错了，2026-07-30 实施时用 `pnpm why` 更正**：
+> `fast-xml-parser@5.2.5` 的持有者是 **S3 文件存储链**（`@aws-sdk/s3-request-presigner@3.894.0` +
+> `@aws-sdk/client-s3@3.974.0` → `middleware-sdk-s3` → `core` → `xml-builder@{3.894.0,3.972.0}`），
+> **不是 `@ai-sdk/amazon-bedrock`**。VT-11 原文没有指认 Bedrock，那一跳是立项时推断的。
+> ⇒ **VT-17 不解决 `fast-xml-parser`**，那条转入 [VT-21](#vt-21)（有便宜解法）。
+> VT-17 仍然成立，但它的收益是**摘掉 `@ai-sdk/*` 这一整族**，而不是关掉那个具体的 quarantine。
+
+`@ai-sdk/*` 共 10 个（`amazon-bedrock` / `anthropic` / `azure` / `google` / `google-vertex` /
+`openai` / `openai-compatible` / `provider` / `replicate` / `mcp`）+ `ai@^6.0.0`，
+声明在 `server/api`、`server/worker`、`server/engine` 三个 `package.json`。真实 import 方只有 4 处：
+
+| import 方 | 是什么 | 我们跑吗 |
+|---|---|---|
+| `server/api/src/app/ai/providers/` | AP 的 AI provider 代理 | **否** — AI Generate 已改 HTTP piece 直连模型端点（VT-15） |
+| `server/api/src/app/mcp/`（448K，api 下第二大目录） | AP 自带 MCP server，供外部 AI agent 驱动 AP | **否** — 气隙内没有 MCP 客户端 |
+| `server/worker/src/lib/execute/jobs/ee/chat/` | EE chat agent | **否** — AG-EE 只清了 `server/api/src/app/ee`，这个目录还在。[EE_REMOVAL_PLAN](EE_REMOVAL_PLAN.md) 已把它列为"条款未覆盖的三处 ee 目录"之一（**按 `LICENSE:5` 的路径条款它属 MIT**，法务确认待办）——但**删它不需要等法务**：理由是无消费方，不是许可 |
+| `server/engine/src/lib/tools/index.ts`（+ `piece-executor.ts`） | 引擎侧 tool 调用胶水 | **否**，但**与 piece 执行主链路同文件，最需谨慎** |
+
+**顺序**：先删前三个消费方 → 再看 engine 侧还剩什么 → 最后才从三个 `package.json` 摘依赖并重算锁。
+engine 的 `piece-executor.ts` 是 piece 执行主链路（PATCH-007 的回归网也压在这条线上），
+**动它必须连带跑 `engine/test/`**。
+
+**验收**：`pnpm install --prod --frozen-lockfile` 不再解析 `@ai-sdk/*` / `ai@^6`。
+这条要在公司机器上实测，宿主机全绿不算数（VT-11 的教训）。
+（`fast-xml-parser` 不在本项验收内，见上方更正与 [VT-21](#vt-21)。）
+
+#### 批 A 第一步已完成（2026-07-30，HERMES-PATCH-015）
+
+删 `app/mcp/`（69 文件）+ `app/ai/`（14 文件）；摘接线点 `app.ts`（4 import + 4 注册）、
+`server.ts`（2 import + 3 注册）、`database-connection.ts`（5 实体 + 5 import）。
+
+- **迁移文件一律未动**——`mcp_*` / `ai_provider` 表由历史迁移建出，是既成事实；
+  这次摘掉的只是 TypeORM 托管，**不产生 schema 变更**。
+- **顺带关掉一个根路径暴露面**：上游把 MCP OAuth 的三组端点注册在**域名根**
+  （`/.well-known/*`、`/mcp/*`、`/mcp/platform/*`），**连 `/api` 前缀都没有** ——
+  比 HERMES-PATCH-012 摘掉的 `/v1/app-events` 更靠外。
+- **api 侧依赖摘除 14 个**：10 × `@ai-sdk/*` + `ai` + `@aws-sdk/client-bedrock` +
+  `ai-gateway-provider` + `cloudflare`（后三个是被删的 provider 文件的专属依赖；
+  `cloudflare` 在 src 下仅有的两处匹配是迁移 SQL 里的 `cloudflareId` 列名字符串，不是 import）。
+- **删掉一个上游自带的孤儿测试** `test/unit/app/chat/chat-compaction.test.ts`：
+  它 import 的 `src/app/chat/chat-compaction` **自 `de4f6469` 纯净基线起就不存在**，
+  即在 AP 0.84.0 里本来就是断的（**不是这次删出来的**，`git ls-tree HEAD` 已核）。
+  它是 api 侧 `ai` 包的唯一残留引用。这也是 VT-02"存量断裂"的一部分。
+
+**闸门结果**：`tsc -p tsconfig.app.json --noEmit` EXIT=0；
+`turbo run build --filter=web --filter=@activepieces/engine --filter=api --filter=worker --force`
+**9/9 successful**（依赖摘除 + `node_modules` 剪枝后复跑仍 9/9）。
+
+**install 面实测收益（诚实计数）**：锁文件包条目 **5147 → 5119（−28）**。
+之所以只有 28、且 `@ai-sdk/` 在锁里仍有 210 处引用——**worker 还声明着 9 个、engine 还声明着 `ai`**。
+`@ai-sdk/*` 要整族消失，必须等 `worker/.../ee/chat/` 与 `engine/src/lib/tools/` 一起处理完。
+**本步不要单独拿去公司机器验收**，那会得到"几乎没改善"的错误结论。
+
+**剩余**：`server/api/src/app/agents/mcp-tool-validator.ts` 仍 import `@modelcontextprotocol/sdk`
+—— 那是 **agents 模块**（与已删的 `app/mcp/` 不是一回事），属另一个功能面，另立项。
+
+#### 批 A 第二步已完成（2026-07-30，同 HERMES-PATCH-015）
+
+| 位置 | 动作 |
+|---|---|
+| `worker/src/lib/execute/jobs/ee/` | 删（3 文件 663 行：`execute-chat-agent` / `chat-worker-tools` / `chat-mcp-client`）+ `job-registry.ts` 摘一条 |
+| `shared/src/lib/automation/workers/job-data.ts` | 摘 `EXECUTE_CHAT_AGENT` **5 处**：枚举、优先级 switch case、`NON_SCHEDULED_JOB_TYPES`、`ExecuteChatAgentJobData` schema+type、`JobData` union |
+| `api/src/app/workers/job-queue/job-queue.ts` | `OneTimeJobAddParams` 类型联合摘一项（**纯类型，无运行时行为**） |
+| `engine/src/lib/tools/` | 删（`index.ts` 413 行 + `tsort.ts`，后者仅被前者使用） |
+| `engine/src/lib/handler/piece-executor.ts` | 摘 `agent.tools` 注入 + 2 个 import |
+| `pieces/framework/src/lib/context/index.ts` | 摘 `agent: AgentContext` + `AgentContext` + `ConstructToolParams` + `from 'ai'` import |
+| `pieces/framework/src/lib/test/index.ts` | 摘测试桩里的 `agent` |
+| `server/utils/src/chat-ai-utils.ts` | 删 + `index.ts` 摘 2 处 export（**它的唯一消费方就是被删的 `ee/chat`**，已用 `git show HEAD:` 佐证） |
+
+**为什么必须动 `shared` 和 `pieces-framework`**（比 api 那次宽，不是范围蔓延）：
+- `job-registry` 是 `Record<WorkerJobType, JobHandler>`，**穷举类型**——不摘枚举就编译不过；
+- `agent.tools` 是 `piece-executor` 注入给 piece 的**上下文契约**，声明在 framework。
+  已核实 **保留的 4 个件与 2 个自研件都不使用 `context.agent`**，且没有任何生产者入队
+  `EXECUTE_CHAT_AGENT`（`git ls-tree` + 全树 grep）。
+
+**依赖摘除合计 42 处声明**：api 14、worker 9、server-utils 9（含 `@openrouter/ai-sdk-provider`）、
+engine 1、framework 1、**根 `package.json` 11**（10×`@ai-sdk/*` + `ai`）+ `ai-gateway-provider`。
+
+> ⚠️ **根 `package.json` 差点被漏掉**：中途一次"已清干净"的核实用的 glob 是
+> `packages/*/package.json packages/*/*/package.json`，**不含仓库根文件**，于是报早了一次。
+> 复核时 `pnpm why @ai-sdk/anthropic` 显示厂商包仍在锁里，才查到根声明。
+> **核依赖清除必须带上根 `package.json`。**
+
+**web 的隐式依赖被显式化**：`web/src/features/chat/` 从 `'ai'` import 的
+`getToolName` / `isToolUIPart` 是**运行时函数不是类型**，而 web **从未声明过 `ai`**——
+一直靠 `@openrouter/ai-sdk-provider` 的 peer 提升出来解析。摘掉那些包会静默断掉 web，
+故给 `packages/web` 补上 `"ai": "6.0.170"`。**这是修一个既存的隐患，不是新增依赖。**
+（web 的 chat-with-ai 前端本身仍在，属另一批。）
+
+**闸门结果**：
+- `turbo build`（web/engine/api/worker）**9/9 successful**；
+- `tsc --noEmit`：worker / api / server-utils / shared / pieces-framework **全 OK**；
+  engine 6 个报错**全在 `network/dns-lookup-guard.ts`**（`@types/node` 的 dns 签名问题），
+  **已用 git worktree 对基线核实：HEAD 上报同样的错**，属存量。
+- 单测见下方「本批建立的测试基线」。
+
+**install 面实测**：锁文件包条目 **5147 → 5030（−117）**；
+`@ai-sdk/{anthropic,openai,google,azure,amazon-bedrock,replicate,google-vertex,mcp,openai-compatible}`
+在锁里**全部归零**。`ai@6.0.170` 保留（web 需要），它不在 FOSS Guard 隔离清单上。
+
+#### 本批建立的测试基线（**三条都已对基线核实为存量红，不是本次改动**）
+
+| 套件 | 结果 | 判定依据 |
+|---|---|---|
+| engine `flow-codes.test.ts > 执行需要 npm 包的代码` | 1 红 / 9 绿 | git worktree 跑 HEAD：**同一断言同样红**（`expected 'FAILED' to be 'RUNNING'`） |
+| worker `isolate.test.ts > argv 静态 --dir 顺序` | 1 红 / 35 绿 | 同上，HEAD 同样红 |
+| api `rate-limiter-interceptor.test.ts` 6 红（`expected 'REJECT' got 'ALLOW'`） | — | **AG-EE 的必然结果**：`concurrency-pool-stub.ts` 的 `getPoolLimit`/`getProjectPoolId` 恒返回 `null`（EE_REMOVAL_PLAN G5/R7，"HERMES 无租户配额 C13"）⇒ 拦截器恒 ALLOW，这批上游 EE 配额测试**设计上不可能通过** |
+
+> ⚠️ **给 api 套件取基线的坑**：worktree 若软链主树的 `node_modules`，基线代码里还 import 的
+> `@ai-sdk/*` 已被剪枝 ⇒ 大量文件加载即失败（29 文件红但只收集到 69 个测试），
+> **这种对比无效**。api 那三条改用"读实际报错 + 定位到 AG-EE 的桩"来判定。
+
+#### 镜像构建 + dev 冒烟（2026-07-30 补，覆盖 VT-17 与 VT-21 两批）
+
+**镜像构建**：`docker compose -f deploy/environments/dev/docker-compose.dev.yml build activepieces`
+成功；镜像 **2.07GB → 1.98GB（−90MB）**。
+`pnpm install` 阶段 **resolved 2994 / reused 2874 / downloaded 4** ——
+裁剪后的依赖闭包在离线 store 里是完整的，这本身就是气隙可行性的一个信号。
+
+**容器**：`up -d` 后 **30 秒转 healthy，RestartCount=0**。
+
+**端点判据**（容器内 `curl`，旧镜像 → 新镜像）：
+
+| 探针 | 旧 | 新 | 判定 |
+|---|---|---|---|
+| `/api/v1/flags` | 200 | **200** | 健康 |
+| `/api/v1/ai-providers` | 403 | **404**（`application/json`，`Route not found`） | AI provider 代理已摘 |
+| `/mcp` | 405 | **200 `text/html`** | 见下方 ⚠️ |
+| `/.well-known/oauth-authorization-server` | **200 无鉴权** | **200 `text/html`** | 见下方 ⚠️ |
+| `/api/ap/v1/flags`（经 Kong :8000 / edge :3000） | 200 | **200** | L2 通道未受影响 |
+
+> ⚠️ **根路径端点的移除表现为「SPA 兜底」而不是 404，直接断言 404 会误判。**
+> AP 的静态兜底对任何**非 `/api`** 路径都返回 `index.html`（`text/html` 200）。
+> 判据要用**响应体**：`/mcp` 与 `/.well-known/*` 现在与不存在的 `/zzz-does-not-exist`
+> 返回**完全相同的 HTML**，即路由确实没了。`/api` 之下没有兜底，所以 `ai-providers`
+> 是干净的 JSON 404。
+>
+> 顺带实证了 [HERMES-PATCH-015](HERMES_PATCHES.md) 说的暴露面：改动前
+> `/.well-known/oauth-authorization-server` 在域名根**无鉴权返回 200**。
+
+**PATCH-009 的 `/ap-cdn` 图标链路**：三个入口（edge :8085 / DW 前端 :3102 / Kong :8000）
+取真实资产均 200；`/api/v1/pieces` 返回 **13 个件**（与 `hermes/pieces.json` 白名单一致），
+其 `logoUrl` 经 edge 逐条请求 **13/13 全部 200**。
+
+> **查图标别按 `<piece-name>.png` 找**：实际 `logoUrl` 大多是 `/ap-cdn/pieces/new-core/*.svg`
+> （自研件在 `hermes/`，`postgres`/`xml` 才是根下的 `.png`）。
+> 按 `<name>.png` 检查会得到"11 个缺失"的假警报——**新旧镜像该目录都是 22 个文件、缺的完全一样**。
+
+**未覆盖：浏览器渲染（VT-03b）**。DW 走统一 FQDN 的 `/dev/` 路径，落到登录页；
+**代输凭据不在允许范围内**，故这一层留待人工登录后驱动。
+可用的替代证据是上面那条"13/13 logoUrl 全 200"——builder 图标渲染依赖的正是它。
+
+### <a id="vt-18"></a>VT-18 — 裁剪批 B：`packages/pieces/core/` 27 个件（P1）
+
+与 HERMES-PATCH-013 处理 community 的**完全同一个论证**，只是当时没把 `core/` 收进来：
+
+- **源码里 0 处真 import** —— `grep -rn "from '@activepieces/piece-"` 在 server/web 下无匹配；
+  出现的 `@activepieces/piece-*` 全是**字符串常量**（数据库迁移里的 piece 名、MCP 工具的元数据）；
+- Dockerfile 构建期已 `rm -rf packages/pieces/{core,custom,community}` ⇒ **对成品镜像零贡献**；
+- 白名单 13 件里，11 件走 registry tarball（`hermes/pieces.json` + `hermes/tarballs/`），
+  2 件是自研（`biz-calendar` / `hash-helper`，源码在 `community/`）⇒ **运行时不从 `core/` 取任何东西**。
+
+**注意**：迁移文件里的字符串常量**不能跟着删**——那是历史迁移的既成事实，改了会破坏 `check-migrations`。
+删目录 + 清 tsconfig 映射即可。`packages/pieces/custom/` 只剩一个 `README.md`，一并处理。
+
+### <a id="vt-19"></a>VT-19 — 裁剪批 C：上游工程脚手架（P2）
+
+纯上游开发设施，气隙内无消费方，且**零编译风险**（不在任何 tsconfig / workspace 里）：
+`.github/`（196K，上游 CI）、`.devcontainer/`、`.verdaccio/`、`benchmark/`、`.husky/`、
+`.all-contributorsrc`、`CONTRIBUTING.md`、`crowdin.yml`（HERMES-PATCH-014 当初"留着只为 diff 干净"，
+D12 之后**直接删**，连同 `package.json` 里那两个 fail-loud 的 npm script）、
+AP 自带的 `docker-compose*.yml` 与 `deploy/`（我们用 `deploy/` 根目录那套）。
+
+**顺手解决一个隐性污染**：`activepieces/` 下有上游自己的 `.claude/`（含 `settings.json`、`agents`、
+`rules`、`skills`）、`.cursor/`、`.agents/`（796K）以及多份 `CLAUDE.md` / `AGENTS.md`。
+它们会在进入该目录工作时被加载，**与本仓库 `.cursor/rules` 唯一真源的约定冲突**
+（见根 [CLAUDE.md](../../CLAUDE.md) 与规则 `ai-guidance-sync`）。
+
+### <a id="vt-21"></a>VT-21 — `fast-xml-parser@5.2.5` 的真实解法：升 S3 链（**P0**）
+
+VT-11 的第三个隔离项，从 VT-17 分出来（见 VT-17 顶部的更正）。持有链：
+
+```
+@aws-sdk/s3-request-presigner@3.894.0 + @aws-sdk/client-s3@3.974.0
+  → @aws-sdk/middleware-sdk-s3@{3.894.0, 3.972.0}
+  → @aws-sdk/core@{3.894.0, 3.972.0}
+  → @aws-sdk/xml-builder@{3.894.0, 3.972.0}
+  → fast-xml-parser@5.2.5      ← quarantine
+```
+
+**为什么便宜**：`@aws-sdk/xml-builder@3.972.36` 起，上游把 `fast-xml-parser` 换成了另一个包
+`fast-xml-builder@1.3.0`。所以不需要求放行、也不需要换实现，只要把 S3 这几个包对齐到能解析出
+`xml-builder@3.972.36+` 的版本，隔离项自然消失。
+
+> ⚠️ 立项时写的是"`xml-builder@3.972.36` 的条目里根本没有 `dependencies` 块"——**那是看错了**：
+> 当时 grep 到的是锁文件 `packages:` 段的元数据条目（只有 `resolution` / `engines`），
+> 依赖在 `snapshots:` 段。结论不变（不再依赖 `fast-xml-parser`），但机制是**换包**不是**去依赖**。
+
+**注意两件事**：
+1. **S3 是在跑的功能**（文件存储，`api/src/app/file/s3-helper.ts`），不能用"删功能面"的办法，这是类 ② 依赖；
+2. 升 aws-sdk 会带动一批 `@smithy/*` 重算——**锁文件重算本身在公司 Nexus 上被 `isolated-vm@6.0.2`
+   的不完整 metadata 堵过一次**（VT-11）。所以这项必须**在公司机器上验证**，宿主机绿不算数。
+
+#### 已完成（2026-07-30，HERMES-PATCH-016）
+
+**改动**（根 `package.json` 与 `api/package.json` 两处都改，**根文件不能漏**——VT-17 的教训）：
+
+| 依赖 | 前 | 后 | 理由 |
+|---|---|---|---|
+| `@aws-sdk/client-s3` | 3.974.0 | **3.997.0** | 其 `@aws-sdk/core` 是 caret 范围 `^3.973.13`，重解析即取到 ≥3.976.0 那支 |
+| `@aws-sdk/s3-request-presigner` | **3.894.0** | **3.997.0** | 真正把 `core@3.894.0` 钉住的就是它 |
+| `@aws-sdk/client-bedrock` (根) | 3.1017.0 | **删** | 零源码 import——被删的 `ai/providers/bedrock-provider.ts` 的遗留 |
+| `@aws-sdk/client-secrets-manager` (根) | 3.997.0 | **删** | 零源码 import——AG-EE 已把 secret manager 桩掉（G4） |
+
+**解析结果**：`@aws-sdk/core` → 3.976.0 / 3.977.3；`xml-builder` → 3.972.36 / 3.972.37。
+
+**验收**：`fast-xml-parser@5.2.5` 在锁文件中 **0 次**。
+锁条目 5030 → **4988**（本批 −42；VT-17+VT-21 合计 5147 → 4988，**−159**）。
+
+> **`fast-xml-parser` 本身并没有消失**，也不该消失：根与 `api/package.json` **直接声明**
+> `"fast-xml-parser": "^5.5.6"`，解析到 **5.7.0**——**不是**被隔离的 5.2.5。别把这条记成"已移除该库"。
+
+**闸门**：`turbo build` 9/9；`api tsc --noEmit` OK；
+`api` 单测 **17 failed | 15 passed (32 files) / 38 failed | 162 passed (200)**——
+与升级前**逐位相同**，零新增失败（那 38 条的成因见 VT-17 的测试基线表）。
+
+**VT-11 四个隔离项的最新账**：
+
+| 项 | 锁中出现 | 状态 |
+|---|---|---|
+| `expr-eval@2.0.2` | **0** | ✅ `55023fd4` 的 `workspace:*` 修复 |
+| `fast-xml-parser@5.2.5` | **0** | ✅ 本项 |
+| `vitest@3.0.8` | 5 | ⬜ **仍在**——VT-11 记录同主版本 `3.2.7` 已在公司 Nexus 实测可下载可运行，但全仓升级的锁重算被 `isolated-vm@6.0.2` 的不完整 metadata 阻断 |
+| `isolated-vm@6.0.2` | 2 | ⬜ **仍在**——它不是 quarantine，是 Nexus 上元数据不全，**且是上面那条的前置障碍** |
+
+⇒ **下一个 P0 是 `isolated-vm@6.0.2` 的 Nexus 元数据**，它同时卡着 `vitest` 的升级路径。
+这条不由我们控制（需 Nexus 管理方补全或镜像重同步），**属类 ② 里"只能求放行"的那一格**。
+
+### <a id="vt-20"></a>VT-20 — 裁剪批 D：AP 自带 embed 路由 + `packages/ee/embed-sdk`（P2，风险最高）
+
+`packages/ee/embed-sdk` 的消费方是 `web/src/app/routes/embed/{index,embedded-connection-dialog}.tsx`
+与 `web/src/components/custom/home-button.tsx`——即 **AP 官方的 iframe 内嵌方案**。
+我们走的是 [Q3](DECISIONS.md#q3) 的 lib-mode + Shadow DOM 纯 builder 组件，与之无关。
+
+**但这批必须最后做、且单独过回归**：动的是 `packages/web` 内部，而 builder 组件正是从那里
+lib-mode 构建出来的。`home-button.tsx` 是**共用组件**（不止 embed 路由在用），
+不能跟着 embed 路由一起删，只能摘掉其中的 embed 分支。
+**闸门加一条**：DW 内嵌 builder 的浏览器渲染冒烟（同 VT-03b）。
 
 ---
 

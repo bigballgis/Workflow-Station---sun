@@ -146,7 +146,7 @@ C-1 集群 NetworkPolicy、air-gap piece 预烘焙。
   **生产 = Job 一次性执行 + 应用容器 `migrationsRun: false`**（air-gap：不接受应用启动时的隐式迁移）。
 - 基线收编（§5.2）：**0.84 基线 = `getMigrations()` 注册 373 条**（postgres），固化为 `baseline-0.84.0.manifest`；
   自维护增量以时间戳 `> 1793000000000` **append-only** 追加数组末尾（0.84 原生自带 `rollback-migrations.ts` 作守卫）。
-  ⚠️ **0.86.2 的 389 条不适用于 0.84 落地**（[Q8](DECISIONS.md#q8) frozen fork，禁用 0.86 结论）。
+  ⚠️ **0.86.2 的 389 条不适用于 0.84 落地**（[D12](DECISIONS.md#d12)：我们跑的是自有分叉，不跟随上游版本；禁用 0.86 结论）。
 
 ### 2.3 Redis（生产独立实例）
 

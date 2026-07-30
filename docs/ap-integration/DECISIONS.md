@@ -25,7 +25,7 @@
 
 | ID | 主题 | 裁决 | 日期 |
 |---|---|---|---|
-| [Q1](#q1) | Vendor 边界与位置 | 全量 vendor（**经 D1 升级为 frozen vendor + controlled fork**；**位置经 D5 修订为仓库根 `activepieces/`**） | 07-22 |
+| [Q1](#q1) | Vendor 边界与位置 | 全量 vendor（D1 升级为 frozen vendor + controlled fork，**经 D12 再改为硬分叉 + 深度裁剪**；**位置经 D5 修订为仓库根 `activepieces/`**） | 07-22 |
 | [Q2](#q2) | Bun 策略 | 全面禁止，AP 子树整体迁 pnpm + Node | 07-22 |
 | [Q3](#q3) | 画布裁剪深度 | 抽"纯 builder 组件"（否决胖挂载） | 07-22 |
 | [Q4](#q4) | 身份/租户 | 废除共享账号承载人的会话，per-user 映射 | 07-22 |
@@ -33,9 +33,9 @@
 | [Q5](#q5) | 数据库 | 独立 schema `activepieces`（同实例） | 07-22 |
 | [Q6](#q6) | 网关与桥的终局 | Kong 收编，:8085 桥并行一版后退役 | 07-22 |
 | [Q7](#q7) | flowId 治理 | flow 注册表 + **部署期解析**（✅ 已实施，见正文） | 07-22 / 07-26 |
-| [Q8](#q8) | AP 版本演进 | **经 D1 重定义为 Frozen Baseline + Controlled Fork** | 07-22 |
+| [Q8](#q8) | AP 版本演进 | D1 重定义为 Frozen Baseline + Controlled Fork，**已由 [D12](#d12) 取代（2026-07-30）** | 07-22 |
 | [Q9](#q9) | approval/todos piece | 从 v1 白名单移除 | 07-22 |
-| [D1](#d1) | EE 发现对 Q1/Q8 成本模型的冲击 | 承认性质变化：**受控 fork**，Q1/Q8 保留但重定义 | 07-23 |
+| [D1](#d1) | EE 发现对 Q1/Q8 成本模型的冲击 | 承认性质变化：**受控 fork**，Q1/Q8 保留但重定义（**"受控"部分经 [D12](#d12) 作废**，成本重估结论仍有效） | 07-23 |
 | [D2](#d2) | AG-02 的正确目标 | **不保留 AP 独立 workspace**，裁剪 AP shared 并入 HERMES frontend；升为最高优先级 Gate | 07-23 |
 | [D3](#d3) | 是否需要 EE 剥离专项文档 | **需要** — 新增 Document 3.5 | 07-23 |
 | [D4](#d4) | 合规评估（R-B）状态 | **尚未启动** | 07-23 |
@@ -43,6 +43,7 @@
 | [D6](#d6) | **沙箱基线降级**（安全策略不允许提权） | 候选基线 → **`SANDBOX_CODE_ONLY` + `STRICT`**（降级阶梯第 3 级）；**内核级出网管控丧失，须由 NetworkPolicy + 桥加固补偿** | 07-23 |
 
 | [D11](#d11) | **signing-key 是否自动供给** | **不自动化** — 只读检测 + fail-loud；私钥只返回一次、写 Secret 需 RBAC、重跑会轮换活密钥；且 k8s 尚未接 `ACTIVEPIECES_MANAGED_*` | 07-29 |
+| [D12](#d12) | **controlled fork 是否还成立** | **不成立，终止** → **硬分叉 + 深度裁剪**（取代 Q8、修订 Q1/D1）。VT-11 证明内网 FOSS Guard 隔离的正是上游 pin 的精确版本，"冻结基线"做不到；且 rebase 在 X-2/X-3 下不会发生。删功能面 = 消依赖，是 VT-12 的解法 | 07-30 |
 
 ---
 
@@ -242,6 +243,8 @@ Q1 原定"全量 vendor 到 `frontend/activepieces/` 并入 frontend pnpm worksp
 3. 前端 workspace 只含 Vue 生态 + 一个 HERMES 自有类型包，`install` 不再拉入任何 AP 后端依赖；
 4. AP 子树保留自己的 workspace 是 **frozen vendor + controlled fork**（[D1](#d1)）的自然形态——
    它整体来自上游 tag，独立锁文件让 baseline ↔ fork 的 diff 更干净（NFR-C02）。
+   > **[D12](#d12) 后**：理由 4 的"diff 更干净"已不再成立，但**结论不变**——独立 workspace 现在的
+   > 理由是工具链隔离（AP 的锁文件受公司 Nexus / FOSS Guard 约束，不该与前端锁互相牵动，见 VT-11）。
 
 > ⚠️ **这不是回到"AP 独立 workspace 供前端消费"**（那个方案已被 Q1 否决、并被 D2 进一步排除）。
 > 关键区别：**前端与 AP 之间没有 workspace 依赖边**，只有 Codegen 产出的**单向派生关系**。
@@ -493,6 +496,129 @@ admin-center。Job 会明确告诉你这件事没做（退 1 + 打印命令）�
 
 ---
 
+### <a id="d12"></a>D12 — 终止 controlled fork，转为**硬分叉 + 深度裁剪**（2026-07-30，**取代 Q8 / 修订 Q1 与 D1**）
+
+**触发**：VT-11 在公司机器上取得的实测结论（见 [VENDOR_TRIM_CHECKLIST](VENDOR_TRIM_CHECKLIST.md)）——
+公司 FOSS Guard 隔离的是**上游锁定的精确版本**：`expr-eval@2.0.2`、`vitest@3.0.8`、
+`fast-xml-parser@5.2.5`，外加 Nexus 里 metadata 不完整的 `isolated-vm@6.0.2`。
+
+#### 裁决
+
+> **`activepieces/` 子树自 2026-07-30 起视为 HERMES 自有源码。**
+> 不再以"对齐上游 0.84.0 / 保持 vendor diff 可重放"作为设计约束；
+> 目标从"少改上游"改为"**只保留我们真正运行的那部分，并让它在公司内网可构建、可维护**"。
+
+#### 理由 —— controlled fork 的前提已被证伪，不是"收益变小"而是"做不到"
+
+controlled fork 的全部价值押在一件事上：**将来能对着上游 tag 逐条重放补丁**。这需要两个前提，
+现在两个都不成立：
+
+1. **"冻结基线"在依赖层面已不可能维持。** 内网决定我们能装哪些版本，上游说了不算。
+   VT-11 之后每解决一个隔离项就是一次对上游 pin 的偏离，"frozen baseline" 只剩源码层面装作还冻着。
+2. **rebase 到新上游 tag 这件事，在 X-2 / X-3 下不会发生**（只有一次集成机会、之后完全断网）。
+   为一个不会发生的动作付纪律成本，是 D1 成本模型里唯一没有被重估过的一项。
+
+**这不是新方向，是 [X-7](#0-项目性质与不可变约束context) 贯彻到底**——X-7 从一开始就写着
+"目标不是持续跟随上游…在封闭环境长期自主维护"。Q8 当时只走了一半：放弃了跟随，却保留了跟随所需的全套纪律。
+
+#### 作废项（即刻停止为其付成本）
+
+| 停止 | 原先为什么这么做 |
+|---|---|
+| 把"vendor diff 干净"当设计约束 | PATCH-009 宁可写 vite 插件构建期改写，也不改那 16 文件 47 处 |
+| 保留死配置只为 diff 干净 | PATCH-014 留着 `crowdin.yml`，只让 npm script 拒跑 |
+| 裁剪必须写成可重放脚本 + `--check` | PATCH-013 |
+| rebase 重放顺序（VT-04） | 012 必须先于 013 之类的约束 |
+| HERMES-PATCH 编号作为**重放索引** | Q8 的 baseline→patch 树 |
+
+#### 保留项（各有独立理由，与上游可追溯性无关，且几乎零成本）
+
+1. **MIT 义务**：分发物保留 `activepieces/LICENSE` 与版权声明。这是文件级义务，与台账无关。
+2. **公司 OSS 入库申报**：硬分叉不豁免，反而让我们成为 maintainer of record。
+3. **"改了什么"的可追溯性 —— 已经免费了**：基线是干净的单提交
+   `de4f6469 vendor(ap): pristine Activepieces 0.84.0 source baseline`，
+   `git diff de4f6469..HEAD -- activepieces/` 随时给出完整答案。
+   ⇒ **[HERMES_PATCHES.md](HERMES_PATCHES.md) 就此从"重放施工图"降级为"为什么改"的变更日志**：
+   继续记录动机与踩坑（那是 git diff 给不出的部分），编号继续递增以便交叉引用，
+   但**不再承担 replay 语义**，也不再要求新改动都去挂一个编号。
+
+#### 深度裁剪 —— 它不是清洁工作，是 VT-12 的解法
+
+盘点（2026-07-30 实测）发现内网装不上的依赖分成**两类，解法不同**——
+这个区分是 2026-07-30 实施 VT-17 时用 `pnpm why` 逐条核出来的，**初稿把两类混为一谈，已更正**：
+
+**① 无消费方的功能面拖进来的依赖 ⇒ 删功能**
+
+```
+@ai-sdk/{amazon-bedrock,anthropic,azure,google,google-vertex,openai,
+         openai-compatible,provider,replicate,mcp}  共 10 个 + ai@^6
+  ← server/api/src/app/ai/providers/        AP 的 AI provider 代理        ✅ 已删
+  ← server/api/src/app/mcp/                 AP 自带 MCP server（448K）    ✅ 已删
+  ← server/worker/src/lib/execute/jobs/ee/chat/   EE chat agent           ✅ 已删
+  ← server/engine/src/lib/tools/            agent tools（+ framework 契约）✅ 已删
+  ← server/utils/src/chat-ai-utils.ts       ee/chat 的唯一消费方          ✅ 已删
+```
+
+**结果（2026-07-30 收口）**：10 个厂商 provider 包在锁文件里归零，锁条目 5147 → 5030；
+[VT-12](VENDOR_TRIM_CHECKLIST.md) 关闭。保留 `ai@6.0.170` 一个（web 的 chat 前端真在用，
+且它不在隔离清单上）。**类 ① 的"删功能面"路径在这一轮被完整验证了一次。**
+
+这些功能**我们一个都不跑**：`piece-ai` 已按"气隙下 AI 件无用"删除（PATCH-002 作废），
+AI Generate 已改 HTTP piece 直连模型端点，气隙内也没有 MCP 客户端。
+
+**② 在跑的功能拖进来的依赖 ⇒ 只能升级或放行，删不掉**
+
+```
+fast-xml-parser@5.2.5  (FOSS Guard 隔离)
+  ← @aws-sdk/xml-builder@{3.894.0, 3.972.0}
+  ← @aws-sdk/core@{3.894.0, 3.972.0}  ← @aws-sdk/middleware-sdk-s3
+  ← @aws-sdk/s3-request-presigner@3.894.0 + @aws-sdk/client-s3@3.974.0   ← **S3 文件存储**
+```
+
+> ⚠️ **本裁决初稿把这条链接到了 `@ai-sdk/amazon-bedrock` 上，是错的。**
+> VT-11 原文只说"来源是 `@aws-sdk/xml-builder@3.894.0 / 3.972.0` 的传递依赖"，没有指认 Bedrock；
+> `pnpm why` 显示真正的持有者是 **S3 文件存储链**。所以删 AI 面**不会**消掉 `fast-xml-parser`。
+>
+> **已于同日按类 ② 的办法解决（VT-21 / HERMES-PATCH-016）**：把 `@aws-sdk/client-s3` 与
+> `@aws-sdk/s3-request-presigner` 升到 3.997.0，使 `xml-builder` 解析到 3.972.36+
+> （该版本改用 `fast-xml-builder`）⇒ `fast-xml-parser@5.2.5` 在锁中归零。
+> **升级而非删除——因为 S3 是在跑的功能，这正是两类划分的意义。**
+
+**于是 VT-12 的三条路径是按类分工，而不是互相替代：**
+
+| 路径 | 适用 | 评价 |
+|---|---|---|
+| 删掉持有依赖的功能面 | 类 ① | **首选**：依赖随功能消失，无需放行、无需升级、install 面永久缩小 |
+| 升级到 Nexus 放行的版本 | 类 ② | 对 S3 链可行且便宜（见上）；但 `isolated-vm@6.0.2` metadata 不全堵过一次 |
+| 求 FOSS Guard 复核放行 | 类 ② 兜底 | 不由我们控制，且每次 install 面变化都要重来 |
+
+**教训（写进裁决而不是只写进 checklist）**：依赖链**必须用 `pnpm why` 核到具体持有者**，
+不能按包名的"AI 味"推断归属。类 ① 和类 ② 在锁文件里长得一样，但解法相反。
+
+#### 裁剪边界
+
+**判定标准**：不在成品镜像里跑、或跑但没有消费方 ⇒ 删。分批执行，每批以 `pnpm install` +
+`turbo run build --filter=web --filter=engine --filter=api --filter=worker` + 镜像构建 + dev 冒烟为闸门。
+
+**明确保留，别误删**：
+- `packages/cli` —— 自研件（`biz-calendar` / `hash-helper`）的开发链路依赖它，
+  见 [PIECE_DEVELOPMENT_HOWTO](PIECE_DEVELOPMENT_HOWTO.md)；VT-11 的 `workspace:*` 修复正落在这里。
+- `packages/web` 的 AP 独立应用形态 —— `/ap-cdn` 资产只随它发布
+  （见 [HERMES_PATCHES](HERMES_PATCHES.md) 009 的补充说明），砍掉会让内嵌 builder 的图标全裂。
+- `app-event-routing.service.ts` 与 `app_event_routing` 表 —— PATCH-012 已论证删了编译不过。
+
+**批次与逐条证据见 [VENDOR_TRIM_CHECKLIST.md](VENDOR_TRIM_CHECKLIST.md) 的 VT-16 及以后。**
+
+#### 代价（明确承担，不粉饰）
+
+- **我们成为 AP 这份代码的唯一维护者**。AP 自身代码出 CVE 由我们自行修补——
+  但这在 Q8 冻结基线下**已经是事实**，D12 没有新增这项风险，只是让它更显眼。
+- **裁剪的回归风险高于纯文档变更**。缓解手段是分批 + 每批过构建与冒烟闸门，
+  而不是"删完再一起验"。
+- **删掉的上游源码不再可读**（VT-09 已就此定过补救约定：需要时从 `de4f6469` 取回）。
+
+---
+
 ## 3. Q 系列裁决（2026-07-22，正文见各条）
 
 ### <a id="q1"></a>Q1 — Vendor 边界与位置
@@ -500,6 +626,9 @@ admin-center。Job 会明确告诉你这件事没做（退 1 + 打印命令）�
 **⚠️ 位置与 workspace 归属经 [D5](#d5) 修订**：AP 子树 → **仓库根 `activepieces/`（自有 pnpm workspace）**；
 前端仅保留 `frontend/packages/ap-contracts/` 裁剪层。原"`frontend/activepieces/` + 并入 frontend workspace"**已作废**。
 **⚠️ 经 D1 升级**：性质为 *frozen vendor + controlled fork*，非"拷进来不动"。
+**⚠️ 经 [D12](#d12) 再改（2026-07-30）**：性质为 **硬分叉 + 深度裁剪**——"全量 vendor"只描述 2026-07-22
+的入库动作，**不再是维持中的状态**；vendor 树按"是否真的在跑"持续收敛（013 已把 686 个 community piece
+收敛到 4，后续批次见 VENDOR_TRIM_CHECKLIST）。
 **⚠️ 经 D2 细化**：**前端侧不再保留 AP 独立 workspace**，改为裁剪 AP shared 并入 HERMES frontend；
 服务端 AP 运行体仍需完整 shared（类型漂移风险见 D2 备注）。
 连带强制项：bun→pnpm 锁重建（CR-01）、4 应用回归（GW-12）、CI 路径过滤（NFR-C03）、
@@ -567,9 +696,15 @@ AP server-api 经 Kong 收进平台域；:8085 edge 桥与 nonce 握手**并行�
   connection 依旧不随包走，故新建的 flow 可能发布失败 → 结果里回传 `PUBLISH_FAILED` +
   原因，补齐凭据后在管理面手工发布。flow 本体不进版本快照（AP 侧自带版本，同库回滚引用不变）。
 
-### <a id="q8"></a>Q8 — AP 版本演进 → **Frozen Baseline + Controlled Fork**
+### <a id="q8"></a>Q8 — AP 版本演进 → ~~Frozen Baseline + Controlled Fork~~ **已由 [D12](#d12) 取代**
+
+> ⚠️ **本条已于 2026-07-30 被 [D12](#d12) 取代，仅存档。**
+> 当前有效表述：**硬分叉 + 深度裁剪**——`activepieces/` 视为 HERMES 自有源码，
+> 不再以"对齐上游 tag / diff 可重放"为设计约束。
+> 下面保留原文，因为 D12 的推理建立在它之上（它的方向没错，错在保留了跟随所需的全套纪律）。
+
 **旧表述（作废）**："完全放弃跟随上游，因为我们只维护一份 vendor 代码。"
-**新表述（采用，D1）**：
+**新表述（采用，D1；2026-07-30 经 D12 再度作废）**：
 > **不承诺持续跟随 Activepieces 上游版本，采用 0.84.0 frozen baseline + HERMES controlled fork 模式。**
 
 依据 X-2/X-3：只有一次集成机会、之后完全断网，"长期跟随上游"的价值大幅下降
