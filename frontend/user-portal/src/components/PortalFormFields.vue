@@ -194,6 +194,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :columns="resolveBinding(field._bindingId)!.columns"
         :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
         :form-fields="resolveBinding(field._bindingId)!.formFields"
+        :form-options="resolveBinding(field._bindingId)!.formOptions"
         :model-value="resolveSubTableRows(resolveBinding(field._bindingId)!)"
         :editable="isSubTableEditable()"
         :allow-add="field.allowAdd"

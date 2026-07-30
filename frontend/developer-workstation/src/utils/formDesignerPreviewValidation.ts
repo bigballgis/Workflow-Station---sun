@@ -256,6 +256,8 @@ export function mergePreviewValidateFormOption(
   form.showMessage = true
   base.form = form
   base.validateOnSubmit = true
+  // Ensure component on.blur/change receive inject.api in built-in Form mode preview.
+  base.injectEvent = true
   // Preview is for layout/field inspection only — hide form-create's built-in bottom
   // submit/validate button (it ran api.submit() silently, looking like it did nothing).
   // Designer-placed Validate button components in the form rules are unaffected.
@@ -298,6 +300,10 @@ export function snapshotDesignerFieldValidate(rules: unknown[]): Array<Record<st
 /**
  * Persist normalized validation onto the live designer (getRule() alone is a parsed copy).
  * Must run before fc-designer openPreview → getJson().
+ *
+ * Do NOT compile event handlers onto the canvas here — openPreview serializes via getJson()
+ * and would drop Hermes closures. Event compilation runs on preview.rule AFTER openPreview
+ * (see {@link patchFcDesignerPreviewEventHandlers}).
  */
 export function prepareDesignerPreviewValidation(
   ref: DesignerPreviewRef | null | undefined,
@@ -318,8 +324,6 @@ export function prepareDesignerPreviewValidation(
   if (Array.isArray(savedRules) && savedRules.length > 0) {
     mergeComponentEventsFromSavedRules(rules, savedRules)
   }
-  syncDesignerComponentEventsForFcPreview(rules)
-  seedFcDesignerPreviewComponentEventCache(rules)
   ensureFormCreateRulesValidationDeep(rules)
   ref.setRule(rules)
   const option = ref.getOption?.()
@@ -333,6 +337,47 @@ export function prepareDesignerPreviewValidation(
     flush,
     validateOnSubmit: ref.getOption?.()?.validateOnSubmit,
   }
+}
+
+type FcPreviewBag = {
+  state?: boolean
+  rule?: unknown[]
+  option?: Record<string, unknown>
+}
+
+/** FcDesigner setup returns `preview` via toRefs(data) — resolve on the public instance. */
+export function resolveFcDesignerPreviewBag(
+  ref: DesignerPreviewRef | null | undefined,
+): FcPreviewBag | null {
+  if (!ref || typeof ref !== 'object') return null
+  const bag = ref as Record<string, unknown>
+  let preview: unknown = bag.preview
+  if (preview && typeof preview === 'object' && 'value' in (preview as object)) {
+    const inner = (preview as { value: unknown }).value
+    if (inner && typeof inner === 'object' && ('rule' in (inner as object) || 'state' in (inner as object))) {
+      preview = inner
+    }
+  }
+  if (!preview || typeof preview !== 'object') return null
+  return preview as FcPreviewBag
+}
+
+/**
+ * After fc-designer openPreview (getJson→parseJson), recompile `$FNX:` handlers with Hermes
+ * wrappers so `$inject.value` is filled from args[0]. Native form-create inject omits `value`.
+ */
+export function patchFcDesignerPreviewEventHandlers(
+  ref: DesignerPreviewRef | null | undefined,
+  validateButtonText: string,
+): boolean {
+  const preview = resolveFcDesignerPreviewBag(ref)
+  if (!preview || !Array.isArray(preview.rule) || preview.rule.length === 0) return false
+  syncDesignerComponentEventsForFcPreview(preview.rule)
+  seedFcDesignerPreviewComponentEventCache(preview.rule)
+  if (preview.option && typeof preview.option === 'object') {
+    Object.assign(preview.option, mergePreviewValidateFormOption(preview.option, validateButtonText))
+  }
+  return true
 }
 
 function logValidatePanelFlush(_source: string, _flush: FlushValidatePanelResult): void {
@@ -404,7 +449,10 @@ export function wrapFcDesignerOpenPreview(
 
   ref.openPreview = function hermesWrappedOpenPreview(this: unknown, ...args: unknown[]) {
     prepareDesignerPreviewValidation(ref, validateButtonText, getSavedRules?.() ?? null)
-    return (original as (...a: unknown[]) => unknown).apply(this, args)
+    const result = (original as (...a: unknown[]) => unknown).apply(this, args)
+    // Must run AFTER getJson→parseJson assigns preview.rule (same sync turn, before ViewForm mount).
+    patchFcDesignerPreviewEventHandlers(ref, validateButtonText)
+    return result
   }
   bag.__hermesOpenPreviewWrapped = true
 }

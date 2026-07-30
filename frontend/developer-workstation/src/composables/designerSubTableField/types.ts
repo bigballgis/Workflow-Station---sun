@@ -13,6 +13,8 @@ export interface ColumnConfig {
   placeholder?: string
   options?: Array<{ label: string; value: any }>
   props?: Record<string, any>
+  /** Form-create rule node — on/_on/hook/_hook for Element Plus dialog events. */
+  sourceRule?: Record<string, unknown>
 }
 
 // 子表配置接口

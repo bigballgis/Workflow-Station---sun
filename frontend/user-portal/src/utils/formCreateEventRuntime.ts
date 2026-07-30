@@ -46,6 +46,14 @@ export {
  */
 export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEventContext) => void) | null {
   if (typeof raw === 'function') {
+    // Prefer tagged $FNX: / FORM-CREATE source so callers can pass a fresh ctx.api
+    // (e.g. visibility-wired PortalFormApi) instead of a stale closed-over api.
+    // Keep in sync with developer-workstation/src/utils/formCreateEventRuntime.ts
+    const tagged = raw as { __hermesFormEventSource?: unknown; __json?: unknown }
+    const source = tagged.__hermesFormEventSource ?? tagged.__json
+    if (typeof source === 'string' && !isEmptyFormCreateHandler(source)) {
+      return parseFormCreateEventHandler(source)
+    }
     return (ctx) => {
       try {
         (raw as FormCreateChangeHandler)(ctx.field, ctx.value, ctx.api)
@@ -69,7 +77,23 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
 
   try {
     if (usesInject) {
-      const runner = new Function('$inject', body) as (inject: Record<string, unknown>) => void
+      // $FNX: bodies are normalized to function($inject){…}. Designer scripts often use
+      // bare `api` / `value` (form-create docs) as well as `$inject.api` — bind both.
+      // Keep in sync with developer-workstation/src/utils/formCreateEventRuntime.ts
+      const runner = new Function(
+        '$inject',
+        [
+          'var api = $inject.api;',
+          'var options = $inject.options;',
+          'var option = $inject.option;',
+          'var rule = $inject.rule;',
+          'var self = $inject.self;',
+          'var args = $inject.args;',
+          'var field = $inject.field;',
+          'var value = $inject.value;',
+          body,
+        ].join('\n'),
+      ) as (inject: Record<string, unknown>) => void
       return (ctx) => {
         runner({
           api: ctx.api,

@@ -13,9 +13,12 @@
       label-width="auto"
       label-position="left"
     >
-      <el-form-item
+      <template
         v-for="col in columns"
         :key="col.field"
+      >
+      <el-form-item
+        v-if="isDialogFieldVisible(col.field)"
         :label="col.label"
         :prop="col.field"
       >
@@ -27,6 +30,8 @@
           :maxlength="col.props?.maxlength"
           :disabled="isColReadonly(col)"
           :clearable="!isColReadonly(col)"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
 
         <!-- textarea -->
@@ -38,6 +43,8 @@
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
           :disabled="isColReadonly(col)"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
 
         <!-- number -->
@@ -50,6 +57,7 @@
           :placeholder="col.placeholder || col.label"
           :disabled="isColReadonly(col)"
           style="width: 100%"
+          @change="(v: number | undefined) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- select -->
@@ -61,6 +69,7 @@
           :clearable="!isColReadonly(col)"
           :disabled="isColReadonly(col)"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         >
           <el-option
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -75,6 +84,7 @@
           v-else-if="col.type === 'radio'"
           v-model="formData[col.field]"
           :disabled="isColReadonly(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         >
           <el-radio
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -90,6 +100,7 @@
           v-else-if="col.type === 'checkbox'"
           v-model="formData[col.field]"
           :disabled="isColReadonly(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         >
           <el-checkbox
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -109,6 +120,8 @@
           :placeholder="col.placeholder || col.label"
           :disabled="isColReadonly(col)"
           :clearable="!isColReadonly(col)"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
 
         <!-- timerange -->
@@ -121,6 +134,7 @@
           :end-placeholder="col.props?.endPlaceholder || 'End time'"
           :disabled="isColReadonly(col)"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- treeselect -->
@@ -134,6 +148,7 @@
           :clearable="!isColReadonly(col)"
           :disabled="isColReadonly(col)"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- switch -->
@@ -141,6 +156,7 @@
           v-else-if="col.type === 'switch'"
           v-model="formData[col.field]"
           :disabled="isColReadonly(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- date -->
@@ -152,6 +168,7 @@
           :placeholder="col.placeholder || col.label"
           :disabled="isColReadonly(col)"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- datetime -->
@@ -163,6 +180,7 @@
           :placeholder="col.placeholder || col.label"
           :disabled="isColReadonly(col)"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- upload -->
@@ -202,7 +220,10 @@
           :props="col.props?.labelProps || { label: 'label', children: 'children' }"
           :node-key="col.props?.nodeKey || 'id'"
           :show-checkbox="col.props?.showCheckbox !== false"
-          @check="(node: any, state: any) => { formData[col.field] = state.checkedKeys }"
+          @check="(node: any, state: any) => {
+            formData[col.field] = state.checkedKeys
+            onDialogFieldChange(col.field, state.checkedKeys)
+          }"
         />
 
         <!-- colorPicker -->
@@ -212,6 +233,7 @@
           :show-alpha="col.props?.showAlpha || false"
           :disabled="isColReadonly(col)"
           popper-class="sub-table-color-popper"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- rate -->
@@ -221,6 +243,7 @@
           :max="col.props?.max || 5"
           :allow-half="col.props?.allowHalf || false"
           :disabled="isColReadonly(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- slider -->
@@ -232,6 +255,7 @@
           :step="col.props?.step || 1"
           :disabled="isColReadonly(col)"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- editor (rich text) -->
@@ -242,6 +266,8 @@
           :rows="col.props?.rows || 5"
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
 
         <!-- signature (base64 image URL input) -->
@@ -275,6 +301,7 @@
           :titles="[col.props?.leftTitle || 'Source', col.props?.rightTitle || 'Target']"
           :filterable="!isColReadonly(col)"
           :disabled="isColReadonly(col)"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- cascader -->
@@ -287,6 +314,7 @@
           :clearable="!isColReadonly(col)"
           :disabled="isColReadonly(col)"
           style="width: 100%"
+          @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
         <!-- user / department -->
@@ -296,6 +324,8 @@
           :placeholder="col.placeholder || (col.type === 'user' ? 'Select user' : 'Select department')"
           :disabled="isColReadonly(col)"
           :clearable="!isColReadonly(col)"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
 
         <!-- fallback -->
@@ -305,8 +335,11 @@
           :placeholder="col.placeholder || col.label"
           :disabled="isColReadonly(col)"
           :clearable="!isColReadonly(col)"
+          @change="() => onDialogFieldChange(col.field)"
+          @blur="() => onDialogFieldBlur(col.field)"
         />
       </el-form-item>
+      </template>
     </el-form>
 
     <template #footer>
@@ -332,6 +365,7 @@ import { buildInitialRow, buildRules, isColReadonly, mergeFormRowWithSeed } from
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { getFilenameFromUrl, extractUploadUrlFromResponse, normalizeUploadFieldsInRow } from './uploadFieldUtils'
+import { useSubTableDialogComponentEvents } from '@/composables/designerSubTableField/useSubTableDialogComponentEvents'
 
 const props = defineProps<{
   visible: boolean
@@ -353,6 +387,15 @@ const visibleModel = computed({
 
 const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
+const {
+  onDialogFieldChange,
+  onDialogFieldBlur,
+  isDialogFieldVisible,
+  resetDialogEventVisibility,
+} = useSubTableDialogComponentEvents(
+  formData,
+  () => props.columns,
+)
 const uploadNames = ref<Record<string, string>>({})
 
 const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
@@ -407,6 +450,7 @@ watch(
   (open) => {
     if (!open) return
     uploadNames.value = {}
+    resetDialogEventVisibility()
     const seed = props.initialData ? JSON.parse(JSON.stringify(props.initialData)) : {}
     formData.value = { ...buildInitialRow(props.columns), ...seed }
     if (props.mode === 'edit' && props.initialData) {

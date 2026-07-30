@@ -195,6 +195,7 @@ export function mapSubFormRuleToDialogColumns(
       ...(options ? { options: options as DialogColumn['options'] } : {}),
       ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
       ...(defaultValue !== undefined ? { defaultValue } : {}),
+      sourceRule: r,
     }
   })
 }

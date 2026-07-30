@@ -9,6 +9,7 @@ import {
   attachPreviewMountedDefaultSync,
   materializePreviewItemsEvents,
   mergeComponentEventsFromSavedRules,
+  preserveSerializedHandlersInShadowBuckets,
   sanitizePreviewItemsHandlers,
   sanitizePreviewRuleHandlers,
 } from '@/utils/formCreatePreviewEvents'
@@ -252,6 +253,8 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       }
       rule = mapFormCreateRulesReadonlyDeep(rule) as any[]
       ensureFormCreateRulesValidationDeep(rule)
+      // Keep $FNX strings in `_on`/`_hook` before sanitize strips them from `on`/`hook`.
+      preserveSerializedHandlersInShadowBuckets(rule)
       // Strip designer `$FNX:` handler strings from on/hook so the sub-form row dialog's
       // base form-create instance doesn't crash on them (same freeze guard as the main form).
       sanitizePreviewRuleHandlers(rule)
@@ -384,6 +387,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
                 allowEdit: placedProps.allowEdit === false ? false : undefined,
                 allowDelete: placedProps.allowDelete === false ? false : undefined,
               },
+              sourceRule: ruleItem as Record<string, unknown>,
             })
             localBindingMap.delete(Number(itemBindingId))
           }

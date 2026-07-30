@@ -58,6 +58,7 @@ import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { cloneFormRules, collectUploadRulesFromTree, injectPreviewUploadHandlers } from '@/utils/formDesigner'
+import { syncDesignerComponentEventsForFcPreview } from '@/utils/formCreatePreviewEvents'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import {
   alignUploadFieldsToColumns,
@@ -127,6 +128,8 @@ function buildDialogFormOption(option: Record<string, any> = {}) {
     ...rest,
     resetBtn: false,
     submitBtn: false,
+    // Same as Form-mode Preview: component on.blur/change receive inject.api.
+    injectEvent: true,
     onSubmit: () => {},
     form: {
       ...defaultFormOption.form,
@@ -278,6 +281,9 @@ function rebuildFormRule() {
   )
   injectDemoBuRoleOptions(filtered)
   formRule.value = insertAssignModeRadio(filtered)
+  // Parent Preview may have sanitized $FNX strings off `on`/`hook` (crash guard).
+  // Recompile from `_on`/`_hook` so sub-form component events run like Form-mode Preview.
+  syncDesignerComponentEventsForFcPreview(formRule.value)
   injectPreviewUploadHandlers(formRule.value, formData, uploadSession)
 }
 

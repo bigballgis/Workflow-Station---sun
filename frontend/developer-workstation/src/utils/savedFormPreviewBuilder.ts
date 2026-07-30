@@ -349,7 +349,11 @@ function buildPreviewItems(
       const binding = localBindingMap.get(Number(itemBindingId))
       if (binding) {
         const mergedPv = mergePortalViewsForSavedPreview(ruleItem, Number(itemBindingId), config)
-        items.push({ kind: 'subTable', binding: { ...binding, portalViews: mergedPv } })
+        items.push({
+          kind: 'subTable',
+          binding: { ...binding, portalViews: mergedPv },
+          sourceRule: ruleItem as Record<string, unknown>,
+        })
         localBindingMap.delete(Number(itemBindingId))
       }
     } else if (isCardRule(ruleItem)) {

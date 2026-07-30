@@ -8,18 +8,18 @@
       class="form-preview-wrapper form-readonly-surface"
     >
       <form-create
-        v-if="item.rule.length"
-        :key="'preview-form-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed')"
+        v-if="visiblePreviewRules(item.rule).length"
+        :key="'preview-form-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed') + '-v' + previewVisibilityRenderTick"
         v-model="previewModel"
         locale="en"
-        :rule="item.rule"
+        :rule="visiblePreviewRules(item.rule)"
         :option="effectivePreviewOption"
         @change="(field: string, value: unknown) => onPreviewFieldChange(item.rule, field, value)"
       />
     </div>
 
     <div
-      v-else-if="item.kind === 'subTable' && hasSubTablePreviewSurface(item.binding) && isDualPortalSubTablePreview(item.binding)"
+      v-else-if="item.kind === 'subTable' && isPreviewSubTableVisible(item) && hasSubTablePreviewSurface(item.binding) && isDualPortalSubTablePreview(item.binding)"
       class="sub-table-preview-item"
     >
       <div class="sub-preview-header">
@@ -61,7 +61,7 @@
             :preview-show-form-below="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
             :preview-link-form-scroll-to-inline="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
             :preview-lookup-compact="false"
-            @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+            @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
             @update:primary-form-data="mergePrimaryFormData"
           />
         </el-tab-pane>
@@ -84,7 +84,7 @@
             :preview-table-bindings="previewTableBindings"
             :preview-show-form-below="false"
             :preview-lookup-compact="initiatorPreviewIsSummary(item.binding)"
-            @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+            @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
             @update:primary-form-data="mergePrimaryFormData"
           />
         </el-tab-pane>
@@ -92,7 +92,7 @@
     </div>
 
     <div
-      v-else-if="item.kind === 'subTable'"
+      v-else-if="item.kind === 'subTable' && isPreviewSubTableVisible(item)"
       class="sub-table-preview-item"
     >
       <div class="sub-preview-header">
@@ -121,7 +121,7 @@
         :parent-tables-by-id="parentTablesById"
         :preview-table-bindings="previewTableBindings"
         :preview-lookup-compact="isMyRequestsPreview"
-        @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+        @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
         @update:primary-form-data="mergePrimaryFormData"
       />
       <el-empty
@@ -156,7 +156,7 @@
     </div>
 
     <div
-      v-else-if="item.kind === 'lookup'"
+      v-else-if="item.kind === 'lookup' && isPreviewFieldVisible(item.field)"
       class="lookup-preview-item"
     >
       <LookupPreview
@@ -226,6 +226,8 @@ import {
 import {
   dispatchPreviewFieldValueChange,
 } from '@/utils/formCreatePreviewEvents'
+import { subTableComponentEventFieldKey } from '@/utils/formCreateComponentEvents'
+import { useFormPreviewEventVisibility } from '@/composables/formDesigner/useFormPreviewEventVisibility'
 import {
   buildDerivedFilterConditions,
   buildPreviewAutofillModelValue,
@@ -285,21 +287,6 @@ const isMyRequestsPreview = computed(
   () => myRequestsPreviewActive.value || previewMyRequestsGlobal?.value === true,
 )
 
-const effectivePreviewOption = computed(() => {
-  if (!isMyRequestsPreview.value) return props.previewOption
-  const baseForm =
-    props.previewOption.form && typeof props.previewOption.form === 'object'
-      ? props.previewOption.form
-      : {}
-  return {
-    ...props.previewOption,
-    form: {
-      ...baseForm,
-      disabled: true,
-    },
-  }
-})
-
 const previewModel = computed({
   get: () => props.previewData,
   set: (value: Record<string, any>) => emit('update:previewData', value),
@@ -308,6 +295,21 @@ const previewModel = computed({
 const parentCascade = inject(PREVIEW_LOOKUP_CASCADE_KEY, null)
 const lookupSelectedRows =
   parentCascade?.lookupSelectedRows ?? reactive<Record<string, Record<string, unknown>>>({})
+
+const {
+  previewVisibilityRenderTick,
+  visiblePreviewRules,
+  isPreviewFieldVisible,
+  isPreviewSubTableVisible,
+  previewVisibilityBridge,
+  effectivePreviewOption,
+} = useFormPreviewEventVisibility({
+  items: () => props.items,
+  previewOption: () => props.previewOption,
+  previewModel,
+  isMyRequestsPreview,
+  emitPreviewData: (value) => emit('update:previewData', value),
+})
 
 function collectLookupPreviewItems(nodes: FormPreviewItem[]): Extract<FormPreviewItem, { kind: 'lookup' }>[] {
   const out: Extract<FormPreviewItem, { kind: 'lookup' }>[] = []
@@ -397,10 +399,22 @@ function inlineFormBelowForBinding(binding: PreviewSubTableBinding) {
   return resolvePreviewInlineFormBelowDesign(binding, resolveSubTableFormDesign)
 }
 
-function updateTableRows(bindingId: number, rows: any[]) {
+function updateTableRows(
+  bindingId: number,
+  rows: any[],
+  sourceRule?: Record<string, unknown>,
+) {
   emit('update:previewTableRows', {
     ...props.previewTableRows,
     [bindingId]: rows,
+  })
+  if (isMyRequestsPreview.value) return
+  if (!sourceRule) return
+  const fieldKey = subTableComponentEventFieldKey(bindingId)
+  dispatchPreviewFieldValueChange([sourceRule], fieldKey, rows, previewModel, {
+    requestIdConfig: props.requestIdConfig,
+    requestIdRecompute: recomputeRequestId,
+    visibility: previewVisibilityBridge(),
   })
 }
 
@@ -422,6 +436,7 @@ function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unk
   dispatchPreviewFieldValueChange(segmentRules, field, value, previewModel, {
     requestIdConfig: props.requestIdConfig,
     requestIdRecompute: recomputeRequestId,
+    visibility: previewVisibilityBridge(),
   })
 }
 

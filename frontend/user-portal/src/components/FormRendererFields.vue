@@ -275,10 +275,10 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
       />
     </template>
 
-    <!-- Sub-table -->
+    <!-- Sub-table — honor api.hidden / display (parity with lookup and other fields) -->
     <template v-else-if="field.type === 'subTable'">
       <el-col
-        v-if="!inColumn"
+        v-if="!inColumn && ctx.isFieldVisible(field.key)"
         :span="24"
         style="padding: 0;"
       >
@@ -288,6 +288,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
+          :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
           :enable-row-select="ctx.subTableMode(field) === 'formBelowTable'"
           :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
           :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
@@ -369,7 +370,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
         </div>
       </el-col>
       <div
-        v-else
+        v-else-if="inColumn && ctx.isFieldVisible(field.key)"
         class="form-col-subtable"
       >
         <SubTableField
@@ -378,6 +379,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
+          :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
           :enable-row-select="ctx.subTableMode(field) === 'formBelowTable'"
           :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
           :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"

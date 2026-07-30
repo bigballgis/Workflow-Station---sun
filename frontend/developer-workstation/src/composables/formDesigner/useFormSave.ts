@@ -10,7 +10,6 @@ import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
 import {
   prepareFormCreateRulesForPersist,
   serializeFormCreateOptionsForPersist,
-  walkRulesEnsureComponentEvents,
 } from '@/utils/formCreateDefaultEvents'
 import { ensureFormCreateRulesValidationDeep } from '@/utils/formCreateValidateRules'
 import {
@@ -170,8 +169,11 @@ export function useFormSave(options: UseFormSaveOptions) {
       const rule = stripFormCreateRulesDisabledDeep(rawRule) as any[]
       ensureFormCreateRulesValidationDeep(rule)
       walkRulesApplyTableFieldDefaultsToPersistedRules(rule, getPrimaryBindingFieldDefinitions())
+      // prepare flattens `_on`→`on` and drops empty `$FNX:` stubs. Do NOT call
+      // walkRulesEnsureComponentEvents here: with leftover `_fc_id` it treats the
+      // persist snapshot as a live canvas rule, moves handlers back to `_on`, and
+      // Event panel / reload then look empty after Save.
       prepareFormCreateRulesForPersist(rule)
-      walkRulesEnsureComponentEvents(rule)
       const options = serializeFormCreateOptionsForPersist(
         designerRef.value.getOption() as Record<string, unknown>,
       )
