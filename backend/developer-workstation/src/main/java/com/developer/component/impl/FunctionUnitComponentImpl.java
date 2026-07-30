@@ -63,7 +63,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final FunctionUnitExporter functionUnitExporter;
     private final ObjectMapper objectMapper;
 
-    // 鍗忎綔绫伙紙闂ㄩ潰鍐呴儴鏋勫缓锛屼緷璧栨潵鑷瀯閫犳敞鍏ョ殑浠撳簱/鏈嶅姟锛?
+    // Collaborators built inside this facade; repos/services come from constructor injection.
     private final FunctionUnitCodeGenerator codeGenerator;
     private final FunctionUnitValidator validator;
     private final FunctionUnitSnapshotFactory snapshotFactory;
@@ -92,7 +92,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             MainTableViewService mainTableViewService,
             ForeignKeyRepository foreignKeyRepository,
             FunctionUnitExporter functionUnitExporter,
-            com.developer.component.TableDesignComponent tableDesignComponent) {
+            com.developer.component.TableDesignComponent tableDesignComponent,
+            EmailConnectionRepository emailConnectionRepository,
+            EmailMonitorRuleRepository emailMonitorRuleRepository,
+            EmailTemplateRepository emailTemplateRepository) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
         this.versionRepository = versionRepository;
@@ -106,7 +109,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.functionUnitExporter = functionUnitExporter;
         this.objectMapper = objectMapper;
 
-        // 鏋勫缓鍗忎綔绫伙細鍦?Spring 涓庢祴璇?new 涓ゆ潯璺緞涓嬭涓轰竴鑷淬€?
+        // Build collaborators so Spring wiring and test `new` stay behaviorally aligned.
         this.codeGenerator = new FunctionUnitCodeGenerator(functionUnitRepository);
         this.validator = new FunctionUnitValidator();
         this.snapshotFactory = new FunctionUnitSnapshotFactory(objectMapper);
@@ -121,6 +124,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 formStageBindingRepository,
                 tableRelationRepository,
                 subTableViewConfigRepository,
+                emailConnectionRepository,
+                emailMonitorRuleRepository,
+                emailTemplateRepository,
                 objectMapper,
                 functionUnitWorkspaceAccessService,
                 sequenceSynchronizer,

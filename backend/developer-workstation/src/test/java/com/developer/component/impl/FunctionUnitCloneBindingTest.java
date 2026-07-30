@@ -80,7 +80,10 @@ class FunctionUnitCloneBindingTest {
                 mock(com.developer.service.MainTableViewService.class),
                 mock(com.developer.repository.ForeignKeyRepository.class),
                 mock(com.developer.component.impl.FunctionUnitExporter.class),
-                tableDesignComponent);
+                tableDesignComponent,
+                mock(com.developer.repository.EmailConnectionRepository.class),
+                mock(com.developer.repository.EmailMonitorRuleRepository.class),
+                mock(com.developer.repository.EmailTemplateRepository.class));
     }
 
     @Test

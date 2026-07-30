@@ -153,7 +153,10 @@ class BpmnDmnCrossReferenceValidationTest {
                 org.mockito.Mockito.mock(com.developer.service.MainTableViewService.class),
                 org.mockito.Mockito.mock(com.developer.repository.ForeignKeyRepository.class),
                 org.mockito.Mockito.mock(com.developer.component.impl.FunctionUnitExporter.class),
-                org.mockito.Mockito.mock(com.developer.component.TableDesignComponent.class)
+                org.mockito.Mockito.mock(com.developer.component.TableDesignComponent.class),
+                org.mockito.Mockito.mock(com.developer.repository.EmailConnectionRepository.class),
+                org.mockito.Mockito.mock(com.developer.repository.EmailMonitorRuleRepository.class),
+                org.mockito.Mockito.mock(com.developer.repository.EmailTemplateRepository.class)
         );
     }
 

@@ -32,5 +32,10 @@ public enum ContentType {
     /**
      * 主表视图设计 (Main Table View Design)
      */
-    MAIN_TABLE_VIEW
+    MAIN_TABLE_VIEW,
+
+    /**
+     * 邮件模板 (Send Task HTML templates from DW email-templates/)
+     */
+    EMAIL_TEMPLATE
 }

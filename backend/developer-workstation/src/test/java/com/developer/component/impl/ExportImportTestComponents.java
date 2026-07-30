@@ -5,6 +5,7 @@ import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
+import com.developer.repository.EmailTemplateRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FormTableBindingRepository;
@@ -66,8 +67,18 @@ public final class ExportImportTestComponents {
         EmailMonitorRuleRepository emailMonitorRuleRepository = Mockito.mock(EmailMonitorRuleRepository.class);
         Mockito.lenient().when(emailMonitorRuleRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
                 .thenReturn(java.util.List.of());
+        EmailTemplateRepository emailTemplateRepository = Mockito.mock(EmailTemplateRepository.class);
+        Mockito.lenient().when(emailTemplateRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
+                .thenReturn(java.util.List.of());
         LinkFormComponentRepository linkFormComponentRepository = Mockito.mock(LinkFormComponentRepository.class);
         Mockito.lenient().when(linkFormComponentRepository.findByFunctionUnitIdOrderBySortOrderAsc(Mockito.anyLong()))
+                .thenReturn(java.util.List.of());
+        RelationTableStructurePortability relationTablePortability =
+                Mockito.mock(RelationTableStructurePortability.class);
+        Mockito.lenient().when(relationTablePortability.exportByIds(Mockito.anyList()))
+                .thenReturn(java.util.List.of());
+        MainTableViewPortability mainTableViewPortability = Mockito.mock(MainTableViewPortability.class);
+        Mockito.lenient().when(mainTableViewPortability.export(Mockito.anyLong(), Mockito.anyMap()))
                 .thenReturn(java.util.List.of());
         FunctionUnitExporter exporter = new FunctionUnitExporter(
                 functionUnitRepository,
@@ -77,12 +88,13 @@ public final class ExportImportTestComponents {
                 decisionDefinitionRepository,
                 emailConnectionRepository,
                 emailMonitorRuleRepository,
+                emailTemplateRepository,
                 formStageBindingRepository,
                 tableRelationRepository,
                 Mockito.mock(SubTableViewConfigRepository.class),
                 linkFormComponentRepository,
-                Mockito.mock(RelationTableStructurePortability.class),
-                Mockito.mock(MainTableViewPortability.class),
+                relationTablePortability,
+                mainTableViewPortability,
                 functionUnitWorkspaceAccessService,
                 automationFlowClient,
                 objectMapper);
@@ -127,6 +139,7 @@ public final class ExportImportTestComponents {
                 decisionDefinitionRepository,
                 Mockito.mock(EmailConnectionRepository.class),
                 Mockito.mock(EmailMonitorRuleRepository.class),
+                Mockito.mock(EmailTemplateRepository.class),
                 formTableBindingRepository,
                 Mockito.mock(LinkFormComponentRepository.class),
                 tableRelationRepository,

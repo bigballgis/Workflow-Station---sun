@@ -6,6 +6,7 @@ import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.EmailConnection;
 import com.developer.entity.EmailMonitorRule;
+import com.developer.entity.EmailTemplate;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
@@ -24,6 +25,7 @@ import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
+import com.developer.repository.EmailTemplateRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
@@ -76,6 +78,7 @@ public class FunctionUnitExporter {
     private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final EmailConnectionRepository emailConnectionRepository;
     private final EmailMonitorRuleRepository emailMonitorRuleRepository;
+    private final EmailTemplateRepository emailTemplateRepository;
     private final FormStageBindingRepository formStageBindingRepository;
     private final TableRelationRepository tableRelationRepository;
     private final SubTableViewConfigRepository subTableViewConfigRepository;
@@ -209,6 +212,14 @@ public class FunctionUnitExporter {
             payload.put("emailMonitors", monitors);
         }
 
+        // Always write the key (even []) so rollback can distinguish "explicitly empty"
+        // from legacy snapshots that omit the field entirely.
+        List<Map<String, Object>> emailTemplates = emailTemplateRepository
+                .findByFunctionUnitIdOrderByNameAsc(functionUnitId).stream()
+                .map(this::serializeEmailTemplate)
+                .toList();
+        payload.put("emailTemplates", emailTemplates);
+
         payload.put("decisions", decisions.stream()
                 .map(DecisionDefinition::getDmnXml)
                 .filter(xml -> xml != null && !xml.isBlank())
@@ -248,6 +259,7 @@ public class FunctionUnitExporter {
             List<String> actionFiles = new ArrayList<>();
             List<String> connectionFiles = new ArrayList<>();
             List<String> monitorFiles = new ArrayList<>();
+            List<String> emailTemplateFiles = new ArrayList<>();
             List<String> automationFlowFiles = new ArrayList<>();
 
             // Export process definition — decode Base64 to raw XML
@@ -388,6 +400,17 @@ public class FunctionUnitExporter {
                 monitorIndex++;
             }
 
+            // Export Send Email templates (BPMN emailTemplateId remaps via templateId)
+            int templateIndex = 0;
+            for (EmailTemplate template : emailTemplateRepository.findByFunctionUnitIdOrderByNameAsc(functionUnitId)) {
+                String fileName = "email-templates/template_" + templateIndex + ".json";
+                byte[] data = objectMapper.writeValueAsBytes(serializeEmailTemplate(template));
+                fileContents.put(fileName, data);
+                addZipEntry(zos, fileName, data);
+                emailTemplateFiles.add(fileName);
+                templateIndex++;
+            }
+
             // Export decision definitions (DMN XML)
             List<String> decisionFiles = new ArrayList<>();
             int decisionIndex = 0;
@@ -430,6 +453,7 @@ public class FunctionUnitExporter {
                             .decisions(decisionFiles)
                             .connections(connectionFiles)
                             .emailMonitors(monitorFiles)
+                            .emailTemplates(emailTemplateFiles)
                             .automationFlows(automationFlowFiles)
                             .mainTableViews(viewsFile)
                             .build())
@@ -664,6 +688,7 @@ public class FunctionUnitExporter {
 
     private Map<String, Object> serializeConnection(EmailConnection connection) {
         Map<String, Object> map = new HashMap<>();
+        map.put("connectionId", connection.getId());
         map.put("connectionUid", connection.getConnectionUid());
         map.put("name", connection.getName());
         map.put("connectionType", connection.getConnectionType().name());
@@ -685,6 +710,16 @@ public class FunctionUnitExporter {
         map.put("imapPort", connection.getImapPort());
         map.put("imapUseSsl", connection.getImapUseSsl());
         map.put("oauthScopes", connection.getOauthScopes());
+        return map;
+    }
+
+    private Map<String, Object> serializeEmailTemplate(EmailTemplate template) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("templateId", template.getId());
+        map.put("name", template.getName());
+        map.put("subject", template.getSubject());
+        map.put("bodyHtml", template.getBodyHtml());
+        map.put("enabled", template.getEnabled());
         return map;
     }
 

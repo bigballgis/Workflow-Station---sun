@@ -42,7 +42,21 @@ description: >-
 | **`views/main_table_views.json`** | **View Design：字段、排序/筛选、restrictToInvolvedUsers、accessRules** |
 | `actions/action_*.json` | 动作 |
 | `decisions/decision_*.dmn` | 决策 |
-| `connections/`、`email-monitors/` | 邮件 |
+| `connections/`、`email-monitors/`、**`email-templates/`** | 邮件连接、监听规则、**Send Task HTML 模板** |
+
+---
+
+## Email Templates 可移植（MUST）
+
+| 路径 | 行为 |
+|------|------|
+| **Export / Snapshot** | 始终写入 `emailTemplates`（无模板时写 `[]`）；ZIP 为 `email-templates/template_*.json` |
+| **Import (DW)** | 解析并 `importEmailTemplate`；BPMN Send Task `emailTemplateId` 经 `BpmnIdRewriter` remap |
+| **Clone** | 深拷贝模板并建立 id mapping；monitor 的 `connectionUid` / `targetFormId` / 数值 `targetBindingId` **映射失败必须抛业务异常**（禁止 `getOrDefault` 回退源 ID） |
+| **Version rollback** | `clearChildCollectionsAndFlush` 删除模板后按快照重建；**旧快照缺 `emailTemplates` key** → 清空且不恢复（接受：回到无模板功能时代） |
+| **Admin import** | 解析 `email-templates/`，以 `ContentType.EMAIL_TEMPLATE` 写入 **catalog content**（禁止静默丢弃；坏 JSON → 整次导入失败） |
+
+**Admin catalog ≠ Send Email 运行时：** workflow-engine 仍从 **DW** `dw_email_templates`（Internal API）取模板。Admin 导入只保证包内模板进入 catalog、不丢文件；**不会**自动写入 DW 运行时表。跨环境要能发信，须另有 DW 导入/同步（本 skill 不把「Admin→DW 回写」算作当前 MUST）。
 
 ---
 
@@ -114,6 +128,7 @@ description: >-
 | `MainTableViewPortabilityTest` | JDBC 导出 access；import 未解析 code；半配拒绝 |
 | `MainTableViewAccessRulesValidatorTest` | 成对/空规则 |
 | `MainTableViewServiceImplTest` | updateView 成对 Save |
+| `EmailPortabilityTest` | 模板 import；BPMN templateId remap；monitor 未映射 form/connection 抛错 |
 | `ExportImportPropertyTest` / 手测 | 整包 round-trip |
 
 手测：Export FU → 删/改 View access → Import 同名覆盖 → Portal 验证 View 菜单与 access 与导出前一致。
@@ -136,7 +151,8 @@ description: >-
 
 1. `emailMonitorRuleRepository.deleteByFunctionUnitId`
 2. `emailConnectionRepository.deleteByFunctionUnitId`
-3. `tableRelationRepository.deleteByFunctionUnitId`（与 tables 一并重建）
+3. `emailTemplateRepository.deleteByFunctionUnitId`
+4. `tableRelationRepository.deleteByFunctionUnitId`（与 tables 一并重建）
 
 不能依赖 `functionUnit.getEmailConnections().clear()` alone — 集合常为 lazy 未加载，旧行会留在库中。
 

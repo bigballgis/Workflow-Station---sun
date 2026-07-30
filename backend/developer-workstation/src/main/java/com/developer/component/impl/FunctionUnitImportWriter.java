@@ -4,6 +4,7 @@ import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.EmailConnection;
 import com.developer.entity.EmailMonitorRule;
+import com.developer.entity.EmailTemplate;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
@@ -23,15 +24,18 @@ import com.developer.enums.BindingType;
 import com.developer.enums.ConnectionType;
 import com.developer.enums.EmailConnectionDirection;
 import com.developer.enums.EmailMonitorActionType;
+import com.developer.enums.OAuthProvider;
 import com.developer.enums.DataType;
 import com.developer.enums.FormType;
 import com.developer.enums.SubMode;
 import com.developer.enums.TableType;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.EmailMonitorRuleRepository;
+import com.developer.repository.EmailTemplateRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.LinkFormComponentRepository;
@@ -46,6 +50,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +72,7 @@ public class FunctionUnitImportWriter {
     private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final EmailConnectionRepository emailConnectionRepository;
     private final EmailMonitorRuleRepository emailMonitorRuleRepository;
+    private final EmailTemplateRepository emailTemplateRepository;
     private final FormTableBindingRepository formTableBindingRepository;
     private final LinkFormComponentRepository linkFormComponentRepository;
     private final TableRelationRepository tableRelationRepository;
@@ -541,8 +547,8 @@ public class FunctionUnitImportWriter {
         return actionDefinitionRepository.save(action);
     }
 
-    void importEmailConnection(FunctionUnit functionUnit, Map<String, Object> connectionData) {
-        EmailConnection connection = EmailConnection.builder()
+    EmailConnection importEmailConnection(FunctionUnit functionUnit, Map<String, Object> connectionData) {
+        EmailConnection.EmailConnectionBuilder builder = EmailConnection.builder()
                 .connectionUid(connectionData.get("connectionUid") != null
                         ? (String) connectionData.get("connectionUid")
                         : UUID.randomUUID().toString())
@@ -551,7 +557,7 @@ public class FunctionUnitImportWriter {
                 .connectionType(connectionData.get("connectionType") != null
                         ? ConnectionType.valueOf((String) connectionData.get("connectionType"))
                         : ConnectionType.SMTP)
-                .host((String) connectionData.get("host"))
+                .host(connectionData.get("host") != null ? (String) connectionData.get("host") : "")
                 .port(connectionData.get("port") != null ? ((Number) connectionData.get("port")).intValue() : 587)
                 .username((String) connectionData.get("username"))
                 .passwordEncrypted((String) connectionData.get("passwordEncrypted"))
@@ -568,8 +574,29 @@ public class FunctionUnitImportWriter {
                         ? ((Number) connectionData.get("imapPort")).intValue() : null)
                 .imapUseSsl(connectionData.get("imapUseSsl") != null
                         ? (Boolean) connectionData.get("imapUseSsl") : null)
+                .oauthScopes((String) connectionData.get("oauthScopes"))
+                .oauthRefreshTokenEncrypted((String) connectionData.get("oauthRefreshTokenEncrypted"))
+                .oauthAccessTokenEncrypted((String) connectionData.get("oauthAccessTokenEncrypted"));
+        if (connectionData.get("oauthProvider") instanceof String provider
+                && !provider.isBlank()) {
+            builder.oauthProvider(OAuthProvider.valueOf(provider));
+        }
+        if (connectionData.get("tokenExpiresAt") instanceof String expiresAt
+                && !expiresAt.isBlank()) {
+            builder.tokenExpiresAt(Instant.parse(expiresAt));
+        }
+        return emailConnectionRepository.save(builder.build());
+    }
+
+    EmailTemplate importEmailTemplate(FunctionUnit functionUnit, Map<String, Object> templateData) {
+        EmailTemplate template = EmailTemplate.builder()
+                .functionUnit(functionUnit)
+                .name((String) templateData.get("name"))
+                .subject((String) templateData.get("subject"))
+                .bodyHtml((String) templateData.get("bodyHtml"))
+                .enabled(templateData.get("enabled") instanceof Boolean enabledVal ? enabledVal : true)
                 .build();
-        emailConnectionRepository.save(connection);
+        return emailTemplateRepository.save(template);
     }
 
     void importEmailMonitorRule(FunctionUnit functionUnit,
@@ -578,9 +605,16 @@ public class FunctionUnitImportWriter {
                                 Map<Long, Long> bindingIdMapping) {
         Long targetFormId = null;
         if (ruleData.get("targetFormId") instanceof Number sourceFormId) {
-            targetFormId = formIdMapping.getOrDefault(sourceFormId.longValue(), sourceFormId.longValue());
+            long sourceId = sourceFormId.longValue();
+            Long mapped = formIdMapping.get(sourceId);
+            if (mapped == null) {
+                throw new DeveloperBusinessException("IMPORT_EMAIL_MONITOR_UNMAPPED",
+                        "Email monitor references targetFormId that was not imported: " + sourceId);
+            }
+            targetFormId = mapped;
         }
         String targetBindingId = remapMonitorTargetBindingId(ruleData.get("targetBindingId"), bindingIdMapping);
+        // Process key must match the target FU BPMN process id (rewritten to functionUnit.code).
         EmailMonitorRule rule = EmailMonitorRule.builder()
                 .ruleUid(ruleData.get("ruleUid") != null
                         ? (String) ruleData.get("ruleUid")
@@ -589,7 +623,7 @@ public class FunctionUnitImportWriter {
                 .name((String) ruleData.get("name"))
                 .enabled(ruleData.get("enabled") instanceof Boolean enabledVal ? enabledVal : true)
                 .connectionUid((String) ruleData.get("connectionUid"))
-                .processDefinitionKey((String) ruleData.get("processDefinitionKey"))
+                .processDefinitionKey(functionUnit.getCode())
                 .startEventId((String) ruleData.get("startEventId"))
                 .folderLabel(ruleData.get("folderLabel") instanceof String folder
                         ? folder : "INBOX")
@@ -619,7 +653,11 @@ public class FunctionUnitImportWriter {
         try {
             long oldId = Long.parseLong(raw);
             Long mapped = bindingIdMapping.get(oldId);
-            return mapped != null ? String.valueOf(mapped) : raw;
+            if (mapped == null) {
+                throw new DeveloperBusinessException("IMPORT_EMAIL_MONITOR_UNMAPPED",
+                        "Email monitor references targetBindingId that was not imported: " + raw);
+            }
+            return String.valueOf(mapped);
         } catch (NumberFormatException e) {
             return raw;
         }
