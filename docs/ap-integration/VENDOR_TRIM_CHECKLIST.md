@@ -32,15 +32,35 @@
 | VT-08 | crowdin 翻译源塌缩 | P2 | ✅ **已处置（2026-07-29，HERMES-PATCH-014）** |
 | VT-09 | 上游 piece 源码不再可读的补救约定 | P2 | ✅ **已完成（2026-07-29）** |
 | VT-10 | codegraph 索引重建 | P2 | ✅ **已自愈（2026-07-29 复查）** |
-| VT-11 | **公司机器报错原文**（VT-12 的前置） | **P0** | ⬜ 未取得 |
-| VT-12 | `@ai-sdk/*` 仍在 api/worker/engine 硬依赖 | P1 | ⬜ 阻塞于 VT-11（**未被 HTTP piece 迁移解决**） |
+| VT-11 | **公司机器报错原文** (VT-12 的前置) | **P0** | ✅ **已取得（2026-07-30）**：见下方实测记录 |
+| VT-12 | `@ai-sdk/*` 仍在 api/worker/engine 硬依赖 | P1 | ⏳ **待结合 VT-11 继续处置（**未被 HTTP piece 迁移解决**）** |
 | VT-13 | `piece-ai` 保留与否的政策裁决 | P1 | ✅ **已关闭（2026-07-28，已删除）** |
 | VT-15 | AI Generate 产物与功能开关 | **P0** | ✅ **已完成（2026-07-29）**：功能停用 + 产物清理 |
 | VT-14 | 17876 个删除独立成 commit | P1 | ✅ **已完成（`a2194c06`）** |
 
-> ⚠️ **VT-11 是整件事的根因位**。VT-01～VT-10 都是这次改动自身的收尾，值得做；
-> 但"公司装不上"这个原始问题是否已解决，在 VT-11 之前**没有任何证据**。
-> 现在 VT-01/03/10/13/14 全部闭合，这一点反而更刺眼：**自身收尾快做完了，原问题一步没动。**
+> ⚠️ VT-11 已证明这不是单一 `@authropic-ai/sdk` 问题，而是公司 FOSS Guard 对锁文件中多个精准版本的
+> 供应链隔离。 删除无用 piece 仍然正确，但不能替代对保留依赖的升级、放行或内网镜像治理。
+
+### VT-11 公司环境原始失败与依赖链（2026-07-30）
+
+在公司 Nexus 上执行 `pnpm install --frozen-lockfile`，首个可复现失败为
+`expr-eval@2.0.2` 被 FOSS Guard quarantine (HTTP 403)。锁文件证明依赖链不是本地
+`packages/shared` 引入，而是 `packages/cli` 错误解析了 registry 包：
+`packages/cli` → `@activepieces/pieces-framework@0.32.0` →
+`@activepieces/shared@0.95.1` → `expr-eval@2.0.2`；同时 CLI 还直接解析了
+`@activepieces/shared@0.96.2` → `expr-eval@2.0.2`。
+
+已将 CLI 的三个内部依赖统一为 `workspace:*`，并同步修正 lockfile importer 为本地 `link:`。
+重跑 frozen install 时锁文件校验通过，且不再请求 `expr-eval`，证明该修正有效。随后依次暴露新的、
+彼此独立的隔离项：
+
+- 全量开发依赖安装：`vitest@3.0.8` quarantine；同主版本 `3.2.7` 已通过公司 Nexus 实际下载和运行验证，
+  但全仓升级的 lockfile 重算又被 Nexus 中不完整的 `isolated-vm@6.0.2` metadata 阻断。
+- `--prod --frozen-lockfile`：`fast-xml-parser@5.2.5` quarantine，来源是
+  `@aws-sdk/xml-builder@3.894.0` / `3.972.0` 的传递依赖。
+
+因此 VT-11 的结论是：`expr-eval` 根因已从代码摘除，但完整 install 仍需继续升级上述保留依赖，
+或由 FOSS Guard/Nexus 管理方对冻结版本完成风险复核与放行；不得通过绕过 Nexus 或放宽生产运行时联网解决。
 
 ---
 

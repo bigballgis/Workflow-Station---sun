@@ -1036,11 +1036,11 @@ importers:
         specifier: workspace:*
         version: link:../pieces/common
       '@activepieces/pieces-framework':
-        specifier: '*'
-        version: 0.32.0(bufferutil@4.1.0)
+        specifier: workspace:*
+        version: link:../pieces/framework
       '@activepieces/shared':
-        specifier: '*'
-        version: 0.96.2(bufferutil@4.1.0)
+        specifier: workspace:*
+        version: link:../shared
       axios:
         specifier: 1.15.2
         version: 1.15.2
