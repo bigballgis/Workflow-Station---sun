@@ -117,9 +117,15 @@ data:
   # 只列 flow 确实需要的主机——填 CIDR 等于把整个集群内网开放给 flow 作者写的 HTTP 步。
   ACTIVEPIECES_SSRF_ALLOW_LIST: "developer-workstation-service.__NAMESPACE__"
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
-  # npm registry for AP runtime piece installs (bun honors NPM_CONFIG_REGISTRY).
-  # REPLACE with the internal Nexus npm repo URL before provisioning pieces.
-  # Fail-closed default on purpose: empty would silently fall back to PUBLIC npmjs.
+  # npm registry for AP runtime piece installs. bun is gone (X-4) — the installer runs
+  # pnpm now, which honors NPM_CONFIG_REGISTRY (and npm_config_registry) just the same;
+  # verified on pnpm 9.15.9.
+  # KEEP this fail-closed .invalid host. Pieces are provisioned entirely from the offline
+  # store baked into the image (AP_PIECES_OFFLINE_INSTALL=true in activepieces.yaml), so
+  # this value is only ever reached when the store MISSES. A reachable Nexus URL here
+  # would turn that miss into a silent online install and leave the air-gap red line with
+  # no evidence; an .invalid host makes the miss fail loudly instead. Empty is not neutral
+  # either — pnpm then falls back to its own default, i.e. the PUBLIC npm registry.
   ACTIVEPIECES_NPM_REGISTRY: "http://npm-registry-not-configured.invalid/"
   # Frontend runtime config: admin "Activepieces" launcher -> AP gateway bridge.
   AP_BRIDGE_URL: "http://hermes-workflow-activepieces.__BASE_DOMAIN__/__ap/bridge"

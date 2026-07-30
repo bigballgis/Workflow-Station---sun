@@ -171,11 +171,13 @@ spec:
         # No OAuth2 app credentials via Activepieces cloud.
         - name: AP_CLOUD_AUTH_ENABLED
           value: "false"
-        # Runtime piece installs use bun (piece-installer -> `bun install`), which honors
-        # NPM_CONFIG_REGISTRY. Point it at the internal Nexus npm repo. CAREFUL: an empty
-        # value makes bun silently fall back to the PUBLIC npm registry (verified on
-        # bun 1.3.1), so the configmap default is a fail-closed .invalid URL until the
-        # real Nexus npm repo URL is filled in.
+        # Runtime piece installs no longer use bun (X-4): piece-installer runs pnpm, which
+        # honors NPM_CONFIG_REGISTRY exactly the same way (verified on pnpm 9.15.9), and an
+        # empty value still means the PUBLIC npm registry — pnpm's own default. So the
+        # configmap keeps a fail-closed .invalid URL. Do NOT "fix" it to the internal Nexus
+        # while AP_PIECES_OFFLINE_INSTALL below is true: this value is then reached only on
+        # an offline-store MISS, and a reachable registry turns that miss into a silent
+        # online install instead of the loud failure the air-gap red line depends on.
         - name: NPM_CONFIG_REGISTRY
           valueFrom:
             configMapKeyRef:

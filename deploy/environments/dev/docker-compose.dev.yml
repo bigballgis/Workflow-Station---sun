@@ -183,10 +183,11 @@ services:
       # re-downloads piece metadata from cloud.activepieces.com into the DB).
       AP_PIECES_SYNC_MODE: NONE
       AP_CLOUD_AUTH_ENABLED: "false"
-      # Runtime piece installs use bun, which honors NPM_CONFIG_REGISTRY. Empty (dev
-      # default) = bun falls back to PUBLIC npmjs — acceptable on local dev only (the
-      # piece catalog is empty anyway); k8s uses a fail-closed value instead. Set this
-      # to the internal Nexus npm repo URL to test the offline piece-provisioning flow.
+      # Runtime piece installs run pnpm (bun removed, X-4), which honors NPM_CONFIG_REGISTRY
+      # the same way. Empty (dev default) = pnpm's own default, i.e. PUBLIC npmjs —
+      # acceptable on local dev only (the piece catalog is empty anyway); k8s deliberately
+      # keeps a fail-closed .invalid value. Set this to the internal Nexus npm repo URL to
+      # rehearse provisioning against a private mirror.
       NPM_CONFIG_REGISTRY: ${ACTIVEPIECES_NPM_REGISTRY:-}
       # HERMES piece-admin P3: true = runtime piece installs resolve ONLY from the
       # pnpm offline store baked into the image (framework closure) — the air-gap
