@@ -7,6 +7,7 @@ settings:
 overrides:
   rollup: npm:@rollup/wasm-node
   '@codemirror/view': 6.43.6
+  mdurl: 2.0.0
 
 importers:
 
@@ -12989,8 +12990,8 @@ packages:
   mdn-data@2.0.14:
     resolution: {integrity: sha512-dn6wd0uw5GsdswPFfsgMp5NSB0/aDe6fK94YJV/AJDYXL6HVLWBsxeq7js7Ad+mU2K9LAlwpk6kN2D5mwCPVow==}
 
-  mdurl@2.1.0:
-    resolution: {integrity: sha512-1+HBaOx0zi/dQWht8rNv9MYf9qqpqL/kxI0hXImU6Y547zM6Sni8BQibt7ifgMcYtQg41ao3Ivd6cnSM86inpg==}
+  mdurl@2.0.0:
+    resolution: {integrity: sha512-Lf+9+2r+Tdp5wXDXC4PcIBjTDtq4UKjCPMQhKIuzpJNW0b96kVqSwW0bT7FhRSfmAiFYgP+SCRvdrDozfh0U5w==}
 
   media-typer@0.3.0:
     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}
@@ -29506,7 +29507,7 @@ snapshots:
       argparse: 2.0.1
       entities: 4.5.0
       linkify-it: 5.0.2
-      mdurl: 2.1.0
+      mdurl: 2.0.0
       punycode.js: 2.3.1
       uc.micro: 2.1.0
 
@@ -29745,7 +29746,7 @@ snapshots:
 
   mdn-data@2.0.14: {}
 
-  mdurl@2.1.0: {}
+  mdurl@2.0.0: {}
 
   media-typer@0.3.0: {}
 

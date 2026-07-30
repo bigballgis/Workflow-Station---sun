@@ -416,7 +416,8 @@
       "ssh2"
     ],
     "overrides": {
-      "@codemirror/view": "6.43.6"
+      "@codemirror/view": "6.43.6",
+      "mdurl": "2.0.0"
     }
   }
 }
