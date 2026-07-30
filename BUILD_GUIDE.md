@@ -372,9 +372,13 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 >    同一台机器换新目录会重新装（2.9 GB 不跨目录复用）。
 > 2. **① 每次重建 bundle**，② 由 DW 的 `prebuild` 钩子拷贝；缺产物直接构建失败
 >    （`SERVICE_TASK_BUILDER_REQUIRED`），不会静默放过。
-> 3. 装依赖失败（气隙 / 私服不可达）也不立即停：若 `activepieces/dist/packages/web-embed/ap-builder.mjs`
->    已存在（从别处拷来），**告警并复用**该 bundle 继续构建；只有"装不上 + 也没有可复用 bundle"
+> 3. **装不上或建不出来都不立即停**：只要 `activepieces/dist/packages/web-embed/ap-builder.mjs`
+>    已存在（从别处拷来），就**告警并复用**该 bundle 继续构建。三种触发复用的情形：装依赖失败、
+>    `node_modules` 压根不存在、以及 `node_modules` 存在但 vite 构建失败（半成品 workspace ——
+>    fetch 中途死掉会留下目录，光看目录在不在会误判"能重建"）。只有"建不出来 + 也没有可复用 bundle"
 >    才 FAIL 停下。
+> 4. 私服注定装不成的机器可以直接 **`-SkipApWorkspaceInstall`**：跳过那十几分钟必败的 install，
+>    直接用拷过来的 bundle。此时若连 bundle 也没有，仍然 FAIL（不会静默出一个缺 builder 的镜像）。
 
 ### 7.3 Docker 镜像构建
 

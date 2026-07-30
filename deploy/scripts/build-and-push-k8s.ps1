@@ -7,6 +7,9 @@
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -Services "workflow-engine,admin-center"
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests -SkipFrontend
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -JavaBaseImage "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+#   # host whose npm mirror cannot satisfy the AP workspace: reuse a carried-over
+#   # activepieces/dist/packages/web-embed instead of installing and rebuilding it
+#   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipApWorkspaceInstall
 # =====================================================
 
 param(
@@ -22,6 +25,10 @@ param(
     # All jars are still re-packaged and all images still built & pushed.
     [switch]$NoClean = $false,
     [switch]$SkipFrontend = $false,
+    # Air-gapped / partially-mirrored host: do not even attempt the Activepieces workspace
+    # install or the builder-bundle build. Requires a prebuilt activepieces/dist/packages/
+    # web-embed carried over from a host that can build it, which is then reused as-is.
+    [switch]$SkipApWorkspaceInstall = $false,
     [switch]$SkipBackend = $false,
     [switch]$PushOnly = $false,
     [switch]$NoPush = $false,
@@ -182,7 +189,12 @@ if (-not $SkipFrontend) {
         $apManifests = @("package.json", "pnpm-lock.yaml") |
             ForEach-Object { Join-Path $apRootDir $_ } | Where-Object { Test-Path $_ }
         $apNewestManifest = ($apManifests | ForEach-Object { (Get-Item $_).LastWriteTime } | Measure-Object -Maximum).Maximum
-        if ((Test-Path $apMarker) -and ((Get-Item -Force $apMarker).LastWriteTime -ge $apNewestManifest)) {
+        if ($SkipApWorkspaceInstall) {
+            # For a host where the install is known to be impossible (private mirror missing or
+            # quarantining packages): skip the doomed ~10-minute attempt outright and go
+            # straight to whatever bundle was carried over.
+            Write-Host "   [ap-builder] -SkipApWorkspaceInstall: not touching the AP workspace" -ForegroundColor Gray
+        } elseif ((Test-Path $apMarker) -and ((Get-Item -Force $apMarker).LastWriteTime -ge $apNewestManifest)) {
             Write-Host "   [ap-builder] AP workspace deps up to date, skipping pnpm install" -ForegroundColor Gray
         } else {
             Write-Host "   >> [ap-builder] pnpm install (AP workspace, ~3 GB on a clean checkout, needs registry access; once per checkout)" -ForegroundColor Yellow
@@ -200,24 +212,35 @@ if (-not $SkipFrontend) {
         # An air-gapped build host that cannot install may instead carry the bundle over from
         # a machine that can build it. Reuse it in that case; only fail when there is neither
         # a way to build the bundle nor a bundle to reuse.
-        $canBuildBundle = Test-Path (Join-Path $apWebDir "node_modules")
-        if (-not $canBuildBundle -and -not (Test-Path $embedMarker)) {
-            Write-Fail "Activepieces workspace deps are still missing after pnpm install ($apWebDir/node_modules) and there is no prebuilt bundle at $embedMarker. Fix the install (see BUILD_GUIDE 7.2 step 0 — its output is above), copy a prebuilt activepieces/dist/packages/web-embed over, or exclude developer-workstation-frontend with -Services."
+        $haveBundle = Test-Path $embedMarker
+        # node_modules existing does not prove the workspace is COMPLETE — a fetch that died
+        # partway (private mirror missing or quarantining a package) can leave the directory
+        # behind, and then the vite build fails on missing deps. So treat the build as an
+        # attempt, not a guarantee, and fall back to a carried-over bundle when it fails.
+        $canTryBuild = (-not $SkipApWorkspaceInstall) -and (Test-Path (Join-Path $apWebDir "node_modules"))
+        if (-not $canTryBuild -and -not $haveBundle) {
+            Write-Fail "Activepieces workspace deps are missing ($apWebDir/node_modules) and there is no prebuilt bundle at $embedMarker. Fix the install (see BUILD_GUIDE 7.2 step 0 — its output is above), copy a prebuilt activepieces/dist/packages/web-embed over, or exclude developer-workstation-frontend with -Services."
         }
-        if ($canBuildBundle) {
+        $built = $false
+        if ($canTryBuild) {
             Write-Host "   >> [ap-builder] vite build (web-embed)" -ForegroundColor Gray
             Push-Location $apWebDir
             try {
                 pnpm exec vite build --config vite.embed.config.mts
-                if ($LASTEXITCODE -ne 0) { Write-Fail "Activepieces web-embed build failed" }
+                $built = $LASTEXITCODE -eq 0
             } finally {
                 Pop-Location
             }
-            Write-Ok "ap-builder (web-embed)"
-        } else {
+            if ($built) {
+                Write-Ok "ap-builder (web-embed)"
+            } elseif (-not $haveBundle) {
+                Write-Fail "Activepieces web-embed build failed and there is no prebuilt bundle at $embedMarker to fall back on."
+            }
+        }
+        if (-not $built) {
             # Reused, not rebuilt: whoever copied it in owns its freshness. Loud on purpose —
             # a stale bundle ships an outdated builder into the image and nothing else warns.
-            Write-Host "   WARNING: AP workspace deps absent; REUSING prebuilt bundle at $embedMarker without rebuilding it. Verify it matches this commit." -ForegroundColor Yellow
+            Write-Host "   WARNING: REUSING the prebuilt bundle at $embedMarker without rebuilding it (AP workspace unusable here). Verify it matches this commit." -ForegroundColor Yellow
             Write-Ok "ap-builder (web-embed, reused)"
         }
     }
