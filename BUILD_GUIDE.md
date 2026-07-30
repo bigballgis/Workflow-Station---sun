@@ -319,6 +319,7 @@ Push-Location frontend/user-portal; pnpm install --frozen-lockfile; pnpm run bui
 
 # developer-workstation-frontend
 # ⓪ 装 Activepieces workspace 依赖（干净 checkout 上没有；只需装一次，后续构建复用）
+#    走 deploy/scripts/build-and-push-k8s.ps1 的话这步已内置，不用手工跑（见 7.2 末尾）。
 #    必须在 activepieces 根目录装：这是 pnpm workspace，根 install 才会给 packages/web 建好链接。
 #    不需要任何 NPM_TOKEN / registry 环境变量（见下方 .npmrc 说明）。
 Push-Location activepieces; pnpm install --frozen-lockfile; Pop-Location
@@ -355,10 +356,18 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 > `public/service-task-builder/` → `dist/` → 镜像。产物是 gitignore 的构建物，**不入库**。
 > 漏掉任一步，构建仍然全绿、镜像照推，但运行时 `/dev/service-task-builder/web.css` 返回 404。
 > 打镜像前可先自查：`ls frontend/developer-workstation/dist/service-task-builder/web.css`。
-> 走 `deploy/scripts/build-and-push-k8s.ps1` 则 ①② 已内置（⓪ 不内置，需按上面手工装一次），
-> 且缺产物会直接构建失败（`SERVICE_TASK_BUILDER_REQUIRED`），不会静默放过。
-> 该脚本在 AP 依赖缺失时的行为：若 `activepieces/dist/packages/web-embed/ap-builder.mjs` 已存在
-> （从别处拷来），则**告警并复用**该 bundle 继续构建；若两者都没有，才按上面的 FAIL 停下。
+> 走 `deploy/scripts/build-and-push-k8s.ps1` 则 **⓪①② 全部内置**，日常发布只需要这一条命令，
+> 上面那段手工步骤只在不用脚本、单独构建某个前端时才需要照抄。脚本的 AP 相关行为：
+>
+> 1. **⓪ 自动装**：判定方式与四个前端一致（`activepieces/node_modules/.modules.yaml` 的 mtime
+>    对比 `package.json` / `pnpm-lock.yaml`）—— 已是最新就打一行 `skipping pnpm install` 跳过，
+>    否则在 `activepieces/` 跑 `pnpm install --frozen-lockfile`。**每个 checkout 只会真装一次**；
+>    同一台机器换新目录会重新装（2.9 GB 不跨目录复用）。
+> 2. **① 每次重建 bundle**，② 由 DW 的 `prebuild` 钩子拷贝；缺产物直接构建失败
+>    （`SERVICE_TASK_BUILDER_REQUIRED`），不会静默放过。
+> 3. 装依赖失败（气隙 / 私服不可达）也不立即停：若 `activepieces/dist/packages/web-embed/ap-builder.mjs`
+>    已存在（从别处拷来），**告警并复用**该 bundle 继续构建；只有"装不上 + 也没有可复用 bundle"
+>    才 FAIL 停下。
 
 ### 7.3 Docker 镜像构建
 

@@ -165,15 +165,44 @@ if (-not $SkipFrontend) {
     # ships without the bundle and 404s on /dev/service-task-builder/web.css.
     $needsApBuilder = @($selectedFrontend | Where-Object { $_.Name -eq "developer-workstation-frontend" }).Count -gt 0
     if ($needsApBuilder -and -not $PushOnly) {
-        $apWebDir = Join-Path $ProjectRoot "activepieces/packages/web"
+        $apRootDir = Join-Path $ProjectRoot "activepieces"
+        $apWebDir = Join-Path $apRootDir "packages/web"
         $embedMarker = Join-Path $ProjectRoot "activepieces/dist/packages/web-embed/ap-builder.mjs"
-        # The AP workspace install is NOT done by this script (it is heavy — ~3 GB — and the
-        # only step that needs registry.npmjs.org), so an air-gapped build host may instead
-        # carry the bundle over from a machine that can build it. Reuse it in that case;
-        # only fail when there is neither a way to build the bundle nor a bundle to reuse.
+
+        # Install the AP workspace deps on the same terms the per-service jobs below use for
+        # the four frontends (.modules.yaml mtime vs manifests), so a clean checkout needs no
+        # manual prerequisite. Install at the workspace ROOT: this is a pnpm workspace and the
+        # root install is what links packages/web's deps. Two things justify the extra noise
+        # over the frontend installs — it is heavy (~3 GB on a clean checkout) and it is the
+        # only step in this script that must reach a registry.
+        # Get-Item needs -Force for this marker: a dot-prefixed name is a hidden file on
+        # macOS/Linux, where Test-Path still says True but Get-Item throws "Could not find
+        # item" without it. Harmless on Windows, where the name is not hidden at all.
+        $apMarker = Join-Path $apRootDir "node_modules/.modules.yaml"
+        $apManifests = @("package.json", "pnpm-lock.yaml") |
+            ForEach-Object { Join-Path $apRootDir $_ } | Where-Object { Test-Path $_ }
+        $apNewestManifest = ($apManifests | ForEach-Object { (Get-Item $_).LastWriteTime } | Measure-Object -Maximum).Maximum
+        if ((Test-Path $apMarker) -and ((Get-Item -Force $apMarker).LastWriteTime -ge $apNewestManifest)) {
+            Write-Host "   [ap-builder] AP workspace deps up to date, skipping pnpm install" -ForegroundColor Gray
+        } else {
+            Write-Host "   >> [ap-builder] pnpm install (AP workspace, ~3 GB on a clean checkout, needs registry access; once per checkout)" -ForegroundColor Yellow
+            Push-Location $apRootDir
+            try {
+                pnpm install --frozen-lockfile
+                # Not fatal here: a host that cannot reach a registry may still carry a
+                # prebuilt bundle, which the reuse path below accepts.
+                if ($LASTEXITCODE -ne 0) { Write-Host "   WARNING: AP workspace pnpm install failed." -ForegroundColor Yellow }
+            } finally {
+                Pop-Location
+            }
+        }
+
+        # An air-gapped build host that cannot install may instead carry the bundle over from
+        # a machine that can build it. Reuse it in that case; only fail when there is neither
+        # a way to build the bundle nor a bundle to reuse.
         $canBuildBundle = Test-Path (Join-Path $apWebDir "node_modules")
         if (-not $canBuildBundle -and -not (Test-Path $embedMarker)) {
-            Write-Fail "Activepieces workspace deps are missing ($apWebDir/node_modules) and no prebuilt bundle at $embedMarker. Run 'pnpm install --frozen-lockfile' in activepieces/ (see BUILD_GUIDE 7.2 step 0), copy a prebuilt activepieces/dist/packages/web-embed over, or exclude developer-workstation-frontend with -Services."
+            Write-Fail "Activepieces workspace deps are still missing after pnpm install ($apWebDir/node_modules) and there is no prebuilt bundle at $embedMarker. Fix the install (see BUILD_GUIDE 7.2 step 0 — its output is above), copy a prebuilt activepieces/dist/packages/web-embed over, or exclude developer-workstation-frontend with -Services."
         }
         if ($canBuildBundle) {
             Write-Host "   >> [ap-builder] vite build (web-embed)" -ForegroundColor Gray
@@ -208,11 +237,11 @@ if (-not $SkipFrontend) {
                     # Skip the install when node_modules is already up to date (mtime compare).
                     # .modules.yaml is pnpm's post-install marker, the counterpart of npm's
                     # node_modules/.package-lock.json.
-                    $marker = Join-Path $ContextDir "node_modules\.modules.yaml"
+                    $marker = Join-Path $ContextDir "node_modules/.modules.yaml"
                     $manifests = @("package.json", "pnpm-lock.yaml") |
                         ForEach-Object { Join-Path $ContextDir $_ } | Where-Object { Test-Path $_ }
                     $newestManifest = ($manifests | ForEach-Object { (Get-Item $_).LastWriteTime } | Measure-Object -Maximum).Maximum
-                    if ((Test-Path $marker) -and ((Get-Item $marker).LastWriteTime -ge $newestManifest)) {
+                    if ((Test-Path $marker) -and ((Get-Item -Force $marker).LastWriteTime -ge $newestManifest)) {
                         $log += "[$Name] node_modules up to date, skipping pnpm install"
                     } else {
                         # --frozen-lockfile: a release build must fail on a lockfile that does
