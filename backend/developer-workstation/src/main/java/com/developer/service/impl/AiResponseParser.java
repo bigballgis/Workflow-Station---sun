@@ -3,13 +3,24 @@ package com.developer.service.impl;
 import com.developer.exception.AiGenerationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import org.springframework.stereotype.Component;
 
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,7 +30,7 @@ import java.util.regex.Pattern;
  *
  * <p>本类是 {@code GenAI/parse_response.md}（原 Activepieces flow 的 "Parse Response" 步骤）的 Java 移植，
  * 逐条保留了那边踩出来的规整规则：length/precision/scale/defaultValue 一律转字符串（
- * {@code AiWriteService} 按 String 解析）、configJson 字符串反序列化且非法即丢、formType TASK→MAIN、
+ * {@code AiWriteService} 按 String 解析）、configJson 字符串反序列化且非法即丢、
  * BPMN 的 Base64 解码与确定性兜底 XML，以及"兜底 XML 无任务节点则拒绝"这条 fail-loud 规则。</p>
  *
  * <p>与 JS 版的两处有意差异（均为修正，不是行为漂移）：
@@ -46,8 +57,17 @@ public class AiResponseParser {
     private static final Pattern BPMN_PROCESS = Pattern.compile("<(?:bpmn:)?process(?:\\s|>)");
     private static final Pattern BPMN_START_EVENT = Pattern.compile("<(?:bpmn:)?startEvent(?:\\s|>)");
     private static final Pattern BPMN_END_EVENT = Pattern.compile("<(?:bpmn:)?endEvent(?:\\s|>)");
-    private static final Pattern BPMN_WORK_NODE = Pattern.compile("<(?:bpmn:)?(?:userTask|serviceTask|task)(?:\\s|>)");
+    private static final Pattern BPMN_WORK_NODE = Pattern.compile(
+            "<(?:bpmn:)?(?:task|userTask|serviceTask|manualTask|scriptTask|businessRuleTask|sendTask|receiveTask)(?:\\s|>)");
     private static final String BPMN_MODEL_NAMESPACE = "http://www.omg.org/spec/BPMN/20100524/MODEL";
+    private static final Set<String> BPMN_FLOW_NODE_NAMES = Set.of(
+            "startEvent", "endEvent", "intermediateCatchEvent", "intermediateThrowEvent",
+            "task", "userTask", "serviceTask", "manualTask", "scriptTask",
+            "businessRuleTask", "sendTask", "receiveTask", "callActivity", "subProcess",
+            "exclusiveGateway", "inclusiveGateway", "parallelGateway", "eventBasedGateway", "complexGateway");
+    private static final Set<String> AI_ASSIGNEE_TYPES = Set.of(
+            "PROCESS_INITIATOR", "ENTITY_MANAGER", "FUNCTIONAL_MANAGER", "HIERARCHY_ROLE",
+            "BU_ROLE", "MANUAL_ASSIGN", "ASSIGNEE_FROM_VARIABLE", "ELEMENT_VARIABLE");
     private static final String PHASE_COMPLETE_MARKER = "---PHASE_COMPLETE---";
     private static final char BOM = '\uFEFF';
 
@@ -228,9 +248,6 @@ public class AiResponseParser {
                 }
                 Map<String, Object> form = (Map<String, Object>) formObj;
                 form.put("configJson", coerceConfigJson(form.get("configJson")));
-                if ("TASK".equals(form.get("formType"))) {
-                    form.put("formType", "MAIN");
-                }
             }
         }
         if (generatedData.get("actionDefinitions") instanceof List<?> actions) {
@@ -295,7 +312,289 @@ public class AiResponseParser {
                     "AI generated invalid BPMN with no task nodes. Regenerate the preview; "
                             + "empty Start-to-End fallback is rejected.");
         }
+        validateConnectedBpmn(xml);
+        validateStageBindings(generatedData, xml);
         process.put("bpmnXml", xml);
+    }
+
+    private void validateStageBindings(Map<String, Object> generatedData, String xml) {
+        try {
+            Document document = parseBpmnSecurely(xml);
+            Map<String, String> userTasks = new LinkedHashMap<>();
+            NodeList userTaskElements = document.getElementsByTagNameNS("*", "userTask");
+            for (int i = 0; i < userTaskElements.getLength(); i++) {
+                Element task = (Element) userTaskElements.item(i);
+                String id = task.getAttribute("id");
+                if (!id.isBlank()) {
+                    userTasks.put(id, task.getAttribute("name"));
+                }
+            }
+
+            // 分派与动作绑定只依赖本轮的 BPMN 自身：范围化重生成（只回 processDefinition）时同样必须校验，
+            // 不能因为这一轮没重生成表单就整块跳过。
+            validateUserTaskAssignments(userTaskElements);
+            validateActionStageBindings(generatedData, userTasks.keySet());
+            // 表单↔阶段是跨实体交叉校验，只有本轮确实产出 formDefinitions 才有比对对象。
+            validateFormStageBindings(generatedData, userTasks);
+        } catch (AiGenerationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AiGenerationException("AI_BPMN_INVALID_XML",
+                    "AI generated BPMN XML could not be validated: " + e.getMessage());
+        }
+    }
+
+    private void validateFormStageBindings(Map<String, Object> generatedData, Map<String, String> userTasks) {
+        if (!(generatedData.get("formDefinitions") instanceof List<?> forms)) {
+            return;
+        }
+        Set<String> boundStageIds = new HashSet<>();
+        for (Object formObj : forms) {
+            if (!(formObj instanceof Map<?, ?> form)) continue;
+            boolean taskForm = "TASK".equals(form.get("formType"));
+            Object bindingsObj = form.get("stageBindings");
+            List<?> bindings = bindingsObj instanceof List<?> list ? list : List.of();
+            if (taskForm && bindings.isEmpty()) {
+                throw invalidFormBinding("TASK form '" + form.get("formName")
+                        + "' has no stageBindings");
+            }
+            if (!taskForm && !bindings.isEmpty()) {
+                throw invalidFormBinding("only TASK forms may define stageBindings");
+            }
+            for (Object bindingObj : bindings) {
+                if (!(bindingObj instanceof Map<?, ?> binding)) {
+                    throw invalidFormBinding("stageBindings entries must be JSON objects");
+                }
+                String stageId = binding.get("stageId") instanceof String id ? id.trim() : "";
+                String stageName = binding.get("stageName") instanceof String name ? name : "";
+                if (!userTasks.containsKey(stageId)) {
+                    throw invalidFormBinding("stageId '" + stageId
+                            + "' does not match a bpmn:userTask id");
+                }
+                if (!stageName.equals(userTasks.get(stageId))) {
+                    throw invalidFormBinding("stageName for '" + stageId
+                            + "' must exactly match the BPMN userTask name");
+                }
+                if (!boundStageIds.add(stageId)) {
+                    throw invalidFormBinding("bpmn:userTask '" + stageId
+                            + "' is bound by more than one TASK form");
+                }
+            }
+        }
+
+        Set<String> unboundTaskIds = new HashSet<>(userTasks.keySet());
+        unboundTaskIds.removeAll(boundStageIds);
+        if (!unboundTaskIds.isEmpty()) {
+            throw invalidFormBinding("unbound bpmn:userTask nodes: " + unboundTaskIds);
+        }
+    }
+
+    private void validateUserTaskAssignments(NodeList userTaskElements) {
+        for (int i = 0; i < userTaskElements.getLength(); i++) {
+            Element task = (Element) userTaskElements.item(i);
+            String taskId = task.getAttribute("id");
+            String assigneeType = customPropertyValue(task, "assigneeType");
+            if (assigneeType == null || assigneeType.isBlank()) {
+                throw new AiGenerationException("AI_TASK_ASSIGNEE_INVALID",
+                        "AI generated bpmn:userTask '" + taskId + "' has no assigneeType extension property");
+            }
+            if (!AI_ASSIGNEE_TYPES.contains(assigneeType.trim())) {
+                throw new AiGenerationException("AI_TASK_ASSIGNEE_INVALID",
+                        "AI generated bpmn:userTask '" + taskId + "' has unsupported assigneeType '"
+                                + assigneeType + "'");
+            }
+        }
+    }
+
+    private void validateActionStageBindings(Map<String, Object> generatedData, Set<String> userTaskIds) {
+        if (!(generatedData.get("actionDefinitions") instanceof List<?> actions)) {
+            return;
+        }
+        Set<String> actionNames = new HashSet<>();
+        for (Object actionObj : actions) {
+            if (!(actionObj instanceof Map<?, ?> action)) {
+                throw invalidActionBinding("actionDefinitions entries must be JSON objects");
+            }
+            String actionName = action.get("actionName") instanceof String name ? name.trim() : "";
+            if (actionName.isEmpty() || !actionNames.add(actionName)) {
+                throw invalidActionBinding("actionName must be non-empty and unique: '" + actionName + "'");
+            }
+            if (!(action.get("stageIds") instanceof List<?> stageIds) || stageIds.isEmpty()) {
+                throw invalidActionBinding("action '" + actionName + "' must have a non-empty stageIds array");
+            }
+            for (Object stageIdObj : stageIds) {
+                String stageId = stageIdObj instanceof String id ? id.trim() : "";
+                if (!userTaskIds.contains(stageId)) {
+                    throw invalidActionBinding("action '" + actionName + "' references unknown userTask '"
+                            + stageId + "'");
+                }
+            }
+        }
+    }
+
+    private String customPropertyValue(Element owner, String propertyName) {
+        NodeList descendants = owner.getElementsByTagNameNS("*", "*");
+        for (int i = 0; i < descendants.getLength(); i++) {
+            Element element = (Element) descendants.item(i);
+            String localName = localName(element);
+            if (("property".equals(localName) || "values".equals(localName))
+                    && propertyName.equals(element.getAttribute("name"))) {
+                return element.getAttribute("value");
+            }
+        }
+        return null;
+    }
+
+    private void validateConnectedBpmn(String xml) {
+        try {
+
+        Document document = parseBpmnSecurely(xml);
+        Map<String, Element> flowNodes = new LinkedHashMap<>();
+        Set<String> startIds = new HashSet<>();
+        Set<String> endIds = new HashSet<>();
+        Set<String> sequenceFlowIds = new HashSet<>();
+        Set<String> sequenceFlowEndpoints = new HashSet<>();
+        Map<String, Set<String>> outgoing = new HashMap<>();
+        Map<String, Set<String>> incoming = new HashMap<>();
+
+        NodeList elements = document.getElementsByTagNameNS("*", "*");
+        for (int i = 0; i < elements.getLength(); i++) {
+            Element element = (Element) elements.item(i);
+            String localName = localName(element);
+            String id = element.getAttribute("id");
+            if (BPMN_FLOW_NODE_NAMES.contains(localName) && !id.isBlank()) {
+                flowNodes.put(id, element);
+                if ("startEvent".equals(localName)) startIds.add(id);
+                if ("endEvent".equals(localName)) endIds.add(id);
+            }
+        }
+
+        for (int i = 0; i < elements.getLength(); i++) {
+            Element element = (Element) elements.item(i);
+            if (!"sequenceFlow".equals(localName(element))) continue;
+            String id = element.getAttribute("id");
+            String sourceRef = element.getAttribute("sourceRef");
+            String targetRef = element.getAttribute("targetRef");
+            if (id.isBlank() || !flowNodes.containsKey(sourceRef) || !flowNodes.containsKey(targetRef)) {
+                throw disconnected("sequenceFlow '" + id + "' has a missing or invalid sourceRef/targetRef");
+            }
+            if (!sequenceFlowEndpoints.add(sourceRef + "\u0000" + targetRef)) {
+                throw disconnected("duplicate sequenceFlow endpoints '" + sourceRef + "' -> '"
+                        + targetRef + "'");
+            }
+            sequenceFlowIds.add(id);
+            outgoing.computeIfAbsent(sourceRef, ignored -> new HashSet<>()).add(targetRef);
+            incoming.computeIfAbsent(targetRef, ignored -> new HashSet<>()).add(sourceRef);
+        }
+
+        if (sequenceFlowIds.isEmpty()) {
+            throw disconnected("the process contains no sequenceFlow elements");
+        }
+
+        Set<String> reachableFromStart = traverse(startIds, outgoing);
+        Set<String> canReachEnd = traverse(endIds, incoming);
+        Set<String> disconnectedIds = new HashSet<>(flowNodes.keySet());
+        disconnectedIds.removeIf(id -> reachableFromStart.contains(id) && canReachEnd.contains(id));
+        if (!disconnectedIds.isEmpty()) {
+            throw disconnected("orphan or dead-end flow nodes: " + disconnectedIds);
+        }
+
+        Set<String> shapedElements = new HashSet<>();
+        Set<String> edgedElements = new HashSet<>();
+
+        for (int i = 0; i < elements.getLength(); i++) {
+            Element element = (Element) elements.item(i);
+            String localName = localName(element);
+            if ("BPMNShape".equals(localName)) {
+                if (element.getElementsByTagNameNS("*", "Bounds").getLength() > 0) {
+                    shapedElements.add(element.getAttribute("bpmnElement"));
+                }
+            } else if ("BPMNEdge".equals(localName)) {
+                NodeList waypoints = element.getElementsByTagNameNS("*", "waypoint");
+                if (waypoints.getLength() >= 2) {
+                    Element first = (Element) waypoints.item(0);
+                    Element last = (Element) waypoints.item(waypoints.getLength() - 1);
+                    if (sameWaypoint(first, last)) {
+                        throw new AiGenerationException("AI_BPMN_MISSING_DI",
+                                "AI generated BPMN has a zero-length diagram edge for sequenceFlow '"
+                                + element.getAttribute("bpmnElement") + "'");
+                    }
+                }
+                edgedElements.add(element.getAttribute("bpmnElement"));
+            }
+        }
+
+        Set<String> missingShapes = new HashSet<>(flowNodes.keySet());
+        missingShapes.removeAll(shapedElements);
+        Set<String> missingEdges = new HashSet<>(sequenceFlowIds);
+        missingEdges.removeAll(edgedElements);
+        if (!missingShapes.isEmpty() || !missingEdges.isEmpty()) {
+            throw new AiGenerationException("AI_BPMN_MISSING_DI",
+                    "AI generated BPMN has incomplete diagram connectivity. Missing shapes="
+                    + missingShapes + ", missing edges=" + missingEdges);
+        }
+        } catch (AiGenerationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AiGenerationException("AI_BPMN_INVALID_XML",
+                    "AI generated BPMN XML could not be validated: " + e.getMessage());
+        }
+    }
+
+    private boolean sameWaypoint(Element first, Element last) {
+        try {
+            double firstX = Double.parseDouble(first.getAttribute("x"));
+            double firstY = Double.parseDouble(first.getAttribute("y"));
+            double lastX = Double.parseDouble(last.getAttribute("x"));
+            double lastY = Double.parseDouble(last.getAttribute("y"));
+            return Double.compare(firstX, lastX) == 0 && Double.compare(firstY, lastY) == 0;
+        } catch (NumberFormatException e) {
+            return true;
+        }
+    }
+
+    private Document parseBpmnSecurely(String xml) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        return factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+    }
+
+    private Set<String> traverse(Set<String> roots, Map<String, Set<String>> graph) {
+        Set<String> visited = new HashSet<>();
+        ArrayDeque<String> queue = new ArrayDeque<>(roots);
+        while (!queue.isEmpty()) {
+            String current = queue.removeFirst();
+            if (!visited.add(current)) continue;
+            queue.addAll(graph.getOrDefault(current, Set.of()));
+        }
+        return visited;
+    }
+
+    private AiGenerationException disconnected(String detail) {
+        return new AiGenerationException("AI_BPMN_DISCONNECTED_NODES",
+                "AI generated BPMN is not a complete Start-to-End graph: " + detail);
+    }
+
+    private AiGenerationException invalidFormBinding(String detail) {
+        return new AiGenerationException("AI_FORM_STAGE_BINDING_INVALID",
+                "AI generated forms are not correctly bound to BPMN user tasks: " + detail);
+    }
+
+    private AiGenerationException invalidActionBinding(String detail) {
+        return new AiGenerationException("AI_ACTION_STAGE_BINDING_INVALID",
+                "AI generated actions are not correctly bound to BPMN user tasks: " + detail);
+    }
+
+    private String localName(Element element) {
+        return element.getLocalName() != null ? element.getLocalName() : element.getTagName();
     }
 
     private static String buildFallbackBpmn(String rawName) {

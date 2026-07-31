@@ -32,6 +32,17 @@ class AiPromptBuilderTest {
         assertTrue(prompt.startsWith("You are a function-unit code generation assistant."));
         assertTrue(prompt.contains("---GENERATED_DATA_START---"));
         assertTrue(prompt.contains("\"fieldDefinitions\""), "字段名速查表必须在场，否则模型会输出 fields");
+        assertTrue(prompt.contains("\"decisionDefinitions\""));
+        assertTrue(prompt.contains("\"tableRelations\""));
+        assertTrue(prompt.contains("\"explanations\""));
+        assertTrue(prompt.contains("DRAFT|CANCEL"), "动作枚举必须包含当前平台的 DRAFT 类型");
+        assertFalse(prompt.contains("N8N_ACTION"), "已弃用的 n8n 动作不得继续暴露给 AI");
+        assertTrue(prompt.contains("DECISION_TABLE"));
+        assertTrue(prompt.contains("\"stageIds\""));
+        assertTrue(prompt.contains("ROLLBACK is a Flowable state-change action"));
+        assertTrue(prompt.contains("custom extension property named assigneeType"));
+        assertTrue(prompt.contains("Do not generate duplicate sequence flows"));
+        assertTrue(prompt.contains("Every bpmn:userTask must be bound by exactly one TASK form"));
         assertTrue(prompt.contains("BPMN XML REQUIREMENTS (MANDATORY)"),
                 "GENERATION 阶段必须无条件追加 BPMN 约束块");
         assertTrue(prompt.contains("Phase: GENERATION | Mode: NEW"));
@@ -43,8 +54,12 @@ class AiPromptBuilderTest {
         String design = builder.build(Map.of("phase", "DESIGN", "message", "x"));
 
         assertTrue(requirements.startsWith("You are a function-unit requirements analyst."));
+        assertTrue(requirements.contains("Form Stage Binding"));
+        assertTrue(requirements.contains("every Start-to-End process path"));
         assertTrue(design.startsWith("You are a function-unit technical design assistant."));
         assertTrue(design.contains("---DESIGN_DOC_START---"));
+        assertTrue(design.contains("Process Node Matrix"));
+        assertTrue(design.contains("Sequence Flow Matrix"));
     }
 
     @Test

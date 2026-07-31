@@ -105,7 +105,7 @@ public class AiGatewayClient {
     public Map<String, Object> chat(String prompt, String amToken) {
         if (gatewayUrl == null || gatewayUrl.isBlank()) {
             throw new AiGenerationException("AI_GATEWAY_NOT_CONFIGURED",
-                    "AI gateway URL is not configured (ai-generation.gateway.url / AI_GATEWAY_URL)");
+                    "AI gateway URL is not configured (ai-generation.gateway.url / GROUP_AI_GATEWAY_URL)");
         }
         if (amToken == null || amToken.isBlank()) {
             throw new AiGenerationException("AI_GATEWAY_TOKEN_MISSING",

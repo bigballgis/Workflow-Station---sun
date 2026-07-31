@@ -18,6 +18,6 @@
  *   2. 后端 `ai-generation.enabled`（环境变量 `AI_GENERATION_ENABLED`）为 `true`——
  *      `AiGenerationController` 带 `@ConditionalOnProperty`，为 false 时整个控制器不注册。
  *
- * 另外后端还须配 `AI_GATEWAY_URL`，否则每轮对话以 `AI_GATEWAY_NOT_CONFIGURED` 失败。
+ * 另外后端还须配 `GROUP_AI_GATEWAY_URL`，否则每轮对话以 `AI_GATEWAY_NOT_CONFIGURED` 失败。
  */
 export const AI_GENERATION_ENABLED = true

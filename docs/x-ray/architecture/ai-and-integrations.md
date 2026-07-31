@@ -37,7 +37,7 @@ sequenceDiagram
     Comp->>Svc: callAiModel(sessionId, msg, phase, mode, ctx, docs, scope, amToken)
     Svc->>Svc: buildPriorConversationHistory (full history minus current msg)
     Svc->>Svc: AiPromptBuilder.build — phase prompt (classpath ai-prompts/*.txt) + context sections
-    Svc->>GW: POST <AI_GATEWAY_URL> Authorization: Bearer <AMToken><br/>{messages:[{role:"user", content:prompt}]}
+    Svc->>GW: POST <GROUP_AI_GATEWAY_URL> Authorization: Bearer <AMToken><br/>{messages:[{role:"user", content:prompt}]}
     GW-->>Svc: OpenAI response; choices[0].message.content carries the<br/>---REQUIREMENTS_DOC/DESIGN_DOC/GENERATED_DATA/PHASE_COMPLETE--- markers
     Svc->>Svc: AiResponseParser.parse → {reply, document, documentType, phaseComplete, generatedData}<br/>(+ field-metadata/configJson/BPMN normalization)
     Svc-->>Comp: response map (retry once on TIMEOUT/CALL_FAILED, +2s; model-side failures are not retried)
@@ -85,7 +85,7 @@ Tests (renamed 2026-07-29 off the retired "webhook" terminology):
 | Key | Default | Env |
 |---|---|---|
 | `ai-generation.enabled` | `false` (dev compose + k8s configmaps set `true`) | `AI_GENERATION_ENABLED` |
-| `ai-generation.gateway.url` | *(empty ⇒ `AI_GATEWAY_NOT_CONFIGURED`)* | `AI_GATEWAY_URL` |
+| `ai-generation.gateway.url` | *(empty ⇒ `AI_GATEWAY_NOT_CONFIGURED`)* | `GROUP_AI_GATEWAY_URL` |
 | `ai-generation.gateway.model` | *(empty ⇒ no `model` field in the body)* | `AI_GATEWAY_MODEL` |
 | `ai-generation.gateway.timeout-seconds` | `300` | `AI_GATEWAY_TIMEOUT_SECONDS` |
 | `ai-generation.gateway.am-token-name` | `AMToken` | `DSP_AM_TOKEN_NAME` |

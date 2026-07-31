@@ -92,11 +92,11 @@ data:
   # AI Generate(developer-workstation)直连集团 AI gateway 的 OpenAI 兼容 chat/completions。
   # 不再经 Activepieces —— 原先的 piece-ai 版 flow 已随该链路废弃删除。
   # 凭证是**每用户**的 DSP AMToken,由浏览器经 X-AM-Token 头透传,故这里不配任何密钥。
-  # __AI_GATEWAY_URL__ 必须按环境替换成完整端点(模型名在路径里);留占位符 => 每轮对话
+  # __GROUP_AI_GATEWAY_URL__ 必须按环境替换成完整端点(模型名在路径里);留占位符 => 每轮对话
   # 以 AI_GATEWAY_NOT_CONFIGURED 显式失败。要整体关掉就把 AI_GENERATION_ENABLED 置 "false"
   # (控制器不注册,/ai-generation/** 返回 404),同时前端 featureFlags.ts 也要改。
   AI_GENERATION_ENABLED: "true"
-  AI_GATEWAY_URL: "__AI_GATEWAY_URL__"
+  GROUP_AI_GATEWAY_URL: "__GROUP_AI_GATEWAY_URL__"
   # 空 => 不在 body 里发 model 字段(URL 路径已选定模型)。
   AI_GATEWAY_MODEL: ""
   # 300s: 推理模型生成 DESIGN 文档实测 ~230s。

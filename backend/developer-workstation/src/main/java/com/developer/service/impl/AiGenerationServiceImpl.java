@@ -501,6 +501,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         metadata.put("tableTypes", java.util.Arrays.stream(com.developer.enums.TableType.values())
                 .map(Enum::name).collect(Collectors.toList()));
         metadata.put("actionTypes", java.util.Arrays.stream(com.developer.enums.ActionType.values())
+                .filter(actionType -> actionType != com.developer.enums.ActionType.N8N_ACTION)
                 .map(Enum::name).collect(Collectors.toList()));
 
         // configJson extension field structure description
@@ -526,7 +527,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         newEntities.put("decisionDefinitions", "Array of { decisionKey, decisionName, dmnXml, hitPolicy: FIRST|UNIQUE|PRIORITY|ANY|COLLECT|RULE_ORDER|OUTPUT_ORDER, description }");
         newEntities.put("tableRelations", "Array of { sourceTableName, sourceFieldName, relationType: ONE_TO_ONE|ONE_TO_MANY|MANY_TO_MANY, targetTableName, targetFieldName }. "
                 + "MANY_TO_ONE is NOT a valid relationType — express a child-to-parent relation as ONE_TO_MANY with the parent as source and the child as target");
-        newEntities.put("formStageBindings", "Array of { stageId, stageName } within formDefinitions[].stageBindings");
+        newEntities.put("formStageBindings", "Array of { stageId, stageName, readOnly: boolean } within formDefinitions[].stageBindings");
+        newEntities.put("actionStageBindings", "Non-empty stageIds[] within each actionDefinitions entry; every value is an exact bpmn:userTask id. Numeric actionIds are injected after persistence");
+        newEntities.put("userTaskAssignment", "Every bpmn:userTask has custom assigneeType: PROCESS_INITIATOR|ENTITY_MANAGER|FUNCTIONAL_MANAGER|HIERARCHY_ROLE|BU_ROLE|MANUAL_ASSIGN|ASSIGNEE_FROM_VARIABLE|ELEMENT_VARIABLE, plus required role/BU/variable properties");
         metadata.put("newEntities", newEntities);
 
         return metadata;

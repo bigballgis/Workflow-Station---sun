@@ -30,10 +30,24 @@ class AiResponseParserTest {
     }
 
     private static String validBpmn() {
-        return "<?xml version=\"1.0\"?><bpmn:definitions xmlns:bpmn=\"" + BPMN_NS + "\">"
+        return "<?xml version=\"1.0\"?><bpmn:definitions xmlns:bpmn=\"" + BPMN_NS + "\" "
+                + "xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" "
+                + "xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" "
+                + "xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\">"
                 + "<bpmn:process id=\"p\" isExecutable=\"true\">"
-                + "<bpmn:startEvent id=\"s\"/><bpmn:userTask id=\"t\"/><bpmn:endEvent id=\"e\"/>"
-                + "</bpmn:process></bpmn:definitions>";
+                + "<bpmn:startEvent id=\"s\"/><bpmn:userTask id=\"t\"><bpmn:extensionElements>"
+                + "<custom:properties xmlns:custom=\"http://custom.bpmn.io/schema\">"
+                + "<custom:property name=\"assigneeType\" value=\"PROCESS_INITIATOR\"/>"
+                + "</custom:properties></bpmn:extensionElements></bpmn:userTask><bpmn:endEvent id=\"e\"/>"
+                + "<bpmn:sequenceFlow id=\"f1\" sourceRef=\"s\" targetRef=\"t\"/>"
+                + "<bpmn:sequenceFlow id=\"f2\" sourceRef=\"t\" targetRef=\"e\"/>"
+                + "</bpmn:process><bpmndi:BPMNDiagram id=\"d\"><bpmndi:BPMNPlane id=\"plane\" bpmnElement=\"p\">"
+                + "<bpmndi:BPMNShape id=\"s_di\" bpmnElement=\"s\"><dc:Bounds x=\"0\" y=\"0\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"t_di\" bpmnElement=\"t\"><dc:Bounds x=\"100\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"e_di\" bpmnElement=\"e\"><dc:Bounds x=\"260\" y=\"0\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNEdge id=\"f1_di\" bpmnElement=\"f1\"><di:waypoint x=\"36\" y=\"18\"/><di:waypoint x=\"100\" y=\"18\"/></bpmndi:BPMNEdge>"
+                + "<bpmndi:BPMNEdge id=\"f2_di\" bpmnElement=\"f2\"><di:waypoint x=\"200\" y=\"18\"/><di:waypoint x=\"260\" y=\"18\"/></bpmndi:BPMNEdge>"
+                + "</bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>";
     }
 
     @Test
@@ -93,7 +107,7 @@ class AiResponseParserTest {
         List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("formDefinitions");
         List<Map<String, Object>> actions = (List<Map<String, Object>>) data.get("actionDefinitions");
 
-        assertEquals("MAIN", forms.get(0).get("formType"), "TASK 不是平台枚举，须改写为 MAIN");
+        assertEquals("TASK", forms.get(0).get("formType"), "TASK 是平台原生表单类型，必须保留用于阶段绑定");
         assertEquals(Map.of("k", 1), forms.get(0).get("configJson"));
         assertNull(forms.get(1).get("configJson"), "非法 configJson 丢成 null，而不是留着炸下游");
         assertNull(actions.get(0).get("configJson"), "JSON 数组不是对象，同样丢弃");
@@ -136,6 +150,126 @@ class AiResponseParserTest {
                         "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
 
         assertEquals("AI_BPMN_NO_TASK_NODES", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_bpmnWithDisconnectedTask_isRejected() {
+        String xml = validBpmn().replace("<bpmn:endEvent id=\"e\"/>",
+                        "<bpmn:userTask id=\"orphan\"/><bpmn:endEvent id=\"e\"/>")
+                        .replace("<bpmndi:BPMNShape id=\"e_di\"", "<bpmndi:BPMNShape id=\"orphan_di\" bpmnElement=\"orphan\"><dc:Bounds x=\"220\" y=\"100\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"e_di\"");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                        () -> parser.parse(gatewayResponse(200,
+                                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_BPMN_DISCONNECTED_NODES", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_bpmnWithoutDiagramEdge_isRejected() {
+        String xml = validBpmn().replaceAll("<bpmndi:BPMNEdge id=\\\"f2_di\\\".*?</bpmndi:BPMNEdge>", "");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                        () -> parser.parse(gatewayResponse(200,
+                                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_BPMN_MISSING_DI", ex.getErrorCode());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void parse_taskFormWithExactStageBinding_isAccepted() {
+        String xml = validBpmn().replace("<bpmn:userTask id=\"t\">",
+                "<bpmn:userTask id=\"t\" name=\"Review Request\">");
+        String json = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"configJson\":null,\"stageBindings\":[{\"stageId\":\"t\","
+                + "\"stageName\":\"Review Request\",\"readOnly\":false}]}],"
+                + "\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        Map<String, Object> data = (Map<String, Object>) result.get("generatedData");
+        List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("formDefinitions");
+        assertEquals("TASK", forms.get(0).get("formType"));
+        assertEquals("t", ((List<Map<String, Object>>) forms.get(0).get("stageBindings"))
+                .get(0).get("stageId"));
+    }
+
+    @Test
+    void parse_userTaskWithoutFormStageBinding_isRejected() {
+        String json = "{\"formDefinitions\":[],\"processDefinition\":{\"bpmnXml\":\""
+                + validBpmn().replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_FORM_STAGE_BINDING_INVALID", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_taskFormWithoutAssigneeType_isRejected() {
+        String xml = validBpmn().replace(
+                "<custom:property name=\"assigneeType\" value=\"PROCESS_INITIATOR\"/>", "");
+        String json = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"\",\"readOnly\":false}]}],"
+                + "\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_TASK_ASSIGNEE_INVALID", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_actionWithUnknownStageId_isRejected() {
+        String json = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"\",\"readOnly\":false}]}],"
+                + "\"actionDefinitions\":[{\"actionName\":\"approve\",\"actionType\":\"APPROVE\","
+                + "\"stageIds\":[\"missing_task\"]}],\"processDefinition\":{\"bpmnXml\":\""
+                + validBpmn().replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_ACTION_STAGE_BINDING_INVALID", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_bpmnWithDuplicateSourceAndTarget_isRejected() {
+        String xml = validBpmn().replace("</bpmn:process>",
+                "<bpmn:sequenceFlow id=\"f1_duplicate\" sourceRef=\"s\" targetRef=\"t\"/>"
+                        + "</bpmn:process>")
+                .replace("</bpmndi:BPMNPlane>",
+                        "<bpmndi:BPMNEdge id=\"f1_duplicate_di\" bpmnElement=\"f1_duplicate\">"
+                                + "<di:waypoint x=\"36\" y=\"20\"/><di:waypoint x=\"100\" y=\"20\"/>"
+                                + "</bpmndi:BPMNEdge></bpmndi:BPMNPlane>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_BPMN_DISCONNECTED_NODES", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_bpmnWithZeroLengthDiagramEdge_isRejected() {
+        String xml = validBpmn().replace(
+                "<di:waypoint x=\"36\" y=\"18\"/><di:waypoint x=\"100\" y=\"18\"/>",
+                "<di:waypoint x=\"36\" y=\"18\"/><di:waypoint x=\"36\" y=\"18\"/>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_BPMN_MISSING_DI", ex.getErrorCode());
     }
 
     @Test

@@ -77,6 +77,7 @@ class AiWriteServiceTest {
                                 "fieldName", "id",
                                 "dataType", "BIGINT",
                                 "isPrimaryKey", true,
+                                "description", "Order identifier",
                                 "sortOrder", 1
                         ))
                 )))
@@ -93,9 +94,10 @@ class AiWriteServiceTest {
         assertEquals("Updated Desc", saved.getDisplayName());
         assertFalse(saved.getTableDefinitions().isEmpty(), "Table definitions should be written");
         assertEquals("orders", saved.getTableDefinitions().get(0).getTableName());
-
-        // In NEW mode, entityManager.flush() should be called after writeTableDefinitions
-        verify(entityManager).flush();
+        assertEquals("Order identifier",
+                saved.getTableDefinitions().get(0).getFieldDefinitions().get(0).getDisplayName());
+        // Flush tables first, then forms/actions so generated IDs can be embedded in BPMN bindings.
+        verify(entityManager, times(2)).flush();
     }
 
     @Test

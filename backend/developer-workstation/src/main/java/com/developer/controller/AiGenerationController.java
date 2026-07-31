@@ -45,7 +45,7 @@ import java.util.List;
  * 不注册，{@code /ai-generation/**} 全部返回 404。开关须**前后端同时打开**：本开关置 true，且前端
  * {@code src/utils/featureFlags.ts} 的 {@code AI_GENERATION_ENABLED} 为 true 并重新构建。
  * 只开一侧：只开后端 = 用户看不到入口；只开前端 = 点进去全 404。
- * 另外还须配 {@code AI_GATEWAY_URL}，否则每轮对话以 {@code AI_GATEWAY_NOT_CONFIGURED} 失败。
+ * 另外还须配 {@code GROUP_AI_GATEWAY_URL}，否则每轮对话以 {@code AI_GATEWAY_NOT_CONFIGURED} 失败。
  */
 @RestController
 @RequestMapping("/ai-generation")

@@ -6,6 +6,8 @@ import com.developer.enums.*;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.IconRepository;
 import com.developer.service.AiWriteService;
+import com.developer.util.AiBpmnActionBindingWriter;
+import com.developer.util.AiBpmnFormBindingWriter;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,6 +70,8 @@ public class AiWriteServiceImpl implements AiWriteService {
         writeFormDefinitions(functionUnit, generatedData, tableMap);
         writeActionDefinitions(functionUnit, generatedData);
         writeDecisionDefinitions(functionUnit, generatedData);
+        // Form IDs are database-generated and are required by BPMN custom formId properties.
+        entityManager.flush();
         writeProcessDefinition(functionUnit, generatedData);
 
         // Handle icon matching/creation before saving
@@ -216,7 +220,8 @@ public class AiWriteServiceImpl implements AiWriteService {
                                     fieldData.get("isPrimaryKey") != null ? fieldData.get("isPrimaryKey") : fieldData.get("primaryKey"),
                                     false))
                             .isUnique(toBoolean(fieldData.get("isUnique"), false))
-                            .displayName((String) fieldData.get("displayName"))
+                            .displayName((String) (fieldData.get("description") != null
+                                    ? fieldData.get("description") : fieldData.get("displayName")))
                             .sortOrder(toInt(fieldData.get("sortOrder")))
                             .build();
                     table.getFieldDefinitions().add(field);
@@ -432,6 +437,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                             .form(form)
                             .stageId((String) sbData.get("stageId"))
                             .stageName((String) sbData.get("stageName"))
+                            .readOnly(toBoolean(sbData.get("readOnly"), false))
                             .build();
                     form.getStageBindings().add(stageBinding);
                 }
@@ -671,6 +677,9 @@ public class AiWriteServiceImpl implements AiWriteService {
         String bpmnXml = (String) procData.get("bpmnXml");
         if (bpmnXml == null || bpmnXml.isBlank()) return;
         bpmnXml = ensureRenderableBpmnDiagram(bpmnXml);
+        bpmnXml = AiBpmnFormBindingWriter.bindStageForms(bpmnXml, functionUnit.getFormDefinitions());
+        bpmnXml = AiBpmnActionBindingWriter.bindStageActions(bpmnXml,
+                functionUnit.getActionDefinitions(), generatedData.getActionDefinitions());
 
         ProcessDefinition processDefinition = ProcessDefinition.builder()
                 .functionUnit(functionUnit)

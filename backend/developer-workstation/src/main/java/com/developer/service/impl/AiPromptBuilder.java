@@ -17,10 +17,9 @@ import java.util.Map;
 /**
  * 把 DW 侧组装好的请求体渲染成一条送给 AI gateway 的 prompt。
  *
- * <p>本类是 {@code GenAI/build_prompt.md}（原 Activepieces flow 的 "Build Prompt" 步骤）的 Java 移植：
- * 三段系统提示词逐字放在 {@code src/main/resources/ai-prompts/*.txt}（由该文件的 PROMPTS 字面量导出，
- * GENERATION 末尾已并入原 flow 在代码里追加的 BPMN 约束块），拼装顺序与分隔符也与原实现一一对应。
- * 改提示词只改 txt，不用动 Java。</p>
+ * <p>本类源自 {@code GenAI/build_prompt.md}（原 Activepieces flow 的 "Build Prompt" 步骤）。运行时提示词的
+ * 唯一真源是 {@code src/main/resources/ai-prompts/*.txt}；历史 flow 文件仅供迁移参考。GENERATION 资源已包含
+ * BPMN 约束块，修改提示词通常只需修改 txt，不用改 Java。</p>
  *
  * <p>入参就是 {@link AiGenerationServiceImpl} 原先 POST 给 AP webhook 的那个 body，
  * 因此移植前后模型看到的文本完全一致。</p>

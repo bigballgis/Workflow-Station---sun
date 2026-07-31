@@ -1286,7 +1286,7 @@ ai-generation:
   # 集团 AI gateway（OpenAI 兼容 chat/completions）。凭证是每用户的 DSP AMToken，
   # 由前端经 X-AM-Token 头透传，后端不持有共享密钥。
   gateway:
-    url: ${AI_GATEWAY_URL:}
+    url: ${GROUP_AI_GATEWAY_URL:}
     model: ${AI_GATEWAY_MODEL:}
     timeout-seconds: ${AI_GATEWAY_TIMEOUT_SECONDS:300}
     am-token-name: ${DSP_AM_TOKEN_NAME:AMToken}
@@ -1583,7 +1583,7 @@ platform:
 ai-generation:
   enabled: ${AI_GENERATION_ENABLED:false}
   gateway:
-    url: ${AI_GATEWAY_URL:}
+    url: ${GROUP_AI_GATEWAY_URL:}
     model: ${AI_GATEWAY_MODEL:}
     timeout-seconds: ${AI_GATEWAY_TIMEOUT_SECONDS:300}
     am-token-name: ${DSP_AM_TOKEN_NAME:AMToken}
@@ -1658,7 +1658,7 @@ management:
 | `SECURITY_ROLE_MAX_NAME_LENGTH` | 角色名最大长度 | 100 |
 | `WORKFLOW_ENGINE_URL` | 工作流引擎地址 | http://localhost:8081 |
 | `AI_GENERATION_ENABLED` | AI Generate 入口开关（前后端须一致） | false |
-| `AI_GATEWAY_URL` | 集团 AI gateway 端点（OpenAI 兼容 chat/completions） | 空（空则调用报 AI_GATEWAY_NOT_CONFIGURED） |
+| `GROUP_AI_GATEWAY_URL` | 集团 AI gateway 端点（OpenAI 兼容 chat/completions） | 空（空则调用报 AI_GATEWAY_NOT_CONFIGURED） |
 | `AI_GATEWAY_MODEL` | body 里的 model 字段；空则不发（URL 路径已选定模型） | 空 |
 | `AI_GATEWAY_TIMEOUT_SECONDS` | 单次模型调用超时 (秒) | 300 |
 | `AI_GENERATION_LOCK_TTL` | AI 编辑锁 TTL (秒) | 1800 |

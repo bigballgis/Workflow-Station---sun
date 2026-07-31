@@ -89,7 +89,7 @@ class AiContextSerializer {
             map.put("defaultValue", f.getDefaultValue());
             map.put("isPrimaryKey", f.getIsPrimaryKey());
             map.put("isUnique", f.getIsUnique());
-            map.put("displayName", f.getDisplayName());
+            map.put("description", f.getDisplayName());
             map.put("sortOrder", f.getSortOrder());
             return map;
         }).collect(Collectors.toList());

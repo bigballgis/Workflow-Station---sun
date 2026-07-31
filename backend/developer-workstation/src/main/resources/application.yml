@@ -205,7 +205,7 @@ ai-generation:
   # 由前端经 X-AM-Token 头透传(或浏览器 AMToken cookie),后端不持有共享密钥。
   gateway:
     # 完整端点 URL,模型名已在路径里。未配置时每轮对话以 AI_GATEWAY_NOT_CONFIGURED 失败。
-    url: ${AI_GATEWAY_URL:}
+    url: ${GROUP_AI_GATEWAY_URL:}
     # 可选:body 里的 model 字段。留空则不发——URL 路径已经选定了模型。
     model: ${AI_GATEWAY_MODEL:}
     # 300s: 推理模型生成 DESIGN 文档实测可达 ~230s。同时决定对话 SSE emitter 的存活时长。

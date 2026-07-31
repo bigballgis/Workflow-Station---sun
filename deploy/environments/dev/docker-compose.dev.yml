@@ -536,7 +536,7 @@ services:
       # AI Generate 直连集团 AI gateway(OpenAI 兼容 chat/completions),凭证是每用户的 DSP AMToken。
       # 空值 => 每轮对话以 AI_GATEWAY_NOT_CONFIGURED 失败(不静默降级);dev 默认取 .env 里的 AI 平台地址。
       AI_GENERATION_ENABLED: ${AI_GENERATION_ENABLED:-true}
-      AI_GATEWAY_URL: ${AI_GATEWAY_URL:-}
+      GROUP_AI_GATEWAY_URL: ${GROUP_AI_GATEWAY_URL:-}
       AI_GATEWAY_MODEL: ${AI_GATEWAY_MODEL:-}
       AI_GATEWAY_TIMEOUT_SECONDS: ${AI_GATEWAY_TIMEOUT_SECONDS:-300}
       # SMTP/IMAP connection test + AI gateway: allow hostnames that resolve to private IPs on corp VPN.
