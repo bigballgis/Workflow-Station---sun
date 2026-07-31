@@ -457,8 +457,18 @@ export const functionUnitApi = {
   getProcess: (functionUnitId: number) =>
     functionUnitAxios.get<any, { data: ProcessDefinition }>(`/api/v1/function-units/${functionUnitId}/process`),
   
-  saveProcess: (functionUnitId: number, data: Partial<ProcessDefinition>) =>
-    functionUnitAxios.post<any, { data: ProcessDefinition }>(`/api/v1/function-units/${functionUnitId}/process`, data),
+  // allowEmpty=true is required to overwrite a stored non-empty process with an empty diagram
+  // (backend empty-diagram guard, see ProcessDesignComponentImpl#save).
+  saveProcess: (
+    functionUnitId: number,
+    data: Partial<ProcessDefinition>,
+    options?: { allowEmpty?: boolean }
+  ) =>
+    functionUnitAxios.post<any, { data: ProcessDefinition }>(
+      `/api/v1/function-units/${functionUnitId}/process`,
+      data,
+      options?.allowEmpty ? { params: { allowEmpty: true } } : undefined
+    ),
 
   // Versions
   getVersions: (functionUnitId: number) =>

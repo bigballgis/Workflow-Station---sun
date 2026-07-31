@@ -43,6 +43,15 @@ public class ProcessBpmnValidator {
                     + "boundaryEvent|callActivity)\\b[^>]*\\bid=\"([^\"]+)\"",
             Pattern.DOTALL);
 
+    /** 任意命名空间前缀下的流程节点（不含 sequenceFlow：连线本身不构成「图里有东西」）。 */
+    private static final Pattern ANY_FLOW_NODE_PATTERN = Pattern.compile(
+            "<(?:\\w+:)?(startEvent|endEvent|userTask|serviceTask|scriptTask|manualTask|sendTask|receiveTask|"
+                    + "businessRuleTask|task|subProcess|transaction|adHocSubProcess|exclusiveGateway|parallelGateway|"
+                    + "inclusiveGateway|eventBasedGateway|complexGateway|intermediateCatchEvent|intermediateThrowEvent|"
+                    + "boundaryEvent|callActivity)\\b");
+
+    private static final Pattern BPMN_SHAPE_PATTERN = Pattern.compile("<(?:\\w+:)?BPMNShape\\b");
+
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FormDefinitionRepository formDefinitionRepository;
     private final I18nService i18nService;
@@ -54,6 +63,21 @@ public class ProcessBpmnValidator {
         this.tableDefinitionRepository = tableDefinitionRepository;
         this.formDefinitionRepository = formDefinitionRepository;
         this.i18nService = i18nService;
+    }
+
+    /**
+     * 「这张图什么都没有」：既无流程节点也无 BPMNDI 图形（null/空白同样视为空）。
+     *
+     * <p>空图护栏的唯一后端实现点，供 {@link ProcessDesignComponentImpl#save} 判断
+     * 「本次保存是否会把已有流程整体抹掉」；前端同一规则见
+     * {@code frontend/developer-workstation/src/utils/bpmnDiagramContent.ts}，两处必须同步修改。</p>
+     */
+    public boolean isEmptyDiagram(String bpmnXml) {
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return true;
+        }
+        return !ANY_FLOW_NODE_PATTERN.matcher(bpmnXml).find()
+                && !BPMN_SHAPE_PATTERN.matcher(bpmnXml).find();
     }
 
     public ValidationResult validate(String bpmnXml) {

@@ -93,13 +93,32 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
 
     @Override
     @Transactional
-    public ProcessDefinition save(Long functionUnitId, String bpmnXml) {
+    public ProcessDefinition save(Long functionUnitId, String bpmnXml, boolean allowEmpty) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
 
 
         // Auto-correct stale IDs (formId, subTableId, actionIds) using name lookup
         bpmnXml = fixStaleIds(functionUnitId, bpmnXml);
+
+        ProcessDefinition existing = processDefinitionRepository
+                .findByFunctionUnitId(functionUnitId)
+                .orElse(null);
+
+        // 空图护栏：把已存的非空流程整体覆盖成空图，只有调用方显式声明 allowEmpty 才放行。
+        // 2026-07-31 dev FU 50030 即被设计器 2s 自动保存覆盖成空 <bpmn:process/>，
+        // 且本表只存当前版本、无历史，覆盖即不可恢复。前端同一判定见
+        // frontend/developer-workstation/src/utils/bpmnDiagramContent.ts。
+        if (!allowEmpty && bpmnValidator.isEmptyDiagram(bpmnXml)) {
+            String existingXml = existing == null ? null : XmlEncodingUtil.smartDecode(existing.getBpmnXml());
+            if (!bpmnValidator.isEmptyDiagram(existingXml)) {
+                log.warn("Blocked empty-diagram overwrite for functionUnitId={} (existing process is not empty)",
+                        functionUnitId);
+                throw new DeveloperBusinessException("EMPTY_PROCESS_OVERWRITE_BLOCKED",
+                        "Refusing to overwrite the existing non-empty process definition with an empty diagram. "
+                                + "Confirm the deletion in the designer (explicit save) if this is intended.");
+            }
+        }
 
         ValidationResult lastTaskTopo = validateLastTaskAssigneeTopology(bpmnXml);
         if (!lastTaskTopo.isValid()) {
@@ -109,12 +128,12 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
             throw new DeveloperBusinessException("LAST_TASK_ANCHOR_TOPOLOGY", detail);
         }
 
-        ProcessDefinition processDefinition = processDefinitionRepository
-                .findByFunctionUnitId(functionUnitId)
-                .orElse(ProcessDefinition.builder()
+        ProcessDefinition processDefinition = existing != null
+                ? existing
+                : ProcessDefinition.builder()
                         .functionUnit(functionUnit)
                         .functionUnitVersionId(functionUnitId)
-                        .build());
+                        .build();
 
         // 使用Base64编码存储XML，避免特殊字符转义问题
         String encodedXml = XmlEncodingUtil.encode(bpmnXml);

@@ -11,10 +11,20 @@ import java.util.Map;
 public interface ProcessDesignComponent {
     
     /**
-     * 保存流程定义
+     * 保存流程定义（不允许用空图覆盖已存的非空流程）
      */
-    ProcessDefinition save(Long functionUnitId, String bpmnXml);
-    
+    default ProcessDefinition save(Long functionUnitId, String bpmnXml) {
+        return save(functionUnitId, bpmnXml, false);
+    }
+
+    /**
+     * 保存流程定义。
+     *
+     * @param allowEmpty 为 true 时允许「空图覆盖已存非空流程」——仅当用户在设计器里显式确认清空后传入。
+     *                   为 false 时该覆盖会抛 {@code EMPTY_PROCESS_OVERWRITE_BLOCKED}（自动保存误触护栏）。
+     */
+    ProcessDefinition save(Long functionUnitId, String bpmnXml, boolean allowEmpty);
+
     /**
      * 获取功能单元的流程定义
      */

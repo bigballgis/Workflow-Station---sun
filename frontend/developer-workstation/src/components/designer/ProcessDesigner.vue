@@ -42,6 +42,13 @@
           {{ t('process.autoSaving') }}
         </span>
         <span
+          v-else-if="autoSaveBlocked"
+          class="auto-save-blocked"
+        >
+          <el-icon><WarningFilled /></el-icon>
+          {{ t('process.emptyDiagramAutoSaveBlockedShort') }}
+        </span>
+        <span
           v-else-if="lastAutoSaveTime"
           class="auto-saved"
         >
@@ -133,7 +140,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProcessImportDialog from './process-designer/ProcessImportDialog.vue'
-import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, Loading, CircleCheck } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, Loading, CircleCheck, WarningFilled } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
 import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
@@ -187,6 +194,7 @@ const {
   saving,
   autoSaving,
   lastAutoSaveTime,
+  autoSaveBlocked,
   exportCurrentBpmnXml,
   handleValidate,
   handleExportSVG,
@@ -257,6 +265,13 @@ onUnmounted(() => {
     align-items: center;
     gap: 6px;
     color: #67c23a;
+  }
+
+  .auto-save-blocked {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #e6a23c;
   }
 }
 

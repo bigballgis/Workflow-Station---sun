@@ -1798,3 +1798,44 @@
     与 diagram-js 15 的默认行为一致——画布获得焦点时才吃快捷键。
     验证：frontend/scripts/verify-dw-ai-panel-copy-shortcut.mjs（面板内 Cmd+C 不再被拦截、图形元素数不变、
     画布聚焦后 Cmd+A 仍选中全部元素），截图见 developer-workstation/verification-screenshots/2026-07-31_ai-panel-copy-shortcut*.png。
+
+- id: "1510"
+  status: fixed
+  fixed_at: "2026-07-31"
+  severity: critical
+  category: bug
+  summary: "DW 流程设计器 2s 自动保存会把清空的画布覆盖到已有流程定义（FU 50030 被存成空 process）"
+  file: "frontend/developer-workstation/src/composables/processDesigner/useProcessActions.ts; backend/developer-workstation/src/main/java/com/developer/component/impl/ProcessDesignComponentImpl.java"
+  note: |
+    现象：2026-07-31 dev FU 50030 的 Start→serviceTask→End 被静默替换为空 <bpmn:process/>
+    （Kong 日志 POST /api/v1/function-units/50030/process 16:11:05Z）。触发源是 issue #1509 的
+    快捷键外泄——误触 Cmd/Ctrl+A + Delete 清空画布，commandStack.changed 2s 后 handleSave(true)
+    把导出结果原样 POST，且 dw_process_definitions 只存当前版本，覆盖即不可恢复（当时靠浏览器
+    console 里残留的 XML 才捞回来）。
+    修复（双层护栏，判定=无流程节点且无 BPMNShape）：
+      前端 useProcessActions.handleSave —— 空图且已存版本非空时，自动保存直接跳过（一次 warning +
+      工具栏「Auto-save paused (empty canvas)」提示），手动 Save 弹确认框，确认后才带 allowEmpty=true 落库；
+      判定实现在 utils/bpmnDiagramContent.ts。
+      后端 ProcessDesignComponentImpl.save(fuId, xml, allowEmpty) —— allowEmpty=false 时空图覆盖非空
+      流程抛 EMPTY_PROCESS_OVERWRITE_BLOCKED(400)；判定实现在 ProcessBpmnValidator.isEmptyDiagram。
+      跨语言两份判定互相在注释里标注对方路径，改一处必须同步另一处。
+    验证：frontend/scripts/verify-dw-empty-diagram-autosave-guard.mjs（清空后 0 次 POST、提示与工具栏
+    指示可见、确认框出现、取消后刷新图形仍是 7 个元素），截图
+    developer-workstation/verification-screenshots/2026-07-31_empty-diagram-autosave-guard*.png；
+    dev 实测后端 400/200/200（拒绝→allowEmpty 放行→原 XML 还原，byte-identical）。
+    单测：useProcessActions.emptyDiagramGuard.test.ts、bpmnDiagramContent.test.ts、
+    ProcessDesignEmptyDiagramGuardTest.java。
+
+- id: "1511"
+  status: open
+  severity: major
+  category: architecture
+  summary: "dw_process_definitions 只存当前版本，流程定义被覆盖后无任何历史可回溯"
+  file: "backend/developer-workstation/src/main/java/com/developer/entity/ProcessDefinition.java"
+  note: |
+    每个 FU 一行，save() 就地覆盖 bpmn_xml；dw_versions 快照只在显式创建版本时产生，
+    设计期（Draft）的误覆盖没有任何兜底。#1510 的空图护栏只能挡「空图覆盖非空」这一种形态，
+    其他误覆盖（AI 生成结果盖掉手改、导入盖掉现有图）依然不可恢复。
+    建议：新增 dw_process_definition_history（function_unit_id + bpmn_xml + created_at + created_by，
+    init-scripts 追加新 .sql），save() 落库前写入前一版本，保留最近 N 条 / N 天；
+    设计器加「恢复上一版本」入口。需先定 ADR：保留策略、是否对 forms/actions 等同类设计表一并铺开。

@@ -187,8 +187,12 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     }
   }
 
-  async function saveProcess(functionUnitId: number, data: Partial<ProcessDefinition>) {
-    const res = await functionUnitApi.saveProcess(functionUnitId, data)
+  async function saveProcess(
+    functionUnitId: number,
+    data: Partial<ProcessDefinition>,
+    options?: { allowEmpty?: boolean }
+  ) {
+    const res = await functionUnitApi.saveProcess(functionUnitId, data, options)
     process.value = res.data
     return res.data
   }
