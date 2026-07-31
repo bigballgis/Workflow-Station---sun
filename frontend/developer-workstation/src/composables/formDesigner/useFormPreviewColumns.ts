@@ -8,7 +8,7 @@ import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
 import { resolveRuleDefaultValue } from '@/utils/formCreateRuleDefaults'
 import { isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
 import { mapDesignerValidateForDialog } from '@/utils/mapDesignerValidateForDialog'
-import { assignSensitiveMaskColumnProps } from '@/utils/sensitiveMask'
+import { assignSensitiveMaskColumnProps } from '@/utils/sensitiveMaskColumnProps'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 
 interface UseFormPreviewColumnsOptions {

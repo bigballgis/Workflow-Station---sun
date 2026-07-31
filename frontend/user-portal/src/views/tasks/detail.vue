@@ -507,7 +507,10 @@ import { useTaskActions } from '@/composables/tasks/useTaskActions'
 import { useCustomActions } from '@/composables/tasks/useCustomActions'
 import { clearBpmnParseCache } from '@/utils/bpmnParseCache'
 import { reconcilePortalWorkspaceSession } from '@/api/auth'
-import { buildSensitiveMaskLookup } from '@/utils/sensitiveMaskLookup'
+import {
+  buildSensitiveMaskLookup,
+  parseFormConfigJsonsProcessFirst,
+} from '@/utils/sensitiveMaskLookup'
 import type { TaskDetailCtx } from '@/composables/taskDetail/context'
 import { createTaskDetailState } from '@/composables/taskDetail/useTaskDetailState'
 import { createTaskDetailFormSchema } from '@/composables/taskDetail/useTaskDetailFormSchema'
@@ -648,8 +651,14 @@ const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml } =
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName })
 const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, buildCurrentTaskFormSubmitPayload, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
 
-/** Mask configs for Change History / other non-FieldRenderer surfaces (display-only). */
+/** Mask configs for Change History only (form stages use each form's own sensitiveMask). */
 const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({
+  formConfigJsons: [
+    ...parseFormConfigJsonsProcessFirst(state.cachedContentForms),
+    processFormFormConfig.value,
+    mainFormConfig.value,
+    selectedNodeForm.value?.formConfig,
+  ],
   formFields: formFields.value,
   formTabs: [
     ...(formTabs.value || []),
@@ -665,20 +674,6 @@ const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({
     ...(subTableBindings.value || []),
     ...(processFormSubTableBindings.value || []),
     ...(selectedNodeForm.value?.subTableBindings || []),
-  ],
-  formConfigJsons: [
-    mainFormConfig.value,
-    processFormFormConfig.value,
-    selectedNodeForm.value?.formConfig,
-    // All FU forms (covers Change History fields from other stages)
-    ...((state.cachedContentForms || []).map((f: { configJson?: unknown }) => {
-      const raw = f?.configJson
-      if (typeof raw === 'string') {
-        // FALLBACK(ux): malformed configJson skips mask enrichment only; CH still shows values.
-        try { return JSON.parse(raw) } catch { return null }
-      }
-      return raw
-    })),
   ],
 }))
 

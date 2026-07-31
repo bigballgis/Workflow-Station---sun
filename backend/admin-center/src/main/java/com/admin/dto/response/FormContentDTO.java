@@ -21,5 +21,7 @@ public class FormContentDTO {
     private String sourceId;
     private String data;       // configJson 字符串
     private String type;       // "FORM"
+    /** DW form type: PROCESS / TASK / ACTION (from dw_form_definitions.form_type). */
+    private String formType;
     private List<TableBindingDTO> tableBindings;
 }
