@@ -1,6 +1,11 @@
 # 多实例子任务按 BU + Role 分派（逐行 Role 字段，共享认领池）
 
 > 状态：**已实现**（2026-07-16 初版；2026-07-18 升级为三场景逐行模型）。
+>
+> 本文覆盖**分派模型**（BPMN 契约、后端解析、认领池）。表单上那个
+> **Assignment Mode 组件**的形态与三端渲染（容器化、拖拽、DW/Portal parity、
+> 框架约束与排查手册）另见
+> [mi-assignment-mode-component.md](./mi-assignment-mode-component.md)。
 
 ## 三场景升级（2026-07-18，最终模型）
 
