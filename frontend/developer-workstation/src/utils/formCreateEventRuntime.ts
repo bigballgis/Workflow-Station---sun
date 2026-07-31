@@ -120,6 +120,15 @@ export function isEmptyFormCreateHandler(raw: unknown): boolean {
 
 export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEventContext) => void) | null {
   if (typeof raw === 'function') {
+    // Preview materialize wraps $FNX: into functions that close over a build-time API
+    // (often without visibility). Prefer the tagged source so dispatch can pass ctx.api
+    // with api.hidden/display wired to extracted lookup / subTable.
+    // Keep in sync with user-portal/src/utils/formCreateEventRuntime.ts
+    const tagged = raw as { __hermesFormEventSource?: unknown; __json?: unknown }
+    const source = tagged.__hermesFormEventSource ?? tagged.__json
+    if (typeof source === 'string' && !isEmptyFormCreateHandler(source)) {
+      return parseFormCreateEventHandler(source)
+    }
     return (ctx) => {
       try {
         (raw as FormCreateChangeHandler)(ctx.field, ctx.value, ctx.api)
@@ -143,7 +152,23 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
 
   try {
     if (usesInject) {
-      const runner = new Function('$inject', body) as (inject: Record<string, unknown>) => void
+      // $FNX: bodies are normalized to function($inject){…}. Designer scripts often use
+      // bare `api` / `value` (form-create docs) as well as `$inject.api` — bind both.
+      // Keep in sync with user-portal/src/utils/formCreateEventRuntime.ts
+      const runner = new Function(
+        '$inject',
+        [
+          'var api = $inject.api;',
+          'var options = $inject.options;',
+          'var option = $inject.option;',
+          'var rule = $inject.rule;',
+          'var self = $inject.self;',
+          'var args = $inject.args;',
+          'var field = $inject.field;',
+          'var value = $inject.value;',
+          body,
+        ].join('\n'),
+      ) as (inject: Record<string, unknown>) => void
       return (ctx) => {
         runner({
           api: ctx.api,
@@ -239,7 +264,10 @@ export function wrapFormLevelOnChangeForFormCreate(raw: unknown): unknown {
         ? (inject as { api?: PortalFormApi; rule?: Record<string, unknown> })
         : {}
     const fcApi = bag.api && typeof bag.api.getValue === 'function' ? bag.api : null
-    if (!fcApi) return
+    if (!fcApi) {
+      console.warn('[formCreateEventRuntime] missing form-create api for form-level onChange', field)
+      return
+    }
     const options = createFormEventOptionsBridge(fcApi, bag.rule)
     runFormOnChangeHandler(stored, field, value, options, bag.rule ?? {})
   }
@@ -266,7 +294,6 @@ export function createPortalFormApi(
   },
 ): PortalFormApi {
   const resolve = (key: string) => resolveFieldKey?.(key) ?? key
-  const vis = visibility?.state
 
   function resolveFieldTargets(
     field: string | string[] | undefined,
@@ -275,6 +302,11 @@ export function createPortalFormApi(
     if (field === undefined) return getAllFieldKeys()
     const list = Array.isArray(field) ? field : [field]
     return list.map(resolve)
+  }
+
+  /** Lazy: Preview materialize binds before FormPreviewItems registers the bridge. */
+  function visibilityState(): PortalFormVisibilityState | undefined {
+    return visibility?.state
   }
 
   return {
@@ -298,26 +330,29 @@ export function createPortalFormApi(
       }
     },
     hidden(status: boolean, field?: string | string[]) {
-      if (!vis) return
-      for (const key of resolveFieldTargets(field, visibility!.getAllFieldKeys)) {
+      const vis = visibilityState()
+      if (!vis || !visibility) return
+      for (const key of resolveFieldTargets(field, visibility.getAllFieldKeys)) {
         if (status) vis.hidden.set(key, true)
         else vis.hidden.delete(key)
       }
-      visibility!.notify()
+      visibility.notify()
     },
     display(status: boolean, field?: string | string[]) {
-      if (!vis) return
-      for (const key of resolveFieldTargets(field, visibility!.getAllFieldKeys)) {
+      const vis = visibilityState()
+      if (!vis || !visibility) return
+      for (const key of resolveFieldTargets(field, visibility.getAllFieldKeys)) {
         if (status) vis.display.set(key, false)
         else vis.display.delete(key)
       }
-      visibility!.notify()
+      visibility.notify()
     },
     hiddenStatus(field: string) {
-      return vis?.hidden.get(resolve(field)) === true
+      return visibilityState()?.hidden.get(resolve(field)) === true
     },
     displayStatus(field: string) {
       const key = resolve(field)
+      const vis = visibilityState()
       if (vis?.display.has(key)) return vis.display.get(key) !== false
       return true
     },

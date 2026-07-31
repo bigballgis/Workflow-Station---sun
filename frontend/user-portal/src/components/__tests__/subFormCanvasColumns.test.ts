@@ -68,6 +68,25 @@ describe('resolveSubFormDialogColumnsForBinding', () => {
     expect(dialogCols.map(c => c.field)).toEqual(['custom_field'])
   })
 
+  it('attaches sourceRule so dialog can run component events', () => {
+    const subForms = {
+      3: {
+        rule: [
+          {
+            type: 'select',
+            field: 'case_type',
+            title: 'Case Type',
+            options: [{ label: 'CNP', value: 1 }],
+            _on: { blur: '$FNX:\n$inject.api.setValue("card_number", "111")' },
+          },
+        ],
+      },
+    }
+    const dialogCols = resolveSubFormDialogColumnsForBinding({ bindingId: 3 }, subForms, ctx)
+    expect(dialogCols[0].sourceRule).toMatchObject({ field: 'case_type', type: 'select' })
+    expect((dialogCols[0].sourceRule as Record<string, unknown>)._on).toBeDefined()
+  })
+
   it('includes fields nested inside a Card layout container (FU 50013 regression)', () => {
     const binding = { bindingId: 50113 }
     const subForms = {
@@ -152,5 +171,56 @@ describe('flattenSubFormRuleLayoutContainers', () => {
   it('returns [] for non-array input', () => {
     expect(flattenSubFormRuleLayoutContainers(undefined)).toEqual([])
     expect(flattenSubFormRuleLayoutContainers(null)).toEqual([])
+  })
+})
+
+/**
+ * The Assignment Mode component holds the assignee / BU / role rules as CHILDREN.
+ * It has no `field` of its own, so unless it is treated as a layout container the
+ * flattener keeps the container and isDialogMappableSubFormRule() then drops it —
+ * silently taking its three fields with it. That is exactly how the User Portal
+ * Add/Edit dialog ended up showing every column except the assignment ones.
+ */
+describe('miAssignment container flattening', () => {
+  const ctx = { lookupDbConfigs: {}, relationViewConfigs: {} }
+
+  it('lifts assignment fields out of the container into dialog columns', () => {
+    const binding = { bindingId: 99 }
+    const subForms = {
+      99: {
+        rule: [
+          { type: 'input', field: 'name', title: 'Name' },
+          { type: 'input', field: 'main_id', title: 'main id' },
+          {
+            type: 'miAssignment',
+            children: [
+              { type: 'lookup', field: 'assignee', title: 'Assignee' },
+              { type: 'select', field: 'bu_code', title: 'Business Unit' },
+              { type: 'select', field: 'role_code', title: 'Role' },
+            ],
+          },
+        ],
+      },
+    }
+    const cols = resolveSubFormDialogColumnsForBinding(binding, subForms, ctx)
+    expect(cols.map(c => c.field))
+      .toEqual(['name', 'main_id', 'assignee', 'bu_code', 'role_code'])
+  })
+
+  it('flattens the container itself away (it is not a column)', () => {
+    const flat = flattenSubFormRuleLayoutContainers([
+      { type: 'miAssignment', children: [{ type: 'input', field: 'assignee' }] },
+    ]) as Array<Record<string, unknown>>
+    expect(flat.map(r => r.field)).toEqual(['assignee'])
+    expect(flat.some(r => r.type === 'miAssignment')).toBe(false)
+  })
+
+  it('handles an empty container without dropping siblings', () => {
+    const flat = flattenSubFormRuleLayoutContainers([
+      { type: 'input', field: 'a' },
+      { type: 'miAssignment', children: [] },
+      { type: 'input', field: 'b' },
+    ]) as Array<Record<string, unknown>>
+    expect(flat.map(r => r.field)).toEqual(['a', 'b'])
   })
 })

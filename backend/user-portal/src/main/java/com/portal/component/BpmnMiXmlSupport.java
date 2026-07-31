@@ -11,7 +11,10 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * BPMN XML parsing helpers used to locate multi-instance (MI) sub-process configuration
@@ -47,6 +50,8 @@ final class BpmnMiXmlSupport {
         factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
         factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
         factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
         factory.setXIncludeAware(false);
         factory.setExpandEntityReferences(false);
 
@@ -338,5 +343,105 @@ final class BpmnMiXmlSupport {
     /** role 模式下存 BU code 的子表列名（可选）。 */
     static String extractBuFieldFromSubProcess(Element subProcessElement) {
         return findFirstPropertyValue(subProcessElement, "buField");
+    }
+
+    /**
+     * Parses every user task inside an MI subprocess and derives the portal assignment contract by sub-table name.
+     * Missing field names remain missing; this parser never supplies legacy column-name defaults.
+     */
+    static Map<String, Map<String, Object>> buildMiAssignmentsBySubTableName(String bpmnXml) {
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return Map.of();
+        }
+        try {
+            Document document = parseBpmnSecurely(bpmnXml);
+            Map<String, MiAssignmentContract> contracts = new LinkedHashMap<>();
+            NodeList subProcesses = document.getElementsByTagNameNS("*", "subProcess");
+            for (int i = 0; i < subProcesses.getLength(); i++) {
+                if (!(subProcesses.item(i) instanceof Element subProcess)
+                        || findMultiInstanceLoopInSubProcess(subProcess) == null) {
+                    continue;
+                }
+                collectMiAssignmentContracts(subProcess, contracts);
+            }
+            Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+            contracts.forEach((name, contract) -> result.put(name, contract.toPayload()));
+            return result;
+        } catch (MiAssignmentConfigurationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new MiAssignmentConfigurationException("Failed to parse BPMN MI assignment configuration", e);
+        }
+    }
+
+    private static void collectMiAssignmentContracts(
+            Element subProcess, Map<String, MiAssignmentContract> contracts) {
+        NodeList tasks = subProcess.getElementsByTagNameNS("*", "userTask");
+        for (int i = 0; i < tasks.getLength(); i++) {
+            if (!(tasks.item(i) instanceof Element task)) {
+                continue;
+            }
+            String mode = normalizedProperty(task, "assigneeMode");
+            String subTableName = normalizedProperty(task, "subTableName");
+            if (!isSupportedMode(mode) || subTableName == null) {
+                continue;
+            }
+            MiAssignmentContract candidate = new MiAssignmentContract(
+                    mode,
+                    normalizedProperty(task, "assigneeField"),
+                    normalizedProperty(task, "roleField"),
+                    normalizedProperty(task, "buField"));
+            MiAssignmentContract existing = contracts.putIfAbsent(subTableName, candidate);
+            if (existing != null && !existing.equals(candidate)) {
+                throw new MiAssignmentConfigurationException(
+                        "CONFLICTING_MI_ASSIGNMENT_CONFIG: subTableName '" + subTableName
+                                + "' has conflicting MI assignment settings");
+            }
+        }
+    }
+
+    private static String normalizedProperty(Element task, String name) {
+        String value = findFirstPropertyValue(task, name);
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static boolean isSupportedMode(String mode) {
+        return "user".equalsIgnoreCase(mode)
+                || "role".equalsIgnoreCase(mode)
+                || "both".equalsIgnoreCase(mode);
+    }
+
+    private record MiAssignmentContract(
+            String assigneeMode, String assigneeField, String roleField, String buField) {
+
+        private MiAssignmentContract {
+            assigneeMode = assigneeMode.toLowerCase(java.util.Locale.ROOT);
+        }
+
+        Map<String, Object> toPayload() {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("allowUser", !"role".equals(assigneeMode));
+            payload.put("allowRole", !"user".equals(assigneeMode));
+            putIfPresent(payload, "assigneeField", assigneeField);
+            putIfPresent(payload, "roleField", roleField);
+            putIfPresent(payload, "buField", buField);
+            return payload;
+        }
+
+        private static void putIfPresent(Map<String, Object> payload, String key, String value) {
+            if (value != null) {
+                payload.put(key, value);
+            }
+        }
+    }
+
+    static final class MiAssignmentConfigurationException extends RuntimeException {
+        MiAssignmentConfigurationException(String message) {
+            super(Objects.requireNonNull(message));
+        }
+
+        MiAssignmentConfigurationException(String message, Throwable cause) {
+            super(Objects.requireNonNull(message), cause);
+        }
     }
 }

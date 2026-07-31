@@ -6,6 +6,7 @@ import FormRenderer from '@/components/FormRenderer.vue'
 import type { RelationFieldDef } from '@/components/subTableAddDialogHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import type { SubTablePortalViews } from '@/components/formRendererHelpers'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 /**
  * Sub-table binding shape for the start form (same data as the original inline ref).
@@ -18,6 +19,7 @@ export interface ProcessStartSubTableBinding {
   bindingType: string
   bindingMode: string
   tableName: string
+  physicalTableName?: string
   tableType: string
   tableDescription: string
   /** Designer PK columns from tableBindings (admin-center); avoids hardcoding id/rowId. */
@@ -27,6 +29,7 @@ export interface ProcessStartSubTableBinding {
   dialogColumns?: Array<{ field: string; label: string; type?: string }>
   /** Parsed sub-form design fields — backs the form-below-table inline form (incl. nested sub-tables). */
   formFields?: FormField[]
+  assignmentConfig?: AssignmentConfig
   portalViews?: Partial<SubTablePortalViews> | null
   data: any[]
   fieldDefinitions?: BindingFieldDefinition[]

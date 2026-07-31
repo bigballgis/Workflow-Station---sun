@@ -172,7 +172,7 @@
               :field-defs="col.props?.fieldDefs || []"
               :ensure-mock-fields="ensureMockFieldsForColumn(col)"
               :show-backfill-view="previewLookupCompact ? false : (col.props?.showBackfillView !== false)"
-              :readonly="!editable || (col.field === 'assignee' && assigneeCellLocked(scope.row))"
+              :readonly="!editable || (assignmentConfig?.assigneeField === col.field && assigneeCellLocked(scope.row))"
               :multiple="col.props?.multiple === true"
               @update:model-value="(val) => onLookupCellChange(col, scope.$index, val)"
             />
@@ -284,6 +284,7 @@
         :initial-data="linkFormInitialData"
         :rule="linkFormRule"
         :option="linkFormOption"
+        :assignment-config="assignmentConfig"
         @update:visible="linkFormDialogVisible = $event"
         @save="handleLinkFormSave"
       />
@@ -301,6 +302,7 @@
         :rule="formRule"
         :option="formOption"
         :columns="dialogColumns"
+        :assignment-config="assignmentConfig"
         @update:visible="formDialogVisible = $event"
         @save="handleDialogSave"
       />
@@ -347,6 +349,7 @@ import {
   isSensitiveMaskActive,
   normalizeSensitiveMaskConfig,
 } from '@/utils/sensitiveMask'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 const { t } = useI18n()
 
@@ -398,6 +401,7 @@ const props = withDefaults(defineProps<{
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
+  assignmentConfig?: AssignmentConfig
 }>(), {
   // Per-op switches default OPEN. Without an explicit default, Vue casts an *absent*
   // Boolean prop to false (not undefined), which would hide Add/Edit/Delete at every
@@ -426,8 +430,6 @@ const canAdd = computed(() => editable.value && props.allowAdd !== false)
 const canEdit = computed(() => editable.value && props.allowEdit !== false)
 const canDelete = computed(() => editable.value && props.allowDelete !== false)
 
-// MI 分派行级互斥：该行选了角色（role_code / bu_code 有值）时，assignee 分派字段应只读，
-// 反之亦然（一行只能一种分派方式）。约定字段名 assignee / role_code / bu_code。
 function hasVal(v: unknown): boolean {
   if (v == null) return false
   if (Array.isArray(v)) return v.length > 0
@@ -435,7 +437,11 @@ function hasVal(v: unknown): boolean {
   return String(v).trim() !== ''
 }
 function assigneeCellLocked(row: Record<string, any>): boolean {
-  return hasVal(row?.role_code) || hasVal(row?.bu_code)
+  const config = props.assignmentConfig
+  if (!config?.allowRole) return false
+  return [config.roleField, config.buField]
+    .filter((field): field is string => !!field)
+    .some((field) => hasVal(row[field]))
 }
 
 function lookupCascadeConfigForColumn(col: ColumnConfig): LookupCascadeConfig {

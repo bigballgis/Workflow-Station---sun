@@ -72,7 +72,13 @@ class VersionComponentImplTest {
     private com.developer.repository.EmailMonitorRuleRepository emailMonitorRuleRepository;
 
     @Mock
+    private com.developer.repository.EmailTemplateRepository emailTemplateRepository;
+
+    @Mock
     private com.developer.repository.TableRelationRepository tableRelationRepository;
+
+    @Mock
+    private com.developer.repository.ProcessDefinitionRepository processDefinitionRepository;
 
     @Mock
     private EntityManager entityManager;

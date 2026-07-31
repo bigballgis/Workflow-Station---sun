@@ -5,6 +5,7 @@ import {
   installFcDesignerPreviewCapture,
   mergePreviewValidateFormOption,
   prepareDesignerPreviewValidation,
+  wrapFcDesignerOpenPreview,
 } from '../formDesignerPreviewValidation'
 
 describe('formDesignerPreviewValidation', () => {
@@ -174,5 +175,60 @@ describe('formDesignerPreviewValidation', () => {
     )
     btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     expect(setRule).toHaveBeenCalled()
+  })
+
+  it('wrapFcDesignerOpenPreview recompiles preview.rule so $inject.value works after getJson', () => {
+    const form: Record<string, unknown> = { case_type: 'CNP', card_number: '' }
+    const api = {
+      setValue: (field: string, value: unknown) => { form[field] = value },
+      getValue: (field: string) => form[field],
+      form,
+      hidden: () => {},
+      display: () => {},
+      hiddenStatus: () => false,
+      displayStatus: () => true,
+      setFieldError: () => {},
+      clearFieldError: () => {},
+    }
+    // Mimic parseJson output: native $FNX compiled without `value` on inject
+    const nativeChange = Object.assign(
+      function ($inject: { api: typeof api; args?: unknown[] }) {
+        // Stock EventConfig scripts use $inject.value — undefined in native inject.
+        const v = ($inject as { value?: unknown }).value
+        if (v === 'CNP') $inject.api.setValue('card_number', 'broken')
+      },
+      {
+        __json:
+          '$FNX:\nvar v = $inject.value\nif (v === \'CNP\') { $inject.api.setValue(\'card_number\', \'111\') }',
+        __inject: true,
+      },
+    )
+    const preview = {
+      state: false,
+      rule: [
+        { type: 'select', field: 'case_type', on: { change: nativeChange }, inject: true },
+        { type: 'input', field: 'card_number' },
+      ] as Array<Record<string, unknown>>,
+      option: {} as Record<string, unknown>,
+    }
+    const ref = {
+      preview,
+      getRule: () => [{ type: 'select', field: 'case_type', _on: { change: nativeChange.__json } }],
+      setRule: vi.fn(),
+      getOption: () => ({}),
+      setOption: vi.fn(),
+      openPreview() {
+        preview.state = true
+        // fc-designer assigns parseJson result here — leave native handler in place
+      },
+    }
+    wrapFcDesignerOpenPreview(ref, 'Validate')
+    ref.openPreview()
+    const change = preview.rule[0].on?.change as (inject: unknown) => void
+    expect(typeof change).toBe('function')
+    // Native inject shape: value missing, selected option only in args[0]
+    change({ api, args: ['CNP'] })
+    expect(form.card_number).toBe('111')
+    expect(preview.option.injectEvent).toBe(true)
   })
 })

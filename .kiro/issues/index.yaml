@@ -1636,6 +1636,131 @@
 
 - id: "1500"
   status: fixed
+  fixed_at: "2026-07-28"
+  severity: major
+  category: bug
+  summary: "FU clone/导出/导入缺失 EmailTemplate，ZIP 未导入 monitors，BPMN connectionId/emailTemplateId 未 remap"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitExporter.java"
+  note: |
+    现象：含 Send Email / 邮件连接 / 入站监控的 Function Unit 经 clone 或导出再导入后，邮件模板丢失或 BPMN 仍指向源 ID，无法发信。
+    根因：EmailTemplate 未纳入 export/import/clone/version；ZIP parser 未解析 email-monitors/；
+    Clone 完全不复制 email；BpmnIdRewriter 不重写 connectionId/emailTemplateId；re-import 未删 dw_email_templates。
+    修复：三条路径补全 templates + monitors；serialize connectionId/templateId；BPMN remap；
+    clone 生成新 connectionUid/ruleUid；monitor processDefinitionKey=目标 FU code；
+    clearChildCollections 删除 templates。
+    验证：EmailPortabilityTest + VersionRollbackParityTest + BpmnIdRewriterTest + clone 相关单测 pass；
+    mvn -pl backend/developer-workstation -am package -DskipTests；compose rebuild developer-workstation。
+
+- id: "1501"
+  status: fixed
+  fixed_at: "2026-07-30"
+  severity: major
+  category: bug
+  summary: "SubTable 表单组件事件（on.change / hooks）可配置可持久化，但 Preview/Portal 运行时不触发"
+  file: "frontend/user-portal/src/composables/formRenderer/useFormData.ts"
+  note: |
+    现象：Form Design 右侧 Event 可为 subTable 配置 change/hooks，保存进 config_json，
+    但 DW Preview 与 User Portal 增删改行后脚本不执行。
+    根因：subTable 无 field；collect 只按 field 索引；handleSubTableUpdate / Preview updateTableRows
+    未调用事件 runner。
+    修复：resolveComponentEventFieldKey → __subTable_${bindingId}；Portal handleSubTableUpdate
+    与 DW FormPreviewItems.updateTableRows（sourceRule）调用 change/value；单测覆盖 collect + dispatch。
+    续 2026-07-29：子表 Add/Edit 弹窗内字段事件 — DialogColumn.sourceRule +
+    useSubTableDialogComponentEvents；select change 会镜像 blur（用户 Case Type→Card Number 场景）。
+    续 2026-07-30：fc-designer 工具栏 Preview（Form mode）不生效 — syncDesignerComponentEventsForFcPreview
+    原先把 $FNX: 字符串挂到 rule.on，form-create 当函数调用导致大量 "not a function"；
+    改为 compileFcPreviewInjectHandler + rule.inject=true + injectEvent，select 仅有 blur 时镜像 change。
+    续 2026-07-30b：子表/子表单同类缺口 — SubTableFormDialog 编译事件 + preserve shadow 后再 sanitize；
+    useSubTableRowDialog / list columns 保留 sourceRule；Portal+DW Element Plus 弹窗补齐
+    cascader/lookup/user/department/transfer 等 @change。
+    续 2026-07-30c：工具栏 Preview 仍不触发 Case Type 等事件 — openPreview 走 getJson→parseJson，
+    编译后的 handler 无 __json 时 toJson 把闭包函数字符串化，parseFn 重建后丢失 api/field；
+    修复：tagFcPreviewHandlerForJsonRoundtrip 写入 __json=$FNX: + __inject。
+    续 2026-07-30d：挂 change 仍不生效 — 原生 inject 无 $inject.value（值在 args[0]）；
+    改为 openPreview 之后 patchFcDesignerPreviewEventHandlers 用 Hermes 包装器重编译 preview.rule，
+    prepare 阶段不再往画布 setRule 编译函数。
+    验证：formDesignerPreviewValidation + formCreatePreviewEvents vitest pass；DW frontend rebuild。
+    续 2026-07-31：visiblePreviewRules 保留 Designer Hide（hidden = designerHidden || !scriptVisible）；
+    子树按 getRuleChildren 槽位 + rule.rule 递归；collectFieldKeysFromRules 同步嵌套 field。
+
+- id: "1503"
+  status: fixed
+  fixed_at: "2026-07-30"
+  severity: major
+  category: bug
+  summary: "Portal api.hidden(__subTable_*) 不隐藏子表 — FormRendererFields 未门控 isFieldVisible"
+  file: "frontend/user-portal/src/components/FormRendererFields.vue"
+  note: |
+    现象：New Requests 选中 user 后 HMDC Transaction 仍显示；脚本 api.hidden(true,'__subTable_271') 无效。
+    根因：subTable 分支渲染未检查 ctx.isFieldVisible(field.key)，显隐 Map 已写但 DOM 仍画。
+    修复：!inColumn / inColumn 两处均加 isFieldVisible；源码回归单测。
+    配合：Event 脚本须用 $inject.value / $inject.api（见 #1502 续）。
+
+- id: "1502"
+  status: fixed
+  fixed_at: "2026-07-30"
+  severity: major
+  category: bug
+  summary: "Form Design 控件 Event 脚本保存后再打开消失"
+  file: "frontend/developer-workstation/src/composables/formDesigner/useFormSave.ts"
+  note: |
+    现象：User 字段等控件 Event 写好 change 脚本 → 确定 → 保存表单 → 再进 Event，code 为空。
+    根因：useFormSave 在 prepareFormCreateRulesForPersist 之后又调 walkRulesEnsureComponentEvents；
+    持久化快照仍带 `_fc_id`，被当成画布规则，把 `on` 挪回 `_on` 并删掉 `on`，回载/Event 面板易丢脚本。
+    修复：保存路径去掉该 ensure；loadEventData 合并 on/_on 且跳过空 $FNX:；refreshFormRules 回写前 inflate；
+    Event 确定失败时不关弹窗。vitest eventSerialization 5 pass；DW frontend rebuild + 容器启动。
+
+- id: "1504"
+  status: fixed
+  fixed_at: "2026-07-31"
+  severity: major
+  category: bug
+  summary: "Deploy Upload to admin center 500 — EMAIL_TEMPLATE 违反 chk_content_type"
+  file: "deploy/init-scripts/00-schema/61-widen-chk-content-type-email-template.sql"
+  note: |
+    现象：Debit Card_20260525 Deploy 在 Upload to admin center 失败，admin.fu.import_unexpected_error。
+    根因：导入写入 ContentType.EMAIL_TEMPLATE，但 sys_function_unit_contents.chk_content_type
+    未包含该值。修复：append-only 脚本 DROP/ADD 约束加入 EMAIL_TEMPLATE；00-init-all 注册 59–61；
+    dev 库已手工执行并通过 INSERT EMAIL_TEMPLATE 冒烟（ROLLBACK）。
+
+- id: "1505"
+  status: fixed
+  fixed_at: "2026-07-31"
+  severity: major
+  category: bug
+  summary: "Form Preview 中 select change 调用 api.hidden 无法隐藏 lookup"
+  file: "frontend/developer-workstation/src/utils/formCreateEventRuntime.ts"
+  note: |
+    现象：HMDC Case Form Preview 里 select 改值后脚本 api.hidden(true, lookupField) 无效，lookup 仍显示。
+    根因：1) Preview 把 lookup 拆成 kind:'lookup'，fc 原生 api.hidden 管不到；
+    2) materializePreviewComponentEvents 在 FormPreviewItems 挂载前用无 visibility 的 PortalFormApi
+    编译 rule.on，且 dispatch 拾取带 __hermesFormEventSource 的包装函数时仍走闭包 api（hidden 空操作）。
+    修复：parseFormCreateEventHandler 优先重跑 tagged $FNX: 源并用 ctx.api；createPortalFormApi
+    惰性读 visibility.state；deferred visibility bridge + FormPreviewItems 注册；form-level onChange
+    经 withPreviewVisibilityFormOnChange。单测 materialize/dispatch/hermes-source；DW build +
+    compose rebuild developer-workstation-frontend。
+
+- id: "1506"
+  status: fixed
+  fixed_at: "2026-07-31"
+  severity: major
+  category: bug
+  summary: "子表 Add Record 弹窗 select 事件 api.hidden 无法隐藏 lookup"
+  file: "frontend/user-portal/src/composables/subTableAddDialog/useSubTableDialogComponentEvents.ts"
+  note: |
+    现象：Task Detail 子表 Add Record 中给 select 配 change/blur 隐藏 lookup，改值后 lookup 仍显示。
+    根因：1) useSubTableDialogComponentEvents 的 createPortalFormApi 未接 visibility，api.hidden 静默空操作；
+    2) 弹窗未按 isDialogFieldVisible 过滤列；3) $FNX: 体规范为 function($inject) 后裸 api 未绑定。
+    修复：dialog 接 visibility + isDialogFieldVisible 过滤；portal/DW parseFormCreateEventHandler
+    inject 路径绑定 api/value/field 等；开窗 reset。单测 dialog events + $FNX bare api；
+    portal/DW build + compose rebuild *-frontend。
+    后续（产品确认）：开窗只跑 Form 级 onCreated→onMounted，不回放 select change；formOptions
+    经 binding→SubTableField→dialog；截图脚本 verify-subtable-dialog-form-lifecycle.mjs 待 URL。
+
+# 以下两条来自 common_0731_SELF_AP（敏感打码批次）。原编号 1500/1501 与
+# common_0726_UIUX_AP 撞号，合并时改为 1507/1508。
+- id: "1507"
+  status: fixed
   fixed_at: "2026-07-30"
   severity: minor
   category: quality
@@ -1644,7 +1769,7 @@
   note: |
     convertFormCreateRule 末尾 console.log 已删除（敏感打码 PR 同批清理）。
 
-- id: "1501"
+- id: "1508"
   status: open
   severity: major
   category: bug

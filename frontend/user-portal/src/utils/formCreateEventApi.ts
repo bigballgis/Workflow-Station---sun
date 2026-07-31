@@ -107,7 +107,10 @@ export function createPortalFormApi(
   },
 ): PortalFormApi {
   const resolve = (key: string) => resolveFieldKey?.(key) ?? key
-  const vis = visibility?.state
+  // Lazy read — keep in sync with developer-workstation formCreateEventRuntime
+  function visibilityState(): PortalFormVisibilityState | undefined {
+    return visibility?.state
+  }
 
   return {
     get form() {
@@ -130,26 +133,29 @@ export function createPortalFormApi(
       }
     },
     hidden(status: boolean, field?: string | string[]) {
-      if (!vis) return
-      for (const key of resolveFieldTargets(field, resolve, visibility!.getAllFieldKeys)) {
+      const vis = visibilityState()
+      if (!vis || !visibility) return
+      for (const key of resolveFieldTargets(field, resolve, visibility.getAllFieldKeys)) {
         if (status) vis.hidden.set(key, true)
         else vis.hidden.delete(key)
       }
-      visibility!.notify()
+      visibility.notify()
     },
     display(status: boolean, field?: string | string[]) {
-      if (!vis) return
-      for (const key of resolveFieldTargets(field, resolve, visibility!.getAllFieldKeys)) {
+      const vis = visibilityState()
+      if (!vis || !visibility) return
+      for (const key of resolveFieldTargets(field, resolve, visibility.getAllFieldKeys)) {
         if (status) vis.display.set(key, false)
         else vis.display.delete(key)
       }
-      visibility!.notify()
+      visibility.notify()
     },
     hiddenStatus(field: string) {
-      return vis?.hidden.get(resolve(field)) === true
+      return visibilityState()?.hidden.get(resolve(field)) === true
     },
     displayStatus(field: string) {
       const key = resolve(field)
+      const vis = visibilityState()
       if (vis?.display.has(key)) return vis.display.get(key) !== false
       return true
     },

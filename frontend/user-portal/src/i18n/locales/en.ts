@@ -982,9 +982,12 @@ exportWithData: 'Export',
     selectDepartment: 'Select department',
     selectBusinessUnit: 'Select business unit',
     selectRole: 'Select role',
-    assignMode: 'Assignment method',
+    // Matches DW's form.miAssignmentTitle so the block reads the same in both apps.
+    assignMode: 'Assignment Mode',
     assignByPerson: 'Assign by person',
     assignByRole: 'Assign by role',
+    assignByPersonHint: 'One named person does this row',
+    assignByRoleHint: 'Anyone with the role in that unit can claim it',
     uploadFailed: 'Upload failed: {field}',
     // Multi-instance assignment
     assignee: 'Assignee',

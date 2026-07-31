@@ -265,6 +265,8 @@ public class ProcessBpmnValidator {
             result.addError("EMPTY_BPMN", "BPMN XML cannot be empty", null);
             return result;
         }
+        MiAssignmentFormGuard assignmentFormGuard = new MiAssignmentFormGuard(
+                formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId));
 
         // 查找所有多实例子流程节点
         Pattern subProcessPattern = Pattern.compile(
@@ -324,6 +326,7 @@ public class ProcessBpmnValidator {
                 try {
                     Long subTableId = Long.parseLong(subTableIdStr);
                     Optional<TableDefinition> tableOpt = tableDefinitionRepository.findByIdWithFields(subTableId);
+                    boolean staleIdFallback = false;
 
                     if (tableOpt.isEmpty()) {
                         // Fallback: lookup by subTableName within the same FU
@@ -333,6 +336,7 @@ public class ProcessBpmnValidator {
                             // Reload with JOIN FETCH to avoid LazyInitializationException on fieldDefinitions
                             if (tableOpt.isPresent()) {
                                 tableOpt = tableDefinitionRepository.findByIdWithFields(tableOpt.get().getId());
+                                staleIdFallback = tableOpt.isPresent();
                             }
                         }
                     }
@@ -357,53 +361,17 @@ public class ProcessBpmnValidator {
                                 subProcessId);
                         }
 
-                        // 验证 4: 按分派模式校验字段配置。
-                        // role 模式（assigneeMode=role）用 roleField（+ 可选 buField），user 模式用 assigneeField。
-                        String assigneeMode = userTaskProps.get("assigneeMode");
-                        boolean roleMode = assigneeMode != null && "role".equalsIgnoreCase(assigneeMode.trim());
-                        if (roleMode) {
-                            String roleField = userTaskProps.get("roleField");
-                            if (roleField != null && !roleField.isEmpty()) {
-                                boolean fieldExists = table.getFieldDefinitions().stream()
-                                    .anyMatch(fd -> fd.getFieldName().equals(roleField));
-                                if (!fieldExists) {
-                                    result.addError("ROLE_FIELD_NOT_FOUND",
-                                        "RoleField '" + roleField + "' not found in SubTable " + subTableId,
-                                        subProcessId);
-                                }
-                            } else {
-                                result.addError("MISSING_ROLE_FIELD",
-                                    "Multi-instance userTask (role mode) is missing roleField configuration",
-                                    userTaskId);
-                            }
-                            // buField 可选：填了就必须存在于子表字段中
-                            String buField = userTaskProps.get("buField");
-                            if (buField != null && !buField.isEmpty()) {
-                                boolean buExists = table.getFieldDefinitions().stream()
-                                    .anyMatch(fd -> fd.getFieldName().equals(buField));
-                                if (!buExists) {
-                                    result.addError("BU_FIELD_NOT_FOUND",
-                                        "BuField '" + buField + "' not found in SubTable " + subTableId,
-                                        subProcessId);
-                                }
-                            }
-                        } else {
-                            String assigneeField = userTaskProps.get("assigneeField");
-                            if (assigneeField != null && !assigneeField.isEmpty()) {
-                                boolean fieldExists = table.getFieldDefinitions().stream()
-                                    .anyMatch(fd -> fd.getFieldName().equals(assigneeField));
-
-                                if (!fieldExists) {
-                                    result.addError("ASSIGNEE_FIELD_NOT_FOUND",
-                                        "AssigneeField '" + assigneeField + "' not found in SubTable " + subTableId,
-                                        subProcessId);
-                                }
-                            } else {
-                                result.addError("MISSING_ASSIGNEE_FIELD",
-                                    "Multi-instance userTask is missing assigneeField configuration",
-                                    userTaskId);
-                            }
-                        }
+                        // 验证 4: user/role/both 分别校验所需字段；buField 可选但配置后必须存在。
+                        validateAssignmentFields(
+                                userTaskProps, table, subTableId, subProcessId, userTaskId, result);
+                        assignmentFormGuard.validate(
+                                userTaskProps,
+                                userTaskId,
+                                subProcessId,
+                                subTableId,
+                                table,
+                                staleIdFallback,
+                                result);
                     }
                 } catch (NumberFormatException e) {
                     result.addError("INVALID_SUBTABLE_ID",
@@ -455,6 +423,77 @@ public class ProcessBpmnValidator {
         }
 
         return result;
+    }
+
+    private void validateAssignmentFields(
+            Map<String, String> properties,
+            TableDefinition table,
+            Long subTableId,
+            String subProcessId,
+            String userTaskId,
+            ValidationResult result) {
+        String mode = Optional.ofNullable(properties.get("assigneeMode"))
+                .map(String::trim)
+                .orElse("user");
+        boolean requiresUser = "user".equalsIgnoreCase(mode) || "both".equalsIgnoreCase(mode);
+        boolean requiresRole = "role".equalsIgnoreCase(mode) || "both".equalsIgnoreCase(mode);
+        if (requiresUser) {
+            validateRequiredField(
+                    properties.get("assigneeField"), "ASSIGNEE", table, subTableId,
+                    subProcessId, userTaskId, result);
+        }
+        if (requiresRole) {
+            validateRequiredField(
+                    properties.get("roleField"), "ROLE", table, subTableId,
+                    subProcessId, userTaskId, result);
+            validateOptionalBuField(properties.get("buField"), table, subTableId, subProcessId, result);
+        }
+    }
+
+    private void validateRequiredField(
+            String fieldName,
+            String fieldType,
+            TableDefinition table,
+            Long subTableId,
+            String subProcessId,
+            String userTaskId,
+            ValidationResult result) {
+        if (fieldName == null || fieldName.isBlank()) {
+            result.addError(
+                    "MISSING_" + fieldType + "_FIELD",
+                    "Multi-instance userTask is missing " + fieldType.toLowerCase(java.util.Locale.ROOT)
+                            + "Field configuration",
+                    userTaskId);
+            return;
+        }
+        boolean exists = table.getFieldDefinitions().stream()
+                .anyMatch(field -> fieldName.equals(field.getFieldName()));
+        if (!exists) {
+            result.addError(
+                    fieldType + "_FIELD_NOT_FOUND",
+                    fieldType.substring(0, 1) + fieldType.substring(1).toLowerCase(java.util.Locale.ROOT)
+                            + "Field '" + fieldName + "' not found in SubTable " + subTableId,
+                    subProcessId);
+        }
+    }
+
+    private void validateOptionalBuField(
+            String buField,
+            TableDefinition table,
+            Long subTableId,
+            String subProcessId,
+            ValidationResult result) {
+        if (buField == null || buField.isBlank()) {
+            return;
+        }
+        boolean exists = table.getFieldDefinitions().stream()
+                .anyMatch(field -> buField.equals(field.getFieldName()));
+        if (!exists) {
+            result.addError(
+                    "BU_FIELD_NOT_FOUND",
+                    "BuField '" + buField + "' not found in SubTable " + subTableId,
+                    subProcessId);
+        }
     }
 
     public ValidationResult validateLastTaskAssigneeTopology(String bpmnXml) {

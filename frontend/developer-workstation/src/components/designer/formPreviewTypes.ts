@@ -1,4 +1,6 @@
 /** Sub-table portal display (designer rule.props + binding-level subTablePortalViews). */
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+
 export interface SubTablePortalViewsPreview {
   assigneeTodo: 'formBelowTable' | 'tableOnly'
   initiatorRequest: 'mirrorTodo' | 'summaryWithLinkFormModal' | 'tableOnly'
@@ -28,6 +30,7 @@ export interface PreviewSubTableBinding {
   allowAdd?: boolean
   allowEdit?: boolean
   allowDelete?: boolean
+  assignmentConfig?: AssignmentConfig
 }
 
 /**
@@ -175,7 +178,8 @@ export function resolvePreviewInlineFormBelowDesign(
 
 export type FormPreviewItem =
   | { kind: 'fields'; rule: any[]; modelKey: string }
-  | { kind: 'subTable'; binding: PreviewSubTableBinding }
+  /** sourceRule = placed form-create subTable node (carries on/hook for Preview events). */
+  | { kind: 'subTable'; binding: PreviewSubTableBinding; sourceRule?: Record<string, unknown> }
   | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
   | { kind: 'lookup'; field: string; rule: Record<string, unknown>; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; selectedDisplayField?: string; filterConditions?: any[]; derivedFrom?: import('@/utils/lookupCascade').LookupDerivedFrom; multiple?: boolean; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number; readonly?: boolean }
   | { kind: 'card'; title: string; items: FormPreviewItem[]; modelKey: string }

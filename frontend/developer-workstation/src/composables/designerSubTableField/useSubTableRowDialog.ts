@@ -57,25 +57,31 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
   // 是否使用 form-create 对话框（当有 formRule 时优先使用）
   const hasFormRule = computed(() => props.formRule && props.formRule.length > 0)
 
+  function toDialogColumn(col: ColumnConfig): DialogColumn {
+    // 将旧的 'input' type 映射到 'text'
+    const type = col.type === 'input' ? 'text' : (col.type as DialogColumn['type'])
+    return {
+      field: col.field,
+      label: col.label,
+      type,
+      required: col.required,
+      ...(col.rules?.length ? { rules: col.rules } : {}),
+      placeholder: col.placeholder,
+      minWidth: col.minWidth,
+      options: col.options,
+      props: col.props,
+      readonly: (col as { readonly?: boolean }).readonly,
+      ...(col.sourceRule ? { sourceRule: col.sourceRule } : {}),
+      ...((col as { defaultValue?: unknown }).defaultValue !== undefined
+        ? { defaultValue: (col as { defaultValue?: unknown }).defaultValue }
+        : {}),
+    }
+  }
+
   // 将 ColumnConfig 转换为 DialogColumn（兼容 SubTableAddDialog 的类型）
   const dialogColumns = computed<DialogColumn[]>(() => {
     const source = dialogAddColumns.value ?? displayColumns.value
-    return source.map(col => {
-      // 将旧的 'input' type 映射到 'text'
-      const type = col.type === 'input' ? 'text' : (col.type as DialogColumn['type'])
-      return {
-        field: col.field,
-        label: col.label,
-        type,
-        required: col.required,
-        ...(col.rules?.length ? { rules: col.rules } : {}),
-        placeholder: col.placeholder,
-        minWidth: col.minWidth,
-        options: col.options,
-        props: col.props,
-        readonly: (col as { readonly?: boolean }).readonly,
-      }
-    })
+    return source.map(toDialogColumn)
   })
 
   // 添加/编辑行 — preview 走 FormDesigner 顶层弹层，避免嵌在 Preview Dialog 内被遮罩挡住
@@ -88,16 +94,7 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
       const fkMetas = toFieldFkMetas(props.config.fieldDefinitions)
       const baseCols = fkMetas.length
         ? applyFkPresentationToDialogColumns(
-            displayColumns.value.map(col => ({
-              field: col.field,
-              label: col.label,
-              type: col.type === 'input' ? 'text' : (col.type as DialogColumn['type']),
-              required: col.required,
-              ...(col.rules?.length ? { rules: col.rules } : {}),
-              placeholder: col.placeholder,
-              options: col.options,
-              props: col.props,
-            })),
+            displayColumns.value.map(toDialogColumn),
             fkMetas,
             props.config.fieldDefinitions,
           ).visibleColumns
@@ -158,6 +155,7 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
         formRule: props.formRule,
         formOption: props.formOption,
         columns: dialogColumns.value,
+        assignmentConfig: props.assignmentConfig,
         onSave: (rowData) => handleDialogSave(rowData),
       })
       return

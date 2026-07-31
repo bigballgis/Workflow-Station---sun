@@ -156,6 +156,24 @@ public class ExportImportPackageParser {
             }
             result.put("connections", connections);
 
+            // Parse inbound email monitor rules
+            List<Map<String, Object>> emailMonitors = new ArrayList<>();
+            for (String fileName : rawFiles.keySet()) {
+                if (fileName.startsWith("email-monitors/") && fileName.endsWith(".json")) {
+                    emailMonitors.add(objectMapper.readValue(rawFiles.get(fileName), Map.class));
+                }
+            }
+            result.put("emailMonitors", emailMonitors);
+
+            // Parse Send Email templates
+            List<Map<String, Object>> emailTemplates = new ArrayList<>();
+            for (String fileName : rawFiles.keySet()) {
+                if (fileName.startsWith("email-templates/") && fileName.endsWith(".json")) {
+                    emailTemplates.add(objectMapper.readValue(rawFiles.get(fileName), Map.class));
+                }
+            }
+            result.put("emailTemplates", emailTemplates);
+
             // Store checksum for verification
             if (rawFiles.containsKey("checksum.sha256")) {
                 result.put("checksum", new String(rawFiles.get("checksum.sha256"), StandardCharsets.UTF_8));

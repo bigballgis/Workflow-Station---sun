@@ -168,6 +168,7 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
             columns,
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
+            assignmentConfig: raw.assignmentConfig,
             portalViews: bindingPortalViews,
             primaryKeyFields: resolveSubTablePrimaryKeyFields(
               raw.primaryKeyFields,
@@ -221,6 +222,7 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
           columns,
           formFields: subFormDesign.formFields,
           formOptions: subFormDesign.formOptions,
+          assignmentConfig: synthetic.assignmentConfig,
           portalViews: bindingPortalViews,
           primaryKeyFields: resolveSubTablePrimaryKeyFields(null, tid, syntheticSchema.formConfig),
           fieldDefinitions: [],

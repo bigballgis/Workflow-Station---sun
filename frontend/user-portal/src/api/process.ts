@@ -1,4 +1,5 @@
 import request from './request'
+import type { MiAssignmentsMap } from '@/utils/miAssignmentConfig'
 
 export interface ProcessDefinition {
   id: string
@@ -73,6 +74,8 @@ export interface FunctionUnitContent {
     data: string
     type: string
   }>
+  /** BPMN-derived assignment configuration keyed by MI subTableName. */
+  miAssignments?: MiAssignmentsMap
   error?: string
 }
 

@@ -39,6 +39,10 @@ import {
   bindingIdsPreferStrictSubTableLookup,
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
+import {
+  attachAssignmentConfigsToBindings,
+  stampAssignmentConfigsOnForms,
+} from '@/utils/miAssignmentConfig'
 
 export interface TaskDetailFuLoaderFns {
   loadFunctionUnitContent: (
@@ -106,6 +110,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         return
       }
 
+      stampAssignmentConfigsOnForms(content.forms, content.miAssignments)
       ctx.cachedContentForms = content.forms || []
       ctx.cachedRelationTableFieldIndex = buildRelationTableFieldIndexFromDataTables(content.dataTables)
 
@@ -396,6 +401,7 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         ctx.ensureSubTableBindingsFromLayoutAndConfig(bindings, formConfigForSubTables)
         // ensure* appends layout-only bindings after the stamp above — re-apply so they carry it too.
         stampMiCollectionFromBpmn(ctx, bindings)
+        attachAssignmentConfigsToBindings(bindings, content.miAssignments)
         subTableBindings.value = bindings
         ctx.syncFormLayoutWithSubTableBindings()
         // Previous-node read-only form collection — moved verbatim to useTaskDetailPrevForms.ts.

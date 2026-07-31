@@ -14,4 +14,6 @@ public interface EmailTemplateRepository extends JpaRepository<EmailTemplate, Lo
     boolean existsByFunctionUnitIdAndName(Long functionUnitId, String name);
 
     boolean existsByFunctionUnitIdAndNameAndIdNot(Long functionUnitId, String name, Long id);
+
+    void deleteByFunctionUnitId(Long functionUnitId);
 }

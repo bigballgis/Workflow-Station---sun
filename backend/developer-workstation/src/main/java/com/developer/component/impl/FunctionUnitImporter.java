@@ -209,6 +209,7 @@ public class FunctionUnitImporter {
             }
         }
 
+        Map<Long, Long> bindingIdMapping = new HashMap<>();
         for (Map<String, Object> formData : formDataList) {
             Object sourceFormIdObj = formData.get("formId");
             if (!(sourceFormIdObj instanceof Number sourceFormId)) {
@@ -220,8 +221,8 @@ public class FunctionUnitImporter {
             }
             FormDefinition form = formDefinitionRepository.findById(newFormId)
                     .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", newFormId));
-            importWriter.finalizeFormImport(form, formData, importedTableNameToId,
-                    relationTableIdMapping, formIdMapping, componentIdMapping);
+            bindingIdMapping.putAll(importWriter.finalizeFormImport(form, formData, importedTableNameToId,
+                    relationTableIdMapping, formIdMapping, componentIdMapping));
         }
 
         Map<Long, Long> actionIdMapping = new HashMap<>();
@@ -242,15 +243,38 @@ public class FunctionUnitImporter {
             }
         }
 
+        Map<Long, Long> connectionIdMapping = new HashMap<>();
         if (packageData.containsKey("connections")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> connections = (List<Map<String, Object>>) packageData.get("connections");
             for (Map<String, Object> connectionData : connections) {
-                importWriter.importEmailConnection(functionUnit, connectionData);
+                var connection = importWriter.importEmailConnection(functionUnit, connectionData);
+                importWriter.recordSourceIdMapping(connectionData.get("connectionId"), connection.getId(),
+                        connectionIdMapping);
             }
         }
 
-        // Write process after tables/forms/actions import; rewrite old BPMN IDs (same as clone)
+        Map<Long, Long> emailTemplateIdMapping = new HashMap<>();
+        if (packageData.containsKey("emailTemplates")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> emailTemplates =
+                    (List<Map<String, Object>>) packageData.get("emailTemplates");
+            for (Map<String, Object> templateData : emailTemplates) {
+                var template = importWriter.importEmailTemplate(functionUnit, templateData);
+                importWriter.recordSourceIdMapping(templateData.get("templateId"), template.getId(),
+                        emailTemplateIdMapping);
+            }
+        }
+
+        if (packageData.containsKey("emailMonitors")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> monitors = (List<Map<String, Object>>) packageData.get("emailMonitors");
+            for (Map<String, Object> monitorData : monitors) {
+                importWriter.importEmailMonitorRule(functionUnit, monitorData, formIdMapping, bindingIdMapping);
+            }
+        }
+
+        // Write process after tables/forms/actions/email import; rewrite old BPMN IDs (same as clone)
         if (packageData.containsKey("process")) {
             String bpmnXml = (String) packageData.get("process");
             String rewrittenBpmn = BpmnIdRewriter.rewrite(
@@ -259,7 +283,10 @@ public class FunctionUnitImporter {
                     formIdMapping,
                     actionIdMapping,
                     importedTableNameToId,
-                    importedFormNameToId);
+                    importedFormNameToId,
+                    Map.of(),
+                    connectionIdMapping,
+                    emailTemplateIdMapping);
             // Name-based repair pass: actionIds (and formId/subTableId) that were ALREADY stale in the
             // source package miss the id mapping above and would stay dangling — the designer/portal then
             // shows the raw id instead of the action name. Re-resolve them by name against this unit.

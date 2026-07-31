@@ -38,6 +38,8 @@ export function buildNestedSubTableDescriptors(
       bindingMode: b.bindingMode,
       foreignKeyField: b.foreignKeyField,
       formFields: b.formFields,
+      formOptions: b.formOptions ?? null,
+      assignmentConfig: b.assignmentConfig,
       // Per-op switches follow the placed widget, exactly like a top-level sub-table:
       // forward only an explicit false so an unset switch keeps the operation open.
       ...(placed.allowAdd === false ? { allowAdd: false } : {}),

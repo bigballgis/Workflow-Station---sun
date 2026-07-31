@@ -361,6 +361,7 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
         columns: Array.isArray(b.columns) ? (b.columns as any[]) : [],
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
+        assignmentConfig: b.assignmentConfig,
         portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(null, b.bindingId, cfg),
         data: Array.isArray(b.data) ? (b.data as any[]) : [],

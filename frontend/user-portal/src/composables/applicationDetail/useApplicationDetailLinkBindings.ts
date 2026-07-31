@@ -249,6 +249,7 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
             subMode: raw.subMode,
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
+            assignmentConfig: raw.assignmentConfig,
             portalViews: bindingPortalViews,
             primaryKeyFields: resolveSubTablePrimaryKeyFields(
               raw.primaryKeyFields,
@@ -302,6 +303,7 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
           columns,
           formFields: subFormDesign.formFields,
           formOptions: subFormDesign.formOptions,
+          assignmentConfig: synthetic.assignmentConfig,
           portalViews: bindingPortalViews,
           primaryKeyFields: resolveSubTablePrimaryKeyFields(null, tid, syntheticSchema.formConfig),
           fieldDefinitions: [],

@@ -74,6 +74,7 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
         columns,
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
+        assignmentConfig: raw.assignmentConfig,
         portalViews: portalViewsMap[bid] ?? portalViewsMap[String(bid)] ?? null,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(raw.primaryKeyFields, bid, cfg),
         fieldDefinitions: raw.fieldDefinitions ?? [],

@@ -479,14 +479,17 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content: name={}", payload.get("name"));
-                fuContentCache.put(functionUnitId, new CachedFuContent(payload, System.currentTimeMillis()));
-                return payload;
+                Map<String, Object> enrichedPayload = enrichMiAssignments(payload);
+                fuContentCache.put(functionUnitId, new CachedFuContent(enrichedPayload, System.currentTimeMillis()));
+                return enrichedPayload;
             }
 
             return Collections.emptyMap();
 
         } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException |
                  FunctionUnitAccessComponent.FunctionUnitAccessDeniedException e) {
+            throw e;
+        } catch (BpmnMiXmlSupport.MiAssignmentConfigurationException e) {
             throw e;
         } catch (Exception e) {
             log.error("Failed to get function unit content for {}: {}", functionUnitId, e.getMessage(), e);
@@ -530,10 +533,11 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content from admin-center: name={}", payload.get("name"));
-                attachRequestIdConfig(payload);
+                Map<String, Object> enrichedPayload = enrichMiAssignments(payload);
+                attachRequestIdConfig(enrichedPayload);
                 // Cache successful result
-                fuContentCache.put(functionUnitId, new CachedFuContent(payload, System.currentTimeMillis()));
-                return payload;
+                fuContentCache.put(functionUnitId, new CachedFuContent(enrichedPayload, System.currentTimeMillis()));
+                return enrichedPayload;
             }
 
             log.warn("Admin-center returned empty content for functionUnitId={}; attempting fallback to workflow-engine BPMN", functionUnitId);
@@ -541,10 +545,13 @@ public class ProcessComponent {
             // Fallback: fetch BPMN from workflow-engine by functionUnitCode, wrap in same shape
             Map<String, Object> fallbackResult = loadBpmnFallbackFromEngine(functionUnitIdOrCode);
             if (fallbackResult != null && !fallbackResult.isEmpty() && !fallbackResult.containsKey("error")) {
+                fallbackResult = enrichMiAssignments(fallbackResult);
                 fuContentCache.put(functionUnitId, new CachedFuContent(fallbackResult, System.currentTimeMillis()));
             }
             return fallbackResult;
 
+        } catch (BpmnMiXmlSupport.MiAssignmentConfigurationException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to get function unit content for {}: {}", functionUnitIdOrCode, e.getMessage(), e);
             // Attempt fallback before giving up
@@ -559,6 +566,35 @@ public class ProcessComponent {
             errorResult.put("error", e.getMessage());
             return errorResult;
         }
+    }
+
+    private Map<String, Object> enrichMiAssignments(Map<String, Object> payload) {
+        Map<String, Map<String, Object>> assignments = new LinkedHashMap<>();
+        Object processesValue = payload.get("processes");
+        if (processesValue instanceof List<?> processes) {
+            for (Object processValue : processes) {
+                if (!(processValue instanceof Map<?, ?> process)) {
+                    continue;
+                }
+                Object data = process.get("data");
+                if (!(data instanceof String bpmnXml) || bpmnXml.isBlank()) {
+                    continue;
+                }
+                Map<String, Map<String, Object>> parsed =
+                        BpmnMiXmlSupport.buildMiAssignmentsBySubTableName(bpmnXml);
+                parsed.forEach((subTableName, config) -> {
+                    Map<String, Object> previous = assignments.putIfAbsent(subTableName, config);
+                    if (previous != null && !previous.equals(config)) {
+                        throw new BpmnMiXmlSupport.MiAssignmentConfigurationException(
+                                "CONFLICTING_MI_ASSIGNMENT_CONFIG: subTableName '" + subTableName
+                                        + "' has conflicting MI assignment settings");
+                    }
+                });
+            }
+        }
+        Map<String, Object> enriched = new LinkedHashMap<>(payload);
+        enriched.put("miAssignments", assignments);
+        return enriched;
     }
 
     /**

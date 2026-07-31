@@ -178,6 +178,31 @@ public class FunctionUnitImportController {
                     log.info("Synced {} email monitor rules for function unit {}",
                             emailMonitors.size(), importResult.getFunctionUnit().getId());
                 }
+
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> emailTemplates =
+                        (List<Map<String, Object>>) packageData.get("emailTemplates");
+                if (emailTemplates != null && !emailTemplates.isEmpty()) {
+                    for (Map<String, Object> templateData : emailTemplates) {
+                        String templateName = templateData.get("name") != null
+                                ? String.valueOf(templateData.get("name"))
+                                : "email-template";
+                        Object templateIdObj = templateData.get("templateId");
+                        if (templateIdObj == null) {
+                            templateIdObj = templateData.get("id");
+                        }
+                        String sourceId = templateIdObj != null ? String.valueOf(templateIdObj) : null;
+                        String templateJson = objectMapper.writeValueAsString(templateData);
+                        functionUnitManager.addFunctionUnitContent(
+                                importResult.getFunctionUnit().getId(),
+                                com.admin.enums.ContentType.EMAIL_TEMPLATE,
+                                templateName,
+                                templateJson,
+                                sourceId);
+                    }
+                    log.info("Saved {} email templates for function unit {}",
+                            emailTemplates.size(), importResult.getFunctionUnit().getId());
+                }
                 
                 result.put("status", "SUCCESS");
                 result.put("functionUnitId", importResult.getFunctionUnit().getId());
@@ -626,6 +651,22 @@ public class FunctionUnitImportController {
         }
         if (!emailMonitors.isEmpty()) {
             result.put("emailMonitors", emailMonitors);
+        }
+
+        List<Map<String, Object>> emailTemplates = new ArrayList<>();
+        for (String fileName : rawFiles.keySet()) {
+            if (fileName.startsWith("email-templates/") && fileName.endsWith(".json")) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> templateData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
+                    emailTemplates.add(templateData);
+                } catch (Exception e) {
+                    throw new IOException("Invalid email template JSON in package: " + fileName, e);
+                }
+            }
+        }
+        if (!emailTemplates.isEmpty()) {
+            result.put("emailTemplates", emailTemplates);
         }
         
         return result;

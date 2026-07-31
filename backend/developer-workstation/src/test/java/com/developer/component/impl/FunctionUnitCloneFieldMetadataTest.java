@@ -26,7 +26,8 @@ import static org.mockito.Mockito.*;
 /**
  * Clone MUST carry the field-level FK/PK runtime metadata (is_foreign_key / ref_table_id /
  * ref_primary_key_fields / pk_generation_json / fk_display_mode / relation_cardinality) plus the
- * main table's Request ID config. The runtime FK auto-fill and PK generation read these columns —
+ * main table's Request ID config. The runtime FK auto-fill and PK generation read these columns;
+ * omitting them leaves cloned FUs without PK/FK behavior even when dw_foreign_keys exist.
  * dw_foreign_keys alone is not enough, so dropping them silently degrades a cloned FU to
  * default (uuid) PK generation and no structural FK auto-fill.
  */
@@ -85,7 +86,10 @@ class FunctionUnitCloneFieldMetadataTest {
                 mock(com.developer.service.MainTableViewService.class),
                 mock(com.developer.repository.ForeignKeyRepository.class),
                 mock(com.developer.component.impl.FunctionUnitExporter.class),
-                tableDesignComponent);
+                tableDesignComponent,
+                mock(com.developer.repository.EmailConnectionRepository.class),
+                mock(com.developer.repository.EmailMonitorRuleRepository.class),
+                mock(com.developer.repository.EmailTemplateRepository.class));
     }
 
     @Test

@@ -1,5 +1,6 @@
 import { ref, computed, type Ref } from 'vue'
 import { permissionApi, type BusinessUnit, type RoleInfo } from '@/api/permission'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 /**
  * MI 子任务「按角色分派」的 BU→Role 级联 + 与 assignee 的行级互斥。
@@ -8,28 +9,32 @@ import { permissionApi, type BusinessUnit, type RoleInfo } from '@/api/permissio
  * - BU 列表：getBusinessUnits（平台 BU 全量目录，含用户已加入的 BU）
  * - 某 BU 下的 role：getBusinessUnitRoles(buId)
  *
- * 子表列 bu_code / role_code 落库存的是 **code**（后端 role 解析用 code），
+ * 配置指定的 BU / Role 列落库存的是 **code**（后端 role 解析用 code），
  * 但 getBusinessUnitRoles 入参是 BU **id**，所以内部维护 code→id 映射，
  * BU select 的 value 存 code、查 role 时转 id。
  *
- * 只服务字段名恰为 `bu_code` / `role_code` 的子表列，对其它 FU 零影响。
+ * 字段名完全来自 BPMN AssignmentConfig，不提供固定列名回退。
  */
-export const BU_FIELD = 'bu_code'
-export const ROLE_FIELD = 'role_code'
-export const ASSIGNEE_FIELD = 'assignee'
-
-export function useSubTableBuRoleCascade(formData: Ref<Record<string, any>>) {
+export function useSubTableBuRoleCascade(
+  formData: Ref<Record<string, any>>,
+  assignmentConfig: Ref<AssignmentConfig | undefined>,
+) {
   // BU 用级联树（el-cascader，与 admin-center Add Role Access 一致：父 BU 可展开子 BU）。
   const buTree = ref<BusinessUnit[]>([])
   // cascader value = BU **id**（emitPath:false 取单个 id）；checkStrictly 允许选父节点。
   const buCascaderProps = { value: 'id', label: 'name', children: 'children', checkStrictly: true, emitPath: false }
-  // cascader v-model 绑这个（存 id）；formData[BU_FIELD] 存的是 **code**（后端解析用 code）。
+  // cascader v-model stores id; the configured BU field stores code for backend resolution.
   const selectedBuId = ref<string>('')
   const roleOptions = ref<Array<{ label: string; value: string }>>([])
   const buLoading = ref(false)
   const roleLoading = ref(false)
-  // id → code（选中后把 code 存进 formData[BU_FIELD]）；缺 code 回退 id。
+  // id → code; when the directory omits code, preserve the id.
   const buIdToCode = ref<Record<string, string>>({})
+  const buField = computed(() => assignmentConfig.value?.buField)
+  const roleField = computed(() => assignmentConfig.value?.roleField)
+  const assigneeField = computed(() => assignmentConfig.value?.assigneeField)
+  const isConfiguredRoleCascade = computed(() =>
+    assignmentConfig.value?.allowRole === true && !!buField.value && !!roleField.value)
 
   function indexBuTree(list: BusinessUnit[]) {
     for (const bu of list || []) {
@@ -77,20 +82,21 @@ export function useSubTableBuRoleCascade(formData: Ref<Record<string, any>>) {
 
   /** 选 BU（cascader value=id）：存 code 到 formData、清 role/assignee（互斥）、按 id 查 role。 */
   async function onBuChange(buId: string | null | undefined) {
+    if (!isConfiguredRoleCascade.value || !buField.value || !roleField.value) return
     const id = buId ? String(buId) : ''
     selectedBuId.value = id
-    formData.value[BU_FIELD] = id ? (buIdToCode.value[id] || id) : ''
-    formData.value[ROLE_FIELD] = ''
-    if (id) {
-      formData.value[ASSIGNEE_FIELD] = ''
+    formData.value[buField.value] = id ? (buIdToCode.value[id] || id) : ''
+    formData.value[roleField.value] = ''
+    if (id && assigneeField.value) {
+      formData.value[assigneeField.value] = ''
     }
     await loadRolesForBu(id)
   }
 
   /** 选 role：清掉 assignee（互斥）。 */
   function onRoleChange(roleCode: string) {
-    if (roleCode) {
-      formData.value[ASSIGNEE_FIELD] = ''
+    if (roleCode && assigneeField.value) {
+      formData.value[assigneeField.value] = ''
     }
   }
 
@@ -101,16 +107,18 @@ export function useSubTableBuRoleCascade(formData: Ref<Record<string, any>>) {
   }
 
   /** 该行已选了人（assignee）→ BU/Role 应禁用。 */
-  const assigneeChosen = computed(() => isLookupSelected(formData.value[ASSIGNEE_FIELD]))
+  const assigneeChosen = computed(() =>
+    assigneeField.value ? isLookupSelected(formData.value[assigneeField.value]) : false)
   /** 该行已选了 BU 或 role → assignee 应禁用。 */
   const buOrRoleChosen = computed(() =>
-    !!(formData.value[BU_FIELD] && String(formData.value[BU_FIELD]).trim())
-    || !!(formData.value[ROLE_FIELD] && String(formData.value[ROLE_FIELD]).trim()))
+    !!(buField.value && formData.value[buField.value] && String(formData.value[buField.value]).trim())
+    || !!(roleField.value && formData.value[roleField.value] && String(formData.value[roleField.value]).trim()))
 
-  /** 编辑态打开时：formData[BU_FIELD] 存的是 code，反查 id 设回 cascader，并预加载其 role。 */
+  /** Editing: resolve the configured BU code back to id and preload its roles. */
   async function primeFromExistingRow() {
+    if (!isConfiguredRoleCascade.value || !buField.value) return
     await loadBusinessUnits()
-    const code = formData.value[BU_FIELD]
+    const code = formData.value[buField.value]
     if (code && String(code).trim()) {
       const c = String(code).trim()
       // code → id（反查 buIdToCode）；找不到就当它本身是 id。
@@ -133,6 +141,7 @@ export function useSubTableBuRoleCascade(formData: Ref<Record<string, any>>) {
     onRoleChange,
     assigneeChosen,
     buOrRoleChosen,
+    isConfiguredRoleCascade,
     primeFromExistingRow,
   }
 }

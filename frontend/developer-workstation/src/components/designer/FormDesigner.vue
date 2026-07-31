@@ -108,6 +108,15 @@
           </el-button>
         </div>
       </div>
+
+      <el-alert
+        v-if="activeMiAssignmentWarning"
+        class="mi-assignment-warning"
+        :title="activeMiAssignmentWarning"
+        type="warning"
+        :closable="false"
+        show-icon
+      />
       
       <!-- Grouped tab navigation: Main Table | Sub Tables ▾ | Relation Tables ▾ -->
       <div class="designer-grouped-nav">
@@ -314,8 +323,8 @@
                       :locale="fcDesignerEnLocale"
                       :config="designerConfig"
                       height="calc(100vh - 320px)"
-                      @active="scheduleSyncHiddenMarkers"
-                      @change-field="scheduleSyncHiddenMarkers"
+                      @active="onSubDesignerStructureChange"
+                      @change-field="onSubDesignerStructureChange"
                     />
                   </div>
                 </div>
@@ -489,6 +498,7 @@
       :rule="previewRowDialog.formRule"
       :option="previewRowDialog.formOption"
       :columns="previewRowDialog.columns"
+      :assignment-config="previewRowDialog.assignmentConfig"
       @update:visible="onPreviewRowDialogVisibleChange"
       @save="handlePreviewRowDialogSave"
     />
@@ -827,6 +837,12 @@ import { useFormNodeBinding } from '@/composables/formDesigner/useFormNodeBindin
 import { useFormLifecycle } from '@/composables/formDesigner/useFormLifecycle'
 import { useBlockingProgress } from '@/composables/useBlockingProgress'
 import BlockingProgressOverlay from '@/components/common/BlockingProgressOverlay.vue'
+import {
+  MI_ASSIGNMENT_CONFIG_KEY,
+  parseMiAssignmentsFromBpmn,
+  ruleContainsMiAssignment,
+  validateMiAssignmentComponents,
+} from '@/utils/miAssignmentConfig'
 
 const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
@@ -848,6 +864,7 @@ const linkFormComponents = ref<Array<{
   sortOrder: number
 }>>([])
 const autoSaving = ref(false)
+const miValidationRevision = ref(0)
 const lastAutoSaveTime = ref<Date | null>(null)
 const showCreateDialog = ref(false)
 const showRenameDialog = ref(false)
@@ -887,6 +904,7 @@ const designerSubBindings = computed(() => {
       // 显式暴露 tableDisplayName，让下游模板可以「tableDisplayName || tableName」自行选择，
       // 避免 tableName 同时承担技术名与显示名两种语义造成下游误用（见 issue 1373）。
       tableDisplayName: tableInStore?.tableDisplayName || undefined,
+      assignmentTableName: tableInStore?.tableName || b.tableName || '',
       tableId: b.tableId,
       tableType: tableInStore?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: tableInStore?.description || '',
@@ -902,6 +920,65 @@ const designerSubBindingsGrouped = computed(() =>
 const designerRelationBindingsGrouped = computed(() =>
   designerSubBindings.value.filter(b => b.bindingType === 'RELATED')
 )
+
+const parsedMiAssignments = computed(() => parseMiAssignmentsFromBpmn(store.process?.bpmnXml))
+const activeMiAssignmentConfig = computed(() => {
+  const bindingId = Number(activeDesignerTab.value)
+  const binding = designerSubBindings.value.find((item) => item.bindingId === bindingId)
+  return binding ? parsedMiAssignments.value.configs[binding.assignmentTableName] : undefined
+})
+provide(MI_ASSIGNMENT_CONFIG_KEY, activeMiAssignmentConfig)
+
+/** BPMN assignment contract for a bound table — shared by canvas load and preview. */
+function resolveAssignmentConfigForTable(tableId: number) {
+  const tableName = store.tables.find((table) => table.id === tableId)?.tableName
+  return tableName ? parsedMiAssignments.value.configs[tableName] : undefined
+}
+
+const activeMiAssignmentWarning = computed(() => {
+  void miValidationRevision.value
+  const bindingId = Number(activeDesignerTab.value)
+  const binding = designerSubBindings.value.find((item) =>
+    item.bindingId === bindingId && item.bindingType === 'SUB')
+  if (!binding) return ''
+  const configJson = {
+    subForms: Object.fromEntries(designerSubBindings.value.map((item, index) => {
+      const saved = selectedForm.value?.configJson?.subForms?.[item.bindingId]
+      let liveRule: unknown
+      try {
+        liveRule = subDesignerRefs.value[index]?.getRule?.()
+      } catch {
+        // FALLBACK(ux): this is a live warning only; save performs an authoritative
+        // collection and validation. Preserve the cached/saved warning state while remounting.
+        liveRule = undefined
+      }
+      return [String(item.bindingId), {
+        rule: Array.isArray(liveRule) ? liveRule : (subFormCache.value[item.bindingId]?.rule || saved?.rule || []),
+      }]
+    })),
+  }
+  const guard = validateMiAssignmentComponents(
+    parsedMiAssignments.value,
+    designerSubBindings.value
+      .filter((item) => item.bindingType === 'SUB')
+      .map((item) => ({ bindingId: item.bindingId, tableName: item.assignmentTableName })),
+    configJson,
+  )
+  const issue = guard.blocking.find((item) => item.subTableName === binding.assignmentTableName)
+  if (issue) {
+    return t(
+      issue.code === 'CONFLICTING_MI_ASSIGNMENT_CONFIG'
+        ? 'form.miAssignmentConflict'
+        : 'form.miAssignmentMissingComponent',
+      { subTable: issue.subTableName, nodes: issue.nodeIds.join(', ') },
+    )
+  }
+  const activeRules = (configJson.subForms as Record<string, { rule: unknown }>)[String(bindingId)]?.rule
+  if (ruleContainsMiAssignment(activeRules) && !activeMiAssignmentConfig.value) {
+    return t('form.miAssignmentOrphanWarning', { subTable: binding.assignmentTableName })
+  }
+  return ''
+})
 
 const activeTabGroup = computed<'main' | 'sub' | 'relation' | null>(() => {
   if (activeDesignerTab.value === 'main') return 'main'
@@ -1067,6 +1144,7 @@ function refreshSiblingLookups() {
 }
 
 function onDesignerStructureChange() {
+  miValidationRevision.value++
   scheduleSyncHiddenMarkers()
   refreshSiblingLookups()
   nextTick(() => {
@@ -1074,6 +1152,11 @@ function onDesignerStructureChange() {
   })
   // Assigned after useFormConfigPaste — remaps stale _bindingId from left JSON paste.
   scheduleAutoRepairStaleBindingsFn()
+}
+
+function onSubDesignerStructureChange() {
+  miValidationRevision.value++
+  scheduleSyncHiddenMarkers()
 }
 
 /** Filled by useFormConfigPaste; no-op until then. */
@@ -1107,6 +1190,7 @@ const tableFieldRules = useTableFieldRules({
   activeDesignerTab,
   getActiveDesignerRef,
   defaultFormOption,
+  getAssignmentConfig: resolveAssignmentConfigForTable,
   t,
 })
 const {
@@ -1231,6 +1315,7 @@ const {
   makeLookupPreviewItem,
   mergePortalViewsForPreview,
   getTableName,
+  getAssignmentConfig: resolveAssignmentConfigForTable,
   t,
 })
 
@@ -1334,6 +1419,7 @@ const formSave = useFormSave({
   provisionAndRepairForSave,
   willProvisionOnSave,
   blockingProgress,
+  getBpmnXml: () => store.process?.bpmnXml,
   t,
 })
 const {
@@ -1754,6 +1840,7 @@ const previewRowDialog = reactive({
   formRule: [] as any[],
   formOption: {} as Record<string, any>,
   columns: [] as any[],
+  assignmentConfig: undefined as import('@/utils/miAssignmentConfig').AssignmentConfig | undefined,
   useFormRule: false,
   onSave: null as PreviewSubTableRowDialogOpen['onSave'] | null,
 })
@@ -1774,6 +1861,7 @@ provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
       ? JSON.parse(JSON.stringify(payload.formOption))
       : {}
     previewRowDialog.columns = payload.columns.map((col) => ({ ...col }))
+    previewRowDialog.assignmentConfig = payload.assignmentConfig
     previewRowDialog.useFormRule = previewRowDialog.formRule.length > 0
     previewRowDialog.onSave = payload.onSave
     previewRowDialog.visible = false

@@ -16,6 +16,27 @@ export interface FieldComponentEvents {
   hook: Record<string, unknown>
 }
 
+/** Portal / Preview key for placed SubTable widgets (parity with formRendererRuleParsing). */
+export function subTableComponentEventFieldKey(bindingId: number | string): string {
+  return `__subTable_${bindingId}`
+}
+
+/**
+ * Event map key for a form-create rule.
+ * SubTable has no `field` — index by `__subTable_${_bindingId}` so Preview/Portal can look up handlers.
+ */
+export function resolveComponentEventFieldKey(rule: Record<string, unknown>): string {
+  const field = rule.field != null ? String(rule.field) : ''
+  if (field) return field
+  if (String(rule.type ?? '') !== 'subTable') return ''
+  const props = (rule.props && typeof rule.props === 'object')
+    ? rule.props as Record<string, unknown>
+    : {}
+  const bindingId = rule._bindingId ?? props._bindingId
+  if (bindingId == null || bindingId === '') return ''
+  return subTableComponentEventFieldKey(bindingId)
+}
+
 function normalizeHandler(raw: unknown): unknown {
   if (Array.isArray(raw)) return raw[0]
   return raw
@@ -59,7 +80,7 @@ function walkRulesCollect(
   map: Map<string, FieldComponentEvents>,
 ): void {
   walkFormCreateRules(items, (rule) => {
-    const field = rule.field != null ? String(rule.field) : ''
+    const field = resolveComponentEventFieldKey(rule)
     if (!field) return
     const on = mergeRuleOnHandlers(rule)
     const hook = mergeRuleHookHandlers(rule)

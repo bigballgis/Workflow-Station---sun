@@ -18,6 +18,27 @@ export interface FieldComponentEvents {
   hook: Record<string, unknown>
 }
 
+/** Portal FormField key for placed SubTable widgets (see formRendererRuleParsing). */
+export function subTableComponentEventFieldKey(bindingId: number | string): string {
+  return `__subTable_${bindingId}`
+}
+
+/**
+ * Event map key for a form-create rule.
+ * SubTable has no `field` — index by `__subTable_${_bindingId}` so Preview/Portal can look up handlers.
+ */
+export function resolveComponentEventFieldKey(rule: Record<string, unknown>): string {
+  const field = rule.field != null ? String(rule.field) : ''
+  if (field) return field
+  if (String(rule.type ?? '') !== 'subTable') return ''
+  const props = (rule.props && typeof rule.props === 'object')
+    ? rule.props as Record<string, unknown>
+    : {}
+  const bindingId = rule._bindingId ?? props._bindingId
+  if (bindingId == null || bindingId === '') return ''
+  return subTableComponentEventFieldKey(bindingId)
+}
+
 function normalizeHandler(raw: unknown): unknown {
   if (Array.isArray(raw)) return raw[0]
   return raw
@@ -64,7 +85,7 @@ function walkRulesCollect(
   for (const raw of items) {
     if (!raw || typeof raw !== 'object') continue
     const rule = raw as Record<string, unknown>
-    const field = rule.field != null ? String(rule.field) : ''
+    const field = resolveComponentEventFieldKey(rule)
     if (field) {
       const on = mergeRuleOnHandlers(rule)
       const hook = mergeRuleHookHandlers(rule)
@@ -95,7 +116,6 @@ export interface RunComponentEventsOptions {
   fieldType?: string
 }
 
-/** Select-like controls: portal does not fire DOM blur reliably; mirror `on.blur` on change. */
 /**
  * Discrete-value controls: designer often uses on.blur; DOM blur is missing or unreliable.
  * Do NOT add text/input/textarea/password — they have real blur; mirroring would run blur every keystroke.

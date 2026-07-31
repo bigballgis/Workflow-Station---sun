@@ -30,12 +30,20 @@ export function resolveSubFormRuleForBinding(
   return Array.isArray(entry?.rule) && entry.rule.length > 0 ? entry.rule : undefined
 }
 
-/** Layout containers whose children are real field rules (same set the DW preview inlines). */
+/**
+ * Layout containers whose children are real field rules (same set the DW preview inlines).
+ *
+ * `miAssignment` belongs here: the Assignment Mode component holds the assignee / BU /
+ * role rules as its children. Without it the container has no `field` of its own, so it
+ * was dropped by isDialogMappableSubFormRule() and took its three fields down with it —
+ * the Add/Edit dialog then rendered every column EXCEPT the assignment ones.
+ */
 const LAYOUT_CONTAINER_TYPES = new Set([
   'el-card', 'elCard', 'card',
   'el-row', 'elRow', 'row',
   'el-col', 'elCol', 'col',
   'group', 'subForm', 'tableForm', 'tableFormColumn',
+  'miAssignment',
 ])
 
 function getLayoutRuleChildren(item: Record<string, unknown>): unknown[] {
@@ -197,6 +205,7 @@ export function mapSubFormRuleToDialogColumns(
       ...(options ? { options: options as DialogColumn['options'] } : {}),
       ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
       ...(defaultValue !== undefined ? { defaultValue } : {}),
+      sourceRule: r,
     }
   })
 }

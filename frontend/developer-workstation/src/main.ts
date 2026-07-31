@@ -30,6 +30,7 @@ import RecordNotePlaceholderWidget from './components/designer/RecordNotePlaceho
 import RecordNoteScopeSelect from './components/designer/RecordNoteScopeSelect.vue'
 import SensitiveMaskPropsEditor from './components/designer/SensitiveMaskPropsEditor.vue'
 import SensitiveMaskedInput from './components/designer/SensitiveMaskedInput.vue'
+import MiAssignmentPlaceholderWidget from './components/designer/MiAssignmentPlaceholderWidget.vue'
 import { registerFormCreateReadonlyParser } from './utils/registerFormCreateReadonlyParser'
 import formCreateFactory from '@form-create/element-ui'
 
@@ -80,6 +81,17 @@ FcDesigner.component('LookupBindingSelect', LookupBindingSelect)
 // Register RecordNotePlaceholderWidget as the canvas renderer for 'recordNote' type
 FcDesigner.component('RecordNote', RecordNotePlaceholderWidget)
 FcDesigner.component('RecordNoteScopeSelect', RecordNoteScopeSelect)
+FcDesigner.component('MiAssignment', MiAssignmentPlaceholderWidget)
+
+// Dedicated "MI" (multi-instance) palette group, sibling to the built-in
+// Basic/Aide/Layout/Subform groups. Registered before any addDragRule call so
+// rules carrying `menu: 'mi'` are filed into it instead of falling back to Basic.
+// Future multi-instance components should use `menu: 'mi'` to land here.
+FcDesigner.addMenu({
+  name: 'mi',
+  title: String(i18n.global.t('form.miMenuTitle')),
+  list: [],
+})
 
 // Sensitive mask: props panel editor + Input display wrapper (Preview / canvas).
 FcDesigner.component('SensitiveMaskPropsEditor', SensitiveMaskPropsEditor)
@@ -170,6 +182,56 @@ FcDesigner.addDragRule({
       }
     ]
   }
+})
+
+// Multi-instance assignment orchestration container. BPMN remains the only source of
+// assignment SETTINGS; this rule holds the assignee / BU / role fields as its children
+// so the whole unit moves as one when dragged.
+//
+// It is a NORMAL drop container (like elCard): `drag: true` lets the author drag the
+// imported fields in and back out, and `mask: false` keeps the children clickable so
+// their own property panels still work. On first load a form that predates the container
+// has its assignment fields adopted automatically (see nestAssignmentFieldsIntoContainer),
+// after which membership and order belong to the author — `_miAdopted` stops the
+// adoption pass from ever re-capturing a field that was deliberately dragged out.
+FcDesigner.addDragRule({
+  name: 'miAssignment',
+  label: String(i18n.global.t('form.miAssignmentTitle')),
+  icon: 'icon-radio',
+  menu: 'mi',
+  // No mask: children must stay selectable inside the container.
+  mask: false,
+  input: false,
+  // Accept dropped components — this is what makes the reserved area a real drop zone.
+  drag: true,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  loadRule(rule: any) {
+    rule.props = rule.props || {}
+    if (!Array.isArray(rule.children)) rule.children = []
+  },
+  parseRule(rule: any) {
+    // Persist children (the nested fields) and the one-time adoption marker, so a
+    // reopened form does not re-adopt fields the author moved out.
+    if (!Array.isArray(rule.children)) rule.children = []
+  },
+  rule() {
+    return {
+      type: 'miAssignment',
+      title: String(i18n.global.t('form.miAssignmentTitle')),
+      props: {},
+      // Dropped straight from the palette: an empty, ready-to-fill drop area. Marked
+      // adopted so it never vacuums fields the author placed elsewhere on the form.
+      _miAdopted: true,
+      children: [],
+    }
+  },
+  props() {
+    return []
+  },
 })
 
 // Register the linkForm drag rule so it appears in the designer left menu

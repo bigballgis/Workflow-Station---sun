@@ -8,6 +8,10 @@ import {
   resolveAssigneeFieldForBinding,
   allSubTableRowsHaveAssignee
 } from '@/utils/subTableAssignment'
+import {
+  hasMiAssignmentMarker,
+  isAssignmentConfigured,
+} from '@/utils/miAssignmentConfig'
 function resolveProcessTaskId(source: MaybeRef<string>): string {
   const v = unref(source)
   return typeof v === 'string' ? v.trim() : ''
@@ -64,9 +68,16 @@ export function useTaskActions(options: {
   const router = useRouter()
   function validateSubTableAssigneesForComplete(): boolean {
     for (const b of options.subTableBindings.value) {
-      const af = resolveAssigneeFieldForBinding(b.columns, b.tableName)
-      if (!af) continue
-      if (!allSubTableRowsHaveAssignee(b.data || [], af)) {
+      const hasMarker = hasMiAssignmentMarker(b.formFields)
+      if (b.assignmentConfig && !hasMarker) continue
+      const config =
+        hasMarker && isAssignmentConfigured(b.assignmentConfig)
+          ? b.assignmentConfig
+          : undefined
+      const af = config?.assigneeField
+        ?? resolveAssigneeFieldForBinding(b.columns, b.tableName)
+      if (!af && !config) continue
+      if (!allSubTableRowsHaveAssignee(b.data || [], af ?? '', config)) {
         ElMessage.warning(t('task.allParticipantsMustHaveAssignee'))
         return false
       }

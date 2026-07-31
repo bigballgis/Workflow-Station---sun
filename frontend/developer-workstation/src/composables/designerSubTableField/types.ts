@@ -1,4 +1,5 @@
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 // 列配置接口
 export interface ColumnConfig {
@@ -13,6 +14,8 @@ export interface ColumnConfig {
   placeholder?: string
   options?: Array<{ label: string; value: any }>
   props?: Record<string, any>
+  /** Form-create rule node — on/_on/hook/_hook for Element Plus dialog events. */
+  sourceRule?: Record<string, unknown>
 }
 
 // 子表配置接口
@@ -54,6 +57,7 @@ export interface SubTableFieldProps {
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
+  assignmentConfig?: AssignmentConfig
 }
 
 export interface SubTableFieldEmit {

@@ -7,6 +7,7 @@ import type { RelationFieldDef } from '@/components/subTableAddDialogHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime/types'
 import type { MiSubProcessScopeConfig } from '@/composables/tasks/miSubProcessScope'
 import type { Column } from '@/composables/subTableField/subTableFieldTypes'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 // Previous node forms (read-only display, ordered)
 export interface PreviousFormEntry {
@@ -25,6 +26,7 @@ export interface PreviousFormEntry {
     bindingMode: string
     foreignKeyField: string | null
     tableName: string
+    physicalTableName?: string
     tableType: string
     tableDescription: string
     columns: Column[]
@@ -33,6 +35,7 @@ export interface PreviousFormEntry {
     subMode?: string
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    assignmentConfig?: AssignmentConfig
     portalViews?: Record<string, any> | null
     primaryKeyFields?: string[]
   }>
@@ -108,6 +111,7 @@ export function createApplicationDetailState(options: {
     bindingMode: string
     foreignKeyField: string | null
     tableName: string
+    physicalTableName?: string
     tableType: string
     tableDescription: string
     columns: Column[]
@@ -115,6 +119,7 @@ export function createApplicationDetailState(options: {
     subMode?: string
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    assignmentConfig?: AssignmentConfig
     // Per-binding portalViews loaded from form configJson.subTablePortalViews[bindingId].
     portalViews?: Record<string, any> | null
     /** From dw_field_definitions via admin assembleFunctionUnitContent; drives row merge / PK resolution. */
@@ -178,6 +183,7 @@ export function createApplicationDetailState(options: {
     subMode?: string
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    assignmentConfig?: AssignmentConfig
     portalViews?: Record<string, any> | null
     primaryKeyFields?: string[]
   }>>([])

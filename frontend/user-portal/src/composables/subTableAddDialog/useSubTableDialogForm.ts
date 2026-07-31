@@ -43,6 +43,10 @@ interface FormDeps {
   resetLookupState: () => void
   destroyEditors: () => void
   fetchDepartmentTree: () => void
+  /** Clear api.hidden / api.display state from prior dialog open. */
+  resetDialogEventVisibility?: () => void
+  /** Run Form-level onCreated → onMounted after row model is ready. */
+  bootstrapDialogFormLifecycle?: () => void
 }
 
 /**
@@ -51,7 +55,16 @@ interface FormDeps {
  * lifecycle and save. Logic and ordering preserved verbatim from the original SFC.
  */
 export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: DialogT, deps: FormDeps) {
-  const { formData, resetUploadNames, backfillUploadNames, resetLookupState, destroyEditors, fetchDepartmentTree } = deps
+  const {
+    formData,
+    resetUploadNames,
+    backfillUploadNames,
+    resetLookupState,
+    destroyEditors,
+    fetchDepartmentTree,
+    resetDialogEventVisibility,
+    bootstrapDialogFormLifecycle,
+  } = deps
 
   const formRef = ref<FormInstance>()
   const saving = ref(false)
@@ -136,6 +149,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     resetUploadNames()
     columnErrors.value = {}
     resetLookupState()
+    resetDialogEventVisibility?.()
     // Fetch department tree if any column is of type 'department'
     if (props.columns.some(c => c.type === 'department')) {
       fetchDepartmentTree()
@@ -150,6 +164,9 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
         ? { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
         : buildInitialRow(props.columns)
     }
+
+    // Form-level onCreated/onMounted (not component change). Must run after model seed.
+    bootstrapDialogFormLifecycle?.()
 
     // Element Plus Form keeps some per-field state; ensure each init starts clean.
     nextTick(() => {
@@ -184,6 +201,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     resetUploadNames()
     columnErrors.value = {}
     resetLookupState()
+    resetDialogEventVisibility?.()
     formData.value = buildInitialRow(props.columns)
     formRef.value?.clearValidate()
     emit('update:visible', false)

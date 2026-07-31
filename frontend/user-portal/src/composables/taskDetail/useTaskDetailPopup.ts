@@ -89,6 +89,7 @@ export function createTaskDetailPopupHelpers(ctx: TaskDetailCtx) {
         columns: cols,
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
+        assignmentConfig: b.assignmentConfig,
         portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(b.primaryKeyFields, b.bindingId, cfg),
         data: [],

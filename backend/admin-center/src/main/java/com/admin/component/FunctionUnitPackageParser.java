@@ -111,6 +111,40 @@ public class FunctionUnitPackageParser {
                     .build());
         }
 
+        // Email templates (email-templates/template_*.json): opaque JSON blobs for catalog retention.
+        for (Map.Entry<String, byte[]> file : rawFiles.entrySet()) {
+            String fileName = file.getKey();
+            if (fileName.startsWith("email-templates/") && fileName.endsWith(".json")) {
+                String contentName = fileName.substring(fileName.lastIndexOf('/') + 1);
+                String json = new String(file.getValue(), StandardCharsets.UTF_8);
+                String sourceId = null;
+                Map<String, Object> templateData;
+                try {
+                    templateData = objectMapper.readValue(file.getValue(), Map.class);
+                } catch (Exception e) {
+                    throw new IOException("Invalid email template JSON in package: " + fileName, e);
+                }
+                Object templateId = templateData.get("templateId");
+                if (templateId == null) {
+                    templateId = templateData.get("id");
+                }
+                if (templateId != null) {
+                    sourceId = String.valueOf(templateId);
+                }
+                Object nameObj = templateData.get("name");
+                if (nameObj instanceof String templateName && !templateName.isBlank()) {
+                    contentName = templateName;
+                }
+                contents.add(FunctionUnitManagerComponent.ContentInfo.builder()
+                        .contentType(ContentType.EMAIL_TEMPLATE)
+                        .contentName(contentName)
+                        .contentPath("/" + fileName)
+                        .contentData(json)
+                        .sourceId(sourceId)
+                        .build());
+            }
+        }
+
         for (Map.Entry<String, byte[]> file : rawFiles.entrySet()) {
             String fileName = file.getKey();
             if (fileName.startsWith("forms/") && fileName.endsWith(".json")) {

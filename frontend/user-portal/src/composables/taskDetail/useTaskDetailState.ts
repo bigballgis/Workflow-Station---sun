@@ -11,6 +11,7 @@ import type { RelationFieldDef } from '@/components/subTableAddDialogHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime/types'
 import type { MiSubProcessScopeConfig } from '@/composables/tasks/miSubProcessScope'
 import { isMiDashboardSubTableBinding } from '@/composables/tasks/shared'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 export interface NodeFormInfo {
   formName: string
@@ -56,6 +57,7 @@ export interface PreviousFormEntry {
     columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    assignmentConfig?: AssignmentConfig
     portalViews?: Record<string, any> | null
     primaryKeyFields?: string[]
     /** 见 subTableBindings 上的同名字段：BPMN 给出的 MI 归属事实，覆盖列名启发式。 */
@@ -117,6 +119,7 @@ export function createTaskDetailState(options: { taskId: string }) {
     columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    assignmentConfig?: AssignmentConfig
     // Per-binding portalViews loaded from form configJson.subTablePortalViews[bindingId].
     // Used as fallback for SubTable rule nodes without portalViews on rule.props, and as the
     // primary source for unplaced bindings (e.g. accessed only via Link Form).

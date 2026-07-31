@@ -113,6 +113,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
           ...(options ? { options } : {}),
           ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
           ...(defaultValue !== undefined ? { defaultValue } : {}),
+          sourceRule: r as Record<string, unknown>,
         }
       })
     }
@@ -289,6 +290,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
             minWidth: 260,
             placeholder: fieldRule.props?.placeholder || lookupPreviewConfig.placeholder,
             ...(defaultValue !== undefined ? { defaultValue } : {}),
+            sourceRule: fieldRule as Record<string, unknown>,
             props: {
               lookupConfig: fieldRule.props?.lookupConfig || '{}',
               searchFields: lookupPreviewConfig.searchFields,
@@ -355,6 +357,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
           ...(options ? { options } : {}),
           ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
           ...(defaultValue !== undefined ? { defaultValue } : {}),
+          ...(fieldRule ? { sourceRule: fieldRule as Record<string, unknown> } : {}),
         }
       })
     }
