@@ -104,15 +104,9 @@ export interface FormField {
   /**
    * Display-only sensitive mask from designer Input props.sensitiveMask.
    * Present only when enabled for plain text Input (not textarea/password).
+   * Per-form: each form's fields carry their own config; forms do not override each other.
    */
-  sensitiveMask?: {
-    enabled: boolean
-    preset: 'last4' | 'first4Last4' | 'first3Last4' | 'all' | 'custom'
-    keepPrefix?: number
-    keepSuffix?: number
-    maskChar?: string
-    revealPlainOnFocus?: boolean
-  }
+  sensitiveMask?: import('@/utils/sensitiveMask').SensitiveMaskConfig
 }
 
 export interface FormTab {

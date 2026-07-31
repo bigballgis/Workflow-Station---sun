@@ -1806,7 +1806,7 @@ const designerConfig = computed(() => ({
             title: t('form.sensitiveMask.panelTitle'),
             value: props.sensitiveMask ?? {
               enabled: false,
-              preset: 'last4',
+              preset: 'all',
               keepPrefix: 0,
               keepSuffix: 4,
               maskChar: '*',

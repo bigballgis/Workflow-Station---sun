@@ -6,6 +6,7 @@
   "scripts": {
     "verify:screenshot": "node scripts/verify-page-screenshot.mjs",
     "verify:dw:assignee-multi-role": "node scripts/verify-dw-assignee-multi-role.mjs",
+    "verify:dw:sensitive-mask-props": "node scripts/verify-dw-sensitive-mask-props.mjs",
     "test:regression:mi": "pnpm -C user-portal run test:regression:mi",
     "verify:mi:e2e": "node scripts/verify-mi-regression-all.mjs",
     "regression:mi": "node scripts/run-mi-regression.mjs",

@@ -3,6 +3,7 @@ import {
   buildSensitiveMaskLookup,
   collectMasksFromFormCreateRules,
   emptySensitiveMaskLookup,
+  parseFormConfigJsonsProcessFirst,
 } from '../sensitiveMaskLookup'
 
 describe('sensitiveMaskLookup', () => {
@@ -56,5 +57,47 @@ describe('sensitiveMaskLookup', () => {
     })
     expect(lookup.get('main_card')?.preset).toBe('last4')
     expect(lookup.get('sub_card')?.preset).toBe('first4Last4')
+  })
+
+  it('parses Portal FormContentDTO.data and keeps PROCESS first for Change History', () => {
+    const configs = parseFormConfigJsonsProcessFirst([
+      {
+        type: 'FORM',
+        formType: 'TASK',
+        data: JSON.stringify({
+          rule: [{
+            type: 'input',
+            field: 'card',
+            props: {
+              sensitiveMask: {
+                enabled: true,
+                preset: 'custom',
+                keepPrefix: 2,
+                keepSuffix: 4,
+              },
+            },
+          }],
+        }),
+      },
+      {
+        type: 'FORM',
+        formType: 'PROCESS',
+        data: JSON.stringify({
+          rule: [{
+            type: 'input',
+            field: 'card',
+            props: {
+              sensitiveMask: {
+                enabled: true,
+                preset: 'ranges',
+                maskRanges: [{ start: 2, end: 8 }],
+              },
+            },
+          }],
+        }),
+      },
+    ])
+    const lookup = buildSensitiveMaskLookup({ formConfigJsons: configs })
+    expect(lookup.get('card')?.preset).toBe('ranges')
   })
 })

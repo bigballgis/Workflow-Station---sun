@@ -1,6 +1,6 @@
 /**
- * Build / apply field-name → sensitiveMask lookups for display surfaces
- * outside FieldRenderer (Change History, Snapshot Diff, lists, dialogs).
+ * Build / apply field-name → sensitiveMask lookups for Change History and similar
+ * non-form surfaces. FormRenderer stages use each form field's own sensitiveMask only.
  */
 import type { FormField } from '@/components/formRendererHelpers'
 import { flattenLeafFormFields } from '@/components/formRendererHelpers'
@@ -15,6 +15,51 @@ export type SensitiveMaskLookup = Map<string, SensitiveMaskConfig>
 
 export function emptySensitiveMaskLookup(): SensitiveMaskLookup {
   return new Map()
+}
+
+export type ContentFormLike = {
+  formType?: string
+  type?: string
+  configJson?: unknown
+  /** Admin FormContentDTO stores designer JSON here (not configJson). */
+  data?: unknown
+}
+
+/**
+ * Parse FU content forms into config objects.
+ * Portal assembled content uses `data` + optional `formType` (PROCESS/TASK/ACTION).
+ *
+ * Product rule (intentional): PROCESS sorted first for Change History first-wins
+ * collection only. FormRenderer stages must NOT use this merge — each stage uses
+ * that form field's own sensitiveMask.
+ */
+export function parseFormConfigJsonsProcessFirst(
+  forms: ContentFormLike[] | null | undefined,
+): unknown[] {
+  if (!forms?.length) return []
+  const rows = forms.map((f) => {
+    const raw = f.configJson ?? f.data
+    let cfg: unknown = raw
+    if (typeof raw === 'string') {
+      // FALLBACK(ux): malformed configJson skips mask enrichment only.
+      try {
+        cfg = JSON.parse(raw)
+      } catch {
+        cfg = null
+      }
+    }
+    const formType = String(f.formType || '').toUpperCase()
+    return { formType, cfg }
+  }).filter((row) => row.cfg != null)
+
+  const rank = (t: string): number => {
+    if (t === 'PROCESS') return 0
+    if (t === 'TASK') return 1
+    if (t === 'ACTION') return 2
+    return 3
+  }
+  rows.sort((a, b) => rank(a.formType) - rank(b.formType))
+  return rows.map((row) => row.cfg)
 }
 
 /** Register mask under field key (first enabled wins; later skips if already set). */
@@ -126,7 +171,7 @@ export function maskScalarIfConfigured(
 }
 
 /**
- * Build a lookup from the common portal detail sources.
+ * Build a lookup for Change History (and similar). Form stage rendering does not use this.
  */
 export function buildSensitiveMaskLookup(sources: {
   formFields?: FormField[] | null
@@ -137,6 +182,11 @@ export function buildSensitiveMaskLookup(sources: {
   formConfigJsons?: unknown[]
 }): SensitiveMaskLookup {
   const lookup = emptySensitiveMaskLookup()
+  if (sources.formConfigJsons) {
+    for (const cfg of sources.formConfigJsons) {
+      collectMasksFromFormConfigJson(lookup, cfg)
+    }
+  }
   collectMasksFromFormFields(lookup, sources.formFields)
   collectMasksFromFormFields(lookup, sources.formFieldsAfterTabs)
   if (sources.formTabs) {
@@ -152,11 +202,6 @@ export function buildSensitiveMaskLookup(sources: {
   if (sources.subTableBindings) {
     for (const b of sources.subTableBindings) {
       collectMasksFromColumns(lookup, b.columns ?? undefined)
-    }
-  }
-  if (sources.formConfigJsons) {
-    for (const cfg of sources.formConfigJsons) {
-      collectMasksFromFormConfigJson(lookup, cfg)
     }
   }
   return lookup
