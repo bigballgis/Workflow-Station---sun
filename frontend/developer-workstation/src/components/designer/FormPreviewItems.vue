@@ -61,6 +61,7 @@
             :preview-show-form-below="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
             :preview-link-form-scroll-to-inline="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
             :preview-lookup-compact="false"
+            :assignment-config="item.binding.assignmentConfig"
             @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
             @update:primary-form-data="mergePrimaryFormData"
           />
@@ -84,6 +85,7 @@
             :preview-table-bindings="previewTableBindings"
             :preview-show-form-below="false"
             :preview-lookup-compact="initiatorPreviewIsSummary(item.binding)"
+            :assignment-config="item.binding.assignmentConfig"
             @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
             @update:primary-form-data="mergePrimaryFormData"
           />
@@ -121,6 +123,7 @@
         :parent-tables-by-id="parentTablesById"
         :preview-table-bindings="previewTableBindings"
         :preview-lookup-compact="isMyRequestsPreview"
+        :assignment-config="item.binding.assignmentConfig"
         @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
         @update:primary-form-data="mergePrimaryFormData"
       />

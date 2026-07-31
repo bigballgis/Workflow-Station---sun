@@ -21,6 +21,10 @@ import {
   getSavedSubTableRowsFromVariables,
 } from './subTableRowHelpers'
 import type { ApplicationDetailCtx } from './context'
+import {
+  attachAssignmentConfigsToBindings,
+  stampAssignmentConfigsOnForms,
+} from '@/utils/miAssignmentConfig'
 
 export interface ApplicationDetailLoadersFns {
   loadProcessDetail: () => Promise<void>
@@ -123,6 +127,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
         console.error('Function unit content error:', content.error)
         return
       }
+      stampAssignmentConfigsOnForms(content.forms, content.miAssignments)
 
       selectedNodeId.value = null
 
@@ -310,6 +315,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           )
           enrichChildBindingRowsFromParentsNestedSubTables(bindings)
         }
+        attachAssignmentConfigsToBindings(bindings, content.miAssignments)
         subTableBindings.value = bindings
         ctx.applyLinkOnlySubTableFieldFilterToMainForm(selectedFormConfig)
         ctx.alignMainSubTableBindingsOnly()

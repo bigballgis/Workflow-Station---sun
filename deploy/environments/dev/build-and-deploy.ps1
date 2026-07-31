@@ -305,6 +305,16 @@ function Resolve-BaseImage {
     )
 
     foreach ($img in $Candidates) {
+        if ($SkipImagePull) {
+            docker image inspect $img *> $null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  Using cached base image: $img" -ForegroundColor Green
+                return $img
+            }
+            Write-Host "  Cached base image unavailable: $img" -ForegroundColor DarkGray
+            continue
+        }
+
         Write-Host "  Trying base image: $img" -ForegroundColor DarkGray
         $pullOutput = docker pull $img 2>&1
         $pullExit = $LASTEXITCODE
@@ -314,10 +324,18 @@ function Resolve-BaseImage {
             Write-Host "  Base image resolved: $img" -ForegroundColor Green
             return $img
         }
+        docker image inspect $img *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  Pull failed; using cached base image: $img" -ForegroundColor Yellow
+            return $img
+        }
         Write-Host "  Pull failed for $img, trying next candidate..." -ForegroundColor Yellow
     }
 
-    throw "Cannot pull any base image from candidates: $($Candidates -join ', '). Check Docker network/proxy."
+    if ($SkipImagePull) {
+        throw "Cannot find any cached base image from candidates: $($Candidates -join ', ')."
+    }
+    throw "Cannot pull or find any cached base image from candidates: $($Candidates -join ', '). Check Docker network/proxy."
 }
 
 # Build the vendored Activepieces "ServiceTask / Automation" builder bundle

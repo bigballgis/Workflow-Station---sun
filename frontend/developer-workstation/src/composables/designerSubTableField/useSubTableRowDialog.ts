@@ -155,6 +155,7 @@ export function useSubTableRowDialog(options: UseSubTableRowDialogOptions) {
         formRule: props.formRule,
         formOption: props.formOption,
         columns: dialogColumns.value,
+        assignmentConfig: props.assignmentConfig,
         onSave: (rowData) => handleDialogSave(rowData),
       })
       return

@@ -2,6 +2,11 @@
  * Multi-instance sub-table row assignment: infer the assignee field name from column
  * definitions (aligns with BPMN assigneeField, e.g. assignee_user_id).
  */
+import {
+  isAssignmentConfigured,
+  type AssignmentConfig,
+} from './miAssignmentConfig'
+
 export function inferAssigneeFieldFromColumns(
   columns: Array<{ field?: string } | null | undefined>
 ): string | undefined {
@@ -37,14 +42,25 @@ export function resolveAssigneeFieldForBinding(
 }
 
 /** When a sub-table has multiple rows with an assignee column, every row must be assigned (non-empty) before the task can be completed. */
-export function allSubTableRowsHaveAssignee(rows: any[], assigneeField: string): boolean {
+export function allSubTableRowsHaveAssignee(
+  rows: any[],
+  assigneeField: string,
+  assignmentConfig?: AssignmentConfig,
+): boolean {
   if (!rows?.length) return true
   const hasVal = (v: unknown) => v != null && String(v).trim() !== ''
+  if (isAssignmentConfigured(assignmentConfig)) {
+    const config = assignmentConfig!
+    return rows.every(row => {
+      if (!row) return false
+      const hasUser = config.allowUser && !!config.assigneeField && hasVal(row[config.assigneeField])
+      const hasRole = config.allowRole && !!config.roleField && hasVal(row[config.roleField])
+      return hasUser || hasRole
+    })
+  }
   return rows.every(
     r =>
       r &&
-      // 已选具体人，或该行是「按角色分派」（有 role_code，走 BU_ROLE 共享认领池，
-      // 无需具体 assignee 即可完成——认领由角色成员在 To Do 里进行）。
-      (hasVal(r[assigneeField]) || hasVal(r.role_code))
+      hasVal(r[assigneeField])
   )
 }

@@ -1,6 +1,7 @@
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from '@/components/formRendererHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 export type Column = DialogColumn & {
   type?: DialogColumn['type'] | 'linkForm'
@@ -30,6 +31,7 @@ export interface SubTableBinding {
   data: any[]
   formFields?: FormField[]
   formOptions?: Record<string, any>
+  assignmentConfig?: AssignmentConfig
 }
 
 /**
@@ -56,6 +58,7 @@ export interface NestedSubTableDescriptor {
   foreignKeyField?: string | null
   formFields?: FormField[]
   formOptions?: Record<string, unknown> | null
+  assignmentConfig?: AssignmentConfig
   /**
    * 逐操作权限，来自放置在父表单设计里的那个 subTable 组件（props.allowAdd/allowEdit/allowDelete）。
    * 与顶层一致：只有显式 false 才下发，undefined 表示放开（SubTableField 的 withDefaults 兜住）。
@@ -75,6 +78,7 @@ export interface SubTableFieldProps {
   formFields?: FormField[]
   /** Sub-form Form Design options for Add/Edit dialog lifecycle events. */
   formOptions?: Record<string, unknown> | null
+  assignmentConfig?: AssignmentConfig
   /** Form-below-table hosts: row click highlights + drives the inline form via currentRowChange. */
   enableRowSelect?: boolean
   modelValue?: any[]

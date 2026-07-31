@@ -32,6 +32,7 @@ import {
 } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import type { PortalViewsValue } from './useSubTablePortalViews'
+import { nestAssignmentFieldsIntoContainer, type AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
@@ -50,6 +51,7 @@ interface UseFormPreviewBuildOptions {
   makeLookupPreviewItem: (ruleItem: any, config: any) => any
   mergePortalViewsForPreview: (ruleItem: any, bindingId: number) => PortalViewsValue
   getTableName: (tableId: number, fallback?: string) => string
+  getAssignmentConfig: (tableId: number) => AssignmentConfig | undefined
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -66,7 +68,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     designerSubBindings, getActiveDesignerRef, getTableFieldDefinitions,
     getPrimaryBindingFieldDefinitions,
     toSubTablePreviewColumns, makeLookupPreviewItem, mergePortalViewsForPreview,
-    getTableName, t,
+    getTableName, getAssignmentConfig, t,
   } = options
 
   const showPreviewDialog = ref(false)
@@ -86,6 +88,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     option?: any
     columns: any[]
     subMode?: string
+    assignmentConfig?: AssignmentConfig
   }>>([])
   const previewSubData = ref<Record<number, any>>({})
   const previewTableRows = ref<Record<number, any[]>>({})
@@ -251,6 +254,10 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       if (rule.length && tableFields.length) {
         rule = syncFormRulesWithTableFields(rule, tableFields) as any[]
       }
+      // Fold assignee / BU / role into the Assignment Mode container so preview shows
+      // the same single nested unit the designer and runtime do. Sub-forms saved before
+      // the container existed keep them as siblings; this is their migration on read.
+      rule = nestAssignmentFieldsIntoContainer(rule, getAssignmentConfig(b.tableId)) as any[]
       rule = mapFormCreateRulesReadonlyDeep(rule) as any[]
       ensureFormCreateRulesValidationDeep(rule)
       // Keep $FNX strings in `_on`/`_hook` before sanitize strips them from `on`/`hook`.
@@ -274,6 +281,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
         fieldDefinitions: (store.tables.find(t => t.id === b.tableId)?.fieldDefinitions) || [],
         bindingLinkMode: b.bindingLinkMode,
         bindingForeignKeyField: b.foreignKeyField,
+        assignmentConfig: getAssignmentConfig(b.tableId),
         rule,
         option,
         columns,

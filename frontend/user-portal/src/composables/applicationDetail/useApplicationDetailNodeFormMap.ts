@@ -21,6 +21,7 @@ import {
 } from './subTableRowHelpers'
 import type { ApplicationDiagramNodeFormInfo, PreviousFormEntry } from './useApplicationDetailState'
 import type { ApplicationDetailCtx } from './context'
+import { attachAssignmentConfigsToBindings } from '@/utils/miAssignmentConfig'
 
 export interface ApplicationDetailNodeFormMapFns {
   handleDiagramNodeClick: (node: ProcessNode) => void
@@ -252,6 +253,7 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
             nodeBindings.push(binding)
           }
           ctx.mergeLinkFormTargetBindingsInto(nodeBindings, formsList, configForSubTables, subForms)
+          attachAssignmentConfigsToBindings(nodeBindings, content.miAssignments)
           ctx.stripLinkOnlySubTableFieldsFromBindings(nodeBindings, subForms, configForSubTables.rule, configForSubTables)
           if (savedSubTables && typeof savedSubTables === 'object') {
             for (const binding of nodeBindings) {

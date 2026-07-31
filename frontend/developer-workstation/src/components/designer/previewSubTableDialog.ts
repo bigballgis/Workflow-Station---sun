@@ -1,4 +1,5 @@
 import type { InjectionKey, Ref } from 'vue'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 export interface PreviewSubTableRowDialogOpen {
   mode: 'add' | 'edit'
@@ -7,6 +8,7 @@ export interface PreviewSubTableRowDialogOpen {
   formRule?: any[]
   formOption?: any
   columns: any[]
+  assignmentConfig?: AssignmentConfig
   onSave: (row: Record<string, any>) => void
 }
 

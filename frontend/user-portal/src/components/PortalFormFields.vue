@@ -17,6 +17,7 @@ import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shar
 import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
 import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 export interface PortalSubTableBindingLite {
   bindingId: number
@@ -28,6 +29,10 @@ export interface PortalSubTableBindingLite {
   dialogColumns?: Array<{ field: string; label: string; type?: string; props?: Record<string, unknown> }>
   /** This binding's own form-design fields — nested subTable widgets render inside its Add/Edit dialog. */
   formFields?: FormField[]
+  /** Sub-form Form Design options — Add/Edit dialog Form-level onCreated / onMounted. */
+  formOptions?: Record<string, unknown> | null
+  /** BPMN-derived MI assignment contract; absent means no Assignment Mode behavior. */
+  assignmentConfig?: AssignmentConfig
   data: unknown[]
   primaryKeyFields?: string[]
   /** Field FK/PK metadata from tableBindings — drives auto PK allocation and FK seeding. */
@@ -195,6 +200,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
         :form-fields="resolveBinding(field._bindingId)!.formFields"
         :form-options="resolveBinding(field._bindingId)!.formOptions"
+        :assignment-config="resolveBinding(field._bindingId)!.assignmentConfig"
         :model-value="resolveSubTableRows(resolveBinding(field._bindingId)!)"
         :editable="isSubTableEditable()"
         :allow-add="field.allowAdd"

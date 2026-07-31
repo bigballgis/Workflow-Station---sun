@@ -203,6 +203,25 @@ export function extractFieldsRecursive(
     const item = items[index]
     const props = item.props as Record<string, unknown> | undefined
     const bindingId = item._bindingId ?? props?._bindingId
+    if (item.type === 'miAssignment') {
+      const marker: FormField = {
+        key: getLayoutKey(item, index, 'miAssignment'),
+        label: '',
+        type: 'miAssignment',
+        span: 24,
+      }
+      applyDesignerHideFlagToFormField(marker, item)
+      fields.push(marker)
+      // The container owns the assignee / BU / role rules as children. Emit them
+      // right after the marker so the dialog still sees real, individually-bound
+      // fields (validation + save paths are unchanged) and the block keeps framing
+      // them. Legacy forms have no children here and are unaffected.
+      const children = item.children
+      if (Array.isArray(children) && children.length > 0) {
+        fields.push(...extractFieldsRecursive(children as Record<string, unknown>[], converter))
+      }
+      continue
+    }
     if (item.type === 'recordNote') {
       const scope = props?.scope === 'TABLE' ? 'TABLE' : 'RECORD'
       const recordNoteField: FormField = {

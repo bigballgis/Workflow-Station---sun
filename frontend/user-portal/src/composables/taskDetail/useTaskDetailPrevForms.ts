@@ -14,6 +14,7 @@ import {
 } from './subTableRowUtils'
 import type { PreviousFormEntry } from './useTaskDetailState'
 import type { TaskDetailCtx } from './context'
+import { attachAssignmentConfigsToBindings } from '@/utils/miAssignmentConfig'
 import { stampMiCollectionFromBpmn } from './miCollectionStamp'
 
 export interface TaskDetailPrevFormsFns {
@@ -123,6 +124,7 @@ export function createTaskDetailPrevForms(ctx: TaskDetailCtx): TaskDetailPrevFor
         }
         // Must precede the MI ghost-row filter below: isMiDashboardSubTableBinding reads this flag.
         stampMiCollectionFromBpmn(ctx, prevBindings)
+        attachAssignmentConfigsToBindings(prevBindings, content.miAssignments)
         const ambiguousPrev = bindingIdsPreferStrictSubTableLookup(prevBindings as any[])
         if (savedSubTables && typeof savedSubTables === 'object') {
           for (const binding of prevBindings) {

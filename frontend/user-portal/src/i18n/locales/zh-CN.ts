@@ -980,6 +980,8 @@ exportWithData: '导出',
     assignMode: '分派方式',
     assignByPerson: '按个人分派',
     assignByRole: '按角色分派',
+    assignByPersonHint: '指定一个人处理该行',
+    assignByRoleHint: '该业务单元中拥有此角色的人均可认领',
     uploadFailed: '字段"{field}"上传失败',
     // Multi-instance assignment
     assignee: '处理人',

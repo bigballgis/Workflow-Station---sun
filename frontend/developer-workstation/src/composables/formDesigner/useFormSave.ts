@@ -23,6 +23,10 @@ import { TABLE_AUDIT_FIELD_NAMES } from '@/utils/tableAuditFields'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 import type { PortalViewsValue } from './useSubTablePortalViews'
 import type { BlockingProgressApi } from '@/composables/useBlockingProgress'
+import {
+  parseMiAssignmentsFromBpmn,
+  validateMiAssignmentComponents,
+} from '@/utils/miAssignmentConfig'
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
@@ -32,7 +36,11 @@ interface UseFormSaveOptions {
   selectedForm: Ref<FormDefinition | null>
   designerRef: Ref<any>
   subDesignerRefs: Ref<any[]>
-  designerSubBindings: ComputedRef<Array<{ bindingId: number; bindingType: string }>>
+  designerSubBindings: ComputedRef<Array<{
+    bindingId: number
+    bindingType: string
+    assignmentTableName: string
+  }>>
   subFormCache: Ref<Record<number, { rule: any[]; options: any }>>
   relationViewState: Ref<Record<number, { allFields: any[]; viewFields: any[] }>>
   subTableViewState: Ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }>>
@@ -50,6 +58,7 @@ interface UseFormSaveOptions {
   willProvisionOnSave?: (nextConfig: Record<string, unknown>) => boolean
   /** Manual Save only: top-bar + fullscreen lock while provisioning / persisting. */
   blockingProgress?: BlockingProgressApi
+  getBpmnXml: () => string | undefined
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -64,7 +73,7 @@ export function useFormSave(options: UseFormSaveOptions) {
     subFormCache, relationViewState, subTableViewState, subTableListViewRefs,
     subTablePortalViewsState, getActiveDesignerRef, getPrimaryBindingFieldDefinitions,
     syncSubTableListViewFromFormRules, loadForms, autoSaving, lastAutoSaveTime,
-    provisionAndRepairForSave, willProvisionOnSave, blockingProgress, t,
+    provisionAndRepairForSave, willProvisionOnSave, blockingProgress, getBpmnXml, t,
   } = options
 
   const savingForm = ref(false)
@@ -411,6 +420,28 @@ export function useFormSave(options: UseFormSaveOptions) {
               return
             }
           }
+        }
+
+        const miGuard = validateMiAssignmentComponents(
+          parseMiAssignmentsFromBpmn(getBpmnXml()),
+          designerSubBindings.value
+            .filter((binding) => binding.bindingType === 'SUB')
+            .map((binding) => ({
+              bindingId: binding.bindingId,
+              tableName: binding.assignmentTableName,
+            })),
+          nextConfig,
+        )
+        if (miGuard.blocking.length > 0) {
+          const issue = miGuard.blocking[0]
+          const key = issue.code === 'CONFLICTING_MI_ASSIGNMENT_CONFIG'
+            ? 'form.miAssignmentConflict'
+            : 'form.miAssignmentMissingComponent'
+          ElMessage.error(t(key, {
+            subTable: issue.subTableName,
+            nodes: issue.nodeIds.join(', '),
+          }))
+          return
         }
 
         if (selectedForm.value?.id !== targetFormId) {

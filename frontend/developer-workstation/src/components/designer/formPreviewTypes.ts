@@ -1,4 +1,6 @@
 /** Sub-table portal display (designer rule.props + binding-level subTablePortalViews). */
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+
 export interface SubTablePortalViewsPreview {
   assigneeTodo: 'formBelowTable' | 'tableOnly'
   initiatorRequest: 'mirrorTodo' | 'summaryWithLinkFormModal' | 'tableOnly'
@@ -28,6 +30,7 @@ export interface PreviewSubTableBinding {
   allowAdd?: boolean
   allowEdit?: boolean
   allowDelete?: boolean
+  assignmentConfig?: AssignmentConfig
 }
 
 /**

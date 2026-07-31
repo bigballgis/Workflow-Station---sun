@@ -9,8 +9,8 @@
     <div
       v-if="formRule && formRule.length"
       class="sub-table-form-preview form-readonly-surface"
+      :style="{ '--mi-label-min-width': assignmentLabelMinWidth }"
     >
-      <!-- MI 场景 C：分派方式 radio 由 rebuildFormRule 注入到 form-create rule 中，插在分派字段组正上方 -->
       <form-create
         v-if="formCreateMounted"
         v-model="formData"
@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { computed, provide, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
@@ -67,6 +67,16 @@ import {
   resolveUploadCellUrl,
 } from './uploadFieldUtils'
 import { mergeFormRowWithSeed } from './subTableAddDialogHelpers'
+import {
+  MI_ASSIGNMENT_CONFIG_KEY,
+  MI_ASSIGNMENT_MODE_KEY,
+  fieldsHiddenByMode,
+  fieldsOwnedByMode,
+  isAssignmentConfigured,
+  resolveAssignModeFromRow,
+  type AssignmentConfig,
+  type AssignmentMode,
+} from '@/utils/miAssignmentConfig'
 
 export interface SubTableFormDialogProps {
   visible: boolean
@@ -83,6 +93,8 @@ export interface SubTableFormDialogProps {
   readOnly?: boolean
   /** List columns — align upload field names on save (preview table display) */
   columns?: Array<{ field: string; type?: string; props?: Record<string, unknown> }>
+  /** BPMN-derived assignment contract for this Sub Table. */
+  assignmentConfig?: AssignmentConfig
 }
 
 const props = withDefaults(defineProps<SubTableFormDialogProps>(), {
@@ -104,6 +116,8 @@ const { t } = useI18n()
 const formData = ref<Record<string, any>>({})
 const formCreateMounted = ref(false)
 const uploadSession = ref<Record<string, { url: string; name?: string }>>({})
+const assignmentConfigRef = computed(() => props.assignmentConfig)
+provide(MI_ASSIGNMENT_CONFIG_KEY, assignmentConfigRef)
 
 const defaultFormOption = {
   resetBtn: false,
@@ -145,13 +159,69 @@ function buildDialogFormOption(option: Record<string, any> = {}) {
 
 const formOption = ref(buildDialogFormOption(props.option))
 const formRule = ref<any[]>([])
+
+/**
+ * `labelWidth: 'auto'` re-measures against whichever fields are currently visible, so
+ * switching assignment mode ("Assignee" ⇄ "Business Unit" / "Role") moved every other
+ * row's input edge sideways. Publish a floor equal to the widest label the dialog can
+ * ever show — measured across BOTH modes — so the column is already wide enough for the
+ * other branch and nothing shifts on toggle. `auto` still governs above the floor, so a
+ * genuinely longer label elsewhere is never clipped or wrapped.
+ */
+const assignmentLabelMinWidth = ref<string>('')
+
+function syncAssignmentLabelMinWidth(): void {
+  const config = props.assignmentConfig
+  if (!config || !isAssignmentConfigured(config)) {
+    assignmentLabelMinWidth.value = ''
+    return
+  }
+  const owned = new Set(
+    [config.assigneeField, config.buField, config.roleField]
+      .filter((field): field is string => !!field),
+  )
+  // Titles come from the raw rule so hidden-by-mode fields are included too.
+  const titles: string[] = []
+  const walk = (list: any[]) => {
+    for (const rule of list || []) {
+      if (rule?.field && owned.has(rule.field) && rule.title) titles.push(String(rule.title))
+      if (Array.isArray(rule?.children)) walk(rule.children)
+    }
+  }
+  walk(rawRule.value || [])
+  if (titles.length === 0) {
+    assignmentLabelMinWidth.value = ''
+    return
+  }
+
+  const ruler = document.createElement('span')
+  ruler.style.cssText =
+    'position:absolute;visibility:hidden;white-space:nowrap;left:-9999px;top:-9999px;font:14px sans-serif;'
+  document.body.appendChild(ruler)
+  let widest = 0
+  for (const title of titles) {
+    ruler.textContent = title
+    widest = Math.max(widest, ruler.getBoundingClientRect().width)
+  }
+  ruler.remove()
+  // Element Plus adds the label's right padding on top of the text itself.
+  assignmentLabelMinWidth.value = widest > 0 ? `${Math.ceil(widest) + 12}px` : ''
+}
 /** 未按 assignMode 过滤的原始 rule（radio 切换时据此重建 formRule）。 */
 const rawRule = ref<any[]>([])
 /** Allocated PK / FK values seeded on add — merged back on save when form-create omits disabled fields. */
 const seedRow = ref<Record<string, any>>({})
 
 watch(
-  () => [props.visible, props.initialData, props.mode, props.rule, props.option, props.readOnly] as const,
+  () => [
+    props.visible,
+    props.initialData,
+    props.mode,
+    props.rule,
+    props.option,
+    props.readOnly,
+    props.assignmentConfig,
+  ] as const,
   ([open, data, mode, rule, option]) => {
     if (!open) {
       formCreateMounted.value = false
@@ -170,11 +240,12 @@ watch(
       seedRow.value = {}
       formData.value = {}
     }
-    // 初始 radio：已填 role/bu → role，否则 person（仅场景 C 有 radio）。
-    if (showAssignModeRadio.value) {
-      const d = (data || {}) as Record<string, any>
-      const roleFilled = (d.role_code && String(d.role_code).trim()) || (d.bu_code && String(d.bu_code).trim())
-      assignMode.value = roleFilled ? 'role' : 'person'
+    const assignmentConfig = props.assignmentConfig
+    if (assignmentConfig && isAssignmentConfigured(assignmentConfig)) {
+      assignMode.value = resolveAssignModeFromRow(
+        (data || {}) as Record<string, unknown>,
+        assignmentConfig,
+      )
     }
     rebuildFormRule()
     hydrateUploadFieldsForFormCreate(formData.value, collectUploadRulesFromTree(formRule.value))
@@ -186,69 +257,106 @@ watch(
   { immediate: true },
 )
 
+const assignMode = ref<AssignmentMode>('person')
+
+// The only channel that reaches the container widget (see MI_ASSIGNMENT_MODE_KEY):
+// form-create does not forward rule.props/rule.on to `input: false` components.
+provide(MI_ASSIGNMENT_MODE_KEY, {
+  mode: assignMode,
+  setMode: (mode: AssignmentMode) => onAssignmentModeChange(mode),
+})
+
+/** A container rule for sub-forms designed before Assignment Mode owned its fields. */
+function makeAssignmentContainerRule(children: any[]): any {
+  return { type: 'miAssignment', props: {}, children }
+}
+
 /**
- * MI 子任务「按个人 / 按角色」二选一（form-create Form Preview 侧）：
- * 场景 C（表单同时含 assignee 与 role_code/bu_code 字段）时顶部显示 radio，
- * 选中哪种就只渲染哪组字段，从根上杜绝一行两种方式。与运行时 SubTableAddDialog 一致。
+ * Give the Assignment Mode container its children, so the block and its pickers
+ * render as one nested unit. Mirrors nestAssignmentFieldsIntoContainer() plus
+ * ensureAssignmentBlockPlaced() in the Portal — keep in sync.
+ *
+ * Forms saved before the container existed keep assignee / BU / role as siblings;
+ * here they are folded into the container (inserted at the first owned field when
+ * no container rule exists yet). Nothing is dropped: every field rule survives,
+ * only its depth in the tree changes, so bindings and validation stay intact.
  */
-const ROLE_GROUP = ['bu_code', 'role_code']
-
-function ruleHasField(rules: any[], field: string): boolean {
-  for (const r of rules || []) {
-    if (r && r.field === field) return true
-    if (r && Array.isArray(r.children) && ruleHasField(r.children, field)) return true
+function nestAssignmentChildren(list: any[], order: string[]): any[] {
+  if (order.length === 0) return list
+  const owned = new Set(order)
+  // Author order wins: children already inside the container keep their arrangement,
+  // and only fields still loose outside it get appended. The designer owns placement,
+  // so preview must not re-sort into contract order.
+  const nestedFirst: any[] = []
+  const looseByField = new Map<string, any>()
+  for (const rule of list) {
+    if (rule?.type === 'miAssignment') {
+      for (const child of (rule.children ?? [])) {
+        if (child?.field && owned.has(child.field)) nestedFirst.push(child)
+      }
+    } else if (rule?.field && owned.has(rule.field)) {
+      looseByField.set(rule.field, rule)
+    }
   }
-  return false
+  const alreadyNested = new Set(nestedFirst.map(child => child?.field))
+  const appended = order
+    .filter(field => !alreadyNested.has(field))
+    .map(field => looseByField.get(field))
+    .filter(Boolean)
+  const children = [...nestedFirst, ...appended]
+  if (children.length === 0) return list
+
+  const rest = list.filter(rule => !(rule?.field && owned.has(rule.field)))
+  const containerAt = rest.findIndex(rule => rule?.type === 'miAssignment')
+  if (containerAt >= 0) {
+    return rest.map(rule =>
+      rule?.type === 'miAssignment' ? { ...rule, children } : rule)
+  }
+  // No container yet — place it where its first field already sat, counting only
+  // the non-owned rules before that point so nothing shifts unexpectedly.
+  const anchorAt = list.findIndex(rule => rule?.field && owned.has(rule.field))
+  if (anchorAt < 0) return list
+  const keptBefore = list
+    .slice(0, anchorAt)
+    .filter(rule => !(rule?.field && owned.has(rule.field))).length
+  return [
+    ...rest.slice(0, keptBefore),
+    makeAssignmentContainerRule(children),
+    ...rest.slice(keptBefore),
+  ]
 }
 
-const hasAssigneeField = computed(() => ruleHasField(rawRule.value, 'assignee'))
-const hasRoleFields = computed(() =>
-  ROLE_GROUP.some(f => ruleHasField(rawRule.value, f)))
-const showAssignModeRadio = computed(() => hasAssigneeField.value && hasRoleFields.value)
-const assignMode = ref<'person' | 'role'>('person')
-
-/** 按 assignMode 从 rule 树里剔除另一组字段（person 去 bu/role，role 去 assignee）。 */
 function filterRuleByAssignMode(rules: any[]): any[] {
-  if (!showAssignModeRadio.value) return rules
-  const drop = assignMode.value === 'person' ? ROLE_GROUP : ['assignee']
+  const config = props.assignmentConfig
+  const configured = !!config && isAssignmentConfigured(config)
+  const hidden = configured ? fieldsHiddenByMode(assignMode.value, config) : new Set<string>()
+  // Children are the active mode's fields only; the other mode's are filtered out.
+  const order = configured ? fieldsOwnedByMode(assignMode.value, config!) : []
+  // The container is a non-field component (drag rule `input: false`): form-create
+  // forwards neither rule.props nor rule.on to it, so mode + setter reach the widget
+  // through provide(MI_ASSIGNMENT_MODE_KEY) instead. Nothing to decorate here.
+  const decorateContainer = (rule: any) => rule
   const walk = (list: any[]): any[] =>
-    (list || [])
-      .filter(r => !(r && drop.includes(r.field)))
-      .map(r => (r && Array.isArray(r.children) ? { ...r, children: walk(r.children) } : r))
+    nestAssignmentChildren(
+      (list || [])
+        .filter(r => {
+          // Single-mode setups keep the container too: it holds their one picker.
+          if (r?.type === 'miAssignment') return configured
+          return !(r?.field && hidden.has(r.field))
+        })
+        .map(r => {
+          if (!r) return r
+          if (r.type === 'miAssignment') {
+            // Drop children hidden by the active mode before nesting re-seats them.
+            const kept = (r.children ?? []).filter(
+              (child: any) => !(child?.field && hidden.has(child.field)))
+            return decorateContainer({ ...r, children: kept })
+          }
+          return Array.isArray(r.children) ? { ...r, children: walk(r.children) } : r
+        }),
+      order,
+    )
   return walk(rules)
-}
-
-/** 构造 form-create 原生 radio rule，插到分派字段组正上方，与字段成一体。 */
-function buildAssignModeRadioRule(): any {
-  return {
-    type: 'radio',
-    field: '__assignMode',
-    title: t('subTable.assignMode'),
-    value: assignMode.value,
-    options: [
-      { label: t('subTable.assignByPerson'), value: 'person' },
-      { label: t('subTable.assignByRole'), value: 'role' },
-    ],
-    props: { button: false },
-    on: {
-      change: (v: string) => {
-        if (v === 'person' || v === 'role') {
-          assignMode.value = v
-          onAssignModeChange()
-        }
-      },
-    },
-  }
-}
-
-/** 在顶层 rule 数组里，把 radio 插到第一个分派字段（assignee/bu_code/role_code）之前。 */
-function insertAssignModeRadio(rules: any[]): any[] {
-  if (!showAssignModeRadio.value) return rules
-  const targets = new Set(['assignee', ...ROLE_GROUP])
-  const idx = rules.findIndex(r => r && targets.has(r.field))
-  const out = [...rules]
-  out.splice(idx < 0 ? 0 : idx, 0, buildAssignModeRadioRule())
-  return out
 }
 
 // Form Preview 只演示布局/交互，BU/Role 用示例假数据（不查 admin-center）；
@@ -263,12 +371,13 @@ const DEMO_ROLE_OPTIONS = [
   { label: 'Sample Role B', value: '__demo_role_b' },
 ]
 
-/** 给 Preview 的 bu_code/role_code 字段填充示例 options（form-create select）。 */
 function injectDemoBuRoleOptions(rules: any[]) {
+  const config = props.assignmentConfig
+  if (!config) return
   const walk = (list: any[]) => {
     for (const r of list || []) {
-      if (r && r.field === 'bu_code') r.options = DEMO_BU_OPTIONS
-      else if (r && r.field === 'role_code') r.options = DEMO_ROLE_OPTIONS
+      if (r && config.buField && r.field === config.buField) r.options = DEMO_BU_OPTIONS
+      else if (r && config.roleField && r.field === config.roleField) r.options = DEMO_ROLE_OPTIONS
       if (r && Array.isArray(r.children)) walk(r.children)
     }
   }
@@ -285,16 +394,16 @@ function rebuildFormRule() {
   // Recompile from `_on`/`_hook` so sub-form component events run like Form-mode Preview.
   syncDesignerComponentEventsForFcPreview(formRule.value)
   injectPreviewUploadHandlers(formRule.value, formData, uploadSession)
+  // Recompute from rawRule (all modes), so the floor does not depend on the active one.
+  syncAssignmentLabelMinWidth()
 }
 
-function onAssignModeChange() {
-  // 清掉另一组的值，重建 rule 并 remount form-create。
-  if (assignMode.value === 'person') {
-    formData.value.bu_code = ''
-    formData.value.role_code = ''
-  } else {
-    formData.value.assignee = ''
-  }
+function onAssignmentModeChange(value: unknown) {
+  if (value !== 'person' && value !== 'role') return
+  assignMode.value = value
+  const config = props.assignmentConfig
+  if (!config) return
+  for (const field of fieldsHiddenByMode(value, config)) formData.value[field] = ''
   formCreateMounted.value = false
   rebuildFormRule()
   nextTick(() => { formCreateMounted.value = true })
@@ -342,6 +451,24 @@ function handleSave() {
 /* form-create adjacent elCard (e.g. Participants Title cards) — parity with Portal */
 .sub-table-form-preview :deep(.el-card) {
   margin-bottom: 10px;
+}
+
+/* ── Assignment Mode container ────────────────────────────────────────────────
+   The widget now owns its fields as nested children and draws its own complete
+   frame, so no external border stitching is needed here — only the block's own
+   width and the gap below it. Mirrors user-portal SubTableAddDialog. */
+.sub-table-form-preview :deep(.mi-assignment-widget) {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 18px;
+}
+
+/* Hold the label column at the widest label either assignment mode can show (see
+   syncAssignmentLabelMinWidth). Element Plus sets `min-width: max-content` on labels in
+   auto mode, so this needs the extra .el-form specificity (and !important) to win;
+   `labelWidth: auto` still governs above the floor, so longer labels never wrap. */
+.sub-table-form-preview :deep(.el-form .el-form-item__label) {
+  min-width: var(--mi-label-min-width, 0) !important;
 }
 
 .form-loading {

@@ -22,6 +22,7 @@ import {
 import type { NodeFormInfo, PreviousFormEntry } from './useTaskDetailState'
 import type { TaskDetailCtx } from './context'
 import { stampMiCollectionFromBpmn } from './miCollectionStamp'
+import { attachAssignmentConfigsToBindings } from '@/utils/miAssignmentConfig'
 
 export interface TaskDetailNodeFormMapFns {
   buildNodeFormMapIfNeeded: () => Promise<void>
@@ -176,6 +177,7 @@ export function createTaskDetailNodeFormMap(ctx: TaskDetailCtx): TaskDetailNodeF
           if (Number.isFinite(bid)) nodeNativeIds.push(bid)
         }
         ctx.mergeLinkFormTargetBindingsInto(nodeBindings as any, content.forms, configForSubTables, subForms)
+        attachAssignmentConfigsToBindings(nodeBindings, content.miAssignments)
         const ambiguousNodeDiagram = bindingIdsPreferStrictSubTableLookup(nodeBindings as any[])
         const _stForNested = formData.value.__subTables__
         if (_stForNested && typeof _stForNested === 'object') {

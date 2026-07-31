@@ -91,15 +91,6 @@
           />
         </el-tab-pane>
         <el-tab-pane
-          :label="t('functionUnit.automation')"
-          name="service-task"
-        >
-          <ServiceTaskDesigner
-            v-if="activeTab === 'service-task'"
-            :function-unit-id="functionUnitId"
-          />
-        </el-tab-pane>
-        <el-tab-pane
           :label="t('functionUnit.tables')"
           name="tables"
         >
@@ -132,6 +123,15 @@
         >
           <ActionDesigner
             v-if="activeTab === 'actions'"
+            :function-unit-id="functionUnitId"
+          />
+        </el-tab-pane>
+        <el-tab-pane
+          :label="t('functionUnit.automation')"
+          name="service-task"
+        >
+          <ServiceTaskDesigner
+            v-if="activeTab === 'service-task'"
             :function-unit-id="functionUnitId"
           />
         </el-tab-pane>

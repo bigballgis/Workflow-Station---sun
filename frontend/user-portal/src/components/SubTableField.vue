@@ -345,7 +345,7 @@
               >
                 {{ getUserDisplayName(resolveRowAssigneeCell(scope.row)) }}
               </span>
-              <!-- 按角色分派的行（有 role_code）：共享认领池，未认领前无具体 assignee，显示角色池信息而非 Unassigned -->
+              <!-- Configured role-assignment row: show its shared pool before a user claims it. -->
               <span
                 v-else-if="rowRoleCode(scope.row)"
                 class="assignee-role-pool"
@@ -383,6 +383,7 @@
       :audit-columns="listViewColumnsForAudit"
       :form-fields="formFields"
       :form-options="formOptions"
+      :assignment-config="assignmentConfig"
       :mode="dialogMode"
       :initial-data="dialogInitialData"
       :row-formulas="rowFormulas"
@@ -589,6 +590,8 @@ import FieldRenderer from './FieldRenderer.vue'
 import PortalFormFields from './PortalFormFields.vue'
 import dayjs from 'dayjs'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+import { isAssignmentConfigured } from '@/utils/miAssignmentConfig'
 import type { Column, NestedSubTableDescriptor, SubTableBinding } from '@/composables/subTableField/subTableFieldTypes'
 import { sanitizeHtml } from '@/composables/subTableField/subTableHtmlSanitize'
 import {
@@ -620,6 +623,8 @@ const props = withDefaults(defineProps<{
   formFields?: FormField[]
   /** Sub-form Form Design options — Add/Edit dialog Form-level onCreated / onMounted. */
   formOptions?: Record<string, unknown> | null
+  /** BPMN-derived MI assignment contract; absent means no Assignment Mode behavior. */
+  assignmentConfig?: AssignmentConfig
   /** Form-below-table hosts: row click highlights + drives the inline form via currentRowChange. */
   enableRowSelect?: boolean
   modelValue?: any[]
@@ -726,11 +731,22 @@ const canEdit = computed(() => props.editable === true && props.allowEdit !== fa
 const canDelete = computed(() => props.editable === true && props.allowDelete !== false)
 
 /**
- * MI「按角色分派」行的 role code（行里有 role_code/bu_code 即视为角色分派）。
+ * MI role code resolved exclusively from the binding's AssignmentConfig.
  * 用于 Assignee 列在共享认领池未认领时显示角色信息，而非误导性的 "Unassigned"。
  */
+/**
+ * The BPMN contract alone decides whether this sub-table is assignment-driven — the same
+ * rule the Add/Edit dialog follows. Requiring an `miAssignment` marker in the form design
+ * meant sub-tables whose form predates the component resolved no config, so a row
+ * assigned to a BU + role showed an empty Assignee cell instead of its shared role pool.
+ */
+const effectiveAssignmentConfig = computed(() =>
+  isAssignmentConfigured(props.assignmentConfig) ? props.assignmentConfig : undefined)
+
 function rowRoleCode(row: Record<string, any>): string {
-  const rc = row?.role_code
+  const roleField = effectiveAssignmentConfig.value?.roleField
+  if (!roleField) return ''
+  const rc = row?.[roleField]
   if (rc != null && String(rc).trim() !== '') return String(rc).trim()
   return ''
 }

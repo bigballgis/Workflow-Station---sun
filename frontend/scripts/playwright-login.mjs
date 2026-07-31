@@ -76,14 +76,32 @@ export async function loginViaUnifiedSso(page, app, opts = {}) {
  * Direct portal username/password login via POST /api/portal/auth/login.
  * Sets httpOnly session cookies + ws_up_user in localStorage (no unified SSO form).
  *
+ * PREFER THIS over loginViaUnifiedSso for portal screenshots: the unified SSO form is
+ * unreliable headless (it reaches /sso/callback and then bounces back to /login without
+ * establishing a session).
+ *
  * Default: developer / password (see deploy/init-scripts/01-admin/05-e2e-test-users-and-business-units.sql)
+ *
+ * Multi-UBR users must pick a workspace before a session is issued. By default the first
+ * returned context is used; pass `buCode` / `roleCode` to target a specific one (e.g.
+ * `{ buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' }`) so a screenshot lands in the
+ * same workspace the reporter saw.
  */
 export async function loginViaPortalPassword(page, opts = {}) {
   const user = opts.user ?? process.env.LOGIN_USER ?? 'developer'
   const pass = opts.pass ?? process.env.LOGIN_PASS ?? 'password'
   const origin = (opts.loginOrigin ?? 'http://localhost:3000').replace(/\/$/, '')
+  const wantBu = opts.buCode ?? process.env.LOGIN_BU_CODE
+  const wantRole = opts.roleCode ?? process.env.LOGIN_ROLE_CODE
 
-  await page.goto(`${origin}/portal/`, { waitUntil: 'domcontentloaded' }).catch(() => {})
+  // Must land on the real origin before touching localStorage — on about:blank the
+  // browser denies storage access, which surfaces later as a confusing SecurityError.
+  // `commit` is enough (and far more reliable than domcontentloaded, which can hang on
+  // the portal shell's long-lived connections); the origin is set as soon as it fires.
+  await page.goto(`${origin}/portal/`, { waitUntil: 'commit' })
+  if (!page.url().startsWith(origin)) {
+    throw new Error(`Portal did not load at ${origin}/portal/ (got ${page.url()})`)
+  }
 
   let res = await page.request.post(`${origin}/api/portal/auth/login`, {
     data: { username: user, password: pass },
@@ -91,7 +109,20 @@ export async function loginViaPortalPassword(page, opts = {}) {
   let body = await res.json().catch(() => ({}))
   // FALLBACK(ux): multi-BU users must pick workspace before session is issued
   if (body.loginErrorCode === 'WORKSPACE_CONTEXT_REQUIRED' && body.workspaceContexts?.[0]) {
-    const c = body.workspaceContexts[0]
+    const match = (wantBu || wantRole)
+      ? body.workspaceContexts.find(c =>
+          (!wantBu || c.businessUnitCode === wantBu || c.businessUnitName === wantBu)
+          && (!wantRole || c.roleCode === wantRole || c.roleName === wantRole))
+      : undefined
+    if ((wantBu || wantRole) && !match) {
+      const available = body.workspaceContexts
+        .map(c => `${c.businessUnitCode ?? c.businessUnitName}/${c.roleCode ?? c.roleName}`)
+        .join(', ')
+      throw new Error(
+        `No workspace matched buCode=${wantBu ?? '*'} roleCode=${wantRole ?? '*'}. Available: ${available}`,
+      )
+    }
+    const c = match ?? body.workspaceContexts[0]
     res = await page.request.post(`${origin}/api/portal/auth/login`, {
       data: {
         username: user,
@@ -119,6 +150,47 @@ export async function loginViaPortalPassword(page, opts = {}) {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1500)
   return { userId: u.userId, username: u.username, portalAccessMode: u.portalAccessMode }
+}
+
+/**
+ * Direct Developer Workstation username/password login via POST /api/v1/auth/login.
+ *
+ * PREFER THIS over loginViaUnifiedSso for DW screenshots — the unified SSO form is
+ * unreliable headless (reaches /dev/sso/callback and bounces back to /login).
+ * Tokens ride in httpOnly cookies; only the user record goes to localStorage.
+ *
+ * Default: developer / password.
+ */
+export async function loginViaDwPassword(page, opts = {}) {
+  const user = opts.user ?? process.env.LOGIN_USER ?? 'developer'
+  const pass = opts.pass ?? process.env.LOGIN_PASS ?? 'password'
+  const origin = (opts.loginOrigin ?? 'http://localhost:3000').replace(/\/$/, '')
+
+  // Land on the real origin first — localStorage is denied on about:blank.
+  await page.goto(`${origin}/dev/`, { waitUntil: 'commit' })
+  if (!page.url().startsWith(origin)) {
+    throw new Error(`DW did not load at ${origin}/dev/ (got ${page.url()})`)
+  }
+
+  const res = await page.request.post(`${origin}/api/v1/auth/login`, {
+    data: { username: user, password: pass },
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok()) {
+    throw new Error(`DW password login failed: ${body.message || `HTTP ${res.status()}`} (user=${user})`)
+  }
+  const u = body.user ?? body.data?.user
+  if (!u?.userId) throw new Error('DW password login failed: response missing user')
+
+  await page.evaluate((userInfo) => {
+    localStorage.setItem('ws_dw_user', JSON.stringify(userInfo))
+    localStorage.setItem('ws_dw_user_id', String(userInfo.userId))
+  }, u)
+
+  console.log(`[login] dw password ${u.username} (${u.userId})`)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(1500)
+  return { userId: u.userId, username: u.username }
 }
 
 export { APP_PRESETS }

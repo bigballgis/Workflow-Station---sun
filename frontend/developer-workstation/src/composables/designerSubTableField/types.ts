@@ -1,4 +1,5 @@
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 // 列配置接口
 export interface ColumnConfig {
@@ -56,6 +57,7 @@ export interface SubTableFieldProps {
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
   previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
+  assignmentConfig?: AssignmentConfig
 }
 
 export interface SubTableFieldEmit {

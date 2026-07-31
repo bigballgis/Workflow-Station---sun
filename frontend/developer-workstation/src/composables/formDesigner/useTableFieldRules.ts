@@ -17,6 +17,10 @@ import {
 } from '@/utils/formFieldMeta'
 import { inflateComponentEventsForDesigner } from '@/utils/formCreateDefaultEvents'
 import type { RequestIdConfig } from '@/api/functionUnit'
+import {
+  nestAssignmentFieldsIntoContainer,
+  type AssignmentConfig,
+} from '@/utils/miAssignmentConfig'
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
@@ -29,6 +33,8 @@ interface UseTableFieldRulesOptions {
   activeDesignerTab: Ref<string>
   getActiveDesignerRef: () => DesignerLike
   defaultFormOption: ComputedRef<Record<string, any>>
+  /** BPMN assignment contract for a bound table, when the table drives an MI sub-task. */
+  getAssignmentConfig?: (tableId: number) => AssignmentConfig | undefined
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -40,7 +46,7 @@ interface UseTableFieldRulesOptions {
 export function useTableFieldRules(options: UseTableFieldRulesOptions) {
   const {
     store, selectedForm, designerRef, subDesignerRefs, designerSubBindings,
-    activeDesignerTab, getActiveDesignerRef, defaultFormOption, t,
+    activeDesignerTab, getActiveDesignerRef, defaultFormOption, getAssignmentConfig, t,
   } = options
 
   /** PRIMARY-bound table field defs (Table Design defaults). */
@@ -355,14 +361,28 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     const options = (resolvedMap.options && typeof resolvedMap.options === 'object'
       ? resolvedMap.options
       : {}) as Record<string, unknown>
+    // Fold assignee / BU / role into the Assignment Mode container before the rule
+    // reaches the canvas, so the designer shows one grouped, draggable unit instead of
+    // an empty container with the fields floating loose beneath it. Sub-forms saved
+    // before the container existed migrate here on load; already-nested rules are
+    // returned untouched (the helper is idempotent).
+    // createIfMissing: forms authored before the container existed have the fields but
+    // no container rule, and leaving them loose is the scattered canvas the container
+    // exists to fix. Saving afterwards persists the grouped shape.
+    const nest = (rule: unknown[]) =>
+      nestAssignmentFieldsIntoContainer(
+        rule as Array<{ type?: string; field?: string; children?: unknown[] }>,
+        getAssignmentConfig?.(tableId),
+        { createIfMissing: true },
+      ) as unknown[]
     if (rawRule.length > 0) {
-      return { rule: rawRule, options }
+      return { rule: nest(rawRule), options }
     }
     const fields = getTableFieldDefinitionsByTableId(tableId)
     if (!fields.length) {
       return { rule: [], options }
     }
-    return { rule: mapFieldsToFormRules(fields), options }
+    return { rule: nest(mapFieldsToFormRules(fields)), options }
   }
 
   return {

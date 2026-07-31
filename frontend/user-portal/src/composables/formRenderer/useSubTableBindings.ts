@@ -4,6 +4,7 @@ import { legacyBindingIdAliases } from '../../components/formRendererHelpers'
 import { findMiIsolatedParentRow } from '../tasks/shared'
 import type { FormField } from '../../components/formRendererHelpers'
 import type { BindingFieldDefinition } from '../../utils/subTableRowRuntime'
+import type { AssignmentConfig } from '../../utils/miAssignmentConfig'
 
 // SubTableBinding shape is intentionally loose here (mirrors FormRenderer.vue local interface).
 export interface SubTableBinding {
@@ -26,6 +27,7 @@ export interface SubTableBinding {
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: string
   foreignKeyField?: string | null
+  assignmentConfig?: AssignmentConfig
 }
 
 interface PrimaryTableBinding {

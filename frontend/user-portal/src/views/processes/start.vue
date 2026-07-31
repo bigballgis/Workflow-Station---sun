@@ -299,6 +299,10 @@ import {
 } from '@/components/subTableAddDialogHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import { applyFieldDefinitionsToFormFields } from '@/utils/subTableRowRuntime'
+import {
+  attachAssignmentConfigsToBindings,
+  stampAssignmentConfigsOnForms,
+} from '@/utils/miAssignmentConfig'
 import { createProcessStartState } from '@/composables/processStart/useProcessStartState'
 import { createProcessStartFormParsing } from '@/composables/processStart/useProcessStartFormParsing'
 import { createProcessStartSubTables } from '@/composables/processStart/useProcessStartSubTables'
@@ -444,6 +448,7 @@ const loadFunctionUnitContent = async () => {
       loadError.value = content.error
       return
     }
+    stampAssignmentConfigsOnForms(content.forms, content.miAssignments)
 
     caches.cachedContentForms = content.forms || []
     caches.cachedRelationTableFieldIndex = buildRelationTableFieldIndexFromDataTables(content.dataTables)
@@ -581,6 +586,7 @@ const loadFunctionUnitContent = async () => {
           bindingType: b.bindingType,
           bindingMode: b.bindingMode,
           tableName: b.tableDisplayName || b.tableName,
+          physicalTableName: b.tableName,
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           primaryKeyFields: resolveSubTablePrimaryKeyFields(
@@ -627,7 +633,10 @@ const loadFunctionUnitContent = async () => {
       }
 
       const neededBindingIds = computeNeededSubTableBindingIds(placedBindingIds.value, bindings)
-      subTableBindings.value = bindings.filter(b => neededBindingIds.has(b.bindingId))
+      subTableBindings.value = attachAssignmentConfigsToBindings(
+        bindings.filter(b => neededBindingIds.has(b.bindingId)),
+        content.miAssignments,
+      )
       console.log('[start] subTableBindings built (designer-placed + linkForm closure):', subTableBindings.value.map(b => ({ id: b.bindingId, cols: b.columns.length })))
     }
     

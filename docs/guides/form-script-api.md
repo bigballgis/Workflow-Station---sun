@@ -102,6 +102,21 @@ fc-designer 在内存与导出之间做别名转换（见 `FcDesigner.vue` `load
 
 **导出/导入后 Event 脚本：** 加载表单时 `inflateComponentEventsForDesigner` 将持久化的 `on`/`hook` 复制到 `_on`/`_hook`，供设计器 Event 面板显示。
 
+### 1.4 MI Assignment Mode 编排组件
+
+`miAssignment` 是采集子表 `subForms[bindingId].rule` 中的无数据编排节点，不含 `field`，也不保存
+BPMN 配置。唯一配置源是对应 MI 内层 UserTask 的 `assigneeMode`、`assigneeField`、`roleField`、
+`buField`、`subTableName` 扩展属性。
+
+- `both`：组件位置渲染“按个人 / 按角色”radio，并按 BPMN 字段名显隐两组已有控件。
+- `user` / `role`：不渲染 radio，只显示该模式对应的已有控件。
+- 未配置：设计态显示告警，Portal 运行时不渲染。
+- BPMN 已配置但目标子表缺少组件：设计器保存与部署校验阻断。
+
+**Breaking change（D-3）**：运行时不再根据 `assignee` / `bu_code` / `role_code` 等固定列名推断
+Assignment Mode，也不自动迁移存量表单。已有 MI 采集子表必须在 Form Design 中拖入
+`miAssignment` 后重新保存、部署。
+
 ---
 
 ## 2. 运行时 API（`PortalFormApi`）

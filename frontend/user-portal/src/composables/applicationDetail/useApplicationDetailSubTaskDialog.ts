@@ -155,6 +155,7 @@ export function createApplicationDetailSubTaskDialog(ctx: ApplicationDetailCtx):
         subMode: b.subMode,
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
+        assignmentConfig: b.assignmentConfig,
         portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(
           b.primaryKeyFields,
