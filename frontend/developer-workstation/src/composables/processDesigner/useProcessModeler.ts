@@ -105,8 +105,14 @@ export function useProcessModeler(options: UseProcessModelerOptions) {
     try {
       bpmnModeler = new BpmnModeler({
         container: canvasRef.value,
+        // Scope diagram-js keyboard bindings to the canvas (it is tabindex="0", so
+        // clicking the diagram focuses it). Binding to `document` — the bpmn-js
+        // default suggestion — makes diagram-js swallow Cmd/Ctrl+C / V / A on the
+        // WHOLE page: its KeyboardBindings preventDefault() every hit outside an
+        // input, which killed text copying in the AI Generate panel and any other
+        // overlay rendered while the designer is mounted.
         keyboard: {
-          bindTo: document
+          bindTo: canvasRef.value
         },
         moddleExtensions: {
           custom: workflowPlatformModdleDescriptor,

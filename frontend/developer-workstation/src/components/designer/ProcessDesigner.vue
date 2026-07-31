@@ -86,9 +86,12 @@
     </div>
     
     <div class="designer-content">
+      <!-- tabindex: the canvas must be focusable so diagram-js keyboard shortcuts
+           (copy/paste/undo/delete) reach it — they are bound here, not on document. -->
       <div
         ref="canvasRef"
         class="bpmn-canvas"
+        tabindex="0"
       />
       <div class="properties-panel-container">
         <NodePropertiesPanel 
@@ -270,7 +273,17 @@ onUnmounted(() => {
   min-width: 0;
   position: relative;
   background: #fafafa;
-  
+
+  // Focusable for keyboard shortcuts, but no ring on plain mouse clicks.
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: -2px;
+  }
+
   :deep(.djs-container) {
     width: 100% !important;
     height: 100% !important;

@@ -1780,3 +1780,21 @@
     Tables 列 DTO 无 sensitiveMask，formatMainTableViewCell / formatRelationCellDisplay
     仍明文。需后端列元数据带 mask 或前端按 FU form config 按 fieldName join。
 
+- id: "1509"
+  status: fixed
+  fixed_at: "2026-07-31"
+  severity: major
+  category: bug
+  summary: "DW Function Unit 编辑页 Cmd/Ctrl+C·V·A 被 BPMN 画布全局吞掉（AI Generate 面板内容无法复制）"
+  file: "frontend/developer-workstation/src/composables/processDesigner/useProcessModeler.ts; frontend/developer-workstation/src/components/designer/ProcessDesigner.vue"
+  note: |
+    根因：BpmnModeler 初始化时传 keyboard.bindTo=document（bpmn-js 17 依赖的 diagram-js 14.11.3 会照做），
+    diagram-js KeyboardBindings 对 copy/paste/select-all 命中即 editorActions.trigger + preventDefault，
+    且 _isEventIgnored 只放行 input/textarea/contenteditable。结果整页非输入区域（含 Teleport 到 body 的
+    AI Generate 面板）Cmd/Ctrl+C / V / A 全部失效；实测 keydown defaultPrevented=true 且 copy 事件不触发，
+    preventDefault 栈直指 Keyboard._keyHandler。副作用更严重：这些快捷键会作用到画布并触发 2s 自动保存，
+    曾把某 FU 的流程图保存成空图。
+    修复：keyboard.bindTo 收敛为画布容器，.bpmn-canvas 加 tabindex="0"（+ :focus-visible 描边），
+    与 diagram-js 15 的默认行为一致——画布获得焦点时才吃快捷键。
+    验证：frontend/scripts/verify-dw-ai-panel-copy-shortcut.mjs（面板内 Cmd+C 不再被拦截、图形元素数不变、
+    画布聚焦后 Cmd+A 仍选中全部元素），截图见 developer-workstation/verification-screenshots/2026-07-31_ai-panel-copy-shortcut*.png。
