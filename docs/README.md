@@ -42,6 +42,20 @@
 | [user-profile-information-architecture.md](./design/user-profile-information-architecture.md) | 三端个人中心 / 顶栏用户信息展示边界 |
 | [mail-monitor-and-task-due-reminder-design.md](./design/mail-monitor-and-task-due-reminder-design.md) | 邮箱监控入子表 & 任务即将过期通知技术方案 |
 
+## 功能规格 · Specs — [`specs/`](./specs/)
+
+需求 / 设计 / 任务三段式**立项快照**（2026-07-30 从 `.kiro/specs/` 迁入）。与上方 `design/` 的分工：
+`design/` 是现行契约，`specs/` 是「当初为什么这么做」的历史记录。完整清单与状态见
+**[specs/README.md](./specs/README.md)**，下表仅列体量最大的几份：
+
+| 文档 | 说明 |
+|------|------|
+| [specs/README.md](./specs/README.md) | **规格索引** — 16 份规格的主题、任务进度、落地状态；附 21 个「已放弃 / 未落笔」空题目及其实际去向 |
+| [relation-tables/](./specs/relation-tables/) | Relation Tables：表结构 / 表数据管理、版本与部署、DW 表绑定与 Lookup 组件（已落地） |
+| [multi-instance-task-dispatch/](./specs/multi-instance-task-dispatch/) | BPMN 多实例子流程动态任务分发（已落地，含 11 份任务实施小结） |
+| [bi-management/](./specs/bi-management/) | Superset Dashboard 同步 / 分配 / Portal 嵌入（已落地） |
+| [vue3-frontend-architecture-refactor/](./specs/vue3-frontend-architecture-refactor/) | admin-center 前端工程化重构（仅需求 + 设计，未排期） |
+
 ## 开发指南 · Guides — [`guides/`](./guides/)
 
 | 文档 | 说明 |
@@ -86,5 +100,9 @@
 ## 其他成文资料 · Elsewhere in the repo
 
 - 部署目录速查：[../deploy/README.md](../deploy/README.md)（Activepieces / Superset / config-sync 等指南就近置于 `deploy/`）
-- 设计规格（工具管理）：[../.kiro/specs/](../.kiro/specs/)
+- **问题台账**：`.kiro/issues.md`（仪表盘摘要）+ `.kiro/issues/index.yaml`（Open / Wontfix 明细）、
+  `.kiro/issues/fixed-archive.yaml`（已修归档）。**保留在 `.kiro/` 原地**——`.cursor/rules`（`issue-radar`、
+  `debug-mode-docker-workflow`、`cross-cutting`）、skills 与 `.github/pull_request_template.md` 均按该固定路径引用。
 - 各级目录约定：`CLAUDE.md`（根 / `frontend/` / `backend/` / `deploy/`，进入目录自动加载）
+- `.kiro/steering/` 与 `.kiro/skills/` 是 `sync-cursor-rules.mjs` 从 `.cursor/` 生成的镜像（已 gitignore），
+  **不是文档**，请勿引用或复制其内容；唯一真源是 `.cursor/rules/*.mdc` 与 `.cursor/skills/`。
