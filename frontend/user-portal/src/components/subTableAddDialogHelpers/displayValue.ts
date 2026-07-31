@@ -1,6 +1,11 @@
 import type { DialogColumn, TreeNode } from './types'
 import { unwrapUserLikeValueToDisplayString } from './userDisplay'
 import { getLookupPrimaryKeyFieldFromProps, resolveLookupCellTagText } from './lookup'
+import {
+  applySensitiveMask,
+  isSensitiveMaskActive,
+  normalizeSensitiveMaskConfig,
+} from '@/utils/sensitiveMask'
 
 /**
  * Resolves a raw stored value to a human-readable display string for table cells.
@@ -8,6 +13,7 @@ import { getLookupPrimaryKeyFieldFromProps, resolveLookupCellTagText } from './l
  * - checkbox: maps array of values → comma-separated labels
  * - password: returns masked string '••••••'
  * - timerange: formats [start, end] array as "start - end"
+ * - text/input with sensitiveMask: display-only mask (model stays plaintext)
  * - others: converts to string
  */
 export function resolveDisplayValue(col: DialogColumn, rawValue: unknown): string {
@@ -17,6 +23,15 @@ export function resolveDisplayValue(col: DialogColumn, rawValue: unknown): strin
 
   if (col.type === 'password') {
     return '••••••'
+  }
+
+  const maskCfg = normalizeSensitiveMaskConfig(col.props?.sensitiveMask)
+  const inputType = typeof col.props?.type === 'string' ? col.props.type : undefined
+  if (
+    (col.type === 'text' || col.type === 'input' || col.type == null) &&
+    isSensitiveMaskActive(maskCfg, inputType)
+  ) {
+    return applySensitiveMask(String(rawValue), maskCfg!)
   }
 
   if (col.type === 'radio' || col.type === 'select') {

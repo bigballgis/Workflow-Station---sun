@@ -19,12 +19,12 @@
             v-if="row.changed"
             class="snapshot-value changed"
           >
-            <del>{{ formatValue(row.snapshotValue) }}</del>
+            <del>{{ formatValue(row.snapshotValue, row.key) }}</del>
           </span>
           <span
             v-else
             class="snapshot-value"
-          >{{ formatValue(row.snapshotValue) }}</span>
+          >{{ formatValue(row.snapshotValue, row.key) }}</span>
         </template>
       </el-table-column>
       <el-table-column
@@ -36,11 +36,11 @@
           <span
             v-if="row.changed"
             class="live-value changed"
-          >{{ formatValue(row.liveValue) }}</span>
+          >{{ formatValue(row.liveValue, row.key) }}</span>
           <span
             v-else
             class="live-value"
-          >{{ formatValue(row.liveValue) }}</span>
+          >{{ formatValue(row.liveValue, row.key) }}</span>
         </template>
       </el-table-column>
       <el-table-column
@@ -75,6 +75,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FormField } from './formRendererHelpers'
 import { computeDiffRows, type DiffRow } from './snapshotDiffHelpers'
+import {
+  applySensitiveMask,
+  isSensitiveMaskActive,
+} from '@/utils/sensitiveMask'
 
 const { t } = useI18n()
 
@@ -93,10 +97,21 @@ const diffRows = computed<DiffRow[]>(() =>
   computeDiffRows(props.snapshotValues, props.liveValues, props.fields)
 )
 
-function formatValue(value: unknown): string {
+const maskByKey = computed(() => {
+  const map = new Map<string, NonNullable<FormField['sensitiveMask']>>()
+  for (const f of props.fields) {
+    if (f.sensitiveMask?.enabled) map.set(f.key, f.sensitiveMask)
+  }
+  return map
+})
+
+function formatValue(value: unknown, fieldKey?: string): string {
   if (value === null || value === undefined) return '-'
   if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
+  const s = String(value)
+  const cfg = fieldKey ? maskByKey.value.get(fieldKey) : undefined
+  if (isSensitiveMaskActive(cfg)) return applySensitiveMask(s, cfg!)
+  return s
 }
 </script>
 

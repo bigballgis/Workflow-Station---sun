@@ -685,6 +685,25 @@ export default {
       allowEdit: '允许编辑',
       allowDelete: '允许删除',
     },
+    // Input 敏感信息打码（属性面板）— 仅影响展示；提交/存储仍为明文
+    sensitiveMask: {
+      panelTitle: '敏感信息打码',
+      enabled: '启用敏感信息打码',
+      preset: '打码规则',
+      keepPrefix: '保留前几位',
+      keepSuffix: '保留后几位',
+      maskChar: '掩码字符',
+      preview: '效果预览',
+      revealPlainOnFocus: '失焦打码 / 聚焦明文',
+      revealPlainOnFocusHint: '关闭时：编辑显示明文，只读与列表打码。开启时：失焦打码，聚焦显示明文。',
+      presets: {
+        last4: '仅保留后 4 位',
+        first4Last4: '保留前 4 位与后 4 位',
+        first3Last4: '保留前 3 位与后 4 位',
+        all: '全部打码',
+        custom: '自定义',
+      },
+    },
     portalViews: {
       sectionTitle: '门户视图',
       sidePanelCollapseTitle: '门户视图（点击展开）',

@@ -8,6 +8,7 @@ import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
 import { resolveRuleDefaultValue } from '@/utils/formCreateRuleDefaults'
 import { isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
 import { mapDesignerValidateForDialog } from '@/utils/mapDesignerValidateForDialog'
+import { assignSensitiveMaskColumnProps } from '@/utils/sensitiveMask'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 
 interface UseFormPreviewColumnsOptions {
@@ -76,6 +77,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         ]) {
           if (rProps[key] !== undefined) passProps[key] = rProps[key]
         }
+        assignSensitiveMaskColumnProps(passProps, type, rProps)
         if (rProps.data !== undefined) passProps.treeData = rProps.data
         if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
         if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox

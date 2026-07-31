@@ -28,6 +28,8 @@ import LookupComponent from './components/designer/LookupComponent.vue'
 import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
 import RecordNotePlaceholderWidget from './components/designer/RecordNotePlaceholderWidget.vue'
 import RecordNoteScopeSelect from './components/designer/RecordNoteScopeSelect.vue'
+import SensitiveMaskPropsEditor from './components/designer/SensitiveMaskPropsEditor.vue'
+import SensitiveMaskedInput from './components/designer/SensitiveMaskedInput.vue'
 import { registerFormCreateReadonlyParser } from './utils/registerFormCreateReadonlyParser'
 import formCreateFactory from '@form-create/element-ui'
 
@@ -78,6 +80,10 @@ FcDesigner.component('LookupBindingSelect', LookupBindingSelect)
 // Register RecordNotePlaceholderWidget as the canvas renderer for 'recordNote' type
 FcDesigner.component('RecordNote', RecordNotePlaceholderWidget)
 FcDesigner.component('RecordNoteScopeSelect', RecordNoteScopeSelect)
+
+// Sensitive mask: props panel editor + Input display wrapper (Preview / canvas).
+FcDesigner.component('SensitiveMaskPropsEditor', SensitiveMaskPropsEditor)
+FcDesigner.component('input', SensitiveMaskedInput)
 
 // Register the subTable drag rule so it appears in the designer left menu
 FcDesigner.addDragRule({

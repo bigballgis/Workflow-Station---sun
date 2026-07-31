@@ -138,7 +138,7 @@
                 <span
                   v-else
                   class="cell-old"
-                >{{ formatDisplayValue(row.oldValue) }}</span>
+                >{{ formatDisplayValue(row.oldValue, 240, row.fieldName) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -154,7 +154,7 @@
                 <span
                   v-else
                   class="cell-new"
-                >{{ formatDisplayValue(row.newValue) }}</span>
+                >{{ formatDisplayValue(row.newValue, 240, row.fieldName) }}</span>
               </template>
             </el-table-column>
           </el-table>
@@ -165,14 +165,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Document, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { RECORD_NOTE_CHANGED_EVENT } from './formRendererHelpers/recordNoteFields'
 import { useChangeHistoryFormatting } from '@/composables/changeHistoryPanel/useChangeHistoryFormatting'
 import { useChangeHistoryLoader } from '@/composables/changeHistoryPanel/useChangeHistoryLoader'
-
+import { getChangeHistorySensitiveMasks } from '@/api/processForm'
+import type { SensitiveMaskConfig } from '@/utils/sensitiveMask'
+import { emptySensitiveMaskLookup, type SensitiveMaskLookup } from '@/utils/sensitiveMaskLookup'
 
 const { t } = useI18n()
 
@@ -183,14 +185,32 @@ interface Props {
   snapshotTime?: string
   taskInstanceId?: string
   showHeader?: boolean
+  /** Field-name → mask config for display-only masking of old/new values. */
+  sensitiveMaskLookup?: SensitiveMaskLookup | Record<string, SensitiveMaskConfig> | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showHeader: true,
 })
 
+/** Server-side masks (same auth as CH); covers viewers without process-detail access. */
+const apiMaskLookup = ref<SensitiveMaskLookup>(emptySensitiveMaskLookup())
+
+const resolvedMaskLookup = computed((): SensitiveMaskLookup => {
+  const merged = emptySensitiveMaskLookup()
+  for (const [k, v] of apiMaskLookup.value) merged.set(k, v)
+  const raw = props.sensitiveMaskLookup
+  if (raw) {
+    const entries = raw instanceof Map ? raw.entries() : Object.entries(raw)
+    for (const [k, v] of entries) {
+      if (!merged.has(k)) merged.set(k, v)
+    }
+  }
+  return merged
+})
+
 // 展示格式化、字段标签与变更类型映射（纯函数）
-const formatting = useChangeHistoryFormatting(t, dayjs)
+const formatting = useChangeHistoryFormatting(t, dayjs, () => resolvedMaskLookup.value)
 const {
   fieldLocationLabel,
   formatDisplayValue,
@@ -203,6 +223,29 @@ const {
 
 // 拉取历史并按快照时间/任务过滤
 const { loading, error, records, loadHistory } = useChangeHistoryLoader(props, t, dayjs)
+
+async function loadApiMasks() {
+  if (!props.processInstanceId) {
+    apiMaskLookup.value = emptySensitiveMaskLookup()
+    return
+  }
+  try {
+    const res = await getChangeHistorySensitiveMasks(props.processInstanceId) as {
+      data?: Record<string, SensitiveMaskConfig>
+    }
+    const raw = res?.data ?? {}
+    const next = emptySensitiveMaskLookup()
+    for (const [k, v] of Object.entries(raw)) {
+      if (v && typeof v === 'object') next.set(k, v)
+    }
+    apiMaskLookup.value = next
+  } catch {
+    // FALLBACK(ux): CH rows still render; mask enrichment skipped when API unavailable.
+    apiMaskLookup.value = emptySensitiveMaskLookup()
+  }
+}
+
+watch(() => props.processInstanceId, () => { void loadApiMasks() }, { immediate: true })
 
 // Record Note 的增删改不经过表单保存，故由 RecordNoteField 广播后就地重取，
 // 否则新写的备注要等整页刷新才出现在变更历史里。

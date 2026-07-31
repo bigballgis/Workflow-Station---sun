@@ -107,14 +107,18 @@
           />
         </el-select>
 
-        <!-- text -->
+        <!-- text (sensitive mask is display-only; formData stays plaintext) -->
         <el-input
           v-else-if="(!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])"
-          v-model="formData[col.field]"
+          :model-value="textDisplay(col)"
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
           :disabled="isColDisabled(col)"
-          :clearable="!isColDisabled(col)"
+          :readonly="showMasked(col) && !isColDisabled(col)"
+          :clearable="!isColDisabled(col) && !showMasked(col)"
+          @update:model-value="(v: string) => onTextUpdate(col, v)"
+          @focus="onTextFocus(col)"
+          @blur="onTextBlur(col)"
         />
 
         <!-- textarea -->
@@ -599,6 +603,7 @@ import { useSubTableDialogEditor } from '@/composables/subTableAddDialog/useSubT
 import { useSubTableDialogRelations } from '@/composables/subTableAddDialog/useSubTableDialogRelations'
 import { useSubTableDialogUpload } from '@/composables/subTableAddDialog/useSubTableDialogUpload'
 import { useSubTableDialogForm } from '@/composables/subTableAddDialog/useSubTableDialogForm'
+import { useSubTableDialogSensitiveMask } from '@/composables/subTableAddDialog/useSubTableDialogSensitiveMask'
 import { mergeNestedSubTableRowsIntoSto } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/subTableNestedRows'
 import type { NestedSubTableDescriptor, SubTableBinding } from '@/composables/subTableField/subTableFieldTypes'
@@ -904,6 +909,14 @@ const {
   destroyEditors,
   fetchDepartmentTree,
 })
+
+const {
+  showMasked,
+  textDisplay,
+  onTextUpdate,
+  onTextFocus,
+  onTextBlur,
+} = useSubTableDialogSensitiveMask(formData, isColDisabled)
 </script>
 
 <style>

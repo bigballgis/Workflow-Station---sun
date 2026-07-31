@@ -1,5 +1,6 @@
 import { request } from './request'
 import type { RequestIdConfig } from '../utils/formFieldMeta'
+import type { SensitiveMaskConfig } from '@/utils/sensitiveMask'
 
 // --- TypeScript interfaces matching backend DTOs ---
 
@@ -106,6 +107,12 @@ export function getChangeHistory(processInstanceId: string, rowIdentifier?: stri
   if (rowIdentifier) query.push('rowIdentifier=' + encodeURIComponent(rowIdentifier))
   if (taskId) query.push('taskId=' + encodeURIComponent(taskId))
   const url = `/processes/${processInstanceId}/change-history` + (query.length > 0 ? '?' + query.join('&') : '')
-  console.warn('[changeHistory] API call: ', url)
   return request.get<{ data: ChangeHistoryRecord[] }>(url)
+}
+
+/** Display-only mask configs for Change History (available whenever CH is). */
+export function getChangeHistorySensitiveMasks(processInstanceId: string) {
+  return request.get<{ data: Record<string, SensitiveMaskConfig> }>(
+    `/processes/${processInstanceId}/change-history/sensitive-masks`,
+  )
 }

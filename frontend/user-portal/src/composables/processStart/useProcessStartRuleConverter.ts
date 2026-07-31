@@ -2,6 +2,7 @@ import type { FormField } from '@/components/FormRenderer.vue'
 import { isFormCreateRuleReadonly, applyDesignerHideFlagToFormField } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import { applyFormCreateValidationToFormField } from '@/utils/formCreateValidateRules'
+import { applySensitiveMaskFromRule } from '@/utils/applySensitiveMaskFromRule'
 
 /**
  * 将单条 form-create 规则转换为 FormRenderer 字段。
@@ -83,6 +84,8 @@ export function convertFormCreateRule(rule: any): FormField | null {
     field.type = 'password'
   }
 
+  applySensitiveMaskFromRule(field, rule)
+
   // 处理 timePicker isRange → timerange
   if (rule.type === 'timePicker' && rule.props?.isRange === true) {
     field.type = 'timerange'
@@ -121,9 +124,6 @@ export function convertFormCreateRule(rule: any): FormField | null {
   }
 
   applyDesignerHideFlagToFormField(field, rule)
-
-  // 调试输出
-  console.log('Converting rule:', rule.type, '->', field.type, rule)
 
   return field
 }

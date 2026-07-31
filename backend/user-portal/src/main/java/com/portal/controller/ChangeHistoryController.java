@@ -1,6 +1,7 @@
 package com.portal.controller;
 
 import com.portal.component.ChangeHistoryComponent;
+import com.portal.component.ChangeHistorySensitiveMaskResolver;
 import com.platform.common.dto.ApiResponse;
 import com.portal.dto.ChangeHistoryRecord;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Change History REST API 控制器
@@ -23,6 +25,7 @@ import java.util.List;
 public class ChangeHistoryController {
 
     private final ChangeHistoryComponent changeHistoryComponent;
+    private final ChangeHistorySensitiveMaskResolver sensitiveMaskResolver;
 
     @GetMapping("/{processInstanceId}/change-history")
     @Operation(summary = "获取流程变更历史")
@@ -33,5 +36,12 @@ public class ChangeHistoryController {
         log.debug("GET /processes/{}/change-history, rowIdentifier={}, taskId={}", processInstanceId, rowIdentifier, taskId);
         List<ChangeHistoryRecord> history = changeHistoryComponent.getChangeHistory(processInstanceId, rowIdentifier, taskId);
         return ApiResponse.success(history);
+    }
+
+    @GetMapping("/{processInstanceId}/change-history/sensitive-masks")
+    @Operation(summary = "变更历史字段敏感打码配置（仅展示）")
+    public ApiResponse<Map<String, Map<String, Object>>> getChangeHistorySensitiveMasks(
+            @PathVariable String processInstanceId) {
+        return ApiResponse.success(sensitiveMaskResolver.resolveByProcessInstanceId(processInstanceId));
     }
 }

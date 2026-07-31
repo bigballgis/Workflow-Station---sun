@@ -685,6 +685,25 @@ export default {
       allowEdit: '允許編輯',
       allowDelete: '允許刪除',
     },
+    // Input 敏感資訊打碼（屬性面板）— 僅影響展示；提交/儲存仍為明文
+    sensitiveMask: {
+      panelTitle: '敏感資訊打碼',
+      enabled: '啟用敏感資訊打碼',
+      preset: '打碼規則',
+      keepPrefix: '保留前幾位',
+      keepSuffix: '保留後幾位',
+      maskChar: '遮罩字元',
+      preview: '效果預覽',
+      revealPlainOnFocus: '失焦打碼 / 聚焦明文',
+      revealPlainOnFocusHint: '關閉時：編輯顯示明文，唯讀與列表打碼。開啟時：失焦打碼，聚焦顯示明文。',
+      presets: {
+        last4: '僅保留後 4 位',
+        first4Last4: '保留前 4 位與後 4 位',
+        first3Last4: '保留前 3 位與後 4 位',
+        all: '全部打碼',
+        custom: '自訂',
+      },
+    },
     portalViews: {
       sectionTitle: '門戶視圖',
       sidePanelCollapseTitle: '門戶視圖（點擊展開）',

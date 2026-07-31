@@ -143,6 +143,10 @@
           <template v-else-if="col.type === 'password'">
             <span>******</span>
           </template>
+          <!-- text with sensitive mask (display-only) -->
+          <template v-else-if="col.type === 'text' || col.type === 'input'">
+            <span>{{ formatSensitiveCellDisplay(col, scope.row[col.field]) }}</span>
+          </template>
           <!-- link form action -->
           <template v-else-if="col.type === 'linkForm'">
             <el-link
@@ -338,8 +342,24 @@ import {
   type LookupDerivedFrom,
 } from '@/utils/lookupCascade'
 import { parseLookupConfig } from '@/utils/formPreview'
+import {
+  applySensitiveMask,
+  isSensitiveMaskActive,
+  normalizeSensitiveMaskConfig,
+} from '@/utils/sensitiveMask'
 
 const { t } = useI18n()
+
+/** List-cell display: apply Input sensitive mask when configured (model stays plaintext). */
+function formatSensitiveCellDisplay(col: ColumnConfig, raw: unknown): string {
+  if (raw === null || raw === undefined || raw === '') return raw == null ? '-' : ''
+  const maskCfg = normalizeSensitiveMaskConfig(col.props?.sensitiveMask)
+  const inputType = typeof col.props?.type === 'string' ? col.props.type : undefined
+  if (isSensitiveMaskActive(maskCfg, inputType)) {
+    return applySensitiveMask(String(raw), maskCfg!)
+  }
+  return String(raw)
+}
 const previewDialogHost = inject(PREVIEW_SUBTABLE_DIALOG_KEY, null)
 const previewMyRequestsActive = inject(PREVIEW_MY_REQUESTS_ACTIVE_KEY, undefined)
 const hideInlineFormForRowDialog = computed(

@@ -4,17 +4,19 @@
     v-show="visible"
     class="field-renderer-root form-readonly-surface"
   >
-    <!-- text / input -->
+    <!-- text / input (sensitive mask is display-only; model stays plaintext) -->
     <template v-if="field.type === 'text' || field.type === 'input'">
       <el-input
-        :model-value="modelValue"
+        :model-value="textDisplayValue"
         :placeholder="field.placeholder"
         :maxlength="field.maxLength"
         :show-word-limit="!!field.maxLength"
         :disabled="isDisabled"
-        clearable
-        @update:model-value="onUpdate"
-        @blur="onBlur"
+        :readonly="textInputReadonly && !isDisabled"
+        :clearable="!showTextMasked"
+        @update:model-value="onMaskedInput"
+        @focus="onMaskedFocus"
+        @blur="onMaskedBlur"
       />
     </template>
 
@@ -648,6 +650,7 @@ import { useFieldUpload } from '@/composables/fieldRenderer/useFieldUpload'
 import { useFieldEditor } from '@/composables/fieldRenderer/useFieldEditor'
 import { useFieldSignature } from '@/composables/fieldRenderer/useFieldSignature'
 import { useFieldDepartment } from '@/composables/fieldRenderer/useFieldDepartment'
+import { useFieldSensitiveMask } from '@/composables/fieldRenderer/useFieldSensitiveMask'
 import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
 import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
 
@@ -698,6 +701,21 @@ const {
   resolvedOptions,
   searchUsers,
 } = useFieldCore(props, emit)
+
+const {
+  displayValue: textDisplayValue,
+  inputReadonly: textInputReadonly,
+  showMasked: showTextMasked,
+  onMaskedInput,
+  onMaskedFocus,
+  onMaskedBlur,
+} = useFieldSensitiveMask(
+  () => props.field,
+  () => props.modelValue,
+  () => isDisabled.value,
+  onUpdate,
+  onBlur,
+)
 
 // XSS sanitization (Task 6.5)
 const { sanitize } = useFieldSanitize()

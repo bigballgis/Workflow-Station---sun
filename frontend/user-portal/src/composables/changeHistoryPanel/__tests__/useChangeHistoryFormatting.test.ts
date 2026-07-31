@@ -72,4 +72,39 @@ describe('useChangeHistoryFormatting', () => {
     const value = JSON.stringify({ name: 'Item A', status: 'APPROVED', amount: '100' })
     expect(formatDisplayValue(value)).toBe('name: Item A; status: APPROVED; amount: 100')
   })
+
+  it('masks scalar field values when sensitiveMaskLookup is provided', () => {
+    const lookup = new Map([
+      ['card_number', {
+        enabled: true,
+        preset: 'last4' as const,
+        keepPrefix: 0,
+        keepSuffix: 4,
+        maskChar: '*',
+        revealPlainOnFocus: false,
+      }],
+    ])
+    const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs, () => lookup)
+    expect(formatDisplayValue('6222021234567890', 240, 'card_number')).toBe('************7890')
+  })
+
+  it('masks matching keys inside sub-table JSON row diffs', () => {
+    const lookup = new Map([
+      ['card_number', {
+        enabled: true,
+        preset: 'last4' as const,
+        keepPrefix: 0,
+        keepSuffix: 4,
+        maskChar: '*',
+        revealPlainOnFocus: false,
+      }],
+    ])
+    const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs, () => lookup)
+    const value = JSON.stringify({
+      row_id: 'ATM-001',
+      card_number: '6222021234567890',
+      merchant_name: 'Shop',
+    })
+    expect(formatDisplayValue(value)).toBe('card_number: ************7890; merchant_name: Shop')
+  })
 })

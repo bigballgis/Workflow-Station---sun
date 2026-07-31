@@ -314,6 +314,26 @@ describe('Property 5: Password field masked display', () => {
   })
 })
 
+describe('Sensitive mask list-cell display', () => {
+  it('resolveDisplayValue applies last4 mask for text columns with sensitiveMask', () => {
+    const col: DialogColumn = {
+      field: 'card',
+      label: 'Card',
+      type: 'text',
+      props: {
+        sensitiveMask: {
+          enabled: true,
+          preset: 'last4',
+          keepPrefix: 0,
+          keepSuffix: 4,
+          maskChar: '*',
+        },
+      },
+    }
+    expect(resolveDisplayValue(col, '6222021234567890')).toBe('************7890')
+  })
+})
+
 // ─── Property 6: Timerange formatted display ─────────────────────────────────
 
 describe('Property 6: Timerange formatted display', () => {

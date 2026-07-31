@@ -355,6 +355,7 @@
             <ChangeHistoryPanel
               :process-instance-id="processId"
               :show-header="false"
+              :sensitive-mask-lookup="sensitiveMaskLookup"
             />
           </div>
         </el-tab-pane>
@@ -443,7 +444,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, InfoFilled, Document, Bell, RefreshLeft, Refresh } from '@element-plus/icons-vue'
@@ -455,6 +456,7 @@ import SubTableField from '@/components/SubTableField.vue'
 import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import { formatDate } from '@/utils/dateFormat'
+import { buildSensitiveMaskLookup } from '@/utils/sensitiveMaskLookup'
 import { createApplicationDetailState } from '@/composables/applicationDetail/useApplicationDetailState'
 import type { ApplicationDetailCtx } from '@/composables/applicationDetail/context'
 import { resolveBindingAssigneeField } from '@/composables/applicationDetail/subTableRowHelpers'
@@ -570,7 +572,41 @@ const {
   bottomSubTableBindings,
   diagramSelectedLinkableBindings,
   diagramSelectedBottomSubTables,
+  previousForms,
 } = ctx
+
+/** Mask configs for Change History (display-only; covers main + previous node forms). */
+const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({
+  formFields: formFields.value,
+  formTabs: [
+    ...(formTabs.value || []),
+    ...(selectedNodeForm.value?.tabs || []),
+    ...((previousForms.value || []).flatMap((f: { tabs?: Array<{ fields?: unknown[] }> }) => f.tabs || [])),
+  ],
+  formFieldsAfterTabs: formFieldsAfterTabs.value,
+  extraFieldLists: [
+    selectedNodeForm.value?.fields,
+    ...((previousForms.value || []).map((f: { formFields?: unknown[] }) => f.formFields)),
+  ],
+  subTableBindings: [
+    ...(subTableBindings.value || []),
+    ...(selectedNodeForm.value?.subTableBindings || []),
+    ...((previousForms.value || []).flatMap((f: { subTableBindings?: unknown[] }) => f.subTableBindings || [])),
+  ],
+  formConfigJsons: [
+    mainFormConfig.value,
+    selectedNodeForm.value?.formConfig,
+    ...((previousForms.value || []).map((f: { formConfig?: unknown }) => f.formConfig)),
+    ...((ctx.cachedContentForms || []).map((f: { configJson?: unknown }) => {
+      const raw = f?.configJson
+      if (typeof raw === 'string') {
+        // FALLBACK(ux): malformed configJson skips mask enrichment only; CH still shows values.
+        try { return JSON.parse(raw) } catch { return null }
+      }
+      return raw
+    })),
+  ],
+}))
 
 const handleWorkflowNodeClick = (node: ProcessNode) => {
   activeDetailTab.value = 'general'
