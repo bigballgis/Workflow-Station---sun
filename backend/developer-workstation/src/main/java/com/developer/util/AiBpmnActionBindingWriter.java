@@ -1,7 +1,9 @@
 package com.developer.util;
 
 import com.developer.entity.ActionDefinition;
+import com.developer.exception.AiGenerationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -30,6 +32,7 @@ import java.util.Set;
  * <p>The model declares stable user-task IDs in {@code actionDefinitions[].stageIds}; database-generated
  * action IDs are resolved and written only after JPA persistence.</p>
  */
+@Slf4j
 public final class AiBpmnActionBindingWriter {
 
     private static final String BPMN_NAMESPACE = "http://www.omg.org/spec/BPMN/20100524/MODEL";
@@ -45,42 +48,42 @@ public final class AiBpmnActionBindingWriter {
      * Missing IDs or invalid partial bindings are ignored; parser validation handles malformed AI output.
      */
     public static String bindStageActions(String bpmnXml, List<ActionDefinition> actions,
-                                        List<Map<String, Object>> generatedActions) {
-    if (bpmnXml == null || bpmnXml.isBlank() || actions == null || actions.isEmpty()
-            || generatedActions == null || generatedActions.isEmpty()) {
-        return bpmnXml;
-    }
-
-    try {
-        Map<String, ActionDefinition> persistedByName = new LinkedHashMap<>();
-        for (ActionDefinition action : actions) {
-            if (action != null && action.getId() != null && action.getActionName() != null) {
-                persistedByName.put(action.getActionName(), action);
-            }
-        }
-        if (persistedByName.isEmpty()) {
+                                          List<Map<String, Object>> generatedActions) {
+        if (bpmnXml == null || bpmnXml.isBlank() || actions == null || actions.isEmpty()
+                || generatedActions == null || generatedActions.isEmpty()) {
             return bpmnXml;
         }
 
-        Map<String, LinkedHashSet<ActionDefinition>> actionsByStage = new LinkedHashMap<>();
-        for (Map<String, Object> generatedAction : generatedActions) {
-            if (generatedAction == null) continue;
-            Object actionName = generatedAction.get("actionName");
-            ActionDefinition persisted = actionName instanceof String name
-                    ? persistedByName.get(name) : null;
-            if (persisted == null || !(generatedAction.get("stageIds") instanceof List<?> stageIds)) {
-                continue;
-            }
-            for (Object stageId : stageIds) {
-                if (stageId instanceof String id && !id.isBlank()) {
-                    actionsByStage.computeIfAbsent(id.trim(), ignored -> new LinkedHashSet<>())
-                            .add(persisted);
+        try {
+            Map<String, ActionDefinition> persistedByName = new LinkedHashMap<>();
+            for (ActionDefinition action : actions) {
+                if (action != null && action.getId() != null && action.getActionName() != null) {
+                    persistedByName.put(action.getActionName(), action);
                 }
             }
-        }
-        if (actionsByStage.isEmpty()) {
-            return bpmnXml;
-        }
+            if (persistedByName.isEmpty()) {
+                return bpmnXml;
+            }
+
+            Map<String, LinkedHashSet<ActionDefinition>> actionsByStage = new LinkedHashMap<>();
+            for (Map<String, Object> generatedAction : generatedActions) {
+                if (generatedAction == null) continue;
+                Object actionName = generatedAction.get("actionName");
+                ActionDefinition persisted = actionName instanceof String name
+                        ? persistedByName.get(name) : null;
+                if (persisted == null || !(generatedAction.get("stageIds") instanceof List<?> stageIds)) {
+                    continue;
+                }
+                for (Object stageId : stageIds) {
+                    if (stageId instanceof String id && !id.isBlank()) {
+                        actionsByStage.computeIfAbsent(id.trim(), ignored -> new LinkedHashSet<>())
+                                .add(persisted);
+                    }
+                }
+            }
+            if (actionsByStage.isEmpty()) {
+                return bpmnXml;
+            }
 
             Document document = parseSecurely(bpmnXml);
             boolean changed = false;
@@ -92,7 +95,11 @@ public final class AiBpmnActionBindingWriter {
             }
             return changed ? serialize(document) : bpmnXml;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to bind AI-generated actions to BPMN user tasks", e);
+            // 同 AiBpmnFormBindingWriter：绑定失败意味着 actionIds 没注入、运行时任务没按钮，
+            // 是要人看的故障，不能降级成 warn 级的 400；栈同样先落一次。
+            log.error("Failed to bind AI-generated actions to BPMN user tasks", e);
+            throw new AiGenerationException("AI_BPMN_BINDING_FAILED",
+                    "Failed to bind AI-generated actions to BPMN user tasks: " + e.getMessage());
         }
     }
 

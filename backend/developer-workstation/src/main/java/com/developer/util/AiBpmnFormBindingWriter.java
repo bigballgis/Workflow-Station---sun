@@ -2,6 +2,8 @@ package com.developer.util;
 
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
+import com.developer.exception.AiGenerationException;
+import lombok.extern.slf4j.Slf4j;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -27,6 +29,7 @@ import java.util.Set;
  * {@link FormStageBinding#getStageId()}, but it cannot know the database-generated form ID.
  * This writer resolves that final link after JPA has assigned the IDs.</p>
  */
+@Slf4j
 public final class AiBpmnFormBindingWriter {
 
     private static final String BPMN_NAMESPACE = "http://www.omg.org/spec/BPMN/20100524/MODEL";
@@ -70,7 +73,14 @@ public final class AiBpmnFormBindingWriter {
             }
             return changed ? serialize(document) : bpmnXml;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to bind AI-generated forms to BPMN task nodes", e);
+            // apply 阶段的 bpmnXml 来自客户端回传的 body，没再过 AiResponseParser，
+            // 所以这里可能拿到未经图校验的 XML：必须以 AI_* 码 fail loud，
+            // 否则会被 GlobalExceptionHandler 当成 400 VAL_INVALID_ARGUMENT 记 warn。
+            // AiGenerationException 没有 cause 构造器，且 handler 只打 message——
+            // 栈在这里先落一次，否则真出 bug 时只剩一行文案。
+            log.error("Failed to bind AI-generated forms to BPMN task nodes", e);
+            throw new AiGenerationException("AI_BPMN_BINDING_FAILED",
+                    "Failed to bind AI-generated forms to BPMN task nodes: " + e.getMessage());
         }
     }
 
