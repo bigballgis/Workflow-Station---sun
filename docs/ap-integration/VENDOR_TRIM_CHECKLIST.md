@@ -341,12 +341,48 @@ VT-11 的第三个隔离项，从 VT-17 分出来（见 VT-17 顶部的更正）
 | 项 | 锁中出现 | 状态 |
 |---|---|---|
 | `expr-eval@2.0.2` | **0** | ✅ `55023fd4` 的 `workspace:*` 修复 |
-| `fast-xml-parser@5.2.5` | **0** | ✅ 本项 |
-| `vitest@3.0.8` | 5 | ⬜ **仍在**——VT-11 记录同主版本 `3.2.7` 已在公司 Nexus 实测可下载可运行，但全仓升级的锁重算被 `isolated-vm@6.0.2` 的不完整 metadata 阻断 |
-| `isolated-vm@6.0.2` | 2 | ⬜ **仍在**——它不是 quarantine，是 Nexus 上元数据不全，**且是上面那条的前置障碍** |
+| `fast-xml-parser@5.2.5` | **0** | ✅ VT-21 |
+| `vitest@3.0.8` | **0** | ✅ `259f34c5`（2026-07-30）——见下方"降级而非升级" |
+| `isolated-vm@6.0.2` | 2 | ⬜ **仍在**——它不是 quarantine，是 Nexus 上元数据不全 |
 
-⇒ **下一个 P0 是 `isolated-vm@6.0.2` 的 Nexus 元数据**，它同时卡着 `vitest` 的升级路径。
-这条不由我们控制（需 Nexus 管理方补全或镜像重同步），**属类 ② 里"只能求放行"的那一格**。
+#### `vitest@3.0.8` 的解法是**降级**，不是升级（2026-07-30，`259f34c5`）
+
+上一版这张表写的是"⬜ 仍在，被 `isolated-vm@6.0.2` 的不完整 metadata 阻断"——那是把
+**升到 3.2.7** 当成了唯一出路。实际走的是反方向：**3.0.3 在公司 Nexus 上是被供的**，
+于是 21 个 package.json（仓库根、`shared`、`pieces-framework`、四个 server 包、
+`packages/pieces/core/` 下 14 个件）的声明点全部改到 3.0.3，**不加 pnpm override**，
+锁文件因此对"实际请求的是什么"保持诚实。`isolated-vm` 不再是这条的前置障碍。
+
+> 坑：第一遍只改到 7 个文件，因为 sweep 用了 `packages/*/package.json` +
+> `packages/*/*/package.json` 两级 glob，而 `packages/pieces/core/<name>/package.json`
+> 深一层。与 VT-17 漏掉仓库根 manifest 同型——**依赖 sweep 一律 `find` 全树，不要 glob**。
+
+#### 收尾：`@vitest/pretty-format` 的浮动版（2026-07-30）
+
+`vitest@3.0.3` 对六个 `@vitest/*` 同伴是精确 pin，唯独 `@vitest/pretty-format` 写的是
+`^3.0.3`，于是它浮到了 **3.2.7**——是 vitest 家族里唯一会随 registry 漂移的包。已加
+`pnpm.overrides` 钉到 `3.0.3`，锁中该包收敛为单版本。
+
+**同时修掉一个存量失配**：锁文件头部的 `overrides:` 记着三条 manifest 里根本不存在的条目
+（`@aws-sdk/util-format-url@3.972.40→3.972.37`、`@smithy/core@3.31.1→3.30.0`、
+`@smithy/signature-v4@5.6.12→5.6.10`，形状即 VT-21 那批的 FOSS Guard 规避降级，
+锁提交了、manifest 没提交）。后果是 `pnpm install --frozen-lockfile` **必挂**
+（`ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`）——包括 `activepieces/Dockerfile` 的镜像构建那一步。
+三条已补登进 `pnpm.overrides`；若当时任其在重算中丢失，`@smithy/core` 会退回被躲开的 3.31.1。
+锁 packages 条目 2970 → 2967，`--frozen-lockfile` 现已通过。
+
+**闸门**（HEAD worktree 取基线，同一 worktree 套新锁复跑，逐位相同）：
+`engine` 6 failed | 318 passed (324)；`worker` 1 failed | 212 passed (213)。
+
+> ⚠️ **测试环境雷**：`~/node_modules/` 下存在一份散装 npm 安装（含 `node@22.13.0`）。
+> pnpm/npx 逐级向上拼 `node_modules/.bin`，凡是放在家目录下的工作树都会被降到那个 node，
+> 而 `zlib.zstdDecompress` 要 22.15.0 才有——`engine` 会炸成 `21 files failed`，
+> 全是 `promisify(...) received undefined`，**看起来像依赖问题，其实不是**。
+> 取基线请用 `/tmp` 下的 worktree（这也是本节数字的取法）。
+
+⇒ **VT-11 四项里只剩 `isolated-vm@6.0.2` 的 Nexus 元数据**。它已不卡 `vitest`，
+但仍卡公司机器上的**完整锁重算**；不由我们控制（需 Nexus 管理方补全或镜像重同步），
+**属类 ② 里"只能求放行"的那一格**。
 
 ### <a id="vt-20"></a>VT-20 — 裁剪批 D：AP 自带 embed 路由 + `packages/ee/embed-sdk`（P2，风险最高）
 
