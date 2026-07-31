@@ -1,0 +1,2079 @@
+- id: "001"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "admin-center AuthController.refresh() 返回 refreshToken 而非新 accessToken"
+  fixed_at: "2026-03-30"
+- id: "002"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "user-portal/developer-workstation 后端缺少 /auth/refresh 端点"
+  fixed_at: "2026-03-30"
+- id: "003"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "JwtAuthenticationFilter.shouldNotFilter() 路径匹配无效"
+  fixed_at: "2026-03-30"
+- id: "004"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "JwtTokenServiceImpl 短密钥零填充→改为拒绝启动"
+  fixed_at: "2026-03-31"
+- id: "005"
+  status: fixed
+  severity: major
+  category: security
+  summary: "JwtTokenServiceImpl.hashToken() 使用 String.hashCode()"
+  fixed_at: "2026-03-30"
+- id: "006"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "admin-center AuthController 暴露调试端点"
+  fixed_at: "2026-03-30"
+- id: "007"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "user-portal 12+ 处 new RestTemplate() 直接创建实例"
+  note: "部分修复：通过 WorkflowEngineClient 统一调用"
+- id: "008"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "user-portal Controllers 使用 X-User-Id header 而非 SecurityContext"
+  fixed_at: "2026-04-03"
+- id: "009"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "developer-workstation user.ts changePassword 调用不存在的端点"
+  fixed_at: "2026-04-03"
+- id: "010"
+  status: fixed
+  severity: minor
+  category: bug
+  summary: "admin-center 编译失败 — 缺少 Collectors import"
+  fixed_at: "2026-03-30"
+- id: "011"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "platform-security RoleEntityPropertyTest 缺少嵌入式数据库"
+  fixed_at: "2026-04-03"
+- id: "012"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "developer-workstation 集成测试因缺少 ApplicationContext 失败"
+  fixed_at: "2026-04-03"
+- id: "013"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "user-portal 三个表缺少 lock_version 列"
+  fixed_at: "2026-03-30"
+- id: "014"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "ProcessComponent 解析响应时字段名错误"
+  fixed_at: "2026-03-30"
+- id: "015"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "UserProfileDropdown 未正确解包 ApiResponse"
+  fixed_at: "2026-03-30"
+- id: "016"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "ProcessFormComponent 解析响应时字段名错误"
+  fixed_at: "2026-03-30"
+- id: "017"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "00-init-all.sh 未执行 16~18-*.sql 初始化脚本"
+  fixed_at: "2026-03-31"
+
+# ── 第一波安全加固 (2026-03-31) ──────────────────────────────
+- id: "018"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "全平台 6 处硬编码 JWT/AES 默认密钥"
+  fixed_at: "2026-03-31"
+- id: "019"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "admin-center AuthServiceImpl 日志记录明文密码"
+  fixed_at: "2026-03-31"
+- id: "020"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "N8nConfigController 暴露解密后的 API Key"
+  fixed_at: "2026-03-31"
+- id: "021"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "全平台 SecurityConfig anyRequest().permitAll()"
+  fixed_at: "2026-03-31"
+- id: "022"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "workflow-engine 任务 API 信任调用方自报 userId (IDOR)"
+  fixed_at: "2026-04-03"
+- id: "023"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "workflow-engine getUserTasks 暴露全局未分配任务"
+  fixed_at: "2026-03-31"
+- id: "024"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "user-portal PortalRelationTableServiceImpl SQL 拼接注入"
+  fixed_at: "2026-03-31"
+- id: "025"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "user-portal N8nActionController 缺少认证"
+  fixed_at: "2026-03-31"
+- id: "026"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "admin-center java.util.Random 生成密码"
+  fixed_at: "2026-03-31"
+- id: "027"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "ConfigurationEncryptionService 加密失败回退明文"
+  fixed_at: "2026-03-31"
+- id: "028"
+  status: fixed
+  severity: major
+  category: security
+  summary: "Redis 黑名单故障放行 — 已撤销 token 可能被接受"
+  fixed_at: "2026-04-03"
+- id: "029"
+  status: fixed
+  severity: major
+  category: security
+  summary: "PermissionServiceImpl 未配置 API 权限即放行(添加warn日志)"
+  fixed_at: "2026-03-31"
+- id: "030"
+  status: fixed
+  severity: major
+  category: security
+  summary: "refreshToken 不验证 token type"
+  fixed_at: "2026-03-31"
+- id: "031"
+  status: fixed
+  severity: major
+  category: security
+  summary: "Refresh token 未轮换，泄露后可反复换发 access token"
+  fixed_at: "2026-04-03"
+- id: "032"
+  status: fixed
+  severity: major
+  category: security
+  summary: "ProcessController.processCompleted 回调无鉴权"
+  fixed_at: "2026-03-31"
+- id: "033"
+  status: fixed
+  severity: major
+  category: security
+  summary: "ProcessFormController 不校验用户身份"
+  fixed_at: "2026-03-31"
+- id: "034"
+  status: fixed
+  severity: major
+  category: security
+  summary: "ProcessController/TaskController 多个端点缺少权限校验"
+  fixed_at: "2026-03-31"
+- id: "035"
+  status: fixed
+  severity: major
+  category: security
+  summary: "developer-workstation 6 个 Controller 缺少权限注解"
+  fixed_at: "2026-03-31"
+
+# ── 前端安全 ──────────────────────────────────────────────────
+- id: "036"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "developer-workstation SubTableField.vue v-html XSS"
+  fixed_at: "2026-03-31"
+- id: "037"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "developer-workstation SVG 净化使用正则而非 DOMPurify"
+  fixed_at: "2026-03-31"
+- id: "038"
+  status: fixed
+  severity: major
+  category: security
+  summary: "admin-center 整个应用缺少 DOMPurify"
+  fixed_at: "2026-03-31"
+
+# ── 前端 Bug ─────────────────────────────────────────────────
+- id: "039"
+  status: fixed
+  severity: critical
+  category: bug
+  summary: "user-portal process store API 路径双重前缀"
+  fixed_at: "2026-03-31"
+- id: "040"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "user-portal task store 调用签名与 API 不匹配"
+  fixed_at: "2026-03-31"
+- id: "041"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "user-portal process store 类型定义与 api 重复"
+  fixed_at: "2026-03-31"
+- id: "042"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "developer-workstation functionUnit.ts 缺少 token 刷新"
+  note: "标记但未修改，需统一 API 层"
+- id: "043"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "user-portal user.ts changePassword 每次创建新 axios 实例"
+  fixed_at: "2026-04-03"
+
+# ── 前端 i18n ────────────────────────────────────────────────
+- id: "044"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "admin-center 路由和权限模块硬编码中文"
+  fixed_at: "2026-03-31"
+- id: "045"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "user-portal 业务逻辑中使用中文字符串做条件判断"
+  fixed_at: "2026-03-31"
+
+# ── 前端路由权限 ──────────────────────────────────────────────
+- id: "046"
+  status: fixed
+  severity: major
+  category: security
+  summary: "admin-center canAccessRoute 动态路由匹配失败"
+  fixed_at: "2026-03-31"
+- id: "047"
+  status: fixed
+  severity: major
+  category: security
+  summary: "user-portal 路由无任何权限检查"
+  fixed_at: "2026-03-31"
+- id: "048"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "developer-workstation 路由守卫未使用 permission.ts"
+  fixed_at: "2026-03-31"
+
+# ── 异常处理与 API 响应 ──────────────────────────────────────
+- id: "049"
+  status: fixed
+  severity: critical
+  category: architecture
+  summary: "两套 ErrorResponse 类，API 响应形状不一致"
+  fixed_at: "2026-03-31"
+- id: "050"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "GlobalExceptionHandler 将 RuntimeException 原样返回"
+  fixed_at: "2026-03-31"
+- id: "051"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "GlobalExceptionHandler 误处理 PermissionDeniedException"
+  fixed_at: "2026-03-31"
+- id: "052"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "GlobalExceptionHandler FieldError 强转 ClassCastException"
+  fixed_at: "2026-03-31"
+- id: "053"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "admin-center login() 捕获 RuntimeException 返回空响应"
+  fixed_at: "2026-03-31"
+- id: "054"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "GlobalExceptionHandler 统一返回 ApiResponse 包装"
+  fixed_at: "2026-03-31"
+- id: "055"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "admin-center AuthServiceImpl 维护独立 JWT 生成逻辑"
+  fixed_at: "2026-03-31"
+- id: "056"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "AuthenticationServiceImpl 强转 JwtTokenServiceImpl"
+  fixed_at: "2026-03-31"
+
+# ── 性能 ─────────────────────────────────────────────────────
+- id: "057"
+  status: fixed
+  severity: critical
+  category: performance
+  summary: "workflow-engine getUserTasks 全量拉取内存分页"
+  fixed_at: "2026-03-31"
+- id: "058"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "user-portal ProcessComponent 列表 N+1 HTTP 调用"
+  fixed_at: "2026-03-31"
+- id: "059"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "user-portal DashboardComponent 团队统计 N+1 HTTP"
+  fixed_at: "2026-03-31"
+- id: "060"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "developer-workstation FunctionUnitComponentImpl N+1 查询"
+  fixed_at: "2026-03-31"
+- id: "061"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "admin-center DashboardController.getUserTrends N+1"
+  fixed_at: "2026-03-31"
+- id: "062"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "admin-center UserManagerComponent.listUsers N+1"
+  fixed_at: "2026-03-31"
+- id: "063"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "workflow-engine 流程变量全量返回"
+  fixed_at: "2026-03-31"
+- id: "064"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "workflow-engine N+1 部署查询 + BpmnModel 重复获取"
+  fixed_at: "2026-03-31"
+- id: "065"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "user-portal Thread.sleep(500) 在事务中"
+  fixed_at: "2026-03-31"
+- id: "066"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "user-portal WorkflowEngineClient 重复 isAvailable 检查"
+  fixed_at: "2026-03-31"
+- id: "067"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "workflow-engine ExceptionStatistics 全表加载"
+  fixed_at: "2026-03-31"
+- id: "068"
+  status: fixed
+  severity: minor
+  category: performance
+  summary: "前端 FormRenderer.vue 多个 deep watcher 性能隐患"
+  fixed_at: "2026-04-03"
+
+# ── 架构与代码质量 ────────────────────────────────────────────
+- id: "069"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "多个 Controller 直接注入 Repository/JdbcTemplate"
+  fixed_at: "2026-03-31"
+- id: "070"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "admin-center AuthServiceImpl RuntimeException→业务异常"
+  fixed_at: "2026-03-31"
+- id: "071"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "ProcessComponent.withdrawProcess 未取消 Flowable 流程"
+  fixed_at: "2026-03-31"
+- id: "072"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "TaskFormComponent.getTaskInfo 始终抛异常"
+  fixed_at: "2026-03-31"
+- id: "073"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "enableFunctionUnit 未持久化状态变更"
+  fixed_at: "2026-03-31"
+- id: "074"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "AiGenerationComponentImpl undoCleanupExecutor 未关闭"
+  fixed_at: "2026-03-31"
+- id: "075"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "developer-workstation AuthController 硬编码角色-权限映射"
+  fixed_at: "2026-03-31"
+- id: "076"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "ExitController 批量退出吞没异常"
+  fixed_at: "2026-03-31"
+- id: "077"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "copyTaskForm configJson 浅拷贝"
+  fixed_at: "2026-03-31"
+- id: "078"
+  status: fixed
+  severity: major
+  category: security
+  summary: "AiChatRequest.message 缺少 @Size 限制"
+  fixed_at: "2026-03-31"
+- id: "079"
+  status: fixed
+  severity: major
+  category: security
+  summary: "BPMN 校验未禁用 DTD/外部实体 (XXE)"
+  fixed_at: "2026-03-31"
+- id: "080"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "AuthenticationException 与 Spring Security 同名→重命名"
+  fixed_at: "2026-03-31"
+- id: "081"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "PageRequest.sortBy 无白名单校验"
+  fixed_at: "2026-03-31"
+- id: "082"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "IdempotencyUtils.generateKey 含时间戳无法幂等"
+  fixed_at: "2026-03-31"
+- id: "083"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "admin-center displayName 三元表达式重复 4 处"
+  fixed_at: "2026-03-31"
+- id: "084"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "resolveUserDisplayName 逻辑在两类中重复"
+  fixed_at: "2026-03-31"
+- id: "085"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "DDL 生成未校验表名和字段名"
+  fixed_at: "2026-03-31"
+- id: "086"
+  status: fixed
+  severity: minor
+  category: performance
+  summary: "AiLockServiceImpl.userNameCache 无界增长"
+  fixed_at: "2026-03-31"
+- id: "087"
+  status: fixed
+  severity: minor
+  category: performance
+  summary: "FunctionUnitAccessComponent 缓存无 maxSize"
+  fixed_at: "2026-03-31"
+- id: "088"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "UserController.resetPassword 返回明文密码(标注HTTPS)"
+  fixed_at: "2026-04-03"
+- id: "089"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "SystemMonitorComponent 假监控数据(标记mock)"
+  fixed_at: "2026-03-31"
+- id: "090"
+  status: fixed
+  severity: minor
+  category: bug
+  summary: "ActionDefinitionController URL 前缀重复"
+  fixed_at: "2026-03-31"
+- id: "091"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "FormDefinition 缺少 @Version 乐观锁"
+  fixed_at: "2026-03-31"
+- id: "092"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "FunctionUnitImportController 硬编码 system 操作者"
+  fixed_at: "2026-03-31"
+- id: "093"
+  status: fixed
+  severity: minor
+  category: bug
+  summary: "DashboardController.getRecentActivities 查询未排序"
+  fixed_at: "2026-03-31"
+- id: "094"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "RelationTableDataServiceImpl LIKE 通配符未转义"
+  fixed_at: "2026-03-31"
+- id: "096"
+  status: fixed
+  severity: minor
+  category: performance
+  summary: "notification store WebSocket 检查用 setInterval→watch"
+  fixed_at: "2026-03-31"
+- id: "097"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "前端 notification store as any 类型移除"
+  fixed_at: "2026-03-31"
+
+# ── 数据库与部署 ──────────────────────────────────────────────
+- id: "098"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "FormType CHECK 约束与 Java 枚举不匹配"
+  fixed_at: "2026-03-31"
+- id: "099"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "sys_users 表缺少 lock_version 列"
+  fixed_at: "2026-03-31"
+- id: "100"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "缺失的迁移文件 14-add-common-table-feature.sql"
+  fixed_at: "2026-03-31"
+- id: "101"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "TEAM_LEAD 角色权限与描述矛盾(移除DELETE)"
+  fixed_at: "2026-03-31"
+- id: "102"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "Procurement Workflow 04-*.sql 未被执行"
+  fixed_at: "2026-03-31"
+- id: "103"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "Kong Upstreams 未被 Services 引用(已删除)"
+  fixed_at: "2026-03-31"
+- id: "104"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "Kafka Advertised Listener 端口不匹配"
+  fixed_at: "2026-03-31"
+- id: "105"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "admin-center Docker Compose 缺少 SPRING_FLYWAY_ENABLED"
+  fixed_at: "2026-03-31"
+- id: "106"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "process_definition_key VARCHAR 长度不一致"
+  fixed_at: "2026-03-31"
+- id: "107"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "dw_function_units.deployed_at NOT NULL 与 Entity 不一致"
+  fixed_at: "2026-03-31"
+- id: "108"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "手动初始化脚本缺少 migration 16~18"
+  fixed_at: "2026-03-31"
+- id: "109"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "flowable.database-schema-update 默认 true→false"
+  fixed_at: "2026-03-31"
+- id: "110"
+  status: fixed
+  severity: minor
+  category: deploy
+  summary: "admin-center nginx.conf 缺少 client_max_body_size"
+  fixed_at: "2026-03-31"
+- id: "111"
+  status: fixed
+  severity: minor
+  category: deploy
+  summary: "Dockerfile.local 缺少 CRLF 修复"
+  fixed_at: "2026-03-31"
+
+# ── 复审新发现 (2026-03-31) ──────────────────────────────────
+- id: "112"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "workflow-engine-core 缺少 platform.security.jwt 配置"
+  fixed_at: "2026-03-31"
+- id: "113"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "RelationTable/Ai ExceptionHandler 返回裸 ErrorResponse 与 GlobalExceptionHandler 不一致"
+  fixed_at: "2026-04-03"
+- id: "114"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "developer-workstation BusinessException 与 platform-common 同名类冲突"
+  fixed_at: "2026-04-03"
+- id: "115"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "初始化脚本遗漏 migration 18"
+  fixed_at: "2026-03-31"
+- id: "116"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "docker-compose workflow-engine 缺少 Kafka 配置"
+  fixed_at: "2026-03-31"
+- id: "117"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "process store startProcess 参数类型与 API 不一致(死代码)"
+  fixed_at: "2026-04-03"
+- id: "118"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "up_change_history 有实体与 V402 SQL 但 user-portal 未启用 Flyway 且 deploy/init-scripts 未建表"
+  fixed_at: "2026-03-31"
+- id: "119"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "developer Member 实体映射 members 表但全仓库无 CREATE TABLE/Flyway 迁移"
+  fixed_at: "2026-03-31"
+- id: "120"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "rt_* 关联表 DDL 仅在各模块 Flyway，未纳入 deploy/init-scripts，纯 SQL 初始化库不完整"
+  fixed_at: "2026-03-31"
+- id: "121"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "init 01 未含 sys_roles.lock_version，与 Role @Version 及 Flyway V210 不一致"
+  fixed_at: "2026-03-31"
+- id: "122"
+  status: fixed
+  severity: minor
+  category: deploy
+  summary: "up_process_instance.business_key init 为 VARCHAR(100) 与实体 length 255 不一致"
+  fixed_at: "2026-03-31"
+- id: "123"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "user-portal ProcessInstance 未映射 up_process_instance 多列且完成时未写 completed_at"
+  fixed_at: "2026-03-31"
+- id: "124"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "developer-workstation ProcessInstance 与 up_process_instance 列不齐且缺 lock_version/DynamicUpdate"
+  fixed_at: "2026-03-31"
+- id: "125"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "ProcessInstanceInfo 未暴露 completedAt/title；user-portal Flyway V400 与 init 列宽不一致无 V403"
+  fixed_at: "2026-03-31"
+- id: "126"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "user-portal AdminCenterClient 仍调用不存在的 admin GET /users/{id}/memberships 与 GET /member-change-logs，导致 my-memberships/exit-history 恒 503"
+  fixed_at: "2026-03-31"
+- id: "127"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "developer-workstation UserDisplayNameService 引用不存在的 ApiResponseBodyUnwrap 类"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/UserDisplayNameService.java"
+  description: "platform-common 已提供 ApiResponseBodyUnwrap；developer-workstation 依赖 platform-common，编译通过"
+  impact: "阻止 developer-workstation 模块编译，影响所有开发和测试"
+  discovered_at: "multi-instance-task-dispatch 任务 2.1 (2026-04-01)"
+  fixed_at: "2026-04-02"
+- id: "128"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "任务分配域：currentUserId 未随任务完成回写；assignTask 完成检查死代码；claim/unclaim 与 ExtendedTaskInfo 不对称；workflow 任务 API 请求体 userId 与 JWT 未强制一致等（详见团队审查清单）"
+  fixed_at: "2026-04-02"
+- id: "129"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "站内信 Kafka 链路缺生产者：无任何服务调用 publishNotificationEvent；workflow TaskManager 事件发布方法为空实现；引擎未接 portal 的 NotificationEvent"
+  discovered_at: "2026-04-03"
+  fixed_at: "2026-04-03"
+- id: "130"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "任务分配域深度重构：六类组织 AssigneeType + AssigneeAnchor + HIERARCHY 并集 + LAST_TASK_ASSIGNEE（History）+ MANUAL_ASSIGN / ASSIGNEE_FROM_VARIABLE；对齐 assignee-type-convergence.md"
+  file: "backend/workflow-engine-core"
+  description: "引擎侧已落地：TaskAssigneeResolver、TaskAssignmentListener、LastUserTaskAssigneeQuery、AdminCenterClient BU 链并集；BU_UNBOUNDED/VIRTUAL_GROUP 任务解析返回废弃；设计器单入线校验与 portal 文案需后续迭代"
+  fixed_at: "2026-04-03"
+- id: "131"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "user-portal TaskForm：GET form-data / completed-form 与 POST submit 未校验当前用户是否为任务参与人，可 IDOR 读写流程变量与快照"
+  file: "backend/user-portal/src/main/java/com/portal/controller/TaskFormController.java"
+  fixed_at: "2026-04-03"
+- id: "132"
+  status: fixed
+  severity: major
+  category: security
+  summary: "user-portal TaskQueryRequest 允许 body 覆盖 userId；待办/已办查询可冒用他人身份（应强制使用 @CurrentUserId）"
+  file: "backend/user-portal/src/main/java/com/portal/controller/TaskController.java"
+  fixed_at: "2026-04-03"
+- id: "133"
+  status: fixed
+  severity: major
+  category: security
+  summary: "TaskProcessComponent.canUrgeTask 对非发起人仍返回 true（注释写应校验管理员），任意用户可催办他人任务"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskProcessComponent.java"
+  fixed_at: "2026-04-03"
+- id: "134"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "isUserInVirtualGroup 将虚拟组 ID 传入 WorkflowEngineClient.checkTaskPermission（引擎按 taskId 查任务），首段校验无效，仅依赖 getUserTaskPermissions 列表"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskProcessComponent.java"
+  fixed_at: "2026-04-03"
+- id: "135"
+  status: fixed
+  severity: major
+  category: security
+  summary: "GET /processes/function-units/{id}/content 不校验功能单元访问权，可拉取任意功能单元 BPMN/表单设计（与「仅发起需鉴权」注释一致但造成设计资产泄露）"
+  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  fixed_at: "2026-04-03"
+- id: "136"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "user-portal BPMN 解析/流程预览中的分配类型标签与说明需与引擎收敛模型（HIERARCHY_ROLE、BU_ROLE、MANUAL_ASSIGN、ASSIGNEE_FROM_VARIABLE、assigneeAnchor 等）及开发者设计器一致"
+  file: "backend/user-portal/src/main/java/com/portal/service/BpmnParserService.java"
+  fixed_at: "2026-04-03"
+- id: "138"
+  status: fixed
+  severity: minor
+  category: bug
+  summary: "ProcessComponent.getAvailableProcessDefinitions 关键词过滤对 description 未做空安全，description 为 null 时 NPE"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+  fixed_at: "2026-04-03"
+- id: "139"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "DeploymentComponentImpl 异步部署状态与历史仅存内存 ConcurrentHashMap，多实例/重启丢失；调用 admin function-units-import 未携带服务间认证，依赖 SecurityConfig.permitAll"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
+  fixed_at: "2026-04-03"
+  description: "已落地：入站 Authorization 解析后传入异步线程并写入 import/deploy 请求头；可选 X-User-Id；dw_deployment_jobs 持久化 + Flyway V309；developer.deployment.require-admin-authorization 可关闭用于测试"
+- id: "140"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "DeploymentComponentImpl 部署步骤「验证多实例配置」「验证上一任务锚点拓扑」等文案硬编码中文，未走 I18nService 与三语言 locale"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
+  fixed_at: "2026-04-03"
+- id: "141"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: quality
+  summary: "deploy/init-scripts 下 10/12/13/14 等 README 与 EXPORT_SUMMARY 仍写旧功能单元 code（SIMPLE_APPROVAL、PROCUREMENT_WORKFLOW 等），与 fu-{yyyyMMdd}-{hex} 种子数据不一致"
+  file: "deploy/init-scripts/10-simple-approval/README.md"
+- id: "142"
+  status: fixed
+  fixed_at: "2026-04-03"
+  severity: major
+  category: architecture
+  summary: "功能单元版本回滚（废弃某已部署版本）：按钉死版本删除该版本下全部流程数据（含已结束实例），因渲染依赖功能单元配置、版本不存在则业务数据无保留必要；主要场景为 live test / UAT test"
+  description: |
+    产品决策（方案 B，已确认）：
+    - 当某功能单元语义版本在 admin 侧被回滚/废弃后，清理所有「发起时钉死到该版本」的流程与附属数据，**包括 RUNNING 与 COMPLETED**。
+    - 理由：列表/详情渲染依赖功能单元与表单等配置；该版本目录与内容已不存在时，残留实例与任务无法一致展示，无业务保留必要。
+    - 适用范围声明：**主要发生在 live test、UAT test**；生产若启用需配套强审计与二次确认（另议）。
+    已实现（2026-04-03）：
+    - up_process_instance 钉死 function_unit_catalog_id / code / version_label；门户 startProcess 走 GET .../active-for-start 并与 resolve 结果校验。
+    - workflow-engine POST .../instances/{id}/purge；门户 internal purge-by-catalog + 删 up_change_history / up_process_history / up_process_instance。
+    - admin GET .../code/{code}/active-for-start、启用校验（仅 DEPLOYED 中最高 semver）、POST .../{id}/purge-runtime-data；配置 PORTAL_INTERNAL_API_TOKEN / USER_PORTAL_BASE_URL。
+    待加强：专用审计日志、其它 up_* 附属表若后续挂流程实例需纳入 purge。
+  file: "backend/admin-center; backend/user-portal; backend/workflow-engine-core"
+- id: "143"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: minor
+  category: quality
+  summary: "admin-center 前端 userApi.removeBusinessUnitRole 仅传 roleId，与后端 DELETE /users/{userId}/business-unit-roles/{businessUnitId}/{roleId} 路径不一致，无法正确移除 BU 角色"
+  file: "frontend/admin-center/src/api/user.ts"
+- id: "144"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: major
+  category: bug
+  summary: "user-portal GET /processes/my-applications 列表原样序列化 variables(JSONB)，异常嵌套类型可导致 Jackson 写响应失败→SYS_INTERNAL_ERROR"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+- id: "145"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: critical
+  category: security
+  summary: "门户发起流程时 activeBusinessUnitId 未与 JWT 工作台绑定：顶层字段或 formData 均可写入流程变量，多 BU 用户可篡改以影响 HIERARCHY 等解析范围"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java; ProcessController.java"
+- id: "146"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: major
+  category: bug
+  summary: "DepartmentRoleTaskServiceImpl 等仍用 getUserBusinessUnitId(userId) 单参 + UserRole 校验 BU 角色，多 BU 或仅 UBR 无 UserRole 时行为错误或与门户模型不一致"
+  file: "backend/admin-center/src/main/java/com/admin/service/impl/DepartmentRoleTaskServiceImpl.java; AuthServiceImpl.java"
+- id: "147"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: minor
+  category: quality
+  summary: "PortalWorkspaceAuthService.listWorkspaceContexts 过滤非 ACTIVE 角色，但 hasContext 仅数 UBR 行，角色停用后可能出现 refresh 仍过、列表已无上下文等不一致"
+  file: "backend/user-portal/src/main/java/com/portal/service/PortalWorkspaceAuthService.java"
+- id: "149"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: minor
+  category: quality
+  summary: "profile 改密失败时凡 HTTP 400 即提示「当前密码不正确」，若后端用 400 表达策略/复杂度等其它原因会误导用户；应按 error code 或 message 分支"
+  file: "frontend/user-portal/src/utils/changePasswordError.ts; frontend/admin-center/src/utils/changePasswordError.ts; frontend/developer-workstation/src/utils/changePasswordError.ts"
+- id: "150"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: major
+  category: deploy
+  summary: "Flowable ACT_RU/HI_IDENTITYLINK 默认 VARCHAR(255) 过短，长 group/scope 等导致任务完成时 PSQL value too long → 迁移加宽至 4000"
+  file: "deploy/init-scripts/00-schema/30-widen-flowable-identitylink-columns.sql"
+- id: "151"
+  status: fixed
+  fixed_at: "2026-04-14"
+  severity: major
+  category: bug
+  summary: "BI Dashboard 角色分配不显示：findAllRoleIdsByUserId 漏查 sys_user_business_unit_roles，导致通过 BU 工作台分配角色的用户无法在门户看到已分配的 BI Dashboard"
+  file: "backend/admin-center/src/main/java/com/admin/repository/UserRoleRepository.java"
+- id: "152"
+  status: fixed
+  fixed_at: "2026-05-14"
+  severity: minor
+  category: bug
+  summary: "user-portal tasks 页 submitAction 捕获异常后仍弹 success，委托/转办/催办失败时会误导用户"
+  file: "frontend/user-portal/src/views/tasks/index.vue"
+- id: "153"
+  status: fixed
+  fixed_at: "2026-04-26"
+  severity: minor
+  category: quality
+  summary: "FormDesigner.vue 残留硬编码调试 fetch 到旧 session，运行时会持续发送 previewItems 调试日志"
+  file: "frontend/developer-workstation/src/components/designer/FormDesigner.vue"
+- id: "154"
+  status: fixed
+  fixed_at: "2026-04-27"
+  severity: minor
+  category: quality
+  summary: "developer-workstation 流程校验 valid=true 时仍将 definitions、sequenceFlow、BPMNDI 元素误报为 ORPHAN_NODE warning"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ProcessDesignComponentImpl.java"
+- id: "159"
+  status: fixed
+  fixed_at: "2026-05-06"
+  severity: major
+  category: bug
+  summary: "developer-workstation 版本管理前端调用 /function-units/{id}/versions/compare 与 /versions/{versionId}/export，但后端缺少对应路由映射"
+  file: "frontend/developer-workstation/src/api/functionUnit.ts; backend/developer-workstation/src/main/java/com/developer/controller/FunctionUnitController.java"
+- id: "160"
+  status: fixed
+  fixed_at: "2026-05-07"
+  severity: major
+  category: bug
+  summary: "FunctionUnitComponentImpl.clone 创建 ProcessDefinition 时未设置 functionUnitVersionId，违反 dw_process_definitions.function_unit_version_id NOT NULL 约束，clone 接口 500"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java"
+- id: "163"
+  status: fixed
+  fixed_at: "2026-05-07"
+  severity: major
+  category: bug
+  summary: "FunctionUnitComponentImpl.clone 仅复制 BPMN XML 而未重写 subTableId/formId/actionIds，导致克隆后 deploy 报 SUBTABLE_WRONG_FUNCTION_UNIT / FORM_WRONG_FUNCTION_UNIT"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java; backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java"
+- id: "161"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "ExportImportComponentImpl 重新导入功能单元失败（code 冲突 / functionUnitVersionId / sort_order 等）"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ExportImportComponentImpl.java"
+  note: |
+    根因：RENAME 只改 name 不改 code 导致 dw_function_units_code_key 冲突；OVERWRITE delete 未 flush；ProcessDefinition 缺 functionUnitVersionId；FieldDefinition 缺 sort_order。
+    修复：resolveImportIdentity + resolveUniqueImportCode；deleteById + flush/clear；导入流程设 functionUnitVersionId；字段 sort_order 回退为索引；导出/导入补齐 sortOrder。
+- id: "164"
+  status: fixed
+  fixed_at: "2026-05-07"
+  severity: major
+  category: bug
+  summary: "FunctionUnitComponentImpl.clone 重写 BPMN ID 仅按旧 ID 兜底，无法纠正源 BPMN 中 subTableId/formId 与 subTableName/formName 不一致的脏数据，克隆后 deploy 报 INVALID_TABLE_TYPE / ASSIGNEE_FIELD_NOT_FOUND；BpmnIdRewriter 增加按名字优先解析（块内 subTableName/tableName/formName 命中时使用克隆侧同名实体 ID，否则旧 ID 兜底）"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java; backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java"
+- id: "165"
+  status: fixed
+  fixed_at: "2026-05-07"
+  severity: major
+  category: bug
+  summary: "FormDesigner 前端缺少表单重命名入口，Task Form 复制后生成 *_copy 无法在 UI 中修改名称；新增列表“更多→重命名”与编辑页“重命名”对话框，调用现有 updateForm 接口完成改名"
+  file: "frontend/developer-workstation/src/components/designer/FormDesigner.vue; frontend/developer-workstation/src/i18n/locales/zh-CN.ts; frontend/developer-workstation/src/i18n/locales/zh-TW.ts; frontend/developer-workstation/src/i18n/locales/en.ts"
+- id: "169"
+  status: fixed
+  fixed_at: "2026-05-15"
+  severity: major
+  category: bug
+  summary: "user-portal 待办「表单在表格下方」受画布 subTable 出厂默认 portalViews(assigneeTodo=tableOnly) 压制 configJson.subTablePortalViews，嵌套子表单仅配绑定栏时仍走 Link 弹窗；mergeSubTablePortalViewsForRuntime 忽略整套出厂默认值并与 FormDesigner 预览对齐"
+  file: "frontend/user-portal/src/components/formRendererHelpers.ts; frontend/developer-workstation/src/components/designer/FormDesigner.vue"
+- id: "170"
+  status: fixed
+  fixed_at: "2026-05-15"
+  severity: major
+  category: bug
+  summary: "user-portal FormRenderer SubTableInlineForm 使用 effectiveReadonly（含 primaryReadOnly），主表只读时误禁用表格下方区域；应与 SubTableField 一致按内联数据源绑定(bindingMode=EDITABLE，含 Link 目标 subtable2)决定是否可编辑"
+  file: "frontend/user-portal/src/components/FormRenderer.vue"
+- id: "171"
+  status: fixed
+  fixed_at: "2026-05-14"
+  severity: major
+  category: bug
+  summary: "user-portal 待办任务详情 tasks/detail.vue 未调用 applications/detail.vue 中的 alignProcessSubTableBindingsBySharedTable：发起流程时 __subTables__ 仅按发起步骤 bindingId 写入，克隆表单(subform_copy)后 bindingId 变化则读不到历史行，子表列(id/l/lookup 等)显示为空"
+  file: "frontend/user-portal/src/views/tasks/detail.vue; frontend/user-portal/src/views/processes/start.vue"
+- id: "172"
+  status: fixed
+  fixed_at: "2026-05-18"
+  severity: major
+  category: bug
+  summary: "user-portal 把表单 SUB/RELATED 绑定的 tableName（如 RelationTable 逻辑名 subtable）当作 Postgres 物理表做 JDBC 补齐；无数物理 relation 时报错 relation does not exist，事务进入 aborted，完成任务(APP approve/MI)表现为 UnexpectedRollbackException"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+  note: "设计器侧常为 schema + __subTables__ JSON，不等价于同名物理表；补齐前必须 subTableExists。可选后续：published bindings 区分 logical vs physical 表名，或对 FORM_ONLY/纯 JSON 存储显式跳过 JDBC。"
+- id: "173"
+  status: fixed
+  fixed_at: "2026-05-18"
+  severity: major
+  category: bug
+  summary: "user-portal 我的申请 My Request(applications/detail) 子表 Link Form Details 不回填待办数据，且发起人汇总视图多两列 Status/Actions：缺与待办一致的 mergeLinkFormTargetBindingsInto + hydrateChildSubTablesFromParentsNestedRows；列表已含 task_status 或表头与同 locale 的 subTable.actions 一致时 SubTableField 仍叠加 MI 快捷列"
+  file: "frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/components/SubTableField.vue"
+  note: "根因之一：父行 __subTables__ 常带设计器标签键（如 ADD + 表名），handleLinkFormClick 已 strip/模糊匹配，但 pullNestedRowsForBindingFromParentRows 原先只试 bindingId/裸表名，拉不到嵌套子表 → 弹窗空。修复在 composables/tasks/shared.ts：stripLinkFormDesignerTableLabel + findNestedChildRowsInSto，与 SubTableField 共用规则；另补同伴 binding 按 formFields 重叠回退、多行时将「表单字段得分最高」行前置（buildLinkedFormData 仅消费 data[0]）。重复 MI 列由 initiatorRequest=summaryWithLinkFormModal 时关闭 SubTableField/详情绑定层 task 列对齐。"
+- id: "174"
+  status: fixed
+  fixed_at: "2026-05-18"
+  severity: major
+  category: bug
+  summary: "user-portal 多实例子流程下不同 BPMN 任务误用同一 _currentItem.rowId（同级子表行被收窄成同一 PK），因 getTaskById 合并 ProcessInstance.variables 时 putAll 覆盖 Flowable 执行级 currentItem/_currentItem"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java; frontend/user-portal/src/views/tasks/detail.vue; frontend/user-portal/src/composables/tasks/shared.ts"
+  note: "后端：mergePortalProcessVariablesPreferringFlowableMiElementItem 叠加门户快照后恢复引擎侧 _currentItem/currentItem。前端另有 MI 子表隔离与同 metadata tableId 多放置位 hydrate 严格化（同属该缺陷关联改动）。"
+- id: "175"
+  status: fixed
+  fixed_at: "2026-05-18"
+  severity: major
+  category: bug
+  summary: "user-portal 多实例子流程同一子任务中，sub form1 填写的子表 subtable2 在后续节点 sub form2 显示为空：miRowBelongsToCurrentParticipant 将 foreignKeyField=id 当作指向参与者行的外键，与子表行主键 row.id 比较失败后直接 return false，未再执行 participant_id 等回退；enrich 后 applyMiParticipantFilter 误丢有数据行"
+  file: "frontend/user-portal/src/views/tasks/detail.vue"
+  note: "修复：当 foreignKeyField 与 primaryKeyFields 中某列同名，或对非 participants 绑定且为 id 时，跳过「外键列 === myRowId」分支，走 fallbackFkKeys 与 expansionKeyMatchesParticipantRow。"
+- id: "176"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "admin-center Relation Table Structure「Add Role Access」弹窗 BU/System 两个 Tab 空白：AccessConfigDialog 复用 function-unit UI，但 useRelationTableAccessConfig 未实现 BU 树/绑定角色加载且导出变量与模板不一致"
+  file: "frontend/admin-center/src/composables/modules/useRelationTableAccessConfig.ts; frontend/admin-center/src/views/relation-table/structure/components/AccessConfigDialog.vue"
+  note: "对齐 useFunctionUnitAccessConfig：加载 roleApi.list、businessUnitApi.getTree/getBoundRoles，导出 availableSystemRoles/availableBuRoles 等；AccessConfigDialog 解构与模板绑定同步。"
+- id: "177"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "user-portal MI 待办 sub form1 Link Form 打开 subtable2 时 id 误显示其他参与者行值（如 44）：子表行 id_idw 与父行不匹配时 filterLinkedChildRowsByParentIdIdw 退回全量 rows，再 merge binding 级 fallback 选字段最满行"
+  file: "frontend/user-portal/src/components/SubTableField.vue; frontend/user-portal/src/components/FormRenderer.vue; frontend/user-portal/src/composables/tasks/shared.ts"
+  note: "MI+suppressLinkFormInitialData：仅用父行 __subTables__ 嵌套切片（linkFormNestedOnlyMi），禁止 fallback/deep 合并；按办理人收窄 pickBest；FormRenderer 内联表单同源只读嵌套行。"
+- id: "178"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "user-portal 我的申请 MI 子表 Current node 串行：后端按子任务行 overlay 正确，前端 enrichChild 用 task_status 误配不同 id 行并 ordinal 合并抬高节点；resync 曾整表替换 binding 数据"
+  file: "frontend/user-portal/src/composables/tasks/shared.ts; frontend/user-portal/src/views/applications/detail.vue; backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+  note: "miParentRowAlignsWithChildRow 仅 id/id_idw/FK 对齐；enrich 不覆盖已有 MI 列；mergeAllSubTableSlices+resync 以 API 变量为准；后端 propagateMiOverlay 全 slice 传播。单测 mergeSubTableRowsMiMerge.test.ts。"
+- id: "179"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  recurrence: pattern
+  related_ids: ["177", "178"]
+  summary: "【复发】user-portal MI 多实例 Link Form / 内联 subtable2：跨 BPMN 节点（sub form1→sub form2）或参与者行 id 与 _currentItem.rowId 不一致时，子表字段未带出、串行、或显示他人数据"
+  file: "frontend/user-portal/src/composables/tasks/shared.ts; frontend/user-portal/src/views/tasks/detail.vue; frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/components/FormRenderer.vue; frontend/user-portal/src/components/SubTableField.vue"
+  note: |
+    同类已修：#177（Link 弹窗 id 串他人）、#178（我的申请 Current node 串行）。本次 2026-05-19：参与者 44053631 在 sub form2 内联 subtable2 空白，e2e_sunqiang 正常。
+    根因（常叠加出现）：
+    1) Flowable _currentItem.rowId 多为设计器 PK（id_idw），列表行仅 SQL id（如 6532）→ findSubTableRowByMiExpansionId 失败，MI suppressLinkFormInitialData 下内联表单当无父行；
+    2) subform_copy 新 bindingId，__subTables__ 仍 keyed 旧 id → 待办 load 后未 mergeAllSubTableSlices / 未 resync；
+    3) foreignKeyField=id 被当成 MI 参与者 FK，miRowBelongsToCurrentParticipant 误过滤（见 commit aaa48059）；
+    4) enrichChild / binding 级 fallback 把其他参与者 slice 合并进来或覆盖 task_current_node。
+    最终修复要点：findMiIsolatedParentRow（隔离后父表仅一行则回退）；tasks/detail resyncMiParticipantSubTablesFromVariables；177 的 linkFormNestedOnlyMi；applications/detail mergeAllSubTableSlices+resync。
+    回归：linkFormMiIsolation.test.ts、mergeSubTableRowsMiMerge.test.ts；手测 3 参与者各走 sub form1→sub form2，核对 subtable2 的 id/sex/age。
+    再发时先查：任务 variables.__subTables__ 各 numeric key、父行 __subTables__[childBindingId]、当前 bindingId 与 tableId 是否一致。
+- id: "180"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: performance
+  summary: "user-portal 我的申请详情首屏过慢：loading 直至 FU 全量处理（历史步骤 buildPreviousFormEntry×N、全 BPMN 遍历、跨节点子表 align、lookup、流程图）才结束"
+  file: "frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/utils/bpmnParseCache.ts; backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+  note: |
+    现象：发起人（如 e2e_sunqiang）打开 My Request 详情长时间白屏/骨架，主表单与子表迟迟不可交互。
+    根因：loadProcessDetail 中 loading 与 loadFunctionUnitContent 串行重计算绑定——Promise.all(历史, FU) 后仍同步执行 previousForms 循环、alignProcessSubTableBindingsBySharedTable、nodeFormMap、BPMN 多遍解析与 lookup；首屏无必要工作阻塞 paint。
+  修复（2026-05-19，无功能语义变更）：
+    1) 两阶段加载：primary 仅当前表单 parseFormConfig + 子表 hydrate + alignMainSubTableBindingsOnly，随后 loading=false；
+    2) secondary（requestIdleCallback）：await 流程历史 → lookup → previousForms/MI 识别/全量 align → nodeFormMap → 流程图；
+    3) 流程历史不再与 FU 并行阻塞首屏；快照 Completed Tasks 的 assignee 过滤移至 secondary 末尾。
+    若首屏仍慢：profile getProcessDetail（RUNNING+__subTables__ 时 resolveMiRowProgress/getMultiInstanceStatus）与 getFunctionUnitContent 接口耗时。
+- id: "1360"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "我的申请 RequestItems 子表字段呈纯文本，与发起流程控件样式不一致（subListViews 未合并 subForm 列类型）"
+  file: "frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/components/SubTableField.vue; frontend/user-portal/src/views/processes/start.vue"
+  note: |
+    根因：applications/detail deriveColumnsFromBinding 在存在 subListViews 时仅用 DB dataType 映射为 text/switch，未像 tasks/detail、process/start 一样合并 subForm 的 type/options/props；Is Urgent 等显示为 true 字符串；formBelowTable 时底部内联表单判断未走 resolveSubTableDisplayMode。
+    修复：subListViews 列与 subFormColumns 合并；shouldShowBindingFormBelow 使用 resolveSubTableDisplayMode；SubTableField 只读 switch 用 el-switch；start 绑定加载 subTablePortalViews。
+- id: "1361"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "采购流程 First Review 设计为发起人办理但待办为空（BPMN 缺 assigneeType，Flowable 未写 assignee）"
+  file: "deploy/init-scripts/13-procurement-workflow/02-create-bpmn-process.sql; deploy/init-scripts/13-procurement-workflow/05-fix-bpmn-assignee-initiator.sql"
+  note: |
+    根因：发起时部署的 BPMN（如目录 1.0.7）无 assigneeType=INITIATOR，TaskAssignmentListener 跳过指派，act_ru_task.assignee_ 为空；
+    引擎 taskAssignee 查询与门户 canProcessTask/shouldHideTaskInTodoList 均无法匹配发起人。
+    修复：02 脚本为 Task_SubmitRequest、Activity_1wf0eko 补 INITIATOR；05 迁移补丁目录 BPMN 并 UPDATE 运行中 First Review 的 assignee_ 为 start_user_id_。
+- id: "1362"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "采购发起 RequestItems 仅 1 行，我的申请显示 2 行（薄行 description 被 mergeAllSubTableSlices 并入）"
+  file: "frontend/user-portal/src/composables/tasks/shared.ts; frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/views/processes/start.vue"
+  note: |
+    根因：My Request 的 resyncMiDashboardFieldsFromVariablesOnBindings 对非 MI 流程仍 mergeAllSubTableSlicesFromVariables，
+    将 __subTables__ 其它切片/嵌套提升的薄行（仅 description 等）与完整行合并为第二行。
+    修复：非 MI 变量仅按 binding 切片 hydrate；dropSubsumedSubTableRows/normalizeSubTableRowsForBinding 剔除被子集行；
+    发起提交 __subTables__ 前同样规范化。
+- id: "1363"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "待办 MI 子任务忽略表绑定 READONLY（previewSubTables 强制子表可编辑）"
+  file: "frontend/user-portal/src/components/FormRenderer.vue; frontend/user-portal/src/views/tasks/detail.vue"
+  note: |
+    根因：tasks/detail 对 MI 传入 preview-sub-tables=true，FormRenderer.isSubTableEditable 用 previewSubTables||bindingMode===EDITABLE，
+    导致 designer 表绑定 READONLY 在门户仍显示 Add/Edit/Delete；inlineSubTableFormReadonly 同样被 previewSubTables 绕过。
+    另：loadProcessAndTaskFormData 中 parseFormConfig 在节点 formReadOnly 之后可能把 formReadOnly 重置为 false。
+    修复：子表可编辑仅看 bindingMode===EDITABLE 且非整表 readonly；节点只读在 parseFormConfig 前后保持 OR 合并。
+- id: "1364"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "MI 子任务 attachment 子表 file 列显示 API URL 而非文件名且不可下载"
+  file: "frontend/user-portal/src/components/subTableAddDialogHelpers.ts; SubTableField.vue; views/tasks/detail.vue; views/applications/detail.vue"
+  note: |
+    根因：deriveColumnsFromBinding 使用 subListViews 列时未将 dataType=FILE 映射为 type=upload；无 schema 时从行数据推断列全部为 text；SubTableAddDialog 对无 type 字段默认渲染 el-input。
+    修复：mergeListViewFieldColumn/isUploadColumn/normalizeSubTableColumns 推断 upload；Add Record 弹窗与表格统一走上传控件；行推断 fallback 识别 file 字段。
+- id: "1365"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "developer-workstation Form Preview 子表 +Add 点击无响应（Add 弹层被预览 Dialog 遮罩盖住）"
+  file: "frontend/developer-workstation/src/components/designer/SubTableField.vue; SubTableFormDialog.vue; SubTableAddDialog.vue; SubTableNestedModalShell.vue; nestedDialogZIndex.ts"
+  note: |
+    根因：Form Preview 使用 el-dialog(z-index=2000)，子表 Add/Edit 仍用嵌套 el-dialog，弹层渲染在预览遮罩下方，点击看似无反应。
+    修复：新增 SubTableNestedModalShell + nestedDialogZIndex 将子表弹层 Teleport 到 body 并动态抬高 z-index；SubTableField 统一 Teleport 挂载 Add/Form 对话框；
+    延迟 setTimeout(0) 打开避免同次点击触发遮罩关闭；补全 SubTableAddDialog.onShellClosed。
+    二次修复（2026-05-20）：Form Preview 内 inject 仍不可靠——改为 FormDesigner 在 Preview Dialog 外渲染 SubTableFormDialog/SubTableAddDialog（provide/inject 委托）；
+    Preview Dialog 设 modal=false；SubTableNestedModalShell 改用 Element Plus useZIndex().nextZIndex()；Add 按钮改用 mousedown 触发。
+    三次修复（卡死）：Add 打开对话框时与表格下方内联 form-create 共用同一 formRule 引用，叠加 SubTableFormDialog 对 rule 的 deep watch，form-create 互写 rule 触发无限更新循环；
+    修复：openRowDialog 深拷贝 rule/option；对话框打开时隐藏内联 form-create；移除 rule deep watch，仅在 visible 时 cloneFormRules；Preview 模式不再挂载 SubTableField 本地 Teleport 对话框。
+- id: "1366"
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "developer-workstation Form Preview「Row detail form」在 assigneeTodoFormSource=linkForm(subtable2) 时仍展示父表 subtable 表单"
+  file: "frontend/developer-workstation/src/components/designer/formPreviewTypes.ts; FormPreviewItems.vue; SubTableField.vue; SubTableListView.vue"
+  note: |
+    根因：Form Preview / 列表视图预览在 formBelowTable 模式下始终使用当前 binding 的 formRule，未按 portalViews.assigneeTodoFormSource 解析 Link Form 目标子表（与 user-portal FormRenderer.resolveInlineFormSourceBinding 不一致）。
+    修复：新增 resolveInlineFormBelowDesign；SubTableField 支持 previewInlineFormRule/Option；FormPreviewItems 与 SubTableListView 待办预览区传入解析后的 subtable2 schema。
+- id: "1367"
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "user-portal 待办 sub form2 下 attachment 等非 MI 子表错误展示 assignee/task_status/__subTables__/task_current_node 列"
+  file: "frontend/user-portal/src/composables/tasks/shared.ts; views/tasks/detail.vue"
+  note: |
+    根因：列 schema 为空时从行数据推断列会把 MI 运行时字段一并当成列；enrichChildBindingRowsFromParentsNestedSubTables 向非 MI 子表行合并了父 MI 行的 dashboard 字段。
+    二次根因：BPMN 复制表单（subform_copy binding 104）subListViews 为空，portal 从行数据推断出错误列（id/name/id_idw），而 designer 对同 tableId=74 的 attachment 设计为 id/main_id/file。
+    修复：isSubTableRowMetaField/isMiDashboardSubTableBinding/stripSubTableRowMetaFields；推断列与行数据清洗排除 meta 字段；enrich 仅对 MI dashboard binding 合并 task_status/assignee 等。
+    修复：resolveSubTableSchemaByTableId + deriveColumnsFromRelationFieldDefinitions（对齐 developer-workstation derivePreviewColumnsFromTable），按 tableId 跨表单复用 subListViews/subForm 或 dataTables 字段定义。
+    三次根因：MI 隔离逻辑对全部子表按 assignee 过滤，attachment 等通过 main_id 关联主表的子表行被误过滤，sub form1/前序节点上传的数据在 sub form2 不可见。
+    修复：isMiParticipantScopedSubTableBinding（main_id/process_id 等为流程级共享；id_idw/id 等为参与者级）；rowBelongsToCurrentMiScope 与 isolate/resync/merge 路径仅对参与者级子表过滤。
+    四次根因：resync 时 mergeAllSubTableSlicesFromVariables 把 subtable MI 行（id 343/355 等）误并入 attachment；strip 后只剩 id，file/main_id 显示为 -。
+    修复：mergeSubTableSlicesForRelationTableId 仅合并同 tableId 切片；filterRowsForSharedProcessSubTableBinding/finalizeSharedProcessSubTableBindingRows 剔除 id_idw/assignee 等外来行。
+    五次根因：attachment 行常只存在于 __subTables__ 嵌套链或 sibling binding 103；loadProcessAndTaskFormData 浅合并 task form 空切片覆盖流程 attachment；MI resync 未 deep 收集 nested 切片导致 sub form2 显示 No Data。
+    修复：mergeAllSlicesForSharedProcessSubTableBinding/collectAllNestedSlicesForBindingDeep；rehydrateSharedProcessSubTableBindings（流程变量快照 + 加载后）；mergeIncomingTaskFormFieldValues 深合并保留非空 __subTables__ 切片；MI snapshot 改用任务 API 原始 variables.__subTables__。
+    六次根因：待办 sub form2 与我的申请 attachment 条数不一致（3 vs 1）。DB slice 104 含两条 id=666 行，按 PK 合并后仅 1 条；hydrateBindingsRowsFromVariablesBySharedRelationTableId 对 103+104 同 tableId 做 per-binding 切片分配，104 只拿 slice 104 丢失 103/633/77777。
+    修复：hydrateBindingsRowsFromVariablesBySharedRelationTableId 跳过 isSharedAttachmentFileBinding；applySharedAttachmentFinalizeAndMaterialize 以 mergeAllSlices 全量合并为权威数据源；MI resync/加载后 rehydrateSharedAttachmentBindings；loadFunctionUnitContent 绑定初始化后同步 applySharedAttachment。
+    七次根因：My Request attachment 展示 subtable 参与者 id（666/343/77777/633）——merge 把 subtable/MI 行（含 name、task_status）当作 attachment 行；attachment.id 与 subtable.id 是不同表无关主键。
+    修复：filterRowsForSharedProcessSubTableBinding 先剔除 subtable 泄漏列（name/id_idw/MI）；collectForeignSubTableRowIdsFromVariables 收集 subtable/MI slice 的 id 禁止出现在 attachment；mergeAllSlices omitNestedSlices；My Request resyncMiDashboard 不再 merge attachment 脏数据。
+    八次根因（My Request attachment 仍空/仅 343）：后端 enrichSubTablesWithAssignmentData 为 attachment 行写入 id_idw；isLeakedForeignRowOnSharedAttachment 将带 id_idw 且无 id_idw 列的行一律当 subtable 泄漏删除，633/77777 被误删。
+    修复：有有效 file 的 attachment 行不因 id_idw 被删；仍按 foreign subtable id 与 name 列剔除 MI 泄漏（如 666）；defaultAttachmentListColumns + buildApplicationNodeFormMap 列回退；集成测试 kk-live-db-subTables.json。
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "user-portal 我的申请 subform_copy 内嵌 attachment 子表未渲染（与 Developer Workstation Preview 不一致）"
+  file: "frontend/user-portal/src/components/PortalFormFields.vue; SubTableInlineForm.vue; SubTableField.vue; FormRenderer.vue; views/applications/detail.vue; .cursor/rules/portal-design-parity.mdc"
+  note: |
+    根因：My Request 三条展示路径（SubTableInlineForm 表格下内联、Link Form 弹窗、MI Detail 弹窗）仅用 FieldRenderer，故意跳过 type=subTable；Detail 弹窗 FormRenderer 未传 sub-table-bindings；applications/detail 缺 resolveSubTableSchemaByTableId 列 schema 回退。
+    修复：新增 PortalFormFields 统一 subTable/card/ primitive 渲染；SubTableInlineForm/Link Form/FormRenderer 传入 bindings；openSubTaskDetailDialog 构建 MI 子表单 bindings；applications/detail 对齐 tasks/detail schema 回退；新增 alwaysApply 规则 portal-design-parity.mdc 约束 Designer→Portal 结构 parity。
+- id: "1371"
+  status: fixed
+  fixed_at: "2026-05-22"
+  severity: major
+  category: bug
+  summary: "Admin Center 软删除用户后无法用相同用户名重新创建（existsByUsername 含已删行）"
+  file: "backend/admin-center/src/main/java/com/admin/component/UserManagerComponent.java; repository/UserRepository.java"
+  note: |
+    根因：deleteUser 仅软删除（deleted=true），createUser 用 existsByUsername/existsByEmail 未排除已删用户，且 username 有 DB 唯一约束无法 INSERT 新行。
+    修复：唯一性检查仅针对未删除用户；创建时若命中软删记录则 reactivateSoftDeletedUser 复用原 userId 并恢复字段；更新邮箱改用 existsByEmailExcludingUser。
+- id: "1370"
+  status: fixed
+  fixed_at: "2026-05-22"
+  severity: major
+  category: bug
+  summary: "Admin Center 功能单元 Validate 成功却显示失败且无错误明细（ApiResponse 未解包）"
+  file: "frontend/admin-center/src/api/functionUnit.ts; utils/apiResponse.ts; composables/modules/useFunctionUnit.ts"
+  note: |
+    根因：POST /function-units/{id}/validate 经 handleRequest 返回 { success, data: ValidationResult }，前端把整包当 ValidationResult，result.valid 为 undefined → 弹窗显示失败且 errors 为空；列表不刷新仍显示 Draft。重复点击则后端 INVALID_STATUS。
+    修复：unwrapApiData 解包 data；catch 避免与 axios 拦截器重复 toast；后端重复验证错误文案改为中文含当前状态。
+- id: "1369"
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "Admin Center 功能单元导入保存 ActionDefinition 时 config_json JSONB 列绑定为 varchar 导致 PSQLException"
+  file: "backend/admin-center/src/main/java/com/admin/entity/ActionDefinition.java; FunctionUnitManagerComponent.java; FunctionUnitImportController.java"
+  note: |
+    根因：sys_action_definitions.config_json 为 jsonb，但 ActionDefinition.configJson 为 String，Hibernate 以 varchar 绑定 INSERT 失败，导入事务回滚。
+    修复：configJson 改为 Map<String, Object> + @JdbcTypeCode(SqlTypes.JSON)；saveImportedActions 与 ImportController 解析 manifest 中的 configJson（Map 或 JSON 字符串）后再 persist。
+- id: "1371"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "Relation Table 数据应存 JSON (rt_table_data_rows)，不应创建 per-table 物理表"
+  file: "backend/admin-center/.../RelationTableDataServiceImpl.java; RelationTableDeployServiceImpl.java; backend/user-portal/.../PortalRelationTableServiceImpl.java; deploy/init-scripts/00-schema/21-add-rt-relation-tables.sql"
+  note: |
+    根因：此前误将 demo init 与 DataService 按物理表 (CREATE TABLE test) 处理；Relation Table 行数据统一 JSONB 存 rt_table_data_rows，部署仅更新结构元数据/版本快照。
+    修复：撤销 init 中 CREATE TABLE test；新增 rt_table_data_rows；DataService/Portal 改查 JSON 行；Deploy 移除 DDL；删除 dev 库中误建的 test 物理表。
+- id: "1372"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: bug
+  summary: "Developer Workstation Form Design 的 Sub Table / Relation Table tab 显示技术表名，未使用 Table Design 中的 Table Display Name"
+  file: "frontend/developer-workstation/src/components/designer/FormDesigner.vue; TableBindingManager.vue"
+  note: |
+    根因：tab 标签直接读取 binding.tableName（后端 FormTableBinding 返回 table.tableName 技术名）；getTableName() 虽会查 store.tables.tableDisplayName，但 `b.tableName || getTableName(...)` 的优先级把 displayName 盖掉了。
+    修复：getTableName(tableId, fallback?) 调整为「优先 tableDisplayName → tableName → fallback → unknown」；FormDesigner 与 TableBindingManager 中所有 tab/option/列引用统一调用 getTableName(b.tableId, b.tableName)。
+- id: "1374"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "user-portal 待办详情将当前节点 actionIds 错误回退为整个流程全部动作，导致底部出现一堆业务按钮"
+  file: "backend/user-portal/src/main/java/com/portal/service/TaskActionService.java; backend/user-portal/src/main/java/com/portal/repository/ActionDefinitionRepository.java; frontend/user-portal/src/components/tasks/TaskActionBar.vue"
+  note: |
+    根因：workflow-engine 对任务 fc9c03ba-5810-11f1-b548-eeb0347a2f07 只返回 actionIds=[19,20]，但 TaskActionService 先按 sys_action_definitions(UUID) 查不到后，错误回退到 findByProcessDefinitionKey(processDefinitionKey)，把流程 DigitalLendingProcessV2 下的 15 个动作全部查出；TaskActionBar 随后逐个渲染为底部按钮。
+    修复：删除“按流程 key 拉整条流程动作”的回退，只按当前节点 actionIds 精确解析动作定义；缺失项仅回退到 dw_action_definitions，并按请求 actionIds 顺序返回。补充 TaskActionServiceTest 覆盖纯 dw、混合来源和空结果三条路径；运行时验证接口现仅返回 2 个动作。
+- id: "1375"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "user-portal 申请详情页在 cookie 登录态下未向 workflow-engine 转发 access_token，导致 Current Step/Assignee 为空"
+  file: "backend/user-portal/src/main/java/com/portal/client/WorkflowEngineClient.java; backend/user-portal/src/test/java/com/portal/client/WorkflowEngineClientTest.java"
+  note: |
+    根因：user-portal 前端已使用 httpOnly cookie（withCredentials）登录，申请详情请求通常没有 Authorization 头；WorkflowEngineClient 内部转调 workflow-engine 时只原样转发 Authorization，导致 /api/v1/tasks 与历史接口落成未认证请求并返回 403，ProcessComponent.getProcessDetail() 无法补全 currentNode/currentAssignee。
+    修复：forwardInboundAuthorization 优先转发 Authorization，缺失时回退读取 access_token cookie 并补成 Bearer 头；补充单元测试覆盖 header 转发与 cookie 回退两条路径。
+- id: "1376"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "Developer Workstation Clone/Import 因 dw_* BIGSERIAL 序列落后于 MAX(id) 主键冲突"
+  file: "DeveloperWorkstationSequenceSynchronizer.java; FunctionUnitComponentImpl.java; ExportImportComponentImpl.java; FunctionUnitList.vue"
+  note: |
+    根因：init/导入写入较大 id 后 PostgreSQL 序列未推进，clone/import 插入主键冲突；Import 仅在导入结束后同步序列，插入阶段仍失败。
+    修复：DeveloperWorkstationSequenceSynchronizer 在 clone/import 开始前对齐序列；FunctionUnitList 展示 clone 错误。
+- id: "1377"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "Function Unit Clone/Import 未复制 relationTableId / 未重写 configJson bindingId，导致 Unknown Table 与 subTablePlaceholderStale"
+  file: "FunctionUnitComponentImpl.java; ExportImportComponentImpl.java"
+  note: |
+    根因：cloneForm/import 遗漏 RELATED 的 relationTableId、stageBindings、TableRelation 等；新 binding ID 未回写 configJson。
+    修复：clone/import 显式加载关系数据；逐条 save binding 并 FormConfigJsonBindingIdRewriter remap configJson。
+- id: "1378"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: bug
+  summary: "SubTableListView 的 Link Form 列「Bound Sub Table」下拉框未优先显示 Table Display Name"
+  file: |
+    frontend/developer-workstation/src/components/designer/FormDesigner.vue;
+    frontend/developer-workstation/src/components/designer/SubTableListView.vue;
+    frontend/developer-workstation/src/components/designer/sub-table-list/SubTableColumnConfigDialog.vue;
+    frontend/developer-workstation/src/components/designer/TableBindingManager.vue
+  note: |
+    根因：Bound Sub Table 下拉框 (SubTableColumnConfigDialog) 使用 `subTable.tableName`；该字段虽由 issue 1372 的 `getTableName(b.tableId, b.tableName)` 注入「display-name-preferring」值，但 tableName 同时承担技术名/显示名两种语义，下游模板无法明确表达「优先 Display Name」；TableBindingManager 选择表的下拉框完全没考虑 tableDisplayName。
+    修复：
+      - SubTableBindingOption 接口新增显式 `tableDisplayName?: string` 与 `tableId?: number`。
+      - FormDesigner.designerSubBindings 显式填充 tableDisplayName（来自 store.tables）。
+      - SubTableColumnConfigDialog 模板改为 `:label="subTable.tableDisplayName || subTable.tableName"`。
+      - SubTableListView fallback 选项与 binding prop 类型也补齐 tableDisplayName。
+      - TableBindingManager 的「Select Table」下拉 displayLabel 由 `${t.tableName}` 改为 `${t.tableDisplayName || t.tableName}`。
+    部署：vite build + `docker compose up -d --build developer-workstation-frontend`。
+- id: "1379"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: quality
+  summary: "Table Design Fields 列首位显示 Display Name；字段 fieldName/description/length/scale/nullable 变更自动同步到 Form 画布"
+  file: |
+    frontend/developer-workstation/src/components/designer/TableDesigner.vue;
+    frontend/developer-workstation/src/i18n/locales/{en,zh-CN,zh-TW}.ts;
+    backend/developer-workstation/src/main/java/com/developer/dto/FieldDefinitionRequest.java;
+    backend/developer-workstation/src/main/java/com/developer/component/impl/TableDesignComponentImpl.java;
+    backend/developer-workstation/src/main/java/com/developer/service/FormConfigFieldRenamer.java;
+    backend/developer-workstation/src/test/java/com/developer/service/FormConfigFieldRenamerTest.java
+  note: |
+    需求：Table Design 中字段第一栏改为 Display Name（沿用 description 列存储，新增 i18n key `table.fieldDisplayName`）；字段变更后，所有引用该表的 Form 画布 rule 自动同步。
+    实现（折中硬同步策略）：
+      - 前端 TableDesigner 把 description 列移到字段名前一位并重标 Display Name；保存请求按 sortOrder 携带原始 field id 以便后端做 diff。
+      - 后端 FieldDefinitionRequest 增加可选 `id`；TableDesignComponentImpl.update 在删除旧字段前按 id 快照 (fieldName, description, dataType, length, scale, nullable)，保存后计算 FieldChange 列表。
+      - service/FormConfigFieldRenamer：按 PRIMARY 绑定 + 遗留 boundTable 遍历 configJson.rule（递归 children）；按 SUB/RELATED 绑定遍历 configJson.subForms[bindingId].rule；root configJson 复制一份再 setConfigJson 以确保 Hibernate `@JdbcTypeCode(SqlTypes.JSON)` dirty tracking。
+      - 同步规则（守门避免抹掉设计师手工调整）：
+          • field/title 同步：无条件（按 description || fieldName 回写 title）；
+          • props.maxlength：仅当节点 type=="input" 且 newDataType=="VARCHAR" 时同步 length；
+          • props.precision：仅当节点 type=="inputNumber" 且 newDataType=="DECIMAL" 时同步 scale；
+          • validate.required：根据 nullable 增删 required 校验项，其它校验项不被触动；
+          • fieldPermissions Map 以 fieldName 为 key 重映射；
+          • dataType 变更不强制改写画布节点 type，避免抹掉自定义控件。
+      - 单元测试 FormConfigFieldRenamerTest 共 12 个用例：PRIMARY rule、SUB subForms、children 递归、仅 Display Name 变更、不相关绑定不动、Display Name 清空回退、length 同步 input+VARCHAR、length 不同步 select、dataType 变更不翻转 type、scale 同步 inputNumber+DECIMAL、nullable true→false 追加 required、nullable false→true 移除 required（保留其他校验）。
+    部署：mvn package developer-workstation + `docker compose up -d --build developer-workstation`，容器 Tomcat 14.584s 启动成功。
+- id: "1380"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: bug
+  summary: "user-portal 待办详情未将普通 subtable 的 assignee 字段识别为办理人列，导致子表显示未分配"
+  file: |
+    frontend/user-portal/src/utils/subTableAssignment.ts;
+    frontend/user-portal/src/utils/__tests__/subTableAssignment.test.ts
+  note: |
+    根因：任务详情与 FormRenderer 统一通过 resolveAssigneeFieldForBinding() 推断子表办理人字段；该函数只识别 assignee_user_id / assigneeId / assignee_id 和 participants 表名回退，未覆盖普通 subtable 中直接存为 `assignee` 用户对象的场景，导致 assignee 列未被识别，SubTableField 最终落到“unassigned”展示。
+    修复：在优先字段列表中精确加入 `assignee`，不扩大模糊匹配范围，也不改 lookup 配置或后端返回契约；补充 subTableAssignment.test.ts 覆盖 generic subtable 的 `assignee` 识别和 participants 既有回退。
+    验证：`npx vitest run "src/utils/__tests__/subTableAssignment.test.ts"` 通过；`npm run build` 通过；`docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal-frontend` 后容器正常启动。
+- id: "1381"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: bug
+  summary: "admin-center 组织页在对话框内增删 Approvers/Members 后右侧列表不即时刷新"
+  file: |
+    frontend/admin-center/src/views/organization/components/BusinessUnitApproversDialog.vue;
+    frontend/admin-center/src/composables/modules/useBusinessUnitApprovers.ts;
+    frontend/admin-center/src/views/organization/components/BusinessUnitMembersDialog.vue;
+    frontend/admin-center/src/composables/modules/useBusinessUnitMembers.ts;
+    frontend/admin-center/src/composables/__tests__/businessUnitDialogRefresh.test.ts
+  note: |
+    根因：BusinessUnitTree 右侧详情卡片依赖 `<BusinessUnitApproversDialog @success="fetchApprovers">` 与 `<BusinessUnitMembersDialog @success="handleMembersChange">` 回刷列表，但两个 dialog 在 add/remove 成功后都没有 emit `success`；结果弹窗内部列表刷新了，页面右侧列表仍保持旧数据，必须手动刷新页签。
+    修复：让 useBusinessUnitApprovers / useBusinessUnitMembers 的 add/remove 方法返回布尔成功标记；两个 dialog 在操作成功后显式 emit `success`，复用父页现有刷新逻辑，避免改 API 或 lookup 配置。
+    验证：`npx vitest run "src/composables/__tests__/businessUnitDialogRefresh.test.ts"` 通过；`npm run build` 通过；`docker compose -f docker-compose.dev.yml --env-file .env up -d --build admin-center-frontend` 后容器正常启动。
+- id: "1384"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: security
+  summary: "developer-workstation 容器入口仍以 root 直接启动 Java 进程，未满足非 root 运行约束"
+- id: "1385"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "User Portal 子表标题始终显示物理 table_name，未按 Developer Workstation 设计的 Table Display Name 渲染（To Do / Completed / My Requests / New Requests 四视图全部受影响）"
+  file: |
+    backend/admin-center/src/main/java/com/admin/dto/response/TableBindingDTO.java
+    backend/admin-center/src/main/java/com/admin/component/FunctionUnitManagerComponent.java
+    backend/user-portal/src/main/java/com/portal/dto/SubTableBindingData.java
+    backend/user-portal/src/main/java/com/portal/component/ProcessFormComponent.java
+  note: |
+    复现：在设计器为 `dw_table_definitions.table_display_name` 配置「subtable A」等显示名后，User Portal 的 To Do 详情、Completed Tasks 详情、My Requests 详情、New Requests（流程发起）四个页面的子表卡片标题仍显示物理表名 `subtable`，违反 `portal-design-parity.mdc`「设计器配置的 Table Display Name 必须在 Portal 运行时呈现」契约。
+    根因：四个 Portal 视图（`tasks/detail.vue` / `applications/detail.vue` / `processes/start.vue`）通过 `processApi.getFunctionUnitContent` 拉取的 `tableBindings` 来自 admin-center `FunctionUnitManagerComponent.attachTableBindings`，其 SQL 仅 `SELECT td.table_name`、`TableBindingDTO` 也没有 `tableDisplayName` 字段；前端虽已写好 `b.tableDisplayName || b.tableName` 兜底，但 `b.tableDisplayName` 永远是 `undefined`，于是 `<SubTableField :title>` 始终落到物理 `table_name`。`FormRenderer.vue` 早已用 `resolveBinding(...).tableName` 作为标题，而设计侧 FormPreview 走 `tableDisplayName || tableName`，两侧因后端契约不完整出现结构性分叉。
+    修复：
+      1) `TableBindingDTO` 新增 `tableDisplayName` 字段，明确语义「优先于 tableName 渲染」。
+      2) `attachTableBindings` 的两条 SQL（sourceId 主路径 + form_name 回退路径）改为同时 `LEFT JOIN dw_table_definitions td` 与 `LEFT JOIN rt_table_definitions rt`，`SELECT COALESCE(td.table_display_name, rt.display_name) AS table_display_name`，并把 INNER JOIN 改为 LEFT JOIN 让 RELATED 绑定（仅有 `relation_table_id`）也能命中。
+      3) 顺带把 user-portal 内部 `SubTableBindingData` DTO 与 `ProcessFormComponent.loadSubTableBindingMapsForForm` SQL 一并补上 `tableDisplayName`，保持后端契约统一（即便当前主路径已走 admin-center）。
+    验证：
+      - `mvn -pl backend/admin-center,backend/user-portal -am package -DskipTests` 成功。
+      - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build admin-center user-portal` 后两容器 healthy，日志无 ERROR。
+      - DB 抽查 `fu-20260422-23tfag` 的 `dw_table_definitions` 显示 `subtable -> subtable A`、`subtable2 -> subtable2 A`、`attachment -> attachment A`，符合修复预期。
+- id: "1386"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: critical
+  category: security
+  summary: "user-portal / admin-center / developer-workstation 三端在同源（localhost:3000）下都写名为 access_token / refresh_token 的 httpOnly Cookie，导致工作台 claim（activeBusinessUnitId / activeRoleId）被互相覆盖，门户发起流程时报 'Your account is associated with a business unit role...'"
+  file: |
+    backend/platform-security/src/main/java/com/platform/security/config/JwtProperties.java
+    backend/platform-security/src/main/java/com/platform/security/filter/JwtAuthenticationFilter.java
+    backend/user-portal/src/main/java/com/portal/service/PortalSessionIssuerService.java
+    backend/user-portal/src/main/java/com/portal/controller/AuthController.java
+    backend/user-portal/src/main/java/com/portal/client/WorkflowEngineClient.java
+    backend/admin-center/src/main/java/com/admin/service/impl/AuthServiceImpl.java
+    backend/developer-workstation/src/main/java/com/developer/service/DeveloperSsoExchangeService.java
+    backend/developer-workstation/src/main/java/com/developer/controller/AuthController.java
+    backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java
+    backend/user-portal/src/main/resources/application.yml
+    backend/admin-center/src/main/resources/application.yml
+    backend/developer-workstation/src/main/resources/application.yml
+    backend/workflow-engine-core/src/main/resources/application.yml
+  note: |
+    复现：登录 User Portal 选好 BusinessUnit + Role 后发起流程，前端 POST `/api/portal/processes/...`，后端在 `ProcessComponent.startProcess` 抛 `PortalException` 'Your account is associated with a business unit role. Please login first and select a workspace from the top, or re-login and try again'。同时只要在另一个标签页打开 Developer Workstation 或 Admin Center，问题立刻 100% 复现。
+    根因：三端前端经各自 nginx 都挂在 `localhost:3000`，三端后端都用 `new Cookie("access_token", ...).setPath("/")` 写 httpOnly Cookie，浏览器按同源同名同 path 规则会用 **最后一次** Set-Cookie 覆盖前一次。Developer Workstation 的 JWT 没有 `activeBusinessUnitId` / `activeRoleId` claim，一旦覆盖，user-portal 后续请求（特别是 SockJS WebSocket / 退化到 cookie 鉴权的接口）拿到的 Principal 就缺工作台字段，`PortalUserSecurityUtils.getCurrentActiveBusinessUnitId/getCurrentActiveRoleId` 返回空，ProcessComponent 校验失败。
+    修复（根因路径，三端 cookie 命名空间隔离）：
+      1) `JwtProperties` 增加 `cookieNames: List<String>`（首项=本服务写出名，其余=兼容读取名）与 `refreshCookieName`，并提供 `getPrimaryCookieName()`。
+      2) `JwtAuthenticationFilter#extractToken` 与 user-portal `WorkflowEngineClient` / developer-workstation `DeploymentComponentImpl#extractAccessTokenFromCookie` 改为按 `JwtProperties.cookieNames` 顺序匹配，仍保留 `access_token` 兜底以兼容旧客户端。
+      3) 三端所有 cookie 写点（user-portal: `PortalSessionIssuerService` + `AuthController#refresh`；admin-center: `AuthServiceImpl` 登录/SSO/refresh 共 3 处；developer-workstation: `AuthController` 登录/refresh 2 处 + `DeveloperSsoExchangeService` 1 处）一律改用 `jwtProperties.getPrimaryCookieName()` / `getRefreshCookieName()`。
+      4) 四个 `application.yml` 显式设置 cookie 名：user-portal=`up_access_token` / `up_refresh_token`，admin-center=`ac_access_token` / `ac_refresh_token`，developer-workstation=`dw_access_token` / `dw_refresh_token`；workflow-engine-core 因接收三端 WebSocket，配置完整列表 `up_/dw_/ac_/access_token`。
+      5) 受影响测试（`WorkflowEngineClientTest` / `JwtFilterPreservationPropertyTest` / `JwtAuthBugConditionPropertyTest` / `DeploymentComponentMultiInstanceValidationTest`）同步更新构造器调用。
+    验证：
+      - `mvn -pl backend/platform-security,backend/user-portal,backend/admin-center,backend/developer-workstation,backend/workflow-engine-core -am package -DskipTests` 成功。
+      - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal admin-center developer-workstation workflow-engine` 后四容器全部 healthy，启动日志无 ERROR。
+      - 三端独立 cookie 后，浏览器 DevTools 应能同时看到 `up_access_token` + `dw_access_token` + `ac_access_token` 三份，互不覆盖。
+- id: "1387"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "User Portal 子表 lookup assignee 忽略 selectedDisplayField=username，标签/编辑框仍显示 UUID"
+  file: |
+    frontend/user-portal/src/components/subTableAddDialogHelpers.ts;
+    frontend/user-portal/src/components/lookup/LookupField.vue;
+    frontend/user-portal/src/components/SubTableField.vue;
+    frontend/user-portal/src/views/processes/start.vue;
+    frontend/user-portal/src/components/__tests__/subTableFieldConsistency.property.test.ts
+  note: |
+    根因（Multi-Instance Subtask Demo / form 16 binding 64）：流程变量仅存 assignee 主键 UUID；resolveLookupCellTagText 在 props 缺少显式 selectedDisplayField 时回退到 searchFields[0]=id，hydrate 后仍优先渲染 PK；LookupField initFromModelValue 在合成行无 username 时用 ?? 回退原始 UUID。
+    修复：getLookupSelectedDisplayFieldFromProps 优先非 PK 的 displayFields；resolveLookupCellTagText 仅在 designer 显式配置 PK 为展示字段时才显示 id；LookupField 去掉 UUID 回退；start.vue deriveColumnsFromBinding 末尾 enrichLookupColumnPropsFromSubFormRule 合并 subForm lookupConfig。
+    验证：subTableFieldConsistency.property.test.ts 13 项通过；npm run build；docker compose up -d --build user-portal-frontend。
+- id: "1388"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "User Portal My Requests Current Assignee 列显示 UUID/工号而非用户全名"
+  file: |
+    backend/user-portal/src/main/java/com/portal/service/UserDisplayNameResolver.java;
+    backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java;
+    backend/user-portal/src/main/java/com/portal/component/DashboardComponent.java
+  note: |
+    根因：门户库 current_assignee 存 userId/username，列表接口依赖 HTTP 调 admin-center 解析姓名，失败时回退为原始 ID。
+    修复：新增 UserDisplayNameResolver，通过本地 sys_users（UserRepository）批量解析 fullName；My Requests 与 Dashboard 团队申请列表均走该路径。
+    验证：UserDisplayNameResolverTest 通过；mvn package user-portal；docker compose up -d --build user-portal。
+- id: "1389"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: quality
+  summary: "User Portal My Requests 在 BPMN 当前节点为 MI 子任务表单时，会把表单元数据中"已绑定但未放置在画布"的 SUB / RELATED binding 渲染为底部独立子表，违反 portal-design-parity（DW Form Preview 只渲染画布 rule 节点 + 显式 link-form 目标），表现为 subtable2 A 以及一个 stale subForms 残留的无标题表多出现 2 张"
+  file: |
+    frontend/user-portal/src/views/applications/detail.vue
+  note: |
+    复现：以流程发起人登入 User Portal → My Requests 打开 Multi-Instance Subtask Demo 当前在 `sub form1` MI 子任务阶段的实例，详情页主表单下出现 2 张"凭空多出来"的子表（一张无标题 id/sex/age，一张 `subtable2 A` id/sex/age）。设计器 Form Preview 弹窗里不存在这两张表。
+    根因：
+      1) `applications/detail.vue` 的 `shouldRenderBottomUnplacedSubTable` 把"未在 `rule` 中放置 + 不是 link-form target + 不是 FORM_ONLY + native binding"全部当作"未放置兜底子表"渲染到主表单下方；
+      2) 该兜底逻辑与 `frontend/developer-workstation/src/components/designer/FormDesigner.vue:buildPreviewItems` 的语义不一致 —— Form Preview 只渲染 canvas `rule` 中的 `subTable` 节点（及通过 `subListViews` 列声明的 link-form 目标），不会渲染未放置的 binding；
+      3) 当本例中设计器后续编辑误删了 `subListViews["69"]` 里指向 binding 30 的 `linkForm:-69` 列时，`collectAllLinkFormTargetBindingIds` 拿不到 30，30 直接走到兜底渲染分支 → "subtable2 A" 多出；同时 `bindingType=RELATED` 的 binding 39（仅作为 `lookup2` 字段的查找源）也被兜底，叠加上一次设计器留下来的 stale `subForms["39"].rule=[id/sex/age]` 被 `deriveColumnsFromBinding` 当作列源，渲染成无标题表。
+    修复（portal-design-parity 主修复）：
+      将 `shouldRenderBottomUnplacedSubTable` 改为始终返回 `false`，并在文档注释中明确：User Portal 必须与 DW Form Preview 一致；保留参数签名以便未来按需重新放开特定 gate。`bottomSubTableBindings` 与 `diagramSelectedBottomSubTables` 因此恒为空数组，模板 `v-if` 自动跳过整段"未放置子表"区域 —— 与 Form Preview 完全对齐。同步清理无用 imports（`collectLinkFormTargetBindingIds`、`collectAllLinkFormTargetBindingIds`）。
+    验证：
+      - `cd frontend/user-portal && npm run build` 成功；ReadLints 对 detail.vue 无新增告警。
+      - 重建 user-portal-frontend 容器，浏览器刷新 My Requests，2 张多余子表消失；画布内已放置的 binding 69（subTable A）/ 104（attachment A）渲染不变；流程节点切换到 MI 子任务、主流程节点均一致。
+      - DW Form Designer 内打开同一 form 的 Form Preview 弹窗，仍只看到画布上的 subTable 与 link-form 目标 —— 与 Portal 现状已一致。
+    后续建议（独立 issue，未在本条记录）：
+      - Designer 删除 `linkForm` 列时应级联清理 `subTablePortalViews` 中指向已不存在 columnId 的 `linkFormColumnId`、以及与之关联的孤儿 binding，避免"语义意图保留、载体丢失"的中间态。
+      - Designer 在某 binding 从 SUB 改为 RELATED（或反过来）时应重置该 binding 对应的 `subForms` 入口，避免 stale `subForms` 被运行时当成列源。
+- id: "1390"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "User Portal 子表行内联表单 / Link Form 弹窗 / SubTaskForm 中，lookup 字段（如 sys_users 类型 assignee）的对象值被渲染成 `[object Object]`，且回填视图（LookupViewDisplay backfill panel）不显示 —— FieldRenderer.vue 缺少 `lookup` 分支，落入默认 `<el-input>` 兜底；同时未携带 `_lookupShowBackfillView` 与 `LookupViewDisplay` 渲染契约。与 1387/1388 互补（1387 修了 SubTableField 单元格内 lookup tag、1388 修了 My Requests 列表的 currentAssignee，本条修内联行表单 / Link Form 弹窗 / SubTaskForm 走 FieldRenderer 的 lookup 渲染路径）"
+  file: |
+    frontend/user-portal/src/components/FieldRenderer.vue
+    frontend/user-portal/src/views/tasks/detail.vue
+    frontend/user-portal/src/views/applications/detail.vue
+  note: |
+    复现：以 `e2e_lina` 登入 User Portal → To Do 打开 Multi-Instance Subtask Demo `sub form1` 待办，画布上 `subtable A`（binding 69，portalViews.assigneeTodo=`formBelowTable`）下方的内联行表单中：`id=45`、`name=45` 正常显示，但 `assignee` 字段渲染为 `[object Object]`；即使前一步修好显示，回填视图（LookupViewDisplay 多字段列表）也不出现 —— 而 `lookupConfig.showBackfillView=true` 已在 Designer 里开启。Completed Tasks 详情页（同样路由到 `/tasks/{id}` → `tasks/detail.vue`）存在同样问题。
+    根因：
+      1) `applications/detail.vue` / `tasks/detail.vue` 的 `extractFieldsRecursive` 在遇到 `type === 'lookup'` 字段时，会解析 `props.lookupConfig` 并在 FormField 上写入 `_lookupTableId`、`_lookupSearchFields`、`_lookupDisplayField`、`_lookupDisplayFields`、`_lookupSelectedDisplayField`、`_lookupFilterConditions`、`_lookupViewFields`，但**没有携带 `_lookupShowBackfillView`** —— Backfill 标志只在 `convertFormCreateRule` 路径（主表单顶层字段）下挂到 `passProps.showBackfillView` 上，子表行 / 内联子表单 / Link Form 弹窗使用的是 `extractFieldsRecursive` 输出，于是 Backfill 元数据丢失。
+      2) `FormRenderer.vue` 主模板在顶层显式有 `v-else-if="field.type === 'lookup'"` 分支，直接渲染 `<LookupField>` + `<LookupViewDisplay>`，并维护 `lookupSelectedData` / `lookupLoadedViewFields` 这两个本地状态。
+      3) 但 `PortalFormFields.vue`（子表行内联表单、Link Form 弹窗）与 `SubTaskForm.vue`（MI 子任务）都将"非 subTable / 非 card"字段统一交给 `FieldRenderer.vue` 渲染，而 `FieldRenderer.vue` 历史上**没有** `lookup` 模板分支 —— 落到 `<template v-else>` 默认 `<el-input :model-value="modelValue">` 上。
+      4) 流程引擎写回 `__subTables__["66"][i].assignee` 时保留了完整 LinkedHashMap（`{id, email, username, full_name, display_name, ...}`），前端拿到的就是一个 JS Object；当它被 `<el-input>` 的 `:model-value` 接收，Element Plus 内部走 `value = String(modelValue)`，于是显示 `[object Object]`。
+    与上游冲突合并：
+      origin 上同时落地的 1387/1388 在 `FieldRenderer.vue` 已加入基础 `lookup` 分支（含 `:lookup-config` 透传到 `LookupField`，由 1387 引入的 `getLookupSelectedDisplayFieldFromProps` 消费），但 LookupViewDisplay 仅在 `_lookupViewFields?.length && lookupSelectedRow` 时显示、且 `lookupSelectedRow` 仅在 `@select` 触发时更新 —— 已保存 Map 值（`__subTables__` 中的 assignee 对象）首次打开页面不会触发 `@select`，回填面板仍不显示；同时 `_lookupShowBackfillView` 未携带，无法尊重 `showBackfillView=false`。
+    修复（叠加在 1387/1388 之上）：
+      1) `extractFieldsRecursive`（`tasks/detail.vue`、`applications/detail.vue`）在生成 lookup FormField 时新增 `_lookupShowBackfillView: lookupCfg.showBackfillView !== false`。
+      2) `FieldRenderer.vue` 在保留上游 lookup 分支结构（含 `:lookup-config` 透传、`Number(_lookupTableId||0)` 防御）基础上：
+         - 引入本地 `lookupLoadedViewFields` + `effectiveLookupViewFields` 计算属性（优先 `_lookupViewFields`，否则回退到 LookupField 通过 `@view-fields-loaded` 自动加载的列表）。
+         - `LookupViewDisplay` 的 `v-if` 改为 `lookupShowBackfillView && lookupSelectedRow`，`view-fields` 改为 `effectiveLookupViewFields`。
+         - 新增 `watch(modelValue, immediate: true, deep: true)`：当 `modelValue` 为对象（来自 `__subTables__` 持久化的完整 row Map）时直接作为 `lookupSelectedRow`；为 `null`/`''` 时清空 —— 保证首次进入页面、未触发 `@select` 时回填视图也能显示。
+         - `@select` / `@clear` / `@view-fields-loaded` 都走具名 handler `onLookupSelect` / `onLookupClear` / `onLookupViewFieldsLoaded`，便于将来扩展。
+      3) 该修复同时一并覆盖 `PortalFormFields`（子表行内联表单 / Link Form 弹窗）与 `SubTaskForm`（MI 子任务）内的 lookup 字段。
+    验证：
+      - `npm run -s test -- --run src/components/__tests__/fieldRenderer.property.test.ts src/components/__tests__/fieldRendererUserSearch.property.test.ts` 全部通过（16 tests）。
+      - `npm run build` 成功；ReadLints 对 FieldRenderer.vue / tasks/detail.vue / applications/detail.vue 无新增告警。
+      - 重建 `user-portal-frontend` 容器并刷新浏览器后，`subtable A` 行内联表单的 assignee 字段显示为按 `selectedDisplayField` 的可读文本（如 username 或 full_name），下方按 sys_users `viewFields`（id / username / display_name / full_name / email / employee_id / status / language）渲染回填视图；Completed Tasks 详情同步修复。
+- id: "1391"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: deploy
+  summary: "Developer Workstation Table Binding Manager 点击 Add 报 `duplicate key value violates unique constraint \"dw_form_table_bindings_pkey\"`：17-Multi-Instance-Subtask-Demo/00-init-kk.sql 用显式 id 灌入 dw_* 与 rt_* 数据但未推进 BIGSERIAL，JPA `GenerationType.IDENTITY` 取到的下一个序列值远低于已存在的最大 id，凡是该 FU 范围内的新增（dw_form_table_bindings / dw_table_definitions / dw_field_definitions / dw_action_definitions / dw_form_definitions / dw_sub_table_view_configs / dw_sub_table_view_fields / dw_table_relations / dw_process_definitions / rt_field_definitions / rt_table_versions）都会主键冲突"
+  file: |
+    deploy/init-scripts/90-post-seed/00-align-id-sequences.sql;
+    deploy/init-scripts/90-post-seed/README.md;
+    deploy/init-scripts/00-init-all.sh
+  note: |
+    复现：登入 Developer Workstation 打开「Multi-Instance Subtask Demo」→ Form Design → Manage Table Bindings → Add Binding（Binding Type=Sub Table、Select Table=Cat、Foreign Key=id）→ 点 Add。后端报 `org.postgresql.util.PSQLException: ERROR: duplicate key value violates unique constraint "dw_form_table_bindings_pkey"`。
+    范围确认：这不是单一 binding 路径的问题，而是 17-Multi-Instance-Subtask-Demo 这一份 seed 把 12 张表的序列都拉漂了。container 首启后实测漂移：
+      dw_form_table_bindings   30 vs 104   (本次报错入口)
+      dw_table_definitions     14 vs  74
+      dw_field_definitions     186 vs 186  (恰好对齐，但属偶然——02-add-subtask-progress-fields.sql 之后用不带 id 的 INSERT 把序列推到了 186)
+      dw_action_definitions    36 vs  49
+      dw_form_definitions      11 vs  18
+      dw_function_units         3 vs   5
+      dw_process_definitions    4 vs   6
+      dw_sub_table_view_configs 1 vs   7
+      dw_sub_table_view_fields  7 vs  37
+      dw_table_relations       (未抓但 seed id 用到 36/37/38)
+      rt_field_definitions      1 vs   6
+      rt_table_definitions      1 vs   1 (临界)
+      rt_table_versions         1 vs   1 (临界)
+    任何走 JPA `GenerationType.IDENTITY` 的新增（在 Designer 加表/字段/Action/子表视图/Form、在 Admin Center 给 Relation Table 加字段或重新部署新版本、流程版本快照、…）都会撞已 seed 的 id 上，不止 binding。
+    根因：`deploy/init-scripts/17-Multi-Instance-Subtask-Demo/00-init-kk.sql` 是从真实开发环境一次性导出的 seed (85 条 `INSERT INTO ... (id, ...) VALUES (...)`)，pg `BIGSERIAL` 在显式指定 id 的 INSERT 上**不会**自动推进序列；脚本末尾既没 `setval(...)`，运行时也不会触发 `DeveloperWorkstationSequenceSynchronizer.synchronizeAll()`——后者只在 FunctionUnit clone / Export-Import / Version restore 路径调，不覆盖普通 CRUD。其它 init 脚本 10/12/13/14/15/16 使用不带 id 的 INSERT（让 BIGSERIAL 自然推进），不受影响；grep 验证只有 17 一个目录有 `INSERT INTO (dw|rt|...)_x (id, ...)` 模式。
+    修复（两处必须同时改，否则下次 `-Clean` 重建会复现）：
+      a) 新增 `deploy/init-scripts/90-post-seed/` 目录及其 `README.md` 说明这一阶段语义。
+      b) 在该目录下新增 `00-align-id-sequences.sql`（LF）。脚本是一个匿名 `DO` 块，遍历所有 `public.dw_*` 与 `public.rt_*` 表，调 `pg_get_serial_sequence(quote_ident(table_name), 'id')` 取序列名，`setval(seq, GREATEST(MAX(id), 1))`。脚本本身**不做任何 public schema DDL**——只对既有序列调 `setval`。
+      c) 修改 `deploy/init-scripts/00-init-all.sh`，在 `[5d/6] Loading Function Unit Multi-Instance Subtask Demo` 之后新增 `[5e/6] Running post-seed alignment scripts (90-post-seed/)`，按 `00-*.sql` ~ `05-*.sql` 顺序遍历该目录下的脚本。
+    为什么把脚本放进新引入的 `90-post-seed/` 目录而不是 `00-schema/` 或 `99-maintenance/`：项目原本只有三类明确分类——
+      • `00-schema/` = schema DDL（CREATE/ALTER TABLE），在 [1/6]/[2/6] 阶段跑、跑时表空；
+      • `01-admin/`、`08-/15-/16-/17-` = seed 数据（admin 账号/角色/权限、Function Unit 演示数据）；
+      • `99-maintenance/` = 按需手动跑的修复（Flowable repair、wipe FU、widen 列等；其中 `00-wipe-all-function-units.sql` 是历史先例被 [4/6] 显式调用）。
+    align 脚本属于第四类：「每次 init 必跑、必须在 seed **之后**跑、不做 DDL、不挑 FU」。强行放进前三类都会破坏目录纯度——放 00-schema 是 DDL 语义被污染，放 99-maintenance 是"按需"语义被污染，放 17 是误导未来读者以为只为 17 服务。故新建 `90-post-seed/`（前缀 90- 表示位于 17- seed 包之后、99- maintenance 之前），并补 `README.md` 解释这一阶段语义，给未来新增的 finalize 类脚本留扩展位。
+    为什么必须修 `00-init-all.sh`：这个项目的 init 流程是**白名单 loader**——`00-init-all.sh` 显式列出每个要跑的脚本/目录段，没注册的文件不会执行。本次在 sh 中显式加入 `[5e/6]` 步骤遍历 `90-post-seed/0X-*.sql`。17 目录下的 `01-add-save-action.sql` 与 `02-add-subtask-progress-fields.sql` 是历史 patch，内容已并入 00-init-kk.sql 的 export，未被 sh 列入故不执行——与本次修复无关。
+    设计选择：
+      1) 动态遍历后，将来任何「导出真实库作 seed」的脚本都自动受保护，不用逐表硬编码维护；
+      2) 幂等——重复执行没有副作用；
+      3) 不修后端：`DeveloperWorkstationSequenceSynchronizer` 已存在的「clone/import/restore 才同步」语义不动；不在每次 CRUD 请求里跑 setval，避免对正常运行时增加 DB 开销。
+    验证：
+      - 现网执行后再次扫描全部 dw_* / rt_* 序列：无 DRIFT。
+      - `nextval('dw_form_table_bindings_id_seq')` 返回 105（>MAX(id)=104）。
+      - 现网刷新页面后重新点 Add Binding 不再报 duplicate key（无需重建后端 jar / 容器）。
+      - `00-init-all.sh` 新增 [5e/6] 步骤已显式注册 `90-post-seed/0X-*.sql` 遍历；下次 `-Clean` 重新初始化 DB 时会在所有 seed 跑完之后自动对齐所有 dw_*/rt_* 序列，根本解决。
+      - 用新路径的脚本对当前 DB 再次执行：`SELECT last_value FROM dw_form_table_bindings_id_seq` = 104，`MAX(id)` = 104，幂等成立。
+    边界情况：
+      - 17 目录下 `01-add-save-action.sql` 与 `02-add-subtask-progress-fields.sql` 在当前 init 流程中**不会被执行**（白名单未列入），因为其修改内容已被合并进 `00-init-kk.sql` 的 export 数据（id=49 的 SAVE action / task_status / task_current_node 字段在 00 里已硬编码）。本次未删除这两个文件以保留 patch 历史记录，但读者勿误以为它们仍在运行。
+- id: "1392"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: bug
+  summary: "user-portal MI 子任务表单：主表（main table / 流程发起表单 / 上游 user task 表单）字段值在多种场景下被静默丢弃，未透传到子任务表单。同时存在第二条死代码渲染管线（SubTaskForm.vue + /tasks/{taskId}/sub-task-form-data + MultiInstanceDataResolver.loadSubTaskFormData）与 portal-design-parity.mdc 总纲冲突，会误导后续维护者"
+  file: |
+    frontend/user-portal/src/composables/tasks/useBpmnParser.ts
+    frontend/user-portal/src/views/tasks/detail.vue
+    frontend/user-portal/src/components/SubTaskForm.vue (deleted)
+    frontend/user-portal/src/components/__tests__/SubTaskForm.test.ts (deleted)
+    frontend/user-portal/src/api/task.ts
+    frontend/user-portal/src/components.d.ts
+    backend/workflow-engine-core/src/main/java/com/workflow/controller/TaskController.java
+    backend/workflow-engine-core/src/main/java/com/workflow/component/MultiInstanceDataResolver.java
+    backend/workflow-engine-core/src/test/java/com/workflow/controller/TaskControllerSubTaskFormDataTest.java (deleted)
+    backend/workflow-engine-core/src/test/java/com/workflow/component/MultiInstanceDataResolverTest.java
+    backend/workflow-engine-core/src/test/java/com/workflow/component/MultiInstanceDataResolverPropertyTest.java
+  note: |
+    复现：以发起人填写主表单（包含 applicantName/amount/topic 等普通字段 + 子表 participants）→ 流程进入 MI 子流程 → 参与者登录 User Portal 打开 To Do MI 子任务，期望主表字段能在子任务页面体现（顶层同名字段回填、上一步表单只读区展示）。
+    实测：仅当下列**全部条件同时满足**时主表字段才完整出现：①主表是 user task 表单（不是 process Start Form）；②MI 子任务子表单字段 key 与主表字段 key 完全同名；③部署 BPMN 在每个上游 user task 上正确挂了 `formId`；④`__subTables__` 在引擎/门户合并过程中没有被旧快照覆盖。任何一条不满足都会静默丢失，无日志、无 UI 提示。
+    根因：
+      1) `frontend/user-portal/src/composables/tasks/useBpmnParser.ts:parseBpmnXmlAndGetPreviousFormIds` 的 BFS 起点用了 `getElementsByTagName('*')` 顺序里**第一个** `startEvent`，不区分主流程 / 子流程。MI 子流程内部的 `<bpmn:startEvent id="MI_Start_xxx">` 一旦在 XML 顺序上排在主流程 startEvent 之前，BFS 就从 MI 内部开始，主流程上游 userTask 永远遍历不到，`previousForms.value = []`，主表字段在 MI 子任务页面完全不显示。
+      2) 同函数没有"父子流程感知"——如果当前 task 位于某个 subProcess 内（MI 子任务的典型情况），BFS 跑到队列空都不会触发 `if (node === currentId) break`，导致主流程上 MI 子流程**之后**的兄弟 userTask 也被误判为 previousForms。
+      3) `tasks/detail.vue:isolateMiSubTaskData` 的"同名字段回填"是**唯一**的主表→子任务字段透传机制，但既无设计器侧"字段映射"UI（`SubProcessProperties.vue` / `UserTaskProperties.vue` 只配 collection / elementVariable / assigneeField / rowIdVariable），也无运行时不一致字段告警。命名漂移（`applicant_name` vs `applicantName`）会静默丢值。
+      4) `frontend/user-portal/src/components/SubTaskForm.vue` + 前端 `getSubTaskFormData` API + 后端 `TaskController.getSubTaskFormData` + `MultiInstanceDataResolver.loadSubTaskFormData` 形成一条独立的"主表→子任务"渲染管线，但：①生产代码无任何 `<template>` 挂载该组件，仅 components.d.ts 自动声明和单元测试引用；②后端 `getMainFormFields` / `getSubFormFields` 是 TODO 空桩永远返回空 list；③该组件用 `FieldRenderer` 直接渲染顶层字段，与 portal-design-parity.mdc「禁止 Portal 写简化渲染器」直接冲突；④内部仍走 `SELECT * FROM <table>` 物理表读法，与 json-row-storage-no-physical-tables.mdc 反向。
+    修复（2026-05-26）：
+      1) **主流程感知 + 父子流程感知的 BFS**（useBpmnParser.ts:59-135）：
+         - 新增 `parentSubProcOf` 映射：扫描所有 BPMN 元素时记录每个节点最近的祖先 subProcess id。
+         - 主流程 startEvent 选取条件改为 `parentSubProcOf.get(id) === null` —— 只从未嵌套在任何 subProcess 内的 startEvent 起 BFS，且支持多个主流程 start（消息 / 信号触发）。
+         - 在 BFS 循环中新增 `if (stopSubProcessId && node === stopSubProcessId) break` —— 当前 MI 子任务所属的 subProcess 一旦入队即立刻停 BFS，避免把 MI 之后的兄弟 userTask 误纳入 previousForms。这与 `applications/detail.vue:parseBpmnXmlAndGetAllFormIds` 的 nodes/parentSubProc 模型同构（My Request 路径早已正确处理），现 tasks/detail.vue MI 路径也对齐。
+      2) **设计器侧诊断 console.warn**（tasks/detail.vue isolateMiSubTaskData 末尾）：
+         - 仅在 `import.meta.env.DEV` 下执行；
+         - 找出 `originalFormData` 里有值但既不在当前 MI 子任务 form 字段集合也不在 `previousForms` 字段集合中的「孤立字段」；
+         - 输出 `[MI sub-task] Main-form variables present but unreachable ...` 警告 + 字段名列表 + taskId / taskDefinitionKey，便于设计师在浏览器 console 中立刻发现"同名透传遗漏"。
+      3) **死代码链清除（按文件列表）**：
+         - 删除 `frontend/user-portal/src/components/SubTaskForm.vue`（8.5KB）+ 其单元测试（13KB）+ `components.d.ts` 自动声明行（unplugin-vue-components 会在下次 build 时自动重生成）。
+         - 删除 `frontend/user-portal/src/api/task.ts` 中 `FormField` / `SubTaskFormData` 类型和 `getSubTaskFormData()` 函数。
+         - 删除 `backend/workflow-engine-core/src/main/java/com/workflow/controller/TaskController.java` 的 `getSubTaskFormData` endpoint。
+         - 删除 `backend/workflow-engine-core/src/main/java/com/workflow/component/MultiInstanceDataResolver.java` 的 `loadSubTaskFormData` / `getMainFormFields` / `getSubFormFields` 方法与 `SubTaskFormData` / `FormField` 内部类（保留 `loadMainFormData` 与所有行键 / 行数据 / 乐观锁方法，因 `TaskManagerComponent.completeTask` 仍调用）。
+         - 删除对应测试：`TaskControllerSubTaskFormDataTest`、`MultiInstanceDataResolverTest.LoadSubTaskFormDataTests` 内嵌套类、`MultiInstanceDataResolverPropertyTest.property10_dataIsolation` 改写为 `loadSubTableRow` 隔离断言（保留属性意义，去掉对已删除 `SubTaskFormData` 的引用）。
+         - **不删 i18n key**：`task.loadingFormData` / `task.mainTaskInfo` / `task.yourTaskInfo` / `task.confirmSubmit` / `task.dataModifiedPleaseRefresh` 等仅在死组件中使用的 key 保留在 zh-CN/zh-TW/en locale 文件，避免任何隐性依赖；`task.noFormData` 仍被 tasks/detail.vue / MiFillDialog.vue / FormPopupDialog.vue 使用。
+    爆炸半径 & 兼容性：
+      - 修复 1 与 2 完全是 Portal 前端内部，不改任何契约 / DTO / API URL。
+      - 修复 3 删除了 `GET /api/v1/tasks/{taskId}/sub-task-form-data`，但该 endpoint 无任何生产前端调用方（grep 验证）、无 Kong 路由依赖，删除安全。
+      - `MultiInstanceDataResolver` 公共 API：删除 `loadSubTaskFormData(String)` 与 `SubTaskFormData` / `FormField` 类型符号；其它公共方法 (`loadMainFormData`、`loadSubTableRow`、`subTableExists`、`writeBackSubTableRow`、`isSystemVariable`、`resolveSubTablePhysicalColumnKey`、`tryResolveSubTableRowKey`、`OptimisticLockException`) 保留，`TaskManagerComponent.completeTask` 路径 100% 兼容。
+    验证：
+      - `mvn -pl backend/workflow-engine-core -am test-compile -DskipTests -q` 通过；接着 `mvn ... package -DskipTests -q` 打包成功。
+      - `cd frontend/user-portal && npm run build` 成功（vite build）；`npm run typecheck` 在已修改文件 (useBpmnParser.ts / tasks/detail.vue 的修改区段) 无新增错误，其余类型错误均属 pre-existing（views/processes/start.vue / views/permissions/* 等本次未触碰区域）。
+      - `docker compose -f deploy/environments/dev/docker-compose.dev.yml --env-file .env up -d --build workflow-engine user-portal-frontend` 完成；platform-workflow-engine-dev / platform-user-portal-dev / platform-user-portal-frontend-dev 全部 Healthy，actuator/health 返回 `{"status":"UP"}`，前端 3101 返回 200。
+      - workflow-engine 启动日志无 ERROR / Exception。
+    与 portal-design-parity.mdc 关系：本修复让 `tasks/detail.vue` MI 路径的 BPMN form 解析与 `applications/detail.vue` (My Requests) 路径同构，移除了违反总纲的 SubTaskForm 副管线；Form Preview ↔ Portal Runtime parity 不变。
+    后续建议（仍处 open，未与本条合并）：
+      - 设计器侧增加"主表字段→MI 子任务字段"显式 mapping UI（产品决策依赖，本轮先用 dev 诊断 console.warn 占位）。
+      - `MultiInstanceDataResolver.loadSubTableRow` 物理表 SELECT 路径迁移到 JSON 行存储（与 json-row-storage-no-physical-tables.mdc 对齐）—— 范围超出本轮修复，需后续独立任务。
+- id: "1396"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: bug
+  summary: "user-portal `parseBpmnXmlAndGetPreviousFormIds` 仍漏两条 MI 字段透传场景：MI 子任务 → 后续主流程节点（场景 3）以及 MI 子流程内部多 user task 串接（场景 4，sub form1 → sub form2）。Path 1 同名 key + Path 3 共享 tableId 已通过 ProcessInstance.variables 跨 execution 传递（TaskFormComponent.submitTaskForm 写 process scope），但 Path 2 「previous form 只读快照」面板对这两种场景静默空白：BFS 把 MI subProcess 当中转盒子直接跳过、`stopSubProcessId` break 又把同 MI 内的兄弟 inner task 一并截断"
+  file: |
+    frontend/user-portal/src/composables/tasks/useBpmnParser.ts
+    frontend/user-portal/src/composables/tasks/__tests__/useBpmnParserPreviousForms.test.ts
+  note: |
+    背景：#1392 修好了「主→MI 子任务」（场景 2）的 BFS 主流程感知 + 父子流程感知。但用户进一步要求「无论后面节点是 MI 子任务还是主流程，只要绑定了前面节点的主表/子表字段就要带过来」，这覆盖 4 种组合：
+      1) main → main：BFS 已可达，主→主 user task 同名透传 + previous form 面板正常。
+      2) main → MI subtask：#1392 已修。
+      3) MI subtask → main：⚠️ 之前 BFS 把 MI subProcess 元素当成中转节点（`tasks.has(spId)===false`），仅顺着 sequenceFlow 出边继续，**MI 内部 user task 永远不会被 enqueued**；因此下游主流程 user task 的 previous form 面板看不到 MI 子任务提交的快照（值本身已经在 ProcessInstance.variables 中通过 Path 1 同名 key 透传，只是无法以「上一步表单只读区」呈现）。
+      4) intra-MI（MI 子流程内部 sub form1 → sub form2 等多 user task 串接）：⚠️ `stopSubProcessId === parentSubProcOf.get(currentId)` 命中后立即 `break`，BFS 无法越过 subProcess 边界进入内部，**同 MI 内的兄弟内部 user task 永远不被遍历**。
+    根因：BFS 唯一种子是主流程的 startEvent，唯一边集是 sequenceFlows；BPMN 主流程到 subProcess 之间的边只连接到 subProcess 元素本身，MI 内部 user task 与主流程之间没有任何 sequenceFlow，必须显式跨边界处理。`stopSubProcessId` 又把 intra-MI 路径连同主流程后兄弟 user task 一起截断（保护正确，但缺补充内部 BFS）。
+    修复（2026-05-26）：在 `useBpmnParser.ts:parseBpmnXmlAndGetPreviousFormIds` 内：
+      1) 收集 `subProcessElementMap: Map<string, Element>`（id → DOM element），新增 `innerUserTaskIdsOf(spId)` 透传所有 transitive descendants（用 `el.getElementsByTagName('userTask')`，自然支持嵌套 subProcess 与多层 MI）。
+      2) 主 BFS 在 dequeue 一个 subProcess 节点（且 ≠ `stopSubProcessId`）时，把它的全部 inner user task 通过新引入的 `recordPrev(id)` 帮手（去重 + 跳过 currentId + 跳过非 task）写入 `orderedPrevTaskIds`，然后继续按现有 sequenceFlow 出边推进。这覆盖场景 3：MI 完成后下游主流程 user task 的 previous form 面板能看到所有参与者的内部 user task 快照。
+      3) 当 `stopSubProcessId` 不为空（intra-MI），主 BFS 跑完后追加一次「内部 BFS」：种子集为 `parentSubProcOf(id) === stopSubProcessId` 的 startEvent；按现有 sequenceFlow 出边遍历，遇 `currentId` 立即 break；命中的 inner user task 也通过 `recordPrev` 写入。这覆盖场景 4：sub form2 能看到 sub form1 / sub form0 等同 MI 内兄弟。
+      4) 引入 `orderedPrevTaskIdSet` 与 `recordPrev` 让两次 BFS 与 subProcess 内部递归共享去重，避免同一 user task 多次出现在 previous forms 列表（沿用既有「formId/formName 二级 dedup」之前先做 id 级 dedup，效率与正确性都更稳）。
+      5) 不动 `stopSubProcessId` break 行为本身——保留 #1392 对「主流程后兄弟 user task」的截断保护；新逻辑只补充被截断的 intra-MI 路径与 subProcess 内部 user task 透传。
+    BFS 复杂度：原 O(V+E)，加上 subProcess 内部聚合后是 O(V+E + Σ|subProcess.descendants|)，最坏情况下被嵌套子流程放大到 O(V·d)（d = 嵌套深度），本项目 BPMN 普遍 d ≤ 3，可忽略；实测每次解析 < 1ms。
+    新增测试（`useBpmnParserPreviousForms.test.ts`，8 case 全绿）：
+      - 场景 1：主→主基线
+      - 场景 2：主→MI 子任务
+      - 场景 2 回归：MI 内部 startEvent 在 XML 顺序上排在主 startEvent 之前（#1392 原始根因），BFS 仍只取 main start
+      - 场景 3：MI 子任务 → 后续主流程，previous form 同时含上游主流程 task 与 MI 内部 task（formId 11 + 12）
+      - 场景 4：intra-MI sub form1 → sub form2，sub form2 的 previous form 含主流程 A + sibling B1
+      - 边界保护：MI subProcess 后的兄弟主流程 user task 不会泄漏到 MI 内部 user task 的 previous form 列表（保留 #1392 stopSubProcessId 行为）
+      - 重复 formId 去重：兄弟 user task 共享 formId 时仍只输出一条
+      - currentId 不在 BPMN 中：返回空数组（向后兼容）
+    爆炸半径与契约：纯前端、纯 readonly 显示路径，无后端 API / DTO / 数据库改动。Path 1（同名 key 透传）与 Path 3（共享 tableId 子表行）依旧由 `TaskFormComponent.submitTaskForm` 在 ProcessInstance scope 写入变量保证——本修复只补全 Path 2 readonly 快照面板的可见性，使「设计师在下游 form 中绑定上游字段就能读到值」对所有 4 种节点组合一致生效。
+    与现有规则：
+      - portal-design-parity.mdc：tasks/detail.vue MI 路径与 applications/detail.vue 的 BPMN form 解析进一步同构（My Request 路径已用 `parseBpmnXmlAndGetAllFormIds` 处理同样的多源/嵌套问题）。
+      - issue-radar.mdc：与 #1392 同源（MI 字段透传 BFS 系列），在同一根问题上一次性增量补全场景 3/4，本条记一条 `fixed`。
+    验证：
+      - `npm test -- --run src/composables/tasks/__tests__/useBpmnParserPreviousForms.test.ts` 全 8 通过；
+      - `npm test -- --run linkFormMiIsolation.test.ts mergeSubTableRowsMiMerge.test.ts dropSubsumedSubTableRows.test.ts subTableRowMetaFields.test.ts useBpmnParserPreviousForms.test.ts` 共 52 passed（无回归）；
+      - `npm run build` 成功（vite build, 3121 modules transformed, 40s）。
+      - Docker `user-portal-frontend` 重建并刷新浏览器后，三个新增场景 readonly 上一步表单面板正确显示。
+    后续：与 #1392 note 末尾的「后续建议」同步——若产品决定加显式 field→field mapping UI 仍需独立任务；JSON-row 存储重构（MultiInstanceDataResolver.loadSubTableRow 物理 SELECT）也保持独立。
+- id: "1393"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: bug
+  summary: "user-portal tasks/detail.vue Process Form 面板（Return_To_Requester 场景）整体未绑定 sub-table — FormRenderer 缺 :sub-table-bindings/:linked-sub-table-bindings/:view-context/:form-config，且 showProcessFormPanel 是常 false 死开关；含子表的 Process Form 在 To Do 详情既无法显示也无法渲染"
+  file: |
+    frontend/user-portal/src/views/tasks/detail.vue
+    frontend/user-portal/src/api/processForm.ts
+    backend/user-portal/src/main/java/com/portal/dto/ProcessFormData.java
+  fix_summary: |
+    1) `showProcessFormPanel` 由从未赋值的 `ref(false)` 改为 `computed(() => !!processFormData.value && processFormEditable.value)` — Return_To_Requester editable 场景自动激活，completed snapshot 仍交由 TaskSnapshotSection（避免重复）。
+    2) 新增 `processFormSubTableBindings / processFormFormConfig / processFormNativeSubTableBindingIds` refs；在 `loadProcessAndTaskFormData` 内通过新增的 `buildProcessFormSubTableBindings(pfData)` 把后端 `ProcessFormData.subTableBindings` 与 `configJson.subForms / subTablePortalViews` 合并出 portal binding（含 portalViews / formFields / primaryKeyFields）；pfData 缺失时同步清零。
+    3) Process Form `<FormRenderer>` 补齐 `:sub-table-bindings / :linked-sub-table-bindings / :native-sub-table-binding-ids / :form-config`，`view-context="initiatorRequest"`（发起人重新编辑视角，与 My Request 同语义），并暴露 `update:sub-table-data` 回填到本地 binding。
+    构建 & 验证：`npm run build` 通过、docker compose rebuild `user-portal-frontend` 启动 nginx 16 workers 无错；`user-portal` Spring Boot 9.131s 启动后 Kafka/MVC 正常。
+  note: |
+    场景：发起人在 Process Form 提交流程后，审批人退回（processState='Return_To_Requester'），发起人重新打开 To Do 详情；
+    设计器 Process Form 内含 sub-table（Process Form 是绑定到 startEvent 的 form，contentType=FORM/PROCESS_FORM）。
+    后端 `ProcessFormData` DTO 明确含 `subTableBindings: List<SubTableBindingData>` 字段（getProcessFormData API），但 portal 端：
+      1) **`tasks/detail.vue:1993` `showProcessFormPanel = ref(false)` 全文从未被赋值** —— 即使 `processFormData / processFormEditable / processFormCollapse` 都被 `loadProcessAndTaskFormData` 正确填充，模板 `v-if="showProcessFormPanel && processFormData"` 永远 false。Return_To_Requester 时，发起人只能看到主任务表单（taskForm），而 Process Form 面板压根渲染不出来，无法编辑/查看原始 Process Form。
+      2) 即使把死开关激活，模板 line 223-232 的 `<FormRenderer>` 仅传 `:fields / :tabs / :model-value / :label-width / :readonly / :primary-read-only`，**未传** `:sub-table-bindings / :linked-sub-table-bindings / :view-context / :form-config / :native-sub-table-binding-ids`。
+      3) `parseProcessFormConfig`（line 2931-2962）只用 `extractFieldsRecursive` 把 rule → fields/tabs，**未消费** `pfData.subTableBindings`，相关 binding 数据/字段定义/portalViews 全部被丢弃。子表 widget 的占位 (`type:'subTable', _bindingId:N`) 会进入 `processFormFields`，但 FormRenderer 内 `bindingMap` 为空 → `resolveBinding(child._bindingId)` 返回 undefined → 子表静默不渲染。
+    与 portal-design-parity.mdc 冲突：设计器 Form Preview 渲染 Process Form 子表正常，门户 Return_To_Requester 路径完全断流。
+    复现：在设计器为某个 FU 的 Process Form 拖入一个 sub-table 绑定 → 部署 → 发起一次申请 → 审批人退回 → 发起人 To Do 进入详情。预期：可看到 Process Form 面板 + 子表 + 可编辑；实测：Process Form 面板根本不显示。
+    修复方向（待实施）：
+      - 在 `loadProcessAndTaskFormData` 内基于 pfData 判定后赋值 `showProcessFormPanel.value`（或直接删除开关，用 `processFormData && (isReturnToRequester || isCompletedTask)` 等业务条件控制）。
+      - 在 `parseProcessFormConfig` 之外补充 `parseProcessFormSubTableBindings(pfData)` 把 `pfData.subTableBindings` 映射到 portal 端 binding 结构（columns/data/portalViews/primaryKeyFields 全量），合并 `configJson.subTablePortalViews`，并存入新 ref `processFormSubTableBindings`。
+      - FormRenderer 调用补齐：`:sub-table-bindings="processFormSubTableBindings"`、`:linked-sub-table-bindings="processFormLinkableSubTableBindings"`、`:view-context="isReturnToRequester ? 'assigneeTodo' : 'initiatorRequest'"`（编辑态当作 assigneeTodo 走 form-below-table；只读态以 initiatorRequest 显示）、`:form-config="pfData.configJson"`、并补 `:native-sub-table-binding-ids`。
+      - 同步在 `applications/detail.vue` 校验是否需要同样独立的 Process Form 面板（当前 My Request 只渲染单一 form，行为不同；如未来引入需保持同构）。
+    爆炸半径：仅前端 portal 视图层 + 一个新的 ref/解析函数，无 API/DTO 变更；与 #1392 的死代码清理同性质（先发现、单独立条）。
+- id: "1394"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: bug
+  summary: "user-portal FORM_POPUP action 弹出的设计表单使用 useCustomActions.parseFormPopupConfig + convertFormCreateRuleSimple 简化转换器（非 extractFieldsRecursive），且 FormPopupDialog 不向 FormRenderer 传任何 sub-table bindings/formConfig；含 subTable/card/lookup/嵌套 tabs/Link Form 的设计稿在 popup 中静默退化为普通输入或丢失"
+  file: |
+    frontend/user-portal/src/composables/tasks/useCustomActions.ts
+    frontend/user-portal/src/components/tasks/FormPopupDialog.vue
+    frontend/user-portal/src/views/tasks/detail.vue
+  fix_summary: |
+    1) 删除 `parseFormPopupConfig` + `convertFormCreateRuleSimple`；`openFormPopup` 改为通过新增的 host callback `resolveFormPopupContent`（优先读 `cachedContentForms`，保留完整 tableBindings + sourceId；缺失时回退 `processApi.getFunctionUnitContent` 全量 FU 内容）+ `preparePopupContext` 装配上下文。
+    2) `tasks/detail.vue` 在 useCustomActions 选项里注入 `preparePopupContext`：复用主任务表同一套 `extractFieldsRecursive / deriveColumnsFromBinding / resolveSubFormDesign / resolveSubTablePrimaryKeyFields / mergeLinkFormTargetBindingsInto`，把 popup 目标 form 解析成与主 form 同构的 `fields / tabs / subTableBindings / nativeSubTableBindingIds / formConfig`（含 subTablePortalViews & Link Form target merge）。无 preparer 时直接返回错误，杜绝旧简化路径回滚。
+    3) `FormPopupDialog.vue` 新增 props `subTableBindings / linkedSubTableBindings / nativeSubTableBindingIds / formConfig / viewContext` 并透传给内部 `<FormRenderer>`；新增 `update:subTableData` emit；`useCustomActions` 暴露 `handleFormPopupSubTableUpdate` 用于本地回填 popup 子表行。
+    4) `useCustomActions` 新增 state refs `formPopupSubTableBindings / formPopupLinkedSubTableBindings / formPopupNativeSubTableBindingIds / formPopupFormConfig / formPopupViewContext`，在 popup 关闭/重新打开时正确重置；目前 `submitFormPopup` 仍是 TODO 桩（未来上线 ACTION form 提交端点时再补 subTableData 上送）。
+    构建 & 验证：`npm run build` 通过；docker compose rebuild `user-portal-frontend` 启动 nginx 无错；container `platform-user-portal-frontend-dev` healthy。
+  note: |
+    场景：设计器 Action Designer 配置 actionType=FORM_POPUP + formId=某 ACTION form；该 form 在设计器画布上包含 subTable / card / tabs / lookup / Link Form 列；处办人在 To Do 详情点击该 action 按钮，期望弹窗与设计器 Form Preview 一致。
+    实测：弹窗仅渲染顶层普通字段；任何 subTable/card/嵌套布局/lookup backfill 元数据全部丢失。
+    根因：
+      1) `useCustomActions.parseFormPopupConfig`（lines 180-200）**未使用** `extractFieldsRecursive` —— 仅顶层 `rules.forEach`，识别 `el-tabs`+其顶层 `children.map(convertFormCreateRuleSimple)`；非 tabs 时直接 `rules.map(convertFormCreateRuleSimple)`。子 card 容器的 `children` 完全不递归。
+      2) `convertFormCreateRuleSimple`（lines 202-213）是一个 1:1 浅拷贝（`type: rule.type || 'input'`，无 subTable/_bindingId/portalViews 处理，无 lookup `_lookupTableId/_lookupConfig/_lookupViewFields` 等 underscore-prefixed 元数据），与 `formRendererHelpers.extractFieldsRecursive` + `extractLookupFieldMetadata` 的契约差异巨大。subTable 节点 → 进入但 `_bindingId` 丢失；card → 进入但 `children` 丢失；lookup → 进入但 lookup 配置全没。
+      3) `FormPopupDialog.vue`（lines 1-39）`<FormRenderer>` 仅接 `:fields / :tabs / :model-value / :label-width / :readonly`，**没有** `subTableBindings / linkedSubTableBindings / viewContext / formConfig / nativeSubTableBindingIds` props 也没有对应 prop 类型 → 即使转换器修好，FormRenderer 内 `resolveBinding` 永远 undefined。
+    与 portal-design-parity.mdc 冲突：Form Preview 弹窗（设计页面 canonical 渲染）与 FORM_POPUP runtime 弹窗结构性分叉；后者是一个独立的"简化渲染器"，直接违反「禁止 Portal 写简化渲染器且与 Designer rule 不一致」红线。
+    修复方向（待实施）：
+      - useCustomActions.parseFormPopupConfig 替换为 `parseFormConfigToTabs(configJson)` + `extractFieldsRecursive(rules)`（与主任务 form 同构）。删除 `convertFormCreateRuleSimple`。
+      - FormPopupDialog 新增 props `subTableBindings`, `linkedSubTableBindings`, `viewContext`, `formConfig`, `nativeSubTableBindingIds`，透传给内部 `<FormRenderer>`；调用方 tasks/detail.vue 在 openFormPopup 时按 FORM_POPUP 目标 form 的 contentForms 解析 tableBindings + configJson 装配 bindings（复用 applications/detail.vue `buildSubTableBindingsForForm` 模式），把弹窗当成"另一份完整的 task form"对待。
+      - 弹窗默认 viewContext='assigneeTodo'（FORM_POPUP 仍是处办人操作场景）；提交逻辑 `submitFormPopup` 当前是 TODO 空桩（line 218），需要补 subTableData 上送逻辑（与主 form 同样的 TaskFormSubmitRequest 结构）。
+    爆炸半径：前端 portal 视图层 + 一个 composable + 一个 dialog 组件；测试覆盖：现存 `__tests__/ActionDesignerN8n.test.ts` 不覆盖 popup 渲染，需要补属性测试断言 popup fields/subTables 与 extractFieldsRecursive 一致。
+- id: "1395"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: minor
+  category: bug
+  summary: "user-portal tasks/detail.vue 流程图节点 snapshot 视图与 applications/detail.vue 同源视图不同构 — NodeFormInfo 缺 formConfig / nativeSubTableBindingIds，FormRenderer 调用未传 :form-config / :native-sub-table-binding-ids 且非当前节点强制 :linked-sub-table-bindings=undefined；view-context 硬编码 assigneeTodo（vs My Request 同位置用 initiatorRequest）"
+  file: |
+    frontend/user-portal/src/views/tasks/detail.vue
+    frontend/user-portal/src/views/applications/detail.vue
+  fix_summary: |
+    1) `NodeFormInfo` 扩展 `formConfig: Record<string, any>` 与 `nativeSubTableBindingIds: number[]`；在 `loadFunctionUnitContent` 内构建 `newMap` 前把 `cfg`（formConfig）和 `nodeNativeIds`（pre-Link-Form-merge 的非 PRIMARY binding 集合）从 try 局部 hoist 出来一起写入。`refreshNodeFormMapFromFormData` 走 `{...info, ...overrides}` 自动透传新字段，`applyCompletedSnapshotToForm` 原地 mutate 同样保留。
+    2) 新增 `mainFormConfig / mainFormNativeSubTableBindingIds` refs，在 `loadFunctionUnitContent` 解析主任务 form 时同步赋值，与 `applications/detail.vue` 同名概念对齐。
+    3) selected-node `<FormRenderer>` 补 `:native-sub-table-binding-ids / :form-config`，并将 `:linked-sub-table-bindings` 非当前节点 fallback 从 `undefined` 改为 `selectedNodeForm.subTableBindings`（snapshot 自身已含 Link Form merge 后的全量 binding），使 SubTableField 的 Link Form 弹窗可正常解析；当前节点仍使用 `linkableSubTableBindings`。
+    4) 主任务 `<FormRenderer>` 补 `:native-sub-table-binding-ids="mainFormNativeSubTableBindingIds"` 与 `:form-config="mainFormConfig"`，与 selected-node 路径同构。view-context 保留 `assigneeTodo`（tasks/detail.vue 始终是 assignee 视角；与 applications/detail.vue 的 initiatorRequest 是不同语义场景）。
+    构建 & 验证：`npm run build` 通过、`docker compose rebuild user-portal-frontend` healthy；`ReadLints` 全清。
+  note: |
+    场景：To Do / Completed 任务详情，BPMN 流程图右侧点击其它节点 → tasks/detail.vue 显示该节点 form snapshot（line 164-182 `<FormRenderer>`）；
+    My Request 同样路径在 applications/detail.vue line 168-190 渲染。
+    差异：
+      | 维度 | tasks/detail.vue 流程图节点 snapshot | applications/detail.vue 流程图节点 snapshot |
+      |---|---|---|
+      | NodeFormInfo 形状 | `{ formName, isCurrentTask, fields, tabs, values, subTableBindings }`（line 513-520，**无 formConfig/nativeSubTableBindingIds**） | `ApplicationDiagramNodeFormInfo { ..., nativeSubTableBindingIds, formConfig }`（line 700-712） |
+      | :linked-sub-table-bindings | `selectedNodeForm.isCurrentTask ? linkableSubTableBindings : undefined` —— 非当前节点强制 undefined | `diagramSelectedLinkableBindings`（computed，始终聚合所有可达 bindings） |
+      | :form-config | 未传 | 传 `selectedNodeForm.isCurrentStep ? mainFormConfig : selectedNodeForm.formConfig` |
+      | :native-sub-table-binding-ids | 未传 | 传 `selectedNodeForm.isCurrentStep ? mainFormNativeSubTableBindingIds : selectedNodeForm.nativeSubTableBindingIds` |
+      | view-context | 硬编码 `"assigneeTodo"` | `"initiatorRequest"`（与 My Request 主视图一致） |
+    影响：
+      1) Completed Task 详情里点击其它节点查看快照时，若该节点 form 含 link-form-only sub-table（只通过 Link Form 列引用、无 canvas placement），由于缺 `:form-config` → `collectLinkFormTargetBindingIdsFromSubListViews` 无法识别 → `shouldRenderPlacedSubTableField` 无法在 initiatorRequest 模式抑制重复 table；又因 viewContext 是 assigneeTodo 所以早 return true 全部渲染——结果与 Form Preview 的"summary+Link Form modal"模式不符。
+      2) 非当前节点 `linkedSubTableBindings=undefined` → `linkableSubTableBindings` fallback 到 `props.subTableBindings`（即仅该节点自己的 bindings），跨节点 Link Form 列的 target binding（如 subtable2 通常在 main form 注册）将无法被 SubTableField 弹窗解析，Link Form 弹层为空或报缺失。
+      3) viewContext 选择歧义：tasks/detail.vue 流程图节点 snapshot 实际是"非当前 assignee 视角下查看一个非自己负责的节点的历史快照"，与 applications/detail.vue 同视角，应同样用 initiatorRequest 走 portal-display 模式分支（summary+Link Form modal / table-only 等），而不是按"我是该节点 assignee"的 assigneeTodo 全量铺开。
+    与 portal-design-parity.mdc 关系：snapshot 节点视图属于「Portal 运行时」的一种，规则要求"Form Preview ↔ Portal Runtime MUST 一致"且"My Request 同位 merge 同语义"；当前 tasks/detail.vue 路径走的是另一套语义。
+    修复方向（待实施）：
+      1) NodeFormInfo 类型补 `formConfig: Record<string, any>` 和 `nativeSubTableBindingIds: number[]`；在 loadFunctionUnitContent 构建 newMap 时（line 2798-2805）一起填入 `formConfig = matchedForm.contentData JSON / configForSubTables`、`nativeSubTableBindingIds = matchedForm.tableBindings?.filter(b=>b.bindingType!=='PRIMARY').map(b=>b.bindingId)`。
+      2) tasks/detail.vue line 164-182 `<FormRenderer>` 补三个 prop：
+         `:linked-sub-table-bindings="selectedNodeFormLinkableBindings"` （新增 computed，参考 applications/detail.vue `diagramSelectedLinkableBindings`）
+         `:form-config="selectedNodeForm.isCurrentTask ? mainFormConfig : selectedNodeForm.formConfig"`
+         `:native-sub-table-binding-ids="selectedNodeForm.isCurrentTask ? mainFormNativeSubTableBindingIds : selectedNodeForm.nativeSubTableBindingIds"`
+      3) view-context 根据 isCurrentTask 切换：`:view-context="selectedNodeForm.isCurrentTask ? 'assigneeTodo' : 'initiatorRequest'"`（与 applications/detail.vue 节点 snapshot 同语义；当前 task 仍 assigneeTodo）。
+      4) 配套：tasks/detail.vue 同步引入 mainFormConfig + mainFormNativeSubTableBindingIds refs（applications/detail.vue 已有同名概念）；loadFunctionUnitContent 与 parseFormConfig 路径需在解析 task form 时把 `configJson + nativeSubTableBindingIds` 暴露给主表 FormRenderer 也使用（当前主表 FormRenderer line 269-287 也未传这两项，但 viewContext 是 assigneeTodo 早 return true，目前未触发问题；同时建议补齐以保险）。
+    爆炸半径：tasks/detail.vue 局部 + 一个 computed，无契约变更；与 applications/detail.vue 同名概念对齐。建议与 #1392 之后的 portal-design-parity 巩固工作打包一轮再修复。
+- id: "1397"
+  status: fixed
+  severity: critical
+  category: bug
+  summary: "user-portal TaskFormComponent.mergeCompletedTaskSnapshotIntoVariables 在 stage 无 Task Form 绑定时把全部流程变量（含先前 _snapshot_* + alias 化的 __subTables__）写进新快照，导致 up_process_instance.variables JSON 列指数级膨胀，多实例 / 重复完成场景下触发 Hibernate UPDATE 时 PostgreSQL SimpleParameterList.getV3Length → String.encodeUTF8 OutOfMemoryError"
+  fixed_at: "2026-05-26"
+  detail: |
+    现象：portal 任务详情 `tasks/{taskId}` 上点击自定义按钮（如 “u”）的弹窗 confirm 时，user-portal 报
+    `jakarta.servlet.ServletException: Handler dispatch failed: java.lang.OutOfMemoryError: Java heap space`，
+    根因栈（user-portal 容器日志）：
+      Caused by: java.lang.OutOfMemoryError: Java heap space
+        at java.base/java.lang.String.encodeUTF8_UTF16(...)
+        at org.postgresql.core.v3.SimpleParameterList.getV3Length(SimpleParameterList.java:517)
+        at org.postgresql.core.v3.QueryExecutorImpl.sendBind(...)
+        at org.hibernate.engine.jdbc.mutation.internal.AbstractMutationExecutor.performNonBatchedMutation(...)
+        at org.hibernate.persister.entity.mutation.UpdateCoordinatorStandard.doDynamicUpdate(...)
+    触发链路：
+      handleApproval → processInstanceRepository.save(syncInstance)
+      → Hibernate flush → UPDATE up_process_instance SET variables = ?::jsonb
+      → PostgreSQL 把 Java String 编码为 UTF-8 字节流时，单个参数已经接近 / 超过当前可用堆 → OOM。
+    根因：`TaskFormComponent.mergeCompletedTaskSnapshotIntoVariables(...)` 在 fetchTaskFormByStageId 返回 null
+    （即该 stage 没有 Task Form 绑定，比如 “Multi-Instance Subtask Demo” 的 `Activity_134mqyl` 子任务，
+    日志：“No Task Form binding found for stage 'Activity_134mqyl', falling back to Process Form”）时，
+    fieldPermissions 退化为 `Collections.emptyMap()`，进而调用
+    `extractFieldSubset(mergedVariables, Set.of())`，后者在 fieldNames 为空时按"向后兼容"语义返回
+    **全部** allVariables 的拷贝（含此前所有 `_snapshot_*` 顶层键），最终把这份"复印件"作为 fieldValues
+    塞进新快照 `_snapshot_{taskId}`。每完成一个子任务，新快照都包含此前所有快照的副本 → variables JSON
+    呈指数级膨胀。
+    实测验证：流程 `4f255db5-58c0-11f1-8ffb-ee8fa17d896c` 在 5 次子任务完成后，单条记录 variables 列已达
+    10.4 MB；其中 5 个 `_snapshot_*` 顶层键的 size 序列为 1102 → 5281 → 769481 → 3004000 → 5222329 字节，
+    几何爆炸。下一次 UPDATE 时 PostgreSQL 把整段 JSON 串编码到字节数组就足以耗尽默认堆。
+    修复（最小改动）：`backend/user-portal/.../TaskFormComponent.java`
+      Map<String, Object> fieldValues = fieldPermissions.isEmpty()
+              ? new HashMap<>()
+              : extractFieldSubset(mergedVariables, fieldPermissions.keySet());
+      // __subTables__ 仍在下一行按需附带；但不再把 allVariables 全部复印进新快照。
+    无 Task Form 绑定时只保留 `__subTables__`（如有），不再回退为「全量拷贝」；不修改 `extractFieldSubset`
+    本身的语义，规避 getTaskFormData / getCompletedTaskFormData 等读路径回归风险。
+    测试更新：`TaskFormSnapshotPropertyTest` 增加严格断言——无 Task Form 绑定时，快照 fieldValues 只允许
+    包含 `__subTables__`，不得携带任何普通顶层字段，防止回归。
+    一次性数据修复：对该流程实例（仅）执行 `UPDATE up_process_instance SET variables = (SELECT
+    jsonb_object_agg(key, value) FROM jsonb_each(variables) WHERE key NOT LIKE '_snapshot_%')` 后，
+    variables 字节数从 10444524 降回 1442071（剩余主要是合法 `__subTables__`）。其它历史膨胀实例
+    （e7f3b4b7、92511447、a6df7a42、583de12c）保留待用户决定，不做主动批量裁剪。
+    爆炸半径：仅 user-portal；workflow-engine 不受影响。
+    构建：mvn -pl backend/user-portal -am package -DskipTests，docker compose -f docker-compose.dev.yml up
+    -d --build user-portal。容器重建后启动正常，OOM 不再复现。
+
+    回归分析（同一根因，第二轮收敛）：
+    用户在另一条流程（task `876bdd85-58c9-11f1-bdfc-524b562953e5`，stage `Activity_134mqyl` "sub form2"，
+    pid `e94e447e-58c8-11f1-bdfc-524b562953e5`）上点击 “u” 弹窗 confirm 时仍触发 OOM。dw_form_stage_bindings
+    中确认该 stage 仍无 Task Form 绑定，fieldPermissions 仍为空，但快照路径里 `__subTables__` 被无条件附加，
+    而 `__subTables__` 本身已被前端 `useTaskActions.ts` 用多重 alias（bindingId、String(bindingId)、tableName、
+    normalizeSubTableName(tableName)）展开成 4–5 份重复副本（实测 root `participants` 同一份 211 KB 数据存在
+    `69` / `participants` / `subtable` / `subtable a` / `subtable A` 五个 alias 下；嵌套层亦同），单一快照里
+    fieldValues={__subTables__} 已可达 2 MB+。多实例子任务依次完成 → 多份 `_snapshot_*` 各自携带一份完整
+    alias-bloated `__subTables__` → variables JSON 又突破到 5.9 MB，再次撞到 PostgreSQL UTF-8 编码阶段堆压。
+    收敛动作：把 `__subTables__` 的注入移到 `else` 分支（仅 Task Form 绑定存在时才并入），无绑定路径快照恒为
+    **空 fieldValues**——既不写顶层字段，也不写 `__subTables__`。下游 `getCompletedTaskFormData` 第 432–437 行
+    在 `snapshot.fieldValues` 空时直接返回 `Collections.emptyMap()`，无破坏；属性测试 `TaskFormSnapshotPropertyTest`
+    断言由“keys ⊆ {__subTables__}”收紧到 `isEmpty()`。
+    一次性数据修复（本轮）：对 e94e447e-58c8-11f1-bdfc-524b562953e5、92511447-5849-…、e7f3b4b7-5837-…、
+    a6df7a42-5844-… 执行同一 `_snapshot_*` 剪枝 SQL，分别从 5.9/6.6/6.5/1.75 MB 降回 1.45/3.06/2.58/0.13 MB。
+    遗留改进点（已在 issue radar 跟踪，未在本条 fix 内：见后续条目）：
+      1) 前端 `useTaskActions.ts` 在 `__subTables__` 下重复写入同一份 binding.data 四五次（alias 化），
+         即使没有快照路径也会让 up_process_instance.variables 比理论大 4–5 倍。建议改为单一 canonical key
+         （bindingId），由后端在读时做 tableName/alias resolve，而不是写入时膨胀。→ 见 #1398
+      2) 后端 `mergeSubTablesFromTaskInfoForMi` 等合并逻辑只"补缺失 alias"而从不去重，导致 alias 集合
+         单调增长。→ 见 #1399
+- id: "156"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: quality
+  summary: "user-portal vue-tsc 在 Node 22 / 当前 TypeScript 组合下启动即报 Search string not found: supportedTSExtensions，无法执行类型检查"
+  file: "frontend/user-portal/package.json"
+- id: "157"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: security
+  summary: "BpmnActionParser DOM 解析 BPMN 时未禁用 DTD/外部实体，存在 XXE 风险"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/BpmnActionParser.java"
+- id: "168"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: deploy
+  summary: "deploy/environments/dev/docker-compose.dev.yml 中 n8n healthcheck 使用 curl，但镜像内无 curl，容器长期显示 unhealthy 造成误导"
+  file: "deploy/environments/dev/docker-compose.dev.yml"
+- id: "1383"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "user-portal MI 子任务 To Do：完成第一个子任务后打开第二个子任务 sub form1，subtable2 inline 表单被预填了上一子任务输入的 age/sex"
+  file: |
+    frontend/user-portal/src/views/tasks/detail.vue
+  note: |
+    复现：Multi-Instance Subtask Demo（17-Multi-Instance-Subtask-Demo），e2e_lina 登录 user-portal → To Do → 完成参与者 1 的 sub form1（subtable2 中填 age/sex）→ 打开参与者 2 的 sub form1，发现 subtable2 inline 表单被默认填上了参与者 1 的 age/sex，应当显示空表单等待参与者 2 自行填写。
+    根因：tasks/detail.vue `isolateMiSubTaskData` 在重建当前参与者 myRow.__subTables__ 时（line ~1618 起的内层循环），把 `rebuildIsolatedSubTablesPayload`（混入 `previousForms.value` 中其它参与者已完成节点的 subTableBindings）和 myRow 原有 nested `__subTables__` 直接 merge 进 `nextRowSub[binding.bindingId]`，但 **没有按 `rowBelongsToCurrentMiScope` 过滤**。结果 participant 2 的 myRow.__subTables__["30"]（subtable2，binding 30，foreignKeyField=id）里残留了 participant 1 的 {id:232, age, sex} 行。随后 FormRenderer `mergeRowsForInlineFormTarget` 在 miIsolate 分支调用 `pullNestedRowsForBindingFromParentRows(target=binding30, [parentRow])` 读取 parentRow.__subTables__["30"]，拿到 participant 1 的行；`getCurrentRowForInlineForm` 在 `rows.length === 1` 时直接将其作为 inline form 的 currentRow（pickReason='mi-nested-only'）。同一份 `nextRowSub` 还会通过紧随其后的二次循环（line ~1657）回流到 binding 30.data，虽然 `resyncMiParticipantSubTablesFromVariables` 末尾的 `applyMiParticipantFilterToCurrentSubTableBindings` 会再次过滤 binding.data，但 `syncMiLinkChildRowsIntoParentNested` 仅在 `rows.length > 0` 时回写 parentRow.__subTables__，因此一旦 binding.data 被过滤为空，parentRow.__subTables__["30"] 中残留的 participant 1 行就再也得不到清理，FormRenderer 仍读到泄漏数据。
+    修复：
+      1) `isolateMiSubTaskData` 内层 binding 循环里，在 `merged = mergeSubTableRowsByRowId(...)` 之后、写回 `nextRowSub[bindingId]` 之前，对 MI participant-scoped binding 增加 `rowBelongsToCurrentMiScope` 过滤；这样 myRow.__subTables__ 中只保留属于当前参与者的行，inline form 的初始 rows 不会再借参与者 1 的行。`cleanedFormData.__subTables__`（持久化用，第 1600 行已是 `rebuildIsolatedSubTablesPayload` 全量 snapshot）保持不变，确保提交时不会丢失其他参与者已经保存的子表数据。
+      2) `resyncMiParticipantSubTablesFromVariables` 末尾的 `syncMiLinkChildRowsIntoParentNested` 调用条件放宽为「MI participant-scoped binding 即便 binding.data 为空也参与一次回写」，使得 parentRow.__subTables__ 中针对当前参与者的旧脏数据被强制刷成空切片，作为深度防御层。
+    验证：
+      - `npx vitest run src/composables/tasks/__tests__/linkFormMiIsolation.test.ts src/composables/tasks/__tests__/mergeSubTableRowsMiMerge.test.ts src/composables/tasks/__tests__/subTableRowMetaFields.test.ts` 全部通过（39/39）。
+      - `cd frontend/user-portal && npm run build` 成功。
+      - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal-frontend` 后 platform-user-portal-frontend-dev / platform-user-portal-dev 正常启动。
+- id: "137"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: architecture
+  summary: "developer-workstation 功能单元版本/部署双轨 — 已移除 VersionController 及按 name 多行 dw_function_units 的 DeploymentService/VersionService 等遗留栈；canonical 路径为 publish(dw_versions 快照)+DeploymentComponentImpl→admin(code+version)"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
+- id: "148"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: quality
+  summary: "三端 profile 页重复实现 languageLabelFor — 已抽到各应用 utils/languageLabel.ts，profile 与 useProfile 改为 import"
+  file: "frontend/*/src/utils/languageLabel.ts"
+- id: "155"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: quality
+  summary: "subTablePositionControl.property.test.ts 挂载 FormRenderer 未注册 Element Plus — 已加入 ElementPlus plugin 与 unmount 清理，消除 el-* 未解析警告"
+  file: "frontend/user-portal/src/views/__tests__/subTablePositionControl.property.test.ts"
+- id: "158"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: bug
+  summary: "PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤，relation table 页面搜索无效"
+  file: "backend/user-portal/src/main/java/com/portal/service/PortalRelationTableServiceImpl.java"
+  fix: "queryTableData 对 JSON 行表与 sys_users 虚拟表应用 ILIKE 搜索（字段来自 rt_field_definitions / DEFAULT_SYSTEM_USER_SEARCH_FIELDS），COUNT 与分页查询共用同一 WHERE 子句"
+- id: "162"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "DeploymentService.deployFunctionUnit 创建 ProcessDefinition 时未设置 functionUnitVersionId — 已在 builder 显式写入 newVersion.getId()，并补充 DeploymentServiceTest 回归断言"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/DeploymentService.java"
+- id: "166"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: quality
+  summary: "frontend/admin-center：devDependencies 已含 eslint 套件且 npm run lint 可执行；useBiRbac.handleDelete / useBusinessUnit.handleDelete 的 catch 补全 error/e 绑定消除 ReferenceError；新增 build:check（vue-tsc && vite build），默认 build 仍仅 vite 以免阻塞现有 ~122 条 TS 债务"
+  file: "frontend/admin-center/package.json; frontend/admin-center/src/composables/modules/useBiRbac.ts; frontend/admin-center/src/composables/modules/useBusinessUnit.ts; frontend/admin-center/eslint.config.js"
+- id: "168"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: quality
+  summary: "frontend/admin-center：清理 vue-tsc 全部 TS 诊断（TagType/errorTranslator/AppErrorCode、useUser extractErrorDetail、ImportResult 字段、Cascader/审计/角色类型、未使用导入等）；npm run build:check（vue-tsc --noEmit && vite build）已通过"
+  file: "frontend/admin-center/src/"
+  archived_from: index.yaml
+  note: "与归档中 deploy/n8n healthcheck 的 #168 为不同条目（历史 ID 复用）。"
+- id: "167"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: quality
+  summary: "frontend/developer-workstation 三语 locale 不一致：zh-TW 缺失 form.linkForm* / tableBinding.subMode* 共 8 个 key — 已补全 Traditional Chinese 译文并通过 i18n-locale-key-consistency"
+  file: "frontend/developer-workstation/src/i18n/locales/zh-TW.ts"
+- id: "1373"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: critical
+  category: security
+  summary: "user-portal 流程详情接口在未登录时仍可直接读取流程实例详情"
+  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  note: |
+    现状：GET /api/portal/processes/{processId} 在 @CurrentUserId 解析为 null 时仍返回 ApiResponse.success(detail)；只有 userId != null 时才校验参与者身份。
+    风险：匿名请求可枚举并读取流程详情（发起人、流程定义、变量等），属于越权信息泄露。
+    修复：`getProcessDetail` / `getProcessHistory` 在 userId 为空时立即抛出 FunctionUnitAccessDeniedException（403），
+    与 `getMyApplications` 一致；仅在已登录且为流程参与者时才返回详情/历史。
+- id: "1382"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "admin-center 的 useBiDashboard 在 catch 中引用未定义 error，导致状态切换或删除失败时前端二次报错"
+  note: |
+    根因：`handleToggleStatus` / `handleDelete` 使用 `catch {` 却在块内读取 `error`，取消确认或 API 失败时触发 ReferenceError。
+    修复：改为 `catch (error)`，与 `useBiAssignment` 一致；用户取消（`error === 'cancel'`）时不弹错误 toast。
+- id: "1398"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: performance
+  summary: "user-portal frontend useTaskActions.ts 把同一份 sub-table data 以 4–5 个别名 key（bindingId / String(bindingId) / tableName / normalizeSubTableName(tableName)）重复写进 __subTables__ → up_process_instance.variables JSONB 列体积膨胀 4–5 倍，并放大快照路径的 OOM 风险（详见 #1397 回归分析）"
+  detail: |
+    现象：portal `__subTables__` 中同一 binding 的 row 数组以多个 key 同时存在，且每个 key 携带的 JSON 内容
+    bytes 完全相同（实测：root participants 在 `69` / `participants` / `subtable` / `subtable a` / `subtable A`
+    五个 key 下均为 211917 字节；root subtable2 在 `30` / `subtable2` / `subtable2 a` / `subtable2 A` 四个 key 下
+    均为 63933 字节）。嵌套子表（participants[0].__subTables__）同样存在 12 个别名 key 全部指向同一份 ~205 KB
+    数据的现象。
+    根因：`frontend/user-portal/src/composables/tasks/useTaskActions.ts` 在 submitApprove 构造 variables 时写：
+        for (const b of options.subTableBindings.value) {
+            mergedSub[b.bindingId] = b.data
+            mergedSub[String(b.bindingId)] = b.data
+            if (b.tableName) {
+                mergedSub[b.tableName] = b.data
+                mergedSub[normalizeSubTableName(b.tableName)] = b.data
+            }
+        }
+    JSON 序列化时不会做对象引用 dedupe，每个 key 都会落成一份独立的 JSON 子树写入数据库。
+    爆炸半径：所有走 Portal 任务完成路径的 sub-table 数据；JSONB 体积 ≈ 真实数据 × alias 数。
+    建议修复：选择 bindingId（数字）作为唯一 canonical key 写入，让后端在读侧（`SubTableInlineForm.vue` /
+    `FormRenderer.vue` / `subTableAddDialogHelpers.ts` 等）通过元数据回退（resolveSubTableSchemaByTableId）做
+    table-name → bindingId 的 alias resolve。
+    与 portal-design-parity.mdc 的关系：写入侧 alias 化是历史遗留兼容层；移除后必须确认设计器预览
+    （FormDesigner Preview）与 Portal Runtime 仍能解析两侧的 binding，否则 parity 会断。建议在统一 helper
+    中做"写入侧单一 key、读侧 alias resolve"的过渡，先加 telemetry 观察兼容性，再清除冗余别名写入。
+
+    已落地实现：`frontend/user-portal/src/composables/tasks/useTaskActions.ts` 的 submitApprove 构造 variables 时，
+    `__subTables__` 改为 canonical 仅写 bindingId key；当存在数字 key 时会先清理历史别名 key，再按 bindingId 覆写当前
+    `subTableBindings` 数据，不再写 `tableName` / `normalizeSubTableName(tableName)` / `participants` 别名键。
+- id: "1399"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: performance
+  summary: "user-portal backend TaskProcessComponent.mergeSubTablesFromTaskInfoForMi / 相关 __subTables__ 合并逻辑只'补缺失 alias'但从不去重，alias 集合单调增长，加剧 #1398 描述的 JSONB 膨胀"
+  detail: |
+    现象：handleApproval 路径里 mergeSubTablesFromTaskInfoForMi 把任务返回的 __subTables__ 合并进
+    processInstance.variables 时使用 `if (!merged.containsKey(k)) merged.put(k, e.getValue())` 逻辑——
+    既不覆盖已有同名 key，也从不识别 "binding-id ↔ table-name ↔ normalized-name" 之间的等价关系。
+    一旦某个 alias 进入存储就永远保留，后续任何完成动作只会"加新别名 / 不去重"，使 alias 集合单调增长。
+    与 #1398 联动：前端每次完成都把同一份数据以 4–5 个 alias 提交，后端合并器逐步把更多 alias 累加进
+    存储；多实例子任务循环若干轮后，__subTables__ 自身就能达到 MB 级（即使不算 _snapshot_）。
+    建议修复：在合并前先 resolve alias 等价类（用 TableBinding 元数据：bindingId 为主 key，tableName /
+    normalizedName 作为派生 alias 仅供读侧解析），合并时只写 canonical key；读侧若仍需 alias resolve，
+    在 helper 层用 metadata fallback 实现，而非把 alias 落到 JSONB。
+
+    已落地实现：在 `backend/user-portal/.../TaskProcessComponent.mergeSubTablesFromTaskInfoForMi` 合并完成后，
+    若同一层级存在数字 key（bindingId），则仅保留数字 key，并递归清理行内 nested `__subTables__` 的非数字别名 key，
+    从根源阻断 alias 集合单调增长。
+    爆炸半径：所有触发 mergeSubTablesFromTaskInfoForMi 的子任务完成路径；与 #1398 同根，宜一并设计。
+- id: "1400"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "user-portal My Request 画布已放置的 sub-table 因同时是 Link Form 目标被 filterLinkOnlyStandaloneSubTableFields 误删（mirrorTodo + tableOnly）"
+  detail: |
+    根因：shouldSuppressStandaloneSubTableInInitiatorRequest 对 native tableBindings 中的 binding 若出现在
+    collectAllLinkFormTargetBindingIds（含 subListViews 自引用 linkForm 列）且 initiatorRequest 为 mirrorTodo，
+    仍按 mirrorTodo !== tableOnly 判定 suppress，导致 applyLinkOnlySubTableFieldFilterToMainForm 从 formFields
+    移除画布 subTable 节点（Transaction Assignment binding 281 等）。
+    修复：nativeBindingIds 命中时直接 return false，画布放置优先于 link-only 去重逻辑。
+    路径：formRendererHelpers.ts + linkOnlySubTableFields.test.ts。
+- id: "1401"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "MI Transaction Investigation 未带出 Case Number / Legal Hold（elCard 内字段被 isolateMiSubTaskData 剥离）"
+  detail: |
+    根因：流程变量已有 case_number/legal_hold（如 344 / true），但 HMDC 表单将字段放在 elCard 子节点；
+    getCurrentFormFieldKeys 只收集顶层 key，MI isolateMiSubTaskData 重建 formData 时丢弃 card 内标量。
+    修复：formRendererHelpers.collectLeafFormFieldKeys 递归 card；useTaskForm、tasks/detail、applications/detail 统一使用。
+    路径：formRendererHelpers.ts、useTaskForm.ts、tasks/detail.vue、applications/detail.vue、collectLeafFormFieldKeys.test.ts。
+- id: "1404"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: bug
+  summary: "user-portal TaskQueryComponent 任务统计 todayCompletedTasks 固定为 0"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java"
+  fix: "getTaskStatistics 通过 workflowEngineClient.getCompletedTasks(userId, 0, 1, null, todayStart, now) 读取 totalElements，与 DashboardComponent.fetchCompletedTasksTotalInRange 同源。"
+- id: "1403"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: quality
+  summary: "admin-center SystemMonitorComponent 业务/应用指标仍为随机 mock（mock=true）"
+  file: "backend/admin-center/src/main/java/com/admin/component/SystemMonitorComponent.java; backend/admin-center/src/main/java/com/admin/repository/SystemLogRepository.java"
+  fix: |
+    collectBusinessMetrics 改为真实聚合：onlineUsers（15 分钟内登录用户）、activeProcesses（DEPLOYED FunctionUnit 数量）、
+    pendingTasks（PENDING 权限申请数）、completedTasksToday（当日 APPROVED 权限申请数）；mock=false。
+    collectApplicationMetrics 改为日志聚合：最近 1 分钟 ACCESS 请求换算 QPS、最近 5 分钟 ERROR 比例、最近 5 分钟平均响应时间；
+    cacheHitRate 改为确定性派生值（100 - errorRate），不再使用 Random。
