@@ -38,6 +38,39 @@ frontend 服务之后 **必须** 用 Playwright 截图验证，不得仅凭单�
 
    登录变量（可选）：`LOGIN_USER`、`LOGIN_PASS`（默认 `developer` / `password`）。
 
+### 登录方式：一律用 developer/password 直连，**不要走 SSO**
+
+自己写临时截图脚本时，用 `scripts/playwright-login.mjs` 里的**密码直连**函数，
+不要用 `loginViaUnifiedSso`——统一 SSO 登录页在 headless 下不可靠（会走到
+`/sso/callback` 后又弹回 `/login`，会话建不起来，白跑一轮 build）。
+
+```js
+import { loginViaPortalPassword, loginViaDwPassword } from './scripts/playwright-login.mjs'
+// portal：默认 developer / password
+await loginViaPortalPassword(page)
+// 多 UBR 用户要落在指定 workspace（否则默认取第一条，可能不是复现问题那条）
+await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
+// developer workstation
+await loginViaDwPassword(page)
+```
+
+登录端点各不相同，别混用：
+
+| app | 端点 | localStorage key |
+|---|---|---|
+| portal | `POST /api/portal/auth/login` | `ws_up_user` / `ws_up_user_id` |
+| dw | `POST /api/v1/auth/login` | `ws_dw_user` / `ws_dw_user_id` |
+
+两者 token 都走 httpOnly cookie，脚本只需写 user 记录。
+
+- 端点是 `POST /api/portal/auth/login`（**不是** `/portal/api/v1/auth/login`，那个会 401）。
+- 多 UBR 会先返回 `WORKSPACE_CONTEXT_REQUIRED` + `workspaceContexts`，helper 已自动带
+  `workspaceBusinessUnitId`/`workspaceRoleId` 重试；`buCode`/`roleCode` 用来挑具体那条。
+- 查可用组合：`select bu.code, r.code from sys_user_business_unit_roles ubr
+  join sys_users u on u.id=ubr.user_id join sys_business_units bu on bu.id=ubr.business_unit_id
+  join sys_roles r on r.id=ubr.role_id where u.username='developer';`
+- DW（`/dev`）headless SSO 同样不可靠，见规则 `dw-headless-sso-login-blocked`。
+
 3. PNG 落在 `frontend/<app>/verification-screenshots/`，命名 `{YYYY-MM-DD}_{slug}.png` —— **禁止验证后删除**。
 4. 在对话 / issue / PR 中写明截图绝对路径，便于人工对照 Designer Form Preview。
 

@@ -312,18 +312,40 @@ BOOT-INF/
 /*.json
 !package.json
 !tsconfig.json
-# Kiro local artifacts — ignore by default; commit generated AI guidance mirrors
+# ── AI guidance：唯一真源是 .cursor/rules + .cursor/skills ──────────────────
+# .claude / .kiro / .github 下的规则与技能都是 sync-cursor-rules.mjs 生成的镜像，
+# 一律不入库；改规则只改 .cursor/**，各工具本地跑同步脚本自行生成。
+# 例外：生成器本体（sync-cursor-rules.mjs）与触发它的 SessionStart hook 配置
+# （settings.json）不是镜像而是真源的一部分，显式放行；个人配置仍走 settings.local.json。
+# .kiro：只排生成物（steering/ + skills/）；specs/ 与 issues* 是手写内容，保留入库。
+# issue-tracking.md 是手写 steering（同步脚本的 keep hand-written 名单里），
+# 生成不出来，必须入库，否则新克隆会丢。
 .kiro/*
+!.kiro/specs/
+!.kiro/specs/**
+!.kiro/issues.md
+!.kiro/issues/
+!.kiro/issues/**
 !.kiro/steering/
-!.kiro/steering/**
-!.kiro/skills/
-!.kiro/skills/**
+.kiro/steering/*
+!.kiro/steering/issue-tracking.md
+# .github：只排生成物（copilot-instructions.md / instructions/ / skills/）。
+# workflows/ 是 CI，hooks/sync-ai-guidance.json 是 Copilot 的同步触发器（真源，
+# 且被 ai-guidance-sync.yml 断言存在），PR 模板同理，都保留入库。
+.github/*
+!.github/workflows/
+!.github/workflows/**
+!.github/hooks/
+!.github/hooks/**
+!.github/pull_request_template.md
+.claude/*
+!.claude/scripts/
+!.claude/scripts/**
+!.claude/settings.json
+.claude/settings.local.json
 !documentation/*.md
 # Windows 上 core.ignorecase 会导致 *.MD 误匹配小写 .md；显式放行版本库文档目录
 !docs/**/*.md
-# Claude Code personal settings
-.claude/settings.local.json
-# .claude/skills 由 sync-cursor-rules.mjs 从 .cursor/skills 镜像；入库以便 CI 防漂移
 # Local ad-hoc Playwright dumps / underscore-prefixed scratch verify scripts (not product)
 frontend/scripts/_*.json
 frontend/scripts/_*.mjs

@@ -2,20 +2,21 @@ name: AI guidance drift check
 
 # Ensures Copilot / Kiro / Claude native copies stay in sync with Cursor
 # sources (.cursor/rules + .cursor/skills). Fail if regenerating produces a diff.
+#
+# 唯一真源是 .cursor/**；各工具的生成副本一律 gitignore，只在本地由 SessionStart /
+# folderOpen hook 生成。因此本 job 分两段：入库的 CLAUDE.md 直接 git diff；未入库的
+# 镜像走沙箱重新生成再逐字节比对（见下面各步注释）。
 
 on:
   push:
     paths:
+      # 只列入库路径：镜像（copilot-instructions.md / instructions/ / skills/ /
+      # steering/）已 gitignore，push 里永远不会出现，列了也触发不了。
       - '.cursor/rules/**'
       - '.cursor/skills/**'
       - '.claude/scripts/sync-cursor-rules.mjs'
       - '.claude/settings.json'
-      - '.github/copilot-instructions.md'
-      - '.github/instructions/**'
-      - '.github/skills/**'
       - '.github/hooks/**'
-      - '.kiro/steering/**'
-      - '.kiro/skills/**'
       - '.vscode/tasks.json'
       - 'CLAUDE.md'
       - 'frontend/CLAUDE.md'
@@ -24,16 +25,13 @@ on:
       - '.github/workflows/ai-guidance-sync.yml'
   pull_request:
     paths:
+      # 只列入库路径：镜像（copilot-instructions.md / instructions/ / skills/ /
+      # steering/）已 gitignore，push 里永远不会出现，列了也触发不了。
       - '.cursor/rules/**'
       - '.cursor/skills/**'
       - '.claude/scripts/sync-cursor-rules.mjs'
       - '.claude/settings.json'
-      - '.github/copilot-instructions.md'
-      - '.github/instructions/**'
-      - '.github/skills/**'
       - '.github/hooks/**'
-      - '.kiro/steering/**'
-      - '.kiro/skills/**'
       - '.vscode/tasks.json'
       - 'CLAUDE.md'
       - 'frontend/CLAUDE.md'
@@ -114,25 +112,83 @@ jobs:
       - name: Regenerate native copies
         run: node .claude/scripts/sync-cursor-rules.mjs
 
-      - name: Fail on uncommitted drift
+      # CLAUDE.md 仍然入库（它们是 @import 索引，不是镜像），所以这里照旧比 diff。
+      - name: Fail on uncommitted CLAUDE.md drift
         run: |
           set -euo pipefail
           if ! git diff --exit-code -- \
             CLAUDE.md \
             frontend/CLAUDE.md \
             backend/CLAUDE.md \
-            deploy/CLAUDE.md \
-            .github/copilot-instructions.md \
-            .github/instructions \
-            .github/skills \
-            .claude/skills \
-            .kiro/steering \
-            .kiro/skills
+            deploy/CLAUDE.md
           then
             echo ''
-            echo 'ERROR: Cursor sources and generated AI guidance copies have drifted.'
+            echo 'ERROR: CLAUDE.md files drifted from .cursor/rules.'
             echo 'Fix: run  node .claude/scripts/sync-cursor-rules.mjs  and commit the result.'
+            echo 'Only edit .cursor/rules and .cursor/skills — never hand-edit generated regions.'
+            exit 1
+          fi
+          echo 'OK: CLAUDE.md in sync'
+
+      # 镜像（copilot-instructions.md / instructions/ / skills/ / steering/）已不入库，
+      # 对它们跑 `git diff` 恒为空 —— 那样的检查是空转。改为：把真源复制到沙箱里独立
+      # 重新生成一遍，再和工作区现有产物逐字节比对。这样既不要求镜像入库，又能抓住
+      # "有人手改了生成副本" 和 "改了 .cursor 但没重跑同步" 两种漂移。
+      - name: Fail on generated-mirror drift (sandbox regenerate)
+        run: |
+          set -euo pipefail
+          SB="$(mktemp -d)"
+          mkdir -p "$SB/.claude" "$SB/frontend" "$SB/backend" "$SB/deploy"
+          cp -r .cursor "$SB/.cursor"
+          cp -r .claude/scripts "$SB/.claude/scripts"
+          cp CLAUDE.md "$SB/"
+          cp frontend/CLAUDE.md "$SB/frontend/"
+          cp backend/CLAUDE.md "$SB/backend/"
+          cp deploy/CLAUDE.md "$SB/deploy/"
+          # 带上现有产物：同步脚本靠 .synced-from-cursor 印记区分"生成"与"手写"，
+          # 少了它会把手写技能/steering 当成孤儿删掉，从而误报漂移。
+          for p in .claude/skills .github/skills .github/instructions \
+                   .github/copilot-instructions.md .kiro/steering .kiro/skills; do
+            [ -e "$p" ] || continue
+            mkdir -p "$SB/$(dirname "$p")"
+            cp -r "$p" "$SB/$p"
+          done
+
+          node "$SB/.claude/scripts/sync-cursor-rules.mjs" > /dev/null
+
+          # 逐"文件"比对，不能逐"目录"：
+          #   - CI 的 checkout 不含镜像（已 gitignore），无物可比 = 正常，不是漂移；
+          #   - 但 .kiro/steering/ 目录本身会存在（issue-tracking.md 是入库的手写
+          #     steering），若按目录 diff，沙箱里 31 个生成文件 vs 工作区 1 个，会被
+          #     误判成漂移。只有"工作区里确实存在的那个文件"才拿去和干净重生成比。
+          # 手写产物（.synced-from-cursor 印记之外的文件，如 issue-tracking.md、
+          # frontend-design 技能）不由脚本生成，沙箱里不会有对应文件 —— 跳过，不算漂移。
+          rc=0
+          checked=0
+          list_generated() {
+            find .claude/skills .github/skills .github/instructions \
+                 .kiro/steering .kiro/skills -type f 2>/dev/null || true
+            [ -f .github/copilot-instructions.md ] && echo .github/copilot-instructions.md
+            return 0
+          }
+          while IFS= read -r f; do
+            [ -n "$f" ] && [ -f "$f" ] || continue
+            [ -f "$SB/$f" ] || continue
+            checked=$((checked + 1))
+            diff -u "$SB/$f" "$f" || rc=1
+          done < <(list_generated)
+
+          rm -rf "$SB"
+          if [ "$checked" -eq 0 ]; then
+            echo 'OK: no generated mirrors in the checkout (expected — they are gitignored)'
+            exit 0
+          fi
+          echo "compared $checked generated file(s)"
+          if [ "$rc" -ne 0 ]; then
+            echo ''
+            echo 'ERROR: generated AI guidance mirrors drifted from .cursor sources.'
+            echo 'Fix: run  node .claude/scripts/sync-cursor-rules.mjs'
             echo 'Only edit .cursor/rules and .cursor/skills — never hand-edit generated copies.'
             exit 1
           fi
-          echo 'OK: no drift after regenerate'
+          echo 'OK: mirrors match a clean regenerate'

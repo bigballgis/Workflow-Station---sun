@@ -1,0 +1,410 @@
+# Implementation Plan: Relation Tables
+
+## 概述
+
+按照 后端共享层 → Admin Center 后端 → Admin Center 前端 → Developer Workstation 后端 → Developer Workstation 前端 → User Portal 后端 → User Portal 前端 的顺序，逐步实现 Relation Tables 功能。后端使用 Java (Spring Boot + JPA)，前端使用 Vue 3 + TypeScript + Element Plus。
+
+## Tasks
+
+- [x] 1. 后端共享层（platform-common）：定义共享枚举和 DTO
+  - [x] 1.1 创建 RelationTableStatus 枚举和 RelationDataType 枚举
+    - 在 `backend/platform-common/src/main/java/com/platform/common/enums/` 下创建 `RelationTableStatus.java`（DRAFT, DEPLOYED, ROLLBACK）
+    - 在同目录下创建 `RelationDataType.java`（VARCHAR, INTEGER, BIGINT, DECIMAL, BOOLEAN, DATE, TIMESTAMP, TEXT）
+    - 在同目录下创建 `RelationAuditAction.java`（ADD, UPDATE, DELETE, STATUS_CHANGE）
+    - _需求: 2.3, 3.5, 13.1-13.4_
+  - [x] 1.2 创建共享 DTO 类
+    - 在 `backend/platform-common/src/main/java/com/platform/common/dto/` 下创建 `RelationTableDTO.java`（id, tableName, displayName, status, enabled, portalVisible, currentVersion 等）
+    - 创建 `RelationFieldDTO.java`（fieldName, dataType, length, nullable, isPrimaryKey, defaultValue, comment, sortOrder）
+    - 创建 `RelationTableDataRowDTO.java`（用于动态表数据的通用行 DTO，使用 Map<String, Object>）
+    - _需求: 2.2, 3.4, 6.2_
+
+- [x] 2. Checkpoint - 确保共享层编译通过
+  - 确保 platform-common 模块编译通过，如有问题请向用户确认。
+
+- [x] 3. Admin Center 后端：实体与数据库迁移
+  - [x] 3.1 创建 Relation Table 相关 JPA 实体
+    - 在 `backend/admin-center/src/main/java/com/admin/entity/` 下创建 `RelationTableDefinition.java`（参照设计文档中的实体定义，包含 @Entity、@Table、审计字段、与 RelationFieldDefinition 的 @OneToMany 关系）
+    - 创建 `RelationFieldDefinition.java`（字段定义实体，包含 fieldName, dataType, length, nullable, isPrimaryKey, defaultValue, comment, sortOrder）
+    - 创建 `RelationTableVersion.java`（版本快照实体，包含 versionNumber, snapshotData JSON, deployedBy, deployedAt）
+    - 创建 `RelationTableAccess.java`（访问权限实体，参照 FunctionUnitAccess 模式，包含 tableId, targetType, targetId）
+    - 创建 `RelationTableAuditLog.java`（审计日志实体，包含 tableId, tableName, rowId, action, oldValue, newValue, operatorId, operatorName, operatedAt）
+    - _需求: 3.4, 5.2, 12.1, 13.1-13.4_
+  - [x] 3.2 创建 Flyway 数据库迁移脚本
+    - 在 `backend/admin-center/src/main/resources/db/migration/admin-center/` 下创建迁移脚本
+    - 包含 rt_table_definitions、rt_field_definitions、rt_table_versions、rt_table_access、rt_audit_logs 五张表的 DDL
+    - 为 rt_audit_logs 创建索引（table_id, action, operator_id, operated_at）
+    - _需求: 3.4, 5.2, 12.1, 13.5_
+
+- [x] 4. Admin Center 后端：Repository 层
+  - [x] 4.1 创建 Repository 接口
+    - 在 `backend/admin-center/src/main/java/com/admin/repository/` 下创建 `RelationTableDefinitionRepository.java`（包含 findByTableName、existsByTableName 等方法）
+    - 创建 `RelationFieldDefinitionRepository.java`（包含 findByTableDefinitionId 等方法）
+    - 创建 `RelationTableVersionRepository.java`（包含 findByTableDefinitionIdOrderByVersionNumberDesc 等方法）
+    - 创建 `RelationTableAccessRepository.java`（包含 findByTableId、findByTargetId 等方法）
+    - 创建 `RelationTableAuditLogRepository.java`（包含按时间、操作人、操作类型过滤的查询方法）
+    - _需求: 2.1, 3.6, 5.6, 12.2, 13.5_
+
+- [x] 5. Admin Center 后端：表结构 CRUD Service 与 Controller
+  - [x] 5.1 创建异常类
+    - 在 `backend/admin-center/src/main/java/com/admin/exception/` 下创建 `RelationTableNotFoundException.java`、`RelationTableNameDuplicateException.java`、`RelationTableDeploymentException.java`、`RelationTableBindingExistsException.java`
+    - 创建 `RelationTableExceptionHandler.java`（@RestControllerAdvice，处理上述异常并返回对应 HTTP 状态码）
+    - _需求: 3.7, 5.6_
+  - [x] 5.2 创建请求/响应 DTO
+    - 在 `backend/admin-center/src/main/java/com/admin/dto/request/` 下创建 `CreateRelationTableRequest.java`（tableName, displayName, description, fieldDefinitions 列表）
+    - 创建 `UpdateRelationTableRequest.java`、`RollbackRequest.java`（targetVersionId）
+    - 在 `backend/admin-center/src/main/java/com/admin/dto/response/` 下创建 `RelationTableResponse.java`、`RelationTableVersionResponse.java`
+    - _需求: 3.2, 4.2, 5.4_
+  - [x] 5.3 实现 RelationTableStructureService
+    - 在 `backend/admin-center/src/main/java/com/admin/service/` 下创建 `RelationTableStructureService.java` 接口
+    - 在 `backend/admin-center/src/main/java/com/admin/service/impl/` 下创建 `RelationTableStructureServiceImpl.java`
+    - 实现 createTable（验证表名唯一性、保存表定义和字段定义、状态设为 DRAFT）
+    - 实现 updateTable（更新基本信息和字段定义、状态设为 DRAFT）
+    - 实现 deleteTable（检查是否有绑定关系，有则拒绝删除）
+    - 实现 getTableList、getTableById、toggleEnabled、togglePortalVisibility
+    - _需求: 2.1-2.7, 3.1-3.7, 4.1-4.5, 7.1-7.4_
+  - [x] 5.4 编写 RelationTableStructureService 单元测试
+    - 在 `backend/admin-center/src/test/java/com/admin/` 下创建 `RelationTableStructureServiceTest.java`
+    - 测试创建表（正常流程、表名重复）、更新表、删除表（正常、有绑定时拒绝）、启用/禁用、门户可见性开关
+    - _需求: 3.1-3.7, 4.1-4.5, 7.1-7.4_
+  - [x] 5.5 编写表名唯一性属性测试
+    - **Property 2: 表名唯一性约束**
+    - 使用 jqwik 生成随机表名，验证创建两个同名表时第二个被拒绝
+    - **验证: 需求 3.6**
+  - [x] 5.6 编写表定义更新持久化属性测试
+    - **Property 3: 表定义更新持久化**
+    - 使用 jqwik 生成随机更新请求，验证保存后读取数据一致
+    - **验证: 需求 4.2, 4.4**
+  - [x] 5.7 创建 RelationTableStructureController
+    - 在 `backend/admin-center/src/main/java/com/admin/controller/` 下创建 `RelationTableStructureController.java`
+    - 实现 POST/GET/PUT/DELETE /api/relation-tables/structures 系列端点
+    - 实现 PUT /{id}/enabled、PUT /{id}/portal-visibility 端点
+    - _需求: 2.1-2.7, 3.1-3.7, 4.1-4.5, 7.1-7.4_
+
+- [x] 6. Admin Center 后端：部署与回滚 Service
+  - [x] 6.1 实现 RelationTableDeployService
+    - 在 `backend/admin-center/src/main/java/com/admin/service/` 下创建 `RelationTableDeployService.java` 接口
+    - 在 `backend/admin-center/src/main/java/com/admin/service/impl/` 下创建 `RelationTableDeployServiceImpl.java`
+    - 实现 deploy 方法：读取当前表定义 → 生成 DDL（CREATE TABLE / ALTER TABLE）→ 执行 DDL → 创建版本快照 → 更新状态为 DEPLOYED → 更新 currentVersion
+    - 实现 rollback 方法：读取目标版本快照 → 用快照数据覆盖当前表定义和字段定义 → 生成新版本号 → 更新状态为 ROLLBACK
+    - 实现 getVersionHistory 方法
+    - DDL 执行失败时回滚事务并抛出 RelationTableDeploymentException
+    - _需求: 5.1-5.6_
+  - [x] 6.2 编写部署与回滚单元测试
+    - 创建 `RelationTableDeployServiceTest.java`
+    - 测试首次部署（CREATE TABLE）、增量部署（ALTER TABLE ADD/DROP/MODIFY COLUMN）、部署失败回滚、回滚到历史版本
+    - _需求: 5.1-5.6_
+  - [x] 6.3 编写部署版本递增属性测试
+    - **Property 7: 部署版本递增与快照**
+    - 使用 jqwik 生成随机表定义，验证部署后版本号 = currentVersion + 1 且快照数据一致
+    - **验证: 需求 5.2**
+  - [x] 6.4 编写回滚恢复属性测试
+    - **Property 8: 回滚恢复表定义**
+    - 使用 jqwik 生成随机版本历史，验证回滚后字段列表与目标版本快照一致
+    - **验证: 需求 5.4**
+  - [x] 6.5 编写部署失败回滚属性测试
+    - **Property 17: 部署失败回滚**
+    - 使用 jqwik 生成无效 DDL 场景，验证部署失败后状态和版本号不变
+    - **验证: 需求 5.6**
+  - [x] 6.6 在 RelationTableStructureController 中添加部署和回滚端点
+    - 实现 POST /{id}/deploy、POST /{id}/rollback、GET /{id}/versions 端点
+    - _需求: 5.1-5.6_
+
+- [x] 7. Admin Center 后端：表数据管理 Service 与 Controller
+  - [x] 7.1 实现 RelationTableDataService
+    - 在 `backend/admin-center/src/main/java/com/admin/service/` 下创建 `RelationTableDataService.java` 接口和实现类
+    - 实现 getDeployedTables（仅返回 DEPLOYED 状态的表）
+    - 实现 queryData（根据已部署的最新表结构动态查询物理表数据，支持分页和搜索过滤）
+    - 实现 addData、updateData、deleteData、changeStatus（Active/Inactive）
+    - 每个数据变更操作调用审计日志记录
+    - _需求: 6.1-6.5_
+  - [x] 7.2 实现 RelationTableAuditService
+    - 创建 `RelationTableAuditService.java` 接口和实现类
+    - 实现 logAdd、logUpdate、logDelete、logStatusChange 方法
+    - 实现 queryAuditLogs（支持按操作时间、操作人、操作类型过滤）
+    - _需求: 13.1-13.5_
+  - [x] 7.3 编写表数据管理单元测试
+    - 创建 `RelationTableDataServiceTest.java`
+    - 测试仅展示已部署表、数据 CRUD、分页、搜索过滤
+    - _需求: 6.1-6.5_
+  - [x] 7.4 编写审计日志完整性属性测试
+    - **Property 9: 审计日志完整性**
+    - 使用 jqwik 生成随机数据操作，验证每次操作都生成正确的审计日志
+    - **验证: 需求 13.1-13.4**
+  - [x] 7.5 编写审计日志过滤属性测试
+    - **Property 16: 审计日志过滤正确性**
+    - 使用 jqwik 生成随机过滤条件，验证返回结果满足过滤条件
+    - **验证: 需求 13.5**
+  - [x] 7.6 编写仅展示已部署表属性测试
+    - **Property 15: 数据列表仅展示已部署表**
+    - 使用 jqwik 生成随机表状态组合，验证仅返回 DEPLOYED 状态的表
+    - **验证: 需求 6.1**
+  - [x] 7.7 编写分页数据大小约束属性测试
+    - **Property 19: 分页数据大小约束**
+    - 使用 jqwik 生成随机分页参数，验证返回数据条数不超过 pageSize
+    - **验证: 需求 6.5**
+  - [x] 7.8 创建 RelationTableDataController
+    - 在 `backend/admin-center/src/main/java/com/admin/controller/` 下创建 `RelationTableDataController.java`
+    - 实现 GET /api/relation-tables/data/tables、GET/POST/PUT/DELETE /api/relation-tables/data/{tableId} 系列端点
+    - _需求: 6.1-6.5_
+
+- [x] 8. Admin Center 后端：权限配置 Service 与 Controller
+  - [x] 8.1 实现 RelationTableAccessService
+    - 创建 `RelationTableAccessService.java` 接口和实现类
+    - 实现 getAccessConfig、addAccess、batchSetAccess、removeAccess 方法
+    - 实现 hasAccess 方法（根据用户 Business Role 判断是否有权限访问某个表）
+    - 参照 FunctionUnitAccessService 的模式实现
+    - _需求: 12.1-12.4_
+  - [x] 8.2 编写权限过滤属性测试
+    - **Property 14: 用户权限过滤**
+    - 使用 jqwik 生成随机用户角色组合，验证可见表 = portal_visible=true ∩ 用户有权限的表
+    - **验证: 需求 8.2, 12.4**
+  - [x] 8.3 在 RelationTableStructureController 中添加权限配置端点
+    - 实现 GET/POST/PUT/DELETE /api/relation-tables/structures/{id}/access 系列端点
+    - _需求: 12.1-12.4_
+
+- [x] 9. Checkpoint - 确保 Admin Center 后端编译通过并且所有测试通过
+  - 确保 admin-center 模块编译通过，所有测试通过，如有问题请向用户确认。
+
+- [x] 10. Admin Center 前端：API 层与路由配置
+  - [x] 10.1 创建 Relation Table API 模块
+    - 在 `frontend/admin-center/src/api/` 下创建 `relationTable.ts`
+    - 封装表结构 CRUD、部署、回滚、版本历史、权限配置、表数据管理等所有 API 调用
+    - _需求: 2.1-2.7, 3.1-3.7, 5.1-5.6, 6.1-6.5, 12.1-12.4_
+  - [x] 10.2 配置路由和菜单
+    - 在 `frontend/admin-center/src/router/index.ts` 中添加 Relation Tables 路由（/relation-tables/structure 和 /relation-tables/data）
+    - 在侧边栏菜单配置中添加 "Relation Tables" 一级菜单及 "Table Structure"、"Table Data" 两个子菜单
+    - _需求: 1.1-1.5_
+
+- [x] 11. Admin Center 前端：表结构管理页面
+  - [x] 11.1 实现表结构列表页 TableStructureList
+    - 在 `frontend/admin-center/src/views/relation-table/structure/index.vue` 创建表结构列表页
+    - 使用 el-table 展示 Name、Display Name、Version、Status、Enable、Portal Visibility、Updated At、Updated By、Actions 列
+    - Status 列使用 el-tag 展示 DRAFT/DEPLOYED/ROLLBACK 状态
+    - Enable 列使用 el-switch 控制启用/禁用
+    - Portal Visibility 列使用 el-switch 控制门户可见性
+    - Actions 列提供 Access、Deploy、Versions、Rollback、Delete 按钮
+    - _需求: 2.1-2.7, 7.1-7.4_
+  - [x] 11.2 实现创建/编辑表结构表单 TableStructureForm
+    - 在 `frontend/admin-center/src/views/relation-table/structure/form.vue` 创建表单页
+    - 包含 Table Name、Display Name、Description 基本信息输入
+    - 实现动态字段列表（可添加/删除字段行），每行包含 Field Name、Data Type（下拉选择）、Length、Nullable（开关）、Primary Key（开关）、Default Value、Comment
+    - 提交时调用创建/更新 API
+    - _需求: 3.1-3.7, 4.1-4.5_
+  - [x] 11.3 实现版本历史对话框 VersionDialog
+    - 在 `frontend/admin-center/src/views/relation-table/structure/components/VersionDialog.vue` 创建版本历史对话框
+    - 展示版本号、部署人、部署时间、变更日志列表
+    - 支持选择某个版本执行回滚操作
+    - _需求: 5.2, 5.4_
+  - [x] 11.4 实现 Business Role 配置对话框 AccessConfigDialog
+    - 在 `frontend/admin-center/src/views/relation-table/structure/components/AccessConfigDialog.vue` 创建权限配置对话框
+    - 参照 FunctionUnit 的 Access 配置对话框模式，支持添加/删除 Business Role 访问权限
+    - _需求: 12.1-12.4_
+
+- [x] 12. Admin Center 前端：表数据管理页面
+  - [x] 12.1 实现表数据列表页 TableDataList
+    - 在 `frontend/admin-center/src/views/relation-table/data/index.vue` 创建表数据管理页
+    - 左侧展示已部署的表列表，右侧根据选中表的已部署表结构动态渲染数据列表
+    - 提供 Add、搜索过滤、分页功能
+    - 每行数据提供 Edit、Delete、Active/Inactive 操作
+    - _需求: 6.1-6.5_
+  - [x] 12.2 实现数据新增/编辑对话框 DataFormDialog
+    - 在 `frontend/admin-center/src/views/relation-table/data/components/DataFormDialog.vue` 创建数据表单对话框
+    - 根据表结构动态渲染表单字段（根据字段类型选择合适的输入组件）
+    - _需求: 6.3_
+
+- [x] 13. Checkpoint - 确保 Admin Center 前端编译通过
+  - 确保 admin-center 前端编译通过，如有问题请向用户确认。
+
+- [x] 14. Developer Workstation 后端：实体与 Repository
+  - [x] 14.1 创建 Relation View 和 Lookup 相关 JPA 实体
+    - 在 `backend/developer-workstation/src/main/java/com/developer/entity/` 下创建 `RelationViewConfig.java`（bindingId, tableId, fieldConfig JSON, viewFields 列表）
+    - 创建 `RelationViewField.java`（viewConfigId, fieldName, displayLabel, columnWidth, sortOrder, visible）
+    - 创建 `RelationLookupConfig.java`（formId, componentId, viewConfigId, tableId, searchFields JSON, displayField）
+    - _需求: 9.3-9.6, 10.3-10.5_
+  - [x] 14.2 创建 Repository 接口
+    - 在 `backend/developer-workstation/src/main/java/com/developer/repository/` 下创建 `RelationViewConfigRepository.java`（findByBindingId, findByTableId）
+    - 创建 `RelationViewFieldRepository.java`（findByViewConfigIdOrderBySortOrderAsc）
+    - 创建 `RelationLookupConfigRepository.java`（findByFormIdAndComponentId, findByFormId）
+    - _需求: 9.3-9.8, 10.1-10.5_
+
+- [x] 15. Developer Workstation 后端：Table Binding 与 View 配置 Service
+  - [x] 15.1 实现 RelationTableBindingService
+    - 在 `backend/developer-workstation/src/main/java/com/developer/service/` 下创建 `RelationTableBindingService.java` 接口和实现类
+    - 实现 getAvailableTables（查询所有 DEPLOYED 状态的 Relation Table）
+    - 实现 bindRelationTable（创建 FormTableBinding 记录，bindingType=RELATED，同时自动创建 RelationViewConfig）
+    - 实现 unbindRelationTable（删除绑定记录，同步删除 RelationViewConfig 及其 RelationViewField）
+    - 实现 getBindings（获取当前 Form 的 Relation Table 绑定列表）
+    - _需求: 9.1-9.3, 9.7_
+  - [x] 15.2 实现 RelationViewService
+    - 创建 `RelationViewService.java` 接口和实现类
+    - 实现 getViewConfig（获取 View 配置，包含已选字段列表）
+    - 实现 saveViewConfig（保存 View 字段配置，包含字段名、显示标签、列宽、排序）
+    - 实现 getAvailableFields（根据 tableId 查询已部署表的所有字段列表）
+    - _需求: 9.4-9.6_
+  - [x] 15.3 编写绑定-View 生命周期同步属性测试
+    - **Property 10: 绑定-View 生命周期同步**
+    - 使用 jqwik 生成随机绑定/解绑操作，验证绑定时自动创建 ViewConfig，解绑时自动删除
+    - **验证: 需求 9.3, 9.7**
+  - [x] 15.4 编写 View 配置持久化往返属性测试
+    - **Property 11: View 配置持久化往返**
+    - 使用 jqwik 生成随机 View 字段配置，验证保存后读取数据一致
+    - **验证: 需求 9.6, 10.5**
+  - [x] 15.5 编写绑定列表仅含已部署表属性测试
+    - **Property 20: 绑定列表仅含已部署表**
+    - 使用 jqwik 生成随机表状态组合，验证可选列表仅包含 DEPLOYED 状态的表
+    - **验证: 需求 9.1**
+  - [x] 15.6 编写绑定类型为 RELATED 属性测试
+    - **Property 21: Relation Table 绑定类型为 RELATED**
+    - 使用 jqwik 验证通过 bindRelationTable 创建的绑定 bindingType 始终为 RELATED
+    - **验证: 需求 9.2**
+
+- [x] 16. Developer Workstation 后端：Lookup 配置 Service 与 Controller
+  - [x] 16.1 实现 RelationLookupService
+    - 创建 `RelationLookupService.java` 接口和实现类
+    - 实现 getLookupConfig（获取 Lookup 组件配置）
+    - 实现 saveLookupConfig（保存 Lookup 配置，包含 viewConfigId, tableId, searchFields, displayField）
+    - 实现 getBoundViews（获取当前 Form 已绑定的 Relation Table 的 View 列表，仅返回已绑定的表）
+    - _需求: 10.1-10.8_
+  - [x] 16.2 编写 Lookup 仅限已绑定表属性测试
+    - **Property 12: Lookup 仅限已绑定表**
+    - 使用 jqwik 生成随机绑定状态，验证 getBoundViews 返回的表集合 = 已绑定的 Relation Table 集合
+    - **验证: 需求 9.8, 10.2**
+  - [x] 16.3 创建 Controller 层
+    - 在 `backend/developer-workstation/src/main/java/com/developer/controller/` 下创建 `RelationTableBindingController.java`
+    - 实现 GET /api/relation-tables/available、POST/DELETE/GET /api/forms/{formId}/relation-bindings 端点
+    - 创建 `RelationTableViewController.java`
+    - 实现 GET/PUT /api/forms/{formId}/relation-views/{bindingId} 和 GET /{bindingId}/fields 端点
+    - 创建 `LookupComponentController.java`
+    - 实现 GET/PUT /api/forms/{formId}/lookup-config/{componentId} 和 GET /{componentId}/bound-views 端点
+    - _需求: 9.1-9.8, 10.1-10.8_
+
+- [x] 17. Checkpoint - 确保 Developer Workstation 后端编译通过并且所有测试通过
+  - 确保 developer-workstation 模块编译通过，所有测试通过，如有问题请向用户确认。
+
+- [x] 18. Developer Workstation 前端：API 层
+  - [x] 18.1 创建 Relation Table API 模块
+    - 在 `frontend/developer-workstation/src/api/` 下创建 `relationTable.ts`
+    - 封装获取可绑定表列表、绑定/解绑、View 配置读写、Lookup 配置读写等 API 调用
+    - _需求: 9.1-9.8, 10.1-10.8_
+
+- [x] 19. Developer Workstation 前端：绑定面板与 View 设计器
+  - [x] 19.1 实现 RelationBindingPanel 组件
+    - 在 `frontend/developer-workstation/src/components/form-designer/RelationBindingPanel.vue` 创建绑定面板
+    - 在 Manage Table Bindings 对话框中集成，展示已绑定的 Relation Table 列表
+    - 提供 Add Binding 按钮，弹出可选表列表（仅已部署的 Relation Table）
+    - 提供 Unbind 按钮，解除绑定时同步移除对应 View 页面
+    - _需求: 9.1-9.3, 9.7_
+  - [x] 19.2 实现 RelationViewDesigner 页面
+    - 在 `frontend/developer-workstation/src/views/form-designer/RelationViewDesigner.vue` 创建 View 设计器页面
+    - 绑定成功后在 subtable 标签页旁边自动生成 view 标签页
+    - 展示已绑定 Relation Table 的可用字段列表，支持勾选/取消勾选字段
+    - 支持拖拽排序、修改显示标签、设置列宽
+    - 保存时调用 View 配置保存 API
+    - _需求: 9.3-9.6_
+  - [x] 19.3 实现 LookupComponent 和 LookupConfigPanel
+    - 在 `frontend/developer-workstation/src/components/form-create/LookupComponent.vue` 创建 form-create 自定义 Lookup 组件
+    - 在 `frontend/developer-workstation/src/components/form-designer/LookupConfigPanel.vue` 创建配置面板
+    - 配置面板中仅允许选择已绑定的 Relation Table
+    - 提供 View 配置入口（点击跳转到 RelationViewDesigner）
+    - 提供 Search_Field_Config 配置（多选关联表字段）
+    - 提供 Display_Field_Config 配置（单选关联表字段）
+    - 在 Preview 模式下展示 Lookup 字段下方的 View 视图
+    - _需求: 10.1-10.8_
+
+- [x] 20. Checkpoint - 确保 Developer Workstation 前端编译通过
+  - 确保 developer-workstation 前端编译通过，如有问题请向用户确认。
+
+- [x] 21. User Portal 后端：只读数据查看与权限过滤
+  - [x] 21.1 创建 PortalRelationTableService
+    - 在 User Portal 后端（复用 platform-common 或通过 API Gateway 调用 Admin Center）创建 `PortalRelationTableService.java` 接口和实现类
+    - 实现 getVisibleTables（根据用户 Business Role 和 portal_visible 过滤可见表列表）
+    - 实现 queryTableData（只读分页查询，包含搜索过滤）
+    - 实现 exportCsv（导出当前表数据为 CSV 格式，限制最大行数）
+    - 实现 searchForLookup（根据 Search_Field_Config 指定字段进行模糊匹配，返回 Display_Field_Config 指定字段的展示值）
+    - 所有写操作（POST/PUT/DELETE）返回 403 Forbidden
+    - _需求: 8.1-8.7, 11.2-11.3_
+  - [x] 21.2 编写 Portal 可见性过滤属性测试
+    - **Property 5: Portal 可见性过滤**
+    - 使用 jqwik 生成随机表和可见性状态，验证 portal_visible=true 的表出现在列表中，false 的不出现
+    - **验证: 需求 7.2, 7.3, 7.4**
+  - [x] 21.3 编写 Portal 写操作拒绝属性测试
+    - **Property 6: Portal 写操作拒绝**
+    - 使用 jqwik 生成随机写操作请求，验证全部被拒绝且数据不变
+    - **验证: 需求 8.7, 12.5**
+  - [x] 21.4 编写 Lookup 搜索结果正确性属性测试
+    - **Property 13: Lookup 搜索结果正确性**
+    - 使用 jqwik 生成随机搜索关键字和数据，验证结果中每条数据至少有一个搜索字段包含关键字
+    - **验证: 需求 11.2, 11.3**
+  - [x] 21.5 编写 CSV 导出数据一致性属性测试
+    - **Property 18: CSV 导出数据一致性**
+    - 使用 jqwik 生成随机表数据，验证导出 CSV 解析后行数和列数据与原始数据一致
+    - **验证: 需求 8.5**
+  - [x] 21.6 创建 PortalRelationTableController
+    - 创建 `PortalRelationTableController.java`
+    - 实现 GET /api/portal/relation-tables（获取可见表列表）
+    - 实现 GET /api/portal/relation-tables/{tableId}（分页查询只读数据）
+    - 实现 GET /api/portal/relation-tables/{tableId}/export（CSV 导出）
+    - 实现 GET /api/portal/relation-tables/{tableId}/search（Lookup 搜索）
+    - _需求: 8.1-8.7, 11.2-11.3_
+
+- [x] 22. Checkpoint - 确保 User Portal 后端编译通过并且所有测试通过
+  - 确保 user-portal 后端模块编译通过，所有测试通过，如有问题请向用户确认。
+
+- [x] 23. User Portal 前端：API 层与路由配置
+  - [x] 23.1 创建 Relation Table API 模块
+    - 在 `frontend/user-portal/src/api/` 下创建 `relationTable.ts`
+    - 封装获取可见表列表、分页查询数据、CSV 导出、Lookup 搜索等 API 调用
+    - _需求: 8.1-8.7_
+  - [x] 23.2 配置路由和菜单
+    - 在 `frontend/user-portal/src/router/index.ts` 中添加 Relation Tables 路由（/relation-tables 和 /relation-tables/:tableId）
+    - 在侧边栏菜单配置中添加 "Relation Tables" 菜单项
+    - _需求: 8.1_
+
+- [x] 24. User Portal 前端：数据查看页面
+  - [x] 24.1 实现 RelationTableList 页面
+    - 在 `frontend/user-portal/src/views/relation-tables/index.vue` 创建表列表页
+    - 展示用户有权限查看的 Relation Table 列表（卡片或表格形式）
+    - 点击某个表跳转到数据查看页
+    - _需求: 8.1-8.2_
+  - [x] 24.2 实现 RelationTableData 页面
+    - 在 `frontend/user-portal/src/views/relation-tables/data.vue` 创建数据查看页
+    - 根据已部署表结构动态渲染只读数据列表
+    - 提供搜索过滤和分页功能
+    - 提供 CSV 导出按钮
+    - 不提供任何数据修改操作入口
+    - _需求: 8.2-8.7_
+
+- [x] 25. User Portal 前端：Lookup 搜索与 View 展示组件
+  - [x] 25.1 实现 LookupField 组件
+    - 在 `frontend/user-portal/src/components/lookup/LookupField.vue` 创建 Lookup 搜索字段组件
+    - 渲染为搜索框，输入关键字时调用 Lookup 搜索 API
+    - 按 Search_Field_Config 配置的字段进行模糊匹配
+    - 搜索结果列表按 Display_Field_Config 配置的字段展示
+    - 选中某条数据后触发事件通知父组件
+    - _需求: 11.1-11.3_
+  - [x] 25.2 实现 LookupViewDisplay 组件
+    - 在 `frontend/user-portal/src/components/lookup/LookupViewDisplay.vue` 创建 View 展示组件
+    - 选中数据后在 Lookup 字段下方展示对应的 View 视图
+    - View 视图的字段和布局与开发者在 Developer Workstation 中设计的 view 页面配置一致
+    - 在 Completed 页面中以只读模式展示，不支持搜索和编辑
+    - _需求: 11.4-11.6_
+  - [x] 25.3 集成 Lookup 组件到 FormRenderer
+    - 在 `frontend/user-portal/src/components/FormRenderer.vue` 中集成 LookupField 和 LookupViewDisplay
+    - 在 My Requests 新建数据时渲染 Lookup 搜索框
+    - 在 To_Do 中支持 Lookup 搜索和 View 展示
+    - 在 Completed 中以只读模式展示 View 视图
+    - _需求: 11.1-11.6_
+
+- [x] 26. Final Checkpoint - 确保所有模块编译通过并且所有测试通过
+  - 确保所有后端模块（platform-common、admin-center、developer-workstation、user-portal 后端）编译通过
+  - 确保所有前端模块（admin-center、developer-workstation、user-portal）编译通过
+  - 确保所有单元测试和属性测试通过
+  - 如有问题请向用户确认。
+
+## Notes
+
+- 标记 `*` 的任务为可选任务，可跳过以加速 MVP 交付
+- 每个任务引用了具体的需求编号以确保可追溯性
+- Checkpoint 任务确保增量验证
+- 属性测试验证通用正确性属性，单元测试验证具体示例和边界情况
+- 后端使用 Java (Spring Boot + JPA + jqwik)，前端使用 Vue 3 + TypeScript + Element Plus + Vitest
