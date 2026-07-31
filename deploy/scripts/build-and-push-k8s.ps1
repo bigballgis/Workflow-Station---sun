@@ -190,7 +190,7 @@ if (-not $SkipFrontend) {
     $needsApBuilder = (-not $UsePrebuiltFrontendDist) -and (-not $NoServiceTaskBuilder) -and
         @($selectedFrontend | Where-Object { $_.Name -eq "developer-workstation-frontend" }).Count -gt 0
     if ($NoServiceTaskBuilder) {
-        Write-Host "   WARNING: -NoServiceTaskBuilder — developer-workstation-frontend will ship WITHOUT the Automation builder; the tab reports it as unavailable. Use only where Activepieces is not deployed." -ForegroundColor Yellow
+        Write-Host "   WARNING: -NoServiceTaskBuilder — nothing in this run touches Activepieces: no workspace install, no bundle build, and any bundle already on disk is kept OUT of the image (DW's prebuild hook clears public/service-task-builder). developer-workstation-frontend ships WITHOUT the Automation builder; the tab reports it as unavailable. Use only where Activepieces is not deployed." -ForegroundColor Yellow
     }
     if ($needsApBuilder -and -not $PushOnly) {
         $apRootDir = Join-Path $ProjectRoot "activepieces"
@@ -288,6 +288,17 @@ if (-not $SkipFrontend) {
                 # Loud on purpose: whoever carried the dist in owns its freshness, and nothing
                 # else in this script can tell a current dist from a month-old one.
                 $log += "[$Name] WARNING: -UsePrebuiltFrontendDist — packing the existing dist/ as-is, no pnpm install, no vite build. Verify it matches this commit."
+                # No vite run here means DW's prebuild hook never runs either, so the SKIP
+                # variable below cannot act. A dist carried over from a host that DID build the
+                # bundle still contains it — drop it so -NoServiceTaskBuilder means the same
+                # thing on both paths. Only a build artifact is removed, never the source.
+                if ($NoBuilder -and $Name -eq "developer-workstation-frontend") {
+                    $stale = Join-Path $ContextDir "dist/service-task-builder"
+                    if (Test-Path $stale) {
+                        Remove-Item -Path $stale -Recurse -Force
+                        $log += "[$Name] -NoServiceTaskBuilder: removed the Activepieces builder bundle from the carried-over dist/ ($stale)"
+                    }
+                }
             }
             if (-not $PushOnly -and -not $UsePrebuiltDist) {
                 Push-Location $ContextDir
@@ -321,9 +332,23 @@ if (-not $SkipFrontend) {
                     # outlives a previous run in the same shell — clear it explicitly rather
                     # than merely not setting it, or -NoServiceTaskBuilder would still hard-fail
                     # after a normal run in the same session.
+                    # SERVICE_TASK_BUILDER_SKIP is the other half of -NoServiceTaskBuilder:
+                    # clearing REQUIRED only stops the hard failure, it does not stop the hook
+                    # from copying a bundle that is already on disk (activepieces/dist/ from an
+                    # earlier build, or public/service-task-builder from an earlier run) — and
+                    # then the image ships the AP builder anyway, which is exactly what this
+                    # switch is meant to leave out. SKIP makes the hook remove the destination
+                    # instead. Both variables are set explicitly in both directions: thread jobs
+                    # share the host process environment, so a previous run in the same shell
+                    # would otherwise leak its value into this one.
                     if ($Name -eq "developer-workstation-frontend") {
-                        if ($NoBuilder) { $env:SERVICE_TASK_BUILDER_REQUIRED = $null }
-                        else { $env:SERVICE_TASK_BUILDER_REQUIRED = "1" }
+                        if ($NoBuilder) {
+                            $env:SERVICE_TASK_BUILDER_REQUIRED = $null
+                            $env:SERVICE_TASK_BUILDER_SKIP = "1"
+                        } else {
+                            $env:SERVICE_TASK_BUILDER_REQUIRED = "1"
+                            $env:SERVICE_TASK_BUILDER_SKIP = $null
+                        }
                     }
                     $log += ">> [$Name] pnpm run build"
                     pnpm run build 2>&1 | ForEach-Object { $log += "[$Name] $_" }

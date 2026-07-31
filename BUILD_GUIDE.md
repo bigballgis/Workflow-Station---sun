@@ -385,12 +385,21 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 >    缺 `dist/index.html` 的服务会**单独失败**，不会打出一个空壳镜像。
 >    ⚠️ 这两个开关都把"产物新鲜度"的责任转移给拷产物的人 —— 脚本分不出今天构建的和一个月前的，
 >    只会打一行黄色 WARNING。常态发布仍应走能联网装依赖的构建机。
-> 6. **整套不部署 Activepieces 时**用 `-NoServiceTaskBuilder`：不构建 bundle，且允许 DW 的 `prebuild`
->    钩子"告警后继续"（实测：不设 `SERVICE_TASK_BUILDER_REQUIRED` 时它打 `SKIP` 并 exit 0；
->    设了则 exit 1）。产出的 DW 镜像**明确不带 Automation builder**，该标签报"builder 不可用"，
->    而不是 404 白屏。默认行为仍是 fail-closed —— 只有显式加这个开关才会放行。
->    脚本会显式清掉 `SERVICE_TASK_BUILDER_REQUIRED`：thread job 共享宿主进程环境变量，
->    同一个 shell 里先跑过一次常规发布再加这个开关，不清就仍然会硬失败。
+> 6. **整套不部署 Activepieces 时**用 `-NoServiceTaskBuilder`：这一趟构建**完全不碰 AP** ——
+>    不装 AP workspace、不构建 bundle，**并且磁盘上已有的 bundle 也不会进镜像**。
+>    机制是两个环境变量，脚本对 DW 这个服务两个方向都显式赋值（thread job 共享宿主进程环境变量，
+>    同一个 shell 里先跑过常规发布会把值漏给下一趟）：
+>    - 清掉 `SERVICE_TASK_BUILDER_REQUIRED` —— 否则缺 bundle 时 `prebuild` 硬失败（exit 1）；
+>    - 设上 `SERVICE_TASK_BUILDER_SKIP=1` —— 只清上面那个还不够：`activepieces/dist/packages/web-embed`
+>      或上一次构建留下的 `public/service-task-builder` 仍会被钩子拷进去 / 被 vite 打进 `dist/`，
+>      镜像照样带着整个 AP builder。设了它，钩子改为**删除** `public/service-task-builder` 后 exit 0。
+>      （实测三条路径：SKIP 有残留时删并 exit 0、无残留时直接 exit 0、常规运行照常拷回。
+>      被删的只是 gitignore 的副本，源 `activepieces/dist/` 不动，下次常规构建自动重建。）
+>
+>    与 `-UsePrebuiltFrontendDist` 同时用时不走 vite、钩子根本不跑，脚本改为直接从拷过来的
+>    `frontend/developer-workstation/dist/service-task-builder` 里删掉该目录，语义两条路径一致。
+>    产出的 DW 镜像**明确不带 Automation builder**，该标签报"builder 不可用"，而不是 404 白屏。
+>    默认行为仍是 fail-closed —— 只有显式加这个开关才会放行。
 
 ### 7.3 Docker 镜像构建
 

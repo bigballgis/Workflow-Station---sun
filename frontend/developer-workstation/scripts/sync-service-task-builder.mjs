@@ -18,6 +18,13 @@
  * fails in the browser (404 on /dev/service-task-builder/web.css). Set
  * SERVICE_TASK_BUILDER_REQUIRED=1 — deploy/scripts/build-and-push-k8s.ps1 does — to turn
  * the missing bundle into a hard failure at build time instead.
+ *
+ * The opposite intent — a release that deliberately leaves Activepieces out — sets
+ * SERVICE_TASK_BUILDER_SKIP=1 (build-and-push-k8s.ps1 -NoServiceTaskBuilder). Not copying
+ * is not enough there: a bundle left in public/ by an earlier normal build would be picked
+ * up by Vite regardless, so this also REMOVES the destination. public/service-task-builder
+ * is a gitignored copy — the source in activepieces/dist/ is untouched and the next normal
+ * build recreates it.
  */
 import { cp, rm, stat, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -35,6 +42,20 @@ const exists = async (p) => {
     return false;
   }
 };
+
+// Checked before SRC: the point is an image without the builder, so whether a bundle
+// happens to be lying around is irrelevant — and SKIP wins over REQUIRED rather than
+// tripping over a leftover variable from an earlier run in the same shell.
+if (process.env.SERVICE_TASK_BUILDER_SKIP) {
+  const had = await exists(DEST);
+  await rm(DEST, { recursive: true, force: true });
+  console.warn(
+    `[sync-service-task-builder] SKIP (SERVICE_TASK_BUILDER_SKIP) — not copying the ` +
+      `Activepieces builder bundle${had ? `; removed the stale copy at ${DEST}` : ''}.\n` +
+      '  This image ships WITHOUT the Automation builder; the tab reports it as unavailable.',
+  );
+  process.exit(0);
+}
 
 if (!(await exists(SRC))) {
   const howToBuild =
