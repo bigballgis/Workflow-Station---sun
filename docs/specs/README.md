@@ -93,7 +93,9 @@
 
 ## 相关文档
 
-- 现行产品设计规格：[`docs/design/`](../design/)（含 [table-design-fk-pk-requirements.md](../design/table-design-fk-pk-requirements.md)、[mi-subtask-bu-role-assignment.md](../design/mi-subtask-bu-role-assignment.md)）
+- 现行产品设计规格：**[`docs/design/README.md`](../design/README.md)**（按功能域分组的索引；含
+  [table-design-fk-pk-requirements.md](../design/table-design-fk-pk-requirements.md)、
+  [mi-subtask-bu-role-assignment.md](../design/mi-subtask-bu-role-assignment.md) 等）
 - 多实例子表排障复盘：[troubleshooting/multi-instance-subtask-fix.md](../troubleshooting/multi-instance-subtask-fix.md)
 - **问题台账（Open / Fixed / Wontfix）**：`.kiro/issues.md` + `.kiro/issues/index.yaml` —— **仍在 `.kiro/` 原地**，
   因 `.cursor/rules`（`issue-radar`、`debug-mode-docker-workflow`、`cross-cutting`）、skills 与

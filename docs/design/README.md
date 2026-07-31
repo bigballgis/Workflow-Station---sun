@@ -69,6 +69,8 @@
 ## 相关位置
 
 - **规则与技能**：`.cursor/rules/`（唯一真源）、`.cursor/skills/`；镜像见 `.claude/` `.github/` `.kiro/`
+- **功能规格（立项快照）**：[../specs/README.md](../specs/README.md) —— 需求 / 设计 / 任务三段式的历史立项记录。
+  分工：本目录是**现行契约**（改功能时以此为准），`specs/` 是**当初为什么这么做**（追溯设计意图）。
 - **架构**：[../architecture/](../architecture/)
 - **排障**：[../troubleshooting/](../troubleshooting/)
 - **数据库**：[../database/](../database/)、schema 真源为 `deploy/init-scripts/00-schema`
