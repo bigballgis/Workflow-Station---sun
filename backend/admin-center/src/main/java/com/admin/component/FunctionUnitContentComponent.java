@@ -183,12 +183,13 @@ public class FunctionUnitContentComponent {
                                 : processKey)
                         .build());
             } else if (content.getContentType() == ContentType.FORM) {
-                data = fetchLatestConfigJsonOrFallback(content, data);
+                FormDefinitionSnapshot latest = fetchLatestFormDefinitionOrFallback(content, data);
                 forms.add(FormContentDTO.builder()
                         .id(content.getId())
                         .name(content.getContentName())
                         .sourceId(content.getSourceId())
-                        .data(data)
+                        .data(latest.configJson())
+                        .formType(latest.formType())
                         .type(ContentType.FORM.name())
                         .build());
             } else if (content.getContentType() == ContentType.DATA_TABLE) {
@@ -236,30 +237,47 @@ public class FunctionUnitContentComponent {
         }
     }
 
+    private record FormDefinitionSnapshot(String configJson, String formType) {}
+
     /**
-     * For FORM content, try to fetch the latest config_json from dw_form_definitions
+     * For FORM content, try to fetch the latest config_json + form_type from dw_form_definitions
      * (the content_data may be a stale snapshot from import time).
      */
-    private String fetchLatestConfigJsonOrFallback(FunctionUnitContent content, String fallbackData) {
+    private FormDefinitionSnapshot fetchLatestFormDefinitionOrFallback(
+            FunctionUnitContent content, String fallbackData) {
         if (content.getSourceId() == null) {
-            return fallbackData;
+            return new FormDefinitionSnapshot(fallbackData, null);
         }
         try {
             Long sourceIdLong = Long.parseLong(content.getSourceId());
-            String latestConfigJson = jdbcTemplate.queryForObject(
-                    "SELECT config_json::text FROM dw_form_definitions WHERE id = ?",
-                    String.class, sourceIdLong);
-            if (latestConfigJson != null) {
-                log.info("Using latest config_json from dw_form_definitions for form sourceId={}", content.getSourceId());
-                return latestConfigJson;
+            org.springframework.jdbc.core.ResultSetExtractor<FormDefinitionSnapshot> extractor = rs -> {
+                if (!rs.next()) {
+                    return null;
+                }
+                return new FormDefinitionSnapshot(
+                        rs.getString("config_json"),
+                        rs.getString("form_type"));
+            };
+            FormDefinitionSnapshot latest = jdbcTemplate.query(
+                    """
+                            SELECT config_json::text AS config_json, form_type
+                            FROM dw_form_definitions
+                            WHERE id = ?
+                            """,
+                    extractor,
+                    sourceIdLong);
+            if (latest != null && latest.configJson() != null) {
+                log.info("Using latest config_json/form_type from dw_form_definitions for form sourceId={}",
+                        content.getSourceId());
+                return latest;
             }
         } catch (NumberFormatException e) {
             log.warn("Invalid sourceId format: {}", content.getSourceId());
         } catch (Exception e) {
-            log.warn("Could not fetch latest config_json for form sourceId={}, using content_data: {}",
+            log.warn("Could not fetch latest form definition for form sourceId={}, using content_data: {}",
                     content.getSourceId(), e.getMessage());
         }
-        return fallbackData;
+        return new FormDefinitionSnapshot(fallbackData, null);
     }
 
     /**

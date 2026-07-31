@@ -8,6 +8,7 @@ import {
 
 /**
  * Display-only mask binding for FieldRenderer text/input.
+ * Uses only this form field's own sensitiveMask — forms do not affect each other.
  * Never writes the masked string back to the model.
  */
 export function useFieldSensitiveMask(

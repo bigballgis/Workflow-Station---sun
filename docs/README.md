@@ -32,15 +32,18 @@
 
 ## 设计规格 · Design — [`design/`](./design/)
 
-| 文档 | 说明 |
+**完整清单见 [`design/README.md`](./design/README.md)**——那里按**功能域**分组
+（同一功能常有多篇：模型一篇、组件/交互一篇），并约定了文件名前缀。
+新增设计文档只需在该索引登记一次，此处不再平铺，避免两处维护、漏登记。
+
+| 功能域 | 覆盖 |
 |------|------|
-| [feature-blueprint.md](./design/feature-blueprint.md) | 1.0 功能全景蓝图（面向 2.0 的功能树） |
-| [table-design-fk-pk-requirements.md](./design/table-design-fk-pk-requirements.md) | Table Design / Relation Table：外键、主键规则、Preview↔Portal parity（PRD v1.0） |
-| [portal-bu-rbac.md](./design/portal-bu-rbac.md) | 门户：业务单元角色（UBR）、工作台上下文与权限摘要 |
-| [portal-permission-self-service.md](./design/portal-permission-self-service.md) | 门户：权限自助（申请 / 代办 / 退出、`\|C\|=0` 模式） |
-| [developer-workstation-workspace-rbac.md](./design/developer-workstation-workspace-rbac.md) | 设计器：功能单元工作区隔离（Technical Lead / Team Lead / Developer） |
-| [user-profile-information-architecture.md](./design/user-profile-information-architecture.md) | 三端个人中心 / 顶栏用户信息展示边界 |
-| [mail-monitor-and-task-due-reminder-design.md](./design/mail-monitor-and-task-due-reminder-design.md) | 邮箱监控入子表 & 任务即将过期通知技术方案 |
+| [MI 多实例子任务分派](./design/README.md#mi-多实例子任务分派) | 分派模型（BPMN 契约 / 认领池）+ Assignment Mode 组件三端渲染 |
+| [User Portal 身份与权限](./design/README.md#user-portal-身份与权限) | UBR 模型与工作台上下文 + 权限自助申请/退出 |
+| [Developer Workstation](./design/README.md#developer-workstation) | 功能单元工作区隔离（Technical Lead / Team Lead / Developer） |
+| [Table Design 建模规则](./design/README.md#table-design-建模规则) | 外键 / 主键规则 PRD |
+| [邮件与提醒](./design/README.md#邮件与提醒) | 邮箱监控入子表 & 任务过期通知（未实现） |
+| [跨端主题](./design/README.md#跨端主题) | 功能总蓝图、个人中心信息架构 |
 
 ## 功能规格 · Specs — [`specs/`](./specs/)
 

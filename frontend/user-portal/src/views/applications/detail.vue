@@ -456,7 +456,10 @@ import SubTableField from '@/components/SubTableField.vue'
 import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import { formatDate } from '@/utils/dateFormat'
-import { buildSensitiveMaskLookup } from '@/utils/sensitiveMaskLookup'
+import {
+  buildSensitiveMaskLookup,
+  parseFormConfigJsonsProcessFirst,
+} from '@/utils/sensitiveMaskLookup'
 import { createApplicationDetailState } from '@/composables/applicationDetail/useApplicationDetailState'
 import type { ApplicationDetailCtx } from '@/composables/applicationDetail/context'
 import { resolveBindingAssigneeField } from '@/composables/applicationDetail/subTableRowHelpers'
@@ -575,8 +578,14 @@ const {
   previousForms,
 } = ctx
 
-/** Mask configs for Change History (display-only; covers main + previous node forms). */
+/** Mask configs for Change History only (form stages use each form's own sensitiveMask). */
 const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({
+  formConfigJsons: [
+    ...parseFormConfigJsonsProcessFirst(ctx.cachedContentForms),
+    mainFormConfig.value,
+    selectedNodeForm.value?.formConfig,
+    ...((previousForms.value || []).map((f: { formConfig?: unknown }) => f.formConfig)),
+  ],
   formFields: formFields.value,
   formTabs: [
     ...(formTabs.value || []),
@@ -592,19 +601,6 @@ const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({
     ...(subTableBindings.value || []),
     ...(selectedNodeForm.value?.subTableBindings || []),
     ...((previousForms.value || []).flatMap((f: { subTableBindings?: unknown[] }) => f.subTableBindings || [])),
-  ],
-  formConfigJsons: [
-    mainFormConfig.value,
-    selectedNodeForm.value?.formConfig,
-    ...((previousForms.value || []).map((f: { formConfig?: unknown }) => f.formConfig)),
-    ...((ctx.cachedContentForms || []).map((f: { configJson?: unknown }) => {
-      const raw = f?.configJson
-      if (typeof raw === 'string') {
-        // FALLBACK(ux): malformed configJson skips mask enrichment only; CH still shows values.
-        try { return JSON.parse(raw) } catch { return null }
-      }
-      return raw
-    })),
   ],
 }))
 

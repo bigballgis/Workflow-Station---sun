@@ -71,6 +71,7 @@ class FunctionUnitContentResponsePropertyTest {
                 .sourceId(sourceId)
                 .data("{}")
                 .type("FORM")
+                .formType("PROCESS")
                 .tableBindings(List.of(binding))
                 .build();
 
@@ -78,6 +79,7 @@ class FunctionUnitContentResponsePropertyTest {
         assert dto.getName().equals(name);
         assert dto.getSourceId().equals(sourceId);
         assert dto.getType().equals("FORM");
+        assert "PROCESS".equals(dto.getFormType());
         assert dto.getTableBindings().size() == 1;
         assert dto.getTableBindings().get(0).getBindingType().equals("PRIMARY");
     }

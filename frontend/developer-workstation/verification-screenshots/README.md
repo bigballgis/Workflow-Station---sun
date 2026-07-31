@@ -8,6 +8,9 @@ cd frontend && pnpm run verify:screenshot -- --app dw --url "http://localhost:30
 # UserTask 多角色 assignee（Fixed BU / Initiator BU role）
 pnpm run verify:dw:assignee-multi-role
 # 可选 FU id：node scripts/verify-dw-assignee-multi-role.mjs 50006
+
+# Sensitive Mask Props Editor（Input 打码面板）
+pnpm run verify:dw:sensitive-mask-props
 ```
 
 详见 `.cursor/rules/frontend-screenshot-verification.mdc`。
