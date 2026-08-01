@@ -646,7 +646,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     /** Build prompt → POST chat/completions → parse response，对应原 AP flow 的中间三步。 */
     private Map<String, Object> doCallAi(Map<String, Object> requestBody, String amToken) {
-        String prompt = aiPromptBuilder.build(requestBody);
+        AiPromptBuilder.RenderedPrompt prompt = aiPromptBuilder.build(requestBody);
         Map<String, Object> httpResult = aiGatewayClient.chat(prompt, amToken);
         return aiResponseParser.parse(httpResult);
     }

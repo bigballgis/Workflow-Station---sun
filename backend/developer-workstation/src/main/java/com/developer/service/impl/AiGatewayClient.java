@@ -28,7 +28,8 @@ import java.util.stream.Collectors;
  * 集团 AI gateway 客户端（OpenAI 兼容 {@code /chat/completions}）。
  *
  * <p>这是原 Activepieces flow 里 "Send Http request" 步骤的 Java 版：一次非流式 POST，
- * {@code Authorization: Bearer <AMToken>}，body 为标准 OpenAI 单条 user message。
+ * {@code Authorization: Bearer <AMToken>}，body 为标准 OpenAI 两条 message——相位提示词走
+ * {@code system}，会话上下文与当前用户消息走 {@code user}。
  * AMToken 是**每用户**的浏览器侧 DSP token，由前端随 chat 请求透传进来（见
  * {@code AiGenerationController#chatStream}），因此调用在 gateway 侧审计到人。</p>
  *
@@ -98,11 +99,11 @@ public class AiGatewayClient {
     /**
      * 发起一次 chat completion。
      *
-     * @param prompt  {@link AiPromptBuilder} 渲染好的完整 prompt
+     * @param prompt  {@link AiPromptBuilder} 渲染好的 system / user 两段
      * @param amToken 该用户的 AMToken，作 Bearer 凭证；缺失即失败，不做匿名调用
      * @return {@code {status: Integer, body: Map}}，交给 {@link AiResponseParser}
      */
-    public Map<String, Object> chat(String prompt, String amToken) {
+    public Map<String, Object> chat(AiPromptBuilder.RenderedPrompt prompt, String amToken) {
         if (gatewayUrl == null || gatewayUrl.isBlank()) {
             throw new AiGenerationException("AI_GATEWAY_NOT_CONFIGURED",
                     "AI gateway URL is not configured (ai-generation.gateway.url / GROUP_AI_GATEWAY_URL)");
@@ -136,7 +137,8 @@ public class AiGatewayClient {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", status);
         result.put("body", parseBody(response.getBody(), status));
-        log.info("AI gateway responded: status={}, promptChars={}", status, prompt.length());
+        log.info("AI gateway responded: status={}, systemChars={}, userChars={}",
+                status, prompt.system().length(), prompt.user().length());
         return result;
     }
 
@@ -161,16 +163,20 @@ public class AiGatewayClient {
                         + "; the sign-in has expired, sign in again to refresh it" + detail);
     }
 
-    private Map<String, Object> buildRequestBody(String prompt) {
-        Map<String, Object> message = new LinkedHashMap<>();
-        message.put("role", "user");
-        message.put("content", prompt);
+    private Map<String, Object> buildRequestBody(AiPromptBuilder.RenderedPrompt prompt) {
+        Map<String, Object> systemMessage = new LinkedHashMap<>();
+        systemMessage.put("role", "system");
+        systemMessage.put("content", prompt.system());
+
+        Map<String, Object> userMessage = new LinkedHashMap<>();
+        userMessage.put("role", "user");
+        userMessage.put("content", prompt.user());
 
         Map<String, Object> body = new LinkedHashMap<>();
         if (model != null && !model.isBlank()) {
             body.put("model", model.trim());
         }
-        body.put("messages", List.of(message));
+        body.put("messages", List.of(systemMessage, userMessage));
         return body;
     }
 

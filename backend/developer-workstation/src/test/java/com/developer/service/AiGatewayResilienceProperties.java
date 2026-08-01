@@ -38,7 +38,8 @@ class AiGatewayResilienceProperties {
 
     private AiGenerationServiceImpl createService(AiGatewayClient gatewayClient, AiResponseParser responseParser) {
         AiPromptBuilder promptBuilder = mock(AiPromptBuilder.class);
-        when(promptBuilder.build(any())).thenReturn("rendered prompt");
+        when(promptBuilder.build(any()))
+                .thenReturn(new AiPromptBuilder.RenderedPrompt("phase prompt", "rendered context"));
         AiGenerationServiceImpl service = new AiGenerationServiceImpl(
                 mock(AiSessionRepository.class),
                 mock(AiMessageRepository.class),
@@ -71,7 +72,7 @@ class AiGatewayResilienceProperties {
     void successfulCallUpdatesTimestamp(@ForAll("arbitrarySessionId") String sessionId) throws Exception {
         AiGatewayClient gatewayClient = mock(AiGatewayClient.class);
         AiResponseParser responseParser = mock(AiResponseParser.class);
-        when(gatewayClient.chat(anyString(), anyString()))
+        when(gatewayClient.chat(any(), anyString()))
                 .thenReturn(Map.of("status", 200, "body", Map.of()));
         when(responseParser.parse(any())).thenReturn(Map.of("reply", "test response"));
 
@@ -101,7 +102,7 @@ class AiGatewayResilienceProperties {
         AiGatewayClient gatewayClient = mock(AiGatewayClient.class);
         AiResponseParser responseParser = mock(AiResponseParser.class);
         // AI_GATEWAY_EMPTY_RESPONSE 不在可重试白名单里：重发同一个 prompt 只会得到同样的空回答。
-        when(gatewayClient.chat(anyString(), anyString()))
+        when(gatewayClient.chat(any(), anyString()))
                 .thenThrow(new AiGenerationException("AI_GATEWAY_EMPTY_RESPONSE", "empty assistant response"));
 
         AiGenerationServiceImpl service = createService(gatewayClient, responseParser);

@@ -22,6 +22,9 @@ import java.util.Map;
  *
  * <p>入参就是 {@link AiGenerationServiceImpl} 原先 POST 给 AP webhook 的那个 body，
  * 因此移植前后模型看到的文本完全一致。</p>
+ *
+ * <p>产出分两段：相位提示词进 {@code system} 消息，会话上下文进 {@code user} 消息
+ * （见 {@link RenderedPrompt}）。文本本身与单条 user message 时代逐字相同，只是换了信封。</p>
  */
 @Slf4j
 @Component
@@ -29,6 +32,15 @@ public class AiPromptBuilder {
 
     private static final String DEFAULT_PHASE = "REQUIREMENTS";
     private static final String DEFAULT_MODE = "NEW";
+
+    /**
+     * 渲染结果：{@code system} 是该相位的提示词全文，{@code user} 是本轮会话上下文 + 当前用户消息。
+     *
+     * <p>两段都逐轮重算——{@code system} 取决于本轮 phase，且每轮都会重新查覆盖表，
+     * 所以相位推进时提示词跟着换，UI 里改完的覆盖值下一轮即生效。不要把它缓存到字段或会话上。</p>
+     */
+    public record RenderedPrompt(String system, String user) {
+    }
 
     private final AiPromptTemplateService promptTemplateService;
 
@@ -43,20 +55,16 @@ public class AiPromptBuilder {
      * 渲染 prompt。
      *
      * @param body {@code AiGenerationServiceImpl#buildAiRequestBody} 产出的请求体
-     * @return 送给 gateway 的完整 prompt 文本
+     * @return system / user 两段，直接对应 gateway 请求里的两条 message
      */
-    public String build(Map<String, Object> body) {
+    public RenderedPrompt build(Map<String, Object> body) {
         Map<String, Object> src = body != null ? body : Map.of();
 
-        String phase = normalize(src.get("phase"), DEFAULT_PHASE);
-        if (!promptTemplateService.phases().contains(phase)) {
-            phase = DEFAULT_PHASE;
-        }
+        String phase = resolvePhase(src.get("phase"));
         String mode = normalize(src.get("mode"), DEFAULT_MODE);
 
         List<String> parts = new ArrayList<>();
-        parts.add(promptTemplateService.resolve(phase));
-        parts.add("\n\n========== Session context (system-provided; do not expose this divider in your reply) ==========");
+        parts.add("========== Session context (system-provided; do not expose this divider in your reply) ==========");
         parts.add("Phase: " + phase + " | Mode: " + mode);
 
         Object fuId = src.get("functionUnitId");
@@ -92,7 +100,26 @@ public class AiPromptBuilder {
         parts.add(asText(src.get("message")));
         parts.add("\n========== End of context — complete the current phase task based on the information above ==========");
 
-        return String.join("\n", parts);
+        return new RenderedPrompt(promptTemplateService.resolve(phase), String.join("\n", parts));
+    }
+
+    /**
+     * 解析本轮相位。落回 REQUIREMENTS 必须留痕。
+     *
+     * <p>phase 传丢或拼错时，模型会拿到需求分析提示词却被要求产出设计/生成结果——回答看着像"AI 没听懂"，
+     * 排查方向全跑偏。这条 warn 就是为了让"每轮都在跑 REQUIREMENTS"在日志里一眼可见，
+     * 而不是从模型输出反推。</p>
+     */
+    private String resolvePhase(Object raw) {
+        String requested = raw != null ? String.valueOf(raw).trim() : "";
+        String phase = requested.toUpperCase();
+        if (promptTemplateService.phases().contains(phase)) {
+            return phase;
+        }
+        log.warn("AI prompt phase is {}; falling back to {}. The caller did not supply a usable phase, so this turn "
+                        + "runs on the requirements prompt regardless of what the session is actually doing.",
+                requested.isEmpty() ? "missing" : "unrecognized ('" + requested + "')", DEFAULT_PHASE);
+        return DEFAULT_PHASE;
     }
 
     /** 历史消息渲染为 {@code [ROLE] content} 行；role 缺失时按原实现落到 user。 */
