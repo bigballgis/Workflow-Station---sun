@@ -1,6 +1,7 @@
 package com.developer.service.impl;
 
 import com.developer.exception.AiGenerationException;
+import com.developer.util.AiBpmnSemanticGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.w3c.dom.Document;
@@ -112,6 +113,7 @@ public class AiResponseParser {
         boolean phaseComplete = reply.contains(PHASE_COMPLETE_MARKER);
 
         Map<String, Object> generatedData = null;
+        List<String> semanticRepairs = List.of();
         Matcher gen = GENERATED_DATA.matcher(reply);
         if (gen.find()) {
             generatedData = parseGeneratedData(gen.group(1).trim());
@@ -119,7 +121,7 @@ public class AiResponseParser {
         if (generatedData != null) {
             normalizeFieldMetadata(generatedData);
             normalizeConfigJson(generatedData);
-            normalizeBpmn(generatedData);
+            semanticRepairs = normalizeBpmn(generatedData);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -128,6 +130,9 @@ public class AiResponseParser {
         result.put("documentType", documentType);
         result.put("phaseComplete", phaseComplete);
         result.put("generatedData", generatedData);
+        // 平台替模型改过的地方。日志已经 warn 过一遍，这里再回传一份，让调用方有机会摆到用户面前——
+        // "存进去的流程和模型给的不完全一样"不该只活在服务端日志里。
+        result.put("semanticRepairs", semanticRepairs);
         return result;
     }
 
@@ -449,9 +454,9 @@ public class AiResponseParser {
      * 结构不合法就换成确定性的 Start→End 骨架；但骨架没有任务节点，最后一步会显式拒绝——
      * 宁可让这一轮生成失败重来，也不要写进去一条跑不动的流程。
      */
-    private void normalizeBpmn(Map<String, Object> generatedData) {
+    private List<String> normalizeBpmn(Map<String, Object> generatedData) {
         if (!(generatedData.get("processDefinition") instanceof Map<?, ?> processDefinition)) {
-            return;
+            return List.of();
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> process = (Map<String, Object>) processDefinition;
@@ -485,9 +490,19 @@ public class AiResponseParser {
                     "AI generated invalid BPMN with no task nodes. Regenerate the preview; "
                             + "empty Start-to-End fallback is rejected.");
         }
+
+        // 语义层守门排在结构校验之前:它会插入网关、改写条件、补动作,产物必须再过一遍
+        // 连通性/DI/阶段绑定,否则修复本身引入的破损就没人拦了。
+        AiBpmnSemanticGuard.Result guarded = AiBpmnSemanticGuard.enforce(generatedData, xml);
+        xml = guarded.bpmnXml();
+        for (String repair : guarded.repairs()) {
+            log.warn("AI output violated a platform process rule and was repaired before saving: {}", repair);
+        }
+
         validateConnectedBpmn(xml);
         validateStageBindings(generatedData, xml);
         process.put("bpmnXml", xml);
+        return guarded.repairs();
     }
 
     private void validateStageBindings(Map<String, Object> generatedData, String xml) {

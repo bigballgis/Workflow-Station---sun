@@ -8,6 +8,7 @@ import com.developer.repository.IconRepository;
 import com.developer.service.AiWriteService;
 import com.developer.util.AiBpmnActionBindingWriter;
 import com.developer.util.AiBpmnFormBindingWriter;
+import com.developer.util.AiBpmnSemanticGuard;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +48,10 @@ public class AiWriteServiceImpl implements AiWriteService {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new com.developer.exception.AiGenerationException(
                         "AI_WRITE_NOT_FOUND", "Function unit not found: " + functionUnitId));
+
+        // 最后一道语义关。生成阶段 AiResponseParser 已经跑过一遍，但 apply 的 body 由客户端回传，
+        // 不再经过 parser——这里是 BPMN 落库前唯一必经的位置。规则幂等，跑第二遍是空操作。
+        enforceProcessSemantics(generatedData);
 
         // Determine mode: if FunctionUnit has existing component data, it's MODIFY mode
         boolean isModifyMode = hasExistingData(functionUnit);
@@ -692,6 +697,46 @@ public class AiWriteServiceImpl implements AiWriteService {
                     .build();
 
             functionUnit.getDecisionDefinitions().add(decision);
+        }
+    }
+
+    /**
+     * 把审批分枝/审批条件/提交动作/阶段绑定这四条平台语义规则应用到待落库的数据上。
+     *
+     * <p>{@link AiBpmnSemanticGuard} 用 Map 视图读写 {@code actionDefinitions}，这里做一次
+     * DTO↔Map 的转接，并把修好的 BPMN 写回 {@code processDefinition}。修不动的违规由守门抛出，
+     * 走 {@code AI_*} 错误码，不会被当成通用 400。</p>
+     */
+    private void enforceProcessSemantics(AiGeneratedData generatedData) {
+        Map<String, Object> processDefinition = generatedData.getProcessDefinition();
+        if (processDefinition == null || !(processDefinition.get("bpmnXml") instanceof String bpmnXml)
+                || bpmnXml.isBlank()) {
+            return;
+        }
+
+        Map<String, Object> view = new LinkedHashMap<>();
+        if (generatedData.getActionDefinitions() != null) {
+            view.put("actionDefinitions", generatedData.getActionDefinitions());
+        }
+
+        AiBpmnSemanticGuard.Result guarded = AiBpmnSemanticGuard.enforce(view, bpmnXml);
+        if (guarded.repairs().isEmpty()) {
+            return;
+        }
+        for (String repair : guarded.repairs()) {
+            log.warn("AI output violated a platform process rule and was repaired before saving: {}", repair);
+        }
+
+        // 回填走 setter + 可变副本，不就地改调用方的 map:apply 的 body 由 Jackson 反序列化而来时是可变的,
+        // 但没有契约保证(测试就用 Map.of 构造),就地 put 会撞 UnsupportedOperationException。
+        Map<String, Object> repairedProcess = new LinkedHashMap<>(processDefinition);
+        repairedProcess.put("bpmnXml", guarded.bpmnXml());
+        generatedData.setProcessDefinition(repairedProcess);
+
+        if (view.get("actionDefinitions") instanceof List<?> repairedActions) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> typed = (List<Map<String, Object>>) repairedActions;
+            generatedData.setActionDefinitions(typed);
         }
     }
 

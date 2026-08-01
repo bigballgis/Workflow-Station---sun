@@ -591,7 +591,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             "AI_DESIGN_STAGE_BINDING_INVALID", "AI_DESIGN_SELF_LOOP", "AI_DESIGN_DUPLICATE_FLOW",
             "AI_BPMN_NO_TASK_NODES", "AI_BPMN_DISCONNECTED_NODES", "AI_BPMN_MISSING_DI",
             "AI_BPMN_INVALID_XML", "AI_TASK_ASSIGNEE_INVALID",
-            "AI_FORM_STAGE_BINDING_INVALID", "AI_ACTION_STAGE_BINDING_INVALID");
+            "AI_FORM_STAGE_BINDING_INVALID", "AI_ACTION_STAGE_BINDING_INVALID",
+            "AI_BPMN_DECISION_VALUE_INVALID");
 
     /**
      * 带着校验器原话再生成一次。只修一次:单次调用上限就是 {@code aiCallTimeoutSeconds},
@@ -639,6 +640,10 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                 + "  bpmn:exclusiveGateway, and all branch conditions sit on that gateway's outgoing flows.\n"
                 + "- Every flow node must be reachable from the start event and must reach an end event.\n"
                 + "- Every BPMNEdge needs distinct first and last waypoints.\n"
+                + "- An approval branch condition is exactly ${decision == 'yes'} or ${decision == 'no'}. Those are the\n"
+                + "  only values the platform ever writes: APPROVE/PROCESS_SUBMIT sets decision=yes and\n"
+                + "  REJECT/PROCESS_REJECT sets decision=no. 'approved', 'rejected', 'APPROVE', 'REJECT', true and\n"
+                + "  false are never written, so a branch testing for them can never be taken.\n"
                 + "If the supplied DESIGN document is what forces the violation, the platform rule wins: follow the\n"
                 + "rule, correct the design accordingly, and say in your reply which part of the design you changed.\n"
                 + "========== End of correction request ==========";

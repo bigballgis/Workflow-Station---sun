@@ -398,4 +398,107 @@ class AiResponseParserTest {
 
         assertEquals("AI_GATEWAY_EMPTY_RESPONSE", ex.getErrorCode());
     }
+
+    // ==================== 语义守门（AiBpmnSemanticGuard）接入 ====================
+
+    /**
+     * 一份"结构挑不出毛病、语义跑不动"的产物：审批分枝直接挂在 userTask 上没有排他网关，
+     * 条件写成运行时永远不会被写入的 approved/rejected，而且整份数据没有 PROCESS_SUBMIT。
+     * 这三条以前全靠提示词，模型不听就照存。
+     */
+    private static String ungatedApprovalBpmn() {
+        return "<?xml version=\"1.0\"?><bpmn:definitions xmlns:bpmn=\"" + BPMN_NS + "\" "
+                + "xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" "
+                + "xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" "
+                + "xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\">"
+                + "<bpmn:process id=\"p\" isExecutable=\"true\">"
+                + "<bpmn:startEvent id=\"s\"/>"
+                + "<bpmn:userTask id=\"t\" name=\"Review\"><bpmn:extensionElements>"
+                + "<custom:properties xmlns:custom=\"http://custom.bpmn.io/schema\">"
+                + "<custom:property name=\"assigneeType\" value=\"PROCESS_INITIATOR\"/>"
+                + "</custom:properties></bpmn:extensionElements></bpmn:userTask>"
+                + "<bpmn:endEvent id=\"ok\"/><bpmn:endEvent id=\"ko\"/>"
+                + "<bpmn:sequenceFlow id=\"f1\" sourceRef=\"s\" targetRef=\"t\"/>"
+                + "<bpmn:sequenceFlow id=\"f2\" sourceRef=\"t\" targetRef=\"ok\">"
+                + "<bpmn:conditionExpression>${decision == 'approved'}</bpmn:conditionExpression></bpmn:sequenceFlow>"
+                + "<bpmn:sequenceFlow id=\"f3\" sourceRef=\"t\" targetRef=\"ko\">"
+                + "<bpmn:conditionExpression>${decision == 'rejected'}</bpmn:conditionExpression></bpmn:sequenceFlow>"
+                + "</bpmn:process><bpmndi:BPMNDiagram id=\"d\"><bpmndi:BPMNPlane id=\"plane\" bpmnElement=\"p\">"
+                + "<bpmndi:BPMNShape id=\"s_di\" bpmnElement=\"s\"><dc:Bounds x=\"0\" y=\"0\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"t_di\" bpmnElement=\"t\"><dc:Bounds x=\"100\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"ok_di\" bpmnElement=\"ok\"><dc:Bounds x=\"400\" y=\"0\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"ko_di\" bpmnElement=\"ko\"><dc:Bounds x=\"400\" y=\"120\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNEdge id=\"f1_di\" bpmnElement=\"f1\"><di:waypoint x=\"36\" y=\"18\"/><di:waypoint x=\"100\" y=\"18\"/></bpmndi:BPMNEdge>"
+                + "<bpmndi:BPMNEdge id=\"f2_di\" bpmnElement=\"f2\"><di:waypoint x=\"200\" y=\"18\"/><di:waypoint x=\"400\" y=\"18\"/></bpmndi:BPMNEdge>"
+                + "<bpmndi:BPMNEdge id=\"f3_di\" bpmnElement=\"f3\"><di:waypoint x=\"200\" y=\"18\"/><di:waypoint x=\"400\" y=\"138\"/></bpmndi:BPMNEdge>"
+                + "</bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>";
+    }
+
+    private Map<String, Object> parseUngatedApproval() {
+        String json = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"Review\",\"readOnly\":false}]}],"
+                + "\"actionDefinitions\":[{\"actionName\":\"approve\",\"actionType\":\"APPROVE\","
+                + "\"stageIds\":[\"t\"]}],\"processDefinition\":{\"bpmnXml\":\""
+                + ungatedApprovalBpmn().replace("\"", "\\\"") + "\"}}";
+
+        return parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String bpmnOf(Map<String, Object> result) {
+        Map<String, Object> generatedData = (Map<String, Object>) result.get("generatedData");
+        Map<String, Object> process = (Map<String, Object>) generatedData.get("processDefinition");
+        return (String) process.get("bpmnXml");
+    }
+
+    /**
+     * 修复产物必须自己也过得了结构校验：插网关会新增节点和连线，DI 没跟上就会被
+     * AI_BPMN_MISSING_DI / AI_BPMN_DISCONNECTED_NODES 拒掉。这条测试守的就是"修复不能修出新伤"。
+     */
+    @Test
+    void parse_ungatedApprovalBranch_isRepairedAndStillPassesStructuralValidation() {
+        Map<String, Object> result = parseUngatedApproval();
+
+        String bpmn = bpmnOf(result);
+        assertTrue(bpmn.contains("exclusiveGateway"), "an exclusive gateway should have been inserted");
+        assertTrue(bpmn.contains("sourceRef=\"Gateway_t\" targetRef=\"ok\""),
+                "the approve branch should now leave the gateway");
+        assertTrue(bpmn.contains("sourceRef=\"Gateway_t\" targetRef=\"ko\""),
+                "the reject branch should now leave the gateway");
+        assertTrue(bpmn.contains("bpmnElement=\"Gateway_t\""), "the gateway needs a BPMNShape");
+    }
+
+    @Test
+    void parse_wrongDecisionValues_areNormalisedBeforeSaving() {
+        String bpmn = bpmnOf(parseUngatedApproval());
+
+        assertTrue(bpmn.contains("${decision == 'yes'}"));
+        assertTrue(bpmn.contains("${decision == 'no'}"));
+        assertFalse(bpmn.contains("approved"));
+        assertFalse(bpmn.contains("rejected"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void parse_generationWithoutSubmitAction_getsOneBeforeSaving() {
+        Map<String, Object> result = parseUngatedApproval();
+
+        Map<String, Object> generatedData = (Map<String, Object>) result.get("generatedData");
+        List<Map<String, Object>> actions =
+                (List<Map<String, Object>>) generatedData.get("actionDefinitions");
+        assertEquals(2, actions.size());
+        assertEquals("PROCESS_SUBMIT", actions.get(1).get("actionType"));
+        assertEquals(List.of("t"), actions.get(1).get("stageIds"));
+    }
+
+    /** 平台替模型改过的地方要能被调用方看见，不能只活在日志里。 */
+    @Test
+    void parse_semanticRepairs_areReportedToTheCaller() {
+        Map<String, Object> result = parseUngatedApproval();
+
+        List<?> repairs = (List<?>) result.get("semanticRepairs");
+        assertNotNull(repairs);
+        assertTrue(repairs.size() >= 3, "gateway insertion, condition rewrites and the submit action: " + repairs);
+    }
 }
