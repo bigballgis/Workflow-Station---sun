@@ -83,11 +83,6 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     return res.data
   }
 
-  async function publish(id: number, changeLog?: string) {
-    const res = await functionUnitApi.publish(id, changeLog)
-    return res.data
-  }
-
   async function clone(id: number, newName: string) {
     const res = await functionUnitApi.clone(id, newName)
     return res.data
@@ -221,7 +216,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
 
   return {
     list, current, loading, loadError, total, allTags, tables, forms, actions, process, versions,
-    fetchList, fetchById, create, update, remove, restore, publish, clone, validate,
+    fetchList, fetchById, create, update, remove, restore, clone, validate,
     fetchAllTags,
     fetchTables, createTable, updateTable, deleteTable,
     fetchForms, createForm, updateForm, deleteForm,

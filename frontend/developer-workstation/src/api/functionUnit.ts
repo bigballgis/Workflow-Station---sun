@@ -392,9 +392,8 @@ export const functionUnitApi = {
   restore: (id: number) =>
     functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/restore`),
 
-  publish: (id: number, changeLog?: string) =>
-    functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/publish`, null, { params: { changeLog } }),
-  
+  // POST /{id}/publish 仍在后端存在，但只由 Deploy 流程内部调用；DW 前端不再直接发布。
+
   clone: (id: number, newName: string) => 
     functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/clone`, null, { params: { newName } }),
   

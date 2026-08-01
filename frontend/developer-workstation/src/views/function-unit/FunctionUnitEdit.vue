@@ -61,13 +61,6 @@
             {{ t('functionUnit.validate') }}
           </el-button>
           <el-button
-            type="success"
-            :disabled="store.current?.status === 'PUBLISHED'"
-            @click="handlePublish"
-          >
-            {{ t('functionUnit.publish') }}
-          </el-button>
-          <el-button
             type="warning"
             @click="showDeployDialog = true"
           >
@@ -529,7 +522,6 @@ const {
   showValidationDialog,
   validationResult,
   handleValidate,
-  handlePublish,
   handleExport
 } = useFunctionUnitActions({ functionUnitId, store })
 
