@@ -25,6 +25,7 @@
                 :key="item.id"
                 placement="bottom"
                 :show-after="250"
+                :disabled="menuOpenId === item.id"
                 popper-class="launchpad-tile-tooltip"
               >
                 <template #content>
@@ -67,6 +68,7 @@
                     trigger="click"
                     popper-class="launchpad-dropdown-popper"
                     @command="(cmd: string) => handleCommand(cmd, item)"
+                    @visible-change="(v: boolean) => (menuOpenId = v ? item.id : null)"
                   >
                     <button
                       class="member-menu-btn"
@@ -150,6 +152,9 @@ const emit = defineEmits<{
   (e: 'rename', folderId: string, name: string): void
   (e: 'reorder', folderId: string, fromId: number, toId: number, mode: 'before' | 'after'): void
 }>()
+
+// 描述气泡与操作菜单挂在同一张卡上，菜单打开时会被气泡盖住，故开菜单即禁用该卡气泡
+const menuOpenId = ref<number | null>(null)
 
 function statusLabel(item: FunctionUnitResponse): string {
   const map: Record<string, string> = {

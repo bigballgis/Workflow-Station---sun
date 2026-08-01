@@ -2,6 +2,7 @@
   <el-tooltip
     placement="bottom"
     :show-after="250"
+    :disabled="menuOpen"
     popper-class="launchpad-tile-tooltip"
   >
     <template #content>
@@ -35,6 +36,7 @@
           class="tile-menu"
           popper-class="launchpad-dropdown-popper"
           @command="handleCommand"
+          @visible-change="menuOpen = $event"
         >
           <button
             class="tile-menu-btn"
@@ -86,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Setting, CopyDocument, Delete, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
@@ -111,6 +113,9 @@ const emit = defineEmits<{
   (e: 'delete', item: FunctionUnitResponse): void
   (e: 'remove', item: FunctionUnitResponse): void
 }>()
+
+// 描述气泡也挂在磁贴上，菜单打开时两者会重叠并盖住菜单项，故开菜单即禁用气泡
+const menuOpen = ref(false)
 
 const statusLabel = computed(() => {
   const map: Record<string, string> = {
