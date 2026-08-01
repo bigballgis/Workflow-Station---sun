@@ -80,9 +80,21 @@ public class AiGenerationController extends BaseController {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         String amToken = resolveAmToken(httpRequest);
-        log.info("Chat stream request for functionUnitId={}, userId={}, amTokenPresent={}",
-                request.getFunctionUnitId(), userId, amToken != null);
+        // 只记来源，不记 amTokenPresent=true/false：字段在不等于凭证有效，DW 页面开久了
+        // cookie 还在但 DSP 侧已过期，此时 gateway 回 401 而这条日志会显示"有 token"。
+        // 真正的判定在 AiGatewayClient（AI_GATEWAY_UNAUTHORIZED），来源用来区分是前端透传还是浏览器 cookie。
+        log.info("Chat stream request for functionUnitId={}, userId={}, amTokenSource={}",
+                request.getFunctionUnitId(), userId, amTokenSource(httpRequest, amToken));
         return aiGenerationComponent.chatStream(request, userId, amToken);
+    }
+
+    /** {@code header} / {@code cookie} / {@code none}——不含任何 token 内容。 */
+    private String amTokenSource(HttpServletRequest httpRequest, String resolved) {
+        if (resolved == null) {
+            return "none";
+        }
+        String header = httpRequest.getHeader(AM_TOKEN_HEADER);
+        return header != null && !header.isBlank() ? "header" : "cookie";
     }
 
     /**

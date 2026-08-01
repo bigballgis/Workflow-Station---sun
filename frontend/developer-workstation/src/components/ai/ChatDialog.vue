@@ -236,6 +236,15 @@
             >
               {{ t('ai.chat.retry') }}
             </el-button>
+            <!-- 过期的 AMToken 重试多少次都是同一个 401：只给"重新登录"这一条出路 -->
+            <el-button
+              v-if="needsReauth"
+              size="small"
+              type="primary"
+              @click="handleSignInAgain"
+            >
+              {{ t('ai.chat.signInAgain') }}
+            </el-button>
           </template>
         </el-alert>
       </div>
@@ -382,6 +391,7 @@ import type {
 import { computeDiff } from '@/types/aiGeneration'
 import type { AiTemplate } from '@/composables/useAiTemplates'
 import { functionUnitApi } from '@/api/functionUnit'
+import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 import { useChatDialogScope } from '@/composables/chatDialog/useChatDialogScope'
 import { useChatDialogPreview } from '@/composables/chatDialog/useChatDialogPreview'
 import { useChatDialogUndo } from '@/composables/chatDialog/useChatDialogUndo'
@@ -518,6 +528,18 @@ const streamingMessage = computed<AiMessage>(() => ({
 }))
 
 const isSendDisabled = computed(() => isStreaming.value || !inputText.value.trim())
+
+/**
+ * AMToken 已过期或缺失：AI gateway 回 401，重试用的还是同一个凭证，只能重新登录。
+ * 走统一登录（autoSso）而不是 reload——它会重跑 DSP 认证并刷新 AMToken cookie。
+ */
+const REAUTH_ERROR_CODES = ['AI_GATEWAY_UNAUTHORIZED', 'AI_GATEWAY_TOKEN_MISSING']
+const needsReauth = computed(() => !!errorCode.value && REAUTH_ERROR_CODES.includes(errorCode.value))
+
+function handleSignInAgain() {
+  setSsoReturnPath(window.location.pathname + window.location.search)
+  redirectToUnifiedLogin('developer-workstation', { autoSso: true })
+}
 
 // Compute i18n-aware error message based on errorCode
 const errorMessage = computed(() => {

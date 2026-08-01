@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -541,7 +542,11 @@ public class AiGenerationServiceImpl implements AiGenerationService {
      * On retry failure, builds degradation info and passes it to the caller via
      * AiGenerationException extraData (requirements 23 + 45 linkage).
      *
-     * <p>模型侧的失败(4xx/5xx、空回答、BPMN 无任务节点)不重试:重试同一个 prompt 只会得到同样的拒绝。</p>
+     * <p>传输层之外还有一类失败:gateway 回了 HTTP 200,但产物过不了平台的语义校验(阶段绑定、
+     * BPMN 连通性、自环……)。这类同样不做"原样重发"——同一个 prompt 重来只是重新抽奖,每次换一种
+     * 违规方式;走 {@link #repairAndRetry} 把校验器的原话喂回去定向重生成。</p>
+     *
+     * <p>纯模型侧失败(4xx/5xx、空回答)仍然不重试。</p>
      */
     private Map<String, Object> doCallAiWithRetry(Map<String, Object> requestBody, String amToken) {
         try {
@@ -549,6 +554,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             lastAiCallSuccessTime = Instant.now();
             return response;
         } catch (AiGenerationException e) {
+            if (REPAIRABLE_ERROR_CODES.contains(e.getErrorCode())) {
+                return repairAndRetry(requestBody, amToken, e);
+            }
             if ("AI_WEBHOOK_TIMEOUT".equals(e.getErrorCode()) || "AI_WEBHOOK_CALL_FAILED".equals(e.getErrorCode())) {
                 log.warn("AI gateway call failed with {}, retrying in 2 seconds...", e.getErrorCode());
                 try {
@@ -573,6 +581,67 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             }
             throw e;
         }
+    }
+
+    /**
+     * 平台语义校验拒绝产物时用的错误码集合——都是"模型可以照着改"的结构性违规，
+     * 与传输层失败(超时/连不上)和纯模型侧失败(4xx/空回答)区分开。
+     */
+    private static final Set<String> REPAIRABLE_ERROR_CODES = Set.of(
+            "AI_DESIGN_STAGE_BINDING_INVALID", "AI_DESIGN_SELF_LOOP", "AI_DESIGN_DUPLICATE_FLOW",
+            "AI_BPMN_NO_TASK_NODES", "AI_BPMN_DISCONNECTED_NODES", "AI_BPMN_MISSING_DI",
+            "AI_BPMN_INVALID_XML", "AI_TASK_ASSIGNEE_INVALID",
+            "AI_FORM_STAGE_BINDING_INVALID", "AI_ACTION_STAGE_BINDING_INVALID");
+
+    /**
+     * 带着校验器原话再生成一次。只修一次:单次调用上限就是 {@code aiCallTimeoutSeconds},
+     * 而对话 emitter 只按两次调用的时长存活,再多一轮修复会在前端先超时。
+     */
+    private Map<String, Object> repairAndRetry(Map<String, Object> requestBody, String amToken,
+                                               AiGenerationException failure) {
+        log.warn("AI output rejected by platform validation ({}), regenerating once with the violation fed back: {}",
+                failure.getErrorCode(), failure.getMessage());
+
+        Map<String, Object> repairBody = new LinkedHashMap<>(requestBody);
+        Object original = requestBody.get("message");
+        repairBody.put("message", buildRepairMessage(original instanceof String s ? s : "", failure));
+
+        try {
+            Map<String, Object> response = doCallAi(repairBody, amToken);
+            lastAiCallSuccessTime = Instant.now();
+            log.info("AI repair pass succeeded after {}", failure.getErrorCode());
+            return response;
+        } catch (AiGenerationException repairEx) {
+            log.warn("AI repair pass still failed with {}: {}", repairEx.getErrorCode(), repairEx.getMessage());
+            throw repairEx;
+        }
+    }
+
+    /**
+     * 修复指令块。除了回灌具体违规，还要显式授权模型推翻自己上一轮遵循的 DESIGN 文档——
+     * 87 号功能单元那次就是设计文档本身违规（把提交动作挂在 startEvent 上、给校验失败画了自环），
+     * 模型每轮都在"照做非法设计"和"遵守平台约束"之间换一种折中，所以错误一直在变。
+     */
+    private String buildRepairMessage(String originalMessage, AiGenerationException failure) {
+        return originalMessage + "\n\n"
+                + "========== AUTOMATIC CORRECTION REQUEST (system-generated, highest priority) ==========\n"
+                + "Your previous answer was rejected by the platform validator and was NOT saved.\n"
+                + "Violation code: " + failure.getErrorCode() + "\n"
+                + "Validator message: " + failure.getMessage() + "\n\n"
+                + "Produce the COMPLETE output for this phase again and fix exactly this violation, keeping everything\n"
+                + "that was already correct. The rules that are most often broken:\n"
+                + "- A stage id is always a bpmn:userTask id. A startEvent, endEvent, gateway or sequenceFlow id is\n"
+                + "  never a valid stage for an action or a TASK form; bind the submit action to the FIRST user task.\n"
+                + "- Never emit a user-task self-loop. A failed check or 'not verified' outcome keeps the process on\n"
+                + "  the current user task and produces no sequence flow; rollback and rework are runtime actions.\n"
+                + "- Emit at most one sequence flow per source/target pair.\n"
+                + "- Every branching user task has exactly one unconditional outgoing flow into its own\n"
+                + "  bpmn:exclusiveGateway, and all branch conditions sit on that gateway's outgoing flows.\n"
+                + "- Every flow node must be reachable from the start event and must reach an end event.\n"
+                + "- Every BPMNEdge needs distinct first and last waypoints.\n"
+                + "If the supplied DESIGN document is what forces the violation, the platform rule wins: follow the\n"
+                + "rule, correct the design accordingly, and say in your reply which part of the design you changed.\n"
+                + "========== End of correction request ==========";
     }
 
     /** Build prompt → POST chat/completions → parse response，对应原 AP flow 的中间三步。 */

@@ -100,9 +100,7 @@ public class AiWriteServiceImpl implements AiWriteService {
     }
 
     private void clearExistingData(FunctionUnit functionUnit) {
-        // tableRelations must be cleared before tableDefinitions (dependency order)
-        functionUnit.getTableRelations().clear();
-        functionUnit.getTableDefinitions().clear();
+        clearTableGraph(functionUnit);
         functionUnit.getFormDefinitions().clear();
         functionUnit.getActionDefinitions().clear();
         functionUnit.getDecisionDefinitions().clear();
@@ -113,21 +111,48 @@ public class AiWriteServiceImpl implements AiWriteService {
 
     private void clearScopedData(FunctionUnit functionUnit, String scope) {
         switch (scope.toUpperCase()) {
-            case "TABLES" -> {
-                // tableRelations depend on tableDefinitions, must clear both
-                functionUnit.getTableRelations().clear();
-                functionUnit.getTableDefinitions().clear();
-            }
+            case "TABLES" -> clearTableGraph(functionUnit);
             case "FORMS" -> functionUnit.getFormDefinitions().clear();
             case "ACTIONS" -> functionUnit.getActionDefinitions().clear();
             case "DECISIONS" -> functionUnit.getDecisionDefinitions().clear();
             case "PROCESS" -> functionUnit.setProcessDefinition(null);
-            case "TABLE_RELATIONS" -> functionUnit.getTableRelations().clear();
+            case "TABLE_RELATIONS" -> {
+                functionUnit.getTableRelations().clear();
+                entityManager.flush();
+            }
             default -> {
                 log.warn("Unknown regenerate scope '{}', falling back to full clear", scope);
                 clearExistingData(functionUnit);
             }
         }
+    }
+
+    /**
+     * Delete the table graph bottom-up, flushing between levels.
+     *
+     * <p>Both {@code dw_foreign_keys} and {@code dw_table_relations} carry database-level
+     * {@code ON DELETE CASCADE} onto {@code dw_table_definitions} / {@code dw_field_definitions}.
+     * Clearing the table collection first therefore lets PostgreSQL delete those dependent rows
+     * underneath Hibernate: the DELETE Hibernate still has queued for its own managed copies then
+     * affects 0 rows and surfaces as an OptimisticLockException on TableRelation. The same ordering
+     * also left Hibernate resolving the foreign-key associations by writing NULL into the NOT NULL
+     * {@code field_id} / {@code table_id} / {@code ref_table_id} / {@code ref_field_id} columns.</p>
+     *
+     * <p>So: foreign keys, then relations, then the tables (fields cascade with them). The flush
+     * after each level is load-bearing — it forces that level to reach the database before the next
+     * level is scheduled, which is what keeps Hibernate and the database cascade from racing.</p>
+     */
+    private void clearTableGraph(FunctionUnit functionUnit) {
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            table.getForeignKeys().clear();
+        }
+        entityManager.flush();
+
+        functionUnit.getTableRelations().clear();
+        entityManager.flush();
+
+        functionUnit.getTableDefinitions().clear();
+        entityManager.flush();
     }
 
     private void handleIcon(FunctionUnit functionUnit, AiGeneratedData generatedData) {

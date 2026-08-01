@@ -72,6 +72,13 @@ vi.mock('@/api/functionUnit', () => ({
   functionUnitApi: { getById: vi.fn().mockResolvedValue({ data: null }) }
 }))
 
+const mockSetSsoReturnPath = vi.fn()
+const mockRedirectToUnifiedLogin = vi.fn()
+vi.mock('@/utils/sso', () => ({
+  setSsoReturnPath: (path: string) => mockSetSsoReturnPath(path),
+  redirectToUnifiedLogin: (clientId: string, options: unknown) => mockRedirectToUnifiedLogin(clientId, options)
+}))
+
 vi.mock('@/api/aiGeneration', () => ({
   aiGenerationApi: { undoLastApply: vi.fn().mockResolvedValue({}) },
   AI_CHAT_STREAM_URL: '/api/v1/ai-generation/chat-stream'
@@ -199,6 +206,32 @@ describe('ChatDialog', () => {
     mockError.value = null
     const wrapper = mountComponent()
     expect(wrapper.find('.chat-dialog__error').exists()).toBe(false)
+  })
+
+  // 过期的 AMToken 重试多少次都是同一个 401，唯一出路是重新登录
+  it('should offer sign-in-again instead of retry when the AMToken was rejected', async () => {
+    mockError.value = 'AI gateway rejected the AMToken with HTTP 401'
+    mockErrorCode.value = 'AI_GATEWAY_UNAUTHORIZED'
+    mockCanRetry.value = false
+
+    const wrapper = mountComponent()
+    const buttons = wrapper.find('.chat-dialog__error').findAll('button')
+    expect(buttons.length).toBe(1)
+
+    await buttons[0].trigger('click')
+    expect(mockSetSsoReturnPath).toHaveBeenCalled()
+    expect(mockRedirectToUnifiedLogin).toHaveBeenCalledWith('developer-workstation', { autoSso: true })
+    expect(mockRetry).not.toHaveBeenCalled()
+  })
+
+  it('should not offer sign-in-again for an ordinary retryable error', () => {
+    mockError.value = 'AI service timed out'
+    mockErrorCode.value = 'AI_WEBHOOK_TIMEOUT'
+    mockCanRetry.value = true
+
+    const wrapper = mountComponent()
+    expect(wrapper.find('.chat-dialog__error').findAll('button').length).toBe(1)
+    expect(mockRedirectToUnifiedLogin).not.toHaveBeenCalled()
   })
 
   it('should register event callbacks on mount', () => {

@@ -240,6 +240,112 @@ class AiResponseParserTest {
         assertEquals("AI_ACTION_STAGE_BINDING_INVALID", ex.getErrorCode());
     }
 
+    // ==================== DESIGN 文档校验 ====================
+
+    /**
+     * 复刻 87 号功能单元那份 DESIGN v2 的形状：正确的部分保持合法，各测试只注入一处缺陷。
+     */
+    private static String designDocument(String nodeRows, String flowRows) {
+        return "---DESIGN_DOC_START---\n"
+                + "# Design Document\n\n"
+                + "## Process Design\n\n"
+                + "### Process Node Matrix\n\n"
+                + "| Node ID | BPMN Type | Name | Responsibility | Bound TASK Form | Actions |\n"
+                + "| --- | --- | --- | --- | --- | --- |\n"
+                + nodeRows
+                + "\n### Sequence Flow Matrix\n\n"
+                + "| Flow ID | Source Node ID | Target Node ID | Condition/Default |\n"
+                + "| --- | --- | --- | --- |\n"
+                + flowRows
+                + "\n---DESIGN_DOC_END---";
+    }
+
+    private static final String VALID_NODE_ROWS =
+            "| bpmn_start_event_1 | startEvent | Start | Trigger | - | - |\n"
+            + "| bpmn_user_task_data_verification | userTask | Data Verification | Verify | verification_form"
+            + " | submit_credit_card_dev_request |\n"
+            + "| bpmn_end_event_1 | endEvent | Done | Terminal | - | - |\n";
+
+    private static final String VALID_FLOW_ROWS =
+            "| flow_1 | bpmn_start_event_1 | bpmn_user_task_data_verification | Default |\n"
+            + "| flow_2 | bpmn_user_task_data_verification | bpmn_end_event_1 | Default |\n";
+
+    @Test
+    void parse_validDesignMatrices_areAccepted() {
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                designDocument(VALID_NODE_ROWS, VALID_FLOW_ROWS)));
+
+        assertEquals("DESIGN", result.get("documentType"));
+    }
+
+    @Test
+    void parse_designBindingAnActionToStartEvent_isRejected() {
+        String rows = VALID_NODE_ROWS.replace(
+                "| bpmn_start_event_1 | startEvent | Start | Trigger | - | - |",
+                "| bpmn_start_event_1 | startEvent | Start | Trigger | - | submit_credit_card_dev_request |");
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200, designDocument(rows, VALID_FLOW_ROWS))));
+
+        assertEquals("AI_DESIGN_STAGE_BINDING_INVALID", ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("bpmn_start_event_1"), ex.getMessage());
+    }
+
+    @Test
+    void parse_designBindingAFormToGateway_isRejected() {
+        String rows = VALID_NODE_ROWS
+                + "| bpmn_gateway_1 | exclusiveGateway | Approved? | Branch | review_form | - |\n";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200, designDocument(rows, VALID_FLOW_ROWS))));
+
+        assertEquals("AI_DESIGN_STAGE_BINDING_INVALID", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_designWithUserTaskSelfLoop_isRejected() {
+        String flows = VALID_FLOW_ROWS
+                + "| flow_data_verification_self_loop | bpmn_user_task_data_verification"
+                + " | bpmn_user_task_data_verification | NOT_VERIFIED |\n";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200, designDocument(VALID_NODE_ROWS, flows))));
+
+        assertEquals("AI_DESIGN_SELF_LOOP", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_designWithDuplicateFlowEndpoints_isRejected() {
+        String flows = VALID_FLOW_ROWS
+                + "| flow_3 | bpmn_user_task_data_verification | bpmn_end_event_1 | APPROVED |\n";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200, designDocument(VALID_NODE_ROWS, flows))));
+
+        assertEquals("AI_DESIGN_DUPLICATE_FLOW", ex.getErrorCode());
+    }
+
+    /** 认不出的类型名不判定——宁可漏判，也不要因为模型换了个写法就拒掉一份合法设计。 */
+    @Test
+    void parse_designWithUnrecognizedNodeType_isNotRejected() {
+        String rows = VALID_NODE_ROWS
+                + "| bpmn_review | Human Task | Review | Approve | review_form | approve |\n";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                designDocument(rows, VALID_FLOW_ROWS)));
+
+        assertEquals("DESIGN", result.get("documentType"));
+    }
+
+    /** 没有矩阵的设计文档（早期草稿、模型省略了小节）照旧放行。 */
+    @Test
+    void parse_designWithoutMatrices_isNotRejected() {
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---DESIGN_DOC_START---\n# Design Document\n## Overview\ntext\n---DESIGN_DOC_END---"));
+
+        assertEquals("DESIGN", result.get("documentType"));
+    }
+
     @Test
     void parse_bpmnWithDuplicateSourceAndTarget_isRejected() {
         String xml = validBpmn().replace("</bpmn:process>",

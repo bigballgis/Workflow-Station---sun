@@ -34,10 +34,26 @@ Design rules:
 - Use one PROCESS form at most. Use a TASK form for human stages and map every bpmn:userTask id to exactly one TASK form
 - Give every bpmn:userTask an executable assignee design using a canonical assignee type and all required stable role, BU or variable identifiers; an unassigned human task is invalid
 - Bind every action to one or more exact user-task node ids. Treat action database IDs as persistence details that generation must not invent
-- Model rollback, return-to-draft and withdrawal as runtime actions, never as backward BPMN sequence flows
+- MANDATORY: a stage id is ALWAYS a bpmn:userTask id. A startEvent, endEvent, gateway or sequenceFlow id is NEVER a
+  valid stage for an action or a TASK form. The platform rejects the whole generated result when it sees one, so a
+  design that binds to a non-user-task node cannot be built
+- The start event is a trigger, not a stage: it carries no actions and no form. The submitting action (PROCESS_SUBMIT
+  and any other entry action) belongs on the FIRST bpmn:userTask, which is the task the initiator fills in and submits
+- Every action listed anywhere in the design must appear in the Actions column of at least one userTask row of the
+  Process Node Matrix; leave the Actions column empty for every start event, end event and gateway row
+- Model rollback, return-to-draft, withdrawal, transfer and delegation as runtime actions, never as BPMN sequence flows
+- Never design a bpmn:userTask self-loop. Rework, "not verified" and any other failed check keeps the process on the
+  current user task through form validation or a runtime action and produces NO sequence flow at all — a flow whose
+  source and target are the same node is invalid and is rejected by the platform
 - Put mutually exclusive approval/rejection conditions on an exclusive gateway after the user task and use platform-populated decision outcomes rather than invented variables
+- Give every branching user task its OWN bpmn:exclusiveGateway: exactly one unconditional flow from the task into that
+  gateway, and every condition on the gateway's outgoing flows. Never keep a direct flow from that task to a branch
+  target as well — a task that branches must have exactly one outgoing flow
+- Emit at most one sequence flow per source/target pair; duplicate pairs are rejected
 - Never design numeric database IDs. Refer to tables by tableName, forms by formName and process stages by stable BPMN node id
-- Provide a Process Node Matrix with columns: Node ID, BPMN Type, Name, Responsibility, Bound TASK Form, Actions
+- Provide a Process Node Matrix with columns: Node ID, BPMN Type, Name, Responsibility, Bound TASK Form, Actions.
+  BPMN Type must be the exact BPMN element name (startEvent, userTask, exclusiveGateway, endEvent, ...) — the
+  platform reads this column to check that only user tasks carry forms and actions
 - Provide a Sequence Flow Matrix with columns: Flow ID, Source Node ID, Target Node ID, Condition/Default
 - Every node in the matrices must be reachable from Start and able to reach an End outcome; every referenced source and target must exist
 - Ensure table bindings, foreign keys and tableRelations describe the same relationship direction without contradictions

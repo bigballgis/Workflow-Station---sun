@@ -14,11 +14,13 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -68,6 +70,14 @@ public class AiResponseParser {
     private static final Set<String> AI_ASSIGNEE_TYPES = Set.of(
             "PROCESS_INITIATOR", "ENTITY_MANAGER", "FUNCTIONAL_MANAGER", "HIERARCHY_ROLE",
             "BU_ROLE", "MANUAL_ASSIGN", "ASSIGNEE_FROM_VARIABLE", "ELEMENT_VARIABLE");
+    /** 设计文档里"这一格没有内容"的常见写法。 */
+    private static final Set<String> DESIGN_EMPTY_CELL_WORDS = Set.of(
+            "n/a", "na", "none", "no", "nil", "null", "not applicable", "-", "无", "不适用");
+    /** 确定不能承载 stage 绑定的 BPMN 类型（gateway 另按后缀判定）。 */
+    private static final Set<String> DESIGN_NON_STAGE_NODE_TYPES = Set.of(
+            "start", "startevent", "end", "endevent", "sequenceflow",
+            "servicetask", "scripttask", "businessruletask", "manualtask", "sendtask", "receivetask",
+            "intermediatecatchevent", "intermediatethrowevent", "callactivity", "subprocess");
     private static final String PHASE_COMPLETE_MARKER = "---PHASE_COMPLETE---";
     private static final char BOM = '\uFEFF';
 
@@ -96,6 +106,7 @@ public class AiResponseParser {
         if (design.find()) {
             document = design.group(1).trim();
             documentType = "DESIGN";
+            validateDesignDocument(document);
         }
 
         boolean phaseComplete = reply.contains(PHASE_COMPLETE_MARKER);
@@ -163,6 +174,168 @@ public class AiResponseParser {
             }
         }
         return "";
+    }
+
+    // ==================== DESIGN 文档 ====================
+
+    /**
+     * 在 DESIGN 阶段就拦掉两类必然让 GENERATION 生不出合法 BPMN 的设计缺陷:
+     * 把动作/表单挂在非 userTask 节点上,以及 userTask 自环。
+     *
+     * <p>这两条以前只有生成阶段才发现,而那时模型是在"照做非法设计"和"遵守平台约束"之间随机折中,
+     * 于是同一份设计每重试一次报一个新错。设计文档是自然语言,所以这里只在能确信读懂表格时才判定:
+     * 认不出列头、认不出节点类型一律跳过(记 warn),宁可漏判也不误伤一份合法设计。</p>
+     */
+    private void validateDesignDocument(String document) {
+        List<Map<String, String>> nodeRows = parseMatrix(document, "Process Node Matrix");
+        for (Map<String, String> row : nodeRows) {
+            String nodeId = cell(row, "node", "id");
+            String type = cell(row, "type");
+            if (!isNonStageNodeType(type)) {
+                continue;
+            }
+            if (!isBlankCell(cell(row, "action"))) {
+                throw invalidDesignBinding("node '" + nodeId + "' is a " + type
+                        + " but the Process Node Matrix gives it actions; actions may only be bound to a userTask"
+                        + " (put the submit action on the first userTask)");
+            }
+            if (!isBlankCell(cell(row, "form"))) {
+                throw invalidDesignBinding("node '" + nodeId + "' is a " + type
+                        + " but the Process Node Matrix binds a form to it; only a userTask can carry a TASK form");
+            }
+        }
+
+        List<Map<String, String>> flowRows = parseMatrix(document, "Sequence Flow Matrix");
+        Set<String> endpoints = new HashSet<>();
+        for (Map<String, String> row : flowRows) {
+            String source = cell(row, "source");
+            String target = cell(row, "target");
+            if (isBlankCell(source) || isBlankCell(target)) {
+                continue;
+            }
+            if (source.equals(target)) {
+                throw new AiGenerationException("AI_DESIGN_SELF_LOOP",
+                        "AI designed a self-loop on '" + source + "'. A failed check keeps the process on the current"
+                        + " user task and produces no sequence flow; model rework and rollback as runtime actions");
+            }
+            if (!endpoints.add(source + " " + target)) {
+                throw new AiGenerationException("AI_DESIGN_DUPLICATE_FLOW",
+                        "AI designed more than one sequence flow from '" + source + "' to '" + target
+                        + "'. Route the branch through one exclusive gateway instead");
+            }
+        }
+    }
+
+    /**
+     * 抽出 {@code ### <title>} 小节下的第一张 Markdown 表格,每行返回 {规范化列头 → 单元格}。
+     * 找不到小节、找不到表头或缺分隔行都返回空列表——调用方据此跳过校验。
+     */
+    private List<Map<String, String>> parseMatrix(String document, String title) {
+        String[] lines = document.split("\\R");
+        int start = -1;
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.startsWith("#") && line.toLowerCase(Locale.ROOT).contains(title.toLowerCase(Locale.ROOT))) {
+                start = i + 1;
+                break;
+            }
+        }
+        if (start < 0) {
+            log.warn("DESIGN document has no '{}' section — skipping that design check", title);
+            return List.of();
+        }
+
+        List<String> header = null;
+        List<Map<String, String>> rows = new ArrayList<>();
+        for (int i = start; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.startsWith("#")) {
+                break; // 下一节开始,本节表格已读完
+            }
+            if (!line.startsWith("|")) {
+                if (header != null) {
+                    break; // 表格结束
+                }
+                continue; // 表格前的说明文字
+            }
+            List<String> cells = splitRow(line);
+            if (header == null) {
+                header = cells;
+                continue;
+            }
+            if (isSeparatorRow(cells)) {
+                continue;
+            }
+            Map<String, String> row = new LinkedHashMap<>();
+            for (int c = 0; c < header.size() && c < cells.size(); c++) {
+                row.put(header.get(c).toLowerCase(Locale.ROOT), cells.get(c));
+            }
+            rows.add(row);
+        }
+        if (header == null) {
+            log.warn("DESIGN document '{}' section has no Markdown table — skipping that design check", title);
+        }
+        return rows;
+    }
+
+    private static List<String> splitRow(String line) {
+        String trimmed = line.replaceAll("^\\|", "").replaceAll("\\|\\s*$", "");
+        List<String> cells = new ArrayList<>();
+        for (String cell : trimmed.split("\\|", -1)) {
+            cells.add(cell.trim());
+        }
+        return cells;
+    }
+
+    private static boolean isSeparatorRow(List<String> cells) {
+        for (String cell : cells) {
+            if (!cell.matches(":?-{2,}:?")) {
+                return false;
+            }
+        }
+        return !cells.isEmpty();
+    }
+
+    /** 按列头关键词取单元格；关键词全部命中才算这一列，缺列返回空串。 */
+    private static String cell(Map<String, String> row, String... keywords) {
+        for (Map.Entry<String, String> entry : row.entrySet()) {
+            boolean matches = true;
+            for (String keyword : keywords) {
+                if (!entry.getKey().contains(keyword)) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
+                return entry.getValue();
+            }
+        }
+        return "";
+    }
+
+    /** 占位符也算空：模型用 -、N/A、None 表示"这一格没有内容"。 */
+    private static boolean isBlankCell(String value) {
+        String normalized = value.replaceAll("[`*_()\\[\\]]", "").trim().toLowerCase(Locale.ROOT);
+        return normalized.isEmpty()
+                || normalized.matches("[-–—]+")
+                || DESIGN_EMPTY_CELL_WORDS.contains(normalized);
+    }
+
+    /**
+     * 只认平台能确定"不是 userTask"的类型名；认不出的（例如模型写成 Human Task）返回 false 跳过，
+     * 这条判定会直接拒掉整份设计文档，误伤的代价比漏判大得多。
+     */
+    private static boolean isNonStageNodeType(String type) {
+        String normalized = type.replaceAll("[^A-Za-z]", "").toLowerCase(Locale.ROOT);
+        if (normalized.contains("usertask")) {
+            return false;
+        }
+        return DESIGN_NON_STAGE_NODE_TYPES.contains(normalized) || normalized.endsWith("gateway");
+    }
+
+    private AiGenerationException invalidDesignBinding(String detail) {
+        return new AiGenerationException("AI_DESIGN_STAGE_BINDING_INVALID",
+                "AI design binds a stage to a node that is not a bpmn:userTask: " + detail);
     }
 
     // ==================== generatedData ====================

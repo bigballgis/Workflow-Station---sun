@@ -27,6 +27,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,6 +54,17 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
 
     /** Undo snapshot cache: key = functionUnitId → serialized AiGeneratedData JSON */
     private final ConcurrentHashMap<Long, String> undoSnapshots = new ConcurrentHashMap<>();
+
+    /**
+     * Function units with an apply already running. Confirm Apply clears and rewrites the whole
+     * component graph, so a second click while the first write is still in flight makes two
+     * transactions delete and re-insert the same rows — the losing one then fails on rows the
+     * winner already removed. Rejecting the second click keeps that out of the database.
+     *
+     * <p>Per-instance only: it stops the double-click, which is what users actually hit. Two DW
+     * replicas still fall back to the function-unit AI lock plus optimistic locking.</p>
+     */
+    private final Set<Long> applyInFlight = ConcurrentHashMap.newKeySet();
 
     /** Undo snapshot TTL cleanup scheduler */
     private final ScheduledExecutorService undoCleanupExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -326,6 +338,11 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         // 1. Renew the lock
         aiLockService.extendLock(functionUnitId, userId);
 
+        if (!applyInFlight.add(functionUnitId)) {
+            log.warn("Rejected concurrent apply: functionUnitId={}, userId={}", functionUnitId, userId);
+            throw new AiGenerationException("AI_WRITE_IN_PROGRESS",
+                    "A previous apply for this function unit is still running, please wait for it to finish");
+        }
         try {
             // 2. Normalize model output the platform enum can't express, then validate
             if (request.getGeneratedData() != null) {
@@ -380,6 +397,8 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
             aiGenerationService.sendEventNotification(functionUnitId,
                     AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", e.getMessage())).build());
             throw e;
+        } finally {
+            applyInFlight.remove(functionUnitId);
         }
     }
 

@@ -163,4 +163,59 @@ class AiGenerationServiceTest {
         assertEquals("assistant", history.get(1).get("role"));
         assertEquals("Sure, let me help you design it", history.get(1).get("content"));
     }
+
+    // ==================== 语义校验失败后的定向重生成 ====================
+
+    private Map<String, Object> callGeneration(String message) {
+        return generationService.callAiModel(UUID.randomUUID(), message, AiPhase.GENERATION, AiMode.NEW,
+                null, 87L, List.of(), "ALL", "token");
+    }
+
+    @Test
+    void callAiModel_whenPlatformValidationRejectsOutput_regeneratesOnceWithTheViolation() {
+        when(aiGatewayClient.chat(any(), any())).thenReturn(Map.of("status", 200));
+        when(aiResponseParser.parse(any()))
+                .thenThrow(new AiGenerationException("AI_ACTION_STAGE_BINDING_INVALID",
+                        "action 'submit' references unknown userTask 'bpmn_start_event_1'"))
+                .thenReturn(Map.of("reply", "fixed"));
+
+        Map<String, Object> result = callGeneration("Generate it");
+
+        assertEquals("fixed", result.get("reply"));
+
+        ArgumentCaptor<Map<String, Object>> bodies = ArgumentCaptor.forClass(Map.class);
+        verify(aiPromptBuilder, times(2)).build(bodies.capture());
+        String repairMessage = (String) bodies.getAllValues().get(1).get("message");
+        assertTrue(repairMessage.startsWith("Generate it"), repairMessage);
+        assertTrue(repairMessage.contains("AI_ACTION_STAGE_BINDING_INVALID"), repairMessage);
+        assertTrue(repairMessage.contains("bpmn_start_event_1"), repairMessage);
+        // 授权模型推翻违规的 DESIGN 文档，否则它只会在两个冲突约束之间换一种折中
+        assertTrue(repairMessage.contains("the platform rule wins"), repairMessage);
+    }
+
+    @Test
+    void callAiModel_whenRepairPassAlsoFails_surfacesTheSecondViolationWithoutFurtherRetries() {
+        when(aiGatewayClient.chat(any(), any())).thenReturn(Map.of("status", 200));
+        when(aiResponseParser.parse(any()))
+                .thenThrow(new AiGenerationException("AI_DESIGN_SELF_LOOP", "self-loop on 'verify'"))
+                .thenThrow(new AiGenerationException("AI_BPMN_DISCONNECTED_NODES", "orphan gateway"));
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class, () -> callGeneration("Design it"));
+
+        assertEquals("AI_BPMN_DISCONNECTED_NODES", ex.getErrorCode());
+        verify(aiPromptBuilder, times(2)).build(any());
+    }
+
+    /** 纯模型侧失败(空回答/4xx)重发同一 prompt 没有意义，仍然一次就抛。 */
+    @Test
+    void callAiModel_whenGatewayReturnsEmptyResponse_isNotRegenerated() {
+        when(aiGatewayClient.chat(any(), any())).thenReturn(Map.of("status", 200));
+        when(aiResponseParser.parse(any()))
+                .thenThrow(new AiGenerationException("AI_GATEWAY_EMPTY_RESPONSE", "empty"));
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class, () -> callGeneration("Generate it"));
+
+        assertEquals("AI_GATEWAY_EMPTY_RESPONSE", ex.getErrorCode());
+        verify(aiPromptBuilder, times(1)).build(any());
+    }
 }

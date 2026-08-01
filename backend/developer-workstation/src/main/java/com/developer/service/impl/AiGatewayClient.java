@@ -129,11 +129,36 @@ public class AiGatewayClient {
         }
 
         int status = response.getStatusCode().value();
+        if (status == 401 || status == 403) {
+            throw rejectedCredential(status, response.getBody());
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", status);
         result.put("body", parseBody(response.getBody(), status));
         log.info("AI gateway responded: status={}, promptChars={}", status, prompt.length());
         return result;
+    }
+
+    /**
+     * 凭证被拒必须在解析 body 之前判掉。
+     *
+     * <p>gateway 拒 AMToken 时回的是 401 + 空 body，走到 {@link #parseBody} 就成了
+     * {@code AI_GATEWAY_BAD_RESPONSE}（前端文案"返回内容无法解析，请重试"），把"登录过期"说成
+     * "网关抽风"——用户照着提示一直点重试，而重试用的还是同一个过期 token，永远好不了。</p>
+     *
+     * <p>注意 {@code amTokenPresent=true} 只说明请求里有这个字段：DW 页面开久了，AMToken cookie
+     * 还在但 DSP 侧已经过期，凭证照样无效。所以这里说的是"被拒绝"，与"缺失"
+     * （{@code AI_GATEWAY_TOKEN_MISSING}）分成两个码，日志和文案都能直接指向重新登录。</p>
+     */
+    private AiGenerationException rejectedCredential(int status, String rawBody) {
+        log.warn("AI gateway rejected the AMToken: status={}, bodyPresent={}. The browser-side DSP token was "
+                + "supplied but is no longer valid (typically an expired session on a long-lived DW page).",
+                status, rawBody != null && !rawBody.isBlank());
+        String detail = rawBody != null && !rawBody.isBlank() ? ": " + truncate(rawBody) : "";
+        return new AiGenerationException("AI_GATEWAY_UNAUTHORIZED",
+                "AI gateway rejected the AMToken with HTTP " + status
+                        + "; the sign-in has expired, sign in again to refresh it" + detail);
     }
 
     private Map<String, Object> buildRequestBody(String prompt) {
