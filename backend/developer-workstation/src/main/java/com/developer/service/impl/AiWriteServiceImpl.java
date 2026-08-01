@@ -104,14 +104,27 @@ public class AiWriteServiceImpl implements AiWriteService {
                 || (functionUnit.getTableRelations() != null && !functionUnit.getTableRelations().isEmpty());
     }
 
+    /**
+     * Delete the referencing side (forms/actions/decisions/process) before the referenced side (table graph).
+     *
+     * <p>{@code dw_form_table_bindings.table_id} is the one foreign key onto {@code dw_table_definitions}
+     * with no {@code ON DELETE} clause — every sibling constraint is CASCADE or SET NULL. Deleting the
+     * tables while a previous generation's binding rows still point at them fails the statement with
+     * SQLSTATE 23503 on {@code fk_binding_table}, which is what made a second Apply blow up.</p>
+     */
     private void clearExistingData(FunctionUnit functionUnit) {
-        clearTableGraph(functionUnit);
         functionUnit.getFormDefinitions().clear();
         functionUnit.getActionDefinitions().clear();
         functionUnit.getDecisionDefinitions().clear();
         if (functionUnit.getProcessDefinition() != null) {
             functionUnit.setProcessDefinition(null);
         }
+        // Not strictly required — clearTableGraph's first flush would carry these deletes out too, because
+        // that flush does not touch dw_table_definitions. Kept explicit so the ordering does not rest on
+        // "entity deletes inside one flush run in registration order", same rationale as clearTableGraph.
+        entityManager.flush();
+
+        clearTableGraph(functionUnit);
     }
 
     private void clearScopedData(FunctionUnit functionUnit, String scope) {
@@ -143,11 +156,14 @@ public class AiWriteServiceImpl implements AiWriteService {
      * also left Hibernate resolving the foreign-key associations by writing NULL into the NOT NULL
      * {@code field_id} / {@code table_id} / {@code ref_table_id} / {@code ref_field_id} columns.</p>
      *
-     * <p>So: foreign keys, then relations, then the tables (fields cascade with them). The flush
-     * after each level is load-bearing — it forces that level to reach the database before the next
-     * level is scheduled, which is what keeps Hibernate and the database cascade from racing.</p>
+     * <p>So: form references, then foreign keys, then relations, then the tables (fields cascade with
+     * them). The flush after each level is load-bearing — it forces that level to reach the database
+     * before the next level is scheduled, which is what keeps Hibernate and the database cascade from
+     * racing.</p>
      */
     private void clearTableGraph(FunctionUnit functionUnit) {
+        detachFormReferencesToTables(functionUnit);
+
         for (TableDefinition table : functionUnit.getTableDefinitions()) {
             table.getForeignKeys().clear();
         }
@@ -158,6 +174,27 @@ public class AiWriteServiceImpl implements AiWriteService {
 
         functionUnit.getTableDefinitions().clear();
         entityManager.flush();
+    }
+
+    /**
+     * Drop every form reference into the table graph before the tables themselves go.
+     *
+     * <p>Matters for {@code regenerateScope=TABLES}, where the forms deliberately survive the clear:
+     * their {@code dw_form_table_bindings} rows would still point at the tables being deleted and
+     * {@code fk_binding_table} has no {@code ON DELETE} clause to absorb it. On the full clear the
+     * forms are already gone by the time this runs, so the loop is a no-op.</p>
+     */
+    private void detachFormReferencesToTables(FunctionUnit functionUnit) {
+        if (functionUnit.getFormDefinitions().isEmpty()) {
+            return;
+        }
+        for (FormDefinition form : functionUnit.getFormDefinitions()) {
+            form.getTableBindings().clear();
+            form.setBoundTable(null);
+        }
+        entityManager.flush();
+        log.warn("Detached table bindings from {} surviving form(s) — the regenerated tables replace the ones "
+                + "they were bound to, so those forms need rebinding", functionUnit.getFormDefinitions().size());
     }
 
     private void handleIcon(FunctionUnit functionUnit, AiGeneratedData generatedData) {

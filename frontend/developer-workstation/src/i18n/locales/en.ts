@@ -2089,6 +2089,7 @@ export default {
       AI_ACTION_STAGE_BINDING_INVALID: 'AI generated actions that are not correctly bound to process tasks, please regenerate',
       AI_BPMN_BINDING_FAILED: 'Failed to write form and action bindings into the process, please regenerate',
       AI_WRITE_CONFLICT: 'Data was modified by another user, please refresh and retry',
+      AI_WRITE_FAILED: 'Data write failed: {detail}',
       AI_WRITE_IN_PROGRESS: 'A previous apply is still running, please wait for it to finish',
       AI_CONTEXT_TOO_LARGE: 'Function unit data too large for AI processing',
       AI_UNDO_EXPIRED: 'Undo window has expired',

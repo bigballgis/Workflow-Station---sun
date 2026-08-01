@@ -2080,6 +2080,7 @@ export default {
       AI_ACTION_STAGE_BINDING_INVALID: 'AI 生成的动作与流程任务节点绑定不正确，请重新生成',
       AI_BPMN_BINDING_FAILED: '表单与动作绑定写入流程失败，请重新生成',
       AI_WRITE_CONFLICT: '数据已被其他用户修改，请刷新后重试',
+      AI_WRITE_FAILED: '数据写入失败：{detail}',
       AI_WRITE_IN_PROGRESS: '上一次应用尚未完成，请等待结束后再试',
       AI_CONTEXT_TOO_LARGE: '功能单元数据过大，无法进行 AI 处理',
       AI_UNDO_EXPIRED: '撤销窗口已过期',

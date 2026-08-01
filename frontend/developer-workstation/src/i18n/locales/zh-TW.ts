@@ -2081,6 +2081,7 @@ export default {
       AI_ACTION_STAGE_BINDING_INVALID: 'AI 產生的動作與流程任務節點繫結不正確，請重新產生',
       AI_BPMN_BINDING_FAILED: '表單與動作繫結寫入流程失敗，請重新產生',
       AI_WRITE_CONFLICT: '資料已被其他使用者修改，請重新整理後重試',
+      AI_WRITE_FAILED: '資料寫入失敗：{detail}',
       AI_WRITE_IN_PROGRESS: '上一次套用尚未完成，請等待結束後再試',
       AI_CONTEXT_TOO_LARGE: '功能單元資料過大，無法進行 AI 處理',
       AI_UNDO_EXPIRED: '復原視窗已過期',

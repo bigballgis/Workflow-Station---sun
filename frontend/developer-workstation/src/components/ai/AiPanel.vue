@@ -456,8 +456,24 @@ function registerEventHandlers() {
   })
 
   eventsComposable.onWriteError((data: any) => {
-    ElMessage.error(data?.message || t('ai.panel.dataApplyFailed'))
+    ElMessage.error(resolveWriteErrorMessage(data))
   })
+}
+
+/**
+ * write_error carries errorCode (translated here) plus message (the actual cause, for failures that
+ * have no canned text). This used to read data.message while the backend sent data.error, so every
+ * failed Apply collapsed into the same generic toast with the real cause left in the backend log.
+ */
+function resolveWriteErrorMessage(data?: { errorCode?: string; message?: string } | null): string {
+  const code = data?.errorCode
+  if (code) {
+    const key = `ai.error.${code}`
+    const translated = t(key, { detail: data?.message || '' })
+    // vue-i18n returns the key itself when it is not found
+    if (translated !== key) return translated
+  }
+  return data?.message || t('ai.panel.dataApplyFailed')
 }
 
 async function showForceUnlockDialog(data: any) {

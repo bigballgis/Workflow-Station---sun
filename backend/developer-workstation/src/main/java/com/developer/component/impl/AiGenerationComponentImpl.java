@@ -44,6 +44,9 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class AiGenerationComponentImpl implements AiGenerationComponent {
 
+    /** Cap for the cause text pushed to the client in a {@code write_error} event. */
+    private static final int MAX_WRITE_ERROR_MESSAGE_LENGTH = 300;
+
     private final AiGenerationService aiGenerationService;
     private final AiLockService aiLockService;
     private final AiValidationService aiValidationService;
@@ -387,19 +390,48 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
             throw e;
         } catch (jakarta.persistence.OptimisticLockException e) {
             log.warn("Optimistic lock conflict during apply: functionUnitId={}", functionUnitId, e);
-            aiGenerationService.sendEventNotification(functionUnitId,
-                    AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", "AI_WRITE_CONFLICT")).build());
+            sendWriteError(functionUnitId, "AI_WRITE_CONFLICT", null);
             throw new AiGenerationException("AI_WRITE_CONFLICT",
                     "Data was modified by another user, please retry");
         } catch (Exception e) {
             log.error("Failed to apply generated data: functionUnitId={}", functionUnitId, e);
-            // Send write error event
-            aiGenerationService.sendEventNotification(functionUnitId,
-                    AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", e.getMessage())).build());
+            String errorCode = e instanceof AiGenerationException age ? age.getErrorCode() : "AI_WRITE_FAILED";
+            sendWriteError(functionUnitId, errorCode, rootCauseMessage(e));
             throw e;
         } finally {
             applyInFlight.remove(functionUnitId);
         }
+    }
+
+    /**
+     * Emit the {@code write_error} SSE event.
+     *
+     * <p>The payload carries {@code errorCode} (translated by the client) and {@code message} (the cause,
+     * for codes that have no canned text). It used to be a single {@code error} key that no client ever
+     * read, so every failed Apply surfaced as the generic "Data write failed" toast with the real cause
+     * only in the backend log. {@code LinkedHashMap} rather than {@code Map.of} because a null message is
+     * legal here and {@code Map.of} would throw an NPE from inside the catch block, hiding the original
+     * failure entirely.</p>
+     */
+    private void sendWriteError(Long functionUnitId, String errorCode, String message) {
+        Map<String, Object> errorData = new LinkedHashMap<>();
+        errorData.put("errorCode", errorCode);
+        errorData.put("message", message);
+        aiGenerationService.sendEventNotification(functionUnitId,
+                AiChatSseEvent.builder().eventType("write_error").data(errorData).build());
+    }
+
+    /** Deepest cause message, capped — a JDBC constraint violation is wrapped several layers deep. */
+    private String rootCauseMessage(Throwable e) {
+        Throwable cause = e;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        String message = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
+        message = message.replaceAll("\\s+", " ").trim();
+        return message.length() > MAX_WRITE_ERROR_MESSAGE_LENGTH
+                ? message.substring(0, MAX_WRITE_ERROR_MESSAGE_LENGTH) + "…"
+                : message;
     }
 
     /**
