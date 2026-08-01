@@ -7,6 +7,10 @@
 # SQL scripts
 *.sql text eol=lf
 
+# CI 的 surefire excludesFile：在 Linux runner 上被 surefire 按平台默认编码逐行读，
+# CRLF 会让模式匹配不上（隔离失效 → CI 无故变红）。和 *.sh 同理，必须钉死 LF。
+.github/known-test-failures.txt text eol=lf
+
 # TypeScript / Vue (frontend; consistent with CI/Linux and avoid CRLF noise on Windows)
 *.ts text eol=lf
 *.tsx text eol=lf

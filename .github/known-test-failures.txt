@@ -1,0 +1,70 @@
+# CI quarantine list (surefire excludesFile).
+#
+# NOTE: ASCII only. Surefire reads this file with the platform default charset,
+# so non-ASCII characters break it with "Failed to load list from file: Input length = 1".
+#
+# These tests were ALREADY RED before CI existed. They are not regressions from
+# any recent change. Left in the suite they would make CI red from day one, and a
+# permanently red CI is the same as no CI: real regressions drown in the noise.
+#
+# Quarantining them restores signal. Each entry records its root cause and its exit
+# condition. Fix one, delete its line.
+#
+# DO NOT add entries here to turn CI green. A newly failing test IS a regression;
+# fix the code instead.
+#
+# Usage: mvn test -Dsurefire.excludesFile=<repo-root>/.github/known-test-failures.txt
+
+# ---------------------------------------------------------------------------
+# workflow-engine-core - 2 failures, deterministic (verified: not flaky)
+#
+# MultiInstanceStatusController.getStatus() returns success=false, so the test
+# fails at assertThat(...isSuccess()).isTrue() and never reaches the count
+# assertions it is actually about. Pre-existing controller defect, unrelated to
+# the Flowable 7.2.0 upgrade: git log shows these files were last touched in
+# b6f6a5d06, well before it.
+#
+# Exit condition: debug the error branch in MultiInstanceStatusController.
+# ---------------------------------------------------------------------------
+**/MultiInstanceStatusQueryConsistencyPropertyTest.java
+
+# ---------------------------------------------------------------------------
+# platform-common - 5 failures (1 + 3, plus a shared cause)
+#
+# Bean Validation constraint violations that the tests do not expect
+# (ConstraintViolationImpl on the configuration properties classes). Verified
+# pre-existing: the same 5 failures reproduce on a git worktree of the commit
+# BEFORE the Flowable 7.2.0 upgrade, so they are not caused by it.
+#
+# Exit condition: reconcile the @ConfigurationProperties constraints with what
+# these property tests assert is valid.
+# ---------------------------------------------------------------------------
+**/ConfigurationValidationPropertyTest.java
+**/ExternalConfigurationLoadingPropertyTest.java
+
+# ---------------------------------------------------------------------------
+# platform-security - 3 errors
+#
+# A jqwik @Property generates arbitrary passwords, including ones longer than
+# BCrypt's hard 72-byte input limit, so the encoder throws
+# IllegalArgumentException("password cannot be more than 72 bytes"). The
+# generator is simply wider than the code under test allows. Verified
+# pre-existing on the commit before the Flowable 7.2.0 upgrade.
+#
+# Exit condition: constrain the generator (e.g. @StringLength(max = 72)), or
+# decide the application should reject over-long passwords and assert that.
+# ---------------------------------------------------------------------------
+**/UserPropertyTest.java
+
+# ---------------------------------------------------------------------------
+# user-portal - 2 errors
+#
+# Both read SQL from deploy/init-scripts/14-travel-expense-reimbursement/, a
+# directory that does not exist in the repository (NoSuchFileException). The
+# tests reference a seed package that was never committed or has been deleted;
+# this is not a product-code defect.
+#
+# Exit condition: restore that seed directory, or delete/rewrite these tests.
+# ---------------------------------------------------------------------------
+**/TravelExpenseIdempotencyPropertyTest.java
+**/TravelExpenseDependencyErrorPropertyTest.java

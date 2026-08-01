@@ -338,6 +338,8 @@ BOOT-INF/
 !.github/hooks/
 !.github/hooks/**
 !.github/pull_request_template.md
+# build.yml 的 surefire excludesFile：CI 的隔离清单，必须入库否则 CI 跑不起来。
+!.github/known-test-failures.txt
 .claude/*
 !.claude/scripts/
 !.claude/scripts/**
