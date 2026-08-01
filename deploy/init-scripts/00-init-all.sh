@@ -26,8 +26,11 @@ for f in /docker-entrypoint-initdb.d/00-schema/01-*.sql \
 done
 
 # --- Step 2: Incremental migrations ---
-# Note: 09-* reserved (intentionally unused). Flowable tables are managed by workflow-engine-core
-# (flowable.database-schema-update=true in docker profile) and can be repaired via 99-maintenance/01-repair-flowable-schema.sql
+# Note: 09-* reserved (intentionally unused). Flowable act_*/flw_* tables are NOT created here.
+# Schema management is manual in every environment (flowable.database-schema-update=false):
+#   new database     -> deploy/k8s/init-data/init-flowable/create/flowable.postgres.all.create.sql
+#   version upgrade  -> deploy/k8s/init-data/init-flowable/upgrade/MIGRATE-*.sql
+#   corrupted schema -> 99-maintenance/01-repair-flowable-schema.sql (drops, then re-run create)
 echo ""
 echo "[2/6] Applying incremental migrations..."
 for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \

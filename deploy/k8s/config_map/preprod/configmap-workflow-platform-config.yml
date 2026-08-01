@@ -24,7 +24,9 @@ data:
   CORS_ALLOWED_ORIGINS: "https://__INGRESS_HOST__,http://__INGRESS_HOST__,https://sit-admin.company.com,https://sit-portal.company.com,https://sit-dev.company.com"
   DEVELOPER_WORKSTATION_BACKEND_URL: "http://developer-workstation-service.__NAMESPACE__:8080"
   DEVELOPER_WORKSTATION_URL: "http://developer-workstation-service.__NAMESPACE__:8080"
-  FLOWABLE_SCHEMA_UPDATE: "true"
+  # Manual migration in every environment: run
+  # deploy/k8s/init-data/init-flowable/upgrade/MIGRATE-*.sql before rolling a new engine image.
+  FLOWABLE_SCHEMA_UPDATE: "false"
   JWT_EXPIRATION: "86400000"
   JWT_EXPIRATION_MS: "86400000"
   JWT_ISSUER: "platform-sit"

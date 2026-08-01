@@ -38,7 +38,7 @@
 
 **执行前**：整库 `pg_dump` 备份（`act_*` 与 `dw_*`/`sys_*` 同库，且 `sys_function_unit_contents` 里指向 `ACT_RE_*` 的两个指针**无外键约束**，只恢复一部分会产生悬垂引用），并停掉 `workflow-engine`。脚本**单向**，官方无降级脚本，回滚只能整库恢复备份。
 
-**各环境**：`dev`/`sit`/`preprod` 的 `FLOWABLE_SCHEMA_UPDATE=true`，引擎启动时自动迁移，一般无需手工执行；`uat`/`prod` 为 `false`，引擎不会自动迁移且版本不符会启动失败，**必须**先执行本文件再发布新镜像。
+**各环境**：2026-08 起 **所有环境**（dev / sit / preprod / uat / prod）的 `FLOWABLE_SCHEMA_UPDATE` 统一为 `false` —— 引擎不会自动迁移，版本不符会直接启动失败。发布新引擎版本前必须：**停引擎 → 整库备份 → 执行迁移脚本 → 再启动**。这样做是因为 Flowable 的 schema 迁移单向不可逆，不应由「重启容器」顺带触发。唯一例外是单元测试（`application-test.yml` 保持 `true`，每次跑都是全新的内存 H2）。
 
 > 已验证：本机 dev 库由引擎自动迁移；同一份备份恢复到临时库后用本脚本手工迁移，两者产出的 `act_*`/`flw_*` schema **841 列逐字节一致**。
 

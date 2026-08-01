@@ -79,11 +79,15 @@ spring:
   kafka:
     bootstrap-servers: kafka:29092
 
-# Flowable Configuration - automatic schema creation on by default, but overridable so the
-# uat/prod path (FLOWABLE_SCHEMA_UPDATE=false + an external migration job) can be rehearsed
-# locally. Hardcoding true made dev structurally unable to reproduce prod's startup behaviour.
+# Flowable Configuration - schema migration is MANUAL in every environment.
+# The engine must not silently upgrade act_* on startup: a Flowable major/minor schema migration
+# is one-way (no vendor downgrade scripts), so it needs a backup and a deliberate operator step,
+# not a side effect of a container restart. Run the migration SQL first, then start the engine:
+#   deploy/k8s/init-data/init-flowable/upgrade/MIGRATE-<from>-to-<to>-for-gui.sql
+# Set FLOWABLE_SCHEMA_UPDATE=true only to deliberately let the engine create/upgrade the schema
+# (e.g. a throwaway local database you are happy to lose).
 flowable:
-  database-schema-update: ${FLOWABLE_SCHEMA_UPDATE:true}
+  database-schema-update: ${FLOWABLE_SCHEMA_UPDATE:false}
   async-executor-activate: true
   history-level: full
 

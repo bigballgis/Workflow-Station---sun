@@ -31,6 +31,9 @@ spring:
       password: ${TEST_REDIS_PASSWORD:dev_redis_123}
 
 flowable:
+  # Deliberately true here even though every real environment now migrates manually: each test run
+  # starts from an empty in-memory H2, so Flowable must create its own act_* tables. Nothing
+  # persists between runs, so there is no migration to control.
   database-schema-update: true
   async-executor-activate: false
 

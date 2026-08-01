@@ -1,0 +1,54 @@
+-- =============================================================================
+-- 说明脚本（不执行任何变更）：Flowable schema 现在是「手动迁移」
+-- =============================================================================
+--
+-- 本文件不做任何 DDL/DML，只是一条给操作者的提示，因为同目录
+-- `01-repair-flowable-schema.sql` 的注释已经过时，而 init-scripts 下的 .sql
+-- 只增不改（见 .cursor/rules/init-scripts-append-only.mdc），故另开一个文件说明。
+--
+-- -----------------------------------------------------------------------------
+-- 变更内容（2026-08）
+-- -----------------------------------------------------------------------------
+-- 所有环境的 `flowable.database-schema-update` 统一改为 **false**：
+--
+--   dev（docker profile 默认值）   true → false
+--   sit（deploy/environments/sit/.env）             true → false
+--   preprod（k8s configmap）                        true → false
+--   uat / prod                                      本来就是 false
+--   测试（application-test.yml）                    保持 true（每次跑都是全新的内存 H2）
+--
+-- 原因：Flowable 的 schema 迁移是**单向**的（官方不提供降级脚本），不应该由
+-- 「重启了一下容器」这种动作顺带触发。迁移前必须有整库备份和明确的操作决定。
+--
+-- -----------------------------------------------------------------------------
+-- 因此 `01-repair-flowable-schema.sql` 的用法变了
+-- -----------------------------------------------------------------------------
+-- 那个脚本的注释里写着「DROP 之后引擎下次启动会自动重建 DDL
+-- （database-schema-update=true in docker profile）」—— **这句现在不成立了**。
+-- DROP 完如果直接启动引擎，引擎会因为找不到 act_* 表而起不来。
+--
+-- 正确顺序：
+--   1. 停掉 workflow-engine
+--   2. 跑 01-repair-flowable-schema.sql（DROP 所有 act_* / flw_*）
+--   3. 手工执行建表脚本：
+--        deploy/k8s/init-data/init-flowable/create/flowable.postgres.all.create.sql
+--   4. 重新执行本仓库的加宽脚本（否则虚拟组 id 超 255 会在任务完成时报错）：
+--        deploy/init-scripts/00-schema/30-widen-flowable-identitylink-columns.sql
+--        deploy/init-scripts/00-schema/31-widen-flowable-act-hi-comment-columns.sql
+--   5. 再启动 workflow-engine
+--
+-- -----------------------------------------------------------------------------
+-- 版本升级（已有库，不是重建）
+-- -----------------------------------------------------------------------------
+--   deploy/k8s/init-data/init-flowable/upgrade/MIGRATE-7.0.0-to-7.2.0-for-gui.sql
+-- 该文件自带前置/后置校验（版本号 + 19 个加宽列）。执行前先整库 pg_dump 备份、
+-- 先停引擎。详见 deploy/k8s/init-data/README.md「Flowable 版本升级」。
+--
+-- -----------------------------------------------------------------------------
+-- 临时想让引擎自己建表（仅限可丢弃的本地库）
+-- -----------------------------------------------------------------------------
+--   FLOWABLE_SCHEMA_UPDATE=true docker compose up -d workflow-engine
+-- =============================================================================
+
+SELECT 'Flowable schema migration is MANUAL in all environments. '
+       'See the comments at the top of this file.' AS note;
