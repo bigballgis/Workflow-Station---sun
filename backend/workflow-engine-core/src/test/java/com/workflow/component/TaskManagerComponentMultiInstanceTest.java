@@ -273,7 +273,9 @@ class TaskManagerComponentMultiInstanceTest {
             .hasMessageContaining("数据已被修改");
         
         // 验证任务未完成
-        verify(taskService, never()).complete(any(), any());
+        // Flowable 7.2.0 新增 complete(String taskId, String userId) 重载，无类型的 any() 会与
+        // complete(String, Map) 产生歧义；用有类型匹配器锁定原本要验证的那个重载。
+        verify(taskService, never()).complete(anyString(), anyMap());
     }
     
     /**
