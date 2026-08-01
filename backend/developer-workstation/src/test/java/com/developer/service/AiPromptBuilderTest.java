@@ -1,24 +1,39 @@
 package com.developer.service;
 
+import com.developer.repository.AiPromptTemplateRepository;
 import com.developer.service.impl.AiPromptBuilder;
+import com.developer.service.impl.AiPromptTemplateServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * AiPromptBuilder 单元测试 —— 对照 {@code GenAI/build_prompt.md} 的移植保真度。
  *
  * <p>重点盯三件事：三段系统提示词都能从 classpath 加载、上下文分节顺序与占位文案不走样、
  * 未知/缺失的 phase 落回 REQUIREMENTS。</p>
+ *
+ * <p>提示词覆盖表这里刻意 mock 成空（没有任何覆盖行），因此走的正是内置默认值那条路径。</p>
  */
 class AiPromptBuilderTest {
 
-    private final AiPromptBuilder builder = new AiPromptBuilder(new ObjectMapper());
+    private final AiPromptBuilder builder = new AiPromptBuilder(new ObjectMapper(), builtInOnlyTemplates());
+
+    /** 覆盖表为空的 AiPromptTemplateService：resolve() 返回 classpath 里的内置提示词。 */
+    private static AiPromptTemplateServiceImpl builtInOnlyTemplates() {
+        AiPromptTemplateRepository repository = mock(AiPromptTemplateRepository.class);
+        when(repository.findByPhase(anyString())).thenReturn(Optional.empty());
+        return new AiPromptTemplateServiceImpl(repository);
+    }
 
     @Test
     void build_generationPhase_carriesSystemPromptAndBpmnConstraints() {

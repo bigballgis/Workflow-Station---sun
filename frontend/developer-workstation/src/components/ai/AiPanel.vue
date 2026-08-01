@@ -25,6 +25,15 @@
             </span>
           </span>
           <div class="ai-panel__header-actions">
+            <!-- 提示词管理：运行时改 requirements / design / generation 三段提示词，免重新部署 -->
+            <el-tooltip :content="t('ai.prompts.entry')">
+              <el-button
+                :icon="Tools"
+                circle
+                size="small"
+                @click="promptDialogVisible = true"
+              />
+            </el-tooltip>
             <!-- Task 17.4: Session history dropdown -->
             <el-dropdown
               v-if="ready"
@@ -168,6 +177,8 @@
           class="ai-panel__resize-handle"
           @mousedown="onResizeMouseDown"
         />
+
+        <AiPromptTemplateDialog v-model:visible="promptDialogVisible" />
       </div>
     </Transition>
   </Teleport>
@@ -177,11 +188,12 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Lock, Loading, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue'
+import { Close, Lock, Loading, FullScreen, ScaleToOriginal, Tools } from '@element-plus/icons-vue'
 import { Clock } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import ChatDialog from './ChatDialog.vue'
 import DocumentPanel from './DocumentPanel.vue'
+import AiPromptTemplateDialog from './AiPromptTemplateDialog.vue'
 import { useAiLock } from '@/composables/useAiLock'
 import { useAiSession } from '@/composables/useAiSession'
 import { useAiEvents } from '@/composables/useAiEvents'
@@ -214,6 +226,7 @@ const documentPanelRef = ref<InstanceType<typeof DocumentPanel> | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const ready = ref(false)
 const currentMode = ref<AiMode>('NEW')
+const promptDialogVisible = ref(false)
 const completedPhases = ref<AiPhase[]>([])
 const initialMessages = ref<AiMessage[]>([])
 

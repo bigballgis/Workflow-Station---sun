@@ -1,25 +1,24 @@
 package com.developer.service.impl;
 
 import com.developer.exception.AiGenerationException;
+import com.developer.service.AiPromptTemplateService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * 把 DW 侧组装好的请求体渲染成一条送给 AI gateway 的 prompt。
  *
- * <p>本类源自 {@code GenAI/build_prompt.md}（原 Activepieces flow 的 "Build Prompt" 步骤）。运行时提示词的
- * 唯一真源是 {@code src/main/resources/ai-prompts/*.txt}；历史 flow 文件仅供迁移参考。GENERATION 资源已包含
+ * <p>本类源自 {@code GenAI/build_prompt.md}（原 Activepieces flow 的 "Build Prompt" 步骤）。提示词的
+ * 内置默认值是 {@code src/main/resources/ai-prompts/*.txt}；历史 flow 文件仅供迁移参考。GENERATION 资源已包含
  * BPMN 约束块，修改提示词通常只需修改 txt，不用改 Java。</p>
+ *
+ * <p>实际取哪一份由 {@link AiPromptTemplateService} 决定：库里 {@code dw_ai_prompt_templates} 有该相位的
+ * 覆盖值就用覆盖值（AI 面板的提示词管理弹窗写入），否则用内置默认值。每轮对话现取，所以在 UI 改完立即生效。</p>
  *
  * <p>入参就是 {@link AiGenerationServiceImpl} 原先 POST 给 AP webhook 的那个 body，
  * 因此移植前后模型看到的文本完全一致。</p>
@@ -28,38 +27,16 @@ import java.util.Map;
 @Component
 public class AiPromptBuilder {
 
-    private static final String RESOURCE_DIR = "ai-prompts/";
     private static final String DEFAULT_PHASE = "REQUIREMENTS";
     private static final String DEFAULT_MODE = "NEW";
-    private static final List<String> PHASES = List.of("REQUIREMENTS", "DESIGN", "GENERATION");
 
-    /** phase → 系统提示词全文 */
-    private final Map<String, String> prompts;
+    private final AiPromptTemplateService promptTemplateService;
 
     private final ObjectMapper objectMapper;
 
-    public AiPromptBuilder(ObjectMapper objectMapper) {
+    public AiPromptBuilder(ObjectMapper objectMapper, AiPromptTemplateService promptTemplateService) {
         this.objectMapper = objectMapper;
-        this.prompts = loadPrompts();
-    }
-
-    /** 启动即加载并校验三段提示词——缺文件直接启动失败，不留到调用时才发现。 */
-    private static Map<String, String> loadPrompts() {
-        Map<String, String> loaded = new LinkedHashMap<>();
-        for (String phase : PHASES) {
-            String path = RESOURCE_DIR + phase.toLowerCase() + ".txt";
-            try (InputStream in = new ClassPathResource(path).getInputStream()) {
-                String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-                if (text.isBlank()) {
-                    throw new IllegalStateException("AI prompt resource is empty: " + path);
-                }
-                loaded.put(phase, text);
-            } catch (IOException e) {
-                throw new IllegalStateException("Failed to load AI prompt resource: " + path, e);
-            }
-        }
-        log.info("Loaded AI prompt templates: {}", loaded.keySet());
-        return Map.copyOf(loaded);
+        this.promptTemplateService = promptTemplateService;
     }
 
     /**
@@ -72,13 +49,13 @@ public class AiPromptBuilder {
         Map<String, Object> src = body != null ? body : Map.of();
 
         String phase = normalize(src.get("phase"), DEFAULT_PHASE);
-        if (!prompts.containsKey(phase)) {
+        if (!promptTemplateService.phases().contains(phase)) {
             phase = DEFAULT_PHASE;
         }
         String mode = normalize(src.get("mode"), DEFAULT_MODE);
 
         List<String> parts = new ArrayList<>();
-        parts.add(prompts.get(phase));
+        parts.add(promptTemplateService.resolve(phase));
         parts.add("\n\n========== Session context (system-provided; do not expose this divider in your reply) ==========");
         parts.add("Phase: " + phase + " | Mode: " + mode);
 
