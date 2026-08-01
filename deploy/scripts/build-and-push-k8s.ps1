@@ -105,12 +105,21 @@ if (-not $SkipBackend -and -not $PushOnly) {
     }
     for ($attempt = 1; -not $pulled -and $attempt -le 3; $attempt++) {
         Write-Host "   Pulling $JavaBaseImage (attempt $attempt/3)..." -ForegroundColor Gray
-        docker pull $JavaBaseImage 2>&1 | Out-Null
+        # Deliberately unredirected — no `2>&1`, no Out-Null. This is a ~320 MB pull against a
+        # mirror that may be slow or unreachable, and swallowing docker's output made a healthy
+        # download and a hung connection look identical: several silent minutes, then a retry.
+        # Letting docker write straight to the console keeps its live progress lines. Avoiding
+        # `2>&1` also keeps Windows PowerShell from turning docker's stderr into a terminating
+        # NativeCommandError under $ErrorActionPreference = "Stop".
+        docker pull $JavaBaseImage
         if ($LASTEXITCODE -eq 0) {
             Write-Ok "Java base image present locally"
             $pulled = $true
             break
         }
+        # Print the exit code: without it the only trace of a failed attempt was the next
+        # "attempt N/3" line, which reads as a restart rather than a failure.
+        Write-Host "   Pull attempt $attempt failed (docker exit $LASTEXITCODE)." -ForegroundColor Yellow
         if ($attempt -lt 3) {
             Write-Host "   Retrying in 5s..." -ForegroundColor DarkGray
             Start-Sleep -Seconds 5
