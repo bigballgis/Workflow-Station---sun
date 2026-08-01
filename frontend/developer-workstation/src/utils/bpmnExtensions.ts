@@ -19,10 +19,53 @@ function rawElement(element: BpmnElement): BpmnElement {
   return toRaw(element) as BpmnElement
 }
 
-/** custom:Properties / custom_1:Properties 在 moddle 中的子项字段名（见 customModdle.ts） */
-function getCustomPropertyList(properties: any): any[] {
-  const list = properties?.property ?? properties?.values
-  return Array.isArray(list) ? list : []
+/** custom:Property / custom:Values 子项（两者字段相同，见 customModdle.ts） */
+interface CustomPropertyEntry {
+  name?: string
+  value?: string
+}
+
+/** custom:Properties / custom_1:Properties 容器：子项可能挂在 property 或 values 上 */
+interface CustomPropertiesContainer {
+  property?: CustomPropertyEntry[]
+  values?: CustomPropertyEntry[]
+}
+
+/** 容器里承载子项的两个字段，读写都按这个顺序找。 */
+const PROPERTY_LIST_FIELDS: (keyof CustomPropertiesContainer)[] = ['property', 'values']
+
+/**
+ * 读取用：custom:Properties / custom_1:Properties 的子项两种写法都可能出现
+ * （`<custom:property>` 与 `<custom:values>`，见 customModdle.ts），合并后返回。
+ */
+function getCustomPropertyList(
+  properties: CustomPropertiesContainer | null | undefined
+): CustomPropertyEntry[] {
+  const merged: CustomPropertyEntry[] = []
+  for (const field of PROPERTY_LIST_FIELDS) {
+    const list = properties?.[field]
+    if (Array.isArray(list)) {
+      merged.push(...list)
+    }
+  }
+  return merged
+}
+
+/**
+ * 写入用：返回真正持有该项的 moddle 数组。删除必须 splice 原数组，
+ * 在 {@link getCustomPropertyList} 的合并副本上 splice 不会生效。
+ */
+function findOwningPropertyList(
+  properties: CustomPropertiesContainer | null | undefined,
+  name: string
+): CustomPropertyEntry[] | null {
+  for (const field of PROPERTY_LIST_FIELDS) {
+    const list = properties?.[field]
+    if (Array.isArray(list) && list.some((p) => p?.name === name)) {
+      return list
+    }
+  }
+  return null
 }
 
 /** 从单个 custom:Properties 或 custom_1:Properties 容器解析为键值表 */
@@ -45,7 +88,7 @@ function collectExtensionPropsFromContainer(properties: any): Record<string, any
 /**
  * 解析属性值，支持 JSON 格式
  */
-export function parsePropertyValue(value: string): any {
+export function parsePropertyValue(value: string | undefined): any {
   if (value === undefined || value === null) return value
   if (value === 'true') return true
   if (value === 'false') return false
@@ -168,14 +211,9 @@ export function setExtensionProperty(
   }
   
   if (!properties.property) {
-    // 兼容旧会话中误用的 values
-    if (Array.isArray(properties.values) && properties.values.length) {
-      properties.property = properties.values
-    } else {
-      properties.property = []
-    }
+    properties.property = []
   }
-  
+
   // 更新或添加属性
   const stringValue = stringifyPropertyValue(value)
   const list = getCustomPropertyList(properties)
@@ -227,9 +265,9 @@ export function removeExtensionProperty(
     (ext: any) => ext.$type === `${CUSTOM_PREFIX}:Properties`
   )
 
-  const list = getCustomPropertyList(properties)
-  if (!list.length) return
-  
+  const list = findOwningPropertyList(properties, name)
+  if (!list) return
+
   const index = list.findIndex((p: any) => p.name === name)
   if (index > -1) {
     list.splice(index, 1)

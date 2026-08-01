@@ -46,7 +46,11 @@
           class="auto-save-blocked"
         >
           <el-icon><WarningFilled /></el-icon>
-          {{ t('process.emptyDiagramAutoSaveBlockedShort') }}
+          {{
+            diagramIsFallback
+              ? t('process.fallbackDiagramAutoSaveBlockedShort')
+              : t('process.emptyDiagramAutoSaveBlockedShort')
+          }}
         </span>
         <span
           v-else-if="lastAutoSaveTime"
@@ -167,6 +171,7 @@ const importXml = ref('')
 const {
   modelerReady,
   bpmnModelerRef,
+  diagramIsFallback,
   getModeler,
   initModeler,
   destroyModeler,
@@ -210,6 +215,7 @@ const {
   store,
   showImportDialog,
   importXml,
+  diagramIsFallback,
   t,
 })
 

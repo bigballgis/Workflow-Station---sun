@@ -230,10 +230,11 @@ function readLoopChars(): { collection: string; elementVariable: string; complet
   const ext = lc.extensionElements
   if (ext?.values?.length) {
     for (const v of ext.values) {
-      const type = v.$type || ''
+      // moddle 类型名为 flowable:Collection（见 customModdle.ts）；旧会话里可能是小写，两种都认。
+      const type = (v.$type || '').toLowerCase()
       if (type === 'flowable:collection') {
         result.collection = (v.body || '').trim()
-      } else if (type === 'flowable:elementVariable') {
+      } else if (type === 'flowable:elementvariable') {
         result.elementVariable = (v.body || '').trim()
       }
     }

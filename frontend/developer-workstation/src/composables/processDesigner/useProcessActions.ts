@@ -15,6 +15,7 @@ interface UseProcessActionsOptions {
   getModeler: () => any
   store: {
     process: { bpmnXml?: string } | null
+    fetchProcess?: (functionUnitId: number) => Promise<unknown>
     saveProcess: (
       functionUnitId: number,
       payload: { bpmnXml: string },
@@ -23,6 +24,11 @@ interface UseProcessActionsOptions {
   }
   showImportDialog: Ref<boolean>
   importXml: Ref<string>
+  /**
+   * 画布内容是 import 失败后的兜底默认图，而非该 FU 真正的流程
+   * （见 useProcessModeler 的 no-diagram fallback）。置位时保存必须先过确认。
+   */
+  diagramIsFallback?: Ref<boolean>
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -32,7 +38,8 @@ interface UseProcessActionsOptions {
  * debug panel. Owns the saving/auto-save UI state.
  */
 export function useProcessActions(options: UseProcessActionsOptions) {
-  const { functionUnitId, getModeler, store, showImportDialog, importXml, t } = options
+  const { functionUnitId, getModeler, store, showImportDialog, importXml, diagramIsFallback, t } =
+    options
 
   const saving = ref(false)
   const autoSaving = ref(false)
@@ -43,6 +50,7 @@ export function useProcessActions(options: UseProcessActionsOptions) {
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
   /** 每轮阻断只弹一次 toast：commandStack.changed 每 2s 就会再次触发保存。 */
   let emptyDiagramWarned = false
+  let fallbackDiagramWarned = false
 
   function formatLastTaskTopologyViolations(): string {
     const bpmnModeler = getModeler()
@@ -53,6 +61,10 @@ export function useProcessActions(options: UseProcessActionsOptions) {
       .join('; ')
   }
 
+  /**
+   * 调试面板用：要的是**画布当前状态**（用户就是在调试没落库的改动），
+   * 与 {@link handleExportXML} 的「导出已持久化 XML」是两码事，勿合并。
+   */
   async function exportCurrentBpmnXml(): Promise<string> {
     const bpmnModeler = getModeler()
     if (!bpmnModeler) return store.process?.bpmnXml || ''
@@ -102,10 +114,26 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     }
   }
 
+  /**
+   * 导出库里持久化的 BPMN，而不是 `bpmnModeler.saveXML()` 重新序列化的画布。
+   *
+   * bpmn-js 的 saveXML 等价于 `moddle.toXML(definitions)`，只会写回 moddle 认识的
+   * 类型：任何未在 customModdle 声明的扩展元素（旧 flowable 元素写法、其它引擎的
+   * listener 等）都会被静默丢弃。导出用于迁移/存档，必须逐字节保真，所以先从后端
+   * 取最新持久化版本；仅在该 FU 还没落过库时才退回画布序列化。
+   */
   async function handleExportXML() {
-    const bpmnModeler = getModeler()
-    if (!bpmnModeler) return
     try {
+      await store.fetchProcess?.(functionUnitId)
+      const persisted = store.process?.bpmnXml
+      if (persisted && persisted.trim()) {
+        downloadFile(persisted, 'process.bpmn', 'application/xml')
+        ElMessage.success(t('process.xmlExportSavedVersion'))
+        return
+      }
+
+      const bpmnModeler = getModeler()
+      if (!bpmnModeler) return
       const { xml } = await bpmnModeler.saveXML({ format: true })
       downloadFile(xml, 'process.bpmn', 'application/xml')
       ElMessage.success(t('process.xmlExportSuccess'))
@@ -154,6 +182,32 @@ export function useProcessActions(options: UseProcessActionsOptions) {
         ElMessage.error(t('process.lastTaskAnchorBlocked', { detail }))
       }
       return
+    }
+
+    // 兜底图护栏：import 失败后画布是默认的 Start→End，不是这个 FU 的流程。
+    // 它有节点有 shape，空图护栏放行，自动保存会把真流程整条覆盖掉，所以单独挡一道。
+    if (diagramIsFallback?.value) {
+      if (isAutoSave) {
+        autoSaveBlocked.value = true
+        if (!fallbackDiagramWarned) {
+          fallbackDiagramWarned = true
+          ElMessage.warning(t('process.fallbackDiagramAutoSaveBlocked'))
+        }
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          t('process.fallbackDiagramSaveConfirm'),
+          t('process.fallbackDiagramSaveConfirmTitle'),
+          {
+            type: 'warning',
+            confirmButtonText: t('common.confirm'),
+            cancelButtonText: t('common.cancel')
+          }
+        )
+      } catch {
+        return // 用户取消：保持已存版本
+      }
     }
 
     let xml: string
@@ -206,6 +260,11 @@ export function useProcessActions(options: UseProcessActionsOptions) {
 
       autoSaveBlocked.value = false
       emptyDiagramWarned = false
+      // 用户已确认用兜底图覆盖：库里现在就是画布内容，护栏归位。
+      fallbackDiagramWarned = false
+      if (diagramIsFallback) {
+        diagramIsFallback.value = false
+      }
       if (isAutoSave) {
         lastAutoSaveTime.value = new Date()
       } else {
