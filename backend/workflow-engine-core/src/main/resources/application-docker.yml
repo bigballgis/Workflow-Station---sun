@@ -79,9 +79,11 @@ spring:
   kafka:
     bootstrap-servers: kafka:29092
 
-# Flowable Configuration - enable automatic schema creation
+# Flowable Configuration - automatic schema creation on by default, but overridable so the
+# uat/prod path (FLOWABLE_SCHEMA_UPDATE=false + an external migration job) can be rehearsed
+# locally. Hardcoding true made dev structurally unable to reproduce prod's startup behaviour.
 flowable:
-  database-schema-update: true
+  database-schema-update: ${FLOWABLE_SCHEMA_UPDATE:true}
   async-executor-activate: true
   history-level: full
 

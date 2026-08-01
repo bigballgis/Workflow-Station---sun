@@ -40,6 +40,16 @@ app:
   security:
     jwt-secret-key: test-only-jwt-secret-key-with-enough-length-for-hs512-validation-0123456789
 
+# platform-security JwtProperties (@ConfigurationProperties prefix "platform.security.jwt") is a
+# SEPARATE binding from app.security.* above — JwtTokenServiceImpl reads THIS one and rejects any
+# secret under 32 bytes. Leaving it unset falls back to the 23-byte default, which fails that check
+# and takes down the whole application context: every @SpringBootTest in the module then errors
+# (was 64 errors, dropping the module from 830 tests to 694).
+platform:
+  security:
+    jwt:
+      secret: test-only-platform-jwt-secret-with-enough-length-for-hs512-0123456789
+
 logging:
   level:
     com.workflow: DEBUG
