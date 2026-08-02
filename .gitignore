@@ -145,6 +145,11 @@ desktop.ini
 !deploy/environments/**/.env
 !deploy/environments/**/.env.*
 
+# ...但 dev 那份不再入库：它现在带真实凭证（AI_GATEWAY_API_KEY 等），本地私有。
+# 排在上面的否定之后才生效——.gitignore 里最后一条匹配规则说了算。
+# 注意仅忽略不足以生效：该文件此前是被跟踪的，已同时 `git rm --cached` 停止跟踪。
+deploy/environments/dev/.env
+
 # Superset BuildKit pip secret (Nexus credentials) — never commit real pip.conf
 deploy/superset/pip.conf
 
