@@ -24,7 +24,10 @@
     >
       <div class="inline-doc-viewer__header">
         <span class="inline-doc-viewer__label">{{ docLabel }}</span>
-        <ViewModeToggle v-model="viewMode" />
+        <ViewModeToggle
+          v-model="viewMode"
+          :modes="availableModes"
+        />
         <el-button
           size="small"
           text
@@ -43,6 +46,14 @@
           v-show="viewMode === 'markdown'"
           :content="content"
         />
+        <DesignProcessPreview
+          v-if="viewMode === 'process'"
+          :content="content"
+        />
+        <DesignTablePreview
+          v-if="viewMode === 'table'"
+          :content="content"
+        />
       </div>
     </div>
   </div>
@@ -54,6 +65,8 @@ import { useI18n } from 'vue-i18n'
 import ViewModeToggle from './ViewModeToggle.vue'
 import XmlTreeView from './XmlTreeView.vue'
 import MarkdownRenderer from './MarkdownRenderer.vue'
+import DesignProcessPreview from './DesignProcessPreview.vue'
+import DesignTablePreview from './DesignTablePreview.vue'
 import type { AiDocumentType, ViewMode } from '@/types/aiGeneration'
 
 const props = defineProps<{
@@ -68,6 +81,15 @@ const viewMode = ref<ViewMode>('xml')
 const chatMessagesHeight = inject<{ value: number }>('chatMessagesHeight', ref(400))
 
 const maxHeight = computed(() => Math.floor(chatMessagesHeight.value * 0.7))
+
+/**
+ * 设计文档多出流程图与数据模型两段预览：设计阶段还没有 BPMN XML，
+ * 但文档里的节点/连线/字段矩阵已经够画出来了，省得用户在上万字正文里靠肉眼拼流程。
+ */
+const availableModes = computed<ViewMode[]>(() =>
+  props.documentType === 'DESIGN'
+    ? ['xml', 'markdown', 'process', 'table']
+    : ['xml', 'markdown'])
 
 const docLabel = computed(() =>
   t(`ai.doc.${props.documentType === 'REQUIREMENTS' ? 'requirements' : 'design'}`)

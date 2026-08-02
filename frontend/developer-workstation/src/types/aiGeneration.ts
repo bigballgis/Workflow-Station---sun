@@ -110,7 +110,7 @@ export interface PageResponse<T> {
   size: number
 }
 
-export type ViewMode = 'xml' | 'markdown'
+export type ViewMode = 'xml' | 'markdown' | 'process' | 'table'
 
 export interface InlineDocument {
   id: number

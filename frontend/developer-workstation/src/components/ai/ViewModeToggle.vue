@@ -19,19 +19,30 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ViewMode } from '@/types/aiGeneration'
 
 const { t } = useI18n()
 
-const MODES: Array<{ value: ViewMode; labelKey: string }> = [
-  { value: 'xml', labelKey: 'ai.doc.xmlView' },
-  { value: 'markdown', labelKey: 'ai.doc.markdownView' }
-]
+const LABEL_KEYS: Record<ViewMode, string> = {
+  xml: 'ai.doc.xmlView',
+  markdown: 'ai.doc.markdownView',
+  process: 'ai.doc.processView',
+  table: 'ai.doc.tableView'
+}
 
-defineProps<{
+// 模式集合可由调用方裁剪：DESIGN 文档多两段结构化预览，其余文档仍是 xml / markdown 两段。
+const props = withDefaults(defineProps<{
   modelValue: ViewMode
-}>()
+  modes?: ViewMode[]
+}>(), {
+  // 字面量不能提出去：defineProps 的默认值工厂会被提升到 setup() 之外，引用不到局部常量。
+  modes: () => ['xml', 'markdown'] as ViewMode[]
+})
+
+const MODES = computed(() =>
+  props.modes.map(value => ({ value, labelKey: LABEL_KEYS[value] })))
 
 defineEmits<{
   'update:modelValue': [mode: ViewMode]
