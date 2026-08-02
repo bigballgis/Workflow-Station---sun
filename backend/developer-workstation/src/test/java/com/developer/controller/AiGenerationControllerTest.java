@@ -11,6 +11,9 @@ import com.developer.exception.AiLockConflictException;
 import com.developer.exception.AiValidationFailedException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.platform.common.dto.UserPrincipal;
+import com.platform.common.i18n.I18nService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +25,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -46,6 +51,10 @@ class AiGenerationControllerTest {
     @Mock
     private AiGenerationComponent aiGenerationComponent;
 
+    /** 控制器构造参数之一；缺了它 @InjectMocks 传 null，未认证分支上会 NPE 而不是抛业务异常。 */
+    @Mock
+    private I18nService i18nService;
+
     @InjectMocks
     private AiGenerationController aiGenerationController;
 
@@ -59,6 +68,22 @@ class AiGenerationControllerTest {
                 .setControllerAdvice(new AiExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .build();
+
+        // 控制器取当前用户走 SecurityContextUtils（只认 UserPrincipal），下面各用例仍在发的
+        // X-User-Id 头早就不是身份来源了。standalone MockMvc 不跑安全过滤器，这里手工种上。
+        UserPrincipal principal = UserPrincipal.builder()
+                .userId("user1")
+                .username("user1")
+                .roles(List.of("DEVELOPER"))
+                .permissions(List.of())
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, List.of()));
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

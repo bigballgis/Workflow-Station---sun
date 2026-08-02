@@ -5,13 +5,16 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.*;
+import com.developer.service.SubTableViewService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.Optional;
 
@@ -41,7 +44,27 @@ class FormDesignComponentImplTest {
     
     @Mock
     private ObjectMapper objectMapper;
-    
+
+    // FormDesignComponentImpl 是 @RequiredArgsConstructor：少一个 @Mock，@InjectMocks 就把该参数
+    // 传 null，直到运行到用它的那一行才 NPE。下面这些是 delete 路径实际会调到的协作者。
+    @Mock
+    private FormTableBindingRestorer formTableBindingRestorer;
+
+    @Mock
+    private FormConfigJsonTableProvisioner formConfigJsonTableProvisioner;
+
+    @Mock
+    private SubTableViewConfigRepository subTableViewConfigRepository;
+
+    @Mock
+    private I18nService i18nService;
+
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private SubTableViewService subTableViewService;
+
     @InjectMocks
     private FormDesignComponentImpl formDesignComponent;
     
@@ -85,7 +108,11 @@ class FormDesignComponentImplTest {
         
         when(formDefinitionRepository.findByIdWithBindings(1L)).thenReturn(Optional.of(form));
         when(formDefinitionRepository.findById(1L)).thenReturn(Optional.of(form));
-        
+        // 组件把异常信息交给 I18nService，mock 默认返回 null；给出与 messages_zh_CN.properties
+        // 一致的文案，下面的断言才验证的是"组件抛出了这条 i18n 消息"。
+        when(i18nService.getMessage("form.in_use"))
+                .thenReturn("无法删除表单：该表单正在被流程定义使用");
+
         // When & Then: 删除应抛出异常
         DeveloperBusinessException exception = assertThrows(DeveloperBusinessException.class, () -> {
             formDesignComponent.delete(1L);

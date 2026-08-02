@@ -8,15 +8,22 @@ import com.developer.service.MemberService;
 import com.developer.validation.SecurityInputValidator;
 import com.developer.dto.ValidationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.dto.UserPrincipal;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -35,9 +42,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 
  * Requirements: 2.2, 2.5
  */
-@WebMvcTest(MemberController.class)
+// A @WebMvcTest slice cannot load in this module: the slice still processes plain @Configuration
+// classes, so SecurityConfig's bean graph drags in RestTemplateConfig (needs an actuator-provided
+// MeterRegistry) and @EnableJpaRepositories on DeveloperWorkstationApplication forces repository
+// beans (need an entityManagerFactory) — neither auto-configuration is part of the web slice.
+// Load the full test context instead, exactly as SpringSecurityAnnotationIntegrationTest does,
+// and keep the collaborators mocked so these stay controller-level tests.
+@SpringBootTest
+@AutoConfigureMockMvc(addFilters = false)
+@ActiveProfiles("test")
 class MemberControllerTest {
-    
+
+    /** 避免 test profile 下 RedisMessageListenerContainer 连接真实 Redis 导致启动超时 */
+    @MockBean
+    private RedisMessageListenerContainer redisMessageListenerContainer;
+
     @Autowired
     private MockMvc mockMvc;
     
@@ -84,10 +103,13 @@ class MemberControllerTest {
                 .updatedBy("system")
                 .build();
         
-        // Setup update request
+        // Setup update request.
+        // NOTE: no field may contain a SecurityIntegrationService blacklist substring — that check
+        // runs for real here and is a plain `contains` over SQL/command keywords, so an innocuous
+        // "Updated User" is rejected as malicious purely because it contains "update".
         updateRequest = MemberUpdateRequest.builder()
-                .fullName("Updated User")
-                .email("updated@example.com")
+                .fullName("Renamed User")
+                .email("renamed@example.com")
                 .role("ADMIN")
                 .active(true)
                 .build();
@@ -96,6 +118,23 @@ class MemberControllerTest {
         when(securityValidator.validate(anyString())).thenReturn(ValidationResult.builder().valid(true).build());
         when(securityValidator.sanitize(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
         when(securityValidator.isValid(anyString())).thenReturn(true);
+
+        // MemberController takes the acting user from SecurityContextUtils, which only accepts a
+        // UserPrincipal — the X-User-Id header these tests still send is no longer an identity
+        // source. With addFilters = false nothing populates the context, so seed it here.
+        UserPrincipal principal = UserPrincipal.builder()
+                .userId("testuser")
+                .username("testuser")
+                .roles(List.of("DEVELOPER"))
+                .permissions(List.of())
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, List.of()));
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
     
     @Test
@@ -104,7 +143,7 @@ class MemberControllerTest {
         when(memberService.createMember(any(MemberRequest.class), anyString())).thenReturn(memberResponse);
         
         // When & Then
-        mockMvc.perform(post("/api/v1/members")
+        mockMvc.perform(post("/members")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-User-Id", "testuser")
                 .content(objectMapper.writeValueAsString(validMemberRequest)))
@@ -127,7 +166,7 @@ class MemberControllerTest {
                 .build();
         
         // When & Then
-        mockMvc.perform(post("/api/v1/members")
+        mockMvc.perform(post("/members")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-User-Id", "testuser")
                 .content(objectMapper.writeValueAsString(invalidRequest)))
@@ -143,7 +182,7 @@ class MemberControllerTest {
                 .thenThrow(new RuntimeException("Username already exists"));
         
         // When & Then
-        mockMvc.perform(post("/api/v1/members")
+        mockMvc.perform(post("/members")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-User-Id", "testuser")
                 .content(objectMapper.writeValueAsString(validMemberRequest)))
@@ -158,7 +197,7 @@ class MemberControllerTest {
         when(memberService.getMember(1L)).thenReturn(memberResponse);
         
         // When & Then
-        mockMvc.perform(get("/api/v1/members/1"))
+        mockMvc.perform(get("/members/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value("1"))
@@ -174,7 +213,7 @@ class MemberControllerTest {
                 .thenThrow(new RuntimeException("Member not found"));
         
         // When & Then
-        mockMvc.perform(get("/api/v1/members/999"))
+        mockMvc.perform(get("/members/999"))
                 .andExpect(status().isInternalServerError()); // BaseController handles as internal error
         
         verify(memberService).getMember(999L);
@@ -186,7 +225,7 @@ class MemberControllerTest {
         when(memberService.getMemberByUsername("testuser")).thenReturn(Optional.of(memberResponse));
         
         // When & Then
-        mockMvc.perform(get("/api/v1/members/username/testuser"))
+        mockMvc.perform(get("/members/username/testuser"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.username").value("testuser"));
@@ -200,7 +239,7 @@ class MemberControllerTest {
         when(memberService.getMemberByUsername("nonexistent")).thenReturn(Optional.empty());
         
         // When & Then
-        mockMvc.perform(get("/api/v1/members/username/nonexistent"))
+        mockMvc.perform(get("/members/username/nonexistent"))
                 .andExpect(status().isNotFound());
         
         verify(memberService).getMemberByUsername("nonexistent");
@@ -212,8 +251,8 @@ class MemberControllerTest {
         MemberResponse updatedResponse = MemberResponse.builder()
                 .id("1")
                 .username("testuser")
-                .fullName("Updated User")
-                .email("updated@example.com")
+                .fullName("Renamed User")
+                .email("renamed@example.com")
                 .role("ADMIN")
                 .active(true)
                 .build();
@@ -222,14 +261,14 @@ class MemberControllerTest {
                 .thenReturn(updatedResponse);
         
         // When & Then
-        mockMvc.perform(put("/api/v1/members/1")
+        mockMvc.perform(put("/members/1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-User-Id", "testuser")
                 .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.fullName").value("Updated User"))
-                .andExpect(jsonPath("$.data.email").value("updated@example.com"))
+                .andExpect(jsonPath("$.data.fullName").value("Renamed User"))
+                .andExpect(jsonPath("$.data.email").value("renamed@example.com"))
                 .andExpect(jsonPath("$.data.role").value("ADMIN"));
         
         verify(memberService).updateMember(eq(1L), any(MemberUpdateRequest.class), eq("testuser"));
@@ -242,7 +281,7 @@ class MemberControllerTest {
                 .thenThrow(new RuntimeException("Member not found"));
         
         // When & Then
-        mockMvc.perform(put("/api/v1/members/999")
+        mockMvc.perform(put("/members/999")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-User-Id", "testuser")
                 .content(objectMapper.writeValueAsString(updateRequest)))
@@ -257,7 +296,7 @@ class MemberControllerTest {
         doNothing().when(memberService).deleteMember(1L, "testuser");
         
         // When & Then
-        mockMvc.perform(delete("/api/v1/members/1")
+        mockMvc.perform(delete("/members/1")
                 .header("X-User-Id", "testuser"))
                 .andExpect(status().isNoContent());
         
@@ -271,7 +310,7 @@ class MemberControllerTest {
                 .when(memberService).deleteMember(999L, "testuser");
         
         // When & Then
-        mockMvc.perform(delete("/api/v1/members/999")
+        mockMvc.perform(delete("/members/999")
                 .header("X-User-Id", "testuser"))
                 .andExpect(status().isInternalServerError()); // BaseController handles as internal error
         
@@ -287,7 +326,7 @@ class MemberControllerTest {
         when(memberService.getAllActiveMembers(any())).thenReturn(page);
         
         // When & Then
-        mockMvc.perform(get("/api/v1/members")
+        mockMvc.perform(get("/members")
                 .param("page", "0")
                 .param("size", "20")
                 .param("sortBy", "fullName")
@@ -310,7 +349,7 @@ class MemberControllerTest {
         when(memberService.searchMembers(eq("test"), any())).thenReturn(page);
         
         // When & Then
-        mockMvc.perform(get("/api/v1/members")
+        mockMvc.perform(get("/members")
                 .param("search", "test")
                 .param("page", "0")
                 .param("size", "20"))
@@ -329,7 +368,7 @@ class MemberControllerTest {
         when(memberService.getMembersByBusinessUnit("BU001")).thenReturn(members);
         
         // When & Then
-        mockMvc.perform(get("/api/v1/members/business-unit/BU001"))
+        mockMvc.perform(get("/members/business-unit/BU001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").isArray())
@@ -340,25 +379,28 @@ class MemberControllerTest {
     
     @Test
     void createMember_SecurityValidationFails_ReturnsBadRequest() throws Exception {
-        // Given
-        ValidationResult invalidResult = ValidationResult.builder()
-                .valid(false)
-                .errors(Arrays.asList(
-                        new ValidationResult.ValidationError("SECURITY_VIOLATION", "Potential security threat detected", "username")
-                ))
+        // Given: input that the real SecurityIntegrationService rejects. BaseController only falls
+        // back to the injected SecurityInputValidator when no SecurityIntegrationService bean
+        // exists, and in a full context it always does — so stubbing the validator here would
+        // assert nothing. Drive the production path instead.
+        MemberRequest maliciousRequest = MemberRequest.builder()
+                .username("test'; DROP TABLE members;--")
+                .fullName("Test User")
+                .email("test@example.com")
+                .employeeId("EMP001")
+                .businessUnitId("BU001")
+                .businessUnitName("Test Business Unit")
+                .role("MEMBER")
                 .build();
-        
-        when(securityValidator.validate(anyString())).thenReturn(invalidResult);
-        
+
         // When & Then
-        mockMvc.perform(post("/api/v1/members")
+        mockMvc.perform(post("/members")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header("X-User-Id", "testuser")
-                .content(objectMapper.writeValueAsString(validMemberRequest)))
+                .content(objectMapper.writeValueAsString(maliciousRequest)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.error.code").value("VAL_SECURITY_VIOLATION"));
-        
+                .andExpect(jsonPath("$.error.code").value("SEC_VALIDATION_FAILED"));
+
         verify(memberService, never()).createMember(any(), any());
     }
 }
