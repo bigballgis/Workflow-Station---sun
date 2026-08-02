@@ -104,11 +104,11 @@
         <el-button
           v-if="permissions.canDelete()"
           size="small"
-          type="danger"
+          :type="isArchived ? 'danger' : 'info'"
           @click="$emit('delete', item)"
         >
-          <el-icon><Delete /></el-icon>
-          {{ t('common.delete') }}
+          <el-icon><component :is="isArchived ? Delete : Box" /></el-icon>
+          {{ deleteLabel }}
         </el-button>
       </div>
     </div>
@@ -118,7 +118,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Edit, CopyDocument, Delete, Setting, RefreshLeft } from '@element-plus/icons-vue'
+import { Edit, CopyDocument, Delete, Box, Setting, RefreshLeft } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import { permissions } from '@/utils/permission'
@@ -153,13 +153,20 @@ const statusType = computed(() => {
 })
 
 const statusLabel = computed(() => {
-  const map: Record<string, string> = { 
-    DRAFT: t('functionUnit.draft'), 
-    PUBLISHED: t('functionUnit.published'), 
-    ARCHIVED: t('functionUnit.archived') 
+  const map: Record<string, string> = {
+    DRAFT: t('functionUnit.draft'),
+    PUBLISHED: t('functionUnit.published'),
+    ARCHIVED: t('functionUnit.archived')
   }
   return map[props.item.status] || props.item.status
 })
+
+// 后端 delete 是两段式：未归档的调用只是软删（置为 ARCHIVED），已归档的才真删。
+// 菜单文案必须跟着状态走，否则第一次点「Delete」弹出的却是归档确认框。
+const isArchived = computed(() => props.item.status === 'ARCHIVED')
+const deleteLabel = computed(() =>
+  isArchived.value ? t('functionUnit.deletePermanent') : t('functionUnit.archive')
+)
 
 function handleClick() {
   emit('click', props.item)

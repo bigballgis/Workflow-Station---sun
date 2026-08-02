@@ -105,7 +105,7 @@
                           command="delete"
                           divided
                         >
-                          <el-icon><Delete /></el-icon>{{ t('common.delete') }}
+                          <el-icon><component :is="item.status === 'ARCHIVED' ? Delete : Box" /></el-icon>{{ deleteLabel(item) }}
                         </el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
@@ -126,7 +126,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Setting, CopyDocument, Delete, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
+import { Setting, CopyDocument, Delete, Box, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import type { LaunchpadFolderEntry } from '@/composables/functionUnitList/useLaunchpadLayout'
@@ -163,6 +163,12 @@ function statusLabel(item: FunctionUnitResponse): string {
     ARCHIVED: t('functionUnit.archived'),
   }
   return map[item.status] || item.status
+}
+
+// 后端 delete 是两段式：未归档的调用只是软删（置为 ARCHIVED），已归档的才真删。
+// 菜单文案必须跟着状态走，否则第一次点「Delete」弹出的却是归档确认框。
+function deleteLabel(item: FunctionUnitResponse): string {
+  return item.status === 'ARCHIVED' ? t('functionUnit.deletePermanent') : t('functionUnit.archive')
 }
 
 function handleCommand(cmd: string, item: FunctionUnitResponse) {
