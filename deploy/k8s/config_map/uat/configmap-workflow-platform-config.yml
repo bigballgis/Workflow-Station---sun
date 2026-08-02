@@ -99,6 +99,9 @@ data:
   GROUP_AI_GATEWAY_URL: "__GROUP_AI_GATEWAY_URL__"
   # 空 => 不在 body 里发 model 字段(URL 路径已选定模型)。
   AI_GATEWAY_MODEL: ""
+  # SSE 流式(服务端拼回整段,解析层无感)。集团 gateway 非流式可用,保持 "false";
+  # 只有会掐长连接的端点(如 DeepSeek,非流式约 1 分钟即 Premature EOF)才置 "true"。
+  AI_GATEWAY_STREAM: "false"
   # 300s: 推理模型生成 DESIGN 文档实测 ~230s。
   AI_GATEWAY_TIMEOUT_SECONDS: "300"
   # developer-workstation 出站 SSRF 白名单(仅该服务读取 ssrf.allowed-hosts)。

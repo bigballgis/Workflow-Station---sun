@@ -87,6 +87,7 @@ Tests (renamed 2026-07-29 off the retired "webhook" terminology):
 | `ai-generation.enabled` | `false` (dev compose + k8s configmaps set `true`) | `AI_GENERATION_ENABLED` |
 | `ai-generation.gateway.url` | *(empty ⇒ `AI_GATEWAY_NOT_CONFIGURED`)* | `GROUP_AI_GATEWAY_URL` |
 | `ai-generation.gateway.model` | *(empty ⇒ no `model` field in the body)* | `AI_GATEWAY_MODEL` |
+| `ai-generation.gateway.api-key` | *(empty ⇒ per-user AMToken; non-empty overrides it and the gateway can no longer audit per user — local development only)* | `AI_GATEWAY_API_KEY` |
 | `ai-generation.gateway.timeout-seconds` | `300` | `AI_GATEWAY_TIMEOUT_SECONDS` |
 | `ai-generation.gateway.am-token-name` | `AMToken` | `DSP_AM_TOKEN_NAME` |
 | `ssrf.allowed-hosts` | `localhost,activepieces` (docker: `activepieces` only) | `SSRF_ALLOWED_HOSTS` |

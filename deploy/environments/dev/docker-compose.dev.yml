@@ -538,6 +538,11 @@ services:
       AI_GENERATION_ENABLED: ${AI_GENERATION_ENABLED:-true}
       GROUP_AI_GATEWAY_URL: ${GROUP_AI_GATEWAY_URL:-}
       AI_GATEWAY_MODEL: ${AI_GATEWAY_MODEL:-}
+      # SSE 流式(服务端拼回整段)。DeepSeek 这类会掐长连接的端点必须开;集团 gateway 保持 false。
+      AI_GATEWAY_STREAM: ${AI_GATEWAY_STREAM:-false}
+      # 静态 Bearer key(本地自测直连 DeepSeek 等 OpenAI 兼容端点用)。非空即顶掉每用户 AMToken,
+      # 审计不到人 => dev 之外留空。
+      AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:-}
       AI_GATEWAY_TIMEOUT_SECONDS: ${AI_GATEWAY_TIMEOUT_SECONDS:-300}
       # SMTP/IMAP connection test + AI gateway: allow hostnames that resolve to private IPs on corp VPN.
       SSRF_ALLOWED_HOSTS: ${SSRF_ALLOWED_HOSTS:-activepieces}
