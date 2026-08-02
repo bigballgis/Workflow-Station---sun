@@ -36,12 +36,18 @@ public class TaskFormDefinitionLoader {
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * Loads Task Form definition by stageId (taskDefinitionKey).
+     * Loads Task Form definition by stageId (taskDefinitionKey), scoped to the process instance's function unit.
      * Prefers developer-workstation; falls back to local {@code dw_form_stage_bindings} when unreachable (shared PostgreSQL with DW).
+     *
+     * <p>The function unit scope is required for correctness, not just precision: BPMN node ids are unique only
+     * within one process, and AI-generated processes reuse readable ids such as {@code UserTask_Approve}, so the
+     * same {@code stageId} legitimately exists in several function units.</p>
      */
-    public Map<String, Object> fetchTaskFormByStageId(String stageId, String developerWorkstationUrl) {
+    public Map<String, Object> fetchTaskFormByStageId(String stageId, String processInstanceId,
+                                                      String developerWorkstationUrl) {
+        String functionUnitCode = resolveFunctionUnitCode(processInstanceId);
         // Try local DB first (millisecond-level) — avoids expensive cross-container HTTP call.
-        Map<String, Object> fromDb = fetchTaskFormFromLocalDw(stageId);
+        Map<String, Object> fromDb = fetchTaskFormFromLocalDw(stageId, functionUnitCode);
         if (fromDb != null) {
             if (fromDb.isEmpty()) {
                 // Definitive negative: local DB queried successfully but found no binding.
@@ -54,16 +60,57 @@ public class TaskFormDefinitionLoader {
         }
         // fromDb == null means local query threw an exception (e.g. table doesn't exist).
         // Fallback: HTTP call to developer-workstation.
-        return fetchTaskFormFromDeveloperWorkstation(stageId, developerWorkstationUrl);
+        return fetchTaskFormFromDeveloperWorkstation(stageId, functionUnitCode, developerWorkstationUrl);
+    }
+
+    /**
+     * Resolves the DW function unit code owning a process instance, or {@code null} when it cannot be
+     * matched to a {@code dw_function_units} row.
+     *
+     * <p>Mirrors the join already used by {@code ChangeHistorySubmissionFilter}: the pinned
+     * {@code function_unit_code} wins, with {@code process_definition_key} as the pre-pin fallback.
+     * Returning {@code null} rather than the raw column value is what lets callers distinguish
+     * "this unit has no binding for the stage" (definitive) from "no unit resolved" (must stay unscoped).</p>
+     */
+    private String resolveFunctionUnitCode(String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()) {
+            return null;
+        }
+        try {
+            List<String> codes = jdbcTemplate.queryForList(
+                    """
+                            SELECT fu.code
+                            FROM up_process_instance pi
+                            INNER JOIN dw_function_units fu
+                                ON fu.code = COALESCE(NULLIF(pi.function_unit_code, ''), pi.process_definition_key)
+                            WHERE pi.id = ?
+                            LIMIT 1
+                            """,
+                    String.class, processInstanceId.trim());
+            if (codes.isEmpty()) {
+                log.warn("No function unit resolved for process instance {}; task form lookup stays unscoped "
+                        + "and may match a stage id bound in another function unit", processInstanceId);
+                return null;
+            }
+            return codes.get(0);
+        } catch (Exception e) {
+            log.debug("Function unit lookup failed for process instance {}: {}", processInstanceId, e.getMessage());
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> fetchTaskFormFromDeveloperWorkstation(String stageId, String developerWorkstationUrl) {
+    private Map<String, Object> fetchTaskFormFromDeveloperWorkstation(String stageId, String functionUnitCode,
+                                                                      String developerWorkstationUrl) {
         try {
             String base = normalizeDeveloperWorkstationBase(developerWorkstationUrl);
-            String url = UriComponentsBuilder
+            UriComponentsBuilder builder = UriComponentsBuilder
                     .fromHttpUrl(base + "/api/v1/form-stage-bindings")
-                    .queryParam("stageId", stageId)
+                    .queryParam("stageId", stageId);
+            if (functionUnitCode != null && !functionUnitCode.isBlank()) {
+                builder.queryParam("functionUnitCode", functionUnitCode);
+            }
+            String url = builder
                     .encode(StandardCharsets.UTF_8)
                     .toUriString();
             log.debug("Fetching Task Form definition from: {}", url);
@@ -87,27 +134,61 @@ public class TaskFormDefinitionLoader {
 
     /**
      * Local lookup when sharing DB with developer-workstation (avoids localhost misconfiguration inside containers).
+     *
+     * @param functionUnitCode owning function unit; {@code null} only when it could not be resolved, in which
+     *                         case the lookup stays global and warns on cross-unit ambiguity
      */
-    private Map<String, Object> fetchTaskFormFromLocalDw(String stageId) {
+    private Map<String, Object> fetchTaskFormFromLocalDw(String stageId, String functionUnitCode) {
         if (stageId == null || stageId.isBlank()) {
             return null;
         }
+        String stage = stageId.trim();
         try {
-            List<Map<String, Object>> rows = jdbcTemplate.query(
-                    """
-                            SELECT fd.form_name, fd.config_json, fd.field_permissions, b.read_only
-                            FROM dw_form_stage_bindings b
-                            INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
-                            WHERE b.stage_id = ?
-                            LIMIT 1
-                            """,
-                    (ResultSet rs, int rowNum) -> mapRowToTaskFormDefinition(rs),
-                    stageId.trim());
-            return rows.isEmpty() ? Collections.emptyMap() : rows.get(0);
+            if (functionUnitCode != null && !functionUnitCode.isBlank()) {
+                List<Map<String, Object>> rows = jdbcTemplate.query(
+                        """
+                                SELECT fd.form_name, fd.config_json, fd.field_permissions, b.read_only
+                                FROM dw_form_stage_bindings b
+                                INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
+                                INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
+                                WHERE b.stage_id = ? AND fu.code = ?
+                                ORDER BY fd.id DESC
+                                LIMIT 1
+                                """,
+                        (ResultSet rs, int rowNum) -> mapRowToTaskFormDefinition(rs),
+                        stage, functionUnitCode.trim());
+                // Empty here is a definitive negative: the unit is known and binds no form to this
+                // stage. Retrying unscoped would serve another unit's form.
+                return rows.isEmpty() ? Collections.emptyMap() : rows.get(0);
+            }
+            return fetchTaskFormUnscoped(stage);
         } catch (Exception e) {
-            log.debug("Local dw_form_stage_bindings lookup failed for stage {}: {}", stageId, e.getMessage());
+            log.debug("Local dw_form_stage_bindings lookup failed for stage {}: {}", stage, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Global stage lookup used only when no function unit could be resolved. Deterministic (highest form id
+     * wins) and warns when the stage id is bound in more than one unit, so the ambiguity is visible in logs
+     * instead of silently deciding which unit's form a user sees.
+     */
+    private Map<String, Object> fetchTaskFormUnscoped(String stage) {
+        List<Map<String, Object>> rows = jdbcTemplate.query(
+                """
+                        SELECT fd.form_name, fd.config_json, fd.field_permissions, b.read_only
+                        FROM dw_form_stage_bindings b
+                        INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
+                        WHERE b.stage_id = ?
+                        ORDER BY fd.id DESC
+                        """,
+                (ResultSet rs, int rowNum) -> mapRowToTaskFormDefinition(rs),
+                stage);
+        if (rows.size() > 1) {
+            log.warn("Stage id '{}' is bound in {} function units and none could be resolved for this process; "
+                    + "resolving to the newest form '{}'", stage, rows.size(), rows.get(0).get("formName"));
+        }
+        return rows.isEmpty() ? Collections.emptyMap() : rows.get(0);
     }
 
     private Map<String, Object> mapRowToTaskFormDefinition(ResultSet rs) throws SQLException {

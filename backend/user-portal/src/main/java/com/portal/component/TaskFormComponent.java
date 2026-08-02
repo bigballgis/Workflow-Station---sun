@@ -276,7 +276,7 @@ public class TaskFormComponent {
 
         // Find FormStageBinding by taskDefinitionKey
         __t = System.nanoTime();
-        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey);
+        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey, taskInfo.processInstanceId);
         log.info("[PERF] form-data.fetchTaskFormByStageId took {} ms", (System.nanoTime() - __t) / 1_000_000L);
 
         // Get process instance for variables
@@ -415,7 +415,7 @@ public class TaskFormComponent {
         TaskInfo taskInfo = getTaskInfo(taskId);
 
         // Get field permissions to filter out READONLY fields
-        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey);
+        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey, taskInfo.processInstanceId);
         Map<String, String> fieldPermissions = formDefinition != null
                 ? fieldMapper().extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
@@ -594,7 +594,7 @@ public class TaskFormComponent {
 
         // Get showLiveValues config from form definition
         boolean showLiveValues = true;
-        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey);
+        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey, taskInfo.processInstanceId);
         if (formDefinition != null && formDefinition.containsKey("showLiveValues")) {
             Object slv = formDefinition.get("showLiveValues");
             if (slv instanceof Boolean) {
@@ -640,16 +640,18 @@ public class TaskFormComponent {
      * {@code __subTables__} so Portal can fully render the completed form.</li>
      * </ul>
      *
+     * @param processInstanceId process instance owning the task; identifies the function unit that scopes
+     *                          the Task Form binding lookup
      * @param mergedVariables merged process variables map (snapshot key written in
      *                        place)
      * @return form field names included in the snapshot (for logging)
      */
     public Set<String> mergeCompletedTaskSnapshotIntoVariables(String taskId, String userId, String taskDefinitionKey,
-            Map<String, Object> mergedVariables) {
+            String processInstanceId, Map<String, Object> mergedVariables) {
         if (mergedVariables == null || taskId == null || taskDefinitionKey == null) {
             return Set.of();
         }
-        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey);
+        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey, processInstanceId);
         Map<String, String> fieldPermissions = formDefinition != null
                 ? fieldMapper().extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
@@ -723,7 +725,7 @@ public class TaskFormComponent {
         merged.putAll(completedVariables != null ? completedVariables : Collections.emptyMap());
 
         Set<String> snapshotFieldKeys = mergeCompletedTaskSnapshotIntoVariables(taskId, userId, taskDefinitionKey,
-                merged);
+                processInstanceId, merged);
         SubTableNestingSanitizer.stripDeepNestedSubTables(merged);
         processInstance.setVariables(merged);
         processInstanceRepository.save(processInstance);
@@ -800,12 +802,15 @@ public class TaskFormComponent {
     }
 
     /**
-     * Loads Task Form definition by stageId (taskDefinitionKey).
+     * Loads Task Form definition by stageId (taskDefinitionKey), scoped to the process instance's function unit.
      * Prefers developer-workstation; falls back to local
      * {@code dw_form_stage_bindings} when unreachable (shared PostgreSQL with DW).
+     *
+     * <p>{@code processInstanceId} is what identifies the function unit: the same BPMN node id may be bound
+     * in several units, so an unscoped lookup can return a different unit's form.</p>
      */
-    private Map<String, Object> fetchTaskFormByStageId(String stageId) {
-        return formDefinitionLoader().fetchTaskFormByStageId(stageId, developerWorkstationUrl);
+    private Map<String, Object> fetchTaskFormByStageId(String stageId, String processInstanceId) {
+        return formDefinitionLoader().fetchTaskFormByStageId(stageId, processInstanceId, developerWorkstationUrl);
     }
 
     // ========== Inner data class ==========
