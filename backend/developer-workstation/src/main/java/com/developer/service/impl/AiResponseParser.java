@@ -57,6 +57,18 @@ public class AiResponseParser {
             Pattern.compile("```(?:json)?\\s*(.*?)```", Pattern.DOTALL);
     private static final Pattern BASE64_ONLY = Pattern.compile("^[A-Za-z0-9+/=\\s]+$");
     private static final Pattern BPMN_DEFINITIONS = Pattern.compile("<(?:bpmn:)?definitions(?:\\s|>)");
+    /** definitions 开标签（含全部属性）——补命名空间声明时就地改写这一段。 */
+    private static final Pattern DEFINITIONS_OPEN_TAG =
+            Pattern.compile("<(?:[A-Za-z0-9_.-]+:)?definitions[^>]*>");
+    /** 不构成实体引用的裸 {@code &}（后面没跟 {@code name;} / {@code #123;} / {@code #x1F;}）。 */
+    private static final Pattern BARE_AMPERSAND =
+            Pattern.compile("&(?!(?:[A-Za-z][A-Za-z0-9]*|#[0-9]+|#[xX][0-9A-Fa-f]+);)");
+    /** 规范固定 URI 的前缀：缺声明时补法唯一，属确定性修复。 */
+    private static final Map<String, String> WELL_KNOWN_NAMESPACES = Map.of(
+            "xsi", "http://www.w3.org/2001/XMLSchema-instance",
+            "bpmndi", "http://www.omg.org/spec/BPMN/20100524/DI",
+            "dc", "http://www.omg.org/spec/DD/20100524/DC",
+            "di", "http://www.omg.org/spec/DD/20100524/DI");
     private static final Pattern BPMN_PROCESS = Pattern.compile("<(?:bpmn:)?process(?:\\s|>)");
     private static final Pattern BPMN_START_EVENT = Pattern.compile("<(?:bpmn:)?startEvent(?:\\s|>)");
     private static final Pattern BPMN_END_EVENT = Pattern.compile("<(?:bpmn:)?endEvent(?:\\s|>)");
@@ -491,6 +503,13 @@ public class AiResponseParser {
                             + "empty Start-to-End fallback is rejected.");
         }
 
+        // 命名空间补齐必须排在所有 XML 解析之前:模型经常写出 xsi:type="bpmn:tFormalExpression"
+        // (这是 BPMN 条件表达式的标准写法)却忘了在 definitions 上声明 xmlns:xsi,于是解析器直接以
+        // "The prefix xsi ... is not bound" 报废整轮生成。声明缺失是纯语法遗漏、补法唯一,
+        // 属于确定性修复而非猜测,不该让用户去重试一次两分钟的生成。
+        xml = declareWellKnownNamespaces(xml);
+        xml = escapeBareAmpersands(xml);
+
         // 语义层守门排在结构校验之前:它会插入网关、改写条件、补动作,产物必须再过一遍
         // 连通性/DI/阶段绑定,否则修复本身引入的破损就没人拦了。
         AiBpmnSemanticGuard.Result guarded = AiBpmnSemanticGuard.enforce(generatedData, xml);
@@ -503,6 +522,60 @@ public class AiResponseParser {
         validateStageBindings(generatedData, xml);
         process.put("bpmnXml", xml);
         return guarded.repairs();
+    }
+
+    /**
+     * 给 {@code definitions} 补上被用到却没声明的众所周知前缀。
+     *
+     * <p>只认死这四个（{@code xsi} / {@code bpmndi} / {@code dc} / {@code di}）：它们的 URI 由规范固定，
+     * 补法唯一，不存在猜错的空间。其余未声明前缀一律不碰——那属于模型自造标签，应当由解析报错拦下，
+     * 而不是被我们编一个 URI 蒙混过关。</p>
+     */
+    private String declareWellKnownNamespaces(String xml) {
+        Matcher matcher = DEFINITIONS_OPEN_TAG.matcher(xml);
+        if (!matcher.find()) {
+            return xml;
+        }
+        String openTag = matcher.group();
+        StringBuilder declarations = new StringBuilder();
+        List<String> added = new ArrayList<>();
+        for (Map.Entry<String, String> entry : WELL_KNOWN_NAMESPACES.entrySet()) {
+            String prefix = entry.getKey();
+            if (openTag.contains("xmlns:" + prefix + "=")) {
+                continue;
+            }
+            boolean used = Pattern.compile("[<\\s]" + prefix + ":[A-Za-z]").matcher(xml).find();
+            if (!used) {
+                continue;
+            }
+            declarations.append(" xmlns:").append(prefix).append("=\"").append(entry.getValue()).append('"');
+            added.add(prefix);
+        }
+        if (added.isEmpty()) {
+            return xml;
+        }
+        // 自动修复必须留痕（错误处理治理红线 1）：补了什么、补在哪，日志里要能直接看到。
+        log.warn("AI generated BPMN used undeclared namespace prefixes {}; declared them on <definitions> "
+                + "so the document can be parsed", added);
+        String repaired = openTag.substring(0, openTag.length() - 1) + declarations + ">";
+        return new StringBuilder(xml).replace(matcher.start(), matcher.end(), repaired).toString();
+    }
+
+    /**
+     * 把不构成实体引用的裸 {@code &} 转义成 {@code &amp;}。
+     *
+     * <p>模型最常见的来源是网关条件里的 {@code ${a && b}}，以及名称里的 "R&D"。裸 {@code &} 让整份文档
+     * 不是良构 XML，解析直接抛 "The entity name must immediately follow the '&'"——改动前必然报废整轮生成。
+     * 已经是 {@code &amp;} / {@code &lt;} / {@code &#39;} 这类合法引用的一律不动，所以良构文档逐字不变。</p>
+     */
+    private String escapeBareAmpersands(String xml) {
+        Matcher matcher = BARE_AMPERSAND.matcher(xml);
+        if (!matcher.find()) {
+            return xml;
+        }
+        String repaired = matcher.reset().replaceAll("&amp;");
+        log.warn("AI generated BPMN contained unescaped '&' characters; escaped them so the document can be parsed");
+        return repaired;
     }
 
     private void validateStageBindings(Map<String, Object> generatedData, String xml) {
@@ -546,8 +619,16 @@ public class AiResponseParser {
                 throw invalidFormBinding("TASK form '" + form.get("formName")
                         + "' has no stageBindings");
             }
-            if (!taskForm && !bindings.isEmpty()) {
-                throw invalidFormBinding("only TASK forms may define stageBindings");
+            // PROCESS 表单绑阶段是允许的：平台侧没有任何 formType 限制（FormStageBindingController
+            // 不判类型、AiBpmnFormBindingWriter 不筛类型、portal 按注入的 formId 直接取表单），
+            // 发起人提交那步挂完整流程表单本身也说得通。提示词仍然要求用 TASK 表单——
+            // 这里只是不再为"能跑但不够规整"烧掉一次两分钟的重生成。
+            // ACTION 表单例外：它是动作弹窗的表单，绑到节点上会让 portal 把动作表单当任务表单打开。
+            if (!taskForm && !bindings.isEmpty() && !"PROCESS".equals(form.get("formType"))) {
+                // 报错必须指名道姓：排查时要能直接看出是哪张表单、模型给的 formType 是什么
+                // （ACTION？还是干脆漏了这个字段）。
+                throw invalidFormBinding("form '" + form.get("formName") + "' has formType "
+                        + form.get("formType") + " but defines stageBindings; only TASK or PROCESS forms may");
             }
             for (Object bindingObj : bindings) {
                 if (!(bindingObj instanceof Map<?, ?> binding)) {

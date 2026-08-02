@@ -210,6 +210,38 @@ class AiResponseParserTest {
         assertEquals("AI_FORM_STAGE_BINDING_INVALID", ex.getErrorCode());
     }
 
+    /**
+     * PROCESS 表单绑阶段必须放行：平台侧没有任何 formType 限制（设计器的绑定接口不判类型、
+     * portal 按注入的 formId 直接取表单），发起人提交那步挂完整流程表单是合理设计。
+     * 校验器比平台更严只会白烧一次两分钟的重生成。
+     */
+    @Test
+    void parse_processFormBoundToAStage_isAccepted() {
+        String json = "{\"formDefinitions\":[{\"formName\":\"request_form\",\"formType\":\"PROCESS\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"\",\"readOnly\":false}]}],"
+                + "\"processDefinition\":{\"bpmnXml\":\"" + validBpmn().replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        assertTrue(result.get("generatedData") != null, "PROCESS form stage binding must not be rejected");
+    }
+
+    /** ACTION 表单仍然禁止绑阶段：它是动作弹窗的表单，绑上去 portal 会把它当任务表单打开。 */
+    @Test
+    void parse_actionFormBoundToAStage_isStillRejected() {
+        String json = "{\"formDefinitions\":[{\"formName\":\"approve_dialog\",\"formType\":\"ACTION\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"\",\"readOnly\":false}]}],"
+                + "\"processDefinition\":{\"bpmnXml\":\"" + validBpmn().replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_FORM_STAGE_BINDING_INVALID", ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("approve_dialog"), ex.getMessage());
+    }
+
     @Test
     void parse_taskFormWithoutAssigneeType_isRejected() {
         String xml = validBpmn().replace(
@@ -362,6 +394,73 @@ class AiResponseParserTest {
                         "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
 
         assertEquals("AI_BPMN_DISCONNECTED_NODES", ex.getErrorCode());
+    }
+
+    /**
+     * {@code xsi:type="bpmn:tFormalExpression"} 是条件表达式的标准写法，模型却常常忘了在
+     * definitions 上声明 xmlns:xsi —— 解析器会以 "The prefix xsi ... is not bound" 报废整轮生成
+     * （实测 deepseek-v4-pro，重生成一次也没救回来）。声明缺失补法唯一，必须就地修复而不是让用户重跑。
+     */
+    @Test
+    void parse_bpmnUsingUndeclaredXsiPrefix_isRepairedInsteadOfRejected() {
+        String xml = validBpmn()
+                .replace(" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"", "")
+                .replace("<bpmn:sequenceFlow id=\"f1\" sourceRef=\"s\" targetRef=\"t\"/>",
+                        "<bpmn:sequenceFlow id=\"f1\" sourceRef=\"s\" targetRef=\"t\">"
+                                + "<bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">"
+                                + "${decision == 'yes'}</bpmn:conditionExpression></bpmn:sequenceFlow>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> generated = (Map<String, Object>) result.get("generatedData");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> process = (Map<String, Object>) generated.get("processDefinition");
+        String repaired = (String) process.get("bpmnXml");
+        assertTrue(repaired.contains("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""),
+                "the missing xsi declaration should have been added: " + repaired);
+    }
+
+    /**
+     * 网关条件里的 {@code ${a && b}} 会让整份 BPMN 不是良构 XML。裸 {@code &} 的转义唯一且无损，
+     * 不该让用户为此重跑一次两分钟的生成。
+     */
+    @Test
+    void parse_bpmnWithUnescapedAmpersand_isRepairedInsteadOfRejected() {
+        String xml = validBpmn().replace("<bpmn:endEvent id=\"e\"/>",
+                "<bpmn:endEvent id=\"e\"><bpmn:documentation>R&D and Q&A</bpmn:documentation></bpmn:endEvent>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> generated = (Map<String, Object>) result.get("generatedData");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> process = (Map<String, Object>) generated.get("processDefinition");
+        assertTrue(((String) process.get("bpmnXml")).contains("R&amp;D and Q&amp;A"),
+                "bare ampersands should have been escaped: " + process.get("bpmnXml"));
+    }
+
+    /** 已经合法的实体引用不能被二次转义，否则 {@code &amp;} 会变成 {@code &amp;amp;}。 */
+    @Test
+    void parse_bpmnWithProperEntityReferences_isLeftUntouched() {
+        String xml = validBpmn().replace("<bpmn:endEvent id=\"e\"/>",
+                "<bpmn:endEvent id=\"e\"><bpmn:documentation>a &amp;&amp; b &lt; c &#39;d&#39;</bpmn:documentation>"
+                        + "</bpmn:endEvent>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> generated = (Map<String, Object>) result.get("generatedData");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> process = (Map<String, Object>) generated.get("processDefinition");
+        assertTrue(((String) process.get("bpmnXml")).contains("a &amp;&amp; b &lt; c &#39;d&#39;"),
+                "existing entity references must not be double-escaped: " + process.get("bpmnXml"));
     }
 
     @Test
