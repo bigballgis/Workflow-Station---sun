@@ -67,4 +67,39 @@ class AiBpmnActionBindingWriterTest {
                 List.of(Map.of("actionName", "approve_request", "stageIds", List.of("Task_Review")))))
                 .isEqualTo(xml);
     }
+
+    /** 同 AiBpmnFormBindingWriter：camunda:properties 不是设计器认得的容器，不能往里塞 actionIds。 */
+    @Test
+    void bindStageActions_shouldNotWriteIntoAForeignNamespaceContainer() {
+        ActionDefinition approve = ActionDefinition.builder()
+                .id(7L)
+                .actionName("approve")
+                .build();
+
+        String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn">
+                  <bpmn:process id="Process_1">
+                    <bpmn:userTask id="Task_Approve" name="Approve Request">
+                      <bpmn:extensionElements>
+                        <camunda:properties>
+                          <camunda:property name="assigneeType" value="PROCESS_INITIATOR"/>
+                        </camunda:properties>
+                      </bpmn:extensionElements>
+                    </bpmn:userTask>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        String result = AiBpmnActionBindingWriter.bindStageActions(xml, List.of(approve),
+                List.of(Map.of("actionName", "approve", "stageIds", List.of("Task_Approve"))));
+
+        assertThat(result).contains("name=\"actionIds\" value=\"[7]\"");
+        String camundaContainer = result.substring(result.indexOf("<camunda:properties"),
+                result.indexOf("</camunda:properties>"));
+        assertThat(camundaContainer).doesNotContain("actionIds");
+        assertThat(camundaContainer).contains("assigneeType");
+        assertThat(result).contains("<custom:properties");
+    }
 }

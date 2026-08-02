@@ -37,6 +37,8 @@ public final class AiBpmnActionBindingWriter {
 
     private static final String BPMN_NAMESPACE = "http://www.omg.org/spec/BPMN/20100524/MODEL";
     private static final String CUSTOM_NAMESPACE = "http://custom.bpmn.io/schema";
+    /** 流程属性面板写入的容器命名空间（customModdle 里的 custom 前缀）。 */
+    private static final String PLATFORM_NAMESPACE = "http://workflow.platform/schema/custom";
     private static final Set<String> ACTION_PROPERTY_NAMES = Set.of("actionIds", "actionNames");
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -144,7 +146,7 @@ public final class AiBpmnActionBindingWriter {
             task.insertBefore(extensionElements, task.getFirstChild());
         }
 
-        Element properties = directChild(extensionElements, "properties");
+        Element properties = customProperties(extensionElements);
         if (properties == null) {
             properties = document.createElementNS(CUSTOM_NAMESPACE, "custom:properties");
             extensionElements.appendChild(properties);
@@ -155,6 +157,28 @@ public final class AiBpmnActionBindingWriter {
         List<String> names = actions.stream().map(ActionDefinition::getActionName).toList();
         appendProperty(document, properties, "actionIds", OBJECT_MAPPER.writeValueAsString(ids));
         appendProperty(document, properties, "actionNames", OBJECT_MAPPER.writeValueAsString(names));
+    }
+
+    /**
+     * 取（或不取）设计器认得的属性容器。
+     *
+     * <p>只认 {@code http://custom.bpmn.io/schema} 与 {@code http://workflow.platform/schema/custom}
+     * 两个命名空间——前端 {@code bpmnExtensions.getExtensionProperties()} 只从这两种容器收属性。
+     * 早先这里按 localName 匹配，于是模型输出的 {@code <camunda:properties>} 被当成可复用容器，
+     * formId/actionIds 全被塞进去：XML 里数据俱全，设计器面板却一片空白，运行时反而正常
+     * （引擎按 localName 递归扫），是最难查的那种"看着没绑上"。</p>
+     */
+    private static Element customProperties(Element extensionElements) {
+        NodeList children = extensionElements.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            if (children.item(i) instanceof Element element
+                    && "properties".equals(localName(element))
+                    && (CUSTOM_NAMESPACE.equals(element.getNamespaceURI())
+                        || PLATFORM_NAMESPACE.equals(element.getNamespaceURI()))) {
+                return element;
+            }
+        }
+        return null;
     }
 
     private static Element directChild(Element parent, String expectedLocalName) {
