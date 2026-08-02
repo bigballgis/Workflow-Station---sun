@@ -405,9 +405,12 @@ const props = withDefaults(defineProps<{
   mode: AiMode
   completedPhases?: AiPhase[]
   initialMessages?: AiMessage[]
+  /** 重开面板时回填的文档卡片；产出文档的那几轮后端不写 ASSISTANT 消息，只能靠它把 AI 侧补回来。 */
+  initialDocuments?: InlineDocument[]
 }>(), {
   completedPhases: () => [],
-  initialMessages: () => []
+  initialMessages: () => [],
+  initialDocuments: () => []
 })
 
 const emit = defineEmits<{
@@ -465,6 +468,17 @@ const currentFunctionUnitData = ref<AiGeneratedData | null>(null)
 // Inline documents state
 const inlineDocuments = ref<InlineDocument[]>([])
 let inlineDocIdCounter = 0
+
+/**
+ * 用历史文档替换聊天区的卡片（重开面板 / 切换历史会话时调用）。
+ *
+ * 恢复来的 id 是 dw_ai_documents 的主键，本轮新产出的卡片用自增计数器，两者可能撞号；
+ * 把计数器推到已用最大值之上，保证 v-for 的 key 不重复，否则新卡片会顶掉旧卡片的位置。
+ */
+function setInlineDocuments(documents: InlineDocument[]): void {
+  inlineDocuments.value = [...documents]
+  inlineDocIdCounter = documents.reduce((max, doc) => Math.max(max, doc.id), inlineDocIdCounter)
+}
 
 // Preview/degradation helpers (pure)
 const { computePreviewData, formatRelativeTime } = useChatDialogPreview()
@@ -570,6 +584,9 @@ const inputPlaceholder = computed(() => {
 onMounted(() => {
   if (props.initialMessages.length) {
     setMessages([...props.initialMessages])
+  }
+  if (props.initialDocuments.length) {
+    setInlineDocuments([...props.initialDocuments])
   }
   // Task 16.4: Check for saved draft on mount
   checkForDraft()
@@ -799,6 +816,7 @@ function autoSendMessage(message: string) {
 
 defineExpose({
   setValidationErrors,
+  setInlineDocuments,
   setValidationWarnings,
   autoSendMessage,
   setMessages,

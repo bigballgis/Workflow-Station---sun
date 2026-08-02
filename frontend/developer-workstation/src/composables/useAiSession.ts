@@ -1,8 +1,13 @@
 import { ref } from 'vue'
-import type { AiSession, AiMessage, AiPhase, AiMode } from '@/types/aiGeneration'
+import type {
+  AiSession, AiMessage, AiPhase, AiMode, AiDocumentType, InlineDocument
+} from '@/types/aiGeneration'
 import { aiGenerationApi } from '@/api/aiGeneration'
 
 const PHASE_ORDER: AiPhase[] = ['REQUIREMENTS', 'DESIGN', 'GENERATION']
+
+/** 会在聊天里以卡片形式回显的文档类型，按产出先后排列。 */
+const INLINE_DOCUMENT_TYPES: AiDocumentType[] = ['REQUIREMENTS', 'DESIGN']
 
 /**
  * Composable for managing AI session lifecycle:
@@ -17,6 +22,35 @@ export function useAiSession() {
   async function loadSessions(functionUnitId: number): Promise<void> {
     const response = await aiGenerationApi.getSessions(functionUnitId)
     sessions.value = response.data
+  }
+
+  /**
+   * 重开面板时把已产出的需求/设计文档取回来，供聊天区以卡片回显。
+   *
+   * 为什么需要它：模型把整段回答放进文档标记里时，`reply` 去掉标记后是空串，
+   * 后端据此**有意不写** ASSISTANT 消息（避免堆空气泡，见 AiGenerationComponentImpl 的注释）。
+   * 于是重开后那一轮只剩用户自己那句话，AI 侧一片空白，对话看着像断了——
+   * 文档本身一直好好存在 dw_ai_documents 里，只是没人把它放回聊天里。
+   *
+   * 文档是按功能单元存的（不区分会话），与右侧面板、阶段推断读的是同一份数据；
+   * 因此换会话看到的仍是该功能单元最新的那版，这与既有行为一致。
+   * 取每种类型的最新版本：历史版本在右侧面板的 Version History 里查，聊天区不做版本堆叠。
+   */
+  async function loadInlineDocuments(functionUnitId: number): Promise<InlineDocument[]> {
+    const restored: InlineDocument[] = []
+    for (const documentType of INLINE_DOCUMENT_TYPES) {
+      try {
+        const response = await aiGenerationApi.getDocumentVersions(functionUnitId, documentType)
+        const versions = response.data ?? []
+        if (!versions.length) continue
+        const latest = versions.reduce((a, b) => (a.version >= b.version ? a : b))
+        restored.push({ id: latest.id, documentType, content: latest.content })
+      } catch (err) {
+        // 单个文档取不回来不该让整个面板打不开：其余文档与消息照常恢复，这里留痕即可。
+        console.error(`Failed to restore ${documentType} document into the chat:`, err)
+      }
+    }
+    return restored
   }
 
   async function loadMessages(sessionId: string): Promise<AiMessage[]> {
@@ -88,6 +122,7 @@ export function useAiSession() {
     sessions,
     currentPhase,
     sessionMessages,
+    loadInlineDocuments,
     loadSessions,
     loadMessages,
     createSession,

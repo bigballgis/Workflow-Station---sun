@@ -141,6 +141,7 @@
               :mode="currentMode"
               :completed-phases="completedPhases"
               :initial-messages="initialMessages"
+              :initial-documents="initialDocuments"
               @phase-complete="handlePhaseComplete"
               @apply="handleApply"
               @regenerate="handleRegenerate"
@@ -205,7 +206,8 @@ import type {
   AiMessage,
   AiGeneratedData,
   AiValidationError,
-  AiDocumentType
+  AiDocumentType,
+  InlineDocument
 } from '@/types/aiGeneration'
 
 const { t } = useI18n()
@@ -229,6 +231,9 @@ const currentMode = ref<AiMode>('NEW')
 const promptDialogVisible = ref(false)
 const completedPhases = ref<AiPhase[]>([])
 const initialMessages = ref<AiMessage[]>([])
+// 重开面板时回填聊天区的文档卡片：产出文档的那几轮后端不写 ASSISTANT 消息，
+// 只靠 initialMessages 恢复的话，AI 侧会整段空白（见 useAiSession.loadInlineDocuments）。
+const initialDocuments = ref<InlineDocument[]>([])
 
 // Docked/detached layout: panel style, drag + resize interactions
 // （停靠模式已改为全屏接管，不再需要跟踪侧栏宽度做 left 偏移）
@@ -289,6 +294,7 @@ async function openPanel() {
       const msgs = await sessionComposable.restoreSession(activeSession)
       currentMode.value = activeSession.mode
       initialMessages.value = [...msgs]
+      initialDocuments.value = await sessionComposable.loadInlineDocuments(props.functionUnitId)
 
       // 根据已有文档推断实际阶段（防止后端阶段未更新的情况）
       const actualPhase = await detectPhaseFromDocuments(props.functionUnitId, activeSession.currentPhase)
@@ -338,6 +344,7 @@ async function showCompletedSessionDialog(completedSession: any) {
       const msgs = await sessionComposable.restoreSession(completedSession)
       currentMode.value = completedSession.mode
       initialMessages.value = [...msgs]
+      initialDocuments.value = await sessionComposable.loadInlineDocuments(props.functionUnitId)
       computeCompletedPhases(completedSession.currentPhase)
       ready.value = true
     } else {
@@ -351,6 +358,7 @@ function startNewSession() {
   currentMode.value = 'NEW'
   completedPhases.value = []
   initialMessages.value = []
+  initialDocuments.value = []
   ready.value = true
 }
 
@@ -393,9 +401,11 @@ async function handleSessionSwitch(sessionId: string) {
     const msgs = await sessionComposable.restoreSession(session)
     currentMode.value = session.mode
     initialMessages.value = [...msgs]
+    initialDocuments.value = await sessionComposable.loadInlineDocuments(props.functionUnitId)
     computeCompletedPhases(session.currentPhase)
     // Force ChatDialog to re-render with new messages
     chatDialogRef.value?.setMessages?.([...msgs])
+    chatDialogRef.value?.setInlineDocuments?.([...initialDocuments.value])
   } catch (err: any) {
     ElMessage.error(err.message || t('ai.panel.initFailed'))
   }

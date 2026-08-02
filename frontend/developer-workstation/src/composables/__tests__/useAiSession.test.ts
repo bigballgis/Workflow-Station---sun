@@ -4,13 +4,23 @@ import type { AiSession } from '@/types/aiGeneration'
 
 const mockGetSessions = vi.fn()
 const mockGetMessages = vi.fn()
+const mockGetDocumentVersions = vi.fn()
 
 vi.mock('@/api/aiGeneration', () => ({
   aiGenerationApi: {
     getSessions: (...args: any[]) => mockGetSessions(...args),
     getMessages: (...args: any[]) => mockGetMessages(...args),
+    getDocumentVersions: (...args: any[]) => mockGetDocumentVersions(...args),
   }
 }))
+
+/** 造一份文档版本记录，只填本用例关心的字段。 */
+function doc(id: number, documentType: string, version: number, content: string) {
+  return {
+    id, functionUnitId: 1, documentType, version, content,
+    createdBy: 'developer', createdAt: '2026-08-02T09:00:00Z'
+  }
+}
 
 describe('useAiSession', () => {
   beforeEach(() => {
@@ -214,5 +224,53 @@ describe('useAiSession', () => {
 
     setCurrentSession(null)
     expect(currentSession.value).toBeNull()
+  })
+
+  /**
+   * 重开面板必须把需求/设计文档以卡片形式放回聊天区。
+   *
+   * 模型把整段回答写进文档标记时，后端有意不写 ASSISTANT 消息（避免空气泡），
+   * 于是那一轮只剩用户自己那句话；文档一直在 dw_ai_documents 里，缺的只是把它取回来这一步。
+   */
+  it('loadInlineDocuments should restore the latest version of each document type', async () => {
+    mockGetDocumentVersions.mockImplementation((_fuId: number, type: string) =>
+      Promise.resolve({
+        data: type === 'REQUIREMENTS'
+          ? [doc(5, 'REQUIREMENTS', 1, 'req v1'), doc(9, 'REQUIREMENTS', 2, 'req v2')]
+          : [doc(6, 'DESIGN', 1, 'design v1')]
+      }))
+
+    const { loadInlineDocuments } = useAiSession()
+    const restored = await loadInlineDocuments(1)
+
+    expect(restored).toEqual([
+      { id: 9, documentType: 'REQUIREMENTS', content: 'req v2' },
+      { id: 6, documentType: 'DESIGN', content: 'design v1' }
+    ])
+  })
+
+  it('loadInlineDocuments should skip document types that do not exist yet', async () => {
+    mockGetDocumentVersions.mockImplementation((_fuId: number, type: string) =>
+      Promise.resolve({ data: type === 'REQUIREMENTS' ? [doc(5, 'REQUIREMENTS', 1, 'req v1')] : [] }))
+
+    const { loadInlineDocuments } = useAiSession()
+
+    expect(await loadInlineDocuments(1)).toEqual([
+      { id: 5, documentType: 'REQUIREMENTS', content: 'req v1' }
+    ])
+  })
+
+  /** 单个文档取不回来不该让整个面板打不开——其余文档照常恢复。 */
+  it('loadInlineDocuments should survive a failing document request', async () => {
+    mockGetDocumentVersions.mockImplementation((_fuId: number, type: string) =>
+      type === 'REQUIREMENTS'
+        ? Promise.reject(new Error('boom'))
+        : Promise.resolve({ data: [doc(6, 'DESIGN', 1, 'design v1')] }))
+
+    const { loadInlineDocuments } = useAiSession()
+
+    expect(await loadInlineDocuments(1)).toEqual([
+      { id: 6, documentType: 'DESIGN', content: 'design v1' }
+    ])
   })
 })
