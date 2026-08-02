@@ -392,7 +392,8 @@ export const functionUnitApi = {
   restore: (id: number) =>
     functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/restore`),
 
-  // POST /{id}/publish 仍在后端存在，但只由 Deploy 流程内部调用；DW 前端不再直接发布。
+  // POST /{id}/publish still exists on the backend, but only the Deploy flow calls it internally;
+  // the DW frontend no longer publishes directly.
 
   clone: (id: number, newName: string) => 
     functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/clone`, null, { params: { newName } }),
@@ -605,8 +606,9 @@ export const functionUnitApi = {
 }
 
 /**
- * 导入包携带的 Automation flow 在本环境的还原结果。
- * PUBLISH_FAILED = 草稿已建但未发布（多为本环境缺 connection 凭据），需人工补齐后发布。
+ * Restore result, in this environment, for an Automation flow carried by an import package.
+ * PUBLISH_FAILED = the draft was created but not published (usually because this environment
+ * is missing connection credentials); someone has to supply them and publish manually.
  */
 export interface AutomationFlowRestoreResult {
   flowKey: string
