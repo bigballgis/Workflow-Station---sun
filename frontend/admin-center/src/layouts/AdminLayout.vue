@@ -146,7 +146,7 @@
             </template>
           </el-menu-item>
 
-          <!-- Automation Flow Migration - uat 导出/prod 导入的 flow 迁移页, requires system:admin -->
+          <!-- Automation Flow Migration - export from uat / import into prod, requires system:admin -->
           <el-menu-item
             v-if="isSystemAdmin"
             index="/automation-flows"
@@ -245,7 +245,7 @@ const brandMarkUrl = `${import.meta.env.BASE_URL}hermes-mark.svg`
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
 
-// 顶栏面包屑：当前页标题取路由 meta.titleKey
+// Header breadcrumb: the current page title comes from the route's meta.titleKey
 const currentTitle = computed(() => {
   const key = route.meta.titleKey
   return key ? t(key) : ''
@@ -306,7 +306,7 @@ $primary-dark: #8b0000;
   background-color: var(--ws-canvas);
 }
 
-// ==================== 白色侧栏（回归原配色） ====================
+// ==================== White sidebar (back to the original palette) ====================
 .admin-aside {
   display: flex;
   flex-direction: column;
@@ -390,7 +390,7 @@ $primary-dark: #8b0000;
     &::before {
       content: '';
       position: absolute;
-      left: -8px; // 贴到侧栏最左缘（抵消菜单容器 padding）
+      left: -8px; // Flush with the sidebar's left edge (offsets the menu container padding)
       top: 50%;
       transform: translateY(-50%);
       width: 3px;
@@ -425,7 +425,7 @@ $primary-dark: #8b0000;
   }
 }
 
-// ==================== 右侧主体 ====================
+// ==================== Main content area ====================
 .admin-body {
   flex: 1;
   min-width: 0;

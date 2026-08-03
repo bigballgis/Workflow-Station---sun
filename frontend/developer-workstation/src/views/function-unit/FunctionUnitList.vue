@@ -69,7 +69,7 @@
           </span>
         </div>
         <div class="filter-actions">
-          <!-- 图标 / 卡片 视图切换：整个开关都是点击区 -->
+          <!-- Icon / card view toggle: the whole switch is the click target -->
           <el-switch
             v-model="isCardView"
             class="view-switch"
@@ -183,7 +183,7 @@
         </el-empty>
       </div>
 
-      <!-- Launchpad Grid：图标 / 卡片双视图；拖到两侧重排，拖到中间合并成组 -->
+      <!-- Launchpad grid: icon / card views. Drop on either side to reorder, drop on the centre to merge into a group -->
       <div
         v-else
         class="launchpad-grid"
@@ -358,7 +358,7 @@
       </template>
     </el-dialog>
 
-    <!-- 分组展开浮层（iOS 文件夹） -->
+    <!-- Expanded group overlay (iOS-style folder) -->
     <LaunchpadFolderOverlay
       :folder="openedFolder"
       :items="openedFolderItems"
@@ -516,7 +516,7 @@ const {
   handleExport,
 } = useFunctionUnitExport({ list: storeList, filteredList })
 
-// ==================== Launchpad（iOS 图标布局 + 拖拽 + 分组） ====================
+// ==================== Launchpad (iOS-style icon layout + drag & drop + grouping) ====================
 const {
   visibleEntries,
   itemById,
@@ -538,7 +538,7 @@ const {
   defaultGroupName: () => t('functionUnit.newGroup'),
 })
 
-// 图标 / 卡片视图切换（默认图标），选择持久化
+// Icon / card view toggle (icon by default); the choice is persisted
 const VIEW_MODE_KEY = 'dw-fu-launchpad-view'
 const viewMode = ref<'icon' | 'card'>(
   localStorage.getItem(VIEW_MODE_KEY) === 'card' ? 'card' : 'icon'
@@ -547,18 +547,19 @@ watch(viewMode, (v) => {
   try {
     localStorage.setItem(VIEW_MODE_KEY, v)
   } catch {
-    // 存储不可用时仅本次会话生效
+    // If storage is unavailable, the choice only applies to this session
   }
 })
 
-// el-switch 的布尔模型：开 = 卡片视图，关 = 图标视图
+// el-switch boolean model: on = card view, off = icon view
 const isCardView = computed({
   get: () => viewMode.value === 'card',
   set: (v: boolean) => { viewMode.value = v ? 'card' : 'icon' },
 })
 
 const openFolderId = ref<string | null>(null)
-// 布局对账可能解散正打开的分组（如删除成员后不足 2 个），computed 会自动关浮层
+// Reconciling the layout can dissolve the open group (e.g. fewer than 2 members left after a
+// deletion); the computed value then closes the overlay automatically
 const openedFolder = computed<LaunchpadFolderEntry | null>(() =>
   openFolderId.value ? folderById(openFolderId.value) ?? null : null
 )
@@ -710,17 +711,17 @@ onMounted(() => {
   gap: 20px;
 }
 
-// ==================== 视图切换开关 ====================
-// 开 = 卡片视图（红），关 = 图标视图（灰）；图标嵌在开关内
+// ==================== View toggle switch ====================
+// On = card view (red), off = icon view (grey); the icon sits inside the switch
 .view-switch {
-  // 关态也给个实色底，避免看起来像禁用
+  // Give the off state a solid fill too, so it does not read as disabled
   --el-switch-off-color: #b8bcc4;
 }
 
-// ==================== Launchpad（图标 / 卡片双视图 + 拖拽重排/合组） ====================
+// ==================== Launchpad (icon / card views + drag to reorder or merge) ====================
 .launchpad-grid {
   align-content: start;
-  min-height: 320px; // 空白区域也可接收「拖到末尾」
+  min-height: 320px; // The empty area also accepts a "drop at the end" gesture
 
   &--icon {
     display: grid;
@@ -746,7 +747,7 @@ onMounted(() => {
     opacity: 0.35;
   }
 
-  // 合并成组候选：目标放大 + 品牌红描边
+  // Merge-into-group candidate: scale the target up and outline it in brand red
   &.drop-merge {
     :deep(.function-unit-card),
     :deep(.folder-card),
@@ -756,7 +757,7 @@ onMounted(() => {
     }
   }
 
-  // 插入排序指示条
+  // Insertion-point indicator bar
   &.drop-before::before,
   &.drop-after::after {
     content: '';

@@ -596,8 +596,9 @@ export const functionUnitApi = {
 }
 
 /**
- * 导入包携带的 Automation flow 在本环境的还原结果。
- * PUBLISH_FAILED = 草稿已建但未发布（多为本环境缺 connection 凭据），需人工补齐后发布。
+ * Restore outcome, in this environment, for an Automation flow carried by an import package.
+ * PUBLISH_FAILED = the draft was created but not published (usually because this environment
+ * is missing the connection credentials); publish manually once they are supplied.
  */
 export interface AutomationFlowRestoreResult {
   flowKey: string
