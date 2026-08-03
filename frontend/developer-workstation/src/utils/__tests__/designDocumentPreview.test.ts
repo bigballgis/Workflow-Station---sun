@@ -193,6 +193,103 @@ describe('parseDesignTables', () => {
   it('returns an empty list when the document has no data model section', () => {
     expect(parseDesignTables('# Design Document\n\n## Overview\njust prose')).toEqual([])
   })
+
+  /**
+   * 光杆表头 `| Table |` / `| Field |`：prompt 没有钉死列名，模型省掉 Name 是真会发生的。
+   * 少了这条兜底就不是报错而是整节静默为空——表清单全丢、或表在字段全空。
+   */
+  it('accepts bare Table and Field headers without the word name', () => {
+    const doc = `### Table Structure
+| Table   | Type | Description |
+|---------|------|-------------|
+| invoice | MAIN | Invoices    |
+
+### Field Design
+| Field  | Data Type | Constraints |
+|--------|-----------|-------------|
+| id     | BIGINT    | PRIMARY KEY |
+| amount | DECIMAL   | NOT NULL    |
+`
+    const tables = parseDesignTables(doc)
+
+    expect(tables.map(t => t.name)).toEqual(['invoice'])
+    expect(tables[0]).toMatchObject({ type: 'MAIN', description: 'Invoices' })
+    expect(tables[0].fields.map(f => f.name)).toEqual(['id', 'amount'])
+    expect(tables[0].fields[0].dataType).toBe('BIGINT')
+  })
+
+  /** 建表语境下模型常把字段列叫 Column；`Column Name` 早就能认，光杆 `Column` 也要认。 */
+  it('accepts Column as the field name header', () => {
+    const doc = `### Table Structure
+| Table Name | Table Type | Description |
+|------------|------------|-------------|
+| invoice    | MAIN       | Invoices    |
+
+### Field Design
+| Column | Data Type | Constraints |
+|--------|-----------|-------------|
+| id     | BIGINT    | PRIMARY KEY |
+`
+    expect(parseDesignTables(doc)[0].fields.map(f => f.name)).toEqual(['id'])
+  })
+
+  /**
+   * 中文表头：小节标题由 prompt 钉死（`### Table Structure` / `### Field Design`）不会变，
+   * 但用户用中文提需求时模型会把列名写成中文，于是标题认得出、列一个都认不出。
+   */
+  it('accepts Chinese name headers under the English section titles', () => {
+    const doc = `### Table Structure
+| 表名 | 表类型 | 说明 |
+|------|--------|------|
+| invoice | MAIN | 发票主表 |
+
+### Field Design
+| 字段名 | 数据类型 | 约束 |
+|--------|----------|------|
+| id | BIGINT | 主键 |
+| amount | DECIMAL | 非空 |
+`
+    const tables = parseDesignTables(doc)
+
+    expect(tables.map(t => t.name)).toEqual(['invoice'])
+    expect(tables[0].fields.map(f => f.name)).toEqual(['id', 'amount'])
+  })
+
+  /** 中文光杆表头同样要认，且 `字段` 不许被 `字段类型` / `字段说明` 抢走。 */
+  it('accepts bare Chinese headers without taking the type column', () => {
+    const doc = `### Table Structure
+| 表 | 类型 | 说明 |
+|----|------|------|
+| invoice | MAIN | 发票主表 |
+
+### Field Design
+| 字段 | 字段类型 | 字段说明 |
+|------|----------|----------|
+| id | BIGINT | 主键 |
+`
+    const tables = parseDesignTables(doc)
+
+    expect(tables.map(t => t.name)).toEqual(['invoice'])
+    expect(tables[0].fields.map(f => f.name)).toEqual(['id'])
+  })
+
+  /** 兜底不能抢在正主前面：有 Field Name 时 `Field Type` 之流不许被当成名字列。 */
+  it('still prefers the name column when other Field columns exist', () => {
+    const doc = `### Table Structure
+| Table Name | Table Type | Description |
+|------------|------------|-------------|
+| invoice    | MAIN       | Invoices    |
+
+### Field Design
+| Field Type | Field Name | Field Description |
+|------------|------------|-------------------|
+| BIGINT     | id         | Primary key       |
+`
+    const field = parseDesignTables(doc)[0].fields[0]
+
+    expect(field.name).toBe('id')
+    expect(field.dataType).toBe('BIGINT')
+  })
 })
 
 describe('layoutDesignProcess', () => {
