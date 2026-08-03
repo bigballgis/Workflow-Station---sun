@@ -8,6 +8,8 @@
  *   里剔除（那可能是别人团队的 FU）。已删除 FU 的幽灵 id 仅存在于数据里，渲染层按
  *   可见性求交集，永远不会显示。
  * - 过滤（搜索/状态/标签）只影响渲染（visibleEntries），不改布局本身。
+ * - 分页按**磁贴**切（客户端分页）：一个分组 = 一个磁贴（不论组里几个 FU），页容量由
+ *   视图模式决定。列表数据一次性取全，服务端分页会把布局（全局顺序 + 跨页分组）切碎。
  */
 import { ref, computed, watch, onBeforeUnmount, type Ref } from 'vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
@@ -44,15 +46,20 @@ export function keyOf(entry: LaunchpadEntry): string {
   return entry.type === 'item' ? `i:${entry.id}` : `f:${entry.id}`
 }
 
+/** 拖到网格边缘停留多久自动翻页（毫秒）——太短会误翻，太长手感黏 */
+const PAGE_FLIP_HOVER_MS = 600
+
 export function useLaunchpadLayout(options: {
-  /** 全量列表（当前页），布局的事实来源 */
+  /** 全量列表（所有 FU，非某一页），布局的事实来源 */
   list: Ref<FunctionUnitResponse[]>
   /** 过滤后的可见列表 */
   visibleList: Ref<FunctionUnitResponse[]>
+  /** 每页磁贴数（随视图模式变化：大图标少、小图标多） */
+  pageSize: Ref<number>
   /** 新分组默认名（i18n，延迟求值） */
   defaultGroupName: () => string
 }) {
-  const { list, visibleList, defaultGroupName } = options
+  const { list, visibleList, pageSize, defaultGroupName } = options
 
   const entries = ref<LaunchpadEntry[]>(loadLayout())
 
@@ -183,9 +190,42 @@ export function useLaunchpadLayout(options: {
     return out
   })
 
+  // ==================== 分页（按磁贴切，分组算一个） ====================
+  const page = ref(1)
+  /** 磁贴总数：分组不论多少成员都只占 1 个 */
+  const totalTiles = computed(() => visibleEntries.value.length)
+  const pageCount = computed(() => Math.max(1, Math.ceil(totalTiles.value / pageSize.value)))
+
+  // 删除/过滤/切换视图后当前页可能越界，钳回最后一页
+  watch(pageCount, (count) => {
+    if (page.value > count) page.value = count
+  })
+
+  const pagedEntries = computed<LaunchpadEntry[]>(() => {
+    const start = (page.value - 1) * pageSize.value
+    return visibleEntries.value.slice(start, start + pageSize.value)
+  })
+
+  function resetPage() {
+    page.value = 1
+  }
+
   // ==================== 拖拽状态 ====================
   const draggingKey = ref<string | null>(null)
   const dropTarget = ref<{ key: string; mode: DropMode } | null>(null)
+
+  // 翻页会把被拖的磁贴从 DOM 里卸载，它身上的 dragend 就不再触发；不兜住的话拖拽状态
+  // 会一直挂着（磁贴半透明、边缘翻页区不消失）。窗口级监听补上这一刀。
+  function onWindowDragEnd() {
+    disarmPageFlip()
+    onDragEnd()
+  }
+  window.addEventListener('dragend', onWindowDragEnd)
+  window.addEventListener('drop', onWindowDragEnd)
+  onBeforeUnmount(() => {
+    window.removeEventListener('dragend', onWindowDragEnd)
+    window.removeEventListener('drop', onWindowDragEnd)
+  })
 
   function onDragStart(entry: LaunchpadEntry) {
     draggingKey.value = keyOf(entry)
@@ -228,16 +268,68 @@ export function useLaunchpadLayout(options: {
     applyDrop(dragKey, target.key, target.mode)
   }
 
-  /** 拖到网格空白处：移到末尾 */
+  /** 拖到网格空白处：移到**当前页**末尾（分页后再甩到全局末尾等于凭空跳页，反直觉） */
   function onDropToEnd() {
     const dragKey = draggingKey.value
     onDragEnd()
     if (!dragKey) return
-    const from = entries.value.findIndex((e) => keyOf(e) === dragKey)
-    if (from < 0) return
-    const [moved] = entries.value.splice(from, 1)
-    entries.value.push(moved)
-    persist()
+    moveToVisibleIndex(dragKey, page.value * pageSize.value - 1)
+  }
+
+  /**
+   * 把某个磁贴挪到「可见序列」的第 targetIndex 位（超出末尾则落到最后）。
+   * 分页只是可见序列的切片，所以跨页移动 = 落到目标页首/页尾对应的那个下标。
+   */
+  function moveToVisibleIndex(dragKey: string, targetIndex: number) {
+    const rest = visibleEntries.value.filter((e) => keyOf(e) !== dragKey)
+    const anchor = rest[Math.max(0, targetIndex)]
+    if (!anchor) {
+      // 目标位置在末尾之后：直接放到布局最后
+      const from = entries.value.findIndex((e) => keyOf(e) === dragKey)
+      if (from < 0) return
+      const [moved] = entries.value.splice(from, 1)
+      entries.value.push(moved)
+      persist()
+      return
+    }
+    applyDrop(dragKey, keyOf(anchor), 'before')
+  }
+
+  // ==================== 跨页拖拽：边缘停留翻页 / 直接扔到边缘 ====================
+  let flipTimer: ReturnType<typeof setTimeout> | undefined
+  let flipArmedDir: -1 | 1 | null = null
+
+  function canFlip(dir: -1 | 1): boolean {
+    return dir < 0 ? page.value > 1 : page.value < pageCount.value
+  }
+
+  /** dragover 会连发，已经为同一方向计时就别重置，否则永远等不到翻页 */
+  function armPageFlip(dir: -1 | 1) {
+    if (!draggingKey.value || !canFlip(dir) || flipArmedDir === dir) return
+    disarmPageFlip()
+    flipArmedDir = dir
+    flipTimer = setTimeout(() => {
+      flipArmedDir = null
+      if (draggingKey.value && canFlip(dir)) page.value += dir
+    }, PAGE_FLIP_HOVER_MS)
+  }
+
+  function disarmPageFlip() {
+    clearTimeout(flipTimer)
+    flipTimer = undefined
+    flipArmedDir = null
+  }
+
+  /** 直接把磁贴扔在边缘区：落到上一页页尾 / 下一页页首，并跟过去 */
+  function onDropToPage(dir: -1 | 1) {
+    const dragKey = draggingKey.value
+    disarmPageFlip()
+    onDragEnd()
+    if (!dragKey || !canFlip(dir)) return
+    const targetPage = page.value + dir
+    const size = pageSize.value
+    moveToVisibleIndex(dragKey, dir < 0 ? targetPage * size - 1 : (targetPage - 1) * size)
+    page.value = targetPage
   }
 
   function applyDrop(dragKey: string, targetKey: string, mode: DropMode) {
@@ -329,6 +421,11 @@ export function useLaunchpadLayout(options: {
   return {
     entries,
     visibleEntries,
+    pagedEntries,
+    page,
+    pageCount,
+    totalTiles,
+    resetPage,
     itemById,
     draggingKey,
     dropTarget,
@@ -338,6 +435,9 @@ export function useLaunchpadLayout(options: {
     onDragLeave,
     onDrop,
     onDropToEnd,
+    armPageFlip,
+    disarmPageFlip,
+    onDropToPage,
     folderById,
     renameFolder,
     reorderInFolder,
