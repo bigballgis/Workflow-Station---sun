@@ -529,6 +529,22 @@ onBeforeUnmount(() => {
 function setInlineDocuments(documents: InlineDocument[]): void {
   inlineDocuments.value = [...documents]
   inlineDocIdCounter = documents.reduce((max, doc) => Math.max(max, doc.id), inlineDocIdCounter)
+  syncPhaseCompleteProposal()
+}
+
+/**
+ * 从已落库的产物重新推导"可以进入下一阶段"的提议（重开面板 / 切换历史会话时）。
+ *
+ * {@link showPhaseCompleteBtn} 原本只由本次挂载收到的 phase_complete 事件点亮，是纯内存态。
+ * 相位闸门下这个按钮是**唯一**推进相位的入口（后端只通知不落库推进），所以关掉面板再打开，
+ * 用户就失去了前进的路：只能再发一轮对话、赌模型再说一次 PHASE_COMPLETE 才能把入口换回来，
+ * 白花一次模型调用。当前相位已经有落库文档，正是模型当初提议时依据的那个事实，用它重建提议。
+ *
+ * GENERATION 是最后一相，没有下一步可提议；流式过程中不动，避免盖掉本轮正在发生的状态。
+ */
+function syncPhaseCompleteProposal(): void {
+  if (props.phase === 'GENERATION' || isStreaming.value) return
+  showPhaseCompleteBtn.value = inlineDocuments.value.some(doc => doc.documentType === props.phase)
 }
 
 // Preview/degradation helpers (pure)

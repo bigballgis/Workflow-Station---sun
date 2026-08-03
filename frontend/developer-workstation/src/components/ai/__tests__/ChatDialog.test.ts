@@ -287,6 +287,37 @@ describe('ChatDialog', () => {
     expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(false)
   })
 
+  /**
+   * 重开面板：按钮必须从落库的产物重新推导出来。
+   *
+   * 闸门下这个按钮是唯一推进相位的入口，而它原本只由本次挂载收到的 phase_complete 点亮——
+   * 关掉面板再打开就没了，用户只能再发一轮对话赌模型再说一次 PHASE_COMPLETE 才能前进。
+   */
+  it('should restore the phase button from the current phase document after reopening', async () => {
+    const wrapper = mountComponent({ ...defaultProps, phase: 'DESIGN' as AiPhase })
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(false)
+
+    ;(wrapper.vm as unknown as { setInlineDocuments: (d: InlineDocument[]) => void }).setInlineDocuments([
+      { id: 1, documentType: 'REQUIREMENTS', content: '# Req' },
+      { id: 2, documentType: 'DESIGN', content: '# Design' }
+    ])
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(true)
+  })
+
+  // 当前相位还没有产物 → 没有什么可推进的，不能凭上游文档就亮按钮
+  it('should not offer the phase button when the current phase produced nothing yet', async () => {
+    const wrapper = mountComponent({ ...defaultProps, phase: 'DESIGN' as AiPhase })
+
+    ;(wrapper.vm as unknown as { setInlineDocuments: (d: InlineDocument[]) => void }).setInlineDocuments([
+      { id: 1, documentType: 'REQUIREMENTS', content: '# Req' }
+    ])
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(false)
+  })
+
   // --- Regenerate 输入框：定向修改 vs 整篇重出 ---
 
   /** ChatDialog 通过 defineExpose 暴露的那部分，测试里只用得到这一个方法。 */
