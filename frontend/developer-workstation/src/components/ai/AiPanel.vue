@@ -446,10 +446,12 @@ function registerEventHandlers() {
   })
 
   eventsComposable.onWriteSuccess((data: any) => {
-    emit('dataApplied')
-    // The actor already got a toast from handleApply's HTTP success — don't double-toast;
-    // this event mainly informs OTHER viewers of the same function unit.
+    // The actor already refreshed and got a toast from handleApply's HTTP success — this event
+    // mainly informs OTHER viewers of the same function unit. Emitting dataApplied again would
+    // make the designer reload twice in a row (the process canvas is torn down and re-imported
+    // on each one), so both the refresh and the toast go through the same self-apply dedupe.
     if (Date.now() - lastSelfApplyAt > SELF_APPLY_TOAST_DEDUPE_MS) {
+      emit('dataApplied')
       ElMessage.success(t('ai.panel.dataApplied'))
     }
     // Pass warnings from write_success to ChatDialog if present

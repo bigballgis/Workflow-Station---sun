@@ -80,6 +80,7 @@
         >
           <ProcessDesigner
             v-if="activeTab === 'process'"
+            :key="processDesignerReloadKey"
             :function-unit-id="functionUnitId"
           />
         </el-tab-pane>
@@ -504,6 +505,8 @@ watch(activeTab, (tab) => {
 })
 
 const showAiPanel = ref(false)
+/** 改这个值会重挂载流程设计器——见 handleAiDataApplied。 */
+const processDesignerReloadKey = ref(0)
 
 const { statusTagType, statusLabel } = useFunctionUnitStatus()
 
@@ -539,8 +542,20 @@ const {
   translateStep
 } = useFunctionUnitDeploy({ functionUnitId, store })
 
+/**
+ * AI 生成结果写入后刷新设计器。
+ *
+ * 表 / 表单 / 动作三个设计器在模板里直接绑 store（`:rows="() => store.tables"` 之类），
+ * refreshAll 更新完 store 它们自己就跟着变了。流程设计器不行：它在 onMounted 里把 BPMN XML
+ * 一次性 importXML 进 bpmn-js 实例，之后再没有任何地方重新导入——store.process 换了新流程，
+ * 画布上还是 apply 之前那张图，用户只能手动刷新整页。改 key 强制重挂载，让 initModeler 重跑。
+ *
+ * 画布上未保存的改动会被丢弃，这是对的：AI apply 已经在服务端替换了流程定义，画布上那份是旧的。
+ * 只有当前 tab 的设计器是挂载着的（各个 tab 都带 v-if），所以这次重挂载不会波及其他 tab。
+ */
 async function handleAiDataApplied() {
   await store.refreshAll(functionUnitId.value)
+  processDesignerReloadKey.value++
 }
 
 onMounted(() => {
