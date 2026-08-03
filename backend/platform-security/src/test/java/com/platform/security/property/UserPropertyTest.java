@@ -1,5 +1,6 @@
 package com.platform.security.property;
 
+import net.jqwik.api.Assume;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.AlphaChars;
 import net.jqwik.api.constraints.Size;
@@ -31,6 +32,7 @@ class UserPropertyTest {
     @Property(tries = 100)
     void passwordHashingShouldBeSecureAndVerifiable(
             @ForAll @Size(min = 1, max = 100) String password) {
+        Assume.that(fitsBcrypt(password));
         
         String hash = passwordEncoder.encode(password);
         
@@ -47,7 +49,8 @@ class UserPropertyTest {
     @Property(tries = 100)
     void samePasswordShouldProduceDifferentHashes(
             @ForAll @Size(min = 1, max = 50) String password) {
-        
+        Assume.that(fitsBcrypt(password));
+
         String hash1 = passwordEncoder.encode(password);
         String hash2 = passwordEncoder.encode(password);
         
@@ -66,6 +69,7 @@ class UserPropertyTest {
         
         Assume.that(!password.equals(wrongPassword));
         Assume.that(!password.isEmpty() && !wrongPassword.isEmpty());
+        Assume.that(fitsBcrypt(password) && fitsBcrypt(wrongPassword));
         
         String hash = passwordEncoder.encode(password);
         
@@ -157,5 +161,15 @@ class UserPropertyTest {
                 "كلمة السر",
                 "סיסמה"
         );
+    }
+
+    /**
+     * BCrypt rejects anything over 72 **bytes**, while {@code @Size} bounds **characters** —
+     * jqwik happily generates non-ASCII, and 50 CJK characters is 150 bytes. Filtering here keeps
+     * the properties about hashing behaviour instead of failing on an input the encoder was never
+     * going to accept.
+     */
+    private static boolean fitsBcrypt(String password) {
+        return password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 72;
     }
 }

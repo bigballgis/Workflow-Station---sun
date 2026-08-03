@@ -329,11 +329,14 @@ class ConfigurationValidationPropertyTest {
     
     @Provide
     Arbitrary<SecurityConfig> criticallyInvalidConfigs() {
+        // 用 Arbitraries.create(supplier) 而不是 Arbitraries.just(<已构造好的实例>)：
+        // just() 的参数在**生成器构造时**就求值一次，100 次 try 共用同一个可变对象。
+        // 任何一次 try 里对它的改动都会污染后续 try —— 断言"应当抛异常"于是随机落空。
         return Arbitraries.oneOf(
                 // Null required fields
-                Arbitraries.just(createSecurityConfigWithNulls()),
+                Arbitraries.create(this::createSecurityConfigWithNulls),
                 // Extremely invalid values
-                Arbitraries.just(createSecurityConfig(-10, -20, -5))
+                Arbitraries.create(() -> createSecurityConfig(-10, -20, -5))
         );
     }
     
@@ -375,11 +378,19 @@ class ConfigurationValidationPropertyTest {
     
     private SecurityConfig createSecurityConfigWithNulls() {
         SecurityConfig config = new SecurityConfig();
-        // Leave required fields as null/default to trigger validation errors
-        config.setPasswordMinLength(8);
+        // Leave jwtSecretKey null (@NotNull) AND put an out-of-range password length in.
+        //
+        // The null alone is not enough: ConfigurationValidator.isCriticalViolation() decides
+        // error-vs-warning by matching the propertyPath against "password"/"security"/"url"/
+        // "username" and the *English* message text ("cannot be null"). "jwtSecretKey" matches
+        // none of those, and on a non-English JVM the message is localised (here 不能为null),
+        // so the violation is filed as a warning and validateAtStartup() never throws — this
+        // fixture was only "critically invalid" on an English-locale machine.
+        //
+        // passwordMinLength is matched by the propertyPath rule, so it is critical everywhere.
+        config.setPasswordMinLength(-1);
         config.setPasswordMaxLength(128);
         config.setMaxFailedAttempts(5);
-        // Don't set JWT secret key - will use default which should fail validation
         return config;
     }
     

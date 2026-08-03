@@ -1,70 +1,45 @@
 # CI quarantine list (surefire excludesFile).
 #
+# Currently EMPTY, and the intent is that it stays that way.
+#
 # NOTE: ASCII only. Surefire reads this file with the platform default charset,
 # so non-ASCII characters break it with "Failed to load list from file: Input length = 1".
 #
-# These tests were ALREADY RED before CI existed. They are not regressions from
-# any recent change. Left in the suite they would make CI red from day one, and a
-# permanently red CI is the same as no CI: real regressions drown in the noise.
+# This file exists for one situation: tests that were ALREADY RED before CI existed,
+# where leaving them in would have made CI red from day one. A permanently red CI is
+# the same as no CI, because real regressions drown in the noise.
 #
-# Quarantining them restores signal. Each entry records its root cause and its exit
-# condition. Fix one, delete its line.
-#
-# DO NOT add entries here to turn CI green. A newly failing test IS a regression;
-# fix the code instead.
+# It is NOT a place to park new failures. A newly failing test is a regression -- fix
+# the code. Every entry must carry its root cause and the condition for deleting it.
 #
 # Usage: mvn test -Dsurefire.excludesFile=<repo-root>/.github/known-test-failures.txt
-
-# ---------------------------------------------------------------------------
-# workflow-engine-core - 2 failures, deterministic (verified: not flaky)
 #
-# MultiInstanceStatusController.getStatus() returns success=false, so the test
-# fails at assertThat(...isSuccess()).isTrue() and never reaches the count
-# assertions it is actually about. Pre-existing controller defect, unrelated to
-# the Flowable 7.2.0 upgrade: git log shows these files were last touched in
-# b6f6a5d06, well before it.
-#
-# Exit condition: debug the error branch in MultiInstanceStatusController.
 # ---------------------------------------------------------------------------
-**/MultiInstanceStatusQueryConsistencyPropertyTest.java
-
-# ---------------------------------------------------------------------------
-# platform-common - 5 failures (1 + 3, plus a shared cause)
+# History: the six classes originally quarantined here have all been fixed and
+# their entries removed. Kept as a short record of what the causes turned out to be.
 #
-# Bean Validation constraint violations that the tests do not expect
-# (ConstraintViolationImpl on the configuration properties classes). Verified
-# pre-existing: the same 5 failures reproduce on a git worktree of the commit
-# BEFORE the Flowable 7.2.0 upgrade, so they are not caused by it.
+#   MultiInstanceStatusQueryConsistencyPropertyTest (engine, 2F)
+#     taskService.createTaskQuery() was left unstubbed and returned null; the NPE was
+#     swallowed by the controller's catch and surfaced as success=false, which read
+#     like a status-consistency bug.
 #
-# Exit condition: reconcile the @ConfigurationProperties constraints with what
-# these property tests assert is valid.
-# ---------------------------------------------------------------------------
-**/ConfigurationValidationPropertyTest.java
-**/ExternalConfigurationLoadingPropertyTest.java
-
-# ---------------------------------------------------------------------------
-# platform-security - 3 errors
+#   ConfigurationValidationPropertyTest (platform-common, 1F)
+#     The "critically invalid" fixture only violated @NotNull on jwtSecretKey, and
+#     ConfigurationValidator.isCriticalViolation() classifies by propertyPath keywords
+#     and *English* message text. On a non-English JVM the localised message missed
+#     that match, the violation was filed as a warning, and no exception was thrown.
 #
-# A jqwik @Property generates arbitrary passwords, including ones longer than
-# BCrypt's hard 72-byte input limit, so the encoder throws
-# IllegalArgumentException("password cannot be more than 72 bytes"). The
-# generator is simply wider than the code under test allows. Verified
-# pre-existing on the commit before the Flowable 7.2.0 upgrade.
+#   ExternalConfigurationLoadingPropertyTest (platform-common, 4F)
+#     SecurityConfig.jwtSecretKey gained @NotNull after these tests were written; no
+#     generator or fixture supplied it, so the closing validate() always failed.
 #
-# Exit condition: constrain the generator (e.g. @StringLength(max = 72)), or
-# decide the application should reject over-long passwords and assert that.
-# ---------------------------------------------------------------------------
-**/UserPropertyTest.java
-
-# ---------------------------------------------------------------------------
-# user-portal - 2 errors
+#   UserPropertyTest (platform-security, 3E)
+#     @Size bounds characters, BCrypt's 72-byte limit is bytes. jqwik generates
+#     non-ASCII, and 50 CJK characters is 150 bytes.
 #
-# Both read SQL from deploy/init-scripts/14-travel-expense-reimbursement/, a
-# directory that does not exist in the repository (NoSuchFileException). The
-# tests reference a seed package that was never committed or has been deleted;
-# this is not a product-code defect.
-#
-# Exit condition: restore that seed directory, or delete/rewrite these tests.
+#   TravelExpenseIdempotencyPropertyTest, TravelExpenseDependencyErrorPropertyTest
+#     (user-portal, 2E) -- deleted. They asserted on SQL under
+#     deploy/init-scripts/14-travel-expense-reimbursement/, which a804c1f55 removed as
+#     dead n8n code. That commit deleted a sibling test for the same reason and simply
+#     missed these two.
 # ---------------------------------------------------------------------------
-**/TravelExpenseIdempotencyPropertyTest.java
-**/TravelExpenseDependencyErrorPropertyTest.java
