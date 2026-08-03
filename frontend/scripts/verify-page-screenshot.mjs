@@ -12,7 +12,12 @@
 import { mkdirSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
-import { loginViaUnifiedSso } from './playwright-login.mjs'
+import {
+  loginViaAdminPassword,
+  loginViaDwPassword,
+  loginViaPortalPassword,
+  loginViaUnifiedSso,
+} from './playwright-login.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FRONTEND_ROOT = resolve(__dirname, '..')
@@ -132,7 +137,11 @@ async function main() {
   try {
     if (!args.skipLogin) {
       console.log(`[login] app=${args.app}`)
-      await loginViaUnifiedSso(page, args.app)
+      // Prefer password login (SSO form is unreliable headless).
+      if (args.app === 'admin') await loginViaAdminPassword(page)
+      else if (args.app === 'dw') await loginViaDwPassword(page)
+      else if (args.app === 'portal') await loginViaPortalPassword(page)
+      else await loginViaUnifiedSso(page, args.app)
     }
 
     console.log(`[goto] ${args.url}`)

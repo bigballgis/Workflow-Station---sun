@@ -1,17 +1,21 @@
 package com.admin.enums;
 
 /**
- * 虚拟组类型枚举
- * 
- * 只有两种类型：
- * - SYSTEM: 系统内置虚拟组，不可删除
- * - CUSTOM: 用户自定义虚拟组，可删除
- * 
- * 所有虚拟组都可以通过 ad_group 字段绑定 AD 组
+ * Virtual group type.
+ *
+ * <ul>
+ *   <li>{@link #SYSTEM}: built-in; cannot be deleted; create via seed only</li>
+ *   <li>{@link #CUSTOM}: business / task-pool groups; user-creatable</li>
+ *   <li>{@link #DEVELOPER}: Developer Workstation team groups; user-creatable</li>
+ * </ul>
+ *
+ * All types may bind an AD group via {@code ad_group}.
  */
 public enum VirtualGroupType {
-    /** 系统内置虚拟组 - 不可删除 */
+    /** Built-in virtual group — not deletable */
     SYSTEM,
-    /** 用户自定义虚拟组 - 可删除 */
-    CUSTOM
+    /** Business / portal task-pool virtual group — deletable */
+    CUSTOM,
+    /** Developer Workstation team virtual group — deletable */
+    DEVELOPER
 }

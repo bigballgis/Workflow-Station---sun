@@ -90,7 +90,7 @@ public class DeveloperPermissionChecker {
     }
 
     /**
-     * 团队成员身份 → DW 只读基线：若用户是任一团队（CUSTOM 虚拟组）成员，则补充
+     * 团队成员身份 → DW 只读基线：若用户是任一团队（CUSTOM 或 DEVELOPER 虚拟组）成员，则补充
      * {@code function_unit:view}，使其通过所有读接口的能力门禁。可见/可改的具体 FU
      * 仍由工作区拦截器按团队 scope + Public 逐 FU 校验，故不会越权。写权限一律不补。
      */

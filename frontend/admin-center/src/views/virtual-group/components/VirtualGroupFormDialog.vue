@@ -43,6 +43,10 @@
             value="CUSTOM"
           />
           <el-option
+            :label="t('virtualGroup.typeDeveloper')"
+            value="DEVELOPER"
+          />
+          <el-option
             v-if="isSystemGroup"
             :label="t('virtualGroup.typeSystem')"
             value="SYSTEM"
@@ -88,14 +92,17 @@ import { virtualGroupApi } from '@/api/virtualGroup'
 const { t } = useI18n()
 
 const props = defineProps<{ modelValue: boolean; group: any }>()
-const emit = defineEmits(['update:modelValue', 'success'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  success: [createdType?: 'CUSTOM' | 'DEVELOPER' | 'SYSTEM']
+}>()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const isEdit = computed(() => !!props.group)
 const isSystemGroup = computed(() => props.group?.type === 'SYSTEM')
 
-const form = reactive({ name: '', code: '', type: 'CUSTOM', adGroup: '', description: '' })
+const form = reactive({ name: '', code: '', type: 'CUSTOM' as 'CUSTOM' | 'DEVELOPER' | 'SYSTEM', adGroup: '', description: '' })
 
 const rules = computed(() => ({
   name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }],
@@ -119,18 +126,18 @@ const handleSubmit = async () => {
   try {
     const data = {
       name: form.name,
-      type: form.type as 'SYSTEM' | 'CUSTOM',
+      type: form.type,
       description: form.description,
       adGroup: form.adGroup || undefined,
     }
     if (isEdit.value) {
       await virtualGroupApi.update(props.group.id, data)
     } else {
-      await virtualGroupApi.create({ ...data, code: form.code } as any)
+      await virtualGroupApi.create({ ...data, code: form.code })
     }
     ElMessage.success(t('common.success'))
     emit('update:modelValue', false)
-    emit('success')
+    emit('success', form.type)
   } catch (e) {
     console.error('Failed to save virtual group:', e)
     ElMessage.error(t('common.failed'))

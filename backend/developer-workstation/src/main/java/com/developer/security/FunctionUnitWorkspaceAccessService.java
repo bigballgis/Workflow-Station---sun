@@ -119,7 +119,7 @@ public class FunctionUnitWorkspaceAccessService {
     }
 
     /**
-     * 是否为任一「团队」（CUSTOM 虚拟组，排除 Public）的成员。
+     * 是否为任一「团队」（CUSTOM 或 DEVELOPER 虚拟组，排除 Public）的成员。
      *
      * <p>
      * 作为 DW 只读基线：团队成员即可进入工作区，查看本团队（可能暂无 FU）与 Public 的功能单元。
@@ -141,7 +141,7 @@ public class FunctionUnitWorkspaceAccessService {
      * <li>{@code ADMIN} 型 / {@code TECH_LEAD} / {@code TEAM_LEAD} /
      * {@code DEVELOPER} /
      * {@code FU_VIEWER} 能力角色；或</li>
-     * <li>任一团队（CUSTOM 虚拟组）成员（团队成员身份 → 只读基线）。</li>
+     * <li>任一团队（CUSTOM 或 DEVELOPER 虚拟组）成员（团队成员身份 → 只读基线）。</li>
      * </ul>
      * 进入后可见/可改的具体 FU 仍受团队 scope 约束。
      */
