@@ -140,9 +140,9 @@ async function main() {
     await page.screenshot({ path: join(OUT_DIR, `${prefix}_ai-panel-applied-after-reopen.png`), fullPage: false })
 
     // Expanded document card: the Regenerate button must be reachable there too
-    await page.locator('.ai-panel .inline-doc-viewer__collapsed').first().click()
+    await page.locator('.ai-panel .inline-doc-viewer__header').first().click()
     await page.waitForTimeout(800)
-    expect(await page.locator('.ai-panel .inline-doc-viewer__expanded button', { hasText: /Regenerate|重新生成/i }).count() > 0,
+    expect(await page.locator('.ai-panel .inline-doc-viewer__card.is-expanded button', { hasText: /Regenerate|重新生成/i }).count() > 0,
       '2. expanded document card also exposes Regenerate')
     await page.screenshot({ path: join(OUT_DIR, `${prefix}_ai-panel-doc-card-expanded.png`), fullPage: false })
 
