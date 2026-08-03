@@ -11,6 +11,11 @@ export interface RestoredGenerationDraft {
   previewData: GenerationPreviewData | null
   /** 这份结果已经 Apply 过：卡片直接还原成只读的 "Applied ✓"，不再提供 Apply 按钮。 */
   applied?: boolean
+  /**
+   * 草稿写入时刻（ISO）。还原出来的卡片照样要显示生成时间，否则重开面板后 Preview 的版本戳
+   * 会空掉，用户又回到"这份是新的还是旧的"猜不出来的状态。
+   */
+  generatedAt?: string
 }
 
 /**
@@ -24,6 +29,13 @@ export interface RestoredGenerationDraft {
  * UI-facing side effects (input text, preview restore, toasts) are delegated to
  * the supplied callbacks so the SFC stays the orchestrator.
  */
+/** 草稿里存的是 Date.now() 毫秒数；旧草稿可能没有该字段，缺失时不显示时间而不是显示 1970。 */
+function toIsoTimestamp(timestamp?: number): string | undefined {
+  return typeof timestamp === 'number' && Number.isFinite(timestamp)
+    ? new Date(timestamp).toISOString()
+    : undefined
+}
+
 export function useChatDialogDraft(
   functionUnitId: () => number,
   sessionId: () => string,
@@ -65,7 +77,8 @@ export function useChatDialogDraft(
         callbacks.restoreGeneration({
           generatedData: genDraft.generatedData,
           previewData: genDraft.previewData,
-          applied: true
+          applied: true,
+          generatedAt: toIsoTimestamp(genDraft.timestamp)
         })
       } else if (genDraft) {
         generationDraftData = genDraft
@@ -94,7 +107,8 @@ export function useChatDialogDraft(
     if (generationDraftData) {
       callbacks.restoreGeneration({
         generatedData: generationDraftData.generatedData,
-        previewData: generationDraftData.previewData
+        previewData: generationDraftData.previewData,
+        generatedAt: toIsoTimestamp(generationDraftData.timestamp)
       })
       ElMessage.info(t('ai.draft.restore'))
     }

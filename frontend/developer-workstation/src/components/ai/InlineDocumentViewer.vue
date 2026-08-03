@@ -7,6 +7,11 @@
       @click="expanded = true"
     >
       <span class="inline-doc-viewer__label">{{ docLabel }}</span>
+      <DocVersionBadge
+        :version="props.version"
+        :generated-at="props.generatedAt"
+        :fresh="props.fresh"
+      />
       <el-button
         size="small"
         text
@@ -15,14 +20,11 @@
         {{ t('ai.doc.expand') }}
       </el-button>
       <span class="inline-doc-viewer__spacer" />
-      <el-button
-        size="small"
+      <RegenerateBox
         text
         :disabled="props.busy"
-        @click.stop="emit('regenerate', props.documentType)"
-      >
-        {{ t('ai.preview.regenerate') }}
-      </el-button>
+        @confirm="instruction => emit('regenerate', props.documentType, instruction)"
+      />
     </div>
 
     <!-- Expanded state -->
@@ -33,6 +35,11 @@
     >
       <div class="inline-doc-viewer__header">
         <span class="inline-doc-viewer__label">{{ docLabel }}</span>
+        <DocVersionBadge
+          :version="props.version"
+          :generated-at="props.generatedAt"
+          :fresh="props.fresh"
+        />
         <ViewModeToggle
           v-model="viewMode"
           :modes="availableModes"
@@ -46,14 +53,11 @@
           {{ t('ai.doc.collapse') }}
         </el-button>
         <span class="inline-doc-viewer__spacer" />
-        <el-button
-          size="small"
+        <RegenerateBox
           text
           :disabled="props.busy"
-          @click="emit('regenerate', props.documentType)"
-        >
-          {{ t('ai.preview.regenerate') }}
-        </el-button>
+          @confirm="instruction => emit('regenerate', props.documentType, instruction)"
+        />
       </div>
       <div class="inline-doc-viewer__body">
         <XmlTreeView
@@ -85,6 +89,8 @@ import XmlTreeView from './XmlTreeView.vue'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 import DesignProcessPreview from './DesignProcessPreview.vue'
 import DesignTablePreview from './DesignTablePreview.vue'
+import DocVersionBadge from './DocVersionBadge.vue'
+import RegenerateBox from './RegenerateBox.vue'
 import type { AiDocumentType, ViewMode } from '@/types/aiGeneration'
 
 const props = defineProps<{
@@ -92,11 +98,18 @@ const props = defineProps<{
   content: string
   /** AI 正在回复：重出按钮置灰，避免在流式过程中再发一轮请求（会被 useAiChat 直接丢弃）。 */
   busy?: boolean
+  /** 版本戳：告诉用户手上这份是不是刚重出的那一版，见 DocVersionBadge。 */
+  version?: number
+  generatedAt?: string
+  fresh?: boolean
 }>()
 
 const emit = defineEmits<{
-  /** 只重出这一份文档，不推进会话相位——由 ChatDialog 转成 regenerateOnly 请求。 */
-  regenerate: [documentType: AiDocumentType]
+  /**
+   * 只重出这一份文档，不推进会话相位——由 ChatDialog 转成 regenerateOnly 请求。
+   * instruction 为用户填的定向修改指令，空串表示整篇重出。
+   */
+  regenerate: [documentType: AiDocumentType, instruction: string]
 }>()
 
 const { t } = useI18n()

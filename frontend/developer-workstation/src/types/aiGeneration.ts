@@ -117,10 +117,23 @@ export interface PageResponse<T> {
 
 export type ViewMode = 'xml' | 'markdown' | 'process' | 'table'
 
+/** 随 document SSE 事件回来的版本元信息——见 AiGenerationComponentImpl 的 documentPayload。 */
+export interface AiDocumentMeta {
+  version?: number
+  generatedAt?: string
+}
+
 export interface InlineDocument {
   id: number
   documentType: AiDocumentType
   content: string
+  /**
+   * 后端 ai_document 的版本号（每次落库 +1）。文档卡靠它告诉用户"你现在看的是不是重出过的那一版"——
+   * 正文改一两个字段时肉眼分辨不出来，版本号是唯一可信的信号。重开面板时由 loadInlineDocuments 回填。
+   */
+  version?: number
+  /** 该版本落库时间（ISO），与 version 一起显示。 */
+  generatedAt?: string
 }
 
 /** Diff result for comparing current vs generated data */

@@ -1,5 +1,7 @@
 import { ref } from 'vue'
-import type { AiMessage, AiChatRequest, AiPhase, AiGeneratedData, GenerationPreviewData } from '@/types/aiGeneration'
+import type {
+  AiMessage, AiChatRequest, AiPhase, AiGeneratedData, GenerationPreviewData, AiDocumentMeta
+} from '@/types/aiGeneration'
 import { AI_CHAT_STREAM_URL } from '@/api/aiGeneration'
 import { getUser } from '@/api/auth'
 import { readAmToken } from '@/utils/amToken'
@@ -84,7 +86,7 @@ export function useAiChat() {
   let abortController: AbortController | null = null
 
   // Event callbacks
-  let onDocumentCallback: ((type: string, content: string) => void) | null = null
+  let onDocumentCallback: ((type: string, content: string, meta?: AiDocumentMeta) => void) | null = null
   let onPhaseCompleteCallback: ((phase: AiPhase) => void) | null = null
   let onGeneratedDataCallback: ((data: any) => void) | null = null
   let onValidationWarningCallback: ((warnings: any[]) => void) | null = null
@@ -227,7 +229,10 @@ export function useAiChat() {
         if (generationStep.value < 2) generationStep.value = 2
         try {
           const parsed = JSON.parse(eventData)
-          onDocumentCallback?.(parsed.documentType, parsed.content)
+          onDocumentCallback?.(parsed.documentType, parsed.content, {
+            version: parsed.version,
+            generatedAt: parsed.generatedAt
+          })
         } catch { /* ignore parse errors */ }
         break
       }
@@ -357,7 +362,7 @@ export function useAiChat() {
     streamingContent.value = ''
   }
 
-  function onDocument(cb: (type: string, content: string) => void) {
+  function onDocument(cb: (type: string, content: string, meta?: AiDocumentMeta) => void) {
     onDocumentCallback = cb
   }
 

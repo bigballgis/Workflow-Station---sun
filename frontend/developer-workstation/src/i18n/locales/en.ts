@@ -136,6 +136,8 @@ export default {
     viewIcon: 'Icon view',
     viewCard: 'Card view',
     dragOutHint: 'Drag a card outside the panel to remove it from the group',
+    dragToPrevPage: 'Previous page',
+    dragToNextPage: 'Next page',
     serviceTaskLoadFailed: 'Failed to load the automation builder',
     serviceTaskEmpty: 'No automation task here yet. In Process Design, add a Service Task and set its type to Automation; save, then come back to create its flow.',
     serviceTaskSelector: 'Service task',
@@ -1998,6 +2000,7 @@ export default {
       newSession: 'Start New Session',
       viewLastSession: 'View Last Session',
       initFailed: 'Failed to initialize AI panel',
+      phasePersistFailed: 'Continuing, but the phase could not be saved — reopening the panel may return to the previous phase.',
       forceUnlockRequest: 'Force Unlock Request',
       forceUnlockMsg: 'User {name} requests to force unlock the AI generation lock for this function unit. Do you agree to release the lock?',
       forceUnlockAccept: 'Accept',
@@ -2060,6 +2063,9 @@ export default {
       retry: 'Retry',
       signInAgain: 'Sign in again',
       nextPhase: 'Enter Next Phase',
+      nextPhaseDesign: 'Generate Design Document',
+      nextPhaseGeneration: 'Generate Function Unit Data',
+      nextPhaseHint: 'The AI considers this phase done. Review the document above before continuing — the next step is a fresh generation that builds on it.',
       send: 'Send',
       stop: 'Stop',
       inputFeedback: 'Enter feedback...',
@@ -2131,6 +2137,12 @@ export default {
       keepEditing: 'Keep Editing',
       expand: 'Expand Document',
       collapse: 'Collapse Document'
+    },
+    regenerate: {
+      title: 'What should be fixed?',
+      placeholder: 'e.g. the shipment table is missing carrier and tracking_no; the reject branch must not loop back to the start event',
+      hintTargeted: 'Only the points above will be changed — everything else that is already correct is kept as is.',
+      hintBlank: 'Leave empty to regenerate the whole thing from scratch.'
     },
     preview: {
       title: 'Generation Preview',

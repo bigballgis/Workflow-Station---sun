@@ -111,6 +111,9 @@
         :document-type="doc.documentType"
         :content="doc.content"
         :busy="isStreaming"
+        :version="doc.version"
+        :generated-at="doc.generatedAt"
+        :fresh="freshKeys.has(doc.documentType)"
         @regenerate="handleDocumentRegenerate"
       />
 
@@ -150,6 +153,8 @@
           :mode="props.mode"
           :diff-result="diffResult"
           :apply-state="applyState"
+          :generated-at="generationGeneratedAt"
+          :fresh="freshKeys.has('GENERATION')"
           @apply="handleApply"
           @regenerate="handleRegenerate"
         />
@@ -295,11 +300,17 @@
         v-if="showPhaseCompleteBtn"
         class="chat-dialog__phase-action"
       >
+        <p class="chat-dialog__phase-action-hint">
+          {{ t('ai.chat.nextPhaseHint') }}
+        </p>
+        <!-- primary（HSBC 红）而非 success：ai-tokens 规定红是唯一强调色，面板里的绿只用于
+             "Applied ✓" 这类完成态，不用于动作按钮 -->
         <el-button
-          type="success"
+          type="primary"
+          :disabled="isStreaming"
           @click="handleNextPhase"
         >
-          {{ t('ai.chat.nextPhase') }}
+          {{ nextPhaseLabel }}
         </el-button>
       </div>
 
@@ -388,6 +399,7 @@ import type {
   AiValidationError,
   InlineDocument,
   AiDocumentType,
+  AiDocumentMeta,
   DiffResult
 } from '@/types/aiGeneration'
 import { computeDiff } from '@/types/aiGeneration'
@@ -478,6 +490,37 @@ const inlineDocuments = ref<InlineDocument[]>([])
 let inlineDocIdCounter = 0
 
 /**
+ * Generation Preview 的版本戳——只有时间，没有版本号。
+ *
+ * 文档卡能显示 vN 是因为 ai_document.version 是后端发的真实版本；生成结果从不落库
+ * （见 markDraftApplied 的注释），本地计数器一重开面板就归零，会给出自相矛盾的编号。
+ * 时间戳本身就足以回答用户的问题——"手上这份是不是刚重出的那一版"——且不会说谎。
+ */
+const generationGeneratedAt = ref<string | undefined>(undefined)
+
+/** 刚刚重出的那几张卡：版本徽章短暂高亮，几秒后自动褪掉。 */
+const FRESH_HIGHLIGHT_MS = 6000
+const freshKeys = ref<Set<string>>(new Set())
+const freshTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function markFresh(key: AiDocumentType | 'GENERATION') {
+  const existing = freshTimers.get(key)
+  if (existing) clearTimeout(existing)
+  freshKeys.value = new Set(freshKeys.value).add(key)
+  freshTimers.set(key, setTimeout(() => {
+    const next = new Set(freshKeys.value)
+    next.delete(key)
+    freshKeys.value = next
+    freshTimers.delete(key)
+  }, FRESH_HIGHLIGHT_MS))
+}
+
+onBeforeUnmount(() => {
+  freshTimers.forEach(timer => clearTimeout(timer))
+  freshTimers.clear()
+})
+
+/**
  * 用历史文档替换聊天区的卡片（重开面板 / 切换历史会话时调用）。
  *
  * 恢复来的 id 是 dw_ai_documents 的主键，本轮新产出的卡片用自增计数器，两者可能撞号；
@@ -532,6 +575,7 @@ const {
     restoreGeneration: (draft: RestoredGenerationDraft) => {
       generatedData.value = draft.generatedData
       previewData.value = draft.previewData || computePreviewData(draft.generatedData)
+      generationGeneratedAt.value = draft.generatedAt
       if (draft.applied) {
         // 已写入过的结果还原成只读态：再点一次 Apply 会把同一份数据重复写一遍
         applyState.value = 'applied'
@@ -638,14 +682,26 @@ async function fetchCurrentFunctionUnitData() {
 }
 
 // Register event callbacks
+/**
+ * 模型说"这一相位完成了"——亮出按钮，等用户决定要不要花掉下一次生成。
+ *
+ * 以前这里直接 emit，AiPanel 收到就自动发下一相位的触发语，于是敲一次回车连跑
+ * 需求→设计→生成三轮，中间没有人看一眼：第一轮漏掉的字段被第二轮当成事实读进去
+ * （后端每一相位都会把上游文档一并发给模型），再被第三轮变成真的表和 BPMN，等用户
+ * 在 Preview 看见时已经隔了两轮生成，改起来还要往回退。
+ *
+ * GENERATION 是最后一相，没有下一步可提议，照原样 emit 交给 AiPanel。
+ */
 onPhaseComplete((phase: AiPhase) => {
-  // DESIGN 和 REQUIREMENTS 阶段完成后会自动触发下一阶段，不需要显示按钮
-  // 只在 GENERATION 阶段完成时不显示按钮（因为没有下一阶段了）
-  // 但仍然 emit 事件让 AiPanel 处理阶段推进
-  emit('phaseComplete', phase)
+  if (phase === 'GENERATION') {
+    emit('phaseComplete', phase)
+    return
+  }
+  showPhaseCompleteBtn.value = true
+  scrollToBottom()
 })
 
-onDocument((type: string, content: string) => {
+onDocument((type: string, content: string, meta?: AiDocumentMeta) => {
   emit('document', type, content)
   // Also add to inline documents for in-chat display. Replace in place when a card of this
   // type already exists — a regenerate produces a second document event for the same type,
@@ -656,15 +712,20 @@ onDocument((type: string, content: string) => {
     inlineDocuments.value.splice(existing, 1, {
       id: inlineDocuments.value[existing].id,
       documentType: docType,
-      content
+      content,
+      version: meta?.version,
+      generatedAt: meta?.generatedAt
     })
-    return
+  } else {
+    inlineDocuments.value.push({
+      id: ++inlineDocIdCounter,
+      documentType: docType,
+      content,
+      version: meta?.version,
+      generatedAt: meta?.generatedAt
+    })
   }
-  inlineDocuments.value.push({
-    id: ++inlineDocIdCounter,
-    documentType: docType,
-    content
-  })
+  markFresh(docType)
 })
 
 onGeneratedData((data: any) => {
@@ -672,6 +733,9 @@ onGeneratedData((data: any) => {
   previewData.value = computePreviewData(data as AiGeneratedData)
   // Fresh generation result → the Apply button must be actionable again
   applyState.value = 'idle'
+  // 打上生成时刻：没有它，用户点完 Regenerate 只能对着一屏看起来差不多的表和表单猜有没有重出。
+  generationGeneratedAt.value = new Date().toISOString()
+  markFresh('GENERATION')
   // Task 17.2: Compute diff in MODIFY mode
   if (props.mode === 'MODIFY' && currentFunctionUnitData.value) {
     diffResult.value = computeDiff(currentFunctionUnitData.value, data as AiGeneratedData)
@@ -695,6 +759,8 @@ function handleSend() {
   inputText.value = ''
   validationErrors.value = []
   validationWarnings.value = []
+  // 用户选择继续对话而不是进入下一阶段：收起提议，等这一轮的结果再说
+  showPhaseCompleteBtn.value = false
 
   sendMessage({
     functionUnitId: props.functionUnitId,
@@ -719,10 +785,20 @@ function handleStop() {
   cancel()
 }
 
+/**
+ * 用户接受了模型的相位完成提议：AiPanel 据此落库推进相位并发下一相位的触发语。
+ * 这是整条链上唯一会推进相位的入口。
+ */
 function handleNextPhase() {
   showPhaseCompleteBtn.value = false
   emit('phaseComplete', props.phase)
 }
+
+/** 按钮上写清楚点下去会生成什么，而不是笼统的"进入下一阶段"——这一下要花掉一次模型调用。 */
+const nextPhaseLabel = computed(() =>
+  props.phase === 'REQUIREMENTS'
+    ? t('ai.chat.nextPhaseDesign')
+    : t('ai.chat.nextPhaseGeneration'))
 
 function handleApply() {
   if (!generatedData.value || applyState.value === 'applying') {
@@ -762,16 +838,15 @@ function markApplyFailed() {
   applyState.value = 'idle'
 }
 
-function handleRegenerate() {
+function handleRegenerate(instruction = '') {
   generatedData.value = null
   previewData.value = null
   diffResult.value = null
   applyState.value = 'idle'
   // Actually rerun the generation (previously this only cleared the preview and the
   // click appeared to do nothing). The auto-trigger hint doubles as user feedback.
-  autoSendMessage('[AUTO_TRIGGER] Please regenerate the complete function unit component data '
-    + 'based on the existing requirements and design documents. '
-    + 'Ignore any previously generated component data and produce a fresh version.')
+  const basePrompt = instruction.trim() ? GENERATION_REVISE_PROMPT : GENERATION_REGENERATE_PROMPT
+  autoSendMessage(withUserCorrection(basePrompt, instruction))
   emit('regenerate')
 }
 
@@ -789,9 +864,53 @@ const DOC_REGENERATE_PROMPTS: Record<AiDocumentType, string> = {
     + 'Rewrite it from scratch; do not merely restate the previous version.'
 }
 
-function handleDocumentRegenerate(documentType: AiDocumentType) {
+const GENERATION_REGENERATE_PROMPT =
+  '[AUTO_TRIGGER] Please regenerate the complete function unit component data '
+  + 'based on the existing requirements and design documents. '
+  + 'Ignore any previously generated component data and produce a fresh version.'
+
+/** 用户填了定向修改指令时，替换掉上面那句"整篇从头重写"的开场白。 */
+const DOC_REVISE_PROMPTS: Record<AiDocumentType, string> = {
+  REQUIREMENTS: '[AUTO_TRIGGER] Please revise the existing requirements document for this function unit.',
+  DESIGN: '[AUTO_TRIGGER] Please revise the existing design document for this function unit.'
+}
+
+const GENERATION_REVISE_PROMPT =
+  '[AUTO_TRIGGER] Please revise the function unit component data you generated from the existing '
+  + 'requirements and design documents.'
+
+/**
+ * 把用户在 Regenerate 输入框里填的话拼成一段最高优先级的定向修改指令。
+ *
+ * 两个刻意的选择：
+ * 1. 用户那段话放在**最末尾**。前面几千 token 的 schema metadata / 既有文档很容易把夹在中间的
+ *    指令冲掉，弱模型（GPT-5.x-nano 一档）对结尾的权重明显更高。格式对齐后端
+ *    AiGenerationServiceImpl#buildRepairMessage 的横幅，那条路径已经验证过有效。
+ * 2. 明确写"保留其余已经正确的内容"。原来的 prompt 是"从头重写、别照抄上一版"——那是在主动
+ *    索要漂移：为了改两个字段把整篇重滚一遍，98% 正确的部分每次都在重新抽奖。
+ *
+ * instruction 为空时原样返回基础 prompt，保持既有的整篇重出行为不变。
+ */
+function withUserCorrection(basePrompt: string, instruction: string): string {
+  const trimmed = instruction.trim()
+  if (!trimmed) return basePrompt
+  return basePrompt + '\n\n'
+    + '========== USER CORRECTION REQUEST (highest priority) ==========\n'
+    + 'Keep everything in the current version that is already correct and reproduce it unchanged.\n'
+    + 'Change ONLY what the instruction below asks for. Do not restructure, rename, drop, reorder or\n'
+    + '"improve" anything the instruction does not mention. Output the COMPLETE artefact again with\n'
+    + 'those changes applied, and state in your reply which parts you changed.\n\n'
+    + 'User instruction:\n'
+    + trimmed + '\n'
+    + '========== End of correction request =========='
+}
+
+function handleDocumentRegenerate(documentType: AiDocumentType, instruction = '') {
   if (isStreaming.value) return
-  autoSendMessage(DOC_REGENERATE_PROMPTS[documentType], {
+  const basePrompt = instruction.trim()
+    ? DOC_REVISE_PROMPTS[documentType]
+    : DOC_REGENERATE_PROMPTS[documentType]
+  autoSendMessage(withUserCorrection(basePrompt, instruction), {
     phase: documentType as AiPhase,
     regenerateOnly: true
   })
@@ -849,6 +968,8 @@ function setValidationWarnings(warnings: AiValidationError[]) {
  */
 function autoSendMessage(message: string, options?: { phase?: AiPhase; regenerateOnly?: boolean }) {
   const turnPhase = options?.phase ?? props.phase
+  // 重出/进入下一阶段都会产出新结果，旧的相位完成提议先收起
+  showPhaseCompleteBtn.value = false
 
   // Add a system-style hint so user knows what's happening
   const hintMessage: AiMessage = {
@@ -996,8 +1117,20 @@ defineExpose({
 
 .chat-dialog__phase-action {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   padding: 12px 16px;
+}
+
+// 提示语要读得完：这一下要花掉一次生成，用户得先知道自己在批准什么
+.chat-dialog__phase-action-hint {
+  margin: 0;
+  max-width: 460px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: ai.$ai-graphite;
 }
 
 .chat-dialog__input-area {

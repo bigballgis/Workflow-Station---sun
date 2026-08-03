@@ -207,7 +207,6 @@ import type {
   AiMessage,
   AiGeneratedData,
   AiValidationError,
-  AiDocumentType,
   InlineDocument
 } from '@/types/aiGeneration'
 
@@ -311,16 +310,11 @@ async function openPanel() {
       initialMessages.value = [...msgs]
       initialDocuments.value = await sessionComposable.loadInlineDocuments(props.functionUnitId)
 
-      // 根据已有文档推断实际阶段（防止后端阶段未更新的情况）
-      const actualPhase = await detectPhaseFromDocuments(props.functionUnitId, activeSession.currentPhase)
-      if (actualPhase !== activeSession.currentPhase) {
-        sessionComposable.setPhase(actualPhase)
-        // 同步更新后端
-        if (activeSession.sessionId) {
-          aiGenerationApi.updateSessionPhase(activeSession.sessionId, actualPhase)
-            .catch(err => console.error('Failed to sync phase:', err))
-        }
-      }
+      // 会话相位就是权威值，不再按"有没有设计文档"去猜。
+      //
+      // 原来的 detectPhaseFromDocuments 修的是"后端阶段未同步"——那是后端自动推进相位时代的产物，
+      // 现在相位只由用户点"进入下一阶段"推进，不存在滞后。留着反而有害：文档按 functionUnitId 存，
+      // 上一条会话留下的 DESIGN 文档会让新会话一开面板就被顶到 DESIGN，等于在重开时把闸门撤掉。
       computeCompletedPhases(sessionComposable.currentPhase.value)
       ready.value = true
       return
@@ -382,26 +376,6 @@ function computeCompletedPhases(currentPhase: AiPhase) {
   const phases: AiPhase[] = ['REQUIREMENTS', 'DESIGN', 'GENERATION']
   const idx = phases.indexOf(currentPhase)
   completedPhases.value = phases.slice(0, idx)
-}
-
-/**
- * 根据已有文档推断实际阶段。
- * 如果 DESIGN 文档已存在但会话阶段仍为 REQUIREMENTS，说明后端阶段未同步，需要修正。
- */
-async function detectPhaseFromDocuments(functionUnitId: number, dbPhase: AiPhase): Promise<AiPhase> {
-  try {
-    // 检查是否有 DESIGN 文档
-    const designRes = await aiGenerationApi.getDocumentVersions(functionUnitId, 'DESIGN' as AiDocumentType)
-    const hasDesign = designRes.data && designRes.data.length > 0
-
-    if (hasDesign && dbPhase === 'REQUIREMENTS') {
-      return 'DESIGN'
-    }
-    // 可以扩展：如果有 GENERATION 数据但阶段是 DESIGN，也可以修正
-  } catch {
-    // 查询失败不影响正常流程
-  }
-  return dbPhase
 }
 
 /**
@@ -535,21 +509,37 @@ async function handleRequestForceUnlock() {
   }
 }
 
-function handlePhaseComplete(_phase: AiPhase) {
-  // 后端已自动推进阶段，这里只更新前端状态
+/**
+ * 推进相位并跑下一相位的生成。
+ *
+ * 只由用户点 ChatDialog 上的"进入下一阶段"触发——后端不再在模型回 phaseComplete 时自动推进
+ * （见 AiGenerationComponentImpl 里那段注释），所以相位落库也挪到了这里：会话状态因此始终等于
+ * 用户看到的状态，不点就不前进，重开面板也不会落在一个还没有产物的相位上。
+ */
+async function handlePhaseComplete(_phase: AiPhase) {
   const advanced = sessionComposable.advancePhase()
-  if (advanced) {
-    computeCompletedPhases(sessionComposable.currentPhase.value)
-    // Auto-trigger AI generation for the new phase
-    const newPhase = sessionComposable.currentPhase.value
-    if (newPhase === 'DESIGN' || newPhase === 'GENERATION') {
-      // 使用 guard 防止重复触发（如果已经在 streaming 则跳过）
-      // isStreaming 必须读 ChatDialog 实例暴露的状态（defineExpose 自动解包 ref）
-      if (!chatDialogRef.value?.isStreaming) {
-        nextTick(() => {
-          autoTriggerPhase(newPhase)
-        })
-      }
+  if (!advanced) return
+
+  computeCompletedPhases(sessionComposable.currentPhase.value)
+  const newPhase = sessionComposable.currentPhase.value
+
+  // 落库失败不挡住生成——用户要的是产物，不是这次记账；但也不能吞掉，否则重开面板会莫名退回。
+  if (currentSessionId.value) {
+    try {
+      await aiGenerationApi.updateSessionPhase(currentSessionId.value, newPhase)
+    } catch (err: any) {
+      console.error('Failed to persist the advanced session phase:', err)
+      ElMessage.warning(t('ai.panel.phasePersistFailed'))
+    }
+  }
+
+  if (newPhase === 'DESIGN' || newPhase === 'GENERATION') {
+    // 使用 guard 防止重复触发（如果已经在 streaming 则跳过）
+    // isStreaming 必须读 ChatDialog 实例暴露的状态（defineExpose 自动解包 ref）
+    if (!chatDialogRef.value?.isStreaming) {
+      nextTick(() => {
+        autoTriggerPhase(newPhase)
+      })
     }
   }
 }

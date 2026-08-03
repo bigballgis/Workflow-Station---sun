@@ -155,6 +155,12 @@ async function main() {
     })
     await page.locator('.ai-panel .inline-doc-viewer', { hasText: /^\s*Design/ })
       .locator('button', { hasText: /Regenerate|重新生成/i }).first().click()
+    // Regenerate now opens a correction box first; confirming it with an empty text area keeps
+    // the original blind-regenerate behaviour this assertion was written against.
+    // el-popover pre-renders every instance into the body, so filter to the visible popper.
+    const correctionBox = page.locator('.regenerate-box').locator('visible=true')
+    await correctionBox.waitFor({ state: 'visible', timeout: 8000 })
+    await correctionBox.locator('.regenerate-box__actions button').last().click()
     await page.waitForTimeout(2500)
     expect(sent?.phase === 'DESIGN',
       `2. Design card regenerates with phase=DESIGN, not the session phase (got ${sent?.phase})`)

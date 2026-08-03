@@ -136,6 +136,8 @@ export default {
     viewIcon: '圖示檢視',
     viewCard: '卡片檢視',
     dragOutHint: '把卡片拖到面板外即可移出分組',
+    dragToPrevPage: '上一頁',
+    dragToNextPage: '下一頁',
     serviceTaskLoadFailed: '自動化編排器載入失敗',
     serviceTaskEmpty: '這裡尚無自動化任務。請在流程設計中新增一個服務任務並將其類型設為「自動化」，儲存後再回到本頁建立流程。',
     serviceTaskSelector: '服務任務',
@@ -1990,6 +1992,7 @@ export default {
       newSession: '開始新會話',
       viewLastSession: '檢視上次會話記錄',
       initFailed: '初始化 AI 面板失敗',
+      phasePersistFailed: '已繼續，但階段未能儲存——重開面板可能退回上一階段。',
       forceUnlockRequest: '強制解鎖請求',
       forceUnlockMsg: '使用者 {name} 請求強制解鎖此功能單元的 AI 生成鎖。是否同意釋放鎖？',
       forceUnlockAccept: '同意',
@@ -2052,6 +2055,9 @@ export default {
       retry: '重試',
       signInAgain: '重新登入',
       nextPhase: '進入下一階段',
+      nextPhaseDesign: '生成設計文件',
+      nextPhaseGeneration: '生成功能單元資料',
+      nextPhaseHint: 'AI 認為本階段已完成。繼續前請先核對上面的文件——下一步會在它的基礎上重新生成。',
       send: '傳送',
       stop: '停止',
       inputFeedback: '輸入修改意見...',
@@ -2123,6 +2129,12 @@ export default {
       keepEditing: '繼續編輯',
       expand: '展開文檔',
       collapse: '摺疊文檔'
+    },
+    regenerate: {
+      title: '要改哪裡？',
+      placeholder: '例如：shipment 表缺了 carrier 和 tracking_no 兩個欄位；審批駁回不該連回 start event',
+      hintTargeted: '只改上面這幾點，其餘已經正確的內容原樣保留。',
+      hintBlank: '留空則整篇從頭重新生成。'
     },
     preview: {
       title: '生成預覽',
