@@ -1,0 +1,71 @@
+name: Frontend tests
+
+# 三个前端 app 一共 207 个测试文件，但在这条 workflow 之前**从未在 CI 里跑过**，
+# 而且本地也基本跑不起来：各 app 的 node_modules 里连 vitest 都没装。门槛在环境准备，
+# 不在测试本身 —— 于是"装不上所以不跑"，测试就慢慢腐烂：
+#   - user-portal 的一个套件因缺 async-validator 声明，整体 transform 失败
+#   - developer-workstation 的 Kong 断言按 \n 匹配，在 CRLF 检出下恒失败
+#   - 同模块的中文注释规约（Requirement 8.1/8.2）已积累 21 处违规
+# 这些都是几分钟能修的问题，只是没有任何东西在盯着。
+#
+# 单独一条 workflow 而不是并进 build.yml：触发路径、工具链、耗时都与后端无关，
+# 混在一起会让后端改动白等前端安装依赖。
+
+on:
+  push:
+    paths:
+      - 'frontend/**'
+      - 'deploy/kong/**'          # preservation.property.test.ts 直接断言 kong.yml.template
+      - '.github/workflows/frontend-build.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'deploy/kong/**'
+      - '.github/workflows/frontend-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      # 一个 app 红不掩盖另外两个的结果 —— 三个各自独立报告。
+      fail-fast: false
+      matrix:
+        app: [user-portal, developer-workstation, admin-center]
+
+    defaults:
+      run:
+        working-directory: frontend/${{ matrix.app }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 每个 app 各自 install（frontend/ 不是 pnpm workspace，没有根 lockfile）。
+      # 版本跟随 frontend/package.json 的 packageManager 字段。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/${{ matrix.app }}/pnpm-lock.yaml
+
+      # --frozen-lockfile：lockfile 与 package.json 不一致时直接失败，而不是悄悄改依赖树。
+      # 本地那次 async-validator 缺声明的问题，正是"依赖只靠 hoist 偶然可用"的后果。
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test
