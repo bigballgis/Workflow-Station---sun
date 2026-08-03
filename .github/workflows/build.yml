@@ -105,20 +105,10 @@ jobs:
           -pl backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging
           $EXCLUDES $REDIS_OVERRIDE
 
-      # developer-workstation 单独一步，且**不阻塞**（continue-on-error）。
-      #
-      # 实测该模块 696 个测试里有 22 failures + 43 errors，分布在 17 个测试类，
-      # 且在升级前的提交上同样复现 —— 是既存债务，不是本次改动造成的。
-      #
-      # 没有把它们塞进 known-test-failures.txt，是因为 17 个类已经不叫"个别隔离"，
-      # 而是"把一个模块的测试基本关掉"：清单会长到没人看，也掩盖了真实规模。
-      # 这里改成显式的非阻塞门 —— 失败在 CI 上看得见（步骤标黄），但不会让整条流水线
-      # 常红而失去信号。
-      #
-      # 去向：单独排查这 17 个类；修到零之后把 continue-on-error 删掉，让它和其它
-      # 模块一样变成硬门禁。在那之前，**这个步骤的红不构成合并阻塞**。
-      - name: Test developer-workstation (non-blocking, known debt)
-        continue-on-error: true
+      # 这一步曾是 continue-on-error：当时该模块 696 个测试里有 22 failures + 43 errors，
+      # 分布在 17 个测试类（在升级前的提交上同样复现，属既存债务）。那 65 个已全部修完，
+      # 模块现在 696 tests / 0F / 0E，因此按当初写下的退出条件把它升为**硬门禁**。
+      - name: Test developer-workstation
         run: mvn $MAVEN_ARGS test -pl backend/developer-workstation $EXCLUDES $REDIS_OVERRIDE
 
       # 失败时把 surefire 报告捞出来 —— 日志里只有摘要，具体哪个断言炸了要看报告。
