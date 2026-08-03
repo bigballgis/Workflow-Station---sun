@@ -35,7 +35,6 @@ const mockPartialGeneratedData = ref<any>({})
 const mockIsGenerationComplete = ref(false)
 const mockGenerationStep = ref(0)
 const mockDegradationInfo = ref<any>(null)
-const mockClearCurrentDraft = vi.fn()
 
 vi.mock('@/composables/useAiChat', () => ({
   useAiChat: () => ({
@@ -57,11 +56,14 @@ vi.mock('@/composables/useAiChat', () => ({
     onGeneratedData: mockOnGeneratedData,
     onValidationWarning: mockOnValidationWarning,
     onSession: mockOnSession,
-    setMessages: mockSetMessages,
-    clearCurrentDraft: mockClearCurrentDraft
+    setMessages: mockSetMessages
   }),
   loadDraft: () => null,
-  clearDraft: vi.fn()
+  clearDraft: vi.fn(),
+  // markApplySuccess 用它把生成结果以 applied 标记写回草稿槽——mock 掉整个模块时必须补上，
+  // 否则 ChatDialog 里的具名导入是 undefined，Apply 成功路径直接抛错。
+  // 必须就地 vi.fn()：工厂会被提升到文件顶部，引用外层变量会命中 TDZ。
+  saveDraft: vi.fn()
 }))
 
 vi.mock('@/composables/useAiTemplates', () => ({

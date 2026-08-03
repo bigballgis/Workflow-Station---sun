@@ -193,7 +193,13 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     }
                 }
 
-                if (Boolean.TRUE.equals(aiResponse.get("phaseComplete"))) {
+                if (Boolean.TRUE.equals(aiResponse.get("phaseComplete")) && request.isRegenerateOnly()) {
+                    // 文档卡上的 Regenerate：产物已经落库并通过 document 事件回给前端了，到此为止。
+                    // 既不推进相位也不发 phase_complete——否则一次"重出需求文档"会把会话相位倒回
+                    // DESIGN，并触发前端自动重跑设计与生成，覆盖用户已经在迭代的产物。
+                    log.info("Regenerate-only turn: skipping phase advance, sessionId={}, phase={}",
+                            session.getSessionId(), request.getPhase());
+                } else if (Boolean.TRUE.equals(aiResponse.get("phaseComplete"))) {
                     // Auto-advance session phase (persisted in backend, not dependent on frontend "next phase" button)
                     AiPhase nextPhase = getNextPhase(request.getPhase());
                     if (nextPhase != null) {

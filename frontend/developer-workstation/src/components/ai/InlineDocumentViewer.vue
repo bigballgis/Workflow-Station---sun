@@ -14,6 +14,15 @@
       >
         {{ t('ai.doc.expand') }}
       </el-button>
+      <span class="inline-doc-viewer__spacer" />
+      <el-button
+        size="small"
+        text
+        :disabled="props.busy"
+        @click.stop="emit('regenerate', props.documentType)"
+      >
+        {{ t('ai.preview.regenerate') }}
+      </el-button>
     </div>
 
     <!-- Expanded state -->
@@ -35,6 +44,15 @@
           @click="expanded = false"
         >
           {{ t('ai.doc.collapse') }}
+        </el-button>
+        <span class="inline-doc-viewer__spacer" />
+        <el-button
+          size="small"
+          text
+          :disabled="props.busy"
+          @click="emit('regenerate', props.documentType)"
+        >
+          {{ t('ai.preview.regenerate') }}
         </el-button>
       </div>
       <div class="inline-doc-viewer__body">
@@ -72,6 +90,13 @@ import type { AiDocumentType, ViewMode } from '@/types/aiGeneration'
 const props = defineProps<{
   documentType: AiDocumentType
   content: string
+  /** AI 正在回复：重出按钮置灰，避免在流式过程中再发一轮请求（会被 useAiChat 直接丢弃）。 */
+  busy?: boolean
+}>()
+
+const emit = defineEmits<{
+  /** 只重出这一份文档，不推进会话相位——由 ChatDialog 转成 regenerateOnly 请求。 */
+  regenerate: [documentType: AiDocumentType]
 }>()
 
 const { t } = useI18n()
@@ -118,6 +143,11 @@ const docLabel = computed(() =>
   &:hover {
     box-shadow: 0 2px 8px rgba(35, 40, 46, 0.06);
   }
+}
+
+// 把 Regenerate 顶到行尾，与左侧的展开/收起动作分开——两者的破坏性完全不同
+.inline-doc-viewer__spacer {
+  flex: 1;
 }
 
 .inline-doc-viewer__label {

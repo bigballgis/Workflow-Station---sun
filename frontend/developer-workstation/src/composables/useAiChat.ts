@@ -10,6 +10,14 @@ export interface AiGenerationDraft {
   previewData: GenerationPreviewData | null
   timestamp: number
   sessionId: string
+  /**
+   * 这份结果已经写入 function unit。
+   *
+   * <p>Apply 成功后草稿不再删除，而是打上这个标记：预览卡是这一轮生成的唯一留存（后端没有存过
+   * generatedData），删掉就意味着关一次面板卡片永久消失。带标记的草稿重开面板时静默还原成
+   * "Applied ✓" 只读态，不弹"是否恢复草稿"。</p>
+   */
+  applied?: boolean
 }
 
 const DRAFT_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -373,15 +381,6 @@ export function useAiChat() {
     messages.value = msgs
   }
 
-  /**
-   * Clear the generation draft for the current session after successful apply.
-   */
-  function clearCurrentDraft(): void {
-    if (lastRequest) {
-      clearDraft(lastRequest.functionUnitId, lastRequest.sessionId || '')
-    }
-  }
-
   return {
     messages,
     isStreaming,
@@ -401,7 +400,6 @@ export function useAiChat() {
     onGeneratedData,
     onValidationWarning,
     onSession,
-    setMessages,
-    clearCurrentDraft
+    setMessages
   }
 }

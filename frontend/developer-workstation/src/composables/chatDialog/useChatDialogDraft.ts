@@ -9,6 +9,8 @@ import {
 export interface RestoredGenerationDraft {
   generatedData: AiGeneratedData
   previewData: GenerationPreviewData | null
+  /** 这份结果已经 Apply 过：卡片直接还原成只读的 "Applied ✓"，不再提供 Apply 按钮。 */
+  applied?: boolean
 }
 
 /**
@@ -57,7 +59,15 @@ export function useChatDialogDraft(
     // Check for generation draft (ai_generation_draft_{functionUnitId}_{sessionId})
     if (sessionId()) {
       const genDraft = loadGenerationDraft(functionUnitId(), sessionId())
-      if (genDraft) {
+      if (genDraft?.applied) {
+        // 已经写入过的结果不是"未完成的草稿"，没有什么可以让用户取舍的——直接把卡片放回聊天区
+        // 的只读态。走 alert 分支会变成每次开面板都要点一次"恢复"才看得到自己刚生成的东西。
+        callbacks.restoreGeneration({
+          generatedData: genDraft.generatedData,
+          previewData: genDraft.previewData,
+          applied: true
+        })
+      } else if (genDraft) {
         generationDraftData = genDraft
         hasGenerationDraft.value = true
       }

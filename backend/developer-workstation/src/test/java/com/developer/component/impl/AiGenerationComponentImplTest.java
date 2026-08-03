@@ -157,6 +157,76 @@ class AiGenerationComponentImplTest {
     }
 
     /**
+     * regenerateOnly（聊天区文档卡上的 Regenerate）：产出照常落库，但相位不推进、不发 phase_complete。
+     *
+     * <p>会话已经走到 GENERATION 时用户回头重出需求文档，模型仍会回 phaseComplete=true。若照常处理，
+     * 会话相位被写回 DESIGN，前端收到 phase_complete 又会自动重跑设计与生成——用户只想换一份文档，
+     * 结果整条链被覆盖。</p>
+     */
+    @Test
+    void chatStream_regenerateOnly_savesDocumentButDoesNotAdvancePhase() throws Exception {
+        session.setCurrentPhase(AiPhase.GENERATION);
+        when(aiGenerationService.restoreSession(anyString())).thenReturn(session);
+        when(aiGenerationService.saveMessage(any(), any(), anyString(), any()))
+                .thenReturn(AiMessage.builder().sessionId(sessionUuid).role(AiMessageRole.USER).content("test").phase(AiPhase.REQUIREMENTS).build());
+        when(aiGenerationService.createChatEmitter(anyLong(), anyString())).thenReturn(new SseEmitter(120000L));
+        when(aiGenerationService.serializeFunctionUnitContext(1L))
+                .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
+        when(aiGenerationService.getLatestDocuments(1L, AiPhase.REQUIREMENTS, AiMode.NEW)).thenReturn(List.of());
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
+                .thenReturn(Map.of(
+                        "reply", "regenerated",
+                        "document", "new req doc",
+                        "documentType", "REQUIREMENTS",
+                        "phaseComplete", true));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        doAnswer(inv -> { latch.countDown(); return null; }).when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
+
+        AiChatRequest request = AiChatRequest.builder()
+                .functionUnitId(1L).sessionId(sessionUuid.toString()).message("[AUTO_TRIGGER] regenerate requirements")
+                .phase(AiPhase.REQUIREMENTS).mode(AiMode.NEW).regenerateOnly(true).build();
+        component.chatStream(request, "user1", AM_TOKEN);
+        latch.await(5, TimeUnit.SECONDS);
+
+        // The new document is still persisted — regenerate must actually replace the doc
+        verify(aiGenerationService).saveDocument(eq(1L), eq(AiDocumentType.REQUIREMENTS), eq("new req doc"), anyString(), eq("user1"));
+        // ...but the session must stay where it was, and no phase_complete may reach the client
+        verify(aiGenerationService, never()).updateSessionPhase(anyString(), any());
+        verify(aiGenerationService, never()).sendChatEvent(anyLong(), anyString(),
+                argThat(ev -> ev != null && "phase_complete".equals(ev.getEventType())));
+    }
+
+    /**
+     * 同一轮若不带 regenerateOnly：phaseComplete 照常推进相位并通知前端（regenerateOnly 的对照组）。
+     */
+    @Test
+    void chatStream_withoutRegenerateOnly_advancesPhaseOnPhaseComplete() throws Exception {
+        when(aiGenerationService.restoreSession(anyString())).thenReturn(session);
+        when(aiGenerationService.saveMessage(any(), any(), anyString(), any()))
+                .thenReturn(AiMessage.builder().sessionId(sessionUuid).role(AiMessageRole.USER).content("test").phase(AiPhase.REQUIREMENTS).build());
+        when(aiGenerationService.createChatEmitter(anyLong(), anyString())).thenReturn(new SseEmitter(120000L));
+        when(aiGenerationService.serializeFunctionUnitContext(1L))
+                .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
+        when(aiGenerationService.getLatestDocuments(1L, AiPhase.REQUIREMENTS, AiMode.NEW)).thenReturn(List.of());
+        when(aiGenerationService.callAiModel(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any(), any()))
+                .thenReturn(Map.of("reply", "done", "phaseComplete", true));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        doAnswer(inv -> { latch.countDown(); return null; }).when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
+
+        AiChatRequest request = AiChatRequest.builder()
+                .functionUnitId(1L).sessionId(sessionUuid.toString()).message("looks good")
+                .phase(AiPhase.REQUIREMENTS).mode(AiMode.NEW).build();
+        component.chatStream(request, "user1", AM_TOKEN);
+        latch.await(5, TimeUnit.SECONDS);
+
+        verify(aiGenerationService).updateSessionPhase(sessionUuid.toString(), AiPhase.DESIGN);
+        verify(aiGenerationService).sendChatEvent(anyLong(), anyString(),
+                argThat(ev -> ev != null && "phase_complete".equals(ev.getEventType())));
+    }
+
+    /**
      * 非首条消息（sessionId 非 null，同阶段）：也应加载 context 和 existingDocuments
      * AI webhook systemMessage 每次请求都重新渲染，需要最新数据
      */

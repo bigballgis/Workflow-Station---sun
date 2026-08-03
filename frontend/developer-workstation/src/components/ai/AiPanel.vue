@@ -139,11 +139,12 @@
               :session-id="currentSessionId"
               :phase="sessionComposable.currentPhase.value"
               :mode="currentMode"
-              :completed-phases="completedPhases"
+              :completed-phases="railCompletedPhases"
               :initial-messages="initialMessages"
               :initial-documents="initialDocuments"
               @phase-complete="handlePhaseComplete"
               @apply="handleApply"
+              @applied="handleApplied"
               @regenerate="handleRegenerate"
               @send-message="handleSendMessage"
               @document="handleDocumentReceived"
@@ -230,6 +231,13 @@ const ready = ref(false)
 const currentMode = ref<AiMode>('NEW')
 const promptDialogVisible = ref(false)
 const completedPhases = ref<AiPhase[]>([])
+/**
+ * 生成结果已写入 function unit。
+ *
+ * GENERATION 是最后一相，computeCompletedPhases 那套"当前相位之前的都算完成"永远点不亮它——
+ * Apply 完成后进度条卡在 03 未完成态。用户点了 Apply 却看不到打勾，只能靠按钮变绿去猜。
+ */
+const generationApplied = ref(false)
 const initialMessages = ref<AiMessage[]>([])
 // 重开面板时回填聊天区的文档卡片：产出文档的那几轮后端不写 ASSISTANT 消息，
 // 只靠 initialMessages 恢复的话，AI 侧会整段空白（见 useAiSession.loadInlineDocuments）。
@@ -257,6 +265,13 @@ const eventsComposable = useAiEvents(functionUnitIdRef)
 // Computed
 const currentSessionId = computed(() =>
   sessionComposable.currentSession.value?.sessionId || ''
+)
+
+// 顶部进度条读的完成集合：相位推进算出来的那部分 + Apply 之后补上的 GENERATION
+const railCompletedPhases = computed<AiPhase[]>(() =>
+  generationApplied.value && !completedPhases.value.includes('GENERATION')
+    ? [...completedPhases.value, 'GENERATION']
+    : completedPhases.value
 )
 
 // 头部状态灯：AI 流式回复中亮红并脉动（读 ChatDialog 实例暴露的 isStreaming，
@@ -357,6 +372,7 @@ function startNewSession() {
   sessionComposable.createSession(props.functionUnitId, 'NEW')
   currentMode.value = 'NEW'
   completedPhases.value = []
+  generationApplied.value = false
   initialMessages.value = []
   initialDocuments.value = []
   ready.value = true
@@ -403,6 +419,8 @@ async function handleSessionSwitch(sessionId: string) {
     initialMessages.value = [...msgs]
     initialDocuments.value = await sessionComposable.loadInlineDocuments(props.functionUnitId)
     computeCompletedPhases(session.currentPhase)
+    // 切到另一条会话：GENERATION 的完成标记属于上一条，不能跟着带过来
+    generationApplied.value = false
     // Force ChatDialog to re-render with new messages
     chatDialogRef.value?.setMessages?.([...msgs])
     chatDialogRef.value?.setInlineDocuments?.([...initialDocuments.value])
@@ -434,6 +452,7 @@ async function closePanel() {
   lockComposable.reset()
   initialMessages.value = []
   completedPhases.value = []
+  generationApplied.value = false
 
   emit('update:visible', false)
 }
@@ -578,6 +597,11 @@ async function handleApply(data: AiGeneratedData) {
     // immediate feedback here instead of relying on the write_success SSE event.
     lastSelfApplyAt = Date.now()
     chatDialogRef.value?.markApplySuccess()
+    // Refresh the designer behind the panel from the same synchronous success. This used to
+    // hang off the write_success SSE event alone, so whenever that event was missed (stream
+    // reconnecting, panel detached) the user was left looking at pre-apply tables and forms.
+    // refreshAll is idempotent, so the SSE path arriving too is harmless.
+    emit('dataApplied')
     ElMessage.success(t('ai.panel.dataApplied'))
   } catch (err: any) {
     chatDialogRef.value?.markApplyFailed()
@@ -592,6 +616,11 @@ async function handleApply(data: AiGeneratedData) {
       ElMessage.error(msg)
     }
   }
+}
+
+/** 生成结果已写入（本轮 Apply 成功，或重开面板时从 applied 草稿还原）——点亮 GENERATION。 */
+function handleApplied() {
+  generationApplied.value = true
 }
 
 function handleRegenerate() { /* ChatDialog handles internally */ }

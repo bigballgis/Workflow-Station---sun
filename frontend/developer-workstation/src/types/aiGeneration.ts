@@ -10,6 +10,11 @@ export interface AiChatRequest {
   phase: AiPhase
   mode: AiMode
   regenerateScope?: string
+  /**
+   * 只重出本相位的产物，不推进会话相位（文档卡上的 Regenerate）。
+   * 后端据此跳过相位推进与 phase_complete 事件——见 AiChatRequest#regenerateOnly。
+   */
+  regenerateOnly?: boolean
 }
 
 export interface AiSseEvent {

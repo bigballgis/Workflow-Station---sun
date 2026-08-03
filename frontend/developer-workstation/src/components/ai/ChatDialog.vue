@@ -110,6 +110,8 @@
         :key="doc.id"
         :document-type="doc.documentType"
         :content="doc.content"
+        :busy="isStreaming"
+        @regenerate="handleDocumentRegenerate"
       />
 
       <!-- Streaming message (AI is responding) -->
@@ -375,7 +377,7 @@ import ChatMessage from './ChatMessage.vue'
 import GenerationPreview from './GenerationPreview.vue'
 import InlineDocumentViewer from './InlineDocumentViewer.vue'
 import { useAiChat } from '@/composables/useAiChat'
-import { clearDraft as clearGenerationDraft } from '@/composables/useAiChat'
+import { saveDraft as saveGenerationDraft } from '@/composables/useAiChat'
 import { useAiTemplates } from '@/composables/useAiTemplates'
 import type {
   AiPhase,
@@ -416,6 +418,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   phaseComplete: [phase: AiPhase]
   apply: [data: AiGeneratedData]
+  /** 生成结果已写入 function unit（含重开面板时从 applied 草稿还原），供父级点亮 GENERATION 并刷新背景页 */
+  applied: []
   regenerate: []
   sendMessage: []
   document: [type: string, content: string]
@@ -442,8 +446,7 @@ const {
   onGeneratedData,
   onValidationWarning,
   onSession,
-  setMessages,
-  clearCurrentDraft
+  setMessages
 } = useAiChat()
 
 // i18n
@@ -460,6 +463,11 @@ const generatedData = ref<AiGeneratedData | null>(null)
 const previewData = ref<GenerationPreviewData | null>(null)
 const validationErrors = ref<AiValidationError[]>([])
 const validationWarnings = ref<AiValidationError[]>([])
+
+// Apply lifecycle surfaced on the preview's Apply button. The parent (AiPanel) owns the
+// API call and reports the outcome back via markApplySuccess / markApplyFailed.
+// 声明必须早于 useChatDialogDraft——它的 restoreGeneration 回调会写这个 ref。
+const applyState = ref<'idle' | 'applying' | 'applied'>('idle')
 
 // Task 17.2: Diff preview state
 const diffResult = ref<DiffResult | null>(null)
@@ -524,6 +532,11 @@ const {
     restoreGeneration: (draft: RestoredGenerationDraft) => {
       generatedData.value = draft.generatedData
       previewData.value = draft.previewData || computePreviewData(draft.generatedData)
+      if (draft.applied) {
+        // 已写入过的结果还原成只读态：再点一次 Apply 会把同一份数据重复写一遍
+        applyState.value = 'applied'
+        emit('applied')
+      }
     }
   }
 )
@@ -634,10 +647,22 @@ onPhaseComplete((phase: AiPhase) => {
 
 onDocument((type: string, content: string) => {
   emit('document', type, content)
-  // Also add to inline documents for in-chat display
+  // Also add to inline documents for in-chat display. Replace in place when a card of this
+  // type already exists — a regenerate produces a second document event for the same type,
+  // and appending would leave two "Requirements" cards with the stale one on top.
+  const docType = type as AiDocumentType
+  const existing = inlineDocuments.value.findIndex(doc => doc.documentType === docType)
+  if (existing >= 0) {
+    inlineDocuments.value.splice(existing, 1, {
+      id: inlineDocuments.value[existing].id,
+      documentType: docType,
+      content
+    })
+    return
+  }
   inlineDocuments.value.push({
     id: ++inlineDocIdCounter,
-    documentType: type as AiDocumentType,
+    documentType: docType,
     content
   })
 })
@@ -699,10 +724,6 @@ function handleNextPhase() {
   emit('phaseComplete', props.phase)
 }
 
-// Apply lifecycle surfaced on the preview's Apply button. The parent (AiPanel) owns the
-// API call and reports the outcome back via markApplySuccess / markApplyFailed.
-const applyState = ref<'idle' | 'applying' | 'applied'>('idle')
-
 function handleApply() {
   if (!generatedData.value || applyState.value === 'applying') {
     return
@@ -714,14 +735,26 @@ function handleApply() {
 /** Called by AiPanel when the apply API call succeeded. */
 function markApplySuccess() {
   applyState.value = 'applied'
-  // Clear generation draft only after a CONFIRMED apply (previously this happened on
-  // click, so a failed apply still wiped the draft and started the undo countdown).
-  clearCurrentDraft()
-  if (props.sessionId) {
-    clearGenerationDraft(props.functionUnitId, props.sessionId)
-  }
+  // Keep the draft instead of deleting it, flagged as applied. The backend never persists
+  // generatedData, so this localStorage entry is the only copy of the preview card — clearing
+  // it here meant closing the panel once made the card vanish for good. checkForDraft()
+  // restores a flagged draft straight into the read-only "Applied ✓" state.
+  markDraftApplied()
+  emit('applied')
   // Task 17.3: Start undo countdown
   startUndoCountdown()
+}
+
+/** 把当前生成结果以 applied 标记重新写回草稿槽，覆盖 useAiChat 在流式期间存的未 apply 版本。 */
+function markDraftApplied() {
+  if (!props.sessionId || !generatedData.value) return
+  saveGenerationDraft(props.functionUnitId, props.sessionId, {
+    generatedData: generatedData.value,
+    previewData: previewData.value,
+    timestamp: Date.now(),
+    sessionId: props.sessionId,
+    applied: true
+  })
 }
 
 /** Called by AiPanel when the apply API call failed (incl. validation errors). */
@@ -740,6 +773,28 @@ function handleRegenerate() {
     + 'based on the existing requirements and design documents. '
     + 'Ignore any previously generated component data and produce a fresh version.')
   emit('regenerate')
+}
+
+/**
+ * 文档卡上的 Regenerate：只重出这一份文档。
+ *
+ * 请求带的是文档自己的相位（而不是会话当前相位）加 regenerateOnly，所以在 GENERATION 阶段回头
+ * 重出需求文档时，会话相位、设计文档与已生成的组件数据都原地不动——后端据此跳过相位推进，
+ * 前端也就不会收到 phase_complete 去级联自动重跑（见 AiChatRequest#regenerateOnly）。
+ */
+const DOC_REGENERATE_PROMPTS: Record<AiDocumentType, string> = {
+  REQUIREMENTS: '[AUTO_TRIGGER] Please regenerate the complete requirements document for this function unit. '
+    + 'Rewrite it from scratch based on the conversation so far; do not merely restate the previous version.',
+  DESIGN: '[AUTO_TRIGGER] Please regenerate the complete design document based on the existing requirements document. '
+    + 'Rewrite it from scratch; do not merely restate the previous version.'
+}
+
+function handleDocumentRegenerate(documentType: AiDocumentType) {
+  if (isStreaming.value) return
+  autoSendMessage(DOC_REGENERATE_PROMPTS[documentType], {
+    phase: documentType as AiPhase,
+    regenerateOnly: true
+  })
 }
 
 function applyTemplate(tpl: AiTemplate) {
@@ -788,15 +843,20 @@ function setValidationWarnings(warnings: AiValidationError[]) {
 /**
  * Auto-send a message programmatically (triggered by phase transition).
  * Shows a brief system hint in the chat, then sends the trigger message to AI.
+ *
+ * @param options.phase          覆盖本轮相位——文档卡的 Regenerate 要用文档自己的相位，而不是会话当前相位
+ * @param options.regenerateOnly 只重出产物，不推进相位（见 AiChatRequest#regenerateOnly）
  */
-function autoSendMessage(message: string) {
+function autoSendMessage(message: string, options?: { phase?: AiPhase; regenerateOnly?: boolean }) {
+  const turnPhase = options?.phase ?? props.phase
+
   // Add a system-style hint so user knows what's happening
   const hintMessage: AiMessage = {
     id: Date.now() - 1,
     sessionId: props.sessionId,
     role: 'ASSISTANT',
     content: t('ai.chat.autoGenerating'),
-    phase: props.phase,
+    phase: turnPhase,
     createdAt: new Date().toISOString()
   }
   messages.value.push(hintMessage)
@@ -806,8 +866,9 @@ function autoSendMessage(message: string) {
     functionUnitId: props.functionUnitId,
     sessionId: props.sessionId,
     message,
-    phase: props.phase,
-    mode: props.mode
+    phase: turnPhase,
+    mode: props.mode,
+    regenerateOnly: options?.regenerateOnly
   })
 
   emit('sendMessage')
