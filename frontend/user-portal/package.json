@@ -26,6 +26,7 @@
     "@vueuse/core": "^10.7.0",
     "@wangeditor/editor": "^5.1.23",
     "@wangeditor/editor-for-vue": "^5.1.12",
+    "async-validator": "^4.2.5",
     "axios": "^1.6.0",
     "bpmn-js": "^17.0.0",
     "dayjs": "^1.11.0",
