@@ -243,7 +243,9 @@ function onDropOutside() {
 .folder-overlay {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  // 必须低于 Element Plus 弹层基线（useZIndex 从 2000 起自增）：浮层内的菜单/气泡/
+  // Settings 弹窗/删除确认框才能自然压在浮层之上。抬高到 2000 以上会把弹窗盖在背后。
+  z-index: 1900;
   display: flex;
   align-items: center;
   justify-content: center;
