@@ -142,7 +142,9 @@ describe('Preservation: Kong configuration has routes for /api/v1/admin, /api/v1
   })
 
   test('Kong config should have strip_path: false for all routes (AP gateway routes excepted)', () => {
-    const content = fs.readFileSync(kongConfigPath, 'utf-8')
+    // 行尾归一化：kong.yml.template 在 Windows 检出下是 CRLF，而下面的正则按 LF 匹配，
+    // 不归一化时 routeBlocks 恒为 null —— 这条断言此前只在 LF 检出的机器上才成立。
+    const content = fs.readFileSync(kongConfigPath, 'utf-8').replace(/\r\n/g, '\n')
     // AP builder 网关路由（/api/ap 收编）按设计 strip /api/ap 前缀，其余路由必须 strip_path: false
     const routeBlocks = content.match(/paths:\n(?:\s+- \S+\n)+\s+strip_path: (?:true|false)/g)
     expect(routeBlocks).not.toBeNull()
