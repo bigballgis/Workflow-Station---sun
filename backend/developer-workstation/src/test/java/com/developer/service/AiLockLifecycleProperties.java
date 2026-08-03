@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.*;
+import static com.developer.service.AiLockTestSupport.stubExistingLock;
 import static org.mockito.Mockito.*;
 
 /**
@@ -43,19 +44,6 @@ class AiLockLifecycleProperties {
         return lockService;
     }
 
-    private String buildLockJson(ObjectMapper objectMapper, String userId) {
-        try {
-            Map<String, String> lockValue = Map.of(
-                    "userId", userId,
-                    "userName", "User_" + userId,
-                    "lockedAt", Instant.now().toString()
-            );
-            return objectMapper.writeValueAsString(lockValue);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     /**
      * Property 3 - Test 1: Release deletes lock from Redis.
      *
@@ -75,16 +63,13 @@ class AiLockLifecycleProperties {
         String lockKey = "ai-gen-lock:" + functionUnitId;
 
         // User acquires lock successfully
-        when(cacheService.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
+        when(cacheService.setIfAbsent(eq(lockKey), any(), any(Duration.class)))
                 .thenReturn(true);
 
         lockService.tryAcquire(functionUnitId, userId);
 
         // Setup for release: readLockInfo needs to find the lock owned by this user
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
-        String lockJson = buildLockJson(objectMapper, userId);
-        when(cacheService.getString(lockKey)).thenReturn(Optional.of(lockJson));
+        stubExistingLock(cacheService, lockKey, userId);
 
         // User releases lock
         lockService.release(functionUnitId, userId);
@@ -112,16 +97,13 @@ class AiLockLifecycleProperties {
         String lockKey = "ai-gen-lock:" + functionUnitId;
 
         // User acquires lock successfully
-        when(cacheService.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
+        when(cacheService.setIfAbsent(eq(lockKey), any(), any(Duration.class)))
                 .thenReturn(true);
 
         lockService.tryAcquire(functionUnitId, userId);
 
         // Setup for extendLock: readLockInfo needs to find the lock owned by this user
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
-        String lockJson = buildLockJson(objectMapper, userId);
-        when(cacheService.getString(lockKey)).thenReturn(Optional.of(lockJson));
+        stubExistingLock(cacheService, lockKey, userId);
 
         // User extends lock
         lockService.extendLock(functionUnitId, userId);

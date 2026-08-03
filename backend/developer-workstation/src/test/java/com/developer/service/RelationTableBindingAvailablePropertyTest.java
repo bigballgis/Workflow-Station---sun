@@ -42,9 +42,14 @@ class RelationTableBindingAvailablePropertyTest {
     void availableTablesShouldOnlyContainDeployed(
             @ForAll("tableCollections") List<RelationTableDTO> allTables) {
 
-        // Simulate: only DEPLOYED tables should be returned by the SQL query
-        List<RelationTableDTO> deployedOnly = allTables.stream()
-                .filter(t -> t.getStatus() == RelationTableStatus.DEPLOYED)
+        // getAvailableTables() selects "WHERE status IN ('DEPLOYED','UPDATED','INIT')" — all three
+        // have a usable rt_field_definitions structure. It was narrowed to DEPLOYED-only once, which
+        // made imported tables (they land as INIT/UPDATED) bindable but with empty field dropdowns;
+        // the widening is deliberate and documented in RelationTableBindingServiceImpl.
+        List<RelationTableDTO> selectable = allTables.stream()
+                .filter(t -> t.getStatus() == RelationTableStatus.DEPLOYED
+                        || t.getStatus() == RelationTableStatus.UPDATED
+                        || t.getStatus() == RelationTableStatus.INIT)
                 .collect(Collectors.toList());
 
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
@@ -52,9 +57,9 @@ class RelationTableBindingAvailablePropertyTest {
         FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
         RelationViewConfigRepository viewConfigRepo = mock(RelationViewConfigRepository.class);
 
-        // Mock JdbcTemplate to return only DEPLOYED tables (simulating WHERE status = 'DEPLOYED')
-        when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(RelationTableStatus.DEPLOYED.getCode())))
-                .thenReturn(deployedOnly);
+        // The status filter lives in the SQL text, not in a bind parameter, so the stub matches
+        // the two-arg query(String, RowMapper) overload the service actually calls.
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(selectable);
 
         RelationTableBindingService service = new RelationTableBindingServiceImpl(
                 bindingRepo, formRepo, viewConfigRepo, jdbcTemplate);
@@ -62,9 +67,11 @@ class RelationTableBindingAvailablePropertyTest {
         // When
         List<RelationTableDTO> result = service.getAvailableTables();
 
-        // Then: all returned tables have DEPLOYED status
-        assertThat(result).allMatch(t -> t.getStatus() == RelationTableStatus.DEPLOYED);
-        assertThat(result).hasSameSizeAs(deployedOnly);
+        // Then: nothing outside the three selectable states leaks through
+        assertThat(result).allMatch(t -> t.getStatus() == RelationTableStatus.DEPLOYED
+                || t.getStatus() == RelationTableStatus.UPDATED
+                || t.getStatus() == RelationTableStatus.INIT);
+        assertThat(result).hasSameSizeAs(selectable);
     }
 
     @Provide

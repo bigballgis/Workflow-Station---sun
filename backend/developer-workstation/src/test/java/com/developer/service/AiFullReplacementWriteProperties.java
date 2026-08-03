@@ -12,6 +12,7 @@ import net.jqwik.api.constraints.IntRange;
 import net.jqwik.api.constraints.LongRange;
 import org.junit.jupiter.api.Tag;
 
+import java.util.LinkedHashMap;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -266,10 +267,10 @@ class AiFullReplacementWriteProperties {
                                 "sortOrder", 1
                         ))
                 )))
-                .formDefinitions(List.of(Map.of(
+                .formDefinitions(List.of(mutableMap(
                         "formName", "main_form",
                         "formType", "PROCESS",
-                        "configJson", Map.of("layout", "default"),
+                        "configJson", mutableMap("layout", "default"),
                         "tableBindings", List.of(Map.of(
                                 "tableName", tableName,
                                 "bindingType", "PRIMARY",
@@ -332,7 +333,11 @@ class AiFullReplacementWriteProperties {
         Map<String, Object> formData = new LinkedHashMap<>();
         formData.put("formName", "task_form");
         formData.put("formType", "TASK");
-        formData.put("configJson", Map.of("layout", "default"));
+        // Mutable on purpose — ensureFormConfigJsonStructure() calls configJson.put(...);
+        // an immutable Map.of() threw UnsupportedOperationException before the assertion ran.
+        Map<String, Object> configJson = new LinkedHashMap<>();
+        configJson.put("layout", "default");
+        formData.put("configJson", configJson);
         formData.put("fieldPermissions", permissions);
         formData.put("showLiveValues", false);
         formData.put("stageBindings", stageBindings);
@@ -406,7 +411,11 @@ class AiFullReplacementWriteProperties {
         Map<String, Object> formData = new LinkedHashMap<>();
         formData.put("formName", "process_form");
         formData.put("formType", "PROCESS");
-        formData.put("configJson", Map.of("layout", "default"));
+        // Mutable on purpose — ensureFormConfigJsonStructure() calls configJson.put(...);
+        // an immutable Map.of() threw UnsupportedOperationException before the assertion ran.
+        Map<String, Object> configJson = new LinkedHashMap<>();
+        configJson.put("layout", "default");
+        formData.put("configJson", configJson);
 
         AiGeneratedData data = AiGeneratedData.builder()
                 .formDefinitions(List.of(formData))
@@ -621,7 +630,11 @@ class AiFullReplacementWriteProperties {
         Map<String, Object> formData = new LinkedHashMap<>();
         formData.put("formName", "legacy_form");
         formData.put("formType", mapping.getKey());
-        formData.put("configJson", Map.of("layout", "default"));
+        // Mutable on purpose — ensureFormConfigJsonStructure() calls configJson.put(...);
+        // an immutable Map.of() threw UnsupportedOperationException before the assertion ran.
+        Map<String, Object> configJson = new LinkedHashMap<>();
+        configJson.put("layout", "default");
+        formData.put("configJson", configJson);
 
         AiGeneratedData data = AiGeneratedData.builder()
                 .formDefinitions(List.of(formData))
@@ -663,7 +676,11 @@ class AiFullReplacementWriteProperties {
         Map<String, Object> formData = new LinkedHashMap<>();
         formData.put("formName", "bad_form");
         formData.put("formType", "INVALID_TYPE");
-        formData.put("configJson", Map.of("layout", "default"));
+        // Mutable on purpose — ensureFormConfigJsonStructure() calls configJson.put(...);
+        // an immutable Map.of() threw UnsupportedOperationException before the assertion ran.
+        Map<String, Object> configJson = new LinkedHashMap<>();
+        configJson.put("layout", "default");
+        formData.put("configJson", configJson);
 
         AiGeneratedData data = AiGeneratedData.builder()
                 .formDefinitions(List.of(formData))
@@ -820,7 +837,7 @@ class AiFullReplacementWriteProperties {
             Map<String, Object> form = new LinkedHashMap<>();
             form.put("formName", "form_" + ft.toLowerCase());
             form.put("formType", ft);
-            form.put("configJson", Map.of("layout", "default"));
+            form.put("configJson", mutableMap("layout", "default"));
             return form;
         }).list().ofMinSize(0).ofMaxSize(2)
                 .map(list -> {
@@ -835,7 +852,7 @@ class AiFullReplacementWriteProperties {
             Map<String, Object> action = new LinkedHashMap<>();
             action.put("actionName", "action_" + at.toLowerCase());
             action.put("actionType", at);
-            action.put("configJson", Map.of("enabled", true));
+            action.put("configJson", mutableMap("enabled", true));
             return action;
         }).list().ofMinSize(0).ofMaxSize(2)
                 .map(list -> {
@@ -872,5 +889,20 @@ class AiFullReplacementWriteProperties {
                 Map.entry("MAIN", FormType.PROCESS),
                 Map.entry("SUB", FormType.TASK)
         );
+    }
+
+    /**
+     * Like {@code Map.of(...)} but mutable.
+     *
+     * <p>AiWriteServiceImpl fills in missing form-create keys with {@code configJson.put(...)},
+     * so any map handed to it must be writable. Production data arrives via Jackson (mutable);
+     * {@code Map.of} here threw UnsupportedOperationException before the property was evaluated.
+     */
+    private static Map<String, Object> mutableMap(Object... kv) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        for (int i = 0; i < kv.length; i += 2) {
+            m.put((String) kv[i], kv[i + 1]);
+        }
+        return m;
     }
 }

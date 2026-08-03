@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static com.developer.service.AiLockTestSupport.stubExistingLock;
 import static org.mockito.Mockito.*;
 
 /**
@@ -48,7 +49,7 @@ class AiLockServiceTest {
     @Test
     void tryAcquire_noExistingLock_shouldSucceed() {
         // setIfAbsent returns true → lock acquired
-        when(cacheService.setIfAbsent(eq("ai-gen-lock:1"), anyString(), eq(Duration.ofSeconds(1800))))
+        when(cacheService.setIfAbsent(eq("ai-gen-lock:1"), any(), eq(Duration.ofSeconds(1800))))
                 .thenReturn(true);
         when(userDisplayNameService.resolve("user1")).thenReturn("Test User");
 
@@ -64,14 +65,12 @@ class AiLockServiceTest {
     @Test
     void tryAcquire_existingLockByOtherUser_shouldThrow() throws Exception {
         // setIfAbsent returns false → lock already held
-        when(cacheService.setIfAbsent(eq("ai-gen-lock:1"), anyString(), any(Duration.class)))
+        when(cacheService.setIfAbsent(eq("ai-gen-lock:1"), any(), any(Duration.class)))
                 .thenReturn(false);
         when(userDisplayNameService.resolve("user1")).thenReturn("User One");
 
         // Existing lock held by different user
-        String lockJson = objectMapper.writeValueAsString(
-                Map.of("userId", "other-user", "userName", "Other User", "lockedAt", Instant.now().toString()));
-        when(cacheService.getString("ai-gen-lock:1")).thenReturn(Optional.of(lockJson));
+        stubExistingLock(cacheService, "ai-gen-lock:1", "other-user");
 
         AiLockConflictException ex = assertThrows(AiLockConflictException.class,
                 () -> lockService.tryAcquire(1L, "user1"));
@@ -82,9 +81,7 @@ class AiLockServiceTest {
 
     @Test
     void release_ownLock_shouldSucceed() throws Exception {
-        String lockJson = objectMapper.writeValueAsString(
-                Map.of("userId", "user1", "userName", "User One", "lockedAt", Instant.now().toString()));
-        when(cacheService.getString("ai-gen-lock:1")).thenReturn(Optional.of(lockJson));
+        stubExistingLock(cacheService, "ai-gen-lock:1", "user1");
 
         lockService.release(1L, "user1");
 
@@ -93,9 +90,7 @@ class AiLockServiceTest {
 
     @Test
     void extendLock_shouldResetTtl() throws Exception {
-        String lockJson = objectMapper.writeValueAsString(
-                Map.of("userId", "user1", "userName", "User One", "lockedAt", Instant.now().toString()));
-        when(cacheService.getString("ai-gen-lock:1")).thenReturn(Optional.of(lockJson));
+        stubExistingLock(cacheService, "ai-gen-lock:1", "user1");
 
         lockService.extendLock(1L, "user1");
 

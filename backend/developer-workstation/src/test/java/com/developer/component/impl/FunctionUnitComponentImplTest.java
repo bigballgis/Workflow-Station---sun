@@ -85,6 +85,15 @@ class FunctionUnitComponentImplTest {
     @Mock
     private com.developer.service.MainTableViewService mainTableViewService;
 
+    /**
+     * FunctionUnitComponentImpl takes a FunctionUnitExporter and calls
+     * buildVersionSnapshotPayload(...) when creating a version. Without this mock @InjectMocks
+     * left the field null, and every affected test failed with
+     * "Failed to create version snapshot: Cannot invoke ...FunctionUnitExporter...".
+     */
+    @Mock
+    private FunctionUnitExporter functionUnitExporter;
+
     @InjectMocks
     private FunctionUnitComponentImpl functionUnitComponent;
     

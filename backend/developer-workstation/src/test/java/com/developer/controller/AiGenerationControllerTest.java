@@ -9,6 +9,11 @@ import com.developer.enums.AiSessionStatus;
 import com.developer.exception.AiExceptionHandler;
 import com.developer.exception.AiLockConflictException;
 import com.developer.exception.AiValidationFailedException;
+import com.platform.common.i18n.I18nService;
+import com.platform.common.dto.UserPrincipal;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.junit.jupiter.api.AfterEach;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +51,14 @@ class AiGenerationControllerTest {
     @Mock
     private AiGenerationComponent aiGenerationComponent;
 
+    /**
+     * AiGenerationController takes (AiGenerationComponent, I18nService). Leaving this out made
+     * @InjectMocks set the field to null, so every request NPE'd inside i18nService.getMessage()
+     * before reaching the behaviour under test.
+     */
+    @Mock
+    private I18nService i18nService;
+
     @InjectMocks
     private AiGenerationController aiGenerationController;
 
@@ -59,6 +72,22 @@ class AiGenerationControllerTest {
                 .setControllerAdvice(new AiExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .build();
+
+        // Several endpoints resolve the caller via SecurityContextUtils.getCurrentUserId() and
+        // throw when it is empty. standaloneSetup() installs no security context, so without this
+        // the request died inside the controller before reaching the behaviour under test.
+        SecurityContextHolder.clearContext();
+        UserPrincipal principal = UserPrincipal.builder()
+                .userId("test-user")
+                .username("test-user")
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, List.of()));
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.*;
+import static com.developer.service.AiLockTestSupport.stubExistingLock;
 import static org.mockito.Mockito.*;
 
 /**
@@ -94,19 +95,19 @@ class AiForceUnlockTimeoutProperties {
         String forceUnlockKey = "ai-gen-force-unlock:" + functionUnitId;
 
         // user1 acquires lock
-        when(cacheService.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
+        when(cacheService.setIfAbsent(eq(lockKey), any(), any(Duration.class)))
                 .thenReturn(true);
         lockService.tryAcquire(functionUnitId, userId1);
 
         // Setup: lock exists in Redis, held by user1
-        String lockJson = buildLockJson(objectMapper, userId1);
-        when(cacheService.getString(lockKey)).thenReturn(Optional.of(lockJson));
+        stubExistingLock(cacheService, lockKey, userId1);
+        when(cacheService.exists(lockKey)).thenReturn(true);
 
         // user2 requests force unlock
         lockService.requestForceUnlock(functionUnitId, userId2);
 
         // Verify: force-unlock key was stored with 60-second TTL
-        verify(cacheService).set(eq(forceUnlockKey), anyString(), eq(Duration.ofSeconds(60)));
+        verify(cacheService).set(eq(forceUnlockKey), any(), eq(Duration.ofSeconds(60)));
     }
 
     /**
@@ -135,20 +136,20 @@ class AiForceUnlockTimeoutProperties {
         String forceUnlockKey = "ai-gen-force-unlock:" + functionUnitId;
 
         // user1 acquires lock
-        when(cacheService.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
+        when(cacheService.setIfAbsent(eq(lockKey), any(), any(Duration.class)))
                 .thenReturn(true);
         lockService.tryAcquire(functionUnitId, userId1);
 
         // Setup: lock exists, held by user1
-        String lockJson = buildLockJson(objectMapper, userId1);
-        when(cacheService.getString(lockKey)).thenReturn(Optional.of(lockJson));
+        stubExistingLock(cacheService, lockKey, userId1);
+        when(cacheService.exists(lockKey)).thenReturn(true);
 
         // user2 requests force unlock
         lockService.requestForceUnlock(functionUnitId, userId2);
 
         // Setup: force-unlock key exists in Redis
-        String forceUnlockJson = buildForceUnlockJson(objectMapper, userId2);
-        when(cacheService.getString(forceUnlockKey)).thenReturn(Optional.of(forceUnlockJson));
+        // respondForceUnlock gates on exists(forceUnlockKey), not on a typed read.
+        when(cacheService.exists(forceUnlockKey)).thenReturn(true);
 
         // user1 responds with accept=true
         lockService.respondForceUnlock(functionUnitId, userId1, true);
@@ -184,20 +185,20 @@ class AiForceUnlockTimeoutProperties {
         String forceUnlockKey = "ai-gen-force-unlock:" + functionUnitId;
 
         // user1 acquires lock
-        when(cacheService.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
+        when(cacheService.setIfAbsent(eq(lockKey), any(), any(Duration.class)))
                 .thenReturn(true);
         lockService.tryAcquire(functionUnitId, userId1);
 
         // Setup: lock exists, held by user1
-        String lockJson = buildLockJson(objectMapper, userId1);
-        when(cacheService.getString(lockKey)).thenReturn(Optional.of(lockJson));
+        stubExistingLock(cacheService, lockKey, userId1);
+        when(cacheService.exists(lockKey)).thenReturn(true);
 
         // user2 requests force unlock
         lockService.requestForceUnlock(functionUnitId, userId2);
 
         // Setup: force-unlock key exists in Redis
-        String forceUnlockJson = buildForceUnlockJson(objectMapper, userId2);
-        when(cacheService.getString(forceUnlockKey)).thenReturn(Optional.of(forceUnlockJson));
+        // respondForceUnlock gates on exists(forceUnlockKey), not on a typed read.
+        when(cacheService.exists(forceUnlockKey)).thenReturn(true);
 
         // user1 responds with accept=false
         lockService.respondForceUnlock(functionUnitId, userId1, false);

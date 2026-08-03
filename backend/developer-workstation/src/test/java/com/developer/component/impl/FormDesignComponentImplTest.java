@@ -5,6 +5,7 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.*;
+import com.platform.common.i18n.I18nService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,22 @@ class FormDesignComponentImplTest {
     
     @Mock
     private ObjectMapper objectMapper;
-    
+
+    /**
+     * FormDesignComponentImpl delegates to FormTableBindingRestorer.repairFunctionUnitBindings(...).
+     * Without this mock @InjectMocks left the field null and the tests failed with an
+     * "Unexpected exception thrown: NullPointerException" that hid the behaviour under test.
+     */
+    @Mock
+    private FormTableBindingRestorer formTableBindingRestorer;
+
+    /**
+     * delete() builds its FORM_IN_USE exception message through i18nService, so an unmocked
+     * (null) instance turned the expected DeveloperBusinessException into an NPE.
+     */
+    @Mock
+    private I18nService i18nService;
+
     @InjectMocks
     private FormDesignComponentImpl formDesignComponent;
     
@@ -85,7 +101,12 @@ class FormDesignComponentImplTest {
         
         when(formDefinitionRepository.findByIdWithBindings(1L)).thenReturn(Optional.of(form));
         when(formDefinitionRepository.findById(1L)).thenReturn(Optional.of(form));
-        
+        // 异常文案经 i18nService 拼装；不 stub 会得到 null message，断言 contains(...) 再次 NPE
+        when(i18nService.getMessage("form.in_use"))
+                .thenReturn("无法删除表单：该表单正在被流程定义使用");
+        when(i18nService.getMessage("form.remove_reference_first"))
+                .thenReturn("请先移除流程中的引用");
+
         // When & Then: 删除应抛出异常
         DeveloperBusinessException exception = assertThrows(DeveloperBusinessException.class, () -> {
             formDesignComponent.delete(1L);
