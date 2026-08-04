@@ -13,28 +13,28 @@ export function useAiTemplates() {
       nameKey: 'ai.template.crud.name',
       descriptionKey: 'ai.template.crud.description',
       icon: 'Grid',
-      promptTemplate: '创建一个完整的CRUD功能单元，包含：主表（含常用字段如名称、描述、状态、创建时间）、子表、主表单（PROCESS类型）、子表单（TASK类型）、增删改查动作、简单的审批流程'
+      promptTemplate: 'Create a complete CRUD function unit that includes: a main table (with common fields such as name, description, status, created time), a sub table, a main form (PROCESS type), a sub form (TASK type), create/read/update/delete actions, and a simple approval process'
     },
     {
       id: 'approval',
       nameKey: 'ai.template.approval.name',
       descriptionKey: 'ai.template.approval.description',
       icon: 'Stamp',
-      promptTemplate: '创建一个多级审批流程功能单元，包含：申请表（含申请人、申请原因、金额等字段）、审批表单（含审批意见、审批结果字段，配置fieldPermissions）、审批动作（同意/拒绝/退回，配置visibilityCondition）、包含会签和或签网关的BPMN流程'
+      promptTemplate: 'Create a multi-level approval function unit that includes: an application table (with fields such as applicant, reason, amount), an approval form (with approval comment and approval result fields, configured with fieldPermissions), approval actions (Approve / Reject / Return, configured with visibilityCondition), and a BPMN process containing both parallel (all-must-sign) and inclusive (any-can-sign) gateways'
     },
     {
       id: 'data-entry',
       nameKey: 'ai.template.dataEntry.name',
       descriptionKey: 'ai.template.dataEntry.description',
       icon: 'EditPen',
-      promptTemplate: '创建一个数据录入功能单元，包含：主数据表、多个明细子表（含数值字段）、带公式计算（formulas）和字段联动（linkages）的复杂表单、汇总规则（summaryRules使用SUM和AVG）、数据导入导出动作'
+      promptTemplate: 'Create a data entry function unit that includes: a main data table, multiple detail sub tables (with numeric fields), a complex form with formula calculations (formulas) and field linkages (linkages), summary rules (summaryRules using SUM and AVG), and data import/export actions'
     },
     {
       id: 'report',
       nameKey: 'ai.template.report.name',
       descriptionKey: 'ai.template.report.description',
       icon: 'DataAnalysis',
-      promptTemplate: '创建一个报表仪表板功能单元，包含：汇总统计表（含数值聚合字段）、明细数据表、带summaryRules（SUM/AVG/COUNT/MIN/MAX）的表单、数据查询和导出动作、表间关系（tableRelations）'
+      promptTemplate: 'Create a report dashboard function unit that includes: a summary statistics table (with numeric aggregation fields), a detail data table, a form with summaryRules (SUM/AVG/COUNT/MIN/MAX), data query and export actions, and table relations (tableRelations)'
     }
   ]
 
