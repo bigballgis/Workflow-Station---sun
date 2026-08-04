@@ -7,6 +7,7 @@ import {
   flowableModdleDescriptor
 } from '@/utils/customModdle'
 import { customTranslateModule } from '@/utils/customTranslate'
+import { isEmptyBpmnDiagram } from '@/utils/bpmnDiagramContent'
 
 // @ts-ignore - bpmn-js types
 import BpmnModeler from 'bpmn-js/lib/Modeler'
@@ -34,6 +35,11 @@ export function useProcessModeler(options: UseProcessModelerOptions) {
 
   const modelerReady = ref(false)
   const bpmnModelerRef = shallowRef<any>(null)
+  /**
+   * 画布装的是 import 失败后的兜底默认图，不是这个 FU 的流程。
+   * useProcessActions 据此挡住自动保存 —— 兜底图有节点有 shape，空图护栏拦不住它。
+   */
+  const diagramIsFallback = ref(false)
 
   let bpmnModeler: any = null
 
@@ -105,8 +111,14 @@ export function useProcessModeler(options: UseProcessModelerOptions) {
     try {
       bpmnModeler = new BpmnModeler({
         container: canvasRef.value,
+        // Scope diagram-js keyboard bindings to the canvas (it is tabindex="0", so
+        // clicking the diagram focuses it). Binding to `document` — the bpmn-js
+        // default suggestion — makes diagram-js swallow Cmd/Ctrl+C / V / A on the
+        // WHOLE page: its KeyboardBindings preventDefault() every hit outside an
+        // input, which killed text copying in the AI Generate panel and any other
+        // overlay rendered while the designer is mounted.
         keyboard: {
-          bindTo: document
+          bindTo: canvasRef.value
         },
         moddleExtensions: {
           custom: workflowPlatformModdleDescriptor,
@@ -140,6 +152,10 @@ export function useProcessModeler(options: UseProcessModelerOptions) {
         // which bpmn-js cannot render directly.
         console.warn('BPMN XML has no DI diagram info, falling back to default diagram')
         await bpmnModeler.importXML(defaultBpmnXml(fallbackProcessId))
+        // 已存流程还在库里，画布上的只是占位默认图 —— 标记出来，别让自动保存覆盖它。
+        if (!isEmptyBpmnDiagram(store.process?.bpmnXml)) {
+          diagramIsFallback.value = true
+        }
         ElMessage.warning(t('process.initializationFailed'))
       }
 
@@ -176,6 +192,7 @@ export function useProcessModeler(options: UseProcessModelerOptions) {
   return {
     modelerReady,
     bpmnModelerRef,
+    diagramIsFallback,
     getModeler,
     initModeler,
     destroyModeler,

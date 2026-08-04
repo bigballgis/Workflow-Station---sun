@@ -5,7 +5,7 @@
  * 组件仅保留 template + 调用此 composable。
  */
 
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
@@ -14,30 +14,48 @@ import { notifyError, notifySuccess } from '@/utils/notify'
 import type { VirtualGroup } from '@/api/virtualGroup'
 import { storeToRefs } from 'pinia'
 import { useVirtualGroupStore } from '@/stores/virtualGroup'
+import {
+  filterSortVirtualGroups,
+  paginateVirtualGroups,
+  type VirtualGroupTab,
+} from '@/utils/virtualGroupList'
 
 export function useVirtualGroup() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const store = useVirtualGroupStore()
   const { groups, loading } = storeToRefs(store)
 
-  // ==================== State ====================
   const formDialogVisible = ref(false)
   const membersDialogVisible = ref(false)
   const rolesDialogVisible = ref(false)
   const approversDialogVisible = ref(false)
   const currentGroup = ref<VirtualGroup | null>(null)
 
-  // ==================== Data Fetching ====================
+  const activeTab = ref<VirtualGroupTab>('CUSTOM')
+  const searchKeyword = ref('')
+  const listPagination = ref({ page: 1, size: 20 })
+
+  const filteredGroups = computed(() =>
+    filterSortVirtualGroups(groups.value, activeTab.value, searchKeyword.value, locale.value)
+  )
+
+  const listTotal = computed(() => filteredGroups.value.length)
+
+  const pagedGroups = computed(() =>
+    paginateVirtualGroups(filteredGroups.value, listPagination.value.page, listPagination.value.size)
+  )
+
+  watch([activeTab, searchKeyword], () => {
+    listPagination.value.page = 1
+  })
 
   const fetchGroups = async () => {
     try {
       await store.fetchGroups()
-    } catch (e) {
+    } catch {
       notifyError(t(errorTranslator(AppErrorCode.VIRTUAL_GROUP_LOAD_FAILED)))
     }
   }
-
-  // ==================== Dialog Actions ====================
 
   const showCreateDialog = () => {
     currentGroup.value = null
@@ -64,7 +82,12 @@ export function useVirtualGroup() {
     approversDialogVisible.value = true
   }
 
-  // ==================== Delete ====================
+  const handleCreateSuccess = async (createdType?: VirtualGroupTab) => {
+    await fetchGroups()
+    if (createdType === 'CUSTOM' || createdType === 'DEVELOPER') {
+      activeTab.value = createdType
+    }
+  }
 
   const { handleDelete: deleteById } = useConfirmDelete(
     (id: string) => store.deleteGroup(id),
@@ -81,18 +104,23 @@ export function useVirtualGroup() {
     else notifyError(t(errorTranslator(r.code || AppErrorCode.VIRTUAL_GROUP_LOAD_FAILED)))
   }
 
-  // ==================== Return ====================
+  const handleListSizeChange = () => {
+    listPagination.value.page = 1
+  }
 
   return {
-    // State
     loading,
     groups,
+    activeTab,
+    searchKeyword,
+    listPagination,
+    listTotal,
+    pagedGroups,
     formDialogVisible,
     membersDialogVisible,
     rolesDialogVisible,
     approversDialogVisible,
     currentGroup,
-    // Methods
     fetchGroups,
     showCreateDialog,
     showEditDialog,
@@ -100,5 +128,7 @@ export function useVirtualGroup() {
     showRolesDialog,
     showApproversDialog,
     handleDelete,
+    handleCreateSuccess,
+    handleListSizeChange,
   }
 }

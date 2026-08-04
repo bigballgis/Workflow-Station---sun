@@ -173,7 +173,8 @@ public class VirtualGroupHelper {
      * <p>Supported types:</p>
      * <ul>
      *   <li>SYSTEM - System-defined virtual groups</li>
-     *   <li>CUSTOM - User-defined virtual groups</li>
+     *   <li>CUSTOM - Business / task-pool virtual groups</li>
+     *   <li>DEVELOPER - Developer Workstation team virtual groups</li>
      * </ul>
      * 
      * @param group the VirtualGroup entity

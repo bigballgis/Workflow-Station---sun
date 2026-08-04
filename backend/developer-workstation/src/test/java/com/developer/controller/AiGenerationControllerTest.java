@@ -9,13 +9,11 @@ import com.developer.enums.AiSessionStatus;
 import com.developer.exception.AiExceptionHandler;
 import com.developer.exception.AiLockConflictException;
 import com.developer.exception.AiValidationFailedException;
-import com.platform.common.i18n.I18nService;
-import com.platform.common.dto.UserPrincipal;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.junit.jupiter.api.AfterEach;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.platform.common.dto.UserPrincipal;
+import com.platform.common.i18n.I18nService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +25,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -51,11 +51,7 @@ class AiGenerationControllerTest {
     @Mock
     private AiGenerationComponent aiGenerationComponent;
 
-    /**
-     * AiGenerationController takes (AiGenerationComponent, I18nService). Leaving this out made
-     * @InjectMocks set the field to null, so every request NPE'd inside i18nService.getMessage()
-     * before reaching the behaviour under test.
-     */
+    /** 控制器构造参数之一；缺了它 @InjectMocks 传 null，未认证分支上会 NPE 而不是抛业务异常。 */
     @Mock
     private I18nService i18nService;
 
@@ -73,13 +69,17 @@ class AiGenerationControllerTest {
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .build();
 
-        // Several endpoints resolve the caller via SecurityContextUtils.getCurrentUserId() and
-        // throw when it is empty. standaloneSetup() installs no security context, so without this
-        // the request died inside the controller before reaching the behaviour under test.
+        // 控制器取当前用户走 SecurityContextUtils（只认 UserPrincipal），下面各用例仍在发的
+        // X-User-Id 头早就不是身份来源了。standalone MockMvc 不跑安全过滤器，这里手工种上。
+        // 先清再种：surefire 复用 JVM fork，SecurityContextHolder 是跨测试类共享的静态状态。
+        // 别的类留下的 Authentication 主体不是 UserPrincipal 时，getCurrentUser() 会返回 empty，
+        // 于是本类单跑绿、进套件红一个（eventStream 用例）。
         SecurityContextHolder.clearContext();
         UserPrincipal principal = UserPrincipal.builder()
-                .userId("test-user")
-                .username("test-user")
+                .userId("user1")
+                .username("user1")
+                .roles(List.of("DEVELOPER"))
+                .permissions(List.of())
                 .build();
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, List.of()));

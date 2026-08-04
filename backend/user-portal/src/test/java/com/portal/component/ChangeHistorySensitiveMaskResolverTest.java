@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -13,6 +14,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ChangeHistorySensitiveMaskResolverTest {
@@ -41,6 +43,13 @@ class ChangeHistorySensitiveMaskResolverTest {
 
         assertThat(masks).containsOnlyKeys("card");
         assertThat(masks.get("card")).containsEntry("enabled", true).containsEntry("keepPrefix", 2);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).query(sqlCaptor.capture(), any(RowMapper.class), eq("pid-1"));
+        String sql = sqlCaptor.getValue();
+        assertThat(sql).containsIgnoringCase("ORDER BY");
+        assertThat(sql).contains("WHEN 'PROCESS' THEN 0");
+        assertThat(sql).contains("WHEN 'TASK' THEN 1");
     }
 
     @Test

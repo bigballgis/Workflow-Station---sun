@@ -170,6 +170,13 @@ class EntityTypeConverterTest {
         VirtualGroupType result = EntityTypeConverter.toVirtualGroupType("CUSTOM");
         assertEquals(VirtualGroupType.CUSTOM, result);
     }
+
+    @Test
+    @DisplayName("toVirtualGroupType: Should convert DEVELOPER string to enum")
+    void testToVirtualGroupType_Developer() {
+        VirtualGroupType result = EntityTypeConverter.toVirtualGroupType("DEVELOPER");
+        assertEquals(VirtualGroupType.DEVELOPER, result);
+    }
     
     @Test
     @DisplayName("toVirtualGroupType: Should return null for null input")
@@ -223,6 +230,13 @@ class EntityTypeConverterTest {
     void testFromVirtualGroupType_Custom() {
         String result = EntityTypeConverter.fromVirtualGroupType(VirtualGroupType.CUSTOM);
         assertEquals("CUSTOM", result);
+    }
+
+    @Test
+    @DisplayName("fromVirtualGroupType: Should convert DEVELOPER enum to string")
+    void testFromVirtualGroupType_Developer() {
+        String result = EntityTypeConverter.fromVirtualGroupType(VirtualGroupType.DEVELOPER);
+        assertEquals("DEVELOPER", result);
     }
     
     @Test

@@ -27,6 +27,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,6 +44,9 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class AiGenerationComponentImpl implements AiGenerationComponent {
 
+    /** Cap for the cause text pushed to the client in a {@code write_error} event. */
+    private static final int MAX_WRITE_ERROR_MESSAGE_LENGTH = 300;
+
     private final AiGenerationService aiGenerationService;
     private final AiLockService aiLockService;
     private final AiValidationService aiValidationService;
@@ -53,6 +57,17 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
 
     /** Undo snapshot cache: key = functionUnitId → serialized AiGeneratedData JSON */
     private final ConcurrentHashMap<Long, String> undoSnapshots = new ConcurrentHashMap<>();
+
+    /**
+     * Function units with an apply already running. Confirm Apply clears and rewrites the whole
+     * component graph, so a second click while the first write is still in flight makes two
+     * transactions delete and re-insert the same rows — the losing one then fails on rows the
+     * winner already removed. Rejecting the second click keeps that out of the database.
+     *
+     * <p>Per-instance only: it stops the double-click, which is what users actually hit. Two DW
+     * replicas still fall back to the function-unit AI lock plus optimistic locking.</p>
+     */
+    private final Set<Long> applyInFlight = ConcurrentHashMap.newKeySet();
 
     /** Undo snapshot TTL cleanup scheduler */
     private final ScheduledExecutorService undoCleanupExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -172,24 +187,40 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         AiDocumentType documentType = AiDocumentType.valueOf(documentTypeStr);
                         String summary = (String) aiResponse.getOrDefault("documentSummary", "AI generated document");
 
-                        aiGenerationService.saveDocument(request.getFunctionUnitId(), documentType, documentContent, summary, userId);
+                        // 版本号与落库时间一并回给前端：文档卡上要显示"v3 · 14:32"，否则用户点完
+                        // Regenerate 只能盯着一段看起来差不多的正文猜这一版到底重出了没有。
+                        var savedDocument = aiGenerationService.saveDocument(
+                                request.getFunctionUnitId(), documentType, documentContent, summary, userId);
+                        Map<String, Object> documentPayload = new LinkedHashMap<>();
+                        documentPayload.put("documentType", documentTypeStr);
+                        documentPayload.put("content", documentContent);
+                        documentPayload.put("version", savedDocument.getVersion());
+                        documentPayload.put("generatedAt", savedDocument.getCreatedAt() != null
+                                ? savedDocument.getCreatedAt().toString() : null);
                         emitIfCurrent.accept(AiChatSseEvent.builder().eventType("document")
-                                        .data(Map.of("documentType", documentTypeStr, "content", documentContent)).build());
+                                        .data(documentPayload).build());
                     }
                 }
 
-                if (Boolean.TRUE.equals(aiResponse.get("phaseComplete"))) {
-                    // Auto-advance session phase (persisted in backend, not dependent on frontend "next phase" button)
-                    AiPhase nextPhase = getNextPhase(request.getPhase());
-                    if (nextPhase != null) {
-                        try {
-                            aiGenerationService.updateSessionPhase(session.getSessionId().toString(), nextPhase);
-                            log.info("Auto-advanced session phase: sessionId={}, from={} to={}",
-                                    session.getSessionId(), request.getPhase(), nextPhase);
-                        } catch (Exception phaseErr) {
-                            log.error("Failed to auto-advance phase: sessionId={}", session.getSessionId(), phaseErr);
-                        }
-                    }
+                if (Boolean.TRUE.equals(aiResponse.get("phaseComplete")) && request.isRegenerateOnly()) {
+                    // 文档卡上的 Regenerate：产物已经落库并通过 document 事件回给前端了，到此为止。
+                    // 既不推进相位也不发 phase_complete——否则一次"重出需求文档"会把会话相位倒回
+                    // DESIGN，并触发前端自动重跑设计与生成，覆盖用户已经在迭代的产物。
+                    log.info("Regenerate-only turn: skipping phase advance, sessionId={}, phase={}",
+                            session.getSessionId(), request.getPhase());
+                } else if (Boolean.TRUE.equals(aiResponse.get("phaseComplete"))) {
+                    // 只通知，不推进。
+                    //
+                    // 模型输出 ---PHASE_COMPLETE--- 是一个"我觉得这一相位可以了"的提议，不是事实：它
+                    // 分不清"设计定稿"和"用户正在纠错"，弱模型上尤其不稳。以前这里直接落库推进，前端
+                    // 收到 phase_complete 又会自动发下一相位的触发语，于是用户敲一次回车就连跑
+                    // 需求→设计→生成三轮模型调用，中间没有任何人看一眼——第一轮漏掉的字段会被第二轮
+                    // 当成事实读进去，再被第三轮变成真的表和 BPMN，等用户在 Preview 看见时已经隔了两轮。
+                    //
+                    // 相位由用户点"进入下一阶段"时经 PUT /sessions/{id}/phase 推进，会话状态因此始终
+                    // 与用户看到的一致：不点就不会前进，重开面板也不会落在一个还没有产物的相位上。
+                    log.info("Phase complete proposed by the model, awaiting user confirmation: sessionId={}, phase={}",
+                            session.getSessionId(), request.getPhase());
                     emitIfCurrent.accept(AiChatSseEvent.builder().eventType("phase_complete").data(request.getPhase().name()).build());
                 }
 
@@ -326,6 +357,11 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         // 1. Renew the lock
         aiLockService.extendLock(functionUnitId, userId);
 
+        if (!applyInFlight.add(functionUnitId)) {
+            log.warn("Rejected concurrent apply: functionUnitId={}, userId={}", functionUnitId, userId);
+            throw new AiGenerationException("AI_WRITE_IN_PROGRESS",
+                    "A previous apply for this function unit is still running, please wait for it to finish");
+        }
         try {
             // 2. Normalize model output the platform enum can't express, then validate
             if (request.getGeneratedData() != null) {
@@ -370,17 +406,48 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
             throw e;
         } catch (jakarta.persistence.OptimisticLockException e) {
             log.warn("Optimistic lock conflict during apply: functionUnitId={}", functionUnitId, e);
-            aiGenerationService.sendEventNotification(functionUnitId,
-                    AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", "AI_WRITE_CONFLICT")).build());
+            sendWriteError(functionUnitId, "AI_WRITE_CONFLICT", null);
             throw new AiGenerationException("AI_WRITE_CONFLICT",
                     "Data was modified by another user, please retry");
         } catch (Exception e) {
             log.error("Failed to apply generated data: functionUnitId={}", functionUnitId, e);
-            // Send write error event
-            aiGenerationService.sendEventNotification(functionUnitId,
-                    AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", e.getMessage())).build());
+            String errorCode = e instanceof AiGenerationException age ? age.getErrorCode() : "AI_WRITE_FAILED";
+            sendWriteError(functionUnitId, errorCode, rootCauseMessage(e));
             throw e;
+        } finally {
+            applyInFlight.remove(functionUnitId);
         }
+    }
+
+    /**
+     * Emit the {@code write_error} SSE event.
+     *
+     * <p>The payload carries {@code errorCode} (translated by the client) and {@code message} (the cause,
+     * for codes that have no canned text). It used to be a single {@code error} key that no client ever
+     * read, so every failed Apply surfaced as the generic "Data write failed" toast with the real cause
+     * only in the backend log. {@code LinkedHashMap} rather than {@code Map.of} because a null message is
+     * legal here and {@code Map.of} would throw an NPE from inside the catch block, hiding the original
+     * failure entirely.</p>
+     */
+    private void sendWriteError(Long functionUnitId, String errorCode, String message) {
+        Map<String, Object> errorData = new LinkedHashMap<>();
+        errorData.put("errorCode", errorCode);
+        errorData.put("message", message);
+        aiGenerationService.sendEventNotification(functionUnitId,
+                AiChatSseEvent.builder().eventType("write_error").data(errorData).build());
+    }
+
+    /** Deepest cause message, capped — a JDBC constraint violation is wrapped several layers deep. */
+    private String rootCauseMessage(Throwable e) {
+        Throwable cause = e;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        String message = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
+        message = message.replaceAll("\\s+", " ").trim();
+        return message.length() > MAX_WRITE_ERROR_MESSAGE_LENGTH
+                ? message.substring(0, MAX_WRITE_ERROR_MESSAGE_LENGTH) + "…"
+                : message;
     }
 
     /**
@@ -504,14 +571,4 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         }
     }
 
-    /**
-     * Get the next phase, return null if already at the last phase
-     */
-    private AiPhase getNextPhase(AiPhase current) {
-        return switch (current) {
-            case REQUIREMENTS -> AiPhase.DESIGN;
-            case DESIGN -> AiPhase.GENERATION;
-            case GENERATION -> null;
-        };
-    }
 }

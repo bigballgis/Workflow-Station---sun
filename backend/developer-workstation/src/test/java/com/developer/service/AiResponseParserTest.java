@@ -30,10 +30,24 @@ class AiResponseParserTest {
     }
 
     private static String validBpmn() {
-        return "<?xml version=\"1.0\"?><bpmn:definitions xmlns:bpmn=\"" + BPMN_NS + "\">"
+        return "<?xml version=\"1.0\"?><bpmn:definitions xmlns:bpmn=\"" + BPMN_NS + "\" "
+                + "xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" "
+                + "xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" "
+                + "xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\">"
                 + "<bpmn:process id=\"p\" isExecutable=\"true\">"
-                + "<bpmn:startEvent id=\"s\"/><bpmn:userTask id=\"t\"/><bpmn:endEvent id=\"e\"/>"
-                + "</bpmn:process></bpmn:definitions>";
+                + "<bpmn:startEvent id=\"s\"/><bpmn:userTask id=\"t\"><bpmn:extensionElements>"
+                + "<custom:properties xmlns:custom=\"http://custom.bpmn.io/schema\">"
+                + "<custom:property name=\"assigneeType\" value=\"PROCESS_INITIATOR\"/>"
+                + "</custom:properties></bpmn:extensionElements></bpmn:userTask><bpmn:endEvent id=\"e\"/>"
+                + "<bpmn:sequenceFlow id=\"f1\" sourceRef=\"s\" targetRef=\"t\"/>"
+                + "<bpmn:sequenceFlow id=\"f2\" sourceRef=\"t\" targetRef=\"e\"/>"
+                + "</bpmn:process><bpmndi:BPMNDiagram id=\"d\"><bpmndi:BPMNPlane id=\"plane\" bpmnElement=\"p\">"
+                + "<bpmndi:BPMNShape id=\"s_di\" bpmnElement=\"s\"><dc:Bounds x=\"0\" y=\"0\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"t_di\" bpmnElement=\"t\"><dc:Bounds x=\"100\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"e_di\" bpmnElement=\"e\"><dc:Bounds x=\"260\" y=\"0\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNEdge id=\"f1_di\" bpmnElement=\"f1\"><di:waypoint x=\"36\" y=\"18\"/><di:waypoint x=\"100\" y=\"18\"/></bpmndi:BPMNEdge>"
+                + "<bpmndi:BPMNEdge id=\"f2_di\" bpmnElement=\"f2\"><di:waypoint x=\"200\" y=\"18\"/><di:waypoint x=\"260\" y=\"18\"/></bpmndi:BPMNEdge>"
+                + "</bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>";
     }
 
     @Test
@@ -93,7 +107,7 @@ class AiResponseParserTest {
         List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("formDefinitions");
         List<Map<String, Object>> actions = (List<Map<String, Object>>) data.get("actionDefinitions");
 
-        assertEquals("MAIN", forms.get(0).get("formType"), "TASK 不是平台枚举，须改写为 MAIN");
+        assertEquals("TASK", forms.get(0).get("formType"), "TASK 是平台原生表单类型，必须保留用于阶段绑定");
         assertEquals(Map.of("k", 1), forms.get(0).get("configJson"));
         assertNull(forms.get(1).get("configJson"), "非法 configJson 丢成 null，而不是留着炸下游");
         assertNull(actions.get(0).get("configJson"), "JSON 数组不是对象，同样丢弃");
@@ -139,6 +153,331 @@ class AiResponseParserTest {
     }
 
     @Test
+    void parse_bpmnWithDisconnectedTask_isRejected() {
+        String xml = validBpmn().replace("<bpmn:endEvent id=\"e\"/>",
+                        "<bpmn:userTask id=\"orphan\"/><bpmn:endEvent id=\"e\"/>")
+                        .replace("<bpmndi:BPMNShape id=\"e_di\"", "<bpmndi:BPMNShape id=\"orphan_di\" bpmnElement=\"orphan\"><dc:Bounds x=\"220\" y=\"100\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"e_di\"");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                        () -> parser.parse(gatewayResponse(200,
+                                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_BPMN_DISCONNECTED_NODES", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_bpmnWithoutDiagramEdge_isRejected() {
+        String xml = validBpmn().replaceAll("<bpmndi:BPMNEdge id=\\\"f2_di\\\".*?</bpmndi:BPMNEdge>", "");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                        () -> parser.parse(gatewayResponse(200,
+                                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_BPMN_MISSING_DI", ex.getErrorCode());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void parse_taskFormWithExactStageBinding_isAccepted() {
+        String xml = validBpmn().replace("<bpmn:userTask id=\"t\">",
+                "<bpmn:userTask id=\"t\" name=\"Review Request\">");
+        String json = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"configJson\":null,\"stageBindings\":[{\"stageId\":\"t\","
+                + "\"stageName\":\"Review Request\",\"readOnly\":false}]}],"
+                + "\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        Map<String, Object> data = (Map<String, Object>) result.get("generatedData");
+        List<Map<String, Object>> forms = (List<Map<String, Object>>) data.get("formDefinitions");
+        assertEquals("TASK", forms.get(0).get("formType"));
+        assertEquals("t", ((List<Map<String, Object>>) forms.get(0).get("stageBindings"))
+                .get(0).get("stageId"));
+    }
+
+    @Test
+    void parse_userTaskWithoutFormStageBinding_isRejected() {
+        String json = "{\"formDefinitions\":[],\"processDefinition\":{\"bpmnXml\":\""
+                + validBpmn().replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_FORM_STAGE_BINDING_INVALID", ex.getErrorCode());
+    }
+
+    /**
+     * PROCESS 表单绑阶段必须放行：平台侧没有任何 formType 限制（设计器的绑定接口不判类型、
+     * portal 按注入的 formId 直接取表单），发起人提交那步挂完整流程表单是合理设计。
+     * 校验器比平台更严只会白烧一次两分钟的重生成。
+     */
+    @Test
+    void parse_processFormBoundToAStage_isAccepted() {
+        String json = "{\"formDefinitions\":[{\"formName\":\"request_form\",\"formType\":\"PROCESS\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"\",\"readOnly\":false}]}],"
+                + "\"processDefinition\":{\"bpmnXml\":\"" + validBpmn().replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        assertTrue(result.get("generatedData") != null, "PROCESS form stage binding must not be rejected");
+    }
+
+    /** ACTION 表单仍然禁止绑阶段：它是动作弹窗的表单，绑上去 portal 会把它当任务表单打开。 */
+    @Test
+    void parse_actionFormBoundToAStage_isStillRejected() {
+        String json = "{\"formDefinitions\":[{\"formName\":\"approve_dialog\",\"formType\":\"ACTION\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"\",\"readOnly\":false}]}],"
+                + "\"processDefinition\":{\"bpmnXml\":\"" + validBpmn().replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_FORM_STAGE_BINDING_INVALID", ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("approve_dialog"), ex.getMessage());
+    }
+
+    @Test
+    void parse_taskFormWithoutAssigneeType_isRejected() {
+        String xml = validBpmn().replace(
+                "<custom:property name=\"assigneeType\" value=\"PROCESS_INITIATOR\"/>", "");
+        String json = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"\",\"readOnly\":false}]}],"
+                + "\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_TASK_ASSIGNEE_INVALID", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_actionWithUnknownStageId_isRejected() {
+        String json = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"\",\"readOnly\":false}]}],"
+                + "\"actionDefinitions\":[{\"actionName\":\"approve\",\"actionType\":\"APPROVE\","
+                + "\"stageIds\":[\"missing_task\"]}],\"processDefinition\":{\"bpmnXml\":\""
+                + validBpmn().replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_ACTION_STAGE_BINDING_INVALID", ex.getErrorCode());
+    }
+
+    // ==================== DESIGN 文档校验 ====================
+
+    /**
+     * 复刻 87 号功能单元那份 DESIGN v2 的形状：正确的部分保持合法，各测试只注入一处缺陷。
+     */
+    private static String designDocument(String nodeRows, String flowRows) {
+        return "---DESIGN_DOC_START---\n"
+                + "# Design Document\n\n"
+                + "## Process Design\n\n"
+                + "### Process Node Matrix\n\n"
+                + "| Node ID | BPMN Type | Name | Responsibility | Bound TASK Form | Actions |\n"
+                + "| --- | --- | --- | --- | --- | --- |\n"
+                + nodeRows
+                + "\n### Sequence Flow Matrix\n\n"
+                + "| Flow ID | Source Node ID | Target Node ID | Condition/Default |\n"
+                + "| --- | --- | --- | --- |\n"
+                + flowRows
+                + "\n---DESIGN_DOC_END---";
+    }
+
+    private static final String VALID_NODE_ROWS =
+            "| bpmn_start_event_1 | startEvent | Start | Trigger | - | - |\n"
+            + "| bpmn_user_task_data_verification | userTask | Data Verification | Verify | verification_form"
+            + " | submit_credit_card_dev_request |\n"
+            + "| bpmn_end_event_1 | endEvent | Done | Terminal | - | - |\n";
+
+    private static final String VALID_FLOW_ROWS =
+            "| flow_1 | bpmn_start_event_1 | bpmn_user_task_data_verification | Default |\n"
+            + "| flow_2 | bpmn_user_task_data_verification | bpmn_end_event_1 | Default |\n";
+
+    @Test
+    void parse_validDesignMatrices_areAccepted() {
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                designDocument(VALID_NODE_ROWS, VALID_FLOW_ROWS)));
+
+        assertEquals("DESIGN", result.get("documentType"));
+    }
+
+    @Test
+    void parse_designBindingAnActionToStartEvent_isRejected() {
+        String rows = VALID_NODE_ROWS.replace(
+                "| bpmn_start_event_1 | startEvent | Start | Trigger | - | - |",
+                "| bpmn_start_event_1 | startEvent | Start | Trigger | - | submit_credit_card_dev_request |");
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200, designDocument(rows, VALID_FLOW_ROWS))));
+
+        assertEquals("AI_DESIGN_STAGE_BINDING_INVALID", ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("bpmn_start_event_1"), ex.getMessage());
+    }
+
+    @Test
+    void parse_designBindingAFormToGateway_isRejected() {
+        String rows = VALID_NODE_ROWS
+                + "| bpmn_gateway_1 | exclusiveGateway | Approved? | Branch | review_form | - |\n";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200, designDocument(rows, VALID_FLOW_ROWS))));
+
+        assertEquals("AI_DESIGN_STAGE_BINDING_INVALID", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_designWithUserTaskSelfLoop_isRejected() {
+        String flows = VALID_FLOW_ROWS
+                + "| flow_data_verification_self_loop | bpmn_user_task_data_verification"
+                + " | bpmn_user_task_data_verification | NOT_VERIFIED |\n";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200, designDocument(VALID_NODE_ROWS, flows))));
+
+        assertEquals("AI_DESIGN_SELF_LOOP", ex.getErrorCode());
+    }
+
+    @Test
+    void parse_designWithDuplicateFlowEndpoints_isRejected() {
+        String flows = VALID_FLOW_ROWS
+                + "| flow_3 | bpmn_user_task_data_verification | bpmn_end_event_1 | APPROVED |\n";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200, designDocument(VALID_NODE_ROWS, flows))));
+
+        assertEquals("AI_DESIGN_DUPLICATE_FLOW", ex.getErrorCode());
+    }
+
+    /** 认不出的类型名不判定——宁可漏判，也不要因为模型换了个写法就拒掉一份合法设计。 */
+    @Test
+    void parse_designWithUnrecognizedNodeType_isNotRejected() {
+        String rows = VALID_NODE_ROWS
+                + "| bpmn_review | Human Task | Review | Approve | review_form | approve |\n";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                designDocument(rows, VALID_FLOW_ROWS)));
+
+        assertEquals("DESIGN", result.get("documentType"));
+    }
+
+    /** 没有矩阵的设计文档（早期草稿、模型省略了小节）照旧放行。 */
+    @Test
+    void parse_designWithoutMatrices_isNotRejected() {
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---DESIGN_DOC_START---\n# Design Document\n## Overview\ntext\n---DESIGN_DOC_END---"));
+
+        assertEquals("DESIGN", result.get("documentType"));
+    }
+
+    @Test
+    void parse_bpmnWithDuplicateSourceAndTarget_isRejected() {
+        String xml = validBpmn().replace("</bpmn:process>",
+                "<bpmn:sequenceFlow id=\"f1_duplicate\" sourceRef=\"s\" targetRef=\"t\"/>"
+                        + "</bpmn:process>")
+                .replace("</bpmndi:BPMNPlane>",
+                        "<bpmndi:BPMNEdge id=\"f1_duplicate_di\" bpmnElement=\"f1_duplicate\">"
+                                + "<di:waypoint x=\"36\" y=\"20\"/><di:waypoint x=\"100\" y=\"20\"/>"
+                                + "</bpmndi:BPMNEdge></bpmndi:BPMNPlane>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_BPMN_DISCONNECTED_NODES", ex.getErrorCode());
+    }
+
+    /**
+     * {@code xsi:type="bpmn:tFormalExpression"} 是条件表达式的标准写法，模型却常常忘了在
+     * definitions 上声明 xmlns:xsi —— 解析器会以 "The prefix xsi ... is not bound" 报废整轮生成
+     * （实测 deepseek-v4-pro，重生成一次也没救回来）。声明缺失补法唯一，必须就地修复而不是让用户重跑。
+     */
+    @Test
+    void parse_bpmnUsingUndeclaredXsiPrefix_isRepairedInsteadOfRejected() {
+        String xml = validBpmn()
+                .replace(" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"", "")
+                .replace("<bpmn:sequenceFlow id=\"f1\" sourceRef=\"s\" targetRef=\"t\"/>",
+                        "<bpmn:sequenceFlow id=\"f1\" sourceRef=\"s\" targetRef=\"t\">"
+                                + "<bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">"
+                                + "${decision == 'yes'}</bpmn:conditionExpression></bpmn:sequenceFlow>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> generated = (Map<String, Object>) result.get("generatedData");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> process = (Map<String, Object>) generated.get("processDefinition");
+        String repaired = (String) process.get("bpmnXml");
+        assertTrue(repaired.contains("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""),
+                "the missing xsi declaration should have been added: " + repaired);
+    }
+
+    /**
+     * 网关条件里的 {@code ${a && b}} 会让整份 BPMN 不是良构 XML。裸 {@code &} 的转义唯一且无损，
+     * 不该让用户为此重跑一次两分钟的生成。
+     */
+    @Test
+    void parse_bpmnWithUnescapedAmpersand_isRepairedInsteadOfRejected() {
+        String xml = validBpmn().replace("<bpmn:endEvent id=\"e\"/>",
+                "<bpmn:endEvent id=\"e\"><bpmn:documentation>R&D and Q&A</bpmn:documentation></bpmn:endEvent>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> generated = (Map<String, Object>) result.get("generatedData");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> process = (Map<String, Object>) generated.get("processDefinition");
+        assertTrue(((String) process.get("bpmnXml")).contains("R&amp;D and Q&amp;A"),
+                "bare ampersands should have been escaped: " + process.get("bpmnXml"));
+    }
+
+    /** 已经合法的实体引用不能被二次转义，否则 {@code &amp;} 会变成 {@code &amp;amp;}。 */
+    @Test
+    void parse_bpmnWithProperEntityReferences_isLeftUntouched() {
+        String xml = validBpmn().replace("<bpmn:endEvent id=\"e\"/>",
+                "<bpmn:endEvent id=\"e\"><bpmn:documentation>a &amp;&amp; b &lt; c &#39;d&#39;</bpmn:documentation>"
+                        + "</bpmn:endEvent>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        Map<String, Object> result = parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> generated = (Map<String, Object>) result.get("generatedData");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> process = (Map<String, Object>) generated.get("processDefinition");
+        assertTrue(((String) process.get("bpmnXml")).contains("a &amp;&amp; b &lt; c &#39;d&#39;"),
+                "existing entity references must not be double-escaped: " + process.get("bpmnXml"));
+    }
+
+    @Test
+    void parse_bpmnWithZeroLengthDiagramEdge_isRejected() {
+        String xml = validBpmn().replace(
+                "<di:waypoint x=\"36\" y=\"18\"/><di:waypoint x=\"100\" y=\"18\"/>",
+                "<di:waypoint x=\"36\" y=\"18\"/><di:waypoint x=\"36\" y=\"18\"/>");
+        String json = "{\"processDefinition\":{\"bpmnXml\":\"" + xml.replace("\"", "\\\"") + "\"}}";
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> parser.parse(gatewayResponse(200,
+                        "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---")));
+
+        assertEquals("AI_BPMN_MISSING_DI", ex.getErrorCode());
+    }
+
+    @Test
     void parse_httpError_surfacesGatewayMessage() {
         Map<String, Object> response = Map.of("status", 401, "body",
                 Map.of("error", Map.of("message", "invalid token")));
@@ -157,5 +496,108 @@ class AiResponseParserTest {
         AiGenerationException ex = assertThrows(AiGenerationException.class, () -> parser.parse(response));
 
         assertEquals("AI_GATEWAY_EMPTY_RESPONSE", ex.getErrorCode());
+    }
+
+    // ==================== 语义守门（AiBpmnSemanticGuard）接入 ====================
+
+    /**
+     * 一份"结构挑不出毛病、语义跑不动"的产物：审批分枝直接挂在 userTask 上没有排他网关，
+     * 条件写成运行时永远不会被写入的 approved/rejected，而且整份数据没有 PROCESS_SUBMIT。
+     * 这三条以前全靠提示词，模型不听就照存。
+     */
+    private static String ungatedApprovalBpmn() {
+        return "<?xml version=\"1.0\"?><bpmn:definitions xmlns:bpmn=\"" + BPMN_NS + "\" "
+                + "xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" "
+                + "xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" "
+                + "xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\">"
+                + "<bpmn:process id=\"p\" isExecutable=\"true\">"
+                + "<bpmn:startEvent id=\"s\"/>"
+                + "<bpmn:userTask id=\"t\" name=\"Review\"><bpmn:extensionElements>"
+                + "<custom:properties xmlns:custom=\"http://custom.bpmn.io/schema\">"
+                + "<custom:property name=\"assigneeType\" value=\"PROCESS_INITIATOR\"/>"
+                + "</custom:properties></bpmn:extensionElements></bpmn:userTask>"
+                + "<bpmn:endEvent id=\"ok\"/><bpmn:endEvent id=\"ko\"/>"
+                + "<bpmn:sequenceFlow id=\"f1\" sourceRef=\"s\" targetRef=\"t\"/>"
+                + "<bpmn:sequenceFlow id=\"f2\" sourceRef=\"t\" targetRef=\"ok\">"
+                + "<bpmn:conditionExpression>${decision == 'approved'}</bpmn:conditionExpression></bpmn:sequenceFlow>"
+                + "<bpmn:sequenceFlow id=\"f3\" sourceRef=\"t\" targetRef=\"ko\">"
+                + "<bpmn:conditionExpression>${decision == 'rejected'}</bpmn:conditionExpression></bpmn:sequenceFlow>"
+                + "</bpmn:process><bpmndi:BPMNDiagram id=\"d\"><bpmndi:BPMNPlane id=\"plane\" bpmnElement=\"p\">"
+                + "<bpmndi:BPMNShape id=\"s_di\" bpmnElement=\"s\"><dc:Bounds x=\"0\" y=\"0\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"t_di\" bpmnElement=\"t\"><dc:Bounds x=\"100\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"ok_di\" bpmnElement=\"ok\"><dc:Bounds x=\"400\" y=\"0\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNShape id=\"ko_di\" bpmnElement=\"ko\"><dc:Bounds x=\"400\" y=\"120\" width=\"36\" height=\"36\"/></bpmndi:BPMNShape>"
+                + "<bpmndi:BPMNEdge id=\"f1_di\" bpmnElement=\"f1\"><di:waypoint x=\"36\" y=\"18\"/><di:waypoint x=\"100\" y=\"18\"/></bpmndi:BPMNEdge>"
+                + "<bpmndi:BPMNEdge id=\"f2_di\" bpmnElement=\"f2\"><di:waypoint x=\"200\" y=\"18\"/><di:waypoint x=\"400\" y=\"18\"/></bpmndi:BPMNEdge>"
+                + "<bpmndi:BPMNEdge id=\"f3_di\" bpmnElement=\"f3\"><di:waypoint x=\"200\" y=\"18\"/><di:waypoint x=\"400\" y=\"138\"/></bpmndi:BPMNEdge>"
+                + "</bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>";
+    }
+
+    private Map<String, Object> parseUngatedApproval() {
+        String json = "{\"formDefinitions\":[{\"formName\":\"review_form\",\"formType\":\"TASK\","
+                + "\"stageBindings\":[{\"stageId\":\"t\",\"stageName\":\"Review\",\"readOnly\":false}]}],"
+                + "\"actionDefinitions\":[{\"actionName\":\"approve\",\"actionType\":\"APPROVE\","
+                + "\"stageIds\":[\"t\"]}],\"processDefinition\":{\"bpmnXml\":\""
+                + ungatedApprovalBpmn().replace("\"", "\\\"") + "\"}}";
+
+        return parser.parse(gatewayResponse(200,
+                "---GENERATED_DATA_START---" + json + "---GENERATED_DATA_END---"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String bpmnOf(Map<String, Object> result) {
+        Map<String, Object> generatedData = (Map<String, Object>) result.get("generatedData");
+        Map<String, Object> process = (Map<String, Object>) generatedData.get("processDefinition");
+        return (String) process.get("bpmnXml");
+    }
+
+    /**
+     * 修复产物必须自己也过得了结构校验：插网关会新增节点和连线，DI 没跟上就会被
+     * AI_BPMN_MISSING_DI / AI_BPMN_DISCONNECTED_NODES 拒掉。这条测试守的就是"修复不能修出新伤"。
+     */
+    @Test
+    void parse_ungatedApprovalBranch_isRepairedAndStillPassesStructuralValidation() {
+        Map<String, Object> result = parseUngatedApproval();
+
+        String bpmn = bpmnOf(result);
+        assertTrue(bpmn.contains("exclusiveGateway"), "an exclusive gateway should have been inserted");
+        assertTrue(bpmn.contains("sourceRef=\"Gateway_t\" targetRef=\"ok\""),
+                "the approve branch should now leave the gateway");
+        assertTrue(bpmn.contains("sourceRef=\"Gateway_t\" targetRef=\"ko\""),
+                "the reject branch should now leave the gateway");
+        assertTrue(bpmn.contains("bpmnElement=\"Gateway_t\""), "the gateway needs a BPMNShape");
+    }
+
+    @Test
+    void parse_wrongDecisionValues_areNormalisedBeforeSaving() {
+        String bpmn = bpmnOf(parseUngatedApproval());
+
+        assertTrue(bpmn.contains("${decision == 'yes'}"));
+        assertTrue(bpmn.contains("${decision == 'no'}"));
+        assertFalse(bpmn.contains("approved"));
+        assertFalse(bpmn.contains("rejected"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void parse_generationWithoutSubmitAction_getsOneBeforeSaving() {
+        Map<String, Object> result = parseUngatedApproval();
+
+        Map<String, Object> generatedData = (Map<String, Object>) result.get("generatedData");
+        List<Map<String, Object>> actions =
+                (List<Map<String, Object>>) generatedData.get("actionDefinitions");
+        assertEquals(2, actions.size());
+        assertEquals("PROCESS_SUBMIT", actions.get(1).get("actionType"));
+        assertEquals(List.of("t"), actions.get(1).get("stageIds"));
+    }
+
+    /** 平台替模型改过的地方要能被调用方看见，不能只活在日志里。 */
+    @Test
+    void parse_semanticRepairs_areReportedToTheCaller() {
+        Map<String, Object> result = parseUngatedApproval();
+
+        List<?> repairs = (List<?>) result.get("semanticRepairs");
+        assertNotNull(repairs);
+        assertTrue(repairs.size() >= 3, "gateway insertion, condition rewrites and the submit action: " + repairs);
     }
 }

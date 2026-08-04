@@ -7,8 +7,8 @@ import com.developer.exception.BusinessLogicException;
 import com.developer.service.MemberService;
 import com.developer.validation.SecurityInputValidator;
 import com.developer.dto.ValidationResult;
-import com.platform.common.dto.UserPrincipal;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.dto.UserPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,13 +16,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.listener.RedisMessageListenerContainer;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -42,18 +42,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 
  * Requirements: 2.2, 2.5
  */
-// 本模块主类声明了自定义 @ComponentScan，它**取代**了 @SpringBootApplication 默认的
-// "只扫本包"行为；@WebMvcTest 会沿用主类那份 scan，于是整个 com.developer.* 被拉进切片
-// （client -> RestTemplateConfig -> MeterRegistry -> JPA entityManagerFactory ...），
-// Web 切片形同虚设，15 个测试全部因上下文起不来而 error。
-//
-// 在这种架构下切片注解本就不成立，故改用完整 @SpringBootTest + MockMvc：慢几秒，但真实可跑。
-// 若将来收敛主类的 @ComponentScan，可以再换回 @WebMvcTest。
+// A @WebMvcTest slice cannot load in this module: the slice still processes plain @Configuration
+// classes, so SecurityConfig's bean graph drags in RestTemplateConfig (needs an actuator-provided
+// MeterRegistry) and @EnableJpaRepositories on DeveloperWorkstationApplication forces repository
+// beans (need an entityManagerFactory) — neither auto-configuration is part of the web slice.
+// Load the full test context instead, exactly as SpringSecurityAnnotationIntegrationTest does,
+// and keep the collaborators mocked so these stay controller-level tests.
 @SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")
 class MemberControllerTest {
-    
+
+    /** 避免 test profile 下 RedisMessageListenerContainer 连接真实 Redis 导致启动超时 */
+    @MockBean
+    private RedisMessageListenerContainer redisMessageListenerContainer;
+
     @Autowired
     private MockMvc mockMvc;
     
@@ -65,15 +68,7 @@ class MemberControllerTest {
     
     @MockBean
     private SecurityInputValidator securityValidator;
-
-    /** 避免 test profile 下 RedisMessageListenerContainer 连接真实 Redis 导致启动超时 */
-    @MockBean
-    private RedisMessageListenerContainer redisMessageListenerContainer;
     
-    // 注意：更新用例的数据刻意避开 "Updated"/"updated@..." —— 它们含子串 "update"，会被
-    // SecurityIntegrationService.containsInjectionPatterns() 的 SQL 关键字黑名单当成注入拦掉
-    // （返回 400）。该黑名单做的是朴素子串匹配，任何含 update/select/delete/create... 的正常
-    // 英文文本都会误报，属于产品侧缺陷；这里只是让本测试不被它绊住，缺陷本身另行处理。
     private MemberRequest validMemberRequest;
     private MemberResponse memberResponse;
     private MemberUpdateRequest updateRequest;
@@ -108,33 +103,40 @@ class MemberControllerTest {
                 .updatedBy("system")
                 .build();
         
-        // Setup update request
+        // Setup update request.
+        // NOTE: no field may contain a SecurityIntegrationService blacklist substring — that check
+        // runs for real here and is a plain `contains` over SQL/command keywords, so an innocuous
+        // "Updated User" is rejected as malicious purely because it contains "update".
         updateRequest = MemberUpdateRequest.builder()
-                .fullName("Revised User")
-                .email("revised@example.com")
+                .fullName("Renamed User")
+                .email("renamed@example.com")
                 .role("ADMIN")
                 .active(true)
                 .build();
         
-        // MemberController 用 SecurityContextUtils.getCurrentUserId() 取当前用户，取不到就抛
-        // RuntimeException（-> 500）。该工具只认 UserPrincipal 主体，仅有 X-User-Id 请求头不够。
-        SecurityContextHolder.clearContext();
-        UserPrincipal principal = UserPrincipal.builder()
-                .userId("testuser").username("testuser").build();
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(principal, null, List.of()));
-
         // Mock security validator to return valid by default
         when(securityValidator.validate(anyString())).thenReturn(ValidationResult.builder().valid(true).build());
         when(securityValidator.sanitize(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
         when(securityValidator.isValid(anyString())).thenReturn(true);
+
+        // MemberController takes the acting user from SecurityContextUtils, which only accepts a
+        // UserPrincipal — the X-User-Id header these tests still send is no longer an identity
+        // source. With addFilters = false nothing populates the context, so seed it here.
+        UserPrincipal principal = UserPrincipal.builder()
+                .userId("testuser")
+                .username("testuser")
+                .roles(List.of("DEVELOPER"))
+                .permissions(List.of())
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, List.of()));
     }
-    
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
     }
-
+    
     @Test
     void createMember_ValidRequest_ReturnsCreated() throws Exception {
         // Given
@@ -249,8 +251,8 @@ class MemberControllerTest {
         MemberResponse updatedResponse = MemberResponse.builder()
                 .id("1")
                 .username("testuser")
-                .fullName("Revised User")
-                .email("revised@example.com")
+                .fullName("Renamed User")
+                .email("renamed@example.com")
                 .role("ADMIN")
                 .active(true)
                 .build();
@@ -265,8 +267,8 @@ class MemberControllerTest {
                 .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.fullName").value("Revised User"))
-                .andExpect(jsonPath("$.data.email").value("revised@example.com"))
+                .andExpect(jsonPath("$.data.fullName").value("Renamed User"))
+                .andExpect(jsonPath("$.data.email").value("renamed@example.com"))
                 .andExpect(jsonPath("$.data.role").value("ADMIN"));
         
         verify(memberService).updateMember(eq(1L), any(MemberUpdateRequest.class), eq("testuser"));
@@ -377,14 +379,12 @@ class MemberControllerTest {
     
     @Test
     void createMember_SecurityValidationFails_ReturnsBadRequest() throws Exception {
-        // Given: 一个真的会被安全校验拦下的输入。
-        //
-        // 这里不能像以前那样 stub securityValidator —— BaseController 只在
-        // securityIntegrationService 为 null 时才回退到它，而在完整 @SpringBootTest 上下文里
-        // 该 bean 是存在的，stub 因此完全不生效（请求会一路成功返回 201）。
-        // 改为送一个真正命中注入模式的值，走的就是生产实际的那条拒绝路径。
+        // Given: input that the real SecurityIntegrationService rejects. BaseController only falls
+        // back to the injected SecurityInputValidator when no SecurityIntegrationService bean
+        // exists, and in a full context it always does — so stubbing the validator here would
+        // assert nothing. Drive the production path instead.
         MemberRequest maliciousRequest = MemberRequest.builder()
-                .username("admin'; DROP TABLE users; --")
+                .username("test'; DROP TABLE members;--")
                 .fullName("Test User")
                 .email("test@example.com")
                 .employeeId("EMP001")
@@ -396,14 +396,11 @@ class MemberControllerTest {
         // When & Then
         mockMvc.perform(post("/members")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header("X-User-Id", "testuser")
                 .content(objectMapper.writeValueAsString(maliciousRequest)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                // SEC_VALIDATION_FAILED 是 securityIntegrationService 这条路径的错误码；
-                // 旧的 VAL_SECURITY_VIOLATION 来自被 stub 的 securityValidator 回退分支。
                 .andExpect(jsonPath("$.error.code").value("SEC_VALIDATION_FAILED"));
-        
+
         verify(memberService, never()).createMember(any(), any());
     }
 }

@@ -6,6 +6,9 @@ import com.developer.enums.*;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.IconRepository;
 import com.developer.service.AiWriteService;
+import com.developer.util.AiBpmnActionBindingWriter;
+import com.developer.util.AiBpmnFormBindingWriter;
+import com.developer.util.AiBpmnSemanticGuard;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +49,10 @@ public class AiWriteServiceImpl implements AiWriteService {
                 .orElseThrow(() -> new com.developer.exception.AiGenerationException(
                         "AI_WRITE_NOT_FOUND", "Function unit not found: " + functionUnitId));
 
+        // 最后一道语义关。生成阶段 AiResponseParser 已经跑过一遍，但 apply 的 body 由客户端回传，
+        // 不再经过 parser——这里是 BPMN 落库前唯一必经的位置。规则幂等，跑第二遍是空操作。
+        enforceProcessSemantics(generatedData);
+
         // Determine mode: if FunctionUnit has existing component data, it's MODIFY mode
         boolean isModifyMode = hasExistingData(functionUnit);
 
@@ -68,6 +75,8 @@ public class AiWriteServiceImpl implements AiWriteService {
         writeFormDefinitions(functionUnit, generatedData, tableMap);
         writeActionDefinitions(functionUnit, generatedData);
         writeDecisionDefinitions(functionUnit, generatedData);
+        // Form IDs are database-generated and are required by BPMN custom formId properties.
+        entityManager.flush();
         writeProcessDefinition(functionUnit, generatedData);
 
         // Handle icon matching/creation before saving
@@ -95,35 +104,97 @@ public class AiWriteServiceImpl implements AiWriteService {
                 || (functionUnit.getTableRelations() != null && !functionUnit.getTableRelations().isEmpty());
     }
 
+    /**
+     * Delete the referencing side (forms/actions/decisions/process) before the referenced side (table graph).
+     *
+     * <p>{@code dw_form_table_bindings.table_id} is the one foreign key onto {@code dw_table_definitions}
+     * with no {@code ON DELETE} clause — every sibling constraint is CASCADE or SET NULL. Deleting the
+     * tables while a previous generation's binding rows still point at them fails the statement with
+     * SQLSTATE 23503 on {@code fk_binding_table}, which is what made a second Apply blow up.</p>
+     */
     private void clearExistingData(FunctionUnit functionUnit) {
-        // tableRelations must be cleared before tableDefinitions (dependency order)
-        functionUnit.getTableRelations().clear();
-        functionUnit.getTableDefinitions().clear();
         functionUnit.getFormDefinitions().clear();
         functionUnit.getActionDefinitions().clear();
         functionUnit.getDecisionDefinitions().clear();
         if (functionUnit.getProcessDefinition() != null) {
             functionUnit.setProcessDefinition(null);
         }
+        // Not strictly required — clearTableGraph's first flush would carry these deletes out too, because
+        // that flush does not touch dw_table_definitions. Kept explicit so the ordering does not rest on
+        // "entity deletes inside one flush run in registration order", same rationale as clearTableGraph.
+        entityManager.flush();
+
+        clearTableGraph(functionUnit);
     }
 
     private void clearScopedData(FunctionUnit functionUnit, String scope) {
         switch (scope.toUpperCase()) {
-            case "TABLES" -> {
-                // tableRelations depend on tableDefinitions, must clear both
-                functionUnit.getTableRelations().clear();
-                functionUnit.getTableDefinitions().clear();
-            }
+            case "TABLES" -> clearTableGraph(functionUnit);
             case "FORMS" -> functionUnit.getFormDefinitions().clear();
             case "ACTIONS" -> functionUnit.getActionDefinitions().clear();
             case "DECISIONS" -> functionUnit.getDecisionDefinitions().clear();
             case "PROCESS" -> functionUnit.setProcessDefinition(null);
-            case "TABLE_RELATIONS" -> functionUnit.getTableRelations().clear();
+            case "TABLE_RELATIONS" -> {
+                functionUnit.getTableRelations().clear();
+                entityManager.flush();
+            }
             default -> {
                 log.warn("Unknown regenerate scope '{}', falling back to full clear", scope);
                 clearExistingData(functionUnit);
             }
         }
+    }
+
+    /**
+     * Delete the table graph bottom-up, flushing between levels.
+     *
+     * <p>Both {@code dw_foreign_keys} and {@code dw_table_relations} carry database-level
+     * {@code ON DELETE CASCADE} onto {@code dw_table_definitions} / {@code dw_field_definitions}.
+     * Clearing the table collection first therefore lets PostgreSQL delete those dependent rows
+     * underneath Hibernate: the DELETE Hibernate still has queued for its own managed copies then
+     * affects 0 rows and surfaces as an OptimisticLockException on TableRelation. The same ordering
+     * also left Hibernate resolving the foreign-key associations by writing NULL into the NOT NULL
+     * {@code field_id} / {@code table_id} / {@code ref_table_id} / {@code ref_field_id} columns.</p>
+     *
+     * <p>So: form references, then foreign keys, then relations, then the tables (fields cascade with
+     * them). The flush after each level is load-bearing — it forces that level to reach the database
+     * before the next level is scheduled, which is what keeps Hibernate and the database cascade from
+     * racing.</p>
+     */
+    private void clearTableGraph(FunctionUnit functionUnit) {
+        detachFormReferencesToTables(functionUnit);
+
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            table.getForeignKeys().clear();
+        }
+        entityManager.flush();
+
+        functionUnit.getTableRelations().clear();
+        entityManager.flush();
+
+        functionUnit.getTableDefinitions().clear();
+        entityManager.flush();
+    }
+
+    /**
+     * Drop every form reference into the table graph before the tables themselves go.
+     *
+     * <p>Matters for {@code regenerateScope=TABLES}, where the forms deliberately survive the clear:
+     * their {@code dw_form_table_bindings} rows would still point at the tables being deleted and
+     * {@code fk_binding_table} has no {@code ON DELETE} clause to absorb it. On the full clear the
+     * forms are already gone by the time this runs, so the loop is a no-op.</p>
+     */
+    private void detachFormReferencesToTables(FunctionUnit functionUnit) {
+        if (functionUnit.getFormDefinitions().isEmpty()) {
+            return;
+        }
+        for (FormDefinition form : functionUnit.getFormDefinitions()) {
+            form.getTableBindings().clear();
+            form.setBoundTable(null);
+        }
+        entityManager.flush();
+        log.warn("Detached table bindings from {} surviving form(s) — the regenerated tables replace the ones "
+                + "they were bound to, so those forms need rebinding", functionUnit.getFormDefinitions().size());
     }
 
     private void handleIcon(FunctionUnit functionUnit, AiGeneratedData generatedData) {
@@ -216,7 +287,8 @@ public class AiWriteServiceImpl implements AiWriteService {
                                     fieldData.get("isPrimaryKey") != null ? fieldData.get("isPrimaryKey") : fieldData.get("primaryKey"),
                                     false))
                             .isUnique(toBoolean(fieldData.get("isUnique"), false))
-                            .displayName((String) fieldData.get("displayName"))
+                            .displayName((String) (fieldData.get("description") != null
+                                    ? fieldData.get("description") : fieldData.get("displayName")))
                             .sortOrder(toInt(fieldData.get("sortOrder")))
                             .build();
                     table.getFieldDefinitions().add(field);
@@ -432,6 +504,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                             .form(form)
                             .stageId((String) sbData.get("stageId"))
                             .stageName((String) sbData.get("stageName"))
+                            .readOnly(toBoolean(sbData.get("readOnly"), false))
                             .build();
                     form.getStageBindings().add(stageBinding);
                 }
@@ -664,6 +737,46 @@ public class AiWriteServiceImpl implements AiWriteService {
         }
     }
 
+    /**
+     * 把审批分枝/审批条件/提交动作/阶段绑定这四条平台语义规则应用到待落库的数据上。
+     *
+     * <p>{@link AiBpmnSemanticGuard} 用 Map 视图读写 {@code actionDefinitions}，这里做一次
+     * DTO↔Map 的转接，并把修好的 BPMN 写回 {@code processDefinition}。修不动的违规由守门抛出，
+     * 走 {@code AI_*} 错误码，不会被当成通用 400。</p>
+     */
+    private void enforceProcessSemantics(AiGeneratedData generatedData) {
+        Map<String, Object> processDefinition = generatedData.getProcessDefinition();
+        if (processDefinition == null || !(processDefinition.get("bpmnXml") instanceof String bpmnXml)
+                || bpmnXml.isBlank()) {
+            return;
+        }
+
+        Map<String, Object> view = new LinkedHashMap<>();
+        if (generatedData.getActionDefinitions() != null) {
+            view.put("actionDefinitions", generatedData.getActionDefinitions());
+        }
+
+        AiBpmnSemanticGuard.Result guarded = AiBpmnSemanticGuard.enforce(view, bpmnXml);
+        if (guarded.repairs().isEmpty()) {
+            return;
+        }
+        for (String repair : guarded.repairs()) {
+            log.warn("AI output violated a platform process rule and was repaired before saving: {}", repair);
+        }
+
+        // 回填走 setter + 可变副本，不就地改调用方的 map:apply 的 body 由 Jackson 反序列化而来时是可变的,
+        // 但没有契约保证(测试就用 Map.of 构造),就地 put 会撞 UnsupportedOperationException。
+        Map<String, Object> repairedProcess = new LinkedHashMap<>(processDefinition);
+        repairedProcess.put("bpmnXml", guarded.bpmnXml());
+        generatedData.setProcessDefinition(repairedProcess);
+
+        if (view.get("actionDefinitions") instanceof List<?> repairedActions) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> typed = (List<Map<String, Object>>) repairedActions;
+            generatedData.setActionDefinitions(typed);
+        }
+    }
+
     private void writeProcessDefinition(FunctionUnit functionUnit, AiGeneratedData generatedData) {
         Map<String, Object> procData = generatedData.getProcessDefinition();
         if (procData == null) return;
@@ -671,6 +784,9 @@ public class AiWriteServiceImpl implements AiWriteService {
         String bpmnXml = (String) procData.get("bpmnXml");
         if (bpmnXml == null || bpmnXml.isBlank()) return;
         bpmnXml = ensureRenderableBpmnDiagram(bpmnXml);
+        bpmnXml = AiBpmnFormBindingWriter.bindStageForms(bpmnXml, functionUnit.getFormDefinitions());
+        bpmnXml = AiBpmnActionBindingWriter.bindStageActions(bpmnXml,
+                functionUnit.getActionDefinitions(), generatedData.getActionDefinitions());
 
         ProcessDefinition processDefinition = ProcessDefinition.builder()
                 .functionUnit(functionUnit)

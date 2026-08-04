@@ -42,6 +42,17 @@
           {{ t('process.autoSaving') }}
         </span>
         <span
+          v-else-if="autoSaveBlocked"
+          class="auto-save-blocked"
+        >
+          <el-icon><WarningFilled /></el-icon>
+          {{
+            diagramIsFallback
+              ? t('process.fallbackDiagramAutoSaveBlockedShort')
+              : t('process.emptyDiagramAutoSaveBlockedShort')
+          }}
+        </span>
+        <span
           v-else-if="lastAutoSaveTime"
           class="auto-saved"
         >
@@ -86,9 +97,12 @@
     </div>
     
     <div class="designer-content">
+      <!-- tabindex: the canvas must be focusable so diagram-js keyboard shortcuts
+           (copy/paste/undo/delete) reach it — they are bound here, not on document. -->
       <div
         ref="canvasRef"
         class="bpmn-canvas"
+        tabindex="0"
       />
       <div class="properties-panel-container">
         <NodePropertiesPanel 
@@ -130,7 +144,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProcessImportDialog from './process-designer/ProcessImportDialog.vue'
-import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, Loading, CircleCheck } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, Loading, CircleCheck, WarningFilled } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
 import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
@@ -157,6 +171,7 @@ const importXml = ref('')
 const {
   modelerReady,
   bpmnModelerRef,
+  diagramIsFallback,
   getModeler,
   initModeler,
   destroyModeler,
@@ -184,6 +199,7 @@ const {
   saving,
   autoSaving,
   lastAutoSaveTime,
+  autoSaveBlocked,
   exportCurrentBpmnXml,
   handleValidate,
   handleExportSVG,
@@ -199,6 +215,7 @@ const {
   store,
   showImportDialog,
   importXml,
+  diagramIsFallback,
   t,
 })
 
@@ -255,6 +272,13 @@ onUnmounted(() => {
     gap: 6px;
     color: #67c23a;
   }
+
+  .auto-save-blocked {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #e6a23c;
+  }
 }
 
 .designer-content {
@@ -270,7 +294,17 @@ onUnmounted(() => {
   min-width: 0;
   position: relative;
   background: #fafafa;
-  
+
+  // Focusable for keyboard shortcuts, but no ring on plain mouse clicks.
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: -2px;
+  }
+
   :deep(.djs-container) {
     width: 100% !important;
     height: 100% !important;

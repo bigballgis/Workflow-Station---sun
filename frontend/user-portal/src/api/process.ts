@@ -61,6 +61,9 @@ export interface FunctionUnitContent {
     name: string
     data: string
     type: string
+    /** DW form type when assembled from admin-center (PROCESS / TASK / ACTION). */
+    formType?: string
+    sourceId?: string
   }>
   processes: Array<{
     id: string

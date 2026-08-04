@@ -25,6 +25,15 @@
             </span>
           </span>
           <div class="ai-panel__header-actions">
+            <!-- 提示词管理：运行时改 requirements / design / generation 三段提示词，免重新部署 -->
+            <el-tooltip :content="t('ai.prompts.entry')">
+              <el-button
+                :icon="Tools"
+                circle
+                size="small"
+                @click="promptDialogVisible = true"
+              />
+            </el-tooltip>
             <!-- Task 17.4: Session history dropdown -->
             <el-dropdown
               v-if="ready"
@@ -130,10 +139,12 @@
               :session-id="currentSessionId"
               :phase="sessionComposable.currentPhase.value"
               :mode="currentMode"
-              :completed-phases="completedPhases"
+              :completed-phases="railCompletedPhases"
               :initial-messages="initialMessages"
+              :initial-documents="initialDocuments"
               @phase-complete="handlePhaseComplete"
               @apply="handleApply"
+              @applied="handleApplied"
               @regenerate="handleRegenerate"
               @send-message="handleSendMessage"
               @document="handleDocumentReceived"
@@ -168,6 +179,8 @@
           class="ai-panel__resize-handle"
           @mousedown="onResizeMouseDown"
         />
+
+        <AiPromptTemplateDialog v-model:visible="promptDialogVisible" />
       </div>
     </Transition>
   </Teleport>
@@ -177,11 +190,12 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Lock, Loading, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue'
+import { Close, Lock, Loading, FullScreen, ScaleToOriginal, Tools } from '@element-plus/icons-vue'
 import { Clock } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import ChatDialog from './ChatDialog.vue'
 import DocumentPanel from './DocumentPanel.vue'
+import AiPromptTemplateDialog from './AiPromptTemplateDialog.vue'
 import { useAiLock } from '@/composables/useAiLock'
 import { useAiSession } from '@/composables/useAiSession'
 import { useAiEvents } from '@/composables/useAiEvents'
@@ -193,7 +207,7 @@ import type {
   AiMessage,
   AiGeneratedData,
   AiValidationError,
-  AiDocumentType
+  InlineDocument
 } from '@/types/aiGeneration'
 
 const { t } = useI18n()
@@ -214,8 +228,19 @@ const documentPanelRef = ref<InstanceType<typeof DocumentPanel> | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const ready = ref(false)
 const currentMode = ref<AiMode>('NEW')
+const promptDialogVisible = ref(false)
 const completedPhases = ref<AiPhase[]>([])
+/**
+ * 生成结果已写入 function unit。
+ *
+ * GENERATION 是最后一相，computeCompletedPhases 那套"当前相位之前的都算完成"永远点不亮它——
+ * Apply 完成后进度条卡在 03 未完成态。用户点了 Apply 却看不到打勾，只能靠按钮变绿去猜。
+ */
+const generationApplied = ref(false)
 const initialMessages = ref<AiMessage[]>([])
+// 重开面板时回填聊天区的文档卡片：产出文档的那几轮后端不写 ASSISTANT 消息，
+// 只靠 initialMessages 恢复的话，AI 侧会整段空白（见 useAiSession.loadInlineDocuments）。
+const initialDocuments = ref<InlineDocument[]>([])
 
 // Docked/detached layout: panel style, drag + resize interactions
 // （停靠模式已改为全屏接管，不再需要跟踪侧栏宽度做 left 偏移）
@@ -239,6 +264,13 @@ const eventsComposable = useAiEvents(functionUnitIdRef)
 // Computed
 const currentSessionId = computed(() =>
   sessionComposable.currentSession.value?.sessionId || ''
+)
+
+// 顶部进度条读的完成集合：相位推进算出来的那部分 + Apply 之后补上的 GENERATION
+const railCompletedPhases = computed<AiPhase[]>(() =>
+  generationApplied.value && !completedPhases.value.includes('GENERATION')
+    ? [...completedPhases.value, 'GENERATION']
+    : completedPhases.value
 )
 
 // 头部状态灯：AI 流式回复中亮红并脉动（读 ChatDialog 实例暴露的 isStreaming，
@@ -276,17 +308,13 @@ async function openPanel() {
       const msgs = await sessionComposable.restoreSession(activeSession)
       currentMode.value = activeSession.mode
       initialMessages.value = [...msgs]
+      initialDocuments.value = await sessionComposable.loadInlineDocuments(props.functionUnitId)
 
-      // 根据已有文档推断实际阶段（防止后端阶段未更新的情况）
-      const actualPhase = await detectPhaseFromDocuments(props.functionUnitId, activeSession.currentPhase)
-      if (actualPhase !== activeSession.currentPhase) {
-        sessionComposable.setPhase(actualPhase)
-        // 同步更新后端
-        if (activeSession.sessionId) {
-          aiGenerationApi.updateSessionPhase(activeSession.sessionId, actualPhase)
-            .catch(err => console.error('Failed to sync phase:', err))
-        }
-      }
+      // 会话相位就是权威值，不再按"有没有设计文档"去猜。
+      //
+      // 原来的 detectPhaseFromDocuments 修的是"后端阶段未同步"——那是后端自动推进相位时代的产物，
+      // 现在相位只由用户点"进入下一阶段"推进，不存在滞后。留着反而有害：文档按 functionUnitId 存，
+      // 上一条会话留下的 DESIGN 文档会让新会话一开面板就被顶到 DESIGN，等于在重开时把闸门撤掉。
       computeCompletedPhases(sessionComposable.currentPhase.value)
       ready.value = true
       return
@@ -325,6 +353,7 @@ async function showCompletedSessionDialog(completedSession: any) {
       const msgs = await sessionComposable.restoreSession(completedSession)
       currentMode.value = completedSession.mode
       initialMessages.value = [...msgs]
+      initialDocuments.value = await sessionComposable.loadInlineDocuments(props.functionUnitId)
       computeCompletedPhases(completedSession.currentPhase)
       ready.value = true
     } else {
@@ -337,7 +366,9 @@ function startNewSession() {
   sessionComposable.createSession(props.functionUnitId, 'NEW')
   currentMode.value = 'NEW'
   completedPhases.value = []
+  generationApplied.value = false
   initialMessages.value = []
+  initialDocuments.value = []
   ready.value = true
 }
 
@@ -345,26 +376,6 @@ function computeCompletedPhases(currentPhase: AiPhase) {
   const phases: AiPhase[] = ['REQUIREMENTS', 'DESIGN', 'GENERATION']
   const idx = phases.indexOf(currentPhase)
   completedPhases.value = phases.slice(0, idx)
-}
-
-/**
- * 根据已有文档推断实际阶段。
- * 如果 DESIGN 文档已存在但会话阶段仍为 REQUIREMENTS，说明后端阶段未同步，需要修正。
- */
-async function detectPhaseFromDocuments(functionUnitId: number, dbPhase: AiPhase): Promise<AiPhase> {
-  try {
-    // 检查是否有 DESIGN 文档
-    const designRes = await aiGenerationApi.getDocumentVersions(functionUnitId, 'DESIGN' as AiDocumentType)
-    const hasDesign = designRes.data && designRes.data.length > 0
-
-    if (hasDesign && dbPhase === 'REQUIREMENTS') {
-      return 'DESIGN'
-    }
-    // 可以扩展：如果有 GENERATION 数据但阶段是 DESIGN，也可以修正
-  } catch {
-    // 查询失败不影响正常流程
-  }
-  return dbPhase
 }
 
 /**
@@ -380,9 +391,13 @@ async function handleSessionSwitch(sessionId: string) {
     const msgs = await sessionComposable.restoreSession(session)
     currentMode.value = session.mode
     initialMessages.value = [...msgs]
+    initialDocuments.value = await sessionComposable.loadInlineDocuments(props.functionUnitId)
     computeCompletedPhases(session.currentPhase)
+    // 切到另一条会话：GENERATION 的完成标记属于上一条，不能跟着带过来
+    generationApplied.value = false
     // Force ChatDialog to re-render with new messages
     chatDialogRef.value?.setMessages?.([...msgs])
+    chatDialogRef.value?.setInlineDocuments?.([...initialDocuments.value])
   } catch (err: any) {
     ElMessage.error(err.message || t('ai.panel.initFailed'))
   }
@@ -411,6 +426,7 @@ async function closePanel() {
   lockComposable.reset()
   initialMessages.value = []
   completedPhases.value = []
+  generationApplied.value = false
 
   emit('update:visible', false)
 }
@@ -430,10 +446,12 @@ function registerEventHandlers() {
   })
 
   eventsComposable.onWriteSuccess((data: any) => {
-    emit('dataApplied')
-    // The actor already got a toast from handleApply's HTTP success — don't double-toast;
-    // this event mainly informs OTHER viewers of the same function unit.
+    // The actor already refreshed and got a toast from handleApply's HTTP success — this event
+    // mainly informs OTHER viewers of the same function unit. Emitting dataApplied again would
+    // make the designer reload twice in a row (the process canvas is torn down and re-imported
+    // on each one), so both the refresh and the toast go through the same self-apply dedupe.
     if (Date.now() - lastSelfApplyAt > SELF_APPLY_TOAST_DEDUPE_MS) {
+      emit('dataApplied')
       ElMessage.success(t('ai.panel.dataApplied'))
     }
     // Pass warnings from write_success to ChatDialog if present
@@ -443,8 +461,24 @@ function registerEventHandlers() {
   })
 
   eventsComposable.onWriteError((data: any) => {
-    ElMessage.error(data?.message || t('ai.panel.dataApplyFailed'))
+    ElMessage.error(resolveWriteErrorMessage(data))
   })
+}
+
+/**
+ * write_error carries errorCode (translated here) plus message (the actual cause, for failures that
+ * have no canned text). This used to read data.message while the backend sent data.error, so every
+ * failed Apply collapsed into the same generic toast with the real cause left in the backend log.
+ */
+function resolveWriteErrorMessage(data?: { errorCode?: string; message?: string } | null): string {
+  const code = data?.errorCode
+  if (code) {
+    const key = `ai.error.${code}`
+    const translated = t(key, { detail: data?.message || '' })
+    // vue-i18n returns the key itself when it is not found
+    if (translated !== key) return translated
+  }
+  return data?.message || t('ai.panel.dataApplyFailed')
 }
 
 async function showForceUnlockDialog(data: any) {
@@ -477,21 +511,37 @@ async function handleRequestForceUnlock() {
   }
 }
 
-function handlePhaseComplete(_phase: AiPhase) {
-  // 后端已自动推进阶段，这里只更新前端状态
+/**
+ * 推进相位并跑下一相位的生成。
+ *
+ * 只由用户点 ChatDialog 上的"进入下一阶段"触发——后端不再在模型回 phaseComplete 时自动推进
+ * （见 AiGenerationComponentImpl 里那段注释），所以相位落库也挪到了这里：会话状态因此始终等于
+ * 用户看到的状态，不点就不前进，重开面板也不会落在一个还没有产物的相位上。
+ */
+async function handlePhaseComplete(_phase: AiPhase) {
   const advanced = sessionComposable.advancePhase()
-  if (advanced) {
-    computeCompletedPhases(sessionComposable.currentPhase.value)
-    // Auto-trigger AI generation for the new phase
-    const newPhase = sessionComposable.currentPhase.value
-    if (newPhase === 'DESIGN' || newPhase === 'GENERATION') {
-      // 使用 guard 防止重复触发（如果已经在 streaming 则跳过）
-      // isStreaming 必须读 ChatDialog 实例暴露的状态（defineExpose 自动解包 ref）
-      if (!chatDialogRef.value?.isStreaming) {
-        nextTick(() => {
-          autoTriggerPhase(newPhase)
-        })
-      }
+  if (!advanced) return
+
+  computeCompletedPhases(sessionComposable.currentPhase.value)
+  const newPhase = sessionComposable.currentPhase.value
+
+  // 落库失败不挡住生成——用户要的是产物，不是这次记账；但也不能吞掉，否则重开面板会莫名退回。
+  if (currentSessionId.value) {
+    try {
+      await aiGenerationApi.updateSessionPhase(currentSessionId.value, newPhase)
+    } catch (err: any) {
+      console.error('Failed to persist the advanced session phase:', err)
+      ElMessage.warning(t('ai.panel.phasePersistFailed'))
+    }
+  }
+
+  if (newPhase === 'DESIGN' || newPhase === 'GENERATION') {
+    // 使用 guard 防止重复触发（如果已经在 streaming 则跳过）
+    // isStreaming 必须读 ChatDialog 实例暴露的状态（defineExpose 自动解包 ref）
+    if (!chatDialogRef.value?.isStreaming) {
+      nextTick(() => {
+        autoTriggerPhase(newPhase)
+      })
     }
   }
 }
@@ -539,6 +589,11 @@ async function handleApply(data: AiGeneratedData) {
     // immediate feedback here instead of relying on the write_success SSE event.
     lastSelfApplyAt = Date.now()
     chatDialogRef.value?.markApplySuccess()
+    // Refresh the designer behind the panel from the same synchronous success. This used to
+    // hang off the write_success SSE event alone, so whenever that event was missed (stream
+    // reconnecting, panel detached) the user was left looking at pre-apply tables and forms.
+    // refreshAll is idempotent, so the SSE path arriving too is harmless.
+    emit('dataApplied')
     ElMessage.success(t('ai.panel.dataApplied'))
   } catch (err: any) {
     chatDialogRef.value?.markApplyFailed()
@@ -553,6 +608,11 @@ async function handleApply(data: AiGeneratedData) {
       ElMessage.error(msg)
     }
   }
+}
+
+/** 生成结果已写入（本轮 Apply 成功，或重开面板时从 applied 草稿还原）——点亮 GENERATION。 */
+function handleApplied() {
+  generationApplied.value = true
 }
 
 function handleRegenerate() { /* ChatDialog handles internally */ }

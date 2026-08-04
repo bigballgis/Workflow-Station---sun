@@ -1,8 +1,13 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { functionUnitApi } from '@/api/functionUnit'
 import { findLastTaskAssigneeTopologyViolations } from '@/utils/bpmnAssigneeTopology'
+import { isEmptyBpmnDiagram } from '@/utils/bpmnDiagramContent'
+import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+
+/** 后端拒绝「空图覆盖非空流程」时的错误码（ProcessDesignComponentImpl#save）。 */
+const EMPTY_PROCESS_OVERWRITE_BLOCKED = 'EMPTY_PROCESS_OVERWRITE_BLOCKED'
 
 interface UseProcessActionsOptions {
   functionUnitId: number
@@ -10,10 +15,20 @@ interface UseProcessActionsOptions {
   getModeler: () => any
   store: {
     process: { bpmnXml?: string } | null
-    saveProcess: (functionUnitId: number, payload: { bpmnXml: string }) => Promise<unknown>
+    fetchProcess?: (functionUnitId: number) => Promise<unknown>
+    saveProcess: (
+      functionUnitId: number,
+      payload: { bpmnXml: string },
+      options?: { allowEmpty?: boolean }
+    ) => Promise<unknown>
   }
   showImportDialog: Ref<boolean>
   importXml: Ref<string>
+  /**
+   * 画布内容是 import 失败后的兜底默认图，而非该 FU 真正的流程
+   * （见 useProcessModeler 的 no-diagram fallback）。置位时保存必须先过确认。
+   */
+  diagramIsFallback?: Ref<boolean>
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -23,13 +38,19 @@ interface UseProcessActionsOptions {
  * debug panel. Owns the saving/auto-save UI state.
  */
 export function useProcessActions(options: UseProcessActionsOptions) {
-  const { functionUnitId, getModeler, store, showImportDialog, importXml, t } = options
+  const { functionUnitId, getModeler, store, showImportDialog, importXml, diagramIsFallback, t } =
+    options
 
   const saving = ref(false)
   const autoSaving = ref(false)
   const lastAutoSaveTime = ref<Date | null>(null)
+  /** 画布已被清空、自动保存被空图护栏挡下（工具栏据此提示需手动保存确认）。 */
+  const autoSaveBlocked = ref(false)
 
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+  /** 每轮阻断只弹一次 toast：commandStack.changed 每 2s 就会再次触发保存。 */
+  let emptyDiagramWarned = false
+  let fallbackDiagramWarned = false
 
   function formatLastTaskTopologyViolations(): string {
     const bpmnModeler = getModeler()
@@ -40,6 +61,10 @@ export function useProcessActions(options: UseProcessActionsOptions) {
       .join('; ')
   }
 
+  /**
+   * 调试面板用：要的是**画布当前状态**（用户就是在调试没落库的改动），
+   * 与 {@link handleExportXML} 的「导出已持久化 XML」是两码事，勿合并。
+   */
   async function exportCurrentBpmnXml(): Promise<string> {
     const bpmnModeler = getModeler()
     if (!bpmnModeler) return store.process?.bpmnXml || ''
@@ -89,10 +114,26 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     }
   }
 
+  /**
+   * 导出库里持久化的 BPMN，而不是 `bpmnModeler.saveXML()` 重新序列化的画布。
+   *
+   * bpmn-js 的 saveXML 等价于 `moddle.toXML(definitions)`，只会写回 moddle 认识的
+   * 类型：任何未在 customModdle 声明的扩展元素（旧 flowable 元素写法、其它引擎的
+   * listener 等）都会被静默丢弃。导出用于迁移/存档，必须逐字节保真，所以先从后端
+   * 取最新持久化版本；仅在该 FU 还没落过库时才退回画布序列化。
+   */
   async function handleExportXML() {
-    const bpmnModeler = getModeler()
-    if (!bpmnModeler) return
     try {
+      await store.fetchProcess?.(functionUnitId)
+      const persisted = store.process?.bpmnXml
+      if (persisted && persisted.trim()) {
+        downloadFile(persisted, 'process.bpmn', 'application/xml')
+        ElMessage.success(t('process.xmlExportSavedVersion'))
+        return
+      }
+
+      const bpmnModeler = getModeler()
+      if (!bpmnModeler) return
       const { xml } = await bpmnModeler.saveXML({ format: true })
       downloadFile(xml, 'process.bpmn', 'application/xml')
       ElMessage.success(t('process.xmlExportSuccess'))
@@ -124,6 +165,14 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     }
   }
 
+  /**
+   * 当前导出的图是空的，而已保存的版本非空 —— 即「这次保存会把流程整体抹掉」。
+   * 已存版本本身就是空的时不算（用户在空图上继续画的正常场景）。
+   */
+  function clearsExistingDiagram(xml: string): boolean {
+    return isEmptyBpmnDiagram(xml) && !isEmptyBpmnDiagram(store.process?.bpmnXml)
+  }
+
   async function handleSave(isAutoSave = false) {
     const bpmnModeler = getModeler()
     if (!bpmnModeler) return
@@ -135,6 +184,70 @@ export function useProcessActions(options: UseProcessActionsOptions) {
       return
     }
 
+    // 兜底图护栏：import 失败后画布是默认的 Start→End，不是这个 FU 的流程。
+    // 它有节点有 shape，空图护栏放行，自动保存会把真流程整条覆盖掉，所以单独挡一道。
+    if (diagramIsFallback?.value) {
+      if (isAutoSave) {
+        autoSaveBlocked.value = true
+        if (!fallbackDiagramWarned) {
+          fallbackDiagramWarned = true
+          ElMessage.warning(t('process.fallbackDiagramAutoSaveBlocked'))
+        }
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          t('process.fallbackDiagramSaveConfirm'),
+          t('process.fallbackDiagramSaveConfirmTitle'),
+          {
+            type: 'warning',
+            confirmButtonText: t('common.confirm'),
+            cancelButtonText: t('common.cancel')
+          }
+        )
+      } catch {
+        return // 用户取消：保持已存版本
+      }
+    }
+
+    let xml: string
+    try {
+      xml = (await bpmnModeler.saveXML({ format: true })).xml
+    } catch (e) {
+      // bpmn-js 导出失败：没有 XML 就无从判断空图，直接放弃本次保存。
+      if (!isAutoSave) {
+        ElMessage.error((e as Error)?.message || t('process.saveFailed'))
+      }
+      return
+    }
+
+    // 空图护栏：清空画布只能由用户显式确认后落库，自动保存一律拒绝。
+    // 2026-07-31 FU 50030 即由误触快捷键触发的自动保存把整条流程覆盖成空 process。
+    const wipesDiagram = clearsExistingDiagram(xml)
+    if (wipesDiagram) {
+      if (isAutoSave) {
+        autoSaveBlocked.value = true
+        if (!emptyDiagramWarned) {
+          emptyDiagramWarned = true
+          ElMessage.warning(t('process.emptyDiagramAutoSaveBlocked'))
+        }
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          t('process.emptyDiagramSaveConfirm'),
+          t('process.emptyDiagramSaveConfirmTitle'),
+          {
+            type: 'warning',
+            confirmButtonText: t('common.confirm'),
+            cancelButtonText: t('common.cancel')
+          }
+        )
+      } catch {
+        return // 用户取消（含关闭弹窗）：保持已存版本
+      }
+    }
+
     if (isAutoSave) {
       autoSaving.value = true
     } else {
@@ -142,20 +255,28 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     }
 
     try {
-      const { xml } = await bpmnModeler.saveXML({ format: true })
-      await store.saveProcess(functionUnitId, { bpmnXml: xml })
+      // allowEmpty 只在用户确认后传，后端据此放行同一条护栏。
+      await store.saveProcess(functionUnitId, { bpmnXml: xml }, { allowEmpty: wipesDiagram })
 
+      autoSaveBlocked.value = false
+      emptyDiagramWarned = false
+      // 用户已确认用兜底图覆盖：库里现在就是画布内容，护栏归位。
+      fallbackDiagramWarned = false
+      if (diagramIsFallback) {
+        diagramIsFallback.value = false
+      }
       if (isAutoSave) {
         lastAutoSaveTime.value = new Date()
       } else {
         ElMessage.success(t('process.saveSuccess'))
       }
-    } catch (e: any) {
+    } catch (e) {
+      const code = (e as { response?: { data?: { error?: { code?: string } } } })?.response?.data
+        ?.error?.code
       const msg =
-        e?.message ||
-        e?.response?.data?.error?.message ||
-        e?.response?.data?.message ||
-        t('process.saveFailed')
+        code === EMPTY_PROCESS_OVERWRITE_BLOCKED
+          ? t('process.emptyDiagramSaveRejected')
+          : resolveUserFacingHttpMessage(e, t)
       if (!isAutoSave) {
         ElMessage.error(msg)
       }
@@ -205,6 +326,7 @@ export function useProcessActions(options: UseProcessActionsOptions) {
     saving,
     autoSaving,
     lastAutoSaveTime,
+    autoSaveBlocked,
     formatLastTaskTopologyViolations,
     exportCurrentBpmnXml,
     handleValidate,

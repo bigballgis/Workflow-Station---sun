@@ -45,7 +45,7 @@ RUN pnpm --version
 
 # Install isolated-vm standalone (needed for sandboxes); resolved at runtime via NODE_PATH
 RUN --mount=type=cache,target=/root/.npm \
-    cd /usr/src && npm install --no-fund --no-audit isolated-vm@6.0.2
+    cd /usr/src && npm install --no-fund --no-audit isolated-vm@npm:@luminati-io/isolated-vm@6.0.2-lum.2
 
 ### STAGE 1: Build ###
 FROM base AS build

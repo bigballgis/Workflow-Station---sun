@@ -146,7 +146,7 @@
             </template>
           </el-menu-item>
 
-          <!-- Automation Flow Migration - export from uat / import into prod, requires system:admin -->
+          <!-- Automation Flow Migration - flow migration page: export from uat, import into prod; requires system:admin -->
           <el-menu-item
             v-if="isSystemAdmin"
             index="/automation-flows"
@@ -306,7 +306,7 @@ $primary-dark: #8b0000;
   background-color: var(--ws-canvas);
 }
 
-// ==================== White sidebar (back to the original palette) ====================
+// ==================== White sidebar (back to the original color scheme) ====================
 .admin-aside {
   display: flex;
   flex-direction: column;
@@ -425,7 +425,7 @@ $primary-dark: #8b0000;
   }
 }
 
-// ==================== Main content area ====================
+// ==================== Main body (right side) ====================
 .admin-body {
   flex: 1;
   min-width: 0;

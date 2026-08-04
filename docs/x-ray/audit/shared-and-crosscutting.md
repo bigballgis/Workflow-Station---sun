@@ -189,7 +189,7 @@ All four `*-mfe` dirs are safe-delete candidates (recover ~4 x node_modules of d
 | developer-workstation | vue-i18n ^11.2.8 | en, zh-CN, zh-TW | ~2070 (largest surface) |
 | login | vue-i18n ^11.4.0 | **en, zh-CN only** (no zh-TW — inconsistency with the 3 apps) | ~29 |
 
-Hardcoded-string risk (grep CJK chars in .vue): admin 11/56, portal 22/51, DW 18/100 files contain raw Chinese — nontrivial residue; note some are comments. There is a dedicated tracked spec `.kiro/specs/frontend-i18n-hardcoded-chinese/`, so the gap is known.
+Hardcoded-string risk (grep CJK chars in .vue): admin 11/56, portal 22/51, DW 18/100 files contain raw Chinese — nontrivial residue; note some are comments. A spec titled `frontend-i18n-hardcoded-chinese` was opened for this, so the gap is known — but it was never written up (empty shell, see [docs/specs/README.md](../../specs/README.md) → "已放弃 / 未落笔"). The binding constraint is the `i18n-rules` rule, not that spec.
 
 ---
 

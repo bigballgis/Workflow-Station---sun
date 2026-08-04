@@ -227,7 +227,7 @@ ALTER TABLE sys_login_audit ADD COLUMN IF NOT EXISTS login_platform VARCHAR(32);
 
 -- =====================================================
 -- 9. Virtual Groups (sys_virtual_groups)
--- type: SYSTEM (cannot be deleted), CUSTOM (user-created)
+-- type: SYSTEM (cannot be deleted), CUSTOM (user-created), DEVELOPER (DW team)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_virtual_groups (
     id VARCHAR(64) PRIMARY KEY,
@@ -242,7 +242,7 @@ CREATE TABLE IF NOT EXISTS sys_virtual_groups (
     created_by VARCHAR(64),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(64),
-    CONSTRAINT chk_virtual_group_type CHECK (type IN ('SYSTEM', 'CUSTOM'))
+    CONSTRAINT chk_virtual_group_type CHECK (type IN ('SYSTEM', 'CUSTOM', 'DEVELOPER'))
 );
 
 -- =====================================================
@@ -686,7 +686,7 @@ COMMENT ON TABLE sys_role_assignments IS 'Role assignments to users/departments/
 COMMENT ON TABLE sys_permissions IS 'Permission definitions';
 COMMENT ON TABLE sys_role_permissions IS 'Role-Permission associations';
 COMMENT ON TABLE sys_login_audit IS 'Login/logout audit trail';
-COMMENT ON TABLE sys_virtual_groups IS 'Virtual groups for role assignment. type=SYSTEM groups cannot be deleted.';
+COMMENT ON TABLE sys_virtual_groups IS 'Virtual groups for role assignment. type=SYSTEM|CUSTOM|DEVELOPER; SYSTEM groups cannot be deleted.';
 COMMENT ON TABLE sys_virtual_group_members IS 'Virtual group member associations';
 COMMENT ON TABLE sys_virtual_group_roles IS 'Virtual group role bindings';
 COMMENT ON TABLE sys_virtual_group_task_history IS 'Virtual group task assignment history';
@@ -4087,3 +4087,21 @@ COMMENT ON INDEX idx_change_history_timestamp_standalone IS 'Supports global aud
 -- =============================================================================
 -- Add avatar column to sys_users for storing LDAP jpegPhoto
 ALTER TABLE sys_users ADD COLUMN IF NOT EXISTS avatar BYTEA;
+
+-- =============================================================================
+-- 63-virtual-group-type-developer.sql
+-- Source file: deploy/init-scripts/00-schema/63-virtual-group-type-developer.sql
+-- =============================================================================
+-- Allow virtual group type DEVELOPER alongside SYSTEM and CUSTOM.
+-- Existing rows keep their type; no data migration.
+-- (Also reflected in CREATE TABLE chk_virtual_group_type above for fresh installs.)
+
+ALTER TABLE sys_virtual_groups DROP CONSTRAINT IF EXISTS chk_virtual_group_type;
+
+ALTER TABLE sys_virtual_groups
+    ADD CONSTRAINT chk_virtual_group_type
+    CHECK (type IN ('SYSTEM', 'CUSTOM', 'DEVELOPER'));
+
+COMMENT ON COLUMN sys_virtual_groups.type IS
+    'SYSTEM (built-in, non-deletable), CUSTOM (business/task-pool), DEVELOPER (DW team)';
+

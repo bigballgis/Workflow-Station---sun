@@ -2,6 +2,7 @@
   <el-tooltip
     placement="bottom"
     :show-after="250"
+    :disabled="menuOpen"
     popper-class="launchpad-tile-tooltip"
   >
     <template #content>
@@ -35,6 +36,7 @@
           class="tile-menu"
           popper-class="launchpad-dropdown-popper"
           @command="handleCommand"
+          @visible-change="menuOpen = $event"
         >
           <button
             class="tile-menu-btn"
@@ -74,7 +76,7 @@
                 command="delete"
                 divided
               >
-                <el-icon><Delete /></el-icon>{{ t('common.delete') }}
+                <el-icon><component :is="isArchived ? Delete : Box" /></el-icon>{{ deleteLabel }}
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -86,9 +88,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Setting, CopyDocument, Delete, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
+import { Setting, CopyDocument, Delete, Box, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import { permissions } from '@/utils/permission'
@@ -112,6 +114,9 @@ const emit = defineEmits<{
   (e: 'remove', item: FunctionUnitResponse): void
 }>()
 
+// 描述气泡也挂在磁贴上，菜单打开时两者会重叠并盖住菜单项，故开菜单即禁用气泡
+const menuOpen = ref(false)
+
 const statusLabel = computed(() => {
   const map: Record<string, string> = {
     DRAFT: t('functionUnit.draft'),
@@ -120,6 +125,13 @@ const statusLabel = computed(() => {
   }
   return map[props.item.status] || props.item.status
 })
+
+// 后端 delete 是两段式：未归档的调用只是软删（置为 ARCHIVED），已归档的才真删。
+// 菜单文案必须跟着状态走，否则第一次点「Delete」弹出的却是归档确认框。
+const isArchived = computed(() => props.item.status === 'ARCHIVED')
+const deleteLabel = computed(() =>
+  isArchived.value ? t('functionUnit.deletePermanent') : t('functionUnit.archive')
+)
 
 function handleCommand(cmd: string) {
   if (cmd === 'settings') emit('settings', props.item)
@@ -230,11 +242,10 @@ function handleCommand(cmd: string) {
 
 <style lang="scss">
 // 图标悬浮描述气泡（Teleport 到 body，需全局样式）。
-// z-index 提到分组浮层（.folder-overlay 3000）之上，浮层内成员卡的气泡才可见。
+// z-index 交给 EP 自增基线（2000+）：分组浮层已压到 1900，无需再手动抬高。
 .launchpad-tile-tooltip {
   max-width: 280px;
   line-height: 1.5;
-  z-index: 4000 !important;
 
   .tip-name {
     font-weight: 600;

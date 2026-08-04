@@ -183,74 +183,95 @@
         </el-empty>
       </div>
 
-      <!-- Launchpad grid: icon / card views. Drop on either side to reorder, drop on the centre to merge into a group -->
+      <!-- Launchpad Grid: icon and card views; drop on either side to reorder, drop on the center to merge into a folder -->
       <div
         v-else
-        class="launchpad-grid"
-        :class="`launchpad-grid--${viewMode}`"
-        @dragover.prevent
-        @drop.prevent="onDropToEnd"
+        class="launchpad-viewport"
+        :class="{ 'is-dragging': draggingKey && pageCount > 1 }"
       >
         <div
-          v-for="entry in visibleEntries"
-          :key="entryKey(entry)"
-          class="launchpad-cell"
-          :class="cellClasses(entryKey(entry))"
-          draggable="true"
-          @dragstart="onDragStart(entry)"
-          @dragend="onDragEnd"
-          @dragover.prevent.stop="onDragOver(entry, $event)"
-          @dragleave="onDragLeave(entry)"
-          @drop.prevent.stop="onDrop(entry)"
+          class="launchpad-grid"
+          :class="`launchpad-grid--${viewMode}`"
+          @dragover.prevent
+          @drop.prevent="onDropToEnd"
         >
-          <template v-if="viewMode === 'icon'">
-            <LaunchpadTile
-              v-if="entry.type === 'item' && itemOf(entry.id)"
-              :item="itemOf(entry.id)!"
-              @open="handleEdit"
-              @settings="handleSettings"
-              @clone="handleClone"
-              @restore="handleRestore"
-              @delete="handleDelete"
-            />
-            <LaunchpadFolderTile
-              v-else-if="entry.type === 'folder'"
-              :folder="entry"
-              :items="folderItems(entry)"
-              @open="openFolderId = entry.id"
-            />
-          </template>
-          <template v-else>
-            <FunctionUnitCard
-              v-if="entry.type === 'item' && itemOf(entry.id)"
-              :item="itemOf(entry.id)!"
-              :tags="getItemTags(itemOf(entry.id)!)"
-              @click="handleEdit"
-              @edit="handleEdit"
-              @settings="handleSettings"
-              @clone="handleClone"
-              @restore="handleRestore"
-              @delete="handleDelete"
-            />
-            <LaunchpadFolderCard
-              v-else-if="entry.type === 'folder'"
-              :folder="entry"
-              :items="folderItems(entry)"
-              @open="openFolderId = entry.id"
-            />
-          </template>
+          <div
+            v-for="entry in pagedEntries"
+            :key="entryKey(entry)"
+            class="launchpad-cell"
+            :class="cellClasses(entryKey(entry))"
+            draggable="true"
+            @dragstart="onDragStart(entry)"
+            @dragend="onDragEnd"
+            @dragover.prevent.stop="onDragOver(entry, $event)"
+            @dragleave="onDragLeave(entry)"
+            @drop.prevent.stop="onDrop(entry)"
+          >
+            <template v-if="viewMode === 'icon'">
+              <LaunchpadTile
+                v-if="entry.type === 'item' && itemOf(entry.id)"
+                :item="itemOf(entry.id)!"
+                @open="handleEdit"
+                @settings="handleSettings"
+                @clone="handleClone"
+                @restore="handleRestore"
+                @delete="handleDelete"
+              />
+              <LaunchpadFolderTile
+                v-else-if="entry.type === 'folder'"
+                :folder="entry"
+                :items="folderItems(entry)"
+                @open="openFolderId = entry.id"
+              />
+            </template>
+            <template v-else>
+              <FunctionUnitCard
+                v-if="entry.type === 'item' && itemOf(entry.id)"
+                :item="itemOf(entry.id)!"
+                :tags="getItemTags(itemOf(entry.id)!)"
+                @click="handleEdit"
+                @edit="handleEdit"
+                @settings="handleSettings"
+                @clone="handleClone"
+                @restore="handleRestore"
+                @delete="handleDelete"
+              />
+              <LaunchpadFolderCard
+                v-else-if="entry.type === 'folder'"
+                :folder="entry"
+                :items="folderItems(entry)"
+                @open="openFolderId = entry.id"
+              />
+            </template>
+          </div>
+        </div>
+
+        <!-- Cross-page drag: while dragging, the grid edges become page-flip targets.
+             Hover to flip and place the tile by hand, or drop right here to send it
+             to the end of the previous page / the start of the next one. -->
+        <div
+          v-for="zone in flipZones"
+          v-show="draggingKey && pageCount > 1"
+          :key="zone.dir"
+          class="page-flip-zone"
+          :class="[`page-flip-zone--${zone.side}`, { 'is-disabled': !zone.enabled }]"
+          @dragover.prevent.stop="armPageFlip(zone.dir)"
+          @dragleave="disarmPageFlip"
+          @drop.prevent.stop="onDropToPage(zone.dir)"
+        >
+          <el-icon><component :is="zone.icon" /></el-icon>
+          <span class="page-flip-zone__label">{{ zone.label }}</span>
         </div>
       </div>
 
-      <!-- Pagination -->
+      <!-- Pagination: client-side over tiles (a folder is one tile), page size follows the view mode -->
       <div class="pagination-wrapper">
         <el-pagination
-          v-if="!store.loading && store.total > pagination.size"
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.size"
-          :total="store.total"
-          layout="total, sizes, prev, pager, next"
-          @change="loadData"
+          v-if="!store.loading && pageCount > 1"
+          v-model:current-page="page"
+          :page-size="pageSize"
+          :total="totalTiles"
+          layout="total, prev, pager, next"
         />
       </div>
     </div>
@@ -358,7 +379,7 @@
       </template>
     </el-dialog>
 
-    <!-- Expanded group overlay (iOS-style folder) -->
+    <!-- Expanded folder overlay (iOS-style folder) -->
     <LaunchpadFolderOverlay
       :folder="openedFolder"
       :items="openedFolderItems"
@@ -425,11 +446,11 @@
 
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, Upload, Download, Grid, Postcard } from '@element-plus/icons-vue'
+import { Search, Plus, Upload, Download, Grid, Postcard, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { type FunctionUnitResponse } from '@/api/functionUnit'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
@@ -458,17 +479,14 @@ const router = useRouter()
 const store = useFunctionUnitStore()
 const { removeRecent } = useRecentFunctionUnits()
 
-const pagination = reactive({ page: 1, size: 20 })
 const showImportDialog = ref(false)
 
 const storeList = computed(() => store.list)
 const storeAllTags = computed(() => store.allTags)
 
 function loadData() {
-  store.fetchList({
+  store.fetchAll({
     tags: searchForm.tags.length > 0 ? searchForm.tags : undefined,
-    page: pagination.page - 1,
-    size: pagination.size,
   })
 }
 
@@ -483,7 +501,7 @@ const {
 } = useFunctionUnitFilters({
   list: storeList,
   allTags: storeAllTags,
-  resetPage: () => { pagination.page = 1 },
+  resetPage: () => resetPage(),
   reload: loadData,
 })
 
@@ -516,28 +534,6 @@ const {
   handleExport,
 } = useFunctionUnitExport({ list: storeList, filteredList })
 
-// ==================== Launchpad (iOS-style icon layout + drag & drop + grouping) ====================
-const {
-  visibleEntries,
-  itemById,
-  draggingKey,
-  dropTarget,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDropToEnd,
-  folderById,
-  renameFolder,
-  reorderInFolder,
-  removeFromFolder,
-} = useLaunchpadLayout({
-  list: storeList,
-  visibleList: filteredList,
-  defaultGroupName: () => t('functionUnit.newGroup'),
-})
-
 // Icon / card view toggle (icon by default); the choice is persisted
 const VIEW_MODE_KEY = 'dw-fu-launchpad-view'
 const viewMode = ref<'icon' | 'card'>(
@@ -547,19 +543,72 @@ watch(viewMode, (v) => {
   try {
     localStorage.setItem(VIEW_MODE_KEY, v)
   } catch {
-    // If storage is unavailable, the choice only applies to this session
+    // Storage unavailable: the choice only applies to this session
   }
 })
 
-// el-switch boolean model: on = card view, off = icon view
+// el-switch's boolean model: on = card view, off = icon view
 const isCardView = computed({
   get: () => viewMode.value === 'card',
   set: (v: boolean) => { viewMode.value = v ? 'card' : 'icon' },
 })
 
+// Tiles per page, by view mode: big cards fit fewer on screen than small icons.
+// A folder counts as one tile no matter how many function units it holds.
+const PAGE_SIZE_BY_VIEW = { card: 20, icon: 50 } as const
+const pageSize = computed(() => PAGE_SIZE_BY_VIEW[viewMode.value])
+
+// ==================== Launchpad (iOS-style icon layout + drag & drop + folders) ====================
+const {
+  pagedEntries,
+  page,
+  pageCount,
+  totalTiles,
+  resetPage,
+  itemById,
+  draggingKey,
+  dropTarget,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDropToEnd,
+  armPageFlip,
+  disarmPageFlip,
+  onDropToPage,
+  folderById,
+  renameFolder,
+  reorderInFolder,
+  removeFromFolder,
+} = useLaunchpadLayout({
+  list: storeList,
+  visibleList: filteredList,
+  pageSize,
+  defaultGroupName: () => t('functionUnit.newGroup'),
+})
+
+// Edge drop zones shown only while dragging, so a tile can be moved to another page
+const flipZones = computed(() => [
+  {
+    dir: -1 as const,
+    side: 'prev',
+    icon: ArrowLeft,
+    enabled: page.value > 1,
+    label: t('functionUnit.dragToPrevPage'),
+  },
+  {
+    dir: 1 as const,
+    side: 'next',
+    icon: ArrowRight,
+    enabled: page.value < pageCount.value,
+    label: t('functionUnit.dragToNextPage'),
+  },
+])
+
 const openFolderId = ref<string | null>(null)
-// Reconciling the layout can dissolve the open group (e.g. fewer than 2 members left after a
-// deletion); the computed value then closes the overlay automatically
+// Reconciling the layout can dissolve the open folder (e.g. fewer than 2 members left after a
+// deletion); the computed then closes the overlay on its own
 const openedFolder = computed<LaunchpadFolderEntry | null>(() =>
   openFolderId.value ? folderById(openFolderId.value) ?? null : null
 )
@@ -714,14 +763,57 @@ onMounted(() => {
 // ==================== View toggle switch ====================
 // On = card view (red), off = icon view (grey); the icon sits inside the switch
 .view-switch {
-  // Give the off state a solid fill too, so it does not read as disabled
+  // Give the off state a solid color too, so it does not read as disabled
   --el-switch-off-color: #b8bcc4;
 }
 
 // ==================== Launchpad (icon / card views + drag to reorder or merge) ====================
+.launchpad-viewport {
+  position: relative;
+
+  // While dragging, the grid gives up its side margins so the page-flip lanes get their
+  // own gutter instead of sitting on top of the first and last column of tiles
+  &.is-dragging {
+    padding: 0 76px;
+  }
+}
+
+// Page-flip drop zones: only shown while a tile is being dragged, so they never
+// steal clicks from the grid underneath
+.page-flip-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 16px;
+  background: rgba(20, 20, 20, 0.06);
+  border: 2px dashed rgba(20, 20, 20, 0.18);
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+  text-align: center;
+  z-index: 5;
+
+  &--prev { left: 4px; }
+  &--next { right: 4px; }
+
+  &.is-disabled {
+    opacity: 0.3;
+  }
+
+  &__label {
+    writing-mode: vertical-rl;
+    letter-spacing: 2px;
+  }
+}
+
 .launchpad-grid {
   align-content: start;
-  min-height: 320px; // The empty area also accepts a "drop at the end" gesture
+  min-height: 320px; // The empty area also accepts a "drop at the end"
 
   &--icon {
     display: grid;
@@ -747,7 +839,7 @@ onMounted(() => {
     opacity: 0.35;
   }
 
-  // Merge-into-group candidate: scale the target up and outline it in brand red
+  // Merge-into-folder candidate: enlarge the target and outline it in the brand red
   &.drop-merge {
     :deep(.function-unit-card),
     :deep(.folder-card),
@@ -757,7 +849,7 @@ onMounted(() => {
     }
   }
 
-  // Insertion-point indicator bar
+  // Insertion indicator bar
   &.drop-before::before,
   &.drop-after::after {
     content: '';

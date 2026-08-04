@@ -118,11 +118,13 @@ class AiRequestBodyProperties {
                 .map(Enum::name).collect(Collectors.toList());
         assertThat(tableTypes).containsExactlyInAnyOrderElementsOf(expectedTableTypes);
 
-        // actionTypes must match ActionType enum values
+        // actionTypes expose current AI-generation capabilities, not legacy persisted enum values
         List<String> actionTypes = (List<String>) metadata.get("actionTypes");
         List<String> expectedActionTypes = Arrays.stream(ActionType.values())
+                .filter(actionType -> actionType != ActionType.N8N_ACTION)
                 .map(Enum::name).collect(Collectors.toList());
         assertThat(actionTypes).containsExactlyInAnyOrderElementsOf(expectedActionTypes);
+        assertThat(actionTypes).doesNotContain("N8N_ACTION");
 
         // configJsonExtensions must contain all extension keys
         Map<String, Object> extensions = (Map<String, Object>) metadata.get("configJsonExtensions");
@@ -136,10 +138,12 @@ class AiRequestBodyProperties {
         assertThat(operators).contains("equals", "not-equals", "contains",
                 "greater-than", "less-than", "is-empty", "is-not-empty");
 
-        // newEntities must describe decisionDefinitions, tableRelations, formStageBindings
+        // newEntities must describe decisions, relations, form/action bindings and assignment
         Map<String, Object> newEntities = (Map<String, Object>) metadata.get("newEntities");
         assertThat(newEntities).containsKeys(
-                "decisionDefinitions", "tableRelations", "formStageBindings");
+                "decisionDefinitions", "tableRelations", "formStageBindings",
+                "actionStageBindings", "userTaskAssignment");
+        assertThat((String) newEntities.get("formStageBindings")).contains("readOnly: boolean");
     }
 
     /**

@@ -93,6 +93,7 @@ public class EntityTypeConverter {
      * <ul>
      *   <li>"SYSTEM" → VirtualGroupType.SYSTEM</li>
      *   <li>"CUSTOM" → VirtualGroupType.CUSTOM</li>
+     *   <li>"DEVELOPER" → VirtualGroupType.DEVELOPER</li>
      * </ul>
      * 
      * @param typeStr the String virtual group type from platform-security entity
@@ -107,6 +108,7 @@ public class EntityTypeConverter {
         return switch (typeStr) {
             case "SYSTEM" -> VirtualGroupType.SYSTEM;
             case "CUSTOM" -> VirtualGroupType.CUSTOM;
+            case "DEVELOPER" -> VirtualGroupType.DEVELOPER;
             default -> {
                 log.error("Unknown virtual group type: {}", typeStr);
                 throw new IllegalArgumentException("Unknown virtual group type: " + typeStr);
@@ -121,6 +123,7 @@ public class EntityTypeConverter {
      * <ul>
      *   <li>VirtualGroupType.SYSTEM → "SYSTEM"</li>
      *   <li>VirtualGroupType.CUSTOM → "CUSTOM"</li>
+     *   <li>VirtualGroupType.DEVELOPER → "DEVELOPER"</li>
      * </ul>
      * 
      * @param type the VirtualGroupType enum from admin-center business logic
@@ -135,10 +138,7 @@ public class EntityTypeConverter {
         return switch (type) {
             case SYSTEM -> "SYSTEM";
             case CUSTOM -> "CUSTOM";
-            default -> {
-                log.error("Unknown VirtualGroupType enum: {}", type);
-                throw new IllegalArgumentException("Unknown VirtualGroupType enum: " + type);
-            }
+            case DEVELOPER -> "DEVELOPER";
         };
     }
     

@@ -205,9 +205,17 @@ ai-generation:
   # 由前端经 X-AM-Token 头透传(或浏览器 AMToken cookie),后端不持有共享密钥。
   gateway:
     # 完整端点 URL,模型名已在路径里。未配置时每轮对话以 AI_GATEWAY_NOT_CONFIGURED 失败。
-    url: ${AI_GATEWAY_URL:}
+    url: ${GROUP_AI_GATEWAY_URL:}
     # 可选:body 里的 model 字段。留空则不发——URL 路径已经选定了模型。
     model: ${AI_GATEWAY_MODEL:}
+    # SSE 流式调用(服务端拼回整段,上层无感)。默认 false = 集团 gateway 既有行为。
+    # 置 true 是给"长请求会被掐连接"的端点用的:DeepSeek 非流式超过约 1 分钟直接 Premature EOF,
+    # 而 GENERATION 阶段必然超过——短的需求/设计阶段却成功,现象很像偶发抖动。
+    stream: ${AI_GATEWAY_STREAM:false}
+    # 可选的静态 Bearer key,配了就顶掉每用户的 AMToken(启动时 warn 一次)。
+    # 只给本地自测用:直连 DeepSeek 这类认固定 key 的 OpenAI 兼容端点。
+    # 代价是 gateway 侧审计不到人,所以 dev 之外一律留空 => 回落原有的每用户 AMToken 链路。
+    api-key: ${AI_GATEWAY_API_KEY:}
     # 300s: 推理模型生成 DESIGN 文档实测可达 ~230s。同时决定对话 SSE emitter 的存活时长。
     timeout-seconds: ${AI_GATEWAY_TIMEOUT_SECONDS:300}
     # AMToken 在 Cookie 中的名字,与 admin-center 的 sso.dsp.am-token-name 对齐。

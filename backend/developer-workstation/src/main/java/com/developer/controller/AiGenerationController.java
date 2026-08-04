@@ -45,7 +45,7 @@ import java.util.List;
  * 不注册，{@code /ai-generation/**} 全部返回 404。开关须**前后端同时打开**：本开关置 true，且前端
  * {@code src/utils/featureFlags.ts} 的 {@code AI_GENERATION_ENABLED} 为 true 并重新构建。
  * 只开一侧：只开后端 = 用户看不到入口；只开前端 = 点进去全 404。
- * 另外还须配 {@code AI_GATEWAY_URL}，否则每轮对话以 {@code AI_GATEWAY_NOT_CONFIGURED} 失败。
+ * 另外还须配 {@code GROUP_AI_GATEWAY_URL}，否则每轮对话以 {@code AI_GATEWAY_NOT_CONFIGURED} 失败。
  */
 @RestController
 @RequestMapping("/ai-generation")
@@ -80,9 +80,21 @@ public class AiGenerationController extends BaseController {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         String amToken = resolveAmToken(httpRequest);
-        log.info("Chat stream request for functionUnitId={}, userId={}, amTokenPresent={}",
-                request.getFunctionUnitId(), userId, amToken != null);
+        // 只记来源，不记 amTokenPresent=true/false：字段在不等于凭证有效，DW 页面开久了
+        // cookie 还在但 DSP 侧已过期，此时 gateway 回 401 而这条日志会显示"有 token"。
+        // 真正的判定在 AiGatewayClient（AI_GATEWAY_UNAUTHORIZED），来源用来区分是前端透传还是浏览器 cookie。
+        log.info("Chat stream request for functionUnitId={}, userId={}, amTokenSource={}",
+                request.getFunctionUnitId(), userId, amTokenSource(httpRequest, amToken));
         return aiGenerationComponent.chatStream(request, userId, amToken);
+    }
+
+    /** {@code header} / {@code cookie} / {@code none}——不含任何 token 内容。 */
+    private String amTokenSource(HttpServletRequest httpRequest, String resolved) {
+        if (resolved == null) {
+            return "none";
+        }
+        String header = httpRequest.getHeader(AM_TOKEN_HEADER);
+        return header != null && !header.isBlank() ? "header" : "cookie";
     }
 
     /**

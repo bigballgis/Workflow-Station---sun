@@ -86,7 +86,40 @@ describe('useAiChat', () => {
 
     await sendMessage(mockRequest)
 
-    expect(callback).toHaveBeenCalledWith('REQUIREMENTS', '# Requirements')
+    expect(callback).toHaveBeenCalledWith('REQUIREMENTS', '# Requirements', {
+      version: undefined,
+      generatedAt: undefined
+    })
+  })
+
+  it('should pass the document version stamp through to onDocument', async () => {
+    // 版本号/时间戳来自后端 saveDocument 的返回，文档卡靠它显示 "v3 · 14:32"——
+    // 少了这一路透传，用户点完 Regenerate 就无法确认手上是不是新的那一版。
+    const docData = {
+      documentType: 'DESIGN',
+      content: '# Design',
+      version: 3,
+      generatedAt: '2026-08-03T06:32:10Z'
+    }
+    const sseEvents = [
+      `event:document\ndata:${JSON.stringify(docData)}\n\n`,
+      'event:done\ndata:{}\n\n'
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      body: createMockSSEStream(sseEvents)
+    }))
+
+    const { sendMessage, onDocument } = useAiChat()
+    const callback = vi.fn()
+    onDocument(callback)
+
+    await sendMessage(mockRequest)
+
+    expect(callback).toHaveBeenCalledWith('DESIGN', '# Design', {
+      version: 3,
+      generatedAt: '2026-08-03T06:32:10Z'
+    })
   })
 
   // --- Task 11.2: validation_warning event ---

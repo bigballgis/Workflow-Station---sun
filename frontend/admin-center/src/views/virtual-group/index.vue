@@ -10,10 +10,40 @@
         </el-button>
       </template>
     </PageHeader>
-    
+
+    <el-tabs v-model="activeTab">
+      <el-tab-pane
+        :label="t('virtualGroup.tabSystem')"
+        name="SYSTEM"
+      />
+      <el-tab-pane
+        :label="t('virtualGroup.tabCustom')"
+        name="CUSTOM"
+      />
+      <el-tab-pane
+        :label="t('virtualGroup.tabDeveloper')"
+        name="DEVELOPER"
+      />
+    </el-tabs>
+
+    <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+      <el-input
+        v-model="searchKeyword"
+        :placeholder="t('virtualGroup.searchPlaceholder')"
+        clearable
+        style="width: 300px;"
+      />
+    </div>
+
+    <el-empty
+      v-if="!loading && listTotal === 0"
+      :description="searchKeyword.trim() ? t('virtualGroup.noSearchResults') : t('virtualGroup.noGroupsInTab')"
+    />
+
     <el-table
+      v-else
       v-loading="loading"
-      :data="groups"
+      :data="pagedGroups"
       stripe
       table-layout="auto"
       style="width: 100%"
@@ -33,10 +63,10 @@
       <el-table-column
         prop="type"
         :label="t('virtualGroup.type')"
-        width="100"
+        width="120"
       >
         <template #default="{ row }">
-          <el-tag :type="row.type === 'SYSTEM' ? 'warning' : 'info'">
+          <el-tag :type="typeTagType(row.type)">
             {{ t(virtualGroupTypeKey(row.type)) }}
           </el-tag>
         </template>
@@ -147,11 +177,23 @@
         </template>
       </el-table-column>
     </el-table>
-    
+
+    <el-pagination
+      v-if="listTotal > 0"
+      v-model:current-page="listPagination.page"
+      v-model:page-size="listPagination.size"
+      :disabled="loading"
+      :total="listTotal"
+      :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next, jumper"
+      style="margin-top: 16px; justify-content: flex-end;"
+      @size-change="handleListSizeChange"
+    />
+
     <VirtualGroupFormDialog
       v-model="formDialogVisible"
       :group="currentGroup"
-      @success="fetchGroups"
+      @success="handleCreateSuccess"
     />
     <VirtualGroupMembersDialog
       v-model="membersDialogVisible"
@@ -185,7 +227,11 @@ const { t } = useI18n()
 
 const {
   loading,
-  groups,
+  activeTab,
+  searchKeyword,
+  listPagination,
+  listTotal,
+  pagedGroups,
   formDialogVisible,
   membersDialogVisible,
   rolesDialogVisible,
@@ -198,7 +244,15 @@ const {
   showRolesDialog,
   showApproversDialog,
   handleDelete,
+  handleCreateSuccess,
+  handleListSizeChange,
 } = useVirtualGroup()
+
+function typeTagType(type: string): 'warning' | 'info' | 'success' {
+  if (type === 'SYSTEM') return 'warning'
+  if (type === 'DEVELOPER') return 'success'
+  return 'info'
+}
 
 onMounted(fetchGroups)
 </script>

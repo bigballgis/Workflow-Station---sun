@@ -392,9 +392,9 @@ export const functionUnitApi = {
   restore: (id: number) =>
     functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/restore`),
 
-  publish: (id: number, changeLog?: string) =>
-    functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/publish`, null, { params: { changeLog } }),
-  
+  // POST /{id}/publish still exists on the backend, but only the Deploy flow calls it internally;
+  // the DW frontend no longer publishes directly.
+
   clone: (id: number, newName: string) => 
     functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/clone`, null, { params: { newName } }),
   
@@ -457,8 +457,18 @@ export const functionUnitApi = {
   getProcess: (functionUnitId: number) =>
     functionUnitAxios.get<any, { data: ProcessDefinition }>(`/api/v1/function-units/${functionUnitId}/process`),
   
-  saveProcess: (functionUnitId: number, data: Partial<ProcessDefinition>) =>
-    functionUnitAxios.post<any, { data: ProcessDefinition }>(`/api/v1/function-units/${functionUnitId}/process`, data),
+  // allowEmpty=true is required to overwrite a stored non-empty process with an empty diagram
+  // (backend empty-diagram guard, see ProcessDesignComponentImpl#save).
+  saveProcess: (
+    functionUnitId: number,
+    data: Partial<ProcessDefinition>,
+    options?: { allowEmpty?: boolean }
+  ) =>
+    functionUnitAxios.post<any, { data: ProcessDefinition }>(
+      `/api/v1/function-units/${functionUnitId}/process`,
+      data,
+      options?.allowEmpty ? { params: { allowEmpty: true } } : undefined
+    ),
 
   // Versions
   getVersions: (functionUnitId: number) =>
@@ -596,9 +606,9 @@ export const functionUnitApi = {
 }
 
 /**
- * Restore outcome, in this environment, for an Automation flow carried by an import package.
+ * Restore result, in this environment, for an Automation flow carried by an import package.
  * PUBLISH_FAILED = the draft was created but not published (usually because this environment
- * is missing the connection credentials); publish manually once they are supplied.
+ * is missing connection credentials); someone has to supply them and publish manually.
  */
 export interface AutomationFlowRestoreResult {
   flowKey: string

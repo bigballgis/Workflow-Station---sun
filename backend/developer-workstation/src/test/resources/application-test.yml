@@ -82,6 +82,22 @@ jwt:
   secret: testSecretKeyForDeveloperWorkstationModule123456
   expiration: 86400000
 
+# platform-security / platform-common 读的是 platform.* 前缀，与上面的 jwt.* / security.* 不是同一套。
+# 不在这里覆盖的话，测试会继承 application.yml 的 ${JWT_SECRET:?JWT_SECRET is required}——
+# Spring 把 `:` 之后整段当默认值，于是密钥变成字面量 "?JWT_SECRET is required"（23 字节），
+# JwtTokenServiceImpl 的 32 字节下限直接拒绝，@SpringBootTest 的 ApplicationContext 起不来。
+platform:
+  security:
+    jwt:
+      secret: testSecretKeyForDeveloperWorkstationModule123456
+      expiration-ms: 86400000
+      refresh-expiration-ms: 604800000
+      issuer: platform
+      validate-issuer: false
+  encryption:
+    # AesEncryptionService 只取前 32 字节，但少于 32 字节会在 @PostConstruct 抛异常。
+    secret-key: testEncryptionSecretKeyForDeveloperWorkstation123456
+
 security:
   max-login-attempts: 5
   lock-duration-minutes: 30
@@ -98,12 +114,3 @@ logging:
   level:
     root: WARN
     com.developer: INFO
-
-# platform-security 的 JwtProperties（@ConfigurationProperties prefix "platform.security.jwt"）
-# 与上面的 app.security.* 是两套**独立**绑定：JwtTokenServiceImpl 读的是这一套，且硬性要求
-# 密钥不短于 32 字节。不配置就会回落到 23 字节的默认值、触发它自己的校验并炸掉整个
-# application context（@SpringBootTest 全部 error）。
-platform:
-  security:
-    jwt:
-      secret: test-only-platform-jwt-secret-with-enough-length-for-hs512-0123456789

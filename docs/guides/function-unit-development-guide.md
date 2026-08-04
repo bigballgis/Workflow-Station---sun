@@ -887,7 +887,13 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 
 | 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| GET | `/` | 按 `stageId` 返回表单定义摘要（无则空对象），query: `stageId` |
+| GET | `/` | 按 `stageId` 返回表单定义摘要（无则空对象），query: `stageId`、`functionUnitCode`（选填但强烈建议） |
+
+> **必须带 `functionUnitCode`。** BPMN 节点 id 只在单个流程内唯一，`dw_form_stage_bindings` 也只约束
+> `UNIQUE(form_id, stage_id)`，所以同一个 `stageId`（AI 生成的流程常用 `UserTask_Approve` 这类可读 id）
+> 会合法地存在于多个功能单元。带上 `functionUnitCode` 时按功能单元收窄，查不到即为确定的「无绑定」；
+> 不带时只能退化为「form id 最大者胜出」并打 WARN 日志，可能返回**别的功能单元**的表单。
+> user-portal 侧由 `up_process_instance` 解析功能单元编码（见 `TaskFormDefinitionLoader`）。
 
 ### 7.22 SSO 兑换 — AuthSsoExchangeController
 
@@ -1286,7 +1292,7 @@ ai-generation:
   # 集团 AI gateway（OpenAI 兼容 chat/completions）。凭证是每用户的 DSP AMToken，
   # 由前端经 X-AM-Token 头透传，后端不持有共享密钥。
   gateway:
-    url: ${AI_GATEWAY_URL:}
+    url: ${GROUP_AI_GATEWAY_URL:}
     model: ${AI_GATEWAY_MODEL:}
     timeout-seconds: ${AI_GATEWAY_TIMEOUT_SECONDS:300}
     am-token-name: ${DSP_AM_TOKEN_NAME:AMToken}
@@ -1583,7 +1589,7 @@ platform:
 ai-generation:
   enabled: ${AI_GENERATION_ENABLED:false}
   gateway:
-    url: ${AI_GATEWAY_URL:}
+    url: ${GROUP_AI_GATEWAY_URL:}
     model: ${AI_GATEWAY_MODEL:}
     timeout-seconds: ${AI_GATEWAY_TIMEOUT_SECONDS:300}
     am-token-name: ${DSP_AM_TOKEN_NAME:AMToken}
@@ -1658,8 +1664,9 @@ management:
 | `SECURITY_ROLE_MAX_NAME_LENGTH` | 角色名最大长度 | 100 |
 | `WORKFLOW_ENGINE_URL` | 工作流引擎地址 | http://localhost:8081 |
 | `AI_GENERATION_ENABLED` | AI Generate 入口开关（前后端须一致） | false |
-| `AI_GATEWAY_URL` | 集团 AI gateway 端点（OpenAI 兼容 chat/completions） | 空（空则调用报 AI_GATEWAY_NOT_CONFIGURED） |
+| `GROUP_AI_GATEWAY_URL` | 集团 AI gateway 端点（OpenAI 兼容 chat/completions） | 空（空则调用报 AI_GATEWAY_NOT_CONFIGURED） |
 | `AI_GATEWAY_MODEL` | body 里的 model 字段；空则不发（URL 路径已选定模型） | 空 |
+| `AI_GATEWAY_API_KEY` | 静态 Bearer key；非空即顶掉每用户 AMToken（审计不到人），仅本地直连 DeepSeek 等 OpenAI 兼容端点时用 | 空 |
 | `AI_GATEWAY_TIMEOUT_SECONDS` | 单次模型调用超时 (秒) | 300 |
 | `AI_GENERATION_LOCK_TTL` | AI 编辑锁 TTL (秒) | 1800 |
 | `AI_GENERATION_FORCE_UNLOCK_TIMEOUT` | AI 强制解锁超时 (秒) | 60 |

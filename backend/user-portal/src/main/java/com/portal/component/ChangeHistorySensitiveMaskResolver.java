@@ -17,6 +17,12 @@ import java.util.Map;
  * Builds fieldName → sensitiveMask config for Change History display.
  * Uses the same access path as change-history (process instance → FU forms),
  * so masks work even when the caller cannot load full process detail.
+ *
+ * <p><b>Product rule (intentional):</b> Change History uses PROCESS-first,
+ * first-wins collection across FU forms for PII display. Stage FormRenderer
+ * remains per-form independent and does <em>not</em> use this resolver.
+ * If TASK/ACTION later need stage-scoped CH masks, resolve by form/stage — do
+ * not silently change this ORDER BY without a product decision.
  */
 @Slf4j
 @Component
@@ -47,6 +53,12 @@ public class ChangeHistorySensitiveMaskResolver {
                             INNER JOIN dw_function_units fu ON fu.code = pi.function_unit_code
                             INNER JOIN dw_form_definitions fd ON fd.function_unit_id = fu.id
                             WHERE pi.process_instance_id = ?
+                            ORDER BY CASE fd.form_type
+                                WHEN 'PROCESS' THEN 0
+                                WHEN 'TASK' THEN 1
+                                ELSE 2
+                            END,
+                            fd.id
                             """,
                     (rs, rowNum) -> rs.getString(1),
                     processInstanceId);

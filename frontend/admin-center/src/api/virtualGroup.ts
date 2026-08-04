@@ -5,7 +5,8 @@ import { get, post, put, del } from './request'
 export interface VirtualGroup {
   id: string
   name: string
-  type: 'SYSTEM' | 'CUSTOM'
+  code: string
+  type: 'SYSTEM' | 'CUSTOM' | 'DEVELOPER'
   description?: string
   adGroup?: string
   status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED'
@@ -82,7 +83,8 @@ export interface TaskHistory {
 
 export interface VirtualGroupCreateRequest {
   name: string
-  type: 'SYSTEM' | 'CUSTOM'
+  code?: string
+  type: 'SYSTEM' | 'CUSTOM' | 'DEVELOPER'
   description?: string
   adGroup?: string
 }

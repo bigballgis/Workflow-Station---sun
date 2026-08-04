@@ -167,7 +167,7 @@ public class TaskApprovalCompletionComponent {
                 mergedVars.putAll(variables);
                 
                 taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
-                        taskId, userId, task.getTaskDefinitionKey(), mergedVars);
+                        taskId, userId, task.getTaskDefinitionKey(), syncProcessId, mergedVars);
                 // Prevent geometric __subTables__ bloat: collapse deep nested copies to the canonical
                 // one-level structure before persisting the approval write-back.
                 SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);

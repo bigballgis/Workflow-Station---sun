@@ -168,7 +168,7 @@ cd deploy/k8s
 - [技术栈（中文）](docs/architecture/tech-stack.md) · [Tech stack (EN)](docs/architecture/tech-stack-en.md)
 - [架构示意](docs/architecture/architecture-diagram.md) · [Schema 与迁移](docs/schema-and-migration.md) · [Demo 数据约定](docs/demo-data-requirements.md)
 - [功能单元开发指南](docs/guides/function-unit-development-guide.md)（深度）
-- 设计规格目录：[.kiro/specs/](.kiro/specs/)
+- 功能规格（需求 / 设计 / 任务）：[docs/specs/](docs/specs/README.md)
 
 ## License
 

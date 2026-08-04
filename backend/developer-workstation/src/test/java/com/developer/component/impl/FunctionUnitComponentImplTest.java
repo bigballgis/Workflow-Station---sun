@@ -85,14 +85,25 @@ class FunctionUnitComponentImplTest {
     @Mock
     private com.developer.service.MainTableViewService mainTableViewService;
 
-    /**
-     * FunctionUnitComponentImpl takes a FunctionUnitExporter and calls
-     * buildVersionSnapshotPayload(...) when creating a version. Without this mock @InjectMocks
-     * left the field null, and every affected test failed with
-     * "Failed to create version snapshot: Cannot invoke ...FunctionUnitExporter...".
-     */
+    // FunctionUnitComponentImpl 的构造参数在拆分出这些协作者后没有同步到测试里，
+    // @InjectMocks 于是传 null —— publish 走到 functionUnitExporter 才 NPE。
     @Mock
     private FunctionUnitExporter functionUnitExporter;
+
+    @Mock
+    private FunctionUnitCodeGenerator codeGenerator;
+
+    @Mock
+    private FunctionUnitValidator validator;
+
+    @Mock
+    private FunctionUnitSnapshotFactory snapshotFactory;
+
+    @Mock
+    private FunctionUnitCloner cloner;
+
+    @Mock
+    private FunctionUnitResponseAssembler responseAssembler;
 
     @InjectMocks
     private FunctionUnitComponentImpl functionUnitComponent;

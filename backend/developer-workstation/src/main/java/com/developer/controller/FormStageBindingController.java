@@ -6,8 +6,10 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
 import com.developer.repository.FormStageBindingRepository;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,11 +18,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Resolve task form definition by BPMN userTask id (stageId), for use by user-portal {@code TaskFormComponent}.
+ *
+ * <p>{@code stageId} alone does not identify a binding: BPMN node ids are unique only within one process,
+ * and {@code dw_form_stage_bindings} constrains only {@code UNIQUE(form_id, stage_id)}. Callers that can
+ * determine the function unit must pass {@code functionUnitCode}.</p>
  */
+@Slf4j
 @RestController
 @RequestMapping("/form-stage-bindings")
 @RequiredArgsConstructor
@@ -34,13 +42,39 @@ public class FormStageBindingController {
     @Transactional(readOnly = true)
     @Operation(summary = "Get task form definition by BPMN user task id (taskDefinitionKey)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getByStageId(
-            @RequestParam(value = "stageId", required = false) String stageId) {
+            @Parameter(description = "BPMN user task id (taskDefinitionKey)")
+            @RequestParam(value = "stageId", required = false) String stageId,
+            @Parameter(description = "Owning function unit code. Optional only because a caller may fail to "
+                    + "resolve it; without it the same stage id may match another function unit's form.")
+            @RequestParam(value = "functionUnitCode", required = false) String functionUnitCode) {
         if (stageId == null || stageId.isBlank()) {
             return ResponseEntity.ok(ApiResponse.success(Map.of()));
         }
-        return formStageBindingRepository.findByStageId(stageId.trim())
-                .map(this::buildSuccess)
-                .orElseGet(() -> ResponseEntity.ok(ApiResponse.success(Map.of())));
+        String stage = stageId.trim();
+
+        if (functionUnitCode != null && !functionUnitCode.isBlank()) {
+            // Scoped resolution: a miss here is a definitive negative — the function unit is
+            // known and simply has no form bound to this stage. Falling through to the global
+            // lookup would serve another unit's form.
+            return firstBinding(
+                    formStageBindingRepository.findByFunctionUnitCodeAndStageId(functionUnitCode.trim(), stage));
+        }
+
+        // No function unit resolvable by the caller: stay deterministic (highest form id
+        // wins) instead of throwing on the legitimately ambiguous multi-unit case.
+        List<FormStageBinding> candidates = formStageBindingRepository.findByStageIdOrderByFormIdDesc(stage);
+        if (candidates.size() > 1) {
+            log.warn("Stage id '{}' is bound in {} function units and no functionUnitCode was supplied; "
+                    + "resolving to form {}. Pass functionUnitCode to disambiguate.",
+                    stage, candidates.size(), candidates.get(0).getForm().getId());
+        }
+        return firstBinding(candidates);
+    }
+
+    private ResponseEntity<ApiResponse<Map<String, Object>>> firstBinding(List<FormStageBinding> candidates) {
+        return candidates.isEmpty()
+                ? ResponseEntity.ok(ApiResponse.success(Map.of()))
+                : buildSuccess(candidates.get(0));
     }
 
     private ResponseEntity<ApiResponse<Map<String, Object>>> buildSuccess(FormStageBinding binding) {

@@ -36,6 +36,8 @@ public class ProcessDesignController {
     @Operation(summary = "Save process definition")
     public ResponseEntity<ApiResponse<ProcessDefinition>> save(
             @PathVariable Long functionUnitId,
+            // 设计器里用户显式确认「保存空流程」后才为 true；缺省 false 时空图覆盖非空流程会被拒绝
+            @RequestParam(value = "allowEmpty", defaultValue = "false") boolean allowEmpty,
             @RequestBody Map<String, String> request) {
         String bpmnXml = request.get("bpmnXml");
         if (bpmnXml == null || bpmnXml.trim().isEmpty()) {
@@ -45,7 +47,7 @@ public class ProcessDesignController {
                             .message("bpmnXml is required")
                             .build()));
         }
-        ProcessDefinition result = processDesignComponent.save(functionUnitId, bpmnXml);
+        ProcessDefinition result = processDesignComponent.save(functionUnitId, bpmnXml, allowEmpty);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     

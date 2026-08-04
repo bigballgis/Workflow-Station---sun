@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import type { ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { ValidationResult } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import type { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -13,7 +13,12 @@ interface UseFunctionUnitActionsOptions {
   store: FunctionUnitStore
 }
 
-/** Validate / publish / export operations for the function unit header. */
+/**
+ * Validate / export operations for the function unit header.
+ *
+ * Publish 入口已废弃：版本快照与状态推进由 Deploy 流程内部完成
+ * （后端 DeploymentComponentImpl 第一步即调 publish），DW 不再单独暴露该按钮。
+ */
 export function useFunctionUnitActions(options: UseFunctionUnitActionsOptions) {
   const { functionUnitId, store } = options
   const { t } = useI18n()
@@ -32,22 +37,6 @@ export function useFunctionUnitActions(options: UseFunctionUnitActionsOptions) {
       ElMessage.error(e.response?.data?.message || t('functionUnit.validationFailed'))
     } finally {
       validating.value = false
-    }
-  }
-
-  async function handlePublish() {
-    try {
-      const { value } = await ElMessageBox.prompt(t('functionUnit.enterChangeLogPrompt'), t('functionUnit.publishFunctionUnit'), {
-        inputType: 'textarea',
-        inputPlaceholder: t('functionUnit.publishChangeLogPlaceholder')
-      })
-      await store.publish(functionUnitId.value, value)
-      ElMessage.success(t('functionUnit.publishSuccess'))
-      store.fetchById(functionUnitId.value)
-    } catch (e: any) {
-      if (e !== 'cancel') {
-        ElMessage.error(e.response?.data?.message || t('functionUnit.publishFailed'))
-      }
     }
   }
 
@@ -79,7 +68,6 @@ export function useFunctionUnitActions(options: UseFunctionUnitActionsOptions) {
     showValidationDialog,
     validationResult,
     handleValidate,
-    handlePublish,
     handleExport
   }
 }

@@ -25,6 +25,7 @@
                 :key="item.id"
                 placement="bottom"
                 :show-after="250"
+                :disabled="menuOpenId === item.id"
                 popper-class="launchpad-tile-tooltip"
               >
                 <template #content>
@@ -67,6 +68,7 @@
                     trigger="click"
                     popper-class="launchpad-dropdown-popper"
                     @command="(cmd: string) => handleCommand(cmd, item)"
+                    @visible-change="(v: boolean) => (menuOpenId = v ? item.id : null)"
                   >
                     <button
                       class="member-menu-btn"
@@ -103,7 +105,7 @@
                           command="delete"
                           divided
                         >
-                          <el-icon><Delete /></el-icon>{{ t('common.delete') }}
+                          <el-icon><component :is="item.status === 'ARCHIVED' ? Delete : Box" /></el-icon>{{ deleteLabel(item) }}
                         </el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
@@ -124,7 +126,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Setting, CopyDocument, Delete, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
+import { Setting, CopyDocument, Delete, Box, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import type { LaunchpadFolderEntry } from '@/composables/functionUnitList/useLaunchpadLayout'
@@ -151,6 +153,9 @@ const emit = defineEmits<{
   (e: 'reorder', folderId: string, fromId: number, toId: number, mode: 'before' | 'after'): void
 }>()
 
+// 描述气泡与操作菜单挂在同一张卡上，菜单打开时会被气泡盖住，故开菜单即禁用该卡气泡
+const menuOpenId = ref<number | null>(null)
+
 function statusLabel(item: FunctionUnitResponse): string {
   const map: Record<string, string> = {
     DRAFT: t('functionUnit.draft'),
@@ -158,6 +163,12 @@ function statusLabel(item: FunctionUnitResponse): string {
     ARCHIVED: t('functionUnit.archived'),
   }
   return map[item.status] || item.status
+}
+
+// 后端 delete 是两段式：未归档的调用只是软删（置为 ARCHIVED），已归档的才真删。
+// 菜单文案必须跟着状态走，否则第一次点「Delete」弹出的却是归档确认框。
+function deleteLabel(item: FunctionUnitResponse): string {
+  return item.status === 'ARCHIVED' ? t('functionUnit.deletePermanent') : t('functionUnit.archive')
 }
 
 function handleCommand(cmd: string, item: FunctionUnitResponse) {
@@ -232,7 +243,9 @@ function onDropOutside() {
 .folder-overlay {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  // 必须低于 Element Plus 弹层基线（useZIndex 从 2000 起自增）：浮层内的菜单/气泡/
+  // Settings 弹窗/删除确认框才能自然压在浮层之上。抬高到 2000 以上会把弹窗盖在背后。
+  z-index: 1900;
   display: flex;
   align-items: center;
   justify-content: center;
