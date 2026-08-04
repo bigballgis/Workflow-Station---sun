@@ -691,6 +691,7 @@ export default {
     tableForm: '表/表单',
     subTableName: '子表名',
     processInstanceId: '流程实例',
+    processInstanceSearchPlaceholder: 'ID / 标题 / 请求编号',
     stage: '环节',
     fieldName: '字段',
     changeType: '操作类型',

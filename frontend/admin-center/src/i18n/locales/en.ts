@@ -695,6 +695,7 @@ export default {
     tableForm: 'Table / Form',
     subTableName: 'Sub-table',
     processInstanceId: 'Process Instance',
+    processInstanceSearchPlaceholder: 'ID / Title / Request ID',
     stage: 'Stage',
     fieldName: 'Field',
     changeType: 'Change Type',
