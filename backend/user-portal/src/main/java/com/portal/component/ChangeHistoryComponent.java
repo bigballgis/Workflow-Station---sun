@@ -65,6 +65,7 @@ public class ChangeHistoryComponent {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final UserPortalAuditEnricher userPortalAuditEnricher;
+    private final UserPortalAuditProcessInstanceMatcher processInstanceMatcher;
     /**
      * Isolated commits for history writes — failures roll back only this slice
      * (never outer txn).
@@ -79,6 +80,7 @@ public class ChangeHistoryComponent {
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
             UserPortalAuditEnricher userPortalAuditEnricher,
+            UserPortalAuditProcessInstanceMatcher processInstanceMatcher,
             PlatformTransactionManager transactionManager) {
         this.changeHistoryRepository = changeHistoryRepository;
         this.processInstanceRepository = processInstanceRepository;
@@ -87,6 +89,7 @@ public class ChangeHistoryComponent {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.userPortalAuditEnricher = userPortalAuditEnricher;
+        this.processInstanceMatcher = processInstanceMatcher;
         TransactionTemplate tt = new TransactionTemplate(transactionManager);
         tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.requiresNewTx = tt;
@@ -1260,7 +1263,9 @@ public class ChangeHistoryComponent {
         Sort sort = buildAuditSort(request.getSortField(), request.getSortOrder());
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Specification<ChangeHistory> spec = buildAuditSpecification(request);
+        // Resolve PI keyword once (outside Spec) so count+content do not double-query.
+        List<String> matchingPiIds = resolveProcessInstanceFilter(request);
+        Specification<ChangeHistory> spec = buildAuditSpecification(request, matchingPiIds);
         Page<ChangeHistory> entityPage = changeHistoryRepository.findAll(spec, pageable);
         List<ChangeHistory> entities = entityPage.getContent();
 
@@ -1279,7 +1284,18 @@ public class ChangeHistoryComponent {
                 records, pageable, entityPage.getTotalElements());
     }
 
-    private Specification<ChangeHistory> buildAuditSpecification(UserPortalAuditQueryRequest request) {
+    private List<String> resolveProcessInstanceFilter(UserPortalAuditQueryRequest request) {
+        if (request.getProcessInstanceId() == null || request.getProcessInstanceId().isBlank()) {
+            return null;
+        }
+        Instant start = parseIsoInstant(request.getStartTime());
+        Instant end = parseIsoInstant(request.getEndTime());
+        return processInstanceMatcher.resolveMatchingProcessInstanceIds(
+                request.getProcessInstanceId(), start, end);
+    }
+
+    private Specification<ChangeHistory> buildAuditSpecification(
+            UserPortalAuditQueryRequest request, List<String> preResolvedPiIds) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -1315,8 +1331,12 @@ public class ChangeHistoryComponent {
                 }
             }
 
-            if (request.getProcessInstanceId() != null && !request.getProcessInstanceId().isBlank()) {
-                predicates.add(cb.equal(root.get("processInstanceId"), request.getProcessInstanceId().trim()));
+            if (preResolvedPiIds != null) {
+                if (preResolvedPiIds.isEmpty()) {
+                    predicates.add(cb.disjunction()); // no match → empty result
+                } else {
+                    predicates.add(root.get("processInstanceId").in(preResolvedPiIds));
+                }
             }
 
             // functionUnitCode filter requires sub-select on process_instance_id
@@ -1335,10 +1355,12 @@ public class ChangeHistoryComponent {
             // username filter: resolve userIds from sys_users, then filter
             if (request.getUsername() != null && !request.getUsername().isBlank()) {
                 String keyword = request.getUsername().trim().toLowerCase();
+                String like = "%" + UserPortalAuditProcessInstanceMatcher.escapeLike(keyword) + "%";
                 List<String> matchingUserIds = jdbcTemplate.query(
-                        "SELECT id FROM sys_users WHERE LOWER(username) LIKE ? OR LOWER(full_name) LIKE ?",
+                        "SELECT id FROM sys_users WHERE LOWER(username) LIKE ? ESCAPE '\\' "
+                                + "OR LOWER(full_name) LIKE ? ESCAPE '\\'",
                         (rs, rowNum) -> rs.getString("id"),
-                        "%" + keyword + "%", "%" + keyword + "%");
+                        like, like);
                 if (matchingUserIds.isEmpty()) {
                     predicates.add(cb.disjunction());
                 } else {

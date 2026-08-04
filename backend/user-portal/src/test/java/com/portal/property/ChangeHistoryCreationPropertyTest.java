@@ -50,6 +50,7 @@ public class ChangeHistoryCreationPropertyTest {
                 mock(JdbcTemplate.class),
                 new ObjectMapper(),
                 mock(com.portal.component.UserPortalAuditEnricher.class),
+                mock(com.portal.component.UserPortalAuditProcessInstanceMatcher.class),
                 PortalTransactionTestSupport.noopPlatformTransactionManager());
     }
 

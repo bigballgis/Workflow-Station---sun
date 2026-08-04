@@ -1839,3 +1839,18 @@
     建议：新增 dw_process_definition_history（function_unit_id + bpmn_xml + created_at + created_by，
     init-scripts 追加新 .sql），save() 落库前写入前一版本，保留最近 N 条 / N 天；
     设计器加「恢复上一版本」入口。需先定 ADR：保留策略、是否对 forms/actions 等同类设计表一并铺开。
+
+- id: "1512"
+  status: fixed
+  fixed_at: "2026-08-04"
+  severity: major
+  category: bug
+  summary: "Admin User Portal 审计按 Request ID 搜索失败，且 variables_json 无界 LIKE"
+  file: "backend/user-portal/src/main/java/com/portal/component/UserPortalAuditProcessInstanceMatcher.java"
+  note: |
+    根因：用 LOWER(variables_json) LIKE 匹配完整 Request ID，但 Request ID 由
+    RequestIdEnricher 从主表字段+分隔符派生，通常不以连续串落库；且查询在
+    JPA Spec 内、无 LIMIT，count+content 可能双查。
+    修复：抽出 UserPortalAuditProcessInstanceMatcher——列字段 LIKE（ESCAPE+LIMIT）
+    + 按审计时间窗候选实例用 RequestIdEnricher 计算匹配；PI 解析移出 Spec；
+    单测覆盖派生 Request ID 命中/未命中与 LIKE 转义。

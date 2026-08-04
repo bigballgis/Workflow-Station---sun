@@ -19,7 +19,10 @@ public class UserPortalAuditQueryRequest {
     private String startTime;
     /** 查询截止时间（ISO-8601） */
     private String endTime;
-    /** 按流程实例 ID 过滤 */
+    /**
+     * Keyword for process instance filter: matches instance id, title, business key,
+     * process definition name, or computed Request ID (case-insensitive substring).
+     */
     private String processInstanceId;
     /** 分页页码（0-based） */
     private int page;

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.UserPortalAuditEnricher;
+import com.portal.component.UserPortalAuditProcessInstanceMatcher;
 import com.portal.component.TaskFormSubTableChangeRecorder;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.ChangeHistoryRecord;
@@ -65,6 +66,7 @@ public class SubTableChangeHistoryPropertyTest {
                                 jdbcTemplate,
                                 new ObjectMapper(),
                                 mock(UserPortalAuditEnricher.class),
+                                mock(UserPortalAuditProcessInstanceMatcher.class),
                                 PortalTransactionTestSupport.noopPlatformTransactionManager());
         }
 
