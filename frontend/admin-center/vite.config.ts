@@ -30,13 +30,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    // Run each test file in a forked child process rather than a worker thread.
-    //
-    // With the default threads pool every test passes but the run still exits non-zero with
-    // "Worker exited unexpectedly" — jsdom does not tear down cleanly inside a worker thread
-    // here, and the crash happens after the results are in. A green suite that reports failure
-    // is worse than useless in CI, so the pool is pinned rather than left to the default.
-    pool: 'forks',
   },
   server: {
     port: 3000,
