@@ -8,7 +8,9 @@ import com.developer.repository.IconRepository;
 import com.developer.service.AiWriteService;
 import com.developer.util.AiBpmnActionBindingWriter;
 import com.developer.util.AiBpmnFormBindingWriter;
+import com.developer.util.AiBpmnMiSubTableWriter;
 import com.developer.util.AiBpmnSemanticGuard;
+import com.developer.util.AiSubFormMiAssignmentWriter;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -78,6 +80,10 @@ public class AiWriteServiceImpl implements AiWriteService {
         // Form IDs are database-generated and are required by BPMN custom formId properties.
         entityManager.flush();
         writeProcessDefinition(functionUnit, generatedData);
+        // Multi-instance nodes reference two more database-generated ids the model cannot know:
+        // the sub table's id in BPMN, and the sub-table binding's id that keys the sub-form
+        // carrying the assignment component. Both are resolvable only after the flush above.
+        writeMultiInstanceAssignment(functionUnit);
 
         // Handle icon matching/creation before saving
         handleIcon(functionUnit, generatedData);
@@ -795,6 +801,35 @@ public class AiWriteServiceImpl implements AiWriteService {
                 .build();
 
         functionUnit.setProcessDefinition(processDefinition);
+    }
+
+    /**
+     * 把多实例分配的两处"库生成 id"补齐：BPMN 里的 {@code subTableId}，以及 {@code configJson.subForms}
+     * 里以子表绑定 id 为键的 {@code miAssignment} 组件。
+     *
+     * <p>和 formId/actionId 是同一类缺口——模型只能给出表名/绑定意图，id 由数据库在写入过程中分配。
+     * 少了前者，部署校验报 {@code MISSING_SUBTABLE_ID}；少了后者，契约完整时报
+     * {@code MISSING_MI_ASSIGNMENT_COMPONENT}，契约不完整时更糟：一路绿灯部署成功，运行时子表行
+     * 没有任何指派入口。</p>
+     */
+    private void writeMultiInstanceAssignment(FunctionUnit functionUnit) {
+        ProcessDefinition processDefinition = functionUnit.getProcessDefinition();
+        if (processDefinition == null || processDefinition.getBpmnXml() == null
+                || processDefinition.getBpmnXml().isBlank()) {
+            return;
+        }
+
+        processDefinition.setBpmnXml(AiBpmnMiSubTableWriter.bindMiSubTables(
+                processDefinition.getBpmnXml(), functionUnit.getTableDefinitions()));
+
+        List<String> written = AiSubFormMiAssignmentWriter.writeAssignmentContainers(
+                processDefinition.getBpmnXml(),
+                functionUnit.getFormDefinitions(),
+                this::fieldToFormCreateRule,
+                this::defaultFormCreateOptions);
+        for (String target : written) {
+            log.info("Wrote MI assignment component into {}", target);
+        }
     }
 
     /**
