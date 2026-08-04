@@ -33,7 +33,9 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
+      # 10 太小：设计器一个页面就并发打 3~4 个接口，叠加 Deploy / AI 的长事务后整池排队，
+      # 表现是所有设计器 tab 卡满 connection-timeout(20s) 然后 500。
+      maximum-pool-size: 20
       minimum-idle: 5
       idle-timeout: 300000
       connection-timeout: 20000
@@ -45,6 +47,12 @@ spring:
     enabled: false
 
   jpa:
+    # 关掉 OSIV：开着时 EntityManager 活到视图渲染结束，请求里任何一次出站 HTTP
+    # （admin-center / workflow-engine / AI gateway，RestTemplate readTimeout=60s）
+    # 都在占着连接，池子被拖垮。关掉后连接只在事务内持有。
+    # 代价：@Transactional 外不能再懒加载——控制器直接返回实体时，未被 @JsonIgnore
+    # 的 LAZY 关联（FunctionUnit.icon / previousVersion 等）必须在事务内就已初始化。
+    open-in-view: false
     hibernate:
       ddl-auto: none
     show-sql: false

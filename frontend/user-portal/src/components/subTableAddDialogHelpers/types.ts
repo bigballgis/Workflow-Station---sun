@@ -37,6 +37,13 @@ export interface DialogColumn {
   type?: ColumnType
   required?: boolean
   readonly?: boolean
+  /**
+   * Designer "Hide" toggle from the sub-form canvas rule (`hidden` / `_hidden` /
+   * `display: false` / `props.hidden`). Seeds the dialog's script-visibility state on open,
+   * so a statically hidden field starts hidden — an event script may still reveal it via
+   * `api.hidden(false, …)`. Without this the flag was dropped and the field always showed.
+   */
+  hidden?: boolean
   /** Element Plus rules from Form Design `rule.validate`; preferred by buildRules over required-only. */
   rules?: Array<Record<string, unknown>>
   /** Form Design Basis / rule default; used by buildInitialRow for Add dialog. */
