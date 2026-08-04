@@ -69,7 +69,19 @@ class FlowableActHiCommentSchemaRepairTest {
                 .thenReturn(type);
     }
 
+    /**
+     * The identity-link check reads character_maximum_length (an Integer), not data_type, and is
+     * run for both act_ru_identitylink and act_hi_identitylink. Returning 4000 keeps these tests
+     * focused on the act_hi_comment behaviour they were written for.
+     */
+    private void stubIdentityLinksWidened() {
+        when(jdbcTemplate.queryForObject(
+                contains("character_maximum_length"), eq(Integer.class), anyString(), anyString()))
+                .thenReturn(4000);
+    }
+
     private void stubAllColumnsWidened() {
+        stubIdentityLinksWidened();
         stubColumnType("message_", "text");
         stubColumnType("action_", "character varying");
         stubColumnType("type_", "character varying");
@@ -106,7 +118,12 @@ class FlowableActHiCommentSchemaRepairTest {
         assertThatCode(() -> repair.run(null)).doesNotThrowAnyException();
 
         verify(jdbcTemplate).execute(contains("ALTER COLUMN message_ TYPE TEXT"));
-        verify(jdbcTemplate).execute(contains("ALTER COLUMN user_id_ TYPE VARCHAR(4000)"));
+        // Qualify with the table: user_id_ is widened on act_hi_comment *and* on both
+        // identity-link tables, so an unqualified matcher now sees three invocations.
+        verify(jdbcTemplate).execute(
+                contains("ALTER TABLE act_hi_comment ALTER COLUMN user_id_ TYPE VARCHAR(4000)"));
+        verify(jdbcTemplate).execute(
+                contains("ALTER TABLE IF EXISTS act_ru_identitylink ALTER COLUMN group_id_ TYPE VARCHAR(4000)"));
     }
 
     @Test
@@ -120,6 +137,34 @@ class FlowableActHiCommentSchemaRepairTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("act_hi_comment.message_")
                 .hasMessageContaining("value too long");
+    }
+
+    @Test
+    @DisplayName("fails startup when an identity-link column is still varchar(255)")
+    void failsWhenIdentityLinkNotWidened() {
+        stubTableExists(true);
+        stubAllColumnsWidened();
+        when(jdbcTemplate.queryForObject(
+                contains("character_maximum_length"), eq(Integer.class), anyString(), anyString()))
+                .thenReturn(255); // widen silently did not apply
+
+        assertThatThrownBy(() -> repair.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("identitylink")
+                .hasMessageContaining("varchar(4000)");
+    }
+
+    @Test
+    @DisplayName("tolerates identity-link tables that do not exist yet")
+    void tolersatesMissingIdentityLinkTables() {
+        stubTableExists(true);
+        stubAllColumnsWidened();
+        // null length = table absent on this boot; the next boot picks it up.
+        when(jdbcTemplate.queryForObject(
+                contains("character_maximum_length"), eq(Integer.class), anyString(), anyString()))
+                .thenReturn(null);
+
+        assertThatCode(() -> repair.run(null)).doesNotThrowAnyException();
     }
 
     @Test

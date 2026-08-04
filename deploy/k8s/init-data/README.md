@@ -38,9 +38,35 @@
 
 **执行前**：整库 `pg_dump` 备份（`act_*` 与 `dw_*`/`sys_*` 同库，且 `sys_function_unit_contents` 里指向 `ACT_RE_*` 的两个指针**无外键约束**，只恢复一部分会产生悬垂引用），并停掉 `workflow-engine`。脚本**单向**，官方无降级脚本，回滚只能整库恢复备份。
 
-**各环境**：2026-08 起 **所有环境**（dev / sit / preprod / uat / prod）的 `FLOWABLE_SCHEMA_UPDATE` 统一为 `false` —— 引擎不会自动迁移，版本不符会直接启动失败。发布新引擎版本前必须：**停引擎 → 整库备份 → 执行迁移脚本 → 再启动**。这样做是因为 Flowable 的 schema 迁移单向不可逆，不应由「重启容器」顺带触发。唯一例外是单元测试（`application-test.yml` 保持 `true`，每次跑都是全新的内存 H2）。
+**各环境**：2026-08 起 **dev / sit / preprod / uat / prod** 的 `FLOWABLE_SCHEMA_UPDATE` 一律为 `false` —— 引擎只校验版本，**既不建表也不升级**，版本不符直接启动失败。发布新引擎版本前必须：**停引擎 → 整库备份 → 执行迁移脚本 → 再启动**。理由是 Flowable 的 schema 迁移单向不可逆（官方无降级脚本），不该由「重启了一下容器」顺带触发。
 
-> 已验证：本机 dev 库由引擎自动迁移；同一份备份恢复到临时库后用本脚本手工迁移，两者产出的 `act_*`/`flw_*` schema **841 列逐字节一致**。
+唯一例外是**单元测试**（`application-test.yml` 保持 `true`）：每次跑都是全新的内存 H2，没有需要保护的数据。
+
+### dev 的 act_* 从哪来（引擎既然不建表）
+
+由 postgres 首次初始化时的 `deploy/init-scripts/00-init-all.sh` **Step 0** 建好（在业务表之前），全部是官方 SQL，没有手工拼装的部分：
+
+```
+[0/7] create/flowable.postgres.all.create.sql   官方建表（7.0.0 基线）
+        + upgradestep.7.0.0.to.7.0.1            ┐
+        + upgradestep.7.0.1.to.7.1.0            ├ 官方增量，落到 7.2.0.2
+        + upgradestep.7.1.0.to.7.2.0            ┘
+[1/7] 业务表 00-schema/01-05
+[2/7] 增量迁移，含 30-/31-                       ← act_* 已存在，加宽在此天然生效
+[3/7] 角色 / 用户
+[4x/7] demo Function Unit
+```
+
+`deploy/k8s/init-data/init-flowable` 通过 compose 以 `/flowable-sql:ro` 单独挂进 postgres 容器（不复制一份到 `init-scripts/`，避免同一份 SQL 在仓库里存两处、升版本时漏改其中一个）。
+
+**两点背景，改之前先读**：
+
+1. **为什么必须在 Step 2 之前** —— `30-`/`31-` 用的是 `ALTER TABLE IF EXISTS`。在这一步之前，`act_*` 要等引擎启动时才建，于是这两个脚本在全新库上**静默空转**，19 个加宽列从未生效。这个顺序问题在 7.2.0 升级之前就存在，只是那时引擎自己建表（`true`）把它掩盖了。
+2. **升 Flowable 版本时要改哪里** —— 把新的官方 `upgradestep` 文件放进 `upgrade/`，并追加到 `00-init-all.sh` 里的 `FLOWABLE_UPGRADE_STEPS`。忘了改也不会静默出错：引擎是 `false`，版本不符会拒绝启动。
+
+> 另注：`99-maintenance/00-wipe-all-function-units.sql` 曾被 init 自动调用（旧 Step 4）。它会 **DROP 掉所有 `act_*`/`flw_*`**，而 initdb 只在数据目录为空时运行、Step 1–3 又不创建任何 Function Unit —— 也就是说它在初始化时无事可清，只是把刚建好的 Flowable 表删掉。现已从 init 移除；该脚本保留在 `99-maintenance/` 供**人工重播种既有库**使用。
+
+> 已验证：`create + 三个 upgradestep` 产出的 schema 与引擎自建的 schema，核心 `act_*`/`flw_*` 表**逐列一致**（差异仅为 content/form 引擎的多余表，以及本仓库刻意加宽的 19 列）。
 
 ## 与 `deploy/init-scripts` 的关系
 
