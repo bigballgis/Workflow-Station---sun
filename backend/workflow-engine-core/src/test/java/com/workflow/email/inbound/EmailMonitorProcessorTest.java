@@ -93,7 +93,7 @@ class EmailMonitorProcessorTest {
         assertThat(sent.getVariables()).containsEntry("case_number", "ABC-7");
         assertThat(sent.getVariables()).containsEntry("initiator", "system");
         assertThat(sent.getVariables()).containsKey("__inboundEmail__");
-        verify(portalSyncComponent).hydratePortalProcessInstanceAsync("pi-9");
+        verify(portalSyncComponent).hydratePortalProcessInstanceAsync(org.mockito.ArgumentMatchers.eq("pi-9"), any());
     }
 
     @Test

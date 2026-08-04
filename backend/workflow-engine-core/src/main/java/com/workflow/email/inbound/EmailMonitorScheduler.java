@@ -1,6 +1,7 @@
 package com.workflow.email.inbound;
 
 import com.platform.security.encryption.EncryptionService;
+import com.workflow.client.AdminCenterSystemImapClient;
 import com.workflow.email.extract.EmailMessage;
 import com.workflow.email.inbound.entity.SysEmailConnection;
 import com.workflow.email.inbound.entity.SysEmailMonitorRule;
@@ -38,6 +39,7 @@ public class EmailMonitorScheduler {
     private final InboundMailClient imapClient;
     private final EmailMonitorProcessor processor;
     private final EncryptionService encryptionService;
+    private final AdminCenterSystemImapClient adminCenterSystemImapClient;
 
     @Value("${workflow.email.monitor.enabled:true}")
     private boolean enabled;
@@ -119,28 +121,20 @@ public class EmailMonitorScheduler {
             return null;
         }
 
-        // Prefer explicitly configured IMAP endpoint; fall back to provider preset for known types.
-        String host = connection.getImapHost();
-        Integer port = connection.getImapPort();
-        boolean ssl = connection.getImapUseSsl() == null || Boolean.TRUE.equals(connection.getImapUseSsl());
-        if (!StringUtils.hasText(host) || port == null || port <= 0) {
-            ImapProviderPreset preset = ImapProviderPreset.forType(connection.getConnectionType());
-            if (preset == null) {
-                log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} type={} has no IMAP host/port configured and no preset available",
-                        rule.getId(), rule.getConnectionUid(), connection.getConnectionType());
-                return null;
-            }
-            host = preset.host();
-            port = preset.port();
-            if (connection.getImapUseSsl() == null) {
-                ssl = preset.ssl();
-            }
-            log.info("[EMAIL-MONITOR] rule {} using IMAP preset for type {}: host={} port={} ssl={}",
-                    rule.getId(), connection.getConnectionType(), host, port, ssl);
-        } else {
-            log.info("[EMAIL-MONITOR] rule {} using configured IMAP endpoint: host={} port={} ssl={}",
-                    rule.getId(), host, port, ssl);
+        // Global IMAP endpoint from Admin Center system config (not per-connection fields).
+        AdminCenterSystemImapClient.SystemImapEndpoint systemImap;
+        try {
+            systemImap = adminCenterSystemImapClient.fetchSystemImapEndpoint();
+        } catch (IllegalStateException ex) {
+            log.warn("[EMAIL-MONITOR] rule {} skipped: system IMAP not configured: {}",
+                    rule.getId(), ex.getMessage());
+            return null;
         }
+        String host = systemImap.host();
+        int port = systemImap.port();
+        boolean ssl = systemImap.useSsl();
+        log.info("[EMAIL-MONITOR] rule {} using system IMAP endpoint: host={} port={} ssl={}",
+                rule.getId(), host, port, ssl);
 
         String username = StringUtils.hasText(connection.getMailboxAddress())
                 ? connection.getMailboxAddress() : connection.getUsername();

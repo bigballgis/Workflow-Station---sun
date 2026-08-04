@@ -87,4 +87,26 @@ class ProcessInstanceHydrationComponentTest {
                 .isInstanceOf(PortalException.class)
                 .hasMessageContaining(PI_ID);
     }
+
+    @Test
+    void hydratesFromSnapshotWithoutCallingEngine() {
+        when(processInstanceRepository.findById(PI_ID)).thenReturn(Optional.empty());
+        when(userDisplayNameResolver.resolve("system")).thenReturn("system");
+        when(processInstanceRepository.save(any(ProcessInstance.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Object> snapshot = Map.of(
+                "processDefinitionKey", "test-20260803-xc0jmo",
+                "businessKey", "email:msg-1",
+                "startUserId", "system",
+                "status", "RUNNING",
+                "variables", Map.of("subject", "hello", "functionUnitId", "50030"));
+
+        ProcessInstance result = hydrationComponent.requireProcessInstance(PI_ID, snapshot);
+
+        assertThat(result.getId()).isEqualTo(PI_ID);
+        assertThat(result.getProcessDefinitionKey()).isEqualTo("test-20260803-xc0jmo");
+        assertThat(result.getVariables()).containsEntry("subject", "hello");
+        verify(workflowEngineClient, never()).getProcessInstance(any());
+        verify(processInstanceRepository).save(any(ProcessInstance.class));
+    }
 }

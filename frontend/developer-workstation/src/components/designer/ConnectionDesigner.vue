@@ -39,6 +39,7 @@
             {{ t('common.edit') }}
           </el-button>
           <el-button
+            v-if="isOutboundCapableRow(row as EmailConnection)"
             link
             type="success"
             @click="openTestDialog(row as EmailConnection)"
@@ -73,103 +74,89 @@
         label-position="top"
         class="connection-form"
       >
-        <el-form-item
-          prop="senderEmail"
-          class="connection-sender-email-item"
-          :label="t('connection.fromEmail')"
-          required
-        >
-          <el-input
-            v-model="form.senderEmail"
-            autocomplete="off"
-            :placeholder="t('connection.emailAddressPlaceholder')"
-          />
-          <div class="form-tip">{{ t('connection.fromEmailHint') }}</div>
-        </el-form-item>
-        <el-form-item :label="t('connection.fromName')">
-          <el-input v-model="form.fromName" :placeholder="t('connection.fromNamePlaceholder')" />
-        </el-form-item>
-        <template v-if="isOutboundCapable">
-          <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
-          <p class="form-tip connection-system-smtp-hint">{{ t('connection.systemSmtpFromAdminHint') }}</p>
-        </template>
-        <template v-if="!isOutboundCapable">
-          <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
-          <el-form-item prop="host" :label="t('connection.host')" required>
-            <el-input
-              v-model="form.host"
-              placeholder="smtp.example.com"
-              autocomplete="off"
-            />
-            <div class="form-tip">{{ t('connection.smtpHostHint') }}</div>
-          </el-form-item>
-          <el-form-item prop="port" :label="t('connection.port')" required>
-            <el-input-number
-              v-model="form.port"
-              :min="1"
-              :max="65535"
-              controls-position="right"
-              style="width: 100%"
-            />
-            <div class="form-tip">{{ t('connection.smtpPortHint') }}</div>
-          </el-form-item>
-          <el-form-item prop="useTls" :label="t('connection.useTls')" required>
-            <el-radio-group v-model="form.useTls">
-              <el-radio :value="true">{{ t('common.yes') }}</el-radio>
-              <el-radio :value="false">{{ t('common.no') }}</el-radio>
-            </el-radio-group>
-            <div class="form-tip">{{ t('connection.smtpTlsHint') }}</div>
-          </el-form-item>
-        </template>
-        <el-form-item :label="t('connection.username')">
-          <el-input v-model="form.username" autocomplete="off" :placeholder="t('connection.usernamePlaceholder')" />
-          <div class="form-tip">{{ t('connection.usernameHint') }}</div>
-        </el-form-item>
-        <el-form-item :label="t('connection.password')" :required="!editingId">
-          <el-input
-            v-model="form.password"
-            type="password"
-            show-password
-            autocomplete="new-password"
-            :placeholder="editingId ? t('connection.passwordKeep') : ''"
-          />
-          <div class="form-tip">{{ t('connection.passwordHint') }}</div>
-        </el-form-item>
         <el-form-item :label="t('connection.direction')">
           <el-select v-model="form.direction" style="width: 100%">
             <el-option :label="t('connection.directionOutbound')" value="OUTBOUND" />
             <el-option :label="t('connection.directionInbound')" value="INBOUND" />
-            <el-option :label="t('connection.directionBoth')" value="BOTH" />
           </el-select>
-          <div class="form-tip">{{ t('connection.directionHint') }}</div>
+          <div v-if="legacyBothEditing" class="form-tip">{{ t('connection.directionLegacyBothHint') }}</div>
+          <div class="form-tip">{{ directionHint }}</div>
         </el-form-item>
 
-        <template v-if="isInbound">
-          <el-divider content-position="left">{{ t('connection.inboundSection') }}</el-divider>
-          <el-form-item :label="t('connection.mailboxAddress')">
-            <el-input v-model="form.mailboxAddress" autocomplete="off" :placeholder="t('connection.mailboxAddressPlaceholder')" />
-            <div class="form-tip">{{ t('connection.mailboxAddressHint') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('connection.imapHost')" :required="imapRequired">
-            <el-input v-model="form.imapHost" placeholder="imap.example.com" autocomplete="off" />
-            <div class="form-tip">{{ t('connection.imapHostHint') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('connection.imapPort')" :required="imapRequired">
-            <el-input-number
-              v-model="form.imapPort"
-              :min="1"
-              :max="65535"
-              controls-position="right"
-              style="width: 100%"
+        <!-- Monitor-only: mailbox + IMAP credentials; server from System Config -->
+        <template v-if="isInboundOnly">
+          <p class="connection-section-title">{{ t('connection.monitorSection') }}</p>
+          <p class="form-tip connection-system-imap-hint">{{ t('connection.systemImapFromAdminHint') }}</p>
+          <el-form-item
+            prop="senderEmail"
+            class="connection-sender-email-item"
+            :label="t('connection.monitorMailboxEmail')"
+            required
+          >
+            <el-input
+              v-model="form.senderEmail"
+              autocomplete="off"
+              :placeholder="t('connection.monitorMailboxEmailPlaceholder')"
             />
-            <div class="form-tip">{{ t('connection.imapPortHint') }}</div>
+            <div class="form-tip">{{ t('connection.monitorMailboxEmailHint') }}</div>
           </el-form-item>
-          <el-form-item :label="t('connection.imapUseSsl')">
-            <el-radio-group v-model="form.imapUseSsl">
-              <el-radio :value="true">{{ t('common.yes') }}</el-radio>
-              <el-radio :value="false">{{ t('common.no') }}</el-radio>
-            </el-radio-group>
-            <div class="form-tip">{{ t('connection.imapSslHint') }}</div>
+          <el-form-item :label="t('connection.monitorUsername')">
+            <el-input
+              v-model="form.username"
+              autocomplete="off"
+              :placeholder="t('connection.monitorUsernamePlaceholder')"
+            />
+            <div class="form-tip">{{ t('connection.monitorUsernameHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('connection.monitorPassword')" :required="!editingId">
+            <el-input
+              v-model="form.password"
+              type="password"
+              show-password
+              autocomplete="new-password"
+              :placeholder="editingId ? t('connection.passwordKeep') : ''"
+            />
+            <div class="form-tip">{{ t('connection.monitorPasswordHint') }}</div>
+          </el-form-item>
+        </template>
+
+        <!-- Outbound send: sender identity + SMTP from System Config -->
+        <template v-else>
+          <el-form-item
+            prop="senderEmail"
+            class="connection-sender-email-item"
+            :label="t('connection.fromEmail')"
+            required
+          >
+            <el-input
+              v-model="form.senderEmail"
+              autocomplete="off"
+              :placeholder="t('connection.emailAddressPlaceholder')"
+            />
+            <div class="form-tip">{{ t('connection.fromEmailHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('connection.fromName')">
+            <el-input v-model="form.fromName" :placeholder="t('connection.fromNamePlaceholder')" />
+          </el-form-item>
+          <p class="connection-section-title">{{ t('connection.smtpSection') }}</p>
+          <p class="form-tip connection-system-smtp-hint">{{ t('connection.systemSmtpFromAdminHint') }}</p>
+          <el-form-item :label="t('connection.username')">
+            <el-input
+              v-model="form.username"
+              autocomplete="off"
+              :placeholder="t('connection.usernamePlaceholder')"
+            />
+            <div class="form-tip">{{ t('connection.usernameHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('connection.password')" :required="!editingId">
+            <el-input
+              v-model="form.password"
+              type="password"
+              show-password
+              autocomplete="new-password"
+              :placeholder="editingId ? t('connection.passwordKeep') : ''"
+            />
+            <div class="form-tip">{{ t('connection.passwordHint') }}</div>
           </el-form-item>
         </template>
 
@@ -236,8 +223,6 @@ const editingId = ref<number | null>(null)
 const testingConnectionId = ref<number | null>(null)
 const testRecipient = ref('')
 
-const SMTP_DEFAULT_PORT = 25
-const SMTP_DEFAULT_USE_TLS = true
 const SMTP_CONNECTION_TYPE: EmailProviderType = 'SMTP'
 
 /** Dialog model — avoid `name` (reserved/conflicts with el-form + HTML form). */
@@ -246,73 +231,43 @@ type ConnectionFormState = Omit<EmailConnectionRequest, 'name'> & { senderEmail:
 const defaultForm = (): ConnectionFormState => ({
   senderEmail: '',
   connectionType: SMTP_CONNECTION_TYPE,
-  host: '',
-  port: SMTP_DEFAULT_PORT,
   username: '',
   password: '',
   fromName: '',
-  useTls: SMTP_DEFAULT_USE_TLS,
   enabled: true,
   direction: 'OUTBOUND',
-  mailboxAddress: '',
-  imapHost: '',
-  imapPort: undefined,
-  imapUseSsl: true
 })
 
 const form = reactive<ConnectionFormState>(defaultForm())
 
-/** Outbound-capable connections use System Config for SMTP host/port/TLS. */
-const isOutboundCapable = computed(
-  () => form.direction === 'OUTBOUND' || form.direction === 'BOTH' || !form.direction,
+const isInboundOnly = computed(() => form.direction === 'INBOUND')
+const legacyBothEditing = ref(false)
+
+const directionHint = computed(() =>
+  isInboundOnly.value ? t('connection.directionHintMonitor') : t('connection.directionHintOutbound'),
 )
 
-const connectionFormRules = computed<FormRules>(() => {
-  const rules: FormRules = {
-    senderEmail: [
-      { required: true, message: t('connection.emailAddressRequired'), trigger: ['blur', 'change'] },
-      {
-        validator: (_rule, value, callback) => {
-          const text = String(value ?? '').trim()
-          if (!isValidSenderEmail(text)) {
-            callback(new Error(t('connection.emailAddressInvalid')))
-            return
-          }
-          callback()
-        },
-        trigger: ['blur', 'change'],
+function isOutboundCapableRow(row: EmailConnection): boolean {
+  const direction = row.direction || 'OUTBOUND'
+  return direction === 'OUTBOUND' || direction === 'BOTH'
+}
+
+const connectionFormRules = computed<FormRules>(() => ({
+  senderEmail: [
+    { required: true, message: t('connection.emailAddressRequired'), trigger: ['blur', 'change'] },
+    {
+      validator: (_rule, value, callback) => {
+        const text = String(value ?? '').trim()
+        if (!isValidSenderEmail(text)) {
+          callback(new Error(t('connection.emailAddressInvalid')))
+          return
+        }
+        callback()
       },
-    ],
-  }
-  if (!isOutboundCapable.value) {
-    rules.host = [{ required: true, message: t('connection.hostRequired'), trigger: ['blur', 'change'] }]
-    rules.port = [
-      {
-        validator: (_rule, value, callback) => {
-          if (value == null || value < 1 || value > 65535) {
-            callback(new Error(t('connection.portRequired')))
-            return
-          }
-          callback()
-        },
-        trigger: ['blur', 'change'],
-      },
-    ]
-    rules.useTls = [
-      {
-        validator: (_rule, value, callback) => {
-          if (value == null) {
-            callback(new Error(t('connection.tlsRequired')))
-            return
-          }
-          callback()
-        },
-        trigger: 'change',
-      },
-    ]
-  }
-  return rules
-})
+      trigger: ['blur', 'change'],
+    },
+  ],
+}))
 
 function clearConnectionFormValidation() {
   nextTick(() => formRef.value?.clearValidate())
@@ -350,35 +305,17 @@ const listColumns = computed<DesignerListTableColumn<EmailConnection>[]>(() => [
   },
 ])
 
-/** Inbound (IMAP) fields only apply when direction includes inbound. */
-const isInbound = computed(() => form.direction === 'INBOUND' || form.direction === 'BOTH')
-
-/** Non-SMTP provider types have a built-in IMAP preset in the engine; custom SMTP must fill it in. */
-const hasImapPreset = computed(() => form.connectionType !== 'SMTP')
-
-/** IMAP host/port are mandatory only for custom SMTP used inbound (no preset to fall back on). */
-const imapRequired = computed(() => isInbound.value && !hasImapPreset.value)
-
 function buildPayload(): EmailConnectionRequest {
   const emailAddress = form.senderEmail.trim()
-  const smtpUsername = form.username?.trim()
-  const inbound = form.direction === 'INBOUND' || form.direction === 'BOTH'
-  const outboundCapable = isOutboundCapable.value
+  const login = form.username?.trim()
   return {
     name: emailAddress,
     connectionType: SMTP_CONNECTION_TYPE,
-    host: outboundCapable ? undefined : form.host?.trim(),
-    port: outboundCapable ? undefined : form.port,
-    useTls: outboundCapable ? undefined : form.useTls,
-    username: smtpUsername || undefined,
+    username: login || undefined,
     password: form.password,
-    fromName: form.fromName?.trim() || undefined,
+    fromName: isInboundOnly.value ? undefined : (form.fromName?.trim() || undefined),
     enabled: form.enabled,
     direction: form.direction || 'OUTBOUND',
-    mailboxAddress: inbound ? (form.mailboxAddress?.trim() || undefined) : undefined,
-    imapHost: inbound ? (form.imapHost?.trim() || undefined) : undefined,
-    imapPort: inbound ? form.imapPort : undefined,
-    imapUseSsl: inbound ? form.imapUseSsl : undefined
   }
 }
 
@@ -405,6 +342,7 @@ function scrollConnectionDialogToTop() {
 
 function openCreateDialog() {
   editingId.value = null
+  legacyBothEditing.value = false
   Object.assign(form, defaultForm())
   showFormDialog.value = true
   clearConnectionFormValidation()
@@ -412,21 +350,16 @@ function openCreateDialog() {
 
 function openEditDialog(row: EmailConnection) {
   editingId.value = row.id
+  const rowDirection = row.direction || 'OUTBOUND'
+  legacyBothEditing.value = rowDirection === 'BOTH'
   Object.assign(form, {
     senderEmail: row.fromEmail || row.name || '',
     connectionType: SMTP_CONNECTION_TYPE,
-    host: row.host,
-    port: row.port ?? SMTP_DEFAULT_PORT,
     username: row.username || '',
     password: '',
-    direction: row.direction || 'OUTBOUND',
-    mailboxAddress: row.mailboxAddress || '',
-    imapHost: row.imapHost || '',
-    imapPort: row.imapPort ?? undefined,
-    imapUseSsl: row.imapUseSsl ?? true,
+    direction: rowDirection === 'BOTH' ? 'OUTBOUND' : rowDirection,
     fromName: row.fromName || '',
-    useTls: row.useTls ?? SMTP_DEFAULT_USE_TLS,
-    enabled: row.enabled
+    enabled: row.enabled,
   })
   showFormDialog.value = true
   clearConnectionFormValidation()
@@ -448,14 +381,6 @@ async function handleSave() {
     return
   }
 
-  if (imapRequired.value && !form.imapHost?.trim()) {
-    ElMessage.warning({ message: t('connection.imapHostRequired'), zIndex: 10001 })
-    return
-  }
-  if (imapRequired.value && (form.imapPort == null || form.imapPort < 1 || form.imapPort > 65535)) {
-    ElMessage.warning({ message: t('connection.imapPortRequired'), zIndex: 10001 })
-    return
-  }
   if (form.username?.trim() && !form.password && !editingId.value) {
     ElMessage.warning({ message: t('connection.passwordRequired'), zIndex: 10001 })
     return

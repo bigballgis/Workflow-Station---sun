@@ -3,6 +3,7 @@ package com.developer.component.impl;
 import com.developer.component.EmailMonitorRuleComponent;
 import com.developer.dto.EmailMonitorRuleRequest;
 import com.developer.dto.EmailMonitorRuleResponse;
+import com.developer.dto.EmailMonitorStartEventBindRequest;
 import com.developer.entity.EmailMonitorRule;
 import com.developer.entity.FunctionUnit;
 import com.developer.exception.DeveloperBusinessException;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -29,6 +31,17 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
     private final EmailConnectionRepository emailConnectionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final I18nService i18nService;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EmailMonitorRuleResponse> listTemplates(Long functionUnitId) {
+        ensureFunctionUnitExists(functionUnitId);
+        return emailMonitorRuleRepository
+                .findByFunctionUnitIdAndSourceRuleIdIsNullAndStartEventIdIsNullOrderByNameAsc(functionUnitId)
+                .stream()
+                .map(EmailMonitorRuleResponse::fromEntity)
+                .toList();
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -64,54 +77,130 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
 
+        rejectTemplatePollution(request);
         if (emailMonitorRuleRepository.existsByFunctionUnitIdAndName(functionUnitId, request.getName())) {
             throw new DeveloperBusinessException("CONFLICT_RULE_NAME",
                     i18nService.getMessage("email.monitor.name_conflict", request.getName()));
         }
         validateConnection(functionUnitId, request.getConnectionUid());
-        validateStartEventBinding(functionUnitId, request.getStartEventId(), null);
 
         EmailMonitorRule rule = EmailMonitorRule.builder()
                 .ruleUid(UUID.randomUUID().toString())
                 .functionUnit(functionUnit)
                 .build();
-        apply(rule, request);
+        applyTemplate(rule, request);
         return EmailMonitorRuleResponse.fromEntity(emailMonitorRuleRepository.save(rule));
     }
 
     @Override
     @Transactional
     public EmailMonitorRuleResponse update(Long functionUnitId, Long ruleId, EmailMonitorRuleRequest request) {
-        EmailMonitorRule rule = getEntity(functionUnitId, ruleId);
+        EmailMonitorRule rule = getTemplateEntity(functionUnitId, ruleId);
 
         if (emailMonitorRuleRepository.existsByFunctionUnitIdAndNameAndIdNot(
                 functionUnitId, request.getName(), ruleId)) {
             throw new DeveloperBusinessException("CONFLICT_RULE_NAME",
                     i18nService.getMessage("email.monitor.name_conflict", request.getName()));
         }
+        rejectTemplatePollution(request);
         validateConnection(functionUnitId, request.getConnectionUid());
-        validateStartEventBinding(functionUnitId, request.getStartEventId(), ruleId);
 
-        apply(rule, request);
-        return EmailMonitorRuleResponse.fromEntity(emailMonitorRuleRepository.save(rule));
+        applyTemplate(rule, request);
+        EmailMonitorRule saved = emailMonitorRuleRepository.save(rule);
+        refreshBindingsFromTemplate(saved);
+        return EmailMonitorRuleResponse.fromEntity(saved);
     }
 
     @Override
     @Transactional
     public void delete(Long functionUnitId, Long ruleId) {
-        emailMonitorRuleRepository.delete(getEntity(functionUnitId, ruleId));
+        EmailMonitorRule rule = getTemplateEntity(functionUnitId, ruleId);
+        if (!emailMonitorRuleRepository.findBySourceRuleId(ruleId).isEmpty()) {
+            throw new DeveloperBusinessException("CONFLICT_MONITOR_IN_USE",
+                    i18nService.getMessage("email.monitor.template_in_use"));
+        }
+        emailMonitorRuleRepository.delete(rule);
     }
 
-    /** Copies request fields onto the entity (shared by create/update). */
-    private void apply(EmailMonitorRule rule, EmailMonitorRuleRequest request) {
+    @Override
+    @Transactional
+    public EmailMonitorRuleResponse bindStartEvent(Long functionUnitId, EmailMonitorStartEventBindRequest request) {
+        FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
+                .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
+        EmailMonitorRule template = getTemplateEntity(functionUnitId, request.getTemplateRuleId());
+
+        String startEventId = request.getStartEventId().trim();
+        String bindingName = bindingName(template.getName(), startEventId);
+
+        EmailMonitorRule binding = emailMonitorRuleRepository
+                .findByFunctionUnitIdAndStartEventId(functionUnitId, startEventId)
+                .orElse(null);
+
+        if (binding == null) {
+            if (emailMonitorRuleRepository.existsByFunctionUnitIdAndName(functionUnitId, bindingName)) {
+                throw new DeveloperBusinessException("CONFLICT_RULE_NAME",
+                        i18nService.getMessage("email.monitor.name_conflict", bindingName));
+            }
+            binding = EmailMonitorRule.builder()
+                    .ruleUid(UUID.randomUUID().toString())
+                    .functionUnit(functionUnit)
+                    .name(bindingName)
+                    .build();
+        } else if (binding.getSourceRuleId() == null) {
+            // Legacy monolithic rule: convert in place to binding referencing the selected template.
+            binding.setSourceRuleId(template.getId());
+        } else if (!template.getId().equals(binding.getSourceRuleId())) {
+            copyTemplateFields(binding, template);
+            binding.setSourceRuleId(template.getId());
+        }
+
+        binding.setSourceRuleId(template.getId());
+        copyTemplateFields(binding, template);
+        binding.setStartEventId(startEventId);
+        binding.setProcessDefinitionKey(request.getProcessDefinitionKey().trim());
+        binding.setFilterFrom(trimToNull(request.getFilterFrom()));
+        binding.setFilterSubject(trimToNull(request.getFilterSubject()));
+        binding.setEnabled(request.getEnabled() == null || Boolean.TRUE.equals(request.getEnabled()));
+
+        validateStartEventBinding(functionUnitId, startEventId, binding.getId());
+        return EmailMonitorRuleResponse.fromEntity(emailMonitorRuleRepository.save(binding));
+    }
+
+    @Override
+    @Transactional
+    public void unbindStartEvent(Long functionUnitId, String startEventId) {
+        if (!StringUtils.hasText(startEventId)) {
+            return;
+        }
+        emailMonitorRuleRepository.findByFunctionUnitIdAndStartEventId(functionUnitId, startEventId.trim())
+                .ifPresent(emailMonitorRuleRepository::delete);
+    }
+
+    private void rejectTemplatePollution(EmailMonitorRuleRequest request) {
+        if (StringUtils.hasText(request.getStartEventId())) {
+            throw new DeveloperBusinessException("VALIDATION_MONITOR_TEMPLATE_ONLY",
+                    i18nService.getMessage("email.monitor.template_no_start_event"));
+        }
+        if (StringUtils.hasText(request.getFilterFrom()) || StringUtils.hasText(request.getFilterSubject())) {
+            throw new DeveloperBusinessException("VALIDATION_MONITOR_TEMPLATE_ONLY",
+                    i18nService.getMessage("email.monitor.template_no_filters"));
+        }
+        if (StringUtils.hasText(request.getProcessDefinitionKey())) {
+            throw new DeveloperBusinessException("VALIDATION_MONITOR_TEMPLATE_ONLY",
+                    i18nService.getMessage("email.monitor.template_no_process_key"));
+        }
+    }
+
+    private void applyTemplate(EmailMonitorRule rule, EmailMonitorRuleRequest request) {
         rule.setName(request.getName().trim());
         rule.setEnabled(request.getEnabled() != null ? request.getEnabled() : Boolean.TRUE);
         rule.setConnectionUid(request.getConnectionUid());
-        rule.setProcessDefinitionKey(request.getProcessDefinitionKey());
-        rule.setStartEventId(request.getStartEventId());
+        rule.setSourceRuleId(null);
+        rule.setProcessDefinitionKey(null);
+        rule.setStartEventId(null);
         rule.setFolderLabel(StringUtils.hasText(request.getFolderLabel()) ? request.getFolderLabel() : "INBOX");
-        rule.setFilterFrom(request.getFilterFrom());
-        rule.setFilterSubject(request.getFilterSubject());
+        rule.setFilterFrom(null);
+        rule.setFilterSubject(null);
         if (request.getActionType() != null) {
             rule.setActionType(request.getActionType());
         }
@@ -126,6 +215,34 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
         if (request.getReviewOnMissing() != null) {
             rule.setReviewOnMissing(request.getReviewOnMissing());
         }
+    }
+
+    private void copyTemplateFields(EmailMonitorRule binding, EmailMonitorRule template) {
+        binding.setConnectionUid(template.getConnectionUid());
+        binding.setFolderLabel(template.getFolderLabel());
+        binding.setActionType(template.getActionType());
+        binding.setTargetFormId(template.getTargetFormId());
+        binding.setTargetBindingId(template.getTargetBindingId());
+        binding.setSystemInitiatorUserId(template.getSystemInitiatorUserId());
+        binding.setExtractionRules(copyMap(template.getExtractionRules()));
+        binding.setCorrelation(copyMap(template.getCorrelation()));
+        binding.setPollIntervalSeconds(template.getPollIntervalSeconds());
+        binding.setReviewOnMissing(template.getReviewOnMissing());
+    }
+
+    private void refreshBindingsFromTemplate(EmailMonitorRule template) {
+        for (EmailMonitorRule binding : emailMonitorRuleRepository.findBySourceRuleId(template.getId())) {
+            copyTemplateFields(binding, template);
+            emailMonitorRuleRepository.save(binding);
+        }
+    }
+
+    private Map<String, Object> copyMap(Map<String, Object> source) {
+        return source == null ? null : new java.util.HashMap<>(source);
+    }
+
+    private static String bindingName(String templateName, String startEventId) {
+        return templateName + " → " + startEventId;
     }
 
     private void validateStartEventBinding(Long functionUnitId, String startEventId, Long excludeRuleId) {
@@ -157,10 +274,13 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
         }
     }
 
-    private void ensureFunctionUnitExists(Long functionUnitId) {
-        if (!functionUnitRepository.existsById(functionUnitId)) {
-            throw new ResourceNotFoundException("FunctionUnit", functionUnitId);
+    private EmailMonitorRule getTemplateEntity(Long functionUnitId, Long ruleId) {
+        EmailMonitorRule rule = getEntity(functionUnitId, ruleId);
+        if (rule.getSourceRuleId() != null || StringUtils.hasText(rule.getStartEventId())) {
+            throw new DeveloperBusinessException("VALIDATION_NOT_MONITOR_TEMPLATE",
+                    i18nService.getMessage("email.monitor.not_a_template"));
         }
+        return rule;
     }
 
     private EmailMonitorRule getEntity(Long functionUnitId, Long ruleId) {
@@ -170,5 +290,19 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
             throw new ResourceNotFoundException("EmailMonitorRule", ruleId);
         }
         return rule;
+    }
+
+    private void ensureFunctionUnitExists(Long functionUnitId) {
+        if (!functionUnitRepository.existsById(functionUnitId)) {
+            throw new ResourceNotFoundException("FunctionUnit", functionUnitId);
+        }
+    }
+
+    private static String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

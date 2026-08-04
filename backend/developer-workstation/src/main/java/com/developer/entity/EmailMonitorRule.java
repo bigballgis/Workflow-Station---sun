@@ -48,6 +48,10 @@ public class EmailMonitorRule {
     @Column(name = "connection_uid", nullable = false, length = 64)
     private String connectionUid;
 
+    /** Template rule id when this row is a Start Event binding (filters/process on this row). */
+    @Column(name = "source_rule_id")
+    private Long sourceRuleId;
+
     @Column(name = "process_definition_key", length = 255)
     private String processDefinitionKey;
 

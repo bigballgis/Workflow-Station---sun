@@ -38,7 +38,7 @@ public class EmailConnectionRequest {
 
     private Boolean enabled = true;
 
-    /** OUTBOUND (SMTP send), INBOUND (IMAP monitor), or BOTH. */
+    /** OUTBOUND (SMTP send) or INBOUND (IMAP monitor). BOTH is legacy and rejected on save. */
     private EmailConnectionDirection direction = EmailConnectionDirection.OUTBOUND;
 
     /** Optional mailbox address for inbound polling; defaults to the connection email. */

@@ -27,6 +27,7 @@
             />
             <span class="form-tip">MB</span>
           </el-form-item>
+          <el-divider content-position="left">{{ t('config.smtpSection') }}</el-divider>
           <el-form-item :label="t('config.smtpHost')" required>
             <el-input
               v-model="systemConfig.smtpHost"
@@ -43,6 +44,27 @@
           </el-form-item>
           <el-form-item :label="t('config.smtpUseTls')" required>
             <el-radio-group v-model="systemConfig.smtpUseTls">
+              <el-radio :value="true">{{ t('common.yes') }}</el-radio>
+              <el-radio :value="false">{{ t('common.no') }}</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-divider content-position="left">{{ t('config.imapSection') }}</el-divider>
+          <el-form-item :label="t('config.imapHost')" required>
+            <el-input
+              v-model="systemConfig.imapHost"
+              style="width: 300px"
+              placeholder="imap.example.com"
+            />
+          </el-form-item>
+          <el-form-item :label="t('config.imapPort')" required>
+            <el-input-number
+              v-model="systemConfig.imapPort"
+              :min="1"
+              :max="65535"
+            />
+          </el-form-item>
+          <el-form-item :label="t('config.imapUseSsl')" required>
+            <el-radio-group v-model="systemConfig.imapUseSsl">
               <el-radio :value="true">{{ t('common.yes') }}</el-radio>
               <el-radio :value="false">{{ t('common.no') }}</el-radio>
             </el-radio-group>
@@ -105,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated } from 'vue'
+import { onActivated, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/PageHeader.vue'
 import { useConfig } from '@/composables/modules/useConfig'
@@ -116,6 +138,7 @@ const {
   activeTab, systemConfig, businessConfig, saveConfig, loadConfigs,
 } = useConfig()
 
+onMounted(() => { loadConfigs() })
 onActivated(() => { loadConfigs() })
 </script>
 

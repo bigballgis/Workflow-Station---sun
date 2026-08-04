@@ -54,7 +54,10 @@ export function useTaskPropertiesForms(
   async function loadEmailConnections() {
     try {
       const res = await connectionApi.list(props.functionUnitId)
-      emailConnections.value = res.data || []
+      emailConnections.value = (res.data || []).filter(c => {
+        const direction = c.direction || 'OUTBOUND'
+        return direction === 'OUTBOUND' || direction === 'BOTH'
+      })
     } catch {
       emailConnections.value = []
     }
