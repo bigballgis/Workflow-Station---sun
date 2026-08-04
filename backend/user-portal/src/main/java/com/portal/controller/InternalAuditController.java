@@ -47,7 +47,7 @@ public class InternalAuditController {
     }
 
     @GetMapping("/function-units")
-    public ApiResponse<List<String>> getFunctionUnitCodes(
+    public ApiResponse<List<Map<String, String>>> getFunctionUnitCodes(
             @RequestHeader(value = "X-Internal-Token", required = false) String token) {
         portalInternalApiProperties.requireValidToken(token);
         return ApiResponse.success(changeHistoryComponent.getDistinctFunctionUnitCodes());

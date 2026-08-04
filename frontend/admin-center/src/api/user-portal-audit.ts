@@ -41,11 +41,16 @@ export interface UserPortalAuditQueryRequest {
   sortOrder?: 'asc' | 'desc'
 }
 
+export interface FunctionUnitOption {
+  code: string
+  name: string
+}
+
 // ==================== API 函数 ====================
 
-export const getFunctionUnitCodes = async (): Promise<string[]> => {
+export const getFunctionUnitCodes = async (): Promise<FunctionUnitOption[]> => {
   const body = await request.get('/security/user-portal-audit-logs/function-units')
-  const data = unwrapApiData<string[]>(body)
+  const data = unwrapApiData<FunctionUnitOption[]>(body)
   return Array.isArray(data) ? data : []
 }
 

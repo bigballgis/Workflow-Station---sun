@@ -1230,10 +1230,22 @@ public class ChangeHistoryComponent {
     // ==================== global cross-process audit query ====================
 
     /**
-     * Returns distinct FU codes that have at least one change history record.
+     * Returns distinct FU codes that have at least one change history record,
+     * with display names resolved from the admin-center FU catalog.
+     * Each entry is a map with "code" and "name" keys.
      */
-    public List<String> getDistinctFunctionUnitCodes() {
-        return changeHistoryRepository.findDistinctFunctionUnitCodes();
+    public List<Map<String, String>> getDistinctFunctionUnitCodes() {
+        List<String> codes = changeHistoryRepository.findDistinctFunctionUnitCodes();
+        Set<String> codeSet = new HashSet<>(codes);
+        Map<String, String> nameByCode = userPortalAuditEnricher.resolveFunctionUnitNames(codeSet);
+        return codes.stream()
+                .map(code -> {
+                    Map<String, String> entry = new HashMap<>();
+                    entry.put("code", code);
+                    entry.put("name", nameByCode.get(code));
+                    return entry;
+                })
+                .collect(Collectors.toList());
     }
 
     /**

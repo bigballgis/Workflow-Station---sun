@@ -14,10 +14,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Internal REST client for querying user-portal audit logs (up_change_history).
@@ -67,9 +68,9 @@ public class UserPortalAuditClient {
     }
 
     /**
-     * Get distinct function unit codes that have audit data.
+     * Get distinct function unit codes (with display names) that have audit data.
      */
-    public List<String> getFunctionUnitCodes() {
+    public List<Map<String, String>> getFunctionUnitCodes() {
         requireTokenConfigured();
         String url = stripTrailingSlash(userPortalBaseUrl) + "/internal/audit-logs/function-units";
         HttpHeaders headers = new HttpHeaders();
@@ -87,7 +88,16 @@ public class UserPortalAuditClient {
             }
             Object data = resp.getBody().get("data");
             if (data instanceof List<?> list) {
-                return list.stream().map(Object::toString).collect(Collectors.toList());
+                List<Map<String, String>> result = new ArrayList<>();
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> m && m.get("code") != null) {
+                        Map<String, String> entry = new HashMap<>();
+                        entry.put("code", String.valueOf(m.get("code")));
+                        entry.put("name", m.get("name") != null ? String.valueOf(m.get("name")) : null);
+                        result.add(entry);
+                    }
+                }
+                return result;
             }
             return Collections.emptyList();
         } catch (AdminBusinessException e) {

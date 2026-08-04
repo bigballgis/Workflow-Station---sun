@@ -11,6 +11,7 @@ import {
   getFunctionUnitCodes,
   type UserPortalAuditRecord,
   type UserPortalAuditQueryRequest,
+  type FunctionUnitOption,
 } from '@/api/user-portal-audit'
 
 interface SortState {
@@ -37,7 +38,7 @@ export const useUserPortalAuditStore = defineStore('userPortalAudit', () => {
   const sort = reactive<SortState>({ field: 'timestamp', order: 'descending' })
 
   // ==================== Cached Data ====================
-  const functionUnitCodes = ref<string[]>([])
+  const functionUnitCodes = ref<FunctionUnitOption[]>([])
 
   // ==================== Actions ====================
 
@@ -107,8 +108,10 @@ export const useUserPortalAuditStore = defineStore('userPortalAudit', () => {
 
   const fetchFunctionUnitCodes = async () => {
     try {
-      const codes = await getFunctionUnitCodes()
-      functionUnitCodes.value = codes.sort((a, b) => a.localeCompare(b))
+      const options = await getFunctionUnitCodes()
+      functionUnitCodes.value = options.sort((a, b) =>
+          (a.name || a.code).localeCompare(b.name || b.code)
+        )
     } catch {
       /* leave empty */
     }

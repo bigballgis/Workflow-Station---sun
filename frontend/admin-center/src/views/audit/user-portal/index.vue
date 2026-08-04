@@ -29,14 +29,15 @@
           <el-select
             v-model="query.functionUnitCode"
             clearable
+            filterable
             :placeholder="t('common.selectPlaceholder')"
-            style="width: 180px"
+            style="width: 220px"
           >
             <el-option
-              v-for="code in functionUnitCodes"
-              :key="code"
-              :label="code"
-              :value="code"
+              v-for="item in functionUnitCodes"
+              :key="item.code"
+              :label="item.name || item.code || '-'"
+              :value="item.code"
             />
           </el-select>
         </el-form-item>
