@@ -86,8 +86,8 @@
           <el-input
             v-model="query.processInstanceId"
             clearable
-            :placeholder="t('upAudit.processInstanceId')"
-            style="width: 180px"
+            :placeholder="t('upAudit.processInstanceSearchPlaceholder')"
+            style="width: 220px"
             @keyup.enter="handleSearch"
           />
         </el-form-item>

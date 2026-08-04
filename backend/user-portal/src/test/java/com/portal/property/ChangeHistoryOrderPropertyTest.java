@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.UserPortalAuditEnricher;
+import com.portal.component.UserPortalAuditProcessInstanceMatcher;
 import com.portal.dto.ChangeHistoryRecord;
 import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
@@ -60,6 +61,7 @@ public class ChangeHistoryOrderPropertyTest {
         repository, mock(ProcessInstanceRepository.class), userRepository, workflowEngineClient,
         mock(JdbcTemplate.class), new ObjectMapper(),
         auditEnricher,
+        mock(UserPortalAuditProcessInstanceMatcher.class),
         PortalTransactionTestSupport.noopPlatformTransactionManager());
     assertThat(component.getChangeHistory("process-1"))
         .extracting(ChangeHistoryRecord::getFieldName)
@@ -99,6 +101,7 @@ public class ChangeHistoryOrderPropertyTest {
                 mock(JdbcTemplate.class),
                 new ObjectMapper(),
                 auditEnricher,
+                mock(UserPortalAuditProcessInstanceMatcher.class),
                 PortalTransactionTestSupport.noopPlatformTransactionManager());
         List<ChangeHistoryRecord> result = component.getChangeHistory(historyList.processInstanceId);
 

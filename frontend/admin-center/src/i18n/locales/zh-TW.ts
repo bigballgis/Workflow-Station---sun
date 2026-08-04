@@ -693,6 +693,7 @@ export default {
     tableForm: '表/表單',
     subTableName: '子表名',
     processInstanceId: '流程實例',
+    processInstanceSearchPlaceholder: 'ID / 標題 / 請求編號',
     stage: '環節',
     fieldName: '欄位',
     changeType: '操作類型',
