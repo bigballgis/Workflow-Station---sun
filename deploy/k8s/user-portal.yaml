@@ -159,8 +159,11 @@ spec:
 #
 # maxReplicas 上限由**数据库连接数**决定，不是由流量决定：
 #   Postgres max_connections=100 - 3(超级用户保留) - 约 6(activepieces/superset/运维) = 91
-#   固定开销: workflow-engine 20 + admin-center 20 + developer-workstation 10 = 50
-#   留给 user-portal: 41 → 每副本 Hikari maximum-pool-size=20 → 最多 2 副本
+#   固定开销: workflow-engine 20 + admin-center 20 = 40
+#   留给 user-portal: 51 → 每副本 Hikari maximum-pool-size=20 → 最多 2 副本
+#   developer-workstation 默认不部署(需 -IncludeDeveloperWorkstation)；一旦开启再吃 20
+#   (2026-08-04 由 10 提到 20，见 backend/developer-workstation application.yml)，
+#   余量降到 31，此时 maxReplicas=2 (需 40) 已经超出预算，必须先降某一侧的池大小。
 # 想调大 maxReplicas，必须**先**把各服务的 maximum-pool-size 降下来
 # (推荐经 ConfigMap 注入 SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE)，否则扩容会打爆 Postgres。
 # 根治方案是 PgBouncer(transaction pooling)，可拆掉「副本数 × 每副本池」这个乘法。
