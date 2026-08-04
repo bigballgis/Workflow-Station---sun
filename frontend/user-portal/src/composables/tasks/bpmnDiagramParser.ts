@@ -1,11 +1,20 @@
 import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
 import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 import {
+  isHumanWorkflowTask,
+  isHumanWorkflowTaskElement,
+  queryHumanWorkflowTasks,
+} from '@/utils/bpmnHumanWorkflowTasks'
+import {
   applyDraftReturnDiagramStatus,
   applyFullNeutralDiagramStatus,
   resolveDiagramStatusSuppressMode,
   type DiagramStatusSuppressMode,
 } from '@/utils/bpmnDiagramDraftReturn'
+import {
+  buildSendTaskCompletedLookups,
+  resolveSendTaskDiagramStatus,
+} from '@/utils/sendTaskDiagramStatus'
 
 const ck = (s: unknown) => String(s ?? '').trim()
 const normLabel = (s: unknown) => ck(s).replace(/\s+/g, ' ')
@@ -106,7 +115,7 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       const childElements = sp.getElementsByTagName('*')
       for (let i = 0; i < childElements.length; i++) {
         const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
-        if (childLocal !== 'userTask' && childLocal !== 'serviceTask' && childLocal !== 'sendTask') continue
+        if (!isHumanWorkflowTask(childLocal) && childLocal !== 'serviceTask' && childLocal !== 'sendTask') continue
         const taskName = childElements[i].getAttribute('name') || ''
         const taskId = childElements[i].getAttribute('id') || ''
         if ((showCurrentStep && normLabel(taskName) === normLabel(currentTaskName)) || inputs.historyRecords.some((h: any) => h.nodeName === taskName || h.nodeId === taskId)) {
@@ -132,7 +141,7 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       }
       for (let i = 0; i < spChildren.length; i++) {
         const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-        if (childLocal !== 'userTask') continue
+        if (!isHumanWorkflowTask(childLocal)) continue
         const taskName = spChildren[i].getAttribute('name') || ''
         const taskId = spChildren[i].getAttribute('id') || ''
         if ((showCurrentStep && (normLabel(taskName) === normLabel(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey)))
@@ -143,7 +152,7 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
     }
 
     if (showCurrentStep && !inputs.isCompletedTask) {
-      doc.querySelectorAll('userTask').forEach((taskEl: Element) => {
+      queryHumanWorkflowTasks(doc).forEach((taskEl: Element) => {
         const uid = ck(taskEl.getAttribute('id'))
         const unameNorm = normLabel(taskEl.getAttribute('name'))
         const defKey = ck(currentTaskDefinitionKey)
@@ -193,7 +202,7 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       let allDone = true, userTaskCount = 0
       for (let i = 0; i < spChildren.length; i++) {
         const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-        if (childLocal !== 'userTask') continue
+        if (!isHumanWorkflowTask(childLocal)) continue
         userTaskCount++
         const taskName = spChildren[i].getAttribute('name') || ''
         const taskId = spChildren[i].getAttribute('id') || ''
@@ -301,7 +310,7 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
           const tar = ck(f.targetRef)
           const tarEl = findBpmnElementByIdAny(tar)
           if (!tarEl || !isUnderGivenSubProcess(tarEl, boundarySpId)) continue
-          if ((tarEl.localName || tarEl.nodeName.split(':').pop()) === 'userTask' && tar === ck(candidateTaskId)) return true
+          if (isHumanWorkflowTaskElement(tarEl) && tar === ck(candidateTaskId)) return true
           queue.push(tar)
         }
       }
@@ -311,13 +320,13 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
     // Current open BPMN userTask
     let currentOpenBpmnUserTaskId = ''
     if (showCurrentStep && !inputs.isCompletedTask) {
-      doc.querySelectorAll('userTask').forEach((ut: Element) => {
+      queryHumanWorkflowTasks(doc).forEach((ut: Element) => {
         const uid = ck(ut.getAttribute('id'))
         if (!uid) return
         if (uid === ck(currentTaskDefinitionKey)) currentOpenBpmnUserTaskId = uid
       })
       if (!currentOpenBpmnUserTaskId) {
-        doc.querySelectorAll('userTask').forEach((ut: Element) => {
+        queryHumanWorkflowTasks(doc).forEach((ut: Element) => {
           const uid = ck(ut.getAttribute('id'))
           if (!uid) return
           const unm = normLabel(ut.getAttribute('name'))
@@ -333,8 +342,8 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       return isDownstreamUserTaskInsideSameActiveMi(currentOpenBpmnUserTaskId, userTaskBpmnId, boundary)
     }
 
-    // User tasks
-    doc.querySelectorAll('userTask').forEach((task: Element, index: number) => {
+    // Human workflow tasks (userTask, manualTask, …)
+    queryHumanWorkflowTasks(doc).forEach((task: Element, index: number) => {
       const id = task.getAttribute('id') || `task_${index}`
       const name = task.getAttribute('name') || inputs.t('task.taskFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
@@ -364,32 +373,21 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
     })
 
+    const sendTaskLookups = buildSendTaskCompletedLookups(inputs.historyRecords)
+
     // Service / send tasks (designer keeps sendTask; deploy converts email sendTask → serviceTask)
     doc.querySelectorAll('serviceTask, sendTask').forEach((task: Element, index: number) => {
       const id = task.getAttribute('id') || `service_${index}`
       const name = task.getAttribute('name') || inputs.t('task.taskFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
-      let status: ProcessNode['status'] = 'pending'
-      if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
-        status = 'completed'
-        completed.push(id)
-      } else {
-        const hm = inputs.historyRecords.find(
-          (h: any) => normLabel(h.nodeName) === normLabel(name) || ck(h.nodeId) === ck(id),
-        )
-        if (hm && (hm.status === 'completed' || hm.status === 'rejected')) {
-          status = hm.status
-          completed.push(id)
-        }
-      }
+      const status = resolveSendTaskDiagramStatus(inputs.historyRecords, id, name, sendTaskLookups)
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      if (status === 'completed' || status === 'rejected') completed.push(id)
     })
 
     const subprocessContainsCurrentOpenTask = (sp: Element): boolean => {
       if (!showCurrentStep || inputs.isCompletedTask) return false
-      const tasks = sp.getElementsByTagName('userTask')
-      for (let ti = 0; ti < tasks.length; ti++) {
-        const task = tasks[ti]
+      for (const task of queryHumanWorkflowTasks(sp)) {
         const uid = ck(task.getAttribute('id'))
         const unm = normLabel(task.getAttribute('name'))
         const openTaskMatches =

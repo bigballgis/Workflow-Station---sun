@@ -1,6 +1,7 @@
 package com.workflow.email.inbound;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.component.ProcessEngineComponent;
 import com.workflow.dto.request.StartProcessRequest;
 import com.workflow.dto.response.ProcessInstanceResult;
@@ -39,6 +40,7 @@ public class EmailMonitorProcessor {
     private final ProcessEngineComponent processEngineComponent;
     private final ProcessedEmailMessageRepository processedRepository;
     private final EmailMonitorPortalSyncComponent portalSyncComponent;
+    private final AdminCenterClient adminCenterClient;
     private final ObjectMapper objectMapper;
 
     /** Returns the recorded status, or {@code null} when the email was skipped as already processed. */
@@ -100,6 +102,14 @@ public class EmailMonitorProcessor {
         }
         if (StringUtils.hasText(rule.getFunctionUnitId())) {
             variables.put("functionUnitId", rule.getFunctionUnitId());
+            // Mirror portal ProcessStartComponent.applyCatalogContextToVariables: Send Email needs
+            // DW functionUnitCode (or numeric DW id); admin UUID alone is not a valid DW template ref.
+            adminCenterClient.resolveFunctionUnitCodeById(rule.getFunctionUnitId())
+                    .ifPresentOrElse(
+                            code -> variables.put("functionUnitCode", code),
+                            () -> log.warn(
+                                    "Email monitor rule {} could not resolve functionUnitCode for functionUnitId={}",
+                                    rule.getId(), rule.getFunctionUnitId()));
         }
         if (StringUtils.hasText(rule.getProcessDefinitionKey())) {
             variables.put("processDefinitionKey", rule.getProcessDefinitionKey());

@@ -1,5 +1,9 @@
 import type { ProcessNode } from '@/components/ProcessDiagram.vue'
 import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
+import {
+  findHumanWorkflowTaskById,
+  isHumanWorkflowTask,
+} from '@/utils/bpmnHumanWorkflowTasks'
 
 const ck = (s: unknown) => String(s ?? '').trim()
 const normLabel = (s: unknown) => ck(s).replace(/\s+/g, ' ')
@@ -53,7 +57,7 @@ export function getFirstUserTaskId(xml: string): string {
   const queue = [...mainStartIds]
   while (queue.length > 0) {
     const currentId = queue.shift()!
-    if (elementTypeById.get(currentId) === 'userTask') return currentId
+    if (elementTypeById.get(currentId) && isHumanWorkflowTask(elementTypeById.get(currentId))) return currentId
     for (const f of seqFlows) {
       if (f.sourceRef === currentId && !visited.has(f.targetRef)) {
         visited.add(f.targetRef)
@@ -76,8 +80,7 @@ export function isCurrentNodeFirstUserTask(
   if (defKey && ck(firstUserTaskId) === defKey) return true
   const doc = getCachedBpmnDocument(xml)
   if (!doc) return false
-  const firstTaskEl = doc.querySelector(`userTask[id="${firstUserTaskId}"]`)
-    ?? Array.from(doc.querySelectorAll('userTask')).find(el => ck(el.getAttribute('id')) === ck(firstUserTaskId))
+  const firstTaskEl = findHumanWorkflowTaskById(doc, firstUserTaskId)
   const firstTaskName = normLabel(firstTaskEl?.getAttribute('name'))
   return !!taskName && firstTaskName === taskName
 }

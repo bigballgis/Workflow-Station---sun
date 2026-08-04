@@ -4,6 +4,7 @@ import com.workflow.component.TaskManagerComponent;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.Process;
 import org.flowable.bpmn.model.ServiceTask;
+import org.flowable.bpmn.model.SubProcess;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.TaskService;
@@ -121,6 +122,45 @@ class TaskHistoryAssemblerSendEmailTest {
         assertThat(activityIds).doesNotContain(AP_ACTIVITY_ID);
     }
 
+    @Test
+    @DisplayName("includes nested subprocess Send Email serviceTask as SEND")
+    void includesNestedSubProcessSendEmail() {
+        String nestedSendId = "Activity_NestedSendEmail";
+        List<HistoricActivityInstance> activities = List.of(
+                completedServiceTask(nestedSendId, "Nested Send Email"),
+                completedUserTask()
+        );
+
+        HistoricActivityInstanceQuery activityQuery = mock(HistoricActivityInstanceQuery.class);
+        when(historyService.createHistoricActivityInstanceQuery()).thenReturn(activityQuery);
+        when(activityQuery.processInstanceId(PROCESS_INSTANCE_ID)).thenReturn(activityQuery);
+        when(activityQuery.orderByHistoricActivityInstanceStartTime()).thenReturn(activityQuery);
+        when(activityQuery.asc()).thenReturn(activityQuery);
+        when(activityQuery.list()).thenReturn(activities);
+
+        when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(bpmnWithNestedSendEmail(nestedSendId));
+
+        List<Map<String, Object>> history = assembler.assembleProcessInstanceHistory(PROCESS_INSTANCE_ID);
+
+        Map<String, Object> sendRow = history.stream()
+                .filter(item -> nestedSendId.equals(item.get("activityId")))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(sendRow.get("operationType")).isEqualTo("SEND");
+    }
+
+    @Test
+    @DisplayName("omits Send Email rows when BPMN model is unavailable")
+    void omitsSendEmailWhenBpmnModelMissing() {
+        when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(null);
+
+        List<Map<String, Object>> history = assembler.assembleProcessInstanceHistory(PROCESS_INSTANCE_ID);
+
+        assertThat(history.stream().map(item -> item.get("activityId")))
+                .doesNotContain(SEND_EMAIL_ACTIVITY_ID, AP_ACTIVITY_ID);
+    }
+
     private static HistoricActivityInstance completedServiceTask(String activityId, String name) {
         HistoricActivityInstance activity = mock(HistoricActivityInstance.class);
         when(activity.getId()).thenReturn("hi-" + activityId);
@@ -166,6 +206,26 @@ class TaskHistoryAssemblerSendEmailTest {
         process.setId("Process_1");
         process.addFlowElement(sendTask);
         process.addFlowElement(apTask);
+
+        BpmnModel model = new BpmnModel();
+        model.addProcess(process);
+        return model;
+    }
+
+    private static BpmnModel bpmnWithNestedSendEmail(String nestedSendId) {
+        ServiceTask sendTask = new ServiceTask();
+        sendTask.setId(nestedSendId);
+        sendTask.setName("Nested Send Email");
+        sendTask.setImplementation("${sendEmailTaskDelegate}");
+
+        SubProcess subProcess = new SubProcess();
+        subProcess.setId("SubProcess_Email");
+        subProcess.setName("Email Step");
+        subProcess.addFlowElement(sendTask);
+
+        Process process = new Process();
+        process.setId("Process_1");
+        process.addFlowElement(subProcess);
 
         BpmnModel model = new BpmnModel();
         model.addProcess(process);

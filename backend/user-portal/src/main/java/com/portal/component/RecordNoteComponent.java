@@ -126,7 +126,7 @@ public class RecordNoteComponent {
             throw new RecordNoteException("NOT_FOUND", "Process instance not found: " + processInstanceId);
         }
         if (!functionUnitAccessComponent.isSystemAdministrator(userId)
-                && !processComponent.isProcessParticipant(userId, detail)) {
+                && !processComponent.canAccessProcessDetail(userId, detail)) {
             throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
         }
         return recordNoteService.adoptDraftNotes(draftTargetId, processInstanceId, userId);
@@ -139,7 +139,7 @@ public class RecordNoteComponent {
             throw new RecordNoteException("NOT_FOUND", "Process instance not found: " + processInstanceId);
         }
         if (!functionUnitAccessComponent.isSystemAdministrator(userId)
-                && !processComponent.isProcessParticipant(userId, detail)) {
+                && !processComponent.canAccessProcessDetail(userId, detail)) {
             throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
         }
         return detail;
@@ -185,7 +185,7 @@ public class RecordNoteComponent {
             return null;
         }
         if (functionUnitAccessComponent.isSystemAdministrator(userId)
-                || processComponent.isProcessParticipant(userId, detail)) {
+                || processComponent.canAccessProcessDetail(userId, detail)) {
             return claimedProcessInstanceId;
         }
         return null;
@@ -215,7 +215,7 @@ public class RecordNoteComponent {
         // (TABLE = per-instance table stream; legacy RECORD-on-instance rows too).
         ProcessInstanceInfo detail = processComponent.getProcessDetail(target.getTargetId());
         if (detail != null) {
-            if (!processComponent.isProcessParticipant(userId, detail)) {
+            if (!processComponent.canAccessProcessDetail(userId, detail)) {
                 throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
             }
             return;

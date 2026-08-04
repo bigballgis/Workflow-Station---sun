@@ -281,12 +281,9 @@ public class ProcessController {
                     "Please login first before viewing process details");
         }
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
-        if (detail != null) {
-            boolean isParticipant = processComponent.isProcessParticipant(userId, detail);
-            if (!isParticipant) {
-                log.warn("User {} attempted to access process {} without being a participant", userId, processId);
-                return ApiResponse.error("403", "You are not a participant of this process");
-            }
+        if (detail != null && !processComponent.canAccessProcessDetail(userId, detail)) {
+            log.warn("User {} attempted to access process {} without detail access", userId, processId);
+            return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
         }
         return ApiResponse.success(detail);
     }
@@ -396,12 +393,9 @@ public class ProcessController {
                     "Please login first before viewing process history");
         }
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
-        if (detail != null) {
-            boolean isParticipant = processComponent.isProcessParticipant(userId, detail);
-            if (!isParticipant) {
-                log.warn("User {} attempted to access process history {} without being a participant", userId, processId);
-                return ApiResponse.error("403", "You are not a participant of this process");
-            }
+        if (detail != null && !processComponent.canAccessProcessDetail(userId, detail)) {
+            log.warn("User {} attempted to access process history {} without detail access", userId, processId);
+            return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
         }
         log.debug("ProcessController.getProcessHistory called with processId: {}", processId);
         List<Map<String, Object>> history = processComponent.getProcessHistory(processId);

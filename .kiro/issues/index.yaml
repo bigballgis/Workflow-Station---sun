@@ -1873,3 +1873,47 @@
     修复：抽出 UserPortalAuditProcessInstanceMatcher——列字段 LIKE（ESCAPE+LIMIT）
     + 按审计时间窗候选实例用 RequestIdEnricher 计算匹配；PI 解析移出 Spec；
     单测覆盖派生 Request ID 命中/未命中与 LIKE 转义。
+
+- id: "1513"
+  status: fixed
+  fixed_at: "2026-08-04"
+  severity: major
+  category: bug
+  summary: "Main Table View 列表可见但 View Record 403（You are not a participant）"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessApplicationQueryComponent.java"
+  note: |
+    现象：开放视图（restrict_to_involved_users=false）列表能看 Email Monitor 等 start_user_id=system
+    的流程，点 View Record 返回 403。根因：详情/历史/备注仅用 isProcessParticipant()。
+    修复：canAccessProcessDetail() — 参与者 OR SYS_ADMIN OR 已发布 Main Table View 读权限
+    （开放视图=全行；受限视图=仅 involved）。ProcessController、RecordNoteComponent 统一走该门控。
+    单测：ProcessApplicationQueryComponentDetailAccessTest、ProcessControllerProcessDetailSecurityTest、
+    RecordNoteAuditTest。关联 Email Monitor #1515。
+
+- id: "1514"
+  status: fixed
+  fixed_at: "2026-08-04"
+  severity: major
+  category: bug
+  summary: "My Requests 流程图 manualTask 节点不着色（白/灰 Pending）"
+  file: "frontend/user-portal/src/composables/applicationDetail/useApplicationDetailDiagramParser.ts"
+  note: |
+    根因链：Designer BPMN 为 generic bpmn:task；Flowable 运行时为 manualTask；
+    TaskHistoryAssembler 不含 manualTask → 流程历史缺 test；Portal 仍 RUNNING → test 白/灰、End 绿。
+    修复：bpmnHumanWorkflowTasks 解析 generic task；history 纳入 manualTask 等；
+    getProcessDetail 引擎已结束则 reconcile COMPLETED。View 与 My Requests 同页 applications/detail.vue。
+
+- id: "1515"
+  status: fixed
+  fixed_at: "2026-08-04"
+  severity: major
+  category: bug
+  summary: "Email Monitor 收信后无法建案：EMAIL_CONFIG_INVALID missing_function_unit_id"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  note: |
+    现象：IMAP fetched=1，startProcess 在 Start 后 Send Email 抛 EMAIL_CONFIG_INVALID
+    （i18n key email.send_task.missing_function_unit_id）。根因：邮件启动只注入 admin
+    functionUnitId(UUID)，SendEmailTaskDelegate.resolveDwFunctionUnitRef 需要 functionUnitCode
+    或数字 DW id（与 Portal applyCatalogContextToVariables 不一致）。
+    修复：admin internal GET /function-units/{id}/code；EmailMonitorProcessor 启动变量补
+    functionUnitCode。单测 EmailMonitorProcessorTest、EmailConnectionSyncResolveCodeTest。
+    运行时验证：process 09c33253… hydrate 成功，后续 poll fetched=0。

@@ -1,6 +1,7 @@
 package com.workflow.email.inbound;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.component.ProcessEngineComponent;
 import com.workflow.dto.request.StartProcessRequest;
 import com.workflow.dto.response.ProcessInstanceResult;
@@ -14,9 +15,11 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,6 +34,7 @@ class EmailMonitorProcessorTest {
     private ProcessEngineComponent processEngineComponent;
     private ProcessedEmailMessageRepository processedRepository;
     private EmailMonitorPortalSyncComponent portalSyncComponent;
+    private AdminCenterClient adminCenterClient;
     private EmailMonitorProcessor processor;
 
     @BeforeEach
@@ -38,8 +42,12 @@ class EmailMonitorProcessorTest {
         processEngineComponent = mock(ProcessEngineComponent.class);
         processedRepository = mock(ProcessedEmailMessageRepository.class);
         portalSyncComponent = mock(EmailMonitorPortalSyncComponent.class);
+        adminCenterClient = mock(AdminCenterClient.class);
+        when(adminCenterClient.resolveFunctionUnitCodeById(eq("fu-1")))
+                .thenReturn(Optional.of("FU-MCY"));
         processor = new EmailMonitorProcessor(
-                processEngineComponent, processedRepository, portalSyncComponent, new ObjectMapper());
+                processEngineComponent, processedRepository, portalSyncComponent,
+                adminCenterClient, new ObjectMapper());
     }
 
     private SysEmailMonitorRule rule(Map<String, Object> extractionRules) {
@@ -92,6 +100,8 @@ class EmailMonitorProcessorTest {
         assertThat(sent.getBusinessKey()).isEqualTo("email:m2");
         assertThat(sent.getVariables()).containsEntry("case_number", "ABC-7");
         assertThat(sent.getVariables()).containsEntry("initiator", "system");
+        assertThat(sent.getVariables()).containsEntry("functionUnitId", "fu-1");
+        assertThat(sent.getVariables()).containsEntry("functionUnitCode", "FU-MCY");
         assertThat(sent.getVariables()).containsKey("__inboundEmail__");
         verify(portalSyncComponent).hydratePortalProcessInstanceAsync(org.mockito.ArgumentMatchers.eq("pi-9"), any());
     }

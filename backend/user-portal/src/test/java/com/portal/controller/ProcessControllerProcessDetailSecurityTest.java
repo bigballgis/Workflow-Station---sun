@@ -55,19 +55,39 @@ class ProcessControllerProcessDetailSecurityTest {
     }
 
     @Test
-    void getProcessDetail_rejectsNonParticipant() {
+    void getProcessDetail_rejectsNonParticipantWithoutViewAccess() {
         ProcessInstanceInfo detail = ProcessInstanceInfo.builder()
                 .id("proc-1")
                 .startUserId("other-user")
                 .build();
         when(processComponent.getProcessDetail("proc-1")).thenReturn(detail);
-        when(processComponent.isProcessParticipant("viewer", detail)).thenReturn(false);
+        when(processComponent.canAccessProcessDetail("viewer", detail)).thenReturn(false);
+        when(i18nService.getMessage("portal.process_detail_access_denied"))
+                .thenReturn("You do not have permission to view this process");
 
         ApiResponse<ProcessInstanceInfo> response = processController.getProcessDetail("viewer", "proc-1");
 
         assertThat(response.isSuccess()).isFalse();
         assertThat(response.getError().getCode()).isEqualTo("403");
+        assertThat(response.getError().getMessage())
+                .isEqualTo("You do not have permission to view this process");
         verify(processComponent).getProcessDetail("proc-1");
+    }
+
+    @Test
+    void getProcessDetail_allowsMainTableViewReader() {
+        ProcessInstanceInfo detail = ProcessInstanceInfo.builder()
+                .id("proc-1")
+                .startUserId("system")
+                .functionUnitCode("test-fu")
+                .build();
+        when(processComponent.getProcessDetail("proc-1")).thenReturn(detail);
+        when(processComponent.canAccessProcessDetail("viewer", detail)).thenReturn(true);
+
+        ApiResponse<ProcessInstanceInfo> response = processController.getProcessDetail("viewer", "proc-1");
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(response.getData()).isEqualTo(detail);
     }
 
     @Test
@@ -86,7 +106,7 @@ class ProcessControllerProcessDetailSecurityTest {
                 .startUserId("user-1")
                 .build();
         when(processComponent.getProcessDetail("proc-1")).thenReturn(detail);
-        when(processComponent.isProcessParticipant(eq("user-1"), eq(detail))).thenReturn(true);
+        when(processComponent.canAccessProcessDetail(eq("user-1"), eq(detail))).thenReturn(true);
         when(processComponent.getProcessHistory("proc-1")).thenReturn(java.util.List.of());
 
         ApiResponse<java.util.List<java.util.Map<String, Object>>> response =
