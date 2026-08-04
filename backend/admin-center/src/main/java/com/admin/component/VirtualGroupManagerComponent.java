@@ -56,6 +56,7 @@ public class VirtualGroupManagerComponent {
     @Transactional
     public VirtualGroupResult createVirtualGroup(VirtualGroupCreateRequest request) {
         log.info("Creating virtual group: {}", request.getName());
+        assertUserCreatableType(request.getType());
         
         // 验证名称唯一性
         if (virtualGroupRepository.existsByName(request.getName())) {
@@ -100,6 +101,15 @@ public class VirtualGroupManagerComponent {
                 .replaceAll("_+", "_")
                 .replaceAll("^_|_$", "");
     }
+
+    /** API create/update may only set CUSTOM or DEVELOPER; SYSTEM is seed-only. */
+    private void assertUserCreatableType(VirtualGroupType type) {
+        if (type != VirtualGroupType.CUSTOM && type != VirtualGroupType.DEVELOPER) {
+            throw new AdminBusinessException(
+                    "INVALID_VIRTUAL_GROUP_TYPE",
+                    "Virtual group type must be CUSTOM or DEVELOPER");
+        }
+    }
     
     /**
      * 更新虚拟组
@@ -118,6 +128,8 @@ public class VirtualGroupManagerComponent {
             log.info("System virtual group AD group updated: {}", groupId);
             return VirtualGroupResult.success(group);
         }
+
+        assertUserCreatableType(request.getType());
         
         // 验证名称唯一性（排除自身）
         if (!group.getName().equals(request.getName()) && 

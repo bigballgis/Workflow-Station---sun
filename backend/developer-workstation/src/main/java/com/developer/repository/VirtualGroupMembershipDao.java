@@ -22,14 +22,15 @@ public class VirtualGroupMembershipDao {
     }
 
     /**
-     * 用户可选择的「团队」：其所属的 ACTIVE、CUSTOM 类型虚拟组，排除内置 Public 组。
+     * 用户可选择的「团队」：其所属的 ACTIVE、CUSTOM/DEVELOPER 类型虚拟组，排除内置 Public 组。
      * 用于进入工作区的团队选择弹窗与顶部切换器。
      */
     public List<DevGroupOptionDTO> findSelectableTeamsByUserId(String userId, String publicGroupId) {
         return jdbcTemplate.query(
                 "SELECT DISTINCT g.id, g.name FROM sys_virtual_group_members m "
                         + "JOIN sys_virtual_groups g ON g.id = m.group_id "
-                        + "WHERE m.user_id = ? AND g.status = 'ACTIVE' AND g.type = 'CUSTOM' AND g.id <> ? "
+                        + "WHERE m.user_id = ? AND g.status = 'ACTIVE' "
+                        + "AND g.type IN ('CUSTOM', 'DEVELOPER') AND g.id <> ? "
                         + "ORDER BY g.name",
                 (rs, rowNum) -> new DevGroupOptionDTO(rs.getString("id"), rs.getString("name")),
                 userId,
@@ -37,13 +38,13 @@ public class VirtualGroupMembershipDao {
     }
 
     /**
-     * All active CUSTOM teams, excluding the built-in Public group, for ADMIN
+     * All active CUSTOM/DEVELOPER teams, excluding the built-in Public group, for ADMIN
      * switching.
      */
     public List<DevGroupOptionDTO> findAllSelectableTeams(String publicGroupId) {
         return jdbcTemplate.query(
                 "SELECT g.id, g.name FROM sys_virtual_groups g "
-                        + "WHERE g.status = 'ACTIVE' AND g.type = 'CUSTOM' AND g.id <> ? "
+                        + "WHERE g.status = 'ACTIVE' AND g.type IN ('CUSTOM', 'DEVELOPER') AND g.id <> ? "
                         + "ORDER BY g.name",
                 (rs, rowNum) -> new DevGroupOptionDTO(rs.getString("id"), rs.getString("name")),
                 publicGroupId);

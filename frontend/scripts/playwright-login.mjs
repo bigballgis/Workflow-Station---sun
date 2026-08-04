@@ -193,4 +193,41 @@ export async function loginViaDwPassword(page, opts = {}) {
   return { userId: u.userId, username: u.username }
 }
 
+/**
+ * Direct Admin Center username/password login via POST /api/v1/admin/auth/login.
+ * Prefer this over loginViaUnifiedSso for admin screenshots (SSO form is unreliable headless).
+ * Default: admin / admin123 (seed in 01-create-admin-only.sql; or LOGIN_USER / LOGIN_PASS).
+ */
+export async function loginViaAdminPassword(page, opts = {}) {
+  const user = opts.user ?? process.env.LOGIN_USER ?? 'admin'
+  const pass = opts.pass ?? process.env.LOGIN_PASS ?? 'admin123'
+  const origin = (opts.loginOrigin ?? 'http://localhost:3000').replace(/\/$/, '')
+
+  await page.goto(`${origin}/admin/`, { waitUntil: 'commit' })
+  if (!page.url().startsWith(origin)) {
+    throw new Error(`Admin did not load at ${origin}/admin/ (got ${page.url()})`)
+  }
+
+  const res = await page.request.post(`${origin}/api/v1/admin/auth/login`, {
+    data: { username: user, password: pass },
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok()) {
+    throw new Error(`Admin password login failed: ${body.error || body.message || `HTTP ${res.status()}`} (user=${user})`)
+  }
+  const u = body.user ?? body.data?.user
+  if (!u?.userId) throw new Error('Admin password login failed: response missing user')
+
+  await page.evaluate((userInfo) => {
+    localStorage.setItem('ws_ac_user', JSON.stringify(userInfo))
+    localStorage.setItem('ws_ac_user_id', String(userInfo.userId))
+    if (userInfo.username) localStorage.setItem('ws_ac_username', String(userInfo.username))
+  }, u)
+
+  console.log(`[login] admin password ${u.username} (${u.userId})`)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(1500)
+  return { userId: u.userId, username: u.username }
+}
+
 export { APP_PRESETS }
