@@ -296,7 +296,7 @@ public class UserPortalAuditEnricher {
         return map;
     }
 
-    private Map<String, String> resolveFunctionUnitNames(Set<String> codes) {
+    Map<String, String> resolveFunctionUnitNames(Set<String> codes) {
         Map<String, String> map = new HashMap<>();
         if (codes == null || codes.isEmpty()) {
             return map;

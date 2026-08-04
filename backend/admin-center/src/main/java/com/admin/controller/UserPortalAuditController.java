@@ -60,8 +60,8 @@ public class UserPortalAuditController {
     }
 
     @GetMapping("/user-portal-audit-logs/function-units")
-    @Operation(summary = "Get distinct function unit codes with audit data")
-    public ApiResponse<List<String>> getFunctionUnitCodes() {
+    @Operation(summary = "Get distinct function unit codes (with names) that have audit data")
+    public ApiResponse<List<Map<String, String>>> getFunctionUnitCodes() {
         return ApiResponse.success(userPortalAuditClient.getFunctionUnitCodes());
     }
 }
