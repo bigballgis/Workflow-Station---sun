@@ -389,7 +389,7 @@ function rebuildFormRule() {
     mapFormCreateRulesReadonlyDeep(cloneFormRules(rawRule.value || [])) as any[]
   )
   injectDemoBuRoleOptions(filtered)
-  formRule.value = insertAssignModeRadio(filtered)
+  formRule.value = filtered
   // Parent Preview may have sanitized $FNX strings off `on`/`hook` (crash guard).
   // Recompile from `_on`/`_hook` so sub-form component events run like Form-mode Preview.
   syncDesignerComponentEventsForFcPreview(formRule.value)
