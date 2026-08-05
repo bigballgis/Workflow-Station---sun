@@ -195,10 +195,8 @@ public class ProcessStartComponent {
         }
         applyWorkspaceContextVariables(userId, variables);
         processSubTablePrimaryKeyEnricherComponent.allocateMissingPrimaryKeysInVariables(pin.code(), variables);
-        // System audit fields are generated server-side at the real insert (never
-        // pre-filled by
-        // the portal dialog); only fields present on the form (submitted keys) receive
-        // values.
+        // System audit fields are platform-managed: written at real insert regardless of
+        // Form Design canvas (audit widgets are stripped from the designer by design).
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         SystemAuditFieldFiller.fillOnInsert(variables, startUserDisplayName);
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterProcessSubmission(

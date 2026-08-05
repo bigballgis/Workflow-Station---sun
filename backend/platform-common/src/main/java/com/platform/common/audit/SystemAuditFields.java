@@ -16,7 +16,8 @@ import java.util.Set;
  *
  * <p>消费方：DW {@code TableDesignComponentImpl}（设计期自动追加）、DW
  * {@code FormDesignComponentImpl}（校验白名单）、DW {@code TableAuditFieldInitializer}（存量补列）、
- * portal {@code SystemAuditFieldFiller}（运行期填值）。前端对应实现：DW
+ * portal {@code SystemAuditFieldFiller}（运行期填值——与 Form Design 画布解耦，发起/更新时
+ * 无条件写入 process variables）。前端对应实现：DW
  * {@code utils/tableAuditFields.ts}、portal {@code subTableAddDialogHelpers/rowInit.ts}
  * ——改动本类语义时须同步两份前端。
  */

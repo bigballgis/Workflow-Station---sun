@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.audit.SystemAuditFields;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,6 +20,7 @@ import java.util.Set;
  * variables after
  * PK/FK, MI, workflow and audit-field enrichment. Only fields editable in the
  * current form survive.
+ * Platform audit columns ({@link SystemAuditFields}) are never attributed to the user.
  */
 @Slf4j
 @Component
@@ -375,6 +377,9 @@ public class ChangeHistorySubmissionFilter {
             Map<?, ?> rule,
             Map<String, String> permissions) {
         if (field.startsWith("__"))
+            return false;
+        // Platform-managed audit columns are never user edits (even if a form rule exists).
+        if (SystemAuditFields.isAuditField(field))
             return false;
         String permission = permissions.get(field);
         if (permission != null && !"EDITABLE".equalsIgnoreCase(permission))

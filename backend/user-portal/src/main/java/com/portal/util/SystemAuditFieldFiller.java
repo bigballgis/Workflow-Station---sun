@@ -8,17 +8,20 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
- * Fills Table Design system audit fields (created_at / created_by / updated_at / updated_by)
- * into main-form process variables at real persistence time.
+ * Fills Table Design system audit fields ({@code created_at} / {@code created_by} /
+ * {@code updated_at} / {@code updated_by}) into main-form process variables at real
+ * persistence time.
  *
- * <p>Rules (issue: audit values must be generated on insert/update, never when a dialog opens):</p>
+ * <p>Rules (platform-managed; independent of Form Design canvas):</p>
  * <ul>
- *   <li>Only keys already present in the variables map are filled — the portal submits a key for
- *       every field placed on the Form Design form, so key presence == "field is on the form".
- *       Tables whose audit fields were not dragged onto the form get no values.</li>
- *   <li>{@link #fillOnInsert} runs at process start (the real insert): fills all four fields.</li>
- *   <li>{@link #fillOnUpdate} runs at task-form / process-form submits (real updates): refreshes
- *       only updated_at / updated_by; created_* is preserved.</li>
+ *   <li>Every DW table auto-appends these four columns ({@code TableDesignComponentImpl}).
+ *       Values are written into process variables whenever a real insert/update runs —
+ *       designers do <b>not</b> need to place the fields on the form (Form Design strips
+ *       them from the canvas by design).</li>
+ *   <li>{@link #fillOnInsert} runs at process start: fills all four fields (overwrites any
+ *       client-supplied values).</li>
+ *   <li>{@link #fillOnUpdate} runs at task-form / process-form submits: refreshes only
+ *       {@code updated_at} / {@code updated_by}; {@code created_*} is preserved.</li>
  * </ul>
  *
  * <p>字段名判定唯一来源 = {@link SystemAuditFields}（platform-common）。
@@ -44,10 +47,10 @@ public final class SystemAuditFieldFiller {
             return;
         }
         String now = now();
-        putIfKeyPresent(variables, CREATED_AT, now);
-        putIfKeyPresent(variables, CREATED_BY, userDisplayName);
-        putIfKeyPresent(variables, UPDATED_AT, now);
-        putIfKeyPresent(variables, UPDATED_BY, userDisplayName);
+        put(variables, CREATED_AT, now);
+        put(variables, CREATED_BY, userDisplayName);
+        put(variables, UPDATED_AT, now);
+        put(variables, UPDATED_BY, userDisplayName);
     }
 
     /** Refresh updated_* on a real update (task form / returned-form submit); created_* untouched. */
@@ -55,12 +58,24 @@ public final class SystemAuditFieldFiller {
         if (variables == null) {
             return;
         }
-        putIfKeyPresent(variables, UPDATED_AT, now());
-        putIfKeyPresent(variables, UPDATED_BY, userDisplayName);
+        put(variables, UPDATED_AT, now());
+        put(variables, UPDATED_BY, userDisplayName);
     }
 
-    private static void putIfKeyPresent(Map<String, Object> variables, String key, String value) {
-        if (variables.containsKey(key) && value != null && !value.isBlank()) {
+    /**
+     * Drop client-supplied audit keys before merging a form payload into process variables.
+     * Prevents Parameter Tampering from overwriting platform-owned {@code created_*} /
+     * {@code updated_*} prior to {@link #fillOnUpdate}.
+     */
+    public static void stripClientAuditKeys(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return;
+        }
+        payload.keySet().removeIf(SystemAuditFields::isAuditField);
+    }
+
+    private static void put(Map<String, Object> variables, String key, String value) {
+        if (value != null && !value.isBlank()) {
             variables.put(key, value);
         }
     }
