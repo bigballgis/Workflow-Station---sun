@@ -39,6 +39,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { consumeSsoLoginErrorMessage } from '@/utils/sso'
 
 const username = ref('')
 const password = ref('')
@@ -54,7 +55,10 @@ onMounted(() => {
   clientId = q.get('client_id') || ''
   redirectUri = q.get('redirect_uri') || ''
   state = q.get('state') || ''
-  if (!clientId || !redirectUri) {
+  const handoff = consumeSsoLoginErrorMessage()
+  if (handoff) {
+    error.value = handoff
+  } else if (!clientId || !redirectUri) {
     error.value = 'Missing client_id or redirect_uri parameter.'
   }
 })
