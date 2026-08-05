@@ -11,4 +11,6 @@ public interface EmailConnectionSyncComponent {
     Optional<Map<String, Object>> getCredentials(String functionUnitId, String connectionId);
 
     Optional<String> resolveFunctionUnitIdByCode(String functionUnitCode);
+
+    Optional<String> resolveFunctionUnitCodeById(String functionUnitId);
 }

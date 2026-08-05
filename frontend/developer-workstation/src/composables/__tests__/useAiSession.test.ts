@@ -243,9 +243,11 @@ describe('useAiSession', () => {
     const { loadInlineDocuments } = useAiSession()
     const restored = await loadInlineDocuments(1)
 
+    // version/generatedAt 必须一起带回来：文档卡靠它显示 "v2 · 09:00"，重开面板后没有这两个字段
+    // 用户就无从判断手上这份是不是自己刚重出过的那一版。
     expect(restored).toEqual([
-      { id: 9, documentType: 'REQUIREMENTS', content: 'req v2' },
-      { id: 6, documentType: 'DESIGN', content: 'design v1' }
+      { id: 9, documentType: 'REQUIREMENTS', content: 'req v2', version: 2, generatedAt: '2026-08-02T09:00:00Z' },
+      { id: 6, documentType: 'DESIGN', content: 'design v1', version: 1, generatedAt: '2026-08-02T09:00:00Z' }
     ])
   })
 
@@ -256,7 +258,7 @@ describe('useAiSession', () => {
     const { loadInlineDocuments } = useAiSession()
 
     expect(await loadInlineDocuments(1)).toEqual([
-      { id: 5, documentType: 'REQUIREMENTS', content: 'req v1' }
+      { id: 5, documentType: 'REQUIREMENTS', content: 'req v1', version: 1, generatedAt: '2026-08-02T09:00:00Z' }
     ])
   })
 
@@ -270,7 +272,7 @@ describe('useAiSession', () => {
     const { loadInlineDocuments } = useAiSession()
 
     expect(await loadInlineDocuments(1)).toEqual([
-      { id: 6, documentType: 'DESIGN', content: 'design v1' }
+      { id: 6, documentType: 'DESIGN', content: 'design v1', version: 1, generatedAt: '2026-08-02T09:00:00Z' }
     ])
   })
 })

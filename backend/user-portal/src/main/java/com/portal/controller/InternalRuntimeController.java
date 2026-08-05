@@ -29,14 +29,27 @@ public class InternalRuntimeController {
     @PostMapping("/hydrate-process-instance")
     public ApiResponse<Map<String, Object>> hydrateProcessInstance(
             @RequestHeader(value = "X-Internal-Token", required = false) String token,
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, Object> body) {
         portalInternalApiProperties.requireValidToken(token);
-        String rawId = body != null ? body.get("processInstanceId") : null;
-        if (!StringUtils.hasText(rawId)) {
+        Object rawId = body != null ? body.get("processInstanceId") : null;
+        String processInstanceId = rawId != null ? String.valueOf(rawId).trim() : null;
+        if (!StringUtils.hasText(processInstanceId)) {
             return ApiResponse.error("BAD_REQUEST", "processInstanceId 不能为空");
         }
-        String processInstanceId = rawId.trim();
-        processInstanceHydrationComponent.requireProcessInstance(processInstanceId);
+        // Optional start-time snapshot from workflow-engine (avoids JWT-protected engine GET).
+        Map<String, Object> snapshot = null;
+        if (body != null) {
+            Object nested = body.get("engineSnapshot");
+            if (nested instanceof Map<?, ?> map) {
+                snapshot = new java.util.LinkedHashMap<>();
+                for (Map.Entry<?, ?> e : map.entrySet()) {
+                    if (e.getKey() != null) {
+                        snapshot.put(String.valueOf(e.getKey()), e.getValue());
+                    }
+                }
+            }
+        }
+        processInstanceHydrationComponent.requireProcessInstance(processInstanceId, snapshot);
         return ApiResponse.success(Map.of("processInstanceId", processInstanceId, "hydrated", true));
     }
 

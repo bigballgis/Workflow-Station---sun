@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import com.platform.common.dto.UserPrincipal;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -71,6 +72,8 @@ public class SecurityPermissionSystemEndToEndTest {
         // Arrange: Mock authentication context
         Authentication mockAuth = mock(Authentication.class);
         when(mockAuth.getName()).thenReturn("john.doe");
+        when(mockAuth.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("john.doe").username("john.doe").build());
         when(mockAuth.isAuthenticated()).thenReturn(true);
         
         SecurityContext mockContext = mock(SecurityContext.class);
@@ -106,6 +109,8 @@ public class SecurityPermissionSystemEndToEndTest {
         // Arrange: Mock authentication context
         Authentication mockAuth = mock(Authentication.class);
         when(mockAuth.getName()).thenReturn("admin.user");
+        when(mockAuth.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("admin.user").username("admin.user").build());
         when(mockAuth.isAuthenticated()).thenReturn(true);
         
         SecurityContext mockContext = mock(SecurityContext.class);
@@ -143,6 +148,8 @@ public class SecurityPermissionSystemEndToEndTest {
         // Arrange: Mock authentication context
         Authentication mockAuth = mock(Authentication.class);
         when(mockAuth.getName()).thenReturn("error.user");
+        when(mockAuth.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("error.user").username("error.user").build());
         when(mockAuth.isAuthenticated()).thenReturn(true);
         
         SecurityContext mockContext = mock(SecurityContext.class);
@@ -173,6 +180,8 @@ public class SecurityPermissionSystemEndToEndTest {
         // Arrange: Mock authentication context
         Authentication mockAuth = mock(Authentication.class);
         when(mockAuth.getName()).thenReturn("manager.user");
+        when(mockAuth.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("manager.user").username("manager.user").build());
         when(mockAuth.isAuthenticated()).thenReturn(true);
         
         SecurityContext mockContext = mock(SecurityContext.class);
@@ -227,6 +236,8 @@ public class SecurityPermissionSystemEndToEndTest {
         // Arrange: Mock authentication context
         Authentication mockAuth = mock(Authentication.class);
         when(mockAuth.getName()).thenReturn("cache.user");
+        when(mockAuth.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("cache.user").username("cache.user").build());
         when(mockAuth.isAuthenticated()).thenReturn(true);
         
         SecurityContext mockContext = mock(SecurityContext.class);
@@ -268,6 +279,8 @@ public class SecurityPermissionSystemEndToEndTest {
         // Arrange: Mock authentication context
         Authentication mockAuth = mock(Authentication.class);
         when(mockAuth.getName()).thenReturn("perf.user");
+        when(mockAuth.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("perf.user").username("perf.user").build());
         when(mockAuth.isAuthenticated()).thenReturn(true);
         
         SecurityContext mockContext = mock(SecurityContext.class);
@@ -311,6 +324,8 @@ public class SecurityPermissionSystemEndToEndTest {
         // Arrange: Mock authentication context
         Authentication mockAuth = mock(Authentication.class);
         when(mockAuth.getName()).thenReturn("audit.user");
+        when(mockAuth.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("audit.user").username("audit.user").build());
         when(mockAuth.isAuthenticated()).thenReturn(true);
         
         SecurityContext mockContext = mock(SecurityContext.class);

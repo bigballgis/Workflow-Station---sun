@@ -4,6 +4,8 @@ import com.workflow.component.TaskManagerComponent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.FlowElement;
+import org.flowable.bpmn.model.Process;
 import org.flowable.bpmn.model.ServiceTask;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
@@ -121,7 +123,8 @@ class TaskHistoryAssembler {
             .singleResult();
         String processStartUserId = processInstance != null ? processInstance.getStartUserId() : null;
         String processDefinitionId = processInstance != null ? processInstance.getProcessDefinitionId() : null;
-        Set<String> sendEmailActivityIds = resolveSendEmailActivityIds(processDefinitionId);
+        BpmnModel bpmnModel = loadBpmnModel(processDefinitionId);
+        Set<String> sendEmailActivityIds = resolveSendEmailActivityIds(bpmnModel);
 
         Set<String> userIdsToResolve = new LinkedHashSet<>();
         if (processStartUserId != null && !processStartUserId.isBlank()) {
@@ -148,7 +151,7 @@ class TaskHistoryAssembler {
 
         // Shape response for the portal UI
         List<Map<String, Object>> historyList = activities.stream()
-            .filter(activity -> shouldIncludeInHistory(activity, sendEmailActivityIds))
+            .filter(activity -> shouldIncludeInHistory(activity, sendEmailActivityIds, bpmnModel))
             .map(activity -> {
                 Map<String, Object> item = new HashMap<>();
                 item.put("id", activity.getId());
@@ -160,7 +163,7 @@ class TaskHistoryAssembler {
 
                 // Derive operation type from activity type and deleteReason
                 String activityType = activity.getActivityType();
-                boolean sendEmailTask = isCompletedSendEmailTask(activity, sendEmailActivityIds);
+                boolean sendEmailTask = isCompletedSendEmailTask(activity, sendEmailActivityIds, bpmnModel);
                 String operationType = "PENDING";
                 if (activity.getEndTime() != null) {
                     if ("startEvent".equals(activityType)) {
@@ -300,37 +303,46 @@ class TaskHistoryAssembler {
         return historyList;
     }
 
-    /**
-     * Collect activity IDs of Send Email service tasks from the process definition BPMN.
-     * // FALLBACK(ux): BPMN lookup failure omits Send Email rows rather than failing the whole history API.
-     */
-    private Set<String> resolveSendEmailActivityIds(String processDefinitionId) {
+    private BpmnModel loadBpmnModel(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isBlank()) {
-            return Set.of();
+            return null;
         }
         try {
-            BpmnModel model = repositoryService.getBpmnModel(processDefinitionId);
-            if (model == null || model.getMainProcess() == null) {
-                return Set.of();
-            }
-            Set<String> ids = new LinkedHashSet<>();
-            for (ServiceTask serviceTask : model.getMainProcess().findFlowElementsOfType(ServiceTask.class, true)) {
+            return repositoryService.getBpmnModel(processDefinitionId);
+        } catch (Exception e) {
+            log.error("Failed to load BPMN model for processDefinition {}: {}",
+                    processDefinitionId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Collect activity IDs of Send Email service tasks from the process definition BPMN
+     * (all processes, including nested subprocess containers).
+     */
+    private Set<String> resolveSendEmailActivityIds(BpmnModel model) {
+        if (model == null || model.getProcesses() == null || model.getProcesses().isEmpty()) {
+            return Set.of();
+        }
+        Set<String> ids = new LinkedHashSet<>();
+        for (Process process : model.getProcesses()) {
+            for (ServiceTask serviceTask : process.findFlowElementsOfType(ServiceTask.class, true)) {
                 if (SEND_EMAIL_DELEGATE.equals(serviceTask.getImplementation())) {
                     ids.add(serviceTask.getId());
                 }
             }
-            return ids;
-        } catch (Exception e) {
-            log.warn("Failed to resolve send-email activity ids for processDefinition {}: {}",
-                    processDefinitionId, e.getMessage());
-            return Set.of();
         }
+        return ids;
     }
 
     private static boolean shouldIncludeInHistory(
-            HistoricActivityInstance activity, Set<String> sendEmailActivityIds) {
+            HistoricActivityInstance activity, Set<String> sendEmailActivityIds, BpmnModel bpmnModel) {
         String type = activity.getActivityType();
         if ("userTask".equals(type)
+                || "manualTask".equals(type)
+                || "scriptTask".equals(type)
+                || "businessRuleTask".equals(type)
+                || "receiveTask".equals(type)
                 || "startEvent".equals(type)
                 || "endEvent".equals(type)
                 || "exclusiveGateway".equals(type)
@@ -338,15 +350,25 @@ class TaskHistoryAssembler {
                 || "inclusiveGateway".equals(type)) {
             return true;
         }
-        return isCompletedSendEmailTask(activity, sendEmailActivityIds);
+        return isCompletedSendEmailTask(activity, sendEmailActivityIds, bpmnModel);
     }
 
     private static boolean isCompletedSendEmailTask(
-            HistoricActivityInstance activity, Set<String> sendEmailActivityIds) {
-        return "serviceTask".equals(activity.getActivityType())
-                && activity.getEndTime() != null
-                && activity.getActivityId() != null
-                && sendEmailActivityIds.contains(activity.getActivityId());
+            HistoricActivityInstance activity, Set<String> sendEmailActivityIds, BpmnModel bpmnModel) {
+        if (!"serviceTask".equals(activity.getActivityType())
+                || activity.getEndTime() == null
+                || activity.getActivityId() == null) {
+            return false;
+        }
+        if (sendEmailActivityIds.contains(activity.getActivityId())) {
+            return true;
+        }
+        if (bpmnModel == null) {
+            return false;
+        }
+        FlowElement flowElement = bpmnModel.getFlowElement(activity.getActivityId());
+        return flowElement instanceof ServiceTask serviceTask
+                && SEND_EMAIL_DELEGATE.equals(serviceTask.getImplementation());
     }
 
     /** Flowable changeActivityState sets deleteReason like "Change activity to Activity_xxx". */

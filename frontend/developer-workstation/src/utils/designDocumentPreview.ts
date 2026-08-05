@@ -140,6 +140,58 @@ function cell(row: MatrixRow, ...keywords: string[]): string {
 }
 
 /**
+ * 表头与关键词完全相同才取——给 `| Field |` / `| 字段 |` 这种光杆表头兜底。
+ *
+ * 不能用 `cell()` 的子串规则去找 `field`：同一行的 `Field Type`、`Field Description`
+ * 都含 field，名字列会取到类型或说明；中文的 `字段` 撞 `字段类型`、`字段说明` 同理。
+ * 所以光杆词只认独占一列的写法。
+ */
+function exactCell(row: MatrixRow, keyword: string): string {
+  const key = Object.keys(row).find(header => stripInlineMarkup(header) === keyword)
+  return key ? stripInlineMarkup(row[key]) : ''
+}
+
+interface NameHeaders {
+  /** 子串匹配：关键词组内每个词都要出现在表头里 */
+  contains: string[][]
+  /** 精确匹配：整列表头就是这个词 */
+  exact: string[]
+}
+
+/**
+ * "这一列是名字"的表头候选，按优先级从稳妥到激进排列。
+ *
+ * prompt（`ai-prompts/design.txt`）只规定了小节标题，没规定列名，措辞完全由模型发挥，
+ * 实际见过 `Field Name` / `Column Name` / `字段名` / 光杆 `Field`。认不出的后果不是报错，
+ * 而是整行被跳过——表清单全丢、或"表都在、字段全空"，预览看着正常却什么也没说。
+ *
+ * 带限定词的写法走子串匹配（`Field Name (EN)`、`字段名称` 都能命中）；
+ * 光杆词有歧义，只能走 `exactCell`，且必须排在最后，否则 `Field Type` 会被当成名字列。
+ */
+const FIELD_NAME_HEADERS: NameHeaders = {
+  contains: [['field', 'name'], ['column', 'name'], ['name'], ['字段名'], ['列名']],
+  exact: ['field', 'column', '字段', '列']
+}
+
+const TABLE_NAME_HEADERS: NameHeaders = {
+  contains: [['table', 'name'], ['name'], ['表名']],
+  exact: ['table', '表', '数据表']
+}
+
+/** 依次试各种表头写法，取第一个有值的列。 */
+function nameCell(row: MatrixRow, headers: NameHeaders): string {
+  for (const keywords of headers.contains) {
+    const value = cell(row, ...keywords)
+    if (value) return value
+  }
+  for (const keyword of headers.exact) {
+    const value = exactCell(row, keyword)
+    if (value) return value
+  }
+  return ''
+}
+
+/**
  * 认出字段小节里"这张表叫什么"的小标题，两种写法都收：
  * `**lease_application**` 与 `#### \`lease_application\` (MAIN)`。
  * 后者括号里的类型顺手收下——表清单漏声明这张表时，它就是唯一的类型来源。
@@ -206,7 +258,7 @@ export function parseDesignTables(content: string): DesignTable[] {
   const byName = new Map<string, DesignTable>()
 
   for (const row of parseMatrix(content, 'Table Structure')) {
-    const name = cell(row, 'table', 'name') || cell(row, 'name')
+    const name = nameCell(row, TABLE_NAME_HEADERS)
     if (!name || isEmptyCell(name)) continue
     const table: DesignTable = {
       name,
@@ -256,7 +308,7 @@ export function parseDesignTables(content: string): DesignTable[] {
       headers.forEach((header, position) => {
         row[header] = cells[position] ?? ''
       })
-      const name = cell(row, 'field', 'name') || cell(row, 'name')
+      const name = nameCell(row, FIELD_NAME_HEADERS)
       if (!name || isEmptyCell(name)) continue
       // 约束与描述分列时两列都要：模型常把"外键指向哪张表"这类关键信息写在 Description 里。
       const details = [

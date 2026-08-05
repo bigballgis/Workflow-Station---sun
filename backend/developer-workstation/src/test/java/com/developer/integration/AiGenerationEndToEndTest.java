@@ -488,12 +488,20 @@ class AiGenerationEndToEndTest {
         component.chatStream(request, "test-user", AM_TOKEN);
         assertTrue(latch.await(5, TimeUnit.SECONDS));
 
-        // Verify: structured error event sent
+        // Verify: structured error event sent.
+        // chatStream now emits a "session" event first (so the frontend learns the sessionId),
+        // so this must not assert an exact invocation count — what matters is that an "error"
+        // event with the right payload is among what was sent, not that it was the only one.
         ArgumentCaptor<AiChatSseEvent> eventCaptor = ArgumentCaptor.forClass(AiChatSseEvent.class);
-        verify(aiGenerationService).sendChatEvent(eq(1L), eq("test-user"), eventCaptor.capture());
+        verify(aiGenerationService, atLeastOnce())
+                .sendChatEvent(eq(1L), eq("test-user"), eventCaptor.capture());
 
-        AiChatSseEvent errorEvent = eventCaptor.getValue();
-        assertEquals("error", errorEvent.getEventType());
+        AiChatSseEvent errorEvent = eventCaptor.getAllValues().stream()
+                .filter(ev -> "error".equals(ev.getEventType()))
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new AssertionError(
+                        "no 'error' event was sent; got: " + eventCaptor.getAllValues().stream()
+                                .map(AiChatSseEvent::getEventType).toList()));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> errorData = (Map<String, Object>) errorEvent.getData();

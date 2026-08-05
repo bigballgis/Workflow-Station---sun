@@ -187,24 +187,40 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         AiDocumentType documentType = AiDocumentType.valueOf(documentTypeStr);
                         String summary = (String) aiResponse.getOrDefault("documentSummary", "AI generated document");
 
-                        aiGenerationService.saveDocument(request.getFunctionUnitId(), documentType, documentContent, summary, userId);
+                        // 版本号与落库时间一并回给前端：文档卡上要显示"v3 · 14:32"，否则用户点完
+                        // Regenerate 只能盯着一段看起来差不多的正文猜这一版到底重出了没有。
+                        var savedDocument = aiGenerationService.saveDocument(
+                                request.getFunctionUnitId(), documentType, documentContent, summary, userId);
+                        Map<String, Object> documentPayload = new LinkedHashMap<>();
+                        documentPayload.put("documentType", documentTypeStr);
+                        documentPayload.put("content", documentContent);
+                        documentPayload.put("version", savedDocument.getVersion());
+                        documentPayload.put("generatedAt", savedDocument.getCreatedAt() != null
+                                ? savedDocument.getCreatedAt().toString() : null);
                         emitIfCurrent.accept(AiChatSseEvent.builder().eventType("document")
-                                        .data(Map.of("documentType", documentTypeStr, "content", documentContent)).build());
+                                        .data(documentPayload).build());
                     }
                 }
 
-                if (Boolean.TRUE.equals(aiResponse.get("phaseComplete"))) {
-                    // Auto-advance session phase (persisted in backend, not dependent on frontend "next phase" button)
-                    AiPhase nextPhase = getNextPhase(request.getPhase());
-                    if (nextPhase != null) {
-                        try {
-                            aiGenerationService.updateSessionPhase(session.getSessionId().toString(), nextPhase);
-                            log.info("Auto-advanced session phase: sessionId={}, from={} to={}",
-                                    session.getSessionId(), request.getPhase(), nextPhase);
-                        } catch (Exception phaseErr) {
-                            log.error("Failed to auto-advance phase: sessionId={}", session.getSessionId(), phaseErr);
-                        }
-                    }
+                if (Boolean.TRUE.equals(aiResponse.get("phaseComplete")) && request.isRegenerateOnly()) {
+                    // 文档卡上的 Regenerate：产物已经落库并通过 document 事件回给前端了，到此为止。
+                    // 既不推进相位也不发 phase_complete——否则一次"重出需求文档"会把会话相位倒回
+                    // DESIGN，并触发前端自动重跑设计与生成，覆盖用户已经在迭代的产物。
+                    log.info("Regenerate-only turn: skipping phase advance, sessionId={}, phase={}",
+                            session.getSessionId(), request.getPhase());
+                } else if (Boolean.TRUE.equals(aiResponse.get("phaseComplete"))) {
+                    // 只通知，不推进。
+                    //
+                    // 模型输出 ---PHASE_COMPLETE--- 是一个"我觉得这一相位可以了"的提议，不是事实：它
+                    // 分不清"设计定稿"和"用户正在纠错"，弱模型上尤其不稳。以前这里直接落库推进，前端
+                    // 收到 phase_complete 又会自动发下一相位的触发语，于是用户敲一次回车就连跑
+                    // 需求→设计→生成三轮模型调用，中间没有任何人看一眼——第一轮漏掉的字段会被第二轮
+                    // 当成事实读进去，再被第三轮变成真的表和 BPMN，等用户在 Preview 看见时已经隔了两轮。
+                    //
+                    // 相位由用户点"进入下一阶段"时经 PUT /sessions/{id}/phase 推进，会话状态因此始终
+                    // 与用户看到的一致：不点就不会前进，重开面板也不会落在一个还没有产物的相位上。
+                    log.info("Phase complete proposed by the model, awaiting user confirmation: sessionId={}, phase={}",
+                            session.getSessionId(), request.getPhase());
                     emitIfCurrent.accept(AiChatSseEvent.builder().eventType("phase_complete").data(request.getPhase().name()).build());
                 }
 
@@ -555,14 +571,4 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         }
     }
 
-    /**
-     * Get the next phase, return null if already at the last phase
-     */
-    private AiPhase getNextPhase(AiPhase current) {
-        return switch (current) {
-            case REQUIREMENTS -> AiPhase.DESIGN;
-            case DESIGN -> AiPhase.GENERATION;
-            case GENERATION -> null;
-        };
-    }
 }

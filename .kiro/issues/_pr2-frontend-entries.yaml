@@ -1,0 +1,59 @@
+# Hold for PR2 commit — do not include in PR1 email-portability commit.
+# Append these blocks to index.yaml when staging frontend Preview/event fixes.
+
+- id: "1501"
+  status: fixed
+  fixed_at: "2026-07-30"
+  severity: major
+  category: bug
+  summary: "SubTable 表单组件事件（on.change / hooks）可配置可持久化，但 Preview/Portal 运行时不触发"
+  file: "frontend/user-portal/src/composables/formRenderer/useFormData.ts"
+  note: |
+    现象：Form Design 右侧 Event 可为 subTable 配置 change/hooks，保存进 config_json，
+    但 DW Preview 与 User Portal 增删改行后脚本不执行。
+    根因：subTable 无 field；collect 只按 field 索引；handleSubTableUpdate / Preview updateTableRows
+    未调用事件 runner。
+    修复：resolveComponentEventFieldKey → __subTable_${bindingId}；Portal handleSubTableUpdate
+    与 DW FormPreviewItems.updateTableRows（sourceRule）调用 change/value；单测覆盖 collect + dispatch。
+    续 2026-07-29：子表 Add/Edit 弹窗内字段事件 — DialogColumn.sourceRule +
+    useSubTableDialogComponentEvents；select change 会镜像 blur（用户 Case Type→Card Number 场景）。
+    续 2026-07-30：fc-designer 工具栏 Preview（Form mode）不生效 — syncDesignerComponentEventsForFcPreview
+    原先把 $FNX: 字符串挂到 rule.on，form-create 当函数调用导致大量 "not a function"；
+    改为 compileFcPreviewInjectHandler + rule.inject=true + injectEvent，select 仅有 blur 时镜像 change。
+    续 2026-07-30b：子表/子表单同类缺口 — SubTableFormDialog 编译事件 + preserve shadow 后再 sanitize；
+    useSubTableRowDialog / list columns 保留 sourceRule；Portal+DW Element Plus 弹窗补齐
+    cascader/lookup/user/department/transfer 等 @change。
+    续 2026-07-30c：工具栏 Preview 仍不触发 Case Type 等事件 — openPreview 走 getJson→parseJson，
+    编译后的 handler 无 __json 时 toJson 把闭包函数字符串化，parseFn 重建后丢失 api/field；
+    修复：tagFcPreviewHandlerForJsonRoundtrip 写入 __json=$FNX: + __inject。
+    续 2026-07-30d：挂 change 仍不生效 — 原生 inject 无 $inject.value（值在 args[0]）；
+    改为 openPreview 之后 patchFcDesignerPreviewEventHandlers 用 Hermes 包装器重编译 preview.rule，
+    prepare 阶段不再往画布 setRule 编译函数。
+    验证：formDesignerPreviewValidation + formCreatePreviewEvents vitest pass；DW frontend rebuild。
+
+- id: "1503"
+  status: fixed
+  fixed_at: "2026-07-30"
+  severity: major
+  category: bug
+  summary: "Portal api.hidden(__subTable_*) 不隐藏子表 — FormRendererFields 未门控 isFieldVisible"
+  file: "frontend/user-portal/src/components/FormRendererFields.vue"
+  note: |
+    现象：New Requests 选中 user 后 HMDC Transaction 仍显示；脚本 api.hidden(true,'__subTable_271') 无效。
+    根因：subTable 分支渲染未检查 ctx.isFieldVisible(field.key)，显隐 Map 已写但 DOM 仍画。
+    修复：!inColumn / inColumn 两处均加 isFieldVisible；源码回归单测。
+    配合：Event 脚本须用 $inject.value / $inject.api（见 #1502 续）。
+
+- id: "1502"
+  status: fixed
+  fixed_at: "2026-07-30"
+  severity: major
+  category: bug
+  summary: "Form Design 控件 Event 脚本保存后再打开消失"
+  file: "frontend/developer-workstation/src/composables/formDesigner/useFormSave.ts"
+  note: |
+    现象：User 字段等控件 Event 写好 change 脚本 → 确定 → 保存表单 → 再进 Event，code 为空。
+    根因：useFormSave 在 prepareFormCreateRulesForPersist 之后又调 walkRulesEnsureComponentEvents；
+    持久化快照仍带 `_fc_id`，被当成画布规则，把 `on` 挪回 `_on` 并删掉 `on`，回载/Event 面板易丢脚本。
+    修复：保存路径去掉该 ensure；loadEventData 合并 on/_on 且跳过空 $FNX:；refreshFormRules 回写前 inflate；
+    Event 确定失败时不关弹窗。vitest eventSerialization 5 pass；DW frontend rebuild + 容器启动。

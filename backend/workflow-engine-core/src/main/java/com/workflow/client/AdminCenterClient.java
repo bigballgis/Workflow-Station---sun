@@ -716,7 +716,7 @@ public class AdminCenterClient {
     public Optional<String> resolveFunctionUnitIdByCode(String functionUnitCode) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/internal/function-units/by-code/"
-                    + functionUnitCode + "/id";
+                    + SafeUrlInput.requirePathToken(functionUnitCode) + "/id";
             ResponseEntity<Map<String, String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -730,6 +730,33 @@ public class AdminCenterClient {
         } catch (Exception e) {
             // FALLBACK(external): FU id 解析失败降级为 empty，调用方(邮件监听)本轮跳过。
             log.error("Failed to resolve function unit id by code {}: {}", functionUnitCode, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 按 Admin Center 功能单元 ID 解析 DW/Portal 使用的 functionUnitCode。
+     */
+    public Optional<String> resolveFunctionUnitCodeById(String functionUnitId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/internal/function-units/"
+                    + SafeUrlInput.requirePathToken(functionUnitId) + "/code";
+            ResponseEntity<Map<String, String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, String>>() {}
+            );
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                String code = response.getBody().get("functionUnitCode");
+                if (code != null && !code.isBlank()) {
+                    return Optional.of(code.trim());
+                }
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            // FALLBACK(external): code 解析失败降级为 empty；邮件启动路径缺少 code 时 Send Email 仍会失败。
+            log.error("Failed to resolve function unit code by id {}: {}", functionUnitId, e.getMessage());
             return Optional.empty();
         }
     }

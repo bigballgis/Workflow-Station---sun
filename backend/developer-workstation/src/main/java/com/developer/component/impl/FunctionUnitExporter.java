@@ -205,7 +205,7 @@ public class FunctionUnitExporter {
         }
 
         List<Map<String, Object>> monitors = emailMonitorRuleRepository
-                .findByFunctionUnitIdOrderByNameAsc(functionUnitId).stream()
+                .findByFunctionUnitIdAndStartEventIdIsNotNull(functionUnitId).stream()
                 .map(this::serializeMonitorRule)
                 .toList();
         if (!monitors.isEmpty()) {
@@ -389,9 +389,10 @@ public class FunctionUnitExporter {
                 connectionIndex++;
             }
 
-            // Export inbound email monitor rules
+            // Export runtime email monitor bindings only (Start Event triggers; templates stay in DW).
             int monitorIndex = 0;
-            for (EmailMonitorRule rule : emailMonitorRuleRepository.findByFunctionUnitIdOrderByNameAsc(functionUnitId)) {
+            for (EmailMonitorRule rule : emailMonitorRuleRepository
+                    .findByFunctionUnitIdAndStartEventIdIsNotNull(functionUnitId)) {
                 String fileName = "email-monitors/monitor_" + monitorIndex + ".json";
                 byte[] data = objectMapper.writeValueAsBytes(serializeMonitorRule(rule));
                 fileContents.put(fileName, data);
@@ -729,6 +730,7 @@ public class FunctionUnitExporter {
         map.put("name", rule.getName());
         map.put("enabled", rule.getEnabled());
         map.put("connectionUid", rule.getConnectionUid());
+        map.put("sourceRuleId", rule.getSourceRuleId());
         map.put("processDefinitionKey", rule.getProcessDefinitionKey());
         map.put("startEventId", rule.getStartEventId());
         map.put("folderLabel", rule.getFolderLabel());

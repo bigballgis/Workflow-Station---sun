@@ -2,6 +2,9 @@ import { functionUnitAxios } from './functionUnit'
 
 export type EmailConnectionDirection = 'OUTBOUND' | 'INBOUND' | 'BOTH'
 
+/** Writable directions when creating/updating connections (BOTH is legacy read-only). */
+export type EmailConnectionDirectionInput = 'OUTBOUND' | 'INBOUND'
+
 export interface EmailConnection {
   id: number
   connectionUid: string
@@ -39,7 +42,7 @@ export interface EmailConnectionRequest {
   fromName?: string
   useTls?: boolean
   enabled?: boolean
-  direction?: EmailConnectionDirection
+  direction?: EmailConnectionDirectionInput
   mailboxAddress?: string
   imapHost?: string
   imapPort?: number

@@ -1,12 +1,12 @@
 package com.developer.component.impl;
 
+import com.developer.client.AdminCenterSystemImapClient;
 import com.developer.client.AdminCenterSystemSmtpClient;
 import com.developer.component.EmailConnectionComponent;
 import com.developer.dto.EmailConnectionRequest;
 import com.developer.dto.EmailConnectionResponse;
 import com.developer.entity.EmailConnection;
 import com.developer.entity.FunctionUnit;
-import com.developer.enums.ConnectionType;
 import com.developer.enums.EmailConnectionDirection;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
@@ -41,6 +41,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     private final EncryptionService encryptionService;
     private final I18nService i18nService;
     private final AdminCenterSystemSmtpClient adminCenterSystemSmtpClient;
+    private final AdminCenterSystemImapClient adminCenterSystemImapClient;
 
     /** Corporate SMTP relays / internal hosts permitted (same config as webhook SSRF allowlist). */
     @Value("${ssrf.allowed-hosts:localhost,activepieces}")
@@ -67,10 +68,10 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
 
-        if (emailConnectionRepository.existsByFunctionUnitIdAndName(functionUnitId, request.getName())) {
-            throw new DeveloperBusinessException("CONFLICT_CONNECTION_NAME",
-                    i18nService.getMessage("email.connection.name_conflict", request.getName()));
-        }
+        EmailConnectionDirection direction = request.getDirection() != null
+                ? request.getDirection() : EmailConnectionDirection.OUTBOUND;
+        rejectBothDirection(direction);
+        assertNameUniqueForDirection(functionUnitId, request.getName(), direction, null);
 
         if (!StringUtils.hasText(request.getUsername())) {
             if (StringUtils.hasText(request.getPassword())) {
@@ -84,8 +85,6 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
         String emailAddress = request.getName().trim();
         String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : null;
-        EmailConnectionDirection direction = request.getDirection() != null
-                ? request.getDirection() : EmailConnectionDirection.OUTBOUND;
         ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, null, direction);
         ResolvedImapEndpoint imap = resolveImapEndpoint(request, null, direction);
 
@@ -119,19 +118,16 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     public EmailConnectionResponse update(Long functionUnitId, Long connectionId, EmailConnectionRequest request) {
         EmailConnection connection = getEntity(functionUnitId, connectionId);
 
-        if (emailConnectionRepository.existsByFunctionUnitIdAndNameAndIdNot(
-                functionUnitId, request.getName(), connectionId)) {
-            throw new DeveloperBusinessException("CONFLICT_CONNECTION_NAME",
-                    i18nService.getMessage("email.connection.name_conflict", request.getName()));
-        }
-
-        String emailAddress = request.getName().trim();
-        String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : null;
         EmailConnectionDirection direction = request.getDirection() != null
                 ? request.getDirection() : connection.getDirection();
         if (direction == null) {
             direction = EmailConnectionDirection.OUTBOUND;
         }
+        rejectBothDirection(direction);
+        assertNameUniqueForDirection(functionUnitId, request.getName(), direction, connectionId);
+
+        String emailAddress = request.getName().trim();
+        String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : null;
         ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, connection, direction);
         ResolvedImapEndpoint imap = resolveImapEndpoint(request, connection, direction);
 
@@ -232,45 +228,18 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         if (isOutboundCapable(direction)) {
             return resolveSystemSmtpEndpoint();
         }
-        String host = StringUtils.hasText(request.getHost())
-                ? request.getHost().trim()
-                : (existing != null ? existing.getHost() : null);
-        if (!StringUtils.hasText(host)) {
-            throw new DeveloperBusinessException("VALIDATION_SMTP_HOST_REQUIRED",
-                    i18nService.getMessage("email.connection.smtp_host_required"));
-        }
-
-        Integer port = request.getPort() != null && request.getPort() > 0
-                ? request.getPort()
-                : (existing != null ? existing.getPort() : null);
-        if (port == null || port <= 0) {
-            throw new DeveloperBusinessException("VALIDATION_SMTP_PORT_REQUIRED",
-                    i18nService.getMessage("email.connection.smtp_port_required"));
-        }
-
-        Boolean useTls = request.getUseTls() != null
-                ? request.getUseTls()
-                : (existing != null ? existing.getUseTls() : null);
-        if (useTls == null) {
-            throw new DeveloperBusinessException("VALIDATION_SMTP_TLS_REQUIRED",
-                    i18nService.getMessage("email.connection.smtp_tls_required"));
-        }
-
-        validateSmtpHost(host);
-        return new ResolvedSmtpEndpoint(host, port, useTls);
+        // Inbound-only monitor connections do not use SMTP; host/port are unused at runtime.
+        return new ResolvedSmtpEndpoint(null, 587, true);
     }
 
     private ResolvedSmtpEndpoint resolveRuntimeSmtpEndpoint(EmailConnection connection) {
         EmailConnectionDirection direction = connection.getDirection() != null
                 ? connection.getDirection() : EmailConnectionDirection.OUTBOUND;
-        if (isOutboundCapable(direction)) {
-            return resolveSystemSmtpEndpoint();
+        if (!isOutboundCapable(direction)) {
+            throw new DeveloperBusinessException("VALIDATION_OUTBOUND_REQUIRED_FOR_TEST",
+                    i18nService.getMessage("email.connection.outbound_required_for_test"));
         }
-        validateSmtpHost(connection.getHost());
-        return new ResolvedSmtpEndpoint(
-                connection.getHost(),
-                connection.getPort(),
-                Boolean.TRUE.equals(connection.getUseTls()));
+        return resolveSystemSmtpEndpoint();
     }
 
     private ResolvedSmtpEndpoint resolveSystemSmtpEndpoint() {
@@ -294,42 +263,61 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     }
 
     /**
-     * Resolves inbound IMAP endpoint from the request (falling back to the existing connection).
-     * Known providers (non-SMTP types) may omit host/port because the engine has a preset;
-     * custom SMTP connections used for inbound must supply host + port explicitly.
+     * Resolves inbound IMAP endpoint from Admin Center system config (required for {@code INBOUND}).
      */
     private ResolvedImapEndpoint resolveImapEndpoint(EmailConnectionRequest request,
                                                      EmailConnection existing,
                                                      EmailConnectionDirection direction) {
-        String host = StringUtils.hasText(request.getImapHost())
-                ? request.getImapHost().trim()
-                : (existing != null ? existing.getImapHost() : null);
-        Integer port = request.getImapPort() != null && request.getImapPort() > 0
-                ? request.getImapPort()
-                : (existing != null ? existing.getImapPort() : null);
-        Boolean useSsl = request.getImapUseSsl() != null
-                ? request.getImapUseSsl()
-                : (existing != null ? existing.getImapUseSsl() : null);
+        if (!isInboundCapable(direction)) {
+            return new ResolvedImapEndpoint(null, null, null);
+        }
+        return resolveSystemImapEndpoint();
+    }
 
-        boolean inbound = direction == EmailConnectionDirection.INBOUND
+    private void rejectBothDirection(EmailConnectionDirection direction) {
+        if (direction == EmailConnectionDirection.BOTH) {
+            throw new DeveloperBusinessException(
+                    "VALIDATION_DIRECTION_BOTH_REMOVED",
+                    i18nService.getMessage("email.connection.direction_both_removed"));
+        }
+    }
+
+    private void assertNameUniqueForDirection(
+            Long functionUnitId,
+            String name,
+            EmailConnectionDirection direction,
+            Long excludeConnectionId) {
+        boolean conflict = excludeConnectionId == null
+                ? emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirection(
+                functionUnitId, name, direction)
+                : emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirectionAndIdNot(
+                functionUnitId, name, direction, excludeConnectionId);
+        if (conflict) {
+            String directionLabel = i18nService.getMessage(
+                    "email.connection.direction_label." + direction.name());
+            throw new DeveloperBusinessException(
+                    "CONFLICT_CONNECTION_NAME",
+                    i18nService.getMessage("email.connection.name_conflict", directionLabel, name));
+        }
+    }
+
+    private static boolean isInboundCapable(EmailConnectionDirection direction) {
+        return direction == EmailConnectionDirection.INBOUND
                 || direction == EmailConnectionDirection.BOTH;
-        boolean hasPreset = request.getConnectionType() != null
-                && request.getConnectionType() != ConnectionType.SMTP;
+    }
 
-        if (inbound && !hasPreset) {
-            if (!StringUtils.hasText(host)) {
-                throw new DeveloperBusinessException("VALIDATION_IMAP_HOST_REQUIRED",
-                        i18nService.getMessage("email.connection.imap_host_required"));
-            }
-            if (port == null || port <= 0) {
-                throw new DeveloperBusinessException("VALIDATION_IMAP_PORT_REQUIRED",
-                        i18nService.getMessage("email.connection.imap_port_required"));
-            }
+    private ResolvedImapEndpoint resolveSystemImapEndpoint() {
+        try {
+            AdminCenterSystemImapClient.SystemImapEndpoint endpoint =
+                    adminCenterSystemImapClient.fetchSystemImapEndpoint();
+            validateSmtpHost(endpoint.host());
+            return new ResolvedImapEndpoint(endpoint.host(), endpoint.port(), endpoint.useSsl());
+        } catch (IllegalStateException ex) {
+            throw new DeveloperBusinessException(
+                    "VALIDATION_SYSTEM_IMAP_REQUIRED",
+                    i18nService.getMessage("email.connection.system_imap_required",
+                            ex.getMessage() != null ? ex.getMessage() : ""));
         }
-        if (StringUtils.hasText(host)) {
-            validateSmtpHost(host);
-        }
-        return new ResolvedImapEndpoint(StringUtils.hasText(host) ? host : null, port, useSsl);
     }
 
     private void ensureFunctionUnitExists(Long functionUnitId) {

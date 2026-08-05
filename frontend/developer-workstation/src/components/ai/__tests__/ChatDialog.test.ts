@@ -3,7 +3,7 @@ import { shallowMount } from '@vue/test-utils'
 import { ref } from 'vue'
 import { createI18n } from 'vue-i18n'
 import ChatDialog from '@/components/ai/ChatDialog.vue'
-import type { AiPhase, AiMessage } from '@/types/aiGeneration'
+import type { AiPhase, AiMessage, InlineDocument } from '@/types/aiGeneration'
 
 const i18n = createI18n({
   legacy: false,
@@ -35,7 +35,6 @@ const mockPartialGeneratedData = ref<any>({})
 const mockIsGenerationComplete = ref(false)
 const mockGenerationStep = ref(0)
 const mockDegradationInfo = ref<any>(null)
-const mockClearCurrentDraft = vi.fn()
 
 vi.mock('@/composables/useAiChat', () => ({
   useAiChat: () => ({
@@ -57,11 +56,14 @@ vi.mock('@/composables/useAiChat', () => ({
     onGeneratedData: mockOnGeneratedData,
     onValidationWarning: mockOnValidationWarning,
     onSession: mockOnSession,
-    setMessages: mockSetMessages,
-    clearCurrentDraft: mockClearCurrentDraft
+    setMessages: mockSetMessages
   }),
   loadDraft: () => null,
-  clearDraft: vi.fn()
+  clearDraft: vi.fn(),
+  // markApplySuccess 用它把生成结果以 applied 标记写回草稿槽——mock 掉整个模块时必须补上，
+  // 否则 ChatDialog 里的具名导入是 undefined，Apply 成功路径直接抛错。
+  // 必须就地 vi.fn()：工厂会被提升到文件顶部，引用外层变量会命中 TDZ。
+  saveDraft: vi.fn()
 }))
 
 vi.mock('@/composables/useAiTemplates', () => ({
@@ -93,7 +95,11 @@ vi.mock('@/types/aiGeneration', async (importOriginal) => {
 const globalStubs = {
   PhaseIndicator: { template: '<div class="phase-indicator" />', props: ['currentPhase', 'completedPhases'] },
   ChatMessage: { template: '<div class="chat-message" />', props: ['message', 'isStreaming'] },
-  InlineDocumentViewer: { template: '<div class="inline-document-viewer" />', props: ['documentType', 'content'] },
+  InlineDocumentViewer: {
+    template: '<div class="inline-document-viewer" />',
+    props: ['documentType', 'content', 'busy', 'version', 'generatedAt', 'fresh'],
+    emits: ['regenerate']
+  },
   GenerationPreview: {
     template: '<div class="generation-preview" />',
     props: ['previewData', 'generatedData', 'isGenerationComplete', 'isStreaming', 'mode', 'diffResult'],
@@ -238,6 +244,129 @@ describe('ChatDialog', () => {
     mountComponent()
     expect(mockOnPhaseComplete).toHaveBeenCalled()
     expect(mockOnGeneratedData).toHaveBeenCalled()
+  })
+
+  // --- 相位闸门：模型说"完成了"只是提议，推进要用户点 ---
+
+  /** 取出组件注册给 useAiChat 的 phase_complete 回调并触发它。 */
+  function firePhaseComplete(phase: AiPhase) {
+    const cb = mockOnPhaseComplete.mock.calls.at(-1)?.[0] as (p: AiPhase) => void
+    cb(phase)
+  }
+
+  it('should offer a button instead of cascading into the next phase', async () => {
+    const wrapper = mountComponent()
+
+    firePhaseComplete('REQUIREMENTS')
+    await wrapper.vm.$nextTick()
+
+    // 不 emit 就不会有 AiPanel 的 advancePhase + autoTriggerPhase，级联到此为止
+    expect(wrapper.emitted('phaseComplete')).toBeFalsy()
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(true)
+  })
+
+  it('should advance only when the user clicks the phase button', async () => {
+    const wrapper = mountComponent()
+    firePhaseComplete('REQUIREMENTS')
+    await wrapper.vm.$nextTick()
+
+    await wrapper.find('.chat-dialog__phase-action button').trigger('click')
+
+    expect(wrapper.emitted('phaseComplete')).toBeTruthy()
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(false)
+  })
+
+  // GENERATION 没有下一相位可提议，按钮无意义，照原样交给 AiPanel
+  it('should still emit directly on the last phase', async () => {
+    const wrapper = mountComponent({ ...defaultProps, phase: 'GENERATION' as AiPhase })
+
+    firePhaseComplete('GENERATION')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('phaseComplete')).toBeTruthy()
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(false)
+  })
+
+  /**
+   * 重开面板：按钮必须从落库的产物重新推导出来。
+   *
+   * 闸门下这个按钮是唯一推进相位的入口，而它原本只由本次挂载收到的 phase_complete 点亮——
+   * 关掉面板再打开就没了，用户只能再发一轮对话赌模型再说一次 PHASE_COMPLETE 才能前进。
+   */
+  it('should restore the phase button from the current phase document after reopening', async () => {
+    const wrapper = mountComponent({ ...defaultProps, phase: 'DESIGN' as AiPhase })
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(false)
+
+    ;(wrapper.vm as unknown as { setInlineDocuments: (d: InlineDocument[]) => void }).setInlineDocuments([
+      { id: 1, documentType: 'REQUIREMENTS', content: '# Req' },
+      { id: 2, documentType: 'DESIGN', content: '# Design' }
+    ])
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(true)
+  })
+
+  // 当前相位还没有产物 → 没有什么可推进的，不能凭上游文档就亮按钮
+  it('should not offer the phase button when the current phase produced nothing yet', async () => {
+    const wrapper = mountComponent({ ...defaultProps, phase: 'DESIGN' as AiPhase })
+
+    ;(wrapper.vm as unknown as { setInlineDocuments: (d: InlineDocument[]) => void }).setInlineDocuments([
+      { id: 1, documentType: 'REQUIREMENTS', content: '# Req' }
+    ])
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.chat-dialog__phase-action').exists()).toBe(false)
+  })
+
+  // --- Regenerate 输入框：定向修改 vs 整篇重出 ---
+
+  /** ChatDialog 通过 defineExpose 暴露的那部分，测试里只用得到这一个方法。 */
+  type ExposedChatDialog = { setInlineDocuments: (docs: InlineDocument[]) => void }
+
+  async function mountWithDesignDoc() {
+    const wrapper = mountComponent({ ...defaultProps, phase: 'GENERATION' as AiPhase })
+    ;(wrapper.vm as unknown as ExposedChatDialog).setInlineDocuments([
+      { id: 7, documentType: 'DESIGN', content: '# Design', version: 2, generatedAt: '2026-08-03T06:32:10Z' }
+    ])
+    await wrapper.vm.$nextTick()
+    return wrapper
+  }
+
+  it('should keep the blank-input Regenerate on the original full-rewrite prompt', async () => {
+    const wrapper = await mountWithDesignDoc()
+
+    wrapper.findComponent(globalStubs.InlineDocumentViewer).vm.$emit('regenerate', 'DESIGN', '')
+    await wrapper.vm.$nextTick()
+
+    const sent = mockSendMessage.mock.calls.at(-1)?.[0]
+    expect(sent.message).toContain('Rewrite it from scratch')
+    expect(sent.message).not.toContain('USER CORRECTION REQUEST')
+  })
+
+  it('should turn a filled-in Regenerate into a keep-what-is-correct instruction', async () => {
+    const wrapper = await mountWithDesignDoc()
+    const instruction = 'shipment 表缺了 carrier 和 tracking_no'
+
+    wrapper.findComponent(globalStubs.InlineDocumentViewer).vm.$emit('regenerate', 'DESIGN', instruction)
+    await wrapper.vm.$nextTick()
+
+    const sent = mockSendMessage.mock.calls.at(-1)?.[0]
+    // 反漂移契约取代"从头重写"：为了改两个字段把整篇重滚一遍，正确的部分每次都在重新抽奖
+    expect(sent.message).not.toContain('Rewrite it from scratch')
+    expect(sent.message).toContain('Keep everything in the current version that is already correct')
+    // 用户那段话必须落在最末尾——前面几千 token 的 schema metadata 很容易把夹在中间的指令冲掉
+    expect(sent.message.indexOf(instruction))
+      .toBeGreaterThan(sent.message.indexOf('USER CORRECTION REQUEST'))
+    // 相位保护不能丢：否则一次纠错会把会话推进到 GENERATION 并级联自动重跑
+    expect(sent.regenerateOnly).toBe(true)
+    expect(sent.phase).toBe('DESIGN')
+  })
+
+  it('should surface the backend document version on the card', async () => {
+    const wrapper = await mountWithDesignDoc()
+    const card = wrapper.findComponent(globalStubs.InlineDocumentViewer)
+    expect(card.props('version')).toBe(2)
+    expect(card.props('generatedAt')).toBe('2026-08-03T06:32:10Z')
   })
 
   it('should call setMessages with initialMessages on mount', async () => {

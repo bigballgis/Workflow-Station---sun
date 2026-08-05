@@ -44,4 +44,12 @@ public class InternalEmailConnectionController {
                 .map(id -> ResponseEntity.ok(Map.of("functionUnitId", id)))
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    @GetMapping("/{functionUnitId}/code")
+    @Operation(summary = "按功能单元 ID 解析 code（内部）")
+    public ResponseEntity<Map<String, String>> resolveCodeById(@PathVariable String functionUnitId) {
+        return emailConnectionSyncComponent.resolveFunctionUnitCodeById(functionUnitId)
+                .map(code -> ResponseEntity.ok(Map.of("functionUnitCode", code)))
+                .orElse(ResponseEntity.notFound().build());
+    }
 }

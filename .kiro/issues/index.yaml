@@ -1565,14 +1565,17 @@
     关联未修：#1496（启动诊断未关 JDBC 连接）。
 
 - id: "1496"
-  status: open
+  status: fixed
+  fixed_at: "2026-08-03"
   severity: minor
   category: quality
   summary: "DataSourceDiagnosticRunner 取得 JDBC 连接后未关闭，可能触发 Hikari 泄漏告警"
   file: "backend/admin-center/src/main/java/com/admin/bi/config/DataSourceDiagnosticRunner.java"
   note: |
-    dataSource.getConnection().getMetaData().getURL() 未 try-with-resources / close，
-    连接归还依赖泄漏检测超时。与 #1495 独立，本轮不顺手修复，避免与启动绑定修复混提交。
+    根因：dataSource.getConnection().getMetaData().getURL() 未关闭连接。
+    修复：try-with-resources 归还连接；JdbcTemplate 诊断查询不变。
+    验证：mvn -pl backend/admin-center -am package -DskipTests PASS。
+    本地 compose 缺 .env 未重建容器；K8s/部署侧需重新发布 admin-center 后确认无 ProxyLeakTask。
 
 - id: "1497"
   status: fixed
@@ -1826,6 +1829,22 @@
     单测：useProcessActions.emptyDiagramGuard.test.ts、bpmnDiagramContent.test.ts、
     ProcessDesignEmptyDiagramGuardTest.java。
 
+- id: "1512"
+  status: fixed
+  fixed_at: "2026-08-04"
+  severity: major
+  category: bug
+  summary: "Email Monitor 启动流程后 Portal hydrate 因引擎 GET 403 失败，申请不可见"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorPortalSyncComponent.java; backend/user-portal/src/main/java/com/portal/component/ProcessInstanceHydrationComponent.java"
+  note: |
+    现象：we_email_processed_messages 为 STARTED，但 up_process_instance 无行；Portal hydrate
+    POST 返回 500。根因：内部 hydrate 仅带 X-Internal-Token，portal→engine GET
+    /api/v1/processes/instances/{id} 需 JWT → 403（SecurityConfig.anyRequest().authenticated）。
+    修复：EmailMonitorProcessor 启动后把 engineSnapshot（processKey/businessKey/variables 等）
+    随 hydrate 请求传给 Portal；ProcessInstanceHydrationComponent 有可用快照时跳过引擎 GET。
+    单测：ProcessInstanceHydrationComponentTest#hydratesFromSnapshotWithoutCallingEngine、
+    EmailMonitorProcessorTest 校验 hydrate 带 snapshot。关联 #1466。
+
 - id: "1511"
   status: open
   severity: major
@@ -1871,3 +1890,42 @@
     lastLoginAt/Ip 仅在 accessToken 签发成功后更新；JWT 吊销延迟（非每请求复核）产品已接受。
     验证：PortalEntitlementServiceTest + PortalSessionIssuerEntitlementTest +
     portalEntitlementMessage vitest pass。
+  category: bug
+  summary: "Main Table View 列表可见但 View Record 403（You are not a participant）"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessApplicationQueryComponent.java"
+  note: |
+    现象：开放视图（restrict_to_involved_users=false）列表能看 Email Monitor 等 start_user_id=system
+    的流程，点 View Record 返回 403。根因：详情/历史/备注仅用 isProcessParticipant()。
+    修复：canAccessProcessDetail() — 参与者 OR SYS_ADMIN OR 已发布 Main Table View 读权限
+    （开放视图=全行；受限视图=仅 involved）。ProcessController、RecordNoteComponent 统一走该门控。
+    单测：ProcessApplicationQueryComponentDetailAccessTest、ProcessControllerProcessDetailSecurityTest、
+    RecordNoteAuditTest。关联 Email Monitor #1515。
+
+- id: "1514"
+  status: fixed
+  fixed_at: "2026-08-04"
+  severity: major
+  category: bug
+  summary: "My Requests 流程图 manualTask 节点不着色（白/灰 Pending）"
+  file: "frontend/user-portal/src/composables/applicationDetail/useApplicationDetailDiagramParser.ts"
+  note: |
+    根因链：Designer BPMN 为 generic bpmn:task；Flowable 运行时为 manualTask；
+    TaskHistoryAssembler 不含 manualTask → 流程历史缺 test；Portal 仍 RUNNING → test 白/灰、End 绿。
+    修复：bpmnHumanWorkflowTasks 解析 generic task；history 纳入 manualTask 等；
+    getProcessDetail 引擎已结束则 reconcile COMPLETED。View 与 My Requests 同页 applications/detail.vue。
+
+- id: "1515"
+  status: fixed
+  fixed_at: "2026-08-04"
+  severity: major
+  category: bug
+  summary: "Email Monitor 收信后无法建案：EMAIL_CONFIG_INVALID missing_function_unit_id"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  note: |
+    现象：IMAP fetched=1，startProcess 在 Start 后 Send Email 抛 EMAIL_CONFIG_INVALID
+    （i18n key email.send_task.missing_function_unit_id）。根因：邮件启动只注入 admin
+    functionUnitId(UUID)，SendEmailTaskDelegate.resolveDwFunctionUnitRef 需要 functionUnitCode
+    或数字 DW id（与 Portal applyCatalogContextToVariables 不一致）。
+    修复：admin internal GET /function-units/{id}/code；EmailMonitorProcessor 启动变量补
+    functionUnitCode。单测 EmailMonitorProcessorTest、EmailConnectionSyncResolveCodeTest。
+    运行时验证：process 09c33253… hydrate 成功，后续 poll fetched=0。

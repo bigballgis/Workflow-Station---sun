@@ -44,7 +44,13 @@ export function useAiSession() {
         const versions = response.data ?? []
         if (!versions.length) continue
         const latest = versions.reduce((a, b) => (a.version >= b.version ? a : b))
-        restored.push({ id: latest.id, documentType, content: latest.content })
+        restored.push({
+          id: latest.id,
+          documentType,
+          content: latest.content,
+          version: latest.version,
+          generatedAt: latest.createdAt
+        })
       } catch (err) {
         // 单个文档取不回来不该让整个面板打不开：其余文档与消息照常恢复，这里留痕即可。
         console.error(`Failed to restore ${documentType} document into the chat:`, err)

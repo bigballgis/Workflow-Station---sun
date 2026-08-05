@@ -6,6 +6,12 @@
           GENERATED SPEC
         </p>
         <span class="generation-preview__title">{{ t('ai.preview.title') }}</span>
+        <DocVersionBadge
+          class="generation-preview__version"
+          :version="props.version"
+          :generated-at="props.generatedAt"
+          :fresh="props.fresh"
+        />
       </div>
       <!-- Task 16.1: Streaming indicator -->
       <div
@@ -292,12 +298,10 @@
       >
         {{ props.applyState === 'applying' ? t('ai.preview.applying') : t('ai.preview.apply') }}
       </el-button>
-      <el-button
+      <RegenerateBox
         :disabled="props.applyState === 'applying'"
-        @click="emit('regenerate')"
-      >
-        {{ t('ai.preview.regenerate') }}
-      </el-button>
+        @confirm="instruction => emit('regenerate', instruction)"
+      />
     </div>
   </section>
 </template>
@@ -307,6 +311,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { InfoFilled, Loading } from '@element-plus/icons-vue'
 import DOMPurify from 'dompurify'
+import DocVersionBadge from './DocVersionBadge.vue'
+import RegenerateBox from './RegenerateBox.vue'
 import type { GenerationPreviewData, AiGeneratedData, DiffResult } from '@/types/aiGeneration'
 
 const { t } = useI18n()
@@ -328,11 +334,16 @@ const props = defineProps<{
   diffResult?: DiffResult | null
   /** Apply lifecycle owned by ChatDialog: spinner while the write runs, green "Applied" after. */
   applyState?: 'idle' | 'applying' | 'applied'
+  /** 第几次生成 + 生成时刻，由 ChatDialog 在每次 generated_data 到达时打戳。 */
+  version?: number
+  generatedAt?: string
+  fresh?: boolean
 }>()
 
 const emit = defineEmits<{
   apply: []
-  regenerate: []
+  /** instruction 为用户填的定向修改指令，空串表示整篇重出。 */
+  regenerate: [instruction: string]
 }>()
 
 const sanitizedIconSvg = computed(() => {
@@ -398,6 +409,11 @@ const previewTab = ref('summary')
   font-weight: 600;
   font-size: 14px;
   color: ai.$ai-ink;
+}
+
+.generation-preview__version {
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 .generation-preview__summary {

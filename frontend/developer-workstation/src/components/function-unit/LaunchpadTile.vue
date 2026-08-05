@@ -242,11 +242,10 @@ function handleCommand(cmd: string) {
 
 <style lang="scss">
 // 图标悬浮描述气泡（Teleport 到 body，需全局样式）。
-// z-index 提到分组浮层（.folder-overlay 3000）之上，浮层内成员卡的气泡才可见。
+// z-index 交给 EP 自增基线（2000+）：分组浮层已压到 1900，无需再手动抬高。
 .launchpad-tile-tooltip {
   max-width: 280px;
   line-height: 1.5;
-  z-index: 4000 !important;
 
   .tip-name {
     font-weight: 600;

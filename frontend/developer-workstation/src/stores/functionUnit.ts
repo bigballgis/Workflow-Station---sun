@@ -23,15 +23,36 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const process = ref<ProcessDefinition | null>(null)
   const versions = ref<Version[]>([])
 
-  async function fetchList(params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number }) {
+  // The list page paginates client-side over the Launchpad layout (a folder is one tile,
+  // and the layout is a single global ordering), so the whole list has to be in hand.
+  // Fetched in chunks rather than one huge request; the cap only guards against a runaway loop.
+  const FETCH_ALL_CHUNK = 200
+  const FETCH_ALL_MAX_CHUNKS = 25
+
+  async function fetchAll(params: { name?: string; status?: string; tags?: string[] } = {}) {
     loading.value = true
     loadError.value = false
     try {
-      // Default sort by name ascending (A→Z) at API level
-      const res = await functionUnitApi.list({ sort: 'name,asc', ...params })
-      const pageData = res?.data?.content !== undefined ? res.data : res?.data
-      list.value = pageData?.content ?? []
-      total.value = pageData?.totalElements ?? 0
+      const acc: FunctionUnitResponse[] = []
+      let totalElements = 0
+      for (let page = 0; page < FETCH_ALL_MAX_CHUNKS; page++) {
+        // Default sort by name ascending (A→Z) at API level
+        const res = await functionUnitApi.list({ sort: 'name,asc', ...params, page, size: FETCH_ALL_CHUNK })
+        const pageData = res?.data
+        const content = pageData?.content ?? []
+        acc.push(...content)
+        totalElements = pageData?.totalElements ?? acc.length
+        if (content.length === 0 || acc.length >= totalElements) break
+      }
+      if (acc.length < totalElements) {
+        // Never pretend a truncated list is the whole list
+        console.warn(
+          `[functionUnit] loaded only ${acc.length}/${totalElements} function units ` +
+          `(cap ${FETCH_ALL_CHUNK * FETCH_ALL_MAX_CHUNKS}); the list page is showing a partial layout`
+        )
+      }
+      list.value = acc
+      total.value = totalElements
     } catch (e) {
       // Surface the failure instead of silently showing an empty list — a transient
       // failure (e.g. token race on first load) previously looked like "no data".
@@ -216,7 +237,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
 
   return {
     list, current, loading, loadError, total, allTags, tables, forms, actions, process, versions,
-    fetchList, fetchById, create, update, remove, restore, clone, validate,
+    fetchAll, fetchById, create, update, remove, restore, clone, validate,
     fetchAllTags,
     fetchTables, createTable, updateTable, deleteTable,
     fetchForms, createForm, updateForm, deleteForm,

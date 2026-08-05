@@ -20,6 +20,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
+import static com.developer.service.AiLockTestSupport.stubExistingLock;
 import static org.mockito.Mockito.*;
 
 /**
@@ -71,7 +72,7 @@ class AiLockExclusivityProperties {
 
         // --- First user acquires the lock successfully ---
         // setIfAbsent returns true for the first user
-        when(cacheService.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
+        when(cacheService.setIfAbsent(eq(lockKey), any(), any(Duration.class)))
                 .thenReturn(true)   // first call: user1 acquires
                 .thenReturn(false); // second call: user2 fails to acquire
 
@@ -95,7 +96,7 @@ class AiLockExclusivityProperties {
             throw new RuntimeException(e);
         }
 
-        when(cacheService.getString(lockKey)).thenReturn(Optional.of(user1LockJson));
+        stubExistingLock(cacheService, lockKey, userId1);
 
         // Second user's tryAcquire should throw AiLockConflictException
         assertThatThrownBy(() -> lockService.tryAcquire(functionUnitId, userId2))

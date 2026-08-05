@@ -80,9 +80,6 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item :label="t('emailMonitor.process')">
-            <el-input v-model="form.processDefinitionKey" :placeholder="t('emailMonitor.processPlaceholder')" />
-          </el-form-item>
           <el-form-item :label="t('emailMonitor.systemInitiator')">
             <SystemInitiatorSelect v-model="form.systemInitiatorUserId" />
           </el-form-item>
@@ -92,18 +89,13 @@
           <el-form-item :label="t('emailMonitor.pollInterval')">
             <el-input-number v-model="form.pollIntervalSeconds" :min="30" :step="30" controls-position="right" />
           </el-form-item>
-          <el-form-item :label="t('emailMonitor.filterFrom')">
-            <el-input v-model="form.filterFrom" :placeholder="t('emailMonitor.filterFromPlaceholder')" />
-          </el-form-item>
-          <el-form-item :label="t('emailMonitor.filterSubject')">
-            <el-input v-model="form.filterSubject" :placeholder="t('emailMonitor.filterSubjectPlaceholder')" />
-          </el-form-item>
         </div>
         <el-form-item>
           <el-checkbox v-model="form.reviewOnMissing">{{ t('emailMonitor.reviewOnMissing') }}</el-checkbox>
         </el-form-item>
 
         <el-divider>{{ t('emailMonitor.wizard.title') }}</el-divider>
+        <div class="form-tip" style="margin-bottom: 8px;">{{ t('emailMonitor.templateFiltersHint') }}</div>
         <EmailExtractionWizard v-model="form.extractionRules" :function-unit-id="functionUnitId" />
       </el-form>
       <template #footer>
@@ -152,8 +144,6 @@ const defaultForm = (): EmailMonitorRuleRequest => ({
   processDefinitionKey: '',
   systemInitiatorUserId: '',
   folderLabel: 'INBOX',
-  filterFrom: '',
-  filterSubject: '',
   actionType: 'START_PROCESS',
   pollIntervalSeconds: 60,
   reviewOnMissing: true,
@@ -178,23 +168,15 @@ const listColumns = computed<DesignerListTableColumn<EmailMonitorRule>[]>(() => 
     key: 'connectionUid',
     prop: 'connectionUid',
     label: t('emailMonitor.connection'),
-    defaultWidth: 160,
+    defaultWidth: 200,
     showOverflowTooltip: true,
     getValue: (row) => connectionName(row.connectionUid),
   },
   {
-    key: 'processDefinitionKey',
-    prop: 'processDefinitionKey',
-    label: t('emailMonitor.process'),
-    defaultWidth: 140,
-    showOverflowTooltip: true,
-  },
-  {
-    key: 'startEventId',
-    prop: 'startEventId',
-    label: t('emailMonitor.startEventId'),
+    key: 'pollIntervalSeconds',
+    prop: 'pollIntervalSeconds',
+    label: t('emailMonitor.pollInterval'),
     defaultWidth: 120,
-    showOverflowTooltip: true,
   },
   {
     key: 'enabled',
@@ -209,7 +191,7 @@ async function loadRules() {
   loading.value = true
   try {
     const [rulesRes, connRes] = await Promise.all([
-      emailMonitorApi.list(props.functionUnitId),
+      emailMonitorApi.listTemplates(props.functionUnitId),
       connectionApi.list(props.functionUnitId)
     ])
     rules.value = rulesRes.data || []
@@ -240,11 +222,8 @@ async function openEditDialog(row: EmailMonitorRule) {
       name: r.name,
       enabled: r.enabled,
       connectionUid: r.connectionUid,
-      processDefinitionKey: r.processDefinitionKey || '',
       systemInitiatorUserId: r.systemInitiatorUserId || '',
       folderLabel: r.folderLabel || 'INBOX',
-      filterFrom: r.filterFrom || '',
-      filterSubject: r.filterSubject || '',
       actionType: r.actionType || 'START_PROCESS',
       pollIntervalSeconds: r.pollIntervalSeconds || 60,
       reviewOnMissing: r.reviewOnMissing ?? true,
@@ -270,10 +249,7 @@ async function handleSave() {
     const payload: EmailMonitorRuleRequest = {
       ...form,
       name: form.name.trim(),
-      processDefinitionKey: form.processDefinitionKey?.trim() || undefined,
-      systemInitiatorUserId: form.systemInitiatorUserId?.trim() || undefined,
-      filterFrom: form.filterFrom?.trim() || undefined,
-      filterSubject: form.filterSubject?.trim() || undefined
+      systemInitiatorUserId: form.systemInitiatorUserId?.trim() || undefined
     }
     if (editingId.value) {
       await emailMonitorApi.update(props.functionUnitId, editingId.value, payload)

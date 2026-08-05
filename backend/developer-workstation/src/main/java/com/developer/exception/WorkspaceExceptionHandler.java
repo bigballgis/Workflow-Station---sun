@@ -30,6 +30,7 @@ public class WorkspaceExceptionHandler {
             "CONFLICT_ACTION_NAME_EXISTS",
             "CONFLICT_DECISION_KEY_EXISTS",
             "CONFLICT_NAME_EXISTS",
+            "CONFLICT_CONNECTION_NAME",
             "PROCESS_FORM_ALREADY_EXISTS"
     );
 

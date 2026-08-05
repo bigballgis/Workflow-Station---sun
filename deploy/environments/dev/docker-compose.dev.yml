@@ -36,6 +36,10 @@ services:
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
       - ../../../deploy/init-scripts:/docker-entrypoint-initdb.d:ro
+      # Flowable 的官方建表/升级 SQL 单独挂进来（而不是复制一份到 init-scripts）：
+      # 同一份 SQL 在仓库里存两处，升 Flowable 版本时必然漏改其中一处。
+      # 挂在 initdb.d 之外，由 00-init-all.sh 显式按顺序调用。
+      - ../../../deploy/k8s/init-data/init-flowable:/flowable-sql:ro
     healthcheck:
       # Require PID 1 to be the real postgres server, not a temporary init process that
       # can still answer pg_isready while docker-entrypoint-initdb.d is mid-flight.
@@ -292,6 +296,11 @@ services:
       DEBUG_LOG_PATH: /.cursor-debug/debug-8aa4e2.log
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: docker
+      # 与 sit/preprod/uat/prod 一致：引擎只校验版本，不建表也不升级。
+      # act_* 由 postgres 初始化时的 00-init-all.sh Step 0 建好（官方 create + 三个 upgradestep），
+      # 所以空卷重建照样能起来；而将来有人改了 pom.xml 里的 flowable.version 却没迁库时，
+      # 引擎会直接拒绝启动，不会把库静默迁移掉 —— 单向迁移必须是人工、备份后的决定。
+      FLOWABLE_SCHEMA_UPDATE: "false"
       SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}

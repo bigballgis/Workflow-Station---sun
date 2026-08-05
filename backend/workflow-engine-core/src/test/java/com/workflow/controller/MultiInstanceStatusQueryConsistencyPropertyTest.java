@@ -11,6 +11,7 @@ import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.task.api.TaskQuery;
 import org.flowable.engine.history.HistoricProcessInstanceQuery;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ExecutionQuery;
@@ -316,11 +317,20 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
         HistoryService historyService,
         ExtendedTaskInfoRepository extendedTaskInfoRepository
     ) {
+        // getStatus() 会调 taskService.createTaskQuery().processInstanceId(id).list() 去补齐
+        // 尚未登记的运行中任务。裸 mock 的 createTaskQuery() 返回 null，整条链直接 NPE，
+        // 被控制器的 catch 兜成 success=false —— 断言看到的"状态不一致"其实是这个 NPE。
+        TaskService taskService = mock(TaskService.class);
+        TaskQuery taskQuery = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        when(taskQuery.processInstanceId(anyString())).thenReturn(taskQuery);
+        when(taskQuery.list()).thenReturn(java.util.Collections.emptyList());
+
         return new MultiInstanceStatusController(
             runtimeService,
             mock(RepositoryService.class),
             historyService,
-            mock(TaskService.class),
+            taskService,
             extendedTaskInfoRepository,
             objectMapper,
             null,

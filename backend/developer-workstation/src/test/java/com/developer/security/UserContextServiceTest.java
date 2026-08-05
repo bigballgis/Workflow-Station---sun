@@ -9,6 +9,7 @@ import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
+import com.platform.common.dto.UserPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
@@ -57,6 +58,8 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn(expectedUsername);
+        when(authentication.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId(expectedUsername).username(expectedUsername).build());
         
         // Execute
         Optional<String> result = userContextService.getCurrentUsername();
@@ -100,6 +103,7 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn(null);
+        when(authentication.getPrincipal()).thenReturn(null);
         
         // Execute
         Optional<String> result = userContextService.getCurrentUsername();
@@ -115,6 +119,8 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn("   ");
+        when(authentication.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("   ").username("   ").build());
         
         // Execute
         Optional<String> result = userContextService.getCurrentUsername();
@@ -133,6 +139,8 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn(authenticatedUser);
+        when(authentication.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId(authenticatedUser).username(authenticatedUser).build());
         
         // Execute
         String result = userContextService.getCurrentUsernameOrFallback(providedUser);
@@ -175,6 +183,8 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn("testUser");
+        when(authentication.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("testUser").username("testUser").build());
         
         // Execute
         boolean result = userContextService.isUserAuthenticated();
@@ -204,6 +214,8 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn(username);
+        when(authentication.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId(username).username(username).build());
         
         // Execute
         boolean result = userContextService.isCurrentUser(username);
@@ -219,6 +231,8 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn("currentUser");
+        when(authentication.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("currentUser").username("currentUser").build());
         
         // Execute
         boolean result = userContextService.isCurrentUser("differentUser");
@@ -300,6 +314,8 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn(username);
+        when(authentication.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId(username).username(username).build());
         
         // Execute
         boolean result = userContextService.handleSessionExpiration(username);
@@ -315,6 +331,8 @@ public class UserContextServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getName()).thenReturn("currentUser");
+        when(authentication.getPrincipal())
+                .thenReturn(UserPrincipal.builder().userId("currentUser").username("currentUser").build());
         
         // Execute
         boolean result = userContextService.handleSessionExpiration("differentUser");

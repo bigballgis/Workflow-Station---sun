@@ -149,6 +149,9 @@ class ExternalConfigurationLoadingPropertyTest {
         environment.setProperty("app.database.url", customDatabaseUrl);
         environment.setProperty("app.database.max-connections", String.valueOf(customMaxConnections));
         environment.setProperty("app.security.password-min-length", String.valueOf(customPasswordMinLength));
+        // 同上：jwtSecretKey 带 @NotNull，末尾会 validate 整个配置对象。
+        environment.setProperty("app.security.jwt-secret-key",
+                "test-only-jwt-secret-key-with-enough-length-0123456789");
         
         // When: Configuration is loaded
         ApplicationConfiguration config = loadConfigurationFromEnvironment();
@@ -206,6 +209,8 @@ class ExternalConfigurationLoadingPropertyTest {
         environment.setProperty("app.database.username", "external_user");
         environment.setProperty("app.database.max-connections", "50");
         environment.setProperty("app.security.password-min-length", "12");
+        environment.setProperty("app.security.jwt-secret-key",
+                "test-only-jwt-secret-key-with-enough-length-0123456789");
         environment.setProperty("app.api.workflow-engine-url", "http://external-workflow:8081");
         
         // When: Configuration is loaded
@@ -249,6 +254,9 @@ class ExternalConfigurationLoadingPropertyTest {
             Map<String, String> config = new HashMap<>();
             config.put("app.security.password-min-length", String.valueOf(minLength));
             config.put("app.security.max-failed-attempts", String.valueOf(maxAttempts));
+            // SecurityConfig.jwtSecretKey 带 @NotNull；不提供它，末尾的 validate() 必失败。
+            config.put("app.security.jwt-secret-key",
+                    "test-only-jwt-secret-key-with-enough-length-0123456789");
             return config;
         });
     }
@@ -337,6 +345,7 @@ class ExternalConfigurationLoadingPropertyTest {
         String[] commonProperties = {
                 "app.database.url", "app.database.username", "app.database.max-connections",
                 "app.security.password-min-length", "app.security.max-failed-attempts",
+                "app.security.jwt-secret-key",
                 "app.api.workflow-engine-url", "app.api.request-timeout-ms"
         };
         

@@ -71,6 +71,10 @@ class AiGenerationControllerTest {
 
         // 控制器取当前用户走 SecurityContextUtils（只认 UserPrincipal），下面各用例仍在发的
         // X-User-Id 头早就不是身份来源了。standalone MockMvc 不跑安全过滤器，这里手工种上。
+        // 先清再种：surefire 复用 JVM fork，SecurityContextHolder 是跨测试类共享的静态状态。
+        // 别的类留下的 Authentication 主体不是 UserPrincipal 时，getCurrentUser() 会返回 empty，
+        // 于是本类单跑绿、进套件红一个（eventStream 用例）。
+        SecurityContextHolder.clearContext();
         UserPrincipal principal = UserPrincipal.builder()
                 .userId("user1")
                 .username("user1")

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import GenerationPreview from '@/components/ai/GenerationPreview.vue'
+import RegenerateBox from '@/components/ai/RegenerateBox.vue'
 import type { GenerationPreviewData, AiGeneratedData } from '@/types/aiGeneration'
 
 const i18n = createI18n({
@@ -139,12 +140,24 @@ describe('GenerationPreview', () => {
     expect(wrapper.emitted('apply')).toBeTruthy()
   })
 
-  it('should emit regenerate when regenerate button is clicked', async () => {
+  // Regenerate 现在由 RegenerateBox 承载（先弹纠错输入框再发），所以按钮不再直接挂在本组件上；
+  // 契约变成"把用户填的指令原样透传给 ChatDialog"。
+  it('should forward the correction box instruction on the regenerate event', async () => {
     const wrapper = mountComponent()
-    const buttons = wrapper.findAll('.el-button')
-    const regenBtn = buttons.find(b => b.text().includes('重新生成'))
-    expect(regenBtn).toBeDefined()
-    await regenBtn!.trigger('click')
+    const box = wrapper.findComponent(RegenerateBox)
+    expect(box.exists()).toBe(true)
+
+    box.vm.$emit('confirm', 'carrier 字段缺失')
+    await wrapper.vm.$nextTick()
+
     expect(wrapper.emitted('regenerate')).toBeTruthy()
+    expect(wrapper.emitted('regenerate')![0]).toEqual(['carrier 字段缺失'])
+  })
+
+  it('should emit regenerate with an empty instruction when the box is confirmed blank', async () => {
+    const wrapper = mountComponent()
+    wrapper.findComponent(RegenerateBox).vm.$emit('confirm', '')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('regenerate')![0]).toEqual([''])
   })
 })

@@ -3,6 +3,7 @@ package com.developer.property;
 import com.developer.security.DeveloperPermissionChecker;
 import com.developer.security.DeveloperPermissionInterceptor;
 import com.developer.security.RequireDeveloperPermission;
+import com.platform.common.dto.UserPrincipal;
 import com.platform.common.i18n.I18nService;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.CharRange;
@@ -86,7 +87,9 @@ class PermissionInterceptorPreservationPropertyTest {
 
         // Set up authentication in SecurityContext (3-arg constructor sets authenticated=true)
         UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList());
+                new UsernamePasswordAuthenticationToken(
+                        UserPrincipal.builder().userId(userId).username(userId).build(),
+                        null, Collections.emptyList());
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -155,7 +158,9 @@ class PermissionInterceptorPreservationPropertyTest {
         request.addHeader("X-User-Id", userId);
 
         UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(userId, null, Collections.emptyList());
+                new UsernamePasswordAuthenticationToken(
+                        UserPrincipal.builder().userId(userId).username(userId).build(),
+                        null, Collections.emptyList());
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         MockHttpServletResponse response = new MockHttpServletResponse();

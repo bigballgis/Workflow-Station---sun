@@ -180,6 +180,12 @@ const applyStatusColors = () => {
     const visual = gfx.querySelector('.djs-visual')
     if (!visual) return
 
+    const bpmnType = typeof element.type === 'string' ? element.type : ''
+    const isEmailTaskShape = bpmnType === 'bpmn:SendTask' || bpmnType === 'bpmn:ServiceTask'
+    const isStatusColored = node.status === 'rejected'
+      || node.status === 'completed'
+      || props.completedNodeIds.includes(node.id)
+
     // Apply to shape primitives, skip label backgrounds
     const shapes = visual.querySelectorAll('rect, circle, polygon, polyline, ellipse')
     shapes.forEach(shape => {
@@ -203,7 +209,13 @@ const applyStatusColors = () => {
         }
         return
       }
-      if (isOpenPath) return
+      if (isOpenPath) {
+        if (isEmailTaskShape && isStatusColored) {
+          el.style.stroke = stroke
+          el.style.strokeWidth = '2px'
+        }
+        return
+      }
       el.style.fill = fill
       el.style.stroke = stroke
     })

@@ -5,10 +5,10 @@
   >
     <div v-loading="loading" class="start-email-monitor">
       <el-alert
-        v-if="inboundConnections.length === 0"
+        v-if="templates.length === 0"
         type="warning"
         :closable="false"
-        :title="t('emailMonitor.noInboundConnection')"
+        :title="t('emailMonitor.startEvent.noTemplate')"
         style="margin-bottom: 12px;"
       />
 
@@ -28,95 +28,64 @@
           <el-form-item :label="t('emailMonitor.startEvent.boundEvent')">
             <el-input :model-value="startEventId" disabled />
           </el-form-item>
-          <el-form-item :label="t('emailMonitor.name')" required>
-            <el-input v-model="form.name" :placeholder="t('emailMonitor.namePlaceholder')" />
-          </el-form-item>
-          <el-form-item :label="t('emailMonitor.connection')" required>
+
+          <el-form-item :label="t('emailMonitor.startEvent.selectTemplate')" required>
             <el-select
-              v-model="form.connectionUid"
+              v-model="templateRuleId"
               style="width: 100%;"
-              :placeholder="t('emailMonitor.connectionPlaceholder')"
+              :placeholder="t('emailMonitor.startEvent.selectTemplatePlaceholder')"
             >
               <el-option
-                v-for="c in inboundConnections"
-                :key="c.connectionUid"
-                :label="`${c.name} (${c.connectionType})`"
-                :value="c.connectionUid"
+                v-for="rule in templates"
+                :key="rule.id"
+                :label="rule.name"
+                :value="rule.id"
               />
             </el-select>
+            <div class="form-tip">{{ t('emailMonitor.startEvent.configureInMonitorsTab') }}</div>
           </el-form-item>
-          <el-form-item :label="t('emailMonitor.systemInitiator')">
-            <SystemInitiatorSelect v-model="form.systemInitiatorUserId" />
+
+          <el-form-item v-if="selectedTemplate" :label="t('emailMonitor.connection')">
+            <el-input :model-value="connectionLabel" disabled />
           </el-form-item>
+
+          <el-form-item v-if="selectedTemplate" :label="t('emailMonitor.startEvent.extractionStatus')">
+            <el-tag :type="hasExtraction ? 'success' : 'warning'" size="small">
+              {{
+                hasExtraction
+                  ? t('emailMonitor.startEvent.extractionConfigured')
+                  : t('emailMonitor.startEvent.extractionMissing')
+              }}
+            </el-tag>
+          </el-form-item>
+
           <el-form-item :label="t('emailMonitor.filterFrom')">
             <el-input
-              v-model="form.filterFrom"
+              v-model="filterFrom"
               :placeholder="t('emailMonitor.filterFromPlaceholder')"
             />
           </el-form-item>
           <el-form-item :label="t('emailMonitor.filterSubject')">
             <el-input
-              v-model="form.filterSubject"
+              v-model="filterSubject"
               :placeholder="t('emailMonitor.filterSubjectPlaceholder')"
             />
           </el-form-item>
-          <el-form-item :label="t('emailMonitor.pollInterval')">
-            <el-input-number
-              v-model="form.pollIntervalSeconds"
-              :min="30"
-              :step="30"
-              controls-position="right"
-            />
-          </el-form-item>
+
           <el-form-item>
-            <el-checkbox v-model="form.reviewOnMissing">
-              {{ t('emailMonitor.reviewOnMissing') }}
-            </el-checkbox>
-          </el-form-item>
-          <el-form-item>
-            <el-button size="small" @click="openWizard">
-              {{ t('emailMonitor.startEvent.openWizard') }}
-            </el-button>
-            <el-tag v-if="hasExtraction" size="small" type="success" style="margin-left: 8px;">
-              {{ t('emailMonitor.startEvent.extractionConfigured') }}
-            </el-tag>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :loading="saving" @click="saveMonitor">
-              {{ t('emailMonitor.startEvent.save') }}
+            <el-button type="primary" :loading="saving" @click="saveBinding">
+              {{ t('emailMonitor.startEvent.saveBinding') }}
             </el-button>
           </el-form-item>
         </template>
       </el-form>
     </div>
   </el-collapse-item>
-
-  <el-dialog
-    v-if="showWizard"
-    v-model="showWizard"
-    :title="t('emailMonitor.wizard.title')"
-    width="900px"
-    top="5vh"
-    append-to-body
-    destroy-on-close
-    :close-on-click-modal="!saving"
-  >
-    <EmailExtractionWizard v-model="extractionRules" :function-unit-id="functionUnitId" />
-    <template #footer>
-      <el-button @click="showWizard = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="saving" @click="confirmWizard">
-        {{ t('emailMonitor.startEvent.saveWizard') }}
-      </el-button>
-    </template>
-  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
-import EmailExtractionWizard from '@/components/designer/email/EmailExtractionWizard.vue'
-import SystemInitiatorSelect from '@/components/designer/email/SystemInitiatorSelect.vue'
 import { useStartEventEmailMonitor } from '@/composables/eventProperties/useStartEventEmailMonitor'
 
 const { t } = useI18n()
@@ -132,27 +101,22 @@ const {
   enabled,
   saving,
   loading,
-  showWizard,
-  inboundConnections,
+  templates,
+  templateRuleId,
+  selectedTemplate,
+  connectionLabel,
+  hasExtraction,
   processDefinitionKey,
   startEventId,
-  form,
-  extractionRules,
-  saveMonitor,
-  onEnabledChange,
-  confirmWizard,
-  openWizard
+  filterFrom,
+  filterSubject,
+  saveBinding,
+  onEnabledChange
 } = useStartEventEmailMonitor(
   props,
   props.updateExtProp,
   t
 )
-
-const hasExtraction = computed(() => {
-  const fields = extractionRules.value.fields?.length ?? 0
-  const subTables = extractionRules.value.subTables?.length ?? 0
-  return fields + subTables > 0
-})
 </script>
 
 <style lang="scss" scoped>

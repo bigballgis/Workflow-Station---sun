@@ -35,4 +35,14 @@ public class AiChatRequest {
     private AiMode mode;
 
     private String regenerateScope;
+
+    /**
+     * 只重出本相位的产物，不推进会话相位。
+     *
+     * <p>聊天区的 Requirements / Design 文档卡上的 Regenerate 走这条路：用户想换一份需求文档，
+     * 但会话可能已经走到 GENERATION。缺了这个标记，模型回的 {@code phaseComplete} 会把会话相位
+     * 倒推回 DESIGN，顶部进度条跟着退，并且前端收到 {@code phase_complete} 后会自动触发下一相位，
+     * 把已有的设计文档和生成结果一并盖掉——用户要的只是重出一份文档。</p>
+     */
+    private boolean regenerateOnly;
 }

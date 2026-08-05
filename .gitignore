@@ -156,6 +156,9 @@ deploy/superset/pip.conf
 # Dev schema-migration SHA markers (isolated per Postgres Docker volume)
 deploy/environments/dev/.schema-migration-markers/
 
+# Local compose overlay (see deploy/environments/dev/LOCAL-OVERLAY.md) — never commit
+**/docker-compose.local.yml
+
 # Secret/credential files
 secrets/
 credentials/
@@ -343,6 +346,8 @@ BOOT-INF/
 !.github/hooks/
 !.github/hooks/**
 !.github/pull_request_template.md
+# build.yml 的 surefire excludesFile：CI 的隔离清单，必须入库否则 CI 跑不起来。
+!.github/known-test-failures.txt
 .claude/*
 !.claude/scripts/
 !.claude/scripts/**

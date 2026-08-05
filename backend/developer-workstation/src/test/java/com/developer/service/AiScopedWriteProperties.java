@@ -8,6 +8,7 @@ import net.jqwik.api.*;
 import net.jqwik.api.constraints.LongRange;
 import org.junit.jupiter.api.Tag;
 
+import java.util.LinkedHashMap;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -324,7 +325,13 @@ class AiScopedWriteProperties {
         Map<String, Object> formData = new LinkedHashMap<>();
         formData.put("formName", formName);
         formData.put("formType", formType);
-        formData.put("configJson", Map.of("layout", "default"));
+        // Mutable on purpose: ensureFormConfigJsonStructure() fills in missing form-create keys
+        // via configJson.put(...). An immutable Map.of() here threw UnsupportedOperationException
+        // before the property under test was ever evaluated. Production configJson comes from
+        // Jackson deserialization, which is mutable, so this now matches reality.
+        Map<String, Object> configJson = new LinkedHashMap<>();
+        configJson.put("layout", "default");
+        formData.put("configJson", configJson);
         return formData;
     }
 }

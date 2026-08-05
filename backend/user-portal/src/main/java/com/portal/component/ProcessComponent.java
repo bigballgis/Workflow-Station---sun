@@ -205,6 +205,14 @@ public class ProcessComponent {
         return processApplicationQueryComponent.isProcessParticipant(userId, detail);
     }
 
+    /**
+     * Process detail/history access (participants + Main Table View visibility parity).
+     * @see ProcessApplicationQueryComponent#canAccessProcessDetail(String, ProcessInstanceInfo)
+     */
+    public boolean canAccessProcessDetail(String userId, ProcessInstanceInfo detail) {
+        return processApplicationQueryComponent.canAccessProcessDetail(userId, detail);
+    }
+
     // ==================== Process actions (withdraw, urge, favorite) ====================
 
     /**

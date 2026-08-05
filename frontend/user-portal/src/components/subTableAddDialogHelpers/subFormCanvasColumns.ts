@@ -1,4 +1,4 @@
-import { isFormCreateRuleReadonly } from '../formRendererHelpers'
+import { isFormCreateRuleHidden, isFormCreateRuleReadonly } from '../formRendererHelpers'
 import {
   isFormCreateRuleRequired,
   mapFormCreateValidateToElementPlusRules,
@@ -192,6 +192,9 @@ export function mapSubFormRuleToDialogColumns(
 
     const required = isFormCreateRuleRequired(r)
     const readonly = isFormCreateRuleReadonly(r)
+    // Designer Hide must survive the trip to the dialog: the column list is the only
+    // thing the Add/Edit dialog sees, so a dropped flag made the field render anyway.
+    const hidden = isFormCreateRuleHidden(r)
     const elRules = mapFormCreateValidateToElementPlusRules(r, type)
     const defaultValue = resolveRuleDefaultValue(r)
 
@@ -201,6 +204,7 @@ export function mapSubFormRuleToDialogColumns(
       type: type as DialogColumn['type'],
       required,
       ...(readonly ? { readonly } : {}),
+      ...(hidden ? { hidden } : {}),
       ...(elRules.length > 0 ? { rules: elRules } : {}),
       ...(options ? { options: options as DialogColumn['options'] } : {}),
       ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),

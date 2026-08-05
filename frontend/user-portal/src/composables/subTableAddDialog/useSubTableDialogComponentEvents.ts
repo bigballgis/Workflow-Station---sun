@@ -1,11 +1,16 @@
 /**
  * Run Form Design component events (rule.on / rule._hook) inside SubTable Add/Edit dialog.
  * Parity with FormRenderer handleFieldChange — columns carry `sourceRule` from sub-form canvas.
- * Form-level onCreated → onMounted run on dialog open (never replay select change).
+ *
+ * Dialog open replays the same bootstrap FormRenderer.onMounted does (see FormRenderer.vue:
+ * syncDesignerHiddenFieldVisibility → bootstrapComponentHookEvents → bootstrapFormOptionsOnChange),
+ * plus the Form-level onCreated/onMounted this dialog owns. Never replays component on.change:
+ * designers expect change only after user interaction.
  */
 import { nextTick, ref, shallowReactive, type Ref } from 'vue'
 import {
   collectFieldComponentEventsFromRules,
+  runAllComponentHookEvents,
   runComponentFieldEvents,
   runComponentFieldEventsOnValueChange,
 } from '@/utils/formCreateComponentEvents'
@@ -21,6 +26,8 @@ export type DialogColumnWithEvents = {
   field: string
   label?: string
   type?: string
+  /** Designer "Hide" toggle carried over from the sub-form canvas rule. */
+  hidden?: boolean
   /** Placed form-create rule node (on / _on / hook / _hook). */
   sourceRule?: Record<string, unknown>
 }
@@ -110,19 +117,65 @@ export function useSubTableDialogComponentEvents(
   }
 
   /**
-   * Form Design Form-tab lifecycle: onCreated then onMounted.
-   * Does not run component on.change — designers expect change only after user interaction.
+   * Seed visibility from the designer "Hide" toggle, mirroring FormRenderer's
+   * syncDesignerHiddenFieldVisibility. Runs before any script so `api.hidden(false, …)`
+   * in onCreated / hooks / onChange can still reveal a statically hidden field.
+   */
+  function seedDialogStaticHiddenVisibility() {
+    for (const col of getColumns()) {
+      if (col.hidden === true && col.field) eventVisibilityState.hidden.set(col.field, true)
+    }
+    notifyEventVisibilityChange()
+  }
+
+  /** Component-level `_hook` phases — the dialog's equivalent of bootstrapComponentHookEvents. */
+  function runDialogComponentHooks(hookName: 'load' | 'mounted') {
+    const rules = getColumns()
+      .map((c) => c.sourceRule)
+      .filter((r): r is Record<string, unknown> => r != null)
+    if (!rules.length) return
+    runAllComponentHookEvents(
+      rules,
+      hookName,
+      () => formData.value,
+      (patch) => {
+        formData.value = { ...formData.value, ...patch }
+      },
+      createFieldKeyResolver(() =>
+        getColumns().map((c) => ({ key: c.field, label: c.label })),
+      ),
+      {
+        state: eventVisibilityState,
+        notify: notifyEventVisibilityChange,
+        getAllFieldKeys: () => getColumns().map((c) => c.field),
+      },
+    )
+  }
+
+  function runDialogFormHandler(raw: unknown, field: string) {
+    if (raw == null || isEmptyFormCreateHandler(raw)) return
+    runFormOnChangeHandler(raw, field, null, createApi())
+  }
+
+  /**
+   * Dialog-open bootstrap, in form-create lifecycle order:
+   *   designer Hide seed → Form onCreated → component hook `load` → Form onChange('__bootstrap__')
+   *   → (nextTick) component hook `mounted` → Form onMounted
+   *
+   * The onChange leg matches FormRenderer.bootstrapFormOptionsOnChange: sub-forms that put
+   * their init logic in the Form-tab onChange (guarded on `field === '__bootstrap__'`) got
+   * nothing here before, so statically hidden fields stayed visible on first open.
+   * onMounted stays deferred — the dialog body has not rendered when this watcher fires.
    */
   function bootstrapDialogFormLifecycle(formOptions?: Record<string, unknown> | null) {
-    if (!formOptions || typeof formOptions !== 'object') return
-    const created = formOptions.onCreated
-    if (created != null && !isEmptyFormCreateHandler(created)) {
-      runFormOnChangeHandler(created, '__form__', null, createApi())
-    }
+    seedDialogStaticHiddenVisibility()
+    const options = formOptions && typeof formOptions === 'object' ? formOptions : null
+    if (options) runDialogFormHandler(options.onCreated, '__form__')
+    runDialogComponentHooks('load')
+    if (options) runDialogFormHandler(options.onChange, '__bootstrap__')
     void nextTick(() => {
-      const mounted = formOptions.onMounted
-      if (mounted == null || isEmptyFormCreateHandler(mounted)) return
-      runFormOnChangeHandler(mounted, '__form__', null, createApi())
+      runDialogComponentHooks('mounted')
+      if (options) runDialogFormHandler(options.onMounted, '__form__')
     })
   }
 

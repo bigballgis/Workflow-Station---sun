@@ -1,6 +1,7 @@
 package com.workflow.email.inbound;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.component.ProcessEngineComponent;
 import com.workflow.dto.request.StartProcessRequest;
 import com.workflow.dto.response.ProcessInstanceResult;
@@ -21,7 +22,6 @@ import org.springframework.util.StringUtils;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,6 +40,7 @@ public class EmailMonitorProcessor {
     private final ProcessEngineComponent processEngineComponent;
     private final ProcessedEmailMessageRepository processedRepository;
     private final EmailMonitorPortalSyncComponent portalSyncComponent;
+    private final AdminCenterClient adminCenterClient;
     private final ObjectMapper objectMapper;
 
     /** Returns the recorded status, or {@code null} when the email was skipped as already processed. */
@@ -81,22 +82,34 @@ public class EmailMonitorProcessor {
                     "Unsupported action or missing process key");
         }
 
-        ProcessInstanceResult result = startProcess(rule, email, extraction);
+        Map<String, Object> startVariables = buildStartVariables(rule, email, extraction);
+        ProcessInstanceResult result = startProcess(rule, email, startVariables);
         if (result == null || !result.isSuccess()) {
             String msg = result != null ? result.getMessage() : "startProcess returned null";
             return record(rule, email, ProcessedEmailMessage.STATUS_FAILED, null, msg);
         }
-        portalSyncComponent.hydratePortalProcessInstanceAsync(result.getProcessInstanceId());
+        portalSyncComponent.hydratePortalProcessInstanceAsync(
+                result.getProcessInstanceId(),
+                buildHydrateSnapshot(rule, email, result, startVariables));
         return record(rule, email, ProcessedEmailMessage.STATUS_STARTED, result.getProcessInstanceId(), null);
     }
 
-    private ProcessInstanceResult startProcess(SysEmailMonitorRule rule, EmailMessage email, ExtractionResult extraction) {
+    private Map<String, Object> buildStartVariables(
+            SysEmailMonitorRule rule, EmailMessage email, ExtractionResult extraction) {
         Map<String, Object> variables = new HashMap<>(extraction.getFields());
         if (StringUtils.hasText(rule.getSystemInitiatorUserId())) {
             variables.put("initiator", rule.getSystemInitiatorUserId());
         }
         if (StringUtils.hasText(rule.getFunctionUnitId())) {
             variables.put("functionUnitId", rule.getFunctionUnitId());
+            // Mirror portal ProcessStartComponent.applyCatalogContextToVariables: Send Email needs
+            // DW functionUnitCode (or numeric DW id); admin UUID alone is not a valid DW template ref.
+            adminCenterClient.resolveFunctionUnitCodeById(rule.getFunctionUnitId())
+                    .ifPresentOrElse(
+                            code -> variables.put("functionUnitCode", code),
+                            () -> log.warn(
+                                    "Email monitor rule {} could not resolve functionUnitCode for functionUnitId={}",
+                                    rule.getId(), rule.getFunctionUnitId()));
         }
         if (StringUtils.hasText(rule.getProcessDefinitionKey())) {
             variables.put("processDefinitionKey", rule.getProcessDefinitionKey());
@@ -105,7 +118,34 @@ public class EmailMonitorProcessor {
         if (!extraction.getSubTables().isEmpty()) {
             variables.put("__subTables__", extraction.getSubTables());
         }
+        return variables;
+    }
 
+    private Map<String, Object> buildHydrateSnapshot(
+            SysEmailMonitorRule rule,
+            EmailMessage email,
+            ProcessInstanceResult result,
+            Map<String, Object> startVariables) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("processInstanceId", result.getProcessInstanceId());
+        snapshot.put("processDefinitionId", result.getProcessDefinitionId());
+        snapshot.put("processDefinitionKey",
+                StringUtils.hasText(result.getProcessDefinitionKey())
+                        ? result.getProcessDefinitionKey() : rule.getProcessDefinitionKey());
+        snapshot.put("processDefinitionName", result.getName());
+        snapshot.put("businessKey",
+                StringUtils.hasText(result.getBusinessKey())
+                        ? result.getBusinessKey() : ("email:" + email.messageId()));
+        snapshot.put("startUserId",
+                StringUtils.hasText(result.getStartUserId())
+                        ? result.getStartUserId() : rule.getSystemInitiatorUserId());
+        snapshot.put("status", "RUNNING");
+        snapshot.put("variables", startVariables);
+        return snapshot;
+    }
+
+    private ProcessInstanceResult startProcess(
+            SysEmailMonitorRule rule, EmailMessage email, Map<String, Object> variables) {
         StartProcessRequest request = new StartProcessRequest();
         request.setProcessDefinitionKey(rule.getProcessDefinitionKey());
         request.setBusinessKey("email:" + email.messageId());

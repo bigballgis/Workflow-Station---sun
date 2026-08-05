@@ -2,9 +2,18 @@ import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
 import { isRejectedName } from '@/utils/statusMatcher'
 import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 import {
+  isHumanWorkflowTask,
+  isHumanWorkflowTaskElement,
+  queryHumanWorkflowTasks,
+} from '@/utils/bpmnHumanWorkflowTasks'
+import {
   applyDraftReturnDiagramStatus,
   resolveDiagramStatusSuppressMode,
 } from '@/utils/bpmnDiagramDraftReturn'
+import {
+  buildSendTaskCompletedLookups,
+  resolveSendTaskDiagramStatus,
+} from '@/utils/sendTaskDiagramStatus'
 import type { ApplicationDetailCtx } from './context'
 
 export interface ApplicationDetailDiagramParserFns {
@@ -133,7 +142,7 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
         const childElements = sp.getElementsByTagName('*')
         for (let i = 0; i < childElements.length; i++) {
           const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
-          if (childLocal !== 'userTask' && childLocal !== 'serviceTask' && childLocal !== 'sendTask') continue
+          if (!isHumanWorkflowTask(childLocal) && childLocal !== 'serviceTask' && childLocal !== 'sendTask') continue
           const taskName = childElements[i].getAttribute('name') || ''
           const taskId = childElements[i].getAttribute('id') || ''
           const taskNameNorm = taskName.trim().replace(/\s+/g, ' ')
@@ -171,7 +180,7 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
           }
           for (let i = 0; i < spChildren.length; i++) {
             const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-            if (childLocal !== 'userTask') continue
+            if (!isHumanWorkflowTask(childLocal)) continue
             const taskName = spChildren[i].getAttribute('name') || ''
             const taskId = spChildren[i].getAttribute('id') || ''
             const tn = taskName.trim().replace(/\s+/g, ' ')
@@ -187,7 +196,7 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
           }
         }
 
-        doc.querySelectorAll('userTask').forEach(taskEl => {
+        queryHumanWorkflowTasks(doc).forEach(taskEl => {
           const uid = (taskEl.getAttribute('id') || '').trim()
           const unameNorm = (taskEl.getAttribute('name') || '').trim().replace(/\s+/g, ' ')
           const curTrim = currentNodeName.trim()
@@ -239,7 +248,7 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
         let userTaskCount = 0
         for (let i = 0; i < spChildren.length; i++) {
           const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-          if (childLocal !== 'userTask') continue
+          if (!isHumanWorkflowTask(childLocal)) continue
           userTaskCount++
           const taskName = spChildren[i].getAttribute('name') || ''
           const taskId = spChildren[i].getAttribute('id') || ''
@@ -268,7 +277,7 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
             if (childLocal === 'multiInstanceLoopCharacteristics') {
               isMultiInstance = true
             }
-            if (childLocal === 'userTask') {
+            if (isHumanWorkflowTask(childLocal)) {
               userTaskCount++
               const taskName = spChildren[i].getAttribute('name') || ''
               const taskId = spChildren[i].getAttribute('id') || ''
@@ -360,7 +369,7 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
             const tar = ckDiag(f.targetRef)
             const tarEl = findBpmnElementByIdAnyDiag(tar)
             if (!tarEl || !isUnderGivenSubProcessDiag(tarEl, boundarySpId)) continue
-            if ((tarEl.localName || tarEl.nodeName.split(':').pop()) === 'userTask' && tar === ckDiag(candidateTaskId)) return true
+            if (isHumanWorkflowTaskElement(tarEl) && tar === ckDiag(candidateTaskId)) return true
             queue.push(tar)
           }
         }
@@ -370,13 +379,13 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
       let currentOpenBpmnUserTaskIdDiag = ''
       if (processInfo.value.status === 'RUNNING' && !snapshotActive) {
         const ctk = (snapshotTaskDefinitionKey || '').trim()
-        doc.querySelectorAll('userTask').forEach((ut: Element) => {
+        queryHumanWorkflowTasks(doc).forEach((ut: Element) => {
           const uid = ckDiag(ut.getAttribute('id'))
           if (!uid) return
           if (ctk && uid === ckDiag(ctk)) currentOpenBpmnUserTaskIdDiag = uid
         })
         if (!currentOpenBpmnUserTaskIdDiag) {
-          doc.querySelectorAll('userTask').forEach((ut: Element) => {
+          queryHumanWorkflowTasks(doc).forEach((ut: Element) => {
             const uid = ckDiag(ut.getAttribute('id'))
             if (!uid) return
             const unm = normLabDiag(ut.getAttribute('name'))
@@ -419,8 +428,8 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
         if (record.status === 'completed' && record.nodeName) completedNodeNamesForMi.add(record.nodeName)
       })
 
-      // Parse user tasks
-      doc.querySelectorAll('userTask').forEach((task, index) => {
+      // Parse human workflow tasks (userTask, manualTask, … — parity with DW designer)
+      queryHumanWorkflowTasks(doc).forEach((task, index) => {
         const id = task.getAttribute('id') || `task_${index}`
         const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
         const pos = positionMap.get(id)
@@ -536,16 +545,14 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
 
         nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       })
+      const sendTaskLookups = buildSendTaskCompletedLookups(historyRecords.value)
+
       // Parse service / send tasks (designer keeps sendTask; deploy converts email sendTask → serviceTask)
       doc.querySelectorAll('serviceTask, sendTask').forEach((task, index) => {
         const id = task.getAttribute('id') || `service_${index}`
         const name = task.getAttribute('name') || t('applicationDetail.serviceFallbackName', { index: index + 1 })
         const pos = positionMap.get(id)
-        const historyMatch = historyRecords.value.find(h => h.nodeName === name || h.nodeId === id)
-        const historyStatus = historyMatch?.status || nodeStatusMap.get(name)
-        const status = historyStatus === 'completed' || historyStatus === 'rejected'
-          ? historyStatus
-          : 'pending'
+        const status = resolveSendTaskDiagramStatus(historyRecords.value, id, name, sendTaskLookups)
         nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
         if (status === 'completed' || status === 'rejected') completed.push(id)
       })
@@ -596,7 +603,7 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
           let userTaskCount = 0
           for (let i = 0; i < childElements.length; i++) {
             const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
-            if (childLocal !== 'userTask') continue
+            if (!isHumanWorkflowTask(childLocal)) continue
             userTaskCount++
             const taskName = childElements[i].getAttribute('name') || ''
             const taskId = childElements[i].getAttribute('id') || ''
