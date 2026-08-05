@@ -30,7 +30,7 @@
         <form
           v-else
           class="login-form"
-          @submit.prevent="onSubmit"
+          @submit.prevent="onSubmitClearHandoff"
         >
           <div class="form-field">
             <label class="field-label">{{ $t('login.username') }}</label>
@@ -57,6 +57,12 @@
             class="form-error"
           >
             {{ $t('login.error.missingParams') }}
+          </p>
+          <p
+            v-else-if="handoffError"
+            class="form-error"
+          >
+            {{ handoffError }}
           </p>
           <p
             v-else-if="errorCode"
@@ -107,6 +113,7 @@ import { useLogin } from '@/composables/useLogin'
 import { useDspLogin } from '@/composables/useDspLogin'
 import { errorTranslator } from '@/utils/errorTranslator'
 import { AppErrorCode } from '@/types/errors'
+import { consumeSsoLoginErrorMessage } from '@/utils/ssoLoginErrorHandoff'
 
 const { t } = useI18n()
 onMounted(() => { document.title = t('login.htmlTitle') })
@@ -121,10 +128,18 @@ const { username, password, loading, errorCode, errorDetails, onSubmit } = useLo
 const dspEnabledValue = window.__LOGIN_RUNTIME_CONFIG__?.VITE_DSP_ENABLED || import.meta.env.VITE_DSP_ENABLED
 const dspEnabled = ref(dspEnabledValue !== 'false')
 const { dspLoading, onDspLogin } = useDspLogin(clientId, redirectUri, state, errorCode, errorDetails)
-const autoSsoInProgress = ref(autoSso.value && !missingParams.value)
+/** Portal SSO callback failure text (e.g. no virtual-group membership); survives full redirect. */
+const handoffError = ref<string | null>(consumeSsoLoginErrorMessage())
+const autoSsoInProgress = ref(autoSso.value && !missingParams.value && !handoffError.value)
+
+async function onSubmitClearHandoff() {
+  handoffError.value = null
+  await onSubmit()
+}
 
 onMounted(async () => {
-  if (!autoSso.value || missingParams.value) return
+  // Do not auto-SSO again when we just bounced back with an entitlement / exchange error.
+  if (!autoSso.value || missingParams.value || handoffError.value) return
   autoSsoInProgress.value = true
   try {
     await onDspLogin({ failureCode: AppErrorCode.SSO_AUTO_FAILED })

@@ -48,6 +48,7 @@ public class PortalSessionIssuerService {
     private final UserRoleService userRoleService;
     private final I18nService i18nService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
+    private final PortalEntitlementService portalEntitlementService;
     private final JwtProperties jwtProperties;
 
     @Value("${jwt.secret}")
@@ -72,6 +73,14 @@ public class PortalSessionIssuerService {
                                                              HttpServletResponse httpResponse, String logUsername) {
         try {
             String userId = user.getId();
+            if (!portalEntitlementService.hasEligibleVirtualGroupMembership(userId)) {
+                log.warn("Portal entitlement denied for user {} (no ACTIVE SYSTEM/CUSTOM/DEVELOPER virtual group)",
+                        logUsername);
+                return ResponseEntity.badRequest().body(LoginResponse.builder()
+                        .loginErrorCode(PortalEntitlementService.LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED)
+                        .message(resolvePortalEntitlementDeniedMessage())
+                        .build());
+            }
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
 
             if (wctx.size() > 1) {
@@ -310,6 +319,20 @@ public class PortalSessionIssuerService {
             }
         }
         return permissions.stream().distinct().toList();
+    }
+
+    /**
+     * Prefer i18n bundle; if MessageSource misses the key it returns the key itself — never show that to end users.
+     */
+    private String resolvePortalEntitlementDeniedMessage() {
+        String key = "auth.portal_entitlement_denied";
+        String message = i18nService.getMessage(key);
+        if (message == null || message.isBlank() || key.equals(message)) {
+            return "You cannot sign in to the User Portal yet. Your account is not in any access group. "
+                    + "Please ask your administrator to add you to the right AD group, wait a few minutes for sync, "
+                    + "then try again.";
+        }
+        return message;
     }
 
     private void setAuthCookie(HttpServletResponse response, String name, String value, int maxAge) {

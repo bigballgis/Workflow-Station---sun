@@ -33,7 +33,8 @@
 | 选人范围 | 全平台 **启用中**用户可搜（锁定/停用等不可用账号排除，与实现一致）。 |
 | 退出语义 | **两种都要**：(1) 退出 BU 成员；(2) 仅移除指定 UBR、保留成员。 |
 | 审批通过后执行 | **系统自动落库**（幂等、审计齐全），非「仅批过、人工再在 Admin 点执行」。 |
-| 自助模式判定 | 仅看 **`|C|=0`**（无有效 UBR 条数），**不**与其它角色/权限再做组合判断。 |
+| 门户准入 | 须属于至少一个 ACTIVE 虚拟组（`SYSTEM`/`CUSTOM`/`DEVELOPER`）；否则登录失败（`PORTAL_ENTITLEMENT_DENIED`）。 |
+| 自助模式判定 | 已准入前提下仅看 **`|C|=0`**（无有效 UBR 条数），**不**与其它角色/权限再做组合判断。 |
 | 自助模式下额外功能 | **个人资料**、**通知中心**均 **开放**（通知内容仍须按权限与数据隔离实现，避免越权）。 |
 | 历史 `VIRTUAL_GROUP` 单 | 门户 **完全隐藏**。 |
 
@@ -61,7 +62,9 @@ UI 与 API 须用**不同申请类型或明确子类型**表达，避免审批�
 
 ## 5. 「仅权限自助」模式（`|C|=0`）
 
-- **触发条件**：用户有效 UBR 集合 **`|C|=0`**（定义同 [portal-bu-rbac.md](./portal-bu-rbac.md) §2、§4.1）。
+- **门户准入（先于自助/FULL）**：用户必须属于至少一个 **ACTIVE** 虚拟组，类型为 `SYSTEM` / `CUSTOM` / `DEVELOPER` 任一（含 Hermes Default Users 等 SYSTEM 组，以及 AD 同步的 CUSTOM 业务组）。无合格成员身份时 **拒绝发放 Portal JWT**（`loginErrorCode=PORTAL_ENTITLEMENT_DENIED`），并返回可读说明（申请 AD 组并等待同步 / 联系管理员）。与「仅 CUSTOM」无关——SYSTEM 与 DEVELOPER 同样准入，以便兼容现网并支持按小组拆分 AD 审批。
+- **吊销时效（已接受）**：准入在发 JWT、`/auth/refresh`、切换工作台时复核；**不**在每个 `/me`/业务请求上复核。成员被移出全部虚拟组后，在 access token 过期前仍可能短暂可用（JWT 常规模型）；refresh 失败后会话结束。产品接受该延迟。
+- **触发条件（自助模式）**：已通过门户准入，且用户有效 UBR 集合 **`|C|=0`**（定义同 [portal-bu-rbac.md](./portal-bu-rbac.md) §2、§4.1）。
 - **行为**：
   - 允许登录与刷新 token（无工作台上下文时 JWT 可不携带 `activeBusinessUnitId` / `activeRoleId`，与现有登录逻辑对齐方向）。
   - **隐藏**全功能菜单入口：待办、流程发起、BI、Relation Tables 等依赖完整工作台的能力（**前后端**均需约束：前端裁剪 + 后端接口拒绝）。
@@ -88,6 +91,7 @@ UI 与 API 须用**不同申请类型或明确子类型**表达，避免审批�
 
 ## 8. 实现清单（落地时自检）
 
+- [x] 门户准入：`PortalEntitlementService` + `issuePortalSession` / refresh / switch-workspace；无合格 VG → `PORTAL_ENTITLEMENT_DENIED`。
 - [x] `LoginResponse` / `/auth/me` 与 JWT claim **`portalAccessMode`**：`FULL` | `PERMISSION_SELF_SERVICE_ONLY`（**`|C|=0` → 后者**）。
 - [x] 前端路由与 `PortalLayout` 按 `portalAccessMode` 裁剪菜单；深链重定向至 `/permissions`；顶栏 **`SelfServiceBanner`**。
 - [x] 后端 **`PortalSelfServiceAccessFilter`**：自助模式仅白名单 `auth`、`permissions`、`permission-requests`（只读/兼容 GET）、`notifications`、`preferences`、`my-permissions`、`exit`（成员列表等）。

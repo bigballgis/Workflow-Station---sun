@@ -1,4 +1,28 @@
 const STORAGE_KEY = 'sso_return_portal'
+/** Same-origin handoff to /login/ (or portal UnifiedLogin); mirrored in frontend/login. */
+const SSO_LOGIN_ERROR_KEY = 'ws_sso_login_error'
+
+/** Persist a login failure message across the full-page redirect to the unified login page. */
+export function setSsoLoginErrorMessage(message: string): void {
+  const trimmed = message.trim()
+  if (!trimmed) return
+  try {
+    sessionStorage.setItem(SSO_LOGIN_ERROR_KEY, trimmed)
+  } catch {
+    /* private mode / quota — ignore */
+  }
+}
+
+/** Read and clear a previously persisted login failure message (one-shot). */
+export function consumeSsoLoginErrorMessage(): string | null {
+  try {
+    const v = sessionStorage.getItem(SSO_LOGIN_ERROR_KEY)
+    sessionStorage.removeItem(SSO_LOGIN_ERROR_KEY)
+    return v && v.trim() ? v.trim() : null
+  } catch {
+    return null
+  }
+}
 /**
  * OAuth `state`（类 UUID）。`crypto.randomUUID()` 仅在安全上下文可用（HTTPS 或 localhost）；
  * 纯 HTTP 域名下会缺失，需降级。
@@ -36,8 +60,13 @@ export function consumeSsoReturnPath(fallback: string) {
 }
 interface UnifiedLoginOptions {
   autoSso?: boolean
+  /** Shown on the login page after redirect (survives full navigation; toast alone is lost). */
+  loginErrorMessage?: string
 }
 export function redirectToUnifiedLogin(_clientId: 'portal', options: UnifiedLoginOptions = {}) {
+  if (options.loginErrorMessage) {
+    setSsoLoginErrorMessage(options.loginErrorMessage)
+  }
   const redirectUri = new URL(
     (import.meta.env.BASE_URL || '/') + 'sso/callback',
     window.location.origin

@@ -53,6 +53,7 @@ import {
   type WorkspaceContextOption
 } from '@/api/auth'
 import { consumeSsoReturnPath, redirectToUnifiedLogin } from '@/utils/sso'
+import { resolvePortalEntitlementMessage } from '@/utils/portalEntitlementMessage'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -94,7 +95,20 @@ async function confirmWorkspace() {
     await runExchange(c.businessUnitId, c.roleId)
     workspaceDialogVisible.value = false
   } catch (e: unknown) {
-    ElMessage.error(t('api.requestFailed'))
+    const ax = e as { response?: { data?: LoginResponse } }
+    const data = ax.response?.data
+    const serverMessage =
+      typeof data?.message === 'string' && data.message.trim() ? data.message.trim() : ''
+    if (data?.loginErrorCode === 'PORTAL_ENTITLEMENT_DENIED') {
+      redirectToUnifiedLogin('portal', {
+        loginErrorMessage: resolvePortalEntitlementMessage(
+          serverMessage,
+          t('login.entitlementDenied')
+        )
+      })
+      return
+    }
+    ElMessage.error(serverMessage || t('api.requestFailed'))
   } finally {
     confirmLoading.value = false
   }
@@ -119,8 +133,14 @@ onMounted(async () => {
       workspaceDialogVisible.value = true
       return
     }
-    ElMessage.error(t('login.loginFailed'))
-    redirectToUnifiedLogin('portal')
+    const serverMessage =
+      typeof data?.message === 'string' && data.message.trim() ? data.message.trim() : ''
+    const loginErrorMessage =
+      data?.loginErrorCode === 'PORTAL_ENTITLEMENT_DENIED'
+        ? resolvePortalEntitlementMessage(serverMessage, t('login.entitlementDenied'))
+        : serverMessage || t('login.loginFailed')
+    // Persist then full navigate — ElMessage would be wiped by window.location.
+    redirectToUnifiedLogin('portal', { loginErrorMessage })
   }
 })
 </script>

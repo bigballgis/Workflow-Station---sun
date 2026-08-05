@@ -9,6 +9,7 @@ import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.dto.LoginResponse;
 import com.portal.dto.SsoExchangeRequest;
 import com.portal.repository.LoginAuditQueryRepository;
+import com.portal.service.PortalEntitlementService;
 import com.portal.service.PortalSessionIssuerService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -77,8 +78,6 @@ public class AuthSsoExchangeController {
             }
 
             user.resetFailedLoginCount();
-            user.setLastLoginAt(LocalDateTime.now());
-            user.setLastLoginIp(ipAddress);
             userRepository.save(user);
 
             // Role grants happen in admin-center and cannot invalidate this portal-local cache,
@@ -98,9 +97,26 @@ public class AuthSsoExchangeController {
             if (responseBody != null && "WORKSPACE_CONTEXT_REQUIRED".equals(responseBody.getLoginErrorCode())) {
                 // Workspace not yet selected — defer audit until the second exchange when workspace is set
                 pendingRedeems.put(body.getCode(), new PendingRedeem(userId, Instant.now()));
-            } else {
-                // Login fully complete (workspace selected or single-workspace user) — record audit
+            } else if (responseBody != null
+                    && PortalEntitlementService.LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED.equals(
+                    responseBody.getLoginErrorCode())) {
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        responseBody.getMessage() != null ? responseBody.getMessage()
+                                : "Portal entitlement denied");
+                pendingRedeems.remove(body.getCode());
+            } else if (response.getStatusCode().is2xxSuccessful()
+                    && responseBody != null
+                    && responseBody.getAccessToken() != null) {
+                user.setLastLoginAt(LocalDateTime.now());
+                user.setLastLoginIp(ipAddress);
+                userRepository.save(user);
                 recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
+                pendingRedeems.remove(body.getCode());
+            } else {
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        responseBody != null && responseBody.getMessage() != null
+                                ? responseBody.getMessage()
+                                : "Portal SSO exchange failed");
                 pendingRedeems.remove(body.getCode());
             }
 

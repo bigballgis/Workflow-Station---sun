@@ -1854,3 +1854,20 @@
     修复：抽出 UserPortalAuditProcessInstanceMatcher——列字段 LIKE（ESCAPE+LIMIT）
     + 按审计时间窗候选实例用 RequestIdEnricher 计算匹配；PI 解析移出 Spec；
     单测覆盖派生 Request ID 命中/未命中与 LIKE 转义。
+
+- id: "1513"
+  status: fixed
+  fixed_at: "2026-08-04"
+  severity: major
+  category: architecture
+  summary: "Portal 登录准入：须属于任一 ACTIVE 虚拟组（SYSTEM/CUSTOM/DEVELOPER）"
+  file: "backend/user-portal/src/main/java/com/portal/service/PortalEntitlementService.java"
+  note: |
+    目标：在未登录与无 UBR 自助之间增加门户准入，兼容 Hermes Default Users（SYSTEM），
+    并允许仅 CUSTOM/DEVELOPER 组成员登录，便于按小 AD 组分散审批。
+    实现：PortalEntitlementService JDBC 查 sys_virtual_group_members∩ACTIVE 组；
+    issuePortalSession 拒绝发 JWT（loginErrorCode=PORTAL_ENTITLEMENT_DENIED + i18n message）；
+    refresh/switch-workspace 同步校验；SSO/账密审计区分失败；SsoCallback handoff 展示可读文案；
+    lastLoginAt/Ip 仅在 accessToken 签发成功后更新；JWT 吊销延迟（非每请求复核）产品已接受。
+    验证：PortalEntitlementServiceTest + PortalSessionIssuerEntitlementTest +
+    portalEntitlementMessage vitest pass。

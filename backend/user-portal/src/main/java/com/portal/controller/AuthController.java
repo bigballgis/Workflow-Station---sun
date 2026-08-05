@@ -14,6 +14,7 @@ import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import com.portal.dto.SwitchWorkspaceRequest;
 import com.portal.repository.LoginAuditQueryRepository;
+import com.portal.service.PortalEntitlementService;
 import com.portal.service.PortalSessionIssuerService;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.platform.security.repository.UserRepository;
@@ -67,6 +68,7 @@ public class AuthController {
     private final I18nService i18nService;
     private final JwtTokenService jwtTokenService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
+    private final PortalEntitlementService portalEntitlementService;
     private final PortalSessionIssuerService portalSessionIssuerService;
     private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final JwtProperties jwtProperties;
@@ -126,21 +128,36 @@ public class AuthController {
                 throw new RuntimeException(i18nService.getMessage("auth.invalid_credentials"));
             }
 
-            log.debug("Password matched, updating login info");
+            log.debug("Password matched; clear failed-login counter (lastLogin only after session issued)");
             user.resetFailedLoginCount();
-            user.setLastLoginAt(LocalDateTime.now());
-            user.setLastLoginIp(ipAddress);
             userRepository.save(user);
-
-            // Record successful login audit
-            recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
 
             // Role grants happen in admin-center and cannot invalidate this portal-local cache,
             // so login is the refresh point: without this, a freshly granted role stays invisible
             // in New Requests until the 5-minute role-code cache expires.
             functionUnitAccessComponent.clearUserRolesCache(user.getId());
 
-            return portalSessionIssuerService.issuePortalSession(user, request, httpRequest, httpResponse);
+            ResponseEntity<LoginResponse> sessionResponse =
+                    portalSessionIssuerService.issuePortalSession(user, request, httpRequest, httpResponse);
+            LoginResponse body = sessionResponse.getBody();
+            if (body != null && body.getAccessToken() != null) {
+                user.setLastLoginAt(LocalDateTime.now());
+                user.setLastLoginIp(ipAddress);
+                userRepository.save(user);
+                recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
+            } else if (body != null
+                    && PortalEntitlementService.LOGIN_ERROR_PORTAL_ENTITLEMENT_DENIED.equals(body.getLoginErrorCode())) {
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        body.getMessage() != null ? body.getMessage()
+                                : i18nService.getMessage("auth.portal_entitlement_denied"));
+            } else if (body == null
+                    || !("WORKSPACE_CONTEXT_REQUIRED".equals(body.getLoginErrorCode()))) {
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        body != null && body.getMessage() != null
+                                ? body.getMessage()
+                                : i18nService.getMessage("auth.login_failed"));
+            }
+            return sessionResponse;
         } catch (RuntimeException e) {
             log.warn("Login failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(LoginResponse.builder()
@@ -182,6 +199,10 @@ public class AuthController {
             jwtTokenService.blacklistToken(refreshToken);
             String userId = claims.getSubject();
             if (!REFRESH_TYPE.equals(claims.get("type", String.class))) {
+                return ResponseEntity.status(401).build();
+            }
+            if (!portalEntitlementService.hasEligibleVirtualGroupMembership(userId)) {
+                log.warn("Portal refresh denied: user {} has no eligible virtual group membership", userId);
                 return ResponseEntity.status(401).build();
             }
             String activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
@@ -338,6 +359,9 @@ public class AuthController {
         try {
             Claims claims = parseToken(token);
             String userId = claims.getSubject();
+            if (!portalEntitlementService.hasEligibleVirtualGroupMembership(userId)) {
+                return ResponseEntity.status(403).build();
+            }
             if (!portalWorkspaceAuthService.hasContext(userId, body.getBusinessUnitId(), body.getRoleId())) {
                 return ResponseEntity.status(403).build();
             }

@@ -870,6 +870,8 @@ export default {
     passwordRequired: 'Please enter password',
     loginSuccess: 'Login successful',
     loginFailed: 'Login failed',
+    entitlementDenied:
+      'You cannot sign in to the User Portal yet. Your account is not in any access group. Please ask your administrator to add you to the right AD group, wait a few minutes for sync, then try again.',
     selected: 'Selected',
     selectWorkspaceTitle: 'Select workspace identity',
     selectWorkspaceHint: 'You have roles in multiple business units. Choose which identity to use for this session.',
