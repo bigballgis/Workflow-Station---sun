@@ -13,6 +13,7 @@ import com.portal.entity.ProcessInstance;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.platform.common.audit.SystemAuditFields;
 import com.platform.security.entity.User;
 import com.platform.security.repository.UserRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -167,6 +168,9 @@ public class ChangeHistoryComponent {
 
     private static boolean isInternalField(String fieldName) {
         if (fieldName == null)
+            return true;
+        // Platform audit columns: single decision via SystemAuditFields (case-insensitive).
+        if (SystemAuditFields.isAuditField(fieldName))
             return true;
         return INTERNAL_FIELD_BLACKLIST.contains(fieldName)
                 || fieldName.startsWith("_snapshot_")
@@ -1299,9 +1303,10 @@ public class ChangeHistoryComponent {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Always exclude internal fields
+            // Always exclude internal fields + platform audit columns
             Predicate notInternal = cb.not(root.get("fieldName").in(INTERNAL_FIELD_BLACKLIST));
-            predicates.add(notInternal);
+            Predicate notAudit = cb.not(root.get("fieldName").in(SystemAuditFields.ALL));
+            predicates.add(cb.and(notInternal, notAudit));
 
             if (request.getUserId() != null && !request.getUserId().isBlank()) {
                 predicates.add(cb.equal(root.get("userId"), request.getUserId().trim()));

@@ -229,9 +229,12 @@ public class ProcessFormComponent {
             oldValuesRef.set(new HashMap<>(oldValues));
 
             Map<String, Object> updatedVariables = new HashMap<>(oldValues);
-            updatedVariables.putAll(formData);
-            // System audit fields: refresh updated_at/updated_by at the real update (key present
-            // only when the field is on the form); created_* is preserved from the insert.
+            Map<String, Object> inbound = formData != null ? new HashMap<>(formData) : new HashMap<>();
+            // Drop forged audit keys so putAll cannot wipe created_* from insert.
+            SystemAuditFieldFiller.stripClientAuditKeys(inbound);
+            updatedVariables.putAll(inbound);
+            // System audit fields: refresh updated_at/updated_by at real update
+            // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);

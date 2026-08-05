@@ -1929,3 +1929,18 @@
     修复：admin internal GET /function-units/{id}/code；EmailMonitorProcessor 启动变量补
     functionUnitCode。单测 EmailMonitorProcessorTest、EmailConnectionSyncResolveCodeTest。
     运行时验证：process 09c33253… hydrate 成功，后续 poll fetched=0。
+
+- id: "1516"
+  status: fixed
+  fixed_at: "2026-08-05"
+  severity: major
+  category: bug
+  summary: "主表审计字段 Views 无值：filler 依赖 Form Design 画布 key，与画布 strip 矛盾"
+  file: "backend/user-portal/src/main/java/com/portal/util/SystemAuditFieldFiller.java"
+  note: |
+    根因：SystemAuditFieldFiller 仅当 submitted variables 含 created_at 等 key 才写入，
+    而 Form Design sync 会剔除审计控件，导致发起后 Views 审计列为空。
+    修复（方案 A）：fillOnInsert/fillOnUpdate 与画布解耦；stripClientAuditKeys 防篡改；
+    ChangeHistorySubmissionFilter + isInternalField + 全局 Spec 走 SystemAuditFields。
+    验证：SystemAuditFieldFillerTest / ChangeHistorySubmissionFilterTest /
+    TaskFormFieldMapperTest / SubTableChangeHistoryPropertyTest；user-portal 重建。

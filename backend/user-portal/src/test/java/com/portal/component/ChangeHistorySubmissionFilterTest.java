@@ -44,6 +44,26 @@ class ChangeHistorySubmissionFilterTest {
     }
 
     @Test
+    void platformAuditFieldsNeverEnterUserChangeHistoryEvenWhenFormRuleLooksEditable() {
+        Map<String, Object> form = formDefinition(
+                List.of(
+                        rule("title", false),
+                        rule("created_at", false),
+                        rule("created_by", false),
+                        rule("updated_at", false),
+                        rule("updated_by", false)),
+                Map.of());
+        Map<String, Object> submitted = Map.of(
+                "title", "hello",
+                "created_at", "2020-01-01 00:00:00",
+                "created_by", "forged",
+                "updated_at", "2020-01-01 00:00:00",
+                "updated_by", "forged");
+        Map<String, Object> actual = filter.retainUserEditableSubmission(submitted, submitted, form);
+        assertThat(actual).containsExactly(Map.entry("title", "hello"));
+    }
+
+    @Test
     void subTableAuditIsIntersectionOfSubmittedAndEditableFields() {
         Map<String, Object> form = formDefinition(
                 List.of(rule("title", false)),
