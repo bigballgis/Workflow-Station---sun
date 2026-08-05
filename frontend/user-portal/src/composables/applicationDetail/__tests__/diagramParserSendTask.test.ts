@@ -106,4 +106,18 @@ describe('application detail diagram parser — sendTask status', () => {
     expect(byId.get('SendTask_Email')?.status).toBe('pending')
     expect(ctx.completedNodeIds.value).not.toContain('SendTask_Email')
   })
+
+  it('marks completed sendTask when history name has extra whitespace', () => {
+    clearBpmnParseCache()
+    const ctx = makeCtx([
+      record('SendTask_Email', 'Send  Task', 'completed', 'send'),
+      record('UserTask_Assign', 'Transaction Assignment', 'current'),
+    ], 'Transaction Assignment')
+    const { parseBpmnXml } = createApplicationDetailDiagramParser(ctx)
+    parseBpmnXml(xml)
+
+    const byId = new Map(ctx.processNodes.value.map(n => [n.id, n]))
+    expect(byId.get('SendTask_Email')?.status).toBe('completed')
+    expect(ctx.completedNodeIds.value).toContain('SendTask_Email')
+  })
 })

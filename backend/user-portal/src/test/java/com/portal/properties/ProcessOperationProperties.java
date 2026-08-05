@@ -76,7 +76,10 @@ class ProcessOperationProperties {
                 processInstanceRepository, workflowEngineClient,
                 new com.portal.component.EngineSubTableHydrator(workflowEngineClient), userDisplayNameResolver,
                 miOverlayComponent, subTableEnrichmentComponent,
-                Mockito.mock(com.portal.component.RequestIdEnricher.class));
+                Mockito.mock(com.portal.component.RequestIdEnricher.class),
+                Mockito.mock(com.portal.component.MainTableViewInvolvementChecker.class),
+                Mockito.mock(com.portal.component.MainTableViewAccessResolver.class),
+                jdbcTemplate);
         ProcessStartComponent processStartComponent = new ProcessStartComponent(
                 processInstanceRepository,
                 processHistoryRepository,

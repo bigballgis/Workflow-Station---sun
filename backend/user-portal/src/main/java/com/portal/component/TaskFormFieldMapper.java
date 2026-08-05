@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.portal.dto.TaskFormSnapshot;
+import com.portal.util.SystemAuditFieldFiller;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -21,18 +22,26 @@ public class TaskFormFieldMapper {
 
     /**
      * Filters read-only fields, keeping EDITABLE fields only.
-     * When fieldPermissions is empty, accepts all fields (backward compatible).
+     * When fieldPermissions is empty, accepts all non-audit fields (backward compatible).
+     * Platform audit columns are never accepted from the client.
      */
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
                                                     Map<String, String> fieldPermissions) {
-        if (fieldPermissions == null || fieldPermissions.isEmpty()) {
-            return new HashMap<>(formData);
+        if (formData == null || formData.isEmpty()) {
+            return new HashMap<>();
         }
-
-        return formData.entrySet().stream()
-                .filter(entry -> "__subTables__".equals(entry.getKey())
-                        || "EDITABLE".equals(fieldPermissions.get(entry.getKey())))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<String, Object> accepted;
+        if (fieldPermissions == null || fieldPermissions.isEmpty()) {
+            accepted = new HashMap<>(formData);
+        } else {
+            accepted = formData.entrySet().stream()
+                    .filter(entry -> "__subTables__".equals(entry.getKey())
+                            || "EDITABLE".equals(fieldPermissions.get(entry.getKey())))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+                            (a, b) -> b, HashMap::new));
+        }
+        SystemAuditFieldFiller.stripClientAuditKeys(accepted);
+        return accepted;
     }
 
     /**

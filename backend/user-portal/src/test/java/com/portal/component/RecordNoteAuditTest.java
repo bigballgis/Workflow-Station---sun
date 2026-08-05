@@ -97,7 +97,7 @@ class RecordNoteAuditTest {
     @Test
     void tableScopeCreateAuditsAgainstTheTargetInstance() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.isProcessParticipant(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
         when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT)
                         .bodyText("Hello reviewer").build());
@@ -113,7 +113,7 @@ class RecordNoteAuditTest {
     void recordScopeCreateAnchorsOnTheCallerSuppliedInstanceAndKeepsTheRowId() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.isProcessParticipant(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
         // Row-id targets fall back to function-unit access for the note itself.
         when(functionUnitAccessComponent.canAccessFunctionUnit("u1", "fu-7")).thenReturn(true);
         MockMultipartFile file = new MockMultipartFile(
@@ -133,7 +133,7 @@ class RecordNoteAuditTest {
     void recordScopeCreateSkipsAuditWhenTheCallerIsNotAParticipantOfTheClaimedInstance() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.isProcessParticipant(eq("u1"), any())).thenReturn(false);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(false);
         when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
         when(functionUnitAccessComponent.canAccessFunctionUnit("u1", "fu-7")).thenReturn(true);
         when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
@@ -163,7 +163,7 @@ class RecordNoteAuditTest {
     void updateAuditsBothSidesOfTheEdit() {
         when(recordNoteService.getLive("note-1")).thenReturn(storedNote(RecordNote.TARGET_TABLE, INSTANCE_ID));
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.isProcessParticipant(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
         when(recordNoteService.update(eq("note-1"), any(), anyString(), eq("u1")))
                 .thenReturn(NoteDetail.builder().id("note-1").subject("Subject")
                         .bodyHtml("<p>Revised body</p>").build());
@@ -179,7 +179,7 @@ class RecordNoteAuditTest {
     void deleteAuditsTheRemovedNoteAsOldValue() {
         when(recordNoteService.getLive("note-1")).thenReturn(storedNote(RecordNote.TARGET_TABLE, INSTANCE_ID));
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.isProcessParticipant(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
 
         component.delete("u1", "note-1", null);
 
@@ -192,7 +192,7 @@ class RecordNoteAuditTest {
     @Test
     void inlineImageUploadsAreNotAuditedSeparately() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.isProcessParticipant(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
         MockMultipartFile img = new MockMultipartFile(
                 "file", "shot.png", "image/png", "x".getBytes(StandardCharsets.UTF_8));
         when(recordNoteService.createAttachment(any(), any(), anyBoolean(), anyString(), any()))

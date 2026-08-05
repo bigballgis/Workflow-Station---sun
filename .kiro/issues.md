@@ -9,7 +9,7 @@
 |------|------|------|
 | 🔓 Open | **12** | `index.yaml` |
 | ⏸️ Wontfix | **1** | `index.yaml` |
-| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504 等） |
+| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1516 等） |
 
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
@@ -25,7 +25,6 @@
 | 1406 | minor | quality | 多实例状态接口用户名为 User-{id} 占位 |
 | 1407 | minor | quality | 动作测试仍为占位实现（流程 simulate 已接入 BpmnProcessSimulator） |
 | 1408 | minor | quality | 表单 boundTable 深绑定校验缺失 |
-| 1496 | minor | quality | DataSourceDiagnosticRunner 取得 JDBC 连接后未关闭 |
 | 1501 | major | bug | Main Table View / Relation Tables 列表未应用 Input 敏感打码 |
 
 ### Wontfix
@@ -53,6 +52,10 @@
 | **#1443** | MI 办理人 **sub form2**：Sub Task 子表空 + People 未带入 sub form1 age/sex；link-child scrub 把 collection 行 `id_idw` 误删 | #1435、scrub `skipSliceKeys`/`buildMiCollectionSliceKeySet`、`miCollectionIdIdwScrub.test.ts` |
 | **#1444** | MI 办理人 People **Save 后表单回显旧值**：persisted 已更新但 inline form 仍显示 stale age；foreign 占位行 seed/collapse 污染 + flatten/hydrate  sibling slice 63 覆盖 30 | #1435、#1443、`flattenNestedSubTableRowsIntoPayload`、`hydrateMiLinkChildBindingsFromFullSnapshot`、task e921c696 Test-000071 |
 | **#1466** | **Email Monitor** 启动流程后 Portal My Request / 待办不可见 | EmailMonitorPortalSyncComponent + internal hydrate API（已 fixed 2026-06-30） |
+| **#1512** | **Email Monitor** hydrate 因引擎 GET 403 失败（无 JWT） | engineSnapshot 随 hydrate 下发，跳过引擎 GET（已 fixed 2026-08-04） |
+| **#1513** | **Main Table View** 列表可见但 View Record 403（非参与者） | canAccessProcessDetail 对齐列表视图规则（已 fixed 2026-08-04） |
+| **#1514** | **My Requests** manualTask 流程图节点不着色 | bpmnHumanWorkflowTasks 解析 manualTask 等（已 fixed 2026-08-04） |
+| **#1515** | **Email Monitor** 收信后建案失败 `missing_function_unit_id` | 启动变量补 `functionUnitCode`（已 fixed 2026-08-04） |
 | **#1467** | **Email Monitor** 转发邮件内层 HTML 未抽取 | ImapInboundMailClient nested message/rfc822（已 fixed 2026-06-30） |
 
 详情与根因清单见 `index.yaml` 中 `id: "179"`（`recurrence: pattern`）。改 `shared.ts` / `tasks/detail.vue` / `FormRenderer.vue` / `SubTableField.vue` 时优先跑上述单测并做三参与者手测；最新一例（#1383）是当前参与者打开 sub form1 时 inline subtable2 被预填上一参与者的输入，根因在 `isolateMiSubTaskData` 重建 myRow.__subTables__ 时遗漏 MI 过滤、且 `syncMiLinkChildRowsIntoParentNested` 在空数据时不回写残留。#1438：Attachment UUID 不得进入 `foreignSubTableRowIds`；有 `file` 的行在 `isLeakedForeignRowOnSharedAttachment` 中 MUST 先判定保留；`patchFormDataSubTablesFromCurrentBindings` 对 shared attachment MUST merge 全量快照。手测 task 093962c4 Attachment 3 行。#1440：`patchMiParentRowsWithNestedChildSlice` MUST `scopeMiLinkChildRowsForParentRow`；`syncMainSubTableRows` binding.data 用 merge 后 `out`；inline `mergeRowsForInlineFormTarget` nested 须 `pickMiLinkChildRowsForParent`。手测 `verify-sex-toggle-isolation.mjs` task 6c6c5cc6。#1444：Save 后 variables 正确但 People inline 仍 stale → flatten 须让顶层 slice 覆盖 nested；hydrate 须让当前 binding slice 覆盖 stale sibling（如 63 vs 30）；seed/collapse 不得处理 foreign 占位行。手测 `frontend/scripts/_cap-e921.mjs` task e921c696 Test-000071。改 `useBpmnParser.ts` 时优先跑 `useBpmnParserPreviousForms.test.ts`（8 case 含场景 1/2/2-regression/3/4 + boundary + dedup + missing-current）。

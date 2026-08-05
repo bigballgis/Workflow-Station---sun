@@ -97,6 +97,7 @@ AI 回复任务整理 → 你看没问题 → 回复 **`确认`** → AI 才开�
 | 定位 | 补充 taskId、截图 | grep + 根因 |
 | 实现 | 语义与合并决策 | 最小 diff + ReadLints |
 | 验证 | 对照验收项 | build、单测、regression、Docker、贴 logs |
+| **code-review 就绪** | 可发 staged 审查指令 | 对照 `.cursor/skills/code-review` 自检至可 PASS |
 | 收尾 | approve merge | 交付清单 + `.kiro` fixed（验证通过后） |
 
 **Cursor 用法：**
@@ -198,6 +199,29 @@ GitHub 会自动加载 [`.github/pull_request_template.md`](../../.github/pull_r
 - [ ] 无 `_tmp_*` 等临时文件入 diff
 - [ ] i18n 三语同步（如有用户可见文案）
 - [ ] 改 `platform-common` 已评估爆炸半径
+- [ ] **Code-review 就绪**（见 §6.1）：staged 审查预期 PASS（或 CONDITIONAL 且无 Blocker/未接受 Major）
+
+### 6.1 Code-review 门禁 — playbook 交付必须可过审
+
+按 playbook **整理并修改**的内容，宣称完成前必须达到：用 **code-review skill** 审查当前 **staged changes** 时结论为 **PASS**（或仅 `CONDITIONAL`：无 Blocker/未接受 Major，且缺口已记录）。
+
+**标准审查指令（完成后应能扛住）：**
+
+```text
+使用 code-review skill 审查当前 staged changes。
+不要修改、提交或推送；按 Blocker/Major/Minor/Question 输出，给出 PASS/CONDITIONAL/FAIL 结论。
+```
+
+| 要求 | 说明 |
+|------|------|
+| 真源 | `.cursor/skills/code-review/SKILL.md` + `reference.md` |
+| Staging | 相关源码/测试/i18n/SQL/配置一并 staged；漏提交 = Major/Blocker |
+| 自检范围 | 需求/正反例、最小 diff、影响链、编译、测试/UI/MI、安全与增量 secret、FU 矩阵（未触达 N/A）、性能（命中才查） |
+| 放行 | 与 skill §9 一致：无 Blocker/未接受 Major + 真实 build/测试证据 + secret 干净 → 才可写 PASS |
+| 审查时 | **只读**：不改代码、不 commit、不 push；固定格式输出结论 |
+| FAIL | 视为未完成，先修再交付 |
+
+规则镜像：`.cursor/rules/ai-development-playbook.mdc` §4.1。
 
 ---
 

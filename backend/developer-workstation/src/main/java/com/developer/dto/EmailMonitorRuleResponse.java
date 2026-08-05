@@ -17,6 +17,7 @@ public class EmailMonitorRuleResponse {
     private String name;
     private Boolean enabled;
     private String connectionUid;
+    private Long sourceRuleId;
     private String processDefinitionKey;
     private String startEventId;
     private String folderLabel;
@@ -39,6 +40,7 @@ public class EmailMonitorRuleResponse {
                 .name(entity.getName())
                 .enabled(entity.getEnabled())
                 .connectionUid(entity.getConnectionUid())
+                .sourceRuleId(entity.getSourceRuleId())
                 .processDefinitionKey(entity.getProcessDefinitionKey())
                 .startEventId(entity.getStartEventId())
                 .folderLabel(entity.getFolderLabel())

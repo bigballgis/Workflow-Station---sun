@@ -12,6 +12,13 @@ public interface EmailMonitorRuleRepository extends JpaRepository<EmailMonitorRu
 
     List<EmailMonitorRule> findByFunctionUnitIdOrderByNameAsc(Long functionUnitId);
 
+    List<EmailMonitorRule> findByFunctionUnitIdAndSourceRuleIdIsNullAndStartEventIdIsNullOrderByNameAsc(
+            Long functionUnitId);
+
+    List<EmailMonitorRule> findBySourceRuleId(Long sourceRuleId);
+
+    List<EmailMonitorRule> findByFunctionUnitIdAndStartEventIdIsNotNull(Long functionUnitId);
+
     Optional<EmailMonitorRule> findByRuleUid(String ruleUid);
 
     boolean existsByFunctionUnitIdAndName(Long functionUnitId, String name);

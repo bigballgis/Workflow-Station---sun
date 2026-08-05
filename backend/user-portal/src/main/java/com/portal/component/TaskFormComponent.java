@@ -466,11 +466,13 @@ public class TaskFormComponent {
             concurrentFieldsRef.set(Set.copyOf(concurrentFields));
 
             Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
-            updatedVariables.putAll(editableData);
+            Map<String, Object> inbound = new HashMap<>(editableData);
+            // Defense in depth: strip even if filterEditableFields missed a case variant.
+            SystemAuditFieldFiller.stripClientAuditKeys(inbound);
+            updatedVariables.putAll(inbound);
 
-            // System audit fields: refresh updated_at/updated_by at the real update (key
-            // present
-            // only when the field is on the form); created_* is preserved from the insert.
+            // System audit fields: refresh updated_at/updated_by at real update
+            // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
             // Prevent geometric __subTables__ bloat: drop deep nested copies before
             // persisting so each

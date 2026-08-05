@@ -36,6 +36,7 @@ cd deploy/environments/dev && docker compose -f docker-compose.dev.yml --env-fil
 - [ ] 单测 / regression 通过
 - [ ] Docker 重建 + logs 无启动失败
 - [ ] 截图（如有 UI）：`frontend/*/verification-screenshots/…`
+- [ ] Code-review 就绪：staged 审查预期 PASS（见 playbook §6.1 / skill `code-review`）
 
 ## MI Invariant（仅 MI 热路径改动时勾选）
 

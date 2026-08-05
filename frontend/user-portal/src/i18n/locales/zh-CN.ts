@@ -899,6 +899,8 @@ export default {
     passwordRequired: '请输入密码',
     loginSuccess: '登录成功',
     loginFailed: '登录失败',
+    entitlementDenied:
+      '暂时无法登录用户门户：您的账号尚未加入任何访问组。请联系管理员，申请加入对应的 AD 组；同步完成后（通常几分钟内）再重新登录。',
     selected: '已选择',
     selectWorkspaceTitle: '选择工作台身份',
     selectWorkspaceHint: '您在多个业务单元下拥有角色，请选择本次进入系统的身份。',

@@ -44,9 +44,22 @@ public class ProcessInstanceHydrationComponent {
 
     /** Local row if present; otherwise hydrate from Flowable and persist. */
     public ProcessInstance requireProcessInstance(String processInstanceId) {
+        return requireProcessInstance(processInstanceId, null);
+    }
+
+    /**
+     * Prefer {@code engineSnapshot} when the caller already holds start-time process data
+     * (email monitor internal hydrate). Snapshot path avoids a JWT-protected engine GET that
+     * fails with 403 on service-to-service calls with only {@code X-Internal-Token}.
+     */
+    @Transactional
+    public ProcessInstance requireProcessInstance(String processInstanceId, Map<String, Object> engineSnapshot) {
         Optional<ProcessInstance> local = processInstanceRepository.findById(processInstanceId);
         if (local.isPresent()) {
             return local.get();
+        }
+        if (hasUsableSnapshot(engineSnapshot)) {
+            return persistFromEngineRow(processInstanceId, engineSnapshot, false);
         }
         return hydrateFromEngine(processInstanceId);
     }
@@ -61,6 +74,16 @@ public class ProcessInstanceHydrationComponent {
         Map<String, Object> engineRow = workflowEngineClient.getProcessInstance(processInstanceId)
                 .orElseThrow(() -> new PortalException("404",
                         "Process instance not found: " + processInstanceId));
+        return persistFromEngineRow(processInstanceId, engineRow, true);
+    }
+
+    @Transactional
+    protected ProcessInstance persistFromEngineRow(
+            String processInstanceId, Map<String, Object> engineRow, boolean enrichLiveStatus) {
+        Optional<ProcessInstance> raced = processInstanceRepository.findById(processInstanceId);
+        if (raced.isPresent()) {
+            return raced.get();
+        }
 
         Map<String, Object> variables = extractVariables(engineRow);
         String processKey = stringValue(engineRow.get("processDefinitionKey"));
@@ -75,10 +98,12 @@ public class ProcessInstanceHydrationComponent {
         String portalStatus = mapEngineStatus(stringValue(engineRow.get("status")));
         String currentNode = null;
         String currentAssignee = null;
-        Optional<Map<String, Object>> liveStatus = workflowEngineClient.getProcessInstanceStatus(processInstanceId);
-        if (liveStatus.isPresent()) {
-            currentNode = stringValue(liveStatus.get().get("nextTaskName"));
-            currentAssignee = stringValue(liveStatus.get().get("nextAssignee"));
+        if (enrichLiveStatus) {
+            Optional<Map<String, Object>> liveStatus = workflowEngineClient.getProcessInstanceStatus(processInstanceId);
+            if (liveStatus.isPresent()) {
+                currentNode = stringValue(liveStatus.get().get("nextTaskName"));
+                currentAssignee = stringValue(liveStatus.get().get("nextAssignee"));
+            }
         }
 
         ProcessInstance entity = ProcessInstance.builder()
@@ -102,14 +127,22 @@ public class ProcessInstanceHydrationComponent {
 
         try {
             ProcessInstance saved = processInstanceRepository.save(entity);
-            log.info("Hydrated portal process instance {} from workflow engine (key={}, startUser={})",
-                    processInstanceId, processKey, startUserId);
+            log.info("Hydrated portal process instance {} from workflow engine (key={}, startUser={}, snapshot={})",
+                    processInstanceId, processKey, startUserId, !enrichLiveStatus);
             return saved;
         } catch (DataIntegrityViolationException duplicate) {
             return processInstanceRepository.findById(processInstanceId)
                     .orElseThrow(() -> new PortalException("404",
                             "Process instance not found: " + processInstanceId));
         }
+    }
+
+    private static boolean hasUsableSnapshot(Map<String, Object> engineSnapshot) {
+        if (engineSnapshot == null || engineSnapshot.isEmpty()) {
+            return false;
+        }
+        return StringUtils.hasText(stringValue(engineSnapshot.get("processDefinitionKey")))
+                || engineSnapshot.get("variables") instanceof Map<?, ?>;
     }
 
     private record CatalogPin(String catalogId, String code, String versionLabel) {}

@@ -156,6 +156,9 @@ deploy/superset/pip.conf
 # Dev schema-migration SHA markers (isolated per Postgres Docker volume)
 deploy/environments/dev/.schema-migration-markers/
 
+# Local compose overlay (see deploy/environments/dev/LOCAL-OVERLAY.md) — never commit
+**/docker-compose.local.yml
+
 # Secret/credential files
 secrets/
 credentials/

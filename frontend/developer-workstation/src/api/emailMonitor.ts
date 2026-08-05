@@ -52,6 +52,7 @@ export interface EmailMonitorRule {
   name: string
   enabled: boolean
   connectionUid: string
+  sourceRuleId?: number
   processDefinitionKey?: string
   startEventId?: string
   folderLabel?: string
@@ -87,10 +88,22 @@ export interface EmailMonitorRuleRequest {
   reviewOnMissing?: boolean
 }
 
+export interface EmailMonitorStartEventBindRequest {
+  templateRuleId: number
+  startEventId: string
+  processDefinitionKey: string
+  filterFrom?: string
+  filterSubject?: string
+  enabled?: boolean
+}
+
 const base = (functionUnitId: number) =>
   `/api/v1/function-units/${functionUnitId}/email-monitors`
 
 export const emailMonitorApi = {
+  listTemplates(functionUnitId: number) {
+    return functionUnitAxios.get<any, { data: EmailMonitorRule[] }>(`${base(functionUnitId)}/templates`)
+  },
   list(functionUnitId: number) {
     return functionUnitAxios.get<any, { data: EmailMonitorRule[] }>(base(functionUnitId))
   },
@@ -110,5 +123,14 @@ export const emailMonitorApi = {
   },
   delete(functionUnitId: number, ruleId: number) {
     return functionUnitAxios.delete(`${base(functionUnitId)}/${ruleId}`)
+  },
+  bindStartEvent(functionUnitId: number, data: EmailMonitorStartEventBindRequest) {
+    return functionUnitAxios.put<any, { data: EmailMonitorRule }>(
+      `${base(functionUnitId)}/start-event-bindings`,
+      data
+    )
+  },
+  unbindStartEvent(functionUnitId: number, startEventId: string) {
+    return functionUnitAxios.delete(`${base(functionUnitId)}/start-event-bindings/${encodeURIComponent(startEventId)}`)
   }
 }

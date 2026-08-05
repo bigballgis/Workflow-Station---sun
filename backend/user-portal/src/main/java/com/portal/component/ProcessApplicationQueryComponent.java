@@ -5,6 +5,8 @@ import com.portal.component.MiOverlaySupport.MiRowProgress;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.component.MainTableViewAccessResolver.AccessRule;
+import com.portal.exception.PortalException;
 import com.portal.service.ProcessAssigneeSnapshot;
 import com.portal.service.UserDisplayNameResolver;
 import lombok.RequiredArgsConstructor;
@@ -14,8 +16,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,6 +47,9 @@ public class ProcessApplicationQueryComponent {
     private final MiOverlayComponent miOverlayComponent;
     private final SubTableEnrichmentComponent subTableEnrichmentComponent;
     private final RequestIdEnricher requestIdEnricher;
+    private final MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
+    private final MainTableViewAccessResolver mainTableViewAccessResolver;
+    private final JdbcTemplate jdbcTemplate;
 
     /** 聚合扇出线程池（引擎 HTTP，不碰 DB），移出共享 commonPool。见 {@link com.portal.config.PortalAsyncConfig}。 */
     @Autowired
@@ -469,6 +476,11 @@ public class ProcessApplicationQueryComponent {
             }
         }
 
+        // Self-heal: email/automation paths may finish in Flowable before portal completion callback lands.
+        if ("RUNNING".equals(instance.getStatus())) {
+            reconcilePortalStatusWithEngineCompletion(instance, info);
+        }
+
         Map<String, Object> vars = info.getVariables();
         boolean hasSubTables =
                 vars != null
@@ -561,6 +573,73 @@ public class ProcessApplicationQueryComponent {
     }
 
     /**
+     * Whether a portal user may open process detail/history. Aligns with Main Table View list rules:
+     * participants first; otherwise a published view the user can see (all rows when
+     * {@code restrict_to_involved_users=false}, or involved-only when restricted).
+     */
+    public boolean canAccessProcessDetail(String userId, ProcessInstanceInfo detail) {
+        if (detail == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        if (isProcessParticipant(userId, detail)) {
+            return true;
+        }
+        if (mainTableViewAccessResolver.isSystemAdministrator(userId)) {
+            return true;
+        }
+        String functionUnitCode = detail.getFunctionUnitCode();
+        if (functionUnitCode == null || functionUnitCode.isBlank()) {
+            return false;
+        }
+        return canAccessViaPublishedMainTableViews(userId, functionUnitCode, detail.getId());
+    }
+
+    private boolean canAccessViaPublishedMainTableViews(
+            String userId, String functionUnitCode, String processInstanceId) {
+        List<Map<String, Object>> views = jdbcTemplate.queryForList("""
+                SELECT v.id, v.restrict_to_involved_users
+                FROM dw_main_table_view_configs v
+                INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
+                WHERE fu.code = ? AND v.status = 'PUBLISHED'
+                """, functionUnitCode);
+        if (views.isEmpty()) {
+            return false;
+        }
+        ProcessInstance instance = processInstanceRepository.findById(processInstanceId).orElse(null);
+        for (Map<String, Object> view : views) {
+            Long viewId = ((Number) view.get("id")).longValue();
+            boolean restrictToInvolved = Boolean.TRUE.equals(view.get("restrict_to_involved_users"));
+            List<AccessRule> rules = loadMainTableViewAccessRules(viewId);
+            if (!mainTableViewAccessResolver.canUserSeeView(userId, rules)) {
+                continue;
+            }
+            if (!restrictToInvolved) {
+                return true;
+            }
+            if (instance != null && mainTableViewInvolvementChecker.isUserInvolved(userId, instance)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<AccessRule> loadMainTableViewAccessRules(Long viewId) {
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                    SELECT target_type, target_id
+                    FROM dw_main_table_view_access
+                    WHERE view_config_id = ?
+                    """, viewId);
+            return mainTableViewAccessResolver.parseAccessRules(rows);
+        } catch (PortalException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to load view access rules for {}", viewId, e);
+            throw new PortalException("500", "Failed to load process detail access rules", e);
+        }
+    }
+
+    /**
      * Cached display-name resolution to avoid duplicate DB hits in one batch
      */
     private String resolveUserDisplayNameCached(String userId, Map<String, String> cache) {
@@ -572,5 +651,45 @@ public class ProcessApplicationQueryComponent {
      */
     private String resolveUserDisplayName(String userId) {
         return userDisplayNameResolver.resolve(userId);
+    }
+
+    /**
+     * When Flowable has already finished but portal still shows RUNNING (missed completion callback),
+     * align local status so Application Detail diagram/history render completed path.
+     */
+    private void reconcilePortalStatusWithEngineCompletion(ProcessInstance instance, ProcessInstanceInfo info) {
+        try {
+            if (!workflowEngineClient.isAvailable()) {
+                return;
+            }
+            Optional<Map<String, Object>> statusOpt = workflowEngineClient.getProcessInstanceStatus(instance.getId());
+            if (statusOpt.isEmpty()) {
+                return;
+            }
+            Object completedFlag = statusOpt.get().get("completed");
+            if (!(completedFlag instanceof Boolean completed) || !completed) {
+                return;
+            }
+            LocalDateTime finishedAt = LocalDateTime.now();
+            instance.setStatus("COMPLETED");
+            instance.setEndTime(finishedAt);
+            instance.setCompletedAt(finishedAt);
+            instance.setCurrentNode(null);
+            instance.setCurrentAssignee(null);
+            instance.setCandidateUsers(null);
+            processInstanceRepository.save(instance);
+
+            info.setStatus("COMPLETED");
+            info.setCurrentNode(null);
+            info.setCurrentAssignee(null);
+            info.setCandidateUsers(null);
+            info.setCurrentStepName(null);
+            info.setEndTime(finishedAt);
+            log.info("getProcessDetail: reconciled portal status to COMPLETED for finished engine instance {}",
+                    instance.getId());
+        } catch (Exception e) {
+            log.warn("getProcessDetail: failed to reconcile completion status for {}: {}",
+                    instance.getId(), e.getMessage());
+        }
     }
 }

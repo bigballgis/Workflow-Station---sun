@@ -152,4 +152,15 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
         }
         return Optional.of(units.get(0).getId());
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> resolveFunctionUnitCodeById(String functionUnitId) {
+        if (functionUnitId == null || functionUnitId.isBlank()) {
+            return Optional.empty();
+        }
+        return functionUnitRepository.findById(functionUnitId)
+                .map(FunctionUnit::getCode)
+                .filter(code -> code != null && !code.isBlank());
+    }
 }

@@ -17,11 +17,24 @@ export function shouldMapRawMessageToInvalidSenderEmail(raw: string | undefined)
 
 export function resolveConnectionSaveErrorMessage(
   error: unknown,
-  t: (key: string) => string,
+  t: (key: string, params?: Record<string, unknown>) => string,
   resolveRawMessage: (error: unknown) => string | undefined,
 ): string {
   const ax = error as {
-    response?: { data?: { error?: { details?: Record<string, unknown> } } }
+    response?: {
+      data?: {
+        error?: { code?: string; errorCode?: string; message?: string; details?: Record<string, unknown> }
+      }
+    }
+  }
+  const err = ax.response?.data?.error
+  const code = err?.code ?? err?.errorCode
+  if (code === 'CONFLICT_CONNECTION_NAME') {
+    const backendMessage = typeof err?.message === 'string' ? err.message.trim() : ''
+    if (backendMessage && !backendMessage.startsWith('email.connection.')) {
+      return backendMessage
+    }
+    return t('connection.nameConflict')
   }
   const details = ax.response?.data?.error?.details
   if (hasConnectionNameValidationError(details)) {

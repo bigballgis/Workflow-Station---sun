@@ -7,6 +7,7 @@ import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.UserDisplayNameResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -58,7 +59,10 @@ class ProcessApplicationQueryEngineScalarHydrationTest {
                 mock(UserDisplayNameResolver.class),
                 mock(MiOverlayComponent.class),
                 mock(SubTableEnrichmentComponent.class),
-                mock(RequestIdEnricher.class));
+                mock(RequestIdEnricher.class),
+                mock(MainTableViewInvolvementChecker.class),
+                mock(MainTableViewAccessResolver.class),
+                mock(JdbcTemplate.class));
     }
 
     @Test

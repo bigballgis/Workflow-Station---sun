@@ -73,6 +73,7 @@ PR 模板：[.github/pull_request_template.md](../../.github/pull_request_templa
 - 触达 MI 热路径 → 必读 `portal-mi-subtable-my-request.mdc` + invariant I1–I7
 - 可见 UI → `/verify-ui` skill + 截图保留 `verification-screenshots/`
 - 改可部署代码 → build + 重建 compose service + `docker logs`（`debug-mode-docker-workflow.mdc`）
+- **全程对照** `.cursor/skills/code-review/SKILL.md` 门禁写代码（见 §4.1），禁止为过验收而留下 Blocker/未接受 Major
 
 ## 3. 按模块 — 完成前最低验证
 
@@ -98,11 +99,35 @@ MI 热路径文件：`applications/detail.vue`、`tasks/detail.vue`、`shared.ts
 ## 验收对照
 - 用户正例：… → 是否满足
 
+## Code-review 就绪
+- 自检结论：PASS | CONDITIONAL（仅允许已记录豁免/环境缺口）
+- 已知 Blocker/Major：无 | …（有则不得宣称完成）
+
 ## 未做 / 需人工
 - （无则写「无」）
 ```
 
 Bug 验证通过后：`.kiro/issues/index.yaml` **一条** `fixed`；至少补单测 / verify 脚本 / 专项 rule 之一。
+
+## 4.1 Code-review 门禁 — playbook 交付必须可过审（硬门禁）
+
+按 playbook **整理并修改**的内容，在宣称完成前必须达到：用 **code-review skill** 审查当前 **staged changes** 时能给出 **PASS**（或仅 `CONDITIONAL` 且无 Blocker/未接受 Major，且缺口已写入「未做/需人工」）。
+
+### 用户标准审查指令（完成后应能扛住）
+
+```text
+使用 code-review skill 审查当前 staged changes。
+不要修改、提交或推送；按 Blocker/Major/Minor/Question 输出，给出 PASS/CONDITIONAL/FAIL 结论。
+```
+
+### 执行要求
+
+1. **对照真源**：`.cursor/skills/code-review/SKILL.md` + `reference.md`（触发矩阵、放行规则、固定输出格式）。
+2. **staging 卫生**：相关源码/测试/i18n/SQL/配置一并 staged；禁止漏提交导致 Major/Blocker；无关噪声勿入 stage。
+3. **自检等价于审查**：完成前按 skill §3–§9 自检——需求/正反例、最小 diff、影响链、编译/build、测试/UI/MI、安全与增量 secret、FU 通用性/生命周期（未触达标 N/A）、性能（命中才查）。
+4. **放行标准**（与 skill §9 一致）：Blocker = 0 且无未接受 Major；受影响模块编译/build 有真实命令结果；必需测试/截图已过；secret 扫描干净 → 才可写「Code-review 就绪：PASS」。关键验证环境不可用 → 最多 `CONDITIONAL`，不得假装 PASS。
+5. **审查时只读**：用户发起上述审查时，**禁止**修改产品代码、提交或推送；按 Blocker/Major/Minor/Question 与 PASS/CONDITIONAL/FAIL 固定格式输出。
+6. **FAIL 即未完成**：若审查或自检为 FAIL → 先修到可 PASS/CONDITIONAL，再交付；禁止「验收过了但过不了 code-review」。
 
 ## 5. 用户可复制 — 任务开场白
 

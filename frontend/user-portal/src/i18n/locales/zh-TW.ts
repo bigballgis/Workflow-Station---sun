@@ -899,6 +899,8 @@ export default {
     passwordRequired: '請輸入密碼',
     loginSuccess: '登入成功',
     loginFailed: '登入失敗',
+    entitlementDenied:
+      '暫時無法登入使用者入口：您的帳號尚未加入任何存取組。請聯絡管理員，申請加入對應的 AD 組；同步完成後（通常幾分鐘內）再重新登入。',
     selected: '已選擇',
     selectWorkspaceTitle: '選擇工作臺身份',
     selectWorkspaceHint: '您於多個業務單元擁有角色，請選擇本次進入系統的身份。',
