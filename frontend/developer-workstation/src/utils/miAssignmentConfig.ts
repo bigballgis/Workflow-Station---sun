@@ -246,6 +246,22 @@ export function nestAssignmentFieldsIntoContainer<T extends {
   return walk(rules)
 }
 
+/**
+ * Form Preview only demonstrates layout/interaction — BU/Role use placeholder sample
+ * data (no admin-center query); real BU→Role cascade runs at user-portal runtime.
+ * Single source so the Add dialog's picker and the sub-table list's label lookup
+ * agree on the same value→label mapping (a row saved via the demo picker stores
+ * one of these values, not a real BU/role code).
+ */
+export const DEMO_BU_OPTIONS = [
+  { label: 'Sample Business Unit 1', value: '__demo_bu_1' },
+  { label: 'Sample Business Unit 2', value: '__demo_bu_2' },
+]
+export const DEMO_ROLE_OPTIONS = [
+  { label: 'Sample Role A', value: '__demo_role_a' },
+  { label: 'Sample Role B', value: '__demo_role_b' },
+]
+
 export function isAssignmentConfigured(config?: AssignmentConfig): boolean {
   if (!config || (!config.allowUser && !config.allowRole)) return false
   if (config.allowUser && !normalizedField(config.assigneeField)) return false

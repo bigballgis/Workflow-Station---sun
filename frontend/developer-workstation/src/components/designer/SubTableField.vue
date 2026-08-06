@@ -147,6 +147,10 @@
           <template v-else-if="col.type === 'text' || col.type === 'input'">
             <span>{{ formatSensitiveCellDisplay(col, scope.row[col.field]) }}</span>
           </template>
+          <!-- select / radio: show the configured option label, not the raw stored value -->
+          <template v-else-if="col.type === 'select' || col.type === 'radio'">
+            <span>{{ formatOptionCellDisplay(col, scope.row[col.field]) }}</span>
+          </template>
           <!-- link form action -->
           <template v-else-if="col.type === 'linkForm'">
             <el-link
@@ -178,7 +182,7 @@
             />
           </template>
           <!-- default -->
-          <span v-else>{{ scope.row[col.field] ?? '-' }}</span>
+          <span v-else>{{ formatDefaultCellDisplay(col, scope.row[col.field]) }}</span>
         </template>
       </el-table-column>
 
@@ -349,7 +353,7 @@ import {
   isSensitiveMaskActive,
   normalizeSensitiveMaskConfig,
 } from '@/utils/sensitiveMask'
-import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+import { DEMO_BU_OPTIONS, DEMO_ROLE_OPTIONS, type AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 const { t } = useI18n()
 
@@ -362,6 +366,53 @@ function formatSensitiveCellDisplay(col: ColumnConfig, raw: unknown): string {
     return applySensitiveMask(String(raw), maskCfg!)
   }
   return String(raw)
+}
+
+/**
+ * select/radio: map stored value(s) to the configured option label(s).
+ *
+ * The Assignment Mode BU/Role fields are a special case in Form Preview: the Add
+ * dialog's picker shows placeholder DEMO_BU_OPTIONS/DEMO_ROLE_OPTIONS (real BU→Role
+ * cascade only runs at user-portal runtime), so a row saved via that picker stores a
+ * `__demo_*` value that never appears in the field's own real-world options list.
+ * Fall back to the same demo set so the label still resolves instead of showing the
+ * raw placeholder value.
+ */
+function formatOptionCellDisplay(col: ColumnConfig, raw: unknown): string {
+  if (raw === null || raw === undefined || raw === '') return '-'
+  const demoOptions = props.assignmentConfig?.buField === col.field
+    ? DEMO_BU_OPTIONS
+    : props.assignmentConfig?.roleField === col.field
+      ? DEMO_ROLE_OPTIONS
+      : []
+  const options = (col.props?.options as Array<{ label?: string; value?: unknown }> | undefined)
+    || col.options
+    || []
+  const labelFor = (value: unknown) => {
+    const match = options.find((o) => String(o.value) === String(value))
+      ?? demoOptions.find((o) => String(o.value) === String(value))
+    return match?.label != null ? String(match.label) : String(value)
+  }
+  return Array.isArray(raw) ? raw.map(labelFor).join(', ') : labelFor(raw)
+}
+
+/**
+ * Legacy/misclassified LOOKUP columns can still carry a raw row object (the LOOKUP
+ * model value shape) even when col.type didn't resolve to 'lookup' — never dump
+ * JSON in that case, extract the same display field LookupPreview would show.
+ */
+function isLookupRowValue(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+function formatDefaultCellDisplay(col: ColumnConfig, raw: unknown): string {
+  if (!isLookupRowValue(raw)) return raw === null || raw === undefined || raw === '' ? '-' : String(raw)
+  const displayField = (col.props?.selectedDisplayField as string | undefined)
+    || (col.props?.displayFields as string[] | undefined)?.[0]
+  if (displayField && raw[displayField] != null && typeof raw[displayField] !== 'object') {
+    return String(raw[displayField])
+  }
+  const firstValue = Object.values(raw).find((v) => v != null && v !== '' && typeof v !== 'object')
+  return firstValue == null ? '-' : String(firstValue)
 }
 const previewDialogHost = inject(PREVIEW_SUBTABLE_DIALOG_KEY, null)
 const previewMyRequestsActive = inject(PREVIEW_MY_REQUESTS_ACTIVE_KEY, undefined)

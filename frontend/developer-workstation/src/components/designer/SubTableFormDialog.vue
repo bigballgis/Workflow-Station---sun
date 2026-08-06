@@ -68,6 +68,8 @@ import {
 } from './uploadFieldUtils'
 import { mergeFormRowWithSeed } from './subTableAddDialogHelpers'
 import {
+  DEMO_BU_OPTIONS,
+  DEMO_ROLE_OPTIONS,
   MI_ASSIGNMENT_CONFIG_KEY,
   MI_ASSIGNMENT_MODE_KEY,
   fieldsHiddenByMode,
@@ -358,18 +360,6 @@ function filterRuleByAssignMode(rules: any[]): any[] {
     )
   return walk(rules)
 }
-
-// Form Preview 只演示布局/交互，BU/Role 用示例假数据（不查 admin-center）；
-// 真实 BU→Role 级联在 user portal 运行时（SubTableAddDialog）里查。
-// 纯占位示例（仅供 Preview 看布局/交互）；真实 BU→Role 在 user portal 运行时查。
-const DEMO_BU_OPTIONS = [
-  { label: 'Sample Business Unit 1', value: '__demo_bu_1' },
-  { label: 'Sample Business Unit 2', value: '__demo_bu_2' },
-]
-const DEMO_ROLE_OPTIONS = [
-  { label: 'Sample Role A', value: '__demo_role_a' },
-  { label: 'Sample Role B', value: '__demo_role_b' },
-]
 
 function injectDemoBuRoleOptions(rules: any[]) {
   const config = props.assignmentConfig

@@ -209,6 +209,10 @@ const LAYOUT_CONTAINER_TYPES = new Set([
   'el-row', 'elRow', 'row',
   'el-col', 'elCol', 'col',
   'group', 'subForm', 'tableForm', 'tableFormColumn',
+  // Assignment Mode container nests assignee/BU/role as children (see
+  // nestAssignmentFieldsIntoContainer) — sub-table column derivation needs those
+  // fields visible at top level, not hidden inside an unrecognized container type.
+  'miAssignment',
 ])
 
 /**

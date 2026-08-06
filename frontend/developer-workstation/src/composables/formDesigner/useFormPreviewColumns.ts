@@ -307,7 +307,9 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         }
         const colType = fieldRule?.type === 'upload'
           ? 'upload'
-          : mapDataTypeToPreviewColumnType(String(column.dataType ?? column.fieldType ?? ''))
+          : (fieldRule?.type === 'select' || fieldRule?.type === 'radio')
+            ? fieldRule.type
+            : mapDataTypeToPreviewColumnType(String(column.dataType ?? column.fieldType ?? ''))
         const uploadProps = colType === 'upload'
           ? {
               action: fieldRule?.props?.action || '/api/v1/upload',
