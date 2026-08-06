@@ -75,14 +75,113 @@ describe('useSubTableDialogComponentEvents', () => {
     expect(isDialogFieldVisible('lookup')).toBe(true)
   })
 
-  it('no-ops when column has no sourceRule (v-model owns the value)', () => {
-    const formData = ref<Record<string, unknown>>({ a: '' })
+  it('applies value when passed even without sourceRule, and runs Form onChange', () => {
+    const formData = ref<Record<string, unknown>>({ a: '', note: '' })
+    const columns = [
+      { field: 'a', type: 'text' },
+      { field: 'note', type: 'text' },
+    ]
     const { onDialogFieldChange } = useSubTableDialogComponentEvents(
       formData,
-      () => [{ field: 'a', type: 'text' }],
+      () => columns,
+      () => ({
+        onChange: '$FNX:\nif ($inject.field === "a") { $inject.api.setValue("note", String($inject.value)) }',
+      }),
     )
     onDialogFieldChange('a', 'x')
-    expect(formData.value.a).toBe('')
+    expect(formData.value.a).toBe('x')
+    expect(formData.value.note).toBe('x')
+  })
+
+  it('runs Form-level onChange on field change without sourceRule (Preview parity)', () => {
+    const formData = ref<Record<string, unknown>>({ flag: 'N', date_a: null, date_b: null })
+    const columns = [
+      { field: 'flag', label: 'Flag', type: 'select' },
+      { field: 'date_a', label: 'Date A', type: 'date' },
+      { field: 'date_b', label: 'Date B', type: 'date' },
+    ]
+    const { onDialogFieldChange, isDialogFieldVisible, bootstrapDialogFormLifecycle } =
+      useSubTableDialogComponentEvents(
+        formData,
+        () => columns,
+        () => ({
+          onChange:
+            '$FNX:\n'
+            + 'var v = $inject.field === "__bootstrap__" ? $inject.api.getValue("flag") : $inject.value\n'
+            + 'if (v === "Y" || v === "Y") { $inject.api.hidden(true, "date_a"); $inject.api.hidden(false, "date_b") }\n'
+            + 'else { $inject.api.hidden(false, "date_a"); $inject.api.hidden(true, "date_b") }\n',
+        }),
+      )
+    bootstrapDialogFormLifecycle()
+    expect(isDialogFieldVisible('date_a')).toBe(true)
+    expect(isDialogFieldVisible('date_b')).toBe(false)
+    onDialogFieldChange('flag', 'Y')
+    expect(isDialogFieldVisible('date_a')).toBe(false)
+    expect(isDialogFieldVisible('date_b')).toBe(true)
+  })
+
+  it('runFormBeforeSubmit false aborts; onSubmit and onReset run handlers', () => {
+    const formData = ref<Record<string, unknown>>({ a: '1', marker: '' })
+    const columns = [{ field: 'a', type: 'text' }, { field: 'marker', type: 'text' }]
+    const opts = {
+      beforeSubmit: '$FNX:\nreturn false',
+      onSubmit: '$FNX:\n$inject.api.setValue("marker", "submitted")',
+      onReset: '$FNX:\n$inject.api.setValue("marker", "reset")',
+      onReload: '$FNX:\n$inject.api.setValue("marker", "reloaded")',
+    }
+    const {
+      runFormBeforeSubmit,
+      runFormOnSubmit,
+      runFormOnReset,
+      runFormOnReload,
+    } = useSubTableDialogComponentEvents(formData, () => columns, () => opts)
+
+    expect(runFormBeforeSubmit()).toBe(false)
+
+    const allowOpts = {
+      beforeSubmit: '$FNX:\nreturn true',
+      onSubmit: opts.onSubmit,
+      onReset: opts.onReset,
+      onReload: opts.onReload,
+    }
+    const api2 = useSubTableDialogComponentEvents(formData, () => columns, () => allowOpts)
+    expect(api2.runFormBeforeSubmit()).toBe(true)
+    api2.runFormOnSubmit()
+    expect(formData.value.marker).toBe('submitted')
+    api2.runFormOnReset()
+    expect(formData.value.marker).toBe('reset')
+    api2.runFormOnReload()
+    expect(formData.value.marker).toBe('reloaded')
+  })
+
+  it('runFormBeforeSubmit aborts on throw (fail-closed)', () => {
+    const formData = ref<Record<string, unknown>>({ a: '1' })
+    const columns = [{ field: 'a', type: 'text' }]
+    const { runFormBeforeSubmit } = useSubTableDialogComponentEvents(
+      formData,
+      () => columns,
+      () => ({
+        beforeSubmit: '$FNX:\nthrow new Error("gate")',
+      }),
+    )
+    expect(runFormBeforeSubmit()).toBe(false)
+  })
+
+  it('onSubmit FORM-CREATE wrapper can read formData param name', () => {
+    const formData = ref<Record<string, unknown>>({ a: 'hello', marker: '' })
+    const columns = [{ field: 'a', type: 'text' }, { field: 'marker', type: 'text' }]
+    const { runFormOnSubmit } = useSubTableDialogComponentEvents(
+      formData,
+      () => columns,
+      () => ({
+        onSubmit:
+          '[[FORM-CREATE-PREFIX-function onSubmit(formData, api){\n'
+          + 'api.setValue("marker", formData.a)\n'
+          + '}-FORM-CREATE-SUFFIX]]',
+      }),
+    )
+    runFormOnSubmit()
+    expect(formData.value.marker).toBe('hello')
   })
 
   it('bootstrapDialogFormLifecycle runs onCreated then onMounted (not select change)', async () => {

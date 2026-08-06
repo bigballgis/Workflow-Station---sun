@@ -79,6 +79,7 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
     if (usesInject) {
       // $FNX: bodies are normalized to function($inject){…}. Designer scripts often use
       // bare `api` / `value` (form-create docs) as well as `$inject.api` — bind both.
+      // formData/data: Form-level onSubmit / beforeSubmit param names.
       // Keep in sync with developer-workstation/src/utils/formCreateEventRuntime.ts
       const runner = new Function(
         '$inject',
@@ -91,11 +92,14 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
           'var args = $inject.args;',
           'var field = $inject.field;',
           'var value = $inject.value;',
+          'var formData = $inject.formData;',
+          'var data = $inject.data;',
           body,
         ].join('\n'),
-      ) as (inject: Record<string, unknown>) => void
+      ) as (inject: Record<string, unknown>) => unknown
       return (ctx) => {
-        runner({
+        const formSnapshot = ctx.api.form
+        return runner({
           api: ctx.api,
           rule: ctx.rule,
           self: ctx.rule,
@@ -104,6 +108,8 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
           args: ctx.args ?? [],
           field: ctx.field,
           value: ctx.value,
+          formData: formSnapshot,
+          data: formSnapshot,
         })
       }
     }
@@ -117,6 +123,8 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
       'self',
       'option',
       'args',
+      'formData',
+      'data',
       body,
     ) as (
       field: string,
@@ -127,11 +135,14 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
       self: Record<string, unknown>,
       option: Record<string, unknown>,
       args: unknown,
-    ) => void
+      formData: Record<string, unknown>,
+      data: Record<string, unknown>,
+    ) => unknown
 
     return (ctx) => {
       const options = createFormEventOptionsBridge(ctx.api, ctx.rule)
-      runner(
+      const formSnapshot = ctx.api.form
+      return runner(
         ctx.field,
         ctx.value,
         options,
@@ -140,6 +151,8 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
         ctx.rule,
         {},
         ctx.args,
+        formSnapshot,
+        formSnapshot,
       )
     }
   } catch (err) {
@@ -185,12 +198,13 @@ export function runFormOnChangeHandler(
   value: unknown,
   portalApi: PortalFormApi,
   rule: Record<string, unknown> = {},
-): void {
+): unknown {
   const handler = parseFormCreateEventHandler(rawHandler)
-  if (!handler || isEmptyFormCreateHandler(rawHandler)) return
+  if (!handler || isEmptyFormCreateHandler(rawHandler)) return undefined
   try {
-    handler({ field, value, api: portalApi, rule })
+    return handler({ field, value, api: portalApi, rule })
   } catch (err) {
     console.warn('[formCreateEventRuntime] onChange execution error:', err)
+    return undefined
   }
 }
