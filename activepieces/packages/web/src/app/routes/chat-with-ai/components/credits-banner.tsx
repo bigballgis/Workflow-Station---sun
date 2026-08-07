@@ -1,10 +1,8 @@
 import { t } from 'i18next';
 import { AlertTriangle, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { CreditsWarning } from '@/features/chat/lib/chat-types';
-import { useIsPlatformAdmin } from '@/hooks/authorization-hooks';
 import { cn } from '@/lib/utils';
 
 export function CreditsBanner({
@@ -18,7 +16,6 @@ export function CreditsBanner({
   daysUntilReset?: number | null;
   onDismiss?: () => void;
 }) {
-  const isPlatformAdmin = useIsPlatformAdmin();
   const isError = Boolean(creditsExhausted);
 
   const message = isError
@@ -47,14 +44,6 @@ export function CreditsBanner({
     >
       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
       <span className="flex-1">{message}</span>
-      {isPlatformAdmin && (
-        <Link
-          to="/platform/setup/billing"
-          className="shrink-0 text-sm font-medium underline"
-        >
-          {t('Show Usage')}
-        </Link>
-      )}
       {!isError && (
         <Button
           variant="ghost"
