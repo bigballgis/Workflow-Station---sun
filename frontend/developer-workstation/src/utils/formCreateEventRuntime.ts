@@ -166,11 +166,14 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
           'var args = $inject.args;',
           'var field = $inject.field;',
           'var value = $inject.value;',
+          'var formData = $inject.formData;',
+          'var data = $inject.data;',
           body,
         ].join('\n'),
-      ) as (inject: Record<string, unknown>) => void
+      ) as (inject: Record<string, unknown>) => unknown
       return (ctx) => {
-        runner({
+        const formSnapshot = ctx.api.form
+        return runner({
           api: ctx.api,
           rule: ctx.rule,
           self: ctx.rule,
@@ -179,6 +182,8 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
           args: ctx.args ?? [],
           field: ctx.field,
           value: ctx.value,
+          formData: formSnapshot,
+          data: formSnapshot,
         })
       }
     }
@@ -192,6 +197,8 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
       'self',
       'option',
       'args',
+      'formData',
+      'data',
       body,
     ) as (
       field: string,
@@ -202,11 +209,14 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
       self: Record<string, unknown>,
       option: Record<string, unknown>,
       args: unknown,
-    ) => void
+      formData: Record<string, unknown>,
+      data: Record<string, unknown>,
+    ) => unknown
 
     return (ctx) => {
       const options = createFormEventOptionsBridge(ctx.api, ctx.rule)
-      runner(
+      const formSnapshot = ctx.api.form
+      return runner(
         ctx.field,
         ctx.value,
         options,
@@ -215,6 +225,8 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
         ctx.rule,
         {},
         ctx.args,
+        formSnapshot,
+        formSnapshot,
       )
     }
   } catch (err) {

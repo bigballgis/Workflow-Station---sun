@@ -780,9 +780,14 @@ const {
   isDialogFieldVisible,
   resetDialogEventVisibility,
   bootstrapDialogFormLifecycle,
+  runFormOnReload,
+  runFormBeforeSubmit,
+  runFormOnSubmit,
+  runFormOnReset,
 } = useSubTableDialogComponentEvents(
   formData,
   () => props.columns,
+  () => props.formOptions,
 )
 
 // Stable identity of the row being edited — RECORD-scope note anchor. Resolution
@@ -1101,6 +1106,10 @@ const {
   fetchDepartmentTree,
   resetDialogEventVisibility,
   bootstrapDialogFormLifecycle: () => bootstrapDialogFormLifecycle(props.formOptions),
+  runFormOnReload: () => runFormOnReload(props.formOptions),
+  runFormBeforeSubmit: () => runFormBeforeSubmit(props.formOptions),
+  runFormOnSubmit: () => runFormOnSubmit(props.formOptions),
+  runFormOnReset: () => runFormOnReset(props.formOptions),
 })
 
 const {

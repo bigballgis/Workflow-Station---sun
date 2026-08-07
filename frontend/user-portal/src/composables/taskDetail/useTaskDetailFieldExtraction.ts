@@ -2,7 +2,7 @@ import type { FormField } from '@/components/FormRenderer.vue'
 import {
   normalizePortalViews,
   isFormCreateRuleReadonly,
-  isFormCreateRuleHidden,
+  applyDesignerHideFlagToFormField,
   isRowRule,
   isColRule,
   getRuleChildren,
@@ -66,22 +66,18 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
   // `item.children` recursion below — sub-table row layouts are wrapped in subForm/tableForm.
   const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 
-  // Recursively extract fields
+  // Recursively extract fields.
+  // Designer Hide must stay in the layout tree (default-hidden) so card/dialog
+  // grouping keeps field order; scripts may reveal via api.hidden(false, …).
   const extractFieldsRecursive = (items: any[]): FormField[] => {
     const fields: FormField[] = []
     for (const item of items) {
-      if (item.field && isFormCreateRuleHidden(item)) {
-        continue
-      }
       const bindingId = item._bindingId ?? item.props?._bindingId
       if (item.type === 'subTable' && bindingId != null) {
-        if (isFormCreateRuleHidden(item)) {
-          continue
-        }
         const rawPv = item.props?.portalViews
         const hasWidgetPortalViews =
           rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
-        fields.push({
+        const subTableField: FormField = {
           key: `__subTable_${bindingId}`,
           label: '',
           type: 'subTable',
@@ -92,7 +88,9 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
           ...(item.props?.allowEdit === false ? { allowEdit: false } : {}),
           ...(item.props?.allowDelete === false ? { allowDelete: false } : {}),
           span: 24
-        })
+        }
+        applyDesignerHideFlagToFormField(subTableField, item)
+        fields.push(subTableField)
         continue
       }
       const auxField = convertAuxiliaryLayoutField(item, fields.length)
@@ -213,6 +211,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
         if (isFormCreateRuleReadonly(item)) {
           field.readonly = true
         }
+        applyDesignerHideFlagToFormField(field, item)
         fields.push(field)
       } else if (FC_SKIP_TYPES.has(item.type)) {
         // Traverse children only (see block below); `continue` would drop all nested row fields.
@@ -265,6 +264,7 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
     if (isFormCreateRuleReadonly(rule)) {
       field.readonly = true
     }
+    applyDesignerHideFlagToFormField(field, rule)
     applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
     applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
     return field

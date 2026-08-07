@@ -47,6 +47,14 @@ interface FormDeps {
   resetDialogEventVisibility?: () => void
   /** Run Form-level onCreated → onMounted after row model is ready. */
   bootstrapDialogFormLifecycle?: () => void
+  /** Form onReload when dialog re-inits while still visible. */
+  runFormOnReload?: () => void
+  /** Form beforeSubmit — return false to abort save. */
+  runFormBeforeSubmit?: () => boolean
+  /** Form onSubmit after validation, before persist. */
+  runFormOnSubmit?: () => void
+  /** Form onReset when dialog closes. */
+  runFormOnReset?: () => void
 }
 
 /**
@@ -64,6 +72,10 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     fetchDepartmentTree,
     resetDialogEventVisibility,
     bootstrapDialogFormLifecycle,
+    runFormOnReload,
+    runFormBeforeSubmit,
+    runFormOnSubmit,
+    runFormOnReset,
   } = deps
 
   const formRef = ref<FormInstance>()
@@ -165,8 +177,10 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
         : buildInitialRow(props.columns)
     }
 
-    // Form-level onCreated/onMounted (not component change). Must run after model seed.
+    // Form-level onCreated/onMounted/onChange(__bootstrap__). Must run after model seed.
     bootstrapDialogFormLifecycle?.()
+    // Re-init while open maps to form-create onReload (first open uses bootstrap only).
+    if (trigger === 'data-change') runFormOnReload?.()
 
     // Element Plus Form keeps some per-field state; ensure each init starts clean.
     nextTick(() => {
@@ -196,6 +210,8 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
 
   function handleClose() {
     destroyEditors()
+    // Form onReset while model still holds current values (form-create parity).
+    runFormOnReset?.()
     // Avoid resetFields(): it resets to the first-mounted "initial model" snapshot and
     // can leak previous values between different row edits. We explicitly reset our model.
     resetUploadNames()
@@ -213,6 +229,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     if (!valid) return
     // Run column validation rules (Task 8.7)
     if (!validateColumns()) return
+    if (runFormBeforeSubmit && runFormBeforeSubmit() === false) return
     const seed = props.mode === 'add' ? props.initialData : undefined
     const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)
     // Audit fields are generated at real save time (never when the dialog opens):
@@ -222,6 +239,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     } else {
       applyEditAuditDefaults(row, props.auditColumns ?? props.columns)
     }
+    runFormOnSubmit?.()
     saving.value = true
     try {
       if (props.saveRow) {
