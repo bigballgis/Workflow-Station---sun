@@ -103,27 +103,44 @@ async function connect() {
 }
 
 async function stampProjectExternalId(client) {
-  const existing = await client.query('select id, "displayName" from project where "externalId" = $1', [
+  const existing = await client.query('select id, "displayName", type from project where "externalId" = $1', [
     PROJECT_EXTERNAL_ID,
   ]);
   if (existing.rowCount > 0) {
+    // The bootstrap default project is born as the platform owner's PERSONAL project.
+    // Since per-user provisioning gives every shadow user a PERSONAL project of their own
+    // (rendered as "Personal Project" in the studio sidebar), the shared project must be
+    // TEAM or it shows up as a second, mislabeled "Personal Project" for everyone.
+    const personal = existing.rows.filter((r) => r.type === 'PERSONAL');
+    if (personal.length > 0) {
+      await client.query("update project set type = 'TEAM' where id = any($1)", [personal.map((r) => r.id)]);
+      console.log('[ap-provision-db] normalized ' + personal.length + ' stamped project(s) from PERSONAL to TEAM.');
+    }
     console.log('[ap-provision-db] project externalId=' + PROJECT_EXTERNAL_ID + ' already set -> skip.');
     return;
   }
-  // Only ever fills in a blank. Re-pointing an externalId that already names a different
-  // project would move every managed user to another tenant, so that stays a human decision.
-  const res = await client.query('update project set "externalId" = $1 where "externalId" is null', [
-    PROJECT_EXTERNAL_ID,
-  ]);
+  // Only ever fills in a blank, and only on the platform owner's bootstrap project.
+  // A blanket `externalId is null` update is no longer safe: every shadow user owns a
+  // PERSONAL project with a null externalId, and admins can create TEAM projects in the
+  // studio — stamping those would silently multiply the shared externalId. Re-pointing an
+  // externalId that already names a different project would move every managed user to
+  // another tenant, so that stays a human decision.
+  const res = await client.query(
+    'update project set "externalId" = $1, type = \'TEAM\' where id = (' +
+      'select id from project where "externalId" is null and "ownerId" = (select "ownerId" from platform limit 1) ' +
+      'order by created asc limit 1)',
+    [PROJECT_EXTERNAL_ID],
+  );
   if (res.rowCount === 0) {
     const all = await client.query('select "displayName", "externalId" from project');
     throw new Error(
-      'no project with a null externalId to stamp, and none carries ' + PROJECT_EXTERNAL_ID + '. Found: ' +
+      'no bootstrap project (platform owner\'s, null externalId) to stamp, and none carries ' + PROJECT_EXTERNAL_ID +
+        '. Found: ' +
         (all.rows.map((r) => r.displayName + '=' + (r.externalId || 'null')).join(', ') || 'no projects at all') +
         '. Fix by hand — re-pointing an existing externalId would move managed users to another project.'
     );
   }
-  console.log('[ap-provision-db] stamped ' + res.rowCount + ' project(s) with externalId=' + PROJECT_EXTERNAL_ID + '.');
+  console.log('[ap-provision-db] stamped ' + res.rowCount + ' project(s) with externalId=' + PROJECT_EXTERNAL_ID + ' (type=TEAM).');
 }
 
 async function seedPieces(client) {

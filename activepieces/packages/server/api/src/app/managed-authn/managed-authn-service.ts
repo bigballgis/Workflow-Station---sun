@@ -16,6 +16,7 @@ import { accessTokenManager } from '../authentication/lib/access-token-manager'
 import { userIdentityService } from '../authentication/user-identity/user-identity-service'
 import { platformService } from '../platform/platform.service'
 import { projectMemberService } from '../project/project-member.service'
+import { projectRepo } from '../project/project-repo'
 import { projectService } from '../project/project-service'
 import { userService } from '../user/user-service'
 import { externalTokenExtractor } from './lib/external-token-extractor'
@@ -25,6 +26,7 @@ import { externalTokenExtractor } from './lib/external-token-extractor'
 //   * getOrCreate the (single, shared) project by externalProjectId,
 //   * getOrCreate the AP user by externalUserId (=> user.externalId maps every
 //     AP action back to the originating DW person for audit),
+//   * ensure the user owns a PERSONAL project (private sandbox in the sidebar),
 //   * upsert the project membership with the token's projectRole,
 //   * mint an AP USER token.
 // The ee embed extras are intentionally dropped: concurrency pools (G5 stub),
@@ -45,6 +47,12 @@ export const managedAuthnService = (log: FastifyBaseLogger) => ({
         }, log)
 
         const user = await getOrCreateUser(externalPrincipal, log)
+
+        await ensurePersonalProject({
+            userId: user.id,
+            platformId: externalPrincipal.platformId,
+            firstName: externalPrincipal.externalFirstName,
+        }, log)
 
         await projectMemberService(log).upsert({
             projectId: project.id,
@@ -160,6 +168,31 @@ const getOrCreateUserIdentity = async (
     })
     return identity
 }
+// Every shadow user also owns a PERSONAL project (private sandbox next to the shared
+// HERMES TEAM project). Visibility for PERSONAL projects is ownerId-based
+// (applyProjectsAccessFilters), so no project_member row is needed. Runs on every
+// handshake: pre-existing shadow users pick theirs up on the next sign-in, and a
+// personal project soft-deleted by user removal is recreated on re-provisioning.
+const ensurePersonalProject = async (
+    { userId, platformId, firstName }: EnsurePersonalProjectParams,
+    log: FastifyBaseLogger,
+): Promise<void> => {
+    const existingProject = await projectRepo().findOneBy({
+        platformId,
+        ownerId: userId,
+        type: ProjectType.PERSONAL,
+    })
+    if (!isNil(existingProject)) {
+        return
+    }
+    await projectService(log).create({
+        displayName: `${firstName}'s Project`,
+        ownerId: userId,
+        platformId,
+        type: ProjectType.PERSONAL,
+    })
+}
+
 const getOrCreateProject = async ({
     platformId,
     externalProjectId,
@@ -211,6 +244,12 @@ type GetOrCreateUserParams = {
 type GetOrCreateProjectParams = {
     platformId: string
     externalProjectId: string
+}
+
+type EnsurePersonalProjectParams = {
+    userId: string
+    platformId: string
+    firstName: string
 }
 
 type SyncExistingUserParams = {

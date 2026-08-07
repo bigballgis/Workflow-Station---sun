@@ -123,6 +123,63 @@ describe('Managed Authentication API', () => {
             )
         })
 
+        it('Provisions a personal project for the shadow user, once', async () => {
+            // arrange
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+
+            const mockSigningKey = createMockSigningKey({
+                platformId: mockPlatform.id,
+            })
+            await db.save('signing_key', mockSigningKey)
+
+            const { mockExternalToken } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: {
+                    externalAccessToken: mockExternalToken,
+                },
+            })
+
+            // assert
+            const responseBody = response?.json()
+
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+
+            const personalProject = await db.findOneBy('project', {
+                ownerId: responseBody?.id,
+                type: 'PERSONAL',
+            })
+
+            expect(personalProject).not.toBeNull()
+            expect(personalProject?.platformId).toBe(mockPlatform.id)
+            // the shared HERMES project stays a separate TEAM project
+            expect(personalProject?.id).not.toBe(responseBody?.projectId)
+
+            // act again — same token, existing user: must not create a second one
+            const secondResponse = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: {
+                    externalAccessToken: mockExternalToken,
+                },
+            })
+
+            // assert
+            expect(secondResponse?.statusCode).toBe(StatusCodes.OK)
+
+            const personalProjects = await db.findBy('project', {
+                ownerId: responseBody?.id,
+                type: 'PERSONAL',
+            })
+            expect(personalProjects).toHaveLength(1)
+        })
+
         it('Adds new user as a member in new project', async () => {
             // arrange
             const { mockPlatform } = await mockAndSaveBasicSetup()

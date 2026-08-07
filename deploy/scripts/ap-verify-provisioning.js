@@ -142,6 +142,19 @@ async function main() {
         'kubectl -n <ns> apply -f ap-bootstrap-job.yaml',
       ],
     });
+  } else if (stamped.some((p) => p.type === 'PERSONAL')) {
+    // Rendered as "Personal Project" in the studio sidebar for every user (the UI labels
+    // all PERSONAL projects that way), colliding with the per-user personal projects that
+    // managed provisioning creates. ap-provision-db normalizes this on its next run.
+    gaps.push({
+      what: 'project externalId=' + PROJECT_EXTERNAL_ID + ' type',
+      detail: 'stamped project is PERSONAL, expected TEAM',
+      fix: [
+        '# re-run the provisioning Job (ap-provision-db normalizes the stamped project to TEAM):',
+        'kubectl -n <ns> delete job ap-bootstrap-shared-account --ignore-not-found',
+        'kubectl -n <ns> apply -f ap-bootstrap-job.yaml',
+      ],
+    });
   } else {
     console.log('[ap-verify] project externalId=' + PROJECT_EXTERNAL_ID + ' OK');
   }
