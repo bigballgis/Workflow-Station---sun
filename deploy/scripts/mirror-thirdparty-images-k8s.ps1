@@ -1,34 +1,38 @@
 # =============================================================================
 # 把第三方镜像同步(拉 → 改 tag → 推)到私有 K8S registry。
 #
-# 背景:build-and-push-k8s.ps1 只 build+push 平台**自研**的 8 个服务;Activepieces / redis /
-# kafka / kong 这些**第三方镜像不是 build 出来的**,而是从上游拉下来、改 tag 后推进私有
+# 背景:build-and-push-k8s.ps1 build+push 我们自己出的镜像(8 个平台服务 + Activepieces);
+# redis / kafka / kong 这些**第三方镜像不是 build 出来的**,而是从上游拉下来、改 tag 后推进私有
 # registry(k8s manifest 全部引用 <Registry>/<name>:<tag>)。这套同步原先没有脚本——本脚本补上。
+#
+# ⚠️ **Activepieces 不在本脚本管辖内**(2026-08-07 移除)。它曾以「第三方」身份在下表里拉
+# 上游 activepieces/activepieces:0.84.0 —— 那个二进制**既没剥 EE、没去 bun、也没预烘焙
+# pieces**,气隙集群里跑不通。我们跑的是仓库内源码构建的
+# <Registry>/activepieces:0.84.0-ee-removed,由 build-and-push-k8s.ps1 产出。
 #
 # 用法:
 #   # 全部第三方镜像
 #   .\mirror-thirdparty-images-k8s.ps1 -Registry nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2
-#   # 只同步 activepieces
-#   .\mirror-thirdparty-images-k8s.ps1 -Registry <...> -Images activepieces
+#   # 只同步某一个
+#   .\mirror-thirdparty-images-k8s.ps1 -Registry <...> -Images redis
 #   # 只拉+改 tag 不推(本地验证)
 #   .\mirror-thirdparty-images-k8s.ps1 -Registry <...> -NoPush
 #
 # 前置:已 docker login 上游(若需要)与目标私有 registry;本机能拉到上游镜像(或经代理镜像源)。
 #
-# ⚠️ 上游确认:下表 Upstream 是**对照 dev compose 推断**的。activepieces 已确认一致;
-#    其余(尤其 kafka:k8s 要 3.6.2、dev 用 confluentinc/cp-kafka:7.5.3,是不同发行版)**请按你们实际确认后再用**。
+# ⚠️ 上游确认:下表 Upstream 是**对照 dev compose 推断**的,尚无一条经过实测确认
+#    (尤其 kafka:k8s 要 3.6.2、dev 用 confluentinc/cp-kafka:7.5.3,是不同发行版)**请按你们实际确认后再用**。
 # =============================================================================
 
 param(
     [Parameter(Mandatory=$true)]
     [string]$Registry,                 # 目标 registry 基址(到 .../workflow-station2 为止)
-    [string]$Images = "all",           # 逗号分隔:activepieces,redis,kafka,kong  或 all
+    [string]$Images = "all",           # 逗号分隔:redis,kafka,kong  或 all
     [switch]$NoPush = $false            # 只拉+改 tag,不 push
 )
 
 # 目标名:tag 必须与 deploy/k8s/*.yaml 里的引用一致;Upstream 为对应上游镜像。
 $ThirdParty = @(
-    @{ Name = "activepieces"; Tag = "0.84.0";  Upstream = "activepieces/activepieces:0.84.0"; Confirmed = $true  },  # ✅ 已确认
     @{ Name = "redis";        Tag = "7.2";     Upstream = "redis:7.2";                        Confirmed = $false },  # dev 用 7.2-alpine,确认要不要 alpine
     @{ Name = "kong";         Tag = "3.7";     Upstream = "kong:3.7";                         Confirmed = $false },
     @{ Name = "kafka";        Tag = "3.6.2";   Upstream = "apache/kafka:3.6.2";               Confirmed = $false }   # ⚠️ dev 是 cp-kafka:7.5.3,发行版不同,务必确认
@@ -43,7 +47,7 @@ $wanted = if ($Images -eq "all") { $ThirdParty } else {
     $set = $Images.Split(",") | ForEach-Object { $_.Trim() }
     $ThirdParty | Where-Object { $set -contains $_.Name }
 }
-if (-not $wanted) { Write-Fail "没有匹配的镜像:$Images(可选 activepieces,redis,kafka,kong 或 all)" }
+if (-not $wanted) { Write-Fail "没有匹配的镜像:$Images(可选 redis,kafka,kong 或 all;activepieces 由 build-and-push-k8s.ps1 构建,不在此列)" }
 
 Write-Host "Registry: $Registry   NoPush: $NoPush" -ForegroundColor Yellow
 

@@ -176,7 +176,11 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 > `activepieces/activepieces:0.84.0` 二进制:**既没剥 EE、没去 bun、也没预装 pieces**,气隙集群里跑不通
 > (该脚本的 activepieces 条目属历史遗留,其余 redis/kafka/kong 仍照常用它)。
 >
-> 正确做法:在有网的构建机上 `docker build -t <Registry>/workflow-station2/activepieces:0.84.0-ee-removed activepieces/`
+> 正确做法:**`build-and-push-k8s.ps1` 现在会一并构建并推送它**(2026-08-07 起),
+> 用 `-ApImageTag` 覆盖标签、`-SkipActivepieces` 跳过(平台代码单独发版时常用),
+> 或 `-Services activepieces` 只出这一个镜像。它**不跟 `-Tag` 走** —— `activepieces.yaml`
+> 把标签钉在 vendored AP 版本上,改标签要连 manifest 一起改。
+> 等价的手工命令仍然有效:`docker build -t <Registry>/workflow-station2/activepieces:0.84.0-ee-removed activepieces/`
 > → push 到 Nexus;或 `docker save | gzip` 带进内网 `docker load`(见 `activepieces/hermes/README.md`)。
 > `ap-bootstrap-job.yaml` 用的也是同一个镜像,一并就位。
 >
