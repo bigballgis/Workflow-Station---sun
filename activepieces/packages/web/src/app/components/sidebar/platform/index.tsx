@@ -20,7 +20,6 @@ import { PaletteIcon } from '@/components/icons/palette';
 import { PuzzleIcon } from '@/components/icons/puzzle';
 import { ServerIcon } from '@/components/icons/server';
 import { Settings2Icon } from '@/components/icons/settings2';
-import { SquareDashedBottomCodeIcon } from '@/components/icons/square-dashed-bottom-code';
 import { UnplugIcon } from '@/components/icons/unplug';
 import { UsersIcon } from '@/components/icons/users';
 import { WebhookIcon } from '@/components/icons/webhook';
@@ -159,12 +158,6 @@ export function PlatformSidebar() {
     {
       label: t('Observability'),
       items: [
-        {
-          to: '/platform/security/audit-logs',
-          label: t('Audit Logs'),
-          icon: SquareDashedBottomCodeIcon,
-          locked: !platform.plan.auditLogEnabled,
-        },
         {
           to: '/platform/infrastructure/event-destinations',
           label: t('Event Streaming'),
