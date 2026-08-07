@@ -233,7 +233,7 @@ export function useFormSave(options: UseFormSaveOptions) {
       // erase the sub-form design on save); always fall through live -> cache -> saved config.
       // Seed from configJson first so paste/repair payloads keep subForms when the target FU
       // still has no designerSubBindings tabs (empty binding list would otherwise drop them).
-      const subForms: Record<number, { rule: any[]; options: any }> = {}
+      const subForms: Record<number, { rule: any[]; options: any; miAssignmentAdopted?: boolean }> = {}
       const savedSubForms = selectedForm.value.configJson?.subForms || {}
       for (const [key, existing] of Object.entries(savedSubForms)) {
         const bindingId = Number(key)
@@ -245,11 +245,12 @@ export function useFormSave(options: UseFormSaveOptions) {
           options: serializeFormCreateOptionsForPersist(
             (existing as { options?: Record<string, unknown> }).options,
           ),
+          miAssignmentAdopted: (existing as { miAssignmentAdopted?: boolean }).miAssignmentAdopted === true,
         }
       }
       designerSubBindings.value.forEach((binding, index) => {
         const subRef = subDesignerRefs.value[index]
-        let collected: { rule: any[]; options: any } | null = null
+        let collected: { rule: any[]; options: any; miAssignmentAdopted?: boolean } | null = null
         if (subRef) {
           // Tab is currently active and mounted
           try {
@@ -266,7 +267,11 @@ export function useFormSave(options: UseFormSaveOptions) {
               const liveOptions = serializeFormCreateOptionsForPersist(
                 subRef.getOption() as Record<string, unknown>,
               )
-              collected = { rule: liveRule, options: liveOptions }
+              // The canvas was hydrated through buildEffectiveSubFormConfig this session
+              // (loadSubDesigners/handleTabChange), so its one-time Assignment Mode
+              // auto-adoption pass has already run — persist that so a deliberate
+              // deletion afterwards is never silently re-created on the next load.
+              collected = { rule: liveRule, options: liveOptions, miAssignmentAdopted: true }
               // Also update cache
               subFormCache.value[binding.bindingId] = collected
             }
@@ -275,17 +280,20 @@ export function useFormSave(options: UseFormSaveOptions) {
           }
         }
         if (!collected && subFormCache.value[binding.bindingId]) {
-          // Tab was visited but is now unmounted (or live collection failed) — use cache
+          // Tab was visited but is now unmounted (or live collection failed) — use cache.
+          // The cache was itself populated from a hydrated canvas — same reasoning as above.
           const cached = subFormCache.value[binding.bindingId]
           const cachedRule = stripFormCreateRulesDisabledDeep(cached.rule || []) as any[]
           prepareFormCreateRulesForPersist(cachedRule)
           collected = {
             rule: cachedRule,
             options: serializeFormCreateOptionsForPersist(cached.options),
+            miAssignmentAdopted: true,
           }
         }
         if (!collected) {
-          // Tab never visited — preserve previously saved data
+          // Tab never visited this session — preserve previously saved data AS-IS,
+          // including whatever adoption flag it already carried.
           const existing = (selectedForm.value!.configJson?.subForms || {})[binding.bindingId]
           if (existing) {
             const existingRule = stripFormCreateRulesDisabledDeep(existing.rule || []) as any[]
@@ -293,6 +301,7 @@ export function useFormSave(options: UseFormSaveOptions) {
             collected = {
               rule: existingRule,
               options: serializeFormCreateOptionsForPersist(existing.options),
+              miAssignmentAdopted: (existing as { miAssignmentAdopted?: boolean }).miAssignmentAdopted === true,
             }
           }
         }
@@ -422,6 +431,9 @@ export function useFormSave(options: UseFormSaveOptions) {
           }
         }
 
+        // Whether a form carries the Assignment Mode component is the developer's own
+        // call — this only blocks a genuine BPMN misconfiguration (different nodes
+        // disagreeing on the assignment contract for the same sub-table).
         const miGuard = validateMiAssignmentComponents(
           parseMiAssignmentsFromBpmn(getBpmnXml()),
           designerSubBindings.value
@@ -434,10 +446,7 @@ export function useFormSave(options: UseFormSaveOptions) {
         )
         if (miGuard.blocking.length > 0) {
           const issue = miGuard.blocking[0]
-          const key = issue.code === 'CONFLICTING_MI_ASSIGNMENT_CONFIG'
-            ? 'form.miAssignmentConflict'
-            : 'form.miAssignmentMissingComponent'
-          ElMessage.error(t(key, {
+          ElMessage.error(t('form.miAssignmentConflict', {
             subTable: issue.subTableName,
             nodes: issue.nodeIds.join(', '),
           }))

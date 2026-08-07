@@ -3,7 +3,9 @@ import {
   assignmentChildFieldOrder,
   fieldsHiddenByMode,
   fieldsOwnedByMode,
+  isAssignModeSwitchable,
   isAssignmentConfigured,
+  lockedAssignMode,
   nestAssignmentFieldsIntoContainer,
   parseMiAssignmentsFromBpmn,
   resolveAssignModeFromRow,
@@ -82,6 +84,35 @@ describe('miAssignmentConfig', () => {
     expect(fieldsHiddenByMode('person', config)).toEqual(new Set(['approver_role', 'department_code']))
     expect(fieldsHiddenByMode('role', config)).toEqual(new Set(['owner_user_id']))
     expect(isAssignmentConfigured({ ...config, roleField: '' })).toBe(false)
+  })
+
+  describe('isAssignModeSwitchable / lockedAssignMode', () => {
+    const BOTH = { allowUser: true, allowRole: true, assigneeField: 'assignee', roleField: 'role_code', buField: 'bu_code' }
+    const USER_ONLY = { allowUser: true, allowRole: false, assigneeField: 'assignee' }
+    const ROLE_ONLY = { allowUser: false, allowRole: true, roleField: 'role_code', buField: 'bu_code' }
+
+    it('is switchable only when both modes are configured', () => {
+      expect(isAssignModeSwitchable(BOTH)).toBe(true)
+      expect(isAssignModeSwitchable(USER_ONLY)).toBe(false)
+      expect(isAssignModeSwitchable(ROLE_ONLY)).toBe(false)
+      expect(isAssignModeSwitchable(undefined)).toBe(false)
+    })
+
+    it('locks to the single configured mode when not switchable', () => {
+      expect(lockedAssignMode(USER_ONLY)).toBe('person')
+      expect(lockedAssignMode(ROLE_ONLY)).toBe('role')
+    })
+
+    it('returns undefined when switchable (both modes) — nothing to lock to', () => {
+      expect(lockedAssignMode(BOTH)).toBeUndefined()
+    })
+
+    it('returns undefined when not configured at all — nothing to show', () => {
+      expect(lockedAssignMode(undefined)).toBeUndefined()
+      expect(lockedAssignMode({ allowUser: false, allowRole: false })).toBeUndefined()
+      // allowRole true but roleField missing — not actually configured.
+      expect(lockedAssignMode({ allowUser: false, allowRole: true })).toBeUndefined()
+    })
   })
 
   it('owns only the active mode fields, BU before Role', () => {
@@ -286,7 +317,7 @@ describe('miAssignmentConfig', () => {
     })
   })
 
-  it('blocks missing/conflicting markers and only warns for reverse presence', () => {
+  it('does not block a sub-table with no Assignment Mode component anywhere — that is the developer\'s call', () => {
     const parsed = parseMiAssignmentsFromBpmn(
       bpmn(task('node', 'user', 'people', { assigneeField: 'owner' })),
     )
@@ -294,19 +325,29 @@ describe('miAssignmentConfig', () => {
       { bindingId: 11, tableName: 'people' },
       { bindingId: 12, tableName: 'other' },
     ]
-    const missing = validateMiAssignmentComponents(parsed, bindings, {
+    const noComponent = validateMiAssignmentComponents(parsed, bindings, {
       subForms: { 11: { rule: [] }, 12: { rule: [{ type: 'miAssignment' }] } },
     })
-    expect(missing.blocking[0].code).toBe('MISSING_MI_ASSIGNMENT_COMPONENT')
-    expect(missing.warnings).toEqual([{
+    expect(noComponent.blocking).toEqual([])
+    // The component on binding 12 ("other") is still flagged: BPMN's contract is
+    // for "people", not "other" — that is a genuine stray placement, still warned.
+    expect(noComponent.warnings).toEqual([{
       code: 'ORPHAN_MI_ASSIGNMENT_COMPONENT',
       bindingId: 12,
       subTableName: 'other',
     }])
+  })
 
-    const valid = validateMiAssignmentComponents(parsed, bindings, {
-      subForms: { 11: { rule: [{ type: 'card', children: [{ type: 'miAssignment' }] }] } },
+  it('still blocks a genuine BPMN conflict (nodes disagreeing on the same sub-table\'s contract)', () => {
+    const conflict = parseMiAssignmentsFromBpmn(
+      bpmn(
+        task('a', 'user', 'people', { assigneeField: 'owner' })
+        + task('b', 'role', 'people', { roleField: 'role' }),
+      ),
+    )
+    const guard = validateMiAssignmentComponents(conflict, [{ bindingId: 11, tableName: 'people' }], {
+      subForms: {},
     })
-    expect(valid.blocking).toEqual([])
+    expect(guard.blocking[0]).toMatchObject({ code: 'CONFLICTING_MI_ASSIGNMENT_CONFIG', subTableName: 'people' })
   })
 })

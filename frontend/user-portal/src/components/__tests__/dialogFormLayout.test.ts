@@ -113,6 +113,49 @@ describe('buildDialogLayoutGroups', () => {
     expect(groups.flatMap(group => group.items).map(item => item.key))
       .toEqual(['before', 'assignment-marker', 'after'])
   })
+
+  /**
+   * The designer's standard "Hide" toggle on the Assignment Mode component was
+   * being ignored — the block always rendered whenever the sub-table had a valid
+   * assignment contract. The whole block (marker + its owned fields) must
+   * disappear together, and its owned fields must not leak into `rest` as
+   * ordinary unwrapped columns.
+   */
+  it('drops a hidden miAssignment marker and its owned fields entirely', () => {
+    const marker: FormField = {
+      key: 'assignment-marker',
+      label: '',
+      type: 'miAssignment',
+      hidden: true,
+      children: [
+        { key: 'assignee', label: 'Assignee', type: 'user' },
+        { key: 'bu_code', label: 'BU', type: 'text' },
+      ],
+    }
+    const formFields: FormField[] = [field('before'), marker, field('after')]
+    const visible = cols('before', 'after', 'assignee', 'bu_code')
+    const groups = buildDialogLayoutGroups(formFields, visible)
+    const keys = groups.flatMap(group => group.items).map(item => item.key)
+    expect(keys).not.toContain('assignment-marker')
+    expect(keys).not.toContain('assignee')
+    expect(keys).not.toContain('bu_code')
+    expect(keys).toEqual(['before', 'after'])
+  })
+
+  it('keeps a visible miAssignment marker and its owned fields (regression baseline)', () => {
+    const marker: FormField = {
+      key: 'assignment-marker',
+      label: '',
+      type: 'miAssignment',
+      hidden: false,
+      children: [{ key: 'assignee', label: 'Assignee', type: 'user' }],
+    }
+    const formFields: FormField[] = [field('before'), marker, field('after')]
+    const visible = cols('before', 'after', 'assignee')
+    const groups = buildDialogLayoutGroups(formFields, visible)
+    const keys = groups.flatMap(group => group.items).map(item => item.key)
+    expect(keys).toEqual(['before', 'assignment-marker', 'assignee', 'after'])
+  })
 })
 
 function field(key: string): FormField {
@@ -210,5 +253,26 @@ describe('ensureAssignmentBlockPlaced', () => {
     const [result] = ensureAssignmentBlockPlaced(groups, ['assignee'])
     const columns = result!.items.filter(i => i.type === 'column').map(i => i.key)
     expect(columns).toEqual(['a', 'assignee', 'b'])
+  })
+
+  /**
+   * Guardrail for the Hidden-toggle fix: buildDialogLayoutGroups drops a hidden
+   * marker's owned fields along with it (see the miAssignment describe block
+   * above), so a legacy pre-adoption form's groups would look identical to one
+   * whose marker is simply hidden — both have no miAssignment item and no owned
+   * columns. ensureAssignmentBlockPlaced alone cannot tell these apart; the caller
+   * (SubTableAddDialog.vue's `hasAssignmentMarker`) MUST check the raw formFields
+   * tree — not post-layout `groups` — before invoking this function, or a hidden
+   * marker's block would be wrongly resurrected as a visible synthetic one.
+   */
+  it('would wrongly resurrect a visible block if the caller failed to check the raw formFields for a hidden marker', () => {
+    // Simulates groups AFTER a hidden miAssignment marker's fields were already
+    // dropped by buildDialogLayoutGroups — indistinguishable here from "no marker
+    // ever existed". This function's own guard (no miAssignment item present) is
+    // not enough on its own; SubTableAddDialog.vue's hasAssignmentMarker gate is
+    // what actually prevents this from firing in production.
+    const groups = [group('name', 'assignee')]
+    const [result] = ensureAssignmentBlockPlaced(groups, ['assignee'])
+    expect(result!.items.some(i => i.type === 'miAssignment')).toBe(true)
   })
 })

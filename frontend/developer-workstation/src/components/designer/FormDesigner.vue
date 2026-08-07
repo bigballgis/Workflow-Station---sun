@@ -935,6 +935,13 @@ function resolveAssignmentConfigForTable(tableId: number) {
   return tableName ? parsedMiAssignments.value.configs[tableName] : undefined
 }
 
+/**
+ * Whether a form carries the Assignment Mode component is the developer's own call —
+ * only two things are still flagged here: BPMN nodes disagreeing on the assignment
+ * contract for this sub-table (CONFLICTING), and a placed component the active BPMN
+ * doesn't actually need for this table (ORPHAN, own-form-only — a stray placement on
+ * form A is not explained by form B's contract).
+ */
 const activeMiAssignmentWarning = computed(() => {
   void miValidationRevision.value
   const bindingId = Number(activeDesignerTab.value)
@@ -966,12 +973,7 @@ const activeMiAssignmentWarning = computed(() => {
   )
   const issue = guard.blocking.find((item) => item.subTableName === binding.assignmentTableName)
   if (issue) {
-    return t(
-      issue.code === 'CONFLICTING_MI_ASSIGNMENT_CONFIG'
-        ? 'form.miAssignmentConflict'
-        : 'form.miAssignmentMissingComponent',
-      { subTable: issue.subTableName, nodes: issue.nodeIds.join(', ') },
-    )
+    return t('form.miAssignmentConflict', { subTable: issue.subTableName, nodes: issue.nodeIds.join(', ') })
   }
   const activeRules = (configJson.subForms as Record<string, { rule: unknown }>)[String(bindingId)]?.rule
   if (ruleContainsMiAssignment(activeRules) && !activeMiAssignmentConfig.value) {

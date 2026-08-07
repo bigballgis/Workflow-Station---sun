@@ -116,8 +116,23 @@ export function fieldsHiddenByMode(
   return new Set(fields.filter((field): field is string => !!field))
 }
 
-export function shouldShowAssignModeRadio(config?: AssignmentConfig): boolean {
+/**
+ * BPMN configured BOTH modes for this sub-table — the runtime widget lets the user
+ * switch between them. When only one mode is configured, both mode cards still
+ * render (see isAssignmentConfigured), but the non-configured one is locked.
+ */
+export function isAssignModeSwitchable(config?: AssignmentConfig): boolean {
   return config?.allowUser === true && config.allowRole === true
+}
+
+/**
+ * The single mode BPMN configured, for a sub-table that is NOT switchable.
+ * Returns undefined when both modes are allowed (nothing to lock to) or when the
+ * contract isn't configured at all (nothing to show).
+ */
+export function lockedAssignMode(config?: AssignmentConfig): AssignmentMode | undefined {
+  if (!config || !isAssignmentConfigured(config) || isAssignModeSwitchable(config)) return undefined
+  return config.allowRole ? 'role' : 'person'
 }
 
 /**
@@ -311,6 +326,15 @@ export function parseMiAssignmentsFromBpmn(xml?: string | null): MiAssignmentPar
   return result
 }
 
+/**
+ * Whether a sub-table's bound form(s) carry an Assignment Mode component is entirely
+ * the developer's call — a form that never assigns MI subtasks (e.g. a process-start
+ * form) has no reason to place one. Only two things are still validated:
+ * - CONFLICTING_MI_ASSIGNMENT_CONFIG (from parsed.diagnostics): different BPMN nodes
+ *   disagree on the assignment contract for the same sub-table — a real data bug.
+ * - ORPHAN_MI_ASSIGNMENT_COMPONENT: a component IS placed but BPMN doesn't configure
+ *   MI assignment for that sub-table at all — likely a leftover, worth flagging.
+ */
 export function validateMiAssignmentComponents(
   parsed: MiAssignmentParseResult,
   bindings: MiAssignmentBinding[],
@@ -319,22 +343,6 @@ export function validateMiAssignmentComponents(
   const blocking: MiAssignmentGuardIssue[] = parsed.diagnostics.map((diagnostic) => ({ ...diagnostic }))
   const warnings: MiAssignmentGuardResult['warnings'] = []
   const subForms = asRecord(configJson.subForms)
-
-  for (const entry of parsed.entries) {
-    if (!isAssignmentConfigured(entry.config)) continue
-    const binding = bindings.find((item) => item.tableName === entry.subTableName)
-    if (!binding || ruleContainsMiAssignment(subFormRule(subForms, binding.bindingId))) continue
-    if (!blocking.some((issue) =>
-      issue.code === 'MISSING_MI_ASSIGNMENT_COMPONENT' && issue.subTableName === entry.subTableName)) {
-      blocking.push({
-        code: 'MISSING_MI_ASSIGNMENT_COMPONENT',
-        subTableName: entry.subTableName,
-        nodeIds: parsed.entries
-          .filter((item) => item.subTableName === entry.subTableName)
-          .map((item) => item.nodeId),
-      })
-    }
-  }
 
   for (const binding of bindings) {
     if (!ruleContainsMiAssignment(subFormRule(subForms, binding.bindingId))) continue

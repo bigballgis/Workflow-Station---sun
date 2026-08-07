@@ -41,8 +41,23 @@ export function isAssignmentConfigured(config?: AssignmentConfig | null): boolea
   return true
 }
 
-export function shouldShowAssignModeRadio(config?: AssignmentConfig | null): boolean {
+/**
+ * BPMN configured BOTH modes for this sub-table — the Add/Edit dialog lets the
+ * user switch between them. When only one mode is configured, both mode cards
+ * still render (see isAssignmentConfigured), but the non-configured one is locked.
+ */
+export function isAssignModeSwitchable(config?: AssignmentConfig | null): boolean {
   return isAssignmentConfigured(config) && config?.allowUser === true && config.allowRole === true
+}
+
+/**
+ * The single mode BPMN configured, for a sub-table that is NOT switchable.
+ * Returns undefined when both modes are allowed (nothing to lock to) or when the
+ * contract isn't configured at all (nothing to show).
+ */
+export function lockedAssignMode(config?: AssignmentConfig | null): AssignmentMode | undefined {
+  if (!config || !isAssignmentConfigured(config) || isAssignModeSwitchable(config)) return undefined
+  return config.allowRole ? 'role' : 'person'
 }
 
 /**

@@ -8,8 +8,11 @@
       :closable="false"
       show-icon
     />
+    <!-- Both cards always show once configured — BPMN configuring only one mode
+         locks the OTHER card rather than hiding it, so the reader can see the
+         mode was deliberately fixed, not just that it's narrower. -->
     <div
-      v-else-if="showRadio"
+      v-else
       class="mi-assignment-widget__modes"
       :class="{ 'is-static': isDesignCanvas }"
       role="radiogroup"
@@ -21,9 +24,13 @@
         type="button"
         role="radio"
         :aria-checked="mode === option.value"
+        :aria-disabled="isCardLocked(option.value)"
         class="mi-assignment-mode-card"
-        :class="{ 'is-selected': !isDesignCanvas && mode === option.value }"
-        :tabindex="isDesignCanvas ? -1 : 0"
+        :class="{
+          'is-selected': !isDesignCanvas && mode === option.value,
+          'is-disabled': !isDesignCanvas && isCardLocked(option.value),
+        }"
+        :tabindex="isDesignCanvas || isCardLocked(option.value) ? -1 : 0"
         @click="changeMode(option.value)"
       >
         <span class="mi-assignment-mode-card__dot" />
@@ -32,15 +39,6 @@
           <span class="mi-assignment-mode-card__hint">{{ t(option.hint) }}</span>
         </span>
       </button>
-    </div>
-    <!-- Single-mode contract: state the destination, nothing to choose. -->
-    <div v-else class="mi-assignment-widget__single">
-      <span class="mi-assignment-mode-card__name">
-        {{ config?.allowRole ? t('subTable.assignByRole') : t('subTable.assignByPerson') }}
-      </span>
-      <span class="mi-assignment-mode-card__hint">
-        {{ config?.allowRole ? t('subTable.assignByRoleHint') : t('subTable.assignByPersonHint') }}
-      </span>
     </div>
 
     <!-- Reserved area for the assignment fields. On the designer canvas this is the
@@ -73,8 +71,9 @@ import { useI18n } from 'vue-i18n'
 import {
   MI_ASSIGNMENT_CONFIG_KEY,
   MI_ASSIGNMENT_MODE_KEY,
+  isAssignModeSwitchable,
   isAssignmentConfigured,
-  shouldShowAssignModeRadio,
+  lockedAssignMode,
   type AssignmentMode,
 } from '@/utils/miAssignmentConfig'
 
@@ -96,7 +95,8 @@ const injectedConfig = inject(MI_ASSIGNMENT_CONFIG_KEY, undefined)
 const injectedMode = inject(MI_ASSIGNMENT_MODE_KEY, undefined)
 const config = computed(() => injectedConfig?.value)
 const configured = computed(() => isAssignmentConfigured(config.value))
-const showRadio = computed(() => shouldShowAssignModeRadio(config.value))
+const switchable = computed(() => isAssignModeSwitchable(config.value))
+const lockedMode = computed(() => lockedAssignMode(config.value))
 const mode = computed(() =>
   injectedMode?.mode.value
   ?? (config.value?.allowRole && !config.value.allowUser ? 'role' : 'person'))
@@ -124,7 +124,13 @@ const modeOptions = [
   { value: 'role' as const, label: 'subTable.assignByRole', hint: 'subTable.assignByRoleHint' },
 ]
 
+/** BPMN configured only one mode — the other card renders but is not selectable. */
+function isCardLocked(value: AssignmentMode): boolean {
+  return !switchable.value && value !== lockedMode.value
+}
+
 function changeMode(value: AssignmentMode): void {
+  if (isCardLocked(value)) return
   if (value === mode.value) return
   injectedMode?.setMode(value)
 }
@@ -191,13 +197,6 @@ function changeMode(value: AssignmentMode): void {
   margin-bottom: 12px;
 }
 
-.mi-assignment-widget__single {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 12px;
-}
-
 /* Designer canvas: the cards document the two runtime branches; there is nothing to
    pick at design time, so they read as labels rather than controls. */
 .mi-assignment-widget__modes.is-static .mi-assignment-mode-card {
@@ -205,6 +204,17 @@ function changeMode(value: AssignmentMode): void {
 }
 
 .mi-assignment-widget__modes.is-static .mi-assignment-mode-card:hover {
+  border-color: #dcdfe6;
+}
+
+/* BPMN configured only one mode — the other card stays visible but locked, so the
+   reader sees the mode was deliberately fixed rather than the block being narrower. */
+.mi-assignment-mode-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mi-assignment-mode-card.is-disabled:hover {
   border-color: #dcdfe6;
 }
 

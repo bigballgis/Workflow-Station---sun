@@ -350,7 +350,7 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     bindingId: number,
     bindings: TableBinding[],
     tableId: number,
-  ): { rule: unknown[]; options: Record<string, unknown> } {
+  ): { rule: unknown[]; options: Record<string, unknown>; miAssignmentAdopted: boolean } {
     const resolved = resolveBindingKeyedEntry(subForms, bindingId, bindings, 'SUB')
       ?? subForms?.[bindingId]
       ?? subForms?.[String(bindingId)]
@@ -361,6 +361,12 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     const options = (resolvedMap.options && typeof resolvedMap.options === 'object'
       ? resolvedMap.options
       : {}) as Record<string, unknown>
+    // ONE-TIME migration only: once a binding has gone through adoption (persisted as
+    // `miAssignmentAdopted` alongside rule/options — see useFormSave.ts), never
+    // auto-recreate the container again. Without this, deleting the block on the
+    // canvas got silently undone on the next load/save, because a deleted container
+    // and a "never had one" form look identical in the rule tree.
+    const alreadyAdopted = resolvedMap.miAssignmentAdopted === true
     // Fold assignee / BU / role into the Assignment Mode container before the rule
     // reaches the canvas, so the designer shows one grouped, draggable unit instead of
     // an empty container with the fields floating loose beneath it. Sub-forms saved
@@ -368,21 +374,22 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     // returned untouched (the helper is idempotent).
     // createIfMissing: forms authored before the container existed have the fields but
     // no container rule, and leaving them loose is the scattered canvas the container
-    // exists to fix. Saving afterwards persists the grouped shape.
+    // exists to fix. Saving afterwards persists the grouped shape AND the adoption flag,
+    // so a deliberate deletion afterwards is never silently reversed.
     const nest = (rule: unknown[]) =>
       nestAssignmentFieldsIntoContainer(
         rule as Array<{ type?: string; field?: string; children?: unknown[] }>,
         getAssignmentConfig?.(tableId),
-        { createIfMissing: true },
+        { createIfMissing: !alreadyAdopted },
       ) as unknown[]
     if (rawRule.length > 0) {
-      return { rule: nest(rawRule), options }
+      return { rule: nest(rawRule), options, miAssignmentAdopted: true }
     }
     const fields = getTableFieldDefinitionsByTableId(tableId)
     if (!fields.length) {
-      return { rule: [], options }
+      return { rule: [], options, miAssignmentAdopted: alreadyAdopted }
     }
-    return { rule: nest(mapFieldsToFormRules(fields)), options }
+    return { rule: nest(mapFieldsToFormRules(fields)), options, miAssignmentAdopted: true }
   }
 
   return {

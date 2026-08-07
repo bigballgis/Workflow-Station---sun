@@ -59,7 +59,6 @@
                 {{ t('subTable.assignMode') }}
               </div>
               <div
-                v-if="showAssignModeRadio"
                 class="mi-assignment-block__modes"
                 role="radiogroup"
                 :aria-label="t('subTable.assignMode')"
@@ -70,8 +69,12 @@
                   type="button"
                   role="radio"
                   :aria-checked="assignMode === option.value"
+                  :aria-disabled="isModeCardDisabled(option.value)"
                   class="mi-assignment-mode-card"
-                  :class="{ 'is-selected': assignMode === option.value }"
+                  :class="{
+                    'is-selected': assignMode === option.value,
+                    'is-disabled': isModeCardDisabled(option.value),
+                  }"
                   @click="selectAssignMode(option.value)"
                 >
                   <span class="mi-assignment-mode-card__dot" />
@@ -678,9 +681,10 @@ import {
   fieldsHiddenByMode,
   fieldsOwnedByMode,
   hasMiAssignmentMarker,
+  isAssignModeSwitchable,
   isAssignmentConfigured,
+  lockedAssignMode,
   resolveAssignModeFromRow,
-  shouldShowAssignModeRadio,
   type AssignmentConfig,
   type AssignmentMode,
 } from '@/utils/miAssignmentConfig'
@@ -956,13 +960,19 @@ watch(
   { immediate: true }
 )
 
-// ─── MI 分派方式 radio（个人 / 角色，二选一显隐，互斥）──────────────────────────
-const showAssignModeRadio = computed(() =>
-  shouldShowAssignModeRadio(effectiveAssignmentConfig.value))
+// ─── MI 分派方式卡片（个人 / 角色，两张卡片恒显示，按 BPMN 单/双模式锁定切换）──────
+const assignModeSwitchable = computed(() =>
+  isAssignModeSwitchable(effectiveAssignmentConfig.value))
+const lockedMode = computed(() =>
+  lockedAssignMode(effectiveAssignmentConfig.value))
+/** BPMN configured only one mode — the other card renders but is not selectable. */
+function isModeCardDisabled(value: AssignmentMode): boolean {
+  return !assignModeSwitchable.value && lockedMode.value !== value
+}
 /**
  * Render the Assignment Mode block for any configured MI sub-table — including
- * single-mode setups, where there are no mode cards but the block still frames
- * the assignee (or BU + role) picker it owns.
+ * single-mode setups, where both cards still show (one locked) framing the
+ * assignee (or BU + role) picker the block owns.
  */
 const showAssignmentBlock = computed(() =>
   isAssignmentConfigured(effectiveAssignmentConfig.value))
@@ -974,16 +984,21 @@ const assignModeOptions = [
 ]
 
 function selectAssignMode(mode: AssignmentMode) {
+  if (isModeCardDisabled(mode)) return
   if (assignMode.value === mode) return
   assignMode.value = mode
   onAssignModeChange(mode)
 }
 
-// 打开/切数据时确定初始 radio：已填 role/bu → role，否则 person。
+// 打开/切数据时确定初始卡片：单模式恒定到 BPMN 配置的那一种；双模式时已填 role/bu → role，否则 person。
 watch(
   () => [props.visible, props.mode, props.initialData] as const,
   ([visible]) => {
     if (!visible || !effectiveAssignmentConfig.value) return
+    if (!assignModeSwitchable.value) {
+      assignMode.value = lockedMode.value ?? 'person'
+      return
+    }
     const d = (props.initialData || {}) as Record<string, any>
     assignMode.value = resolveAssignModeFromRow(d, effectiveAssignmentConfig.value)
   },
@@ -994,6 +1009,9 @@ watch(
 function onAssignModeChange(mode: string | number | boolean | undefined) {
   const config = effectiveAssignmentConfig.value
   if (!config) return
+  // Defense in depth: selectAssignMode already blocks the locked card's click,
+  // but this setter must not trust an unexpected call either.
+  if ((mode === 'person' || mode === 'role') && isModeCardDisabled(mode)) return
   if (mode === 'person') {
     if (config.buField) formData.value[config.buField] = ''
     if (config.roleField) formData.value[config.roleField] = ''
@@ -1229,6 +1247,17 @@ watch(
 
 .mi-assignment-mode-card.is-selected::before {
   background: #c8102e;
+}
+
+/* BPMN configured only one mode — the other card stays visible but locked, so the
+   reader sees the mode was deliberately fixed rather than the block being narrower. */
+.mi-assignment-mode-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mi-assignment-mode-card.is-disabled:hover {
+  border-color: #dcdfe6;
 }
 
 .mi-assignment-mode-card:focus-visible {

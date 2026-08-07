@@ -289,8 +289,7 @@ public class ProcessBpmnValidator {
             result.addError("EMPTY_BPMN", "BPMN XML cannot be empty", null);
             return result;
         }
-        MiAssignmentFormGuard assignmentFormGuard = new MiAssignmentFormGuard(
-                formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId));
+        MiAssignmentFormGuard assignmentFormGuard = new MiAssignmentFormGuard();
 
         // 查找所有多实例子流程节点
         Pattern subProcessPattern = Pattern.compile(
@@ -350,7 +349,6 @@ public class ProcessBpmnValidator {
                 try {
                     Long subTableId = Long.parseLong(subTableIdStr);
                     Optional<TableDefinition> tableOpt = tableDefinitionRepository.findByIdWithFields(subTableId);
-                    boolean staleIdFallback = false;
 
                     if (tableOpt.isEmpty()) {
                         // Fallback: lookup by subTableName within the same FU
@@ -360,7 +358,6 @@ public class ProcessBpmnValidator {
                             // Reload with JOIN FETCH to avoid LazyInitializationException on fieldDefinitions
                             if (tableOpt.isPresent()) {
                                 tableOpt = tableDefinitionRepository.findByIdWithFields(tableOpt.get().getId());
-                                staleIdFallback = tableOpt.isPresent();
                             }
                         }
                     }
@@ -392,9 +389,6 @@ public class ProcessBpmnValidator {
                                 userTaskProps,
                                 userTaskId,
                                 subProcessId,
-                                subTableId,
-                                table,
-                                staleIdFallback,
                                 result);
                     }
                 } catch (NumberFormatException e) {

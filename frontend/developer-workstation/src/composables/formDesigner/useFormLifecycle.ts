@@ -280,6 +280,11 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
               installDesignerPreviewCaptureHooks()
             } catch {}
           }
+          // Hydration is async (nextTick + setTimeout) and touches no reactive state
+          // the MI assignment warning computed tracks — without this it can stay
+          // stuck on whatever it saw before the sub-designer's rule was populated
+          // (e.g. "missing component") until the user manually visits that tab.
+          onDesignerStructureChange()
         }, 150)
       })
     })

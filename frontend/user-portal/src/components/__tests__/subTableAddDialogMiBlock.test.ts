@@ -216,3 +216,84 @@ describe('SubTableAddDialog — Assignment Mode block', () => {
     wrapper.unmount()
   })
 })
+
+/**
+ * BPMN configuring only ONE mode ("user" or "role", not "both") must still show
+ * BOTH cards — locked to the configured one — instead of hiding the other card
+ * entirely (the previous behavior). The user cannot switch to the locked-out mode
+ * in either the design canvas, DW Preview, or here in the User Portal runtime.
+ */
+describe('SubTableAddDialog — single-mode contract locks the other card', () => {
+  const ROLE_ONLY: AssignmentConfig = {
+    allowUser: false, allowRole: true, roleField: 'role_code', buField: 'bu_code',
+  }
+  const USER_ONLY: AssignmentConfig = {
+    allowUser: true, allowRole: false, assigneeField: 'assignee',
+  }
+
+  function mountLocked(config: AssignmentConfig) {
+    return mount(SubTableAddDialog, {
+      props: {
+        visible: true,
+        mode: 'add',
+        columns: COLUMNS,
+        formFields: FORM_FIELDS,
+        assignmentConfig: config,
+      } as never,
+      attachTo: document.body,
+      global: { stubs: { teleport: true } },
+    })
+  }
+
+  it('still renders both cards when only "role" is configured', async () => {
+    const wrapper = mountLocked(ROLE_ONLY)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.mi-assignment-mode-card')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('locks the non-configured card (aria-disabled, is-disabled class)', async () => {
+    const wrapper = mountLocked(ROLE_ONLY)
+    await wrapper.vm.$nextTick()
+    const [personCard, roleCard] = wrapper.findAll('.mi-assignment-mode-card')
+    expect(personCard!.attributes('aria-disabled')).toBe('true')
+    expect(personCard!.classes()).toContain('is-disabled')
+    expect(roleCard!.attributes('aria-disabled')).toBe('false')
+    expect(roleCard!.classes()).not.toContain('is-disabled')
+    wrapper.unmount()
+  })
+
+  it('does not switch when the locked card is clicked', async () => {
+    const wrapper = mountLocked(ROLE_ONLY)
+    await wrapper.vm.$nextTick()
+    const [personCard, roleCard] = wrapper.findAll('.mi-assignment-mode-card')
+    expect(roleCard!.attributes('aria-checked')).toBe('true')
+    await personCard!.trigger('click')
+    await wrapper.vm.$nextTick()
+    // Still locked to role — the click on the disabled card is a no-op.
+    expect(roleCard!.attributes('aria-checked')).toBe('true')
+    expect(personCard!.attributes('aria-checked')).toBe('false')
+    wrapper.unmount()
+  })
+
+  it('opens on the BPMN-configured mode regardless of row data', async () => {
+    // Row data would resolve to "role" if inference ran — but the contract is
+    // locked to "person", so the block must ignore the row and open on person.
+    const wrapper = mount(SubTableAddDialog, {
+      props: {
+        visible: true,
+        mode: 'edit',
+        initialData: { role_code: 'MANAGER', bu_code: 'E2E_FINANCE' },
+        columns: COLUMNS,
+        formFields: FORM_FIELDS,
+        assignmentConfig: USER_ONLY,
+      } as never,
+      attachTo: document.body,
+      global: { stubs: { teleport: true } },
+    })
+    await wrapper.vm.$nextTick()
+    const [personCard] = wrapper.findAll('.mi-assignment-mode-card')
+    expect(personCard!.attributes('aria-checked')).toBe('true')
+    wrapper.unmount()
+  })
+})

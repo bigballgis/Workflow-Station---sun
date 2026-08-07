@@ -46,6 +46,13 @@ function collectLayoutItems(
       continue
     }
     if (ch.type === 'miAssignment') {
+      if (ch.hidden) {
+        // Designer "Hide" toggle — the whole block (marker + owned fields) disappears
+        // together. Still mark the owned fields as used (discarding the layout items)
+        // so they don't leak into `rest` as ordinary unwrapped columns below.
+        collectLayoutItems(ch.children || [], colByField, used)
+        continue
+      }
       items.push({ type: 'miAssignment', key: ch.key })
       // The container owns its fields as children — emit them immediately after
       // the marker so they render inside the block. groupAssignmentFieldsUnderMarker

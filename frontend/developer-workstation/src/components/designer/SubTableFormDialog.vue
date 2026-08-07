@@ -59,7 +59,7 @@ import { Loading } from '@element-plus/icons-vue'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { cloneFormRules, collectUploadRulesFromTree, injectPreviewUploadHandlers } from '@/utils/formDesigner'
 import { syncDesignerComponentEventsForFcPreview } from '@/utils/formCreatePreviewEvents'
-import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
+import { isFormCreateRuleHidden, mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import {
   alignUploadFieldsToColumns,
   hydrateUploadFieldsForFormCreate,
@@ -74,7 +74,9 @@ import {
   MI_ASSIGNMENT_MODE_KEY,
   fieldsHiddenByMode,
   fieldsOwnedByMode,
+  isAssignModeSwitchable,
   isAssignmentConfigured,
+  lockedAssignMode,
   resolveAssignModeFromRow,
   type AssignmentConfig,
   type AssignmentMode,
@@ -213,6 +215,9 @@ function syncAssignmentLabelMinWidth(): void {
 const rawRule = ref<any[]>([])
 /** Allocated PK / FK values seeded on add — merged back on save when form-create omits disabled fields. */
 const seedRow = ref<Record<string, any>>({})
+// Declared before the immediate watch below, which reads/writes it synchronously
+// during setup() whenever the dialog mounts already `visible`.
+const assignMode = ref<AssignmentMode>('person')
 
 watch(
   () => [
@@ -244,10 +249,11 @@ watch(
     }
     const assignmentConfig = props.assignmentConfig
     if (assignmentConfig && isAssignmentConfigured(assignmentConfig)) {
-      assignMode.value = resolveAssignModeFromRow(
-        (data || {}) as Record<string, unknown>,
-        assignmentConfig,
-      )
+      // BPMN configured only one mode — always open on it, regardless of row data.
+      // Row-data inference only makes sense when the user can actually switch modes.
+      assignMode.value = isAssignModeSwitchable(assignmentConfig)
+        ? resolveAssignModeFromRow((data || {}) as Record<string, unknown>, assignmentConfig)
+        : (lockedAssignMode(assignmentConfig) ?? 'person')
     }
     rebuildFormRule()
     hydrateUploadFieldsForFormCreate(formData.value, collectUploadRulesFromTree(formRule.value))
@@ -258,8 +264,6 @@ watch(
   },
   { immediate: true },
 )
-
-const assignMode = ref<AssignmentMode>('person')
 
 // The only channel that reaches the container widget (see MI_ASSIGNMENT_MODE_KEY):
 // form-create does not forward rule.props/rule.on to `input: false` components.
@@ -343,7 +347,9 @@ function filterRuleByAssignMode(rules: any[]): any[] {
       (list || [])
         .filter(r => {
           // Single-mode setups keep the container too: it holds their one picker.
-          if (r?.type === 'miAssignment') return configured
+          // The designer's standard Hide toggle still wins — an authored-hidden block
+          // must not render just because the sub-table has a valid assignment contract.
+          if (r?.type === 'miAssignment') return configured && !isFormCreateRuleHidden(r)
           return !(r?.field && hidden.has(r.field))
         })
         .map(r => {
@@ -390,8 +396,11 @@ function rebuildFormRule() {
 
 function onAssignmentModeChange(value: unknown) {
   if (value !== 'person' && value !== 'role') return
-  assignMode.value = value
   const config = props.assignmentConfig
+  // Defense in depth: the widget already prevents clicking the locked card, but
+  // the injected setter itself must not trust an unexpected call either.
+  if (config && !isAssignModeSwitchable(config) && value !== lockedAssignMode(config)) return
+  assignMode.value = value
   if (!config) return
   for (const field of fieldsHiddenByMode(value, config)) formData.value[field] = ''
   formCreateMounted.value = false
