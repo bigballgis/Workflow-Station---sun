@@ -1,0 +1,100 @@
+---
+description: 硬分叉进来的 Activepieces 子树（activepieces/**）的编码与安全约定 —— 从上游自带的 CLAUDE.md/.claude/rules 收编，只留对本仓库仍然成立的部分
+globs: activepieces/**/*.ts,activepieces/**/*.tsx,activepieces/**/*.mts,activepieces/**/*.mjs
+alwaysApply: false
+---
+
+# Activepieces 子树（`activepieces/**`）
+
+`activepieces/` 是**我们自己的源码**（[D12](../../docs/ap-integration/DECISIONS.md#d12) 硬分叉 +
+[D13](../../docs/ap-integration/DECISIONS.md#d13) 纯自维护），不以对齐上游为约束。
+基线是单提交 `de4f6469`，`git diff de4f6469..HEAD -- activepieces/` 就是完整改动清单；
+动机层记在 [HERMES_PATCHES.md](../../docs/ap-integration/HERMES_PATCHES.md)。
+
+本文件是上游自带 `CLAUDE.md` / `.claude/rules` / `.agents`（2026-08-07 随 VT-19 删除）里
+**仍然成立**那部分的收编。已作废、不要再遵守的：EE/CE edition 分层与 `hooksFactory`
+（`src/app/ee/` 整个不存在了）、`platformMustHaveFeatureEnabled` 特性门（`OPEN_SOURCE_PLAN`
+全开）、cloud/enterprise 多 edition 验证矩阵、Crowdin i18n 同步、上游 PR/label 流程。
+
+## 会静默出错的三件事（优先记住）
+
+- **新建 TypeORM 实体必须手动注册**：加进 `packages/server/api/src/app/database/database-connection.ts`
+  的 `getEntities()`，迁移另加进 `postgres-connection.ts` 的 `getMigrations()`。
+  TypeORM **不会**自动发现，漏了是运行时静默失效。
+- **多租户查询必须带 `projectId` 或 `platformId`**。连接类多 project 共享用
+  `ArrayContains([projectId])` 查 `projectIds` 数组列。
+- **出网 HTTP 一律走 `safeHttp.axios` / `safeHttp.createAxios`**（`@activepieces/server-utils`），
+  它包了 `request-filtering-agent`，挡私网 / loopback / link-local / 云 metadata IP，
+  并关掉 DNS-到-connect 的 TOCTOU 窗口。裸 `fetch` / `axios.create` 绕过 SSRF 防护。
+
+## 服务端（`packages/server/**`）
+
+- Fastify 5 + TypeORM + BullMQ；控制器用 `FastifyPluginAsyncZod` + zod schema。
+- **route prefix 归模块**：`app.ts` 里只 `app.register(xxxModule)`，`prefix` 写在
+  `*.module.ts` 内部，不在 `app.ts` 里内联。
+- 写操作一律 `POST`（创建与更新都是），删除用 `DELETE`；**不用 PUT/PATCH**。
+- 每个端点都要 `securityAccess` 配置。副作用拆到 `*-side-effects.ts` 显式调用。
+- 多实例并发用 `distributedLock` / BullMQ 去重 / `FOR UPDATE SKIP LOCKED`。
+- **禁止 N+1**：不要「取集合再逐条查」，用 JOIN / 子查询 / `IN (:...ids)`。
+- 外部数据入库前 `sanitizeObjectForPostgresql()`（托管 PG，不装扩展）。
+- **zod 默认 strip 未知键，不是报错**：请求 schema 想拒掉多余字段必须 `.strict()`，
+  否则客户端发废弃字段会拿到 2xx + 静默丢弃（2026-08-07 project 接口踩过）。
+
+## 前端（`packages/web/**`）
+
+React 18 + Vite + TanStack Query + RHF + Zod + Tailwind + Shadcn/Radix。
+
+- `className` 组合一律用 `cn()`（`@/lib/utils`）；**不用负 margin**。
+- 溢出文本用 `TextWithTooltip`；复制输入框用 `CopyToClipboardInput`。
+- 表单：`zodResolver` + `defaultValues` + `mode: 'onChange'`；每个字段
+  `<FormField render>` + `<FormItem>` + `<FormMessage/>`；对话框 open 态与表单分离、
+  用 `key` 重置而不是 `form.reset()`；服务端错误进 `root.serverError`。
+- 列表/表格这类主数据 `useQuery` 加 `meta: { showErrorDialog: true }`；
+  次要查询（flag、piece 元数据、单项）不要加，让它静默失败。
+- **i18n 是 ICU MessageFormat**：变量单花括号 `{name}`，复数用
+  `{count, plural, =1 {…} other {#…}}`；**不是** i18next 的 `{{name}}` / `_one` 后缀。
+  zod 的错误消息必须是 `translation.json` 里存在的 key（`FormMessage` 会 `t()` 它）。
+- 测试放 `packages/web/test/`，镜像源码路径，用 `@/` 别名 import。
+
+## 通用编码约定
+
+- 不用 `any`（用具体类型或 `unknown` + 类型守卫）；**不用 `as` 强转**，见到多余的删掉。
+- 用 `tryCatch` / `tryCatchSync`（Go 风格错误），不要裸 try/catch 包一切。
+- 函数参数多于一个时用**单个解构对象**（命名参数）。
+- 数据流保持不可变：helper 自己建集合并 return，不要改调用方传进来的容器。
+- 文件顺序：imports → 导出的函数/常量 → 非导出 helper → 类型；
+  **导出的类型与常量放文件末尾**。util 文件里多个纯函数聚成一个 `export const xxxUtils = {…}`；
+  React 组件仍然各自具名导出。
+- 注释只解释 **why**，不复述 **what**。
+- 改 `packages/shared` **必须**在 `packages/shared/package.json` bump 版本
+  （修复 patch / 新导出或行为变更 minor），且它的 `dist` 是 api 解析的目标 ——
+  改完要 `turbo run build` 才看得到新导出。
+
+## 测试
+
+- **api 测试不需要任何外部服务**：`packages/server/api/.env.tests` 用 `AP_DB_TYPE=PGLITE`
+  （进程内 Postgres）+ `AP_REDIS_TYPE=MEMORY`。`pnpm --filter api run test-unit` /
+  `test-ce` 直接能跑，CI 也在跑（`.github/workflows/ap-api-tests.yml`）。
+- **只有 `ce` 一个 edition**：`test/integration/{ee,cloud}` 已删（[D13](../../docs/ap-integration/DECISIONS.md#d13)）。
+  新的集成测试一律写在 `test/integration/ce/`；跑的时候带 `AP_EDITION=ce`，否则
+  cloud/ee 分支的模块根本没注册，你会看到一堆莫名的 **404**。
+- **Node 版本是承重的**：`node:zlib` 的 zstd 是 **22.15** 才有，而 `file-compressor.ts`
+  在模块顶层 `promisify` 它 ⇒ 旧运行时下**每个测试都死在收集期**（`promisify(undefined)`），
+  报错位置离病因极远。`.nvmrc` 钉 v24。**踩过的坑**：`$HOME/node_modules` 里一个
+  `node@22.13` npm 包会被 npm/npx 逐级向上收集到 PATH 最前面，压掉真 node ——
+  症状是「整套测试都跑不起来」，实际跟仓库无关。先 `node -e "console.log(process.version)"`
+  在 **vitest 内部**确认版本再怀疑代码。
+- 测已删功能的测试**直接删**，别留着当红灯；测活代码的红灯要修或登记，不要静默。
+
+## 构建与验证
+
+- 用 **turbo**，没有 Nx（不要 `nx` / `npx nx`）。
+- `pnpm exec turbo run build --filter=web --filter=@activepieces/engine --filter=api --filter=worker`
+  是成品四包；`npx turbo run lint --filter=<pkg>` 单包 lint（eslint 易 OOM，
+  加 `NODE_OPTIONS=--max-old-space-size=8192`）。
+- **锁文件是提交进仓库的资产**：镜像两个 stage 都 `pnpm install --frozen-lockfile`，
+  改了任何 manifest 就要 `pnpm install --lockfile-only` 并把锁文件一起提交。
+- 白标：用户可见界面不得硬编码 "Activepieces"（已改 Automation Studio）。
+- `api` 包不是打包产物而是逐文件 tsc 输出 ⇒ dev 里可以 `docker cp` 单个 `.js` 热替 + restart
+  快速验证，但**最后必须 `docker compose build activepieces` 固化**，否则
+  `up -d --force-recreate` 会静默回滚。
