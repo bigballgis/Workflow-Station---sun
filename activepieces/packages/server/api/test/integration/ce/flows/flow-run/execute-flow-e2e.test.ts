@@ -21,13 +21,15 @@ import {
     FlowVersionState,
     PackageType,
     PieceType,
+    RunEnvironment,
     StepOutputType,
     StreamStepProgress,
-    RunEnvironment,
 } from '@activepieces/shared'
 import { FastifyInstance } from 'fastify'
+import { worker } from '../../../../../../worker/src/lib/worker'
 import { databaseConnection } from '../../../../../src/app/database/database-connection'
 import { flowRunService } from '../../../../../src/app/flows/flow-run/flow-run-service'
+import { db } from '../../../../helpers/db'
 import { setupE2eEnvironment } from '../../../../helpers/e2e-setup'
 import {
     createMockFlow,
@@ -35,8 +37,6 @@ import {
     createMockPieceMetadata,
     mockAndSaveBasicSetup,
 } from '../../../../helpers/mocks'
-import { db } from '../../../../helpers/db'
-import { worker } from '../../../../../../worker/src/lib/worker'
 
 let app: FastifyInstance
 
@@ -871,7 +871,7 @@ describe('Execute Flow E2E', () => {
             valid: true,
             settings: {
                 sourceCode: {
-                    code: `export const code = async () => ({ big: 'x'.repeat(40000) });`,
+                    code: 'export const code = async () => ({ big: \'x\'.repeat(40000) });',
                     packageJson: '{}',
                 },
                 input: {},

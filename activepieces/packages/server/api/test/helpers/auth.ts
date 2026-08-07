@@ -1,10 +1,7 @@
-import { apId, DefaultProjectRole, Principal, SigningKeyId } from '@activepieces/shared'
+import { apId, DefaultProjectRole, PlatformRole, Principal, SigningKeyId } from '@activepieces/shared'
 import { faker } from '@faker-js/faker'
 import jwt, { Algorithm, JwtPayload, SignOptions } from 'jsonwebtoken'
-import {
-    ExternalPrincipal,
-    ExternalTokenPayload,
-} from '../../src/app/ee/managed-authn/lib/external-token-extractor'
+import { ExternalTokenPayload } from '../../src/app/managed-authn/lib/external-token-extractor'
 
 const generateToken = ({
     payload,
@@ -87,17 +84,15 @@ CEri0OurQ6fh4y87TK4JFbSTPEDkrPh4STPH7TtroBM/rn7Zj4+1Ur1RlgI=
 -----END RSA PRIVATE KEY-----`
 
 export const generateMockExternalToken = (
-    params?: Partial<GenerateMockExternalTokenParams>,
+    params?: GenerateMockExternalTokenParams,
 ): GenerateMockExternalTokenReturn => {
     const mockExternalTokenPayload: ExternalTokenPayload = {
         externalUserId: params?.externalUserId ?? apId(),
-        role: params?.projectRole as DefaultProjectRole ?? DefaultProjectRole.ADMIN,
         externalProjectId: params?.externalProjectId ?? apId(),
         firstName: params?.externalFirstName ?? faker.person.firstName(),
-        pieces: params?.pieces ?? undefined,
         lastName: params?.externalLastName ?? faker.person.lastName(),
-        concurrencyPoolKey: params?.concurrencyPoolKey,
-        concurrencyPoolLimit: params?.concurrencyPoolLimit,
+        role: params?.projectRole ?? DefaultProjectRole.ADMIN,
+        platformRole: params?.platformRole ?? PlatformRole.MEMBER,
     }
 
     const algorithm = 'RS256'
@@ -129,7 +124,16 @@ type GenerateTokenParams = {
     issuer?: string
 }
 
-type GenerateMockExternalTokenParams = ExternalPrincipal & {
+type GenerateMockExternalTokenParams = {
+    // The platform binding actually comes from the signing key row, not the payload; kept
+    // because every call site passes it alongside signingKeyId and reads better that way.
+    platformId?: string
+    externalUserId?: string
+    externalProjectId?: string
+    externalFirstName?: string
+    externalLastName?: string
+    projectRole?: DefaultProjectRole
+    platformRole?: PlatformRole
     signingKeyId?: SigningKeyId
     privateKey?: string
 }

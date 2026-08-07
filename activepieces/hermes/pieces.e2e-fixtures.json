@@ -1,0 +1,22 @@
+[
+    {
+        "name": "@activepieces/piece-webhook",
+        "version": "0.1.29",
+        "tarball": "activepieces-piece-webhook-0.1.29.tgz"
+    },
+    {
+        "name": "@activepieces/piece-subflows",
+        "version": "0.4.11",
+        "tarball": "activepieces-piece-subflows-0.4.11.tgz"
+    },
+    {
+        "name": "@activepieces/piece-data-mapper",
+        "version": "0.3.15",
+        "tarball": "activepieces-piece-data-mapper-0.3.15.tgz"
+    },
+    {
+        "name": "@activepieces/piece-delay",
+        "version": "0.3.26",
+        "tarball": "activepieces-piece-delay-0.3.26.tgz"
+    }
+]

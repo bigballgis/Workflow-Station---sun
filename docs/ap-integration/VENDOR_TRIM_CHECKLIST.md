@@ -1,7 +1,9 @@
 # Vendor 树裁剪遗留 checklist（HERMES-PATCH-011 / 012 / 013）
 
-> 2026-07-28 建。三个 patch 的内容见 [HERMES_PATCHES.md](HERMES_PATCHES.md#清单)，
-> 保留清单与重放脚本见 [`activepieces/hermes/trim-vendor-pieces.mjs`](../../activepieces/hermes/trim-vendor-pieces.mjs)。
+> 2026-07-28 建。三个 patch 的内容见 [HERMES_PATCHES.md](HERMES_PATCHES.md#清单)。
+> **2026-08-07（[D13](DECISIONS.md#d13)）**：`trim-vendor-pieces.mjs` 已删除 —— 裁剪结果就是树的状态，
+> `packages/pieces/{core,custom}` 一并删除；它的 tsconfig 不变量拆成
+> [`activepieces/hermes/check-tsconfig-paths.mjs`](../../activepieces/hermes/check-tsconfig-paths.mjs)。
 >
 > **背景一句话**：公司内网 `pnpm install` 卡在 `@anthropic-ai/sdk@0.39.0`。追查发现该包来自上游
 > vendor 进来的 694 个 community piece 之一（`piece-claude`），这些件既不在 `pieces.json` 白名单、
@@ -27,19 +29,20 @@
 | VT-03 | 容器启动 + builder 冒烟 | **P0** | ✅ **全绿（2026-07-29）**：服务端 + dev 真实环境 + 经 Kong + **浏览器渲染** |
 | VT-04 | rebase 重放顺序陷阱（脚本加断言） | P1 | ⛔ **已作废（2026-07-30，[D12](DECISIONS.md#d12)）** — rebase 不会发生；**但它发现的 11 条悬空 tsconfig 映射转入 VT-16** |
 | VT-05 | app-events 死链无提示 | P1 | ✅ **已完成（2026-07-29）** |
-| VT-06 | `--check` 接进 CI | P1 | ✅ **已完成（2026-07-29）** |
+| VT-06 | `--check` 接进 CI | P1 | ✅ 已完成（2026-07-29）→ **2026-08-07 改形**：白名单检查随脚本删除，CI 现在跑 `check-tsconfig-paths.mjs` + 锁文件一致性 |
 | VT-07 | `SUPPORTED_APP_WEBHOOKS` flag 说谎 | P1 | ⬜ 未做 |
 | VT-08 | crowdin 翻译源塌缩 | P2 | ✅ **已处置（2026-07-29，HERMES-PATCH-014）** |
 | VT-09 | 上游 piece 源码不再可读的补救约定 | P2 | ✅ **已完成（2026-07-29）** |
 | VT-10 | codegraph 索引重建 | P2 | ✅ **已自愈（2026-07-29 复查）** |
 | VT-11 | **公司机器报错原文** (VT-12 的前置) | **P0** | ✅ **已取得（2026-07-30）**：见下方实测记录 |
 | VT-12 | `@ai-sdk/*` 仍在 api/worker/engine 硬依赖 | **P0** | ✅ **已关闭（2026-07-30，VT-17）**：10 个厂商 provider 包在锁文件里**归零**；`ai` 仅剩 web 一个显式声明 |
-| VT-16 | tsconfig 悬空映射 11 条 + `--check` 漏检单行写法 | P1 | ⬜ 未做（VT-04 的遗产） |
+| VT-16 | tsconfig 悬空映射 + `--check` 漏检单行写法 | P1 | ✅ **已完成（2026-08-07）**：实际清掉 **37** 条（34 条指向已删 piece 目录 + `ee-auth` / `ee/billing/ui` / `ui-feature-forms`）；新 checker 按 tsconfig 语义解析（相对 baseUrl、`*` 只查固定前缀），不再依赖写法 |
 | VT-17 | **裁剪批 A**：AP AI 代理 / MCP server / EE chat / engine agent tools | **P0** | ✅ **已完成（2026-07-30，HERMES-PATCH-015）**：api + worker + engine + framework + server-utils + 根 package.json |
 | VT-21 | `fast-xml-parser@5.2.5`：升 S3 链（`xml-builder@3.972.36+` 改用 `fast-xml-builder`） | **P0** | ✅ **已完成（2026-07-30，HERMES-PATCH-016）**：锁中 0 次；顺带摘掉 2 个零 import 的 aws 包 |
 | VT-22 | `isolated-vm@6.0.2` Nexus 元数据不全（**卡着 `vitest@3.0.8` 的升级路径**） | **P0** | ⬜ 未做——不由我们控制，需 Nexus 管理方补全/重同步 |
-| VT-18 | **裁剪批 B**：`packages/pieces/core/` 27 个件 | P1 | ⬜ 未做 |
-| VT-19 | **裁剪批 C**：上游工程脚手架与 AP 自有 agent 规则 | P2 | ⬜ 未做 |
+| VT-18 | **裁剪批 B**：`packages/pieces/core/` 27 个件 | P1 | ✅ **已完成（2026-08-07，[D13](DECISIONS.md#d13)）**：`core/`(699 文件) + `custom/` 删除，workspace glob 两处摘掉（根 `package.json` + `pnpm-workspace.yaml`），37 条 tsconfig 映射清理，锁文件重生成（33168→31584 行）。迁移里的 piece 名字符串常量按计划**未动** |
+| VT-19 | **裁剪批 C**：上游工程脚手架与 AP 自有 agent 规则 | P2 | ✅ **已完成（2026-08-07，[D13](DECISIONS.md#d13)）**：删 `.github`(196K 上游 CI) / `.devcontainer` / `.verdaccio` / `benchmark` / `.husky`(连 `husky` devDependency) / `.all-contributorsrc` / AP 自带 `docker-compose*.yml` 与 `deploy/`；guidance 侧删 `.agents`(796K) / `.claude`(内含一个走公网 `npx` 的 context7 MCP server) / `.cursor` 软链 / 6 份 `CLAUDE.md`（其中 3 份是指向 `AGENTS.md` 的软链）+ 3 份 `AGENTS.md`。**仍然成立的约定收编进 `.cursor/rules/activepieces-vendor.mdc`**：sync 脚本新增 `activepieces` 目标，`activepieces/CLAUDE.md` 变成与 frontend/backend/deploy 同构的生成式 wrapper |
+| VT-22 | **api 测试套的去留**（120 文件，long-standing「跑不起来」） | P1 | ✅ **已完成（2026-08-07，[D13](DECISIONS.md#d13)）**：**不是死套件** —— 真凶是 `$HOME/node_modules/node@22.13` 把 `.nvmrc` 要求的 v24 从 npx 的 PATH 上挤掉，而 `node:zlib` 的 zstd 是 22.15 才有、`file-compressor.ts` 在模块顶层 `promisify` 它 ⇒ 每个测试都死在收集期。另一处单点：共用 mock 工厂 `test/helpers/mocks/index.ts` 还 import 4 个已删模块，一修 CE 从 7 通过跳到 38。结果：**CE 47/47 文件 368 用例全绿**（含 `execute-flow-e2e`：它红的真因是 **`spawn esbuild ENOENT`**——CODE 步要 PATH 上的 esbuild 二进制，不是装不到 piece；它钉的 4 个旧版件已留档进 `hermes/tarballs` + `pieces.e2e-fixtures.json`，`prewarm-pieces.sh` 新增 `AP_PREWARM_WORKSPACE` 可预热到测试缓存，**registry 指向不可达地址仍 7/7 通过**）、**unit 18/18 文件 156 用例全绿**（最后 7 个红也修完了，两处都是**夹具落后于实现**、产品代码无恙：`job-broker.test.ts` 的 mock job data 早于 `tryDequeue` 里新增的 `JobData.safeParse` —— 解析失败会被判 poison job、失败掉并递归，于是每个用例都 dequeue 到 null；另断言了 `ConsumeJobRequest` 从来没有的 `timeoutInSeconds`（超时由 worker 在执行期按 job 类型算）。`queue-dispatcher.test.ts` 停在两参 `onOrphanedJob(jobId, log)`，而实现早已是四参 `(jobId, token, queueName, log)` —— token/queueName 要原样带回，broker 才能用**同一个 BullMQ token** 把 job 退回它自己的队列）。删 `integration/{ee,cloud}` 46 文件 + 测已删功能的 unit 13 文件；其中**覆盖活功能的 7 个提升进 `ce/`**（managed-authn / signing-key×2 / store-entry / flow 角色 RBAC / app-connection metadata / sign-up）。CI 新增 `.github/workflows/ap-api-tests.yml`（含一条 zstd 前置断言，防同类环境骗局） |
 | VT-20 | **裁剪批 D**：AP 自带 embed 路由 + `packages/ee/embed-sdk` | P2 | ⬜ 未做（风险最高，需 builder 回归） |
 | VT-13 | `piece-ai` 保留与否的政策裁决 | P1 | ✅ **已关闭（2026-07-28，已删除）** |
 | VT-15 | AI Generate 产物与功能开关 | **P0** | ✅ **已完成（2026-07-29）**：功能停用 + 产物清理 |
@@ -282,6 +285,15 @@ engine 1、framework 1、**根 `package.json` 11**（10×`@ai-sdk/*` + `ai`）+ 
 `.all-contributorsrc`、`CONTRIBUTING.md`、`crowdin.yml`（HERMES-PATCH-014 当初"留着只为 diff 干净"，
 D12 之后**直接删**，连同 `package.json` 里那两个 fail-loud 的 npm script）、
 AP 自带的 `docker-compose*.yml` 与 `deploy/`（我们用 `deploy/` 根目录那套）。
+
+> ✅ **已执行（2026-08-07）**。两处与原计划不同：`CONTRIBUTING.md` 本就不在树里；
+> `activepieces/CLAUDE.md` **没有一删了之** —— 其中实体注册 / 数据隔离 / safe-http / zod 与前端表单
+> 那些约定对本仓库仍然成立，按 `ai-guidance-sync` 收编进 `.cursor/rules/activepieces-vendor.mdc`，
+> sync 脚本加了 `activepieces` 目标，该文件现在是生成式 wrapper（与 frontend/backend/deploy 同构）。
+> 已作废、明确不再遵守的部分写在 wrapper 里：EE/CE edition 分层与 `hooksFactory`、
+> `platformMustHaveFeatureEnabled` 特性门、cloud/enterprise 验证矩阵、Crowdin、上游 PR/label 流程。
+> `.agents/features/*.md` 一并删除：其中约三分之一（`ee-*`/`ai-providers`/`alerts`/`chat`/`mcp` 等）
+> 描述的功能我们已经删掉，留着会主动误导；需要时按 VT-09 从 `de4f6469` 取回。
 
 **顺手解决一个隐性污染**：`activepieces/` 下有上游自己的 `.claude/`（含 `settings.json`、`agents`、
 `rules`、`skills`）、`.cursor/`、`.agents/`（796K）以及多份 `CLAUDE.md` / `AGENTS.md`。
@@ -584,7 +596,7 @@ Playwright 在 FU 50030 的 Automation tab 上录到 **12 个不同 `/ap-cdn` �
 
 ### VT-04 rebase 重放的顺序陷阱 ✅ 已完成（2026-07-29）
 
-- [x] [`trim-vendor-pieces.mjs`](../../activepieces/hermes/trim-vendor-pieces.mjs) 加 fail-loud 前置断言
+- [x] `trim-vendor-pieces.mjs` 加 fail-loud 前置断言（脚本已于 2026-08-07 删除，见本文件开头）
       `assertNothingStillNeedsDoomedPieces()`
 - [x] `web/tsconfig.app.json` / `tsconfig.spec.json` 纳入映射清理范围（`TSCONFIGS` 常量）
 

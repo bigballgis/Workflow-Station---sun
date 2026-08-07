@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { createServiceContext, createTestContext, TestContext, TestContextParams } from './test-context'
+import { createTestContext, TestContext, TestContextParams } from './test-context'
 
 export function describeWithAuth(
     name: string,
@@ -7,14 +7,10 @@ export function describeWithAuth(
     fn: (setup: () => Promise<TestContext>) => void,
     params?: TestContextParams,
 ): void {
-    describe.each(['USER', 'SERVICE'] as const)(`${name} [%s]`, (authType) => {
-        const setup = async (): Promise<TestContext> => {
-            const userCtx = await createTestContext(getApp(), params)
-            if (authType === 'SERVICE') {
-                return createServiceContext(getApp(), userCtx)
-            }
-            return userCtx
-        }
-        fn(setup)
+    // Only USER remains: SERVICE principals were minted from an EE api-key, and both the
+    // api-key module and its auth path went with the EE removal (G6) — there is no way to
+    // obtain a service token in this build, so a [SERVICE] variant could only ever fail.
+    describe(`${name} [USER]`, () => {
+        fn(() => createTestContext(getApp(), params))
     })
 }

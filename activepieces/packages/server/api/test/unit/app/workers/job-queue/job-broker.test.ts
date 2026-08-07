@@ -1,5 +1,14 @@
+import {
+    apId,
+    ExecuteFlowJobData,
+    ExecutionType,
+    LATEST_JOB_DATA_SCHEMA_VERSION,
+    RunEnvironment,
+    StreamStepProgress,
+    WorkerJobType,
+} from '@activepieces/shared'
 import { InterceptorVerdict } from '../../../../../src/app/workers/job-queue/job-interceptor'
-import { Job, Worker as BullMQWorker } from 'bullmq'
+import { Worker as BullMQWorker, Job } from 'bullmq'
 import { FastifyBaseLogger } from 'fastify'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -41,11 +50,32 @@ const mockLog: FastifyBaseLogger = {
     level: 'info',
 } as unknown as FastifyBaseLogger
 
+// tryDequeue runs JobData.safeParse on the (migrated) payload and treats a parse failure as
+// an unrecoverable poison job — it fails the job and recurses, so a fixture that does not
+// satisfy the schema makes every one of these cases dequeue nothing. Keep this valid.
+function validJobData(): ExecuteFlowJobData {
+    return {
+        jobType: WorkerJobType.EXECUTE_FLOW,
+        schemaVersion: LATEST_JOB_DATA_SCHEMA_VERSION,
+        projectId: 'proj-1',
+        platformId: 'plat-1',
+        flowId: apId(),
+        flowVersionId: apId(),
+        runId: apId(),
+        environment: RunEnvironment.PRODUCTION,
+        executionType: ExecutionType.BEGIN,
+        streamStepProgress: StreamStepProgress.NONE,
+        payload: { type: 'inline', value: null },
+        logsFileId: apId(),
+        logsUploadUrl: 'https://example.invalid/v1/flow-runs/logs?token=x',
+    }
+}
+
 function createMockJob(id: string, data?: Record<string, unknown>, deferredFailure?: string): Job {
     return {
         id,
         name: `job-name-${id}`,
-        data: { projectId: 'proj-1', platformId: 'plat-1', ...data },
+        data: { ...validJobData(), ...data },
         attemptsMade: 0,
         deferredFailure,
         moveToDelayed: vi.fn().mockResolvedValue(undefined),
@@ -75,7 +105,12 @@ describe('tryDequeue', () => {
         expect(result).not.toBeNull()
         expect(result!.jobId).toBe('job-1')
         expect(result!.engineToken).toBe('engine-token')
-        expect(result!.timeoutInSeconds).toBe(600)
+        // No timeoutInSeconds here: ConsumeJobRequest carries {jobId, jobData, attempsStarted,
+        // engineToken, token, queueName}; the per-job timeout is resolved by the worker at
+        // execution time from FLOW_TIMEOUT_SECONDS / TRIGGER_TIMEOUT_SECONDS.
+        expect(result!.queueName).toBe('test-queue')
+        expect(result!.attempsStarted).toBe(0)
+        expect(result!.token).toEqual(expect.stringMatching(/^token-/))
         expect(result!.token).toMatch(/^token-/)
         expect(result!.queueName).toBe('test-queue')
         expect(job.updateData).not.toHaveBeenCalled()
