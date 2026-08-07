@@ -12,5 +12,11 @@ cache/
 # Logs
 *.log
 
+# Daemon runtime state. daemon.pid was tracked until 2026-08-07 and the running daemon
+# rewrites it constantly, so it showed up as an unstaged change in every status — and it
+# interrupted an interactive rebase mid-run, which git reports as an unrelated failure.
+daemon.pid
+daemon.sock
+
 # Hook markers
 .dirty
