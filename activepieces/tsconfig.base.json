@@ -12,117 +12,52 @@
     "importHelpers": true,
     "target": "es2015",
     "module": "esnext",
-    "lib": ["es2022", "dom"],
+    "lib": [
+      "es2022",
+      "dom"
+    ],
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@activepieces/ee-auth": ["packages/ee/auth/src/index.ts"],
-      "@activepieces/ee/billing/ui": ["packages/ee/billing/ui/src/index.ts"],
-      "@activepieces/engine": ["packages/server/engine/src/main.ts"],
-      "@activepieces/piece-approval": [
-        "packages/pieces/core/approval/src/index.ts"
+      "@activepieces/engine": [
+        "packages/server/engine/src/main.ts"
       ],
       "@activepieces/piece-biz-calendar": [
         "packages/pieces/community/biz-calendar/src/index.ts"
       ],
-      "@activepieces/piece-connections": [
-        "packages/pieces/core/connections/src/index.ts"
-      ],
-      "@activepieces/piece-crypto": [
-        "packages/pieces/core/crypto/src/index.ts"
-      ],
-      "@activepieces/piece-csv": ["packages/pieces/core/csv/src/index.ts"],
-      "@activepieces/piece-data-mapper": [
-        "packages/pieces/core/data-mapper/src/index.ts"
-      ],
-      "@activepieces/piece-data-summarizer": [
-        "packages/pieces/core/data-summarizer/src/index.ts"
-      ],
-      "@activepieces/piece-date-helper": [
-        "packages/pieces/core/date-helper/src/index.ts"
-      ],
-      "@activepieces/piece-delay": ["packages/pieces/core/delay/src/index.ts"],
-      "@activepieces/piece-file-helper": [
-        "packages/pieces/core/file-helper/src/index.ts"
-      ],
-      "@activepieces/piece-forms": ["packages/pieces/core/forms/src/index.ts"],
-      "@activepieces/piece-graphql": [
-        "packages/pieces/core/graphql/src/index.ts"
-      ],
       "@activepieces/piece-hash-helper": [
         "packages/pieces/community/hash-helper/src/index.ts"
-      ],
-      "@activepieces/piece-http": ["packages/pieces/core/http/src/index.ts"],
-      "@activepieces/piece-image-helper": [
-        "packages/pieces/core/image-helper/src/index.ts"
       ],
       "@activepieces/piece-json": [
         "packages/pieces/community/json/src/index.ts"
       ],
-      "@activepieces/piece-math-helper": [
-        "packages/pieces/core/math-helper/src/index.ts"
-      ],
-      "@activepieces/piece-pdf": ["packages/pieces/core/pdf/src/index.ts"],
       "@activepieces/piece-postgres": [
         "packages/pieces/community/postgres/src/index.ts"
       ],
-      "@activepieces/piece-qrcode": [
-        "packages/pieces/core/qrcode/src/index.ts"
+      "@activepieces/pieces-common": [
+        "packages/pieces/common/src/index.ts"
       ],
-      "@activepieces/piece-schedule": [
-        "packages/pieces/core/schedule/src/index.ts"
-      ],
-      "@activepieces/piece-sftp": ["packages/pieces/core/sftp/src/index.ts"],
-      "@activepieces/piece-smtp": ["packages/pieces/core/smtp/src/index.ts"],
-      "@activepieces/piece-store": ["packages/pieces/core/store/src/index.ts"],
-      "@activepieces/piece-subflows": [
-        "packages/pieces/core/subflows/src/index.ts"
-      ],
-      "@activepieces/piece-tables": [
-        "packages/pieces/core/tables/src/index.ts"
-      ],
-      "@activepieces/piece-tags": ["packages/pieces/core/tags/src/index.ts"],
-      "@activepieces/piece-text-helper": [
-        "packages/pieces/core/text-helper/src/index.ts"
-      ],
-      "@activepieces/piece-webhook": [
-        "packages/pieces/core/webhook/src/index.ts"
-      ],
-      "@activepieces/piece-xml": ["packages/pieces/core/xml/src/index.ts"],
-      "@activepieces/pieces-common": ["packages/pieces/common/src/index.ts"],
       "@activepieces/pieces-framework": [
         "packages/pieces/framework/src/index.ts"
       ],
-      "@activepieces/server-utils": ["packages/server/utils/src/index.ts"],
-      "@activepieces/shared": ["packages/shared/src/index.ts"],
-      "@ee/*": ["packages/ee/*"],
-      "Aminos": ["packages/pieces/community/Aminos/src/index.ts"],
-      "activepieces/piece-microsoft-dynamics-365-business-central": [
-        "packages/pieces/community/microsoft-dynamics-365-business-central/src/index.ts"
+      "@activepieces/server-utils": [
+        "packages/server/utils/src/index.ts"
       ],
-      "activepieces/piece-microsoft-dynamics-crm": [
-        "packages/pieces/community/microsoft-dynamics-crm/src/index.ts"
+      "@activepieces/shared": [
+        "packages/shared/src/index.ts"
       ],
-      "activepieces/piece-microsoft-sharepoint": [
-        "packages/pieces/community/microsoft-sharepoint/src/index.ts"
+      "@ee/*": [
+        "packages/ee/*"
       ],
-      "activepieces/piece-snowflake": [
-        "packages/pieces/community/snowflake/src/index.ts"
-      ],
-      "activepieces/piece-zuora": [
-        "packages/pieces/community/zuora/src/index.ts"
-      ],
-      "activepieces/piece-cashfree-payments": [
-        "packages/pieces/community/cashfree-payments/src/index.ts"
-      ],
-      "ee-embed-sdk": ["packages/ee/embed-sdk/src/index.ts"],
-      "ui-feature-forms": ["packages/ui/features-forms/src/index.ts"],
-      "@activepieces/piece-manual-trigger": [
-        "packages/pieces/core/manual-trigger/src/index.ts"
+      "ee-embed-sdk": [
+        "packages/ee/embed-sdk/src/index.ts"
       ]
     },
     "resolveJsonModule": true
   },
-  "exclude": ["node_modules", "tmp"]
+  "exclude": [
+    "node_modules",
+    "tmp"
+  ]
 }
