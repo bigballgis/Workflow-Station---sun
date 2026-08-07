@@ -1,7 +1,7 @@
 import {
-  CreatePlatformProjectRequest,
+  CreateProjectRequest,
   ListProjectRequestForPlatformQueryParams,
-  UpdateProjectPlatformRequest,
+  UpdateProjectRequest,
   isNil,
   ProjectType,
   ProjectWithLimits,
@@ -45,7 +45,7 @@ export const projectCollection = createCollection<ProjectWithLimits, string>(
     getKey: (item) => item.id,
     onUpdate: async ({ transaction }) => {
       for (const { original, modified } of transaction.mutations) {
-        const request: UpdateProjectPlatformRequest = {
+        const request: UpdateProjectRequest = {
           displayName: modified.displayName,
           metadata: modified.metadata ?? undefined,
           releasesEnabled: modified.releasesEnabled,
@@ -54,8 +54,6 @@ export const projectCollection = createCollection<ProjectWithLimits, string>(
               ? modified.externalId
               : undefined,
           icon: modified.icon,
-          plan: modified.plan,
-          maxConcurrentJobs: modified.maxConcurrentJobs,
         };
         await api.post<ProjectWithLimits>(
           `/v1/projects/${original.id}`,
@@ -82,7 +80,7 @@ export const projectCollectionUtils = {
     onError: (error: Error) => void,
   ) => {
     return useMutation({
-      mutationFn: (request: CreatePlatformProjectRequest) =>
+      mutationFn: (request: CreateProjectRequest) =>
         api.post<ProjectWithLimits>('/v1/projects', request),
       onSuccess: (data) => {
         projectCollection.utils.writeInsert(data);
@@ -103,7 +101,7 @@ export const projectCollectionUtils = {
         request,
       }: {
         projectId: string;
-        request: UpdateProjectPlatformRequest;
+        request: UpdateProjectRequest;
       }) => api.post<ProjectWithLimits>(`/v1/projects/${projectId}`, request),
       onSuccess: (data) => {
         projectCollection.utils.writeUpdate(data);
@@ -112,7 +110,7 @@ export const projectCollectionUtils = {
       onError,
     });
   },
-  update: (projectId: string, request: UpdateProjectPlatformRequest) => {
+  update: (projectId: string, request: UpdateProjectRequest) => {
     projectCollection.update(projectId, (draft) => {
       Object.assign(
         draft,

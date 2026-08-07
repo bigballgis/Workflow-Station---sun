@@ -1,16 +1,12 @@
 import {
-  AppConnectionWithoutSensitiveData,
   Permission,
-  UpdateProjectPlatformRequest,
   PlatformRole,
+  UpdateProjectRequest,
 } from '@activepieces/shared';
-import { useQueryClient } from '@tanstack/react-query';
 import { t } from 'i18next';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { GlobalConnectionWarning } from '@/components/custom/global-connection-utils';
-import { MultiSelectPieceProperty } from '@/components/custom/multi-select-piece-property';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,9 +24,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { SkeletonList } from '@/components/ui/skeleton';
 import { internalErrorToast } from '@/components/ui/sonner';
-import { globalConnectionsQueries } from '@/features/connections/hooks/global-connections-hooks';
 import { projectCollectionUtils } from '@/features/projects/stores/project-collection';
 import { useAuthorization } from '@/hooks/authorization-hooks';
 import { platformHooks } from '@/hooks/platform-hooks';
@@ -52,17 +46,6 @@ export function EditProjectDialog({
   projectId,
   initialValues,
 }: EditProjectDialogProps) {
-  const { platform } = platformHooks.useCurrentPlatform();
-  const globalConnectionsEnabled = platform.plan.globalConnectionsEnabled;
-
-  const { data: globalConnectionsPage, isLoading: isLoadingConnections } =
-    globalConnectionsQueries.useGlobalConnections({
-      request: { limit: 9999 },
-      extraKeys: [],
-    });
-
-  const globalConnections = globalConnectionsPage?.data ?? [];
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md w-full">
@@ -73,17 +56,11 @@ export function EditProjectDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {!globalConnectionsEnabled || !isLoadingConnections ? (
-          <EditProjectForm
-            onClose={onClose}
-            projectId={projectId}
-            initialValues={initialValues}
-            globalConnections={globalConnections}
-            globalConnectionsEnabled={globalConnectionsEnabled}
-          />
-        ) : (
-          <SkeletonList numberOfItems={3} className="h-10" />
-        )}
+        <EditProjectForm
+          onClose={onClose}
+          projectId={projectId}
+          initialValues={initialValues}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -93,29 +70,16 @@ const EditProjectForm = ({
   onClose,
   projectId,
   initialValues,
-  globalConnections,
-  globalConnectionsEnabled,
 }: {
   onClose: () => void;
   projectId: string;
   initialValues?: EditProjectDialogProps['initialValues'];
-  globalConnections: AppConnectionWithoutSensitiveData[];
-  globalConnectionsEnabled: boolean;
 }) => {
   const { checkAccess } = useAuthorization();
   const { platform } = platformHooks.useCurrentPlatform();
   const platformRole = userHooks.getCurrentUserPlatformRole();
-  const queryClient = useQueryClient();
-
-  const currentConnectionExternalIds = globalConnections
-    .filter((connection) => connection.projectIds.includes(projectId))
-    .map((connection) => connection.externalId);
-
   const { mutate, isPending } = projectCollectionUtils.useUpdateProject(
     () => {
-      queryClient.invalidateQueries({
-        queryKey: globalConnectionsQueries.getGlobalConnectionsQueryKey([]),
-      });
       toast.success(t('Your changes have been saved.'), {
         duration: 3000,
       });
@@ -127,11 +91,10 @@ const EditProjectForm = ({
     },
   );
 
-  const form = useForm<UpdateProjectPlatformRequest>({
+  const form = useForm<UpdateProjectRequest>({
     defaultValues: {
       displayName: initialValues?.projectName,
       externalId: initialValues?.externalId,
-      globalConnectionExternalIds: currentConnectionExternalIds,
     },
     disabled: checkAccess(Permission.WRITE_PROJECT) === false,
   });
@@ -146,12 +109,10 @@ const EditProjectForm = ({
             request: {
               displayName: values.displayName,
               externalId: values.externalId,
-              globalConnectionExternalIds: values.globalConnectionExternalIds,
             },
           });
         })}
       >
-        {globalConnectionsEnabled && <GlobalConnectionWarning />}
         <FormField
           name="displayName"
           render={({ field }) => (
@@ -189,31 +150,6 @@ const EditProjectForm = ({
               )}
             />
           )}
-
-        {globalConnectionsEnabled && (
-          <FormField
-            name="globalConnectionExternalIds"
-            render={({ field }) => (
-              <FormItem>
-                <Label>{t('Global Connections')}</Label>
-                <MultiSelectPieceProperty
-                  placeholder={t('Select global connections')}
-                  options={globalConnections.map((connection) => ({
-                    value: connection.externalId,
-                    label: connection.displayName,
-                  }))}
-                  loading={false}
-                  onChange={(value) => {
-                    field.onChange(value ?? []);
-                  }}
-                  initialValues={field.value ?? []}
-                  showDeselect={(field.value ?? []).length > 0}
-                />
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
 
         <DialogFooter className="justify-end mt-6">
           <Button type="button" variant="outline" onClick={onClose}>
