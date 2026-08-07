@@ -16,6 +16,7 @@ export type FeatureKey =
   | 'EVENT_DESTINATIONS'
   | 'API'
   | 'SSO'
+  | 'AUDIT_LOGS'
   | 'ENVIRONMENT'
   | 'ISSUES'
   | 'ANALYTICS'

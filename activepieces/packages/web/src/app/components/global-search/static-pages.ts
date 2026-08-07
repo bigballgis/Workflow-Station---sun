@@ -14,6 +14,7 @@ import { PuzzleIcon } from '@/components/icons/puzzle';
 import { ServerIcon } from '@/components/icons/server';
 import { Settings2Icon } from '@/components/icons/settings2';
 import { ShieldIcon } from '@/components/icons/shield';
+import { SquareDashedBottomCodeIcon } from '@/components/icons/square-dashed-bottom-code';
 import { TrophyIcon } from '@/components/icons/trophy';
 import { UnplugIcon } from '@/components/icons/unplug';
 import { UsersIcon } from '@/components/icons/users';
@@ -102,6 +103,13 @@ export const STATIC_PAGES: StaticPage[] = [
     label: 'Platform Admin — Embedding',
     href: '/platform/security/embed',
     icon: FrameIcon,
+    requiresPlatformAdmin: true,
+  },
+  {
+    id: 'page-platform-audit-logs',
+    label: 'Platform Admin — Audit Logs',
+    href: '/platform/security/audit-logs',
+    icon: SquareDashedBottomCodeIcon,
     requiresPlatformAdmin: true,
   },
   {

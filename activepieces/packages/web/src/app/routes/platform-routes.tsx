@@ -20,6 +20,9 @@ const ApiKeysPage = React.lazy(() =>
     default: m.ApiKeysPage,
   })),
 );
+const AuditLogsPage = React.lazy(
+  () => import('./platform/security/audit-logs'),
+);
 const ProjectRolePage = React.lazy(() =>
   import('./platform/security/project-role').then((m) => ({
     default: m.ProjectRolePage,
@@ -201,7 +204,7 @@ export const platformRoutes = [
     element: (
       <PlatformLayout>
         <PageTitle title="Platform Security">
-          <Navigate to="/platform/security/sso" replace />
+          <Navigate to="/platform/security/audit-logs" replace />
         </PageTitle>
       </PlatformLayout>
     ),
@@ -225,6 +228,18 @@ export const platformRoutes = [
         <PageTitle title="Secret managers">
           <SuspenseWrapper>
             <SecretManagersPage />
+          </SuspenseWrapper>
+        </PageTitle>
+      </PlatformLayout>
+    ),
+  },
+  {
+    path: '/platform/security/audit-logs',
+    element: (
+      <PlatformLayout>
+        <PageTitle title="Audit Logs">
+          <SuspenseWrapper>
+            <AuditLogsPage />
           </SuspenseWrapper>
         </PageTitle>
       </PlatformLayout>
