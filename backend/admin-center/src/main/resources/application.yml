@@ -299,6 +299,10 @@ service-task:
     private-key: ${ACTIVEPIECES_MANAGED_PRIVATE_KEY:}
     project-external-id: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:hermes-shared}
     token-ttl-seconds: ${ACTIVEPIECES_MANAGED_TOKEN_TTL:120}
+    # 影子用户角色：平台级 ADMIN|MEMBER，project 级 Admin|Editor|Viewer（逐字对应 project_role.name）。
+    # 默认全权——从 admin center 进入的人要能用平台级页面；每次握手会同步既有影子用户的角色。
+    platform-role: ${ACTIVEPIECES_MANAGED_PLATFORM_ROLE:ADMIN}
+    project-role: ${ACTIVEPIECES_MANAGED_PROJECT_ROLE:Admin}
 
 # JWT Configuration
 jwt:

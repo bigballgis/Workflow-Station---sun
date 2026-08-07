@@ -44,13 +44,6 @@ export const managedAuthnService = (log: FastifyBaseLogger) => ({
             externalProjectId: externalPrincipal.externalProjectId,
         }, log)
 
-        if (!isNil(externalPrincipal.projectDisplayName)) {
-            await projectService(log).update(project.id, {
-                type: project.type,
-                displayName: externalPrincipal.projectDisplayName,
-            })
-        }
-
         const user = await getOrCreateUser(externalPrincipal, log)
 
         await projectMemberService(log).upsert({
@@ -99,16 +92,51 @@ const getOrCreateUser = async (
     })
 
     if (!isNil(existingUser)) {
-        return existingUser
+        // HERMES is the source of truth for role and display name, and both are only
+        // written when the shadow user is first provisioned. Re-sync on every exchange so
+        // an existing shadow user picks up a changed role / a real display name instead of
+        // being stuck with whatever the very first token carried.
+        return syncExistingUser({ existingUser, params }, log)
     }
     const identity = await getOrCreateUserIdentity(params, log)
     const user = await userService(log).create({
         externalId: params.externalUserId,
         platformId: params.platformId,
         identityId: identity.id,
-        platformRole: PlatformRole.MEMBER,
+        platformRole: params.platformRole,
     })
     return user
+}
+
+const syncExistingUser = async (
+    { existingUser, params }: SyncExistingUserParams,
+    log: FastifyBaseLogger,
+): Promise<User> => {
+    await syncIdentityName({ identityId: existingUser.identityId, params }, log)
+
+    if (existingUser.platformRole === params.platformRole) {
+        return existingUser
+    }
+    await userService(log).update({
+        id: existingUser.id,
+        platformId: params.platformId,
+        platformRole: params.platformRole,
+    })
+    return { ...existingUser, platformRole: params.platformRole }
+}
+
+const syncIdentityName = async (
+    { identityId, params }: SyncIdentityNameParams,
+    log: FastifyBaseLogger,
+): Promise<void> => {
+    const identity = await userIdentityService(log).getOneOrFail({ id: identityId })
+    if (identity.firstName === params.externalFirstName && identity.lastName === params.externalLastName) {
+        return
+    }
+    await userIdentityService(log).update(identityId, {
+        firstName: params.externalFirstName,
+        lastName: params.externalLastName,
+    })
 }
 
 const getOrCreateUserIdentity = async (
@@ -177,9 +205,20 @@ type GetOrCreateUserParams = {
     externalProjectId: string
     externalFirstName: string
     externalLastName: string
+    platformRole: PlatformRole
 }
 
 type GetOrCreateProjectParams = {
     platformId: string
     externalProjectId: string
+}
+
+type SyncExistingUserParams = {
+    existingUser: User
+    params: GetOrCreateUserParams
+}
+
+type SyncIdentityNameParams = {
+    identityId: string
+    params: GetOrCreateUserParams
 }
