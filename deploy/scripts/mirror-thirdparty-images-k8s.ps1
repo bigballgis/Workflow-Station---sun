@@ -8,7 +8,7 @@
 # ⚠️ **Activepieces 不在本脚本管辖内**(2026-08-07 移除)。它曾以「第三方」身份在下表里拉
 # 上游 activepieces/activepieces:0.84.0 —— 那个二进制**既没剥 EE、没去 bun、也没预烘焙
 # pieces**,气隙集群里跑不通。我们跑的是仓库内源码构建的
-# <Registry>/activepieces:0.84.0-ee-removed,由 build-and-push-k8s.ps1 产出。
+# <Registry>/activepieces:<平台发版 tag>,由 build-and-push-k8s.ps1 与 8 个平台镜像一起产出。
 #
 # 用法:
 #   # 全部第三方镜像

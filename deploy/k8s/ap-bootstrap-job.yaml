@@ -64,7 +64,7 @@ spec:
       initContainers:
       - name: ap-bootstrap
         # Same vendored EE-removed image as the activepieces Deployment (keep tags in sync).
-        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:__IMAGE_TAG__
         imagePullPolicy: IfNotPresent
         command: ["node", "/scripts/ap-bootstrap-shared-account.js"]
         env:
@@ -98,7 +98,7 @@ spec:
       # (RBAC 只有"写 Secret"才需要,那一步仍然只报不改)。幂等,每次部署都跑一遍,
       # 这样白名单变了也会跟着同步。跑完不需要重启 AP——/v1/pieces 是直接查库的。
       - name: ap-provision-db
-        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:__IMAGE_TAG__
         imagePullPolicy: IfNotPresent
         # pg 装在镜像的 /usr/src/app/node_modules,脚本从 /scripts 挂载进来解析不到。
         command: ["node", "/scripts/ap-provision-db.js"]
@@ -176,7 +176,7 @@ spec:
       # 不自动修 signing-key 是裁决:私钥只返回一次、写 Secret 需要 RBAC,且重跑会轮换正在用的密钥。
       containers:
       - name: ap-verify
-        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:__IMAGE_TAG__
         imagePullPolicy: IfNotPresent
         command: ["node", "/scripts/ap-verify-provisioning.js"]
         env:

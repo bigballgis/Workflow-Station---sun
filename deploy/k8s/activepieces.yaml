@@ -46,8 +46,13 @@ spec:
       - name: activepieces
         # HERMES vendored image: EE-removed + de-bunned Activepieces 0.84.0, built from the
         # in-repo source (activepieces/Dockerfile) — mirrors the dev compose activepieces
-        # service. Replaces the upstream 0.84.0 image; must be pushed to this Nexus path at
-        # the :0.84.0-ee-removed tag.
+        # service. Replaces the upstream 0.84.0 image.
+        # TAG: follows the platform release tag (2026-08-07). AP is built from this repo by
+        # build-and-push-k8s.ps1 in the same run as the eight platform images, so it ships on
+        # the same tag; the apply script substitutes __IMAGE_TAG__ with -ImageTag.
+        # ⇒ every release must publish an activepieces image for that tag. Building the
+        # platform with -SkipActivepieces leaves this tag unpublished and the pod in
+        # ImagePullBackOff — the script warns when you do that.
         # AIR-GAP (X-3): the allowlisted pieces (activepieces/hermes/pieces.json) are
         # PRE-INSTALLED by the image's last layer, so the runtime installer never reaches
         # a registry for them; ACTIVEPIECES_NPM_REGISTRY stays fail-closed as a backstop.
@@ -55,8 +60,7 @@ spec:
         # The designer half (piece_metadata rows) is NOT in the image: run
         # deploy/pieces/metadata/pieces-seed.sql against this environment's DB, then
         # restart AP (the piece registry is cached in-process).
-        #image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:__IMAGE_TAG__
-        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0-ee-removed
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:__IMAGE_TAG__
         imagePullPolicy: Always
         # >>> SANDBOX BASELINE — decision D6 (2026-07-23). Mirrors dev compose. <<<
         # See docs/ap-integration/DECISIONS.md#d6.

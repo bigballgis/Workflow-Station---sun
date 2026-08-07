@@ -12,9 +12,9 @@
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipApWorkspaceInstall
 #   # deployment without Activepieces: DW frontend ships without the Automation builder
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -NoServiceTaskBuilder
-#   # AP image only (~25 min: full pnpm install + turbo build + piece prewarm)
-#   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Services activepieces
-#   # platform images only, reuse the AP image already in the registry
+#   # AP image only, on the release tag (~25 min: pnpm install + turbo build + piece prewarm)
+#   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -Services activepieces
+#   # platform images only — WARNS: activepieces:v1.0.0 will not exist for this release
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipActivepieces
 # =====================================================
 
@@ -51,13 +51,14 @@ param(
     # with the allowlisted pieces prewarmed into the last layer. Do NOT substitute the upstream
     # activepieces/activepieces:0.84.0 image (nor mirror-thirdparty-images-k8s.ps1's legacy
     # activepieces entry) — that one has none of the three and cannot run air-gapped.
-    # Skip it when only platform code changed: the AP image is a ~25 min build and its tag is
-    # pinned to the vendored AP version, so it is stable across platform releases.
+    # ⚠️ AP ships on the SAME tag as the platform, so skipping it leaves <Registry>/
+    # activepieces:$Tag unpublished while activepieces.yaml/ap-bootstrap-job.yaml resolve
+    # __IMAGE_TAG__ to exactly that tag ⇒ ImagePullBackOff. Only for a run whose images are
+    # not being deployed as a set (the script warns).
     [switch]$SkipActivepieces = $false,
-    # Deliberately NOT $Tag: deploy/k8s/activepieces.yaml pins this tag, and it tracks the
-    # vendored Activepieces version rather than the platform release. Bump it here and in the
-    # manifest together, or the cluster keeps pulling the old image.
-    [string]$ApImageTag = "0.84.0-ee-removed",
+    # Optional override; empty means "same tag as the platform images". The manifests use
+    # __IMAGE_TAG__, so this must match what the apply script is given as -ImageTag.
+    [string]$ApImageTag = "",
     [switch]$PushOnly = $false,
     [switch]$NoPush = $false,
     # Max services built/pushed in parallel (docker build/push run concurrently per service)
@@ -97,10 +98,11 @@ $selectedFrontend = if ($Services -eq "all") { $FrontendServices } else {
     $FrontendServices | Where-Object { $names -contains $_.Name }
 }
 # Activepieces is not a $BackendServices/$FrontendServices entry: it is neither a Maven module
-# nor a pnpm frontend, it has its own Dockerfile at the repo's activepieces/ root, and its tag
-# is $ApImageTag rather than $Tag. It is still selectable by name so -Services activepieces works.
+# nor a pnpm frontend and it has its own Dockerfile at the repo's activepieces/ root. It is
+# still selectable by name so -Services activepieces works, and it ships on the platform tag.
 $buildActivepieces = (-not $SkipActivepieces) -and
     (($Services -eq "all") -or (($Services -split ",") -contains "activepieces"))
+$apTag = if ([string]::IsNullOrWhiteSpace($ApImageTag)) { $Tag } else { $ApImageTag }
 
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Yellow
@@ -109,10 +111,23 @@ Write-Host "=========================================" -ForegroundColor Yellow
 Write-Host "  Registry: $Registry"
 Write-Host "  Tag: $Tag"
 Write-Host "  Services: $Services"
-Write-Host "  Activepieces: $(if ($buildActivepieces) { "yes (:$ApImageTag)" } else { 'skipped' })"
+Write-Host "  Activepieces: $(if ($buildActivepieces) { "yes (:$apTag)" } else { 'SKIPPED — nothing will publish activepieces:$Tag' })"
 Write-Host "  MaxParallel: $MaxParallel"
 Write-Host "  JavaBaseImage: $JavaBaseImage"
 Write-Host "=========================================" -ForegroundColor Yellow
+
+if (-not $buildActivepieces) {
+    # Worth shouting about: activepieces.yaml and ap-bootstrap-job.yaml resolve __IMAGE_TAG__
+    # to the tag the apply script is given, so a release whose AP image was never pushed under
+    # that tag comes up in ImagePullBackOff — and nothing before the deploy would have said so.
+    Write-Host ""
+    Write-Host "  WARNING: Activepieces is NOT being built/pushed in this run." -ForegroundColor Yellow
+    Write-Host "           deploy/k8s/{activepieces,ap-bootstrap-job}.yaml pull" -ForegroundColor Yellow
+    Write-Host "           $Registry/activepieces:<-ImageTag>. Deploying tag '$Tag' without" -ForegroundColor Yellow
+    Write-Host "           publishing that image => ImagePullBackOff." -ForegroundColor Yellow
+    Write-Host "           Re-run with -Services activepieces, or deploy an -ImageTag whose" -ForegroundColor Yellow
+    Write-Host "           activepieces image already exists in the registry." -ForegroundColor Yellow
+}
 
 # 0. Pre-pull Java runtime base (avoids docker build hitting Docker Hub for FROM metadata)
 # The @(...).Count guards below: a selection like -Services activepieces (or any frontend-only
@@ -431,7 +446,7 @@ if ($buildActivepieces) {
     Write-Step "Building Activepieces image from in-repo source..."
 
     $apContext = Join-Path $ProjectRoot "activepieces"
-    $apImage = "$Registry/activepieces:$ApImageTag"
+    $apImage = "$Registry/activepieces:$apTag"
 
     if (-not (Test-Path (Join-Path $apContext "Dockerfile"))) {
         Write-Fail "No Dockerfile at $apContext — the vendored Activepieces tree is missing. Exclude it with -SkipActivepieces if this deployment ships without Activepieces."
@@ -466,9 +481,7 @@ Write-Host "=========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Images: $Registry/*:$Tag" -ForegroundColor White
 if ($buildActivepieces) {
-    # Called out separately because it does NOT carry $Tag — deploy/k8s/activepieces.yaml
-    # pins this tag to the vendored AP version.
-    Write-Host "        $Registry/activepieces:$ApImageTag" -ForegroundColor White
+    Write-Host "        $Registry/activepieces:$apTag" -ForegroundColor White
 }
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
