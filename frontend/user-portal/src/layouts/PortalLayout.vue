@@ -24,7 +24,7 @@
             v-if="showFullPortal"
             index="/dashboard"
           >
-            <el-icon><HomeFilled /></el-icon>
+            <el-icon class="nav-anim nav-anim--bounce"><HomeFilled /></el-icon>
             <template #title>
               {{ t('menu.dashboard') }}
             </template>
@@ -33,7 +33,7 @@
             v-if="showFullPortal && hasBiDashboards"
             index="/bi-dashboard"
           >
-            <el-icon><DataAnalysis /></el-icon>
+            <el-icon class="nav-anim nav-anim--rise"><DataAnalysis /></el-icon>
             <template #title>
               BI Dashboard
             </template>
@@ -50,7 +50,7 @@
               type="danger"
               class="task-menu-badge-icon"
             >
-              <el-icon><List /></el-icon>
+              <el-icon class="nav-anim nav-anim--wobble"><List /></el-icon>
             </el-badge>
             <template #title>
               <span class="task-menu-title-with-badge">
@@ -69,7 +69,7 @@
             v-if="showFullPortal"
             index="/tasks/completed"
           >
-            <el-icon><Finished /></el-icon>
+            <el-icon class="nav-anim nav-anim--pop"><Finished /></el-icon>
             <template #title>
               {{ t('menu.completedTasks') }}
             </template>
@@ -78,7 +78,7 @@
             v-if="showFullPortal"
             index="/processes"
           >
-            <el-icon><Plus /></el-icon>
+            <el-icon class="nav-anim nav-anim--pop"><Plus /></el-icon>
             <template #title>
               {{ t('menu.processes') }}
             </template>
@@ -87,7 +87,7 @@
             v-if="showFullPortal"
             index="/my-applications"
           >
-            <el-icon><Document /></el-icon>
+            <el-icon class="nav-anim nav-anim--wobble"><Document /></el-icon>
             <template #title>
               {{ t('menu.myApplications') }}
             </template>
@@ -96,7 +96,7 @@
             v-if="showFullPortal"
             index="/delegations"
           >
-            <el-icon><Share /></el-icon>
+            <el-icon class="nav-anim nav-anim--wobble"><Share /></el-icon>
             <template #title>
               {{ t('menu.delegations') }}
             </template>
@@ -112,7 +112,7 @@
               type="danger"
               class="perm-menu-badge-icon"
             >
-              <el-icon><Key /></el-icon>
+              <el-icon class="nav-anim nav-anim--nudge"><Key /></el-icon>
             </el-badge>
             <template #title>
               <span class="perm-menu-title-with-badge">
@@ -131,7 +131,7 @@
             v-if="showFullPortal"
             index="/relation-tables"
           >
-            <el-icon><Grid /></el-icon>
+            <el-icon class="nav-anim nav-anim--pop"><Grid /></el-icon>
             <template #title>
               {{ t('menu.relationTables') }}
             </template>
@@ -141,7 +141,7 @@
             index="views-group"
           >
             <template #title>
-              <el-icon><ViewIcon /></el-icon>
+              <el-icon class="nav-anim nav-anim--blink"><ViewIcon /></el-icon>
               <span>{{ t('menu.views') }}</span>
             </template>
             <el-menu-item
@@ -354,7 +354,7 @@ const toggleCollapse = () => {
 </script>
 
 <style lang="scss" scoped>
-$aside-width: 248px; // 与 admin-center / developer-workstation 侧栏同宽
+$aside-width: 280px; // 与 admin-center / developer-workstation 侧栏同宽（admin 长菜单名不压箭头的最小整档）
 $aside-collapsed-width: 64px;
 
 .portal-layout {
@@ -591,7 +591,66 @@ $aside-collapsed-width: 64px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    
+
+    // 收起态：菜单容器 8px padding 把条目压到 48px 宽，而 EP 仍按「64px 宽 + 20px 左 padding」
+    // 摆图标（el-menu-item 的内容还包在绝对定位的 .el-menu-tooltip__trigger 里，自带同款 padding），
+    // 图标中心整体右偏 8px —— 收起时一律 flex 居中（badge 包装层随触发层一起居中）。
+    &.el-menu--collapse {
+      :deep(.el-menu-item),
+      :deep(.el-sub-menu__title),
+      :deep(.el-menu-item .el-menu-tooltip__trigger) {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 !important;
+      }
+
+      :deep(.el-icon) {
+        margin-right: 0;
+      }
+    }
+
+    // Nav icon micro-animations（与 admin-center AdminLayout 同款，AP builder 风格）：
+    // hover 菜单行时图标播一次性弹性动画，按图标语义分动作；关键帧首尾均为原始形态。
+    :deep(.el-menu-item:hover .nav-anim--wobble svg),
+    :deep(.el-sub-menu__title:hover .nav-anim--wobble svg) {
+      animation: nav-icon-wobble 0.55s ease-in-out;
+    }
+
+    :deep(.el-menu-item:hover .nav-anim--pop svg),
+    :deep(.el-sub-menu__title:hover .nav-anim--pop svg) {
+      animation: nav-icon-pop 0.45s ease-out;
+    }
+
+    :deep(.el-menu-item:hover .nav-anim--rise svg),
+    :deep(.el-sub-menu__title:hover .nav-anim--rise svg) {
+      transform-origin: 50% 85%;
+      animation: nav-icon-rise 0.5s ease-out;
+    }
+
+    // blink：与 rise 同一组关键帧，但以中心为原点，对"眼睛"图标呈眨眼效果
+    :deep(.el-menu-item:hover .nav-anim--blink svg),
+    :deep(.el-sub-menu__title:hover .nav-anim--blink svg) {
+      transform-origin: 50% 50%;
+      animation: nav-icon-rise 0.5s ease-out;
+    }
+
+    :deep(.el-menu-item:hover .nav-anim--bounce svg),
+    :deep(.el-sub-menu__title:hover .nav-anim--bounce svg) {
+      animation: nav-icon-bounce 0.5s ease-out;
+    }
+
+    :deep(.el-menu-item:hover .nav-anim--nudge svg),
+    :deep(.el-sub-menu__title:hover .nav-anim--nudge svg) {
+      animation: nav-icon-nudge 0.5s ease-in-out;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :deep(.el-menu-item:hover .nav-anim svg),
+      :deep(.el-sub-menu__title:hover .nav-anim svg) {
+        animation: none;
+      }
+    }
   }
 
   .collapse-btn {
@@ -601,11 +660,47 @@ $aside-collapsed-width: 64px;
     height: 48px;
     cursor: pointer;
     border-top: 1px solid var(--border-color);
-    
+
     &:hover {
       background-color: var(--background-light);
     }
   }
 }
 
+@keyframes nav-icon-wobble {
+  0% { transform: rotate(0deg); }
+  30% { transform: rotate(-14deg); }
+  60% { transform: rotate(10deg); }
+  80% { transform: rotate(-4deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes nav-icon-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.8); }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes nav-icon-rise {
+  0% { transform: scaleY(1); }
+  35% { transform: scaleY(0.7); }
+  70% { transform: scaleY(1.12); }
+  100% { transform: scaleY(1); }
+}
+
+@keyframes nav-icon-bounce {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(-3px); }
+  65% { transform: translateY(1px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes nav-icon-nudge {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  55% { transform: translateX(2.5px); }
+  80% { transform: translateX(-1px); }
+  100% { transform: translateX(0); }
+}
 </style>

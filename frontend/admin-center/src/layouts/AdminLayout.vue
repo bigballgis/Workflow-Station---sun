@@ -24,7 +24,7 @@
         >
           <!-- Dashboard - everyone -->
           <el-menu-item index="/dashboard">
-            <el-icon><Odometer /></el-icon>
+            <el-icon class="nav-anim nav-anim--wobble"><Odometer /></el-icon>
             <template #title>
               {{ t('menu.dashboard') }}
             </template>
@@ -35,7 +35,7 @@
             v-if="canReadUser"
             index="/user/list"
           >
-            <el-icon><User /></el-icon>
+            <el-icon class="nav-anim nav-anim--bounce"><User /></el-icon>
             <template #title>
               {{ t('menu.userManagement') }}
             </template>
@@ -47,7 +47,7 @@
             index="entitlement"
           >
             <template #title>
-              <el-icon><Lock /></el-icon>
+              <el-icon class="nav-anim nav-anim--wobble"><Lock /></el-icon>
               <span>{{ t('menu.entitlementManagement') }}</span>
             </template>
             <el-menu-item
@@ -75,7 +75,7 @@
             v-if="isSystemAdmin"
             index="/function-unit"
           >
-            <el-icon><Box /></el-icon>
+            <el-icon class="nav-anim nav-anim--pop"><Box /></el-icon>
             <template #title>
               {{ t('menu.functionUnit') }}
             </template>
@@ -87,7 +87,7 @@
             index="bi-management"
           >
             <template #title>
-              <el-icon><DataAnalysis /></el-icon>
+              <el-icon class="nav-anim nav-anim--rise"><DataAnalysis /></el-icon>
               <span>{{ t('menu.biManagement') }}</span>
             </template>
             <el-menu-item index="/bi-management/dashboard-registry">
@@ -107,7 +107,7 @@
             index="audit"
           >
             <template #title>
-              <el-icon><Document /></el-icon>
+              <el-icon class="nav-anim nav-anim--wobble"><Document /></el-icon>
               <span>{{ t('menu.audit') }}</span>
             </template>
             <el-menu-item index="/audit/admin-center">
@@ -124,7 +124,7 @@
             index="relation-tables"
           >
             <template #title>
-              <el-icon><Grid /></el-icon>
+              <el-icon class="nav-anim nav-anim--pop"><Grid /></el-icon>
               <span>{{ t('menu.relationTables') }}</span>
             </template>
             <el-menu-item index="/relation-tables/structure">
@@ -140,7 +140,7 @@
             v-if="isSystemAdmin"
             index="/automation-pieces"
           >
-            <el-icon><Cpu /></el-icon>
+            <el-icon class="nav-anim nav-anim--pop"><Cpu /></el-icon>
             <template #title>
               {{ t('menu.automationPieces') }}
             </template>
@@ -151,7 +151,7 @@
             v-if="isSystemAdmin"
             index="/automation-flows"
           >
-            <el-icon><Share /></el-icon>
+            <el-icon class="nav-anim nav-anim--wobble"><Share /></el-icon>
             <template #title>
               {{ t('menu.automationFlows') }}
             </template>
@@ -166,7 +166,7 @@
             :route="route.path"
             @click="openServiceTask"
           >
-            <el-icon><Connection /></el-icon>
+            <el-icon class="nav-anim nav-anim--nudge"><Connection /></el-icon>
             <template #title>
               {{ t('menu.serviceTask') }}
             </template>
@@ -294,7 +294,7 @@ const toggleCollapse = () => {
 
 <style scoped lang="scss">
 $header-height: 64px;
-$aside-width: 248px;
+$aside-width: 280px; // 与 user-portal / developer-workstation 统一；280 起「Entitlement Management」文字才不压子菜单箭头
 $aside-collapsed-width: 64px;
 $primary-color: #db0011;
 $primary-dark: #8b0000;
@@ -407,6 +407,97 @@ $primary-dark: #8b0000;
   :deep(.el-menu) {
     background: transparent;
   }
+
+  // 收起态：菜单容器 8px padding 把条目压到 48px 宽，而 EP 仍按「64px 宽 + 20px 左 padding」
+  // 摆图标（el-menu-item 的内容还包在绝对定位的 .el-menu-tooltip__trigger 里，自带同款 padding），
+  // 图标中心整体右偏 8px —— 收起时一律 flex 居中。
+  &.el-menu--collapse {
+    :deep(.el-menu-item),
+    :deep(.el-sub-menu__title),
+    :deep(.el-menu-item .el-menu-tooltip__trigger) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 !important;
+    }
+
+    :deep(.el-icon) {
+      margin-right: 0;
+    }
+  }
+
+  // Nav icon micro-animations (Activepieces-style): hovering the menu ROW plays a
+  // one-shot springy animation on the icon, each variant matching the icon's meaning.
+  // Keyframes end at the identity transform so there is no snap on hover-out.
+  :deep(.el-menu-item:hover .nav-anim--wobble svg),
+  :deep(.el-sub-menu__title:hover .nav-anim--wobble svg) {
+    animation: nav-icon-wobble 0.55s ease-in-out;
+  }
+
+  :deep(.el-menu-item:hover .nav-anim--pop svg),
+  :deep(.el-sub-menu__title:hover .nav-anim--pop svg) {
+    animation: nav-icon-pop 0.45s ease-out;
+  }
+
+  :deep(.el-menu-item:hover .nav-anim--rise svg),
+  :deep(.el-sub-menu__title:hover .nav-anim--rise svg) {
+    transform-origin: 50% 85%;
+    animation: nav-icon-rise 0.5s ease-out;
+  }
+
+  :deep(.el-menu-item:hover .nav-anim--bounce svg),
+  :deep(.el-sub-menu__title:hover .nav-anim--bounce svg) {
+    animation: nav-icon-bounce 0.5s ease-out;
+  }
+
+  :deep(.el-menu-item:hover .nav-anim--nudge svg),
+  :deep(.el-sub-menu__title:hover .nav-anim--nudge svg) {
+    animation: nav-icon-nudge 0.5s ease-in-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :deep(.el-menu-item:hover .nav-anim svg),
+    :deep(.el-sub-menu__title:hover .nav-anim svg) {
+      animation: none;
+    }
+  }
+}
+
+@keyframes nav-icon-wobble {
+  0% { transform: rotate(0deg); }
+  30% { transform: rotate(-14deg); }
+  60% { transform: rotate(10deg); }
+  80% { transform: rotate(-4deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes nav-icon-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.8); }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes nav-icon-rise {
+  0% { transform: scaleY(1); }
+  35% { transform: scaleY(0.7); }
+  70% { transform: scaleY(1.12); }
+  100% { transform: scaleY(1); }
+}
+
+@keyframes nav-icon-bounce {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(-3px); }
+  65% { transform: translateY(1px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes nav-icon-nudge {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  55% { transform: translateX(2.5px); }
+  80% { transform: translateX(-1px); }
+  100% { transform: translateX(0); }
 }
 
 .collapse-btn {
