@@ -85,5 +85,18 @@ public class ServiceTaskProperties {
 
         /** 外部 token 有效期（秒），短时——仅用于换取 AP token 的一次握手。 */
         private int tokenTtlSeconds = 120;
+
+        /**
+         * 影子用户的 AP 平台角色（{@code ADMIN} / {@code MEMBER}）。默认 {@code ADMIN}：
+         * 从 admin center 进入 AP 的人需要平台级页面（AI provider、piece 管理、签名密钥）。
+         * 收紧成 {@code MEMBER} 只需改配置——AP 侧每次握手会按此值同步既有影子用户。
+         */
+        private String platformRole = "ADMIN";
+
+        /**
+         * 影子用户在共享 project 里的角色，逐字对应 AP {@code project_role.name}
+         * （{@code Admin} / {@code Editor} / {@code Viewer}）。默认 {@code Admin}。
+         */
+        private String projectRole = "Admin";
     }
 }

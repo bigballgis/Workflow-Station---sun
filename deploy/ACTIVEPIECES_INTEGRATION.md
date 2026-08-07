@@ -26,7 +26,7 @@
 | **L1 DW 内嵌编排器** —— Function Unit 的 **Automation** 标签直接挂 AP builder（lib-mode + Shadow DOM，**非 iframe**，X-6）；bundle 由 `activepieces/packages/web` 的 `vite.embed.config.mts` 产出，DW 的 `prebuild` 钩子拷进 `public/service-task-builder/` | dev 浏览器 E2E 通过 | `INTEGRATION_DESIGN.md` |
 | **L2 Kong `/api/ap`** —— builder 的 REST + socket.io 经网关收编（socket.io path `/api/ap/socket.io`）；**另有 `/ap-cdn`** 把气隙镜像的 piece 图标转回 AP（lib-mode bundle 不带 publicDir，不收编则内嵌 builder 里图标全 404 成灰块） | dev 通过 | 同上 + `HERMES_PATCHES.md` 009 |
 | **L7 per-user provisioning** —— 审计到人：managed-authn + signing-key，每用户签 RS256 外部 token 换 AP 会话（flow Owner 落真实用户，不再全是共享账号）。**dev 已启用**（`ACTIVEPIECES_MANAGED_ENABLED=true`） | dev 已启用 | 同上 + `DECISIONS.md` |
-| **vendored 源码镜像** —— EE 剥离 + 去 bun + 预烘焙 pieces，`activepieces:0.84.0-ee-removed`（见 §5 前置） | 已落地 | `EE_REMOVAL_PLAN.md` |
+| **vendored 源码镜像** —— EE 剥离 + 去 bun + 预烘焙 pieces（dev 本地 tag `activepieces:0.84.0-ee-removed`；k8s 跟平台发版 tag，见 §5 前置） | 已落地 | `EE_REMOVAL_PLAN.md` |
 | **自研 piece 开发** —— 从写代码到 DW 可用的全链路 + 可直接抄的完整示例 | 已落地（biz-calendar / hash-helper 实建） | [`PIECE_DEVELOPMENT_HOWTO.md`](../docs/ap-integration/PIECE_DEVELOPMENT_HOWTO.md) / [`PIECE_DEVELOPMENT_EXAMPLE.md`](../docs/ap-integration/PIECE_DEVELOPMENT_EXAMPLE.md) |
 | **离线 piece 白名单投放** —— 白名单 + 预装（运行时半） | 已落地 | `activepieces/hermes/README.md` |
 | **元数据 seed / 自研件元数据序列化** —— `piece_metadata` 行（设计器半） | 已落地 | `deploy/pieces/README.md` |
@@ -167,7 +167,8 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 ## 5. k8s / 生产部署
 
 > **前置:AP 镜像现在是「仓库内源码构建」,不再是镜像上游二进制。**
-> k8s manifest 引用的是 `<Registry>/workflow-station2/activepieces:0.84.0-ee-removed` ——
+> k8s manifest 引用的是 `<Registry>/workflow-station2/activepieces:__IMAGE_TAG__`
+> （2026-08-07 起**跟平台发版 tag 走**，由 apply 脚本用 `-ImageTag` 替换）——
 > 由**本仓库 `activepieces/` 源码树 + `activepieces/Dockerfile`** 构建的 HERMES vendored 镜像:
 > **EE 剥离 + 去 bun(X-4,运行时装包改 pnpm) + 末层预烘焙白名单 pieces(`activepieces/hermes/pieces.json`,X-3 气隙)**。
 > 与 dev compose 的 `activepieces` 服务同源同构。
@@ -176,7 +177,13 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 > `activepieces/activepieces:0.84.0` 二进制:**既没剥 EE、没去 bun、也没预装 pieces**,气隙集群里跑不通
 > (该脚本的 activepieces 条目属历史遗留,其余 redis/kafka/kong 仍照常用它)。
 >
-> 正确做法:在有网的构建机上 `docker build -t <Registry>/workflow-station2/activepieces:0.84.0-ee-removed activepieces/`
+> 正确做法:**`build-and-push-k8s.ps1` 会一并构建并推送它**(2026-08-07 起),**和 8 个平台镜像
+> 同一个 `-Tag`**,`-Services activepieces` 可只出这一个。
+> ⚠️ **每次发版都必须发布该 tag 的 AP 镜像**:`activepieces.yaml` 与 `ap-bootstrap-job.yaml`
+> 把 `__IMAGE_TAG__` 解析成 apply 时给的 `-ImageTag`,用 `-SkipActivepieces` 出的那个 tag
+> 没有 AP 镜像 ⇒ ImagePullBackOff(脚本会就此告警)。真要复用旧镜像就 deploy 一个已存在
+> AP 镜像的 `-ImageTag`,或用 `-ApImageTag` 显式覆盖。
+> 等价的手工命令仍然有效:`docker build -t <Registry>/workflow-station2/activepieces:<Tag> activepieces/`
 > → push 到 Nexus;或 `docker save | gzip` 带进内网 `docker load`(见 `activepieces/hermes/README.md`)。
 > `ap-bootstrap-job.yaml` 用的也是同一个镜像,一并就位。
 >

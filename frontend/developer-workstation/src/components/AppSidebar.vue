@@ -21,7 +21,7 @@
         router
       >
         <el-menu-item index="/function-units">
-          <el-icon><Folder /></el-icon>
+          <el-icon class="nav-anim nav-anim--pop"><Folder /></el-icon>
           <template #title>
             {{ t('functionUnit.title') }}
           </template>
@@ -165,7 +165,7 @@ export default {
 
 <style scoped lang="scss">
 $header-height: 64px;
-$aside-width: 248px; // 与 admin-center / user-portal 侧栏同宽
+$aside-width: 280px; // 与 admin-center / user-portal 侧栏同宽
 $aside-collapsed-width: 64px;
 $primary-color: #db0011;
 // 「最近打开」区内容的左起点：与上方菜单项图标框左缘同列（菜单容器 8px + EP 菜单项 20px）
@@ -211,14 +211,14 @@ $recent-inset: 20px;
     flex-shrink: 0;
   }
 
-  // 「Developer Workstation」比 admin-center / user-portal 的应用名长，248px 内放不下 16px/0.5px 那一档；
-  // 收一档字号与字距刚好整行放下，仍设省略号兜住更长的译名。
+  // 侧栏放宽到 280px 后「Developer Workstation」整行放得下 16px/0.5px 标准档
+  // （与 admin-center / user-portal 同款），仍设省略号兜住更长的译名。
   .brand-name {
     min-width: 0;
     color: var(--ws-text);
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
-    letter-spacing: 0.2px;
+    letter-spacing: 0.5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -268,6 +268,43 @@ $recent-inset: 20px;
       border-radius: 0 3px 3px 0;
     }
   }
+
+  // 收起态：菜单容器 8px padding 把条目压到 48px 宽，而 EP 仍按「64px 宽 + 20px 左 padding」
+  // 摆图标（el-menu-item 的内容还包在绝对定位的 .el-menu-tooltip__trigger 里，自带同款 padding），
+  // 图标中心整体右偏 8px —— 收起时一律 flex 居中（与 admin-center / user-portal 同款修复）。
+  &.el-menu--collapse {
+    :deep(.el-menu-item),
+    :deep(.el-menu-item .el-menu-tooltip__trigger) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 !important;
+    }
+
+    :deep(.el-icon) {
+      margin-right: 0;
+    }
+  }
+
+  // Nav icon micro-animation（与 admin-center / user-portal 同款，AP builder 风格）：
+  // hover 菜单行时图标播一次性弹性缩放；完整变体集见另两端 Layout，这里只用到 pop。
+  // 「最近打开」磁贴已有自己的上浮微交互，不叠加此动画。
+  :deep(.el-menu-item:hover .nav-anim--pop svg) {
+    animation: nav-icon-pop 0.45s ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :deep(.el-menu-item:hover .nav-anim svg) {
+      animation: none;
+    }
+  }
+}
+
+@keyframes nav-icon-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.8); }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); }
 }
 
 // ==================== 最近打开 ====================

@@ -168,12 +168,17 @@ public class ServiceTaskApiClient {
     }
 
     /**
-     * 按 AP external-token-extractor 的 v2 payload 契约签发 RS256 外部 token：
-     * {@code externalUserId / externalProjectId / firstName / lastName}（均必填）。
-     * 不带 {@code role} → AP 默认 EDITOR。{@code kid} 走 header，AP 据此查 publicKey 验签。
+     * 按 AP external-token payload 契约签发 RS256 外部 token。<b>六个 claim 全部必填</b>
+     * （{@code externalUserId / externalProjectId / firstName / lastName / role / platformRole}）——
+     * AP 侧的 schema 是为本方法量身定的、没有可选分支也没有版本变体，
+     * 因为这条链上永远只有一个签发方（见 DECISIONS.md D13 裁决 2）。
+     * {@code kid} 走 header，AP 据此查 publicKey 验签。
      */
     private String buildExternalToken(UserPrincipal user) {
         ServiceTaskProperties.Managed managed = properties.getManaged();
+        // 空配置在这里就断掉，而不是发一个缺 claim 的 token 让 AP 去猜默认值。
+        String projectRole = requireConfigured(managed.getProjectRole(), "service-task.managed.project-role");
+        String platformRole = requireConfigured(managed.getPlatformRole(), "service-task.managed.platform-role");
         String firstName = firstNonBlank(user.getDisplayName(), user.getUsername(), user.getUserId());
         Date now = new Date();
         Date expiry = new Date(now.getTime() + managed.getTokenTtlSeconds() * 1000L);
@@ -184,6 +189,10 @@ public class ServiceTaskApiClient {
                     .claim("externalProjectId", managed.getProjectExternalId())
                     .claim("firstName", firstName)
                     .claim("lastName", "")
+                    // role = project_role.name（Admin/Editor/Viewer）；platformRole = AP 平台角色
+                    // （ADMIN/MEMBER）。AP 每次握手按这两个值同步既有影子用户。
+                    .claim("role", projectRole)
+                    .claim("platformRole", platformRole)
                     .issuedAt(now)
                     .expiration(expiry)
                     .signWith(loadPrivateKey(managed.getPrivateKey()), Jwts.SIG.RS256)
@@ -215,6 +224,13 @@ public class ServiceTaskApiClient {
         } catch (RuntimeException | java.security.GeneralSecurityException e) {
             throw new ServiceTaskApiException("Invalid Activepieces managed private key (expected PKCS8 PEM)", e);
         }
+    }
+
+    private static String requireConfigured(String value, String property) {
+        if (value == null || value.isBlank()) {
+            throw new ServiceTaskApiException("Activepieces managed provisioning misconfigured: " + property + " must be set");
+        }
+        return value;
     }
 
     private static String firstNonBlank(String... values) {

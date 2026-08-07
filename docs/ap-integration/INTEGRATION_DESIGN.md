@@ -360,7 +360,7 @@ standalone AP 行为**，故独立 AP 不受影响）。6 切点全部改为经�
 | 3 | `API_BASE_URL/API_URL = origin/api` 模块常量 | `lib/api.ts` | `request()` 改**懒读** `apHost.getApiUrl()`（宿主可指向 Kong `/api/ap`） |
 | 4 | 401/session-expired 强跳 `/sign-in` | `lib/api.ts` | `globalErrorHandler` 有 `onUnauthorized` 则回调 |
 | 5 | socket.io 模块单例 `io(origin,{path:'/api/socket.io'})` | `components/providers/socket-provider.tsx` | **改懒建**，`apHost.getSocketBaseUrl()/getSocketPath()`（宿主指向 `/api/ap/socket.io`） |
-| 6 | queryClient onError 硬耦合 billing 弹窗 | `app/query-client.ts` | `disableBillingDialogs` 时不开 EE manage-plan 弹窗 |
+| 6 | queryClient onError 硬耦合 billing 弹窗 | `app/query-client.ts` | ~~`disableBillingDialogs` 时不开 EE manage-plan 弹窗~~ **已被 VT-23 取代（2026-08-07）**：billing 面整树删除，402 一律走通用 toast，开关不复存在 |
 
 **验证**：`tsc -p tsconfig.app.json` 0 新增 error（唯一既有 error 在 `prompt-kit/markdown.tsx`，vendored 基线 `de4f6469` 起就在、
 与 L1 无关，vite/esbuild 构建不受影响）；**vitest 3/3 PASS**（`test/lib/host-config.test.ts`：默认回退 / L2 `/api/ap` 前缀注入 / 懒读）。
@@ -376,7 +376,6 @@ window.__AP_HOST_CONFIG__ = {
   socketPath:  '/api/ap/socket.io',          // L2 Kong socket.io
   storage:     <注入的 Storage，写入 L7 per-user AP token/projectId>,
   onUnauthorized: (reason) => <DW 侧重新供给 token / 提示，不导航>,
-  disableBillingDialogs: true,               // 无 billing 宿主
 }
 ```
 per-user token 由 L7 桥（`/launch`→managed 换取）写入注入的 `storage`；builder 经 L2 `/api/ap/*` 访问 AP。

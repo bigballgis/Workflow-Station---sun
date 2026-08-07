@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { piecesApi, PieceIcon, piecesHooks } from '@/features/pieces';
 import { platformHooks } from '@/hooks/platform-hooks';
 
-import { ManagePiecesDialog } from './manage-pieces-dialog';
 
 const columns: ColumnDef<RowDataWithActions<PieceMetadataModelSummary>>[] = [
   {
@@ -114,11 +113,6 @@ const PiecesSettings = () => {
     isTableQuery: true,
   });
 
-  const toolbarButtons = useMemo(
-    () => [<ManagePiecesDialog key="manage" onSuccess={() => refetch()} />],
-    [refetch],
-  );
-
   const customFilters = useMemo(
     () => [
       <DataTableInputPopover
@@ -162,7 +156,6 @@ const PiecesSettings = () => {
         }}
         isLoading={isLoading}
         hidePagination={true}
-        toolbarButtons={platform.plan.managePiecesEnabled ? toolbarButtons : []}
       />
     </div>
   );

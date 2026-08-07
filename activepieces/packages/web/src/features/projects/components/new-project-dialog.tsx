@@ -1,17 +1,10 @@
-import {
-  AppConnectionWithoutSensitiveData,
-  CreatePlatformProjectRequest,
-  ProjectWithLimits,
-} from '@activepieces/shared';
+import { CreateProjectRequest, ProjectWithLimits } from '@activepieces/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useQueryClient } from '@tanstack/react-query';
 import { t } from 'i18next';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { DefaultTag } from '@/components/custom/global-connection-utils';
-import { MultiSelectPieceProperty } from '@/components/custom/multi-select-piece-property';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,11 +18,8 @@ import {
 import { Form, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { SkeletonList } from '@/components/ui/skeleton';
 import { internalErrorToast } from '@/components/ui/sonner';
-import { globalConnectionsQueries } from '@/features/connections';
 import { projectCollectionUtils } from '@/features/projects';
-import { platformHooks } from '@/hooks/platform-hooks';
 
 type NewProjectDialogProps = {
   children: React.ReactNode;
@@ -38,16 +28,6 @@ type NewProjectDialogProps = {
 
 export const NewProjectDialog = (props: NewProjectDialogProps) => {
   const [open, setOpen] = useState(false);
-  const { platform } = platformHooks.useCurrentPlatform();
-  const globalConnectionsEnabled = platform.plan.globalConnectionsEnabled;
-
-  const { data: globalConnectionsPage, isLoading: isLoadingConnections } =
-    globalConnectionsQueries.useGlobalConnections({
-      request: { limit: 9999 },
-      extraKeys: [],
-    });
-
-  const globalConnections = globalConnectionsPage?.data ?? [];
 
   return (
     <Dialog key={open ? 'open' : 'closed'} open={open} onOpenChange={setOpen}>
@@ -61,79 +41,43 @@ export const NewProjectDialog = (props: NewProjectDialogProps) => {
             )}
           </DialogDescription>
         </DialogHeader>
-        {(!isLoadingConnections || !globalConnectionsEnabled) && (
-          <NewProjectForm
-            setOpen={setOpen}
-            globalConnections={globalConnections}
-            globalConnectionsEnabled={globalConnectionsEnabled}
-            onCreate={props.onCreate}
-          />
-        )}
-        {isLoadingConnections && globalConnectionsEnabled && (
-          <SkeletonList numberOfItems={3} className="h-10" />
-        )}
+        <NewProjectForm setOpen={setOpen} onCreate={props.onCreate} />
       </DialogContent>
     </Dialog>
   );
 };
 
+// Alert Receiver Email and Global Connections used to live here. Both fed EE modules this
+// build does not have (alerts, platform-scoped connections), so the fields could only ever
+// be collected and dropped — see DECISIONS.md D13.
 const NewProjectForm = ({
   onCreate,
   setOpen,
-  globalConnections,
-  globalConnectionsEnabled,
 }: Omit<NewProjectDialogProps, 'children'> & {
   setOpen: (open: boolean) => void;
-  globalConnections: AppConnectionWithoutSensitiveData[];
-  globalConnectionsEnabled: boolean;
 }) => {
-  const queryClient = useQueryClient();
-  const preselectedConnectionExternalIds = globalConnections
-    .filter((connection) => connection.preSelectForNewProjects)
-    .map((connection) => connection.externalId);
-
-  const form = useForm<CreatePlatformProjectRequest>({
+  const form = useForm<CreateProjectRequest>({
     resolver: zodResolver(
       z.object({
         displayName: z.string().min(1, t('Name is required')),
-        alertReceiverEmail: z
-          .email(t('Invalid email'))
-          .nullable()
-          .optional()
-          .or(z.literal('')),
       }),
     ),
-    defaultValues: {
-      globalConnectionExternalIds: preselectedConnectionExternalIds,
-      alertReceiverEmail: '',
-    },
   });
-
-  const handleCreate = () => {
-    const values = form.getValues();
-    const alertReceiverEmail = values.alertReceiverEmail?.trim();
-    mutate({
-      ...values,
-      alertReceiverEmail:
-        alertReceiverEmail && alertReceiverEmail.length > 0
-          ? alertReceiverEmail
-          : null,
-    });
-  };
 
   const { mutate, isPending } = projectCollectionUtils.useCreateProject(
     (data) => {
       onCreate?.(data);
       setOpen(false);
-      queryClient.invalidateQueries({
-        queryKey: globalConnectionsQueries.getGlobalConnectionsQueryKey([]),
-      });
     },
     (error) => {
       console.error(error);
       internalErrorToast();
     },
   );
+
+  const handleCreate = () => {
+    mutate(form.getValues());
+  };
 
   return (
     <>
@@ -155,62 +99,10 @@ const NewProjectForm = ({
                   placeholder={t('Project Name')}
                   className="rounded-sm"
                 />
-              </FormItem>
-            )}
-          />
-          <FormField
-            name="alertReceiverEmail"
-            render={({ field }) => (
-              <FormItem className="grid space-y-2">
-                <Label htmlFor="alertReceiverEmail">
-                  {t('Alert Receiver Email')}
-                </Label>
-                <Input
-                  {...field}
-                  id="alertReceiverEmail"
-                  type="email"
-                  placeholder="alerts@example.com"
-                  className="rounded-sm"
-                  value={field.value ?? ''}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {t('Receives flow failure emails for this project.')}
-                </span>
                 <FormMessage />
               </FormItem>
             )}
           />
-          {globalConnectionsEnabled && (
-            <FormField
-              name="globalConnectionExternalIds"
-              render={({ field }) => (
-                <FormItem className="grid space-y-2">
-                  <Label>{t('Global Connections')}</Label>
-                  <MultiSelectPieceProperty
-                    placeholder={t('Select global connections')}
-                    options={
-                      globalConnections.map((connection) => ({
-                        value: connection.externalId,
-                        label: connection.displayName,
-                      })) ?? []
-                    }
-                    loading={false}
-                    onChange={(value) => {
-                      field.onChange(value ?? []);
-                    }}
-                    itemExtraContent={(index) => {
-                      if (globalConnections[index].preSelectForNewProjects) {
-                        return <DefaultTag />;
-                      }
-                      return null;
-                    }}
-                    initialValues={field.value ?? []}
-                    showDeselect={(field.value ?? []).length > 0}
-                  />
-                </FormItem>
-              )}
-            />
-          )}
           {form?.formState?.errors?.root?.serverError && (
             <FormMessage>
               {form.formState.errors.root.serverError.message}

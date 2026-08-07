@@ -18,13 +18,17 @@ const mockLog: FastifyBaseLogger = {
 
 const mockWorker = {} as BullMQWorker
 
+// Mirrors ConsumeJobRequest: the dispatcher hands `token` and `queueName` straight to
+// onOrphanedJob so the broker can return the job to its own queue with the same BullMQ
+// token it was dequeued under. (`timeoutInSeconds` was never part of this contract.)
 function createFakeJob(id: string): ConsumeJobRequest {
     return {
         jobId: id,
         jobData: {} as ConsumeJobRequest['jobData'],
-        timeoutInSeconds: 600,
         attempsStarted: 0,
-        engineToken: 'token',
+        engineToken: 'engine-token',
+        token: `token-${id}`,
+        queueName: 'test-queue',
     }
 }
 
@@ -249,7 +253,7 @@ describe('QueueDispatcher', () => {
         pendingDequeues[0].resolve(orphanedJob)
         await vi.advanceTimersByTimeAsync(0)
 
-        expect(onOrphanedJobMock).toHaveBeenCalledWith('orphaned-job', mockLog)
+        expect(onOrphanedJobMock).toHaveBeenCalledWith('orphaned-job', 'token-orphaned-job', 'test-queue', mockLog)
     })
 
     it('should not spawn a second concurrent loop after close() while dequeue is in-flight', async () => {

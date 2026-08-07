@@ -5,10 +5,8 @@ import {
 } from 'typeorm'
 import { PlatformAnalyticsReportEntity } from '../analytics/platform-analytics-report.entity'
 import { AppConnectionEntity } from '../app-connection/app-connection.entity'
+import { AuditEventEntity } from '../audit-logs/audit-event-entity'
 import { UserIdentityEntity } from '../authentication/user-identity/user-identity-entity'
-import { ConcurrencyPoolEntity } from '../project/concurrency-pool.entity'
-import { ProjectMemberEntity } from '../project/project-member.entity'
-import { ProjectRoleEntity } from '../project/project-role.entity'
 import { EventDestinationEntity } from '../event-destinations/event-destinations.entity'
 import { FileEntity } from '../file/file.entity'
 import { FlagEntity } from '../flags/flag.entity'
@@ -25,7 +23,10 @@ import { PieceMetadataEntity } from '../pieces/metadata/piece-metadata-entity'
 import { PieceTagEntity } from '../pieces/tags/pieces/piece-tag.entity'
 import { TagEntity } from '../pieces/tags/tag-entity'
 import { PlatformEntity } from '../platform/platform.entity'
+import { ConcurrencyPoolEntity } from '../project/concurrency-pool.entity'
 import { ProjectEntity } from '../project/project-entity'
+import { ProjectMemberEntity } from '../project/project-member.entity'
+import { ProjectRoleEntity } from '../project/project-role.entity'
 import { SigningKeyEntity } from '../signing-key/signing-key-entity'
 import { StoreEntryEntity } from '../store-entry/store-entry-entity'
 import { FieldEntity } from '../tables/field/field.entity'
@@ -89,6 +90,7 @@ function getEntities(): EntitySchema<unknown>[] {
         TemplateEntity,
         PlatformAnalyticsReportEntity,
         // CLOUD
+        AuditEventEntity,
         EventDestinationEntity,
 
     ]

@@ -1,0 +1,84 @@
+name: AP api tests
+
+# The api suite needs NO services: .env.tests runs it on AP_DB_TYPE=PGLITE (in-process
+# Postgres) and AP_REDIS_TYPE=MEMORY. That is why this job is cheap enough to run on every
+# activepieces/** change.
+#
+# Node version is load-bearing: node:zlib gained zstd in 22.15, and file-compressor.ts
+# imports it at module scope, so on an older runtime EVERY test dies at collection with
+# `promisify(undefined)`. We pin from .nvmrc (v24). This is exactly what made the suite look
+# dead on a dev machine in 2026-08 — a stray `node` npm package in $HOME put 22.13 on npx's
+# PATH, ahead of the real runtime.
+#
+# Scope (D13): this fork ships ONE edition, so test/integration/{ee,cloud} are gone and the
+# tests in them that covered live features were promoted into ce/ (managed-authn, signing-key,
+# store-entry, flow role permissions, app-connection metadata, sign-up).
+
+on:
+  push:
+    paths:
+      - 'activepieces/packages/server/api/**'
+      - 'activepieces/packages/shared/**'
+      - '.github/workflows/ap-api-tests.yml'
+  pull_request:
+    paths:
+      - 'activepieces/packages/server/api/**'
+      - 'activepieces/packages/shared/**'
+      - '.github/workflows/ap-api-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ap-api-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-tests:
+    name: api unit + CE integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: activepieces
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: activepieces/.nvmrc
+
+      - name: Assert the runtime has zstd (see header)
+        run: node -e "const z=require('node:zlib'); if (typeof z.zstdCompress !== 'function') { throw new Error('node ' + process.version + ' has no zlib.zstdCompress — the api suite cannot collect') }"
+
+      - name: Install
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Unit tests
+        run: pnpm --filter api run test-unit
+
+      # execute-flow-e2e is the only test that really executes flows — webhook → data mapper
+      # → code, subflow wait-for-response, delay/resume, >32KB output slicing. That is the
+      # BPMN service-task contract (sync webhook in, response out) plus the PAUSED branch of
+      # HERMES-PATCH-007, so it stays in the gate.
+      #
+      # It needs two things the image provides but a bare runner does not:
+      #   1. the four piece versions it pins — prewarmed from our archived tarballs
+      #      (hermes/pieces.e2e-fixtures.json) rather than resolved off npm, so a yanked or
+      #      re-published version cannot change what we test;
+      #   2. the `esbuild` BINARY on PATH — the CODE step shells out to it (pkg-runner.ts),
+      #      and without it every flow fails with `spawn esbuild ENOENT`. The image installs
+      #      it globally; here it is in node_modules/.bin at the same 0.25.0.
+      - name: Prewarm the flow-E2E piece fixtures from our tarballs
+        run: |
+          AP_PREWARM_WORKSPACE="$PWD/cache/v11/common" \
+            sh hermes/prewarm-pieces.sh "$PWD/hermes/pieces.e2e-fixtures.json"
+
+      - name: CE integration tests
+        run: |
+          set -a; . packages/server/api/.env.tests; set +a
+          PATH="$PWD/node_modules/.bin:$PATH" AP_EDITION=ce pnpm exec vitest run \
+            --root packages/server/api \
+            test/integration/ce

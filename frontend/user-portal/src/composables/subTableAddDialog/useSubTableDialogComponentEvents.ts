@@ -1,11 +1,14 @@
 /**
- * Run Form Design component events (rule.on / rule._hook) inside SubTable Add/Edit dialog.
- * Parity with FormRenderer handleFieldChange — columns carry `sourceRule` from sub-form canvas.
+ * Run Form Design component events (rule.on / rule._hook) and Form-level options.*
+ * inside SubTable Add/Edit dialog — Preview (form-create) parity.
  *
- * Dialog open replays the same bootstrap FormRenderer.onMounted does (see FormRenderer.vue:
- * syncDesignerHiddenFieldVisibility → bootstrapComponentHookEvents → bootstrapFormOptionsOnChange),
- * plus the Form-level onCreated/onMounted this dialog owns. Never replays component on.change:
- * designers expect change only after user interaction.
+ * Dialog open bootstrap (form-create order):
+ *   designer Hide seed → Form onCreated → component hook `load` → Form onChange('__bootstrap__')
+ *   → (nextTick) component hook `mounted` → Form onMounted
+ *
+ * Field edits also run Form onChange (not only component change). Save/close run
+ * beforeSubmit / onSubmit / onReset. Re-init while open runs onReload.
+ * beforeFetch: N/A — dialog has no form-create remote-fetch pipeline.
  */
 import { nextTick, ref, shallowReactive, type Ref } from 'vue'
 import {
@@ -18,6 +21,7 @@ import {
   createFieldKeyResolver,
   createPortalFormApi,
   isEmptyFormCreateHandler,
+  parseFormCreateEventHandler,
   runFormOnChangeHandler,
   type PortalFormVisibilityState,
 } from '@/utils/formCreateEventRuntime'
@@ -35,6 +39,7 @@ export type DialogColumnWithEvents = {
 export function useSubTableDialogComponentEvents(
   formData: Ref<Record<string, unknown>>,
   getColumns: () => DialogColumnWithEvents[],
+  getFormOptions: () => Record<string, unknown> | null | undefined = () => null,
 ) {
   const eventVisibilityState = shallowReactive<PortalFormVisibilityState>({
     hidden: new Map<string, boolean>(),
@@ -78,6 +83,25 @@ export function useSubTableDialogComponentEvents(
     )
   }
 
+  function resolveFormOptions(
+    override?: Record<string, unknown> | null,
+  ): Record<string, unknown> | null {
+    if (override && typeof override === 'object') return override
+    const opts = getFormOptions()
+    return opts && typeof opts === 'object' ? opts : null
+  }
+
+  function runDialogFormHandler(raw: unknown, field: string, value: unknown = null): unknown {
+    if (raw == null || isEmptyFormCreateHandler(raw)) return undefined
+    return runFormOnChangeHandler(raw, field, value, createApi())
+  }
+
+  function runFormOptionsOnChange(field: string, value: unknown) {
+    const options = resolveFormOptions()
+    if (!options) return
+    runDialogFormHandler(options.onChange, field, value)
+  }
+
   function resolveEvents(field: string) {
     const col = getColumns().find((c) => c.field === field)
     if (!col?.sourceRule) return undefined
@@ -86,25 +110,31 @@ export function useSubTableDialogComponentEvents(
     return { col, ev }
   }
 
-  /** Select / radio / switch / … — also mirrors on.blur for select-like types. */
+  /**
+   * Select / radio / switch / … — component change (+ mirrored blur for select-like),
+   * then Form-level onChange (Preview / FormRenderer parity). Runs Form onChange even
+   * when the column has no sourceRule — v-model may already own the value.
+   */
   function onDialogFieldChange(field: string, value?: unknown) {
-    const found = resolveEvents(field)
-    if (!found) return
     if (value !== undefined) {
       formData.value = { ...formData.value, [field]: value }
     }
     const v = value !== undefined ? value : formData.value[field]
-    runComponentFieldEventsOnValueChange(found.ev, {
-      field,
-      value: v,
-      api: createApi(),
-      onEvent: 'change',
-      hookEvent: 'value',
-      fieldType: found.col.type,
-    })
+    const found = resolveEvents(field)
+    if (found) {
+      runComponentFieldEventsOnValueChange(found.ev, {
+        field,
+        value: v,
+        api: createApi(),
+        onEvent: 'change',
+        hookEvent: 'value',
+        fieldType: found.col.type,
+      })
+    }
+    runFormOptionsOnChange(field, v)
   }
 
-  /** Text / textarea focus leave. */
+  /** Text / textarea focus leave — component on.blur only (FormRenderer parity). */
   function onDialogFieldBlur(field: string) {
     const found = resolveEvents(field)
     if (!found) return
@@ -152,24 +182,14 @@ export function useSubTableDialogComponentEvents(
     )
   }
 
-  function runDialogFormHandler(raw: unknown, field: string) {
-    if (raw == null || isEmptyFormCreateHandler(raw)) return
-    runFormOnChangeHandler(raw, field, null, createApi())
-  }
-
   /**
    * Dialog-open bootstrap, in form-create lifecycle order:
    *   designer Hide seed → Form onCreated → component hook `load` → Form onChange('__bootstrap__')
    *   → (nextTick) component hook `mounted` → Form onMounted
-   *
-   * The onChange leg matches FormRenderer.bootstrapFormOptionsOnChange: sub-forms that put
-   * their init logic in the Form-tab onChange (guarded on `field === '__bootstrap__'`) got
-   * nothing here before, so statically hidden fields stayed visible on first open.
-   * onMounted stays deferred — the dialog body has not rendered when this watcher fires.
    */
   function bootstrapDialogFormLifecycle(formOptions?: Record<string, unknown> | null) {
     seedDialogStaticHiddenVisibility()
-    const options = formOptions && typeof formOptions === 'object' ? formOptions : null
+    const options = resolveFormOptions(formOptions)
     if (options) runDialogFormHandler(options.onCreated, '__form__')
     runDialogComponentHooks('load')
     if (options) runDialogFormHandler(options.onChange, '__bootstrap__')
@@ -179,11 +199,64 @@ export function useSubTableDialogComponentEvents(
     })
   }
 
+  /** Form onReload — when dialog re-inits while still open (mode/initialData swap). */
+  function runFormOnReload(formOptions?: Record<string, unknown> | null) {
+    const options = resolveFormOptions(formOptions)
+    if (!options) return
+    runDialogFormHandler(options.onReload, '__form__')
+  }
+
+  /**
+   * Form beforeSubmit — return false to abort save (form-create parity).
+   * Empty / missing handler → allow save.
+   * Parse failure or thrown error → abort (fail-closed); do not reuse
+   * runFormOnChangeHandler which swallows exceptions for UX scripts.
+   */
+  function runFormBeforeSubmit(formOptions?: Record<string, unknown> | null): boolean {
+    const options = resolveFormOptions(formOptions)
+    if (!options || isEmptyFormCreateHandler(options.beforeSubmit)) return true
+    try {
+      const handler = parseFormCreateEventHandler(options.beforeSubmit)
+      if (!handler) {
+        console.warn('[useSubTableDialogComponentEvents] beforeSubmit parse failed; aborting save')
+        return false
+      }
+      const result = handler({
+        field: '__submit__',
+        value: formData.value,
+        api: createApi(),
+        rule: {},
+      })
+      return result !== false
+    } catch (err) {
+      console.warn('[useSubTableDialogComponentEvents] beforeSubmit error; aborting save:', err)
+      return false
+    }
+  }
+
+  /** Form onSubmit — after validation, before persist emit. */
+  function runFormOnSubmit(formOptions?: Record<string, unknown> | null) {
+    const options = resolveFormOptions(formOptions)
+    if (!options) return
+    runDialogFormHandler(options.onSubmit, '__submit__', formData.value)
+  }
+
+  /** Form onReset — when dialog closes / model cleared. */
+  function runFormOnReset(formOptions?: Record<string, unknown> | null) {
+    const options = resolveFormOptions(formOptions)
+    if (!options) return
+    runDialogFormHandler(options.onReset, '__form__')
+  }
+
   return {
     onDialogFieldChange,
     onDialogFieldBlur,
     isDialogFieldVisible,
     resetDialogEventVisibility,
     bootstrapDialogFormLifecycle,
+    runFormOnReload,
+    runFormBeforeSubmit,
+    runFormOnSubmit,
+    runFormOnReset,
   }
 }

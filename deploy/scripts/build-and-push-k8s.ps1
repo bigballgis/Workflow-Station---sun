@@ -12,6 +12,10 @@
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipApWorkspaceInstall
 #   # deployment without Activepieces: DW frontend ships without the Automation builder
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -NoServiceTaskBuilder
+#   # AP image only, on the release tag (~25 min: pnpm install + turbo build + piece prewarm)
+#   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -Services activepieces
+#   # platform images only — WARNS: activepieces:v1.0.0 will not exist for this release
+#   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipActivepieces
 # =====================================================
 
 param(
@@ -43,6 +47,18 @@ param(
     # unavailable rather than 404ing on web.css. Default stays fail-closed.
     [switch]$NoServiceTaskBuilder = $false,
     [switch]$SkipBackend = $false,
+    # Activepieces is built from THIS repo (activepieces/Dockerfile): EE-removed, de-bunned,
+    # with the allowlisted pieces prewarmed into the last layer. Do NOT substitute the upstream
+    # activepieces/activepieces:0.84.0 image (nor mirror-thirdparty-images-k8s.ps1's legacy
+    # activepieces entry) — that one has none of the three and cannot run air-gapped.
+    # ⚠️ AP ships on the SAME tag as the platform, so skipping it leaves <Registry>/
+    # activepieces:$Tag unpublished while activepieces.yaml/ap-bootstrap-job.yaml resolve
+    # __IMAGE_TAG__ to exactly that tag ⇒ ImagePullBackOff. Only for a run whose images are
+    # not being deployed as a set (the script warns).
+    [switch]$SkipActivepieces = $false,
+    # Optional override; empty means "same tag as the platform images". The manifests use
+    # __IMAGE_TAG__, so this must match what the apply script is given as -ImageTag.
+    [string]$ApImageTag = "",
     [switch]$PushOnly = $false,
     [switch]$NoPush = $false,
     # Max services built/pushed in parallel (docker build/push run concurrently per service)
@@ -81,6 +97,12 @@ $selectedFrontend = if ($Services -eq "all") { $FrontendServices } else {
     $names = $Services -split ","
     $FrontendServices | Where-Object { $names -contains $_.Name }
 }
+# Activepieces is not a $BackendServices/$FrontendServices entry: it is neither a Maven module
+# nor a pnpm frontend and it has its own Dockerfile at the repo's activepieces/ root. It is
+# still selectable by name so -Services activepieces works, and it ships on the platform tag.
+$buildActivepieces = (-not $SkipActivepieces) -and
+    (($Services -eq "all") -or (($Services -split ",") -contains "activepieces"))
+$apTag = if ([string]::IsNullOrWhiteSpace($ApImageTag)) { $Tag } else { $ApImageTag }
 
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Yellow
@@ -89,12 +111,29 @@ Write-Host "=========================================" -ForegroundColor Yellow
 Write-Host "  Registry: $Registry"
 Write-Host "  Tag: $Tag"
 Write-Host "  Services: $Services"
+Write-Host "  Activepieces: $(if ($buildActivepieces) { "yes (:$apTag)" } else { 'SKIPPED — nothing will publish activepieces:$Tag' })"
 Write-Host "  MaxParallel: $MaxParallel"
 Write-Host "  JavaBaseImage: $JavaBaseImage"
 Write-Host "=========================================" -ForegroundColor Yellow
 
+if (-not $buildActivepieces) {
+    # Worth shouting about: activepieces.yaml and ap-bootstrap-job.yaml resolve __IMAGE_TAG__
+    # to the tag the apply script is given, so a release whose AP image was never pushed under
+    # that tag comes up in ImagePullBackOff — and nothing before the deploy would have said so.
+    Write-Host ""
+    Write-Host "  WARNING: Activepieces is NOT being built/pushed in this run." -ForegroundColor Yellow
+    Write-Host "           deploy/k8s/{activepieces,ap-bootstrap-job}.yaml pull" -ForegroundColor Yellow
+    Write-Host "           $Registry/activepieces:<-ImageTag>. Deploying tag '$Tag' without" -ForegroundColor Yellow
+    Write-Host "           publishing that image => ImagePullBackOff." -ForegroundColor Yellow
+    Write-Host "           Re-run with -Services activepieces, or deploy an -ImageTag whose" -ForegroundColor Yellow
+    Write-Host "           activepieces image already exists in the registry." -ForegroundColor Yellow
+}
+
 # 0. Pre-pull Java runtime base (avoids docker build hitting Docker Hub for FROM metadata)
-if (-not $SkipBackend -and -not $PushOnly) {
+# The @(...).Count guards below: a selection like -Services activepieces (or any frontend-only
+# one) leaves $selectedBackend empty, and without them this pulls a 320 MB base image for
+# nothing and then hands mvn a -pl list ending in a comma.
+if (-not $SkipBackend -and -not $PushOnly -and @($selectedBackend).Count -gt 0) {
     Write-Step "Pre-pulling Java base image..."
     docker image inspect $JavaBaseImage 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
@@ -131,7 +170,7 @@ if (-not $SkipBackend -and -not $PushOnly) {
 }
 
 # 1. Maven Build
-if (-not $SkipBackend -and -not $PushOnly) {
+if (-not $SkipBackend -and -not $PushOnly -and @($selectedBackend).Count -gt 0) {
     Write-Step "Building backend with Maven..."
 
     $modules = "backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging," + (($selectedBackend | ForEach-Object { $_.Dir }) -join ",")
@@ -149,7 +188,7 @@ if (-not $SkipBackend -and -not $PushOnly) {
 }
 
 # 2. Docker Build & Push (Backend) — parallel across services
-if (-not $SkipBackend) {
+if (-not $SkipBackend -and @($selectedBackend).Count -gt 0) {
     Write-Step "Building backend Docker images (parallel x$MaxParallel)..."
 
     $backendJobs = foreach ($svc in $selectedBackend) {
@@ -183,7 +222,7 @@ if (-not $SkipBackend) {
 }
 
 # 3. Docker Build & Push (Frontend — local pnpm build + Dockerfile.local) — parallel across services
-if (-not $SkipFrontend) {
+if (-not $SkipFrontend -and @($selectedFrontend).Count -gt 0) {
     Write-Step "Building frontend (local pnpm build + Docker, parallel x$MaxParallel)..."
 
     # The developer-workstation frontend embeds the Activepieces builder. That bundle is
@@ -392,6 +431,48 @@ if (-not $SkipFrontend) {
     }
 }
 
+# 4. Activepieces image (in-repo source, own tag) — LAST and sequential on purpose.
+#
+# Last: it is the longest single build in this script (full pnpm install + turbo build of
+# web/engine/api/worker + the piece prewarm layer), and nothing else depends on the IMAGE.
+# What developer-workstation-frontend needs from Activepieces is the embed bundle, which comes
+# from the SOURCE tree in step 3 — so putting this first would only delay the eight platform
+# images behind ~25 minutes.
+#
+# Sequential and unredirected: a single long build where docker's live output is the only
+# progress signal. Capturing it into a log array (as the parallel per-service jobs do) would
+# make a healthy 25-minute build and a hung one look identical.
+if ($buildActivepieces) {
+    Write-Step "Building Activepieces image from in-repo source..."
+
+    $apContext = Join-Path $ProjectRoot "activepieces"
+    $apImage = "$Registry/activepieces:$apTag"
+
+    if (-not (Test-Path (Join-Path $apContext "Dockerfile"))) {
+        Write-Fail "No Dockerfile at $apContext — the vendored Activepieces tree is missing. Exclude it with -SkipActivepieces if this deployment ships without Activepieces."
+    }
+    # Both build stages run `pnpm install --frozen-lockfile`, so a lockfile that does not match
+    # the workspace manifests fails the build minutes in. Catch it here instead.
+    if (-not (Test-Path (Join-Path $apContext "pnpm-lock.yaml"))) {
+        Write-Fail "No pnpm-lock.yaml at $apContext — the image build needs the committed lockfile (both stages use --frozen-lockfile)."
+    }
+
+    if (-not $PushOnly) {
+        Write-Host "   docker build -t $apImage $apContext" -ForegroundColor Gray
+        Write-Host "   (this one is slow: pnpm install + turbo build + piece prewarm)" -ForegroundColor DarkGray
+        docker build -t $apImage $apContext
+        if ($LASTEXITCODE -ne 0) { Write-Fail "Activepieces build failed (docker exit $LASTEXITCODE)" }
+        Write-Ok "activepieces image built ($apImage)"
+    }
+
+    if (-not $NoPush) {
+        Write-Host "   docker push $apImage" -ForegroundColor Gray
+        docker push $apImage
+        if ($LASTEXITCODE -ne 0) { Write-Fail "Activepieces push failed (docker exit $LASTEXITCODE)" }
+        Write-Ok "activepieces image pushed"
+    }
+}
+
 # Summary
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Green
@@ -399,8 +480,16 @@ Write-Host "  Build & Push Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Images: $Registry/*:$Tag" -ForegroundColor White
+if ($buildActivepieces) {
+    Write-Host "        $Registry/activepieces:$apTag" -ForegroundColor White
+}
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Update deploy/k8s/configmap-*.yaml with DB/Redis hosts" -ForegroundColor White
 Write-Host "  2. Update deploy/k8s/secret-*.yaml with real credentials" -ForegroundColor White
 Write-Host "  3. Deploy: .\deploy\k8s\deploy.ps1 -Environment sit -Tag $Tag" -ForegroundColor White
+if ($buildActivepieces) {
+    Write-Host "  4. Activepieces ships only the piece RUNTIME half. Seed the metadata half once" -ForegroundColor White
+    Write-Host "     per environment: deploy/pieces/metadata/pieces-seed.sql (ap-bootstrap-job's" -ForegroundColor White
+    Write-Host "     ap-provision-db initContainer does this and invalidates AP's registry cache)." -ForegroundColor White
+}

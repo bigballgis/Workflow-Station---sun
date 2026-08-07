@@ -455,18 +455,16 @@ git checkout de4f6469 -- activepieces/packages/pieces/community/<name>
 
 **A. 只是参考** —— 看完把目录删掉即可，不需要动任何配置。
 
-**B. 要长期保留**（打源码补丁、或它成了自研件的基底）——**四步缺一不可**：
+**B. 要长期保留**（打源码补丁、或它成了自研件的基底）——**两步**：
 
-1. 在 [`activepieces/hermes/trim-vendor-pieces.mjs`](../../activepieces/hermes/trim-vendor-pieces.mjs)
-   的 `KEEP` 里加一条，**写明理由**（那个对象里每条都有理由，没理由的不许加）；
-2. `pnpm install --lockfile-only` 重生成锁文件 —— 该件的依赖要重新进入解析；
-3. 若做了源码修改，按 [HERMES_PATCHES.md](HERMES_PATCHES.md) 的规矩取下一个补丁号并登记；
-4. `node hermes/trim-vendor-pieces.mjs --check` 自检。
+1. `pnpm install --lockfile-only` 重生成锁文件 —— 该件的依赖要重新进入解析。
+   **锁文件必须一起提交**：镜像两个 stage 都跑 `pnpm install --frozen-lockfile`，漏了会让构建失败；
+   CI 的 `vendor-trim-check.yml` 也会先挡一道。
+2. 若在 `tsconfig.base.json` 加了 path 映射，`node hermes/check-tsconfig-paths.mjs` 自检。
 
-> **忘了第 1 步会被 CI 挡下**，这是设计好的：`.github/workflows/vendor-trim-check.yml` 在每次
-> `activepieces/**` 改动上跑 `--check`，未登记的件会报
-> `FAIL: N 个未收敛的 community piece`。别去关掉这个 job —— 它的作用正是防止 690 个件
-> 连同它们的第三方 SDK 悄悄回潮（这是最初 `pnpm install` 在公司内网装不下来的根因）。
+> 从前这里还要求去 `trim-vendor-pieces.mjs` 的 `KEEP` 里登记 —— 那个脚本与它的白名单检查已于
+> 2026-08-07 随 [D13](DECISIONS.md#d13) 删除（`packages/pieces/core` 也整体删了）。
+> 加自研件不再需要先向任何清单报备。
 
 > **第 2 步不能省**：`pnpm install --frozen-lockfile` 在镜像构建阶段会因为工作区与锁文件对不上
 > 而失败，而那要等到构建才暴露。CI 的第二步（`--frozen-lockfile --lockfile-only`）就是为它准备的。

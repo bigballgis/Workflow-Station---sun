@@ -1,11 +1,6 @@
 import { LATEST_CONTEXT_VERSION, PieceMetadata } from '@activepieces/pieces-framework'
-import { apDayjs } from '@activepieces/server-utils'
 import {
-    AiCreditsAutoTopUpState,
-    AIProvider,
-    AIProviderName,
     apId,
-    ApiKey,
     AppConnection,
     AppConnectionScope,
     AppConnectionStatus,
@@ -37,7 +32,6 @@ import {
     InvitationStatus,
     InvitationType,
     KeyAlgorithm,
-    OAuthApp,
     OtpModel,
     OtpState,
     OtpType,
@@ -60,7 +54,6 @@ import {
     RunEnvironment,
     SigningKey,
     Table,
-    TeamProjectsLimit,
     Template,
     TemplateStatus,
     TemplateType,
@@ -73,12 +66,7 @@ import { faker } from '@faker-js/faker'
 import bcrypt from 'bcrypt'
 import dayjs from 'dayjs'
 import { FastifyBaseLogger } from 'fastify'
-import { AIProviderSchema } from '../../../src/app/ai/ai-provider-entity'
 import { databaseConnection } from '../../../src/app/database/database-connection'
-import { generateApiKey } from '../../../src/app/ee/api-keys/api-key-service'
-import { OAuthAppWithEncryptedSecret } from '../../../src/app/ee/oauth-apps/oauth-app.entity'
-import { PlatformPlanEntity } from '../../../src/app/ee/platform/platform-plan/platform-plan.entity'
-import { encryptUtils } from '../../../src/app/helper/encryption'
 import { PieceMetadataSchema } from '../../../src/app/pieces/metadata/piece-metadata-entity'
 import { pieceMetadataService } from '../../../src/app/pieces/metadata/piece-metadata-service'
 import { PieceTagSchema } from '../../../src/app/pieces/tags/pieces/piece-tag.entity'
@@ -118,19 +106,6 @@ export const createMockUser = (user?: Partial<User>): User => {
     }
 }
 
-export const createMockOAuthApp = async (
-    oAuthApp?: Partial<OAuthApp>,
-): Promise<OAuthAppWithEncryptedSecret> => {
-    return {
-        id: oAuthApp?.id ?? apId(),
-        created: oAuthApp?.created ?? faker.date.recent().toISOString(),
-        updated: oAuthApp?.updated ?? faker.date.recent().toISOString(),
-        platformId: oAuthApp?.platformId ?? apId(),
-        pieceName: oAuthApp?.pieceName ?? faker.lorem.word(),
-        clientId: oAuthApp?.clientId ?? apId(),
-        clientSecret: await encryptUtils.encryptString(faker.lorem.word()),
-    }
-}
 
 export const createMockTemplate = (
     template?: Partial<Template>,
@@ -218,46 +193,6 @@ export const createMockGitRepo = (gitRepo?: Partial<GitRepo>): GitRepo => {
     }
 }
 
-export const createMockPlatformPlan = (platformPlan?: Partial<PlatformPlan>): PlatformPlan => {
-    return {
-        id: platformPlan?.id ?? apId(),
-        created: platformPlan?.created ?? faker.date.recent().toISOString(),
-        updated: platformPlan?.updated ?? faker.date.recent().toISOString(),
-        platformId: platformPlan?.platformId ?? apId(),
-        tablesEnabled: platformPlan?.tablesEnabled ?? false,
-        includedAiCredits: platformPlan?.includedAiCredits ?? 0,
-        licenseKey: platformPlan?.licenseKey ?? faker.lorem.word(),
-        stripeCustomerId: undefined,
-        stripeSubscriptionId: undefined,
-        ssoEnabled: platformPlan?.ssoEnabled ?? false,
-        eventStreamingEnabled: platformPlan?.eventStreamingEnabled ?? false,
-        aiCreditsAutoTopUpState: AiCreditsAutoTopUpState.DISABLED,
-        environmentsEnabled: platformPlan?.environmentsEnabled ?? false,
-        analyticsEnabled: platformPlan?.analyticsEnabled ?? false,
-        auditLogEnabled: platformPlan?.auditLogEnabled ?? false,
-        globalConnectionsEnabled: platformPlan?.globalConnectionsEnabled ?? false,
-        customRolesEnabled: platformPlan?.customRolesEnabled ?? false,
-        managePiecesEnabled: platformPlan?.managePiecesEnabled ?? false,
-        manageTemplatesEnabled: platformPlan?.manageTemplatesEnabled ?? false,
-        customAppearanceEnabled: platformPlan?.customAppearanceEnabled ?? false,
-        apiKeysEnabled: platformPlan?.apiKeysEnabled ?? false,
-        stripeSubscriptionStatus: undefined,
-        showPoweredBy: platformPlan?.showPoweredBy ?? false,
-        embeddingEnabled: platformPlan?.embeddingEnabled ?? false,
-        agentsEnabled: platformPlan?.agentsEnabled ?? false,
-        aiProvidersEnabled: platformPlan?.aiProvidersEnabled ?? false,
-        chatEnabled: platformPlan?.chatEnabled ?? false,
-        teamProjectsLimit: platformPlan?.teamProjectsLimit ?? TeamProjectsLimit.NONE,
-        projectRolesEnabled: platformPlan?.projectRolesEnabled ?? false,
-        stripeSubscriptionEndDate: apDayjs().endOf('month').unix(),
-        stripeSubscriptionStartDate: apDayjs().startOf('month').unix(),
-        plan: platformPlan?.plan,
-        secretManagersEnabled: platformPlan?.secretManagersEnabled ?? false,
-        scimEnabled: platformPlan?.scimEnabled ?? false,
-        canary: platformPlan?.canary ?? false,
-        customDomainsEnabled: false,
-    }
-}
 export const createMockPlatform = (platform?: Partial<Platform>): Platform => {
     return {
         id: platform?.id ?? apId(),
@@ -346,21 +281,6 @@ j9mmntXsa/leIwBVspiEOHYZwJOe5+goSd8K1VIQJxC1DVBxB2eHxMvuo3eyJ0HE
 DlebIeZy4zrE1LPgRic1kfdemyxvuN3iwZnPGiY79nL1ZNDM3M4ApSMCAwEAAQ==
 -----END RSA PUBLIC KEY-----`
 
-export const createMockApiKey = (
-    apiKey?: Partial<Omit<ApiKey, 'hashedValue' | 'truncatedValue'>>,
-): ApiKey & { value: string } => {
-    const { secretHashed, secretTruncated, secret } = generateApiKey()
-    return {
-        id: apiKey?.id ?? apId(),
-        created: apiKey?.created ?? faker.date.recent().toISOString(),
-        updated: apiKey?.updated ?? faker.date.recent().toISOString(),
-        displayName: apiKey?.displayName ?? faker.lorem.word(),
-        platformId: apiKey?.platformId ?? apId(),
-        hashedValue: secretHashed,
-        value: secret,
-        truncatedValue: secretTruncated,
-    }
-}
 
 
 export const createMockSigningKey = (
@@ -677,20 +597,6 @@ export const mockAndSaveBasicSetup = async (params?: MockBasicSetupParams): Prom
     })
 
     await databaseConnection().getRepository('platform').save(mockPlatform)
-    const hasPlanTable = databaseConnection().hasMetadata(PlatformPlanEntity)
-    if (hasPlanTable) {
-        const mockPlatformPlan = createMockPlatformPlan({
-            platformId: mockPlatform.id,
-            auditLogEnabled: true,
-            apiKeysEnabled: true,
-            customRolesEnabled: true,
-            teamProjectsLimit: TeamProjectsLimit.UNLIMITED,
-            includedAiCredits: 1000,
-            ...params?.plan,
-        })
-        await databaseConnection().getRepository('platform_plan').upsert(mockPlatformPlan, ['platformId'])
-    }
-
     mockOwner.platformId = mockPlatform.id
     await databaseConnection().getRepository('user').save(mockOwner)
 
@@ -709,20 +615,6 @@ export const mockAndSaveBasicSetup = async (params?: MockBasicSetupParams): Prom
     }
 }
 
-type MockBasicSetupWithApiKey = MockBasicSetup & { mockApiKey: ApiKey & { value: string } }
-export const mockAndSaveBasicSetupWithApiKey = async (params?: MockBasicSetupParams): Promise<MockBasicSetupWithApiKey> => {
-    const basicSetup = await mockAndSaveBasicSetup(params)
-
-    const mockApiKey = createMockApiKey({
-        platformId: basicSetup.mockPlatform.id,
-    })
-    await databaseConnection().getRepository('api_key').save(mockApiKey)
-
-    return {
-        ...basicSetup,
-        mockApiKey,
-    }
-}
 
 export const createMockFile = (file?: Partial<File>): File => {
     const hasExplicitProjectId = file !== undefined && 'projectId' in file
@@ -770,27 +662,7 @@ export const createMockProjectRelease = (projectRelease?: Partial<ProjectRelease
     }
 }
 
-export const createMockAIProvider = async (aiProvider?: Partial<AIProvider>): Promise<Omit<AIProviderSchema, 'platform'>> => {
-    return {
-        id: aiProvider?.id ?? apId(),
-        created: aiProvider?.created ?? faker.date.recent().toISOString(),
-        updated: aiProvider?.updated ?? faker.date.recent().toISOString(),
-        platformId: aiProvider?.platformId ?? apId(),
-        provider: aiProvider?.provider ?? faker.helpers.enumValue(AIProviderName),
-        displayName: aiProvider?.displayName ?? faker.lorem.word(),
-        auth: await encryptUtils.encryptObject({
-            apiKey: process.env.OPENAI_API_KEY ?? faker.string.uuid(),
-        }),
-        config: aiProvider?.config ?? {},
-    }
 
-}
-
-export const mockAndSaveAIProvider = async (params?: Partial<AIProvider>): Promise<Omit<AIProviderSchema, 'platform'>> => {
-    const mockAIProvider = await createMockAIProvider(params)
-    await databaseConnection().getRepository('ai_provider').upsert(mockAIProvider, ['platformId', 'provider'])
-    return mockAIProvider
-}
 
 export const mockPieceMetadata = async (mockLog: FastifyBaseLogger): Promise<PieceMetadata> => {
     const { mockPlatform } = await mockAndSaveBasicSetup()

@@ -1,10 +1,8 @@
-import { ApFlagId } from '@activepieces/shared';
 import { useMutation } from '@tanstack/react-query';
 import { t } from 'i18next';
 import { Check, ChevronsUpDown, Globe } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
 import { LoadingSpinner } from '@/components/custom/spinner';
 import { Button } from '@/components/ui/button';
@@ -23,16 +21,12 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { flagsHooks } from '@/hooks/flags-hooks';
 import { localesMap } from '@/lib/locale-utils';
 import { cn } from '@/lib/utils';
 
 export const LanguageToggle = () => {
   const { i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const { data: showCommunity } = flagsHooks.useFlag<boolean>(
-    ApFlagId.SHOW_COMMUNITY,
-  );
   const [selectedLanguage, setSelectedLanguage] = useState<string | undefined>(
     i18n.language ?? 'en',
   );
@@ -110,18 +104,6 @@ export const LanguageToggle = () => {
           </Command>
         </PopoverContent>
       </Popover>
-      {showCommunity && (
-        <div className="pt-1">
-          <Link
-            className="text-xs text-primary hover:underline font-medium"
-            rel="noopener noreferrer"
-            target="_blank"
-            to="https://www.activepieces.com/docs/about/i18n"
-          >
-            {t('Help translate Activepieces →')}
-          </Link>
-        </div>
-      )}
     </div>
   );
 };

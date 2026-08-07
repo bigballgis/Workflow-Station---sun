@@ -1,13 +1,18 @@
-name: AP vendor trim check
+name: AP workspace invariants
 
-# HERMES-PATCH-013 的防回潮闸门。上游 0.84.0 在 packages/pieces/community/ 下带了 694 个件，
-# 我们只保留 4 个（理由逐条写在 activepieces/hermes/trim-vendor-pieces.mjs 的 KEEP 里）。
-# 其余的既不在 pieces.json 白名单、也不进成品镜像，唯一效果是把上百个第三方 SDK
-# （含 @anthropic-ai/sdk、openai、@google/genai …）拖进每一次 pnpm install ——
-# 在受限内网 / 气隙环境里这是纯粹的失败面。
+# Two cheap gates on the vendored Activepieces workspace. Neither is about upstream
+# alignment — that stopped being a goal in D12/D13; both catch mistakes we make ourselves.
 #
-# rebase 到新上游 tag 会把它们整批带回来，而重放全靠人记得跑脚本。这个 job 就是那个"记得"。
-# 它只读文件系统，不装依赖、不构建，秒级完成。
+#   1. No tsconfig path mapping points at a file that does not exist. A dangling mapping
+#      resolves imports to nothing and tsc reports it far from the cause. There were 34 of
+#      them on 2026-08-07 (leftovers from deleting packages/pieces/core).
+#   2. The committed lockfile still matches the workspace manifests. The image build runs
+#      `pnpm install --frozen-lockfile` in both stages, so a manifest edit without a
+#      lockfile refresh fails the build instead of this job — much later and much noisier.
+#
+# This job replaced the HERMES-PATCH-013 "piece trim did not regress" gate: community/ is
+# where our own pieces live, so asserting an allowlist there taxed the workflow it was
+# meant to protect.
 
 on:
   push:
@@ -25,8 +30,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  trim-check:
-    name: Community pieces converged, no dangling tsconfig paths
+  workspace-invariants:
+    name: tsconfig paths resolve, lockfile matches workspace
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -37,18 +42,10 @@ jobs:
         with:
           node-version: '20'
 
-      # 一次调用同时把三条不变量查掉：
-      #   1. community/ 只剩 KEEP 里那几个件；
-      #   2. 三个 tsconfig 里没有指向已删目录的 path 映射（单行与三行两种写法都查）；
-      #   3. 没有任何 workspace manifest 还依赖待删件 —— 即 HERMES-PATCH-012 的重放顺序。
-      # 失败信息里已带修复步骤，这里不重复。
-      - name: Run trim invariant check
-        run: node activepieces/hermes/trim-vendor-pieces.mjs --check
+      - name: tsconfig path mappings all resolve
+        run: node activepieces/hermes/check-tsconfig-paths.mjs
 
-      # --check 只保证"树是收敛的"，不保证锁文件跟着走。少了这步，一次漏跑
-      # `pnpm install --lockfile-only` 就会让镜像构建阶段的 --frozen-lockfile 失败，
-      # 而那要等到构建才暴露。
-      - name: Lockfile matches the trimmed workspace
+      - name: Lockfile matches the workspace
         working-directory: activepieces
         run: |
           set -euo pipefail

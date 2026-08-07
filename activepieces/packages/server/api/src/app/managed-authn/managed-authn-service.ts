@@ -16,6 +16,7 @@ import { accessTokenManager } from '../authentication/lib/access-token-manager'
 import { userIdentityService } from '../authentication/user-identity/user-identity-service'
 import { platformService } from '../platform/platform.service'
 import { projectMemberService } from '../project/project-member.service'
+import { projectRepo } from '../project/project-repo'
 import { projectService } from '../project/project-service'
 import { userService } from '../user/user-service'
 import { externalTokenExtractor } from './lib/external-token-extractor'
@@ -25,6 +26,7 @@ import { externalTokenExtractor } from './lib/external-token-extractor'
 //   * getOrCreate the (single, shared) project by externalProjectId,
 //   * getOrCreate the AP user by externalUserId (=> user.externalId maps every
 //     AP action back to the originating DW person for audit),
+//   * ensure the user owns a PERSONAL project (private sandbox in the sidebar),
 //   * upsert the project membership with the token's projectRole,
 //   * mint an AP USER token.
 // The ee embed extras are intentionally dropped: concurrency pools (G5 stub),
@@ -44,14 +46,13 @@ export const managedAuthnService = (log: FastifyBaseLogger) => ({
             externalProjectId: externalPrincipal.externalProjectId,
         }, log)
 
-        if (!isNil(externalPrincipal.projectDisplayName)) {
-            await projectService(log).update(project.id, {
-                type: project.type,
-                displayName: externalPrincipal.projectDisplayName,
-            })
-        }
-
         const user = await getOrCreateUser(externalPrincipal, log)
+
+        await ensurePersonalProject({
+            userId: user.id,
+            platformId: externalPrincipal.platformId,
+            firstName: externalPrincipal.externalFirstName,
+        }, log)
 
         await projectMemberService(log).upsert({
             projectId: project.id,
@@ -99,16 +100,51 @@ const getOrCreateUser = async (
     })
 
     if (!isNil(existingUser)) {
-        return existingUser
+        // HERMES is the source of truth for role and display name, and both are only
+        // written when the shadow user is first provisioned. Re-sync on every exchange so
+        // an existing shadow user picks up a changed role / a real display name instead of
+        // being stuck with whatever the very first token carried.
+        return syncExistingUser({ existingUser, params }, log)
     }
     const identity = await getOrCreateUserIdentity(params, log)
     const user = await userService(log).create({
         externalId: params.externalUserId,
         platformId: params.platformId,
         identityId: identity.id,
-        platformRole: PlatformRole.MEMBER,
+        platformRole: params.platformRole,
     })
     return user
+}
+
+const syncExistingUser = async (
+    { existingUser, params }: SyncExistingUserParams,
+    log: FastifyBaseLogger,
+): Promise<User> => {
+    await syncIdentityName({ identityId: existingUser.identityId, params }, log)
+
+    if (existingUser.platformRole === params.platformRole) {
+        return existingUser
+    }
+    await userService(log).update({
+        id: existingUser.id,
+        platformId: params.platformId,
+        platformRole: params.platformRole,
+    })
+    return { ...existingUser, platformRole: params.platformRole }
+}
+
+const syncIdentityName = async (
+    { identityId, params }: SyncIdentityNameParams,
+    log: FastifyBaseLogger,
+): Promise<void> => {
+    const identity = await userIdentityService(log).getOneOrFail({ id: identityId })
+    if (identity.firstName === params.externalFirstName && identity.lastName === params.externalLastName) {
+        return
+    }
+    await userIdentityService(log).update(identityId, {
+        firstName: params.externalFirstName,
+        lastName: params.externalLastName,
+    })
 }
 
 const getOrCreateUserIdentity = async (
@@ -132,6 +168,31 @@ const getOrCreateUserIdentity = async (
     })
     return identity
 }
+// Every shadow user also owns a PERSONAL project (private sandbox next to the shared
+// HERMES TEAM project). Visibility for PERSONAL projects is ownerId-based
+// (applyProjectsAccessFilters), so no project_member row is needed. Runs on every
+// handshake: pre-existing shadow users pick theirs up on the next sign-in, and a
+// personal project soft-deleted by user removal is recreated on re-provisioning.
+const ensurePersonalProject = async (
+    { userId, platformId, firstName }: EnsurePersonalProjectParams,
+    log: FastifyBaseLogger,
+): Promise<void> => {
+    const existingProject = await projectRepo().findOneBy({
+        platformId,
+        ownerId: userId,
+        type: ProjectType.PERSONAL,
+    })
+    if (!isNil(existingProject)) {
+        return
+    }
+    await projectService(log).create({
+        displayName: `${firstName}'s Project`,
+        ownerId: userId,
+        platformId,
+        type: ProjectType.PERSONAL,
+    })
+}
+
 const getOrCreateProject = async ({
     platformId,
     externalProjectId,
@@ -177,9 +238,26 @@ type GetOrCreateUserParams = {
     externalProjectId: string
     externalFirstName: string
     externalLastName: string
+    platformRole: PlatformRole
 }
 
 type GetOrCreateProjectParams = {
     platformId: string
     externalProjectId: string
+}
+
+type EnsurePersonalProjectParams = {
+    userId: string
+    platformId: string
+    firstName: string
+}
+
+type SyncExistingUserParams = {
+    existingUser: User
+    params: GetOrCreateUserParams
+}
+
+type SyncIdentityNameParams = {
+    identityId: string
+    params: GetOrCreateUserParams
 }

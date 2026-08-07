@@ -17,9 +17,14 @@
 ## 怎么用
 
 - **读**：想知道某处 AP 代码为什么长这样，先查下表；查不到就 `git log` / `git blame`。
-- **写**：值得解释的改动（有非显然动机、有踩坑、有否决过的替代做法）在下表加一行，
-  编号取下一个；纯机械改动不必登记。
-- **许可审计**：MIT 义务是保留 `activepieces/LICENSE` 与版权声明（文件级，与本表无关）；
+- **写**：**新改动不再挂编号**（[D13](DECISIONS.md#d13) 裁决 1 —— D12 早就不要求了，
+  只是一直没执行）。值得解释的动机写进提交信息；只有需要被别处交叉引用的才回来加一行。
+  已有的 001–018 编号保留，代码里的 `HERMES-PATCH-0NN` 标记继续有效。
+- **许可审计**：`activepieces/LICENSE` 已由 `fd96c997c` 删除，镜像也不再拷贝它
+  （[D13](DECISIONS.md#d13) 裁决 3 作废了 D12 保留项 #1）。**这不是已经收尾的事**：
+  成品镜像仍分发 AP 源码，MIT 的保留义务附着在分发上，结论挂在
+  [D4](DECISIONS.md#d4)（合规评估，尚未启动）名下。
+
   需要回答"我们对上游做了什么"时用上面那条 `git diff`，本表提供人类可读的动机层。
 
 > **⚠️ 002 已作废并删除（2026-07-28）**，它曾是唯一的「构建期改写产物」类补丁。
@@ -46,6 +51,8 @@
 | 016 | 依赖治理 | 根 `activepieces/package.json` + `server/api/package.json` | **关掉 FOSS Guard 对 `fast-xml-parser@5.2.5` 的隔离**：把 `@aws-sdk/client-s3` 3.974.0→3.997.0、`@aws-sdk/s3-request-presigner` **3.894.0**→3.997.0（后者才是把 `@aws-sdk/core@3.894.0` 钉住的元凶），使 `core` 解析到 3.976.0/3.977.3、`xml-builder` 到 3.972.36/37 —— 上游自该版本起把 `fast-xml-parser` 换成了 `fast-xml-builder@1.3.0`。顺带删根上零 import 的 `@aws-sdk/client-bedrock`（被删的 bedrock provider 遗留）与 `@aws-sdk/client-secrets-manager`（AG-EE 已桩掉 secret manager，G4）。**这是"类 ② 依赖"的样板**：S3 是在跑的功能，只能升级不能删（见 [D12](DECISIONS.md#d12) 的两类划分）。**注意**：`fast-xml-parser` 并未从树上消失——根与 api 直接声明 `^5.5.6`→**5.7.0**，那不是被隔离的版本 | 2026-07-30 | [VT-21](VENDOR_TRIM_CHECKLIST.md#vt-21) |
 | 015 | 功能面移除 | 删 `server/api/src/app/mcp/`（69 文件）+ `server/api/src/app/ai/`（14 文件）；改 `app.ts` / `server.ts` / `database/database-connection.ts` / `server/api/package.json` | 移除 AP 自带 **MCP server** 与 **AI provider 代理**。二者在气隙内都没有消费方（没有 MCP 客户端；AI Generate 已改 HTTP piece 直连模型端点，`piece-ai` 早已删除），且是 api 侧 `@ai-sdk/*` 的唯一 import 方。**顺带关掉一个比 012 更靠外的暴露面**：上游把 MCP OAuth 三组端点注册在**域名根**（`/.well-known/*`、`/mcp/*`、`/mcp/platform/*`），连 `/api` 前缀都没有。**迁移与表一律不动**（既成事实，只摘 TypeORM 托管，无 schema 变更）。api 侧摘依赖 14 个（10×`@ai-sdk/*` + `ai` + `@aws-sdk/client-bedrock` + `ai-gateway-provider` + `cloudflare`）；另删上游自带的孤儿测试 `test/unit/app/chat/chat-compaction.test.ts`（它 import 的 `src/app/chat/` **自 `de4f6469` 起就不存在**，在 0.84.0 里本就是断的）。**注意**：`app/agents/` 仍 import `@modelcontextprotocol/sdk`，那是另一个功能面。**第二步（同日）**：删 `worker/.../jobs/ee/`（EE chat agent 3 文件）、`engine/src/lib/tools/`（agent tools）、`server/utils/src/chat-ai-utils.ts`；连带摘 `shared` 的 `EXECUTE_CHAT_AGENT`（5 处，因 `job-registry` 是穷举 `Record`）与 `pieces-framework` 的 `agent` 上下文契约（已核实保留件与自研件都不用 `context.agent`）。依赖声明合计摘 42 处，**含仓库根 `package.json` 的 11 处——中途曾因核实 glob 不含根文件而误报"已清干净"**。`@ai-sdk/*` 厂商包在锁里归零，锁条目 5147→5030。**给 `packages/web` 补上 `"ai"` 显式声明**：`web/src/features/chat/` import 的 `getToolName`/`isToolUIPart` 是运行时函数，此前一直靠 `@openrouter/ai-sdk-provider` 的 peer 提升解析，摘掉会静默断掉 web | 2026-07-30 | [D12](DECISIONS.md#d12) / [VT-17](VENDOR_TRIM_CHECKLIST.md#vt-17) |
 | 014 | 源码 | `activepieces/crowdin.yml` + `activepieces/package.json` | 关掉 Crowdin 双向同步。`push-i18n`（`crowdin upload sources`）会拿**本仓库的**源串去改写上游 Activepieces 的 Crowdin 项目 —— 013 之后 source 匹配只剩 **29** 个（裁剪前约 700），一次上传在上游项目里等同于批量删除源串；`pull-i18n` 则会把上游最新译文灌进 Q8 冻结基线，静默改掉 vendored i18n。两者都需 `CROWDIN_PERSONAL_TOKEN` 且目标是公网 SaaS，气隙部署下既不需要也不该发生。两个 npm script 改为 fail-loud 拒跑，配置文件保留（vendor diff 干净）并在头部写明理由。**自研件不在 source 匹配里**：`biz-calendar` / `hash-helper` 只有手写的 `src/i18n/zh.json`，没有 `translation.json` | 2026-07-29 | — |
+| 018 | 源码（CE 重写模块） | `server/api/src/app/project/project.controller.ts` | 给 CE 的 `/v1/projects` 补回 **POST**（建 TEAM project）。G6 剥 EE 时按「单共享 project 模型」故意没留创建入口，但 `2db9b6ca6` 把 `OPEN_SOURCE_PLAN.teamProjectsLimit` 开成 `UNLIMITED` 后 web 端的 Create Project 对话框重新出现 —— 点下去是 `404 Route not found`，前端只显示一句 "Something went wrong"（**UI 面与后端路由脱钩的典型症状**：解锁 EE 特性开关会点亮一批没有 CE 实现的入口，这条只是第一个被踩到的）。**不是整体回港 EE 的 platform-project-service**：project plan / concurrency pool / alerts 三个模块都随 EE 删了，故 `alertReceiverEmail`（对话框里那个字段）、`globalConnectionExternalIds`、`maxConcurrentJobs` 一律 **fail loud 400**，而不是收下再忽略——收下就等于承诺永远不会发出的失败告警。另外必须给创建者补 `project_member`（Admin）：TEAM project 的可见性只走 `project_member`，`ownerId` 仅对 PERSONAL 生效（`applyProjectsAccessFilters`），不补的话 platformRole 一旦收紧回 MEMBER，人就打不开自己刚建的 project | 2026-08-07 | — |
+| 017 | 源码（CE 重写模块） | `server/api/src/app/managed-authn/managed-authn-service.ts` + `.../lib/external-token-extractor.ts` | 外部 token 新增可选 `platformRole` claim（缺省仍 `MEMBER`，保持上游语义），并把「角色 + 显示名」从**只在首次供给时写**改为**每次握手同步**。原实现里 `getOrCreateUser` 命中既有影子用户就直接 return，`platformRole` 硬编码 `MEMBER`、`firstName` 只在创建 identity 时落一次 —— 结果是：① 从 admin center 进来的人永远看不到 AP 平台级页面（AI provider / piece 管理 / 签名密钥），② 首次握手若拿到的显示名不理想（HERMES 那侧 admin-center JWT 曾漏 `displayName` claim，退化成 username），此后**再也修不回来**，只能改库。同步在 HERMES 侧配置驱动（`service-task.managed.platform-role` 默认 `ADMIN`、`project-role` 默认 `Admin`），HERMES 是角色的唯一真源：在 AP UI 里手改会在下次进入时被覆盖，这是刻意的 | 2026-08-06 | — |
 
 源码类的路径相对 `activepieces/packages/`（003–008 / 012 在 `server/` 下，001 / 009 在 `web/` 下，010 两侧都有）；
 011 / 013 是 vendor 树裁剪，不是源码补丁——**grep `HERMES-PATCH-0` 时它们的标记落在

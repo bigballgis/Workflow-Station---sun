@@ -12,6 +12,7 @@ import { platformAnalyticsModule } from './analytics/platform-analytics.module'
 import { setPlatformOAuthService } from './app-connection/app-connection-service/oauth2'
 import { appConnectionModule } from './app-connection/app-connection.module'
 import { platformAppConnectionModule } from './app-connection/platform-app-connection.module'
+import { auditEventModule } from './audit-logs/audit-event-module'
 import { authenticationModule } from './authentication/authentication.module'
 import { canaryRoutingMiddleware } from './core/canary/canary-routing.middleware'
 import { collaborativeModule } from './core/collaborative/collaborative.module'
@@ -217,6 +218,12 @@ export const setupApp = async (app: FastifyInstance): Promise<FastifyInstance> =
             // per-DW-user external token for an AP USER token. See AG-06.
             await app.register(signingKeyModule)
             await app.register(managedAuthnModule)
+            // HERMES: audit-events reimplemented in CE (ee version removed in EE
+            // strip). Persists the same applicationEvents stream that event
+            // streaming consumes; the audit_event table survives in the MIT
+            // migration area, so no new migration. AP-side operational audit —
+            // admin-center remains the compliance audit system of record.
+            await app.register(auditEventModule)
             break
     }
 

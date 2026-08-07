@@ -88,14 +88,6 @@
       "dependsOn": ["build"],
       "cache": false
     },
-    "test-ee": {
-      "dependsOn": ["build"],
-      "cache": false
-    },
-    "test-cloud": {
-      "dependsOn": ["build"],
-      "cache": false
-    },
     "check-migrations": {
       "dependsOn": ["build"],
       "cache": false

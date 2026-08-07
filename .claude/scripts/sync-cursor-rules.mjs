@@ -42,10 +42,13 @@ const BEGIN = '<!-- BEGIN cursor-rules:auto -->';
 const END = '<!-- END cursor-rules:auto -->';
 
 const TARGETS = {
-  root:     { file: join(REPO, 'CLAUDE.md'),            prefix: '@.cursor/rules/' },
-  frontend: { file: join(REPO, 'frontend', 'CLAUDE.md'), prefix: '@../.cursor/rules/' },
-  backend:  { file: join(REPO, 'backend', 'CLAUDE.md'),  prefix: '@../.cursor/rules/' },
-  deploy:   { file: join(REPO, 'deploy', 'CLAUDE.md'),   prefix: '@../.cursor/rules/' },
+  root:         { file: join(REPO, 'CLAUDE.md'),                prefix: '@.cursor/rules/' },
+  frontend:     { file: join(REPO, 'frontend', 'CLAUDE.md'),    prefix: '@../.cursor/rules/' },
+  backend:      { file: join(REPO, 'backend', 'CLAUDE.md'),     prefix: '@../.cursor/rules/' },
+  deploy:       { file: join(REPO, 'deploy', 'CLAUDE.md'),      prefix: '@../.cursor/rules/' },
+  // 硬分叉进来的 Activepieces 子树（D12/D13）。上游自带的 CLAUDE.md / .claude / .agents 已删除，
+  // 其中仍然成立的约定收进 .cursor/rules/activepieces-*.mdc，由本脚本落到这里。
+  activepieces: { file: join(REPO, 'activepieces', 'CLAUDE.md'), prefix: '@../.cursor/rules/' },
 };
 
 const ROOT_PRIORITY = [
@@ -152,6 +155,8 @@ function classifyTargets(fm) {
   const g = globs.toLowerCase();
   const targets = new Set();
 
+  // activepieces 先判：它的 glob 里带 .ts，否则会被下面的兜底扫进 frontend。
+  if (g.includes('activepieces')) targets.add('activepieces');
   if (/deploy\/|dockerfile|docker-compose|nginx|\/k8s|k8s\//.test(g)) targets.add('deploy');
   if (g.includes('frontend')) targets.add('frontend');
   if (g.includes('backend')) targets.add('backend');
@@ -279,7 +284,7 @@ function rewriteRegion(absFile, importLines) {
 }
 
 function syncClaudeImports(rules) {
-  const buckets = { root: [], frontend: [], backend: [], deploy: [] };
+  const buckets = { root: [], frontend: [], backend: [], deploy: [], activepieces: [] };
   for (const rule of rules) {
     for (const target of classifyTargets(rule.fm)) {
       buckets[target].push(rule.name);

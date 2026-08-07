@@ -87,6 +87,31 @@ describe('buildDialogLayoutGroups', () => {
     expect(groups[1].items.map(item => item.key)).toEqual(['orphan'])
   })
 
+  it('keeps designer-order fields inside the card when all are present in formFields', () => {
+    // Counterpart to extract dropping Hide fields: once dates stay in card.children,
+    // revealing them must not create a rest group outside Financial adjustment.
+    const visible = cols(
+      'merchant_credit',
+      'merchant_credit_date',
+      'temporary_refund',
+      'temporary_refund_date',
+      'rebilled_date',
+    )
+    const formFields: FormField[] = [
+      {
+        key: 'c1',
+        label: 'Financial adjustment',
+        type: 'card',
+        span: 24,
+        children: visible.map(c => field(c.field)),
+      },
+    ]
+    const groups = buildDialogLayoutGroups(formFields, visible)
+    expect(groups).toHaveLength(1)
+    expect(groups[0].title).toBe('Financial adjustment')
+    expect(groups[0].items.map(item => item.key)).toEqual(visible.map(c => c.field))
+  })
+
   it.each([
     ['flat', (marker: FormField) => [field('before'), marker, field('after')]],
     ['card', (marker: FormField) => [{

@@ -6,7 +6,7 @@ const STORAGE_KEY = 'sidebar-collapsed'
  * Composable for managing sidebar collapse state
  * Extracted for testability
  *
- * The collapsed/expanded widths live in AppSidebar's stylesheet (248px / 64px, shared with
+ * The collapsed/expanded widths live in AppSidebar's stylesheet (280px / 64px, shared with
  * admin-center and user-portal) so the transition is pure CSS — this owns only the state.
  */
 export function useSidebarState() {

@@ -16,7 +16,9 @@
 # (piece_metadata rows). The two must stay in lockstep.
 set -eu
 MANIFEST="${1:?usage: prewarm-pieces.sh /path/to/pieces.json}"
-WORKSPACE="/usr/src/app/cache/v11/common"
+# Image default; overridable so the same script can prewarm a test cache outside the image
+# (execute-flow-e2e pins older piece versions — see hermes/pieces.e2e-fixtures.json).
+WORKSPACE="${AP_PREWARM_WORKSPACE:-/usr/src/app/cache/v11/common}"
 
 mkdir -p "$WORKSPACE/pieces"
 cd "$WORKSPACE"

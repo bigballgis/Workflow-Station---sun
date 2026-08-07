@@ -28,7 +28,6 @@ export type FeatureKey =
   | 'AGENTS'
   | 'TABLES'
   | 'TODOS'
-  | 'BILLING'
   | 'MCPS'
   | 'SECRET_MANAGERS'
   | 'DEDICATED_WORKERS';

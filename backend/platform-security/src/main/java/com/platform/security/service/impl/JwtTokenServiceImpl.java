@@ -66,11 +66,16 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + jwtProperties.getExpirationMs());
 
+        // email / displayName 必须落进 claim：{@link #extractUserPrincipal} 会读回它们，
+        // 缺失时下游只能退到 username（如 AP per-user provisioning 的影子用户显示名）。
+        // 空值不写 claim，避免 token 里出现 null 字段。
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(userId)
                 .claim(CLAIM_USER_ID, userId)
                 .claim(CLAIM_USERNAME, username)
+                .claim(CLAIM_EMAIL, blankToNull(email))
+                .claim(CLAIM_DISPLAY_NAME, blankToNull(displayName))
                 .claim(CLAIM_ROLES, roles != null ? roles : Collections.emptyList())
                 .claim(CLAIM_PERMISSIONS, permissions != null ? permissions : Collections.emptyList())
                 .claim(CLAIM_LANGUAGE, language != null ? language : "zh_CN")
@@ -80,6 +85,11 @@ public class JwtTokenServiceImpl implements JwtTokenService {
                 .expiration(expiration)
                 .signWith(secretKey)
                 .compact();
+    }
+
+    /** jjwt 对 null claim 值等同于「不写该 claim」，故空白值统一归一成 null。 */
+    private static String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value;
     }
 
     @Override

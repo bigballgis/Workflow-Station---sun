@@ -2,7 +2,7 @@ import type { FormField } from '@/components/FormRenderer.vue'
 import {
   normalizePortalViews,
   isFormCreateRuleReadonly,
-  isFormCreateRuleHidden,
+  applyDesignerHideFlagToFormField,
   isRowRule,
   isColRule,
   getRuleChildren,
@@ -63,6 +63,8 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
   const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 
   // Recursively extract fields.
+  // Designer Hide must stay in the layout tree (default-hidden) so card/dialog
+  // grouping keeps field order; scripts may reveal via api.hidden(false, …).
   // `skipSubTable`: when traversing subForm/tableForm wrappers on the main canvas, do not promote
   // nested subTable widgets (e.g. link-form target subtable2) to the page-level field list.
   const extractFieldsRecursive = (
@@ -71,19 +73,13 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
   ): FormField[] => {
     const fields: FormField[] = []
     for (const item of items) {
-      if (item.field && isFormCreateRuleHidden(item)) {
-        continue
-      }
       const bindingId = item._bindingId ?? item.props?._bindingId
       if (item.type === 'subTable' && bindingId != null) {
-        if (isFormCreateRuleHidden(item)) {
-          continue
-        }
         if (!ctx.skipSubTable) {
           const rawPv = item.props?.portalViews
           const hasWidgetPortalViews =
             rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
-          fields.push({
+          const subTableField: FormField = {
             key: `__subTable_${bindingId}`,
             label: '',
             type: 'subTable',
@@ -94,7 +90,9 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
             ...(item.props?.allowEdit === false ? { allowEdit: false } : {}),
             ...(item.props?.allowDelete === false ? { allowDelete: false } : {}),
             span: 24,
-          })
+          }
+          applyDesignerHideFlagToFormField(subTableField, item)
+          fields.push(subTableField)
         }
         continue
       }
@@ -216,6 +214,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
         if (isFormCreateRuleReadonly(item)) {
           field.readonly = true
         }
+        applyDesignerHideFlagToFormField(field, item)
         fields.push(field)
       } else if (FC_SKIP_TYPES.has(item.type)) {
         // Traverse children only; `continue` would drop nested sub-table row fields.
@@ -291,6 +290,7 @@ export function createApplicationDetailFormSchema(appCtx: ApplicationDetailCtx):
     if (isFormCreateRuleReadonly(rule)) {
       field.readonly = true
     }
+    applyDesignerHideFlagToFormField(field, rule)
     applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
     applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
     return field

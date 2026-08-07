@@ -397,6 +397,10 @@ services:
       ACTIVEPIECES_MANAGED_SIGNING_KEY_ID: ${ACTIVEPIECES_MANAGED_SIGNING_KEY_ID:-}
       ACTIVEPIECES_MANAGED_PRIVATE_KEY: ${ACTIVEPIECES_MANAGED_PRIVATE_KEY:-}
       ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:-hermes-shared}
+      # 影子用户角色（平台级 ADMIN|MEMBER / project 级 Admin|Editor|Viewer）。默认全权：
+      # 从 admin center 进入的人要能用 AP 平台级页面。每次握手同步既有影子用户。
+      ACTIVEPIECES_MANAGED_PLATFORM_ROLE: ${ACTIVEPIECES_MANAGED_PLATFORM_ROLE:-ADMIN}
+      ACTIVEPIECES_MANAGED_PROJECT_ROLE: ${ACTIVEPIECES_MANAGED_PROJECT_ROLE:-Admin}
       # 桥页公网地址（浏览器侧）。/launch 在其后附 #nonce=<票> 整页跳转（方案 B 跨域 SSO 握手）。
       # dev 同源 :8085；k8s 经 configmap AP_BRIDGE_URL 注入 AP 网关主机。
       AP_BRIDGE_URL: ${ACTIVEPIECES_BRIDGE_PUBLIC_URL:-http://localhost:8085/__ap/bridge}

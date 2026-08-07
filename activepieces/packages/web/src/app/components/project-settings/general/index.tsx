@@ -37,7 +37,6 @@ export type FormValues = {
   projectName: string;
   icon: ProjectIcon;
   externalId?: string;
-  maxConcurrentJobs?: number | null;
 };
 
 type GeneralSettingsProps = {
@@ -164,52 +163,6 @@ export const GeneralSettings = ({ form }: GeneralSettingsProps) => {
                 />
                 <FormDescription className="text-xs text-muted-foreground">
                   {t('Used to identify the project based on your SaaS ID')}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-        {platformRole === PlatformRole.ADMIN && (
-          <FormField
-            name="maxConcurrentJobs"
-            render={({ field }) => (
-              <FormItem>
-                <Label
-                  htmlFor="maxConcurrentJobs"
-                  className="text-sm font-medium"
-                >
-                  {t('Max Concurrent Jobs')}
-                </Label>
-                <ClearableInput
-                  {...field}
-                  id="maxConcurrentJobs"
-                  type="number"
-                  min={1}
-                  placeholder={
-                    defaultConcurrentJobsLimit
-                      ? t('Default ({value})', {
-                          value: defaultConcurrentJobsLimit,
-                        })
-                      : t('Default')
-                  }
-                  value={field.value ?? ''}
-                  onChange={(e) =>
-                    field.onChange(
-                      e.target.value ? Number(e.target.value) : null,
-                    )
-                  }
-                  onClear={() => field.onChange(null)}
-                  disabled={form.formState.disabled || !isRateLimiterEnabled}
-                />
-                <FormDescription className="text-xs text-muted-foreground">
-                  {isRateLimiterEnabled === false
-                    ? t(
-                        'The rate limiting feature is disabled. Enable the PROJECT_RATE_LIMITER_ENABLED environment variable to use this feature.',
-                      )
-                    : t(
-                        'Maximum number of flows that can run at the same time for this project',
-                      )}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
