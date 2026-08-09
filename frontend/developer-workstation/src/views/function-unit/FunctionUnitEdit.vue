@@ -34,6 +34,15 @@
           </span>
         </div>
         <div>
+          <el-button
+            v-if="AI_STUDIO_ENABLED"
+            type="primary"
+            plain
+            @click="showAiStudioDialog = true"
+          >
+            <el-icon><Guide /></el-icon>
+            {{ t('ai.studio.entryButton') }}
+          </el-button>
           <!-- AI Generate 入口：功能已停用，见 utils/featureFlags.ts -->
           <el-button
             v-if="AI_GENERATION_ENABLED"
@@ -310,6 +319,14 @@
       @data-applied="handleAiDataApplied"
     />
 
+    <AiStudioEntryDialog
+      v-if="AI_STUDIO_ENABLED"
+      :function-unit-id="functionUnitId"
+      :visible="showAiStudioDialog"
+      @update:visible="showAiStudioDialog = $event"
+      @open="handleOpenAiStudio"
+    />
+
     <!-- Deploy Dialog -->
     <el-dialog
       v-model="showDeployDialog"
@@ -461,7 +478,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick, Guide } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
 import ServiceTaskDesigner from '@/components/serviceTask/ServiceTaskDesigner.vue'
@@ -477,7 +495,9 @@ import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import AiPanel from '@/components/ai/AiPanel.vue'
-import { AI_GENERATION_ENABLED } from '@/utils/featureFlags'
+import AiStudioEntryDialog from '@/components/ai/AiStudioEntryDialog.vue'
+import { AI_GENERATION_ENABLED, AI_STUDIO_ENABLED } from '@/utils/featureFlags'
+import type { AiStudioOpenPayload } from '@/utils/aiStudioDraft'
 import { useFunctionUnitStatus } from '@/composables/functionUnitEdit/useFunctionUnitStatus'
 import { useFunctionUnitSettings } from '@/composables/functionUnitEdit/useFunctionUnitSettings'
 import { useFunctionUnitActions } from '@/composables/functionUnitEdit/useFunctionUnitActions'
@@ -505,6 +525,16 @@ watch(activeTab, (tab) => {
 })
 
 const showAiPanel = ref(false)
+const showAiStudioDialog = ref(false)
+
+/**
+ * AI Studio 工作台在后续增量实现；入口先行。这里必须给显式提示而不是留空——
+ * 否则点 "Open AI Studio" 弹窗关掉却无任何反应，看起来像坏了。
+ * 工作台落地后把这里换成路由跳转，payload（new / continue + 草稿）契约见 utils/aiStudioDraft.ts。
+ */
+function handleOpenAiStudio(_payload: AiStudioOpenPayload) {
+  ElMessage.info(t('ai.studio.workspaceComingSoon'))
+}
 /** 改这个值会重挂载流程设计器——见 handleAiDataApplied。 */
 const processDesignerReloadKey = ref(0)
 

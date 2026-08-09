@@ -2259,6 +2259,25 @@ export default {
     undo: {
       button: 'Undo',
       success: 'Changes undone successfully'
+    },
+    studio: {
+      entryButton: 'AI Studio',
+      title: 'Build with AI',
+      subtitle: 'Design your Function Unit step by step with AI, while staying in control.',
+      newDesign: 'Start a new AI design',
+      newDesignDesc: 'Describe your idea and build each phase together.',
+      recommended: 'Recommended',
+      continueDraft: 'Continue AI draft',
+      continueDraftDesc: 'Resume {name} · {phase}',
+      noDraft: 'No AI draft to resume for this Function Unit yet.',
+      guideTitle: 'AI Studio guides you through',
+      // 其余步骤文案复用设计器 Tab 的 key（见 utils/aiStudioDraft.ts），只有 Review 是 AI Studio 独有
+      step: {
+        review: 'Review'
+      },
+      overwriteNote: 'Your existing design will not be overwritten without confirmation.',
+      openButton: 'Open AI Studio',
+      workspaceComingSoon: 'The AI Studio workspace is under development — stay tuned.'
     }
   },
   businessLogic: {

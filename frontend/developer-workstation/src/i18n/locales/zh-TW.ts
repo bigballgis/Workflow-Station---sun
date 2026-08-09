@@ -2251,6 +2251,25 @@ export default {
     undo: {
       button: '復原',
       success: '已成功復原更改'
+    },
+    studio: {
+      entryButton: 'AI Studio',
+      title: '用 AI 建構',
+      subtitle: '在 AI 引導下逐步設計你的功能單元，全程由你掌控。',
+      newDesign: '開始新的 AI 設計',
+      newDesignDesc: '描述你的想法，與 AI 一起逐階段建構。',
+      recommended: '推薦',
+      continueDraft: '繼續 AI 草稿',
+      continueDraftDesc: '繼續 {name} · {phase}',
+      noDraft: '該功能單元還沒有可繼續的 AI 草稿。',
+      guideTitle: 'AI Studio 將引導你完成',
+      // 其餘步驟文案複用設計器 Tab 的 key（見 utils/aiStudioDraft.ts），只有 Review 是 AI Studio 獨有
+      step: {
+        review: '審閱'
+      },
+      overwriteNote: '未經確認，你現有的設計不會被覆蓋。',
+      openButton: '打開 AI Studio',
+      workspaceComingSoon: 'AI Studio 工作台正在開發中，敬請期待。'
     }
   },
   businessLogic: {
