@@ -276,7 +276,15 @@
             {{ t('ai.studio.workspace.copilotTitle') }}
           </div>
           <div class="copilot-msg__bubble">
-            {{ msg.text }}
+            <!-- 模型回复按 markdown 渲染（MarkdownRenderer 内置 DOMPurify 消毒）；
+                 用户消息与错误气泡保持纯文本 -->
+            <MarkdownRenderer
+              v-if="msg.role === 'assistant' && !msg.isError"
+              :content="msg.text"
+            />
+            <template v-else>
+              {{ msg.text }}
+            </template>
           </div>
         </div>
         <div
@@ -357,6 +365,7 @@ import ConnectionDesigner from '@/components/designer/ConnectionDesigner.vue'
 import EmailTemplateDesigner from '@/components/designer/EmailTemplateDesigner.vue'
 import EmailMonitorDesigner from '@/components/designer/EmailMonitorDesigner.vue'
 import DecisionList from '@/components/designer/DecisionList.vue'
+import MarkdownRenderer from '@/components/ai/MarkdownRenderer.vue'
 import {
   AI_STUDIO_PHASES,
   aiStudioPhaseLabel,
@@ -1107,6 +1116,15 @@ onMounted(async () => {
     line-height: 1.55;
     color: var(--el-text-color-primary);
     word-break: break-word;
+
+    // markdown 首末元素的外边距不撑大气泡
+    :deep(.markdown-renderer > :first-child) {
+      margin-top: 0;
+    }
+
+    :deep(.markdown-renderer > :last-child) {
+      margin-bottom: 0;
+    }
   }
 
   &--assistant &__bubble {
