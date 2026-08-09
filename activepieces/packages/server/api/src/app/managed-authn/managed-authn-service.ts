@@ -120,7 +120,7 @@ const syncExistingUser = async (
     { existingUser, params }: SyncExistingUserParams,
     log: FastifyBaseLogger,
 ): Promise<User> => {
-    await syncIdentityName({ identityId: existingUser.identityId, params }, log)
+    await syncIdentity({ identityId: existingUser.identityId, params }, log)
 
     if (existingUser.platformRole === params.platformRole) {
         return existingUser
@@ -133,25 +133,46 @@ const syncExistingUser = async (
     return { ...existingUser, platformRole: params.platformRole }
 }
 
-const syncIdentityName = async (
-    { identityId, params }: SyncIdentityNameParams,
+const syncIdentity = async (
+    { identityId, params }: SyncIdentityParams,
     log: FastifyBaseLogger,
 ): Promise<void> => {
     const identity = await userIdentityService(log).getOneOrFail({ id: identityId })
-    if (identity.firstName === params.externalFirstName && identity.lastName === params.externalLastName) {
-        return
+    const update: { firstName?: string, lastName?: string, email?: string } = {}
+    if (identity.firstName !== params.externalFirstName || identity.lastName !== params.externalLastName) {
+        update.firstName = params.externalFirstName
+        update.lastName = params.externalLastName
     }
-    await userIdentityService(log).update(identityId, {
-        firstName: params.externalFirstName,
-        lastName: params.externalLastName,
-    })
+    // Shadow identities minted before the token carried an email claim hold the
+    // sha256 hash email; upgrade them to the real address on the next handshake.
+    // email is a unique column, so if another identity already holds the target
+    // address, keep the current one instead of failing the whole sign-in.
+    if (!isNil(params.externalEmail)) {
+        const targetEmail = cleanEmailOtherwiseCompareFails(params.externalEmail)
+        if (identity.email !== targetEmail) {
+            const holder = await userIdentityService(log).getIdentityByEmail(targetEmail)
+            if (isNil(holder) || holder.id === identityId) {
+                update.email = targetEmail
+            }
+            else {
+                log.warn({ identityId, targetEmail, holderId: holder.id }, '[managedAuthn#syncIdentity] target email already belongs to another identity, keeping current email')
+            }
+        }
+    }
+    if (Object.keys(update).length > 0) {
+        await userIdentityService(log).update(identityId, update)
+    }
 }
 
 const getOrCreateUserIdentity = async (
     params: GetOrCreateUserParams,
     log: FastifyBaseLogger,
 ): Promise<UserIdentity> => {
-    const cleanedEmail = generateEmailHash(params)
+    // Real email when the token carries one (same person across sign-ins maps to
+    // the same identity); hash fallback for accounts without a mail attribute.
+    const cleanedEmail = isNil(params.externalEmail)
+        ? generateEmailHash(params)
+        : cleanEmailOtherwiseCompareFails(params.externalEmail)
     const existingIdentity = await userIdentityService(log).getIdentityByEmail(cleanedEmail)
     if (!isNil(existingIdentity)) {
         return existingIdentity
@@ -238,6 +259,7 @@ type GetOrCreateUserParams = {
     externalProjectId: string
     externalFirstName: string
     externalLastName: string
+    externalEmail?: string
     platformRole: PlatformRole
 }
 
@@ -257,7 +279,7 @@ type SyncExistingUserParams = {
     params: GetOrCreateUserParams
 }
 
-type SyncIdentityNameParams = {
+type SyncIdentityParams = {
     identityId: string
     params: GetOrCreateUserParams
 }

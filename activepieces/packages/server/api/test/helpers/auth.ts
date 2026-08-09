@@ -91,6 +91,7 @@ export const generateMockExternalToken = (
         externalProjectId: params?.externalProjectId ?? apId(),
         firstName: params?.externalFirstName ?? faker.person.firstName(),
         lastName: params?.externalLastName ?? faker.person.lastName(),
+        ...(params?.externalEmail ? { email: params.externalEmail } : {}),
         role: params?.projectRole ?? DefaultProjectRole.ADMIN,
         platformRole: params?.platformRole ?? PlatformRole.MEMBER,
     }
@@ -132,6 +133,7 @@ type GenerateMockExternalTokenParams = {
     externalProjectId?: string
     externalFirstName?: string
     externalLastName?: string
+    externalEmail?: string
     projectRole?: DefaultProjectRole
     platformRole?: PlatformRole
     signingKeyId?: SigningKeyId

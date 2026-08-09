@@ -139,6 +139,7 @@ type UpdatePasswordParams = {
 type UpdateParams = {
     firstName?: string
     lastName?: string
+    email?: string
     password?: string
     imageUrl?: string | null
 }

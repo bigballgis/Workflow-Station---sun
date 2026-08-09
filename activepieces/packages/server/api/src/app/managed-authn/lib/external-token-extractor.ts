@@ -54,6 +54,7 @@ export const externalTokenExtractor = (log: FastifyBaseLogger) => {
                     externalProjectId: payload.externalProjectId,
                     externalFirstName: payload.firstName,
                     externalLastName: payload.lastName,
+                    externalEmail: payload.email,
                     projectRole: projectRole.name,
                     platformRole: payload.platformRole,
                 }
@@ -97,6 +98,9 @@ export const ExternalTokenPayload = z.object({
     externalProjectId: z.string().min(1),
     firstName: z.string().min(1),
     lastName: z.string(),
+    // Optional only because some LDAP accounts genuinely have no mail attribute;
+    // when absent the shadow identity falls back to the sha256 hash email.
+    email: z.string().min(1).optional(),
     role: z.enum(DefaultProjectRole),
     platformRole: z.enum(PlatformRole),
 })
@@ -109,6 +113,7 @@ export type ExternalPrincipal = {
     externalProjectId: string
     externalFirstName: string
     externalLastName: string
+    externalEmail?: string
     projectRole: string
     platformRole: PlatformRole
 }

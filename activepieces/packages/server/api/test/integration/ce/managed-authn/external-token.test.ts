@@ -180,6 +180,121 @@ describe('Managed Authentication API', () => {
             expect(personalProjects).toHaveLength(1)
         })
 
+        it('Provisions the shadow identity with the real email when the token carries one', async () => {
+            // arrange
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+            const mockSigningKey = createMockSigningKey({ platformId: mockPlatform.id })
+            await db.save('signing_key', mockSigningKey)
+
+            const realEmail = `Shadow.User+${apId()}@Example.COM`
+            const { mockExternalToken } = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                externalEmail: realEmail,
+            })
+
+            // act
+            const response = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: { externalAccessToken: mockExternalToken },
+            })
+
+            // assert — email is cleaned (lowercased/trimmed), not hashed
+            const responseBody = response?.json()
+            expect(response?.statusCode).toBe(StatusCodes.OK)
+            expect(responseBody?.email).toBe(realEmail.toLowerCase())
+        })
+
+        it('Upgrades a hash-email shadow identity to the real email on the next handshake', async () => {
+            // arrange
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+            const mockSigningKey = createMockSigningKey({ platformId: mockPlatform.id })
+            await db.save('signing_key', mockSigningKey)
+
+            const externalUserId = apId()
+            const withoutEmail = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                externalUserId,
+            })
+            const firstResponse = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: { externalAccessToken: withoutEmail.mockExternalToken },
+            })
+            expect(firstResponse?.statusCode).toBe(StatusCodes.OK)
+            // pre-email-claim identities carry the sha256 hash email
+            expect(firstResponse?.json()?.email).toMatch(/^[0-9a-f]{64}$/)
+
+            const realEmail = `upgraded+${apId()}@example.com`.toLowerCase()
+            const withEmail = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                externalUserId,
+                externalEmail: realEmail,
+            })
+
+            // act
+            const secondResponse = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: { externalAccessToken: withEmail.mockExternalToken },
+            })
+
+            // assert — same user, identity email upgraded in place
+            const secondBody = secondResponse?.json()
+            expect(secondResponse?.statusCode).toBe(StatusCodes.OK)
+            expect(secondBody?.id).toBe(firstResponse?.json()?.id)
+            expect(secondBody?.email).toBe(realEmail)
+        })
+
+        it('Keeps the current email when the target email already belongs to another identity', async () => {
+            // arrange
+            const { mockPlatform } = await mockAndSaveBasicSetup()
+            const mockSigningKey = createMockSigningKey({ platformId: mockPlatform.id })
+            await db.save('signing_key', mockSigningKey)
+
+            // an unrelated identity already owns the address
+            const takenEmail = `taken+${apId()}@example.com`.toLowerCase()
+            await mockBasicUser({
+                userIdentity: { email: takenEmail },
+                user: { platformId: mockPlatform.id },
+            })
+
+            const externalUserId = apId()
+            const withoutEmail = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                externalUserId,
+            })
+            const firstResponse = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: { externalAccessToken: withoutEmail.mockExternalToken },
+            })
+            const hashEmail = firstResponse?.json()?.email
+
+            const withEmail = generateMockExternalToken({
+                platformId: mockPlatform.id,
+                signingKeyId: mockSigningKey.id,
+                externalUserId,
+                externalEmail: takenEmail,
+            })
+
+            // act — must not fail the sign-in, must not steal the address
+            const secondResponse = await app?.inject({
+                method: 'POST',
+                url: '/api/v1/managed-authn/external-token',
+                body: { externalAccessToken: withEmail.mockExternalToken },
+            })
+
+            // assert
+            const secondBody = secondResponse?.json()
+            expect(secondResponse?.statusCode).toBe(StatusCodes.OK)
+            expect(secondBody?.email).toBe(hashEmail)
+        })
+
         it('Adds new user as a member in new project', async () => {
             // arrange
             const { mockPlatform } = await mockAndSaveBasicSetup()

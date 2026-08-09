@@ -3,6 +3,7 @@ package com.admin.servicetask.client;
 import com.admin.servicetask.config.ServiceTaskProperties;
 import com.admin.exception.ServiceTaskApiException;
 import com.platform.common.dto.UserPrincipal;
+import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
@@ -180,10 +181,11 @@ public class ServiceTaskApiClient {
         String projectRole = requireConfigured(managed.getProjectRole(), "service-task.managed.project-role");
         String platformRole = requireConfigured(managed.getPlatformRole(), "service-task.managed.platform-role");
         String firstName = firstNonBlank(user.getDisplayName(), user.getUsername(), user.getUserId());
+        String email = user.getEmail();
         Date now = new Date();
         Date expiry = new Date(now.getTime() + managed.getTokenTtlSeconds() * 1000L);
         try {
-            return Jwts.builder()
+            JwtBuilder builder = Jwts.builder()
                     .header().keyId(managed.getSigningKeyId()).and()
                     .claim("externalUserId", user.getUserId())
                     .claim("externalProjectId", managed.getProjectExternalId())
@@ -192,7 +194,13 @@ public class ServiceTaskApiClient {
                     // role = project_role.name（Admin/Editor/Viewer）；platformRole = AP 平台角色
                     // （ADMIN/MEMBER）。AP 每次握手按这两个值同步既有影子用户。
                     .claim("role", projectRole)
-                    .claim("platformRole", platformRole)
+                    .claim("platformRole", platformRole);
+            // email 是可选 claim：LDAP 账号可能没有 mail 属性。带上时 AP 用真实邮箱建/升级
+            // 影子 identity（否则回退 sha256 哈希邮箱——Automation Studio 界面会露出来）。
+            if (email != null && !email.isBlank()) {
+                builder.claim("email", email);
+            }
+            return builder
                     .issuedAt(now)
                     .expiration(expiry)
                     .signWith(loadPrivateKey(managed.getPrivateKey()), Jwts.SIG.RS256)
