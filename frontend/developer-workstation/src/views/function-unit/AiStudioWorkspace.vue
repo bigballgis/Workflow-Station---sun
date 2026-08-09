@@ -371,7 +371,12 @@ import {
   aiStudioPhaseLabel,
   loadAiStudioDraft,
   saveAiStudioDraft,
-  type AiStudioPhase
+  loadAiStudioChatThreads,
+  saveAiStudioChatThreads,
+  clearAiStudioChatThreads,
+  type AiStudioPhase,
+  type AiStudioChatMessage,
+  type AiStudioChatThreads
 } from '@/utils/aiStudioDraft'
 
 const { t } = useI18n()
@@ -515,14 +520,8 @@ async function runValidation() {
 
 // ---- AI Copilot：与 AI Generate 同源的模型链路（集团 gateway + AMToken 透传） ----
 // 会话按阶段隔离：每个阶段一个独立线程，切阶段即切线程，互不可见也互不进对方历史。
-interface CopilotMessage {
-  role: 'user' | 'assistant'
-  text: string
-  /** 请求失败时的错误气泡（样式区分，不当成正常回复） */
-  isError?: boolean
-  /** 线程开场的阶段引导语：不计入送模型的历史 */
-  isPhaseNote?: boolean
-}
+// 线程随草稿持久化到 localStorage（契约见 utils/aiStudioDraft.ts），Continue AI draft 时恢复。
+type CopilotMessage = AiStudioChatMessage
 
 const copilotOpen = ref(true)
 const copilotInput = ref('')
@@ -530,7 +529,12 @@ const copilotReplying = ref(false)
 /** 正在等回复的线程；打字指示只出现在这个阶段的线程里 */
 const copilotReplyingPhase = ref<AiStudioPhase | null>(null)
 const copilotBodyRef = ref<HTMLElement>()
-const copilotThreads = ref<Partial<Record<AiStudioPhase, CopilotMessage[]>>>({})
+const copilotThreads = ref<AiStudioChatThreads>({})
+
+// 任何线程变化（新线程、发消息、收回复）即落盘；进入时的整体恢复也会触发一次原样回写，无害
+watch(copilotThreads, (threads) => {
+  saveAiStudioChatThreads(fuId.value, threads)
+}, { deep: true })
 
 /**
  * 取（必要时新建）某阶段的线程。引导语只随线程**首次创建**（=第一次进入该阶段）追加一次，
@@ -625,12 +629,15 @@ onMounted(async () => {
 
   const draft = loadAiStudioDraft(fuId.value)
   const mode = route.query.mode
+  // 先恢复聊天线程再定阶段：阶段 watch 里的 copilotThread() 看到已恢复的线程
+  // 就不会重建（引导语只属于真正的首次进入）
+  copilotThreads.value = loadAiStudioChatThreads(fuId.value)
 
   if (draft && mode === 'continue') {
     currentPhase.value = draft.phase
     completedPhases.value = draft.completedPhases ?? []
   } else if (draft && mode === 'new' && (draft.completedPhases?.length || draft.phase !== AI_STUDIO_PHASES[0])) {
-    // 入口承诺"未经确认不覆盖"：重新开始会丢弃草稿进度，必须先问
+    // 入口承诺"未经确认不覆盖"：重新开始会丢弃草稿进度与聊天记录，必须先问
     try {
       await ElMessageBox.confirm(
         t('ai.studio.workspace.restartConfirmMsg'),
@@ -639,6 +646,8 @@ onMounted(async () => {
       )
       completedPhases.value = []
       currentPhase.value = AI_STUDIO_PHASES[0]
+      clearAiStudioChatThreads(fuId.value)
+      copilotThreads.value = {}
     } catch {
       currentPhase.value = draft.phase
       completedPhases.value = draft.completedPhases ?? []

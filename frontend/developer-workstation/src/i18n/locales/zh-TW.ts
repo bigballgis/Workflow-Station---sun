@@ -2283,7 +2283,7 @@ export default {
         phaseConfirmed: '階段已確認：{phase}',
         allPhasesDone: '全部階段已確認——就緒後請回功能單元設計器部署。',
         restartConfirmTitle: '開始新的 AI 設計？',
-        restartConfirmMsg: '重新開始會丟棄當前 AI 草稿進度，功能單元設計本身不受影響。',
+        restartConfirmMsg: '重新開始會丟棄當前 AI 草稿進度和 Copilot 聊天記錄，功能單元設計本身不受影響。',
         restartConfirmOk: '重新開始',
         validationRunning: '正在校驗設計…',
         validationReady: '可以部署',

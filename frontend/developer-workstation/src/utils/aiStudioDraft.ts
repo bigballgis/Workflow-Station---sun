@@ -99,6 +99,72 @@ export function clearAiStudioDraft(functionUnitId: number): void {
   localStorage.removeItem(aiStudioDraftStorageKey(functionUnitId))
 }
 
+// ---- Copilot 聊天线程持久化（与草稿同生命周期，Continue AI draft 时一并恢复） ----
+
+export interface AiStudioChatMessage {
+  role: 'user' | 'assistant'
+  text: string
+  isError?: boolean
+  isPhaseNote?: boolean
+}
+
+export type AiStudioChatThreads = Partial<Record<AiStudioPhase, AiStudioChatMessage[]>>
+
+const CHAT_STORAGE_PREFIX = 'dw-ai-studio-chat:'
+
+/** 每阶段最多持久化的消息条数，防 localStorage 无限膨胀（保最新）。 */
+const CHAT_MESSAGES_PER_PHASE_CAP = 50
+
+export function aiStudioChatStorageKey(functionUnitId: number): string {
+  return `${CHAT_STORAGE_PREFIX}${functionUnitId}`
+}
+
+/** 读取该功能单元的 Copilot 聊天线程；没有或已损坏返回空对象（损坏会 warn 并清除）。 */
+export function loadAiStudioChatThreads(functionUnitId: number): AiStudioChatThreads {
+  const key = aiStudioChatStorageKey(functionUnitId)
+  const raw = localStorage.getItem(key)
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as AiStudioChatThreads
+    const threads: AiStudioChatThreads = {}
+    for (const phase of AI_STUDIO_PHASES) {
+      const msgs = parsed[phase]
+      if (!Array.isArray(msgs)) continue
+      const valid = msgs.filter(
+        (m): m is AiStudioChatMessage =>
+          !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string'
+      )
+      if (valid.length) threads[phase] = valid
+    }
+    return threads
+  } catch (e) {
+    console.warn(`[ai-studio] discarding corrupt chat threads at ${key}`, e)
+    localStorage.removeItem(key)
+    return {}
+  }
+}
+
+/**
+ * 持久化聊天线程（每阶段截断到最新 CHAT_MESSAGES_PER_PHASE_CAP 条）。
+ * 配额超限等存储失败只 warn 不中断对话——聊天本体还在内存里，丢的只是这次落盘。
+ */
+export function saveAiStudioChatThreads(functionUnitId: number, threads: AiStudioChatThreads): void {
+  const capped: AiStudioChatThreads = {}
+  for (const phase of AI_STUDIO_PHASES) {
+    const msgs = threads[phase]
+    if (msgs?.length) capped[phase] = msgs.slice(-CHAT_MESSAGES_PER_PHASE_CAP)
+  }
+  try {
+    localStorage.setItem(aiStudioChatStorageKey(functionUnitId), JSON.stringify(capped))
+  } catch (e) {
+    console.warn('[ai-studio] failed to persist chat threads (quota?)', e)
+  }
+}
+
+export function clearAiStudioChatThreads(functionUnitId: number): void {
+  localStorage.removeItem(aiStudioChatStorageKey(functionUnitId))
+}
+
 /**
  * 阶段 key → 当前语言下的阶段名。除 Review 外全部复用设计器 Tab 的既有 i18n key，
  * 保证引导条文案与 Tab 文案永远一致，不再维护一套平行翻译。

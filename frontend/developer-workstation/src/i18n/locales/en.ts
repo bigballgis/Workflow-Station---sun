@@ -2291,7 +2291,7 @@ export default {
         phaseConfirmed: 'Phase confirmed: {phase}',
         allPhasesDone: 'All phases confirmed — deploy from the Function Unit designer when ready.',
         restartConfirmTitle: 'Start a new AI design?',
-        restartConfirmMsg: 'Starting over discards the current AI draft progress. Your Function Unit design itself is not affected.',
+        restartConfirmMsg: 'Starting over discards the current AI draft progress and its copilot chat history. Your Function Unit design itself is not affected.',
         restartConfirmOk: 'Start over',
         validationRunning: 'Validating the design…',
         validationReady: 'Ready to deploy',
