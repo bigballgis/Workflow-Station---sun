@@ -153,9 +153,6 @@ deploy/environments/dev/.env
 # Superset BuildKit pip secret (Nexus credentials) — never commit real pip.conf
 deploy/superset/pip.conf
 
-# Dev schema-migration SHA markers (isolated per Postgres Docker volume)
-deploy/environments/dev/.schema-migration-markers/
-
 # Local compose overlay (see deploy/environments/dev/LOCAL-OVERLAY.md) — never commit
 **/docker-compose.local.yml
 

@@ -17,6 +17,8 @@
 #   .\build-and-deploy.ps1 -RebuildServiceTaskBuilder  # Force-rebuild the AP Automation builder bundle
 #   .\build-and-deploy.ps1 -ForceBuild        # Ignore freshness checks; rebuild everything once
 #   .\build-and-deploy.ps1 -SkipApProvisioning # Skip AP shared-account/signing-key/piece-catalog provisioning
+#   .\build-and-deploy.ps1 -SkipActivepieces  # Skip AP entirely (build/start/provisioning); DW loses embedded Automation builder
+#   .\build-and-deploy.ps1 -SkipSuperset      # Skip Superset entirely (build/start/bootstrap); e.g. offline hosts that can't install psycopg2-binary
 #
 # Incremental strategy (default, without -Clean / -ForceBuild):
 #   - Skip Maven when backend JARs are newer than sources/poms
@@ -50,7 +52,14 @@ param(
     # Skip the Activepieces provisioning pass (shared account / signing key / piece catalog).
     # Each step is idempotent and gated on an emptiness check, so it normally costs a few
     # queries; pass this only when AP is intentionally down or provisioned out-of-band.
-    [switch]$SkipApProvisioning
+    [switch]$SkipApProvisioning,
+    # Skip Activepieces entirely: no builder-bundle build, no compose build/start, no
+    # provisioning. The DW frontend also drops the embedded Automation builder. Use when AP's
+    # own build/start is broken or unwanted for the task at hand.
+    [switch]$SkipActivepieces,
+    # Skip Superset entirely: no compose build/start, no bootstrap. Use on hosts that cannot
+    # reach the Python/Nexus package source (psycopg2-binary install fails offline).
+    [switch]$SkipSuperset
 )
 
 $ErrorActionPreference = "Stop"
@@ -520,21 +529,21 @@ trusted-host = pypi.org files.pythonhosted.org
     return $tmp
 }
 
-function Get-PostgresVolumeMarkerDir {
+function Test-PostgresVolumeExists {
     $volName = docker volume ls -q 2>$null | Where-Object { $_ -match 'postgres_dev_data$' } | Select-Object -First 1
-    if (-not $volName) {
-        return (Join-Path $PSScriptRoot ".schema-migration-markers\_no_volume")
-    }
-    $created = docker volume inspect $volName --format "{{.CreatedAt}}" 2>$null
-    if (-not $created) { $created = "unknown" }
-    $safe = (($volName + "_" + $created) -replace '[^A-Za-z0-9._-]', '_')
-    return (Join-Path $PSScriptRoot ".schema-migration-markers\$safe")
+    return [bool]$volName
 }
 
 function Invoke-SchemaMigrations {
     param(
-        [Parameter(Mandatory = $true)][string]$PostgresContainerId
+        [Parameter(Mandatory = $true)][string]$PostgresContainerId,
+        [Parameter(Mandatory = $true)][bool]$VolumeExistedBeforeUp
     )
+
+    if ($VolumeExistedBeforeUp) {
+        Write-Host "  postgres_dev_data volume already existed — skipping schema SQL." -ForegroundColor DarkGray
+        return
+    }
 
     $InitScriptsDir = Join-Path $RootDir "deploy/init-scripts/00-schema"
     if (-not (Test-Path $InitScriptsDir)) {
@@ -542,9 +551,7 @@ function Invoke-SchemaMigrations {
         return
     }
 
-    $markerDir = Get-PostgresVolumeMarkerDir
-    New-Item -ItemType Directory -Force -Path $markerDir | Out-Null
-    Write-Host "  Schema migration markers: $markerDir" -ForegroundColor DarkGray
+    Write-Host "  postgres_dev_data volume is new — running schema SQL." -ForegroundColor DarkGray
 
     # Orchestrators use psql \i includes; they are for host-side `psql -f` only.
     # This runner pipes SQL via stdin into docker exec, so \i cannot resolve paths —
@@ -562,13 +569,6 @@ function Invoke-SchemaMigrations {
             continue
         }
 
-        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-        $markerPath = Join-Path $markerDir ($file.Name + ".sha256")
-        if ((Test-Path -LiteralPath $markerPath) -and ((Get-Content -LiteralPath $markerPath -Raw).Trim().ToLowerInvariant() -eq $hash)) {
-            Write-Host "    skip (unchanged) $($file.Name)" -ForegroundColor DarkGray
-            continue
-        }
-
         Write-Host "    apply $($file.Name)" -ForegroundColor DarkGray
         $prevEAP = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
@@ -580,7 +580,6 @@ function Invoke-SchemaMigrations {
             Write-Host $output -ForegroundColor Red
             throw "Schema migration failed: $($file.Name) (exit $exit). Aborting — will not treat as idempotent warning."
         }
-        Set-Content -LiteralPath $markerPath -Value $hash -Encoding ascii -NoNewline
     }
     Write-Host "  Schema migrations complete." -ForegroundColor Green
 }
@@ -808,7 +807,7 @@ if ($Service) {
         # `prebuild` hook has something to copy into public/service-task-builder.
         # Return value discarded on purpose: this path always runs vite below, so there is
         # no freshness check to override.
-        if ($Service -eq "developer-workstation-frontend") {
+        if ($Service -eq "developer-workstation-frontend" -and -not $SkipActivepieces) {
             $null = Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
         }
         $feDir = "$RootDir/$($svc.FrontendDir)"
@@ -967,7 +966,7 @@ if (-not $SkipFrontend) {
         $imageName = "dev-$($fe.Name)"
 
         $builderRebuilt = $false
-        if ($fe.Name -eq "developer-workstation-frontend") {
+        if ($fe.Name -eq "developer-workstation-frontend" -and -not $SkipActivepieces) {
             $builderRebuilt = Ensure-ServiceTaskBuilderBundle -Force:$RebuildServiceTaskBuilder
         }
 
@@ -1040,13 +1039,15 @@ if (-not $SkipInfra) {
         Write-Host "  Will still attempt to start infra; if pulls fail compose will exit with error." -ForegroundColor Yellow
     }
 
+    $volumeExistedBeforeUp = Test-PostgresVolumeExists
+
     Invoke-ComposeUpSequential -ServiceNames @('postgres', 'redis', 'kafka')
 
     # Healthcheck requires PID 1 = postgres AND pg_isready (init scripts finished).
     $postgresContainerId = Wait-ForContainerHealth -ServiceName "postgres" -DisplayName "PostgreSQL" -MaxRetries 180
 
-    Write-Host "  Running DB schema migrations (content-hashed, volume-scoped)..." -ForegroundColor DarkGray
-    Invoke-SchemaMigrations -PostgresContainerId $postgresContainerId
+    Write-Host "  Running DB schema migrations (volume-existence-gated)..." -ForegroundColor DarkGray
+    Invoke-SchemaMigrations -PostgresContainerId $postgresContainerId -VolumeExistedBeforeUp $volumeExistedBeforeUp
 
     Wait-ForContainerHealth -ServiceName "redis" -DisplayName "Redis" -MaxRetries 20
     Wait-ForContainerHealth -ServiceName "kafka" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3
@@ -1087,17 +1088,21 @@ foreach ($spec in $backendBuildSpecs) {
     }
 }
 
-$supersetDockerfile = Join-Path $RootDir "deploy/superset/Dockerfile"
-$supersetInputs = @(
-    $supersetDockerfile,
-    (Join-Path $RootDir "deploy/superset/superset_config.py"),
-    (Join-Path $RootDir "deploy/superset/superset_security_manager.py"),
-    $env:SUPERSET_PIP_CONF_FILE
-)
-if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "dev-superset" -InputPaths $supersetInputs)) {
-    $servicesToBuild.Add("superset-final") | Out-Null
+if ($SkipSuperset) {
+    Write-Host "  Skipping Superset build (-SkipSuperset)." -ForegroundColor DarkGray
 } else {
-    Write-Host "  Skipping Docker build for superset-final (image fresh)." -ForegroundColor DarkGray
+    $supersetDockerfile = Join-Path $RootDir "deploy/superset/Dockerfile"
+    $supersetInputs = @(
+        $supersetDockerfile,
+        (Join-Path $RootDir "deploy/superset/superset_config.py"),
+        (Join-Path $RootDir "deploy/superset/superset_security_manager.py"),
+        $env:SUPERSET_PIP_CONF_FILE
+    )
+    if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "dev-superset" -InputPaths $supersetInputs)) {
+        $servicesToBuild.Add("superset-final") | Out-Null
+    } else {
+        Write-Host "  Skipping Docker build for superset-final (image fresh)." -ForegroundColor DarkGray
+    }
 }
 
 # Watching only the Dockerfile was wrong: every HERMES source patch lives under
@@ -1110,18 +1115,22 @@ if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "dev-super
 # the only stable signal that the vendor tree changed at all.
 # Get-NewestFileTime already skips node_modules/dist/.git/target, so this is ~2.5k files —
 # the same order as the frontend src scans this script already does per build.
-$apInputPaths = @(
-    (Join-Path $RootDir "activepieces/Dockerfile"),
-    (Join-Path $RootDir "activepieces/pnpm-lock.yaml"),
-    (Join-Path $RootDir "activepieces/tsconfig.base.json"),
-    (Join-Path $RootDir "activepieces/hermes"),
-    (Join-Path $RootDir "activepieces/packages/server"),
-    (Join-Path $RootDir "activepieces/packages/web/src")
-)
-if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "activepieces:0.84.0-ee-removed" -InputPaths $apInputPaths)) {
-    $servicesToBuild.Add("activepieces") | Out-Null
+if ($SkipActivepieces) {
+    Write-Host "  Skipping Activepieces build (-SkipActivepieces)." -ForegroundColor DarkGray
 } else {
-    Write-Host "  Skipping Docker build for activepieces (image fresh)." -ForegroundColor DarkGray
+    $apInputPaths = @(
+        (Join-Path $RootDir "activepieces/Dockerfile"),
+        (Join-Path $RootDir "activepieces/pnpm-lock.yaml"),
+        (Join-Path $RootDir "activepieces/tsconfig.base.json"),
+        (Join-Path $RootDir "activepieces/hermes"),
+        (Join-Path $RootDir "activepieces/packages/server"),
+        (Join-Path $RootDir "activepieces/packages/web/src")
+    )
+    if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "activepieces:0.84.0-ee-removed" -InputPaths $apInputPaths)) {
+        $servicesToBuild.Add("activepieces") | Out-Null
+    } else {
+        Write-Host "  Skipping Docker build for activepieces (image fresh)." -ForegroundColor DarkGray
+    }
 }
 
 $buildOk = $true
@@ -1160,10 +1169,14 @@ if ($servicesToBuild.Count -eq 0) {
             }
         }
 
-        $nextCandidates = @(
+        # @() around the whole pipeline is required: with a single surviving candidate,
+        # Where-Object unwraps its output to a bare string, and $nextCandidates[0] would then
+        # index into that string's characters (e.g. "e" from "eclipse-temurin:...") instead of
+        # selecting the candidate — silently corrupting the image name passed to `docker pull`.
+        $nextCandidates = @(@(
             "eclipse-temurin:17-jre",
             "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
-        ) | Where-Object { $_ -notin $attemptedImages }
+        ) | Where-Object { $_ -notin $attemptedImages })
         if ($nextCandidates.Count -gt 0) {
             $nextImage = $nextCandidates[0]
             Write-Host "  Trying alternative Java base image: $nextImage" -ForegroundColor Yellow
@@ -1206,11 +1219,15 @@ if (-not $SkipImagePull) {
     }
 }
 
+$skippedSvcs = @()
+if ($SkipActivepieces) { $skippedSvcs += 'activepieces' }
+if ($SkipSuperset) { $skippedSvcs += 'superset-final' }
+
 if ($ServicesOnly -or $SkipInfra) {
     Write-Host "  Starting only non-infra services (skip infra)..." -ForegroundColor Yellow
     $infra = @('postgres','redis','kafka')
     $allSvcs = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null
-    $startSvcs = $allSvcs | Where-Object { $infra -notcontains $_ }
+    $startSvcs = $allSvcs | Where-Object { $infra -notcontains $_ -and $skippedSvcs -notcontains $_ }
     if ($startSvcs -and $startSvcs.Count -gt 0) {
         Invoke-ComposeUpSequential -ServiceNames $startSvcs -NoDeps
     } else {
@@ -1218,8 +1235,9 @@ if ($ServicesOnly -or $SkipInfra) {
     }
 } else {
     $allSvcs = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null
-    if ($allSvcs -and $allSvcs.Count -gt 0) {
-        Invoke-ComposeUpSequential -ServiceNames $allSvcs
+    $startSvcs = @($allSvcs | Where-Object { $skippedSvcs -notcontains $_ })
+    if ($startSvcs -and $startSvcs.Count -gt 0) {
+        Invoke-ComposeUpSequential -ServiceNames $startSvcs
     } else {
         throw "No compose services found to start"
     }
@@ -1238,12 +1256,19 @@ Wait-ForContainerHealth -ServiceName "user-portal" -DisplayName "User Portal"
 Wait-ForContainerHealth -ServiceName "developer-workstation" -DisplayName "Developer Workstation"
 Wait-ForContainerHealth -ServiceName "edge-frontend" -DisplayName "Edge frontend (single-origin)"
 
-# Superset is required: URI fail-closed + bootstrap must succeed (no warning soft-pass).
-Invoke-SupersetBootstrap
+# Superset is required by default: URI fail-closed + bootstrap must succeed (no warning
+# soft-pass) — unless the caller explicitly opted out via -SkipSuperset.
+if ($SkipSuperset) {
+    Write-Host "  Skipping Superset bootstrap (-SkipSuperset)." -ForegroundColor DarkGray
+} else {
+    Invoke-SupersetBootstrap
+}
 
 # AP state lives in Postgres, so a fresh volume / -Clean leaves it empty and the DW Automation
 # tab broken. Idempotent — skipped work is a couple of COUNT queries.
-if ($SkipApProvisioning) {
+if ($SkipActivepieces) {
+    Write-Host "  Skipping Activepieces provisioning (-SkipActivepieces)." -ForegroundColor DarkGray
+} elseif ($SkipApProvisioning) {
     Write-Host "  Skipping Activepieces provisioning (-SkipApProvisioning)." -ForegroundColor DarkGray
 } elseif ($OptionalComposeServices -contains 'activepieces' -and -not (Get-ComposeContainerId -ServiceName 'activepieces')) {
     Write-Host "  Activepieces container not running; skipping AP provisioning." -ForegroundColor DarkGray
@@ -1308,7 +1333,7 @@ Write-Host ""
 # AP provisioning (shared account, signing key, piece catalog) runs automatically above via
 # Invoke-ApProvisioning; each step is gated on an emptiness check. Report the resulting state
 # so a broken Automation tab is obvious here rather than in the browser.
-if (-not $SkipApProvisioning) {
+if (-not $SkipActivepieces -and -not $SkipApProvisioning) {
     $apPieces = Get-PgScalar "select count(*) from piece_metadata;"
     $apKeys = Get-PgScalar "select count(*) from signing_key;"
     $apProjects = Get-PgScalar "select count(*) from project;"
