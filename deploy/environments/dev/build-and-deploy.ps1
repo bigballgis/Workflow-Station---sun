@@ -819,8 +819,18 @@ if ($Service) {
             Write-Host "  pnpm install..." -ForegroundColor DarkGray
             $prev = $ErrorActionPreference
             $ErrorActionPreference = "Continue"
-            pnpm install
-            $installExit = $LASTEXITCODE
+            # CI=true forces pnpm's non-interactive output path. Without it, some packages'
+            # postinstall scripts (e.g. admin-center's vue-echarts) trip pnpm's interactive
+            # stream handling under PowerShell and it crashes with
+            # "Error: readStream must be readable" — unrelated to deps/registry/Node version.
+            $prevCi = $env:CI
+            $env:CI = "true"
+            try {
+                pnpm install
+                $installExit = $LASTEXITCODE
+            } finally {
+                $env:CI = $prevCi
+            }
             $ErrorActionPreference = $prev
             if ($installExit -ne 0) { throw "pnpm install failed: $Service (exit code $installExit)" }
             # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
@@ -983,8 +993,17 @@ if (-not $SkipFrontend) {
                 Write-Host "  pnpm install..." -ForegroundColor DarkGray
                 $prev = $ErrorActionPreference
                 $ErrorActionPreference = "Continue"
-                pnpm install
-                $installExit = $LASTEXITCODE
+                # CI=true forces pnpm's non-interactive output path — see the -Service branch
+                # above for why (postinstall scripts crash pnpm's interactive stream handling
+                # under PowerShell with "Error: readStream must be readable").
+                $prevCi = $env:CI
+                $env:CI = "true"
+                try {
+                    pnpm install
+                    $installExit = $LASTEXITCODE
+                } finally {
+                    $env:CI = $prevCi
+                }
                 $ErrorActionPreference = $prev
                 if ($installExit -ne 0) { throw "pnpm install failed: $($fe.Name) (exit code $installExit)" }
                 Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
