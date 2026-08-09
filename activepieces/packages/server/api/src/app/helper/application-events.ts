@@ -90,7 +90,14 @@ async function enrichAuditEventParam(requestOrMeta: FastifyRequest | MetaInforma
         data: {
             ...params.data,
             project,
-            user,
+            // Names live on the identity, not the user row. Merge them in so
+            // consumers (the Audit Logs page) can show a person instead of the
+            // managed-identity hash email.
+            user: isNil(user) ? user : {
+                ...user,
+                firstName: identity?.firstName,
+                lastName: identity?.lastName,
+            },
         },
         action: params.action,
     }

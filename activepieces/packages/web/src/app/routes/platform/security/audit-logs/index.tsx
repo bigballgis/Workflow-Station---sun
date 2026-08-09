@@ -71,8 +71,12 @@ export default function AuditLogsPage() {
       accessorKey: 'userId',
       options:
         users?.data?.map((user) => {
+          const name = [user.firstName, user.lastName]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
           return {
-            label: user.email,
+            label: name.length > 0 ? name : user.email,
             value: user.id,
           };
         }) ?? [],
@@ -180,7 +184,7 @@ export default function AuditLogsPage() {
               ),
               cell: ({ row }) => {
                 return (
-                  <div className="text-left">{row.original.userEmail}</div>
+                  <div className="text-left">{performedBy(row.original)}</div>
                 );
               },
             },
@@ -264,13 +268,13 @@ export default function AuditLogsPage() {
                   {t('Who & When')}
                 </p>
                 <div className="grid grid-cols-[150px_1fr] gap-y-3 text-sm">
-                  {selectedEvent?.userEmail && (
+                  {selectedEvent && performedBy(selectedEvent) && (
                     <>
                       <span className="text-muted-foreground">
                         {t('Performed By')}
                       </span>
                       <span className="font-medium">
-                        {selectedEvent.userEmail}
+                        {performedBy(selectedEvent)}
                       </span>
                     </>
                   )}
@@ -336,6 +340,20 @@ export default function AuditLogsPage() {
       </div>
     </LockedFeatureGuard>
   );
+}
+
+// Prefer the person's name; the managed-identity email is a sha256 hash for
+// shadow users, so it only serves as a fallback for events written before the
+// enrichment started carrying identity names.
+function performedBy(event: ApplicationEvent): string | undefined {
+  const user = (
+    event.data as { user?: { firstName?: string; lastName?: string } }
+  ).user;
+  const name = [user?.firstName, user?.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  return name.length > 0 ? name : event.userEmail;
 }
 
 function convertToIcon(event: ApplicationEvent) {
