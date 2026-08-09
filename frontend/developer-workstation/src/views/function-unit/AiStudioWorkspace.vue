@@ -524,8 +524,8 @@ const copilotBodyRef = ref<HTMLElement>()
 const copilotThreads = ref<Partial<Record<AiStudioPhase, CopilotMessage[]>>>({})
 
 /**
- * 取（必要时新建）某阶段的线程。引导语只随线程**首次创建**（=第一次进入该阶段）出现；
- * 离开阶段时 dropPhaseNote 会把它移除，revisit 不再重复打招呼（线程已存在即不会再加）。
+ * 取（必要时新建）某阶段的线程。引导语只随线程**首次创建**（=第一次进入该阶段）追加一次，
+ * 之后作为线程历史永久保留；revisit 只是重新展示既有线程，绝不会再追加第二条引导语。
  */
 function copilotThread(phase: AiStudioPhase): CopilotMessage[] {
   let thread = copilotThreads.value[phase]
@@ -541,14 +541,6 @@ function copilotThread(phase: AiStudioPhase): CopilotMessage[] {
     copilotThreads.value[phase] = thread
   }
   return thread
-}
-
-/** 离开阶段时移除其线程里的引导语，让它成为一次性的首访问候。 */
-function dropPhaseNote(phase: AiStudioPhase) {
-  const thread = copilotThreads.value[phase]
-  if (thread?.some(m => m.isPhaseNote)) {
-    copilotThreads.value[phase] = thread.filter(m => !m.isPhaseNote)
-  }
 }
 
 // 纯读取：线程的按需创建在 watch(currentPhase) / onMounted / 发送时做，不在 computed 里带副作用
@@ -609,8 +601,7 @@ async function sendCopilotMessage() {
 }
 
 // ---- 阶段切换副作用 ----
-watch(currentPhase, (phase, prevPhase) => {
-  if (prevPhase) dropPhaseNote(prevPhase)
+watch(currentPhase, (phase) => {
   persistDraft()
   // FormDesigner 依赖 store.tables 预取（与 FunctionUnitEdit 的 forms tab watch 一致）
   if (phase === 'FORM_DESIGN') void store.fetchTables(fuId.value)
