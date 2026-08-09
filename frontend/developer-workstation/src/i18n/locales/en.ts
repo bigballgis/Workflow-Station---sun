@@ -2305,7 +2305,6 @@ export default {
         noFindings: 'No issues found.',
         copilotPhaseNote: 'Now on {phase}. {desc}',
         copilotTitle: 'AI Copilot',
-        copilotWelcome: 'I can help you design each phase. Describe the change you want, or edit directly on the canvas.',
         copilotPlaceholder: 'Describe how this phase should change…',
         copilotSend: 'Send',
         copilotError: 'AI Copilot request failed: {reason}',

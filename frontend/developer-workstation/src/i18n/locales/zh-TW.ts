@@ -2297,7 +2297,6 @@ export default {
         noFindings: '未發現問題。',
         copilotPhaseNote: '現在是 {phase} 階段。{desc}',
         copilotTitle: 'AI Copilot',
-        copilotWelcome: '我可以協助你設計每個階段。描述你想要的改動，或直接在畫布上編輯。',
         copilotPlaceholder: '描述這個階段要怎麼改…',
         copilotSend: '傳送',
         copilotError: 'AI Copilot 呼叫失敗：{reason}',

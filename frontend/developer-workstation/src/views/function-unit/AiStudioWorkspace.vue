@@ -280,7 +280,7 @@
           </div>
         </div>
         <div
-          v-if="copilotReplying"
+          v-if="copilotReplying && copilotReplyingPhase === currentPhase"
           class="copilot-msg copilot-msg--assistant"
         >
           <div class="copilot-msg__who">
@@ -505,20 +505,54 @@ async function runValidation() {
 }
 
 // ---- AI Copilot：与 AI Generate 同源的模型链路（集团 gateway + AMToken 透传） ----
+// 会话按阶段隔离：每个阶段一个独立线程，切阶段即切线程，互不可见也互不进对方历史。
 interface CopilotMessage {
   role: 'user' | 'assistant'
   text: string
   /** 请求失败时的错误气泡（样式区分，不当成正常回复） */
   isError?: boolean
+  /** 线程开场的阶段引导语：不计入送模型的历史 */
+  isPhaseNote?: boolean
 }
 
 const copilotOpen = ref(true)
 const copilotInput = ref('')
 const copilotReplying = ref(false)
+/** 正在等回复的线程；打字指示只出现在这个阶段的线程里 */
+const copilotReplyingPhase = ref<AiStudioPhase | null>(null)
 const copilotBodyRef = ref<HTMLElement>()
-const copilotMessages = ref<CopilotMessage[]>([
-  { role: 'assistant', text: t('ai.studio.workspace.copilotWelcome') }
-])
+const copilotThreads = ref<Partial<Record<AiStudioPhase, CopilotMessage[]>>>({})
+
+/**
+ * 取（必要时新建）某阶段的线程。引导语只随线程**首次创建**（=第一次进入该阶段）出现；
+ * 离开阶段时 dropPhaseNote 会把它移除，revisit 不再重复打招呼（线程已存在即不会再加）。
+ */
+function copilotThread(phase: AiStudioPhase): CopilotMessage[] {
+  let thread = copilotThreads.value[phase]
+  if (!thread) {
+    thread = [{
+      role: 'assistant',
+      text: t('ai.studio.workspace.copilotPhaseNote', {
+        phase: aiStudioPhaseLabel(t, phase),
+        desc: phaseDesc(phase)
+      }),
+      isPhaseNote: true
+    }]
+    copilotThreads.value[phase] = thread
+  }
+  return thread
+}
+
+/** 离开阶段时移除其线程里的引导语，让它成为一次性的首访问候。 */
+function dropPhaseNote(phase: AiStudioPhase) {
+  const thread = copilotThreads.value[phase]
+  if (thread?.some(m => m.isPhaseNote)) {
+    copilotThreads.value[phase] = thread.filter(m => !m.isPhaseNote)
+  }
+}
+
+// 纯读取：线程的按需创建在 watch(currentPhase) / onMounted / 发送时做，不在 computed 里带副作用
+const copilotMessages = computed(() => copilotThreads.value[currentPhase.value] ?? [])
 
 function scrollCopilotToBottom() {
   void nextTick(() => {
@@ -526,10 +560,10 @@ function scrollCopilotToBottom() {
   })
 }
 
-/** 送给模型的历史窗口：最近 10 条真实对话（阶段引导语与错误气泡不算历史）。 */
-function copilotHistory() {
-  return copilotMessages.value
-    .filter(m => !m.isError)
+/** 送给模型的历史窗口：本阶段线程里最近 10 条真实对话（引导语与错误气泡不算）。 */
+function copilotHistory(phase: AiStudioPhase) {
+  return copilotThread(phase)
+    .filter(m => !m.isError && !m.isPhaseNote)
     .slice(-10)
     .map(m => ({
       role: m.role === 'user' ? ('USER' as const) : ('ASSISTANT' as const),
@@ -540,52 +574,50 @@ function copilotHistory() {
 async function sendCopilotMessage() {
   const text = copilotInput.value.trim()
   if (!text || copilotReplying.value) return
-  const history = copilotHistory()
-  copilotMessages.value.push({ role: 'user', text })
+  // 锁定发送时所在的阶段线程：等待期间切走，回复也落回这个线程
+  const phase = currentPhase.value
+  const thread = copilotThread(phase)
+  const history = copilotHistory(phase)
+  thread.push({ role: 'user', text })
   copilotInput.value = ''
   copilotReplying.value = true
+  copilotReplyingPhase.value = phase
   scrollCopilotToBottom()
   try {
     const res = await aiGenerationApi.studioChat({
       functionUnitId: fuId.value,
-      phase: currentPhase.value,
+      phase,
       message: text,
       history
     })
-    copilotMessages.value.push({ role: 'assistant', text: res.data.reply })
+    thread.push({ role: 'assistant', text: res.data.reply })
   } catch (e: any) {
     const reason = e?.response?.data?.error?.message
       ?? e?.response?.data?.message
       ?? e?.message
       ?? String(e)
-    copilotMessages.value.push({
+    thread.push({
       role: 'assistant',
       text: t('ai.studio.workspace.copilotError', { reason }),
       isError: true
     })
   } finally {
     copilotReplying.value = false
-    scrollCopilotToBottom()
+    copilotReplyingPhase.value = null
+    if (currentPhase.value === phase) scrollCopilotToBottom()
   }
 }
 
 // ---- 阶段切换副作用 ----
-watch(currentPhase, (phase) => {
+watch(currentPhase, (phase, prevPhase) => {
+  if (prevPhase) dropPhaseNote(prevPhase)
   persistDraft()
   // FormDesigner 依赖 store.tables 预取（与 FunctionUnitEdit 的 forms tab watch 一致）
   if (phase === 'FORM_DESIGN') void store.fetchTables(fuId.value)
   if (phase === 'VALIDATION') void runValidation()
-  // Copilot 阶段引导语：后端未接入时也让流转有陪伴感
-  copilotMessages.value.push({
-    role: 'assistant',
-    text: t('ai.studio.workspace.copilotPhaseNote', {
-      phase: aiStudioPhaseLabel(t, phase),
-      desc: phaseDesc(phase)
-    })
-  })
-  void nextTick(() => {
-    copilotBodyRef.value?.scrollTo({ top: copilotBodyRef.value.scrollHeight })
-  })
+  // 确保该阶段的 Copilot 线程存在（新线程带引导语开场）并滚到底
+  copilotThread(phase)
+  scrollCopilotToBottom()
 })
 
 onMounted(async () => {
@@ -618,6 +650,7 @@ onMounted(async () => {
   }
 
   persistDraft()
+  copilotThread(currentPhase.value)
   if (currentPhase.value === 'FORM_DESIGN') void store.fetchTables(fuId.value)
   if (currentPhase.value === 'VALIDATION') void runValidation()
 })
