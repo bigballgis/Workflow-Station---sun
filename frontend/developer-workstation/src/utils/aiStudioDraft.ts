@@ -10,7 +10,7 @@ import type { ComposerTranslation } from 'vue-i18n'
 
 /**
  * AI Studio 引导阶段，顺序即 UI 展示顺序 = FunctionUnitEdit 设计器 Tab 顺序，
- * 末尾追加 Review。Tab 顺序变了这里要跟着调。
+ * 末尾追加 Validation（最终校验门禁）。Tab 顺序变了这里要跟着调。
  */
 export const AI_STUDIO_PHASES = [
   'PROCESS_DESIGN',
@@ -23,16 +23,18 @@ export const AI_STUDIO_PHASES = [
   'EMAIL_TEMPLATES',
   'EMAIL_MONITORS',
   'DECISION_DESIGN',
-  'REVIEW'
+  'VALIDATION'
 ] as const
 
 export type AiStudioPhase = (typeof AI_STUDIO_PHASES)[number]
 
 export interface AiStudioDraft {
-  /** 草稿名称，一般为功能单元名或用户在 Description 阶段起的名字 */
+  /** 草稿名称，取功能单元名 */
   name: string
   /** 上次停留的阶段 */
   phase: AiStudioPhase
+  /** 已确认（Confirm phase）的阶段 */
+  completedPhases?: AiStudioPhase[]
   /** ISO 时间戳，工作台写入时更新 */
   updatedAt?: string
 }
@@ -62,12 +64,23 @@ export function loadAiStudioDraft(functionUnitId: number): AiStudioDraft | null 
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as Partial<AiStudioDraft>
+    // 末阶段曾叫 REVIEW（2026-08-09 更名 VALIDATION）：旧草稿就地迁移而不是作废
+    if ((parsed.phase as string) === 'REVIEW') parsed.phase = 'VALIDATION'
+    if (Array.isArray(parsed.completedPhases)) {
+      parsed.completedPhases = parsed.completedPhases.map(p =>
+        ((p as string) === 'REVIEW' ? 'VALIDATION' : p) as AiStudioPhase)
+    }
     if (
       typeof parsed.name === 'string' &&
       parsed.name.length > 0 &&
       (AI_STUDIO_PHASES as readonly string[]).includes(parsed.phase ?? '')
     ) {
-      return parsed as AiStudioDraft
+      // completedPhases 里混入未知值时只丢弃该值，不整个作废草稿
+      const completed = Array.isArray(parsed.completedPhases)
+        ? parsed.completedPhases.filter((p): p is AiStudioPhase =>
+          (AI_STUDIO_PHASES as readonly string[]).includes(p))
+        : []
+      return { ...(parsed as AiStudioDraft), completedPhases: completed }
     }
     throw new Error(`unexpected draft shape: ${raw}`)
   } catch (e) {
@@ -75,6 +88,15 @@ export function loadAiStudioDraft(functionUnitId: number): AiStudioDraft | null 
     localStorage.removeItem(key)
     return null
   }
+}
+
+/** 工作台写草稿；入口弹窗据此点亮 "Continue AI draft"。 */
+export function saveAiStudioDraft(functionUnitId: number, draft: AiStudioDraft): void {
+  localStorage.setItem(aiStudioDraftStorageKey(functionUnitId), JSON.stringify(draft))
+}
+
+export function clearAiStudioDraft(functionUnitId: number): void {
+  localStorage.removeItem(aiStudioDraftStorageKey(functionUnitId))
 }
 
 /**
@@ -93,7 +115,7 @@ export function aiStudioPhaseLabel(t: ComposerTranslation, phase: AiStudioPhase)
     EMAIL_TEMPLATES: 'emailTemplate.title',
     EMAIL_MONITORS: 'emailMonitor.title',
     DECISION_DESIGN: 'functionUnit.decisions',
-    REVIEW: 'ai.studio.step.review'
+    VALIDATION: 'ai.studio.step.validation'
   }
   return t(keyByPhase[phase])
 }

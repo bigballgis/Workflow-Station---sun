@@ -2271,13 +2271,58 @@ export default {
       continueDraftDesc: 'Resume {name} · {phase}',
       noDraft: 'No AI draft to resume for this Function Unit yet.',
       guideTitle: 'AI Studio guides you through',
-      // 其余步骤文案复用设计器 Tab 的 key（见 utils/aiStudioDraft.ts），只有 Review 是 AI Studio 独有
+      // 其余步骤文案复用设计器 Tab 的 key（见 utils/aiStudioDraft.ts），只有 Validation 是 AI Studio 独有
       step: {
-        review: 'Review'
+        validation: 'Validation'
       },
       overwriteNote: 'Your existing design will not be overwritten without confirmation.',
       openButton: 'Open AI Studio',
-      workspaceComingSoon: 'The AI Studio workspace is under development — stay tuned.'
+      workspace: {
+        exit: 'Exit AI Studio',
+        statusConfirmed: 'Confirmed',
+        statusInProgress: 'In progress',
+        statusNotStarted: 'Not started',
+        saveDraft: 'Save draft',
+        confirmPhase: 'Confirm phase',
+        finish: 'Finish',
+        draftSaved: 'Draft saved',
+        draftSavedAt: 'Draft autosaved · {time}',
+        phaseOf: 'Phase {current} of {total}',
+        phaseConfirmed: 'Phase confirmed: {phase}',
+        allPhasesDone: 'All phases confirmed — deploy from the Function Unit designer when ready.',
+        restartConfirmTitle: 'Start a new AI design?',
+        restartConfirmMsg: 'Starting over discards the current AI draft progress. Your Function Unit design itself is not affected.',
+        restartConfirmOk: 'Start over',
+        validationRunning: 'Validating the design…',
+        validationReady: 'Ready to deploy',
+        validationReadyDesc: 'Validation passed. Deploy from the Function Unit designer when ready.',
+        validationIssues: '{count} errors to fix',
+        validationIssuesDesc: 'Fix the findings below, then re-run validation.',
+        rerunValidation: 'Re-run validation',
+        phasesChecklist: 'Phase confirmations',
+        phasesConfirmedCount: '{done} of {total} confirmed',
+        findings: 'Validation findings',
+        noFindings: 'No issues found.',
+        copilotPhaseNote: 'Now on {phase}. {desc}',
+        copilotTitle: 'AI Copilot',
+        copilotWelcome: 'I can help you design each phase. Describe the change you want, or edit directly on the canvas.',
+        copilotPlaceholder: 'Describe how this phase should change…',
+        copilotSend: 'Send',
+        copilotError: 'AI Copilot request failed: {reason}',
+        phaseDesc: {
+          processDesign: 'Review the BPMN flow, roles and conditions.',
+          tableDesign: 'Define main and sub tables, fields and keys.',
+          formDesign: 'Bind forms to tables and lay out fields.',
+          viewDesign: 'Configure main table views and access.',
+          actionDesign: 'Define actions triggered from views and forms.',
+          automation: 'Configure service tasks and automation flows.',
+          connections: 'Manage external connections used by this unit.',
+          emailTemplates: 'Author email templates for notifications.',
+          emailMonitors: 'Set up inbound email monitors.',
+          decisionDesign: 'Model decision tables used by the process.',
+          validation: 'Run the final checks before deployment.'
+        }
+      }
     }
   },
   businessLogic: {

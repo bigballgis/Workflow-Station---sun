@@ -1,4 +1,5 @@
 import api from './index'
+import { readAmToken } from '@/utils/amToken'
 import type {
   LockInfo,
   AiSession,
@@ -51,6 +52,27 @@ export const aiGenerationApi = {
 
   updateSessionPhase: (sessionId: string, phase: string) =>
     api.put(`/ai-generation/sessions/${sessionId}/phase`, null, { params: { phase } }),
+
+  /**
+   * AI Studio Copilot 单轮对话（顾问式，无会话/锁/文档）。
+   * 模型链路与 AI Generate 同源：AMToken 经 X-AM-Token 头透传，读不到就不带，
+   * 后端以 AI_GATEWAY_TOKEN_MISSING 显式失败（dev 配静态 key 时无需 token）。
+   */
+  studioChat: (data: AiStudioChatPayload) => {
+    const amToken = readAmToken()
+    return api.post<any, { data: { reply: string } }>(
+      '/ai-generation/studio-chat',
+      data,
+      amToken ? { headers: { 'X-AM-Token': amToken } } : undefined
+    )
+  },
+}
+
+export interface AiStudioChatPayload {
+  functionUnitId: number
+  phase: string
+  message: string
+  history: { role: 'USER' | 'ASSISTANT'; content: string }[]
 }
 
 // SSE endpoint URLs (used by composables with fetch API, not axios)

@@ -478,7 +478,6 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick, Guide } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
@@ -527,13 +526,12 @@ watch(activeTab, (tab) => {
 const showAiPanel = ref(false)
 const showAiStudioDialog = ref(false)
 
-/**
- * AI Studio 工作台在后续增量实现；入口先行。这里必须给显式提示而不是留空——
- * 否则点 "Open AI Studio" 弹窗关掉却无任何反应，看起来像坏了。
- * 工作台落地后把这里换成路由跳转，payload（new / continue + 草稿）契约见 utils/aiStudioDraft.ts。
- */
-function handleOpenAiStudio(_payload: AiStudioOpenPayload) {
-  ElMessage.info(t('ai.studio.workspaceComingSoon'))
+function handleOpenAiStudio(payload: AiStudioOpenPayload) {
+  router.push({
+    name: 'AiStudioWorkspace',
+    params: { id: functionUnitId.value },
+    query: { mode: payload.mode }
+  })
 }
 /** 改这个值会重挂载流程设计器——见 handleAiDataApplied。 */
 const processDesignerReloadKey = ref(0)

@@ -34,7 +34,7 @@ const i18n = createI18n({
           noDraft: 'No AI draft to resume for this Function Unit yet.',
           guideTitle: 'AI Studio guides you through',
           step: {
-            review: 'Review'
+            validation: 'Validation'
           },
           overwriteNote: 'Your existing design will not be overwritten without confirmation.',
           openButton: 'Open AI Studio'
@@ -89,7 +89,7 @@ describe('AiStudioEntryDialog', () => {
       '8Email Templates',
       '9Email Monitors',
       '10Decision Design',
-      '11Review'
+      '11Validation'
     ])
   })
 
@@ -121,7 +121,8 @@ describe('AiStudioEntryDialog', () => {
     expect(cards[1].classes()).toContain('is-selected')
 
     await wrapper.findAll('button')[1].trigger('click')
-    expect(wrapper.emitted('open')).toEqual([[{ mode: 'continue', draft }]])
+    // loadAiStudioDraft 归一化时会补全 completedPhases
+    expect(wrapper.emitted('open')).toEqual([[{ mode: 'continue', draft: { ...draft, completedPhases: [] } }]])
   })
 
   it('discards a corrupt draft and falls back to the disabled continue card', () => {

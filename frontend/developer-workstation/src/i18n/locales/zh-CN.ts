@@ -2262,13 +2262,58 @@ export default {
       continueDraftDesc: '继续 {name} · {phase}',
       noDraft: '该功能单元还没有可继续的 AI 草稿。',
       guideTitle: 'AI Studio 将引导你完成',
-      // 其余步骤文案复用设计器 Tab 的 key（见 utils/aiStudioDraft.ts），只有 Review 是 AI Studio 独有
+      // 其余步骤文案复用设计器 Tab 的 key（见 utils/aiStudioDraft.ts），只有 Validation 是 AI Studio 独有
       step: {
-        review: '审阅'
+        validation: '校验'
       },
       overwriteNote: '未经确认，你现有的设计不会被覆盖。',
       openButton: '打开 AI Studio',
-      workspaceComingSoon: 'AI Studio 工作台正在开发中，敬请期待。'
+      workspace: {
+        exit: '退出 AI Studio',
+        statusConfirmed: '已确认',
+        statusInProgress: '进行中',
+        statusNotStarted: '未开始',
+        saveDraft: '保存草稿',
+        confirmPhase: '确认本阶段',
+        finish: '完成',
+        draftSaved: '草稿已保存',
+        draftSavedAt: '草稿已自动保存 · {time}',
+        phaseOf: '第 {current} / {total} 阶段',
+        phaseConfirmed: '阶段已确认：{phase}',
+        allPhasesDone: '全部阶段已确认——就绪后请回功能单元设计器部署。',
+        restartConfirmTitle: '开始新的 AI 设计？',
+        restartConfirmMsg: '重新开始会丢弃当前 AI 草稿进度，功能单元设计本身不受影响。',
+        restartConfirmOk: '重新开始',
+        validationRunning: '正在校验设计…',
+        validationReady: '可以部署',
+        validationReadyDesc: '校验通过。就绪后请回功能单元设计器部署。',
+        validationIssues: '{count} 个错误待修复',
+        validationIssuesDesc: '修复下方问题后重新校验。',
+        rerunValidation: '重新校验',
+        phasesChecklist: '阶段确认情况',
+        phasesConfirmedCount: '已确认 {done}/{total}',
+        findings: '校验结果',
+        noFindings: '未发现问题。',
+        copilotPhaseNote: '现在是 {phase} 阶段。{desc}',
+        copilotTitle: 'AI Copilot',
+        copilotWelcome: '我可以协助你设计每个阶段。描述你想要的改动，或直接在画布上编辑。',
+        copilotPlaceholder: '描述这个阶段要怎么改…',
+        copilotSend: '发送',
+        copilotError: 'AI Copilot 调用失败：{reason}',
+        phaseDesc: {
+          processDesign: '审阅 BPMN 流程、角色与条件。',
+          tableDesign: '定义主表、子表、字段与主外键。',
+          formDesign: '将表单绑定到数据表并编排字段。',
+          viewDesign: '配置主表视图与访问控制。',
+          actionDesign: '定义视图与表单触发的动作。',
+          automation: '配置服务任务与自动化流程。',
+          connections: '管理本功能单元使用的外部连接。',
+          emailTemplates: '编写通知邮件模板。',
+          emailMonitors: '配置入站邮件监控。',
+          decisionDesign: '建模流程使用的决策表。',
+          validation: '部署前运行最终校验。'
+        }
+      }
     }
   },
   businessLogic: {
