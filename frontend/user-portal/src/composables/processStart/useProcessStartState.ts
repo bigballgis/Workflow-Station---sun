@@ -29,6 +29,8 @@ export interface ProcessStartSubTableBinding {
   dialogColumns?: Array<{ field: string; label: string; type?: string }>
   /** Parsed sub-form design fields — backs the form-below-table inline form (incl. nested sub-tables). */
   formFields?: FormField[]
+  /** Designer Form events (onChange / onCreated / …) — same contract as task-detail subFormDesign. */
+  formOptions?: Record<string, unknown>
   assignmentConfig?: AssignmentConfig
   portalViews?: Partial<SubTablePortalViews> | null
   data: any[]

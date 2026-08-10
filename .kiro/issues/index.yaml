@@ -1944,3 +1944,19 @@
     ChangeHistorySubmissionFilter + isInternalField + 全局 Spec 走 SystemAuditFields。
     验证：SystemAuditFieldFillerTest / ChangeHistorySubmissionFilterTest /
     TaskFormFieldMapperTest / SubTableChangeHistoryPropertyTest；user-portal 重建。
+
+- id: "1517"
+  status: fixed
+  fixed_at: "2026-08-10"
+  severity: major
+  category: bug
+  summary: "New Request 子表弹窗缺少 formOptions，Form onChange/onCreated 不触发（Todo 正常）"
+  file: "frontend/user-portal/src/views/processes/start.vue"
+  note: |
+    反例：Portal New Request 打开 subform Add 时 Form 级 onChange（及 onCreated/bootstrap）不跑；
+    同 FU 提交后 Todo 打开 subform 改字段 onChange 生效。
+    根因：start.vue 构建 subTableBindings 只带 formFields，未带 subForms[].options；
+    task-detail resolveSubFormDesign 已传 formOptions。
+    修复：pickSubFormOptionsFromDesign + ProcessStartSubTableBinding.formOptions；
+    主路径与 subForms fallback 均写入。单测 pickSubFormOptionsFromDesign.test.ts；
+    pnpm build user-portal 通过。dev compose 缺 .env 未重建镜像。
