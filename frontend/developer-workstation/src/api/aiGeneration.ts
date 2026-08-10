@@ -57,15 +57,23 @@ export const aiGenerationApi = {
    * AI Studio Copilot 单轮对话（顾问式，无会话/锁/文档）。
    * 模型链路与 AI Generate 同源：AMToken 经 X-AM-Token 头透传，读不到就不带，
    * 后端以 AI_GATEWAY_TOKEN_MISSING 显式失败（dev 配静态 key 时无需 token）。
+   * propose=true 走 GENERATION 管线产出结构化提案，耗时分钟级，超时放宽到 6 分钟。
    */
   studioChat: (data: AiStudioChatPayload) => {
     const amToken = readAmToken()
-    return api.post<any, { data: { reply: string } }>(
+    return api.post<any, { data: AiStudioChatResult }>(
       '/ai-generation/studio-chat',
       data,
-      amToken ? { headers: { 'X-AM-Token': amToken } } : undefined
+      {
+        timeout: data.propose ? 360000 : 120000,
+        ...(amToken ? { headers: { 'X-AM-Token': amToken } } : {})
+      }
     )
   },
+
+  /** 应用 Copilot 改动提案（后端：抢 AI 锁 → 校验 → 按 scope 写入）。 */
+  studioApplyProposal: (data: AiStudioApplyPayload) =>
+    api.post('/ai-generation/studio-chat/apply', data, { timeout: 120000 }),
 }
 
 export interface AiStudioChatPayload {
@@ -73,6 +81,19 @@ export interface AiStudioChatPayload {
   phase: string
   message: string
   history: { role: 'USER' | 'ASSISTANT'; content: string }[]
+  propose?: boolean
+}
+
+export interface AiStudioChatResult {
+  reply: string | null
+  proposal: Record<string, unknown> | null
+  proposalScope: string | null
+}
+
+export interface AiStudioApplyPayload {
+  functionUnitId: number
+  scope: string
+  generatedData: Record<string, unknown>
 }
 
 // SSE endpoint URLs (used by composables with fetch API, not axios)

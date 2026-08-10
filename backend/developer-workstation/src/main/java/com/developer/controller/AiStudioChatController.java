@@ -1,6 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.AiStudioChatComponent;
+import com.developer.dto.AiStudioApplyRequest;
 import com.developer.dto.AiStudioChatRequest;
 import com.developer.dto.AiStudioChatResponse;
 import com.developer.security.RequireDeveloperPermission;
@@ -53,7 +54,7 @@ public class AiStudioChatController extends BaseController {
     }
 
     @PostMapping
-    @Operation(summary = "AI Studio copilot chat (single turn, advisory only)")
+    @Operation(summary = "AI Studio copilot chat (single turn; propose=true returns a structured proposal)")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<AiStudioChatResponse>> chat(
             @Valid @RequestBody AiStudioChatRequest request, HttpServletRequest httpRequest) {
@@ -61,6 +62,18 @@ public class AiStudioChatController extends BaseController {
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         String amToken = resolveAmToken(httpRequest);
         return handleRequest(() -> aiStudioChatComponent.chat(request, userId, amToken));
+    }
+
+    @PostMapping("/apply")
+    @Operation(summary = "Apply a copilot change proposal to the function unit design")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<Void>> applyProposal(@Valid @RequestBody AiStudioApplyRequest request) {
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
+        return handleRequest(() -> {
+            aiStudioChatComponent.applyProposal(request, userId);
+            return null;
+        });
     }
 
     /**

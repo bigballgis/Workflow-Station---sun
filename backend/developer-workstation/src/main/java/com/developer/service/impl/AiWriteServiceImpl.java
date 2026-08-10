@@ -3,6 +3,7 @@ package com.developer.service.impl;
 import com.developer.dto.AiGeneratedData;
 import com.developer.entity.*;
 import com.developer.enums.*;
+import com.developer.exception.AiGenerationException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.IconRepository;
 import com.developer.service.AiWriteService;
@@ -11,6 +12,7 @@ import com.developer.util.AiBpmnFormBindingWriter;
 import com.developer.util.AiBpmnMiSubTableWriter;
 import com.developer.util.AiBpmnSemanticGuard;
 import com.developer.util.AiSubFormMiAssignmentWriter;
+import com.developer.util.XmlEncodingUtil;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,7 +50,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                 regenerateScope != null ? regenerateScope : "ALL");
 
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
-                .orElseThrow(() -> new com.developer.exception.AiGenerationException(
+                .orElseThrow(() -> new AiGenerationException(
                         "AI_WRITE_NOT_FOUND", "Function unit not found: " + functionUnitId));
 
         // 最后一道语义关。生成阶段 AiResponseParser 已经跑过一遍，但 apply 的 body 由客户端回传，
@@ -79,11 +81,11 @@ public class AiWriteServiceImpl implements AiWriteService {
         writeDecisionDefinitions(functionUnit, generatedData);
         // Form IDs are database-generated and are required by BPMN custom formId properties.
         entityManager.flush();
-        writeProcessDefinition(functionUnit, generatedData);
+        boolean processReplaced = writeProcessDefinition(functionUnit, generatedData);
         // Multi-instance nodes reference two more database-generated ids the model cannot know:
         // the sub table's id in BPMN, and the sub-table binding's id that keys the sub-form
         // carrying the assignment component. Both are resolvable only after the flush above.
-        writeMultiInstanceAssignment(functionUnit);
+        writeMultiInstanceAssignment(functionUnit, processReplaced);
 
         // Handle icon matching/creation before saving
         handleIcon(functionUnit, generatedData);
@@ -783,12 +785,12 @@ public class AiWriteServiceImpl implements AiWriteService {
         }
     }
 
-    private void writeProcessDefinition(FunctionUnit functionUnit, AiGeneratedData generatedData) {
+    private boolean writeProcessDefinition(FunctionUnit functionUnit, AiGeneratedData generatedData) {
         Map<String, Object> procData = generatedData.getProcessDefinition();
-        if (procData == null) return;
+        if (procData == null) return false;
 
         String bpmnXml = (String) procData.get("bpmnXml");
-        if (bpmnXml == null || bpmnXml.isBlank()) return;
+        if (bpmnXml == null || bpmnXml.isBlank()) return false;
         bpmnXml = ensureRenderableBpmnDiagram(bpmnXml);
         bpmnXml = AiBpmnFormBindingWriter.bindStageForms(bpmnXml, functionUnit.getFormDefinitions());
         bpmnXml = AiBpmnActionBindingWriter.bindStageActions(bpmnXml,
@@ -801,6 +803,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                 .build();
 
         functionUnit.setProcessDefinition(processDefinition);
+        return true;
     }
 
     /**
@@ -811,24 +814,44 @@ public class AiWriteServiceImpl implements AiWriteService {
      * 少了前者，部署校验报 {@code MISSING_SUBTABLE_ID}；少了后者，契约完整时报
      * {@code MISSING_MI_ASSIGNMENT_COMPONENT}，契约不完整时更糟：一路绿灯部署成功，运行时子表行
      * 没有任何指派入口。</p>
+     *
+     * @param processReplaced 本轮 apply 是否写入了新 process。false 时这里处理的是存量
+     *                        BPMN——解析失败要以 {@code AI_EXISTING_BPMN_INVALID} 指向存量数据。
      */
-    private void writeMultiInstanceAssignment(FunctionUnit functionUnit) {
+    private void writeMultiInstanceAssignment(FunctionUnit functionUnit, boolean processReplaced) {
         ProcessDefinition processDefinition = functionUnit.getProcessDefinition();
         if (processDefinition == null || processDefinition.getBpmnXml() == null
                 || processDefinition.getBpmnXml().isBlank()) {
             return;
         }
 
-        processDefinition.setBpmnXml(AiBpmnMiSubTableWriter.bindMiSubTables(
-                processDefinition.getBpmnXml(), functionUnit.getTableDefinitions()));
+        // 本轮没写新 process 时，这里拿到的是流程设计器落库的存量 BPMN——它按
+        // XmlEncodingUtil 约定以 Base64 存储，直接喂给 XML 解析器会报
+        // "Content is not allowed in prolog"，必须先 smartDecode。
+        String bpmnXml = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
+        try {
+            processDefinition.setBpmnXml(AiBpmnMiSubTableWriter.bindMiSubTables(
+                    bpmnXml, functionUnit.getTableDefinitions()));
 
-        List<String> written = AiSubFormMiAssignmentWriter.writeAssignmentContainers(
-                processDefinition.getBpmnXml(),
-                functionUnit.getFormDefinitions(),
-                this::fieldToFormCreateRule,
-                this::defaultFormCreateOptions);
-        for (String target : written) {
-            log.info("Wrote MI assignment component into {}", target);
+            List<String> written = AiSubFormMiAssignmentWriter.writeAssignmentContainers(
+                    processDefinition.getBpmnXml(),
+                    functionUnit.getFormDefinitions(),
+                    this::fieldToFormCreateRule,
+                    this::defaultFormCreateOptions);
+            for (String target : written) {
+                log.info("Wrote MI assignment component into {}", target);
+            }
+        } catch (AiGenerationException e) {
+            if (processReplaced) {
+                throw e;
+            }
+            // 失败的是 FU 既有的 process definition，而不是本次 AI 产物——用独立错误码指明
+            // 数据源头，否则 AI_BPMN_MI_BINDING_FAILED 会把排查方向引向 AI 回传的 body。
+            throw new AiGenerationException("AI_EXISTING_BPMN_INVALID",
+                    "Stored BPMN of function unit " + functionUnit.getId()
+                            + " (process definition id " + processDefinition.getId()
+                            + ") could not be processed — repair or clear it in the process designer"
+                            + " before applying AI changes: " + e.getMessage());
         }
     }
 

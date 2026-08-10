@@ -210,7 +210,7 @@
         <component
           :is="PHASE_COMPONENT[currentPhase]"
           v-else
-          :key="currentPhase"
+          :key="`${currentPhase}-${stageReloadKey}`"
           :function-unit-id="fuId"
         />
       </div>
@@ -286,6 +286,43 @@
               {{ msg.text }}
             </template>
           </div>
+          <!-- 结构化改动提案卡：摘要 + Apply -->
+          <div
+            v-if="msg.proposal"
+            class="proposal-card"
+          >
+            <div class="proposal-card__title">
+              {{ t('ai.studio.workspace.proposalTitle') }}
+            </div>
+            <div
+              v-for="item in proposalItems(msg.proposal.data)"
+              :key="item.label"
+              class="proposal-card__item"
+            >
+              <span class="proposal-card__plus">+</span>
+              {{ item.label }}<template v-if="item.count !== null">
+                × {{ item.count }}
+              </template>
+            </div>
+            <div class="proposal-card__footer">
+              <span
+                v-if="msg.proposal.applied"
+                class="proposal-card__applied"
+              >
+                <el-icon><Check /></el-icon>
+                {{ t('ai.studio.workspace.proposalApplied') }}
+              </span>
+              <el-button
+                v-else
+                type="primary"
+                size="small"
+                :loading="applyingProposalMsg === msg"
+                @click="applyProposal(msg)"
+              >
+                {{ t('ai.studio.workspace.proposalApply') }}
+              </el-button>
+            </div>
+          </div>
         </div>
         <div
           v-if="copilotReplying && copilotReplyingPhase === currentPhase"
@@ -302,12 +339,28 @@
           </div>
         </div>
       </div>
+      <div
+        v-if="proposalSupported"
+        class="copilot__propose"
+      >
+        <el-button
+          size="small"
+          type="primary"
+          plain
+          :disabled="!copilotInput.trim() || copilotReplying"
+          @click="sendCopilotMessage(true)"
+        >
+          <el-icon><MagicStick /></el-icon>
+          {{ t('ai.studio.workspace.proposeButton') }}
+        </el-button>
+        <span class="copilot__propose-hint">{{ t('ai.studio.workspace.proposeHint') }}</span>
+      </div>
       <div class="copilot__input">
         <el-input
           v-model="copilotInput"
           :placeholder="t('ai.studio.workspace.copilotPlaceholder')"
           :disabled="copilotReplying"
-          @keydown.enter.prevent="sendCopilotMessage"
+          @keydown.enter.prevent="sendCopilotMessage()"
         >
           <template #suffix>
             <el-button
@@ -315,7 +368,7 @@
               circle
               :disabled="!copilotInput.trim() || copilotReplying"
               :aria-label="t('ai.studio.workspace.copilotSend')"
-              @click="sendCopilotMessage"
+              @click="sendCopilotMessage()"
             >
               <el-icon><Promotion /></el-icon>
             </el-button>
@@ -576,7 +629,12 @@ function copilotHistory(phase: AiStudioPhase) {
     }))
 }
 
-async function sendCopilotMessage() {
+/** 结构化提案仅在有 generatedData 切片的阶段可用（与后端 PROPOSAL_SCOPE_BY_PHASE 一致）。 */
+const PROPOSAL_PHASES: readonly AiStudioPhase[] =
+  ['PROCESS_DESIGN', 'TABLE_DESIGN', 'FORM_DESIGN', 'ACTION_DESIGN', 'DECISION_DESIGN']
+const proposalSupported = computed(() => PROPOSAL_PHASES.includes(currentPhase.value))
+
+async function sendCopilotMessage(propose = false) {
   const text = copilotInput.value.trim()
   if (!text || copilotReplying.value) return
   // 锁定发送时所在的阶段线程：等待期间切走，回复也落回这个线程
@@ -593,9 +651,21 @@ async function sendCopilotMessage() {
       functionUnitId: fuId.value,
       phase,
       message: text,
-      history
+      history,
+      propose
     })
-    thread.push({ role: 'assistant', text: res.data.reply })
+    const { reply, proposal, proposalScope } = res.data
+    const message: CopilotMessage = {
+      role: 'assistant',
+      text: reply ?? (proposal ? t('ai.studio.workspace.proposalReady') : '')
+    }
+    if (proposal && proposalScope) {
+      message.proposal = { scope: proposalScope, data: proposal }
+    } else if (propose) {
+      // 要求了提案但模型没产出数据块：显式说明，别让用户以为按钮坏了
+      message.text = `${message.text}\n\n${t('ai.studio.workspace.proposalNone')}`.trim()
+    }
+    thread.push(message)
   } catch (e: any) {
     const reason = e?.response?.data?.error?.message
       ?? e?.response?.data?.message
@@ -610,6 +680,53 @@ async function sendCopilotMessage() {
     copilotReplying.value = false
     copilotReplyingPhase.value = null
     if (currentPhase.value === phase) scrollCopilotToBottom()
+  }
+}
+
+// ---- 提案卡片：摘要与 Apply ----
+
+/** 提案内容摘要：各切片的条数（+ 流程是否更新），供卡片按 "+ 条目" 列出。 */
+function proposalItems(data: Record<string, unknown>): { label: string; count: number | null }[] {
+  const items: { label: string; count: number | null }[] = []
+  const push = (key: string, label: string) => {
+    const n = Array.isArray(data[key]) ? (data[key] as unknown[]).length : 0
+    if (n > 0) items.push({ label, count: n })
+  }
+  push('tableDefinitions', t('functionUnit.tables'))
+  push('tableRelations', t('ai.studio.workspace.proposalItemRelations'))
+  push('formDefinitions', t('functionUnit.forms'))
+  push('actionDefinitions', t('functionUnit.actionDesign'))
+  push('decisionDefinitions', t('functionUnit.decisions'))
+  if (data.processDefinition) items.push({ label: t('functionUnit.process'), count: null })
+  return items
+}
+
+/** 正在 Apply 的那条消息（同一时刻只允许一个 Apply 在跑） */
+const applyingProposalMsg = ref<CopilotMessage | null>(null)
+/** 改这个值会重挂载中间区设计器——Apply 写库后画布/列表必须重新加载 */
+const stageReloadKey = ref(0)
+
+async function applyProposal(msg: CopilotMessage) {
+  if (!msg.proposal || msg.proposal.applied || applyingProposalMsg.value) return
+  applyingProposalMsg.value = msg
+  try {
+    await aiGenerationApi.studioApplyProposal({
+      functionUnitId: fuId.value,
+      scope: msg.proposal.scope,
+      generatedData: msg.proposal.data
+    })
+    msg.proposal.applied = true
+    ElMessage.success(t('ai.studio.workspace.proposalApplySuccess'))
+    await store.refreshAll(fuId.value)
+    stageReloadKey.value++
+  } catch (e: any) {
+    const reason = e?.response?.data?.error?.message
+      ?? e?.response?.data?.message
+      ?? e?.message
+      ?? String(e)
+    ElMessage.error(t('ai.studio.workspace.proposalApplyFailed', { reason }))
+  } finally {
+    applyingProposalMsg.value = null
   }
 }
 
@@ -1097,9 +1214,74 @@ onMounted(async () => {
     gap: 12px;
   }
 
+  &__propose {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px 0;
+    border-top: 1px solid var(--el-border-color-lighter);
+  }
+
+  &__propose-hint {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
+
   &__input {
     padding: 12px 14px;
+  }
+
+  // propose 行不存在的阶段（无结构化切片），输入区自己补分隔线
+  &__propose + &__input {
+    border-top: none;
+  }
+
+  &__body + &__input {
     border-top: 1px solid var(--el-border-color-lighter);
+  }
+}
+
+.proposal-card {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 10px;
+  background-color: var(--el-color-primary-light-9);
+
+  &__title {
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--el-text-color-primary);
+    margin-bottom: 8px;
+  }
+
+  &__item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--el-text-color-regular);
+  }
+
+  &__plus {
+    color: var(--el-color-primary);
+    font-weight: 700;
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  &__applied {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--el-color-success);
   }
 }
 

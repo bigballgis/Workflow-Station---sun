@@ -32,6 +32,12 @@ public class AiStudioChatRequest {
     @Size(max = 4000)
     private String message;
 
+    /**
+     * true = 本轮要求产出结构化改动提案（走 AI Generate 的 GENERATION 管线，带全量设计上下文，
+     * 耗时可达分钟级）；false = 普通顾问式对话。
+     */
+    private boolean propose;
+
     /** 近期对话历史（旧→新），服务端还会按字符预算再截断一次。 */
     @Valid
     @Size(max = 20)

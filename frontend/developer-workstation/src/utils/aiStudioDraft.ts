@@ -106,6 +106,12 @@ export interface AiStudioChatMessage {
   text: string
   isError?: boolean
   isPhaseNote?: boolean
+  /** 结构化改动提案（propose 轮次）：data 即 Apply 时原样带回的 generatedData */
+  proposal?: {
+    scope: string
+    data: Record<string, unknown>
+    applied?: boolean
+  }
 }
 
 export type AiStudioChatThreads = Partial<Record<AiStudioPhase, AiStudioChatMessage[]>>

@@ -1,13 +1,19 @@
 package com.developer.service.impl;
 
 import com.developer.dto.AiStudioChatRequest;
+import com.developer.dto.FunctionUnitContextDTO;
+import com.developer.enums.AiMode;
+import com.developer.enums.AiPhase;
 import com.developer.exception.AiGenerationException;
+import com.developer.service.AiGenerationService;
 import com.developer.service.AiStudioChatService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * AI Studio Copilot 对话实现。
@@ -49,16 +55,129 @@ public class AiStudioChatServiceImpl implements AiStudioChatService {
             Map.entry("DECISION_DESIGN", "model decision tables used by the process"),
             Map.entry("VALIDATION", "run the final whole-design checks before deployment"));
 
+    /**
+     * propose 轮次的写入范围：AI Studio 阶段 → AiWriteService 的 regenerateScope。
+     * 不在表里的阶段（View/Automation/Connections/Email/Validation）没有对应的
+     * generatedData 切片，不支持结构化提案。
+     */
+    private static final Map<String, String> PROPOSAL_SCOPE_BY_PHASE = Map.of(
+            "PROCESS_DESIGN", "PROCESS",
+            "TABLE_DESIGN", "TABLES",
+            "FORM_DESIGN", "FORMS",
+            "ACTION_DESIGN", "ACTIONS",
+            "DECISION_DESIGN", "DECISIONS");
+
+    /**
+     * scope → 允许写入的 generatedData 切片，与 {@code AiWriteServiceImpl#clearScopedData}
+     * 的清理范围对齐（TABLES 清的是整个表图谱，所以连关系一起）。模型在 scoped 轮次里经常
+     * 顺手带上范围外的切片（如 processDefinition）——写入层会照单全写，撞上"每 FU 一份流程
+     * 定义"这类唯一约束，所以提案返回前与 Apply 落库前都必须按这张表裁剪。
+     */
+    private static final Map<String, Set<String>> SCOPE_SLICES = Map.of(
+            "TABLES", Set.of("tableDefinitions", "tableRelations"),
+            "TABLE_RELATIONS", Set.of("tableRelations"),
+            "FORMS", Set.of("formDefinitions"),
+            "ACTIONS", Set.of("actionDefinitions"),
+            "DECISIONS", Set.of("decisionDefinitions"),
+            "PROCESS", Set.of("processDefinition"));
+
+    /** scope 允许的切片 key；ALL 返回全部。供本类与 Apply 编排（component）共用。 */
+    public static Set<String> allowedSlices(String scope) {
+        if ("ALL".equalsIgnoreCase(scope)) {
+            return SCOPE_SLICES.values().stream()
+                    .flatMap(Set::stream)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
+        Set<String> slices = SCOPE_SLICES.get(scope);
+        if (slices == null) {
+            throw new AiGenerationException("AI_STUDIO_UNKNOWN_SCOPE", "Unknown proposal scope: " + scope);
+        }
+        return slices;
+    }
+
     private final AiGatewayClient aiGatewayClient;
     private final AiResponseParser aiResponseParser;
+    private final AiGenerationService aiGenerationService;
 
-    public AiStudioChatServiceImpl(AiGatewayClient aiGatewayClient, AiResponseParser aiResponseParser) {
+    public AiStudioChatServiceImpl(AiGatewayClient aiGatewayClient, AiResponseParser aiResponseParser,
+                                   AiGenerationService aiGenerationService) {
         this.aiGatewayClient = aiGatewayClient;
         this.aiResponseParser = aiResponseParser;
+        this.aiGenerationService = aiGenerationService;
     }
 
     @Override
-    public String chat(AiStudioChatRequest request, String amToken) {
+    public StudioChatResult chat(AiStudioChatRequest request, String amToken) {
+        if (request.isPropose()) {
+            return propose(request, amToken);
+        }
+        return new StudioChatResult(advisoryChat(request, amToken), null, null);
+    }
+
+    /**
+     * 改动提案：复用 AI Generate 的 GENERATION 管线（{@code callAiModel} 自带上下文序列化时的
+     * 提示词模板、schema 元数据、校验失败自动修复重试）。sessionId 用随机 UUID——
+     * Copilot 无会话持久化，管线只拿它查历史（查不到即空），对话上下文折进 message 文本。
+     */
+    private StudioChatResult propose(AiStudioChatRequest request, String amToken) {
+        String scope = PROPOSAL_SCOPE_BY_PHASE.get(request.getPhase());
+        if (scope == null) {
+            throw new AiGenerationException("AI_STUDIO_PROPOSAL_UNSUPPORTED_PHASE",
+                    "Phase " + request.getPhase() + " has no structured proposal scope; "
+                            + "proposals are supported for: " + PROPOSAL_SCOPE_BY_PHASE.keySet());
+        }
+
+        FunctionUnitContextDTO context =
+                aiGenerationService.serializeFunctionUnitContext(request.getFunctionUnitId());
+        AiMode mode = aiGenerationService.determineMode(request.getFunctionUnitId());
+
+        Map<String, Object> parsed = aiGenerationService.callAiModel(
+                UUID.randomUUID(), buildProposalMessage(request, scope), AiPhase.GENERATION, mode,
+                context, request.getFunctionUnitId(), null, scope, amToken);
+
+        Object reply = parsed.get("reply");
+        Object generatedData = parsed.get("generatedData");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> proposal = generatedData instanceof Map<?, ?> m
+                ? new java.util.LinkedHashMap<>((Map<String, Object>) m)
+                : null;
+        if (proposal != null) {
+            proposal.keySet().retainAll(allowedSlices(scope));
+            if (proposal.isEmpty()) proposal = null;
+        }
+        if (proposal == null && (!(reply instanceof String r) || r.isBlank())) {
+            // 既没有数据块也没有解释文本：显式失败，别让前端拿到一张空白卡
+            throw new AiGenerationException("AI_STUDIO_PROPOSAL_EMPTY",
+                    "The model returned neither a proposal data block nor an explanation");
+        }
+        log.info("AI Studio proposal round: functionUnitId={}, phase={}, scope={}, hasProposal={}, replyChars={}",
+                request.getFunctionUnitId(), request.getPhase(), scope, proposal != null,
+                reply instanceof String r ? r.length() : 0);
+        return new StudioChatResult(
+                reply instanceof String r && !r.isBlank() ? r.trim() : null,
+                proposal,
+                proposal != null ? scope : null);
+    }
+
+    /**
+     * propose 轮次的用户消息 = 对话转写 + 显式的 scope 限定指令。
+     *
+     * <p>GENERATION 提示词在 NEW 模式（空功能单元）下默认产出整套设计——包括一份大概率过不了
+     * 平台校验的 BPMN，而校验失败会让整个提案轮次失败。这里从源头限定：只产出 scope 内的切片。
+     * 即便模型仍旧多给，{@code allowedSlices} 的裁剪也会兜住，但少生成就少一次校验失败的机会。</p>
+     */
+    private String buildProposalMessage(AiStudioChatRequest request, String scope) {
+        return buildTranscript(request) + "\n\n"
+                + "========== Scoped change request (system-provided, highest priority) ==========\n"
+                + "Regenerate ONLY the '" + scope + "' slice of the design to fulfil the user's latest request.\n"
+                + "The GENERATED_DATA block must contain exactly these keys and nothing else: "
+                + allowedSlices(scope) + ".\n"
+                + "Do NOT output any other slice (no process, forms, actions, decisions or tables outside the "
+                + "scope), do NOT rename the function unit, and do NOT include an icon.\n"
+                + "========== End of scoped change request ==========";
+    }
+
+    private String advisoryChat(AiStudioChatRequest request, String amToken) {
         String blurb = PHASE_BLURBS.get(request.getPhase());
         if (blurb == null) {
             // DTO 的 @Pattern 已挡住未知阶段；这里兜的是两处枚举日后失同步的编程错误
