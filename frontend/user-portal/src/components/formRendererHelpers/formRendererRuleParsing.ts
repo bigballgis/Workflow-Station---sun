@@ -211,15 +211,17 @@ export function extractFieldsRecursive(
         span: 24,
       }
       applyDesignerHideFlagToFormField(marker, item)
-      fields.push(marker)
-      // The container owns the assignee / BU / role rules as children. Emit them
-      // right after the marker so the dialog still sees real, individually-bound
-      // fields (validation + save paths are unchanged) and the block keeps framing
-      // them. Legacy forms have no children here and are unaffected.
+      // The container owns the assignee / BU / role rules — keep them NESTED here.
+      // The dialog's layout pass reads marker.children to decide the block's
+      // membership and to drop them together when the designer's Hide toggle is on;
+      // hoisting them alongside the marker left `hidden` on the marker alone and
+      // leaked an undesigned Assignee row into the dialog. Legacy forms have no
+      // children here and are unaffected.
       const children = item.children
       if (Array.isArray(children) && children.length > 0) {
-        fields.push(...extractFieldsRecursive(children as Record<string, unknown>[], converter))
+        marker.children = extractFieldsRecursive(children as Record<string, unknown>[], converter)
       }
+      fields.push(marker)
       continue
     }
     if (item.type === 'recordNote') {

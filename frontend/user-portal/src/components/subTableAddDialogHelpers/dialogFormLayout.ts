@@ -103,44 +103,6 @@ export function groupAssignmentFieldsUnderMarker(
 }
 
 /**
- * Place the Assignment Mode block for sub-forms whose design carries no
- * `miAssignment` marker (they were saved before the component existed).
- *
- * The block is inserted where its own fields already sit — at the first owned
- * field — so the dialog's field order is preserved and the block simply frames
- * the controls the reader was going to meet there anyway. When the design has a
- * marker this is not called: the designer's placement wins.
- *
- * Returns the groups untouched when nothing is owned, so a misconfigured contract
- * can never strand a headless block in the dialog.
- */
-export function ensureAssignmentBlockPlaced(
-  groups: DialogLayoutGroup[],
-  assignmentFields: string[],
-): DialogLayoutGroup[] {
-  const owned = new Set(assignmentFields.filter(Boolean))
-  if (owned.size === 0) return groups
-  if (groups.some(group => group.items.some(item => item.type === 'miAssignment'))) return groups
-
-  const hostIndex = groups.findIndex(group =>
-    group.items.some(item => item.type === 'column' && owned.has(item.column.field)))
-  if (hostIndex < 0) return groups
-
-  const host = groups[hostIndex]!
-  const anchorAt = host.items.findIndex(
-    item => item.type === 'column' && owned.has(item.column.field))
-  const items = [
-    ...host.items.slice(0, anchorAt),
-    { type: 'miAssignment', key: '__mi_assignment_block__' } as DialogLayoutItem,
-    ...host.items.slice(anchorAt),
-  ]
-  return groups.map((group, index) =>
-    index === hostIndex
-      ? { ...group, items: groupAssignmentFieldsUnderMarker(items, assignmentFields) }
-      : group)
-}
-
-/**
  * Group dialog items by Designer form layout (elCard → card groups), preserving
  * the exact position of the non-data `miAssignment` marker through all containers.
  */
@@ -155,13 +117,19 @@ export function buildDialogLayoutGroups(
     const ordered = Array.isArray(formFields)
       ? collectLayoutItems(formFields, colByField, used)
       : []
+    // Designed columns are the only truth (subtable-columns-dw-parity): a form that
+    // references any column has authored its field set, so columns it left out were
+    // left out on purpose and must not reappear. Only a design that references
+    // nothing at all falls back to the whole table — otherwise a sub-table whose
+    // physical columns outnumber its designed fields (e.g. an `assignee` column the
+    // author never placed) would render fields DW Form Preview never shows.
     const rest = visibleColumns
       .filter(column => !used.has(column.field))
       .map(column => ({ type: 'column', key: column.field, column }) as DialogLayoutItem)
     return [{
       key: 'flat',
       title: null,
-      items: ordered.length > 0 ? [...ordered, ...rest] : rest,
+      items: ordered.length > 0 ? ordered : rest,
     }]
   }
 
@@ -204,24 +172,35 @@ export function buildDialogLayoutGroups(
         })
         used.add(f.key)
       } else if (f.type === 'miAssignment') {
+        if (f.hidden) {
+          // Designer "Hide" toggle — the whole block goes, owned fields included.
+          // Must use collectLayoutItems (discarding its result), NOT walk(): walk
+          // promotes anything matching a column into its own group, which would
+          // re-surface the very fields the Hide toggle is meant to remove.
+          // collectLayoutItems only marks them used, so they also stay out of the
+          // empty-design fallback below.
+          collectLayoutItems(f.children || [], colByField, used)
+          continue
+        }
+        // Emit the marker together with the fields it owns, mirroring the flat
+        // path's collectLayoutItems. Pushing the marker alone rendered the block
+        // as an empty frame while its picker went missing entirely.
         groups.push({
           key: f.key,
           title: null,
-          items: [{ type: 'miAssignment', key: f.key }],
+          items: [
+            { type: 'miAssignment', key: f.key },
+            ...collectLayoutItems(f.children || [], colByField, used),
+          ],
         })
       }
     }
   }
 
   walk(formFields!)
-  const rest = visibleColumns.filter((c) => !used.has(c.field))
-  if (rest.length > 0) {
-    groups.push({
-      key: 'rest',
-      title: null,
-      items: rest.map(column => ({ type: 'column', key: column.field, column })),
-    })
-  }
+  // Same parity rule as the flat path above: groups exist ⇒ the design authored its
+  // field set, so undesigned physical columns stay out. The empty-design fallback
+  // below still shows the whole table.
   return groups.length > 0
     ? groups
     : [{
