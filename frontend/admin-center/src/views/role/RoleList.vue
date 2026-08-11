@@ -3,7 +3,7 @@
     <PageHeader :title="t('menu.roleList')">
       <template #actions>
         <el-button
-          v-if="canWriteRole"
+          v-if="canWriteRole && activeTab === 'CUSTOM'"
           type="primary"
           @click="showCreateDialog"
         >
@@ -11,6 +11,17 @@
         </el-button>
       </template>
     </PageHeader>
+
+    <el-tabs v-model="activeTab">
+      <el-tab-pane
+        :label="t('role.tabSystem')"
+        name="SYSTEM"
+      />
+      <el-tab-pane
+        :label="t('role.tabCustom')"
+        name="CUSTOM"
+      />
+    </el-tabs>
     
     <el-form
       :inline="true"
@@ -53,10 +64,16 @@
         </el-button>
       </el-form-item>
     </el-form>
+
+    <el-empty
+      v-if="!roleStore.loading && listTotal === 0"
+      :description="t('role.noRolesInTab')"
+    />
     
     <el-table
+      v-else
       v-loading="roleStore.loading"
-      :data="sortedRoles"
+      :data="pagedRoles"
       stripe
       table-layout="auto"
       style="width: 100%"
@@ -97,8 +114,6 @@
           </el-tag>
         </template>
       </el-table-column>
-      <!-- <el-table-column prop="description" :label="t('role.description')" min-width="150" show-overflow-tooltip /> -->
-      <!-- <el-table-column prop="memberCount" :label="t('role.memberCount')" width="100" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header" /> -->
       <el-table-column
         prop="status"
         :label="t('common.status')"
@@ -168,22 +183,24 @@
       </el-table-column>
     </el-table>
     
-    <div class="pagination-container">
+    <div
+      v-if="listTotal > 0"
+      class="pagination-container"
+    >
       <el-pagination
         v-model:current-page="query.page"
         v-model:page-size="query.size"
-        :total="roleStore.total"
+        :total="listTotal"
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
-        @size-change="handleSearch"
-        @current-change="handleSearch"
+        @size-change="handlePageSizeChange"
       />
     </div>
     
     <RoleFormDialog
       v-model="formDialogVisible"
       :role="currentRole"
-      @success="handleSearch"
+      @success="loadRoles"
     />
     <RoleMembersDialog
       v-model="membersDialogVisible"
@@ -193,56 +210,94 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/PageHeader.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Lock } from '@element-plus/icons-vue'
+import { Lock, Plus } from '@element-plus/icons-vue'
 import { useRoleStore } from '@/stores/role'
 import { Role, type RoleType } from '@/api/role'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import { roleTypeTagType, roleTypeKey } from '@/utils/format'
+import {
+  filterSortRoles,
+  paginateRoles,
+  type RoleListTab,
+} from '@/utils/roleList'
 import RoleFormDialog from './components/RoleFormDialog.vue'
 import RoleMembersDialog from './components/RoleMembersDialog.vue'
 import { useTabRefresh } from '@/composables/useTabRefresh'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const roleStore = useRoleStore()
 
-// Permission checks
 const canWriteRole = hasPermission(PERMISSIONS.ROLE_WRITE)
 const canDeleteRole = hasPermission(PERMISSIONS.ROLE_DELETE)
 
-const query = reactive<{ type: RoleType | ''; page: number; size: number }>({ type: '', page: 1, size: 20 })
+const activeTab = ref<RoleListTab>('CUSTOM')
+const query = reactive<{ type: RoleType | ''; page: number; size: number }>({
+  type: '',
+  page: 1,
+  size: 20,
+})
 const formDialogVisible = ref(false)
 const membersDialogVisible = ref(false)
 const currentRole = ref<Role | null>(null)
+const typeFilter = ref<RoleType | ''>('')
 
-// 排序：非系统角色在前，系统角色在后
-const sortedRoles = computed(() => {
-  return [...roleStore.roles].sort((a, b) => {
-    if (a.isSystem === b.isSystem) return 0
-    return a.isSystem ? 1 : -1
-  })
+const filteredRoles = computed(() =>
+  filterSortRoles(roleStore.roles, activeTab.value, typeFilter.value, locale.value)
+)
+const listTotal = computed(() => filteredRoles.value.length)
+const pagedRoles = computed(() =>
+  paginateRoles(filteredRoles.value, query.page, query.size)
+)
+
+watch([activeTab, typeFilter], () => {
+  query.page = 1
 })
 
-const handleSearch = () => roleStore.fetchRoles({ type: query.type as RoleType || undefined, page: query.page - 1, size: query.size })
-const handleReset = () => { query.type = ''; query.page = 1; handleSearch() }
+const loadRoles = () => roleStore.fetchAllRoles()
 
-const showCreateDialog = () => { currentRole.value = null; formDialogVisible.value = true }
-const showEditDialog = (role: Role) => { currentRole.value = role; formDialogVisible.value = true }
-const showMembersDialog = (role: Role) => { currentRole.value = role; membersDialogVisible.value = true }
+const handleSearch = () => {
+  typeFilter.value = query.type
+  query.page = 1
+}
+
+const handleReset = () => {
+  query.type = ''
+  typeFilter.value = ''
+  query.page = 1
+}
+
+const handlePageSizeChange = () => {
+  query.page = 1
+}
+
+const showCreateDialog = () => {
+  currentRole.value = null
+  formDialogVisible.value = true
+}
+const showEditDialog = (role: Role) => {
+  currentRole.value = role
+  formDialogVisible.value = true
+}
+const showMembersDialog = (role: Role) => {
+  currentRole.value = role
+  membersDialogVisible.value = true
+}
 
 const handleDelete = async (role: Role) => {
   await ElMessageBox.confirm(t('role.confirmDeleteRole'), t('user.hint'), { type: 'warning' })
   await roleStore.deleteRole(role.id)
   ElMessage.success(t('common.success'))
+  await loadRoles()
 }
 
-useTabRefresh(handleSearch)
+useTabRefresh(loadRoles)
 
 onMounted(() => {
-  handleSearch()
+  loadRoles()
 })
 </script>
 

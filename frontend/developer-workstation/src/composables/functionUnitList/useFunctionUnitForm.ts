@@ -87,11 +87,23 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
       myGroups.value = []
       canSeeAll.value = false
     }
-    if (teamEditable.value && teamOptions.value.length === 0) {
+    if (teamEditable.value) {
       try {
-        // ADMIN may target any team (incl. Public); TECH_LEAD is scoped to own teams + Public.
+        // ADMIN may target any team (CUSTOM + DEVELOPER). TECH_LEAD: own teams + Public.
+        // Must include DEVELOPER — otherwise pre-selected DEVELOPER team IDs render as raw UUIDs.
+        // Reload every open so newly created teams appear without a full page refresh.
         if (canSeeAll.value) {
-          teamOptions.value = await adminCenterApi.getVirtualGroups('CUSTOM', 'ACTIVE')
+          const [custom, developer] = await Promise.all([
+            adminCenterApi.getVirtualGroups('CUSTOM', 'ACTIVE'),
+            adminCenterApi.getVirtualGroups('DEVELOPER', 'ACTIVE'),
+          ])
+          const byId = new Map<string, VirtualGroupInfo>()
+          for (const g of [...custom, ...developer]) {
+            if (g?.id) byId.set(g.id, g)
+          }
+          teamOptions.value = [...byId.values()].sort((a, b) =>
+            (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+          )
         } else {
           const opts: VirtualGroupInfo[] = myGroups.value.map(g => ({ id: g.id, name: g.name }))
           if (publicGroupId.value) opts.push({ id: publicGroupId.value, name: 'Public' })

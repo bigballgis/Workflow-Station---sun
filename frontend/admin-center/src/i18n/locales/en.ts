@@ -422,7 +422,10 @@ export default {
     sysAdmin: 'System Admin',
     superAdmin: 'Super Admin',
     auditor: 'Auditor',
-    tenantAdmin: 'Tenant Admin'
+    tenantAdmin: 'Tenant Admin',
+    tabSystem: 'System',
+    tabCustom: 'Custom',
+    noRolesInTab: 'No roles in this category'
   },
   permission: {
     permissionName: 'Permission Name',
@@ -487,7 +490,11 @@ export default {
     roleTypeHint: 'Role Type Description:',
     buBoundedHint: 'Requires business unit association. Users need to join a business unit after joining the virtual group to activate permissions.',
     buUnboundedHint: 'Takes effect immediately. Users get the role permissions right after joining the virtual group.',
-    systemGroupRoleWarning: 'Role bindings for system virtual groups cannot be modified'
+    systemGroupRoleWarning: 'Role bindings for system virtual groups cannot be modified',
+    activate: 'Activate',
+    deactivate: 'Deactivate',
+    confirmActivate: 'Activate this virtual group?',
+    confirmDeactivate: 'Deactivate this virtual group? It will remain visible but cannot be selected in Developer Workstation.'
   },
   functionUnit: {
     title: 'Function Unit Management',

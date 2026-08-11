@@ -58,9 +58,10 @@ public class PermissionCatalogComponent {
                 .map(g -> (String) g.get("groupId"))
                 .collect(Collectors.toSet());
 
-        // 过滤掉已加入的虚拟组
+        // 过滤掉已加入的、以及非 ACTIVE 的虚拟组（不可再申请加入）
         return allGroups.stream()
                 .filter(g -> !userGroupIds.contains(g.get("id")))
+                .filter(g -> "ACTIVE".equalsIgnoreCase(String.valueOf(g.get("status"))))
                 .collect(Collectors.toList());
     }
 

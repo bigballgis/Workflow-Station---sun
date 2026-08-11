@@ -34,6 +34,7 @@
         <el-select
           v-model="form.type"
           :placeholder="t('role.selectRoleType')"
+          :disabled="isEdit"
           style="width: 100%"
         >
           <el-option
@@ -42,13 +43,6 @@
           >
             <span>{{ t('role.buBounded') }}</span>
             <span style="color: #909399; font-size: 12px; margin-left: 8px;">{{ t('role.buBoundedDesc') }}</span>
-          </el-option>
-          <el-option
-            :label="t('role.buUnbounded')"
-            value="BU_UNBOUNDED"
-          >
-            <span>{{ t('role.buUnbounded') }}</span>
-            <span style="color: #909399; font-size: 12px; margin-left: 8px;">{{ t('role.buUnboundedDesc') }}</span>
           </el-option>
         </el-select>
       </el-form-item>

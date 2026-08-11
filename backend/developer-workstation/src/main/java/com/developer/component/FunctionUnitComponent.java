@@ -115,7 +115,7 @@ public interface FunctionUnitComponent {
 
     /**
      * Whether the current user may enter the function unit workspace.
-     * True for ADMIN/TECH_LEAD/TEAM_LEAD/DEVELOPER/FU_VIEWER capability roles, or for
+     * True for ADMIN/TECH_LEAD/TEAM_LEAD/DEVELOPER capability roles, or for
      * members of a team (virtual group) that owns at least one function unit (read-only baseline).
      */
     boolean canAccessWorkspace();

@@ -120,7 +120,8 @@ export default {
     noTeam: 'No workspace',
     selectTitle: 'Select a workspace',
     selectHint: 'You belong to multiple workspaces. Choose the workspace whose function units you want to view. You can switch workspaces or view Public function units anytime from the top bar.',
-    confirm: 'Enter'
+    confirm: 'Enter',
+    inactive: 'Inactive'
   },
   functionUnit: {
     serviceTaskCreateFailed: 'Failed to create the automation flow',

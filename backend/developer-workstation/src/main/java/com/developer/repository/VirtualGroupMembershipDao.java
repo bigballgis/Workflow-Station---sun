@@ -22,31 +22,33 @@ public class VirtualGroupMembershipDao {
     }
 
     /**
-     * 用户可选择的「团队」：其所属的 ACTIVE、CUSTOM/DEVELOPER 类型虚拟组，排除内置 Public 组。
-     * 用于进入工作区的团队选择弹窗与顶部切换器。
+     * 用户所属的「团队」列表：CUSTOM/DEVELOPER，排除 Public。
+     * 含 ACTIVE 与 INACTIVE（INACTIVE 供 UI 展示为不可选，不从列表删除）。
      */
     public List<DevGroupOptionDTO> findSelectableTeamsByUserId(String userId, String publicGroupId) {
         return jdbcTemplate.query(
-                "SELECT DISTINCT g.id, g.name FROM sys_virtual_group_members m "
+                "SELECT DISTINCT g.id, g.name, g.status FROM sys_virtual_group_members m "
                         + "JOIN sys_virtual_groups g ON g.id = m.group_id "
-                        + "WHERE m.user_id = ? AND g.status = 'ACTIVE' "
+                        + "WHERE m.user_id = ? AND g.status IN ('ACTIVE', 'INACTIVE') "
                         + "AND g.type IN ('CUSTOM', 'DEVELOPER') AND g.id <> ? "
                         + "ORDER BY g.name",
-                (rs, rowNum) -> new DevGroupOptionDTO(rs.getString("id"), rs.getString("name")),
+                (rs, rowNum) -> new DevGroupOptionDTO(
+                        rs.getString("id"), rs.getString("name"), rs.getString("status")),
                 userId,
                 publicGroupId);
     }
 
     /**
-     * All active CUSTOM/DEVELOPER teams, excluding the built-in Public group, for ADMIN
-     * switching.
+     * All CUSTOM/DEVELOPER teams (ACTIVE + INACTIVE), excluding Public, for ADMIN switching.
      */
     public List<DevGroupOptionDTO> findAllSelectableTeams(String publicGroupId) {
         return jdbcTemplate.query(
-                "SELECT g.id, g.name FROM sys_virtual_groups g "
-                        + "WHERE g.status = 'ACTIVE' AND g.type IN ('CUSTOM', 'DEVELOPER') AND g.id <> ? "
+                "SELECT g.id, g.name, g.status FROM sys_virtual_groups g "
+                        + "WHERE g.status IN ('ACTIVE', 'INACTIVE') "
+                        + "AND g.type IN ('CUSTOM', 'DEVELOPER') AND g.id <> ? "
                         + "ORDER BY g.name",
-                (rs, rowNum) -> new DevGroupOptionDTO(rs.getString("id"), rs.getString("name")),
+                (rs, rowNum) -> new DevGroupOptionDTO(
+                        rs.getString("id"), rs.getString("name"), rs.getString("status")),
                 publicGroupId);
     }
 }
