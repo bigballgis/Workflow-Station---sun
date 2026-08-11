@@ -420,7 +420,10 @@ export default {
     sysAdmin: '系統管理員',
     superAdmin: '超級管理員',
     auditor: '稽核員',
-    tenantAdmin: '租戶管理員'
+    tenantAdmin: '租戶管理員',
+    tabSystem: 'System',
+    tabCustom: 'Custom',
+    noRolesInTab: '該分類下暫無角色'
   },
   permission: {
     permissionName: '權限名稱',
@@ -485,7 +488,11 @@ export default {
     roleTypeHint: '角色類型說明：',
     buBoundedHint: '需要配合業務單元使用，使用者加入虛擬群組後還需申請加入業務單元才能啟用權限',
     buUnboundedHint: '獨立生效，使用者加入虛擬群組後立即擁有該角色權限',
-    systemGroupRoleWarning: '系統內建虛擬群組的角色綁定不可修改'
+    systemGroupRoleWarning: '系統內建虛擬群組的角色綁定不可修改',
+    activate: '啟用',
+    deactivate: '停用',
+    confirmActivate: '確定啟用該虛擬群組？',
+    confirmDeactivate: '確定停用該虛擬群組？停用後仍會顯示，但在 Developer Workstation 中不可選擇。'
   },
   functionUnit: {
     title: '功能單元管理',

@@ -73,19 +73,6 @@ ON CONFLICT (code) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     updated_at = CURRENT_TIMESTAMP;
 
--- 7. Function Unit Viewer Role (team read-only baseline)
--- Bound to team (CUSTOM) virtual groups so members can view — but not edit — the team's
--- function units. Edit rights come only from an additional TEAM_LEAD/DEVELOPER role.
-INSERT INTO sys_roles (id, code, name, type, display_name, status, is_system, created_at, updated_at)
-VALUES 
-('role-fu-viewer', 'FU_VIEWER', 'Function Unit Viewer', 'DEVELOPER', 'Read-only access to a team''s function units in the developer workstation (no edit permissions)', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT (code) DO UPDATE SET 
-    name = EXCLUDED.name,
-    display_name = EXCLUDED.display_name,
-    updated_at = CURRENT_TIMESTAMP;
-
-
-
 -- 1. System Administrators Virtual Group
 INSERT INTO sys_virtual_groups (id, code, name, type, display_name, status, created_at, updated_at)
 VALUES 
@@ -207,13 +194,6 @@ VALUES
 ('vgr-developer-001', 'vg-developers', 'role-developer', CURRENT_TIMESTAMP, 'system')
 ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
 
--- Bind FU_VIEWER role to Default Development Team (team read-only baseline)
-INSERT INTO sys_virtual_group_roles (id, virtual_group_id, role_id, created_at, created_by)
-VALUES 
-('vgr-default-dev-team-viewer', 'vg-default-dev-team', 'role-fu-viewer', CURRENT_TIMESTAMP, 'system')
-ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
-
-
 -- =============================================================================
 -- 01-admin/01-create-admin-only.sql
 -- =============================================================================
@@ -332,19 +312,6 @@ FROM (VALUES
     ('PROCESS_CREATE'), ('PROCESS_UPDATE'), ('PROCESS_DELETE'), ('PROCESS_VIEW'),
     ('TABLE_CREATE'), ('TABLE_UPDATE'), ('TABLE_DELETE'), ('TABLE_VIEW'),
     ('ACTION_CREATE'), ('ACTION_UPDATE'), ('ACTION_DELETE'), ('ACTION_VIEW')
-) AS p(permission)
-ON CONFLICT (role_id, permission) DO NOTHING;
-
-
--- FU_VIEWER: 团队只读基线，仅查看功能单元（子资源读操作均以 FUNCTION_UNIT_VIEW 门禁）
-INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
-SELECT 
-    gen_random_uuid()::varchar,
-    'role-fu-viewer',
-    p.permission,
-    CURRENT_TIMESTAMP
-FROM (VALUES 
-    ('FUNCTION_UNIT_VIEW')
 ) AS p(permission)
 ON CONFLICT (role_id, permission) DO NOTHING;
 

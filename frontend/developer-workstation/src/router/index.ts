@@ -32,13 +32,13 @@ const routes: RouteRecordRaw[] = [
         path: 'function-units',
         name: 'FunctionUnits',
         component: () => import('@/views/function-unit/FunctionUnitList.vue'),
-        meta: { titleKey: 'functionUnit.title', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER', 'FU_VIEWER'] }
+        meta: { titleKey: 'functionUnit.title', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
       },
       {
         path: 'function-units/:id',
         name: 'FunctionUnitEdit',
         component: () => import('@/views/function-unit/FunctionUnitEdit.vue'),
-        meta: { titleKey: 'functionUnit.edit', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER', 'FU_VIEWER'] }
+        meta: { titleKey: 'functionUnit.edit', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
       },
       {
         path: 'profile',

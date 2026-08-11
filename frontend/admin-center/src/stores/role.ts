@@ -25,28 +25,69 @@ export const useRoleStore = defineStore('role', () => {
     }
   }
 
+  /** Load every page so client-side System/Custom tabs are complete. */
+  const fetchAllRoles = async () => {
+    loading.value = true
+    try {
+      const pageSizeAll = 100
+      let page = 0
+      const all: Role[] = []
+      let totalElements = Number.POSITIVE_INFINITY
+      while (all.length < totalElements) {
+        const res = await roleApi.list({ page, size: pageSizeAll })
+        const batch = res.content ?? []
+        totalElements = res.totalElements ?? batch.length
+        all.push(...batch)
+        if (batch.length === 0) break
+        page += 1
+        if (page > 1000) break
+      }
+      roles.value = all
+      total.value = all.length
+      currentPage.value = 0
+      pageSize.value = pageSizeAll
+    } finally {
+      loading.value = false
+    }
+  }
+
   const fetchPermissionTree = async () => {
     permissions.value = await permissionApi.getTree()
   }
 
   const createRole = async (data: CreateRoleRequest) => {
     await roleApi.create(data)
-    await fetchRoles()
+    await fetchAllRoles()
   }
 
   const updateRole = async (id: string, data: UpdateRoleRequest) => {
     await roleApi.update(id, data)
-    await fetchRoles()
+    await fetchAllRoles()
   }
 
   const deleteRole = async (id: string) => {
     await roleApi.delete(id)
-    await fetchRoles()
+    await fetchAllRoles()
   }
 
   const updateRolePermissions = async (id: string, permissions: RolePermission[]) => {
     await roleApi.updatePermissions(id, permissions)
   }
 
-  return { roles, permissions, loading, total, currentPage, pageSize, currentRole, fetchRoles, fetchPermissionTree, createRole, updateRole, deleteRole, updateRolePermissions }
+  return {
+    roles,
+    permissions,
+    loading,
+    total,
+    currentPage,
+    pageSize,
+    currentRole,
+    fetchRoles,
+    fetchAllRoles,
+    fetchPermissionTree,
+    createRole,
+    updateRole,
+    deleteRole,
+    updateRolePermissions,
+  }
 })

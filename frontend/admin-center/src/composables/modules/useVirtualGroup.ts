@@ -7,6 +7,7 @@
 
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessageBox } from 'element-plus'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
@@ -28,8 +29,8 @@ export function useVirtualGroup() {
   const formDialogVisible = ref(false)
   const membersDialogVisible = ref(false)
   const rolesDialogVisible = ref(false)
-  const approversDialogVisible = ref(false)
   const currentGroup = ref<VirtualGroup | null>(null)
+  const statusToggleLoadingId = ref<string | null>(null)
 
   const activeTab = ref<VirtualGroupTab>('CUSTOM')
   const searchKeyword = ref('')
@@ -77,11 +78,6 @@ export function useVirtualGroup() {
     rolesDialogVisible.value = true
   }
 
-  const showApproversDialog = (group: VirtualGroup) => {
-    currentGroup.value = group
-    approversDialogVisible.value = true
-  }
-
   const handleCreateSuccess = async (createdType?: VirtualGroupTab) => {
     await fetchGroups()
     if (createdType === 'CUSTOM' || createdType === 'DEVELOPER') {
@@ -108,6 +104,30 @@ export function useVirtualGroup() {
     listPagination.value.page = 1
   }
 
+  const handleToggleStatus = async (group: VirtualGroup) => {
+    const activating = group.status !== 'ACTIVE'
+    try {
+      await ElMessageBox.confirm(
+        t(activating ? 'virtualGroup.confirmActivate' : 'virtualGroup.confirmDeactivate'),
+        t('common.confirm'),
+        { type: 'warning' }
+      )
+    } catch {
+      return
+    }
+    statusToggleLoadingId.value = group.id
+    try {
+      if (activating) await store.activateGroup(group.id)
+      else await store.deactivateGroup(group.id)
+      notifySuccess(t('common.success'))
+      await fetchGroups()
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.VIRTUAL_GROUP_LOAD_FAILED)))
+    } finally {
+      statusToggleLoadingId.value = null
+    }
+  }
+
   return {
     loading,
     groups,
@@ -119,16 +139,16 @@ export function useVirtualGroup() {
     formDialogVisible,
     membersDialogVisible,
     rolesDialogVisible,
-    approversDialogVisible,
     currentGroup,
+    statusToggleLoadingId,
     fetchGroups,
     showCreateDialog,
     showEditDialog,
     showMembersDialog,
     showRolesDialog,
-    showApproversDialog,
     handleDelete,
     handleCreateSuccess,
     handleListSizeChange,
+    handleToggleStatus,
   }
 }

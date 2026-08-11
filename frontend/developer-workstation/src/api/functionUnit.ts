@@ -343,6 +343,8 @@ export interface Version {
 export interface DevGroupOption {
   id: string
   name: string
+  /** ACTIVE selectable; INACTIVE listed but disabled in the switcher */
+  status?: string
 }
 
 export interface MyDevGroups {

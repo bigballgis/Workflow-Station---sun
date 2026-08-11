@@ -120,7 +120,8 @@ export default {
     noTeam: '無工作區',
     selectTitle: '選擇工作區',
     selectHint: '你屬於多個工作區，請選擇要查看功能單元的工作區。隨時可在頂部切換工作區或單獨查看公共（Public）功能單元。',
-    confirm: '進入'
+    confirm: '進入',
+    inactive: '已停用'
   },
   functionUnit: {
     serviceTaskCreateFailed: '建立自動化流程失敗',

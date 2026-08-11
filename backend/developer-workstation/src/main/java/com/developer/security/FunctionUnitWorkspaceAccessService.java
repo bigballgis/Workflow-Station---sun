@@ -44,7 +44,7 @@ import java.util.Set;
  * 能力（capability）在可见 scope 内生效：
  * {@code TECH_LEAD}/{@code TEAM_LEAD}/{@code DEVELOPER}
  * 可编辑；{@code TECH_LEAD}/{@code TEAM_LEAD}
- * 可删除/维护团队分配；仅成员身份（如 {@code FU_VIEWER}）为<b>只读</b>。Public 组功能单元
+ * 可删除/维护团队分配；仅团队成员身份（无能力角色）为<b>只读</b>。Public 组功能单元
  * 仅 {@code ADMIN} 可改（承载历史/共享，团队成员只读）。
  * </p>
  */
@@ -55,7 +55,6 @@ public class FunctionUnitWorkspaceAccessService {
     private static final String ROLE_TECH_LEAD = "TECH_LEAD";
     private static final String ROLE_TEAM_LEAD = "TEAM_LEAD";
     private static final String ROLE_DEVELOPER = "DEVELOPER";
-    private static final String ROLE_FU_VIEWER = "FU_VIEWER";
     private final RoleRepository roleRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
@@ -93,7 +92,7 @@ public class FunctionUnitWorkspaceAccessService {
         boolean teamLead = roleRepository.hasRoleByUserId(userId, ROLE_TEAM_LEAD);
         boolean developer = roleRepository.hasRoleByUserId(userId, ROLE_DEVELOPER);
         return switch (action) {
-            // 团队成员（含只读 FU_VIEWER）与 Public 组功能单元：任何可进入工作区者均可查看
+            // 团队成员与 Public 组功能单元：任何可进入工作区者均可查看
             case VIEW -> true;
             // 编辑/设计/发布/部署/回滚：需能力角色，且必须在自己团队 scope 内（Public 仅 ADMIN 可改）
             case MODIFY -> inMemberScope && (techLead || teamLead || developer);
@@ -130,17 +129,17 @@ public class FunctionUnitWorkspaceAccessService {
         if (userId == null || userId.isBlank()) {
             return false;
         }
-        return !virtualGroupMembershipDao
+        return virtualGroupMembershipDao
                 .findSelectableTeamsByUserId(userId, DevGroupConstants.PUBLIC_GROUP_ID)
-                .isEmpty();
+                .stream()
+                .anyMatch(DevGroupOptionDTO::isSelectable);
     }
 
     /**
      * 能否进入 DW 功能单元工作区（能力门禁）：
      * <ul>
      * <li>{@code ADMIN} 型 / {@code TECH_LEAD} / {@code TEAM_LEAD} /
-     * {@code DEVELOPER} /
-     * {@code FU_VIEWER} 能力角色；或</li>
+     * {@code DEVELOPER} 能力角色；或</li>
      * <li>任一团队（CUSTOM 或 DEVELOPER 虚拟组）成员（团队成员身份 → 只读基线）。</li>
      * </ul>
      * 进入后可见/可改的具体 FU 仍受团队 scope 约束。
@@ -152,8 +151,7 @@ public class FunctionUnitWorkspaceAccessService {
         if (roleRepository.userHasActiveAdminTypeRole(userId)
                 || roleRepository.hasRoleByUserId(userId, ROLE_TECH_LEAD)
                 || roleRepository.hasRoleByUserId(userId, ROLE_TEAM_LEAD)
-                || roleRepository.hasRoleByUserId(userId, ROLE_DEVELOPER)
-                || roleRepository.hasRoleByUserId(userId, ROLE_FU_VIEWER)) {
+                || roleRepository.hasRoleByUserId(userId, ROLE_DEVELOPER)) {
             return true;
         }
         return isMemberOfAnyDevTeam(userId);
@@ -201,7 +199,9 @@ public class FunctionUnitWorkspaceAccessService {
             if (!admin) {
                 allowed = new HashSet<>();
                 for (DevGroupOptionDTO t : getSelectableTeams(userId)) {
-                    allowed.add(t.getId());
+                    if (t.isSelectable()) {
+                        allowed.add(t.getId());
+                    }
                 }
                 allowed.add(DevGroupConstants.PUBLIC_GROUP_ID);
             }
