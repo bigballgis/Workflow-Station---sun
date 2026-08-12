@@ -41,7 +41,10 @@ public class PortalPrimaryKeyAllocationComponent {
         return AllocatePrimaryKeyResponse.builder().values(values).build();
     }
 
-    /** Package-visible for {@link ProcessSubTablePrimaryKeyEnricherComponent}. */
+    /**
+     * Package-visible for {@link ProcessSubTablePrimaryKeyEnricherComponent} and
+     * {@link ComputedFieldRecalculator}.
+     */
     Long resolveFunctionUnitIdForAllocation(String functionUnitIdOrCode) {
         return resolveFunctionUnitId(functionUnitIdOrCode);
     }
