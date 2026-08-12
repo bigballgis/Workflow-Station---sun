@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { queryTasks } from '@/api/task'
 
 /**
- * 侧边栏「To Do」旁展示的待处理任务数量（与 /tasks 列表总数一致）。
+ * 侧边栏「Pending Tasks」旁展示的待处理任务数量（与 /tasks 列表总数一致）。
  */
 export const usePendingTaskStore = defineStore('pendingTask', () => {
   const count = ref(0)

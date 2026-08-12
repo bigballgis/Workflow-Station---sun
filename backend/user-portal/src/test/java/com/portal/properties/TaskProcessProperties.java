@@ -2,6 +2,7 @@ package com.portal.properties;
 
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
+import com.portal.component.DelegationRuleMatcher;
 import com.portal.component.DelegatedTaskQueryComponent;
 import com.portal.component.MiCollectionVariableBuilder;
 import com.portal.component.MiOverlayComponent;
@@ -109,15 +110,15 @@ class TaskProcessProperties {
             workflowEngineClient,
             engineSubTableHydrator,
             taskActionService,
-            new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
+            new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository, new DelegationRuleMatcher()),
             new WorkspaceTaskFilterComponent(
                 workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository),
             new MiParticipantEnrichmentComponent(jdbcTemplate),
-            new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate, requestIdEnricher),
+            new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate, requestIdEnricher, delegationAuditRepository),
             requestIdEnricher
         );
         TaskPermissionEvaluator taskPermissionEvaluator =
-            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient);
+            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, new DelegationRuleMatcher());
         ProcessInstanceSyncComponent processInstanceSyncComponent =
             new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository);
         MiCollectionVariableBuilder miCollectionVariableBuilder =
@@ -129,7 +130,8 @@ class TaskProcessProperties {
             changeHistoryComponent,
             taskFormComponent,
             miCollectionVariableBuilder,
-            processInstanceSyncComponent
+            processInstanceSyncComponent,
+            null
         );
         SubTableRowAssignmentComponent subTableRowAssignmentComponent = new SubTableRowAssignmentComponent(
             workflowEngineClient,
@@ -178,7 +180,9 @@ class TaskProcessProperties {
         when(workflowEngineClient.delegateTask(any(), any(), any(), any()))
                 .thenReturn(Optional.of(Map.of("success", true)));
         
-        // Mock 完成任务成功
+        // Mock 完成任务成功（含 standing act-as 的 actingForUserId 重载）
+        when(workflowEngineClient.completeTask(any(), any(), any(), any(), any()))
+                .thenReturn(Optional.of(Map.of("success", true)));
         when(workflowEngineClient.completeTask(any(), any(), any(), any()))
                 .thenReturn(Optional.of(Map.of("success", true)));
         
@@ -495,7 +499,8 @@ class TaskProcessProperties {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> variablesCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(workflowEngineClient).completeTask(eq(taskId), eq(userId), eq("APPROVE"), variablesCaptor.capture());
+        verify(workflowEngineClient).completeTask(
+                eq(taskId), eq(userId), eq("APPROVE"), variablesCaptor.capture(), any());
         Object collectionObj = variablesCaptor.getValue().get("multiInstance_subtable_collection");
         assertInstanceOf(List.class, collectionObj);
 

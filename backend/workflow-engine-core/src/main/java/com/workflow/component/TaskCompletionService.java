@@ -99,6 +99,18 @@ public class TaskCompletionService {
     public TaskAssignmentResult completeTask(String taskId, String userId,
                                              java.util.Map<String, Object> variables,
                                              boolean sendNotification) {
+        return completeTask(taskId, userId, variables, sendNotification, null, false);
+    }
+
+    /**
+     * @param actingForUserId portal standing-rule delegator (assignee hung on); trusted only when {@code actingForTrusted}
+     * @param actingForTrusted true only when portal sent a valid service token (never from browser alone)
+     */
+    public TaskAssignmentResult completeTask(String taskId, String userId,
+                                             java.util.Map<String, Object> variables,
+                                             boolean sendNotification,
+                                             String actingForUserId,
+                                             boolean actingForTrusted) {
         try {
             validateUserId(userId);
 
@@ -137,10 +149,17 @@ public class TaskCompletionService {
             Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId);
 
+            boolean actAsTrusted = actingForTrusted
+                    && actingForUserId != null
+                    && !actingForUserId.isBlank();
+            if (actAsTrusted) {
+                authorizeTrustedActingFor(flowableTask, extendedTaskInfoOpt.orElse(null), actingForUserId);
+            }
+
             if (extendedTaskInfoOpt.isPresent()) {
                 ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
 
-                if (!flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
+                if (!actAsTrusted && !flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
                     taskActionService.validateCompletePermission(extendedTaskInfo, userId);
                 }
 
@@ -154,7 +173,7 @@ public class TaskCompletionService {
                     log.info("Detected multi-instance sub-task, preparing to write back to sub-table: taskId={}", taskId);
                     taskMultiInstanceService.handleMultiInstanceSubTaskCompletion(taskId, variables, extendedTaskInfo);
                 }
-            } else if (!flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
+            } else if (!actAsTrusted && !flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
                 throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                                 "userId", "User does not have permission to complete this task", userId)));
@@ -513,6 +532,27 @@ public class TaskCompletionService {
         log.warn("Task {} has no assignee and no candidate links; setting assignee to portal user {} (process initiator) before complete",
                 task.getId(), portalUserId.trim());
         taskService.setAssignee(task.getId(), portalUserId.trim());
+    }
+
+    /**
+     * Portal standing act-as: trusted {@code actingForUserId} must match the hung assignee (Flowable or extended).
+     */
+    private void authorizeTrustedActingFor(
+            Task flowableTask, ExtendedTaskInfo extendedTaskInfo, String actingForUserId) {
+        String hungOn = flowableTask != null ? flowableTask.getAssignee() : null;
+        if ((!StringUtils.hasText(hungOn) || hungOn.isBlank()) && extendedTaskInfo != null) {
+            hungOn = extendedTaskInfo.getCurrentAssignee();
+        }
+        if (!StringUtils.hasText(hungOn)
+                || !taskActionService.engineActorMatchesPortalUser(hungOn, actingForUserId.trim())) {
+            throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                            "actingForUserId",
+                            "Trusted actingFor must match task assignee",
+                            actingForUserId)));
+        }
+        log.info("Trusted acting-for complete authorized: taskId={}, actingFor={}",
+                flowableTask != null ? flowableTask.getId() : null, actingForUserId);
     }
 
     boolean flowableRuntimeAuthorizesComplete(Task task, String portalUserId) {

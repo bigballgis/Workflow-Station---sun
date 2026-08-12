@@ -68,6 +68,10 @@ public class WorkflowEngineClient {
     @Value("${workflow-engine.enabled:true}")
     private boolean workflowEngineEnabled;
 
+    /** Shared with workflow-engine; used only to trust standing act-as {@code actingForUserId} on complete. */
+    @Value("${service.internal-token:}")
+    private String serviceInternalToken;
+
     private static final long HEALTH_CHECK_CACHE_TTL_MS = 30_000;
     private volatile boolean cachedAvailable = false;
     private volatile long lastHealthCheckTime = 0;
@@ -117,6 +121,15 @@ public class WorkflowEngineClient {
      *
      * <p>No request context (e.g. scheduled job): no header — protected APIs return 403; caller handles.
      */
+    /**
+     * Marks the outbound call as first-party portal→engine (required for trusted actingFor).
+     */
+    void attachServiceInternalToken(HttpHeaders headers) {
+        if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
+            headers.set(PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
+        }
+    }
+
     void forwardInboundAuthorization(HttpHeaders headers) {
         var attrs = RequestContextHolder.getRequestAttributes();
         if (!(attrs instanceof ServletRequestAttributes servletAttrs)) {
@@ -279,6 +292,15 @@ public class WorkflowEngineClient {
     }
 
     /**
+     * Visible-task query with optional Flowable pushdown criteria (name/sort/priority).
+     */
+    public Optional<Map<String, Object>> getUserAllVisibleTasks(String userId, List<String> groupIds,
+                                                                 List<String> deptRoles, int page, int size,
+                                                                 com.portal.util.EngineTaskPushdown.Criteria criteria) {
+        return taskClient.getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size, criteria);
+    }
+
+    /**
      * Returns task detail
      */
     public Optional<Map<String, Object>> getTaskById(String taskId) {
@@ -306,7 +328,13 @@ public class WorkflowEngineClient {
      */
     public Optional<Map<String, Object>> completeTask(String taskId, String userId,
                                                        String action, Map<String, Object> variables) {
-        return taskClient.completeTask(taskId, userId, action, variables);
+        return taskClient.completeTask(taskId, userId, action, variables, null);
+    }
+
+    public Optional<Map<String, Object>> completeTask(String taskId, String userId,
+                                                       String action, Map<String, Object> variables,
+                                                       String actingForUserId) {
+        return taskClient.completeTask(taskId, userId, action, variables, actingForUserId);
     }
 
     /**

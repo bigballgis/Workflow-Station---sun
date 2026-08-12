@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 任务查询请求DTO
@@ -43,6 +44,13 @@ public class TaskQueryRequest {
 
     /** 搜索关键词 */
     private String keyword;
+
+    /**
+     * Optional column filters (MTV shape): {@code {field:{operator,value}}}.
+     * Whitelist: taskName, requestId, processDefinitionName, initiatorName, priority,
+     * assignmentType, currentNode.
+     */
+    private Map<String, Map<String, Object>> filters;
 
     /** 排序字段 */
     private String sortBy;
