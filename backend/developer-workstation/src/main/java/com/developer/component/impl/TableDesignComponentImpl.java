@@ -17,6 +17,7 @@ import com.developer.service.MainTableViewService;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
+import com.developer.service.ComputedFieldValidator;
 import com.developer.service.FieldFkPkSyncService;
 import com.developer.service.FormConfigFieldRenamer;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
@@ -60,6 +61,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     private final I18nService i18nService;
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final FieldFkPkSyncService fieldFkPkSyncService;
+    private final ComputedFieldValidator computedFieldValidator;
     private final JdbcTemplate jdbcTemplate;
     private final MainTableViewService mainTableViewService;
     
@@ -97,6 +99,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             }
             List<TableDefinition> allTables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
             fieldFkPkSyncService.validateIncomingFields(tableDefinition, request.getFields(), allTables);
+            computedFieldValidator.validateIncomingFields(tableDefinition, request.getFields(), allTables);
             sequenceSynchronizer.synchronizeFieldDefinitions();
             int sortOrder = 0;
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
@@ -172,6 +175,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         List<TableDefinition> allTables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
         if (request.getFields() != null && !request.getFields().isEmpty()) {
             fieldFkPkSyncService.validateIncomingFields(tableDefinition, request.getFields(), allTables);
+            computedFieldValidator.validateIncomingFields(tableDefinition, request.getFields(), allTables);
         }
         
         // Refresh field definitions: cascade=CascadeType.ALL + orphanRemoval=true → clear memory, delete rows explicitly
@@ -442,6 +446,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .refTableId(request.getRefTableId())
                 .refPrimaryKeyFields(request.getRefPrimaryKeyFields())
                 .pkGenerationJson(request.getPkGeneration())
+                .isComputed(Boolean.TRUE.equals(request.getIsComputed()))
+                .computedFieldJson(Boolean.TRUE.equals(request.getIsComputed()) ? request.getComputedField() : null)
                 .fkDisplayMode(request.getFkDisplayMode() != null ? request.getFkDisplayMode() : "readonly")
                 .relationCardinality(request.getRelationCardinality())
                 .build();
