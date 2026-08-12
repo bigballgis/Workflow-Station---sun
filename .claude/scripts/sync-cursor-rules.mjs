@@ -16,6 +16,13 @@
  *     files that lack the AUTO-GENERATED marker / .synced-from-cursor stamp.
  *   - Single-instance lock (folderOpen + SessionStart may race).
  *
+ * Routing (deterministic, mirrors Cursor's globs/alwaysApply semantics):
+ *   globs contains deploy//Dockerfile/docker-compose/nginx/k8s -> deploy/CLAUDE.md
+ *   else globs contains "frontend"                              -> frontend/CLAUDE.md
+ *   else globs contains "backend"                               -> backend/CLAUDE.md
+ *   else alwaysApply:false with globs                         -> matching directory bucket(s)
+ *   else alwaysApply:false with no globs                      -> omitted (on-demand: skill / Cursor rule picker)
+ *
  * Triggers: VS Code folderOpen task, Claude SessionStart, Copilot sessionStart,
  *           manual `node .claude/scripts/sync-cursor-rules.mjs`, CI drift check.
  *
@@ -148,9 +155,19 @@ function splitGlobs(globs) {
   return parts;
 }
 
+/**
+ * Decide which CLAUDE.md bucket(s) a rule belongs to.
+ * - alwaysApply:true -> root (always in context).
+ * - alwaysApply:false with no globs -> omitted from CLAUDE.md (on-demand via skill / rule description).
+ * - alwaysApply:false with globs -> route to matching directory bucket(s); cross-cutting globs
+ *   with no path hint infer from file extensions.
+ * Returns a de-duplicated array of bucket keys (may be empty).
+ */
 function classifyTargets(fm) {
+  if (fm.alwaysApply === true) return ['root'];
+
   const globs = fm.globs;
-  if (!globs || fm.alwaysApply === true) return ['root'];
+  if (!globs) return [];
 
   const g = globs.toLowerCase();
   const targets = new Set();

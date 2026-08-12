@@ -1,0 +1,32 @@
+---
+description: >-
+  功能/模块设计 Plan 门禁 — 先方案后实现。触发词：设计方案、/plan、写 Plan、先出方案。
+  完整流程见 skill feature-design-plan。alwaysApply:false 且无 globs — 不注入 CLAUDE.md 常驻块，按需 @ 或 skill 触发。
+alwaysApply: false
+---
+
+# 设计 Plan 门禁
+
+与 `ai-development-playbook.mdc`（**执行前任务整理**）分工：
+
+| 用户意图 | 使用 |
+|----------|------|
+| 要方案、架构、分期、多方案权衡 | skill **`feature-design-plan`** |
+| 方案已定或 bug/fix 路径明确，准备改代码 | **`ai-development-playbook`** |
+
+## 触发语
+
+- `设计方案` / `技术设计` / `功能设计` / `写 Plan` / `/plan` / `先出方案` / `architecture plan`
+- 明确写「**不要改代码**，先出 Plan」
+
+## 硬门禁
+
+1. 加载 skill [`.cursor/skills/feature-design-plan/SKILL.md`](../skills/feature-design-plan/SKILL.md)
+2. **只读探查**（Read / Grep / Glob）；禁止 Edit / Write / 改代码 Shell
+3. **必须**输出 skill §3 固定模板（`## 设计 Plan`）
+4. **等待用户确认**后再进入实现；实现仍走 playbook 任务整理（除非用户写「Plan 已确认，无需确认直接执行」）
+
+## 勿混用
+
+- 设计 Plan 阶段**不要**输出 playbook 的「任务整理」块代替设计 Plan
+- 小范围 bug fix 无需设计 Plan，直接 playbook 即可
