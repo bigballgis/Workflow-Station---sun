@@ -80,6 +80,19 @@ public class FieldDefinition {
     @Column(name = "pk_generation_json", columnDefinition = "jsonb")
     private Map<String, Object> pkGenerationJson;
 
+    @Column(name = "is_computed")
+    @Builder.Default
+    private Boolean isComputed = false;
+
+    /**
+     * Computed (formula) field definition: version, scope, source text, validated AST, dependsOn, onError.
+     * The AST is the only evaluation authority; {@code source} exists for editor redisplay.
+     * Result type is not stored here — {@code dataType} / {@code precision} / {@code scale} stay authoritative.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "computed_field_json", columnDefinition = "jsonb")
+    private Map<String, Object> computedFieldJson;
+
     @Column(name = "fk_display_mode", length = 20)
     @Builder.Default
     private String fkDisplayMode = "readonly";

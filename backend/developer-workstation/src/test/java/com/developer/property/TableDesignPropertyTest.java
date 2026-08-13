@@ -40,6 +40,7 @@ public class TableDesignPropertyTest {
                 tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
                 mock(com.developer.service.FieldFkPkSyncService.class),
+                mock(com.developer.service.ComputedFieldValidator.class),
                 mock(JdbcTemplate.class),
                 mock(com.developer.service.MainTableViewService.class));
         
@@ -68,6 +69,7 @@ public class TableDesignPropertyTest {
                 tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
                 mock(com.developer.service.FieldFkPkSyncService.class),
+                mock(com.developer.service.ComputedFieldValidator.class),
                 mock(JdbcTemplate.class),
                 mock(com.developer.service.MainTableViewService.class));
         

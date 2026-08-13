@@ -104,6 +104,10 @@ portal:
     overview-cache-ttl-seconds: ${PORTAL_DASHBOARD_OVERVIEW_CACHE_TTL_SECONDS:15}
     # 为 true 时不请求「平均处理时长」所需的 completed-tasks 样本，减轻引擎调用（avg 展示为默认 2.5）。
     skip-avg-processing-hours: ${PORTAL_DASHBOARD_SKIP_AVG_PROCESSING_HOURS:true}
+  computed-fields:
+    # 写入时服务端重算计算字段（Table Design 的公式列）。关掉即回到「客户端提交值直接落库」，
+    # 是新功能出问题时的止血开关，不是常态配置。
+    enabled: ${PORTAL_COMPUTED_FIELDS_ENABLED:true}
 
 # JWT Configuration
 jwt:
