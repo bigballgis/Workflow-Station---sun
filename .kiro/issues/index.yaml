@@ -1944,3 +1944,24 @@
     ChangeHistorySubmissionFilter + isInternalField + 全局 Spec 走 SystemAuditFields。
     验证：SystemAuditFieldFillerTest / ChangeHistorySubmissionFilterTest /
     TaskFormFieldMapperTest / SubTableChangeHistoryPropertyTest；user-portal 重建。
+
+- id: "1517"
+  status: fixed
+  fixed_at: "2026-08-12"
+  severity: major
+  category: bug
+  summary: "AI apply 解析存量 BPMN 未先 Base64 解码：设计器保存过流程的 FU 一律 apply 失败"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/impl/AiWriteServiceImpl.java"
+  note: |
+    现象：FU 50030 (fghj) 任何 AI apply（AI Generate / AI Studio 提案）500，
+    AI_BPMN_MI_BINDING_FAILED "Content is not allowed in prolog"。
+    根因：流程设计器按 XmlEncodingUtil 约定把 bpmn_xml Base64 落库；本轮 apply 未重写
+    process 时（scoped apply / 提案不含流程），writeMultiInstanceAssignment 把 DB 里的
+    Base64 串直接喂给 XML 解析器。所有正常读路径都先 smartDecode，唯独该 AI 写路径漏了。
+    修复：writeMultiInstanceAssignment 解析前 XmlEncodingUtil.smartDecode；
+    writeProcessDefinition 返回本轮是否重写 process，失败发生在存量 BPMN 时重抛为
+    AI_EXISTING_BPMN_INVALID（带 FU id + process definition id + 修复指引），不再把
+    排查方向误导向 AI 回传 body。
+    验证：AiWriteServiceTest 7/7（新增 2 例）；dev 运行时 E2E——bpmn_xml 恢复 Base64 后
+    scoped apply 200 且存量 BPMN 正确解码回写；垃圾内容 500 AI_EXISTING_BPMN_INVALID，
+    事务回滚不丢数据。dev DB 曾把 50062 行就地解码为裸 XML（两种形态读路径均兼容）。
