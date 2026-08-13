@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  enrichLookupColumnPropsFromSubFormRule,
   flattenSubFormRuleLayoutContainers,
   resolveSubFormDialogColumnsForBinding,
   resolveSubFormRuleForBinding,
@@ -222,5 +223,144 @@ describe('miAssignment container flattening', () => {
       { type: 'input', field: 'b' },
     ]) as Array<Record<string, unknown>>
     expect(flat.map(r => r.field)).toEqual(['a', 'b'])
+  })
+
+  /**
+   * The designed backfill view (Relation Table View on the binding) is the only truth for which
+   * relation-table columns the Add/Edit dialog shows under a selected lookup value. Regression:
+   * the lookupConfig re-merge used to rebuild the lookup props without the resolved relation view
+   * and spread them last, wiping viewFields to [] — LookupField then fell back to the relation
+   * table's global view and rendered every column (ATM: 8 sys_users columns instead of the 2 designed).
+   */
+  describe('lookup backfill viewFields survive the lookupConfig re-merge', () => {
+    const ATM_BINDING = 5001
+    const designedView = [{ fieldName: 'username' }, { fieldName: 'full_name' }]
+    const lookupConfig = JSON.stringify({
+      tableId: 77,
+      bindingId: ATM_BINDING,
+      searchFields: ['username'],
+      displayFields: ['username'],
+      selectedDisplayField: 'username',
+      showBackfillView: true,
+    })
+    const binding = { bindingId: ATM_BINDING }
+    const subForms = {
+      [ATM_BINDING]: {
+        rule: [
+          { type: 'input', field: 'transaction_number', title: 'Transaction Number' },
+          { type: 'lookup', field: 'assignee', title: 'Assign To', props: { lookupConfig } },
+        ],
+      },
+    }
+
+    function assigneeColumn(lookupCtx: Parameters<typeof resolveSubFormDialogColumnsForBinding>[2]) {
+      const cols = resolveSubFormDialogColumnsForBinding(binding, subForms, lookupCtx)
+      return cols.find(c => c.field === 'assignee')
+    }
+
+    it('keeps the designed per-binding relation view instead of falling back to all columns', () => {
+      const col = assigneeColumn({
+        lookupDbConfigs: {},
+        relationViewConfigs: { [ATM_BINDING]: { viewFields: designedView } },
+      } as never)
+      expect(col?.type).toBe('lookup')
+      expect(col?.props?.viewFields).toEqual(designedView)
+      expect(col?.props?.showBackfillView).toBe(true)
+    })
+
+    it('keeps the db-config view fields when no per-binding relation view is configured', () => {
+      const dbView = [{ fieldName: 'user_id' }, { fieldName: 'email' }]
+      const col = assigneeColumn({
+        lookupDbConfigs: { assignee: { tableId: 77, viewFields: dbView } },
+        relationViewConfigs: {},
+      } as never)
+      expect(col?.props?.viewFields).toEqual(dbView)
+    })
+
+    it('still honours showBackfillView:false by emitting no view fields', () => {
+      const hiddenBackfill = JSON.stringify({
+        tableId: 77,
+        bindingId: ATM_BINDING,
+        displayFields: ['username'],
+        showBackfillView: false,
+      })
+      const cols = resolveSubFormDialogColumnsForBinding(
+        binding,
+        {
+          [ATM_BINDING]: {
+            rule: [{ type: 'lookup', field: 'assignee', title: 'Assign To', props: { lookupConfig: hiddenBackfill } }],
+          },
+        },
+        {
+          lookupDbConfigs: {},
+          relationViewConfigs: { [ATM_BINDING]: { viewFields: designedView } },
+        } as never,
+      )
+      const col = cols.find(c => c.field === 'assignee')
+      expect(col?.props?.viewFields).toEqual([])
+      expect(col?.props?.showBackfillView).toBe(false)
+    })
+
+    it('does not lose the resolved lookup table id to the re-merge', () => {
+      const col = assigneeColumn({
+        lookupDbConfigs: { assignee: { tableId: 77, viewFields: [] } },
+        relationViewConfigs: { [ATM_BINDING]: { viewFields: designedView } },
+      } as never)
+      expect(col?.props?.tableId).toBe(77)
+    })
+  })
+
+  /**
+   * The "keep the caller-resolved value" rule must not resurrect values the design deliberately
+   * cleared or repointed. These two cases guard the restore from over-reaching.
+   */
+  describe('lookupConfig re-merge does not resurrect stale lookup props', () => {
+    it('honours showBackfillView:false even when the column already carried view fields', () => {
+      const cols = enrichLookupColumnPropsFromSubFormRule(
+        [{
+          field: 'assignee',
+          label: 'Assign To',
+          type: 'lookup',
+          props: { tableId: 5, viewFields: [{ fieldName: 'username' }], showBackfillView: true },
+        }] as never,
+        [{
+          field: 'assignee',
+          type: 'lookup',
+          props: { lookupConfig: JSON.stringify({ tableId: 5, displayFields: ['x'], showBackfillView: false }) },
+        }],
+      )
+      expect(cols[0].props?.showBackfillView).toBe(false)
+      expect(cols[0].props?.viewFields).toEqual([])
+    })
+
+    it('does not inherit the previous table view fields when the rule repoints to another table', () => {
+      const cols = enrichLookupColumnPropsFromSubFormRule(
+        [{
+          field: 'assignee',
+          label: 'Assign To',
+          type: 'lookup',
+          props: {
+            tableId: 77,
+            searchFields: ['old_field'],
+            displayField: 'old_field',
+            viewFields: [{ fieldName: 'old_field' }],
+          },
+        }] as never,
+        [{
+          field: 'assignee',
+          type: 'lookup',
+          props: {
+            lookupConfig: JSON.stringify({
+              tableId: 99,
+              searchFields: ['new_field'],
+              displayFields: ['new_field'],
+            }),
+          },
+        }],
+      )
+      expect(cols[0].props?.tableId).toBe(99)
+      expect(cols[0].props?.viewFields).toEqual([])
+      expect(cols[0].props?.searchFields).toEqual(['new_field'])
+    })
   })
 })

@@ -354,16 +354,11 @@
                 v-else
                 class="text-muted"
               >{{ t('subTable.unassigned') }}</span>
-              <el-button
-                v-if="canAssign"
-                link
-                type="primary"
-                size="small"
-                class="assign-btn"
-                @click="openAssignDialog(scope.row, scope.$index)"
-              >
-                {{ resolveRowAssigneeCell(scope.row) ? t('subTable.reassign') : t('subTable.assign') }}
-              </el-button>
+              <!--
+                No inline Assign/Reassign button here by design: assignment is driven solely by the
+                row's Edit dialog (assignee field), so the Assignee column stays a pure display cell.
+                `canAssign` still gates the Edit-dialog assignment call in useSubTableRowDialog.
+              -->
             </div>
           </template>
         </el-table-column>
@@ -520,49 +515,10 @@
       </div>
     </Teleport>
 
-    <!-- User picker dialog for assignment -->
-    <el-dialog
-      v-model="assignDialogVisible"
-      :title="t('subTable.selectAssignee')"
-      width="500px"
-      @opened="onAssignDialogOpened"
-    >
-      <el-form
-        label-width="auto"
-        label-position="left"
-      >
-        <el-form-item :label="t('subTable.user')">
-          <el-select
-            v-model="selectedAssigneeId"
-            :placeholder="t('subTable.searchUser')"
-            filterable
-            remote
-            :remote-method="searchUsers"
-            :loading="userSearchLoading"
-            style="width: 100%;"
-          >
-            <el-option
-              v-for="user in userOptions"
-              :key="user.id"
-              :label="`${user.name} (${user.username})`"
-              :value="user.id"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="assignDialogVisible = false">
-          {{ t('common.cancel') }}
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="assigning"
-          @click="confirmAssignment"
-        >
-          {{ t('common.confirm') }}
-        </el-button>
-      </template>
-    </el-dialog>
+    <!--
+      The standalone user-picker dialog was removed together with the inline Assign/Reassign button:
+      assignment now happens only through the row Edit dialog's assignee field.
+    -->
   </div>
 </template>
 
@@ -964,30 +920,20 @@ const { uploadNames, downloadingKeys, downloadFile } = useSubTableFileDownload(t
 
 const assignment = useSubTableAssignment(props, rows, emit, t, rowKeys)
 const {
-  assignDialogVisible,
-  selectedAssigneeId,
-  currentAssignRow,
-  currentAssignRowIndex,
-  assigning,
-  userOptions,
-  userSearchLoading,
   userNameCache,
   showAssigneeColumn,
-  openAssignDialog,
-  onAssignDialogOpened,
-  searchUsers,
   getUserDisplayName,
   resolveRowAssigneeCell,
-  confirmAssignment
+  performSubTableRowAssignment,
 } = assignment
 
 /**
- * Test-facing bindings: SubTableField.assign / FormRenderer.subTable property tests assert these via
- * {@code wrapper.vm.*}; they are not referenced by this SFC's template, so mark them as read for noUnusedLocals.
+ * Test-facing bindings: SubTableField.assign / FormRenderer.subTable tests assert these via
+ * {@code wrapper.vm.*}; they are not referenced by this SFC's template, so mark them as read
+ * for noUnusedLocals. `performSubTableRowAssignment` is the row Edit dialog's assignment call.
  */
-void currentAssignRow
-void currentAssignRowIndex
 void userNameCache
+void performSubTableRowAssignment
 
 // Summary row support
 const hasSummary = computed(() => (props.summaryColumns?.length ?? 0) > 0)
@@ -1301,7 +1247,6 @@ onBeforeUnmount(() => {
   .assignee-cell {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
 
     .assignee-name {
@@ -1312,10 +1257,6 @@ onBeforeUnmount(() => {
     .text-muted {
       font-size: 13px;
       color: #909399;
-    }
-
-    .assign-btn {
-      flex-shrink: 0;
     }
   }
 }

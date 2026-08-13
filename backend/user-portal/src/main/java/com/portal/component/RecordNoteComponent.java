@@ -28,12 +28,18 @@ import java.util.List;
  * table's shared stream within that one process); RECORD scope anchors on a
  * sub-table row id.
  *
- * Access model:
+ * Access model — visibility follows the hosting request, never function unit roles:
  * - targetId resolving to a process instance: participants only (initiator /
  *   assignee / candidates), probed server-side against the instance store.
- * - otherwise (sub-table row ids): falls back to function unit access —
- *   row-level involvement is not resolvable from a bare row id.
+ * - sub-table row ids: the caller names the hosting instance and the same participant
+ *   check runs against it. Row ids are predictable business keys, so this anchor is
+ *   what stops enumeration; it is verified server-side, never taken on trust.
+ * - New-Request drafts ("draft-" prefix): no instance exists yet; adoptDraftNotes
+ *   re-anchors them onto the instance once the request starts.
  * - SYS_ADMIN bypasses all checks.
+ *
+ * Deliberately NOT a function unit role check: that would deny the very participants
+ * working a row (e.g. an MI assignee whose task role was never granted FU access).
  */
 @Slf4j
 @Component
@@ -46,25 +52,26 @@ public class RecordNoteComponent {
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final ChangeHistoryComponent changeHistoryComponent;
 
-    public PageResponse<NoteItem> list(String userId, NoteTarget target, int page, int size) {
+    public PageResponse<NoteItem> list(String userId, NoteTarget target, int page, int size,
+                                       String processInstanceId) {
         checkTargetShape(target);
-        checkAccess(userId, target);
+        checkAccess(userId, target, processInstanceId);
         return recordNoteService.list(target, page, size, userId);
     }
 
-    public NoteDetail detail(String userId, String noteId) {
+    public NoteDetail detail(String userId, String noteId, String processInstanceId) {
         RecordNote note = requireLive(noteId);
-        checkAccess(userId, targetOf(note));
+        checkAccess(userId, targetOf(note), processInstanceId);
         return recordNoteService.detail(noteId, userId);
     }
 
     /** Returns the live note after verifying read access; used by the download endpoint. */
-    public RecordNote getForDownload(String userId, String noteId) {
+    public RecordNote getForDownload(String userId, String noteId, String processInstanceId) {
         RecordNote note = requireLive(noteId);
         if (!RecordNote.TYPE_ATTACHMENT.equals(note.getNoteType())) {
             throw new RecordNoteException("NOT_ATTACHMENT", "Note has no downloadable content");
         }
-        checkAccess(userId, targetOf(note));
+        checkAccess(userId, targetOf(note), processInstanceId);
         return note;
     }
 
@@ -72,7 +79,7 @@ public class RecordNoteComponent {
                                   List<MultipartFile> files, List<String> adoptInlineIds,
                                   String processInstanceId) {
         checkTargetShape(target);
-        checkAccess(userId, target);
+        checkAccess(userId, target, processInstanceId);
         NoteItem created = recordNoteService.createComment(target, subject, bodyHtml, files, adoptInlineIds,
                 userId, resolveName(userId));
         audit(userId, target, processInstanceId, ChangeType.RECORD_NOTE_ADD,
@@ -80,16 +87,17 @@ public class RecordNoteComponent {
         return created;
     }
 
-    public NoteItem createInlineImage(String userId, NoteTarget target, MultipartFile file) {
+    public NoteItem createInlineImage(String userId, NoteTarget target, MultipartFile file,
+                                      String processInstanceId) {
         checkTargetShape(target);
-        checkAccess(userId, target);
+        checkAccess(userId, target, processInstanceId);
         return recordNoteService.createAttachment(target, file, true, userId, resolveName(userId));
     }
 
     public NoteDetail update(String userId, String noteId, String subject, String bodyHtml,
                              String processInstanceId) {
         RecordNote note = requireLive(noteId);
-        checkAccess(userId, targetOf(note));
+        checkAccess(userId, targetOf(note), processInstanceId);
         String before = RecordNoteAuditSummary.existing(note);
         NoteDetail updated = recordNoteService.update(noteId, subject, bodyHtml, userId);
         audit(userId, targetOf(note), processInstanceId, ChangeType.RECORD_NOTE_UPDATE,
@@ -99,7 +107,7 @@ public class RecordNoteComponent {
 
     public void delete(String userId, String noteId, String processInstanceId) {
         RecordNote note = requireLive(noteId);
-        checkAccess(userId, targetOf(note));
+        checkAccess(userId, targetOf(note), processInstanceId);
         boolean owner = note.getCreatedBy().equals(userId);
         if (!owner && !functionUnitAccessComponent.isSystemAdministrator(userId)) {
             throw new RecordNoteException("NOT_OWNER", "Only the author or an administrator can delete a note");
@@ -204,7 +212,15 @@ public class RecordNoteComponent {
         return names;
     }
 
-    private void checkAccess(String userId, NoteTarget target) {
+    /**
+     * Notes are visible to whoever can open the hosting request — no function unit role check.
+     *
+     * <p>A sub-table row target carries a bare row id, so the instance cannot be derived from it;
+     * the caller supplies {@code hostProcessInstanceId} and it is verified here, never trusted.
+     * Row ids are predictable business keys (ATM-DC-PW-TRANS-000004), so without that anchor any
+     * authenticated user could enumerate other people's row notes.
+     */
+    private void checkAccess(String userId, NoteTarget target, String hostProcessInstanceId) {
         if (userId == null || userId.isBlank()) {
             throw new RecordNoteException("FORBIDDEN", "Missing user identity");
         }
@@ -215,17 +231,32 @@ public class RecordNoteComponent {
         // (TABLE = per-instance table stream; legacy RECORD-on-instance rows too).
         ProcessInstanceInfo detail = processComponent.getProcessDetail(target.getTargetId());
         if (detail != null) {
-            if (!processComponent.canAccessProcessDetail(userId, detail)) {
-                throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
-            }
+            requireParticipant(userId, detail);
             return;
         }
-        // Sub-table row targets: fall back to function unit access.
-        String functionUnitId = target.getFunctionUnitId();
-        if (functionUnitId == null || functionUnitId.isBlank()
-                || !functionUnitAccessComponent.canAccessFunctionUnit(userId, functionUnitId)) {
-            throw new RecordNoteException("FORBIDDEN", "No access to this function unit's notes");
+        // New-Request drafts have no instance yet; only the author's own rows are ever reachable
+        // (adoptDraftNotes re-anchors them once the request starts).
+        if (isDraftTarget(target.getTargetId())) {
+            return;
         }
+        // Sub-table row target: authorize against the hosting instance the caller named.
+        ProcessInstanceInfo host = hostProcessInstanceId == null || hostProcessInstanceId.isBlank()
+                ? null
+                : processComponent.getProcessDetail(hostProcessInstanceId);
+        if (host == null) {
+            throw new RecordNoteException("FORBIDDEN", "Cannot resolve the request hosting this row's notes");
+        }
+        requireParticipant(userId, host);
+    }
+
+    private void requireParticipant(String userId, ProcessInstanceInfo detail) {
+        if (!processComponent.canAccessProcessDetail(userId, detail)) {
+            throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
+        }
+    }
+
+    private static boolean isDraftTarget(String targetId) {
+        return targetId != null && targetId.startsWith("draft-");
     }
 
     private void checkTargetShape(NoteTarget target) {

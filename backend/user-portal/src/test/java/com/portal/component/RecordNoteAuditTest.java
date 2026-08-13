@@ -23,8 +23,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -114,8 +116,7 @@ class RecordNoteAuditTest {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
-        // Row-id targets fall back to function-unit access for the note itself.
-        when(functionUnitAccessComponent.canAccessFunctionUnit("u1", "fu-7")).thenReturn(true);
+        // Row-id targets carry no resolvable instance, so note access adds no gate of its own.
         MockMultipartFile file = new MockMultipartFile(
                 "files", "report.pdf", "application/pdf", "x".getBytes(StandardCharsets.UTF_8));
         when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
@@ -129,19 +130,119 @@ class RecordNoteAuditTest {
                 eq(ROW_ID), isNull(), eq("report.pdf"));
     }
 
+    /**
+     * A non-participant naming someone else's instance is refused outright. Previously the write
+     * went through and only the audit entry was skipped, which left an unattributable note behind.
+     */
     @Test
-    void recordScopeCreateSkipsAuditWhenTheCallerIsNotAParticipantOfTheClaimedInstance() {
+    void recordScopeCreateIsRejectedWhenTheCallerIsNotAParticipantOfTheClaimedInstance() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(false);
         when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
-        when(functionUnitAccessComponent.canAccessFunctionUnit("u1", "fu-7")).thenReturn(true);
-        when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
-                .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT).bodyText("hi").build());
 
-        component.createComment("u1", rowTarget(), null, "<p>hi</p>", List.of(), List.of(), INSTANCE_ID);
+        assertThatThrownBy(() ->
+                component.createComment("u1", rowTarget(), null, "<p>hi</p>", List.of(), List.of(), INSTANCE_ID))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("not a participant");
 
+        verify(recordNoteService, never())
+                .createComment(any(), any(), any(), any(), any(), anyString(), any());
         verify(changeHistoryComponent, never()).recordNoteChange(any(), any(), any(), any(), any(), any());
+    }
+
+    /**
+     * A participant of the hosting request reads row notes even with NO function unit role.
+     * That is the reported bug: an MI assignee holding HMDC_Assign_Role on a unit that only
+     * lists HMDC_Index_Role was refused the notes on the row she was working.
+     */
+    @Test
+    void rowScopeNotesAreReadableByAParticipantWithoutFunctionUnitRoleAccess() {
+        when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
+        when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
+        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
+        when(recordNoteService.list(any(), eq(0), eq(5), eq("u1"))).thenReturn(null);
+
+        component.list("u1", rowTarget(), 0, 5, INSTANCE_ID);
+
+        verify(recordNoteService).list(any(), eq(0), eq(5), eq("u1"));
+        // Function unit roles must play no part in note visibility.
+        verify(functionUnitAccessComponent, never()).canAccessFunctionUnit(anyString(), anyString());
+    }
+
+    /**
+     * Row ids are predictable business keys (ATM-DC-PW-TRANS-000004). A non-participant who
+     * guesses one must not be able to read its notes by naming the hosting instance.
+     */
+    @Test
+    void rowScopeNotesRejectANonParticipantOfTheHostingInstance() {
+        when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
+        when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(false);
+        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
+
+        assertThatThrownBy(() -> component.list("u1", rowTarget(), 0, 5, INSTANCE_ID))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("not a participant");
+
+        verify(recordNoteService, never()).list(any(), anyInt(), anyInt(), anyString());
+    }
+
+    /** Without a hosting instance a row target cannot be authorized at all — deny, never fall through. */
+    @Test
+    void rowScopeNotesRejectWhenNoHostingInstanceIsSupplied() {
+        when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
+        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
+
+        assertThatThrownBy(() -> component.list("u1", rowTarget(), 0, 5, null))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("Cannot resolve the request");
+
+        verify(recordNoteService, never()).list(any(), anyInt(), anyInt(), anyString());
+    }
+
+    /** A claimed instance that does not exist must not authorize anything either. */
+    @Test
+    void rowScopeNotesRejectAnUnknownClaimedInstance() {
+        when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
+        when(processComponent.getProcessDetail("no-such-instance")).thenReturn(null);
+        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
+
+        assertThatThrownBy(() -> component.list("u1", rowTarget(), 0, 5, "no-such-instance"))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("Cannot resolve the request");
+
+        verify(recordNoteService, never()).list(any(), anyInt(), anyInt(), anyString());
+    }
+
+    /** Instance-scope notes keep their own participant gate, unaffected by the row-scope anchor. */
+    @Test
+    void instanceScopeNotesStillRejectNonParticipants() {
+        when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
+        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(false);
+        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
+
+        assertThatThrownBy(() -> component.list("u1", tableTarget(), 0, 5, null))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("not a participant");
+
+        verify(recordNoteService, never()).list(any(), anyInt(), anyInt(), anyString());
+    }
+
+    /** New-Request drafts have no instance yet; the author must still reach their own notes. */
+    @Test
+    void draftScopeNotesAreReadableBeforeTheRequestStarts() {
+        NoteTarget draft = NoteTarget.builder()
+                .targetType(RecordNote.TARGET_TABLE).targetId("draft-abc")
+                .tableKind("DW").tableId("42").functionUnitId("fu-7").build();
+        when(processComponent.getProcessDetail("draft-abc")).thenReturn(null);
+        when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
+        when(recordNoteService.list(any(), eq(0), eq(5), eq("u1"))).thenReturn(null);
+
+        component.list("u1", draft, 0, 5, null);
+
+        verify(recordNoteService).list(any(), eq(0), eq(5), eq("u1"));
     }
 
     @Test
@@ -150,7 +251,6 @@ class RecordNoteAuditTest {
                 .targetType(RecordNote.TARGET_TABLE).targetId("draft-abc")
                 .tableKind("DW").tableId("42").functionUnitId("fu-7").build();
         when(processComponent.getProcessDetail("draft-abc")).thenReturn(null);
-        when(functionUnitAccessComponent.canAccessFunctionUnit("u1", "fu-7")).thenReturn(true);
         when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT).bodyText("hi").build());
 
@@ -199,7 +299,7 @@ class RecordNoteAuditTest {
                 .thenReturn(NoteItem.builder().id("n2").noteType(RecordNote.TYPE_ATTACHMENT)
                         .fileName("shot.png").build());
 
-        component.createInlineImage("u1", tableTarget(), img);
+        component.createInlineImage("u1", tableTarget(), img, INSTANCE_ID);
 
         verify(changeHistoryComponent, never()).recordNoteChange(any(), any(), any(), any(), any(), any());
     }
