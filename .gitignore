@@ -369,3 +369,7 @@ deploy/pieces_metadata*
 # 注意:activepieces/hermes/tarballs/*.tgz 是**有意**入库的（13 个件共 344 KB，气隙投放物料），
 # 与此不同——那是无法重建的审批产物,这里是每次都能从源码重建的构建产物。
 deploy/**/*.zip
+
+# build-and-deploy.ps1 的本机 schema 迁移标记（按本地 Postgres 卷记录已应用 SQL 的
+# content-hash），机器本地状态，不入库
+deploy/environments/*/.schema-migration-markers/
