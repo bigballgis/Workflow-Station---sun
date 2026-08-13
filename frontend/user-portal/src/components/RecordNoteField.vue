@@ -287,6 +287,8 @@ const target = computed<RecordNoteTargetParams | null>(() => {
     tableKind: props.tableKind ?? 'DW',
     tableId: String(props.tableId),
     functionUnitId: props.functionUnitId ?? null,
+    // RECORD scope authorizes against the hosting request — a row id alone identifies no instance.
+    processInstanceId: props.processInstanceId ?? null,
   }
 })
 
@@ -363,7 +365,7 @@ async function resolveInlineImages(html: string): Promise<string> {
       const match = src.match(/^\/api\/portal\/record-notes\/([^/]+)\/content$/)
       if (!match) return
       try {
-        const url = await fetchRecordNoteBlobUrl(match[1])
+        const url = await fetchRecordNoteBlobUrl(match[1], props.processInstanceId ?? null)
         objectUrls.push(url)
         img.setAttribute('src', url)
       } catch {
@@ -435,7 +437,7 @@ function openEditor() {
 async function startEdit(note: RecordNoteItem) {
   let body = note.bodyHtml
   if (!body) {
-    const detail = await getRecordNoteDetail(note.id)
+    const detail = await getRecordNoteDetail(note.id, props.processInstanceId ?? null)
     body = detail?.bodyHtml || ''
   }
   editingNoteId.value = note.id
@@ -529,7 +531,7 @@ async function removeNote(note: RecordNoteItem) {
 }
 
 function download(noteId: string, fileName: string) {
-  void downloadRecordNoteAttachment(noteId, fileName)
+  void downloadRecordNoteAttachment(noteId, fileName, props.processInstanceId ?? null)
 }
 
 // Hibernate @UpdateTimestamp fills updated_at on INSERT too (microseconds after

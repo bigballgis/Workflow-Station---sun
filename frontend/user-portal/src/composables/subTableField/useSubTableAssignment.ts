@@ -7,7 +7,6 @@ import {
   unwrapPortalApiPayload,
   resolveUserFacingHttpMessage
 } from '@/utils/httpErrorMessage'
-import { userApi } from '@/api/user'
 import { extractUserIdFromCellValue, unwrapUserLikeValueToDisplayString } from '@/components/subTableAddDialogHelpers'
 import type { SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
 import { sameValue } from './useSubTableRowKeys'
@@ -37,14 +36,10 @@ export function useSubTableAssignment(
 ) {
   const { resolveSubTableRowPk } = deps
 
-  // Assignment functionality
-  const assignDialogVisible = ref(false)
-  const selectedAssigneeId = ref('')
-  const currentAssignRow = ref<any>(null)
-  const currentAssignRowIndex = ref<number | null>(null)
+  // Assignment functionality.
+  // Row assignment is driven solely by the row Edit dialog's assignee field — there is no
+  // standalone user-picker dialog, so no picker visibility / selection / user-search state here.
   const assigning = ref(false)
-  const userOptions = ref<any[]>([])
-  const userSearchLoading = ref(false)
   const userNameCache = ref<Record<string, string>>({})
 
   // Assignee column: show when assign buttons are active, OR when data already has assignee values (read-only completed tasks)
@@ -55,34 +50,6 @@ export function useSubTableAssignment(
       r && (r.assignee_display_name || resolveRowAssigneeCell(r as Record<string, unknown>))
     )
   })
-
-  function openAssignDialog(row: any, rowIndex: number) {
-    currentAssignRow.value = row
-    currentAssignRowIndex.value = rowIndex
-    selectedAssigneeId.value = extractUserIdFromCellValue(row[props.assigneeField || ''] as unknown) || ''
-    assignDialogVisible.value = true
-  }
-
-  function onAssignDialogOpened() {
-    searchUsers('')
-  }
-
-  async function searchUsers(keyword: string) {
-    userSearchLoading.value = true
-    try {
-      const result = await userApi.searchUsers(keyword || '')
-      userOptions.value = [...result]
-      // Cache user names
-      result.forEach((user: any) => {
-        userNameCache.value[user.id] = user.name
-      })
-    } catch (e) {
-      console.error('Failed to search users:', e)
-      userOptions.value = []
-    } finally {
-      userSearchLoading.value = false
-    }
-  }
 
   function getUserDisplayName(userId: unknown): string {
     if (userId == null || userId === '') return ''
@@ -240,18 +207,16 @@ export function useSubTableAssignment(
     emit('assignmentChanged')
   }
 
+  /**
+   * Assign a row to a user. Invoked from the row Edit dialog's save funnel — the dialog owns the
+   * success feedback, so this only surfaces failures.
+   */
   async function performSubTableRowAssignment(
     rowIndex: number,
     assigneeId: string,
-    opts?: { fromEditDialog?: boolean },
   ): Promise<boolean> {
     const row = rows.value[rowIndex] as Record<string, unknown> | undefined
-    if (!row || !props.taskId) {
-      if (!opts?.fromEditDialog) {
-        ElMessage.error(t('subTable.assignmentFailed'))
-      }
-      return false
-    }
+    if (!row || !props.taskId) return false
 
     const rowPk = resolveSubTableRowPk(row)
     const rowKeyRaw = row.rowKey
@@ -323,10 +288,6 @@ export function useSubTableAssignment(
 
       if (ok && result) {
         applyAssignmentResultToRow(rowIndex, result)
-        if (!opts?.fromEditDialog) {
-          ElMessage.success(t('subTable.assignmentSuccess'))
-          assignDialogVisible.value = false
-        }
         return true
       }
 
@@ -359,32 +320,13 @@ export function useSubTableAssignment(
     }
   }
 
-  async function confirmAssignment() {
-    if (!selectedAssigneeId.value) {
-      ElMessage.warning(t('subTable.pleaseSelectUser'))
-      return
-    }
-    if (currentAssignRowIndex.value == null) return
-    await performSubTableRowAssignment(currentAssignRowIndex.value, selectedAssigneeId.value)
-  }
-
   return {
-    assignDialogVisible,
-    selectedAssigneeId,
-    currentAssignRow,
-    currentAssignRowIndex,
     assigning,
-    userOptions,
-    userSearchLoading,
     userNameCache,
     showAssigneeColumn,
-    openAssignDialog,
-    onAssignDialogOpened,
-    searchUsers,
     getUserDisplayName,
     resolveRowAssigneeCell,
     applyAssigneeDisplayNameToRow,
     performSubTableRowAssignment,
-    confirmAssignment
   }
 }

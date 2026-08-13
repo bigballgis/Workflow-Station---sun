@@ -192,6 +192,18 @@ export function resolveLookupCellTagText(
   return '-'
 }
 
+/**
+ * Props that {@link buildLookupColumnProps} can only fill from the caller-resolved `options`
+ * (per-binding relation view / lookup db config). Re-deriving them here from `lookupConfig` alone
+ * yields empty values, so an already-resolved value on the column must win over the rebuilt blank.
+ */
+const CALLER_RESOLVED_LOOKUP_PROPS = ['viewFields', 'tableId', 'searchFields', 'displayField'] as const
+
+function isBlankLookupProp(value: unknown): boolean {
+  if (value == null || value === '' || value === 0) return true
+  return Array.isArray(value) && value.length === 0
+}
+
 /** Merge subForm rule lookupConfig onto derived columns (list-view merges may drop selectedDisplayField). */
 export function enrichLookupColumnPropsFromSubFormRule(
   columns: DialogColumn[],
@@ -208,7 +220,26 @@ export function enrichLookupColumnPropsFromSubFormRule(
     const rule = ruleByField.get(col.field)
     const rawCfg = rule?.props?.lookupConfig ?? col.props?.lookupConfig
     if (!rawCfg && col.type !== 'lookup' && rule?.type !== 'lookup') return col
-    const lookupProps = buildLookupColumnProps(rawCfg || '{}')
+    const lookupProps: Record<string, unknown> = { ...buildLookupColumnProps(rawCfg || '{}') }
+    // The caller (mapSubFormRuleToDialogColumns / the list-view deriver) already resolved the
+    // designed backfill view and table binding from context this function has no access to.
+    // Without this, the rebuilt blanks overwrote them and the Add/Edit dialog fell back to the
+    // relation table's *global* view — rendering every column instead of the designed subset.
+    //
+    // Only restore when the rule targets the SAME table: a rule that repoints the field at another
+    // relation table must not inherit the previous table's view fields / search fields.
+    const sameTable =
+      isBlankLookupProp(lookupProps.tableId) ||
+      isBlankLookupProp(col.props?.tableId) ||
+      lookupProps.tableId === col.props?.tableId
+    for (const key of CALLER_RESOLVED_LOOKUP_PROPS) {
+      // showBackfillView:false deliberately yields an empty viewFields — never resurrect a stale one.
+      if (key === 'viewFields' && lookupProps.showBackfillView === false) continue
+      if (!sameTable && key !== 'tableId') continue
+      if (isBlankLookupProp(lookupProps[key]) && !isBlankLookupProp(col.props?.[key])) {
+        lookupProps[key] = col.props![key]
+      }
+    }
     return {
       ...col,
       type: col.type === 'lookup' || rule?.type === 'lookup' ? 'lookup' : col.type,

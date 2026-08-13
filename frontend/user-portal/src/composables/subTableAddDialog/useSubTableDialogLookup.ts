@@ -25,6 +25,11 @@ function dialogColumnAsLookupField(col: DialogColumn): FormField {
     _lookupConfig: typeof col.props?.lookupConfig === 'string'
       ? col.props.lookupConfig
       : JSON.stringify(cfg || {}),
+    // Carry the designed backfill view through too: the dialog template reads col.props directly
+    // today, but a FormField that silently lost these would reintroduce the "all relation-table
+    // columns" fallback for any future consumer.
+    _lookupViewFields: (col.props?.viewFields as unknown[]) || [],
+    _lookupShowBackfillView: col.props?.showBackfillView !== false,
   } as FormField
 }
 

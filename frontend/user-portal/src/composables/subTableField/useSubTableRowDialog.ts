@@ -26,7 +26,7 @@ export function useSubTableRowDialog(
   t: SubTableFieldT,
   deps: {
     applyAssigneeDisplayNameToRow: (row: Record<string, any>, previousAssigneeId?: string) => Record<string, any>
-    performSubTableRowAssignment: (rowIndex: number, assigneeId: string, opts?: { fromEditDialog?: boolean }) => Promise<boolean>
+    performSubTableRowAssignment: (rowIndex: number, assigneeId: string) => Promise<boolean>
   },
 ) {
   const { applyAssigneeDisplayNameToRow, performSubTableRowAssignment } = deps
@@ -209,7 +209,7 @@ export function useSubTableRowDialog(
         newAssigneeId &&
         newAssigneeId !== prevAssigneeId
       ) {
-        await performSubTableRowAssignment(idx, newAssigneeId, { fromEditDialog: true })
+        await performSubTableRowAssignment(idx, newAssigneeId)
       }
       return
     }

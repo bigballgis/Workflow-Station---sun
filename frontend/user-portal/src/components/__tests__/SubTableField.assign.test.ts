@@ -3,7 +3,6 @@ import { mount } from '@vue/test-utils'
 import { ElMessage } from 'element-plus'
 import SubTableField from '../SubTableField.vue'
 import { assignSubTableRow } from '@/api/task'
-import { userApi } from '@/api/user'
 
 // Mock API calls
 vi.mock('@/api/task', () => ({
@@ -43,7 +42,7 @@ vi.mock('element-plus', async () => {
   }
 })
 
-describe('SubTableField - Assign Button', () => {
+describe('SubTableField - Row Assignment', () => {
   const mockColumns = [
     { field: 'name', label: 'Name', type: 'text' },
     { field: 'email', label: 'Email', type: 'text' }
@@ -53,12 +52,6 @@ describe('SubTableField - Assign Button', () => {
     { id: 101, name: 'Zhang San', email: 'zhang@example.com', assignee: null },
     { id: 102, name: 'Li Si', email: 'li@example.com', assignee: 'user-001' },
     { id: 103, name: 'Wang Wu', email: 'wang@example.com', assignee: null }
-  ]
-
-  const mockUsers = [
-    { id: 'user-001', name: 'User One', username: 'user1' },
-    { id: 'user-002', name: 'User Two', username: 'user2' },
-    { id: 'user-003', name: 'User Three', username: 'user3' }
   ]
 
   const globalStubs = {
@@ -78,12 +71,15 @@ describe('SubTableField - Assign Button', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(userApi.searchUsers).mockResolvedValue(mockUsers)
   })
 
-  describe('Button Permission Control', () => {
-    it('should show assign button when canAssign is true', async () => {
-      const wrapper = mount(SubTableField, {
+  /**
+   * The inline Assign/Reassign button and its user-picker dialog were removed: assignment is
+   * reached only through the row Edit dialog. These lock that in so the button cannot come back.
+   */
+  describe('No inline assign button', () => {
+    function mountWith(extra: Record<string, unknown> = {}) {
+      return mount(SubTableField, {
         props: {
           title: 'Test Table',
           columns: mockColumns,
@@ -91,140 +87,48 @@ describe('SubTableField - Assign Button', () => {
           showAssignButton: true,
           assigneeField: 'assignee',
           canAssign: true,
-          taskId: 'task-123'
+          taskId: 'task-123',
+          ...extra,
         },
-        global: {
-          stubs: globalStubs
-        }
+        global: { stubs: globalStubs },
       })
+    }
 
+    it('renders no Assign/Reassign button even when assignment is permitted', async () => {
+      const wrapper = mountWith()
       await wrapper.vm.$nextTick()
-      
-      // Check that assignee field is in props
-      expect(wrapper.props('assigneeField')).toBe('assignee')
-      expect(wrapper.props('canAssign')).toBe(true)
-      expect(wrapper.props('showAssignButton')).toBe(true)
+
+      expect(wrapper.find('.assign-btn').exists()).toBe(false)
+      expect(wrapper.html()).not.toContain('subTable.assign')
+      expect(wrapper.html()).not.toContain('subTable.reassign')
     })
 
-    it('should not show assign button when canAssign is false', async () => {
-      const wrapper = mount(SubTableField, {
-        props: {
-          title: 'Test Table',
-          columns: mockColumns,
-          modelValue: mockRows,
-          showAssignButton: true,
-          assigneeField: 'assignee',
-          canAssign: false,
-          taskId: 'task-123'
-        },
-        global: {
-          stubs: globalStubs
-        }
-      })
+    it('exposes no user-picker dialog API', () => {
+      const wrapper = mountWith()
+      const vm = wrapper.vm as unknown as Record<string, unknown>
 
-      await wrapper.vm.$nextTick()
-      expect(wrapper.props('canAssign')).toBe(false)
+      expect(vm.openAssignDialog).toBeUndefined()
+      expect(vm.confirmAssignment).toBeUndefined()
+      expect(vm.assignDialogVisible).toBeUndefined()
     })
 
-    it('should not show assign column when showAssignButton is false', async () => {
-      const wrapper = mount(SubTableField, {
-        props: {
-          title: 'Test Table',
-          columns: mockColumns,
-          modelValue: mockRows,
-          showAssignButton: false,
-          assigneeField: 'assignee',
-          canAssign: true,
-          taskId: 'task-123'
-        },
-        global: {
-          stubs: globalStubs
-        }
-      })
-
+    it('still keeps the Assignee column available for display', async () => {
+      const wrapper = mountWith()
       await wrapper.vm.$nextTick()
-      expect(wrapper.props('showAssignButton')).toBe(false)
+      expect(wrapper.vm.showAssigneeColumn).toBe(true)
+    })
+
+    it('hides the Assignee column when there is no assignee field', async () => {
+      const wrapper = mountWith({ assigneeField: undefined, showAssignButton: false })
+      await wrapper.vm.$nextTick()
+      expect(wrapper.vm.showAssigneeColumn).toBe(false)
     })
   })
 
-  describe('User Picker Dialog', () => {
-    it('should open user picker dialog when assign button is clicked', async () => {
-      const wrapper = mount(SubTableField, {
-        props: {
-          title: 'Test Table',
-          columns: mockColumns,
-          modelValue: mockRows,
-          showAssignButton: true,
-          assigneeField: 'assignee',
-          canAssign: true,
-          taskId: 'task-123'
-        },
-        global: {
-          stubs: globalStubs
-        }
-      })
-
-      // Open dialog programmatically
-      await wrapper.vm.openAssignDialog(mockRows[0], 0)
-      await wrapper.vm.$nextTick()
-
-      // Dialog should be visible
-      expect(wrapper.vm.assignDialogVisible).toBe(true)
-      expect(wrapper.vm.currentAssignRow).toEqual(mockRows[0])
-      expect(wrapper.vm.currentAssignRowIndex).toBe(0)
-    })
-
-    it('should load users when dialog is opened', async () => {
-      const wrapper = mount(SubTableField, {
-        props: {
-          title: 'Test Table',
-          columns: mockColumns,
-          modelValue: mockRows,
-          showAssignButton: true,
-          assigneeField: 'assignee',
-          canAssign: true,
-          taskId: 'task-123'
-        },
-        global: {
-          stubs: globalStubs
-        }
-      })
-
-      // Open dialog
-      await wrapper.vm.openAssignDialog(mockRows[0], 0)
-      await wrapper.vm.onAssignDialogOpened()
-
-      // Should call searchUsers
-      expect(userApi.searchUsers).toHaveBeenCalledWith('')
-    })
-
-    it('should close dialog when cancel is clicked', async () => {
-      const wrapper = mount(SubTableField, {
-        props: {
-          title: 'Test Table',
-          columns: mockColumns,
-          modelValue: mockRows,
-          showAssignButton: true,
-          assigneeField: 'assignee',
-          canAssign: true,
-          taskId: 'task-123'
-        },
-        global: {
-          stubs: globalStubs
-        }
-      })
-
-      // Open dialog
-      await wrapper.vm.openAssignDialog(mockRows[0], 0)
-      expect(wrapper.vm.assignDialogVisible).toBe(true)
-
-      // Close dialog
-      wrapper.vm.assignDialogVisible = false
-      await wrapper.vm.$nextTick()
-      expect(wrapper.vm.assignDialogVisible).toBe(false)
-    })
-  })
-
+  /**
+   * There is no standalone user-picker dialog: assignment is driven only by the row Edit dialog,
+   * whose save funnel calls performSubTableRowAssignment. These cover that real entry point.
+   */
   describe('Assignment Success', () => {
     it('should call API and refresh data when assignment succeeds', async () => {
       const mockResponse = {
@@ -252,12 +156,8 @@ describe('SubTableField - Assign Button', () => {
         }
       })
 
-      // Open dialog and select user
-      await wrapper.vm.openAssignDialog(mockRows[0], 0)
-      wrapper.vm.selectedAssigneeId = 'user-002'
-
-      // Confirm assignment
-      await wrapper.vm.confirmAssignment()
+      const ok = await wrapper.vm.performSubTableRowAssignment(0, 'user-002')
+      expect(ok).toBe(true)
 
       // Should call API
       expect(assignSubTableRow).toHaveBeenCalledWith('task-123', 101, 'user-002')
@@ -269,9 +169,6 @@ describe('SubTableField - Assign Button', () => {
       // Should emit events
       expect(wrapper.emitted('update:modelValue')).toBeTruthy()
       expect(wrapper.emitted('assignmentChanged')).toBeTruthy()
-
-      // Dialog should be closed
-      expect(wrapper.vm.assignDialogVisible).toBe(false)
     })
 
     it('should cache user names after assignment', async () => {
@@ -300,9 +197,7 @@ describe('SubTableField - Assign Button', () => {
         }
       })
 
-      await wrapper.vm.openAssignDialog(mockRows[0], 0)
-      wrapper.vm.selectedAssigneeId = 'user-002'
-      await wrapper.vm.confirmAssignment()
+      await wrapper.vm.performSubTableRowAssignment(0, 'user-002')
 
       // User name should be cached
       expect(wrapper.vm.userNameCache['user-002']).toBe('User Two')
@@ -311,32 +206,7 @@ describe('SubTableField - Assign Button', () => {
   })
 
   describe('Assignment Validation', () => {
-    it('should show warning when no user is selected', async () => {
-      const wrapper = mount(SubTableField, {
-        props: {
-          title: 'Test Table',
-          columns: mockColumns,
-          modelValue: [...mockRows],
-          showAssignButton: true,
-          assigneeField: 'assignee',
-          canAssign: true,
-          taskId: 'task-123'
-        },
-        global: {
-          stubs: globalStubs
-        }
-      })
-
-      await wrapper.vm.openAssignDialog(mockRows[0], 0)
-      wrapper.vm.selectedAssigneeId = ''
-
-      await wrapper.vm.confirmAssignment()
-
-      expect(ElMessage.warning).toHaveBeenCalledWith('subTable.pleaseSelectUser')
-      expect(assignSubTableRow).not.toHaveBeenCalled()
-    })
-
-    it('should show error when taskId is missing', async () => {
+    it('should not call the API when taskId is missing', async () => {
       const wrapper = mount(SubTableField, {
         props: {
           title: 'Test Table',
@@ -352,12 +222,31 @@ describe('SubTableField - Assign Button', () => {
         }
       })
 
-      await wrapper.vm.openAssignDialog(mockRows[0], 0)
-      wrapper.vm.selectedAssigneeId = 'user-002'
+      const ok = await wrapper.vm.performSubTableRowAssignment(0, 'user-002')
 
-      await wrapper.vm.confirmAssignment()
+      expect(ok).toBe(false)
+      expect(assignSubTableRow).not.toHaveBeenCalled()
+    })
 
-      expect(ElMessage.error).toHaveBeenCalledWith('subTable.assignmentFailed')
+    it('should not call the API when the row index does not exist', async () => {
+      const wrapper = mount(SubTableField, {
+        props: {
+          title: 'Test Table',
+          columns: mockColumns,
+          modelValue: [...mockRows],
+          showAssignButton: true,
+          assigneeField: 'assignee',
+          canAssign: true,
+          taskId: 'task-123'
+        },
+        global: {
+          stubs: globalStubs
+        }
+      })
+
+      const ok = await wrapper.vm.performSubTableRowAssignment(999, 'user-002')
+
+      expect(ok).toBe(false)
       expect(assignSubTableRow).not.toHaveBeenCalled()
     })
 
@@ -379,13 +268,11 @@ describe('SubTableField - Assign Button', () => {
         }
       })
 
-      await wrapper.vm.openAssignDialog(mockRows[0], 0)
-      wrapper.vm.selectedAssigneeId = 'user-002'
+      const ok = await wrapper.vm.performSubTableRowAssignment(0, 'user-002')
 
-      await wrapper.vm.confirmAssignment()
-
+      // Surfaces the failure to the user and reports it to the caller, without throwing.
+      expect(ok).toBe(false)
       expect(ElMessage.error).toHaveBeenCalled()
-      expect(wrapper.vm.assignDialogVisible).toBe(true) // Dialog stays open on error
     })
   })
 
