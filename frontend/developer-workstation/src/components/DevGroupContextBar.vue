@@ -28,9 +28,9 @@
             v-for="opt in switchOptions"
             :key="opt.id"
             :command="opt.id"
-            :disabled="opt.id === currentId"
+            :disabled="isOptionDisabled(opt)"
           >
-            {{ opt.name }}
+            {{ formatOptionLabel(opt) }}
           </el-dropdown-item>
         </el-dropdown-menu>
       </template>
@@ -55,18 +55,19 @@
       class="dev-group-radio-group"
     >
       <el-radio
-        v-for="g in groups"
+        v-for="g in selectableGroupsForDialog"
         :key="g.id"
         :label="g.id"
+        :disabled="!isGroupActive(g)"
         class="dev-group-radio"
       >
-        {{ g.name }}
+        {{ formatOptionLabel(g) }}
       </el-radio>
     </el-radio-group>
     <template #footer>
       <el-button
         type="primary"
-        :disabled="!pendingGroupId"
+        :disabled="!pendingGroupId || !isPendingSelectable"
         @click="confirmSelection"
       >
         {{ t('devGroup.confirm') }}
@@ -92,17 +93,41 @@ const currentId = ref<string | null>(null)
 const selectDialogVisible = ref(false)
 const pendingGroupId = ref<string>('')
 
+function isGroupActive(opt: DevGroupOption): boolean {
+  return !opt.status || opt.status === 'ACTIVE'
+}
+
+function formatOptionLabel(opt: DevGroupOption): string {
+  if (isGroupActive(opt)) return opt.name
+  return `${opt.name} (${t('devGroup.inactive')})`
+}
+
+function isOptionDisabled(opt: DevGroupOption): boolean {
+  if (opt.id === currentId.value) return true
+  if (opt.id === ALL_GROUPS || opt.id === publicGroupId.value) return false
+  return !isGroupActive(opt)
+}
+
 // Options shown in the header switcher: "All groups" (admin only), Public, and the user's teams.
 const switchOptions = computed<DevGroupOption[]>(() => {
   const opts: DevGroupOption[] = []
   if (canSeeAll.value) {
-    opts.push({ id: ALL_GROUPS, name: t('devGroup.allGroups') })
+    opts.push({ id: ALL_GROUPS, name: t('devGroup.allGroups'), status: 'ACTIVE' })
   }
   if (publicGroupId.value) {
-    opts.push({ id: publicGroupId.value, name: t('devGroup.publicGroup') })
+    opts.push({ id: publicGroupId.value, name: t('devGroup.publicGroup'), status: 'ACTIVE' })
   }
   opts.push(...groups.value)
   return opts
+})
+
+const selectableGroupsForDialog = computed(() => groups.value)
+
+const activeGroups = computed(() => groups.value.filter(isGroupActive))
+
+const isPendingSelectable = computed(() => {
+  const g = groups.value.find((x) => x.id === pendingGroupId.value)
+  return Boolean(g && isGroupActive(g))
 })
 
 const showBar = computed(() => canSeeAll.value || Boolean(publicGroupId.value) || groups.value.length > 0)
@@ -111,7 +136,7 @@ const currentName = computed(() => {
   if (currentId.value === ALL_GROUPS) return t('devGroup.allGroups')
   if (currentId.value === publicGroupId.value) return t('devGroup.publicGroup')
   const match = groups.value.find(g => g.id === currentId.value)
-  if (match) return match.name
+  if (match) return formatOptionLabel(match)
   return t('devGroup.noTeam')
 })
 
@@ -122,11 +147,13 @@ function applyAndReload(groupId: string) {
 
 function onSwitch(groupId: string) {
   if (groupId === currentId.value) return
+  const opt = switchOptions.value.find((o) => o.id === groupId)
+  if (opt && isOptionDisabled(opt)) return
   applyAndReload(groupId)
 }
 
 function confirmSelection() {
-  if (!pendingGroupId.value) return
+  if (!pendingGroupId.value || !isPendingSelectable.value) return
   selectDialogVisible.value = false
   applyAndReload(pendingGroupId.value)
 }
@@ -146,7 +173,8 @@ async function resolveContext() {
   }
 
   const stored = getActiveGroupRaw()
-  const validIds = new Set<string>(groups.value.map(g => g.id))
+  // Only ACTIVE teams (plus All/Public) are valid as the current workspace.
+  const validIds = new Set<string>(activeGroups.value.map(g => g.id))
   if (canSeeAll.value) validIds.add(ALL_GROUPS)
   if (publicGroupId.value) validIds.add(publicGroupId.value)
 
@@ -161,17 +189,17 @@ async function resolveContext() {
     currentId.value = ALL_GROUPS
     setActiveGroup(ALL_GROUPS)
     emit('ready')
-  } else if (groups.value.length === 1) {
-    currentId.value = groups.value[0]!.id
+  } else if (activeGroups.value.length === 1) {
+    currentId.value = activeGroups.value[0]!.id
     setActiveGroup(currentId.value)
     emit('ready')
-  } else if (groups.value.length === 0) {
+  } else if (activeGroups.value.length === 0) {
     currentId.value = publicGroupId.value
     if (currentId.value) setActiveGroup(currentId.value)
     emit('ready')
   } else {
-    // Multiple teams and no prior choice → force a selection.
-    pendingGroupId.value = groups.value[0]!.id
+    // Multiple active teams and no prior choice → force a selection.
+    pendingGroupId.value = activeGroups.value[0]!.id
     selectDialogVisible.value = true
   }
 }

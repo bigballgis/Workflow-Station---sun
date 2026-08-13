@@ -7,7 +7,7 @@ import { getStoredUser } from '@/api/auth'
  * - TECH_LEAD: 全局全权（CREATE, EDIT, DELETE, DEPLOY, PUBLISH, CLONE），不受团队隔离
  * - TEAM_LEAD: CREATE, EDIT, DELETE, DEPLOY, PUBLISH, CLONE（仅团队 scope 内，后端校验）
  * - DEVELOPER: EDIT, DEPLOY, PUBLISH（仅团队 scope 内；不能 CREATE / DELETE / CLONE）
- * - FU_VIEWER: 团队只读基线——不属于任何能力角色列表 → 前端不显示任何编辑入口
+ * - 无能力角色的团队成员：只读基线（后端 workspace-access / 团队 scope 校验）
  *
  * 说明：这里的按钮可见性仅为 UX；具体某个 FU 能否被编辑由后端工作区隔离
  * （FunctionUnitWorkspaceAccessService）按团队 scope 逐 FU 校验。
@@ -143,7 +143,6 @@ export function getCurrentRoleName(): string {
     'TECH_LEAD': 'Technical Lead',
     'TEAM_LEAD': 'Team Lead',
     'DEVELOPER': 'Developer',
-    'FU_VIEWER': 'Function Unit Viewer',
     'SYS_ADMIN': 'System Administrator',
     'AUDITOR': 'Auditor',
     'MANAGER': 'Manager'

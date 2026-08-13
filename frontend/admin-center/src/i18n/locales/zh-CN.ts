@@ -418,7 +418,10 @@ export default {
     sysAdmin: '系统管理员',
     superAdmin: '超级管理员',
     auditor: '审计员',
-    tenantAdmin: '租户管理员'
+    tenantAdmin: '租户管理员',
+    tabSystem: 'System',
+    tabCustom: 'Custom',
+    noRolesInTab: '该分类下暂无角色'
   },
   permission: {
     permissionName: '权限名称',
@@ -483,7 +486,11 @@ export default {
     roleTypeHint: '角色类型说明：',
     buBoundedHint: '需要配合业务单元使用，用户加入虚拟组后还需申请加入业务单元才能激活权限',
     buUnboundedHint: '独立生效，用户加入虚拟组后立即拥有该角色权限',
-    systemGroupRoleWarning: '系统内置虚拟组的角色绑定不可修改'
+    systemGroupRoleWarning: '系统内置虚拟组的角色绑定不可修改',
+    activate: '启用',
+    deactivate: '停用',
+    confirmActivate: '确定启用该虚拟组？',
+    confirmDeactivate: '确定停用该虚拟组？停用后仍会显示，但在 Developer Workstation 中不可选择。'
   },
   functionUnit: {
     title: '功能单元管理',

@@ -27,9 +27,20 @@
 
 ## 2. 你怎么写 — 懒人写法（推荐）
 
+### 2.0 先设计 Plan，还是先改代码？
+
+| 场景 | 触发语 | AI 产出 |
+|------|--------|---------|
+| 新功能 / 跨模块 / 架构未定 | `先出设计 Plan，不要改代码` 或 `/plan` | **设计 Plan**（skill `feature-design-plan`） |
+| Bug / 小改动 / 方案已定 | `按 playbook 整理` | **任务整理** → 确认后改代码 |
+
+设计 Plan 确认后，再发：`按 playbook 执行（先输出任务整理，等我确认）`。
+
+### 2.1 执行阶段 — playbook
+
 **不必手填模板。** 说想法 + 触发语；AI 先输出「任务整理」，**你回复「确认」后才会改代码**。
 
-### 万能触发语
+#### 万能触发语
 
 ```text
 按 playbook 整理。
@@ -102,6 +113,7 @@ AI 回复任务整理 → 你看没问题 → 回复 **`确认`** → AI 才开�
 
 **Cursor 用法：**
 
+- 设计 Plan → skill：`/plan` 或 `.cursor/skills/feature-design-plan/`（先方案，确认后再 playbook）
 - UI / parity → 引用 skill：`/verify-ui` 或 `.claude/skills/verify-ui-fix-with-screenshot/`
 - MI 子表 → `@.cursor/rules/portal-mi-subtable-my-request.mdc`
 - 长对话（>10 轮）→ 新开会话，粘贴任务模板 + 上次 commit hash
@@ -286,7 +298,7 @@ Lookup 等自定义组件须走组件事件派发链（Preview ①/② + Portal 
 - 检查是否有「已 merge 但未补测试」的 MI 相关 PR
 - 确认 `verification-screenshots/` 未被误删
 
-**大功能启动前：** Plan 模式或先要「影响文件清单 + 验证计划」，确认后再 Agent 实现。
+**大功能启动前：** 使用 skill **`feature-design-plan`**（`/plan`）产出设计 Plan，确认后再 `按 playbook 执行`。
 
 ---
 
@@ -314,4 +326,4 @@ Lookup 等自定义组件须走组件事件派发链（Preview ①/② + Portal 
 
 ---
 
-*最后更新：2026-07-17*
+*最后更新：2026-08-12*

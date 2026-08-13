@@ -36,6 +36,15 @@ import { nestAssignmentFieldsIntoContainer, type AssignmentConfig } from '@/util
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
+/** True when the sub-form design placed the Assignment Mode component itself. */
+function hasAssignmentContainer(rules: unknown[]): boolean {
+  let found = false
+  walkFormCreateRules(rules, rule => {
+    if (rule.type === 'miAssignment') found = true
+  })
+  return found
+}
+
 interface UseFormPreviewBuildOptions {
   functionUnitId: number
   store: { tables: any[]; fetchTables: (functionUnitId: number) => Promise<unknown> }
@@ -281,7 +290,11 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
         fieldDefinitions: (store.tables.find(t => t.id === b.tableId)?.fieldDefinitions) || [],
         bindingLinkMode: b.bindingLinkMode,
         bindingForeignKeyField: b.foreignKeyField,
-        assignmentConfig: getAssignmentConfig(b.tableId),
+        // Only a design that actually placed the Assignment Mode component gets the
+        // block. The BPMN contract supplies its content, not its existence — passing
+        // the config unconditionally made every MI-configured sub-table render an
+        // assignment block the author never put on the canvas.
+        assignmentConfig: hasAssignmentContainer(rule) ? getAssignmentConfig(b.tableId) : undefined,
         rule,
         option,
         columns,

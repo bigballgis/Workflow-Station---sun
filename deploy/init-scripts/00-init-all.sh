@@ -144,6 +144,8 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/06-hase-organization-seed.sql
 # Built-in Public dev group (always-visible overlay for the function-unit workspace).
 # On a fresh DB the FU-migration steps are no-ops (no function units yet); it just creates the group.
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/08-fu-public-group-migration.sql
+# Remove deprecated FU_VIEWER role seeded by earlier 01-admin scripts (append-only cleanup).
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/09-remove-fu-viewer-role.sql
 
 # Step 4 used to run 99-maintenance/00-wipe-all-function-units.sql here. Removed: this script
 # only runs when the data directory is empty, and Steps 1-3 create no function units, so the

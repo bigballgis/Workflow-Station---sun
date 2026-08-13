@@ -159,11 +159,13 @@
               {{ t('virtualGroup.bindRoles') }}
             </el-button>
             <el-button
+              v-if="row.type !== 'SYSTEM'"
               link
               type="primary"
-              @click="showApproversDialog(row)"
+              :loading="statusToggleLoadingId === row.id"
+              @click="handleToggleStatus(row)"
             >
-              {{ t('virtualGroup.approvers') }}
+              {{ row.status === 'ACTIVE' ? t('virtualGroup.deactivate') : t('virtualGroup.activate') }}
             </el-button>
             <el-button
               v-if="row.type !== 'SYSTEM'"
@@ -204,10 +206,6 @@
       :group="currentGroup"
       @success="fetchGroups"
     />
-    <VirtualGroupApproversDialog
-      v-model="approversDialogVisible"
-      :group="currentGroup"
-    />
   </div>
 </template>
 
@@ -219,7 +217,6 @@ import PageHeader from '@/components/PageHeader.vue'
 import VirtualGroupFormDialog from './components/VirtualGroupFormDialog.vue'
 import VirtualGroupMembersDialog from './components/VirtualGroupMembersDialog.vue'
 import VirtualGroupRolesDialog from './components/VirtualGroupRolesDialog.vue'
-import VirtualGroupApproversDialog from './components/VirtualGroupApproversDialog.vue'
 import { useVirtualGroup } from '@/composables/modules/useVirtualGroup'
 import { virtualGroupTypeKey, roleTypeKey } from '@/utils/format'
 
@@ -235,17 +232,17 @@ const {
   formDialogVisible,
   membersDialogVisible,
   rolesDialogVisible,
-  approversDialogVisible,
   currentGroup,
+  statusToggleLoadingId,
   fetchGroups,
   showCreateDialog,
   showEditDialog,
   showMembersDialog,
   showRolesDialog,
-  showApproversDialog,
   handleDelete,
   handleCreateSuccess,
   handleListSizeChange,
+  handleToggleStatus,
 } = useVirtualGroup()
 
 function typeTagType(type: string): 'warning' | 'info' | 'success' {

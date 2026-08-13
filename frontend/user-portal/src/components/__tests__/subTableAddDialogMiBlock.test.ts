@@ -110,12 +110,13 @@ describe('SubTableAddDialog — Assignment Mode block', () => {
   })
 
   /**
-   * FU 50005 "Assign Task" shape: BPMN configures assignee + BU + role, but the
-   * sub-form was designed before the Assignment Mode component existed, so it has
-   * no marker. The block must still render — with its picker inside it — instead
-   * of an empty frame beside a stranded Assignee row.
+   * The design is the only truth. A BPMN assignment contract supplies the block's
+   * content, not its existence — so a sub-form that never placed the Assignment
+   * Mode component shows no block, and no undesigned assignee/BU/role field leaks
+   * in beside it. Previously the dialog synthesized a block here, which rendered
+   * an Assignee picker DW Form Preview never shows.
    */
-  it('renders the block and owns its picker when the design has no marker', async () => {
+  it('renders no block when the design has no marker', async () => {
     const wrapper = mount(SubTableAddDialog, {
       props: {
         visible: true,
@@ -129,10 +130,8 @@ describe('SubTableAddDialog — Assignment Mode block', () => {
     })
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('.mi-assignment-block__head').exists()).toBe(true)
-    // The block is never an empty frame: it owns the picker for the active mode.
-    expect(wrapper.findAll('.mi-assignment-block__field')).toHaveLength(1)
-    expect(wrapper.findAll('.mi-assignment-block__field--last')).toHaveLength(1)
+    expect(wrapper.find('.mi-assignment-block__head').exists()).toBe(false)
+    expect(wrapper.findAll('.mi-assignment-block__field')).toHaveLength(0)
 
     wrapper.unmount()
   })

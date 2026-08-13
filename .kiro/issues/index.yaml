@@ -1965,3 +1965,19 @@
     验证：AiWriteServiceTest 7/7（新增 2 例）；dev 运行时 E2E——bpmn_xml 恢复 Base64 后
     scoped apply 200 且存量 BPMN 正确解码回写；垃圾内容 500 AI_EXISTING_BPMN_INVALID，
     事务回滚不丢数据。dev DB 曾把 50062 行就地解码为裸 XML（两种形态读路径均兼容）。
+
+- id: "1518"
+  status: fixed
+  fixed_at: "2026-08-10"
+  severity: major
+  category: bug
+  summary: "New Request 子表弹窗缺少 formOptions，Form onChange/onCreated 不触发（Todo 正常）"
+  file: "frontend/user-portal/src/views/processes/start.vue"
+  note: |
+    反例：Portal New Request 打开 subform Add 时 Form 级 onChange（及 onCreated/bootstrap）不跑；
+    同 FU 提交后 Todo 打开 subform 改字段 onChange 生效。
+    根因：start.vue 构建 subTableBindings 只带 formFields，未带 subForms[].options；
+    task-detail resolveSubFormDesign 已传 formOptions。
+    修复：pickSubFormOptionsFromDesign + ProcessStartSubTableBinding.formOptions；
+    主路径与 subForms fallback 均写入。单测 pickSubFormOptionsFromDesign.test.ts；
+    pnpm build user-portal 通过。dev compose 缺 .env 未重建镜像。

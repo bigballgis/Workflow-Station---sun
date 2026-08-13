@@ -27,7 +27,7 @@ describe('DevGroupContextBar', () => {
   it('emits ready after persisting a single available team', async () => {
     getMyDevGroups.mockResolvedValue({
       data: {
-        groups: [{ id: 'vg-department-managers', name: 'Department managers' }],
+        groups: [{ id: 'vg-department-managers', name: 'Department managers', status: 'ACTIVE' }],
         canSeeAllGroups: false,
         publicGroupId: 'vg-dev-public',
       },
@@ -40,5 +40,25 @@ describe('DevGroupContextBar', () => {
     await flushPromises()
     expect(getActiveGroupRaw()).toBe('vg-department-managers')
     expect(wrapper.emitted('ready')).toHaveLength(1)
+  })
+
+  it('does not select an inactive team as the current workspace', async () => {
+    getMyDevGroups.mockResolvedValue({
+      data: {
+        groups: [
+          { id: 'vg-inactive', name: 'Inactive team', status: 'INACTIVE' },
+          { id: 'vg-active', name: 'Active team', status: 'ACTIVE' },
+        ],
+        canSeeAllGroups: false,
+        publicGroupId: 'vg-dev-public',
+      },
+    })
+    mount(DevGroupContextBar, {
+      global: {
+        stubs: ['el-button', 'el-dialog', 'el-dropdown', 'el-dropdown-item', 'el-dropdown-menu', 'el-icon', 'el-radio', 'el-radio-group'],
+      },
+    })
+    await flushPromises()
+    expect(getActiveGroupRaw()).toBe('vg-active')
   })
 })

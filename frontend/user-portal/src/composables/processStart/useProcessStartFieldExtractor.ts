@@ -119,6 +119,26 @@ export function createFieldExtractor(deps: {
           children: extractFieldsRecursive(getRuleChildren(item))
         } as any)
         continue
+      } else if (item.type === 'miAssignment') {
+        const marker: FormField = {
+          key: getLayoutKey(item, fields.length, 'miAssignment'),
+          label: '',
+          type: 'miAssignment',
+          span: 24,
+        } as any
+        applyDesignerHideFlagToFormField(marker, item)
+        // Keep the assignee / BU / role rules NESTED under the marker rather than
+        // hoisting them alongside it. The dialog's layout pass reads the marker's
+        // own children to decide the block's membership — and to drop them with it
+        // when the designer's Hide toggle is on. Flattening them here made `hidden`
+        // apply to the marker alone, leaking an undesigned Assignee row into the
+        // dialog while the block itself correctly disappeared.
+        const children = item.children
+        if (Array.isArray(children) && children.length > 0) {
+          marker.children = extractFieldsRecursive(children)
+        }
+        fields.push(marker)
+        continue
       } else if (item.type === 'recordNote') {
         // New Request: notes are writable before the instance exists — the page
         // anchors them on a draft target id, then re-anchors (adopt) after start.

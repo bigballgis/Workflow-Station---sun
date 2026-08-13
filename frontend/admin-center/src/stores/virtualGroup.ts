@@ -19,5 +19,13 @@ export const useVirtualGroupStore = defineStore('virtualGroup', () => {
     await virtualGroupApi.delete(id)
   }
 
-  return { groups, loading, fetchGroups, deleteGroup }
+  const activateGroup = async (id: string) => {
+    await virtualGroupApi.activate(id)
+  }
+
+  const deactivateGroup = async (id: string) => {
+    await virtualGroupApi.deactivate(id)
+  }
+
+  return { groups, loading, fetchGroups, deleteGroup, activateGroup, deactivateGroup }
 })

@@ -77,6 +77,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+# Local content-addressable store (must not live in the repo)
+.pnpm-store/
 # Note: pnpm-lock.yaml must be tracked to ensure consistent dependency versions
 # across environments. The frontends use pnpm (pinned via each package.json's
 # "packageManager"); activepieces/ has always used it.
@@ -152,9 +154,6 @@ deploy/environments/dev/.env
 
 # Superset BuildKit pip secret (Nexus credentials) — never commit real pip.conf
 deploy/superset/pip.conf
-
-# Dev schema-migration SHA markers (isolated per Postgres Docker volume)
-deploy/environments/dev/.schema-migration-markers/
 
 # Local compose overlay (see deploy/environments/dev/LOCAL-OVERLAY.md) — never commit
 **/docker-compose.local.yml
@@ -353,6 +352,8 @@ BOOT-INF/
 !.claude/scripts/**
 !.claude/settings.json
 .claude/settings.local.json
+# Vendor/subtree local Claude workspace junk (not the repo-root .claude mirror)
+activepieces/.claude/
 !documentation/*.md
 # Windows 上 core.ignorecase 会导致 *.MD 误匹配小写 .md；显式放行版本库文档目录
 !docs/**/*.md

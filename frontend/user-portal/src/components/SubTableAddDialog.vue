@@ -655,7 +655,6 @@ import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDial
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import {
   buildDialogLayoutGroups,
-  ensureAssignmentBlockPlaced,
   groupAssignmentFieldsUnderMarker,
 } from './subTableAddDialogHelpers/dialogFormLayout'
 import type { FormField, RowFormulaRule, ValidationRule } from './formRendererHelpers'
@@ -680,7 +679,6 @@ import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import {
   fieldsHiddenByMode,
   fieldsOwnedByMode,
-  hasMiAssignmentMarker,
   isAssignModeSwitchable,
   isAssignmentConfigured,
   lockedAssignMode,
@@ -932,13 +930,11 @@ const {
   primeFromExistingRow,
 } = useSubTableBuRoleCascade(formData, toRef(props, 'assignmentConfig'))
 
-const hasAssignmentMarker = computed(() => hasMiAssignmentMarker(props.formFields))
 /**
- * The BPMN assignment contract drives the block on its own. Sub-forms designed
- * before the Assignment Mode component existed carry no marker, and requiring one
- * left their assignee / BU / role controls stranded outside the block (or, in
- * single-mode setups, showed an empty frame). The marker still decides WHERE the
- * block sits when present; it no longer decides whether it renders.
+ * The BPMN contract supplies the block's CONTENT (which modes, which fields); the
+ * designer's `miAssignment` marker decides whether it renders at all and where.
+ * A sub-form that never placed the component shows no block — the design is the
+ * only truth, same rule the dialog's column set follows.
  */
 const effectiveAssignmentConfig = computed(() =>
   isAssignmentConfigured(props.assignmentConfig) ? props.assignmentConfig : undefined)
@@ -1101,8 +1097,7 @@ const dialogLayoutGroups = computed(() => {
     ...group,
     items: groupAssignmentFieldsUnderMarker(group.items, assignmentOwnedFields.value),
   }))
-  if (!showAssignmentBlock.value || hasAssignmentMarker.value) return groups
-  return ensureAssignmentBlockPlaced(groups, assignmentOwnedFields.value)
+  return groups
 })
 
 // ─── Form core (state / rules / formulas / validation / open / save) ───────────
@@ -1317,12 +1312,15 @@ watch(
   overflow-wrap: anywhere;
 }
 
-/* Owned fields continue the box: side borders only, no top border. */
+/* Owned fields continue the box: side borders only, no top border. Only the
+   --last field closes the bottom — otherwise role mode's two stacked fields
+   (BU, then Role) each draw a full border and BU shows a stray line above Role. */
 .el-form-item.mi-assignment-block__field {
   margin-bottom: 0;
   padding: 8px 14px 0;
   border: 1px solid #dcdfe6;
   border-top: none;
+  border-bottom: none;
   background: #f7f9fc;
 }
 
@@ -1330,6 +1328,7 @@ watch(
 .el-form-item.mi-assignment-block__field--last {
   margin-bottom: 18px;
   padding-bottom: 14px;
+  border-bottom: 1px solid #dcdfe6;
   border-radius: 0 0 6px 6px;
 }
 
