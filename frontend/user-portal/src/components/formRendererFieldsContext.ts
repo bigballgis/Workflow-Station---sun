@@ -37,6 +37,10 @@ export interface FormRendererFieldsContext {
   subTableCompactLookupCells: (field: FormField) => boolean
   subTableMode: (field: FormField) => string
   resolveInlineFormTableTitle: (field: FormField) => string
+  resolveInlineFormSourceBinding: (field: FormField) => {
+    formOptions?: Record<string, unknown> | null
+    dialogColumns?: Array<Record<string, unknown>>
+  } | null
   resolveInlineFormFields: (field: FormField) => FormField[]
   getCurrentRowForInlineForm: (field: FormField) => Record<string, unknown> | null
   inlineSubTableFormReadonly: (field: FormField) => boolean

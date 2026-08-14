@@ -99,6 +99,11 @@ export interface FormField {
   readonly?: boolean
   /** Designer "Hide" — form-create rule.hidden; field omitted from layout when true. */
   hidden?: boolean
+  /**
+   * Original form-create rule node (`on` / `_on` / `hook` / `_hook`).
+   * Form-below-table and Add/Edit dialog Event runtime read this; layout render ignores it.
+   */
+  sourceRule?: Record<string, unknown>
   /** Row layout gutter (type === 'row'). */
   gutter?: number
   /**

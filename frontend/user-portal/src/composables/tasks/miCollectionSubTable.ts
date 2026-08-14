@@ -78,9 +78,53 @@ export function finalizeMiCollectionSubTableBindingRows(
   return mergeMiCollectionSubTableRows([rows], binding)
 }
 
+function sourceRelationTableId(
+  sourceBinding: { bindingId?: number; tableId?: number | null },
+  bindingTableById?: Map<number, number | null>,
+): number | null {
+  const fromBinding = sourceBinding.tableId != null ? Number(sourceBinding.tableId) : NaN
+  if (Number.isFinite(fromBinding)) return fromBinding
+  const bid = sourceBinding.bindingId != null ? Number(sourceBinding.bindingId) : NaN
+  if (!Number.isFinite(bid) || !bindingTableById) return null
+  const mapped = bindingTableById.get(bid)
+  return mapped != null && Number.isFinite(Number(mapped)) ? Number(mapped) : null
+}
+
+function targetRowsLookFileOnly(target: unknown[]): boolean {
+  return target.length > 0 && target.every(
+    r => r && typeof r === 'object' && pickNonEmptyAttachmentFile(r),
+  )
+}
+
+function rowIdIdentity(row: unknown): string | null {
+  if (!row || typeof row !== 'object') return null
+  const o = row as Record<string, unknown>
+  const raw = o.row_id ?? o.rowId
+  if (raw == null) return null
+  const s = String(raw).trim()
+  return s === '' ? null : s
+}
+
+/** Same designer row_id — used when leftover slices have no table map entry and no id/id_idw. */
+export function slicesShareRowId(source: unknown[], target: unknown[]): boolean {
+  const keys = new Set<string>()
+  for (const r of source) {
+    const id = rowIdIdentity(r)
+    if (id) keys.add(id)
+  }
+  if (keys.size === 0) return false
+  return target.some(r => {
+    const id = rowIdIdentity(r)
+    return id != null && keys.has(id)
+  })
+}
+
 /**
- * Assignment task only: merge active binding rows into another numeric slice when both describe
- * the same MI collection table — never into attachment / link-child bindings.
+ * Merge active binding rows into another numeric `__subTables__` slice when both describe
+ * the same relation table — never into attachment / file-only / link-child-only slices.
+ *
+ * Copied forms keep stale N/Y (and other scalars) under an older binding id while Save writes
+ * the current id. Without this, form-below-table reopen hydrates the stale slice.
  */
 export function shouldSyncStaleSiblingSubTableSlice(
   target: unknown[],
@@ -98,24 +142,51 @@ export function shouldSyncStaleSiblingSubTableSlice(
     columns?: Array<{ field?: string }> | null
   }>,
   sliceKey: string,
+  bindingTableById?: Map<number, number | null>,
+  sourceRows?: unknown[],
 ): boolean {
-  if (!isMiDashboardSubTableBinding(sourceBinding)) return false
+  if (isFileOnlySubTableBinding(sourceBinding)) return false
   const pkCol = resolveMiCollectionPrimaryKeyFields(sourceBinding)[0] ?? 'id_idw'
   const bid = Number(sliceKey)
+  const srcTid = sourceRelationTableId(sourceBinding, bindingTableById)
   const peer = allBindings.find(b => Number(b.bindingId) === bid)
   if (peer) {
     if (isFileOnlySubTableBinding(peer)) return false
+    const peerTidFromBinding = peer.tableId != null ? Number(peer.tableId) : NaN
+    const peerTidFromMap = bindingTableById?.get(Number(peer.bindingId))
+    const peerTid = peerTidFromMap != null && Number.isFinite(Number(peerTidFromMap))
+      ? Number(peerTidFromMap)
+      : peerTidFromBinding
+    if (srcTid != null && Number.isFinite(peerTid) && srcTid !== peerTid) return false
+    // Same relation table: copied-form / form-below-table Y/N must sync even when the
+    // peer is FK-scoped (isMiParticipantScoped). Collection→People stays blocked by tableId.
+    if (srcTid != null && Number.isFinite(peerTid) && srcTid === peerTid) return true
     if (
       isMiParticipantScopedSubTableBinding(peer as { columns?: Array<{ field?: string }> | null; foreignKeyField?: string | null; tableName?: string })
       && !isMiDashboardSubTableBinding(peer)
     ) {
       return false
     }
-    const srcTid = sourceBinding.tableId != null ? Number(sourceBinding.tableId) : NaN
-    const peerTid = peer.tableId != null ? Number(peer.tableId) : NaN
-    if (Number.isFinite(srcTid) && Number.isFinite(peerTid) && srcTid !== peerTid) return false
-    return isMiDashboardSubTableBinding(peer)
+    return isMiDashboardSubTableBinding(sourceBinding) && isMiDashboardSubTableBinding(peer)
   }
+  if (srcTid != null && bindingTableById && Number.isFinite(bid)) {
+    const peerTid = bindingTableById.get(bid)
+    if (peerTid != null && Number.isFinite(Number(peerTid))) {
+      if (Number(peerTid) === srcTid) {
+        return !targetRowsLookFileOnly(target)
+      }
+      return false
+    }
+  }
+  if (
+    Array.isArray(sourceRows)
+    && sourceRows.length > 0
+    && slicesShareRowId(sourceRows, target)
+    && !targetRowsLookFileOnly(target)
+  ) {
+    return true
+  }
+  if (!isMiDashboardSubTableBinding(sourceBinding)) return false
   const hasPk = target.some(
     r => r && typeof r === 'object' && rowResolvesDesignerPrimaryKey(r, [pkCol]),
   )

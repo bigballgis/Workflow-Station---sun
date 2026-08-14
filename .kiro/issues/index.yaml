@@ -1981,3 +1981,22 @@
     修复：pickSubFormOptionsFromDesign + ProcessStartSubTableBinding.formOptions；
     主路径与 subForms fallback 均写入。单测 pickSubFormOptionsFromDesign.test.ts；
     pnpm build user-portal 通过。dev compose 缺 .env 未重建镜像。
+
+- id: "1519"
+  status: fixed
+  fixed_at: "2026-08-14"
+  severity: major
+  category: bug
+  summary: "Form below table 不跑 Form Design Event，Y/N 显隐日期失效"
+  file: "frontend/user-portal/src/components/SubTableInlineForm.vue"
+  note: |
+    反例：Portal To Do 子表 portalViews.assigneeTodo=formBelowTable 时，改 Merchant Credit Y/N
+    不会显隐对应 Date（Add/Edit 弹窗正常）。
+    根因：SubTableInlineForm → PortalFormFields 未接入 useSubTableDialogComponentEvents，
+    也未传入子表 formOptions / sourceRule。
+    修复：复用对话框事件运行时；extract 时绑定 sourceRule；FormRenderer 传入 formOptions
+    与 dialogColumns；按行身份 bootstrap/onReload；isDialogFieldVisible 过滤叶子字段。
+    验证：subTableInlineFormEvents.test.ts 10/10（含 bootstrap 不 emit、同 id 旧快照不把 Y 打回 N、
+    PK id 出现不 rebootstrap、formOptions 迟到再跑 Event）；sibling hydration 6/6。
+    二次修复：bootstrap 不再 emit update:row；rowModel 只在换行时从 currentRow 拷贝；
+    Save 把 Y 同步到同表 leftover sibling slice，避免 reopen 回 N。

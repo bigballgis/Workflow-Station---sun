@@ -48,6 +48,56 @@ function enrichMiDashboardResolvedRows(
   return mergeSubTableRowsByRowId(rows, allSlices, binding.primaryKeyFields ?? null)
 }
 
+function mergeTableNameSlicesInto(
+  rows: any[],
+  savedSubTables: Record<string, unknown>,
+  binding: ResolveSubTableRowsBinding,
+): any[] {
+  const seen = new Set<unknown>([rows])
+  let merged = rows
+  const nameKeys = [
+    binding.tableName,
+    binding.physicalTableName,
+    binding.tableName ? normalizeSubTableName(binding.tableName) : '',
+    binding.physicalTableName ? normalizeSubTableName(binding.physicalTableName) : '',
+  ].filter((k): k is string => typeof k === 'string' && k.trim().length > 0)
+  for (const key of nameKeys) {
+    const extra = savedSubTables[key] ?? savedSubTables[String(key)]
+    if (!Array.isArray(extra) || extra.length === 0 || seen.has(extra)) continue
+    seen.add(extra)
+    merged = mergeSubTableRowsByRowId(merged, extra as any[], binding.primaryKeyFields ?? null)
+  }
+  return merged
+}
+
+function mergeSameTableIdNumericSlicesInto(
+  rows: any[],
+  savedSubTables: Record<string, unknown>,
+  binding: ResolveSubTableRowsBinding,
+  rtMap?: Map<number, number | null>,
+): any[] {
+  if (!rtMap) return rows
+  const selfTid =
+    binding.tableId != null && Number.isFinite(Number(binding.tableId))
+      ? Number(binding.tableId)
+      : (rtMap.get(Number(binding.bindingId)) ?? null)
+  if (selfTid == null || !Number.isFinite(Number(selfTid))) return rows
+  const tid = Number(selfTid)
+  const seen = new Set<unknown>([rows])
+  let merged = rows
+  for (const [bid, mapped] of rtMap.entries()) {
+    if (legacyBindingIdAliases(binding.bindingId).includes(Number(bid))) continue
+    if (mapped == null || Number(mapped) !== tid) continue
+    for (const alias of legacyBindingIdAliases(bid)) {
+      const extra = savedSubTables[alias] ?? savedSubTables[String(alias)]
+      if (!Array.isArray(extra) || extra.length === 0 || seen.has(extra)) continue
+      seen.add(extra)
+      merged = mergeSubTableRowsByRowId(merged, extra as any[], binding.primaryKeyFields ?? null)
+    }
+  }
+  return merged
+}
+
 export function resolveSubTableRowsForBinding(
   savedSubTables: Record<string, unknown> | null | undefined,
   binding: ResolveSubTableRowsBinding,
@@ -60,10 +110,26 @@ export function resolveSubTableRowsForBinding(
     return Array.isArray(v) && v.length > 0 ? (v as any[]) : undefined
   }
 
+  const finish = (found: any[]): any[] => {
+    // Overlay same-table-id sibling slices (leftover binding ids), then the
+    // table-name alias last so form-below-table Save (Y) wins on reopen.
+    // Own-slice-last would hide sibling Y when the current key is a leftover N.
+    let merged = mergeSameTableIdNumericSlicesInto(
+      found,
+      savedSubTables,
+      binding,
+      opts?.bindingTableById,
+    )
+    if (!opts?.forbidNameFallback) {
+      merged = mergeTableNameSlicesInto(merged, savedSubTables, binding)
+    }
+    return enrichMiDashboardResolvedRows(merged, savedSubTables, binding, opts)
+  }
+
   let rows: any[] | undefined
   for (const alias of legacyBindingIdAliases(binding.bindingId)) {
     rows = tryKey(alias)
-    if (rows) return enrichMiDashboardResolvedRows(rows, savedSubTables, binding, opts)
+    if (rows) return finish(rows)
   }
 
   if (!opts?.forbidNameFallback) {

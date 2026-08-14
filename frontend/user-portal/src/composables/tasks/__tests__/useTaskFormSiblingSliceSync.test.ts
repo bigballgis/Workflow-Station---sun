@@ -3,7 +3,18 @@ import {
   mergeSubTableRowsByRowId,
   shouldSyncStaleSiblingSubTableSlice,
   filterRowsForMiCollectionSubTableBinding,
+  isMiDashboardSubTableBinding,
 } from '../shared'
+
+function sliceUnchanged(snapshot: Record<string, any> | undefined, bindingId: number, out: unknown[]): boolean {
+  if (!snapshot) return false
+  const prev = snapshot[bindingId] ?? snapshot[String(bindingId)]
+  try {
+    return JSON.stringify(prev) === JSON.stringify(out)
+  } catch {
+    return false
+  }
+}
 
 function syncStaleSiblingSubTableSlicesFromActiveBindings(
   subTables: Record<string, any>,
@@ -14,8 +25,13 @@ function syncStaleSiblingSubTableSlicesFromActiveBindings(
     tableId?: number | null
     tableName?: string
     columns?: Array<{ field?: string }> | null
+    formFields?: unknown[] | null
+    foreignKeyField?: string | null
   }>,
+  tableMap?: Map<number, number | null>,
+  snapshot?: Record<string, any>,
 ) {
+  const currentIds = new Set(bindings.map(b => Number(b.bindingId)))
   for (const binding of bindings) {
     const source =
       subTables[binding.bindingId] ??
@@ -23,12 +39,16 @@ function syncStaleSiblingSubTableSlicesFromActiveBindings(
       binding.data
     if (!Array.isArray(source) || source.length === 0) continue
     const pk = Array.isArray(binding.primaryKeyFields) ? binding.primaryKeyFields : null
+    const sourceHasForm = Array.isArray(binding.formFields) && binding.formFields.length > 0
+    const sourceIsMiDashboard = isMiDashboardSubTableBinding(binding)
+    const sourceChanged = snapshot ? !sliceUnchanged(snapshot, binding.bindingId, source) : sourceHasForm
     for (const key of Object.keys(subTables)) {
       if (!/^\d+$/.test(key)) continue
       if (Number(key) === Number(binding.bindingId)) continue
+      if (currentIds.has(Number(key)) && !sourceIsMiDashboard && !sourceChanged) continue
       const target = subTables[key]
       if (!Array.isArray(target) || target.length === 0) continue
-      if (!shouldSyncStaleSiblingSubTableSlice(target, binding, bindings, key)) continue
+      if (!shouldSyncStaleSiblingSubTableSlice(target, binding, bindings, key, tableMap, source)) continue
       subTables[key] = mergeSubTableRowsByRowId(target, source as any[], pk)
     }
   }
@@ -85,6 +105,186 @@ describe('syncStaleSiblingSubTableSlicesFromActiveBindings', () => {
     expect(subTables['104']).toHaveLength(1)
     expect(subTables['104'][0].file).toContain('.pdf')
     expect(subTables['104'][0].id_idw).toBeUndefined()
+  })
+
+  it('copies form-below-table Y onto a stale same-table sibling slice keyed only by row_id', () => {
+    const tableId = 50327
+    const subTables: Record<string, any> = {
+      '50522': [{
+        row_id: 'TRANS-FBT-1',
+        merchant_name: 'FBT',
+        merchant_credit: 'N',
+        temporary_refund: 'N',
+      }],
+      '50527': [{
+        row_id: 'TRANS-FBT-1',
+        merchant_name: 'FBT',
+        merchant_credit: 'Y',
+        temporary_refund: 'N',
+      }],
+      '50528': [{
+        row_id: 'TRANS-FBT-1',
+        comment: 'note',
+        merchant_credit: 'N',
+      }],
+    }
+    const tableMap = new Map<number, number | null>([
+      [50522, tableId],
+      [50527, tableId],
+      [50528, 50326],
+    ])
+    syncStaleSiblingSubTableSlicesFromActiveBindings(subTables, [{
+      bindingId: 50527,
+      tableId,
+      tableName: 'ATM Transaction',
+      primaryKeyFields: ['id_idw'],
+      columns: [{ field: 'assignee' }, { field: 'merchant_name' }],
+      data: subTables['50527'],
+    }], tableMap)
+    expect(subTables['50522'][0].merchant_credit).toBe('Y')
+    expect(subTables['50528'][0].merchant_credit).toBe('N')
+  })
+
+  it('copies form-below-table Y onto leftover binding 50533 by row_id without a table map', () => {
+    const subTables: Record<string, any> = {
+      '50527': [{
+        row_id: 'TRANS-FBT-1',
+        merchant_name: 'FBT',
+        merchant_credit: 'Y',
+      }],
+      '50533': [{
+        row_id: 'TRANS-FBT-1',
+        merchant_name: 'FBT',
+        merchant_credit: 'N',
+      }],
+    }
+    syncStaleSiblingSubTableSlicesFromActiveBindings(subTables, [{
+      bindingId: 50527,
+      tableId: 50327,
+      tableName: 'ATM Transaction',
+      primaryKeyFields: ['id_idw'],
+      columns: [{ field: 'merchant_name' }],
+      formFields: [{ key: 'merchant_credit' }],
+      data: subTables['50527'],
+    }])
+    expect(subTables['50533'][0].merchant_credit).toBe('Y')
+  })
+
+  it('does not let a list-only current binding N overwrite the live form slice Y', () => {
+    const tableId = 50327
+    const subTables: Record<string, any> = {
+      '50533': [{
+        row_id: 'TRANS-FBT-1',
+        merchant_credit: 'N',
+      }],
+      '50527': [{
+        row_id: 'TRANS-FBT-1',
+        merchant_credit: 'Y',
+      }],
+    }
+    const tableMap = new Map<number, number | null>([
+      [50533, tableId],
+      [50527, tableId],
+    ])
+    syncStaleSiblingSubTableSlicesFromActiveBindings(subTables, [
+      {
+        bindingId: 50533,
+        tableId,
+        tableName: 'ATM Transaction',
+        primaryKeyFields: ['id_idw'],
+        columns: [{ field: 'merchant_name' }],
+        data: subTables['50533'],
+      },
+      {
+        bindingId: 50527,
+        tableId,
+        tableName: 'ATM Transaction',
+        primaryKeyFields: ['id_idw'],
+        columns: [{ field: 'merchant_name' }],
+        formFields: [{ key: 'merchant_credit' }],
+        data: subTables['50527'],
+      },
+    ], tableMap)
+    expect(subTables['50527'][0].merchant_credit).toBe('Y')
+    expect(subTables['50533'][0].merchant_credit).toBe('Y')
+  })
+
+  it('copies live form N onto a current list binding whose tableId only exists on the map', () => {
+    const tableId = 50327
+    const subTables: Record<string, any> = {
+      '50533': [{
+        row_id: 'TRANS-FBT-1',
+        merchant_credit: 'Y',
+      }],
+      '50527': [{
+        row_id: 'TRANS-FBT-1',
+        merchant_credit: 'N',
+      }],
+    }
+    const tableMap = new Map<number, number | null>([
+      [50533, tableId],
+      [50527, tableId],
+    ])
+    syncStaleSiblingSubTableSlicesFromActiveBindings(subTables, [
+      {
+        bindingId: 50533,
+        tableName: 'ATM Transaction',
+        primaryKeyFields: ['id_idw'],
+        columns: [{ field: 'merchant_name' }],
+        data: subTables['50533'],
+      },
+      {
+        bindingId: 50527,
+        tableId,
+        tableName: 'ATM Transaction',
+        primaryKeyFields: ['id_idw'],
+        columns: [{ field: 'merchant_name' }],
+        formFields: [{ key: 'merchant_credit' }],
+        data: subTables['50527'],
+      },
+    ], tableMap)
+    expect(subTables['50527'][0].merchant_credit).toBe('N')
+    expect(subTables['50533'][0].merchant_credit).toBe('N')
+  })
+
+  it('copies changed form Y onto an FK-scoped current list binding even without formFields', () => {
+    const tableId = 50327
+    const yRow = { row_id: 'TRANS-FBT-1', merchant_credit: 'Y' }
+    const nRow = { row_id: 'TRANS-FBT-1', merchant_credit: 'N' }
+    const subTables: Record<string, any> = {
+      '50533': [{ ...nRow }],
+      '50527': [{ ...yRow }],
+    }
+    const snapshot = {
+      '50533': [{ ...nRow }],
+      '50527': [{ ...nRow }],
+    }
+    const tableMap = new Map<number, number | null>([
+      [50533, tableId],
+      [50527, tableId],
+    ])
+    syncStaleSiblingSubTableSlicesFromActiveBindings(subTables, [
+      {
+        bindingId: 50533,
+        tableId,
+        tableName: 'ATM Transaction',
+        primaryKeyFields: ['id_idw'],
+        columns: [{ field: 'merchant_name' }],
+        foreignKeyField: 'id',
+        data: subTables['50533'],
+      },
+      {
+        bindingId: 50527,
+        tableId,
+        tableName: 'ATM Transaction',
+        primaryKeyFields: ['id_idw'],
+        columns: [{ field: 'merchant_name' }],
+        foreignKeyField: 'id',
+        data: subTables['50527'],
+      },
+    ], tableMap, snapshot)
+    expect(subTables['50527'][0].merchant_credit).toBe('Y')
+    expect(subTables['50533'][0].merchant_credit).toBe('Y')
   })
 })
 

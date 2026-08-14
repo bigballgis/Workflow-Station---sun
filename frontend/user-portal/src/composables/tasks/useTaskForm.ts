@@ -14,9 +14,42 @@ import {
   buildMiCollectionSliceKeySet,
   collapseMiLinkChildRowsToOnePerParticipant,
   isMiParticipantScopedSubTableBinding,
+  isMiDashboardSubTableBinding,
   shouldSyncStaleSiblingSubTableSlice,
   syncMiLinkChildEditedRowsIntoSiblingSlices,
 } from './shared'
+
+function subTableSliceUnchanged(
+  snapshot: Record<string, any>,
+  bindingId: number,
+  out: unknown[],
+): boolean {
+  const prev = snapshot[bindingId] ?? snapshot[String(bindingId)]
+  try {
+    return JSON.stringify(prev) === JSON.stringify(out)
+  } catch {
+    return false
+  }
+}
+
+function stampBindingTableNameAliases(
+  subTables: Record<string, any>,
+  subTableData: Record<string, Array<Record<string, unknown>>>,
+  binding: { tableName?: string; physicalTableName?: string },
+  rows: unknown[],
+) {
+  if (binding.tableName) {
+    subTables[binding.tableName] = rows
+    subTables[normalizeSubTableName(binding.tableName)] = rows
+    subTableData[binding.tableName] = rows as Array<Record<string, unknown>>
+  }
+  const physical = binding.physicalTableName
+  if (physical && physical !== binding.tableName) {
+    subTables[physical] = rows
+    subTables[normalizeSubTableName(physical)] = rows
+    subTableData[physical] = rows as Array<Record<string, unknown>>
+  }
+}
 
 export function useTaskForm(options: {
   subTableBindings: Ref<any[]>
@@ -54,8 +87,11 @@ export function useTaskForm(options: {
       tableId?: number | null
       tableName?: string
       columns?: Array<{ field?: string }> | null
+      formFields?: unknown[] | null
     }>,
+    snapshot?: Record<string, any>,
   ) {
+    const currentIds = new Set(bindings.map(b => Number(b.bindingId)))
     for (const binding of bindings) {
       const source =
         subTables[binding.bindingId] ??
@@ -63,19 +99,33 @@ export function useTaskForm(options: {
         binding.data
       if (!Array.isArray(source) || source.length === 0) continue
       const pk = Array.isArray(binding.primaryKeyFields) ? binding.primaryKeyFields : null
+      const sourceHasForm = Array.isArray(binding.formFields) && binding.formFields.length > 0
+      const sourceIsMiDashboard = isMiDashboardSubTableBinding(binding)
+      const sourceChanged = snapshot ? !subTableSliceUnchanged(snapshot, binding.bindingId, source) : sourceHasForm
       for (const key of Object.keys(subTables)) {
         if (!/^\d+$/.test(key)) continue
         if (Number(key) === Number(binding.bindingId)) continue
+        // Unchanged list-only rows still hold page-load N/Y; do not copy that onto the
+        // live form slice. A binding whose data actually changed this Save is the source of truth.
+        if (currentIds.has(Number(key)) && !sourceIsMiDashboard && !sourceChanged) continue
         const target = subTables[key]
         if (!Array.isArray(target) || target.length === 0) continue
-        if (!shouldSyncStaleSiblingSubTableSlice(target, binding, bindings, key)) continue
+        if (!shouldSyncStaleSiblingSubTableSlice(
+          target,
+          binding,
+          bindings,
+          key,
+          options.bindingRelationTableMap?.value,
+          source,
+        )) continue
         subTables[key] = mergeSubTableRowsByRowId(target, source as any[], pk)
       }
     }
   }
 
   function buildSubTableSubmitPayload() {
-    const subTables: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
+    const snapshot = (formData.value.__subTables__ as Record<string, any>) || {}
+    const subTables: Record<string, any> = { ...snapshot }
     flattenNestedSubTableRowsIntoPayload(subTables as Record<string, unknown>)
     let miParentIdIdw: string | number | null = null
     let miCollectionSliceKeys: Set<string> | null = null
@@ -131,19 +181,11 @@ export function useTaskForm(options: {
       subTables[binding.bindingId] = out
       subTables[String(binding.bindingId)] = out
       subTableData[String(binding.bindingId)] = out
-      if (binding.tableName) {
-        subTables[binding.tableName] = out
-        subTables[normalizeSubTableName(binding.tableName)] = out
-        subTableData[binding.tableName] = out
-      }
-      // The physical table name is a slice alias too (process start writes it, and nested-row
-      // lookups accept it). Leaving it behind kept a pre-edit copy of the rows in variables,
-      // which hydration then merged back over the fresh slice — the edit looked lost on reload.
-      const physical = (binding as { physicalTableName?: string }).physicalTableName
-      if (physical && physical !== binding.tableName) {
-        subTables[physical] = out
-        subTables[normalizeSubTableName(physical)] = out
-        subTableData[physical] = out
+      // Unchanged list-only bindings still hold page-load N; do not let them be last-writer
+      // of the table-name alias after the live form slice already wrote Y.
+      const nameMissing = Boolean(binding.tableName) && !Array.isArray(subTables[binding.tableName])
+      if (nameMissing || !subTableSliceUnchanged(snapshot, binding.bindingId, out)) {
+        stampBindingTableNameAliases(subTables, subTableData, binding, out)
       }
     }
 
@@ -151,7 +193,14 @@ export function useTaskForm(options: {
       syncStaleSiblingSubTableSlicesFromActiveBindings(
         subTables,
         options.subTableBindings.value,
+        snapshot,
       )
+      for (const binding of options.subTableBindings.value) {
+        if (!Array.isArray(binding.formFields) || binding.formFields.length === 0) continue
+        const live = subTables[String(binding.bindingId)]
+        if (!Array.isArray(live) || live.length === 0) continue
+        stampBindingTableNameAliases(subTables, subTableData, binding, live)
+      }
     } else {
       // #1446: link-form (People) edits must also reach the same relation table's stale sibling
       // slices (other nodes' binding ids), or reload hydrates the old value. Update-only by row PK;

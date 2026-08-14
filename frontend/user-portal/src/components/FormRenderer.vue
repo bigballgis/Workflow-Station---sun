@@ -602,6 +602,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   subTableCompactLookupCells,
   subTableMode,
   resolveInlineFormTableTitle,
+  resolveInlineFormSourceBinding,
   resolveInlineFormFields,
   getCurrentRowForInlineForm,
   inlineSubTableFormReadonly,
@@ -828,26 +829,30 @@ defineExpose({
 </style>
 
 <style lang="scss">
-/* Scoped to .form-renderer container to prevent global style leak (Req 30) */
-.form-renderer {
-  .form-renderer-popper {
-    z-index: 2050;
-  }
+/*
+ * FieldRenderer sets popper-class="form-renderer-popper" and teleports to body.
+ * Nesting the rule under .form-renderer never matches those nodes, so select /
+ * date poppers on form-below-table open under the table stacking context.
+ */
+.form-renderer-popper {
+  z-index: 5000 !important;
+}
 
+.form-renderer {
   :deep(.el-select__popper) {
-    z-index: 2050;
+    z-index: 5000;
   }
 
   :deep(.el-picker__popper) {
-    z-index: 2050;
+    z-index: 5000;
   }
 
   :deep(.el-cascader__dropdown) {
-    z-index: 2050;
+    z-index: 5000;
   }
 
   :deep(.el-tree-select__popper) {
-    z-index: 2050;
+    z-index: 5000;
   }
 }
 </style>
