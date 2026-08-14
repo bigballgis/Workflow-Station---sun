@@ -49,4 +49,5 @@
 
 ## 技能
 
+- `/plan` —— 功能/模块设计 Plan（先方案后实现，见 `.cursor/skills/feature-design-plan/`）
 - `/verify-ui` —— UI 改动后用 Playwright 截图验证（见 `.claude/skills/verify-ui-fix-with-screenshot/`）

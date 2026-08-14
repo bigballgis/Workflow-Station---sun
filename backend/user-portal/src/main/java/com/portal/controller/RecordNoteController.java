@@ -66,17 +66,20 @@ public class RecordNoteController {
             @RequestParam(required = false) String tableKind,
             @RequestParam String tableId,
             @RequestParam(required = false) String functionUnitId,
+            @RequestParam(required = false) String processInstanceId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size) {
         int safeSize = size < 1 ? 5 : Math.min(size, 100);
         NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
-        return ApiResponse.success(recordNoteComponent.list(userId, target, Math.max(page, 0), safeSize));
+        return ApiResponse.success(
+                recordNoteComponent.list(userId, target, Math.max(page, 0), safeSize, processInstanceId));
     }
 
     @Operation(summary = "Note detail including sanitized rich-text body")
     @GetMapping("/{noteId}")
-    public ApiResponse<NoteDetail> detail(@CurrentUserId String userId, @PathVariable String noteId) {
-        return ApiResponse.success(recordNoteComponent.detail(userId, noteId));
+    public ApiResponse<NoteDetail> detail(@CurrentUserId String userId, @PathVariable String noteId,
+                                          @RequestParam(required = false) String processInstanceId) {
+        return ApiResponse.success(recordNoteComponent.detail(userId, noteId, processInstanceId));
     }
 
     @Operation(summary = "Create a comment with optional attachments; adopts pre-uploaded inline images")
@@ -107,9 +110,11 @@ public class RecordNoteController {
             @RequestParam(required = false) String tableKind,
             @RequestParam String tableId,
             @RequestParam(required = false) String functionUnitId,
+            @RequestParam(required = false) String processInstanceId,
             @RequestParam MultipartFile file) {
         NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
-        return ApiResponse.success(recordNoteComponent.createInlineImage(userId, target, file));
+        return ApiResponse.success(
+                recordNoteComponent.createInlineImage(userId, target, file, processInstanceId));
     }
 
     @Operation(summary = "Re-anchor New-Request draft notes onto the started process instance")
@@ -140,10 +145,11 @@ public class RecordNoteController {
 
     @Operation(summary = "Download a single attachment / inline image")
     @GetMapping("/{noteId}/content")
-    public ResponseEntity<byte[]> content(@CurrentUserId String userId, @PathVariable String noteId) {
+    public ResponseEntity<byte[]> content(@CurrentUserId String userId, @PathVariable String noteId,
+                                          @RequestParam(required = false) String processInstanceId) {
         RecordNote note;
         try {
-            note = recordNoteComponent.getForDownload(userId, noteId);
+            note = recordNoteComponent.getForDownload(userId, noteId, processInstanceId);
         } catch (RecordNoteException e) {
             return ResponseEntity.status(binaryStatus(e)).build();
         }

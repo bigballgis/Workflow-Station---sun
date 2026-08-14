@@ -304,6 +304,7 @@ import {
   stampAssignmentConfigsOnForms,
 } from '@/utils/miAssignmentConfig'
 import { createProcessStartState } from '@/composables/processStart/useProcessStartState'
+import { pickSubFormOptionsFromDesign } from '@/composables/processStart/pickSubFormOptionsFromDesign'
 import { createProcessStartFormParsing } from '@/composables/processStart/useProcessStartFormParsing'
 import { createProcessStartSubTables } from '@/composables/processStart/useProcessStartSubTables'
 import {
@@ -576,10 +577,13 @@ const loadFunctionUnitContent = async () => {
         // Sub-form design fields back the form-below-table inline form (same contract as
         // task detail's resolveSubFormDesign) — without them portalViews=formBelowTable
         // renders an empty "no form fields configured" card on the start page.
+        // formOptions (Form onChange / onCreated / …) must also travel: without them
+        // New Request subform dialog/bootstrap skips Form events that Todo already runs.
         const subFormDesign = subForms[b.bindingId] ?? subForms[String(b.bindingId)] ?? {}
         const subFormFields = Array.isArray(subFormDesign.rule) && subFormDesign.rule.length > 0
           ? applyFieldDefinitionsToFormFields(extractFieldsRecursive(subFormDesign.rule), bindingFieldDefinitions)
           : []
+        const subFormOptions = pickSubFormOptionsFromDesign(subFormDesign)
         bindings.push({
           bindingId: b.bindingId,
           tableId: tid != null ? Number(tid) : null,
@@ -597,6 +601,7 @@ const loadFunctionUnitContent = async () => {
           columns,
           ...(dialogColumns.length > 0 ? { dialogColumns } : {}),
           ...(subFormFields.length > 0 ? { formFields: subFormFields } : {}),
+          ...(subFormOptions ? { formOptions: subFormOptions } : {}),
           portalViews: bindingPortalViews,
           fieldDefinitions: bindingFieldDefinitions,
           bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
@@ -615,6 +620,7 @@ const loadFunctionUnitContent = async () => {
           const fakeBinding = { bindingId, subFormConfig: subForm }
           const listCols = resolveSubTableBindingColumnsForStart(fakeBinding, subForms, formConfigForPk)
           const dialogCols = deriveDialogColumnsFromBinding(fakeBinding, subForms)
+          const fallbackOptions = pickSubFormOptionsFromDesign(subForm as { options?: unknown })
           bindings.push({
             bindingId,
             tableId: null,
@@ -626,6 +632,7 @@ const loadFunctionUnitContent = async () => {
             primaryKeyFields: undefined,
             columns: listCols,
             ...(dialogCols.length > 0 ? { dialogColumns: dialogCols } : {}),
+            ...(fallbackOptions ? { formOptions: fallbackOptions } : {}),
             fieldDefinitions: [],
             data: []
           })

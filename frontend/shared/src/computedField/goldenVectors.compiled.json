@@ -1,0 +1,2664 @@
+{
+  "$comment": [
+    "GENERATED FILE - do not edit by hand.",
+    "Source: goldenVectors.json. Regenerate: cd frontend/user-portal && npm run vectors:build",
+    "Consumed by the Java ComputedFieldGoldenVectorTest, which has no parser of its own."
+  ],
+  "generatedFrom": "goldenVectors.json",
+  "divisionScale": 10,
+  "functionNames": [
+    "ABS",
+    "AND",
+    "COALESCE",
+    "CONCAT",
+    "ENDSWITH",
+    "FIND",
+    "IF",
+    "INT",
+    "ISBLANK",
+    "LEFT",
+    "LEN",
+    "LOWER",
+    "MID",
+    "MOD",
+    "NOT",
+    "OR",
+    "POWER",
+    "RIGHT",
+    "ROUND",
+    "ROUNDDOWN",
+    "ROUNDUP",
+    "SQRT",
+    "STARTSWITH",
+    "SUBSTITUTE",
+    "SWITCH",
+    "TRIM",
+    "TRUNC",
+    "UPPER",
+    "VALUE"
+  ],
+  "cases": [
+    {
+      "name": "float trap: 0.1 + 0.2 is exactly 0.3",
+      "formula": "0.1 + 0.2",
+      "row": {},
+      "expect": "0.3",
+      "ast": {
+        "type": "binary",
+        "op": "+",
+        "left": {
+          "type": "number",
+          "text": "0.1"
+        },
+        "right": {
+          "type": "number",
+          "text": "0.2"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "float trap: repeated addition of 0.1",
+      "formula": "0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1",
+      "row": {},
+      "expect": "1.0",
+      "ast": {
+        "type": "binary",
+        "op": "+",
+        "left": {
+          "type": "binary",
+          "op": "+",
+          "left": {
+            "type": "binary",
+            "op": "+",
+            "left": {
+              "type": "binary",
+              "op": "+",
+              "left": {
+                "type": "binary",
+                "op": "+",
+                "left": {
+                  "type": "binary",
+                  "op": "+",
+                  "left": {
+                    "type": "binary",
+                    "op": "+",
+                    "left": {
+                      "type": "binary",
+                      "op": "+",
+                      "left": {
+                        "type": "binary",
+                        "op": "+",
+                        "left": {
+                          "type": "number",
+                          "text": "0.1"
+                        },
+                        "right": {
+                          "type": "number",
+                          "text": "0.1"
+                        }
+                      },
+                      "right": {
+                        "type": "number",
+                        "text": "0.1"
+                      }
+                    },
+                    "right": {
+                      "type": "number",
+                      "text": "0.1"
+                    }
+                  },
+                  "right": {
+                    "type": "number",
+                    "text": "0.1"
+                  }
+                },
+                "right": {
+                  "type": "number",
+                  "text": "0.1"
+                }
+              },
+              "right": {
+                "type": "number",
+                "text": "0.1"
+              }
+            },
+            "right": {
+              "type": "number",
+              "text": "0.1"
+            }
+          },
+          "right": {
+            "type": "number",
+            "text": "0.1"
+          }
+        },
+        "right": {
+          "type": "number",
+          "text": "0.1"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "multiplication adds scales",
+      "formula": "1.05 * 2.5",
+      "row": {},
+      "expect": "2.625",
+      "ast": {
+        "type": "binary",
+        "op": "*",
+        "left": {
+          "type": "number",
+          "text": "1.05"
+        },
+        "right": {
+          "type": "number",
+          "text": "2.5"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "money case: subtotal times tax rate (scale 2 x scale 4 = scale 6)",
+      "formula": "amount * (1 + tax_rate)",
+      "row": {
+        "amount": "1999.99",
+        "tax_rate": "0.0825"
+      },
+      "expect": "2164.989175",
+      "ast": {
+        "type": "binary",
+        "op": "*",
+        "left": {
+          "type": "field",
+          "name": "amount"
+        },
+        "right": {
+          "type": "binary",
+          "op": "+",
+          "left": {
+            "type": "number",
+            "text": "1"
+          },
+          "right": {
+            "type": "field",
+            "name": "tax_rate"
+          }
+        }
+      },
+      "dependsOn": [
+        "amount",
+        "tax_rate"
+      ]
+    },
+    {
+      "name": "operator precedence: multiply before add",
+      "formula": "2 + 3 * 4",
+      "row": {},
+      "expect": "14",
+      "ast": {
+        "type": "binary",
+        "op": "+",
+        "left": {
+          "type": "number",
+          "text": "2"
+        },
+        "right": {
+          "type": "binary",
+          "op": "*",
+          "left": {
+            "type": "number",
+            "text": "3"
+          },
+          "right": {
+            "type": "number",
+            "text": "4"
+          }
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "parentheses override precedence",
+      "formula": "(2 + 3) * 4",
+      "row": {},
+      "expect": "20",
+      "ast": {
+        "type": "binary",
+        "op": "*",
+        "left": {
+          "type": "binary",
+          "op": "+",
+          "left": {
+            "type": "number",
+            "text": "2"
+          },
+          "right": {
+            "type": "number",
+            "text": "3"
+          }
+        },
+        "right": {
+          "type": "number",
+          "text": "4"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "unary minus binds tighter than multiply",
+      "formula": "-2 * 3",
+      "row": {},
+      "expect": "-6",
+      "ast": {
+        "type": "binary",
+        "op": "*",
+        "left": {
+          "type": "unary",
+          "op": "-",
+          "operand": {
+            "type": "number",
+            "text": "2"
+          }
+        },
+        "right": {
+          "type": "number",
+          "text": "3"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "subtraction is left associative",
+      "formula": "10 - 3 - 2",
+      "row": {},
+      "expect": "5",
+      "ast": {
+        "type": "binary",
+        "op": "-",
+        "left": {
+          "type": "binary",
+          "op": "-",
+          "left": {
+            "type": "number",
+            "text": "10"
+          },
+          "right": {
+            "type": "number",
+            "text": "3"
+          }
+        },
+        "right": {
+          "type": "number",
+          "text": "2"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "division settles at DIVISION_SCALE with HALF_UP",
+      "formula": "1 / 3",
+      "row": {},
+      "expect": "0.3333333333",
+      "ast": {
+        "type": "binary",
+        "op": "/",
+        "left": {
+          "type": "number",
+          "text": "1"
+        },
+        "right": {
+          "type": "number",
+          "text": "3"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "division rounds HALF_UP at the last digit",
+      "formula": "2 / 3",
+      "row": {},
+      "expect": "0.6666666667",
+      "ast": {
+        "type": "binary",
+        "op": "/",
+        "left": {
+          "type": "number",
+          "text": "2"
+        },
+        "right": {
+          "type": "number",
+          "text": "3"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "division by zero is an error, never 0",
+      "formula": "amount / 0",
+      "row": {
+        "amount": "10"
+      },
+      "expectError": "DIVISION_BY_ZERO",
+      "ast": {
+        "type": "binary",
+        "op": "/",
+        "left": {
+          "type": "field",
+          "name": "amount"
+        },
+        "right": {
+          "type": "number",
+          "text": "0"
+        }
+      },
+      "dependsOn": [
+        "amount"
+      ]
+    },
+    {
+      "name": "division by a zero-valued field is an error",
+      "formula": "total / qty",
+      "row": {
+        "total": "100",
+        "qty": "0"
+      },
+      "expectError": "DIVISION_BY_ZERO",
+      "ast": {
+        "type": "binary",
+        "op": "/",
+        "left": {
+          "type": "field",
+          "name": "total"
+        },
+        "right": {
+          "type": "field",
+          "name": "qty"
+        }
+      },
+      "dependsOn": [
+        "qty",
+        "total"
+      ]
+    },
+    {
+      "name": "IF short-circuits so the divide guard is writable",
+      "formula": "IF(qty = 0, 0, total / qty)",
+      "row": {
+        "total": "100",
+        "qty": "0"
+      },
+      "expect": "0",
+      "ast": {
+        "type": "call",
+        "fn": "IF",
+        "args": [
+          {
+            "type": "binary",
+            "op": "=",
+            "left": {
+              "type": "field",
+              "name": "qty"
+            },
+            "right": {
+              "type": "number",
+              "text": "0"
+            }
+          },
+          {
+            "type": "number",
+            "text": "0"
+          },
+          {
+            "type": "binary",
+            "op": "/",
+            "left": {
+              "type": "field",
+              "name": "total"
+            },
+            "right": {
+              "type": "field",
+              "name": "qty"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "qty",
+        "total"
+      ]
+    },
+    {
+      "name": "IF takes the else branch",
+      "formula": "IF(qty = 0, 0, total / qty)",
+      "row": {
+        "total": "100",
+        "qty": "4"
+      },
+      "expect": "25.0000000000",
+      "ast": {
+        "type": "call",
+        "fn": "IF",
+        "args": [
+          {
+            "type": "binary",
+            "op": "=",
+            "left": {
+              "type": "field",
+              "name": "qty"
+            },
+            "right": {
+              "type": "number",
+              "text": "0"
+            }
+          },
+          {
+            "type": "number",
+            "text": "0"
+          },
+          {
+            "type": "binary",
+            "op": "/",
+            "left": {
+              "type": "field",
+              "name": "total"
+            },
+            "right": {
+              "type": "field",
+              "name": "qty"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "qty",
+        "total"
+      ]
+    },
+    {
+      "name": "IF without an else branch yields blank",
+      "formula": "IF(1 = 2, 5)",
+      "row": {},
+      "expectBlank": true,
+      "ast": {
+        "type": "call",
+        "fn": "IF",
+        "args": [
+          {
+            "type": "binary",
+            "op": "=",
+            "left": {
+              "type": "number",
+              "text": "1"
+            },
+            "right": {
+              "type": "number",
+              "text": "2"
+            }
+          },
+          {
+            "type": "number",
+            "text": "5"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "AND short-circuits on the first false",
+      "formula": "AND(false, 1 / 0 = 1)",
+      "row": {},
+      "expect": false,
+      "ast": {
+        "type": "call",
+        "fn": "AND",
+        "args": [
+          {
+            "type": "boolean",
+            "value": false
+          },
+          {
+            "type": "binary",
+            "op": "=",
+            "left": {
+              "type": "binary",
+              "op": "/",
+              "left": {
+                "type": "number",
+                "text": "1"
+              },
+              "right": {
+                "type": "number",
+                "text": "0"
+              }
+            },
+            "right": {
+              "type": "number",
+              "text": "1"
+            }
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "OR short-circuits on the first true",
+      "formula": "OR(true, 1 / 0 = 1)",
+      "row": {},
+      "expect": true,
+      "ast": {
+        "type": "call",
+        "fn": "OR",
+        "args": [
+          {
+            "type": "boolean",
+            "value": true
+          },
+          {
+            "type": "binary",
+            "op": "=",
+            "left": {
+              "type": "binary",
+              "op": "/",
+              "left": {
+                "type": "number",
+                "text": "1"
+              },
+              "right": {
+                "type": "number",
+                "text": "0"
+              }
+            },
+            "right": {
+              "type": "number",
+              "text": "1"
+            }
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "NOT inverts",
+      "formula": "NOT(amount > 100)",
+      "row": {
+        "amount": "50"
+      },
+      "expect": true,
+      "ast": {
+        "type": "call",
+        "fn": "NOT",
+        "args": [
+          {
+            "type": "binary",
+            "op": ">",
+            "left": {
+              "type": "field",
+              "name": "amount"
+            },
+            "right": {
+              "type": "number",
+              "text": "100"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "amount"
+      ]
+    },
+    {
+      "name": "blank behaves as zero in arithmetic",
+      "formula": "amount + missing_field_value",
+      "row": {
+        "amount": "10",
+        "missing_field_value": null
+      },
+      "expect": "10",
+      "ast": {
+        "type": "binary",
+        "op": "+",
+        "left": {
+          "type": "field",
+          "name": "amount"
+        },
+        "right": {
+          "type": "field",
+          "name": "missing_field_value"
+        }
+      },
+      "dependsOn": [
+        "amount",
+        "missing_field_value"
+      ]
+    },
+    {
+      "name": "empty string is blank, not text",
+      "formula": "ISBLANK(note)",
+      "row": {
+        "note": ""
+      },
+      "expect": true,
+      "ast": {
+        "type": "call",
+        "fn": "ISBLANK",
+        "args": [
+          {
+            "type": "field",
+            "name": "note"
+          }
+        ]
+      },
+      "dependsOn": [
+        "note"
+      ]
+    },
+    {
+      "name": "zero is not blank",
+      "formula": "ISBLANK(amount)",
+      "row": {
+        "amount": "0"
+      },
+      "expect": false,
+      "ast": {
+        "type": "call",
+        "fn": "ISBLANK",
+        "args": [
+          {
+            "type": "field",
+            "name": "amount"
+          }
+        ]
+      },
+      "dependsOn": [
+        "amount"
+      ]
+    },
+    {
+      "name": "text does not silently become a number",
+      "formula": "amount + note",
+      "row": {
+        "amount": "10",
+        "note": "abc"
+      },
+      "expectError": "TYPE_MISMATCH",
+      "ast": {
+        "type": "binary",
+        "op": "+",
+        "left": {
+          "type": "field",
+          "name": "amount"
+        },
+        "right": {
+          "type": "field",
+          "name": "note"
+        }
+      },
+      "dependsOn": [
+        "amount",
+        "note"
+      ]
+    },
+    {
+      "name": "VALUE is the explicit text-to-number path",
+      "formula": "amount + VALUE(note)",
+      "row": {
+        "amount": "10",
+        "note": "2.5"
+      },
+      "expect": "12.5",
+      "ast": {
+        "type": "binary",
+        "op": "+",
+        "left": {
+          "type": "field",
+          "name": "amount"
+        },
+        "right": {
+          "type": "call",
+          "fn": "VALUE",
+          "args": [
+            {
+              "type": "field",
+              "name": "note"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "amount",
+        "note"
+      ]
+    },
+    {
+      "name": "VALUE rejects unparseable text",
+      "formula": "VALUE(note)",
+      "row": {
+        "note": "12abc"
+      },
+      "expectError": "TYPE_MISMATCH",
+      "ast": {
+        "type": "call",
+        "fn": "VALUE",
+        "args": [
+          {
+            "type": "field",
+            "name": "note"
+          }
+        ]
+      },
+      "dependsOn": [
+        "note"
+      ]
+    },
+    {
+      "name": "blank equals blank",
+      "formula": "note = other_note",
+      "row": {
+        "note": null,
+        "other_note": ""
+      },
+      "expect": true,
+      "ast": {
+        "type": "binary",
+        "op": "=",
+        "left": {
+          "type": "field",
+          "name": "note"
+        },
+        "right": {
+          "type": "field",
+          "name": "other_note"
+        }
+      },
+      "dependsOn": [
+        "note",
+        "other_note"
+      ]
+    },
+    {
+      "name": "blank does not equal zero",
+      "formula": "note = 0",
+      "row": {
+        "note": null
+      },
+      "expect": false,
+      "ast": {
+        "type": "binary",
+        "op": "=",
+        "left": {
+          "type": "field",
+          "name": "note"
+        },
+        "right": {
+          "type": "number",
+          "text": "0"
+        }
+      },
+      "dependsOn": [
+        "note"
+      ]
+    },
+    {
+      "name": "ROUND uses HALF_UP",
+      "formula": "ROUND(2.345, 2)",
+      "row": {},
+      "expect": "2.35",
+      "ast": {
+        "type": "call",
+        "fn": "ROUND",
+        "args": [
+          {
+            "type": "number",
+            "text": "2.345"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "ROUND HALF_UP on a negative moves away from zero",
+      "formula": "ROUND(-2.345, 2)",
+      "row": {},
+      "expect": "-2.35",
+      "ast": {
+        "type": "call",
+        "fn": "ROUND",
+        "args": [
+          {
+            "type": "unary",
+            "op": "-",
+            "operand": {
+              "type": "number",
+              "text": "2.345"
+            }
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "ROUND to whole number",
+      "formula": "ROUND(2.5, 0)",
+      "row": {},
+      "expect": "3",
+      "ast": {
+        "type": "call",
+        "fn": "ROUND",
+        "args": [
+          {
+            "type": "number",
+            "text": "2.5"
+          },
+          {
+            "type": "number",
+            "text": "0"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "ROUND defaults to zero digits",
+      "formula": "ROUND(2.5)",
+      "row": {},
+      "expect": "3",
+      "ast": {
+        "type": "call",
+        "fn": "ROUND",
+        "args": [
+          {
+            "type": "number",
+            "text": "2.5"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "ROUNDDOWN truncates toward zero",
+      "formula": "ROUNDDOWN(2.999, 2)",
+      "row": {},
+      "expect": "2.99",
+      "ast": {
+        "type": "call",
+        "fn": "ROUNDDOWN",
+        "args": [
+          {
+            "type": "number",
+            "text": "2.999"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "ROUNDDOWN on a negative truncates toward zero",
+      "formula": "ROUNDDOWN(-2.999, 2)",
+      "row": {},
+      "expect": "-2.99",
+      "ast": {
+        "type": "call",
+        "fn": "ROUNDDOWN",
+        "args": [
+          {
+            "type": "unary",
+            "op": "-",
+            "operand": {
+              "type": "number",
+              "text": "2.999"
+            }
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "ROUNDUP moves away from zero",
+      "formula": "ROUNDUP(2.001, 2)",
+      "row": {},
+      "expect": "2.01",
+      "ast": {
+        "type": "call",
+        "fn": "ROUNDUP",
+        "args": [
+          {
+            "type": "number",
+            "text": "2.001"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "ROUNDUP on a negative moves away from zero",
+      "formula": "ROUNDUP(-2.001, 2)",
+      "row": {},
+      "expect": "-2.01",
+      "ast": {
+        "type": "call",
+        "fn": "ROUNDUP",
+        "args": [
+          {
+            "type": "unary",
+            "op": "-",
+            "operand": {
+              "type": "number",
+              "text": "2.001"
+            }
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "ABS of a negative",
+      "formula": "ABS(0 - 7.5)",
+      "row": {},
+      "expect": "7.5",
+      "ast": {
+        "type": "call",
+        "fn": "ABS",
+        "args": [
+          {
+            "type": "binary",
+            "op": "-",
+            "left": {
+              "type": "number",
+              "text": "0"
+            },
+            "right": {
+              "type": "number",
+              "text": "7.5"
+            }
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "INT truncates toward zero for positives",
+      "formula": "INT(7.9)",
+      "row": {},
+      "expect": "7",
+      "ast": {
+        "type": "call",
+        "fn": "INT",
+        "args": [
+          {
+            "type": "number",
+            "text": "7.9"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "INT truncates toward zero for negatives",
+      "formula": "INT(-7.9)",
+      "row": {},
+      "expect": "-7",
+      "ast": {
+        "type": "call",
+        "fn": "INT",
+        "args": [
+          {
+            "type": "unary",
+            "op": "-",
+            "operand": {
+              "type": "number",
+              "text": "7.9"
+            }
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "MOD keeps the dividend sign",
+      "formula": "MOD(10, 3)",
+      "row": {},
+      "expect": "1",
+      "ast": {
+        "type": "call",
+        "fn": "MOD",
+        "args": [
+          {
+            "type": "number",
+            "text": "10"
+          },
+          {
+            "type": "number",
+            "text": "3"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "MOD of a negative dividend",
+      "formula": "MOD(-10, 3)",
+      "row": {},
+      "expect": "-1",
+      "ast": {
+        "type": "call",
+        "fn": "MOD",
+        "args": [
+          {
+            "type": "unary",
+            "op": "-",
+            "operand": {
+              "type": "number",
+              "text": "10"
+            }
+          },
+          {
+            "type": "number",
+            "text": "3"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "MOD by zero is an error",
+      "formula": "MOD(10, 0)",
+      "row": {},
+      "expectError": "DIVISION_BY_ZERO",
+      "ast": {
+        "type": "call",
+        "fn": "MOD",
+        "args": [
+          {
+            "type": "number",
+            "text": "10"
+          },
+          {
+            "type": "number",
+            "text": "0"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "POWER with a whole exponent is exact",
+      "formula": "POWER(1.1, 3)",
+      "row": {},
+      "expect": "1.331",
+      "ast": {
+        "type": "call",
+        "fn": "POWER",
+        "args": [
+          {
+            "type": "number",
+            "text": "1.1"
+          },
+          {
+            "type": "number",
+            "text": "3"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "POWER to the zero",
+      "formula": "POWER(5, 0)",
+      "row": {},
+      "expect": "1",
+      "ast": {
+        "type": "call",
+        "fn": "POWER",
+        "args": [
+          {
+            "type": "number",
+            "text": "5"
+          },
+          {
+            "type": "number",
+            "text": "0"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "POWER with a negative exponent divides at DIVISION_SCALE",
+      "formula": "POWER(2, -2)",
+      "row": {},
+      "expect": "0.2500000000",
+      "ast": {
+        "type": "call",
+        "fn": "POWER",
+        "args": [
+          {
+            "type": "number",
+            "text": "2"
+          },
+          {
+            "type": "unary",
+            "op": "-",
+            "operand": {
+              "type": "number",
+              "text": "2"
+            }
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "POWER rejects a fractional exponent to keep both engines identical",
+      "formula": "POWER(2, 0.5)",
+      "row": {},
+      "expectError": "NON_INTEGER_EXPONENT",
+      "ast": {
+        "type": "call",
+        "fn": "POWER",
+        "args": [
+          {
+            "type": "number",
+            "text": "2"
+          },
+          {
+            "type": "number",
+            "text": "0.5"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "SQRT truncates at DIVISION_SCALE",
+      "formula": "SQRT(2)",
+      "row": {},
+      "expect": "1.4142135623",
+      "ast": {
+        "type": "call",
+        "fn": "SQRT",
+        "args": [
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "SQRT of a perfect square",
+      "formula": "SQRT(144)",
+      "row": {},
+      "expect": "12.0000000000",
+      "ast": {
+        "type": "call",
+        "fn": "SQRT",
+        "args": [
+          {
+            "type": "number",
+            "text": "144"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "SQRT of zero",
+      "formula": "SQRT(0)",
+      "row": {},
+      "expect": "0.0000000000",
+      "ast": {
+        "type": "call",
+        "fn": "SQRT",
+        "args": [
+          {
+            "type": "number",
+            "text": "0"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "SQRT of a negative is an error, not NaN",
+      "formula": "SQRT(0 - 1)",
+      "row": {},
+      "expectError": "NEGATIVE_SQRT",
+      "ast": {
+        "type": "call",
+        "fn": "SQRT",
+        "args": [
+          {
+            "type": "binary",
+            "op": "-",
+            "left": {
+              "type": "number",
+              "text": "0"
+            },
+            "right": {
+              "type": "number",
+              "text": "1"
+            }
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "CONCAT joins mixed kinds using canonical text forms",
+      "formula": "CONCAT(code, \"-\", amount)",
+      "row": {
+        "code": "INV",
+        "amount": "10.50"
+      },
+      "expect": "INV-10.50",
+      "ast": {
+        "type": "call",
+        "fn": "CONCAT",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "text",
+            "value": "-"
+          },
+          {
+            "type": "field",
+            "name": "amount"
+          }
+        ]
+      },
+      "dependsOn": [
+        "amount",
+        "code"
+      ]
+    },
+    {
+      "name": "LEN counts characters",
+      "formula": "LEN(code)",
+      "row": {
+        "code": "ABCDE"
+      },
+      "expect": "5",
+      "ast": {
+        "type": "call",
+        "fn": "LEN",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "LEN of blank is zero",
+      "formula": "LEN(missing)",
+      "row": {
+        "missing": null
+      },
+      "expect": "0",
+      "ast": {
+        "type": "call",
+        "fn": "LEN",
+        "args": [
+          {
+            "type": "field",
+            "name": "missing"
+          }
+        ]
+      },
+      "dependsOn": [
+        "missing"
+      ]
+    },
+    {
+      "name": "TRIM strips both ends",
+      "formula": "TRIM(code)",
+      "row": {
+        "code": "  AB  "
+      },
+      "expect": "AB",
+      "ast": {
+        "type": "call",
+        "fn": "TRIM",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "LEFT takes a prefix",
+      "formula": "LEFT(code, 3)",
+      "row": {
+        "code": "ABCDEF"
+      },
+      "expect": "ABC",
+      "ast": {
+        "type": "call",
+        "fn": "LEFT",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "number",
+            "text": "3"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "LEFT beyond length returns the whole string",
+      "formula": "LEFT(code, 99)",
+      "row": {
+        "code": "ABC"
+      },
+      "expect": "ABC",
+      "ast": {
+        "type": "call",
+        "fn": "LEFT",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "number",
+            "text": "99"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "RIGHT takes a suffix",
+      "formula": "RIGHT(code, 2)",
+      "row": {
+        "code": "ABCDEF"
+      },
+      "expect": "EF",
+      "ast": {
+        "type": "call",
+        "fn": "RIGHT",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "RIGHT of zero length is empty",
+      "formula": "RIGHT(code, 0)",
+      "row": {
+        "code": "ABC"
+      },
+      "expect": "",
+      "ast": {
+        "type": "call",
+        "fn": "RIGHT",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "number",
+            "text": "0"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "MID is one-based",
+      "formula": "MID(code, 2, 3)",
+      "row": {
+        "code": "ABCDEF"
+      },
+      "expect": "BCD",
+      "ast": {
+        "type": "call",
+        "fn": "MID",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          },
+          {
+            "type": "number",
+            "text": "3"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "MID without a count takes the rest",
+      "formula": "MID(code, 4)",
+      "row": {
+        "code": "ABCDEF"
+      },
+      "expect": "DEF",
+      "ast": {
+        "type": "call",
+        "fn": "MID",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "number",
+            "text": "4"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "MID past the end is empty",
+      "formula": "MID(code, 10, 2)",
+      "row": {
+        "code": "ABC"
+      },
+      "expect": "",
+      "ast": {
+        "type": "call",
+        "fn": "MID",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "number",
+            "text": "10"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "UPPER and LOWER",
+      "formula": "CONCAT(UPPER(code), LOWER(code))",
+      "row": {
+        "code": "aB"
+      },
+      "expect": "ABab",
+      "ast": {
+        "type": "call",
+        "fn": "CONCAT",
+        "args": [
+          {
+            "type": "call",
+            "fn": "UPPER",
+            "args": [
+              {
+                "type": "field",
+                "name": "code"
+              }
+            ]
+          },
+          {
+            "type": "call",
+            "fn": "LOWER",
+            "args": [
+              {
+                "type": "field",
+                "name": "code"
+              }
+            ]
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "SUBSTITUTE replaces every occurrence",
+      "formula": "SUBSTITUTE(code, \"-\", \"\")",
+      "row": {
+        "code": "A-B-C"
+      },
+      "expect": "ABC",
+      "ast": {
+        "type": "call",
+        "fn": "SUBSTITUTE",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "text",
+            "value": "-"
+          },
+          {
+            "type": "text",
+            "value": ""
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "SUBSTITUTE with an empty needle returns the input unchanged",
+      "formula": "SUBSTITUTE(code, \"\", \"X\")",
+      "row": {
+        "code": "AB"
+      },
+      "expect": "AB",
+      "ast": {
+        "type": "call",
+        "fn": "SUBSTITUTE",
+        "args": [
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "text",
+            "value": ""
+          },
+          {
+            "type": "text",
+            "value": "X"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "FIND is one-based",
+      "formula": "FIND(\"B\", code)",
+      "row": {
+        "code": "ABC"
+      },
+      "expect": "2",
+      "ast": {
+        "type": "call",
+        "fn": "FIND",
+        "args": [
+          {
+            "type": "text",
+            "value": "B"
+          },
+          {
+            "type": "field",
+            "name": "code"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "FIND returns blank when absent",
+      "formula": "FIND(\"Z\", code)",
+      "row": {
+        "code": "ABC"
+      },
+      "expectBlank": true,
+      "ast": {
+        "type": "call",
+        "fn": "FIND",
+        "args": [
+          {
+            "type": "text",
+            "value": "Z"
+          },
+          {
+            "type": "field",
+            "name": "code"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "FIND honours the start position",
+      "formula": "FIND(\"A\", code, 2)",
+      "row": {
+        "code": "ABA"
+      },
+      "expect": "3",
+      "ast": {
+        "type": "call",
+        "fn": "FIND",
+        "args": [
+          {
+            "type": "text",
+            "value": "A"
+          },
+          {
+            "type": "field",
+            "name": "code"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "STARTSWITH and ENDSWITH",
+      "formula": "AND(STARTSWITH(code, \"AB\"), ENDSWITH(code, \"EF\"))",
+      "row": {
+        "code": "ABCDEF"
+      },
+      "expect": true,
+      "ast": {
+        "type": "call",
+        "fn": "AND",
+        "args": [
+          {
+            "type": "call",
+            "fn": "STARTSWITH",
+            "args": [
+              {
+                "type": "field",
+                "name": "code"
+              },
+              {
+                "type": "text",
+                "value": "AB"
+              }
+            ]
+          },
+          {
+            "type": "call",
+            "fn": "ENDSWITH",
+            "args": [
+              {
+                "type": "field",
+                "name": "code"
+              },
+              {
+                "type": "text",
+                "value": "EF"
+              }
+            ]
+          }
+        ]
+      },
+      "dependsOn": [
+        "code"
+      ]
+    },
+    {
+      "name": "SWITCH matches a branch",
+      "formula": "SWITCH(status, \"NEW\", 1, \"DONE\", 2, 0)",
+      "row": {
+        "status": "DONE"
+      },
+      "expect": "2",
+      "ast": {
+        "type": "call",
+        "fn": "SWITCH",
+        "args": [
+          {
+            "type": "field",
+            "name": "status"
+          },
+          {
+            "type": "text",
+            "value": "NEW"
+          },
+          {
+            "type": "number",
+            "text": "1"
+          },
+          {
+            "type": "text",
+            "value": "DONE"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          },
+          {
+            "type": "number",
+            "text": "0"
+          }
+        ]
+      },
+      "dependsOn": [
+        "status"
+      ]
+    },
+    {
+      "name": "SWITCH falls through to the default",
+      "formula": "SWITCH(status, \"NEW\", 1, \"DONE\", 2, 99)",
+      "row": {
+        "status": "OTHER"
+      },
+      "expect": "99",
+      "ast": {
+        "type": "call",
+        "fn": "SWITCH",
+        "args": [
+          {
+            "type": "field",
+            "name": "status"
+          },
+          {
+            "type": "text",
+            "value": "NEW"
+          },
+          {
+            "type": "number",
+            "text": "1"
+          },
+          {
+            "type": "text",
+            "value": "DONE"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          },
+          {
+            "type": "number",
+            "text": "99"
+          }
+        ]
+      },
+      "dependsOn": [
+        "status"
+      ]
+    },
+    {
+      "name": "SWITCH without a default yields blank",
+      "formula": "SWITCH(status, \"NEW\", 1, \"DONE\", 2)",
+      "row": {
+        "status": "OTHER"
+      },
+      "expectBlank": true,
+      "ast": {
+        "type": "call",
+        "fn": "SWITCH",
+        "args": [
+          {
+            "type": "field",
+            "name": "status"
+          },
+          {
+            "type": "text",
+            "value": "NEW"
+          },
+          {
+            "type": "number",
+            "text": "1"
+          },
+          {
+            "type": "text",
+            "value": "DONE"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": [
+        "status"
+      ]
+    },
+    {
+      "name": "COALESCE picks the first non-blank",
+      "formula": "COALESCE(nickname, full_name, \"anonymous\")",
+      "row": {
+        "nickname": null,
+        "full_name": "Ada"
+      },
+      "expect": "Ada",
+      "ast": {
+        "type": "call",
+        "fn": "COALESCE",
+        "args": [
+          {
+            "type": "field",
+            "name": "nickname"
+          },
+          {
+            "type": "field",
+            "name": "full_name"
+          },
+          {
+            "type": "text",
+            "value": "anonymous"
+          }
+        ]
+      },
+      "dependsOn": [
+        "full_name",
+        "nickname"
+      ]
+    },
+    {
+      "name": "COALESCE of all blanks is blank",
+      "formula": "COALESCE(nickname, full_name)",
+      "row": {
+        "nickname": null,
+        "full_name": ""
+      },
+      "expectBlank": true,
+      "ast": {
+        "type": "call",
+        "fn": "COALESCE",
+        "args": [
+          {
+            "type": "field",
+            "name": "nickname"
+          },
+          {
+            "type": "field",
+            "name": "full_name"
+          }
+        ]
+      },
+      "dependsOn": [
+        "full_name",
+        "nickname"
+      ]
+    },
+    {
+      "name": "text ordering is code-unit lexicographic",
+      "formula": "code < other",
+      "row": {
+        "code": "ABC",
+        "other": "ABD"
+      },
+      "expect": true,
+      "ast": {
+        "type": "binary",
+        "op": "<",
+        "left": {
+          "type": "field",
+          "name": "code"
+        },
+        "right": {
+          "type": "field",
+          "name": "other"
+        }
+      },
+      "dependsOn": [
+        "code",
+        "other"
+      ]
+    },
+    {
+      "name": "ordering a number against text is an error",
+      "formula": "amount > code",
+      "row": {
+        "amount": "1",
+        "code": "abc"
+      },
+      "expectError": "TYPE_MISMATCH",
+      "ast": {
+        "type": "binary",
+        "op": ">",
+        "left": {
+          "type": "field",
+          "name": "amount"
+        },
+        "right": {
+          "type": "field",
+          "name": "code"
+        }
+      },
+      "dependsOn": [
+        "amount",
+        "code"
+      ]
+    },
+    {
+      "name": "booleans reject ordering comparisons",
+      "formula": "true > false",
+      "row": {},
+      "expectError": "TYPE_MISMATCH",
+      "ast": {
+        "type": "binary",
+        "op": ">",
+        "left": {
+          "type": "boolean",
+          "value": true
+        },
+        "right": {
+          "type": "boolean",
+          "value": false
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "SUM over sub-table rows",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [
+          {
+            "amount": "10.50"
+          },
+          {
+            "amount": "20.25"
+          },
+          {
+            "amount": "0.25"
+          }
+        ]
+      },
+      "expect": "31.00",
+      "ast": {
+        "type": "aggregate",
+        "fn": "SUM",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "SUM skips blank cells rather than treating them as zero-width errors",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [
+          {
+            "amount": "10"
+          },
+          {
+            "amount": null
+          },
+          {
+            "amount": ""
+          },
+          {
+            "amount": "5"
+          }
+        ]
+      },
+      "expect": "15",
+      "ast": {
+        "type": "aggregate",
+        "fn": "SUM",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "SUM of an empty sub-table is zero",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": []
+      },
+      "expect": "0",
+      "ast": {
+        "type": "aggregate",
+        "fn": "SUM",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "MIN of an empty sub-table is blank, not zero",
+      "formula": "MIN(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": []
+      },
+      "expectBlank": true,
+      "ast": {
+        "type": "aggregate",
+        "fn": "MIN",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "AVG of an empty sub-table is blank, not zero",
+      "formula": "AVG(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": []
+      },
+      "expectBlank": true,
+      "ast": {
+        "type": "aggregate",
+        "fn": "AVG",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "MIN and MAX over rows",
+      "formula": "MAX(request_items.amount) - MIN(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [
+          {
+            "amount": "5"
+          },
+          {
+            "amount": "17.5"
+          },
+          {
+            "amount": "9"
+          }
+        ]
+      },
+      "expect": "12.5",
+      "ast": {
+        "type": "binary",
+        "op": "-",
+        "left": {
+          "type": "aggregate",
+          "fn": "MAX",
+          "table": "request_items",
+          "column": "amount"
+        },
+        "right": {
+          "type": "aggregate",
+          "fn": "MIN",
+          "table": "request_items",
+          "column": "amount"
+        }
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "AVG settles at DIVISION_SCALE",
+      "formula": "AVG(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [
+          {
+            "amount": "10"
+          },
+          {
+            "amount": "20"
+          },
+          {
+            "amount": "25"
+          }
+        ]
+      },
+      "expect": "18.3333333333",
+      "ast": {
+        "type": "aggregate",
+        "fn": "AVG",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "COUNT of a table counts rows including blank cells",
+      "formula": "COUNT(request_items)",
+      "row": {},
+      "subTables": {
+        "request_items": [
+          {
+            "amount": "1"
+          },
+          {
+            "amount": null
+          },
+          {
+            "amount": "3"
+          }
+        ]
+      },
+      "expect": "3",
+      "ast": {
+        "type": "aggregate",
+        "fn": "COUNT",
+        "table": "request_items"
+      },
+      "dependsOn": [
+        "request_items"
+      ]
+    },
+    {
+      "name": "COUNT of a column counts non-blank cells only",
+      "formula": "COUNT(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [
+          {
+            "amount": "1"
+          },
+          {
+            "amount": null
+          },
+          {
+            "amount": "3"
+          }
+        ]
+      },
+      "expect": "2",
+      "ast": {
+        "type": "aggregate",
+        "fn": "COUNT",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "aggregate combined with a row field",
+      "formula": "ROUND(SUM(request_items.amount) * (1 + tax_rate), 2)",
+      "row": {
+        "tax_rate": "0.0825"
+      },
+      "subTables": {
+        "request_items": [
+          {
+            "amount": "100"
+          },
+          {
+            "amount": "49.99"
+          }
+        ]
+      },
+      "expect": "162.36",
+      "ast": {
+        "type": "call",
+        "fn": "ROUND",
+        "args": [
+          {
+            "type": "binary",
+            "op": "*",
+            "left": {
+              "type": "aggregate",
+              "fn": "SUM",
+              "table": "request_items",
+              "column": "amount"
+            },
+            "right": {
+              "type": "binary",
+              "op": "+",
+              "left": {
+                "type": "number",
+                "text": "1"
+              },
+              "right": {
+                "type": "field",
+                "name": "tax_rate"
+              }
+            }
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": [
+        "request_items.amount",
+        "tax_rate"
+      ]
+    },
+    {
+      "name": "non-numeric cell in an aggregated column is an error, not a skipped row",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [
+          {
+            "amount": "10"
+          },
+          {
+            "amount": "oops"
+          }
+        ]
+      },
+      "expectError": "TYPE_MISMATCH",
+      "ast": {
+        "type": "aggregate",
+        "fn": "SUM",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "aggregate over an absent sub-table is an error, not zero",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {},
+      "expectError": "UNKNOWN_TABLE",
+      "ast": {
+        "type": "aggregate",
+        "fn": "SUM",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "unknown function is rejected",
+      "formula": "TOTALLY_MADE_UP(1)",
+      "row": {},
+      "expectError": "UNKNOWN_FUNCTION",
+      "parseOnly": false,
+      "ast": {
+        "type": "call",
+        "fn": "TOTALLY_MADE_UP",
+        "args": [
+          {
+            "type": "number",
+            "text": "1"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "wrong arity is rejected",
+      "formula": "ROUND(1, 2, 3)",
+      "row": {},
+      "expectError": "WRONG_ARG_COUNT",
+      "ast": {
+        "type": "call",
+        "fn": "ROUND",
+        "args": [
+          {
+            "type": "number",
+            "text": "1"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          },
+          {
+            "type": "number",
+            "text": "3"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "numeric field arriving as a JSON number still computes exactly",
+      "formula": "amount * 3",
+      "row": {
+        "amount": 0.1
+      },
+      "expect": "0.3",
+      "ast": {
+        "type": "binary",
+        "op": "*",
+        "left": {
+          "type": "field",
+          "name": "amount"
+        },
+        "right": {
+          "type": "number",
+          "text": "3"
+        }
+      },
+      "dependsOn": [
+        "amount"
+      ]
+    },
+    {
+      "name": "boolean field compares with a literal",
+      "formula": "IF(urgent = true, 100, 0)",
+      "row": {
+        "urgent": true
+      },
+      "expect": "100",
+      "ast": {
+        "type": "call",
+        "fn": "IF",
+        "args": [
+          {
+            "type": "binary",
+            "op": "=",
+            "left": {
+              "type": "field",
+              "name": "urgent"
+            },
+            "right": {
+              "type": "boolean",
+              "value": true
+            }
+          },
+          {
+            "type": "number",
+            "text": "100"
+          },
+          {
+            "type": "number",
+            "text": "0"
+          }
+        ]
+      },
+      "dependsOn": [
+        "urgent"
+      ]
+    },
+    {
+      "name": "deeply nested parentheses",
+      "formula": "((((1 + 2)) * ((3))))",
+      "row": {},
+      "expect": "9",
+      "ast": {
+        "type": "binary",
+        "op": "*",
+        "left": {
+          "type": "binary",
+          "op": "+",
+          "left": {
+            "type": "number",
+            "text": "1"
+          },
+          "right": {
+            "type": "number",
+            "text": "2"
+          }
+        },
+        "right": {
+          "type": "number",
+          "text": "3"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "case-insensitive function names normalize to one AST",
+      "formula": "round(2.345, 2)",
+      "row": {},
+      "expect": "2.35",
+      "ast": {
+        "type": "call",
+        "fn": "ROUND",
+        "args": [
+          {
+            "type": "number",
+            "text": "2.345"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "TRUE and FALSE literals are case-insensitive",
+      "formula": "IF(TRUE, 1, 2)",
+      "row": {},
+      "expect": "1",
+      "ast": {
+        "type": "call",
+        "fn": "IF",
+        "args": [
+          {
+            "type": "boolean",
+            "value": true
+          },
+          {
+            "type": "number",
+            "text": "1"
+          },
+          {
+            "type": "number",
+            "text": "2"
+          }
+        ]
+      },
+      "dependsOn": []
+    }
+  ],
+  "aliasDeduplicationCases": [
+    {
+      "name": "three alias keys for one table must not triple the sum",
+      "formula": "SUM(request_items.amount)",
+      "rawSubTables": {
+        "42": [
+          {
+            "amount": "100"
+          },
+          {
+            "amount": "50"
+          }
+        ],
+        "request_items": [
+          {
+            "amount": "100"
+          },
+          {
+            "amount": "50"
+          }
+        ],
+        "Request Items": [
+          {
+            "amount": "100"
+          },
+          {
+            "amount": "50"
+          }
+        ]
+      },
+      "sliceIdentities": {
+        "42": {
+          "tableId": 7,
+          "tableName": "request_items"
+        },
+        "request_items": {
+          "tableId": 7,
+          "tableName": "request_items"
+        },
+        "Request Items": {
+          "tableId": 7,
+          "tableName": "request_items"
+        }
+      },
+      "expectedCanonicalKeys": [
+        "request_items"
+      ],
+      "expect": "150",
+      "ast": {
+        "type": "aggregate",
+        "fn": "SUM",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "a slice arriving only under its bindingId is still found by table name",
+      "formula": "SUM(request_items.amount)",
+      "rawSubTables": {
+        "42": [
+          {
+            "amount": "100"
+          },
+          {
+            "amount": "50"
+          }
+        ]
+      },
+      "sliceIdentities": {
+        "42": {
+          "tableId": 7,
+          "tableName": "request_items"
+        }
+      },
+      "expectedCanonicalKeys": [
+        "request_items"
+      ],
+      "expect": "150",
+      "ast": {
+        "type": "aggregate",
+        "fn": "SUM",
+        "table": "request_items",
+        "column": "amount"
+      },
+      "dependsOn": [
+        "request_items.amount"
+      ]
+    },
+    {
+      "name": "two genuinely different tables stay separate",
+      "formula": "SUM(request_items.amount) + SUM(other_items.amount)",
+      "rawSubTables": {
+        "request_items": [
+          {
+            "amount": "100"
+          }
+        ],
+        "other_items": [
+          {
+            "amount": "7"
+          }
+        ]
+      },
+      "sliceIdentities": {
+        "request_items": {
+          "tableId": 7,
+          "tableName": "request_items"
+        },
+        "other_items": {
+          "tableId": 9,
+          "tableName": "other_items"
+        }
+      },
+      "expectedCanonicalKeys": [
+        "other_items",
+        "request_items"
+      ],
+      "expect": "107",
+      "ast": {
+        "type": "binary",
+        "op": "+",
+        "left": {
+          "type": "aggregate",
+          "fn": "SUM",
+          "table": "request_items",
+          "column": "amount"
+        },
+        "right": {
+          "type": "aggregate",
+          "fn": "SUM",
+          "table": "other_items",
+          "column": "amount"
+        }
+      },
+      "dependsOn": [
+        "other_items.amount",
+        "request_items.amount"
+      ]
+    }
+  ]
+}

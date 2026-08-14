@@ -23,6 +23,13 @@ const routes: RouteRecordRaw[] = [
     meta: { titleKey: 'login.title' }
   },
   {
+    // AI Studio 工作台：全屏三栏布局，自带左侧阶段轨道，因此不挂在 MainLayout 下
+    path: '/function-units/:id/ai-studio',
+    name: 'AiStudioWorkspace',
+    component: () => import('@/views/function-unit/AiStudioWorkspace.vue'),
+    meta: { titleKey: 'ai.studio.entryButton', requiresAuth: true, requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER', 'FU_VIEWER'] }
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/function-units',

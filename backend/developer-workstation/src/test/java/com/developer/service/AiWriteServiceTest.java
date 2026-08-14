@@ -5,13 +5,16 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.Icon;
+import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.BindingType;
 import com.developer.enums.IconCategory;
 import com.developer.enums.TableType;
+import com.developer.exception.AiGenerationException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.IconRepository;
 import com.developer.service.impl.AiWriteServiceImpl;
+import com.developer.util.XmlEncodingUtil;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -283,6 +286,91 @@ class AiWriteServiceTest {
         assertInstanceOf(Map.class, entry, "sub-form must be keyed by the persisted binding id");
         assertTrue(containsMiAssignment(((Map<?, ?>) entry).get("rule")),
                 "the sub-form must carry the miAssignment component the deploy guard demands");
+    }
+
+    @Test
+    void applyGeneratedData_scopedApply_decodesBase64StoredBpmnBeforeMiBinding() {
+        // 流程设计器按 XmlEncodingUtil 约定把 bpmn_xml Base64 落库；scope=TABLES 的 apply
+        // 不重写 process，MI 回填必须先解码存量 BPMN 才能解析（dev FU "fghj" 的真实故障）。
+        functionUnit.setProcessDefinition(ProcessDefinition.builder()
+                .functionUnit(functionUnit)
+                .bpmnXml(XmlEncodingUtil.encode(MULTI_INSTANCE_BPMN))
+                .build());
+        functionUnit.setTableRelations(new ArrayList<>());
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+        AtomicLong sequence = new AtomicLong(100L);
+        doAnswer(inv -> {
+            functionUnit.getTableDefinitions().stream()
+                    .filter(table -> table.getId() == null)
+                    .forEach(table -> table.setId(sequence.incrementAndGet()));
+            return null;
+        }).when(entityManager).flush();
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(
+                        Map.of(
+                                "tableName", "orders",
+                                "tableType", "MAIN",
+                                "fieldDefinitions", List.of(Map.of(
+                                        "fieldName", "id", "dataType", "BIGINT",
+                                        "isPrimaryKey", true, "sortOrder", 1))),
+                        Map.of(
+                                "tableName", "order_items",
+                                "tableType", "SUB",
+                                "fieldDefinitions", List.of(Map.of(
+                                        "fieldName", "id", "dataType", "BIGINT",
+                                        "isPrimaryKey", true, "sortOrder", 1)))))
+                .build();
+
+        writeService.applyGeneratedData(1L, data, "TABLES");
+
+        ArgumentCaptor<FunctionUnit> captor = ArgumentCaptor.forClass(FunctionUnit.class);
+        verify(functionUnitRepository).save(captor.capture());
+        FunctionUnit saved = captor.getValue();
+
+        String bpmn = saved.getProcessDefinition().getBpmnXml();
+        assertTrue(bpmn.trim().startsWith("<"), "stored BPMN must be decoded before parsing");
+        TableDefinition subTable = saved.getTableDefinitions().stream()
+                .filter(table -> "order_items".equals(table.getTableName()))
+                .findFirst().orElseThrow();
+        assertTrue(bpmn.contains("name=\"subTableId\" value=\"" + subTable.getId() + "\""),
+                "MI binding must still run against the decoded stored BPMN");
+    }
+
+    @Test
+    void applyGeneratedData_corruptStoredBpmn_failsWithExistingBpmnErrorCode() {
+        // 存量 process definition 不是合法 XML（也不是 Base64）时，错误必须指向存量数据，
+        // 而不是笼统的 AI_BPMN_MI_BINDING_FAILED 把排查方向引向 AI 回传 body。
+        functionUnit.setProcessDefinition(ProcessDefinition.builder()
+                .id(77L)
+                .functionUnit(functionUnit)
+                .bpmnXml("this is not xml, and not base64 either!!!")
+                .build());
+        functionUnit.setTableRelations(new ArrayList<>());
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        AtomicLong sequence = new AtomicLong(100L);
+        doAnswer(inv -> {
+            functionUnit.getTableDefinitions().stream()
+                    .filter(table -> table.getId() == null)
+                    .forEach(table -> table.setId(sequence.incrementAndGet()));
+            return null;
+        }).when(entityManager).flush();
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(Map.of(
+                        "tableName", "orders",
+                        "tableType", "MAIN",
+                        "fieldDefinitions", List.of(Map.of(
+                                "fieldName", "id", "dataType", "BIGINT",
+                                "isPrimaryKey", true, "sortOrder", 1)))))
+                .build();
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> writeService.applyGeneratedData(1L, data, "TABLES"));
+        assertEquals("AI_EXISTING_BPMN_INVALID", ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("process definition id 77"),
+                "message must locate the stored process definition");
     }
 
     private static boolean containsMiAssignment(Object value) {

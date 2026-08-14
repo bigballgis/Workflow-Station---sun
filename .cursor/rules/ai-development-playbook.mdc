@@ -47,9 +47,18 @@ PR 模板：[.github/pull_request_template.md](../../.github/pull_request_templa
 4. 用户回复 **确认** / **可以** / **执行** / **OK** / **go**（或等价）→ 方可进入 §2 执行；用户修正字段 → 更新任务整理并**再次等待确认**。
 5. **仅当用户明确写**「无需确认直接执行」/「跳过 playbook 确认」→ 可跳过门禁。
 
+### 设计 Plan vs 任务整理
+
+| 用户意图 | 使用 |
+|----------|------|
+| 要方案 / 架构 / `/plan` / 「先出设计，不要改代码」 | skill **`feature-design-plan`**（见 `.cursor/skills/feature-design-plan/SKILL.md`） |
+| 方案已定或 bug/fix，准备改代码 | 本节 **playbook 任务整理** |
+
+设计 Plan 确认后，用户回复 **按 playbook 执行** 进入 §2；Plan 中的【非目标】应写入任务整理【禁止】。
+
 ### 未触发 playbook 时
 
-纯问答、只读 review、用户明确「不要改代码」→ 不强制任务整理。  
+纯问答、只读 review、用户明确「不要改代码」→ 不强制任务整理（若要做设计 Plan → 用 `feature-design-plan` skill）。  
 其它实现类任务仍遵循 §1 解析任务，但不强制「先确认再动手」（除非用户另行要求）。
 
 ## 1. 解析用户任务（缺则追问，勿静默假设）

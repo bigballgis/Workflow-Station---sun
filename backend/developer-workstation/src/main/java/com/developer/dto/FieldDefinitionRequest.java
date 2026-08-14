@@ -56,6 +56,15 @@ public class FieldDefinitionRequest {
     private Long refTableId;
     private List<String> refPrimaryKeyFields;
     private Map<String, Object> pkGeneration;
+
+    private Boolean isComputed;
+    /**
+     * Computed field definition submitted by the designer:
+     * { version, scope: row|aggregate, source, ast, dependsOn[], onError: fail|null }.
+     * Validated by {@code ComputedFieldValidator} before persisting; the AST is the evaluation authority.
+     */
+    private Map<String, Object> computedField;
+
     /** readonly | hidden */
     private String fkDisplayMode;
     /** oneToOne | oneToMany | manyToMany */

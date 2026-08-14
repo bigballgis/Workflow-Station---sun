@@ -6,6 +6,12 @@ export interface RecordNoteTargetParams {
   tableKind?: 'DW' | 'RT'
   tableId: string
   functionUnitId?: number | string | null
+  /**
+   * The request hosting these notes. Required for RECORD scope (sub-table rows): a row id alone
+   * cannot identify the instance, so the server authorizes against this instead — and verifies it
+   * rather than trusting it. Omitting it on a row target yields 403.
+   */
+  processInstanceId?: string | null
 }
 
 export interface RecordNoteAttachment {
@@ -71,6 +77,7 @@ function targetQuery(target: RecordNoteTargetParams): Record<string, unknown> {
     ...(target.functionUnitId != null && target.functionUnitId !== ''
       ? { functionUnitId: target.functionUnitId }
       : {}),
+    ...(target.processInstanceId ? { processInstanceId: target.processInstanceId } : {}),
   }
 }
 
@@ -85,8 +92,13 @@ export async function listRecordNotes(
   return res?.data ?? null
 }
 
-export async function getRecordNoteDetail(noteId: string): Promise<RecordNoteDetail | null> {
-  const res = (await service.get(`/record-notes/${encodeURIComponent(noteId)}`)) as ApiEnvelope<RecordNoteDetail>
+export async function getRecordNoteDetail(
+  noteId: string,
+  processInstanceId?: string | null,
+): Promise<RecordNoteDetail | null> {
+  const res = (await service.get(`/record-notes/${encodeURIComponent(noteId)}`, {
+    ...(processInstanceId ? { params: { processInstanceId } } : {}),
+  })) as ApiEnvelope<RecordNoteDetail>
   return res?.data ?? null
 }
 
@@ -160,17 +172,26 @@ export function recordNoteContentUrl(noteId: string): string {
 }
 
 /** Fetch attachment content as an object URL (inline <img> cannot carry auth headers). */
-export async function fetchRecordNoteBlobUrl(noteId: string): Promise<string> {
+export async function fetchRecordNoteBlobUrl(
+  noteId: string,
+  processInstanceId?: string | null,
+): Promise<string> {
   const blob = (await service.get(`/record-notes/${encodeURIComponent(noteId)}/content`, {
     responseType: 'blob',
+    ...(processInstanceId ? { params: { processInstanceId } } : {}),
   })) as unknown as Blob
   return URL.createObjectURL(blob)
 }
 
 /** Download an attachment through axios (carries auth headers), then save locally. */
-export async function downloadRecordNoteAttachment(noteId: string, fileName: string): Promise<void> {
+export async function downloadRecordNoteAttachment(
+  noteId: string,
+  fileName: string,
+  processInstanceId?: string | null,
+): Promise<void> {
   const blob = (await service.get(`/record-notes/${encodeURIComponent(noteId)}/content`, {
     responseType: 'blob',
+    ...(processInstanceId ? { params: { processInstanceId } } : {}),
   })) as unknown as Blob
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
