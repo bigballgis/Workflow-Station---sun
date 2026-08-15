@@ -1,5 +1,19 @@
 # Activepieces 0.84.0 集成 — 当前状态
 
+> ## ⚠️ 归档：本文描述 0.84 方案，其源码树已删除
+>
+> 本文的对象是仓库根的 `activepieces/`（Activepieces 0.84.0 硬分叉）。**该目录已于 2026-08-14
+> 删除**——0.88 重构（`automation/`）交付并验证后，它作为参考实现的使命结束。凡本文写成
+> `activepieces/...` 的路径，**在工作树里都已不存在**；要看当年的源码走 git 历史：
+> `git show de4f6469:activepieces/<path>`（0.84 vendor 基线）、
+> `git checkout de4f6469 -- activepieces/<dir>`（取整目录），
+> 或 `git show 4635f7950:activepieces/<path>`（删除前最后一个提交）。
+>
+> **现行真源：[REQUIREMENTS_0.88.md](REQUIREMENTS_0.88.md) + [IMPLEMENTATION_0.88.md](IMPLEMENTATION_0.88.md)（**新读者从这两份开始**，不要从本文开始）；裁决仍看 [DECISIONS.md](DECISIONS.md)**
+>
+> 本文**不逐句改写**，作为决策依据的历史记录原样保留。
+
+
 > **从这里开始读。** 更新日期：2026-07-28
 
 ---

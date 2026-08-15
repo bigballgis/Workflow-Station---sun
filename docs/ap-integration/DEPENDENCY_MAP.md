@@ -1,5 +1,19 @@
 # Activepieces 0.84.0 依赖图与模块处置（Dependency Map & Module Disposition）
 
+> ## ⚠️ 归档：本文描述 0.84 方案，其源码树已删除
+>
+> 本文的对象是仓库根的 `activepieces/`（Activepieces 0.84.0 硬分叉）。**该目录已于 2026-08-14
+> 删除**——0.88 重构（`automation/`）交付并验证后，它作为参考实现的使命结束。凡本文写成
+> `activepieces/...` 的路径，**在工作树里都已不存在**；要看当年的源码走 git 历史：
+> `git show de4f6469:activepieces/<path>`（0.84 vendor 基线）、
+> `git checkout de4f6469 -- activepieces/<dir>`（取整目录），
+> 或 `git show 4635f7950:activepieces/<path>`（删除前最后一个提交）。
+>
+> **现行真源：`automation/` 的实际依赖树；模块处置结论见 [IMPLEMENTATION_0.88.md](IMPLEMENTATION_0.88.md) 与 `automation/hermes/TRIM_LOG.md`**
+>
+> 本文**不逐句改写**，作为决策依据的历史记录原样保留。
+
+
 > **Document 3 / 10** — 前置：[REQUIREMENTS.md](REQUIREMENTS.md)（Q1–Q9 + Q4a 已裁决）、
 > [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md)（六线逆向完成）。
 > 决策见 [DECISIONS.md](DECISIONS.md)；阻塞项见 [OPEN_GATES.md](OPEN_GATES.md)；总览见 [STATUS.md](STATUS.md)。

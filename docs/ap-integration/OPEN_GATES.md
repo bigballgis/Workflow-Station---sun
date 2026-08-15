@@ -94,7 +94,7 @@ project-members/oauth-apps/audit-events/git-repo/…）。实测：
 | AG-02.1（改述为 **zod 对齐**，非 typebox） | ✅ 无冲突（HERMES 无 zod，纯新增） |
 | AG-02.5 DW 真实工程回归 | ⏳ 待在真实 DW 上跑（PoC 用的是最小 Vite 工程） |
 | AG-02.6 CI 路径过滤 | ⏳ 待实施 |
-| AG-02.7 Schema Drift（Codegen + CI 新鲜度校验） | ⏳ 待实施——**canonical = `activepieces/packages/shared`**，ap-contracts 为派生物 |
+| AG-02.7 Schema Drift（Codegen + CI 新鲜度校验） | ⏳ 待实施——**canonical = `automation/packages/core/shared`**（0.84 的 `activepieces/packages/shared` 随该树于 2026-08-14 删除），ap-contracts 为派生物 |
 | AG-02.8 builder 组件交付 | ✅ **已定案 = 构建期拷贝**（`prebuild` 把 web-embed 拷进 DW `public/service-task-builder/`，DW 自身 nginx 提供；无 registry、运行时不出网；产物不入库）。⚠️ nginx 默认 mime.types 无 `.mjs`，须显式 `default_type text/javascript` |
 
 ### 失败回退

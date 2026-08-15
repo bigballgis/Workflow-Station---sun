@@ -1,14 +1,70 @@
 name: AP api tests
 
-# The api suite needs NO services: .env.tests runs it on AP_DB_TYPE=PGLITE (in-process
-# Postgres) and AP_REDIS_TYPE=MEMORY. That is why this job is cheap enough to run on every
-# activepieces/** change.
+# Test gate for the vendored Activepieces server API (`automation/`, 0.88):
+# unit suite + the CE integration suite.
+#
+# HISTORY — this gate was INERT from the 0.88 port until 2026-08-14. Every `paths:` filter
+# pointed at `activepieces/**` (the deleted 0.84 hard fork) while the live tree is
+# `automation/**`, so it never triggered once during the whole 0.88 rewrite. That is why
+# 15 unit test files had been left referencing `src/app/ee/**` modules deleted in the EE
+# removal (AG-EE / EE_REMOVAL_PLAN G5) with nobody noticing. Repointed and re-armed on
+# 2026-08-14 (unit only) after a real green local run; the CE leg was added 2026-08-15,
+# likewise only after a real green local run.
+#
+# CE INTEGRATION LEG — `test/integration/ce`, 52 files / 372 tests, incl.
+# `execute-flow-e2e.test.ts`, which really does start a worker, install pieces and run the
+# engine. Four things it needs that the unit suite does not; all four are steps below:
+#   1. `hermes/pieces.e2e-fixtures.json` — the four pieces the e2e test pins
+#      (webhook@0.1.29, subflows@0.4.11, data-mapper@0.3.15, delay@0.3.26). Restored from
+#      `git show 4635f7950:activepieces/hermes/pieces.e2e-fixtures.json` WITHOUT the
+#      `tarball` fields: all four versions are still on registry.npmjs.org, so the prewarm
+#      fetches them and no piece binary goes back into the tree FR-D09 emptied. The file is
+#      `.dockerignore`d — it is CI-only and must not reach the image.
+#   2. a prewarm into `cache/v13/common` — `v13` is 0.88's LATEST_CACHE_VERSION
+#      (packages/server/sandbox/.../cache-paths.ts), not the 0.84 `v11`. The manifest path
+#      must be ABSOLUTE: prewarm-pieces.sh cd's into the workspace before resolving it.
+#   3. a built engine at `dist/packages/engine/main.js` and a built `@activepieces/sandbox`
+#      — see the Build step, which the unit leg turned out to need as well.
+#   4. `node_modules/.bin` on PATH — the CODE step shells out to a bare `esbuild`
+#      (pkg-runner.ts#build).
+#
+# THE PNPM-VERSION TRAP (cost half a debugging session, do not undo it). The prewarm and the
+# runtime piece installer must run the SAME pnpm. The installer spawns a bare `pnpm`
+# (pkg-runner.ts), which resolves to the `packageManager` pin in automation/package.json
+# (pnpm 9.15.9) because `pnpm exec` puts that version's bin dir at the head of PATH. If the
+# prewarm ran under a different pnpm (e.g. a system pnpm 10), the first filtered install the
+# runtime performs — installing the e2e ARCHIVE piece into the same workspace — prunes the
+# four prewarmed members' `node_modules` while leaving their `ready` markers — 8 of the 9
+# `execute-flow-e2e` cases then fail with `PieceNotFoundError` → `INTERNAL_ERROR`. `corepack
+# enable` in the Install step is what keeps the two sides on the same version; the prewarm
+# step asserts it rather than trusting it. (`pieceCheckIfAlreadyInstalled` has since been
+# hardened to probe `node_modules/<pieceName>` instead of the bare directory, so a purge now
+# reinstalls instead of sticking — but that is a safety net for the runtime, not a licence to
+# let the two pnpm versions drift here.)
+#
+# SERVICES — the unit suite is mostly service-free (.env.tests runs AP_DB_TYPE=PGLITE and
+# AP_REDIS_TYPE=MEMORY), but two files drive REAL BullMQ against a REAL redis:
+# `workers/job-queue/active-invariant.test.ts` and
+# `helper/system-jobs/remove-deprecated-jobs.test.ts`. Both read AP_REDIS_HOST/PORT
+# directly. .env.tests ships `AP_REDIS_HOST=redis` (the compose hostname), which resolves
+# nowhere on a runner — and dotenv does not overwrite an already-set variable, so the step
+# env below wins. Without the service those two files fail with ENOTFOUND redis.
+# The CE leg gets the same env for the same reason, though it mostly runs on the
+# AP_REDIS_TYPE=MEMORY path: `redis-memory-server` downloads redis source and `make`s it on
+# first use (into node_modules/.cache/redis-memory-server), which is why the job timeout is
+# generous. It needs network + a toolchain, both of which ubuntu-latest has.
+#
+# WHY NOT `pnpm --filter api run test-ce` — that package script starts with
+# `export $(cat .env.tests | xargs)`, an unconditional export that CLOBBERS the step env and
+# puts AP_REDIS_HOST back to the unreachable `redis`. The CE step below invokes vitest
+# directly so the step env keeps winning (vitest.setup.ts still loads .env.tests through
+# dotenv, which does not overwrite what is already set).
 #
 # Node version is load-bearing: node:zlib gained zstd in 22.15, and file-compressor.ts
-# imports it at module scope, so on an older runtime EVERY test dies at collection with
-# `promisify(undefined)`. We pin from .nvmrc (v24). This is exactly what made the suite look
-# dead on a dev machine in 2026-08 — a stray `node` npm package in $HOME put 22.13 on npx's
-# PATH, ahead of the real runtime.
+# imports it at module scope, so on an older runtime a third of the suite dies at
+# collection with `promisify(undefined)`. We pin from .nvmrc (v24) and assert it below.
+# This is exactly what made the suite look dead on a dev machine in 2026-08 — a stray
+# `node` 22.13 ahead of the real runtime on npx's PATH.
 #
 # Scope (D13): this fork ships ONE edition, so test/integration/{ee,cloud} are gone and the
 # tests in them that covered live features were promoted into ce/ (managed-authn, signing-key,
@@ -17,13 +73,13 @@ name: AP api tests
 on:
   push:
     paths:
-      - 'activepieces/packages/server/api/**'
-      - 'activepieces/packages/shared/**'
+      - 'automation/packages/server/api/**'
+      - 'automation/packages/core/shared/**'
       - '.github/workflows/ap-api-tests.yml'
   pull_request:
     paths:
-      - 'activepieces/packages/server/api/**'
-      - 'activepieces/packages/shared/**'
+      - 'automation/packages/server/api/**'
+      - 'automation/packages/core/shared/**'
       - '.github/workflows/ap-api-tests.yml'
   workflow_dispatch:
 
@@ -33,12 +89,22 @@ concurrency:
 
 jobs:
   api-tests:
-    name: api unit + CE integration
+    name: api unit + CE integration tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
-        working-directory: activepieces
+        working-directory: automation
+    services:
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,7 +112,7 @@ jobs:
       - name: Setup Node from .nvmrc
         uses: actions/setup-node@v4
         with:
-          node-version-file: activepieces/.nvmrc
+          node-version-file: automation/.nvmrc
 
       - name: Assert the runtime has zstd (see header)
         run: node -e "const z=require('node:zlib'); if (typeof z.zstdCompress !== 'function') { throw new Error('node ' + process.version + ' has no zlib.zstdCompress — the api suite cannot collect') }"
@@ -56,29 +122,52 @@ jobs:
           corepack enable
           pnpm install --frozen-lockfile
 
+      - name: Build
+        # NOT optional, and NOT only for the CE leg — every workspace package resolves through
+        # its `main: ./dist/src/index.js`, and vitest aliases only four of them to src
+        # (shared / pieces-framework / pieces-common / server-utils). On a clean checkout
+        # without this step 34 of the 39 UNIT files die at collection with
+        # `Failed to resolve entry for package "@activepieces/core-utils"`. The 2026-08-14
+        # "green" unit run was on a machine that happened to have stale dist/ dirs lying
+        # around, which is exactly the kind of thing this gate exists to stop believing.
+        #   api      → the core/* + pieces/* + server-utils dists the unit suite imports
+        #   engine   → dist/packages/engine/main.js, which engine-installer.ts copies into
+        #              cache/v13/common; without it every flow run dies in provisioning
+        #   sandbox  → the CE e2e imports worker/src, which imports @activepieces/sandbox;
+        #              that one resolves to dist and is NOT built by --filter=api
+        #   worker   → same graph, kept explicit so a future import cannot silently break it
+        run: npx turbo run build --filter=api --filter=@activepieces/engine --filter=@activepieces/sandbox --filter=worker
+
       - name: Unit tests
+        env:
+          # Overrides .env.tests' `redis` hostname — a service container on a non-container
+          # job is reachable on localhost, not by its label.
+          AP_REDIS_HOST: localhost
+          AP_REDIS_PORT: 6379
         run: pnpm --filter api run test-unit
 
-      # execute-flow-e2e is the only test that really executes flows — webhook → data mapper
-      # → code, subflow wait-for-response, delay/resume, >32KB output slicing. That is the
-      # BPMN service-task contract (sync webhook in, response out) plus the PAUSED branch of
-      # HERMES-PATCH-007, so it stays in the gate.
-      #
-      # It needs two things the image provides but a bare runner does not:
-      #   1. the four piece versions it pins — prewarmed from our archived tarballs
-      #      (hermes/pieces.e2e-fixtures.json) rather than resolved off npm, so a yanked or
-      #      re-published version cannot change what we test;
-      #   2. the `esbuild` BINARY on PATH — the CODE step shells out to it (pkg-runner.ts),
-      #      and without it every flow fails with `spawn esbuild ENOENT`. The image installs
-      #      it globally; here it is in node_modules/.bin at the same 0.25.0.
-      - name: Prewarm the flow-E2E piece fixtures from our tarballs
+      - name: Prewarm the pieces the CE e2e tests pin
+        # Absolute manifest path is required — the script cd's into AP_PREWARM_WORKSPACE
+        # before resolving it. The version assertion guards the pnpm trap in the header:
+        # a prewarm on a different pnpm than the one the runtime installer spawns gets its
+        # node_modules pruned on the first runtime install, silently.
         run: |
-          AP_PREWARM_WORKSPACE="$PWD/cache/v11/common" \
+          pinned="$(node -p "require('./package.json').packageManager.split('@')[1]")"
+          actual="$(pnpm --version)"
+          if [ "$pinned" != "$actual" ]; then
+            echo "pnpm $actual is not the packageManager pin $pinned — the prewarm and the" >&2
+            echo "runtime piece installer would disagree and prune the prewarmed pieces." >&2
+            exit 1
+          fi
+          AP_PREWARM_WORKSPACE="$PWD/cache/v13/common" \
             sh hermes/prewarm-pieces.sh "$PWD/hermes/pieces.e2e-fixtures.json"
 
       - name: CE integration tests
+        env:
+          AP_EDITION: ce
+          AP_REDIS_HOST: localhost
+          AP_REDIS_PORT: 6379
+        # node_modules/.bin carries the bare `esbuild` the CODE step spawns.
         run: |
-          set -a; . packages/server/api/.env.tests; set +a
-          PATH="$PWD/node_modules/.bin:$PATH" AP_EDITION=ce pnpm exec vitest run \
-            --root packages/server/api \
-            test/integration/ce
+          export PATH="$PWD/node_modules/.bin:$PATH"
+          pnpm --filter api exec vitest run test/integration/ce --bail 1 --passWithNoTests=false

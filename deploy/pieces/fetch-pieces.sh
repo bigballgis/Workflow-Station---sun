@@ -1,8 +1,8 @@
 #!/bin/sh
 # Downloads the pieces listed in the allowlist onto an INTERNET-CONNECTED machine
 # (dev laptop). The allowlist lives with the image build that bakes the runtime half:
-# activepieces/hermes/pieces.json. Produces:
-#   ../../activepieces/hermes/tarballs/<pkg>-<version>.tgz
+# automation/hermes/pieces.json. Produces:
+#   ../../automation/hermes/tarballs/<pkg>-<version>.tgz
 #                                  — npm package (audit trail / Nexus publish source;
 #                                    also the install source for in-house pieces)
 #   metadata/<short-name>.json     — full designer metadata from the AP cloud API,
@@ -17,11 +17,11 @@
 # Then regenerate the DB seed:  node generate-metadata-seed.js
 set -eu
 cd "$(dirname "$0")"
-TARBALL_DIR=../../activepieces/hermes/tarballs
+TARBALL_DIR=../../automation/hermes/tarballs
 mkdir -p "$TARBALL_DIR" metadata
 
 node -e '
-const pieces = require("../../activepieces/hermes/pieces.json");
+const pieces = require("../../automation/hermes/pieces.json");
 for (const p of pieces) {
     if (p.tarball) { console.error(`--- skip ${p.name}@${p.version} (in-house, built locally)`); continue; }
     console.log(p.name + " " + p.version + " " + p.name.split("/")[1]);
@@ -36,11 +36,11 @@ done
 # cdn.activepieces.com is unreachable there (every step icon would render broken).
 # In-house pieces are skipped: their upstream URLs 404 even online, so their icons
 # are authored by hand and live in the same directory.
-ICON_DIR=../../activepieces/packages/web/public/piece-icons
+ICON_DIR=../../automation/packages/web/public/piece-icons
 mkdir -p "$ICON_DIR"
 node -e '
 const fs = require("fs"), path = require("path");
-const pieces = require("../../activepieces/hermes/pieces.json");
+const pieces = require("../../automation/hermes/pieces.json");
 for (const p of pieces) {
     const short = p.name.split("/")[1];
     const file = path.join("metadata", short + ".json");

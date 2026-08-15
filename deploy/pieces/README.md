@@ -15,10 +15,10 @@ pieces 均为 MIT 开源，镜像合法。
 | 半边 | 给谁用 | 投放方式 |
 |---|---|---|
 | **元数据**（actions/triggers 定义） | 设计器 UI | 本目录 `metadata/pieces-seed.sql` 导入 `piece_metadata` 表 |
-| **npm 包**（可执行代码） | worker 运行时 | 构建期预装进 AP 镜像（`activepieces/hermes/prewarm-pieces.sh`） |
+| **npm 包**（可执行代码） | worker 运行时 | 构建期预装进 AP 镜像（`automation/hermes/prewarm-pieces.sh`） |
 
-> **白名单清单本体在 [`activepieces/hermes/pieces.json`](../../activepieces/hermes/pieces.json)**——
-> 唯一需要手改的文件。它跟着「烘进镜像」那一半走（Docker 构建上下文只能是 `activepieces/`），
+> **白名单清单本体在 [`automation/hermes/pieces.json`](../../automation/hermes/pieces.json)**——
+> 唯一需要手改的文件。它跟着「烘进镜像」那一半走（Docker 构建上下文只能是 `automation/`），
 > 本目录的脚本读同一个文件生成设计器那一半，两半永远同源。
 
 ## 文件
@@ -32,7 +32,7 @@ pieces 均为 MIT 开源，镜像合法。
   （气隙下 CDN 不可达，否则每个步骤图标全裂；与 `generate-metadata-seed.js` 的 logoUrl 前缀改写配套）
 
 镜像侧（白名单 `pieces.json`、预装脚本、npm 包留档 `tarballs/`、构建期补丁）都在
-[`activepieces/hermes/`](../../activepieces/hermes/README.md)——它们必须在 Docker 构建上下文里。
+[`automation/hermes/`](../../automation/hermes/README.md)——它们必须在 Docker 构建上下文里。
 
 ## 首次执行（Quick Start）
 
@@ -128,7 +128,7 @@ worker 的 `piece-installer.ts` 装 piece 前先查
 在**有外网的机器**（dev 笔记本）上：
 
 ```sh
-# 1. 编辑 activepieces/hermes/pieces.json 加 { "name": "@activepieces/piece-xxx", "version": "a.b.c" }
+# 1. 编辑 automation/hermes/pieces.json 加 { "name": "@activepieces/piece-xxx", "version": "a.b.c" }
 #    版本查 https://cloud.activepieces.com/api/v1/pieces （latest 均兼容 0.84）
 cd <repo>/deploy/pieces
 sh fetch-pieces.sh                  # 2. 下载 tarball + 元数据
@@ -193,7 +193,7 @@ pubsub 失效；直接 psql 写表不会触发。症状：列表 `/api/v1/pieces
   - `piece-approval` / `piece-todos` 的元数据仍在 `metadata/` 留档，但已按
     [Q9](../../docs/ap-integration/DECISIONS.md#q9) 移出白名单，不投放。
 - **「Approvals」标签页已在源码里摘掉**（HERMES-PATCH-001，
-  `activepieces/packages/web/src/app/builder/pieces-selector/index.tsx`）：
+  `automation/packages/web/src/app/builder/pieces-selector/index.tsx`）：
   它硬编码 6 个 SaaS piece（slack/discord/ms-teams/ms-outlook/gmail/telegram-bot），要求**全部**
   加载成功才渲染，白名单环境下 6 个全 404 → 无限骨架屏 + console 刷屏。该功能=「经 Slack/Teams/Gmail
   发消息审批」，离线集群里本质不可用。

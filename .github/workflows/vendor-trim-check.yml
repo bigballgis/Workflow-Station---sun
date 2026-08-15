@@ -17,11 +17,11 @@ name: AP workspace invariants
 on:
   push:
     paths:
-      - 'activepieces/**'
+      - 'automation/**'
       - '.github/workflows/vendor-trim-check.yml'
   pull_request:
     paths:
-      - 'activepieces/**'
+      - 'automation/**'
       - '.github/workflows/vendor-trim-check.yml'
   workflow_dispatch:
 
@@ -43,10 +43,10 @@ jobs:
           node-version: '20'
 
       - name: tsconfig path mappings all resolve
-        run: node activepieces/hermes/check-tsconfig-paths.mjs
+        run: node automation/hermes/check-tsconfig-paths.mjs
 
       - name: Lockfile matches the workspace
-        working-directory: activepieces
+        working-directory: automation
         run: |
           set -euo pipefail
           corepack enable

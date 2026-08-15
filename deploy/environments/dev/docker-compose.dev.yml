@@ -105,18 +105,20 @@ services:
   # Non-prod: UI login via the edge gateway shared-account (see nginx :8085 + bridge).
   # Shares the platform Postgres/Redis. Runs the engine + UI + API on container :80.
   activepieces:
-    # HERMES vendored image: EE-removed + de-bunned Activepieces 0.84.0, built from the
-    # in-repo source tree (activepieces/) via its own Dockerfile. EE is stripped (AG-EE),
+    # HERMES vendored image: EE-removed + de-bunned Activepieces 0.88.0, built from the
+    # in-repo source tree (automation/) via its own Dockerfile. EE is stripped (AG-EE),
     # bun is gone (X-4, pnpm/Node), the Approvals tab is patched out at the source level
-    # (HERMES-PATCH-001, Q9), and the allowlisted pieces (activepieces/hermes/pieces.json)
+    # (HERMES-PATCH-001, Q9), and the allowlisted pieces (automation/hermes/pieces.json)
     # are PRE-INSTALLED by the last layer — the runtime installer is a no-op for them, so
     # an air-gapped cluster never reaches a registry. Custom (ARCHIVE) pieces imported via
-    # Admin Center resolve from the baked pnpm offline store instead.
+    # the retained admin-center service resolve from the baked pnpm offline store instead.
+    # The 0.84 predecessor tree was DELETED on 2026-08-14 once 0.88 was verified; retrieve it
+    # from git history if ever needed (`git show de4f6469:activepieces/<path>`).
     # Build (heavy — full monorepo): docker compose build activepieces
     build:
-      context: ../../../activepieces
+      context: ../../../automation
       dockerfile: Dockerfile
-    image: activepieces:0.84.0-ee-removed
+    image: activepieces:0.88.0-ee-removed
     container_name: platform-activepieces-dev
     depends_on:
       postgres:
@@ -185,7 +187,11 @@ services:
       # the offline switch that actually works is SYNC_MODE=NONE, which makes
       # piece-sync-service skip the cloud metadata sync (default OFFICIAL_AUTO
       # re-downloads piece metadata from cloud.activepieces.com into the DB).
+      # C-2 piece 冻结 + X-3 气隙：这两条与镜像内的代码默认值一致（HERMES-PATCH-019 已把上游
+      # 的 OFFICIAL_AUTO / true 翻成 fail-closed），此处显式重写一遍，让运维在 compose 里就能
+      # 看见闸门的位置，而不是要去读镜像里的默认值。改动任一条都等于允许运行期出公网。
       AP_PIECES_SYNC_MODE: NONE
+      AP_USE_CDN_FOR_BUNDLES: "false"
       AP_CLOUD_AUTH_ENABLED: "false"
       # Runtime piece installs run pnpm (bun removed, X-4), which honors NPM_CONFIG_REGISTRY
       # the same way. Empty (dev default) = pnpm's own default, i.e. PUBLIC npmjs —
@@ -385,18 +391,16 @@ services:
       SUPERSET_DB_SCHEMA: ${SUPERSET_DB_SCHEMA}
       BI_SUPERSET_USERNAME: ${BI_SUPERSET_USERNAME}
       BI_SUPERSET_PASSWORD: ${BI_SUPERSET_PASSWORD}
-      # Activepieces login bridge (non-prod): mint AP tokens via the shared account.
+      # Activepieces login bridge (non-prod): mint per-user AP tokens.
       # In-network AP is activepieces:80. Prod runtime leaves bridge disabled (no UI).
       ACTIVEPIECES_INTERNAL_URL: ${ACTIVEPIECES_INTERNAL_URL:-http://activepieces:80}
       ACTIVEPIECES_BRIDGE_ENABLED: ${ACTIVEPIECES_BRIDGE_ENABLED:-true}
-      ACTIVEPIECES_SHARED_EMAIL: ${ACTIVEPIECES_SHARED_EMAIL}
-      ACTIVEPIECES_SHARED_PASSWORD: ${ACTIVEPIECES_SHARED_PASSWORD}
-      # L7 per-user provisioning（审计到人）：开启后按当前用户换 AP token，flow Owner 落真实创建人。
+      # L7 per-user provisioning（审计到人）——AP 身份的唯一路径，无共享账号、无开关：
+      # 每次 AP 调用按当前操作人换 token，flow Owner 与 AP 审计落真实的人。
       # 密钥对来自一次性 POST /v1/signing-keys；私钥仅服务端持有（.env，单行 PEM）。
-      ACTIVEPIECES_MANAGED_ENABLED: ${ACTIVEPIECES_MANAGED_ENABLED:-false}
       ACTIVEPIECES_MANAGED_SIGNING_KEY_ID: ${ACTIVEPIECES_MANAGED_SIGNING_KEY_ID:-}
       ACTIVEPIECES_MANAGED_PRIVATE_KEY: ${ACTIVEPIECES_MANAGED_PRIVATE_KEY:-}
-      ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:-hermes-shared}
+      ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:-hermes-main}
       # 影子用户角色（平台级 ADMIN|MEMBER / project 级 Admin|Editor|Viewer）。默认全权：
       # 从 admin center 进入的人要能用 AP 平台级页面。每次握手同步既有影子用户。
       ACTIVEPIECES_MANAGED_PLATFORM_ROLE: ${ACTIVEPIECES_MANAGED_PLATFORM_ROLE:-ADMIN}
