@@ -1,4 +1,3 @@
-import type { DialogColumn } from './subTableAddDialogHelpers'
 
 export function isStoredFileUrl(value: unknown): value is string {
   if (typeof value !== 'string' || !value.trim()) return false

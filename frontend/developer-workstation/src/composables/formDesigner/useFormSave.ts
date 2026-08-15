@@ -72,7 +72,7 @@ export function useFormSave(options: UseFormSaveOptions) {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, designerSubBindings,
     subFormCache, relationViewState, subTableViewState, subTableListViewRefs,
     subTablePortalViewsState, getActiveDesignerRef, getPrimaryBindingFieldDefinitions,
-    syncSubTableListViewFromFormRules, loadForms, autoSaving, lastAutoSaveTime,
+    loadForms, autoSaving, lastAutoSaveTime,
     provisionAndRepairForSave, willProvisionOnSave, blockingProgress, getBpmnXml, t,
   } = options
 

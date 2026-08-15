@@ -190,12 +190,6 @@ describe('Preservation: Kong configuration has routes for /api/v1/admin, /api/v1
           ...Object.entries(routeServiceMap).map(([route, service]) => ({ route, service }))
         ),
         ({ route, service }: { route: string; service: string }) => {
-          // Find the service block that contains this route
-          // The route path should appear under a service whose name contains the expected service name
-          const serviceRegex = new RegExp(
-            `name:\\s*${service.replace('-', '[-\\\\s]')}[\\s\\S]*?paths:[\\s\\S]*?- ${route.replace('/', '\\/')}`,
-            'i'
-          )
           // Simpler check: the route path exists and the service name exists
           expect(content).toContain(`- ${route}`)
           expect(content).toContain(`${service}-service`)

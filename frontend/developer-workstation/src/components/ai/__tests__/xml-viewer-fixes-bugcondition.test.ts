@@ -11,7 +11,6 @@ import * as fc from 'fast-check'
 import { mount } from '@vue/test-utils'
 import type { XmlNode } from '@/utils/markdownToXml'
 import XmlTreeNode from '../XmlTreeNode.vue'
-import XmlTreeView from '../XmlTreeView.vue'
 
 // ─── XmlNode arbitrary generator (reused pattern from XmlTreeView.property.test.ts) ───
 

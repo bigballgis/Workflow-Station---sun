@@ -76,7 +76,7 @@ describe('Property 9: Navigation with dirty edits triggers confirm', () => {
         fc.constantFrom(...actions),
         fc.string({ minLength: 1, maxLength: 200 }),
         fc.string({ minLength: 1, maxLength: 200 }),
-        (action: (typeof actions)[number], original: string, edited: string) => {
+        (_action: (typeof actions)[number], original: string, edited: string) => {
           fc.pre(original !== edited) // ensure dirty
 
           const isEditing = true

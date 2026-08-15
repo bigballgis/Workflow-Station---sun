@@ -805,7 +805,7 @@ import {
   PREVIEW_SUBTABLE_DIALOG_KEY,
   type PreviewSubTableRowDialogOpen,
 } from './previewSubTableDialog'
-import { cloneFormRules, getRuleChildren, injectUploadButtonLabels, walkFormCreateRules } from '@/utils/formDesigner'
+import { cloneFormRules, injectUploadButtonLabels, walkFormCreateRules } from '@/utils/formDesigner'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'

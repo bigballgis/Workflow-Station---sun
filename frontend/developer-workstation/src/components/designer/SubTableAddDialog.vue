@@ -220,7 +220,7 @@
           :props="col.props?.labelProps || { label: 'label', children: 'children' }"
           :node-key="col.props?.nodeKey || 'id'"
           :show-checkbox="col.props?.showCheckbox !== false"
-          @check="(node: any, state: any) => {
+          @check="(_node: any, state: any) => {
             formData[col.field] = state.checkedKeys
             onDialogFieldChange(col.field, state.checkedKeys)
           }"
@@ -442,8 +442,6 @@ function clearSignature(field: string) {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   formData.value[field] = ''
 }
-
-const formRules = computed(() => buildRules(props.columns))
 
 watch(
   () => props.visible,
