@@ -1,0 +1,34 @@
+.angular
+.dockerignore
+**/.env
+.git
+.gitattributes
+.github
+.history
+.idea
+*.log
+*.md
+.vscode
+builds
+deploy
+dev
+Dockerfile
+# `dist` alone only matches the root folder; the glob form is what actually keeps
+# locally-built package dist/ out of the image (a bare `dist` once let a stale local
+# build ship inside the 0.84 image).
+dist
+**/dist
+docs
+**/node_modules
+# Local turbo / prewarm leftovers must never enter the build context: `COPY . .`
+# would bake a stale piece cache over the one prewarm-pieces.sh builds in-image.
+**/.turbo
+cache
+# NOTE: hermes/ is deliberately NOT ignored — hermes/pieces.json, the scripts and
+# hermes/tarballs/*.tgz (in-house pieces, on no public registry) must ship in the
+# context for the offline-store bake and piece prewarm layers.
+# ...but the e2e fixture manifest is CI-only (it prewarms the versions
+# test/integration/ce pins, which are older than the shipped allowlist). It must never
+# reach the image: `pieces.json` is the single runtime allowlist, and a second manifest
+# in hermes/ invites prewarming the wrong one.
+hermes/pieces.e2e-fixtures.json

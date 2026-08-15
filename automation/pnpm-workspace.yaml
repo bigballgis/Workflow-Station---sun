@@ -1,0 +1,12 @@
+packages:
+  - "packages/core/*"
+  - "packages/server/engine"
+  - "packages/web"
+  - "packages/server/api"
+  - "packages/server/utils"
+  - "packages/server/sandbox"
+  - "packages/server/worker"
+  - "packages/pieces/framework"
+  - "packages/pieces/common"
+  - "packages/pieces/core/*"
+  - "packages/pieces/community/*"

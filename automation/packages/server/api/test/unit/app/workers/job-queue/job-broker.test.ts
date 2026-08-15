@@ -1,0 +1,235 @@
+import { ExecutionType, RunEnvironment, StreamStepProgress, WorkerJobType } from '@activepieces/shared'
+import { InterceptorVerdict } from '../../../../../src/app/workers/job-queue/job-interceptor'
+import { Worker as BullMQWorker, Job } from 'bullmq'
+import { FastifyBaseLogger } from 'fastify'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mockGenerateEngineToken = vi.fn().mockResolvedValue('engine-token')
+
+vi.mock('../../../../../src/app/authentication/lib/access-token-manager', () => ({
+    accessTokenManager: () => ({
+        generateEngineToken: mockGenerateEngineToken,
+    }),
+}))
+
+vi.mock('../../../../../src/app/workers/migrations/job-data-migrations', () => ({
+    jobMigrations: () => ({
+        apply: vi.fn((data: unknown) => Promise.resolve(data)),
+    }),
+}))
+
+const mockPreDispatch = vi.fn()
+const mockOnJobFinished = vi.fn().mockResolvedValue(undefined)
+
+vi.mock('../../../../../src/app/workers/job-queue/interceptors/rate-limiter-interceptor', () => ({
+    rateLimiterInterceptor: {
+        preDispatch: (...args: unknown[]) => mockPreDispatch(...args),
+        onJobFinished: (...args: unknown[]) => mockOnJobFinished(...args),
+    },
+}))
+
+import { tryDequeue } from '../../../../../src/app/workers/job-queue/job-broker'
+
+const mockLog: FastifyBaseLogger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+    trace: vi.fn(),
+    child: vi.fn(),
+    silent: vi.fn(),
+    level: 'info',
+} as unknown as FastifyBaseLogger
+
+// tryDequeue runs `JobData.safeParse(migratedData)` after migration and fails anything that
+// does not validate as UNRECOVERABLE — so a job here needs a complete, schema-valid payload,
+// not just the two ids the interceptors read. With a partial payload every case below fell
+// into the invalid-schema branch: the job was moved to FAILED, tryDequeue recursed, and the
+// assertions saw `null` / an un-delayed job.
+function createValidJobData(overrides?: Record<string, unknown>): Record<string, unknown> {
+    return {
+        jobType: WorkerJobType.EXECUTE_FLOW,
+        environment: RunEnvironment.PRODUCTION,
+        projectId: 'proj-1',
+        platformId: 'plat-1',
+        schemaVersion: 4,
+        flowId: 'flow-1',
+        flowVersionId: 'fv-1',
+        runId: 'run-1',
+        executionType: ExecutionType.BEGIN,
+        streamStepProgress: StreamStepProgress.NONE,
+        payload: { type: 'inline', value: {} },
+        logsFileId: 'log-file-id',
+        ...overrides,
+    }
+}
+
+function createMockJob(id: string, data?: Record<string, unknown>, deferredFailure?: string): Job {
+    return {
+        id,
+        name: `job-name-${id}`,
+        data: createValidJobData(data),
+        attemptsMade: 0,
+        deferredFailure,
+        moveToDelayed: vi.fn().mockResolvedValue(undefined),
+        moveToFailed: vi.fn().mockResolvedValue(undefined),
+        changePriority: vi.fn().mockResolvedValue(undefined),
+        updateData: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Job
+}
+
+describe('tryDequeue', () => {
+    let mockWorker: BullMQWorker
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        mockWorker = {
+            getNextJob: vi.fn(),
+        } as unknown as BullMQWorker
+    })
+
+    it('should return job when interceptor allows', async () => {
+        const job = createMockJob('job-1')
+        vi.mocked(mockWorker.getNextJob).mockResolvedValueOnce(job)
+        mockPreDispatch.mockResolvedValueOnce({ verdict: InterceptorVerdict.ALLOW })
+
+        const result = await tryDequeue(mockWorker, 'test-queue', mockLog)
+
+        expect(result).not.toBeNull()
+        expect(result!.jobId).toBe('job-1')
+        expect(result!.engineToken).toBe('engine-token')
+        // `timeoutInSeconds` was asserted here but is not part of ConsumeJobRequest
+        // (jobId/jobData/attempsStarted/engineToken/token/queueName) — it read as undefined.
+        expect(result!.attempsStarted).toBe(0)
+        expect(result!.token).toMatch(/^token-/)
+        expect(result!.queueName).toBe('test-queue')
+        expect(job.updateData).not.toHaveBeenCalled()
+        expect(mockWorker.getNextJob).toHaveBeenCalledTimes(1)
+    })
+
+    it('should retry when interceptor rejects then return next allowed job', async () => {
+        const jobA = createMockJob('job-a')
+        const jobB = createMockJob('job-b')
+
+        vi.mocked(mockWorker.getNextJob)
+            .mockResolvedValueOnce(jobA)
+            .mockResolvedValueOnce(jobB)
+
+        mockPreDispatch
+            .mockResolvedValueOnce({ verdict: InterceptorVerdict.REJECT, delayInMs: 5000 })
+            .mockResolvedValueOnce({ verdict: InterceptorVerdict.ALLOW })
+
+        const result = await tryDequeue(mockWorker, 'test-queue', mockLog)
+
+        expect(result).not.toBeNull()
+        expect(result!.jobId).toBe('job-b')
+        expect(mockWorker.getNextJob).toHaveBeenCalledTimes(2)
+        expect(jobA.moveToDelayed).toHaveBeenCalledTimes(1)
+        expect(jobB.moveToDelayed).not.toHaveBeenCalled()
+    })
+
+    it('should return null when no jobs remain after rejection', async () => {
+        const job = createMockJob('job-1')
+
+        vi.mocked(mockWorker.getNextJob)
+            .mockResolvedValueOnce(job)
+            .mockResolvedValueOnce(undefined as unknown as Job)
+
+        mockPreDispatch
+            .mockResolvedValueOnce({ verdict: InterceptorVerdict.REJECT, delayInMs: 5000 })
+
+        const result = await tryDequeue(mockWorker, 'test-queue', mockLog)
+
+        expect(result).toBeNull()
+        expect(mockWorker.getNextJob).toHaveBeenCalledTimes(2)
+        expect(job.moveToDelayed).toHaveBeenCalledTimes(1)
+    })
+
+    it('should handle multiple consecutive rejections then return null', async () => {
+        const jobs = [createMockJob('j1'), createMockJob('j2'), createMockJob('j3')]
+
+        const getNextJobMock = vi.mocked(mockWorker.getNextJob)
+        for (const j of jobs) {
+            getNextJobMock.mockResolvedValueOnce(j)
+        }
+        getNextJobMock.mockResolvedValueOnce(undefined as unknown as Job)
+
+        mockPreDispatch
+            .mockResolvedValue({ verdict: InterceptorVerdict.REJECT, delayInMs: 5000 })
+
+        const result = await tryDequeue(mockWorker, 'test-queue', mockLog)
+
+        expect(result).toBeNull()
+        expect(mockWorker.getNextJob).toHaveBeenCalledTimes(4)
+        for (const j of jobs) {
+            expect(j.moveToDelayed).toHaveBeenCalledTimes(1)
+        }
+    })
+
+    it('should set priority on delayed job when interceptor specifies it', async () => {
+        const jobA = createMockJob('job-a')
+        const jobB = createMockJob('job-b')
+
+        vi.mocked(mockWorker.getNextJob)
+            .mockResolvedValueOnce(jobA)
+            .mockResolvedValueOnce(jobB)
+
+        mockPreDispatch
+            .mockResolvedValueOnce({ verdict: InterceptorVerdict.REJECT, delayInMs: 3000, priority: 10 })
+            .mockResolvedValueOnce({ verdict: InterceptorVerdict.ALLOW })
+
+        const result = await tryDequeue(mockWorker, 'test-queue', mockLog)
+
+        expect(result!.jobId).toBe('job-b')
+        expect(jobA.changePriority).toHaveBeenCalledWith({ priority: 10 })
+    })
+
+    it('should fail job with deferredFailure and skip interceptors', async () => {
+        const zombieJob = createMockJob('zombie-1', undefined, 'job stalled more than allowable limit')
+
+        vi.mocked(mockWorker.getNextJob)
+            .mockResolvedValueOnce(zombieJob)
+            .mockResolvedValueOnce(undefined as unknown as Job)
+
+        const result = await tryDequeue(mockWorker, 'test-queue', mockLog)
+
+        expect(result).toBeNull()
+        expect(zombieJob.moveToFailed).toHaveBeenCalledTimes(1)
+        const moveToFailedCall = vi.mocked(zombieJob.moveToFailed).mock.calls[0]
+        expect(moveToFailedCall[0]).toBeInstanceOf(Error)
+        expect((moveToFailedCall[0] as Error).message).toBe('job stalled more than allowable limit')
+        expect(moveToFailedCall[1]).toMatch(/^token-/)
+        expect(moveToFailedCall[2]).toBe(false)
+        expect(mockPreDispatch).not.toHaveBeenCalled()
+        expect(mockOnJobFinished).not.toHaveBeenCalled()
+        expect(mockWorker.getNextJob).toHaveBeenCalledTimes(2)
+    })
+
+    it('should keep draining when moveToFailed throws on a deferred-failure job', async () => {
+        const zombieJob = createMockJob('zombie-2', undefined, 'job stalled more than allowable limit')
+        vi.mocked(zombieJob.moveToFailed).mockRejectedValueOnce(new Error('Missing lock'))
+        const liveJob = createMockJob('live-1')
+
+        vi.mocked(mockWorker.getNextJob)
+            .mockResolvedValueOnce(zombieJob)
+            .mockResolvedValueOnce(liveJob)
+
+        mockPreDispatch.mockResolvedValueOnce({ verdict: InterceptorVerdict.ALLOW })
+
+        const result = await tryDequeue(mockWorker, 'test-queue', mockLog)
+
+        expect(result).not.toBeNull()
+        expect(result!.jobId).toBe('live-1')
+        expect(mockWorker.getNextJob).toHaveBeenCalledTimes(2)
+    })
+
+    it('should return null when queue is empty (no jobs at all)', async () => {
+        vi.mocked(mockWorker.getNextJob).mockResolvedValueOnce(undefined as unknown as Job)
+
+        const result = await tryDequeue(mockWorker, 'test-queue', mockLog)
+
+        expect(result).toBeNull()
+        expect(mockWorker.getNextJob).toHaveBeenCalledTimes(1)
+    })
+})
