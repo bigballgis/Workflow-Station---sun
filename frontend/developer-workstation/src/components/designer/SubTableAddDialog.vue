@@ -10,6 +10,7 @@
       ref="formRef"
       class="form-readonly-surface"
       :model="formData"
+      :rules="formRules"
       label-width="auto"
       label-position="left"
     >
@@ -442,6 +443,12 @@ function clearSignature(field: string) {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   formData.value[field] = ''
 }
+
+// buildRules 把 Form Design 的 required / validate[] 转成 Element Plus 规则。此前它被算出来
+// 却没有绑到 <el-form :rules>，而 handleConfirm 又调 formRef.validate() —— 没有规则的校验
+// 恒真，于是子表新增/编辑行对必填与校验规则完全不设防。属接线遗漏：buildRules 是导出的、
+// 有专门属性测试，用途只有这一个表单。
+const formRules = computed(() => buildRules(props.columns))
 
 watch(
   () => props.visible,
