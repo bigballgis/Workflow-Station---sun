@@ -273,7 +273,8 @@ const handleImportFile = async (file: UploadFile) => {
     }))
     await fetchList()
   } catch {
-    // request.ts 拦截器已 notify 具体错误
+    // 拦截器已 notify 具体错误;这里再给一条动作级失败提示,避免只剩一个"没反应"的按钮
+    ElMessage.error(t('automationPiece.importFailed'))
   } finally {
     importing.value = false
   }
@@ -288,7 +289,8 @@ const handleToggle = async (row: AutomationPieceSummary, enabled: boolean) => {
       if (p.name === row.name) p.disabled = !enabled
     })
   } catch {
-    // 拦截器已提示
+    // 失败时不改本地 disabled,受控开关会弹回原位;补一条动作级提示说明"没生效"
+    ElMessage.error(t('automationPiece.toggleFailed'))
   } finally {
     togglingKey.value = ''
   }
@@ -315,11 +317,12 @@ const handleDelete = async (row: AutomationPieceSummary) => {
     await fetchList()
   } catch (e: unknown) {
     const status = (e as { status?: number })?.status
-    const refCount = (e as { message?: string })?.message
+    // 409(PIECE_IN_USE):后端 message 是被占用的 flow 名称清单(String.join(", ")),不是数量
+    const flows = (e as { message?: string })?.message ?? ''
     if (status === 409) {
       try {
         await ElMessageBox.confirm(
-          t('automationPiece.deleteInUse', { count: refCount ?? '?' }),
+          t('automationPiece.deleteInUse', { flows }),
           t('common.delete'),
           { type: 'error', confirmButtonText: t('automationPiece.forceDelete') }
         )

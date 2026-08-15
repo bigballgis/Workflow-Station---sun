@@ -245,6 +245,7 @@ import {
   removeExtensionProperty
 } from '@/utils/bpmnExtensions'
 import ServiceTaskFlowPanel from './ServiceTaskFlowPanel.vue'
+import { ALL_AP_KEYS } from '@/utils/serviceTaskConfigSerializer'
 
 const { t } = useI18n()
 
@@ -260,7 +261,7 @@ const taskDescription = ref('')
 
 type ServiceTaskType = 'http' | 'script' | 'message' | 'ap' | 'dmn'
 
-/** 引擎不执行的存量类型（ServiceTaskExecutor 只认 ap:flowId，DMN 走 Flowable 原生字段） */
+/** 引擎不执行的存量类型（ServiceTaskExecutor 只认 ap 流程引用，DMN 走 Flowable 原生字段） */
 const LEGACY_TYPES: ServiceTaskType[] = ['http', 'script', 'message']
 
 /** 各类型独占的扩展属性；切换类型时清掉其他类型的残留，避免污染导出/版本快照 */
@@ -268,7 +269,8 @@ const TYPE_EXT_KEYS: Record<ServiceTaskType, string[]> = {
   http: ['httpUrl', 'httpMethod', 'httpHeaders', 'httpBody', 'httpResponseVar'],
   script: ['scriptLanguage', 'scriptContent'],
   message: ['messageTopic', 'messagePayload'],
-  ap: ['ap:flowId', 'ap:webhookUrl', 'ap:timeoutSeconds', 'ap:retryCount', 'ap:inputMapping', 'ap:outputMapping'],
+  // 全键集（现行 ap:flowKey + 全部旧键）：切走类型时必须把 legacy 残留一并清干净
+  ap: [...ALL_AP_KEYS],
   dmn: ['decisionTableReferenceKey', 'fallbackToDefaultTenant'],
 }
 

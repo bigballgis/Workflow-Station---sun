@@ -2,7 +2,7 @@
   HERMES L1: DW (Vue 3) host wrapper that mounts the vendored ServiceTask builder
   (React, lib-mode ESM bundle) inside a Shadow DOM — NOT an iframe (project X-6).
 
-  Contract with the builder bundle (activepieces/packages/web, built via
+  Contract with the builder bundle (automation/packages/web, built via
   vite.embed.config.mts -> dist/packages/web-embed):
     - `ap-builder.mjs` exports `mountApBuilder(config) => unmount`.
     - `web.css` is the Tailwind v4 stylesheet; it is injected as an inline <style>

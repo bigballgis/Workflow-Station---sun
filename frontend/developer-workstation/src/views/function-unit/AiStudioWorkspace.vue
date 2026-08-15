@@ -207,6 +207,20 @@
             </section>
           </div>
         </div>
+        <!-- Automation 阶段不再内嵌流程编排器（FR-B01/B2）：流程在独立的
+             Automation 页设计，Service Task 面板只填业务键 -->
+        <el-empty
+          v-else-if="currentPhase === 'AUTOMATION'"
+          class="automation-moved"
+          :description="t('ai.studio.workspace.automationMoved')"
+        >
+          <el-button
+            type="primary"
+            @click="openAutomationPage"
+          >
+            {{ t('ai.studio.workspace.openAutomation') }}
+          </el-button>
+        </el-empty>
         <component
           :is="PHASE_COMPONENT[currentPhase]"
           v-else
@@ -413,7 +427,6 @@ import TableDesigner from '@/components/designer/TableDesigner.vue'
 import FormDesigner from '@/components/designer/FormDesigner.vue'
 import MainTableViewDesignTab from '@/components/designer/MainTableViewDesignTab.vue'
 import ActionDesigner from '@/components/designer/ActionDesigner.vue'
-import ServiceTaskDesigner from '@/components/serviceTask/ServiceTaskDesigner.vue'
 import ConnectionDesigner from '@/components/designer/ConnectionDesigner.vue'
 import EmailTemplateDesigner from '@/components/designer/EmailTemplateDesigner.vue'
 import EmailMonitorDesigner from '@/components/designer/EmailMonitorDesigner.vue'
@@ -446,7 +459,7 @@ const PHASE_COMPONENT: Partial<Record<AiStudioPhase, Component>> = {
   FORM_DESIGN: markRaw(FormDesigner),
   VIEW_DESIGN: markRaw(MainTableViewDesignTab),
   ACTION_DESIGN: markRaw(ActionDesigner),
-  AUTOMATION: markRaw(ServiceTaskDesigner),
+  // AUTOMATION 无内嵌设计器（流程移至独立 Automation 页），模板里单独渲染引导态
   CONNECTIONS: markRaw(ConnectionDesigner),
   EMAIL_TEMPLATES: markRaw(EmailTemplateDesigner),
   EMAIL_MONITORS: markRaw(EmailMonitorDesigner),
@@ -458,6 +471,11 @@ const completedPhases = ref<AiStudioPhase[]>([])
 const lastSavedAt = ref('')
 
 const currentPhaseIndex = computed(() => AI_STUDIO_PHASES.indexOf(currentPhase.value))
+
+/** Automation 阶段引导：新标签页打开独立 Automation 页，不打断工作台上下文 */
+function openAutomationPage(): void {
+  window.open(router.resolve('/automation').href, '_blank', 'noopener')
+}
 
 /** 可进入：已确认的阶段、当前阶段，以及最远进度的下一个阶段。 */
 function canEnterPhase(idx: number): boolean {

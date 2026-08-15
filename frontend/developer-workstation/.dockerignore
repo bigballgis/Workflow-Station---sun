@@ -9,3 +9,4 @@ verification-screenshots
 playwright-report
 test-results
 coverage
+.turbo

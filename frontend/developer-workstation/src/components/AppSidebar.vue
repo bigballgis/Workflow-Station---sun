@@ -26,6 +26,17 @@
             {{ t('functionUnit.title') }}
           </template>
         </el-menu-item>
+        <!-- Automation 一级入口（FR-B2）：仅四个能力角色可见；
+             无能力角色的团队成员走 FU 只读兜底，不含本页（FR-B15） -->
+        <el-menu-item
+          v-if="canSeeAutomation"
+          index="/automation"
+        >
+          <el-icon class="nav-anim nav-anim--pop"><Connection /></el-icon>
+          <template #title>
+            {{ t('automation.title') }}
+          </template>
+        </el-menu-item>
       </el-menu>
 
       <!-- 最近打开：整条是缩小版 Launchpad 磁贴（同一套图标造型），
@@ -102,8 +113,9 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Folder, Fold, Expand } from '@element-plus/icons-vue'
+import { Folder, Fold, Expand, Connection } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
+import { hasAnyRole } from '@/utils/permission'
 import { useSidebarState } from '@/composables/useSidebarState'
 import { useRecentFunctionUnits } from '@/composables/useRecentFunctionUnits'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -120,7 +132,16 @@ const { recent, recordVisit, clearRecent, syncMetadata } = useRecentFunctionUnit
 
 // 打开某个 FU 时导航项**不**标记为当前位置：此时「最近打开」里那一条才是更准确的所在，
 // 两处同时点亮会出现两条红色定位条，读起来是两个当前位置。
-const activeMenu = computed(() => (route.name === 'FunctionUnits' ? '/function-units' : ''))
+const activeMenu = computed(() => {
+  if (route.name === 'FunctionUnits') return '/function-units'
+  if (route.name === 'Automation' || route.name === 'AutomationFlowEdit') return '/automation'
+  return ''
+})
+
+// Automation 菜单可见性与路由 requiredRoles 一致（守卫对 /automation 不做工作区兜底）
+const canSeeAutomation = computed(() =>
+  hasAnyRole(['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'])
+)
 
 /** 当前正在设计器里打开的 FU（用于把「最近打开」里对应的一条标为当前位置） */
 const openFunctionUnitId = computed(() => {

@@ -11,9 +11,8 @@ declare module 'element-plus/dist/locale/zh-tw.mjs'
 declare module 'element-plus/dist/locale/en.mjs'
 
 // Runtime config injected per-environment by docker-entrypoint.sh into public/config.js.
-interface AppRuntimeConfig {
-  AP_BRIDGE_URL?: string
-}
+// (Currently no keys: the AP_BRIDGE_URL launcher gate was removed with the Admin Center
+// automation entries — FR-E01; automation management lives in Developer Workstation now.)
 interface Window {
-  __APP_CONFIG__?: AppRuntimeConfig
+  __APP_CONFIG__?: Record<string, string | undefined>
 }
