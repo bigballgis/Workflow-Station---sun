@@ -490,8 +490,11 @@ public class TaskController {
     @Operation(summary = "Get User Task Permissions", description = "Get user's virtual group and role information for task queries")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getUserTaskPermissions(
             @Parameter(description = "User ID", required = true)
-            @RequestParam("userId") String userId) {
-        
+            @RequestParam("userId") String userId,
+            @Parameter(description = "Include the user's role codes. Set false to skip a second admin-center round-trip "
+                    + "when only virtualGroupIds are needed.")
+            @RequestParam(value = "includeRoles", defaultValue = "true") boolean includeRoles) {
+
         Optional<String> actor = WorkflowActorResolver.currentUserId();
         if (actor.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -502,16 +505,19 @@ public class TaskController {
                     .body(ApiResponse.error("FORBIDDEN", "Can only query permissions for the authenticated user"));
         }
 
-        log.info("Getting task permissions for user: {}", userId);
-        
+        log.info("Getting task permissions for user: {} (includeRoles={})", userId, includeRoles);
+
         List<String> virtualGroupIds = userPermissionService.getUserVirtualGroupIds(userId);
-        List<String> roles = userPermissionService.getUserRoles(userId);
-        
+
         Map<String, Object> result = new HashMap<>();
         result.put("userId", userId);
         result.put("virtualGroupIds", virtualGroupIds);
-        result.put("roles", roles);
-        
+        // Each lookup is its own serial admin-center call, and this endpoint sits on the To Do /
+        // dashboard cold path. Callers that never read "roles" can drop half the latency.
+        if (includeRoles) {
+            result.put("roles", userPermissionService.getUserRoles(userId));
+        }
+
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     

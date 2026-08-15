@@ -196,8 +196,12 @@ public class AutomationFlowController {
     public record FlowRestoreRequest(List<JsonNode> flows) {}
 
     /**
-     * 引擎部署期解析:BPMN 里的 {@code ap:flowId} → 本环境实际 flowId（Q7）。
-     * 找不到映射时 404,引擎侧保留原引用并告警。
+     * 引擎部署期解析:BPMN 里的 {@code ap:flowKey} 业务键或 legacy {@code ap:flowId}
+     * → 本环境实际 flowId（Q7）。找不到映射时 404,引擎侧部署 fail-fast（FR-C12）。
+     *
+     * <p>FR-C05:解析到的 flow <b>无已发布版本</b>时同样按 404（NOT_FOUND 语义）返回,
+     * 错误体说明 flow 未发布——引用未发布 flow 的部署必须显式失败,而不是部署成功后
+     * 运行时 404/204。</p>
      */
     @GetMapping("/resolve")
     public ResponseEntity<ApiResponse<Map<String, String>>> resolveFlowRef(
@@ -207,10 +211,18 @@ public class AutomationFlowController {
             return ResponseEntity.status(403)
                     .body(ApiResponse.error(ERR_FORBIDDEN, "valid X-Service-Token required"));
         }
-        Optional<String> resolved = automationFlowService.resolveFlowRef(ref);
-        return resolved
-                .map(id -> ResponseEntity.ok(ApiResponse.success(Map.of("flowId", id))))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        Optional<AutomationFlowService.FlowResolution> resolved = automationFlowService.resolveFlowRef(ref);
+        if (resolved.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        AutomationFlowService.FlowResolution resolution = resolved.get();
+        if (!resolution.published()) {
+            return ResponseEntity.status(404).body(ApiResponse.error("AP_FLOW_NOT_PUBLISHED",
+                    "flow ref '" + ref + "' resolves to flow " + resolution.flowId()
+                            + " but that flow has no published version; publish it in "
+                            + "Admin Center → Automation before deploying"));
+        }
+        return ResponseEntity.ok(ApiResponse.success(Map.of("flowId", resolution.flowId())));
     }
 
     private boolean isValidServiceToken(String provided) {

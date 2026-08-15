@@ -148,7 +148,7 @@ class ServiceTaskExecutorFailureRecordTest {
     @DisplayName("成功路径不写失败行，也不额外开事务")
     void successPathDoesNotOpenTheFailureTransaction() {
         when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(), eq(Map.class)))
-                .thenReturn(ResponseEntity.ok(Map.of("rowCount", 4)));
+                .thenReturn(ResponseEntity.ok(Map.of("variables", Map.of("rowCount", 4))));
 
         executor.execute(execution);
 

@@ -76,9 +76,9 @@ class AutomationFlowRestoreTest {
 
     @Test
     void keepsExistingFlowUntouched() {
-        // 迁移键已能解析到本环境 flow（同环境重导 / 之前迁移过）
-        when(jdbcTemplate.queryForList(contains("WHERE id = ?"), eq(String.class), any(Object[].class)))
-                .thenReturn(List.of("local-flow-id"));
+        // 迁移键已能解析到本环境 flow（同环境重导 / 之前迁移过）；发布态与否都不覆盖既有草稿
+        when(jdbcTemplate.queryForList(contains("WHERE id = ?"), any(Object[].class)))
+                .thenReturn(List.of(Map.of("id", "local-flow-id", "published", false)));
 
         List<AutomationFlowService.FlowRestoreResult> results =
                 service.restoreFlows(List.of(flowExport()));
@@ -87,7 +87,7 @@ class AutomationFlowRestoreTest {
         assertEquals(AutomationFlowService.FlowRestoreStatus.ALREADY_PRESENT, results.get(0).status());
         assertEquals("local-flow-id", results.get(0).flowId());
         // 不覆盖既有草稿，也不必登录 AP
-        verify(serviceTaskApiClient, never()).signInShared();
+        verify(serviceTaskApiClient, never()).signInAsCurrentActor();
         verify(restTemplate, never()).exchange(anyString(), any(HttpMethod.class), any(HttpEntity.class),
                 eq(String.class));
     }
@@ -155,7 +155,7 @@ class AutomationFlowRestoreTest {
     private void stubMissingFlow() {
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), any(Object[].class)))
                 .thenReturn(List.of());
-        when(serviceTaskApiClient.signInShared())
+        when(serviceTaskApiClient.signInAsCurrentActor())
                 .thenReturn(new ServiceTaskApiClient.ApSession("token", "project-1", "platform-1"));
         when(jdbcTemplate.queryForList(anyString(), any(Object[].class)))
                 .thenReturn(List.<Map<String, Object>>of());
