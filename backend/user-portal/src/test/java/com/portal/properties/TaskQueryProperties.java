@@ -1,6 +1,7 @@
 package com.portal.properties;
 
 import com.portal.client.WorkflowEngineClient;
+import com.portal.component.DelegationRuleMatcher;
 import com.portal.component.DelegatedTaskQueryComponent;
 import com.portal.component.MiParticipantEnrichmentComponent;
 import com.portal.component.TaskHistoryComponent;
@@ -35,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -85,11 +87,11 @@ class TaskQueryProperties {
             workflowEngineClient,
             new com.portal.component.EngineSubTableHydrator(workflowEngineClient),
             taskActionService,
-            new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
+            new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository, new DelegationRuleMatcher()),
             new WorkspaceTaskFilterComponent(
                 workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository),
             new MiParticipantEnrichmentComponent(jdbcTemplate),
-            new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate, requestIdEnricher),
+            new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate, requestIdEnricher, mock(com.portal.repository.DelegationAuditRepository.class)),
             requestIdEnricher
         );
         ReflectionTestUtils.setField(taskQueryComponent, "taskQueryExecutor", (java.util.concurrent.Executor) Runnable::run);
@@ -554,17 +556,33 @@ class TaskQueryProperties {
     }
 
     /**
-     * Mock Flowable 任务响应
+     * Mock Flowable 任务响应（按 page/size 切片，与引擎分页语义一致；mine 路径信任引擎页）。
      */
     private void mockFlowableTasksResponse(List<Map<String, Object>> tasks) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("tasks", tasks);
-        body.put("totalCount", (long) tasks.size());
-
         when(workflowEngineClient.getUserAllVisibleTasks(anyString(), anyList(), anyList(), anyInt(), anyInt()))
-                .thenReturn(Optional.of(body));
+                .thenAnswer(invocation -> {
+                    int page = invocation.getArgument(3);
+                    int size = invocation.getArgument(4);
+                    return Optional.of(enginePageBody(tasks, page, size));
+                });
         when(workflowEngineClient.getUserTasks(anyString(), anyInt(), anyInt()))
-                .thenReturn(Optional.of(body));
+                .thenAnswer(invocation -> {
+                    int page = invocation.getArgument(1);
+                    int size = invocation.getArgument(2);
+                    return Optional.of(enginePageBody(tasks, page, size));
+                });
+    }
+
+    private static Map<String, Object> enginePageBody(List<Map<String, Object>> tasks, int page, int size) {
+        int from = Math.max(0, page) * Math.max(1, size);
+        int to = Math.min(from + Math.max(1, size), tasks.size());
+        List<Map<String, Object>> slice = from < tasks.size()
+                ? tasks.subList(from, to)
+                : Collections.emptyList();
+        Map<String, Object> body = new HashMap<>();
+        body.put("tasks", new ArrayList<>(slice));
+        body.put("totalCount", (long) tasks.size());
+        return body;
     }
 
     /**

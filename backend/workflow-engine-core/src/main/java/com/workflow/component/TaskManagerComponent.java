@@ -71,6 +71,14 @@ public class TaskManagerComponent {
         return taskQueryService.getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size, activeBusinessUnitId);
     }
 
+    public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds,
+                                                 List<String> deptRoles, int page, int size,
+                                                 String activeBusinessUnitId,
+                                                 com.workflow.dto.request.EngineTaskListCriteria criteria) {
+        return taskQueryService.getUserAllVisibleTasks(
+                userId, groupIds, deptRoles, page, size, activeBusinessUnitId, criteria);
+    }
+
     public TaskListResult.TaskInfo getTaskInfo(String taskId) {
         return taskQueryService.getTaskInfo(taskId);
     }
@@ -114,7 +122,16 @@ public class TaskManagerComponent {
     public TaskAssignmentResult completeTask(String taskId, String userId,
                                              Map<String, Object> variables,
                                              boolean sendNotification) {
-        return taskCompletionService.completeTask(taskId, userId, variables, sendNotification);
+        return taskCompletionService.completeTask(taskId, userId, variables, sendNotification, null, false);
+    }
+
+    public TaskAssignmentResult completeTask(String taskId, String userId,
+                                             Map<String, Object> variables,
+                                             boolean sendNotification,
+                                             String actingForUserId,
+                                             boolean actingForTrusted) {
+        return taskCompletionService.completeTask(
+                taskId, userId, variables, sendNotification, actingForUserId, actingForTrusted);
     }
 
     @Auditable(

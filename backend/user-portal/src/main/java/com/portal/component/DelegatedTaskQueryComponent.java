@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -39,6 +38,7 @@ public class DelegatedTaskQueryComponent {
 
     private final WorkflowEngineClient workflowEngineClient;
     private final DelegationRuleRepository delegationRuleRepository;
+    private final DelegationRuleMatcher delegationRuleMatcher;
 
     /**
      * Query tasks delegated to a user.
@@ -46,12 +46,10 @@ public class DelegatedTaskQueryComponent {
      * Delegation info is stored in the local database and combined with Flowable task info.
      */
     public List<TaskInfo> queryDelegatedTasks(String userId) {
-        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
 
-        // Get active delegation rules where the current user is the delegate
         List<DelegationRule> delegations = delegationRuleRepository
                 .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
 
@@ -59,20 +57,18 @@ public class DelegatedTaskQueryComponent {
             return Collections.emptyList();
         }
 
-        // Get list of delegators
-        Set<String> delegatorIds = delegations.stream()
-                .map(DelegationRule::getDelegatorId)
-                .collect(Collectors.toSet());
+        Map<String, List<DelegationRule>> rulesByDelegator = delegations.stream()
+                .collect(Collectors.groupingBy(DelegationRule::getDelegatorId));
 
         SecurityContext ctx = SecurityContextHolder.getContext();
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
-        // 说明：每个 delegator 的叶子任务只做 workflow-engine HTTP（不碰 DB），不参与连接放大，
-        // 因此保留 commonPool；也避免“运行在有界池上的 delegatedFuture 又向同一有界池提交子任务并 join”
-        // 造成的有界池自等待死锁（父占满线程等子、子在队列无线程可跑）。
-        List<CompletableFuture<List<TaskInfo>>> futures = delegatorIds.stream()
-                .map(delegatorId -> CompletableFuture.supplyAsync(() -> RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(
-                        ctx, attrs, () -> loadDelegatedTasksForDelegator(userId, delegatorId))))
+        List<CompletableFuture<List<TaskInfo>>> futures = rulesByDelegator.entrySet().stream()
+                .map(entry -> CompletableFuture.supplyAsync(() ->
+                        RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(
+                                ctx, attrs,
+                                () -> loadDelegatedTasksForDelegator(
+                                        userId, entry.getKey(), entry.getValue()))))
                 .toList();
 
         List<TaskInfo> delegatedTasks = new ArrayList<>();
@@ -88,10 +84,10 @@ public class DelegatedTaskQueryComponent {
     }
 
     /**
-     * Convert one delegator's pending tasks into a list with the delegate as assignee
-     * (single delegator; can query multiple delegators in parallel).
+     * Load one delegator's assigned tasks that match standing rules (assignee == delegator only).
      */
-    private List<TaskInfo> loadDelegatedTasksForDelegator(String delegateUserId, String delegatorId) {
+    private List<TaskInfo> loadDelegatedTasksForDelegator(
+            String delegateUserId, String delegatorId, List<DelegationRule> rules) {
         List<TaskInfo> delegatedTasks = new ArrayList<>();
         try {
             for (int p = 0; ; p++) {
@@ -107,6 +103,12 @@ public class DelegatedTaskQueryComponent {
                 }
                 for (Map<String, Object> taskMap : tasks) {
                     TaskInfo taskInfo = EngineTaskMapper.convertMapToTaskInfo(taskMap);
+                    if (!isAssignedToDelegator(taskInfo, delegatorId)) {
+                        continue;
+                    }
+                    if (!delegationRuleMatcher.anyMatch(taskInfo, delegatorId, rules)) {
+                        continue;
+                    }
                     TaskInfo delegatedTask = TaskInfo.builder()
                             .taskId(taskInfo.getTaskId())
                             .taskName(taskInfo.getTaskName())
@@ -140,5 +142,13 @@ public class DelegatedTaskQueryComponent {
             log.warn("Failed to get delegated tasks for delegator {}: {}", delegatorId, e.getMessage());
         }
         return delegatedTasks;
+    }
+
+    private static boolean isAssignedToDelegator(TaskInfo task, String delegatorId) {
+        if (task == null || delegatorId == null || delegatorId.isBlank()) {
+            return false;
+        }
+        String assignee = task.getAssignee();
+        return assignee != null && !assignee.isBlank() && delegatorId.equals(assignee.trim());
     }
 }

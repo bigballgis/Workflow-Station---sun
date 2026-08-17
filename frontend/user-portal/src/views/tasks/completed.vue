@@ -4,6 +4,31 @@
       <h1>{{ t('task.completedTasks') }}</h1>
     </div>
 
+    <el-tabs
+      v-model="listView"
+      class="task-list-tabs"
+      @tab-change="onListViewChange"
+    >
+      <el-tab-pane name="mine">
+        <template #label>
+          <span>{{ t('task.tab.mine') }}</span>
+        </template>
+      </el-tab-pane>
+      <el-tab-pane name="acting">
+        <template #label>
+          <span class="acting-tab-label">
+            {{ t('task.tab.actingForOthers') }}
+            <el-badge
+              v-if="actingCount > 0"
+              :value="actingCount"
+              :max="99"
+              class="acting-tab-badge"
+            />
+          </span>
+        </template>
+      </el-tab-pane>
+    </el-tabs>
+
     <!-- 筛选条件 -->
     <div class="portal-card filter-card">
       <el-form
@@ -46,12 +71,16 @@
       </el-form>
     </div>
 
-    <!-- 任务列表：与待办一致 — 无整表 v-loading 遮罩，首屏空表显示加载提示，翻页保留旧数据 -->
+    <!-- 任务列表：v-loading overlay while paging (Views parity) -->
     <div class="portal-card">
       <el-table
-        :data="taskList"
+        v-loading="loading"
+        class="portal-list-grid"
+        :data="displayTaskRows"
         stripe
-        table-layout="auto"
+        table-layout="fixed"
+        :span-method="taskSpanMethod"
+        :row-class-name="groupRowClassName"
       >
         <template #empty>
           <div
@@ -63,119 +92,244 @@
             </el-icon>
             <span>{{ t('common.loading') }}</span>
           </div>
-          <span v-else>{{ t('task.noCompletedTasks') }}</span>
+          <span v-else>{{ listView === 'acting' ? t('task.tab.noActing') : t('task.noCompletedTasks') }}</span>
         </template>
         <el-table-column
-          prop="requestId"
-          :label="t('task.requestId')"
-          min-width="130"
+          v-for="(field, idx) in orderedTaskFields"
+          :key="field"
+          :prop="field"
+          :width="colWidth(field, taskWidthFallback(field))"
           show-overflow-tooltip
         >
-          <template #default="{ row }">
-            <el-link
-              type="primary"
-              @click="viewTask(row)"
-            >
-              {{ row.requestId || '-' }}
-            </el-link>
+          <template #header>
+            <PortalListColumnHeader
+              :label="taskColumnLabel(field)"
+              :width="colWidth(field, taskWidthFallback(field))"
+              :has-filter="hasFilter(field)"
+              :sort-direction="sortDirection(field)"
+              :is-grouped="isGrouped(field)"
+              :can-move-left="canMoveLeft(field)"
+              :can-move-right="canMoveRight(field)"
+              :date-like="field === 'createTime' || field === 'completedTime'"
+              @sort-asc="onSort(field, 'ASC')"
+              @sort-desc="onSort(field, 'DESC')"
+              @group-by="onGroup(field)"
+              @filter="openFilter(field, taskColumnLabel(field))"
+              @clear-filter="onClearColumnFilter(field)"
+              @move-left="moveLeft(field)"
+              @move-right="moveRight(field)"
+              @resize="(w) => onColResize(field, w)"
+              @resize-end="onColResizeEnd"
+            />
           </template>
-        </el-table-column>
-        <el-table-column
-          prop="taskName"
-          :label="t('task.taskName')"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="currentStepName"
-          :label="t('task.currentStep')"
-          min-width="130"
-          show-overflow-tooltip
-        >
           <template #default="{ row }">
-            {{ row.currentStepName || row.taskName || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="processDefinitionName"
-          :label="t('task.processName')"
-          min-width="140"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="action"
-          :label="t('task.action')"
-          width="130"
-        >
-          <template #default="{ row }">
-            <el-tag
-              v-if="!row.multiInstanceSubTask"
-              :type="getActionTagType(row.action)"
-              size="small"
-              style="white-space: nowrap;"
-            >
-              {{ t(`action.${row.action || 'completed'}`) }}
-            </el-tag>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="createTime"
-          :label="t('task.createTime')"
-          width="160"
-        >
-          <template #default="{ row }">
-            <span style="white-space: nowrap;">{{ formatDate(row.createTime) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="completedTime"
-          :label="t('task.completedTime')"
-          width="160"
-        >
-          <template #default="{ row }">
-            <span style="white-space: nowrap;">{{ formatDate(row.completedTime) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="durationInMillis"
-          :label="t('task.duration')"
-          width="100"
-        >
-          <template #default="{ row }">
-            <span style="white-space: nowrap;">{{ formatDuration(row.durationInMillis) }}</span>
+            <template v-if="isPortalListGroupHeader(row)">
+              <div
+                v-if="idx === 0"
+                class="group-header-cell"
+              >
+                <strong>{{ row._groupLabel }}</strong>
+                <span class="group-count">({{ row._groupCount }})</span>
+              </div>
+            </template>
+            <template v-else-if="field === 'requestId'">
+              <el-link
+                type="primary"
+                @click="viewTask(row)"
+              >
+                {{ row.requestId || '-' }}
+              </el-link>
+            </template>
+            <template v-else-if="field === 'taskName'">
+              {{ row.taskName }}
+            </template>
+            <template v-else-if="field === 'currentStepName'">
+              {{ row.currentStepName || row.taskName || '-' }}
+            </template>
+            <template v-else-if="field === 'processDefinitionName'">
+              {{ row.processDefinitionName }}
+            </template>
+            <template v-else-if="field === 'delegatorId'">
+              {{ t('task.actingFor', { name: row.delegatorName || row.delegatorId || '-' }) }}
+            </template>
+            <template v-else-if="field === 'action'">
+              <span
+                v-if="row.action === 'ACTED_BY_PROXY'"
+                style="white-space: nowrap;"
+              >
+                {{ t('task.actedByProxy', { name: row.delegatorName || row.delegatorId || '-' }) }}
+              </span>
+              <el-tag
+                v-else-if="!row.multiInstanceSubTask"
+                :type="getActionTagType(row.action)"
+                size="small"
+                style="white-space: nowrap;"
+              >
+                {{ t(`action.${row.action || 'completed'}`) }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="field === 'createTime'">
+              <span style="white-space: nowrap;">{{ formatDate(row.createTime) }}</span>
+            </template>
+            <template v-else-if="field === 'completedTime'">
+              <span style="white-space: nowrap;">{{ formatDate(row.completedTime) }}</span>
+            </template>
+            <template v-else-if="field === 'durationInMillis'">
+              <span style="white-space: nowrap;">{{ formatDuration(row.durationInMillis) }}</span>
+            </template>
           </template>
         </el-table-column>
       </el-table>
 
-      <el-pagination
+      <PortalListPagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.size"
         :disabled="loading"
         :total="pagination.total"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        style="margin-top: 16px; justify-content: flex-end;"
-        @size-change="handleSizeChange"
-        @current-change="handlePageChange"
+        @change="loadTasks"
+      />
+
+      <PortalListFilterDialog
+        v-model="filterDialogVisible"
+        :title="filterDialogField
+          ? `${t('mainTableView.colFilterBy')}: ${filterDialogField.label}`
+          : t('mainTableView.colFilterBy')"
+        :initial="filterDialogField
+          ? colState.filters[filterDialogField.field]
+          : null"
+        @apply="onApplyColumnFilter"
+        @clear="onClearColumnFilter()"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import { Search, Loading } from '@element-plus/icons-vue'
 import { queryCompletedTasks, TaskInfo } from '@/api/task'
 import { formatDate } from '@/utils/dateFormat'
+import PortalListPagination from '@/components/portal-list/PortalListPagination.vue'
+import PortalListColumnHeader from '@/components/portal-list/PortalListColumnHeader.vue'
+import PortalListFilterDialog from '@/components/portal-list/PortalListFilterDialog.vue'
+import { usePortalListColumnState } from '@/composables/usePortalListColumnState'
+import { PORTAL_LIST_DEFAULT_PAGE_SIZE } from '@/constants/portalListPagination'
+import {
+  applyGroupHeaders,
+  isPortalListGroupHeader,
+  portalListGroupSpanMethod,
+  type PortalListColumnFilter,
+  type PortalListSortDirection,
+} from '@/utils/portalListGridRuntime'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
+
+const cols = usePortalListColumnState('tasks-completed')
+const {
+  state: colState,
+  filterDialogVisible,
+  filterDialogField,
+  width: colWidth,
+  onResize: onColResize,
+  onResizeEnd: onColResizeEnd,
+  toggleSort,
+  toggleGroup,
+  moveLeft,
+  moveRight,
+  canMoveLeft,
+  canMoveRight,
+  ensureOrder,
+  orderedColumnFields,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  hasFilter,
+  sortDirection,
+  isGrouped,
+  activeFilters,
+} = cols
+
+/** Completed history path; sortBy forwarded when present (unknown fields may be ignored server-side). */
+const SORT_FIELD_MAP: Record<string, string> = {
+  requestId: 'requestId',
+  taskName: 'taskName',
+  currentStepName: 'taskName',
+  processDefinitionName: 'processDefinitionName',
+  delegatorId: 'delegatorId',
+  action: 'action',
+  createTime: 'createTime',
+  completedTime: 'completedTime',
+  durationInMillis: 'durationInMillis',
+}
+
+/** FE column → API filter field (TaskQueryColumnFilters whitelist where applicable). */
+const FILTER_FIELD_MAP: Record<string, string> = {
+  currentStepName: 'currentNode',
+  requestId: 'requestId',
+  taskName: 'taskName',
+  processDefinitionName: 'processDefinitionName',
+}
+
+const MINE_FIELDS = [
+  'requestId', 'taskName', 'currentStepName', 'processDefinitionName',
+  'action', 'createTime', 'completedTime', 'durationInMillis',
+]
+const ACTING_FIELDS = [
+  'requestId', 'taskName', 'currentStepName', 'processDefinitionName',
+  'delegatorId', 'action', 'createTime', 'completedTime', 'durationInMillis',
+]
 
 const loading = ref(true)
 const taskList = ref<TaskInfo[]>([])
+const listView = ref<'mine' | 'acting'>(route.query.view === 'proxy' ? 'acting' : 'mine')
+const actingCount = ref(0)
+
+const taskDataFields = computed(() =>
+  listView.value === 'acting' ? ACTING_FIELDS : MINE_FIELDS,
+)
+const orderedTaskFields = computed(() => orderedColumnFields(taskDataFields.value))
+watch(taskDataFields, (fields) => ensureOrder(fields), { immediate: true })
+
+function taskWidthFallback(field: string): number {
+  const map: Record<string, number> = {
+    requestId: 140, taskName: 160, currentStepName: 140, processDefinitionName: 150,
+    delegatorId: 140, action: 160, createTime: 170, completedTime: 170, durationInMillis: 110,
+  }
+  return map[field] ?? 140
+}
+
+function taskColumnLabel(field: string): string {
+  const map: Record<string, string> = {
+    requestId: t('task.requestId'),
+    taskName: t('task.taskName'),
+    currentStepName: t('task.currentStep'),
+    processDefinitionName: t('task.processName'),
+    delegatorId: t('delegation.delegator'),
+    action: t('task.action'),
+    createTime: t('task.createTime'),
+    completedTime: t('task.completedTime'),
+    durationInMillis: t('task.duration'),
+  }
+  return map[field] ?? field
+}
+
+const displayTaskRows = computed(() =>
+  applyGroupHeaders(taskList.value as unknown as Record<string, unknown>[], colState.groupBy) as unknown as TaskInfo[],
+)
+
+function groupRowClassName({ row }: { row: unknown }) {
+  return isPortalListGroupHeader(row) ? 'group-header-row' : ''
+}
+
+function taskSpanMethod({ row, columnIndex }: { row: unknown; columnIndex: number }) {
+  return portalListGroupSpanMethod(row, columnIndex, orderedTaskFields.value.length, 0)
+}
 
 const filterForm = reactive({
   keyword: '',
@@ -184,30 +338,107 @@ const filterForm = reactive({
 
 const pagination = reactive({
   page: 1,
-  size: 20,
+  size: PORTAL_LIST_DEFAULT_PAGE_SIZE,
   total: 0
 })
+
+/** Toolbar keyword only — column filters go via `filters` body. */
+function resolveKeyword(): string | undefined {
+  return filterForm.keyword || undefined
+}
+
+function buildColumnFilters(): Record<string, { operator: string; value: string }> | undefined {
+  const raw = activeFilters()
+  const out: Record<string, { operator: string; value: string }> = {}
+  for (const [field, filter] of Object.entries(raw)) {
+    const apiField = FILTER_FIELD_MAP[field] ?? field
+    out[apiField] = { operator: filter.operator, value: filter.value ?? '' }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+const loadActingCount = async () => {
+  try {
+    const res = await queryCompletedTasks({
+      assignmentTypes: ['DELEGATED'],
+      page: 0,
+      size: 1
+    })
+    const data = res.data || res
+    actingCount.value = Number(data.totalElements || 0)
+  } catch {
+    // FALLBACK(ux): badge is optional chrome; list load remains authoritative
+    actingCount.value = 0
+  }
+}
 
 const loadTasks = async () => {
   loading.value = true
   try {
+    const sortApi = colState.sort?.field
+      ? SORT_FIELD_MAP[colState.sort.field]
+      : undefined
     const res = await queryCompletedTasks({
-      keyword: filterForm.keyword || undefined,
+      assignmentTypes: listView.value === 'acting' ? ['DELEGATED'] : undefined,
+      keyword: resolveKeyword(),
+      filters: buildColumnFilters(),
       startTime: filterForm.dateRange?.[0] || undefined,
       endTime: filterForm.dateRange?.[1] || undefined,
+      sortBy: sortApi,
+      sortDirection: colState.sort?.direction?.toLowerCase(),
       page: pagination.page - 1,
       size: pagination.size
     })
     const data = res.data || res
     taskList.value = data.content || []
     pagination.total = data.totalElements || 0
+    if (listView.value === 'acting') {
+      actingCount.value = Number(data.totalElements || 0)
+    }
   } catch (error) {
     console.error('Failed to load completed tasks:', error)
     taskList.value = []
     pagination.total = 0
+    ElMessage.error(t('task.loadFailed'))
   } finally {
     loading.value = false
   }
+}
+
+function onSort(field: string, direction: PortalListSortDirection) {
+  toggleSort(field, direction)
+  pagination.page = 1
+  loadTasks()
+}
+
+function onGroup(field: string) {
+  toggleGroup(field)
+  pagination.page = 1
+  loadTasks()
+}
+
+function onApplyColumnFilter(filter: PortalListColumnFilter) {
+  applyFilter(filter)
+  pagination.page = 1
+  loadTasks()
+}
+
+function onClearColumnFilter(field?: string) {
+  clearFilter(field)
+  pagination.page = 1
+  loadTasks()
+}
+
+const onListViewChange = () => {
+  pagination.page = 1
+  const q = { ...route.query } as Record<string, string>
+  if (listView.value === 'acting') {
+    q.view = 'proxy'
+  } else {
+    delete q.view
+  }
+  router.replace({ query: q })
+  loadTasks()
 }
 
 const handleSearch = () => {
@@ -219,15 +450,6 @@ const handleReset = () => {
   filterForm.keyword = ''
   filterForm.dateRange = null
   handleSearch()
-}
-
-const handleSizeChange = () => {
-  pagination.page = 1
-  loadTasks()
-}
-
-const handlePageChange = () => {
-  loadTasks()
 }
 
 const viewTask = (task: TaskInfo) => {
@@ -283,11 +505,25 @@ const getActionTagType = (action: string): 'success' | 'warning' | 'info' | 'dan
 }
 
 onMounted(() => {
-  loadTasks()
+  void loadTasks()
+  if (listView.value !== 'acting') {
+    void loadActingCount()
+  }
 })
 </script>
 
 <style lang="scss" scoped>
+.acting-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acting-tab-badge :deep(.el-badge__content) {
+  position: static;
+  transform: none;
+}
+
 .table-empty-loading {
   display: inline-flex;
   align-items: center;

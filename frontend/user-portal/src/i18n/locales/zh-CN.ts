@@ -228,6 +228,13 @@ export default {
   },
   task: {
     title: '待办',
+    tab: {
+      mine: '我的',
+      actingForOthers: '代理办理',
+      noActing: '暂无代理办理'
+    },
+    actedByProxy: '由 {name} 代理完成',
+    actingFor: '代 {name} 办理',
     completedTasks: '已处理任务',
     completedTime: '完成时间',
     taskName: '任务名称',

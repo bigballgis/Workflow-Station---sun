@@ -32,7 +32,7 @@ class TaskApprovalCompletionSubTableGuardTest {
         // same engine
         // client); the remaining collaborators are unused here.
         return new TaskApprovalCompletionComponent(
-                client, new EngineSubTableHydrator(client), null, null, null, null, null);
+                client, new EngineSubTableHydrator(client), null, null, null, null, null, null);
     }
 
     private List<Map<String, Object>> fourRows() {

@@ -26,6 +26,7 @@ public class TaskPermissionEvaluator {
 
     private final DelegationRuleRepository delegationRuleRepository;
     private final WorkflowEngineClient workflowEngineClient;
+    private final DelegationRuleMatcher delegationRuleMatcher;
 
     /**
      * Runtime empty pool: no assignee, candidates, groups, or assignmentTarget (matches Flowable identity links); do not tighten by assignmentType.
@@ -189,8 +190,8 @@ public class TaskPermissionEvaluator {
             return true;
         }
 
-        // Delegated task
-        if ("DELEGATED".equals(assignmentType) && assignee != null && matchesPortalIdentity(assignee, userId, portalUsername)) {
+        // Standing-rule proxy (list projection or engine task hung on delegator)
+        if (allowsByStandingDelegation(task, userId)) {
             return true;
         }
 
@@ -219,17 +220,6 @@ public class TaskPermissionEvaluator {
             }
         }
 
-        // Check delegation rules
-        if (assignee != null) {
-            List<DelegationRule> delegations = delegationRuleRepository
-                    .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
-            for (DelegationRule delegation : delegations) {
-                if (samePortalUserId(assignee, delegation.getDelegatorId())) {
-                    return true;
-                }
-            }
-        }
-
         // Empty pool (no assignee/candidates/groups/target): allow initiator only when BPMN is initiator task;
         // BU_ROLE / HIERARCHY nodes that look empty must not appear on initiator todo.
         if (isEmptyAssignmentPool(task) && isInitiatorOfTask(task, userId, portalUsername)) {
@@ -242,6 +232,61 @@ public class TaskPermissionEvaluator {
             return true;
         }
 
+        return false;
+    }
+
+    /**
+     * When the actor is not the hung assignee but holds a matching standing rule, return the delegator id
+     * to send as trusted {@code actingForUserId} to the engine.
+     */
+    public Optional<String> resolveStandingActingFor(TaskInfo task, String userId, String portalUsername) {
+        if (task == null || userId == null || userId.isBlank()) {
+            return Optional.empty();
+        }
+        String hungOn = task.getAssignee();
+        if (hungOn != null && !hungOn.isBlank()
+                && matchesPortalIdentity(hungOn, userId, portalUsername)) {
+            return Optional.empty();
+        }
+        if (!allowsByStandingDelegation(task, userId)) {
+            return Optional.empty();
+        }
+        if (task.getDelegatorId() != null && !task.getDelegatorId().isBlank()) {
+            return Optional.of(task.getDelegatorId().trim());
+        }
+        if (hungOn != null && !hungOn.isBlank()) {
+            return Optional.of(hungOn.trim());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Standing act-as: task hung on delegator (engine assignee) or list projection with {@code delegatorId}.
+     */
+    private boolean allowsByStandingDelegation(TaskInfo task, String userId) {
+        if (task == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        String hungOn = task.getDelegatorId();
+        if (hungOn == null || hungOn.isBlank()) {
+            hungOn = task.getAssignee();
+        }
+        if (hungOn == null || hungOn.isBlank()) {
+            return false;
+        }
+        List<DelegationRule> rules = delegationRuleRepository
+                .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
+        if (rules.isEmpty()) {
+            return false;
+        }
+        for (DelegationRule rule : rules) {
+            if (!samePortalUserId(hungOn, rule.getDelegatorId())) {
+                continue;
+            }
+            if (delegationRuleMatcher.matches(task, rule)) {
+                return true;
+            }
+        }
         return false;
     }
 

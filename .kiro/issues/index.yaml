@@ -2078,3 +2078,32 @@
     platform-common messages_*.properties 校验消息。
     验证：DelegationRuleListSpecTest 6 + DelegationAuditListSpecTest 4 +
     DelegationRuleMatcherTest 5 全绿；frontend vitest 953/953。
+
+- id: "1523"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Portal 待办/已处理全量扫描：路由条件过宽导致引擎能答的请求也全扫；full-scan 缓存 key 漏工作区，跨 BU/角色串数据"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java"
+  note: |
+    反例一（缓存串数据）：同一 userId 在 BU-A 打开 To Do（缓存 full-scan 结果），
+    切到 BU-B 再打开 To Do → 在 TTL 内命中同一条缓存，看到的是 BU-A 视角过滤出的任务。
+    因为 fullScanCacheKey 只由 userId + request + assignmentTypes + size 组成，
+    而 applyPortalPostEngineFilters 的结果依赖当前激活 BU / 角色。
+    反例二（白扫）：请求条件其实能被引擎 criteria 完整表达时，
+    仍会走 queryTasksFullEnginePagesThenDelegate 把引擎所有页拉一遍再过滤。
+    根因：路由处除 EngineTaskPushdown.canFullyPush 之外还有第二个更宽的
+    needsFullEngineScanBeforeFilters 条件，两处判断同一件事（能否只取一页），
+    宽的那个把可下推的请求也拽进全扫；缓存 key 又没带工作区上下文。
+    修复：删掉 needsFullEngineScanBeforeFilters，路由只由 canFullyPush 一处决定
+    （对应 error-handling-governance 红线 3「一个决策一个位置」）；
+    fullScanCacheKey 补 SecurityContextUtils.getCurrentActiveBusinessUnitId()
+    与 getCurrentActiveRoleId()，工作区不同则不共享缓存。
+    引擎侧同 PR 落地 page/size/sort/filter 下推（EngineTaskListCriteria）。
+    验证：EngineTaskPushdownTest 9（新增用例逐条覆盖「原先触发全扫的条件现在
+    canFullyPush 必须为 false」）+ TaskInfoListOpsTest 4 + TaskQueryColumnFiltersTest 4 全绿；
+    user-portal 后端定向单测 84/84；frontend vitest 953/953。
+    运行时：新增 scripts/verify-portal-list-pagination.mjs —— To Do「下一页」只发 1 次
+    /tasks/query 且首行变化（真下推分页），并顺带守住 #1520 的「改每页条数只发 1 次请求」。
+    截图：frontend/user-portal/verification-screenshots/2026-08-17_pagination-*.png

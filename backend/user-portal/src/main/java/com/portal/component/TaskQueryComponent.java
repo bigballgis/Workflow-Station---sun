@@ -7,7 +7,10 @@ import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TaskStatistics;
 import com.portal.dto.TaskHistoryInfo;
+import com.portal.util.EngineTaskPushdown;
 import com.portal.util.RequestContextInheritanceUtils;
+import com.portal.util.TaskInfoListOps;
+import com.portal.util.TaskQueryColumnFilters;
 import com.portal.util.WorkflowEnginePayloadHelper;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.entity.ProcessInstance;
@@ -87,11 +90,11 @@ public class TaskQueryComponent {
 
     /**
      * Query pending tasks for a user.
-     * <p>Default: fetch pending tasks from the engine using the requested {@code page}/{@code size},
-     * in parallel with {@link #queryDelegatedTasks} (when applicable), then merge, filter by portal rules,
-     * sort, and paginate the merged list. No hard 1000-row limit.
-     * Keyword/priority filters need the full engine task list; fetch all engine pages by {@code size},
-     * then merge with delegated tasks before filtering.</p>
+     * <p>Default: engine window page ({@code page}/{@code size}). When chrome is only pushable
+     * (taskName + createTime/dueDate/priority/name sort), criteria are pushed to the engine so the
+     * first page stays fast and {@code total} matches the engine filtered count.
+     * Non-pushable filters (keyword / initiator / …) still full-scan all engine pages for an exact
+     * filtered total; pushable fragments are still sent to shrink the walk.</p>
      */
     public PageResponse<TaskInfo> queryTasks(TaskQueryRequest request) {
         if (!workflowEngineClient.isAvailable()) {
@@ -105,16 +108,17 @@ public class TaskQueryComponent {
         List<String> assignmentTypes = request.getAssignmentTypes();
         int page = request.getPage() != null ? request.getPage() : 0;
         int size = request.getSize() != null ? request.getSize() : 20;
+        EngineTaskPushdown.Criteria push = EngineTaskPushdown.from(request);
 
         if (isDelegatedOnlyAssignmentFilter(assignmentTypes)) {
             return queryDelegatedTasksOnlyPage(userId, request, page, size);
         }
 
-        if (needsFullEngineScanBeforeFilters(request)) {
-            return queryTasksFullEnginePagesThenDelegate(userId, request, assignmentTypes, page, size);
-        }
-
-        return queryTasksEngineWindowThenDelegate(userId, request, assignmentTypes, page, size);
+        // One decision, one place: whatever the engine cannot answer from a single page
+        // has to be filtered over every engine page to reach an exact total.
+        return EngineTaskPushdown.canFullyPush(request)
+                ? queryTasksEngineWindowThenDelegate(userId, request, assignmentTypes, page, size, push)
+                : queryTasksFullEnginePagesThenDelegate(userId, request, assignmentTypes, page, size, push);
     }
 
     private static boolean isDelegatedOnlyAssignmentFilter(List<String> assignmentTypes) {
@@ -123,48 +127,14 @@ public class TaskQueryComponent {
                 && "DELEGATED".equalsIgnoreCase(assignmentTypes.get(0));
     }
 
-    /**
-     * Keyword, priority, etc. must be filtered over the full engine task list;
-     * fetch all pages from the engine with the requested page size (no row limit).
-     */
-    private boolean needsFullEngineScanBeforeFilters(TaskQueryRequest request) {
-        if (request.getPriorities() != null && !request.getPriorities().isEmpty()) {
-            return true;
-        }
-        if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
-            return true;
-        }
-        if (request.getProcessTypes() != null && !request.getProcessTypes().isEmpty()) {
-            return true;
-        }
-        if (request.getStatuses() != null && !request.getStatuses().isEmpty()) {
-            return true;
-        }
-        if (request.getStartTime() != null || request.getEndTime() != null) {
-            return true;
-        }
-        if (Boolean.TRUE.equals(request.getIncludeOverdue())) {
-            return true;
-        }
-        String sortBy = request.getSortBy();
-        if (sortBy != null && !sortBy.isBlank() && !"createTime".equalsIgnoreCase(sortBy)) {
-            return true;
-        }
-        String sortDir = request.getSortDirection();
-        return sortDir != null && !sortDir.isBlank() && !"desc".equalsIgnoreCase(sortDir);
-    }
-
     private PageResponse<TaskInfo> queryDelegatedTasksOnlyPage(
             String userId, TaskQueryRequest request, int page, int size) {
         List<TaskInfo> allTasks = new ArrayList<>(queryDelegatedTasks(userId));
         allTasks = applyPortalPostEngineFilters(userId, allTasks);
+        maybeEnrichRequestIdsForColumnFilter(allTasks, request);
         allTasks = applyFilters(allTasks, request);
-        allTasks = applySorting(allTasks, request);
-        int start = page * size;
-        int end = Math.min(start + size, allTasks.size());
-        List<TaskInfo> pagedTasks = start < allTasks.size()
-                ? allTasks.subList(start, end)
-                : Collections.emptyList();
+        allTasks = TaskInfoListOps.applySorting(allTasks, request);
+        List<TaskInfo> pagedTasks = TaskInfoListOps.pageOf(allTasks, page, size);
         requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
@@ -175,44 +145,115 @@ public class TaskQueryComponent {
             TaskQueryRequest request,
             List<String> assignmentTypes,
             int page,
-            int size) {
-        boolean includeDelegated = assignmentTypes == null || assignmentTypes.isEmpty()
-                || assignmentTypes.contains("DELEGATED");
-
+            int size,
+            EngineTaskPushdown.Criteria push) {
+        // Mine tab: never merge standing-rule proxy tasks (use assignmentTypes=DELEGATED only).
         SecurityContext ctx = SecurityContextHolder.getContext();
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
-        CompletableFuture<List<TaskInfo>> engineAllFuture = CompletableFuture.supplyAsync(() ->
-                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs,
-                        () -> fetchAllEngineTasksPaged(userId, assignmentTypes, size)), taskQueryExecutor);
+        String cacheKey = fullScanCacheKey(userId, request, assignmentTypes, size);
+        FullScanCacheEntry cached = getCachedFullScanEntry(cacheKey);
+        List<TaskInfo> filteredSorted;
+        if (cached != null) {
+            filteredSorted = cached.tasks();
+            log.info("[PERF] query.fullScan cacheHit=true engineTasks={}", filteredSorted.size());
+        } else {
+            long __tFetch0 = System.nanoTime();
+            List<TaskInfo> engineTasks = RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs,
+                    () -> fetchAllEngineTasksPaged(userId, assignmentTypes, size, push));
+            long __tFetch1 = System.nanoTime();
 
-        CompletableFuture<List<TaskInfo>> delegatedFuture = includeDelegated
-                ? CompletableFuture.supplyAsync(() ->
-                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)), taskQueryExecutor)
-                : CompletableFuture.completedFuture(Collections.emptyList());
+            List<TaskInfo> allTasks = applyPortalPostEngineFilters(userId, new ArrayList<>(engineTasks));
+            long __tPost = System.nanoTime();
+            maybeEnrichRequestIdsForColumnFilter(allTasks, request);
+            allTasks = applyFilters(allTasks, request);
+            allTasks = TaskInfoListOps.applySorting(allTasks, request);
+            long __tMem = System.nanoTime();
+            filteredSorted = List.copyOf(allTasks);
+            putCachedFullScan(cacheKey, filteredSorted);
+            log.info("[PERF] query.fullScan engineAllPages={}ms postFilter={}ms memFilterSort={}ms "
+                            + "engineTasks={} filtered={} pushNameLike={} pushNameExact={} pushSort={}/{}",
+                    (__tFetch1 - __tFetch0) / 1_000_000L,
+                    (__tPost - __tFetch1) / 1_000_000L,
+                    (__tMem - __tPost) / 1_000_000L,
+                    engineTasks.size(),
+                    filteredSorted.size(),
+                    push != null ? push.taskNameLike() : null,
+                    push != null ? push.taskNameExact() : null,
+                    push != null ? push.sortBy() : null,
+                    push != null ? push.sortDirection() : null);
+        }
 
-        long __tF0 = System.nanoTime();
-        List<TaskInfo> engineTasks = engineAllFuture.join();
-        List<TaskInfo> delegated = delegatedFuture.join();
-        long __tFJoin = System.nanoTime();
-
-        List<TaskInfo> allTasks = new ArrayList<>(engineTasks);
-        allTasks.addAll(delegated);
-        allTasks = applyPortalPostEngineFilters(userId, allTasks);
-        long __tFFilter = System.nanoTime();
-        log.info("[PERF] query.fullScan parallel(engineAllPages+delegated)={}ms postFilter={}ms engineTasks={} delegated={} merged={}",
-                (__tFJoin - __tF0) / 1_000_000L, (__tFFilter - __tFJoin) / 1_000_000L,
-                engineTasks.size(), delegated.size(), allTasks.size());
-        allTasks = applyFilters(allTasks, request);
-        allTasks = applySorting(allTasks, request);
-        int start = page * size;
-        int end = Math.min(start + size, allTasks.size());
-        List<TaskInfo> pagedTasks = start < allTasks.size()
-                ? allTasks.subList(start, end)
-                : Collections.emptyList();
+        List<TaskInfo> pagedTasks = new ArrayList<>(TaskInfoListOps.pageOf(filteredSorted, page, size));
         requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
-        return PageResponse.of(pagedTasks, page, size, allTasks.size());
+        // Exact filtered total after full engine walk (no page/row hard-cap / truncated flag).
+        return PageResponse.of(pagedTasks, page, size, filteredSorted.size());
+    }
+
+    private static final int FULL_SCAN_CACHE_TTL_MS = 15_000;
+    private static final int FULL_SCAN_CACHE_MAX = 64;
+    private final Map<String, FullScanCacheEntry> fullScanCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(32, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, FullScanCacheEntry> eldest) {
+                    return size() > FULL_SCAN_CACHE_MAX;
+                }
+            });
+
+    private record FullScanCacheEntry(List<TaskInfo> tasks, long cachedAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - cachedAt > FULL_SCAN_CACHE_TTL_MS;
+        }
+    }
+
+    private FullScanCacheEntry getCachedFullScanEntry(String key) {
+        FullScanCacheEntry e = fullScanCache.get(key);
+        if (e == null || e.isExpired()) {
+            if (e != null) {
+                fullScanCache.remove(key);
+            }
+            return null;
+        }
+        return e;
+    }
+
+    private void putCachedFullScan(String key, List<TaskInfo> tasks) {
+        fullScanCache.put(key, new FullScanCacheEntry(tasks, System.currentTimeMillis()));
+    }
+
+    /**
+     * The cached list is already through {@code applyPortalPostEngineFilters}, which hides
+     * MI role-scoped tasks that do not belong to the caller's active BU + role. Keying on the
+     * user alone would therefore serve the previous workspace's tasks for the whole TTL after
+     * a workspace switch, so the active BU and role are part of the key.
+     */
+    private static String fullScanCacheKey(
+            String userId, TaskQueryRequest request, List<String> assignmentTypes, int size) {
+        return userId + '|'
+                + SecurityContextUtils.getCurrentActiveBusinessUnitId().orElse("-") + '|'
+                + SecurityContextUtils.getCurrentActiveRoleId().orElse("-") + '|'
+                + String.valueOf(assignmentTypes) + '|'
+                + size + '|'
+                + String.valueOf(request.getFilters()) + '|'
+                + String.valueOf(request.getSortBy()) + '|'
+                + String.valueOf(request.getSortDirection()) + '|'
+                + String.valueOf(request.getKeyword()) + '|'
+                + String.valueOf(request.getPriorities()) + '|'
+                + String.valueOf(request.getProcessTypes()) + '|'
+                + String.valueOf(request.getStatuses()) + '|'
+                + String.valueOf(request.getStartTime()) + '|'
+                + String.valueOf(request.getEndTime()) + '|'
+                + String.valueOf(request.getIncludeOverdue());
+    }
+
+    /** When column filters target requestId, enrich before in-memory filter (best-effort). */
+    private void maybeEnrichRequestIdsForColumnFilter(List<TaskInfo> tasks, TaskQueryRequest request) {
+        var filters = TaskQueryColumnFilters.parseFilters(request.getFilters());
+        boolean needsRequestId = filters.stream().anyMatch(f -> "requestId".equals(f.field()));
+        if (needsRequestId) {
+            requestIdEnricher.enrichTaskRequestIds(tasks);
+        }
     }
 
     /**
@@ -226,9 +267,11 @@ public class TaskQueryComponent {
      * RUNNING instances as a fallback path if the result is empty.
      */
     private EngineWindowResult fetchEngineTaskPageWindow(
-            String userId, List<String> assignmentTypes, int page, int size) {
+            String userId, List<String> assignmentTypes, int page, int size,
+            EngineTaskPushdown.Criteria push) {
         List<TaskInfo> engineTasks = new ArrayList<>();
         long engineTotal = 0L;
+        EngineTaskPushdown.Criteria safePush = push != null ? push : EngineTaskPushdown.Criteria.empty();
         try {
             long __tw0 = System.nanoTime();
             List<String> groupIds = workspaceTaskFilter.getUserVirtualGroups(userId);
@@ -236,12 +279,15 @@ public class TaskQueryComponent {
             long __twVg = System.nanoTime();
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty()
                     || assignmentTypes.contains("VIRTUAL_GROUP");
+            // Always use visible-tasks API so BU_ROLE orphan repair runs; push criteria when present.
             Optional<Map<String, Object>> result = includeGroups
-                    ? workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), page, size)
-                    : workflowEngineClient.getUserTasks(userId, page, size);
-            log.info("[PERF] engineWindow vgroups={}ms engineHttp={}ms groupCount={} includeGroups={}",
+                    ? workflowEngineClient.getUserAllVisibleTasks(
+                            userId, groupIds, Collections.emptyList(), page, size, safePush)
+                    : workflowEngineClient.getUserAllVisibleTasks(
+                            userId, Collections.emptyList(), Collections.emptyList(), page, size, safePush);
+            log.info("[PERF] engineWindow vgroups={}ms engineHttp={}ms groupCount={} includeGroups={} push={}",
                     (__twVg - __tw0) / 1_000_000L, (System.nanoTime() - __twVg) / 1_000_000L,
-                    groupIds != null ? groupIds.size() : 0, includeGroups);
+                    groupIds != null ? groupIds.size() : 0, includeGroups, safePush.hasAny());
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
                 engineTotal = EngineTaskMapper.extractEngineTotalCount(responseBody);
@@ -264,73 +310,58 @@ public class TaskQueryComponent {
     }
 
     /**
-     * Fetch engine tasks using the requested {@code page}/{@code size}, then synchronously fetch
-     * delegated tasks; merge, sort, then slice (current page = page {@code page} of merged list).
-     * Engine and delegated task fetches run in parallel when possible to reduce first-screen latency.
+     * Mine tab: trust engine {@code page}/{@code size}/{@code total}; do not merge standing-rule proxy tasks
+     * and do not re-slice the engine window.
      */
     private PageResponse<TaskInfo> queryTasksEngineWindowThenDelegate(
             String userId,
             TaskQueryRequest request,
             List<String> assignmentTypes,
             int page,
-            int size) {
-        boolean includeDelegated = assignmentTypes == null || assignmentTypes.isEmpty()
-                || assignmentTypes.contains("DELEGATED");
-
+            int size,
+            EngineTaskPushdown.Criteria push) {
         SecurityContext ctx = SecurityContextHolder.getContext();
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
-        CompletableFuture<EngineWindowResult> engineFuture = CompletableFuture.supplyAsync(() ->
-                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs,
-                        () -> fetchEngineTaskPageWindow(userId, assignmentTypes, page, size)), taskQueryExecutor);
-
-        CompletableFuture<List<TaskInfo>> delegatedFuture = includeDelegated
-                ? CompletableFuture.supplyAsync(() ->
-                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)), taskQueryExecutor)
-                : CompletableFuture.completedFuture(Collections.emptyList());
-
         long __tQ0 = System.nanoTime();
-        EngineWindowResult engineResult = engineFuture.join();
+        EngineWindowResult engineResult = RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs,
+                () -> fetchEngineTaskPageWindow(userId, assignmentTypes, page, size, push));
         List<TaskInfo> engineTasks = engineResult.tasks();
         long engineTotal = engineResult.engineTotal();
-        List<TaskInfo> delegated = delegatedFuture.join();
         long __tQJoin = System.nanoTime();
 
-        List<TaskInfo> allTasks = new ArrayList<>(engineTasks);
-        allTasks.addAll(delegated);
-        allTasks = applyPortalPostEngineFilters(userId, allTasks);
+        List<TaskInfo> pageTasks = applyPortalPostEngineFilters(userId, new ArrayList<>(engineTasks));
         long __tQFilter = System.nanoTime();
-        log.info("[PERF] query.window parallel(engine+delegated)={}ms postFilter={}ms engineTasks={} delegated={} merged={}",
+        log.info("[PERF] query.window mine engine={}ms postFilter={}ms engineTasks={} total={} push={}",
                 (__tQJoin - __tQ0) / 1_000_000L, (__tQFilter - __tQJoin) / 1_000_000L,
-                engineTasks.size(), delegated.size(), allTasks.size());
-        allTasks = applySorting(allTasks, request);
+                engineTasks.size(), engineTotal, push != null && push.hasAny());
 
-        int start = page * size;
-        int end = Math.min(start + size, allTasks.size());
-        List<TaskInfo> pagedTasks = start < allTasks.size()
-                ? allTasks.subList(start, end)
-                : Collections.emptyList();
-
-        boolean enginePageComplete = engineTasks.size() < size || engineTotal <= (long) (page + 1) * size;
-        long totalElements = enginePageComplete
-                ? allTasks.size()
-                : Math.max(engineTotal + (long) delegated.size(), (long) allTasks.size());
-
-        requestIdEnricher.enrichTaskRequestIds(pagedTasks);
-        EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
-        return PageResponse.of(pagedTasks, page, size, totalElements);
+        // Keep engine page order; avoid second subList that empties page 2+.
+        requestIdEnricher.enrichTaskRequestIds(pageTasks);
+        EngineTaskMapper.clearTaskVariablesForList(pageTasks);
+        long totalElements = engineTotal > 0 ? engineTotal : pageTasks.size();
+        return PageResponse.of(pageTasks, page, size, totalElements);
     }
 
-    private List<TaskInfo> fetchAllEngineTasksPaged(String userId, List<String> assignmentTypes, int pageSize) {
+    /**
+     * Walk all engine pages until exhausted so filtered totals are exact (no artificial page cap).
+     * Optional push criteria shrink each engine page when a taskName fragment is present.
+     */
+    private List<TaskInfo> fetchAllEngineTasksPaged(
+            String userId, List<String> assignmentTypes, int pageSize, EngineTaskPushdown.Criteria push) {
         List<String> groupIds = workspaceTaskFilter.getUserVirtualGroups(userId);
         groupIds = workspaceTaskFilter.filterVirtualGroupsForActiveWorkspace(userId, groupIds);
         boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty()
                 || assignmentTypes.contains("VIRTUAL_GROUP");
+        EngineTaskPushdown.Criteria safePush = push != null ? push : EngineTaskPushdown.Criteria.empty();
         List<TaskInfo> out = new ArrayList<>();
+        int safePageSize = Math.max(1, Math.min(pageSize, 100));
         for (int p = 0; ; p++) {
             Optional<Map<String, Object>> result = includeGroups
-                    ? workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), p, pageSize)
-                    : workflowEngineClient.getUserTasks(userId, p, pageSize);
+                    ? workflowEngineClient.getUserAllVisibleTasks(
+                            userId, groupIds, Collections.emptyList(), p, safePageSize, safePush)
+                    : workflowEngineClient.getUserAllVisibleTasks(
+                            userId, Collections.emptyList(), Collections.emptyList(), p, safePageSize, safePush);
             if (result.isEmpty()) {
                 break;
             }
@@ -341,7 +372,7 @@ public class TaskQueryComponent {
             for (Map<String, Object> taskMap : tasks) {
                 out.add(EngineTaskMapper.convertMapToTaskInfo(taskMap));
             }
-            if (tasks.size() < pageSize) {
+            if (tasks.size() < safePageSize) {
                 break;
             }
         }
@@ -363,8 +394,9 @@ public class TaskQueryComponent {
                     return pid == null || pid.isBlank() || !withdrawnProcessIds.contains(pid);
                 })
                 .collect(Collectors.toCollection(ArrayList::new));
+        // LinkedHashMap: preserve engine page order (mine tab trusts createTime desc from engine).
         filtered = filtered.stream()
-                .collect(Collectors.toMap(TaskInfo::getTaskId, t -> t, (t1, t2) -> t1))
+                .collect(Collectors.toMap(TaskInfo::getTaskId, t -> t, (t1, t2) -> t1, LinkedHashMap::new))
                 .values()
                 .stream()
                 .collect(Collectors.toList());
@@ -581,6 +613,7 @@ public class TaskQueryComponent {
      * Apply filter criteria.
      */
     private List<TaskInfo> applyFilters(List<TaskInfo> tasks, TaskQueryRequest request) {
+        var columnFilters = TaskQueryColumnFilters.parseFilters(request.getFilters());
         return tasks.stream()
                 .filter(t -> {
                     // Priority filter
@@ -630,35 +663,15 @@ public class TaskQueryComponent {
                             return false;
                         }
                     }
+                    // Column filters (MTV shape)
+                    if (!TaskQueryColumnFilters.matches(t, columnFilters)) {
+                        return false;
+                    }
                     return true;
                 })
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Apply sorting.
-     */
-    private List<TaskInfo> applySorting(List<TaskInfo> tasks, TaskQueryRequest request) {
-        String sortBy = request.getSortBy() != null ? request.getSortBy() : "createTime";
-        boolean ascending = "asc".equalsIgnoreCase(request.getSortDirection());
-
-        Comparator<TaskInfo> comparator = switch (sortBy) {
-            case "priority" -> Comparator.comparing(TaskInfo::getPriority, Comparator.nullsLast(Comparator.naturalOrder()));
-            case "dueDate" -> Comparator.comparing(TaskInfo::getDueDate, Comparator.nullsLast(Comparator.naturalOrder()));
-            case "taskName" -> Comparator.comparing(TaskInfo::getTaskName, Comparator.nullsLast(Comparator.naturalOrder()));
-            default -> Comparator.comparing(TaskInfo::getCreateTime, Comparator.nullsLast(Comparator.naturalOrder()));
-        };
-
-        if (!ascending) {
-            comparator = comparator.reversed();
-        }
-
-        return tasks.stream().sorted(comparator).collect(Collectors.toList());
-    }
-
-    /**
-     * Get task statistics.
-     */
     public TaskStatistics getTaskStatistics(String userId) {
         return taskHistoryComponent.getTaskStatistics(userId);
     }

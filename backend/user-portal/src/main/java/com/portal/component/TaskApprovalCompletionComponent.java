@@ -45,12 +45,20 @@ public class TaskApprovalCompletionComponent {
     private final TaskFormComponent taskFormComponent;
     private final MiCollectionVariableBuilder miCollectionVariableBuilder;
     private final ProcessInstanceSyncComponent processInstanceSyncComponent;
+    private final DelegationComponent delegationComponent;
 
     /**
      * Handles approval completion
      * Via WorkflowEngineClient calling Flowable engine
      */
     void handleApproval(TaskInfo task, TaskCompleteRequest request, String userId) {
+        handleApproval(task, request, userId, null);
+    }
+
+    /**
+     * @param actingForUserId standing-rule delegator when actor is the delegate; null for self-complete
+     */
+    void handleApproval(TaskInfo task, TaskCompleteRequest request, String userId, String actingForUserId) {
         String taskId = task.getTaskId();
         String action = request.getAction();
 
@@ -125,7 +133,8 @@ public class TaskApprovalCompletionComponent {
 
         log.info("Variables before calling workflowEngineClient: {}", variables);
 
-        Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
+        Optional<Map<String, Object>> result = workflowEngineClient.completeTask(
+                taskId, userId, action, variables, actingForUserId);
 
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to complete task: " + taskId);
@@ -142,8 +151,18 @@ public class TaskApprovalCompletionComponent {
             throw new PortalException("500", message);
         }
 
-        log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})",
-                taskId, userId, action, variables.get("approvalStatus"));
+        if (actingForUserId != null && !actingForUserId.isBlank() && delegationComponent != null) {
+            delegationComponent.recordDelegateTaskProcess(
+                    actingForUserId,
+                    userId,
+                    taskId,
+                    "ACT_AS_COMPLETE",
+                    "SUCCESS",
+                    action);
+        }
+
+        log.info("Task {} completed via Flowable by user {} with action {} actingFor={} (approvalStatus: {})",
+                taskId, userId, action, actingForUserId, variables.get("approvalStatus"));
 
         
         AtomicReference<Map<String, Object>> preSyncVariablesRef = new AtomicReference<>(Map.of());

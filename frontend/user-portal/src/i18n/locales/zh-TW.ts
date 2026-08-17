@@ -228,6 +228,13 @@ export default {
   },
   task: {
     title: '待辦',
+    tab: {
+      mine: '我的',
+      actingForOthers: '代理辦理',
+      noActing: '暫無代理辦理'
+    },
+    actedByProxy: '由 {name} 代理完成',
+    actingFor: '代 {name} 辦理',
     completedTasks: '已處理任務',
     completedTime: '完成時間',
     taskName: '任務名稱',

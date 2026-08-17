@@ -228,6 +228,13 @@ export default {
   },
   task: {
     title: 'To Do',
+    tab: {
+      mine: 'My Tasks',
+      actingForOthers: 'Acting For',
+      noActing: 'No tasks to act for'
+    },
+    actedByProxy: 'Completed by {name} (acting)',
+    actingFor: 'Acting for {name}',
     completedTasks: 'Completed Tasks',
     completedTime: 'Completed Time',
     taskName: 'Task Name',

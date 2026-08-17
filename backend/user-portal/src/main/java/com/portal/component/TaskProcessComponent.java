@@ -171,7 +171,12 @@ public class TaskProcessComponent {
 
         String action = request.getAction();
         switch (action) {
-            case "APPROVE", "REJECT" -> taskApprovalCompletionComponent.handleApproval(task, request, userId);
+            case "APPROVE", "REJECT" -> {
+                String actingFor = taskPermissionEvaluator
+                        .resolveStandingActingFor(task, userId, portalUsername)
+                        .orElse(null);
+                taskApprovalCompletionComponent.handleApproval(task, request, userId, actingFor);
+            }
             case "TRANSFER" -> handleTransfer(task, request, userId);
             case "DELEGATE" -> handleDelegate(task, request, userId);
             case "RETURN" -> handleReturn(task, request, userId, "RETURN");

@@ -4,13 +4,41 @@
       <h1>{{ t('task.title') }}</h1>
     </div>
 
+    <el-tabs
+      v-model="listView"
+      class="task-list-tabs"
+      @tab-change="onListViewChange"
+    >
+      <el-tab-pane name="mine">
+        <template #label>
+          <span>{{ t('task.tab.mine') }}</span>
+        </template>
+      </el-tab-pane>
+      <el-tab-pane name="acting">
+        <template #label>
+          <span class="acting-tab-label">
+            {{ t('task.tab.actingForOthers') }}
+            <el-badge
+              v-if="actingCount > 0"
+              :value="actingCount"
+              :max="99"
+              class="acting-tab-badge"
+            />
+          </span>
+        </template>
+      </el-tab-pane>
+    </el-tabs>
+
     <!-- 筛选条件 -->
     <div class="portal-card filter-card">
       <el-form
         :inline="true"
         :model="filterForm"
       >
-        <el-form-item :label="t('task.assignmentType')">
+        <el-form-item
+          v-if="listView === 'mine'"
+          :label="t('task.assignmentType')"
+        >
           <el-select
             v-model="filterForm.assignmentTypes"
             multiple
@@ -29,10 +57,6 @@
             <el-option
               value="DEPT_ROLE"
               :label="t('task.deptRole')"
-            />
-            <el-option
-              value="DELEGATED"
-              :label="t('task.delegated')"
             />
           </el-select>
         </el-form-item>
@@ -88,12 +112,16 @@
       </el-form>
     </div>
 
-    <!-- 任务列表：先渲染表格结构，数据异步填充（加载中仅在空表时提示，翻页时保留上一页数据直至返回） -->
+    <!-- 任务列表：v-loading overlay while paging (Views parity) -->
     <div class="portal-card">
       <el-table
-        :data="taskList"
+        v-loading="loading"
+        class="portal-list-grid"
+        :data="displayTaskRows"
         stripe
         table-layout="fixed"
+        :span-method="taskSpanMethod"
+        :row-class-name="groupRowClassName"
         @selection-change="handleSelectionChange"
       >
         <template #empty>
@@ -106,115 +134,107 @@
             </el-icon>
             <span>{{ t('common.loading') }}</span>
           </div>
-          <span v-else>{{ t('task.noTasks') }}</span>
+          <span v-else>{{ listView === 'acting' ? t('task.tab.noActing') : t('task.noTasks') }}</span>
         </template>
         <el-table-column
           type="selection"
           width="50"
+          :selectable="(row) => !isPortalListGroupHeader(row)"
         />
         <el-table-column
-          prop="requestId"
-          :label="t('task.requestId')"
-          min-width="130"
-          show-overflow-tooltip
+          v-for="(field, idx) in orderedTaskFields"
+          :key="field"
+          :prop="field"
+          :width="colWidth(field, taskWidthFallback(field))"
+          :show-overflow-tooltip="field !== 'assignmentType' && field !== 'priority' && field !== 'dueDate'"
+          :class-name="field === 'assignmentType' ? 'no-wrap-header' : undefined"
         >
-          <template #default="{ row }">
-            <el-link
-              type="primary"
-              @click="viewTask(row)"
-            >
-              {{ row.requestId || '-' }}
-            </el-link>
+          <template #header>
+            <PortalListColumnHeader
+              :label="taskColumnLabel(field)"
+              :width="colWidth(field, taskWidthFallback(field))"
+              :has-filter="hasFilter(field)"
+              :sort-direction="sortDirection(field)"
+              :is-grouped="isGrouped(field)"
+              :can-move-left="canMoveLeft(field)"
+              :can-move-right="canMoveRight(field)"
+              :date-like="field === 'createTime' || field === 'dueDate'"
+              @sort-asc="onSort(field, 'ASC')"
+              @sort-desc="onSort(field, 'DESC')"
+              @group-by="onGroup(field)"
+              @filter="openFilter(field, taskColumnLabel(field))"
+              @clear-filter="onClearColumnFilter(field)"
+              @move-left="moveLeft(field)"
+              @move-right="moveRight(field)"
+              @resize="(w) => onColResize(field, w)"
+              @resize-end="onColResizeEnd"
+            />
           </template>
-        </el-table-column>
-        <el-table-column
-          prop="taskName"
-          :label="t('task.taskName')"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="currentStepName"
-          :label="t('task.currentStep')"
-          min-width="130"
-          show-overflow-tooltip
-        >
           <template #default="{ row }">
-            {{ row.currentStepName || row.taskName || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="processDefinitionName"
-          :label="t('task.processName')"
-          min-width="140"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="assignmentType"
-          :label="t('task.assignmentType')"
-          width="130"
-          :show-overflow-tooltip="false"
-          class-name="no-wrap-header"
-        >
-          <template #default="{ row }">
-            <el-tag
-              :class="['assignment-tag', getAssignmentClass(row)]"
-              size="small"
-            >
-              {{ t(`task.${getAssignmentKey(row)}`) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="initiatorName"
-          :label="t('task.initiator')"
-          width="100"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            {{ row.initiatorName || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="priority"
-          :label="t('task.priority')"
-          width="80"
-        >
-          <template #default="{ row }">
-            <el-tag
-              :class="['priority-tag', getPriorityClass(row.priority)]"
-              size="small"
-            >
-              {{ getPriorityLabel(row.priority) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="createTime"
-          :label="t('task.createTime')"
-          width="150"
-        >
-          <template #default="{ row }">
-            {{ formatDate(row.createTime) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="dueDate"
-          :label="t('task.dueDate')"
-          width="130"
-        >
-          <template #default="{ row }">
-            <span :class="{ 'overdue': row.isOverdue }">
-              {{ row.dueDate ? formatDate(row.dueDate) : '-' }}
-            </span>
-            <el-tag
-              v-if="row.isOverdue"
-              type="danger"
-              size="small"
-              style="margin-left: 4px;"
-            >
-              {{ t('task.overdue') }}
-            </el-tag>
+            <template v-if="isPortalListGroupHeader(row)">
+              <div
+                v-if="idx === 0"
+                class="group-header-cell"
+              >
+                <strong>{{ row._groupLabel }}</strong>
+                <span class="group-count">({{ row._groupCount }})</span>
+              </div>
+            </template>
+            <template v-else-if="field === 'requestId'">
+              <el-link
+                type="primary"
+                @click="viewTask(row)"
+              >
+                {{ row.requestId || '-' }}
+              </el-link>
+            </template>
+            <template v-else-if="field === 'taskName'">
+              {{ row.taskName }}
+            </template>
+            <template v-else-if="field === 'currentStepName'">
+              {{ row.currentStepName || row.taskName || '-' }}
+            </template>
+            <template v-else-if="field === 'processDefinitionName'">
+              {{ row.processDefinitionName }}
+            </template>
+            <template v-else-if="field === 'assignmentType'">
+              <el-tag
+                :class="['assignment-tag', getAssignmentClass(row)]"
+                size="small"
+              >
+                {{ t(`task.${getAssignmentKey(row)}`) }}
+              </el-tag>
+            </template>
+            <template v-else-if="field === 'delegatorId'">
+              {{ t('task.actingFor', { name: row.delegatorName || row.delegatorId || '-' }) }}
+            </template>
+            <template v-else-if="field === 'initiatorName'">
+              {{ row.initiatorName || '-' }}
+            </template>
+            <template v-else-if="field === 'priority'">
+              <el-tag
+                :class="['priority-tag', getPriorityClass(row.priority)]"
+                size="small"
+              >
+                {{ getPriorityLabel(row.priority) }}
+              </el-tag>
+            </template>
+            <template v-else-if="field === 'createTime'">
+              {{ formatDate(row.createTime) }}
+            </template>
+            <template v-else-if="field === 'dueDate'">
+              <span :class="{ 'overdue': row.isOverdue }">
+                {{ row.dueDate ? formatDate(row.dueDate) : '-' }}
+              </span>
+              <el-tag
+                v-if="row.isOverdue"
+                type="danger"
+                size="small"
+                style="margin-left: 4px;"
+              >
+                {{ t('task.overdue') }}
+              </el-tag>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -233,16 +253,24 @@
         </el-button>
       </div>
 
-      <el-pagination
+      <PortalListPagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.size"
-        :total="pagination.total"
-        :page-sizes="[10, 20, 50, 100]"
         :disabled="loading"
-        layout="total, sizes, prev, pager, next, jumper"
-        style="margin-top: 16px; justify-content: flex-end;"
-        @size-change="handleSizeChange"
-        @current-change="handlePageChange"
+        :total="pagination.total"
+        @change="loadTasks"
+      />
+
+      <PortalListFilterDialog
+        v-model="filterDialogVisible"
+        :title="filterDialogField
+          ? `${t('mainTableView.colFilterBy')}: ${filterDialogField.label}`
+          : t('mainTableView.colFilterBy')"
+        :initial="filterDialogField
+          ? colState.filters[filterDialogField.field]
+          : null"
+        @apply="onApplyColumnFilter"
+        @clear="onClearColumnFilter()"
       />
     </div>
 
@@ -311,22 +339,141 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Search, Loading } from '@element-plus/icons-vue'
 import { queryTasks, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
 import { formatDate } from '@/utils/dateFormat'
 import { usePendingTaskStore } from '@/stores/pendingTask'
+import PortalListPagination from '@/components/portal-list/PortalListPagination.vue'
+import PortalListColumnHeader from '@/components/portal-list/PortalListColumnHeader.vue'
+import PortalListFilterDialog from '@/components/portal-list/PortalListFilterDialog.vue'
+import { usePortalListColumnState } from '@/composables/usePortalListColumnState'
+import { PORTAL_LIST_DEFAULT_PAGE_SIZE } from '@/constants/portalListPagination'
+import {
+  applyGroupHeaders,
+  isPortalListGroupHeader,
+  portalListGroupSpanMethod,
+  type PortalListColumnFilter,
+  type PortalListSortDirection,
+} from '@/utils/portalListGridRuntime'
 
 const pendingTaskStore = usePendingTaskStore()
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
+
+const cols = usePortalListColumnState('tasks-pending')
+const {
+  state: colState,
+  filterDialogVisible,
+  filterDialogField,
+  width: colWidth,
+  onResize: onColResize,
+  onResizeEnd: onColResizeEnd,
+  toggleSort,
+  toggleGroup,
+  moveLeft,
+  moveRight,
+  canMoveLeft,
+  canMoveRight,
+  ensureOrder,
+  orderedColumnFields,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  hasFilter,
+  sortDirection,
+  isGrouped,
+  activeFilters,
+} = cols
+
+/** Backend TaskQueryComponent whitelist; unknown fields may fall back server-side. */
+const SORT_FIELD_MAP: Record<string, string> = {
+  requestId: 'requestId',
+  taskName: 'taskName',
+  currentStepName: 'taskName',
+  processDefinitionName: 'processDefinitionName',
+  assignmentType: 'assignmentType',
+  delegatorId: 'delegatorId',
+  initiatorName: 'initiatorName',
+  priority: 'priority',
+  createTime: 'createTime',
+  dueDate: 'dueDate',
+}
+
+/** FE column → API filter field (TaskQueryColumnFilters whitelist). */
+const FILTER_FIELD_MAP: Record<string, string> = {
+  currentStepName: 'currentNode',
+  requestId: 'requestId',
+  taskName: 'taskName',
+  processDefinitionName: 'processDefinitionName',
+  initiatorName: 'initiatorName',
+  priority: 'priority',
+  assignmentType: 'assignmentType',
+}
+
+const MINE_FIELDS = [
+  'requestId', 'taskName', 'currentStepName', 'processDefinitionName',
+  'assignmentType', 'initiatorName', 'priority', 'createTime', 'dueDate',
+]
+const ACTING_FIELDS = [
+  'requestId', 'taskName', 'currentStepName', 'processDefinitionName',
+  'delegatorId', 'initiatorName', 'priority', 'createTime', 'dueDate',
+]
+
+function taskWidthFallback(field: string): number {
+  const map: Record<string, number> = {
+    requestId: 140, taskName: 160, currentStepName: 140, processDefinitionName: 150,
+    assignmentType: 140, delegatorId: 140, initiatorName: 120, priority: 100,
+    createTime: 160, dueDate: 140,
+  }
+  return map[field] ?? 140
+}
+
+function taskColumnLabel(field: string): string {
+  const map: Record<string, string> = {
+    requestId: t('task.requestId'),
+    taskName: t('task.taskName'),
+    currentStepName: t('task.currentStep'),
+    processDefinitionName: t('task.processName'),
+    assignmentType: t('task.assignmentType'),
+    delegatorId: t('delegation.delegator'),
+    initiatorName: t('task.initiator'),
+    priority: t('task.priority'),
+    createTime: t('task.createTime'),
+    dueDate: t('task.dueDate'),
+  }
+  return map[field] ?? field
+}
 
 const loading = ref(true)
 const taskList = ref<TaskInfo[]>([])
 const selectedTasks = ref<TaskInfo[]>([])
+const listView = ref<'mine' | 'acting'>(route.query.view === 'proxy' ? 'acting' : 'mine')
+const actingCount = ref(0)
+
+const taskDataFields = computed(() =>
+  listView.value === 'acting' ? ACTING_FIELDS : MINE_FIELDS,
+)
+const orderedTaskFields = computed(() => orderedColumnFields(taskDataFields.value))
+
+watch(taskDataFields, (fields) => ensureOrder(fields), { immediate: true })
+
+/** Client group headers on current server page (API has no groupCounts yet). */
+const displayTaskRows = computed(() =>
+  applyGroupHeaders(taskList.value as unknown as Record<string, unknown>[], colState.groupBy) as unknown as TaskInfo[],
+)
+
+function groupRowClassName({ row }: { row: unknown }) {
+  return isPortalListGroupHeader(row) ? 'group-header-row' : ''
+}
+
+function taskSpanMethod({ row, columnIndex }: { row: unknown; columnIndex: number }) {
+  return portalListGroupSpanMethod(row, columnIndex, orderedTaskFields.value.length, 1)
+}
 
 const filterForm = reactive({
   assignmentTypes: [] as string[],
@@ -336,7 +483,7 @@ const filterForm = reactive({
 
 const pagination = reactive({
   page: 1,
-  size: 20,
+  size: PORTAL_LIST_DEFAULT_PAGE_SIZE,
   total: 0
 })
 
@@ -349,13 +496,56 @@ const actionForm = reactive({
   reason: ''
 })
 
+/** Toolbar keyword only — column filters go via `filters` body. */
+function resolveKeyword(): string | undefined {
+  return filterForm.keyword || undefined
+}
+
+/** Map active column filters to TaskQueryRequest.filters. */
+function buildColumnFilters(): Record<string, { operator: string; value: string }> | undefined {
+  const raw = activeFilters()
+  const out: Record<string, { operator: string; value: string }> = {}
+  for (const [field, filter] of Object.entries(raw)) {
+    const apiField = FILTER_FIELD_MAP[field] ?? field
+    out[apiField] = { operator: filter.operator, value: filter.value ?? '' }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+const loadActingCount = async () => {
+  try {
+    const res = await queryTasks({
+      assignmentTypes: ['DELEGATED'],
+      page: 0,
+      size: 1
+    })
+    const data = res.data || res
+    actingCount.value = Number(data.totalElements || 0)
+  } catch {
+    // FALLBACK(ux): badge is optional chrome; list load remains authoritative
+    actingCount.value = 0
+  }
+}
+
 const loadTasks = async () => {
   loading.value = true
   try {
+    const assignmentTypes =
+      listView.value === 'acting'
+        ? ['DELEGATED']
+        : filterForm.assignmentTypes.length > 0
+          ? filterForm.assignmentTypes
+          : undefined
+    const sortApi = colState.sort?.field
+      ? SORT_FIELD_MAP[colState.sort.field]
+      : undefined
     const res = await queryTasks({
-      assignmentTypes: filterForm.assignmentTypes.length > 0 ? filterForm.assignmentTypes : undefined,
+      assignmentTypes,
       priorities: filterForm.priorities.length > 0 ? filterForm.priorities : undefined,
-      keyword: filterForm.keyword || undefined,
+      keyword: resolveKeyword(),
+      filters: buildColumnFilters(),
+      sortBy: sortApi,
+      sortDirection: colState.sort?.direction?.toLowerCase(),
       page: pagination.page - 1,
       size: pagination.size
     })
@@ -363,14 +553,55 @@ const loadTasks = async () => {
     const data = res.data || res
     taskList.value = data.content || []
     pagination.total = data.totalElements || 0
-    pendingTaskStore.syncCountFromListTotal(data.totalElements as number | undefined)
+    if (listView.value === 'mine') {
+      pendingTaskStore.syncCountFromListTotal(data.totalElements as number | undefined)
+    } else {
+      actingCount.value = Number(data.totalElements || 0)
+    }
   } catch (error) {
     console.error('Failed to load tasks:', error)
     taskList.value = []
     pagination.total = 0
+    ElMessage.error(t('task.loadFailed'))
   } finally {
     loading.value = false
   }
+}
+
+function onSort(field: string, direction: PortalListSortDirection) {
+  toggleSort(field, direction)
+  pagination.page = 1
+  loadTasks()
+}
+
+function onGroup(field: string) {
+  toggleGroup(field)
+  pagination.page = 1
+  loadTasks()
+}
+
+function onApplyColumnFilter(filter: PortalListColumnFilter) {
+  applyFilter(filter)
+  pagination.page = 1
+  loadTasks()
+}
+
+function onClearColumnFilter(field?: string) {
+  clearFilter(field)
+  pagination.page = 1
+  loadTasks()
+}
+
+const onListViewChange = () => {
+  pagination.page = 1
+  const q = { ...route.query } as Record<string, string>
+  if (listView.value === 'acting') {
+    q.view = 'proxy'
+  } else {
+    delete q.view
+  }
+  router.replace({ query: q })
+  loadTasks()
 }
 
 const handleSearch = () => {
@@ -383,15 +614,6 @@ const handleReset = () => {
   filterForm.priorities = []
   filterForm.keyword = ''
   handleSearch()
-}
-
-const handleSizeChange = () => {
-  pagination.page = 1
-  loadTasks()
-}
-
-const handlePageChange = () => {
-  loadTasks()
 }
 
 const handleSelectionChange = (selection: TaskInfo[]) => {
@@ -527,7 +749,10 @@ const getPriorityClass = (priority: any): string => {
 }
 
 onMounted(() => {
-  loadTasks()
+  void loadTasks()
+  if (listView.value !== 'acting') {
+    void loadActingCount()
+  }
 })
 </script>
 
@@ -542,6 +767,17 @@ onMounted(() => {
       color: var(--text-primary);
       margin: 0;
     }
+  }
+
+  .acting-tab-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .acting-tab-badge :deep(.el-badge__content) {
+    position: static;
+    transform: none;
   }
   
   .filter-card {
