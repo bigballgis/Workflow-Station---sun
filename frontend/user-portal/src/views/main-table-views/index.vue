@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Expand, Fold } from '@element-plus/icons-vue'
 import MainTableViewColumnMenu from '@/components/mainTableView/MainTableViewColumnMenu.vue'
-import MainTableViewColumnResizeHandle from '@/components/mainTableView/MainTableViewColumnResizeHandle.vue'
+import ColumnResizeHandle from '@platform-shared/list/ColumnResizeHandle.vue'
 import { useMainTableViewPage } from '@/composables/mainTableView/useMainTableViewPage'
 
 const {
@@ -211,7 +211,7 @@ const {
                   :has-filter="!!gridRuntime.filters[col.fieldName]"
                   @command="(action) => handleColumnCommand(col, action)"
                 />
-                <MainTableViewColumnResizeHandle
+                <ColumnResizeHandle
                   :initial-width="columnWidth(col, gridRuntime)"
                   @resize="(width) => handleColumnResize(col.fieldName, width)"
                   @resize-end="handleColumnResizeEnd"

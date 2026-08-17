@@ -1,8 +1,8 @@
 import type { MainTableViewDataRow, MainTableViewFieldColumn } from '@/api/mainTableView'
-import { clampColumnWidth } from '@/utils/mainTableViewColumnResizeCursor'
+import { clampColumnWidth } from '@platform-shared/list/columnResizeCursor'
 import { formatMainTableViewCell } from '@/utils/mainTableViewCsvExport'
 
-export { COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, clampColumnWidth } from '@/utils/mainTableViewColumnResizeCursor'
+export { COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, clampColumnWidth } from '@platform-shared/list/columnResizeCursor'
 
 export type GridSortDirection = 'ASC' | 'DESC'
 
