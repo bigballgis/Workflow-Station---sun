@@ -2057,3 +2057,24 @@
     PermissionRequestListSpecTest 7 + PermissionRequestListSpecApprovalChromeTest 3 +
     PortalColumnFilterSupportTest 10 + MainTableViewSqlQueryCompilerTest 8 +
     PortalMainTableViewFilterUtilsTest 4 全绿；frontend vitest 953/953。
+
+- id: "1522"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Delegations「My Delegations / Audit Records」列头筛选只给文本算子，时间列条件被静默丢弃"
+  file: "backend/user-portal/src/main/java/com/portal/util/DelegationRuleListSpec.java"
+  note: |
+    反例：Delegations 两个列表的列头 Filter by，对 Start Time、Delegation Type、Delegate To
+    一律只给 Contains/Equals 等 8 个字符串算子 + 一个文本框；对时间列选 Contains 后
+    ListSpec.parseFilters 直接 continue 丢掉该条件，接口照常返回全量数据，用户以为筛掉了。
+    根因：与 #1521 同源 —— FILTER_FIELDS 只是不带类型的字段名白名单。
+    修复：两个 Delegation ListSpec 改由 COLUMNS 单一声明（PortalListColumnMeta）派生
+    SORT/GROUP/FILTER 白名单，复用 #1521 引入的 PortalColumnFilterSupport 类型校验；
+    新增 GET /delegations/columns 与 /delegations/audit/columns 暴露列能力；
+    列表分页/排序/筛选下推 SQL。委托本体（standing rule 匹配 DelegationRuleMatcher、
+    代办任务归集、审计留痕）同一 PR 落地，代办文案走 en/zh-CN/zh-TW 三语与
+    platform-common messages_*.properties 校验消息。
+    验证：DelegationRuleListSpecTest 6 + DelegationAuditListSpecTest 4 +
+    DelegationRuleMatcherTest 5 全绿；frontend vitest 953/953。

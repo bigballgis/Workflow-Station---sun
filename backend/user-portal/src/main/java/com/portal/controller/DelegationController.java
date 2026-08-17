@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.component.DelegationComponent;
 import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
@@ -7,21 +8,24 @@ import com.portal.dto.DelegationRuleRequest;
 import com.portal.dto.PageResponse;
 import com.portal.entity.DelegationAudit;
 import com.portal.entity.DelegationRule;
+import com.portal.exception.PortalException;
+import com.portal.util.PortalColumnFilterSupport;
+import com.portal.util.PortalListColumnMeta;
 import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 委托管理API
  */
-@Tag(name = "委托管理", description = "委托规则管理和代理任务处理")
+@Tag(name = "委托管理", description = "委托规则管理与审计")
 @RestController
 @RequestMapping("/delegations")
 @RequiredArgsConstructor
@@ -29,13 +33,43 @@ public class DelegationController {
 
     private final DelegationComponent delegationComponent;
     private final I18nService i18nService;
+    private final ObjectMapper objectMapper;
 
-    @Operation(summary = "获取委托规则列表")
+    @Operation(summary = "获取委托规则列表（传 page 时返回 PageResponse；省略 page 时返回全量 List）")
     @GetMapping
-    public ApiResponse<List<DelegationRule>> getDelegationRules(
-            @CurrentUserId String userId) {
-        List<DelegationRule> rules = delegationComponent.getDelegationRules(userId);
-        return ApiResponse.success(rules);
+    public ApiResponse<?> getDelegationRules(
+            @CurrentUserId String userId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortDirection,
+            @RequestParam(required = false) String filters,
+            @RequestParam(required = false) String groupBy) {
+        if (page != null) {
+            int safePage = Math.max(0, page);
+            int safeSize = size == null || size < 1 ? 20 : Math.min(size, 200);
+            var result = delegationComponent.getDelegationRules(
+                    userId,
+                    PageRequest.of(safePage, safeSize),
+                    parseFilters(filters),
+                    sortField,
+                    sortDirection,
+                    groupBy);
+            return ApiResponse.success(result.toPageResponse());
+        }
+        return ApiResponse.success(delegationComponent.getDelegationRules(userId));
+    }
+
+    @Operation(summary = "获取委托规则列表的列能力（类型 / 可用算子 / 枚举取值）")
+    @GetMapping("/columns")
+    public ApiResponse<List<PortalListColumnMeta>> getDelegationRuleColumns() {
+        return ApiResponse.success(delegationComponent.getDelegationRuleColumns());
+    }
+
+    @Operation(summary = "获取委托审计列表的列能力（类型 / 可用算子）")
+    @GetMapping("/audit/columns")
+    public ApiResponse<List<PortalListColumnMeta>> getDelegationAuditColumns() {
+        return ApiResponse.success(delegationComponent.getDelegationAuditColumns());
     }
 
     @Operation(summary = "获取有效委托规则")
@@ -92,14 +126,6 @@ public class DelegationController {
         return ApiResponse.success(rule);
     }
 
-    @Operation(summary = "获取代理任务（委托给我的）")
-    @GetMapping("/proxy-tasks")
-    public ApiResponse<List<DelegationRule>> getProxyTasks(
-            @CurrentUserId String userId) {
-        List<DelegationRule> delegations = delegationComponent.getDelegationsForDelegate(userId);
-        return ApiResponse.success(delegations);
-    }
-
     @Operation(summary = "获取委托人ID列表")
     @GetMapping("/delegators")
     public ApiResponse<List<String>> getDelegatorIds(
@@ -113,11 +139,28 @@ public class DelegationController {
     public ApiResponse<PageResponse<DelegationAudit>> getDelegationAuditRecords(
             @CurrentUserId String userId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        Page<DelegationAudit> auditPage = delegationComponent.getDelegationAuditRecords(
-                userId, PageRequest.of(page, size));
-        PageResponse<DelegationAudit> response = PageResponse.of(
-                auditPage.getContent(), page, size, auditPage.getTotalElements());
-        return ApiResponse.success(response);
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sortField,
+            @RequestParam(required = false) String sortDirection,
+            @RequestParam(required = false) String filters,
+            @RequestParam(required = false) String groupBy) {
+        int safePage = Math.max(0, page);
+        int safeSize = size < 1 ? 20 : Math.min(size, 200);
+        var result = delegationComponent.getDelegationAuditRecords(
+                userId,
+                PageRequest.of(safePage, safeSize),
+                parseFilters(filters),
+                sortField,
+                sortDirection,
+                groupBy);
+        return ApiResponse.success(result.toPageResponse());
+    }
+
+    private Map<String, Map<String, Object>> parseFilters(String filtersJson) {
+        try {
+            return PortalColumnFilterSupport.parseFiltersJson(filtersJson, objectMapper);
+        } catch (IllegalArgumentException ex) {
+            throw new PortalException("400", ex.getMessage());
+        }
     }
 }
