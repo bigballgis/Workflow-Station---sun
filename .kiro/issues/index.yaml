@@ -2000,3 +2000,28 @@
     PK id 出现不 rebootstrap、formOptions 迟到再跑 Event）；sibling hydration 6/6。
     二次修复：bootstrap 不再 emit update:row；rowModel 只在换行时从 currentRow 拷贝；
     Save 把 Y 同步到同表 leftover sibling slice，避免 reopen 回 N。
+
+- id: "1520"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Portal 列表改每页条数发两次请求；页码越界仍照原页请求后端"
+  file: "frontend/user-portal/src/components/portal-list/PortalListPagination.vue"
+  note: |
+    反例一：My Applications 停在第 1 页，把每页条数从 20 改成 50 → Network 出现两条
+    /processes/my-applications 请求（size=50&page=1 各一次）。因为 el-pagination 改 size 时
+    会自己把 current page 夹回合法范围，于是同一次点击既触发 size-change 又触发
+    current-change，两个 handler 各自 fetch 一次。
+    反例二：Permissions 翻到第 5 页后把筛选条件收紧到只剩 3 条 → 前端仍带 page=5 请求，
+    后端返回空 records，页面显示空列表而不是第 1 页的 3 条。
+    根因：各视图自己写裸 el-pagination + 各自的 handlePageChange / handleSizeChange，
+    没有统一的「一次用户操作 = 一次请求」出口，也没人负责夹取页码；
+    另有 6 个视图把 :visible="true" 硬写在 pager 上，等于该 prop 从未表达过意图。
+    修复：抽出 PortalListPagination —— size-change 期间用 withinSizeChange 抑制随之而来的
+    current-change，一次点击只 emit 一次 change；current-change 出口对 page 做
+    [1, lastPage] 夹取；把恒真的 :visible 换成语义明确的 hideWhenEmpty（默认 false，
+    仅 relation-tables 需要延续基线的 v-if="totalElements > 0" 行为）；
+    MTV 的裸 el-pagination 一并换掉，删掉其 handlePageChange / handleSizeChange。
+    验证：PortalListPagination.test.ts 5/5（含「size 变更只 emit 一次 change」
+    与「越界页夹到 lastPage」两条回归）；frontend/user-portal vitest 953/953 全绿。

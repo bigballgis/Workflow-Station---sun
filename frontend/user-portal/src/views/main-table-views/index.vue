@@ -2,6 +2,7 @@
 import { Expand, Fold } from '@element-plus/icons-vue'
 import PortalListColumnHeader from '@/components/portal-list/PortalListColumnHeader.vue'
 import PortalListFilterDialog from '@/components/portal-list/PortalListFilterDialog.vue'
+import PortalListPagination from '@/components/portal-list/PortalListPagination.vue'
 import { useMainTableViewPage } from '@/composables/mainTableView/useMainTableViewPage'
 
 const {
@@ -14,7 +15,7 @@ const {
   viewListCollapsed, viewSearchKeyword, filteredGroupedViews, handleSelectView,
   MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
   processedRows, groupedRows, pagedRows, displayTotal,
-  handleSearch, handlePageChange, handleSizeChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
+  handleSearch, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
   isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,
   handleColumnCommand, applyColumnFilter, clearColumnFilter, handleColumnResize, handleColumnResizeEnd,
   handleExport, mtvHeaderCellClassName, rowClassName, spanMethod,
@@ -266,21 +267,12 @@ const {
           </div>
         </div>
 
-        <div
-          v-if="displayTotal > 0"
-          class="pagination-wrap"
-        >
-          <el-pagination
-            v-model:current-page="currentPage"
-            background
-            :page-size="pageSize"
-            :total="displayTotal"
-            :page-sizes="[10, 20, 50, 100]"
-            layout="total, sizes, prev, pager, next"
-            @current-change="handlePageChange"
-            @size-change="handleSizeChange"
-          />
-        </div>
+        <PortalListPagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :total="displayTotal"
+          hide-when-empty
+        />
         </template>
 
         <el-empty
@@ -480,11 +472,6 @@ const {
 }
 .hidden-import-input {
   display: none;
-}
-.pagination-wrap {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
 }
 .mtv-data-grid-scroll {
   width: 100%;

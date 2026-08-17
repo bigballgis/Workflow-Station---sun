@@ -319,15 +319,6 @@ function handleSearch() {
   loadData()
 }
 
-function handlePageChange(page: number) {
-  currentPage.value = page
-}
-
-function handleSizeChange(size: number) {
-  pageSize.value = size
-  currentPage.value = 1
-}
-
 function formatCell(colOrValue: MainTableViewFieldColumn | unknown, row?: GridDisplayRow | MainTableViewDataRow) {
   // Backward-compatible: formatCell(value) still works for non-lookup callers.
   if (row && colOrValue && typeof colOrValue === 'object' && 'fieldName' in (colOrValue as object)) {
@@ -733,7 +724,7 @@ onMounted(async () => {
     viewListCollapsed, viewSearchKeyword, filteredGroupedViews, handleSelectView,
     MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
     processedRows, groupedRows, pagedRows, displayTotal,
-    handleSearch, handlePageChange, handleSizeChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
+    handleSearch, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
     isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,
     handleColumnCommand, applyColumnFilter, clearColumnFilter, handleColumnResize, handleColumnResizeEnd,
     handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName, rowClassName, spanMethod,
