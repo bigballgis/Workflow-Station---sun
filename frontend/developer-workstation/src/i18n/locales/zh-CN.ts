@@ -426,6 +426,8 @@ export default {
     pkGen_uuid: 'UUID',
     pkGen_autoIncrement: '自增整数',
     pkGen_prefixedSequence: '前缀序号',
+    pkGen_dailyDateSequence: '日期+每日序号',
+    pkGen_monthlyDateSequence: '日期+每月序号',
     pkScope_perTable: '按表',
     pkScope_perFunctionUnit: '按功能单元',
     pkScope_perPrefix: '按前缀',

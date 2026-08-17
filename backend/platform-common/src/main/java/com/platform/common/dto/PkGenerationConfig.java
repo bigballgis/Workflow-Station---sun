@@ -14,10 +14,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PkGenerationConfig {
 
-    /** manual | uuid | autoIncrement | prefixedSequence */
+    /** manual | uuid | autoIncrement | prefixedSequence | dailyDateSequence | monthlyDateSequence */
     private String strategy;
 
-    /** perTable | perFunctionUnit | perPrefix */
+    /** perTable | perFunctionUnit | perPrefix | perDay | perMonth */
     private String scope;
 
     private Long startValue;

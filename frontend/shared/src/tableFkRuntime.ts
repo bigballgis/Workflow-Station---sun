@@ -16,8 +16,8 @@ export interface FieldFkMeta {
 }
 
 export interface PkGenerationConfig {
-  strategy?: 'manual' | 'uuid' | 'autoIncrement' | 'prefixedSequence'
-  scope?: 'perTable' | 'perFunctionUnit' | 'perPrefix'
+  strategy?: 'manual' | 'uuid' | 'autoIncrement' | 'prefixedSequence' | 'dailyDateSequence' | 'monthlyDateSequence'
+  scope?: 'perTable' | 'perFunctionUnit' | 'perPrefix' | 'perDay' | 'perMonth'
   startValue?: number
   padWidth?: number
   prefix?: string

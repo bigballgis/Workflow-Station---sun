@@ -379,6 +379,8 @@ export default {
     pkGen_uuid: 'UUID',
     pkGen_autoIncrement: 'Auto increment',
     pkGen_prefixedSequence: 'Prefixed sequence',
+    pkGen_dailyDateSequence: 'Date + daily sequence',
+    pkGen_monthlyDateSequence: 'Date + monthly sequence',
     pkScope_perTable: 'Per table',
     pkScope_perFunctionUnit: 'Per function unit',
     pkScope_perPrefix: 'Per prefix',

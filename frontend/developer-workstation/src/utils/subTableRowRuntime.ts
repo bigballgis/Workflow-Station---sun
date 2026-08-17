@@ -10,6 +10,7 @@ import type { FieldDefinition } from '@/api/functionUnit'
 import type { DialogColumn } from '../components/designer/subTableAddDialogHelpers'
 import { buildInitialRow } from '../components/designer/subTableAddDialogHelpers'
 import { normalizeFieldDefinitionForRuntime } from './formFieldMeta'
+import { pkStrategyAllocatesString } from './pkGenerationConfig'
 import {
   type FieldFkMeta,
   type PkGenerationConfig,
@@ -119,13 +120,13 @@ function pkNeedsAllocation(field: BindingFieldDefinition): boolean {
   return strategy !== 'manual'
 }
 
-/** prefixedSequence / uuid allocate string values — inputNumber cannot bind them. */
+/** uuid / prefixedSequence / calendar-period sequences allocate string values — inputNumber cannot bind them. */
 function pkAllocationYieldsString(field: BindingFieldDefinition): boolean {
   const normalized = normalizeFieldDefinitionForRuntime(field as FieldDefinition)
   if (!normalized.isPrimaryKey) return false
   const pkConfig = normalized.pkGeneration ?? normalized.pkGenerationJson
   const strategy = pkConfig?.strategy ?? 'uuid'
-  return strategy === 'uuid' || strategy === 'prefixedSequence'
+  return pkStrategyAllocatesString(strategy)
 }
 
 function applyAutoPkColumnPresentation(
