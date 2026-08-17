@@ -2202,3 +2202,16 @@
     frontend/shared/src/computedField 共享 AST 引擎，不要复活 mathjs）；
     或反向清理脚手架（删 businessLogicEngine 死代码 + 卸 mathjs + 清 i18n 文案）。
     与计算字段特性无关，不阻塞其交付。
+
+- id: "1532"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: quality
+  summary: "Email Monitor IMAP/配置失败只 warn 且每 30s 重打邮箱，无有界退避"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorScheduler.java"
+  note: |
+    Confluence Email Monitor 运维对齐（不引入 Kafka/POP3/审批状态机）。
+    失败不推进 lastSyncCursor；指数退避（pollInterval × 2^(n-1)，上限 15min）；
+    ERROR 日志含 ruleId / consecutiveFailures / retryAfter，不含密码。
+    单测 EmailMonitorPollBackoffTest、EmailMonitorSchedulerTest。
