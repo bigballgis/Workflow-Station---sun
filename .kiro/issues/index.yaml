@@ -2311,3 +2311,25 @@
     验证：BpmnActionParserTest + BpmnActionParserMergeTest + BpmnActionParserMergePropertyTest
     共 20 tests pass（含 XML/模型合并、兄弟节点隔离、模型优先于 XML、异常回退、
     jqwik 80–100 tries 的 merge/XML/parse 不变量）。
+
+- id: "1539"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "__subTables__ 行可无任何身份键落库，读侧无法区分两行只能靠内容哈希（会误并两行）"
+  file: "backend/user-portal/src/main/java/com/portal/entity/ProcessInstance.java"
+  note: |
+    只有声明了自增主键的子表才由 ProcessSubTablePrimaryKeyEnricherComponent 发号；
+    未声明主键的子表、邮件触发发起、引擎回灌的行都可能匿名落库（dev 实测 1 行有完整业务
+    数据却无任何身份键）。读侧（审计 diff、MTV SUB 展开去重）此时只剩内容哈希一条路，
+    而两行业务值相同就会被误并成一行。
+    修复：身份键清单与优先级收敛到 platform-common 的 SubTableRowIdentity（row_id / rowId /
+    rowID / id_idw / _rowKey / rowKey / id，大小写不敏感，空白视同缺失）；
+    ProcessInstance 的 @PrePersist/@PreUpdate 调 SubTableRowIdentityEnricher 给无身份的行补
+    row_id（已有身份一律不覆盖，设计器主键优先）——写入路径众多，实体回调是它们唯一的汇合点。
+    存量由 deploy/init-scripts/00-schema/67-backfill-subtable-row-id.sql 回填（幂等）。
+    验证：单测 SubTableRowIdentityTest / SubTableRowIdentityEnricherTest /
+    ProcessInstanceSubTableRowIdentityTest + user-portal 全量 1065 项；
+    dev 回填 1→0 行且二次运行 0 更新；运行时经 /tasks/{id}/submit 提交无身份行后读回带 row_id。
+    编号说明：0731 已占用 #1538（Global 动作合并），本条在 Views PR 记为 #1539。
