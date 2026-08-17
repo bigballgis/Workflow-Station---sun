@@ -2000,3 +2000,110 @@
     PK id 出现不 rebootstrap、formOptions 迟到再跑 Event）；sibling hydration 6/6。
     二次修复：bootstrap 不再 emit update:row；rowModel 只在换行时从 currentRow 拷贝；
     Save 把 Y 同步到同表 leftover sibling slice，避免 reopen 回 N。
+
+- id: "1520"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Portal 列表改每页条数发两次请求；页码越界仍照原页请求后端"
+  file: "frontend/user-portal/src/components/portal-list/PortalListPagination.vue"
+  note: |
+    反例一：My Applications 停在第 1 页，把每页条数从 20 改成 50 → Network 出现两条
+    /processes/my-applications 请求（size=50&page=1 各一次）。因为 el-pagination 改 size 时
+    会自己把 current page 夹回合法范围，于是同一次点击既触发 size-change 又触发
+    current-change，两个 handler 各自 fetch 一次。
+    反例二：Permissions 翻到第 5 页后把筛选条件收紧到只剩 3 条 → 前端仍带 page=5 请求，
+    后端返回空 records，页面显示空列表而不是第 1 页的 3 条。
+    根因：各视图自己写裸 el-pagination + 各自的 handlePageChange / handleSizeChange，
+    没有统一的「一次用户操作 = 一次请求」出口，也没人负责夹取页码；
+    另有 6 个视图把 :visible="true" 硬写在 pager 上，等于该 prop 从未表达过意图。
+    修复：抽出 PortalListPagination —— size-change 期间用 withinSizeChange 抑制随之而来的
+    current-change，一次点击只 emit 一次 change；current-change 出口对 page 做
+    [1, lastPage] 夹取；把恒真的 :visible 换成语义明确的 hideWhenEmpty（默认 false，
+    仅 relation-tables 需要延续基线的 v-if="totalElements > 0" 行为）；
+    MTV 的裸 el-pagination 一并换掉，删掉其 handlePageChange / handleSizeChange。
+    验证：PortalListPagination.test.ts 5/5（含「size 变更只 emit 一次 change」
+    与「越界页夹到 lastPage」两条回归）；frontend/user-portal vitest 953/953 全绿。
+
+- id: "1521"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Portal Applications / Drafts / Permissions / Relation Tables 列头筛选只给文本算子，日期条件被静默丢弃；列表在内存里分页"
+  file: "backend/user-portal/src/main/java/com/portal/util/ProcessApplicationListSpec.java"
+  note: |
+    反例一（静默丢条件）：My Applications 的 Start Time、Drafts 的 Save Time、
+    Permissions 的 Created At，列头 Filter by 只有 Contains/Equals 等字符串算子 + 一个文本框；
+    对日期列传 contains 后 ListSpec.parseFilters 直接 continue 丢掉该条件，接口照常返回全量，
+    用户以为筛掉了。Permissions 的 Request Type / Submitted By 也没有码值 / 人员选择器。
+    反例二（假分页）：这几个列表把符合条件的行整批查出来再在内存里切页，
+    行数上去以后每翻一页都要重跑全量查询。
+    根因：FILTER_FIELDS 只是字段名白名单、不带类型，前端无从得知列是什么类型，
+    后端遇到不支持的算子只能静默 drop；分页也没有下推到 SQL。
+    修复：新增 PortalListColumnMeta（TEXT/ENUM/USER/DATETIME + 每种类型的合法算子集）
+    与 PortalColumnFilterSupport（按天比较的 on/before/after/between + 按类型校验的
+    parseFilters —— 已声明列上的非法算子/日期值改为抛 IllegalArgumentException
+    走 400，不再静默丢弃）；四个列表由各自 ListSpec 的 COLUMNS 单一声明派生
+    SORT/GROUP/FILTER 白名单，并把 page/size/sort/filter 下推进 SQL（count + limit/offset）；
+    新增 GET /processes/my-applications/columns、/processes/drafts/columns、
+    /permissions/requests/columns 暴露列能力；前端接 usePortalListFilterMeta +
+    unwrapPortalListColumns，PortalListFilterDialog 按 kind 渲染日期/码值/人员选择器，
+    算子列表来自后端声明。另补 up_process_instance 的 MTV 查询索引。
+    注意：ProcessController 有本地 IAE handler 会把 IllegalArgumentException 变成 500，
+    因此该 controller 内转成 PortalException 才能拿到 400。
+    验证：ProcessApplicationListSpecTest 12 + ProcessDraftListSpecTest 8 +
+    PermissionRequestListSpecTest 7 + PermissionRequestListSpecApprovalChromeTest 3 +
+    PortalColumnFilterSupportTest 10 + MainTableViewSqlQueryCompilerTest 8 +
+    PortalMainTableViewFilterUtilsTest 4 全绿；frontend vitest 953/953。
+
+- id: "1522"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Delegations「My Delegations / Audit Records」列头筛选只给文本算子，时间列条件被静默丢弃"
+  file: "backend/user-portal/src/main/java/com/portal/util/DelegationRuleListSpec.java"
+  note: |
+    反例：Delegations 两个列表的列头 Filter by，对 Start Time、Delegation Type、Delegate To
+    一律只给 Contains/Equals 等 8 个字符串算子 + 一个文本框；对时间列选 Contains 后
+    ListSpec.parseFilters 直接 continue 丢掉该条件，接口照常返回全量数据，用户以为筛掉了。
+    根因：与 #1521 同源 —— FILTER_FIELDS 只是不带类型的字段名白名单。
+    修复：两个 Delegation ListSpec 改由 COLUMNS 单一声明（PortalListColumnMeta）派生
+    SORT/GROUP/FILTER 白名单，复用 #1521 引入的 PortalColumnFilterSupport 类型校验；
+    新增 GET /delegations/columns 与 /delegations/audit/columns 暴露列能力；
+    列表分页/排序/筛选下推 SQL。委托本体（standing rule 匹配 DelegationRuleMatcher、
+    代办任务归集、审计留痕）同一 PR 落地，代办文案走 en/zh-CN/zh-TW 三语与
+    platform-common messages_*.properties 校验消息。
+    验证：DelegationRuleListSpecTest 6 + DelegationAuditListSpecTest 4 +
+    DelegationRuleMatcherTest 5 全绿；frontend vitest 953/953。
+
+- id: "1523"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Portal 待办/已处理全量扫描：路由条件过宽导致引擎能答的请求也全扫；full-scan 缓存 key 漏工作区，跨 BU/角色串数据"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java"
+  note: |
+    反例一（缓存串数据）：同一 userId 在 BU-A 打开 To Do（缓存 full-scan 结果），
+    切到 BU-B 再打开 To Do → 在 TTL 内命中同一条缓存，看到的是 BU-A 视角过滤出的任务。
+    因为 fullScanCacheKey 只由 userId + request + assignmentTypes + size 组成，
+    而 applyPortalPostEngineFilters 的结果依赖当前激活 BU / 角色。
+    反例二（白扫）：请求条件其实能被引擎 criteria 完整表达时，
+    仍会走 queryTasksFullEnginePagesThenDelegate 把引擎所有页拉一遍再过滤。
+    根因：路由处除 EngineTaskPushdown.canFullyPush 之外还有第二个更宽的
+    needsFullEngineScanBeforeFilters 条件，两处判断同一件事（能否只取一页），
+    宽的那个把可下推的请求也拽进全扫；缓存 key 又没带工作区上下文。
+    修复：删掉 needsFullEngineScanBeforeFilters，路由只由 canFullyPush 一处决定
+    （对应 error-handling-governance 红线 3「一个决策一个位置」）；
+    fullScanCacheKey 补 SecurityContextUtils.getCurrentActiveBusinessUnitId()
+    与 getCurrentActiveRoleId()，工作区不同则不共享缓存。
+    引擎侧同 PR 落地 page/size/sort/filter 下推（EngineTaskListCriteria）。
+    验证：EngineTaskPushdownTest 9（新增用例逐条覆盖「原先触发全扫的条件现在
+    canFullyPush 必须为 false」）+ TaskInfoListOpsTest 4 + TaskQueryColumnFiltersTest 4 全绿；
+    user-portal 后端定向单测 84/84；frontend vitest 953/953。
+    运行时：新增 scripts/verify-portal-list-pagination.mjs —— To Do「下一页」只发 1 次
+    /tasks/query 且首行变化（真下推分页），并顺带守住 #1520 的「改每页条数只发 1 次请求」。
+    截图：frontend/user-portal/verification-screenshots/2026-08-17_pagination-*.png

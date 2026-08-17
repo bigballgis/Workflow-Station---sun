@@ -1,4 +1,5 @@
 import request from './request'
+import type { PortalListColumnMeta } from '@/utils/portalListGridRuntime'
 
 // ==================== 新的类型定义 ====================
 
@@ -277,8 +278,25 @@ export const permissionApi = {
   },
 
   /** 获取我的申请记录 */
-  getMyRequests(params?: { page?: number; size?: number; status?: string }) {
-    return request.get<{ content: PermissionRequestRecord[]; totalElements: number }>('/permissions/requests', { params })
+  getMyRequests(params?: {
+    page?: number
+    size?: number
+    status?: string
+    excludePending?: boolean
+    sortField?: string
+    sortDirection?: 'ASC' | 'DESC'
+    filters?: string
+    groupBy?: string
+  }) {
+    return request.get<{
+      content: PermissionRequestRecord[]
+      totalElements: number
+      groupCounts?: Record<string, number>
+    }>('/permissions/requests', { params })
+  },
+
+  getRequestColumns() {
+    return request.get<{ data: PortalListColumnMeta[] }>('/permissions/requests/columns')
   },
 
   /** 取消申请 */
@@ -289,8 +307,19 @@ export const permissionApi = {
   // ==================== 审批 API ====================
 
   /** 获取待审批列表 */
-  getPendingApprovals(params?: { page?: number; size?: number }) {
-    return request.get<{ content: PermissionRequestRecord[]; totalElements: number }>('/permissions/approvals/pending', { params })
+  getPendingApprovals(params?: {
+    page?: number
+    size?: number
+    sortField?: string
+    sortDirection?: 'ASC' | 'DESC'
+    filters?: string
+    groupBy?: string
+  }) {
+    return request.get<{
+      content: PermissionRequestRecord[]
+      totalElements: number
+      groupCounts?: Record<string, number>
+    }>('/permissions/approvals/pending', { params })
   },
 
   /** 批准申请 */
@@ -309,8 +338,19 @@ export const permissionApi = {
   },
 
   /** 获取审批历史 */
-  getApprovalHistory(params?: { page?: number; size?: number }) {
-    return request.get<{ content: PermissionRequestRecord[]; totalElements: number }>('/permissions/approvals/history', { params })
+  getApprovalHistory(params?: {
+    page?: number
+    size?: number
+    sortField?: string
+    sortDirection?: 'ASC' | 'DESC'
+    filters?: string
+    groupBy?: string
+  }) {
+    return request.get<{
+      content: PermissionRequestRecord[]
+      totalElements: number
+      groupCounts?: Record<string, number>
+    }>('/permissions/approvals/history', { params })
   },
 
   // ==================== 成员管理 API ====================
@@ -414,7 +454,13 @@ export const permissionApi = {
   },
 
   /** 获取申请历史记录 */
-  getRequestHistory(params?: { page?: number; size?: number; status?: string }) {
+  getRequestHistory(params?: {
+    page?: number
+    size?: number
+    status?: string
+    /** When true and status omitted, server excludes PENDING with correct total. */
+    excludePending?: boolean
+  }) {
     return request.get<{ content: PermissionRequestRecord[]; totalElements: number }>('/permissions/requests', { params })
   },
 

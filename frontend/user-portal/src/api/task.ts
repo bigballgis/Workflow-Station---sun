@@ -11,6 +11,8 @@ export interface TaskQueryRequest {
   endTime?: string
   includeOverdue?: boolean
   keyword?: string
+  /** MTV-shaped column filters: `{ field: { operator, value } }` */
+  filters?: Record<string, { operator: string; value: string }>
   sortBy?: string
   sortDirection?: string
   page?: number

@@ -2,6 +2,7 @@ package com.workflow.controller;
 
 import com.platform.common.config.ConfigurationManager;
 import com.platform.common.config.WorkflowConfig;
+import com.platform.common.constant.PlatformConstants;
 import com.platform.common.security.SecurityIntegrationService;
 import com.workflow.component.HistoryManagerComponent;
 import com.workflow.component.TaskManagerComponent;
@@ -24,13 +25,17 @@ import com.workflow.util.WorkflowActorResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,6 +70,9 @@ public class TaskController {
     private final com.workflow.component.MultiInstanceDataResolver multiInstanceDataResolver;
     private final TaskHistoryAssembler taskHistoryAssembler;
 
+    @Value("${service.internal-token:}")
+    private String serviceInternalToken;
+
     /**
      * Query task list.
      */
@@ -84,7 +92,17 @@ public class TaskController {
             @Parameter(description = "Department role list")
             @RequestParam(value = "deptRoles", required = false) List<String> deptRoles,
             @Parameter(description = "Portal current workspace business unit (optional; filters pending tasks where FIXED_BU_ROLE is inconsistent with JWT)")
-            @RequestParam(value = "activeBusinessUnitId", required = false) String activeBusinessUnitId) {
+            @RequestParam(value = "activeBusinessUnitId", required = false) String activeBusinessUnitId,
+            @Parameter(description = "Task name LIKE pattern (may include %); ignored when taskNameExact is set")
+            @RequestParam(value = "taskNameLike", required = false) String taskNameLike,
+            @Parameter(description = "Exact task name match")
+            @RequestParam(value = "taskNameExact", required = false) String taskNameExact,
+            @Parameter(description = "Exact Flowable priority (integer)")
+            @RequestParam(value = "priority", required = false) Integer priority,
+            @Parameter(description = "Sort field: createTime | dueDate | priority | name")
+            @RequestParam(value = "sortBy", required = false) String sortBy,
+            @Parameter(description = "Sort direction: asc | desc")
+            @RequestParam(value = "sortDirection", required = false) String sortDirection) {
         
         // Validate and sanitize inputs using security integration service
         if (userId != null) {
@@ -128,8 +146,11 @@ public class TaskController {
             // getUserTasks would skip BU_ROLE orphan-pool repair and todos may be empty.
             List<String> gids = groupIds != null ? groupIds : Collections.emptyList();
             List<String> droles = deptRoles != null ? deptRoles : Collections.emptyList();
+            com.workflow.dto.request.EngineTaskListCriteria criteria =
+                    new com.workflow.dto.request.EngineTaskListCriteria(
+                            taskNameLike, taskNameExact, priority, sortBy, sortDirection);
             result = taskManagerComponent.getUserAllVisibleTasks(userId, gids, droles, page, pageSize,
-                    activeBusinessUnitId);
+                    activeBusinessUnitId, criteria);
         }
         
         return ResponseEntity.ok(ApiResponse.success(result));
@@ -329,7 +350,8 @@ public class TaskController {
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> completeTask(
             @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
-            @RequestBody Map<String, Object> request) {
+            @RequestBody Map<String, Object> request,
+            HttpServletRequest httpRequest) {
         
         Optional<String> actor = WorkflowActorResolver.currentUserId();
         if (actor.isEmpty()) {
@@ -343,18 +365,44 @@ public class TaskController {
         if (request.containsKey("sendNotification") && request.get("sendNotification") instanceof Boolean b) {
             sendNotification = b;
         }
+
+        String actingForUserId = null;
+        Object actingForRaw = request.get("actingForUserId");
+        if (actingForRaw instanceof String s && !s.isBlank()) {
+            actingForUserId = s.trim();
+        }
+        boolean actingForTrusted = false;
+        if (actingForUserId != null) {
+            String serviceToken = httpRequest.getHeader(PlatformConstants.HEADER_SERVICE_TOKEN);
+            if (!isValidServiceToken(serviceToken)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.error("FORBIDDEN", "actingForUserId requires a trusted service token"));
+            }
+            actingForTrusted = true;
+        }
         
-        log.info("Completing task: {} by user: {}", taskId, userId);
+        log.info("Completing task: {} by user: {} actingForTrusted={}", taskId, userId, actingForTrusted);
         log.debug("Variables received (keys only): {}",
                 variables != null ? variables.keySet() : null);
         
-        TaskAssignmentResult result = taskManagerComponent.completeTask(taskId, userId, variables, sendNotification);
+        TaskAssignmentResult result = taskManagerComponent.completeTask(
+                taskId, userId, variables, sendNotification, actingForUserId, actingForTrusted);
         
         if (result.isSuccess()) {
             return ResponseEntity.ok(ApiResponse.success(result));
         } else {
             return ResponseEntity.badRequest().body(ApiResponse.error("COMPLETE_FAILED", result.getMessage()));
         }
+    }
+
+    private boolean isValidServiceToken(String presented) {
+        if (presented == null || presented.isBlank()
+                || serviceInternalToken == null || serviceInternalToken.isBlank()) {
+            return false;
+        }
+        byte[] a = presented.getBytes(StandardCharsets.UTF_8);
+        byte[] b = serviceInternalToken.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(a, b);
     }
     
     /**

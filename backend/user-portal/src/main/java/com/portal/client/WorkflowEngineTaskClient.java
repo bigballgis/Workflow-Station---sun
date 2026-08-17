@@ -101,6 +101,16 @@ public class WorkflowEngineTaskClient {
      */
     public Optional<Map<String, Object>> getUserAllVisibleTasks(String userId, List<String> groupIds,
                                                                  List<String> deptRoles, int page, int size) {
+        return getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size,
+                com.portal.util.EngineTaskPushdown.Criteria.empty());
+    }
+
+    /**
+     * Same as {@link #getUserAllVisibleTasks(String, List, List, int, int)} with optional engine pushdown criteria.
+     */
+    public Optional<Map<String, Object>> getUserAllVisibleTasks(String userId, List<String> groupIds,
+                                                                 List<String> deptRoles, int page, int size,
+                                                                 com.portal.util.EngineTaskPushdown.Criteria criteria) {
         if (!engine.isAvailable()) {
             return Optional.empty();
         }
@@ -122,6 +132,23 @@ public class WorkflowEngineTaskClient {
             SecurityContextUtils.getCurrentActiveBusinessUnitId()
                     .filter(id -> id != null && !id.isBlank())
                     .ifPresent(bu -> ub.queryParam("activeBusinessUnitId", bu));
+            if (criteria != null) {
+                if (criteria.taskNameLike() != null && !criteria.taskNameLike().isBlank()) {
+                    ub.queryParam("taskNameLike", criteria.taskNameLike());
+                }
+                if (criteria.taskNameExact() != null && !criteria.taskNameExact().isBlank()) {
+                    ub.queryParam("taskNameExact", criteria.taskNameExact());
+                }
+                if (criteria.priority() != null) {
+                    ub.queryParam("priority", criteria.priority());
+                }
+                if (criteria.sortBy() != null && !criteria.sortBy().isBlank()) {
+                    ub.queryParam("sortBy", criteria.sortBy());
+                }
+                if (criteria.sortDirection() != null && !criteria.sortDirection().isBlank()) {
+                    ub.queryParam("sortDirection", criteria.sortDirection());
+                }
+            }
             String url = ub.encode().build().toUriString();
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
@@ -211,6 +238,16 @@ public class WorkflowEngineTaskClient {
      */
     public Optional<Map<String, Object>> completeTask(String taskId, String userId,
                                                        String action, Map<String, Object> variables) {
+        return completeTask(taskId, userId, action, variables, null);
+    }
+
+    /**
+     * @param actingForUserId when set (standing act-as), also sends {@code X-Service-Token} so the engine
+     *                        trusts the claim; browsers must never be able to set this alone.
+     */
+    public Optional<Map<String, Object>> completeTask(String taskId, String userId,
+                                                       String action, Map<String, Object> variables,
+                                                       String actingForUserId) {
         if (!engine.isAvailable()) {
             return Optional.empty();
         }
@@ -221,10 +258,16 @@ public class WorkflowEngineTaskClient {
             request.put("userId", userId);
             request.put("action", action);
             request.put("variables", variables);
+            if (actingForUserId != null && !actingForUserId.isBlank()) {
+                request.put("actingForUserId", actingForUserId.trim());
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             engine.forwardInboundAuthorization(headers);
+            if (actingForUserId != null && !actingForUserId.isBlank()) {
+                engine.attachServiceInternalToken(headers);
+            }
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.POST, entity,
