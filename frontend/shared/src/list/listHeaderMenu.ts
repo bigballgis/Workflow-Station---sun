@@ -1,0 +1,94 @@
+import type { ListColumnMeta } from './columnMeta'
+
+export type ListHeaderCommand =
+  | 'sortAsc'
+  | 'sortDesc'
+  | 'clearSort'
+  | 'group'
+  | 'filter'
+  | 'clearFilter'
+  | 'moveLeft'
+  | 'moveRight'
+
+export interface ListHeaderState {
+  sort?: 'ASC' | 'DESC' | null
+  grouped?: boolean
+  filtered?: boolean
+  showMove?: boolean
+  canMoveLeft?: boolean
+  canMoveRight?: boolean
+}
+
+export interface ListHeaderMenuItem {
+  command: ListHeaderCommand
+  labelKey: string
+  divided?: boolean
+  disabled?: boolean
+  /** Render the "active" dot marker (currently-filtered indicator). */
+  activeDot?: boolean
+}
+
+/**
+ * Menu entries are driven by the column declaration: a non-sortable column gets no
+ * sort entries and a groupable:false column gets NO group entry at all (not a
+ * disabled one) — grouping is a per-field semantic capability, not generic list
+ * chrome. DATETIME columns label their sort directions older/newer instead of
+ * A→Z (replaces user-portal's old field-name sniffing).
+ */
+export function listHeaderMenuItems(
+  column: ListColumnMeta,
+  state: ListHeaderState,
+): ListHeaderMenuItem[] {
+  const items: ListHeaderMenuItem[] = []
+  const dateLike = column.kind === 'DATETIME'
+
+  if (column.sortable) {
+    items.push({
+      command: 'sortAsc',
+      labelKey: dateLike ? 'sharedList.sortOlder' : 'sharedList.sortAsc',
+    })
+    items.push({
+      command: 'sortDesc',
+      labelKey: dateLike ? 'sharedList.sortNewer' : 'sharedList.sortDesc',
+    })
+    if (state.sort) {
+      items.push({ command: 'clearSort', labelKey: 'sharedList.clearSort' })
+    }
+  }
+
+  if (column.groupable) {
+    items.push({
+      command: 'group',
+      labelKey: state.grouped ? 'sharedList.ungroup' : 'sharedList.groupBy',
+      divided: items.length > 0,
+    })
+  }
+
+  if (column.filterable) {
+    items.push({
+      command: 'filter',
+      labelKey: 'sharedList.filterBy',
+      divided: items.length > 0 && !column.groupable,
+      activeDot: state.filtered === true,
+    })
+    if (state.filtered) {
+      items.push({ command: 'clearFilter', labelKey: 'sharedList.clearFilter' })
+    }
+  }
+
+  if (state.showMove) {
+    items.push({
+      command: 'moveLeft',
+      labelKey: 'sharedList.moveLeft',
+      divided: items.length > 0,
+      disabled: state.canMoveLeft === false,
+    })
+    items.push({
+      command: 'moveRight',
+      labelKey: 'sharedList.moveRight',
+      disabled: state.canMoveRight === false,
+    })
+  }
+
+  return items
+}
