@@ -196,16 +196,13 @@ export function useSubTablePortalViews(deps: PortalViewsDeps) {
     const own = resolveBinding(field._bindingId)
     if (!own) return null
     const source = resolveAssigneeTodoFormSource(field)
+    // Only an explicit designer pick of `linkForm` switches the inline schema.
+    // A leftover Link Form *column* on the list must not steal this binding's
+    // sub-form options — Add/Edit dialog always uses the placed binding, and
+    // form-below-table Event scripts live on that same `formOptions`.
     if (source.type === 'linkForm') {
       const target = findLinkFormTargetBinding(field)
       if (target) {
-        return target
-      }
-    }
-    // 待办 + 表格下表单：列表上存在 Link Form 列即以内联展示其目标子表（subtable2），避免仅靠绑定 JSON 未写 type=linkForm 时用错主表 subForm。
-    if (deps.viewContext() === 'assigneeTodo' && subTableMode(field) === 'formBelowTable') {
-      const target = findLinkFormTargetBinding(field)
-      if (target && target.bindingId !== own.bindingId) {
         return target
       }
     }

@@ -202,6 +202,32 @@ describe('SubTableInlineForm — form-below-table Events', () => {
     wrapper.unmount()
   })
 
+  it('keeps field-gated onChange visibility when a PK id appears on a row that had none', async () => {
+    const fieldGated =
+      '$FNX:\n'
+      + 'if ($inject.field === "merchant_credit") {\n'
+      + '  if ($inject.value === "Y") { $inject.api.hidden(false, "merchant_credit_date") }\n'
+      + '  else { $inject.api.hidden(true, "merchant_credit_date") }\n'
+      + '}\n'
+    const wrapper = await mountInline({
+      formOptions: { onChange: fieldGated },
+      currentRow: { merchant_credit: 'N' },
+    })
+    expect(wrapper.html()).not.toContain('Merchant Credit Date')
+    await wrapper.find('[data-field="merchant_credit"]').trigger('click')
+    await nextTick()
+    await nextTick()
+    expect(wrapper.html()).toContain('Merchant Credit Date')
+
+    await wrapper.setProps({
+      currentRow: { id: 'pk-allocated', merchant_credit: 'N' },
+    } as never)
+    await nextTick()
+    await nextTick()
+    expect(wrapper.html()).toContain('Merchant Credit Date')
+    wrapper.unmount()
+  })
+
   it('does not rebootstrap when PK id appears on the same row_id', async () => {
     const wrapper = await mountInline({
       formOptions: { onChange: FLAG_ON_CHANGE },
