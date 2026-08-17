@@ -271,7 +271,9 @@ const {
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="displayTotal"
+          :disabled="dataLoading"
           hide-when-empty
+          @change="loadData"
         />
         </template>
 

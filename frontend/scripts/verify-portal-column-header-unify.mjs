@@ -3,9 +3,9 @@
  * Screenshot verification for the unified portal list column header.
  *
  * Views (Main Table View) used to render its own `MainTableViewColumnMenu` +
- * a separate resize handle + a view-level width dialog. It now renders the shared
- * `PortalListColumnHeader`. This script proves the Views grid kept its header row,
- * its resize handles and its width editor after the swap.
+ * a separate resize handle + a view-level width dialog. It now renders the same
+ * `PortalListColumnHeader` the SQL-backed portal lists use. This script proves both
+ * surfaces render the identical menu and that the Views grid kept its layout.
  *
  * Usage (from frontend/):
  *   node scripts/verify-portal-column-header-unify.mjs
@@ -15,6 +15,7 @@
 import { mkdirSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 import { fileURLToPath } from 'url'
+import { launchChromium } from './playwright-browser.mjs'
 import { loginViaPortalPassword } from './playwright-login.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -25,29 +26,6 @@ function datePrefix() {
   const d = new Date()
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-async function loadPlaywright() {
-  try {
-    return await import('playwright')
-  } catch {
-    throw new Error(
-      'playwright is not installed. From frontend/ run:\n' +
-        '  pnpm install\n' +
-        '  pnpm exec playwright install chromium',
-    )
-  }
-}
-
-async function launchBrowser() {
-  const { chromium } = await loadPlaywright()
-  const launchOpts = { headless: true }
-  if (process.env.PLAYWRIGHT_EXECUTABLE_PATH) {
-    launchOpts.executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH
-  } else if (process.env.PLAYWRIGHT_CHANNEL) {
-    launchOpts.channel = process.env.PLAYWRIGHT_CHANNEL
-  }
-  return chromium.launch(launchOpts)
 }
 
 async function shoot(target, name) {
@@ -76,7 +54,7 @@ async function closeMenu(page) {
 
 async function main() {
   mkdirSync(OUT_DIR, { recursive: true })
-  const browser = await launchBrowser()
+  const browser = await launchChromium()
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } })
   const saved = []
 
@@ -110,6 +88,15 @@ async function main() {
     saved.push(await shoot(widthDialog, 'mtv-unified-width-dialog'))
     await page.keyboard.press('Escape')
     await page.waitForTimeout(500)
+
+    console.log('My Applications list…')
+    await page.goto(`${ORIGIN}/portal/my-applications`, { waitUntil: 'domcontentloaded' })
+    await page.locator('.portal-list-col-header').first().waitFor({ timeout: 30000 })
+    await page.waitForTimeout(2500)
+    saved.push(await shoot(page, 'applications-header-row'))
+
+    const appsMenu = await openColumnMenu(page, 0)
+    saved.push(await shoot(appsMenu, 'applications-header-menu'))
     await closeMenu(page)
 
     console.log(`\nOK — ${saved.length} screenshots written to ${OUT_DIR}`)

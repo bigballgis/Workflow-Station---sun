@@ -600,6 +600,7 @@ export default {
     requestType: '申請類型',
     requestTarget: '申請目標',
     applyTime: '申請時間',
+    processTime: '處理時間',
     roleAssignment: '角色申請',
     virtualGroupJoin: '加入虛擬群組',
     businessUnitRole: '業務單元角色',

@@ -641,6 +641,7 @@ export default {
     requestType: 'Request Type',
     requestTarget: 'Request Target',
     applyTime: 'Apply Time',
+    processTime: 'Processed Time',
     roleAssignment: 'Role Assignment',
     virtualGroupJoin: 'Join Virtual Group',
     businessUnitRole: 'Business Unit Role',

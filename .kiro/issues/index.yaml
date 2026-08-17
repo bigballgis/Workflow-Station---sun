@@ -2025,3 +2025,35 @@
     MTV 的裸 el-pagination 一并换掉，删掉其 handlePageChange / handleSizeChange。
     验证：PortalListPagination.test.ts 5/5（含「size 变更只 emit 一次 change」
     与「越界页夹到 lastPage」两条回归）；frontend/user-portal vitest 953/953 全绿。
+
+- id: "1521"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Portal Applications / Drafts / Permissions / Relation Tables 列头筛选只给文本算子，日期条件被静默丢弃；列表在内存里分页"
+  file: "backend/user-portal/src/main/java/com/portal/util/ProcessApplicationListSpec.java"
+  note: |
+    反例一（静默丢条件）：My Applications 的 Start Time、Drafts 的 Save Time、
+    Permissions 的 Created At，列头 Filter by 只有 Contains/Equals 等字符串算子 + 一个文本框；
+    对日期列传 contains 后 ListSpec.parseFilters 直接 continue 丢掉该条件，接口照常返回全量，
+    用户以为筛掉了。Permissions 的 Request Type / Submitted By 也没有码值 / 人员选择器。
+    反例二（假分页）：这几个列表把符合条件的行整批查出来再在内存里切页，
+    行数上去以后每翻一页都要重跑全量查询。
+    根因：FILTER_FIELDS 只是字段名白名单、不带类型，前端无从得知列是什么类型，
+    后端遇到不支持的算子只能静默 drop；分页也没有下推到 SQL。
+    修复：新增 PortalListColumnMeta（TEXT/ENUM/USER/DATETIME + 每种类型的合法算子集）
+    与 PortalColumnFilterSupport（按天比较的 on/before/after/between + 按类型校验的
+    parseFilters —— 已声明列上的非法算子/日期值改为抛 IllegalArgumentException
+    走 400，不再静默丢弃）；四个列表由各自 ListSpec 的 COLUMNS 单一声明派生
+    SORT/GROUP/FILTER 白名单，并把 page/size/sort/filter 下推进 SQL（count + limit/offset）；
+    新增 GET /processes/my-applications/columns、/processes/drafts/columns、
+    /permissions/requests/columns 暴露列能力；前端接 usePortalListFilterMeta +
+    unwrapPortalListColumns，PortalListFilterDialog 按 kind 渲染日期/码值/人员选择器，
+    算子列表来自后端声明。另补 up_process_instance 的 MTV 查询索引。
+    注意：ProcessController 有本地 IAE handler 会把 IllegalArgumentException 变成 500，
+    因此该 controller 内转成 PortalException 才能拿到 400。
+    验证：ProcessApplicationListSpecTest 12 + ProcessDraftListSpecTest 8 +
+    PermissionRequestListSpecTest 7 + PermissionRequestListSpecApprovalChromeTest 3 +
+    PortalColumnFilterSupportTest 10 + MainTableViewSqlQueryCompilerTest 8 +
+    PortalMainTableViewFilterUtilsTest 4 全绿；frontend vitest 953/953。

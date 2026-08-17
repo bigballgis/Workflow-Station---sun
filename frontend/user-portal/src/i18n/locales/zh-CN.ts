@@ -641,6 +641,7 @@ export default {
     requestType: '申请类型',
     requestTarget: '申请目标',
     applyTime: '申请时间',
+    processTime: '处理时间',
     roleAssignment: '角色申请',
     virtualGroupJoin: '加入虚拟组',
     businessUnitRole: '业务单元角色',
