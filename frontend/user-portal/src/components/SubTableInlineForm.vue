@@ -2,13 +2,21 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PortalFormFields, { type PortalSubTableBindingLite } from './PortalFormFields.vue'
-import type { FormField } from './formRendererHelpers'
+import { flattenLeafFormFields, type FormField } from './formRendererHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import {
+  useSubTableDialogComponentEvents,
+  type DialogColumnWithEvents,
+} from '@/composables/subTableAddDialog/useSubTableDialogComponentEvents'
 
 /**
  * Inline form rendered **below** a SubTableField when the designer chose
  * portalViews.assigneeTodo = 'formBelowTable'. Nested subTable widgets use
  * {@link PortalFormFields} so structure matches Developer Workstation preview.
+ *
+ * Form Design Events reuse the Add/Edit dialog runtime (same subset: Form
+ * onCreated/onMounted/onChange/onReload/beforeSubmit/onSubmit/onReset and
+ * field change/blur + hook load/mounted/value).
  */
 
 interface Props {
@@ -27,6 +35,10 @@ interface Props {
   hostTaskId?: string
   hostPrimaryFormData?: Record<string, unknown>
   hostPrimaryTableId?: number | null
+  /** Sub-form Form Design options — Form-level onCreated / onMounted / onChange. */
+  formOptions?: Record<string, unknown> | null
+  /** Canvas columns from the source binding — sourceRule fallback when FormField has none. */
+  dialogColumns?: DialogColumnWithEvents[] | Array<Record<string, unknown>> | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -46,26 +58,116 @@ const { t } = useI18n()
 
 const rowModel = ref<Record<string, unknown>>({})
 
+/**
+ * Stable row id for bootstrap. Prefer business keys (`row_id` / `sub_task_id`)
+ * before allocated `id` / `id_idw` — otherwise PK allocation changes the identity
+ * string, rebootstrap copies the parent snapshot, and in-progress Y/N is dropped.
+ */
+function inlineFormRowIdentity(row: Record<string, unknown> | null | undefined): string {
+  if (!row) return ''
+  for (const k of ['row_id', 'sub_task_id', 'id', 'id_idw']) {
+    const v = row[k]
+    if (v != null && String(v).trim() !== '') return `${k}:${String(v)}`
+  }
+  return ''
+}
+
+function formOptionsEventFingerprint(options: Record<string, unknown> | null | undefined): string {
+  if (!options || typeof options !== 'object') return ''
+  return ['onChange', 'onMounted', 'onCreated', 'onReload', 'beforeSubmit']
+    .map((k) => String(options[k] ?? ''))
+    .join('\0')
+}
+
+function eventColumnsFromInlineForm(): DialogColumnWithEvents[] {
+  const dialogByField = new Map<string, DialogColumnWithEvents>()
+  for (const col of props.dialogColumns ?? []) {
+    if (!col || typeof col !== 'object') continue
+    const field = String((col as DialogColumnWithEvents).field ?? '').trim()
+    if (!field) continue
+    dialogByField.set(field, col as DialogColumnWithEvents)
+  }
+  return flattenLeafFormFields(props.fields)
+    .filter(f => typeof f.key === 'string' && f.key.length > 0 && !f.key.startsWith('__'))
+    .map((f) => {
+      const d = dialogByField.get(f.key)
+      return {
+        field: f.key,
+        label: f.label,
+        type: f.type,
+        hidden: f.hidden === true || d?.hidden === true,
+        sourceRule: f.sourceRule ?? d?.sourceRule,
+      }
+    })
+}
+
+const {
+  onDialogFieldChange,
+  onDialogFieldBlur,
+  isDialogFieldVisible,
+  resetDialogEventVisibility,
+  bootstrapDialogFormLifecycle,
+  runFormOnReload,
+  runFormBeforeSubmit,
+  runFormOnSubmit,
+  runFormOnReset,
+} = useSubTableDialogComponentEvents(
+  rowModel,
+  eventColumnsFromInlineForm,
+  () => props.formOptions,
+)
+
+/**
+ * Bind rowModel + Event bootstrap only when the selected row changes.
+ * `getCurrentRowForInlineForm` returns a new object every parent render — copying
+ * that snapshot back (and emitting it) was overwriting in-progress Y/N edits and
+ * triggering sub-table autosave of the page-load value, so Save/reload showed N again.
+ * Dialog Event runtime also keeps bootstrap mutations local until the user confirms.
+ */
 watch(
-  () => props.currentRow,
-  r => {
+  () => inlineFormRowIdentity(props.currentRow),
+  (nextId, prevId) => {
+    const r = props.currentRow
     rowModel.value = r != null && typeof r === 'object' ? { ...r } : {}
+    resetDialogEventVisibility()
+    if (!r) {
+      if (prevId) runFormOnReset()
+      return
+    }
+    bootstrapDialogFormLifecycle()
+    if (prevId) runFormOnReload()
   },
-  { immediate: true, deep: true },
+  { immediate: true },
+)
+
+watch(
+  () => formOptionsEventFingerprint(props.formOptions),
+  (next, prev) => {
+    if (!next || next === prev) return
+    if (!inlineFormRowIdentity(props.currentRow) && !props.currentRow) return
+    resetDialogEventVisibility()
+    if (props.currentRow) bootstrapDialogFormLifecycle()
+  },
 )
 
 function handleFieldUpdate(key: string, value: unknown) {
-  const merged = { ...rowModel.value, [key]: value }
-  rowModel.value = merged
-  emit('update:row', merged)
+  onDialogFieldChange(key, value)
+  emit('update:row', { ...rowModel.value })
   emit('change', key, value)
+}
+
+function handleFieldBlur(key: string) {
+  onDialogFieldBlur(key)
+  emit('update:row', { ...rowModel.value })
 }
 
 /** Flush row model into bindings before persist so Save allocates PK on the latest inline edits. */
 function handleSaveClick() {
+  if (!runFormBeforeSubmit()) return
   const merged = { ...rowModel.value }
   rowModel.value = merged
   emit('update:row', merged)
+  runFormOnSubmit()
   emit('save')
 }
 
@@ -103,7 +205,9 @@ const cardTitle = computed(() =>
           :host-task-id="hostTaskId"
           :host-primary-form-data="hostPrimaryFormData"
           :host-primary-table-id="hostPrimaryTableId ?? null"
+          :is-field-visible="isDialogFieldVisible"
           @update:field="handleFieldUpdate"
+          @field-blur="handleFieldBlur"
         />
       </el-row>
       <el-empty

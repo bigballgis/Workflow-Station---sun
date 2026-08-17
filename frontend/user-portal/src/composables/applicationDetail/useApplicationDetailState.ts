@@ -35,6 +35,7 @@ export interface PreviousFormEntry {
     subMode?: string
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    dialogColumns?: Column[]
     assignmentConfig?: AssignmentConfig
     portalViews?: Record<string, any> | null
     primaryKeyFields?: string[]
@@ -119,6 +120,7 @@ export function createApplicationDetailState(options: {
     subMode?: string
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    dialogColumns?: Column[]
     assignmentConfig?: AssignmentConfig
     // Per-binding portalViews loaded from form configJson.subTablePortalViews[bindingId].
     portalViews?: Record<string, any> | null
@@ -183,6 +185,7 @@ export function createApplicationDetailState(options: {
     subMode?: string
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    dialogColumns?: Column[]
     assignmentConfig?: AssignmentConfig
     portalViews?: Record<string, any> | null
     primaryKeyFields?: string[]

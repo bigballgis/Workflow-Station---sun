@@ -151,7 +151,9 @@ export function rowResolvesDesignerPrimaryKey(
  *    merges snapshots that use only `id` with ones that attach a full `rowKey` map.
  * 2. Legacy `id` / `rowId` when no designer PK list — before bare `rowKey`, so mixed payloads dedupe.
  * 3. Flowable / platform `rowKey` object canonical string.
- * 4. Stable content fingerprint — when PK values are missing so rows are not dropped.
+ * 4. Designer `row_id` / `rowId` when `id` / `id_idw` were never allocated — same physical row
+ *    otherwise fingerprints as two rows (stale N vs saved Y) and form-below-table reopens as N.
+ * 5. Stable content fingerprint — when PK values are missing so rows are not dropped.
  */
 export function mergeSubTableRowsByRowId(
   existing: any[] | undefined,
@@ -295,6 +297,13 @@ export function mergeSubTableRowsByRowId(
       if (canon != null && canon !== '') {
         k = `__rowKey__${canon}`
       }
+    }
+
+    if (k == null) {
+      const rowId =
+        scalarForMergeKey(getRowValueIgnoreCase(o, 'row_id'))
+        ?? scalarForMergeKey(getRowValueIgnoreCase(o, 'rowId'))
+      if (rowId != null) k = `__row_id__${rowId}`
     }
 
     if (k == null) {
