@@ -38,7 +38,7 @@ public final class ComputedFieldTypeInference {
 
     private static final Set<String> NUMBER_FUNCTIONS = Set.of(
             "ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC", "ABS", "INT", "SQRT", "POWER", "MOD",
-            "LEN", "FIND", "VALUE");
+            "LEN", "FIND", "VALUE", "DATEDIFF");
 
     private static final Set<String> TEXT_FUNCTIONS = Set.of(
             "CONCAT", "TRIM", "UPPER", "LOWER", "LEFT", "RIGHT", "MID", "SUBSTITUTE");
@@ -87,10 +87,15 @@ public final class ComputedFieldTypeInference {
                 return ResultKind.NUMBER;
             case "unary":
                 return ResultKind.NUMBER;
-            case "field":
-                return fieldResolver == null
-                        ? ResultKind.UNKNOWN
-                        : orUnknown(fieldResolver.apply(node.path("name").asText("")));
+            case "field": {
+                String table = node.path("table").asText("");
+                String name = node.path("name").asText("");
+                if (fieldResolver == null) {
+                    return ResultKind.UNKNOWN;
+                }
+                String key = table.isBlank() ? name : table + "." + name;
+                return orUnknown(fieldResolver.apply(key));
+            }
             case "binary":
                 return COMPARISON_OPERATORS.contains(node.path("op").asText(""))
                         ? ResultKind.BOOLEAN

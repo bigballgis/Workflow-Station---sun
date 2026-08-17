@@ -1,6 +1,7 @@
 package com.portal.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
 import com.portal.component.MainTableViewInvolvementChecker;
@@ -60,6 +61,9 @@ class PortalMainTableViewImportTest {
     @Mock
     private ProcessComponent processComponent;
 
+    @Mock
+    private ComputedFieldRecalculator computedFieldRecalculator;
+
     private PortalMainTableViewServiceImpl service;
 
     @BeforeEach
@@ -73,7 +77,8 @@ class PortalMainTableViewImportTest {
                 accessResolver,
                 mainTableViewInvolvementChecker,
                 processInstanceRepository,
-                processComponent);
+                processComponent,
+                computedFieldRecalculator);
         when(functionUnitAccessComponent.canAccessFunctionUnit(USER_ID, FU_CODE)).thenReturn(true);
         when(functionUnitAccessComponent.isFunctionUnitEnabled(FU_CODE)).thenReturn(true);
         when(functionUnitAccessComponent.isSystemAdministrator(USER_ID)).thenReturn(true);

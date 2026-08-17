@@ -598,6 +598,153 @@
       "formula": "IF(TRUE, 1, 2)",
       "row": {},
       "expect": "1"
+    },
+    {
+      "name": "date subtraction is whole calendar days (left minus right)",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-01-02", "start_date": "2026-01-01" },
+      "expect": "1"
+    },
+    {
+      "name": "date subtraction can be negative",
+      "formula": "start_date - end_date",
+      "row": { "end_date": "2026-01-02", "start_date": "2026-01-01" },
+      "expect": "-1"
+    },
+    {
+      "name": "same calendar day difference is zero",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-01-01", "start_date": "2026-01-01" },
+      "expect": "0"
+    },
+    {
+      "name": "date subtraction crosses a year boundary",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-01-01", "start_date": "2025-12-31" },
+      "expect": "1"
+    },
+    {
+      "name": "ISO timestamps subtract by calendar date, ignoring time",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-01-02T15:00:00Z", "start_date": "2026-01-01T23:59:59Z" },
+      "expect": "1"
+    },
+    {
+      "name": "slash-separated year-first dates subtract as whole days",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026/06/02", "start_date": "2026/06/01" },
+      "expect": "1"
+    },
+    {
+      "name": "slash dates with a time suffix still subtract as whole days",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026/06/02 18:30:00", "start_date": "2026/06/01 00:00:00" },
+      "expect": "1"
+    },
+    {
+      "name": "hyphen dates with a space-separated time suffix ignore the clock",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-06-02 18:30:00", "start_date": "2026-06-01 00:00:00" },
+      "expect": "1"
+    },
+    {
+      "name": "dot-separated year-first dates subtract as whole days",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026.06.02", "start_date": "2026.06.01" },
+      "expect": "1"
+    },
+    {
+      "name": "unpadded month and day are accepted when the year comes first",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026/6/2", "start_date": "2026/6/1" },
+      "expect": "1"
+    },
+    {
+      "name": "day-first slash dates stay TYPE_MISMATCH (ambiguous)",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "02/06/2026", "start_date": "01/06/2026" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "VALUE still refuses a slash date string",
+      "formula": "VALUE(note)",
+      "row": { "note": "2026/06/02" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "impossible slash calendar date is not a date",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026/02/29", "start_date": "2026/01/01" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "DATEDIFF is Power Fx order: end minus start",
+      "formula": "DATEDIFF(start_date, end_date)",
+      "row": { "end_date": "2026-01-02", "start_date": "2026-01-01" },
+      "expect": "1"
+    },
+    {
+      "name": "DATEDIFF reversed arguments is negative",
+      "formula": "DATEDIFF(end_date, start_date)",
+      "row": { "end_date": "2026-01-02", "start_date": "2026-01-01" },
+      "expect": "-1"
+    },
+    {
+      "name": "VALUE still refuses a date string",
+      "formula": "VALUE(note)",
+      "row": { "note": "2026-01-02" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "numeric subtraction is unchanged next to dates",
+      "formula": "price - quantity",
+      "row": { "price": "10", "quantity": "3" },
+      "expect": "7"
+    },
+    {
+      "name": "non-date text subtraction stays TYPE_MISMATCH",
+      "formula": "left - right",
+      "row": { "left": "abc", "right": "def" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "date minus a number is TYPE_MISMATCH",
+      "formula": "end_date - 1",
+      "row": { "end_date": "2026-01-02" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "impossible calendar date is not a date",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-02-29", "start_date": "2026-01-01" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "sub-table formula reads a main-table text column",
+      "formula": "leave_request.name",
+      "row": {},
+      "parents": { "leave_request": { "name": "Vin" } },
+      "expect": "Vin"
+    },
+    {
+      "name": "LEN of a main-table text column",
+      "formula": "LEN(leave_request.name)",
+      "row": {},
+      "parents": { "leave_request": { "name": "Vin" } },
+      "expect": "3"
+    },
+    {
+      "name": "qualified field without a parent row is UNKNOWN_TABLE",
+      "formula": "leave_request.name",
+      "row": {},
+      "expectError": "UNKNOWN_TABLE"
+    },
+    {
+      "name": "SUM still treats table.column as an aggregate, not a parent field",
+      "formula": "SUM(date_info.day)",
+      "row": {},
+      "subTables": { "date_info": [{ "day": "2" }, { "day": "3" }] },
+      "expect": "5"
     }
   ],
   "syntaxErrorCases": [
@@ -608,8 +755,8 @@
     { "name": "stray character", "formula": "1 # 2", "expectError": "SYNTAX_ERROR" },
     { "name": "trailing input after a complete expression", "formula": "1 2", "expectError": "SYNTAX_ERROR" },
     {
-      "name": "qualified reference outside an aggregate",
-      "formula": "request_items.amount",
+      "name": "qualified reference missing the column name",
+      "formula": "leave_request.",
       "expectError": "SYNTAX_ERROR"
     },
     {

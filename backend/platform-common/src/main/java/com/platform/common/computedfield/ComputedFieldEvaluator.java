@@ -101,7 +101,16 @@ public final class ComputedFieldEvaluator {
 
     private static EvalOutcome field(JsonNode node, ComputedFieldContext context) {
         String name = node.path("name").asText("");
-        return EvalOutcome.ok(ComputedValues.fromRowValue(context.fieldValue(name)));
+        String table = node.path("table").asText("");
+        if (table.isBlank()) {
+            return EvalOutcome.ok(ComputedValues.fromRowValue(context.fieldValue(name)));
+        }
+        Map<String, Object> parent = context.parentRow(table);
+        if (parent == null) {
+            return EvalOutcome.error(ComputedFieldErrorCode.UNKNOWN_TABLE,
+                    "Parent table '" + table + "' is not present on this record");
+        }
+        return EvalOutcome.ok(ComputedValues.fromRowValue(parent.get(name)));
     }
 
     private static EvalOutcome aggregate(JsonNode node, ComputedFieldContext context) {
@@ -240,6 +249,12 @@ public final class ComputedFieldEvaluator {
             };
             return EvalOutcome.ok(ComputedValue.of(result));
         }
+        if ("-".equals(op)) {
+            EvalOutcome dateDiff = tryCalendarDateSubtract(leftOk.value(), rightOk.value());
+            if (dateDiff != null) {
+                return dateDiff;
+            }
+        }
         Object a = ComputedValues.toNumber(leftOk.value(), "Operator '" + op + "'");
         if (a instanceof EvalOutcome failure) {
             return failure;
@@ -269,6 +284,16 @@ public final class ComputedFieldEvaluator {
                 return EvalOutcome.error(ComputedFieldErrorCode.UNSUPPORTED_NODE,
                         "Unsupported operator '" + op + "'");
         }
+    }
+
+    /** Whole-day difference when both sides are calendar dates; otherwise null so '-' stays numeric. */
+    private static EvalOutcome tryCalendarDateSubtract(ComputedValue left, ComputedValue right) {
+        Long leftDay = ComputedFieldDates.epochDay(left);
+        Long rightDay = ComputedFieldDates.epochDay(right);
+        if (leftDay == null || rightDay == null) {
+            return null;
+        }
+        return EvalOutcome.ok(ComputedValue.of(BigDecimal.valueOf(leftDay - rightDay)));
     }
 
     private static EvalOutcome call(JsonNode node, ComputedFieldContext context, int depth) {

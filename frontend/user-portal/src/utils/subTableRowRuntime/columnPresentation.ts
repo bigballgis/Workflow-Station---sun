@@ -8,6 +8,7 @@ import {
   isFkHidden,
   isFkReadonly,
 } from '../tableFkRuntime'
+import { applyComputedReadonlyToFormFields, isComputedColumn } from '../computedFieldRuntime'
 import { pkAllocationYieldsString, pkNeedsAllocation } from './pkPredicates'
 import type { BindingFieldDefinition } from './types'
 
@@ -39,6 +40,9 @@ export function applyFkPresentationToDialogColumns(
     const fieldDef = fieldByName.get(col.field)
     if (fieldDef) {
       next = applyAutoPkColumnPresentation(next, fieldDef)
+      if (isComputedColumn(fieldDef)) {
+        next = { ...next, readonly: true }
+      }
     }
     return next
   })
@@ -49,18 +53,24 @@ export function applyFkPresentationToDialogColumns(
   return { visibleColumns, allColumns }
 }
 
-/** Inline / modal subForm fields: auto-PK and string FK values must not use el-input-number. */
+/**
+ * Inline / modal subForm fields: auto-PK and string FK values must not use el-input-number, and a
+ * computed column must not be editable at all — the server overwrites whatever is typed there on
+ * every write, so an editable input would only promise an edit it cannot keep.
+ */
 export function applyFieldDefinitionsToFormFields<
   T extends { key: string; type?: string; readonly?: boolean },
 >(fields: T[], fieldDefinitions?: BindingFieldDefinition[] | null): T[] {
   const fieldByName = new Map((fieldDefinitions ?? []).map(f => [f.fieldName, f]))
-  return fields.map(field => {
+  const withPkPresentation = fields.map(field => {
     const def = fieldByName.get(field.key)
     if (!def) return field
-    let next = { ...field }
-    if (next.type === 'number' && pkNeedsAllocation(def) && pkAllocationYieldsString(def)) {
-      next = { ...next, type: 'text', readonly: true }
+    if (field.type === 'number' && pkNeedsAllocation(def) && pkAllocationYieldsString(def)) {
+      return { ...field, type: 'text', readonly: true }
     }
-    return next
+    return field
   })
+  // Single owner of the computed ⇒ read-only decision, and the only pass that descends into
+  // layout containers (a computed input nested in a card must not stay editable).
+  return applyComputedReadonlyToFormFields(withPkPresentation, fieldDefinitions)
 }

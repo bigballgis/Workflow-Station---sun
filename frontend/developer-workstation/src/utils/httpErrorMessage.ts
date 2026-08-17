@@ -63,6 +63,21 @@ export function pickHttpErrorBodyMessage(data: unknown): string | undefined {
   return undefined
 }
 
+/** Machine code from ApiResponse.error.code / errorCode, when the body is a platform error. */
+export function pickHttpErrorCode(data: unknown): string | undefined {
+  if (data == null || typeof data !== 'object') return undefined
+  const o = data as Record<string, unknown>
+  const err = o.error
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>
+    if (typeof e.code === 'string' && e.code.trim()) return e.code.trim()
+    if (typeof e.errorCode === 'string' && e.errorCode.trim()) return e.errorCode.trim()
+  }
+  if (typeof o.code === 'string' && o.code.trim()) return o.code.trim()
+  if (typeof o.errorCode === 'string' && o.errorCode.trim()) return o.errorCode.trim()
+  return undefined
+}
+
 const AXIOS_STATUS_ONLY = /^Request failed with status code \d+$/i
 
 /** Kong upstream DNS failure after backend container recreate (raw body: "name resolution failed"). */

@@ -90,6 +90,20 @@ public class RelationFieldDefinition {
     @Column(name = "lookup_config", columnDefinition = "jsonb")
     private Map<String, Object> lookupConfig;
 
+    /** Whether this column is derived from a formula instead of user input (read-only in forms). */
+    @Column(name = "is_computed")
+    @Builder.Default
+    private Boolean isComputed = false;
+
+    /**
+     * Computed field definition: version, scope, source text, validated AST, dependsOn, onError.
+     * Validated by {@code RelationComputedFieldValidator} before persisting; the AST is the
+     * evaluation authority.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "computed_field_json", columnDefinition = "jsonb")
+    private Map<String, Object> computedFieldJson;
+
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
 }

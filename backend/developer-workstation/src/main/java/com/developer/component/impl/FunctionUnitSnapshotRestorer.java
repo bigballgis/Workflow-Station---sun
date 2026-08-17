@@ -399,6 +399,7 @@ public class FunctionUnitSnapshotRestorer {
     }
 
     private static FieldDefinition buildLegacyField(TableDefinition table, Map<String, Object> fieldSnap) {
+        rejectComputedOnLegacyPath(fieldSnap);
         return FieldDefinition.builder()
                 .tableDefinition(table)
                 .fieldName((String) fieldSnap.get("fieldName"))
@@ -416,6 +417,21 @@ public class FunctionUnitSnapshotRestorer {
                 .displayName((String) fieldSnap.get("displayName"))
                 .sortOrder(fieldSnap.get("sortOrder") != null ? ((Number) fieldSnap.get("sortOrder")).intValue() : 0)
                 .build();
+    }
+
+    /**
+     * Pre-v2 snapshots never carried computed fields. Restoring one that claims to must fail
+     * rather than persist a formula through this incomplete path (no AST remap, no validator).
+     * Re-publish the FU so rollback uses the export-format snapshot (schema v2 / {@code tables}).
+     */
+    static void rejectComputedOnLegacyPath(Map<String, Object> fieldSnap) {
+        if (fieldSnap == null) {
+            return;
+        }
+        if (Boolean.TRUE.equals(fieldSnap.get("isComputed")) || fieldSnap.get("computedField") != null) {
+            throw new DeveloperBusinessException("COMPUTED_FIELD_LEGACY_PATH",
+                    "Legacy snapshots cannot restore computed fields; publish or re-export the Function Unit first");
+        }
     }
 
     @SuppressWarnings("unchecked")

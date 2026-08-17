@@ -2,6 +2,7 @@ package com.portal.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
 import com.portal.component.MainTableViewAccessResolver.AccessRule;
@@ -54,6 +55,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private final MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessComponent processComponent;
+    private final ComputedFieldRecalculator computedFieldRecalculator;
 
     @Override
     @Transactional(readOnly = true)
@@ -306,6 +308,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 }
             }
             if (changed) {
+                computedFieldRecalculator.recalculate(pi.getFunctionUnitCode(), vars);
                 pi.setVariables(vars);
                 processInstanceRepository.save(pi);
                 updated++;

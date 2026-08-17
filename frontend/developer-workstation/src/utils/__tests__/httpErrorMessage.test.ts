@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isGatewayUpstreamDnsFailure,
   pickHttpErrorBodyMessage,
+  pickHttpErrorCode,
   resolveUserFacingHttpMessage,
 } from '@/utils/httpErrorMessage'
 
@@ -26,5 +27,19 @@ describe('httpErrorMessage', () => {
     expect(pickHttpErrorBodyMessage({ message: 'name resolution failed' })).toBe(
       'name resolution failed',
     )
+  })
+
+  it('reads platform ApiResponse.error message and code', () => {
+    const body = {
+      success: false,
+      error: {
+        code: 'COMPUTED_FIELD_TYPE_MISMATCH',
+        message: "Computed field 'day' produces a number but the column is declared as VARCHAR.",
+      },
+    }
+    expect(pickHttpErrorBodyMessage(body)).toBe(
+      "Computed field 'day' produces a number but the column is declared as VARCHAR.",
+    )
+    expect(pickHttpErrorCode(body)).toBe('COMPUTED_FIELD_TYPE_MISMATCH')
   })
 })

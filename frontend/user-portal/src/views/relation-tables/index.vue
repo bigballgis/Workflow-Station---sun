@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-container">
     <div class="page-header">
       <span class="page-title">Relation Tables</span>
@@ -226,6 +226,7 @@
           :key="field.fieldName"
           :label="field.displayName || field.fieldName"
           :required="field.nullable === false || field.isPrimaryKey"
+          :error="computedFieldErrorText[field.fieldName]"
         >
           <template v-if="field.dataType === 'LOOKUP'">
             <LookupField
@@ -252,14 +253,14 @@
           <el-switch
             v-else-if="field.dataType === 'BOOLEAN'"
             v-model="formData[field.fieldName]"
-            :disabled="isPkDisabled(field)"
+            :disabled="isFieldDisabled(field)"
           />
           <el-input-number
             v-else-if="['INTEGER', 'BIGINT', 'DECIMAL'].includes(field.dataType)"
             v-model="formData[field.fieldName]"
             :precision="field.dataType === 'DECIMAL' ? (field.scale || 2) : 0"
             style="width: 100%;"
-            :disabled="isPkDisabled(field)"
+            :disabled="isFieldDisabled(field)"
           />
           <el-date-picker
             v-else-if="field.dataType === 'DATE'"
@@ -267,7 +268,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             style="width: 100%;"
-            :disabled="isPkDisabled(field)"
+            :disabled="isFieldDisabled(field)"
           />
           <el-date-picker
             v-else-if="field.dataType === 'TIMESTAMP'"
@@ -275,13 +276,13 @@
             type="datetime"
             value-format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%;"
-            :disabled="isPkDisabled(field)"
+            :disabled="isFieldDisabled(field)"
           />
           <el-input
             v-else
             v-model="formData[field.fieldName]"
             :maxlength="field.length || undefined"
-            :disabled="isPkDisabled(field)"
+            :disabled="isFieldDisabled(field)"
           />
         </el-form-item>
       </el-form>
@@ -389,7 +390,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { Search, Download, Plus, Upload, ArrowDown, Expand, Fold } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -398,9 +400,11 @@ import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
 import LookupField from '@/components/lookup/LookupField.vue'
 import LookupViewDisplay from '@/components/lookup/LookupViewDisplay.vue'
 import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, formatRelationCellDisplay, type FieldLike } from '@/components/lookup/useLookupBehaviors'
+import { collectComputedColumns, previewComputedRow } from '@/utils/computedFieldRuntime'
 
 const SYSTEM_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
 
+const { t } = useI18n()
 const route = useRoute()
 
 const tableListLoading = ref(false)
@@ -618,6 +622,61 @@ const isPkDisabled = (f: RelationFieldDef): boolean => {
   return pkStrategy(f) !== 'manual'
 }
 
+/** Computed columns join primary keys as fields the user may see but not type into. */
+const isFieldDisabled = (f: RelationFieldDef): boolean => isPkDisabled(f) || f.isComputed === true
+
+// ---- Computed (formula) columns ----
+// The server recomputes these on every write; previewing keeps the dialog in step with the save.
+// Relation tables have no sub-tables, so every formula here is row scope.
+const computedColumns = computed(() =>
+  collectComputedColumns(
+    fieldDefs.value.map(f => ({
+      fieldName: f.fieldName,
+      isComputed: f.isComputed,
+      computedField: f.computedField,
+    })),
+  ),
+)
+
+/** fieldName → error code for formulas the server would refuse to save. */
+const computedFieldErrors = ref<Record<string, string>>({})
+
+const recomputeComputedColumns = (): void => {
+  if (!computedColumns.value.length) return
+  const preview = previewComputedRow(computedColumns.value, formData.value, {})
+  for (const [fieldName, value] of Object.entries(preview.values)) {
+    formData.value[fieldName] = value
+  }
+  for (const fieldName of Object.keys(preview.errors)) {
+    formData.value[fieldName] = null
+  }
+  computedFieldErrors.value = preview.errors
+}
+
+const computedFieldErrorText = computed<Record<string, string>>(() => {
+  const messages: Record<string, string> = {}
+  for (const [field, code] of Object.entries(computedFieldErrors.value)) {
+    messages[field] = t('computedField.evaluationFailed', { code })
+  }
+  return messages
+})
+
+// Stable primitive getter: joining the dependency values avoids a deep traversal of the whole row.
+watch(
+  () => {
+    if (!computedColumns.value.length) return ''
+    const parts: string[] = []
+    for (const column of computedColumns.value) {
+      for (const dep of column.definition?.dependsOn ?? []) {
+        if (dep.includes('.')) continue
+        parts.push(`${dep}=${String(formData.value[dep] ?? '')}`)
+      }
+    }
+    return parts.join('|')
+  },
+  () => { recomputeComputedColumns() },
+)
+
 // ---- LOOKUP fields ----
 const fieldsAsLike = (): FieldLike[] =>
   editableFields.value.map(f => ({ fieldName: f.fieldName, dataType: f.dataType, lookupConfig: f.lookupConfig }))
@@ -669,6 +728,8 @@ const openAddDialog = async () => {
     fd[f.fieldName] = f.dataType === 'BOOLEAN' ? false : (f.dataType === 'LOOKUP' && f.lookupConfig?.multiple ? [] : null)
   }
   formData.value = fd
+  computedFieldErrors.value = {}
+  recomputeComputedColumns()
   dialogVisible.value = true
   // Auto-generate PK values per strategy (skip manual, which the user types).
   try {
@@ -692,11 +753,16 @@ const openEditDialog = (row: Record<string, any>) => {
     fd[f.fieldName] = row[f.fieldName] ?? null
   }
   formData.value = fd
+  computedFieldErrors.value = {}
+  recomputeComputedColumns()
   dialogVisible.value = true
 }
 
 const handleSaveRecord = async () => {
   if (!selectedTableId.value) return
+  // A formula the server refuses to evaluate would make the whole write fail; the inline error is
+  // already on the offending field, so stop here instead of round-tripping to a rejection.
+  if (Object.keys(computedFieldErrors.value).length > 0) return
   saving.value = true
   try {
     const lookupCfgByField = new Map<string, LookupConfig>()

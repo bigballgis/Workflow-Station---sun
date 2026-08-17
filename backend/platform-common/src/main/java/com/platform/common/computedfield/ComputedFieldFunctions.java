@@ -36,6 +36,7 @@ public final class ComputedFieldFunctions {
         Map<String, ComputedFieldFunction> functions = new LinkedHashMap<>();
         functions.putAll(ComputedFieldMathFunctions.create());
         functions.putAll(ComputedFieldTextFunctions.create());
+        functions.putAll(ComputedFieldDateFunctions.create());
         functions.put("NOT", ComputedFieldFunctions::not);
         return Collections.unmodifiableMap(functions);
     }

@@ -1,15 +1,10 @@
 package com.portal.component;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.platform.common.computedfield.ComputedFieldAstValidator;
 import com.platform.common.computedfield.ComputedFieldContext;
-import com.platform.common.computedfield.ComputedFieldEvaluator;
-import com.platform.common.computedfield.ComputedValue;
-import com.platform.common.computedfield.EvalOutcome;
 import com.platform.common.computedfield.SubTableNormalizer;
 import com.platform.common.computedfield.SubTableNormalizer.SliceIdentity;
-import com.portal.exception.PortalException;
+import com.portal.component.ComputedFieldRowEvaluation.FieldMeta;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,17 +12,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Server-side authority for computed (formula) field values in process variables.
@@ -93,7 +84,10 @@ public class ComputedFieldRecalculator {
      *
      * @param functionUnitIdOrCode function unit id or code, as carried on the process instance
      * @param variables            process variables to recompute into; mutated in place
-     * @throws PortalException when a formula fails and its {@code onError} mode is {@code fail}
+     * @throws com.portal.exception.PortalException when a formula fails and its {@code onError}
+     *                                              mode is {@code fail}, when a stored definition
+     *                                              is unusable, or when the Function Unit cannot
+     *                                              be resolved
      */
     public void recalculate(String functionUnitIdOrCode, Map<String, Object> variables) {
         if (!enabled || variables == null || variables.isEmpty()) {
@@ -102,19 +96,18 @@ public class ComputedFieldRecalculator {
         if (!hasAnyComputedField()) {
             return;
         }
-        Long functionUnitId = resolveFunctionUnitIdOrNull(functionUnitIdOrCode);
-        if (functionUnitId == null) {
-            log.debug("Skip computed field recalculation: function unit not resolved for {}",
-                    functionUnitIdOrCode);
+        if (functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
             return;
         }
+        Long functionUnitId = portalPrimaryKeyAllocationComponent
+                .resolveFunctionUnitIdForAllocation(functionUnitIdOrCode);
         FuComputedFields metadata = metadataFor(functionUnitId);
         if (metadata.isEmpty()) {
             return;
         }
         Map<String, List<Map<String, Object>>> subTables =
                 recalculateSubTableRows(variables, metadata);
-        applyFields(metadata.mainFields(), variables,
+        ComputedFieldRowEvaluation.applyFields(metadata.mainFields(), variables,
                 new ComputedFieldContext(variables, subTables));
     }
 
@@ -163,7 +156,7 @@ public class ComputedFieldRecalculator {
                 if (identity == null || identity.tableId() == null) {
                     continue;
                 }
-                List<ComputedFieldMeta> fields =
+                List<FieldMeta> fields =
                         metadata.subFieldsByTableId().get(toLong(identity.tableId()));
                 if (fields == null || fields.isEmpty() || !(slice.getValue() instanceof List<?> rows)) {
                     continue;
@@ -171,69 +164,13 @@ public class ComputedFieldRecalculator {
                 for (Object row : rows) {
                     if (row instanceof Map<?, ?> rowMap) {
                         Map<String, Object> typed = (Map<String, Object>) rowMap;
-                        applyFields(fields, typed, ComputedFieldContext.ofRow(typed));
+                        ComputedFieldRowEvaluation.applyFields(
+                                fields, typed, ComputedFieldContext.ofRow(typed, metadata.parentRows(variables)));
                     }
                 }
             }
         }
         return SubTableNormalizer.normalize(slices, metadata::identify);
-    }
-
-    /** Evaluates fields in dependency order and writes each result into the target map. */
-    private void applyFields(List<ComputedFieldMeta> fields,
-                             Map<String, Object> target,
-                             ComputedFieldContext context) {
-        for (ComputedFieldMeta field : fields) {
-            EvalOutcome outcome = ComputedFieldEvaluator.evaluate(field.ast(), context);
-            if (outcome instanceof EvalOutcome.Success success) {
-                target.put(field.fieldName(), toStoredValue(success.value()));
-                continue;
-            }
-            EvalOutcome.Failure failure = (EvalOutcome.Failure) outcome;
-            String detail = "Computed field '" + field.fieldName() + "' failed: "
-                    + failure.error().code() + " " + failure.error().message();
-            if (field.failOnError()) {
-                throw new PortalException("COMPUTED_FIELD_EVALUATION_FAILED", detail);
-            }
-            // onError=null is the designer's explicit choice to store a blank instead of blocking
-            // the submission. Still logged with the field name, because Power Platform's silent
-            // blank on failure is precisely the diagnosability problem this feature exists to fix.
-            log.warn("{}; storing blank because onError=null", detail);
-            target.put(field.fieldName(), null);
-        }
-    }
-
-    /**
-     * Converts an evaluated value into what goes into the variable map.
-     *
-     * <p>Numbers stay {@link BigDecimal} rather than being rounded to the column's scale: the
-     * browser preview would have to round identically or the two ends would visibly disagree, and
-     * that shared rounding contract does not exist yet. Storing the exact result also keeps a BPMN
-     * gateway comparing a real number rather than a string.
-     */
-    private Object toStoredValue(ComputedValue value) {
-        if (value instanceof ComputedValue.Number number) {
-            return number.value();
-        }
-        if (value instanceof ComputedValue.Text text) {
-            return text.value();
-        }
-        if (value instanceof ComputedValue.Bool bool) {
-            return bool.value();
-        }
-        return null;
-    }
-
-    private Long resolveFunctionUnitIdOrNull(String functionUnitIdOrCode) {
-        if (functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
-            return null;
-        }
-        try {
-            return portalPrimaryKeyAllocationComponent
-                    .resolveFunctionUnitIdForAllocation(functionUnitIdOrCode);
-        } catch (PortalException e) {
-            return null;
-        }
     }
 
     private FuComputedFields metadataFor(Long functionUnitId) {
@@ -267,89 +204,27 @@ public class ComputedFieldRecalculator {
             return FuComputedFields.EMPTY;
         }
 
-        List<ComputedFieldMeta> main = new ArrayList<>();
-        Map<Long, List<ComputedFieldMeta>> subByTable = new LinkedHashMap<>();
+        String mainTableName = null;
+        List<FieldMeta> main = new ArrayList<>();
+        Map<Long, List<FieldMeta>> subByTable = new LinkedHashMap<>();
         for (RawField field : raw) {
-            ComputedFieldMeta meta = toMeta(field);
-            if (meta == null) {
-                continue;
+            if ("MAIN".equalsIgnoreCase(field.tableType()) && mainTableName == null) {
+                mainTableName = field.tableName();
             }
+            FieldMeta meta = ComputedFieldRowEvaluation.toMeta(field.fieldName(),
+                    ComputedFieldRowEvaluation.parseJsonMap(objectMapper, field.json(), field.fieldName()));
             if ("MAIN".equalsIgnoreCase(field.tableType())) {
                 main.add(meta);
             } else {
                 subByTable.computeIfAbsent(field.tableId(), k -> new ArrayList<>()).add(meta);
             }
         }
-        main = orderByDependency(main);
-        subByTable.replaceAll((tableId, fields) -> orderByDependency(fields));
-        return new FuComputedFields(main, subByTable, loadSliceIdentities(functionUnitId));
-    }
-
-    private ComputedFieldMeta toMeta(RawField field) {
-        Map<String, Object> definition = parseJsonMap(field.json());
-        if (definition.isEmpty()) {
-            log.warn("Field '{}' is marked computed but has no definition; skipping it",
-                    field.fieldName());
-            return null;
+        if (mainTableName == null) {
+            mainTableName = loadMainTableName(functionUnitId);
         }
-        Object rawAst = definition.get("ast");
-        if (!(rawAst instanceof Map<?, ?> astMap) || astMap.isEmpty()) {
-            log.warn("Computed field '{}' has no AST; skipping it", field.fieldName());
-            return null;
-        }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> ast = (Map<String, Object>) astMap;
-        // Dependencies are re-derived from the tree rather than read from the stored dependsOn,
-        // so an edited row cannot make a field claim it depends on nothing and be evaluated first.
-        Set<String> dependencies = ComputedFieldAstValidator.validate(ast).fieldDependencies();
-        boolean failOnError = !"null".equals(String.valueOf(definition.get("onError")));
-        return new ComputedFieldMeta(field.fieldName(), ast, dependencies, failOnError);
-    }
-
-    /**
-     * Orders fields so a formula runs after the formulas it reads.
-     *
-     * <p>The design-time validator rejects cycles, but this reads persisted rows that could have
-     * been edited around it, so an unresolvable order is reported rather than looped on.
-     */
-    private List<ComputedFieldMeta> orderByDependency(List<ComputedFieldMeta> fields) {
-        Map<String, ComputedFieldMeta> byName = new LinkedHashMap<>();
-        for (ComputedFieldMeta field : fields) {
-            byName.put(field.fieldName().toLowerCase(Locale.ROOT), field);
-        }
-        List<ComputedFieldMeta> ordered = new ArrayList<>(fields.size());
-        Set<String> placed = new HashSet<>();
-        Set<String> visiting = new LinkedHashSet<>();
-        for (ComputedFieldMeta field : fields) {
-            visit(field, byName, placed, visiting, ordered);
-        }
-        return ordered;
-    }
-
-    private void visit(ComputedFieldMeta field,
-                       Map<String, ComputedFieldMeta> byName,
-                       Set<String> placed,
-                       Set<String> visiting,
-                       List<ComputedFieldMeta> ordered) {
-        String key = field.fieldName().toLowerCase(Locale.ROOT);
-        if (placed.contains(key)) {
-            return;
-        }
-        if (!visiting.add(key)) {
-            throw new PortalException("COMPUTED_FIELD_CIRCULAR_DEPENDENCY",
-                    "Computed fields form a dependency cycle: " + String.join(" -> ", visiting)
-                            + " -> " + key);
-        }
-        for (String dependency : field.dependencies()) {
-            ComputedFieldMeta upstream = byName.get(dependency.toLowerCase(Locale.ROOT));
-            // Plain columns are leaves: they already hold their value and need no ordering.
-            if (upstream != null) {
-                visit(upstream, byName, placed, visiting, ordered);
-            }
-        }
-        visiting.remove(key);
-        placed.add(key);
-        ordered.add(field);
+        main = ComputedFieldRowEvaluation.orderByDependency(main);
+        subByTable.replaceAll((tableId, fields) -> ComputedFieldRowEvaluation.orderByDependency(fields));
+        return new FuComputedFields(mainTableName, main, subByTable, loadSliceIdentities(functionUnitId));
     }
 
     /**
@@ -383,17 +258,22 @@ public class ComputedFieldRecalculator {
         return identities;
     }
 
-    private Map<String, Object> parseJsonMap(String json) {
-        if (json == null || json.isBlank()) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {
-            });
-        } catch (Exception e) {
-            log.warn("Unreadable computed_field_json, treating the field as undefined", e);
-            return Map.of();
-        }
+    /**
+     * Physical MAIN table name, used when this Function Unit only has computed fields on SUB
+     * tables so the field-metadata query never returned a MAIN row.
+     */
+    private String loadMainTableName(Long functionUnitId) {
+        List<String> names = jdbcTemplate.query(
+                """
+                SELECT table_name
+                FROM dw_table_definitions
+                WHERE function_unit_id = ? AND table_type = 'MAIN'
+                ORDER BY id
+                LIMIT 1
+                """,
+                (rs, rowNum) -> rs.getString("table_name"),
+                functionUnitId);
+        return names.isEmpty() ? null : names.get(0);
     }
 
     private static Long toLong(Object value) {
@@ -406,13 +286,6 @@ public class ComputedFieldRecalculator {
         return value == null ? null : Long.valueOf(String.valueOf(value));
     }
 
-    /** One computed field, ready to evaluate. */
-    private record ComputedFieldMeta(String fieldName,
-                                     Map<String, Object> ast,
-                                     Set<String> dependencies,
-                                     boolean failOnError) {
-    }
-
     /** A row of the metadata query, before the definition JSON is understood. */
     private record RawField(Long tableId,
                             String tableName,
@@ -422,15 +295,23 @@ public class ComputedFieldRecalculator {
     }
 
     /** Everything needed to recompute one Function Unit's records. */
-    private record FuComputedFields(List<ComputedFieldMeta> mainFields,
-                                    Map<Long, List<ComputedFieldMeta>> subFieldsByTableId,
+    private record FuComputedFields(String mainTableName,
+                                    List<FieldMeta> mainFields,
+                                    Map<Long, List<FieldMeta>> subFieldsByTableId,
                                     Map<String, SliceIdentity> sliceIdentities) {
 
         static final FuComputedFields EMPTY =
-                new FuComputedFields(List.of(), Map.of(), Map.of());
+                new FuComputedFields(null, List.of(), Map.of(), Map.of());
 
         boolean isEmpty() {
             return mainFields.isEmpty() && subFieldsByTableId.isEmpty();
+        }
+
+        Map<String, Map<String, Object>> parentRows(Map<String, Object> variables) {
+            if (mainTableName == null || mainTableName.isBlank() || variables == null) {
+                return Map.of();
+            }
+            return Map.of(mainTableName.toLowerCase(Locale.ROOT), variables);
         }
 
         SliceIdentity identify(String sliceKey) {

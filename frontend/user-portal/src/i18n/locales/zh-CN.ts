@@ -946,6 +946,9 @@ export default {
     restore: '恢复',
     discard: '丢弃',
   },
+  computedField: {
+    evaluationFailed: '#ERR — 公式无法计算（{code}），请修正它依赖的字段值。',
+  },
   linkForm: {
     defaultLinkText: '详情',
     linkedForm: '关联表单',

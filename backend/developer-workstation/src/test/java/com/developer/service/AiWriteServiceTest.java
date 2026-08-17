@@ -108,6 +108,30 @@ class AiWriteServiceTest {
     }
 
     @Test
+    void applyGeneratedData_rejectsComputedFieldInsteadOfPersistingIt() {
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(Map.of(
+                        "tableName", "orders",
+                        "tableType", "MAIN",
+                        "fieldDefinitions", List.of(Map.of(
+                                "fieldName", "amount",
+                                "dataType", "DECIMAL",
+                                "isComputed", true,
+                                "computedField", Map.of("source", "qty * price")
+                        ))
+                )))
+                .build();
+
+        AiGenerationException ex = assertThrows(AiGenerationException.class,
+                () -> writeService.applyGeneratedData(1L, data, null));
+        assertEquals("AI_COMPUTED_FIELD_UNSUPPORTED", ex.getErrorCode());
+        assertTrue(functionUnit.getTableDefinitions().isEmpty(),
+                "computed field must not be written before the rejection");
+    }
+
+    @Test
     void applyGeneratedData_modifyMode_shouldDeleteOldAndWriteNew() {
         // MODIFY mode: has existing data
         TableDefinition existingTable = TableDefinition.builder()

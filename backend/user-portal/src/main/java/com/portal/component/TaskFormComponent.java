@@ -140,8 +140,21 @@ public class TaskFormComponent {
     @Autowired
     private ProcessSubTablePrimaryKeyEnricherComponent processSubTablePrimaryKeyEnricherComponent;
 
+    /** Lazy: server-side formula columns; null in {@code new}-constructed tests skips recalculation. */
+    @Lazy
+    @Autowired
+    private ComputedFieldRecalculator computedFieldRecalculator;
+
     private ProcessSubTablePrimaryKeyEnricherComponent subTablePrimaryKeyEnricher() {
         return processSubTablePrimaryKeyEnricherComponent;
+    }
+
+    private void recalculateComputedFields(String functionUnitCode, Map<String, Object> variables) {
+        ComputedFieldRecalculator recalculator = computedFieldRecalculator;
+        if (recalculator == null || functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
+            return;
+        }
+        recalculator.recalculate(functionUnitCode, variables);
     }
 
     private ChangeHistorySubmissionFilter changeHistorySubmissionFilter() {
@@ -474,6 +487,7 @@ public class TaskFormComponent {
             // System audit fields: refresh updated_at/updated_by at real update
             // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
+            recalculateComputedFields(processInstance.getFunctionUnitCode(), updatedVariables);
             // Prevent geometric __subTables__ bloat: drop deep nested copies before
             // persisting so each
             // task save stores the canonical one-level structure instead of compounding

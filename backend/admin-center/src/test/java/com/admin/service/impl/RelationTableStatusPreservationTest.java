@@ -242,7 +242,7 @@ class RelationTableStatusPreservationTest {
         JdbcTemplate jdbcTemplate = mockJdbcTemplate();
 
         RelationTableStructureServiceImpl structureService = new RelationTableStructureServiceImpl(
-                tableRepo, fieldRepo, jdbcTemplate);
+                tableRepo, fieldRepo, new com.admin.service.RelationComputedFieldValidator(), jdbcTemplate);
 
         // Build a DRAFT table (equivalent to INIT in unfixed code)
         RelationTableDefinition draftTable = buildTableDefinition(

@@ -567,6 +567,19 @@ public class FunctionUnitExporter {
         map.put("pkGenerationJson", field.getPkGenerationJson());
         map.put("fkDisplayMode", field.getFkDisplayMode());
         map.put("relationCardinality", field.getRelationCardinality());
+        boolean computed = Boolean.TRUE.equals(field.getIsComputed());
+        map.put("isComputed", computed);
+        if (computed) {
+            Map<String, Object> formula = field.getComputedFieldJson();
+            if (formula == null || formula.isEmpty()) {
+                throw new DeveloperBusinessException("COMPUTED_FIELD_EXPORT_INVALID",
+                        "Field '" + field.getFieldName()
+                                + "' is marked computed but has no usable formula JSON");
+            }
+            map.put("computedField", formula);
+        } else {
+            map.put("computedField", null);
+        }
         return map;
     }
 

@@ -39,10 +39,16 @@ export interface BooleanLiteralNode {
   value: boolean
 }
 
-/** Reference to another field on the SAME row. */
+/**
+ * Reference to a field. Unqualified (`name`) reads the same row. Qualified
+ * (`table.name`) reads the Function Unit MAIN row from a SUB-table formula —
+ * not an aggregate, and not another sub-table.
+ */
 export interface FieldRefNode {
   type: 'field'
   name: string
+  /** Physical MAIN table name when this is a parent-row lookup. */
+  table?: string
 }
 
 /**

@@ -222,6 +222,20 @@ class ComputedFieldRecalculatorTest {
 
             assertThat(variables.get("total_price")).isEqualTo(new BigDecimal("12000.00"));
         }
+
+        @Test
+        @DisplayName("a sub-table formula that reads a main-table column")
+        void subTableReadsMainColumn() {
+            subField(ITEMS_TABLE_ID, "requester",
+                    parentField("purchase_request", "title"), "fail");
+            binding(42L, ITEMS_TABLE_ID, "request_items");
+            Map<String, Object> variables = existingRecord();
+
+            recalculator.recalculate(FU, variables);
+
+            List<Map<String, Object>> items = sliceOf(variables, "request_items");
+            assertThat(items.get(0).get("requester")).isEqualTo("Laptop refresh");
+        }
     }
 
     @Nested
@@ -335,16 +349,43 @@ class ComputedFieldRecalculatorTest {
         }
 
         @Test
-        @DisplayName("skips a field whose stored definition is unusable")
-        void unusableDefinitionIsSkipped() {
+        @DisplayName("rejects the write when a stored definition is unusable")
+        void unusableDefinitionBlocksWrite() {
             fieldRows.add(new Object[]{MAIN_TABLE_ID, "purchase_request", "MAIN", "broken", "{}"});
             mainField("total", binary("+", number("1"), number("2")), "fail");
             Map<String, Object> variables = existingRecord();
+            Object submittedTotal = variables.get("total");
 
-            recalculator.recalculate(FU, variables);
+            assertThatThrownBy(() -> recalculator.recalculate(FU, variables))
+                    .isInstanceOf(PortalException.class)
+                    .hasMessageContaining("broken");
+            assertThat(variables.get("total")).isEqualTo(submittedTotal);
+        }
 
-            assertThat(variables).doesNotContainKey("broken");
-            assertThat(variables.get("total")).isEqualTo(new BigDecimal("3"));
+        @Test
+        @DisplayName("rejects the write when stored JSON is unreadable")
+        void unreadableJsonBlocksWrite() {
+            fieldRows.add(new Object[]{MAIN_TABLE_ID, "purchase_request", "MAIN", "broken", "{"});
+            Map<String, Object> variables = existingRecord();
+
+            assertThatThrownBy(() -> recalculator.recalculate(FU, variables))
+                    .isInstanceOf(PortalException.class)
+                    .hasMessageContaining("broken");
+        }
+
+        @Test
+        @DisplayName("rejects the write when the Function Unit cannot be resolved")
+        void unresolvedFunctionUnitBlocksWrite() {
+            when(primaryKeyAllocationComponent.resolveFunctionUnitIdForAllocation(anyString()))
+                    .thenThrow(new PortalException("FUNCTION_UNIT_NOT_FOUND", "Function unit not found"));
+            mainField("total", binary("+", number("1"), number("2")), "fail");
+            Map<String, Object> variables = existingRecord();
+            Object submittedTotal = variables.get("total");
+
+            assertThatThrownBy(() -> recalculator.recalculate(FU, variables))
+                    .isInstanceOf(PortalException.class)
+                    .hasMessageContaining("Function unit not found");
+            assertThat(variables.get("total")).isEqualTo(submittedTotal);
         }
     }
 
@@ -375,6 +416,12 @@ class ComputedFieldRecalculatorTest {
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
                 .thenAnswer(invocation -> {
                     String sql = invocation.getArgument(0);
+                    if (sql.contains("table_type = 'MAIN'") && !sql.contains(FIELDS_SQL)) {
+                        RowMapper<Object> mapper = invocation.getArgument(1);
+                        ResultSet rs = org.mockito.Mockito.mock(ResultSet.class);
+                        when(rs.getString("table_name")).thenReturn("purchase_request");
+                        return List.of(mapper.mapRow(rs, 0));
+                    }
                     if (!sql.contains(FIELDS_SQL)) {
                         return List.of();
                     }
@@ -451,6 +498,10 @@ class ComputedFieldRecalculatorTest {
 
     private static String field(String name) {
         return "{\"type\":\"field\",\"name\":\"" + name + "\"}";
+    }
+
+    private static String parentField(String table, String name) {
+        return "{\"type\":\"field\",\"table\":\"" + table + "\",\"name\":\"" + name + "\"}";
     }
 
     private static String binary(String op, String left, String right) {
