@@ -3,6 +3,7 @@
  * Used by both column presentation and PK allocation; kept standalone to avoid import cycles.
  */
 import { normalizeFieldDefinitionForRuntime, type RuntimeFieldDefinition } from '../formFieldMeta'
+import { pkStrategyAllocatesString } from '../pkGenerationConfig'
 import { type PkGenerationConfig } from '../tableFkRuntime'
 import type { BindingFieldDefinition } from './types'
 
@@ -14,11 +15,11 @@ export function pkNeedsAllocation(field: BindingFieldDefinition): boolean {
   return strategy !== 'manual'
 }
 
-/** prefixedSequence / uuid allocate string values — inputNumber cannot bind them. */
+/** uuid / prefixedSequence / calendar-period sequences allocate string values — inputNumber cannot bind them. */
 export function pkAllocationYieldsString(field: BindingFieldDefinition): boolean {
   const normalized = normalizeFieldDefinitionForRuntime(field as RuntimeFieldDefinition)
   if (!normalized.isPrimaryKey) return false
   const pkConfig = normalized.pkGeneration ?? normalized.pkGenerationJson
   const strategy = (pkConfig as PkGenerationConfig | undefined)?.strategy ?? 'uuid'
-  return strategy === 'uuid' || strategy === 'prefixedSequence'
+  return pkStrategyAllocatesString(strategy)
 }

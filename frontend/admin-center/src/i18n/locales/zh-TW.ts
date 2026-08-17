@@ -1038,6 +1038,8 @@ export default {
     pkGen_uuid: 'UUID',
     pkGen_autoIncrement: '自增整數',
     pkGen_prefixedSequence: '前綴序號',
+    pkGen_dailyDateSequence: '日期+每日序號',
+    pkGen_monthlyDateSequence: '日期+每月序號',
     labelPortalVisibility: '入口可見性',
     labelDataShowStatus: '資料展示狀態',
     labelFrom: '從',

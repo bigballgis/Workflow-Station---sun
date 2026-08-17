@@ -39,7 +39,7 @@
               style="width: 100%;"
               :teleported="false"
               :placeholder="t('table.pkGenerationStrategy')"
-              @change="emitChange"
+              @change="onStrategyChange"
             >
               <el-option
                 v-for="s in PK_GENERATION_STRATEGIES"
@@ -59,7 +59,7 @@
                 @change="emitChange"
               />
             </el-form-item>
-            <template v-if="local.strategy === 'prefixedSequence'">
+            <template v-if="showPrefix">
               <el-form-item :label="t('table.pkGenerationPrefix')">
                 <el-input
                   v-model="local.prefix"
@@ -67,6 +67,8 @@
                   @input="emitChange"
                 />
               </el-form-item>
+            </template>
+            <template v-if="showPadWidth">
               <el-form-item :label="t('table.pkGenerationPadWidth')">
                 <el-input-number
                   v-model="local.padWidth"
@@ -81,7 +83,7 @@
           </template>
         </el-form>
         <div
-          v-if="local.strategy === 'prefixedSequence' && previewLabel"
+          v-if="showPreview"
           class="pk-preview"
         >
           {{ t('table.pkGenerationPreview') }}: <code>{{ previewLabel }}</code>
@@ -104,7 +106,7 @@
         size="small"
         class="pk-strategy-select"
         :placeholder="t('table.pkGenerationStrategy')"
-        @change="emitChange"
+        @change="onStrategyChange"
       >
         <el-option
           v-for="s in PK_GENERATION_STRATEGIES"
@@ -147,7 +149,7 @@
                 @change="emitChange"
               />
             </el-form-item>
-            <template v-if="local.strategy === 'prefixedSequence'">
+            <template v-if="showPrefix">
               <el-form-item :label="t('table.pkGenerationPrefix')">
                 <el-input
                   v-model="local.prefix"
@@ -155,6 +157,8 @@
                   @input="emitChange"
                 />
               </el-form-item>
+            </template>
+            <template v-if="showPadWidth">
               <el-form-item :label="t('table.pkGenerationPadWidth')">
                 <el-input-number
                   v-model="local.padWidth"
@@ -168,7 +172,7 @@
             </template>
           </el-form>
           <div
-            v-if="local.strategy === 'prefixedSequence' && previewLabel"
+            v-if="showPreview"
             class="pk-preview"
           >
             {{ t('table.pkGenerationPreview') }}: <code>{{ previewLabel }}</code>
@@ -188,7 +192,10 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Setting } from '@element-plus/icons-vue'
 import {
+  DAILY_DATE_SEQUENCE_DEFAULT_PAD,
   PK_GENERATION_STRATEGIES,
+  formatCalendarDateSequencePreview,
+  isCalendarDateSequence,
   parsePkGeneration,
   pkGenerationNeedsExtraConfig,
   serializePkGeneration,
@@ -221,12 +228,19 @@ const editorClasses = computed(() => ({
 
 const showExtra = computed(() => pkGenerationNeedsExtraConfig(local.strategy))
 
+const showPrefix = computed(() => local.strategy === 'prefixedSequence')
+const showPadWidth = computed(() =>
+  local.strategy === 'prefixedSequence' || isCalendarDateSequence(local.strategy))
+const showPreview = computed(() => showPadWidth.value && !!previewLabel.value)
+
 const strategyShortLabel = computed(() => {
   const map: Record<string, string> = {
     manual: 'Manual',
     uuid: 'UUID',
     autoIncrement: 'Auto',
     prefixedSequence: 'Prefix',
+    dailyDateSequence: 'Daily',
+    monthlyDateSequence: 'Monthly',
   }
   return map[local.strategy] ?? local.strategy
 })
@@ -238,10 +252,20 @@ const hasExtraValues = computed(() => {
   if (local.strategy === 'prefixedSequence') {
     return !!(local.prefix?.trim()) || local.startValue !== 1 || local.padWidth !== 6
   }
+  if (isCalendarDateSequence(local.strategy)) {
+    return local.startValue !== 1 || local.padWidth !== DAILY_DATE_SEQUENCE_DEFAULT_PAD
+  }
   return false
 })
 
 const previewLabel = computed(() => {
+  if (isCalendarDateSequence(local.strategy)) {
+    return formatCalendarDateSequencePreview(
+      local.strategy === 'monthlyDateSequence' ? 'month' : 'day',
+      local.padWidth,
+      local.startValue,
+    )
+  }
   if (local.strategy !== 'prefixedSequence') return ''
   const prefix = local.prefix ?? ''
   const pad = local.padWidth ?? 6
@@ -266,6 +290,14 @@ watch(enabled, (on) => {
     emitChange()
   }
 })
+
+function onStrategyChange() {
+  if (isCalendarDateSequence(local.strategy)) {
+    local.padWidth = DAILY_DATE_SEQUENCE_DEFAULT_PAD
+    local.prefix = ''
+  }
+  emitChange()
+}
 
 function emitChange() {
   if (!enabled.value) {
