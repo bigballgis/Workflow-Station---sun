@@ -9,7 +9,7 @@ import java.util.Optional;
 /**
  * 自动化 flow 迁移管理（uat → prod 发布通道）+ 引擎部署期 flowId 解析。
  *
- * <p>与 piece 管理同模式：读走共库 SQL（AP 表），写一律经 AP API（共享账号会话），
+ * <p>与 piece 管理同模式：读走共库 SQL（AP 表），写一律经 AP API（按当前操作人换取的会话），
  * 不直写 AP 表。见 DECISIONS Q5/Q7 与 {@code AutomationPieceService}。</p>
  */
 public interface AutomationFlowService {
@@ -28,10 +28,18 @@ public interface AutomationFlowService {
     FlowImportResult importFlow(byte[] json, boolean publish);
 
     /**
-     * 部署期解析（引擎调用）：ref 是 BPMN 里的 {@code ap:flowId}。本环境存在同 id
-     * 的 flow 时原样返回；否则按迁移键查找映射。找不到返回 empty。
+     * 部署期解析（引擎调用）：ref 是 BPMN 里的 {@code ap:flowKey} 业务键或 legacy
+     * {@code ap:flowId}。本环境存在同 id 的 flow 时原样返回；否则按迁移键
+     * （{@code metadata.hermesFlowKey}）查找映射。找不到返回 empty。
+     *
+     * <p>返回值带 {@code published} 标记：FR-C05 要求引用了<b>未发布</b> flow 的部署显式
+     * 失败，由 {@code /resolve} 端点将 {@code published=false} 映射为 404（错误信息说明
+     * flow 未发布）。内部调用（导出、还原去重）不关心发布态，取 {@code flowId()} 即可。</p>
      */
-    Optional<String> resolveFlowRef(String ref);
+    Optional<FlowResolution> resolveFlowRef(String ref);
+
+    /** {@link #resolveFlowRef} 的结果：本环境 flowId + 是否已有发布版本 */
+    record FlowResolution(String flowId, boolean published) {}
 
     /**
      * 按 BPMN 引用导出（FU 导出包随带 flow 时由 DW 调用）：ref 是 {@code ap:flowId}，

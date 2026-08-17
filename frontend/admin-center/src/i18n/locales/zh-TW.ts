@@ -82,10 +82,10 @@ export default {
     tableStructure: '表結構管理',
     tableData: '表資料管理',
     biManagement: 'BI 管理',
-    serviceTask: '自動化工作台',
     biDashboardRegistry: '儀表板註冊',
     biDashboardAssignment: '儀表板分配',
     biRbacMapping: 'RBAC 對應',
+    // 下两键既是左侧菜单项，也被审计页当作资源类型标签使用（auditMappings.ts）。
     automationPieces: '自動化組件',
     automationFlows: '自動化流程遷移'
   },
@@ -111,11 +111,13 @@ export default {
     exportFailed: '匯出失敗',
     import: '匯入組件(.tgz)',
     importSuccess: '已匯入 {name} v{version},設計器立即可見',
+    importFailed: '匯入失敗',
+    toggleFailed: '組件啟停失敗',
     deleteConfirm: '確認刪除 {name} v{version}?其中繼資料與執行時套件將被移除。',
-    deleteInUse: '該組件被 {count} 個 flow 引用,強制刪除後這些 flow 執行會失敗。仍要刪除?',
+    deleteInUse: '該組件被以下 flow 使用:{flows}。強制刪除後這些 flow 執行會失敗。仍要刪除?',
     forceDelete: '強制刪除',
     deleted: '組件已刪除',
-    deleteOfficialConfirm: '確認把烘焙件 {name} v{version} 從目錄中刪除?映像內預裝的執行時套件不受影響;若它仍在白名單(activepieces/hermes/pieces.json)且重跑 seed SQL,該組件會再次出現。仍要刪除?'
+    deleteOfficialConfirm: '確認把烘焙件 {name} v{version} 從目錄中刪除?映像內預裝的執行時套件不受影響;若它仍在白名單(automation/hermes/pieces.json)且重跑 seed SQL,該組件會再次出現。仍要刪除?'
   },
   automationFlow: {
     title: '自動化流程遷移',

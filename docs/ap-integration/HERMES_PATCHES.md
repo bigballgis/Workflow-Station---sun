@@ -1,5 +1,19 @@
 # HERMES-PATCH 变更日志
 
+> ## ⚠️ 归档：本文描述 0.84 方案，其源码树已删除
+>
+> 本文的对象是仓库根的 `activepieces/`（Activepieces 0.84.0 硬分叉）。**该目录已于 2026-08-14
+> 删除**——0.88 重构（`automation/`）交付并验证后，它作为参考实现的使命结束。凡本文写成
+> `activepieces/...` 的路径，**在工作树里都已不存在**；要看当年的源码走 git 历史：
+> `git show de4f6469:activepieces/<path>`（0.84 vendor 基线）、
+> `git checkout de4f6469 -- activepieces/<dir>`（取整目录），
+> 或 `git show 4635f7950:activepieces/<path>`（删除前最后一个提交）。
+>
+> **现行真源：`automation/hermes/TRIM_LOG.md`（0.88 改动动机台账）。本文的 `HERMES-PATCH-0NN` 编号仍被 0.88 代码里的注释交叉引用，故保留**
+>
+> 本文**不逐句改写**，作为决策依据的历史记录原样保留。
+
+
 > **⚠️ 2026-07-30 定位变更（[D12](DECISIONS.md#d12)）**：本文件原是 [Q8](DECISIONS.md#q8)
 > "frozen baseline + controlled fork" 的实体清单，承担**逐条重放到新上游 tag** 的施工图职责。
 > Q8 已被 D12 取代——`activepieces/` 现视为 HERMES 自有源码，rebase 不会发生。

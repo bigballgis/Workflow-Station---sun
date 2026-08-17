@@ -110,9 +110,10 @@ class ServiceTaskExecutorNoResponseTest {
     }
 
     @Test
-    @DisplayName("200 + 正常 body 仍判成功，输出照常回写")
-    void okWithBodyStillSucceeds() {
-        stubWebhook(ResponseEntity.ok(Map.of("rowCount", 4, "rows", List.of("a", "b", "c", "d"))));
+    @DisplayName("200 + 契约 body（顶层 variables 对象）判成功，回写 variables 内容")
+    void okWithContractBodyStillSucceeds() {
+        stubWebhook(ResponseEntity.ok(
+                Map.of("variables", Map.of("rowCount", 4, "rows", List.of("a", "b", "c", "d")))));
 
         ServiceTaskExecutionResult result = executor.executeSynchronous(actionRequest());
 
@@ -121,12 +122,23 @@ class ServiceTaskExecutorNoResponseTest {
     }
 
     @Test
-    @DisplayName("200 + 空 body 仍判成功：那是 flow 主动返回的空结果，与 204 不同")
-    void okWithEmptyBodyIsStillSuccess() {
-        stubWebhook(ResponseEntity.ok(Map.of()));
+    @DisplayName("200 + 空 variables 对象仍判成功：flow 主动声明不回写任何变量，与 204 不同")
+    void okWithEmptyVariablesObjectIsStillSuccess() {
+        stubWebhook(ResponseEntity.ok(Map.of("variables", Map.of())));
 
         ServiceTaskExecutionResult result = executor.executeSynchronous(actionRequest());
 
         assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("200 + 无 variables 键 = 契约违例：判失败，绝不整体合并 body")
+    void okWithoutVariablesKeyIsAContractViolation() {
+        stubWebhook(ResponseEntity.ok(Map.of("rowCount", 4)));
+
+        ServiceTaskExecutionResult result = executor.executeSynchronous(actionRequest());
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrorMessage()).contains("envelope contract", "variables");
     }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Mirrors every cdn.activepieces.com asset the product actually references into
-// activepieces/packages/web/public/ap-cdn/, preserving the URL path.
+// automation/packages/web/public/ap-cdn/, preserving the URL path.
 //
 // Why: production is air-gapped (X-2/X-3). Upstream hardcodes the CDN in ~47 places
 // and stores it in piece metadata, so without a mirror the builder renders broken
@@ -13,8 +13,8 @@ import { dirname, join, resolve } from 'path'
 
 const CDN = 'https://cdn.activepieces.com'
 const ROOT = resolve(import.meta.dirname, '../..')
-const OUT = join(ROOT, 'activepieces/packages/web/public/ap-cdn')
-const SCAN = ['activepieces/packages/web/src', 'activepieces/packages/shared/src']
+const OUT = join(ROOT, 'automation/packages/web/public/ap-cdn')
+const SCAN = ['automation/packages/web/src', 'automation/packages/core/shared/src']
 // Upstream-only surfaces we never expose (EE upsell videos, gamification badges).
 const SKIP = [/\/videos\//, /\/badges\//]
 

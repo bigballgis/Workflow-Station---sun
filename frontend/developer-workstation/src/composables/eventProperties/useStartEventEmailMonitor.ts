@@ -1,7 +1,7 @@
 /**
  * Start Event ↔ Email Monitor template binding (filters configured here only).
  */
-import { ref, reactive, watch, computed, onMounted, nextTick } from 'vue'
+import { ref, watch, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import {

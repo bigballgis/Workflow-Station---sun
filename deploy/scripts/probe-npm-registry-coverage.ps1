@@ -5,14 +5,14 @@
 # 背景:内网私服(Nexus 等)常常只是**部分**镜像了公共 npm——某个包的新版本干脆不存在。
 # 而 `pnpm install` 是 fail-fast:碰到第一个缺失 tarball 就 ERR_PNPM_FETCH_404 退出。
 # 于是排查退化成"装 → 看报错 → 提单/降级 → 再装"的多轮循环,一轮只能发现一个包
-# (activepieces 一个 lockfile 就有 3000+ 个走 registry 的包)。本脚本一次走完全部,
+# (automation 一个 lockfile 就有 3000+ 个走 registry 的包)。本脚本一次走完全部,
 # 让你拿到**完整缺口清单**再决定:批量申请入库,还是逐个 pnpm.overrides 降版本。
 #
 # 用法:
-#   # 探全部 5 个 lockfile(activepieces + 4 个前端)
+#   # 探全部 5 个 lockfile(automation + 4 个前端)
 #   .\probe-npm-registry-coverage.ps1 -Registry https://nexus303.systems.uk.hsbc:8081/nexus/repository/public-npm-registry_iq
-#   # 只探 activepieces
-#   .\probe-npm-registry-coverage.ps1 -Registry <...> -Lockfile ..\..\activepieces\pnpm-lock.yaml
+#   # 只探 automation
+#   .\probe-npm-registry-coverage.ps1 -Registry <...> -Lockfile ..\..\automation\pnpm-lock.yaml
 #   # 网关拒 HEAD(405/501)时改用 ranged GET
 #   .\probe-npm-registry-coverage.ps1 -Registry <...> -UseGet
 #
@@ -74,7 +74,7 @@ function Resolve-LockSpec {
 if ($Lockfile.Count -eq 0) {
     # 构建机真正会 install 的五个 workspace:AP(内嵌 builder 用)+ 四个前端。
     $Lockfile = @(
-        "activepieces/pnpm-lock.yaml",
+        "automation/pnpm-lock.yaml",
         "frontend/admin-center/pnpm-lock.yaml",
         "frontend/user-portal/pnpm-lock.yaml",
         "frontend/developer-workstation/pnpm-lock.yaml",

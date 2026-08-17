@@ -135,7 +135,9 @@
             </el-menu-item>
           </el-sub-menu>
 
-          <!-- Automation Pieces - read-only piece catalog + export, requires system:admin -->
+          <!-- Automation Pieces - piece catalog + import/export/enable/delete, requires system:admin.
+               Lives here (not in the Developer Workstation): DW is dev-only and is not part of the
+               K8S deployment set, while piece rollout is a production-environment operation. -->
           <el-menu-item
             v-if="isSystemAdmin"
             index="/automation-pieces"
@@ -154,21 +156,6 @@
             <el-icon class="nav-anim nav-anim--wobble"><Share /></el-icon>
             <template #title>
               {{ t('menu.automationFlows') }}
-            </template>
-          </el-menu-item>
-
-          <!-- ServiceTask - external tool (non-prod), opens the :8085 login bridge
-               in a new tab. el-menu is in router mode, so bind :route to the current
-               path (no-op navigation) and do the real action in @click. -->
-          <el-menu-item
-            v-if="isSystemAdmin && apBridgeUrl"
-            index="service-task-launch"
-            :route="route.path"
-            @click="openServiceTask"
-          >
-            <el-icon class="nav-anim nav-anim--nudge"><Connection /></el-icon>
-            <template #title>
-              {{ t('menu.serviceTask') }}
             </template>
           </el-menu-item>
         </el-menu>
@@ -231,11 +218,10 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   Fold, Expand,
-  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Connection, Cpu, Share
+  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Cpu, Share
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
-import { launchServiceTask } from '@/api/serviceTask'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -250,36 +236,6 @@ const currentTitle = computed(() => {
   const key = route.meta.titleKey
   return key ? t(key) : ''
 })
-
-// ServiceTask launcher (non-prod only). The menu visibility is gated on RUNTIME config
-// (window.__APP_CONFIG__.AP_BRIDGE_URL, injected per-environment at container start) — the
-// frontend image is built once and promoted to uat/sit/prod, so this can't be a build-time
-// value. Non-prod sets it -> the entry shows; prod leaves it empty -> hidden (AP is
-// runtime-only there). Empty or an un-substituted "${...}" placeholder falls back to the
-// dev default. Here the value is used ONLY as the on/off flag — the real bridge URL is
-// minted server-side by /launch (cross-domain SSO handshake), not navigated to directly.
-const apBridgeUrl = computed(() => {
-  const rt = window.__APP_CONFIG__?.AP_BRIDGE_URL
-  if (rt && !rt.includes('${')) return rt
-  return import.meta.env.DEV ? 'http://localhost:8085/__ap/bridge' : ''
-})
-
-const openServiceTask = async () => {
-  if (!apBridgeUrl.value) return
-  // Cross-domain SSO handshake (plan B): ask the admin-domain /launch endpoint (where the
-  // platform JWT cookie is valid) to sign into AP with the shared account and mint a
-  // one-time nonce, returning the AP bridge URL carrying it. Then navigate THIS tab there.
-  // The AP domain needs no platform cookie, so admin and AP may live on different parent
-  // domains. Same-tab navigation (not a new tab) keeps the bridge's localStorage['token']
-  // write in the same storage partition as the AP app; the user returns via browser back.
-  try {
-    const bridgeUrl = await launchServiceTask()
-    if (bridgeUrl) window.location.assign(bridgeUrl)
-  } catch {
-    // Error toast is already surfaced by the request response interceptor
-    // (401 goes through refresh/login; 502/others show a toast).
-  }
-}
 
 // Permission checks
 const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))

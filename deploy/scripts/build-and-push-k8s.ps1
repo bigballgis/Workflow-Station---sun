@@ -8,7 +8,7 @@
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests -SkipFrontend
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -JavaBaseImage "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
 #   # host whose npm mirror cannot satisfy the AP workspace: reuse a carried-over
-#   # activepieces/dist/packages/web-embed instead of installing and rebuilding it
+#   # automation/dist/packages/web-embed instead of installing and rebuilding it
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipApWorkspaceInstall
 #   # deployment without Activepieces: DW frontend ships without the Automation builder
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -NoServiceTaskBuilder
@@ -32,7 +32,7 @@ param(
     [switch]$NoClean = $false,
     [switch]$SkipFrontend = $false,
     # Air-gapped / partially-mirrored host: do not even attempt the Activepieces workspace
-    # install or the builder-bundle build. Requires a prebuilt activepieces/dist/packages/
+    # install or the builder-bundle build. Requires a prebuilt automation/dist/packages/
     # web-embed carried over from a host that can build it, which is then reused as-is.
     [switch]$SkipApWorkspaceInstall = $false,
     # Same idea for the four frontends: pack each image from a dist/ built elsewhere instead of
@@ -47,9 +47,9 @@ param(
     # unavailable rather than 404ing on web.css. Default stays fail-closed.
     [switch]$NoServiceTaskBuilder = $false,
     [switch]$SkipBackend = $false,
-    # Activepieces is built from THIS repo (activepieces/Dockerfile): EE-removed, de-bunned,
+    # Activepieces is built from THIS repo (automation/Dockerfile): EE-removed, de-bunned,
     # with the allowlisted pieces prewarmed into the last layer. Do NOT substitute the upstream
-    # activepieces/activepieces:0.84.0 image (nor mirror-thirdparty-images-k8s.ps1's legacy
+    # activepieces/activepieces image (nor mirror-thirdparty-images-k8s.ps1's legacy
     # activepieces entry) — that one has none of the three and cannot run air-gapped.
     # ⚠️ AP ships on the SAME tag as the platform, so skipping it leaves <Registry>/
     # activepieces:$Tag unpublished while activepieces.yaml/ap-bootstrap-job.yaml resolve
@@ -98,7 +98,7 @@ $selectedFrontend = if ($Services -eq "all") { $FrontendServices } else {
     $FrontendServices | Where-Object { $names -contains $_.Name }
 }
 # Activepieces is not a $BackendServices/$FrontendServices entry: it is neither a Maven module
-# nor a pnpm frontend and it has its own Dockerfile at the repo's activepieces/ root. It is
+# nor a pnpm frontend and it has its own Dockerfile at the repo's automation/ root. It is
 # still selectable by name so -Services activepieces works, and it ships on the platform tag.
 $buildActivepieces = (-not $SkipActivepieces) -and
     (($Services -eq "all") -or (($Services -split ",") -contains "activepieces"))
@@ -226,7 +226,7 @@ if (-not $SkipFrontend -and @($selectedFrontend).Count -gt 0) {
     Write-Step "Building frontend (local pnpm build + Docker, parallel x$MaxParallel)..."
 
     # The developer-workstation frontend embeds the Activepieces builder. That bundle is
-    # produced by the AP workspace (outside frontend/) into activepieces/dist/packages/
+    # produced by the AP workspace (outside frontend/) into automation/dist/packages/
     # web-embed and is gitignored, so a clean checkout never has it; DW's pnpm `prebuild`
     # hook only COPIES it into public/. Nothing else builds it, so build it here — before
     # the per-service jobs start, since DW's build consumes it. Skip this and the image
@@ -241,9 +241,9 @@ if (-not $SkipFrontend -and @($selectedFrontend).Count -gt 0) {
         Write-Host "   WARNING: -NoServiceTaskBuilder — nothing in this run touches Activepieces: no workspace install, no bundle build, and any bundle already on disk is kept OUT of the image (DW's prebuild hook clears public/service-task-builder). developer-workstation-frontend ships WITHOUT the Automation builder; the tab reports it as unavailable. Use only where Activepieces is not deployed." -ForegroundColor Yellow
     }
     if ($needsApBuilder -and -not $PushOnly) {
-        $apRootDir = Join-Path $ProjectRoot "activepieces"
+        $apRootDir = Join-Path $ProjectRoot "automation"
         $apWebDir = Join-Path $apRootDir "packages/web"
-        $embedMarker = Join-Path $ProjectRoot "activepieces/dist/packages/web-embed/ap-builder.mjs"
+        $embedMarker = Join-Path $ProjectRoot "automation/dist/packages/web-embed/ap-builder.mjs"
 
         # Install the AP workspace deps on the same terms the per-service jobs below use for
         # the four frontends (.modules.yaml mtime vs manifests), so a clean checkout needs no
@@ -288,7 +288,7 @@ if (-not $SkipFrontend -and @($selectedFrontend).Count -gt 0) {
         # attempt, not a guarantee, and fall back to a carried-over bundle when it fails.
         $canTryBuild = (-not $SkipApWorkspaceInstall) -and (Test-Path (Join-Path $apWebDir "node_modules"))
         if (-not $canTryBuild -and -not $haveBundle) {
-            Write-Fail "Activepieces workspace deps are missing ($apWebDir/node_modules) and there is no prebuilt bundle at $embedMarker. Fix the install (see BUILD_GUIDE 7.2 step 0 — its output is above), copy a prebuilt activepieces/dist/packages/web-embed over, or exclude developer-workstation-frontend with -Services."
+            Write-Fail "Activepieces workspace deps are missing ($apWebDir/node_modules) and there is no prebuilt bundle at $embedMarker. Fix the install (see BUILD_GUIDE 7.2 step 0 — its output is above), copy a prebuilt automation/dist/packages/web-embed over, or exclude developer-workstation-frontend with -Services."
         }
         $built = $false
         if ($canTryBuild) {
@@ -382,7 +382,7 @@ if (-not $SkipFrontend -and @($selectedFrontend).Count -gt 0) {
                     # after a normal run in the same session.
                     # SERVICE_TASK_BUILDER_SKIP is the other half of -NoServiceTaskBuilder:
                     # clearing REQUIRED only stops the hard failure, it does not stop the hook
-                    # from copying a bundle that is already on disk (activepieces/dist/ from an
+                    # from copying a bundle that is already on disk (automation/dist/ from an
                     # earlier build, or public/service-task-builder from an earlier run) — and
                     # then the image ships the AP builder anyway, which is exactly what this
                     # switch is meant to leave out. SKIP makes the hook remove the destination
@@ -445,7 +445,7 @@ if (-not $SkipFrontend -and @($selectedFrontend).Count -gt 0) {
 if ($buildActivepieces) {
     Write-Step "Building Activepieces image from in-repo source..."
 
-    $apContext = Join-Path $ProjectRoot "activepieces"
+    $apContext = Join-Path $ProjectRoot "automation"
     $apImage = "$Registry/activepieces:$apTag"
 
     if (-not (Test-Path (Join-Path $apContext "Dockerfile"))) {

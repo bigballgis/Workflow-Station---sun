@@ -404,8 +404,9 @@ public class ProcessDeploymentManager {
      * re-serialize when at least one AP task is rebound).
      */
     private String bindActivepiecesServiceTasks(String bpmnXml) {
-        if (bpmnXml == null || bpmnXml.isBlank() || !bpmnXml.contains("ap:flowId")) {
-            // Fast path: nothing to bind when the AP marker is absent.
+        if (bpmnXml == null || bpmnXml.isBlank()
+                || (!bpmnXml.contains("ap:flowId") && !bpmnXml.contains("ap:flowKey"))) {
+            // Fast path: nothing to bind when the AP markers are absent.
             return bpmnXml;
         }
         try {
@@ -438,6 +439,9 @@ public class ProcessDeploymentManager {
                 return bpmnXml;
             }
             return new String(converter.convertToXML(model), StandardCharsets.UTF_8);
+        } catch (WorkflowBusinessException e) {
+            // FR-C12: unresolved AP flow references must fail the deployment — never swallow.
+            throw e;
         } catch (Exception e) {
             log.warn("AP service-task delegate binding skipped (deploy continues with original XML): {}",
                     e.getMessage());
@@ -447,7 +451,7 @@ public class ProcessDeploymentManager {
 
     /**
      * An AP service task is identified by a {@code serviceType=ap} extension property, or by the
-     * presence of an {@code ap:flowId} extension property.
+     * presence of an {@code ap:flowKey} / {@code ap:flowId} extension property.
      */
     private boolean isActivepiecesServiceTask(ServiceTask serviceTask) {
         Map<String, List<ExtensionElement>> extensionElements = serviceTask.getExtensionElements();
@@ -466,7 +470,8 @@ public class ProcessDeploymentManager {
             for (ExtensionElement propertyElement : propertyElements) {
                 String name = propertyElement.getAttributeValue(null, "name");
                 String value = propertyElement.getAttributeValue(null, "value");
-                if ("ap:flowId".equals(name) && value != null && !value.isBlank()) {
+                if (("ap:flowId".equals(name) || "ap:flowKey".equals(name))
+                        && value != null && !value.isBlank()) {
                     return true;
                 }
                 if ("serviceType".equals(name) && "ap".equalsIgnoreCase(value)) {
@@ -478,10 +483,15 @@ public class ProcessDeploymentManager {
     }
 
     /**
-     * 部署期 flowId 解析（DECISIONS Q7）：BPMN 里的 {@code ap:flowId} 是源环境的引用，
-     * 经 admin-center 解析为本环境实际 flowId 后改写进部署产物（源 BPMN 不动）。
-     * 解析不到时保留原引用继续部署——引用可能本就指向本环境 flow（同环境场景由
-     * resolve 的 id 直查覆盖），真正缺失会在运行时由执行器以失败记录暴露。
+     * 部署期 flowId 解析（DECISIONS Q7 + FR-C12）：BPMN 里的引用（{@code ap:flowKey} 业务键
+     * 优先，缺失回退 legacy {@code ap:flowId}）经 admin-center 解析为本环境实际 flowId 后写入
+     * 部署副本的 {@code ap:flowId} 属性（源 BPMN 不动；无该属性节点时创建）。
+     *
+     * <p><b>解析不到即部署失败</b>（FR-C12）：NOT_FOUND / UNAVAILABLE 一律抛
+     * {@link WorkflowBusinessException}，不再「保留原引用继续」——那只会把失败推迟到运行时。
+     * 唯一豁免：解析通道未配置（{@code service-task.flow-resolve-url} / token 为空）且 BPMN
+     * 只有 legacy {@code ap:flowId} 无 {@code ap:flowKey}——纯本地 dev 旧路径，warn 后按原
+     * 引用放行；但凡出现 {@code ap:flowKey}，解析不可用即失败。</p>
      */
     private boolean resolveApFlowRef(ServiceTask serviceTask) {
         Map<String, List<ExtensionElement>> extensionElements = serviceTask.getExtensionElements();
@@ -489,54 +499,114 @@ public class ProcessDeploymentManager {
             return false;
         }
         List<ExtensionElement> propertiesElements = extensionElements.get("properties");
-        if (propertiesElements == null) {
+        if (propertiesElements == null || propertiesElements.isEmpty()) {
             return false;
         }
+
+        ExtensionElement flowKeyProperty = findApProperty(propertiesElements, "ap:flowKey");
+        ExtensionElement flowIdProperty = findApProperty(propertiesElements, "ap:flowId");
+        String flowKey = attributeValue(flowKeyProperty, "value");
+        String legacyFlowId = attributeValue(flowIdProperty, "value");
+        boolean hasFlowKey = flowKey != null && !flowKey.isBlank();
+        String flowRef = hasFlowKey ? flowKey.trim()
+                : (legacyFlowId != null && !legacyFlowId.isBlank() ? legacyFlowId.trim() : null);
+        if (flowRef == null) {
+            return false;
+        }
+
+        ServiceTaskFlowRefResolver.Resolution resolution = serviceTaskFlowRefResolver.resolve(flowRef);
+        switch (resolution.outcome()) {
+            case RESOLVED -> {
+                if (resolution.flowId().equals(legacyFlowId)) {
+                    return false;
+                }
+                boolean changed = writeApFlowIdProperty(propertiesElements, flowIdProperty,
+                        resolution.flowId());
+                if (changed) {
+                    log.info("Resolved AP flow ref on task '{}': {} -> {}",
+                            serviceTask.getId(), flowRef, resolution.flowId());
+                }
+                return changed;
+            }
+            case NOT_FOUND -> throw new WorkflowBusinessException("AP_FLOW_REF_NOT_FOUND",
+                    "AP flow reference '" + flowRef + "' on service task '" + serviceTask.getId()
+                            + "' has no flow nor migration mapping in this environment (admin-center "
+                            + "resolve returned 404, or the flow has no published version). Import and "
+                            + "publish the flow via Admin Center → Automation before deploying (FR-C12).");
+            case UNAVAILABLE -> {
+                if (!serviceTaskFlowRefResolver.isConfigured() && !hasFlowKey) {
+                    // Legacy local-dev path: no resolver configured, BPMN only carries ap:flowId.
+                    // Keep the original ref so dev environments without admin-center still deploy.
+                    log.warn("AP flow ref resolution is not configured "
+                                    + "(service-task.flow-resolve-url / service.internal-token empty); "
+                                    + "deploying legacy ap:flowId '{}' on task '{}' as-is",
+                            flowRef, serviceTask.getId());
+                    return false;
+                }
+                throw new WorkflowBusinessException("AP_FLOW_REF_RESOLUTION_UNAVAILABLE",
+                        "AP flow reference '" + flowRef + "' on service task '" + serviceTask.getId()
+                                + "' could not be resolved: admin-center flow resolution is "
+                                + (serviceTaskFlowRefResolver.isConfigured()
+                                        ? "configured but unreachable or returned no flowId"
+                                        : "not configured (service-task.flow-resolve-url / "
+                                                + "service.internal-token is empty), which is required "
+                                                + "once ap:flowKey business keys are used")
+                                + ". Deployment aborted (FR-C12).");
+            }
+        }
+        return false;
+    }
+
+    /** 在 properties 扩展元素里找指定 name 的 property 子元素；不存在返回 null。 */
+    private ExtensionElement findApProperty(List<ExtensionElement> propertiesElements, String name) {
         for (ExtensionElement propertiesElement : propertiesElements) {
             List<ExtensionElement> propertyElements = propertiesElement.getChildElements().get("property");
             if (propertyElements == null) {
                 continue;
             }
             for (ExtensionElement propertyElement : propertyElements) {
-                if (!"ap:flowId".equals(propertyElement.getAttributeValue(null, "name"))) {
-                    continue;
-                }
-                String flowRef = propertyElement.getAttributeValue(null, "value");
-                if (flowRef == null || flowRef.isBlank()) {
-                    return false;
-                }
-                ServiceTaskFlowRefResolver.Resolution resolution =
-                        serviceTaskFlowRefResolver.resolve(flowRef);
-                switch (resolution.outcome()) {
-                    case RESOLVED -> {
-                        if (resolution.flowId().equals(flowRef)) {
-                            return false;
-                        }
-                        List<ExtensionAttribute> valueAttrs =
-                                propertyElement.getAttributes().get("value");
-                        if (valueAttrs == null || valueAttrs.isEmpty()) {
-                            return false;
-                        }
-                        valueAttrs.get(0).setValue(resolution.flowId());
-                        log.info("Resolved AP flow ref on task '{}': {} -> {}",
-                                serviceTask.getId(), flowRef, resolution.flowId());
-                        return true;
-                    }
-                    case NOT_FOUND -> {
-                        log.warn("AP flow ref '{}' on task '{}' has no flow nor migration mapping "
-                                        + "in this environment; deploying original ref (runtime will "
-                                        + "fail until the flow is imported via admin-center)",
-                                flowRef, serviceTask.getId());
-                        return false;
-                    }
-                    case UNAVAILABLE -> {
-                        log.debug("AP flow ref resolution unavailable; keeping original ref '{}'", flowRef);
-                        return false;
-                    }
+                if (name.equals(propertyElement.getAttributeValue(null, "name"))) {
+                    return propertyElement;
                 }
             }
         }
-        return false;
+        return null;
+    }
+
+    private String attributeValue(ExtensionElement element, String attribute) {
+        return element != null ? element.getAttributeValue(null, attribute) : null;
+    }
+
+    /**
+     * 把解析出的本环境 flowId 写入部署副本的 {@code ap:flowId} 属性；属性节点不存在
+     * （BPMN 只写了 {@code ap:flowKey}）时在首个 properties 元素下创建。
+     */
+    private boolean writeApFlowIdProperty(List<ExtensionElement> propertiesElements,
+                                          ExtensionElement flowIdProperty, String resolvedFlowId) {
+        if (flowIdProperty != null) {
+            List<ExtensionAttribute> valueAttrs = flowIdProperty.getAttributes().get("value");
+            if (valueAttrs != null && !valueAttrs.isEmpty()) {
+                valueAttrs.get(0).setValue(resolvedFlowId);
+                return true;
+            }
+            ExtensionAttribute valueAttr = new ExtensionAttribute("value");
+            valueAttr.setValue(resolvedFlowId);
+            flowIdProperty.addAttribute(valueAttr);
+            return true;
+        }
+        ExtensionElement propertiesElement = propertiesElements.get(0);
+        ExtensionElement property = new ExtensionElement();
+        property.setName("property");
+        property.setNamespace(propertiesElement.getNamespace());
+        property.setNamespacePrefix(propertiesElement.getNamespacePrefix());
+        ExtensionAttribute nameAttr = new ExtensionAttribute("name");
+        nameAttr.setValue("ap:flowId");
+        property.addAttribute(nameAttr);
+        ExtensionAttribute valueAttr = new ExtensionAttribute("value");
+        valueAttr.setValue(resolvedFlowId);
+        property.addAttribute(valueAttr);
+        propertiesElement.addChildElement(property);
+        return true;
     }
 
     /**

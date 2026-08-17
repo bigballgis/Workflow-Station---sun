@@ -276,9 +276,9 @@ bi:
     cron: ${BI_SYNC_CRON:0 0 */6 * * ?}
     enabled: ${BI_SYNC_ENABLED:true}
 
-# Activepieces integration (community edition + gateway shared account).
+# Activepieces integration (community edition + gateway login bridge, per-user identity).
 # bridge.enabled is OFF by default — prod runs AP as runtime only (no UI login).
-# Non-prod enables the bridge so the :8085 gateway can mint AP tokens via the shared account.
+# Non-prod enables the bridge so the :8085 gateway can mint per-user AP tokens.
 service-task:
   internal-url: ${ACTIVEPIECES_INTERNAL_URL:http://localhost:8086}
   bridge:
@@ -287,17 +287,15 @@ service-task:
     # k8s：AP 网关主机，例如 http://hermes-workflow-activepieces.<域>/__ap/bridge；留空 → /launch 返回 502。
     public-url: ${AP_BRIDGE_URL:}
     nonce-ttl-seconds: ${ACTIVEPIECES_BRIDGE_NONCE_TTL:60}
-  shared-account:
-    email: ${ACTIVEPIECES_SHARED_EMAIL:}
-    password: ${ACTIVEPIECES_SHARED_PASSWORD:}
-  # Per-user provisioning（L7 审计到人）。开启后 /internal/ap/launch|token 按当前平台用户
-  # 换取其专属 AP token（flow.ownerId 才会落到真实创建人），关闭则回退共享账号。
-  # signing-key-id / private-key 来自一次性 POST /v1/signing-keys（平台 admin）。
+  # Per-user provisioning（L7 审计到人）——AP 身份的唯一路径，无共享账号、无回退开关：
+  # 所有 AP 调用（登录桥 /internal/ap/*、flow/piece 的导入删除启停）都按当前操作人换取
+  # 其专属 AP token，flow.ownerId 与 AP 审计因此落到真实的人。
+  # signing-key-id / private-key 来自一次性 POST /v1/signing-keys（平台 admin）；
+  # 未配置时 AP 调用直接失败（ACTIVEPIECES_API_ERROR），不会退回任何共享身份。
   managed:
-    enabled: ${ACTIVEPIECES_MANAGED_ENABLED:false}
     signing-key-id: ${ACTIVEPIECES_MANAGED_SIGNING_KEY_ID:}
     private-key: ${ACTIVEPIECES_MANAGED_PRIVATE_KEY:}
-    project-external-id: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:hermes-shared}
+    project-external-id: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:hermes-main}
     token-ttl-seconds: ${ACTIVEPIECES_MANAGED_TOKEN_TTL:120}
     # 影子用户角色：平台级 ADMIN|MEMBER，project 级 Admin|Editor|Viewer（逐字对应 project_role.name）。
     # 默认全权——从 admin center 进入的人要能用平台级页面；每次握手会同步既有影子用户的角色。

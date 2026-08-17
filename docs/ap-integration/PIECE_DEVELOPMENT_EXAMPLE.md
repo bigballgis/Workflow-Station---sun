@@ -1,5 +1,16 @@
 # Piece 开发示例：业务日历（`piece-biz-calendar`）
 
+> ⚠️ **2026-08-14 更新到 0.88 基线。** 本文原先针对 `activepieces/`（0.84），照 0.84 抄会在三处卡住：
+> ① `packages/cli` 已删除，**`npm run create-piece` / `npm run build-piece` 都不存在了**——脚手架改为
+> 「照抄现成件」，打包改为直接用 esbuild（§1、§7）；
+> ② 打包体例改成 **esbuild 自包含 bundle**（`main: "./src/index.js"`、`dependencies: {}`），
+> 沿用 0.84 的 tsc 体例（pin `@activepieces/*` 版本）会让构建期 `seed-offline-store.mjs` 去 npm
+> 解析根本不存在的版本 → **404 炸掉整个镜像构建**（§2、§7）；
+> ③ `minimumSupportedRelease` 下限抬到 **`0.82.0`**（0.88 的 context V2 要求，§5）。
+> 另：目录一律 `activepieces/` → **`automation/`**；运行时缓存 `cache/v11` → **`cache/v13`**、
+> 手工预装的依赖文件名 `archive.tgz` → **`bundle.tgz`**（§7）。
+> 判定依据见 [IMPLEMENTATION_0.88.md](IMPLEMENTATION_0.88.md) §6.2；流程真源见 how-to。
+
 > 配套 [`PIECE_DEVELOPMENT_HOWTO.md`](./PIECE_DEVELOPMENT_HOWTO.md)（讲**流程**）。本文是一个**能直接抄**的
 > 完整自研 piece：三个动作 + 一个轮询触发器，每个文件给全码。
 >
@@ -22,12 +33,12 @@
 
 ## 1. 目录结构
 
-自研件一律放 `activepieces/packages/pieces/community/`（core/ 留给上游官方件，避免 rebase 冲突）：
+自研件一律放 `automation/packages/pieces/community/`（core/ 留给上游官方件，避免 rebase 冲突）：
 
 ```
-activepieces/packages/pieces/community/biz-calendar/
+automation/packages/pieces/community/biz-calendar/
 ├── package.json
-├── tsconfig.json / tsconfig.lib.json / .eslintrc.json   # create-piece 生成，不用改
+├── tsconfig.json / tsconfig.lib.json / .eslintrc.json   # 从 hash-helper 抄来，不用改
 └── src/
     ├── index.ts               # createPiece(...) 入口
     ├── i18n/
@@ -43,15 +54,17 @@ activepieces/packages/pieces/community/biz-calendar/
             └── sla-due-soon.ts       # 进阶章节
 ```
 
-用脚手架生成骨架（X-4：用 npx，不碰 bun）：
+**0.88 没有脚手架 CLI**（`packages/cli` 已随裁剪删除，`npm run create-piece` 不存在），
+骨架靠**照抄现成件**（how-to §1.1）。本例就是从 `hash-helper` 抄出来的：
 
 ```bash
-cd activepieces
-npm run create-piece
-# piece 名填 biz-calendar，包名回车取默认 @activepieces/piece-biz-calendar，类型选 community
-# （displayName 是后面在 src/index.ts 里写的，脚手架不问）
+cd automation
+cp -r packages/pieces/community/hash-helper packages/pieces/community/biz-calendar
+rm -rf packages/pieces/community/biz-calendar/{dist,node_modules}
+# 然后：改 package.json 的 name（→ @activepieces/piece-biz-calendar）、
+#       清空 src/lib/ 抄来的 action、按 §3–§5 写自己的文件。
 
-# 【不能省】脚手架不装依赖，回 monorepo 根链接 workspace 包，否则编译报 TS2307：
+# 【不能省】回 monorepo 根链接 workspace 包，否则编译报 TS2307：
 pnpm install
 ```
 
@@ -59,15 +72,13 @@ pnpm install
 
 ## 2. `package.json`
 
-`create-piece` 会生成。**只把 `version` 从 `0.0.1` 改成 `1.0.0`，其余字段一律保留**——
-`build-piece` 走 turbo 调这里的 `build` script，删了直接报 `no dist output`；真实件全是
-CommonJS，**不要**加 `"type": "module"`。改完长这样（实测可构建）：
+抄自 hash-helper，只改 `name`；真实件全是 CommonJS，**不要**加 `"type": "module"`。
+仓库现状逐字如下（`automation/packages/pieces/community/biz-calendar/package.json`）：
 
 ```json
 {
   "name": "@activepieces/piece-biz-calendar",
   "version": "1.0.0",
-  "type": "commonjs",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "dependencies": {
@@ -83,7 +94,18 @@ CommonJS，**不要**加 `"type": "module"`。改完长这样（实测可构建�
 }
 ```
 
-> 依赖都是 `workspace:*`、不引外部包 → 气隙友好（build-piece 打包时会把它们 pin 成具体版本）。
+关于这份文件，0.88 有三点要清楚：
+
+- **`workspace:*` 只服务本地类型检查 / IDE 跳转**。0.88 打包时它们**被整个丢弃**——esbuild 把
+  `@activepieces/*` 内联进 bundle，tarball 的 `dependencies` 是 `{}`（§7）。
+  0.84 那句「build-piece 会把 workspace 依赖 pin 成具体版本」**已经不成立**，
+  照旧 pin 反而会炸镜像构建（§7 的 ⚠️）。
+- **`scripts.build` 是抄来的遗留**，0.88 打包不走它（CLI/turbo 都没了），留着无害、也方便本地 tsc 自查。
+- **`main`/`types` 指向 `dist/src/`** 是给 monorepo 内解析用的；**tarball 里的 `package.json`
+  是另写的一份**（`main: "./src/index.js"`），两者不冲突，见 §7。
+
+> hash-helper 的 package.json 多一行显式 `"type": "commonjs"`，本件没写——两者都按 CommonJS 打包，
+> 效果一致；新件照抄 hash-helper（带上这行）更保险。
 > **`version` 会一路流到白名单**（pieces.json / 元数据 / 预装目录三处必须逐字一致，见 how-to §0）。
 > 改逻辑就升这个版本号，别原地覆盖。
 
@@ -283,8 +305,8 @@ export const bizCalendar = createPiece({
   displayName: 'Business Calendar',
   description: '工作日 / SLA 到期日计算（纯本地，无外网）。',
   auth: PieceAuth.None(),                 // 纯计算件无需鉴权
-  minimumSupportedRelease: '0.36.1',      // 必须 ≤ 我们的 0.84.0
-  logoUrl: '/ap-cdn/pieces/hermes/biz-calendar.svg', // 自研件自带图标，见下注
+  minimumSupportedRelease: '0.82.0',      // 0.88 的下限：context V2 要求 ≥0.82.0，见下注
+  logoUrl: '/ap-cdn/pieces/hermes/biz-calendar.svg', // HERMES: 气隙自托管图标(X-3)，见下注
   authors: ['workflow-station'],
   categories: [PieceCategory.CORE],
   actions: [addBusinessDaysAction, businessDaysBetweenAction, isBusinessDayAction],
@@ -292,10 +314,20 @@ export const bizCalendar = createPiece({
 });
 ```
 
+> **`minimumSupportedRelease` 在 0.88 有硬下限 `0.82.0`。** 0.88 的 framework 引入了 context V2，
+> 常量 `MINIMUM_SUPPORTED_RELEASE_AFTER_LATEST_CONTEXT_VERSION = '0.82.0'`（见
+> `automation/packages/pieces/framework/src/lib/context/versioning.ts`）。`createPiece()` 会把
+> 低于它（或不合法）的值**静默抬到 `0.82.0`**（`framework/src/lib/piece.ts`）——所以 0.84 时代写的
+> `'0.36.1'` 不会报错，但序列化出来的元数据一定是 `0.82.0`。新件直接写 `'0.82.0'`，别再抄旧值。
+>
+> ⚠️ 仓库里 `src/index.ts` 目前仍留着 0.84 时期的 `'0.36.1' // 必须 ≤ 我们的 0.84.0`，
+> 而 `deploy/pieces/metadata/piece-biz-calendar.json` 里已经是 `"minimumSupportedRelease": "0.82.0"`
+> ——就是被上面这条 clamp 抬上去的。以本文写法为准。
+
 > **图标别指向上游 CDN。** 本件早期写的是 `https://cdn.activepieces.com/pieces/calendar.svg`，
 > 但上游根本没有这个文件——**联网也是 404**，任何环境都碎图（2026-07-26 排查气隙资产时才
 > 发现，hash-helper 同病）。自研件把 svg 放进
-> `activepieces/packages/web/public/ap-cdn/pieces/hermes/biz-calendar.svg`，
+> `automation/packages/web/public/ap-cdn/pieces/hermes/biz-calendar.svg`（本件的图已在位），
 > `logoUrl` 写该同源路径即可。云端件不用管：CDN 资产已整体镜像 + 构建期重写
 > （见 HOWTO §1.2 / §3.3）。
 
@@ -303,8 +335,8 @@ export const bizCalendar = createPiece({
 
 ## 6. i18n（可选）`src/i18n/zh.json`
 
-key 对应各 `displayName`/`description`，不做也能跑（回退英文）。
-**必须放 `src/i18n/`**——打包只拷贝 `src/i18n/`，放顶层 `i18n/` 会被静默忽略（实测 tarball 里没有）：
+key 对应各 `displayName`/`description`，不做也能跑（回退英文）。**必须放 `src/i18n/`**——
+放顶层 `i18n/` 一定不会进包（how-to §1.6）：
 
 ```json
 {
@@ -318,21 +350,68 @@ key 对应各 `displayName`/`description`，不做也能跑（回退英文）。
 }
 ```
 
+> ⚠️ **0.88 的 esbuild 打包不会自动带上 i18n**：bundle 只产出 `dist/src/index.js`，
+> 本件当前的 tarball 里**只有** `src/index.js` + `package.json`，`zh.json` 没进去
+> （元数据 JSON 里 `"i18n": null` 也是同一个原因）。上游件（如 text-helper）的做法是把
+> `src/i18n` 一并拷进 `dist/` 并写进 tarball `package.json` 的 `files`：
+>
+> ```bash
+> cp -r $P/src/i18n $P/dist/src/i18n            # $P 见 §7
+> # 并在 §7 生成 dist/package.json 时把 files 写成
+> #   ["src/index.js", "package.json", "src/i18n"]
+> ```
+>
+> 不做也不影响功能（builder 显示英文原文）。
+
 ---
 
 ## 7. 本地构建 & 试运行（开发内环）
 
-dev 与生产是同一套白名单机制（目录 DB-only，**没有**「从源码加载」捷径，见 how-to §2）。
-内环 = 构建 → 出两半 → seed dev 库 → 重启 AP（以下命令 2026-07 全部实测通过）：
+dev 与生产是同一套白名单机制（目录 DB-only，且 `AP_PIECES_SYNC_MODE` 的**代码默认值就是 `NONE`**，
+**没有**「从源码加载」捷径，见 how-to §2）。
+内环 = 打包 → 出两半 → seed dev 库 → 重启 AP。
+
+**打包**（0.88 无 CLI，直接用 esbuild；配方与 how-to §3.1 一致，这里替换成本件的具体路径）：
 
 ```bash
-cd activepieces
-npm run build-piece -- biz-calendar
-# → packages/pieces/community/biz-calendar/dist/（CLI 已自动 npm pack 出 tgz）
+cd automation
+P=packages/pieces/community/biz-calendar
+rm -rf $P/dist && mkdir -p $P/dist/src
+npx esbuild $P/src/index.ts --bundle --platform=node --format=cjs --outfile=$P/dist/src/index.js
 
+# tarball 的 package.json：自包含，零 @activepieces 依赖（与源码那份是两回事，见 §2）
+node -e '
+  const fs=require("fs"), d="packages/pieces/community/biz-calendar";
+  const j=require("./"+d+"/package.json");
+  fs.writeFileSync(d+"/dist/package.json", JSON.stringify({
+    name: j.name, version: j.version, main: "./src/index.js",
+    dependencies: {},
+    files: ["src/index.js", "package.json"]
+  }, null, 2) + "\n");
+'
+(cd $P/dist && npm pack --silent) \
+  && mv $P/dist/activepieces-piece-biz-calendar-1.0.0.tgz hermes/tarballs/
+
+# 冒烟：能 require 出来就说明 bundle 完整
+node -e 'console.log(Object.keys(require("./packages/pieces/community/biz-calendar/dist/src/index.js")))'
+# → [ 'bizCalendar' ]
+```
+
+⚠️ **别用 0.84 的 tsc 体例**（`tsc -p tsconfig.lib.json` + 把 `@activepieces/{framework,common,shared}`
+pin 成具体版本）：0.88 工作区这几个包的版本在 npm 上不存在，构建期 `seed-offline-store.mjs`
+解析它们会 404，**整个镜像构建挂掉**（how-to §3.1）。本件产出的实际长相：
+`hermes/tarballs/activepieces-piece-biz-calendar-1.0.0.tgz`，**35.5 KB**，包内只有
+`src/index.js` + `package.json`，`"dependencies": {}` ⇒ 离线烘焙对它是空操作，构建期零联网。
+
+**出元数据半 + seed dev 库**：
+
+```bash
 cd ../deploy/pieces
 node serialize-piece-metadata.js biz-calendar       # → metadata/piece-biz-calendar.json
-# pieces.json 追加 { "name": "@activepieces/piece-biz-calendar", "version": "1.0.0" }
+#   （bundle 自包含，不再需要 dist/node_modules 就能 require 出 metadata）
+# pieces.json（automation/hermes/pieces.json）追加：
+#   { "name": "@activepieces/piece-biz-calendar", "version": "1.0.0",
+#     "tarball": "activepieces-piece-biz-calendar-1.0.0.tgz" }
 node generate-metadata-seed.js
 docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_dev \
   < metadata/pieces-seed.sql
@@ -346,9 +425,26 @@ docker restart platform-activepieces-dev            # 不重启则「列表有�
 props → builder 表单的映射一目了然：`DateTime`→日期选择器、`Number`→数字框、`Array`→可增删的列表、
 `StaticDropdown`→下拉。**改代码后 Cmd+Shift+R 硬刷新**，否则吃旧 builder JS 缓存。
 
-**试运行**（真实执行 `run()`）还需运行时半进 worker 预装目录——正式路径烘镜像（how-to §6），
-dev 快路径按 how-to §2 把 tarball 手工预装进容器；装好后触发 flow 即可看到输出
-`{ "dueDate": "2026-07-27" }`（2026-07-24 周五 +1 工作日 = 下周一，实测）。
+**试运行**（真实执行 `run()`）还需运行时半进 worker 预装目录——正式路径是烘镜像（how-to §6），
+dev 快路径是手工预装（布局与 prewarm 一致，容器重建即失效；机制与坑见 how-to §2）：
+
+```bash
+cd <repo>
+docker cp automation/hermes/tarballs/activepieces-piece-biz-calendar-1.0.0.tgz \
+  platform-activepieces-dev:/tmp/piece.tgz
+docker exec platform-activepieces-dev sh -c '
+  P=/usr/src/app/cache/v13/common/pieces/@activepieces/piece-biz-calendar-1.0.0
+  mkdir -p "$P" && cp /tmp/piece.tgz "$P/bundle.tgz"
+  printf "{\"name\":\"@activepieces/piece-biz-calendar-1.0.0\",\"version\":\"1.0.0\",\"dependencies\":{\"@activepieces/piece-biz-calendar\":\"$P/bundle.tgz\"}}" > "$P/package.json"
+  cd "$P" && pnpm install --config.node-linker=isolated --ignore-workspace && echo true > ready'
+```
+
+> 0.88 的两处易错点：缓存版本是 **`v13`**（0.84 是 `v11`），依赖文件名是 **`bundle.tgz`**
+> （0.84 是 `archive.tgz`），且依赖值是它的**绝对路径、不带 `file:` 前缀**。写歪了运行时会重装或
+> `PieceNotFound`。
+
+装好后触发 flow 即可看到输出 `{ "dueDate": "2026-07-27" }`
+（2026-07-24 周五 +1 工作日 = 下周一，实测）。
 
 ---
 
@@ -420,30 +516,32 @@ export const slaDueSoonTrigger = createTrigger({
 这个例子对应的具体命令：
 
 ```bash
-# §3.1 运行时半：build（CLI 自动 pack）→ 留档（并 publish 到内网 Nexus 供构建机解析）
-cd activepieces && npm run build-piece -- biz-calendar
-cp packages/pieces/community/biz-calendar/dist/activepieces-piece-biz-calendar-1.0.0.tgz \
-   hermes/tarballs/
+# §3.1 运行时半：esbuild bundle → npm pack → 落 hermes/tarballs/（本文 §7 的第一块，逐字可抄）
+#      自包含 tarball 已是安装源，构建机不需要能解析这个包名；也可另行 publish 到内网 Nexus
 
 # §3.2 元数据半：本地序列化（不能问本地 AP 要——新件不在 DB，单查 404）
-cd ../deploy/pieces
+cd deploy/pieces
 node serialize-piece-metadata.js biz-calendar   # → metadata/piece-biz-calendar.json
 
-# §4 白名单：activepieces/hermes/pieces.json 追加
+# §3.3 图标半：automation/packages/web/public/ap-cdn/pieces/hermes/biz-calendar.svg（本件已在位）
+
+# §4 白名单：automation/hermes/pieces.json 追加（本件已登记）
 #   { "name": "@activepieces/piece-biz-calendar", "version": "1.0.0",
 #     "tarball": "activepieces-piece-biz-calendar-1.0.0.tgz" }
 
 # §5 生成 seed
 node generate-metadata-seed.js
 
-# §6 烘镜像 → §7 投放（起 AP 建表 → psql < pieces-seed.sql → 重启 AP）→ §8 在 DW 验证
+# §6 烘镜像（cd automation && docker build -t activepieces:0.88.0-ee-removed .）
+# → §7 投放（起 AP 建表 → psql < pieces-seed.sql → 重启 AP）→ §8 在 DW 验证
 ```
 
 ---
 
 ## 10. 单元测试（推荐，纯函数好测）
 
-`common/business-days.ts` 是纯函数，测起来零依赖：
+`common/business-days.ts` 是纯函数，测起来零依赖（仓库里目前**没有**落这个测试文件——
+0.88 裁剪后 piece 侧不带测试脚手架，要跑就自己接测试框架）：
 
 ```ts
 import { addBusinessDays, businessDaysBetween, isBusinessDay } from '../src/lib/common/business-days';
@@ -468,11 +566,15 @@ test('工作日间隔', () => {
 
 - ✅ **纯本地**：三个 action 无外网、无子进程、无系统路径 → 落在 `SANDBOX_CODE_ONLY` 内。
 - ✅ **无 bun**：全程 npx/pnpm（X-4）。
-- ✅ **无外部依赖**：deps 只有 `workspace:*`（+tslib）→ 气隙镜像预装零障碍。
-- ⚠️ **create-piece 后先 `pnpm install`**：否则编译报 TS2307（脚手架不装依赖）。
-- ⚠️ **package.json 保留脚手架字段**：删 `build` script 会让 build-piece 报 `no dist output`；不加 `"type":"module"`。
-- ⚠️ **i18n 放 `src/i18n/`**：顶层 `i18n/` 不会被打包。
+- ✅ **无外部依赖**：源码 deps 只有 `workspace:*`（+tslib），打包后 `dependencies: {}` → 气隙零障碍。
+- ⛔ **`create-piece` / `build-piece` 在 0.88 已不存在**（`packages/cli` 被删）：脚手架靠 `cp -r hash-helper`（§1），打包靠 esbuild（§7）。
+- ⛔ **别沿用 0.84 的 tsc 体例打包**（pin `@activepieces/*` 版本）：npm 上没有那些版本，构建期 `seed-offline-store.mjs` **404 炸镜像构建**（§7）。
+- ⚠️ **抄完骨架先 `pnpm install`**：否则编译报 TS2307（找不到 `@activepieces/pieces-framework`）。
+- ⚠️ **package.json 别加 `"type": "module"`**：真实件全是 CommonJS（§2）。
+- ⚠️ **`minimumSupportedRelease` 写 `'0.82.0'`**：低于它会被 framework 静默抬上去（§5）。
+- ⚠️ **i18n 放 `src/i18n/`，且 esbuild 体例下要显式带进 `files`**：否则 tarball 里没有（§6）。
 - ⚠️ **元数据文件名 `piece-biz-calendar.json`**：存成 `biz-calendar.json` 生成器 ENOENT（脚本自动命名）。
 - ⚠️ **触发器一旦外呼**：目标必须内网 + 网关放行（X-3），否则生产失败。
 - ⚠️ **两半版本一致**：`package.json` / `pieces.json` / 元数据 JSON 三处 `1.0.0` 逐字对齐。
+- ⚠️ **手工预装认 `cache/v13` + `bundle.tgz`**：沿用 0.84 的 `v11`/`archive.tgz` 会 `PieceNotFound`（§7）。
 - ⚠️ **跑完 seed 必须重启 AP**：否则列表有、单查 404（进程内 `cachedRegistry`，见 how-to §7）。

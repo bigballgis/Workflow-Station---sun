@@ -95,15 +95,16 @@ public class ExportImportPackageParser {
                         rawFiles.get("link-form-components/link_form_components.json"), List.class));
             }
 
-            // Parse Automation (Activepieces) flow payloads carried by the package
-            List<Map<String, Object>> automationFlows = new ArrayList<>();
-            for (String fileName : rawFiles.keySet().stream().sorted().toList()) {
-                if (fileName.startsWith("automation-flows/") && fileName.endsWith(".json")) {
-                    automationFlows.add(objectMapper.readValue(rawFiles.get(fileName), Map.class));
-                }
-            }
-            if (!automationFlows.isEmpty()) {
-                result.put("automationFlows", automationFlows);
+            // FR-B12: packages no longer carry Automation (Activepieces) flow bodies. Legacy
+            // packages may still contain automation-flows/ entries — record the file names only,
+            // so the importer can log that they are ignored (flows migrate via the dedicated
+            // Automation migration channel).
+            List<String> legacyAutomationFlowFiles = rawFiles.keySet().stream()
+                    .filter(name -> name.startsWith("automation-flows/") && name.endsWith(".json"))
+                    .sorted()
+                    .toList();
+            if (!legacyAutomationFlowFiles.isEmpty()) {
+                result.put("legacyAutomationFlowFiles", legacyAutomationFlowFiles);
             }
 
             // Parse "View Design" main-table view configs

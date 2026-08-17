@@ -1,6 +1,5 @@
 package com.developer.component.impl;
 
-import com.developer.client.AdminCenterAutomationFlowClient;
 import com.developer.dto.ExportManifest;
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
@@ -35,7 +34,6 @@ import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
-import com.developer.util.BpmnServiceTaskFlowRefs;
 import com.developer.util.XmlEncodingUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -86,7 +84,6 @@ public class FunctionUnitExporter {
     private final RelationTableStructurePortability relationTablePortability;
     private final MainTableViewPortability mainTableViewPortability;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
-    private final AdminCenterAutomationFlowClient automationFlowClient;
     private final ObjectMapper objectMapper;
 
     @Value("${platform.version:1.0.0}")
@@ -150,8 +147,9 @@ public class FunctionUnitExporter {
         }
         // Automation flows are intentionally NOT snapshotted: the flow body is an environment-level
         // resource with its own versioning in AP, and a same-database rollback leaves the BPMN's
-        // ap:flowId pointing at the very same flow. Cross-environment portability is served by the
-        // ZIP's automation-flows/ entries instead.
+        // ap:flowKey/ap:flowId pointing at the very same flow. Cross-environment portability is
+        // served by the dedicated Automation flow migration channel (FR-B12) — FU packages no
+        // longer carry flow bodies either.
 
         payload.put("tables", tables.stream()
                 .map(table -> serializeTable(table, tableIdToName))
@@ -260,35 +258,20 @@ public class FunctionUnitExporter {
             List<String> connectionFiles = new ArrayList<>();
             List<String> monitorFiles = new ArrayList<>();
             List<String> emailTemplateFiles = new ArrayList<>();
-            List<String> automationFlowFiles = new ArrayList<>();
 
             // Export process definition — decode Base64 to raw XML
             String processFile = null;
-            String decodedBpmn = null;
             if (processDefinition != null) {
-                decodedBpmn = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
+                String decodedBpmn = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
                 processFile = "process/process.bpmn";
                 byte[] processData = decodedBpmn.getBytes(StandardCharsets.UTF_8);
                 fileContents.put(processFile, processData);
                 addZipEntry(zos, processFile, processData);
             }
 
-            // Export the Automation (Activepieces) flows the service tasks reference. The flow body
-            // lives in AP, not in the DW schema, so it is fetched through admin-center's migration
-            // channel; without it the package would carry an ap:flowId that resolves to nothing in
-            // the target environment.
-            int flowIndex = 0;
-            for (String flowRef : BpmnServiceTaskFlowRefs.extract(decodedBpmn)) {
-                byte[] flowData = automationFlowClient.exportFlow(flowRef)
-                        .orElseThrow(() -> new DeveloperBusinessException("AP_FLOW_EXPORT_UNRESOLVED",
-                                "Service task references automation flow '" + flowRef
-                                        + "', which no longer exists in this environment"));
-                String fileName = "automation-flows/flow_" + flowIndex + ".json";
-                fileContents.put(fileName, flowData);
-                addZipEntry(zos, fileName, flowData);
-                automationFlowFiles.add(fileName);
-                flowIndex++;
-            }
+            // FR-B12: Automation (Activepieces) flows are NOT packaged any more. The BPMN carries
+            // portable ap:flowKey references; the flow bodies migrate through the dedicated
+            // Automation migration channel, and import validates the references resolve (FR-B13).
 
             // Export table definitions
             int tableIndex = 0;
@@ -455,7 +438,6 @@ public class FunctionUnitExporter {
                             .connections(connectionFiles)
                             .emailMonitors(monitorFiles)
                             .emailTemplates(emailTemplateFiles)
-                            .automationFlows(automationFlowFiles)
                             .mainTableViews(viewsFile)
                             .build())
                     .dependencies(new ArrayList<>())

@@ -27,12 +27,12 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Activepieces 共享账号登录桥后端。
+ * Activepieces 登录桥后端（per-user：谁进去就是谁）。
  *
- * <p>方案：社区版 + 网关共享账号。两种进入路径：
+ * <p>方案：社区版 + 网关登录桥，会话一律按当前操作人经 managed-authn 换取。两种进入路径：
  * <ol>
  *   <li><b>跨域握手（方案 B，推荐）</b>：admin 域调 {@link #launch()}（cookie 在自己域有效）→ 验平台 JWT、
- *       共享账号换 AP 会话、签发一次性 nonce → 返回 {@code bridgeUrl = <AP 桥页>#nonce=<票>}。浏览器整页跳到
+ *       按该用户换 AP 会话、签发一次性 nonce → 返回 {@code bridgeUrl = <AP 桥页>#nonce=<票>}。浏览器整页跳到
  *       AP 域桥页，桥页凭 {@link #token(String) nonce} 换回 AP token 写 localStorage。<b>AP 域全程无需平台 cookie</b>，
  *       故 admin 与 AP 分属不同父域也能用。</li>
  *   <li><b>同源回退（dev）</b>：admin 与 AP 同源（:8085）时，桥页直接带 cookie 调 {@link #token(String)}（无 nonce），
@@ -40,14 +40,14 @@ import java.util.Optional;
  * </ol>
  *
  * <p>安全模型：换 AP token 必经"已认证的 admin 域 {@code /launch}"或"同源带 cookie 的 {@code /token}"；
- * nonce 不可猜、单次、短时效；AP token 从不进入 URL。共享账号口令仅服务端持有。
+ * nonce 不可猜、单次、短时效；AP token 从不进入 URL。外部 token 的签名私钥仅服务端持有。
  * 生产 runtime 不开 UI（{@code activepieces.bridge.enabled=false}）→ 端点恒 404。
  */
 @RestController
 @RequestMapping("/internal/ap")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Activepieces Login Bridge", description = "Shared-account login bridge endpoints for the AP gateway")
+@Tag(name = "Activepieces Login Bridge", description = "Per-user login bridge endpoints for the AP gateway")
 public class ServiceTaskTokenController {
 
     private final ServiceTaskProperties properties;
@@ -60,16 +60,16 @@ public class ServiceTaskTokenController {
     /**
      * 跨域握手入口（方案 B）。在 <b>admin 域</b>命中（经 Kong {@code /api/v1/admin} 路由），平台 JWT cookie
      * 在自己域上有效，故 {@link SecurityContextUtils#getCurrentUser()} 可校验当前用户。
-     * 验过后用共享账号换 AP 会话、签发一次性 nonce，返回 {@code bridgeUrl}（桥页地址 + {@code #nonce=}）。
+     * 验过后按<b>该用户</b>换其专属 AP 会话、签发一次性 nonce，返回 {@code bridgeUrl}（桥页地址 + {@code #nonce=}）。
      * 前端拿到后 {@code window.location.assign(bridgeUrl)} 整页跳转进 AP 域。
      *
      * @return {@code {bridgeUrl}}；未认证 401；桥关闭 404；桥页公网地址未配置 502。
      */
     @GetMapping("/launch")
     @Operation(summary = "Mint a cross-domain AP bridge launch URL",
-            description = "Validates the platform JWT (cookie on the admin origin), signs into AP with the "
-                    + "shared account, issues a one-time nonce, and returns the AP bridge URL carrying it. "
-                    + "The AP domain then needs no platform cookie.")
+            description = "Validates the platform JWT (cookie on the admin origin), exchanges a per-user "
+                    + "managed external token for an AP session, issues a one-time nonce, and returns the AP "
+                    + "bridge URL carrying it. The AP domain then needs no platform cookie.")
     public ResponseEntity<ApiResponse<Map<String, String>>> launch() {
         if (!properties.getBridge().isEnabled()) {
             return ResponseEntity.notFound().build();
@@ -86,14 +86,11 @@ public class ServiceTaskTokenController {
 
         UserPrincipal user = userOpt.get();
         String login = user.getUsername() != null ? user.getUsername() : user.getUserId();
-        // Per-user provisioning（审计到人）优先：configured => 按当前 DW 用户换取专属 AP token，
-        // AP 侧 externalId=DW userId。未配置 managed 则回退共享账号（不回归既有 dev/非生产行为）。
-        ServiceTaskApiClient.ApSession session = properties.getManaged().isEnabled()
-                ? apiClient.signInManaged(user)
-                : apiClient.signInShared();
+        // 谁进去就是谁：按当前平台用户换取其专属 AP token（AP 侧 externalId=平台 userId）。
+        // 没有回退分支——共享账号已移除，未配置签名密钥时 signInManaged 直接 fail-loud。
+        ServiceTaskApiClient.ApSession session = apiClient.signInManaged(user);
         String nonce = nonceStore.issue(session, properties.getBridge().getNonceTtlSeconds());
-        log.debug("Issued AP bridge launch nonce for platform user {} (managed={})",
-                login, properties.getManaged().isEnabled());
+        log.debug("Issued AP bridge launch nonce for platform user {}", login);
 
         String bridgeUrl = publicUrl + "#nonce=" + URLEncoder.encode(nonce, StandardCharsets.UTF_8);
         Map<String, String> data = new HashMap<>();
@@ -155,14 +152,14 @@ public class ServiceTaskTokenController {
      * <ul>
      *   <li><b>nonce（方案 B，跨域）</b>：带 {@code ?nonce=}，单次兑换 {@code /launch} 暂存的 AP 会话——
      *       <b>不依赖平台 cookie</b>，故在 AP 域可用。无效 / 过期 / 已用 → 401。</li>
-     *   <li><b>cookie（dev 同源回退）</b>：无 {@code nonce} 时校验平台 JWT，现场用共享账号换 AP token。未认证 401。</li>
+     *   <li><b>cookie（dev 同源回退）</b>：无 {@code nonce} 时校验平台 JWT，现场按该用户换其专属 AP token。未认证 401。</li>
      * </ul>
      * 桥关闭时 404。
      */
     @GetMapping("/token")
     @Operation(summary = "Resolve an AP session via nonce (cross-domain) or platform cookie (same-origin dev)",
             description = "With ?nonce= consumes the one-time session minted by /launch (no platform cookie "
-                    + "needed). Without nonce, validates the platform JWT and signs into AP with the shared account.")
+                    + "needed). Without nonce, validates the platform JWT and mints that user's own AP session.")
     public ResponseEntity<ApiResponse<Map<String, String>>> token(
             @RequestParam(value = "nonce", required = false) String nonce) {
         if (!properties.getBridge().isEnabled()) {
@@ -178,8 +175,7 @@ public class ServiceTaskTokenController {
             }
             session = resolved.get();
         } else {
-            // 同源：校验平台 JWT，现场换 AP token。与 /launch 一致按 managed 分流——
-            // per-user（审计到人）开启时换该用户专属 token，否则回退共享账号。
+            // 同源：校验平台 JWT，现场按该用户换其专属 AP token（与 /launch 同一条路径，无回退）。
             // DW 内嵌 builder（lib-mode 挂载）走的正是这条路径。
             Optional<UserPrincipal> userOpt = SecurityContextUtils.getCurrentUser();
             if (userOpt.isEmpty()) {
@@ -187,11 +183,8 @@ public class ServiceTaskTokenController {
             }
             UserPrincipal user = userOpt.get();
             String login = user.getUsername() != null ? user.getUsername() : user.getUserId();
-            session = properties.getManaged().isEnabled()
-                    ? apiClient.signInManaged(user)
-                    : apiClient.signInShared();
-            log.debug("Issued AP session (same-origin) for platform user {} (managed={})",
-                    login, properties.getManaged().isEnabled());
+            session = apiClient.signInManaged(user);
+            log.debug("Issued AP session (same-origin) for platform user {}", login);
         }
 
         // A complete AP session is token + projectId (AP clears both on logout). Returning

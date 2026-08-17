@@ -10,14 +10,14 @@
 //
 // Usage:  node serialize-piece-metadata.js <piece-folder> [...more]
 //   e.g.  node serialize-piece-metadata.js biz-calendar
-// Prereq: npm run build-piece -- <piece-folder>  (in activepieces/) has been run,
+// Prereq: npx esbuild bundle (in automation/, see PIECE_DEVELOPMENT_HOWTO) has been run,
 //         so packages/pieces/*/<piece-folder>/dist/ exists with a pinned package.json.
 'use strict'
 const fs = require('fs')
 const path = require('path')
 
 const repoRoot = path.resolve(__dirname, '..', '..')
-const piecesRoot = path.join(repoRoot, 'activepieces', 'packages', 'pieces')
+const piecesRoot = path.join(repoRoot, 'automation', 'packages', 'pieces')
 const metadataDir = path.join(__dirname, 'metadata')
 
 // Self-developed pieces live in community/ (see HOWTO §1.1); custom/ and core/ are
@@ -31,18 +31,19 @@ function findPieceDist(folderName) {
     }
     throw new Error(
         `no built dist for piece folder "${folderName}" under ${SEARCH_DIRS.join('/')}. ` +
-        'Run: cd activepieces && npm run build-piece -- ' + folderName,
+        'Run the esbuild packaging step first (PIECE_DEVELOPMENT_HOWTO.md \u00a73.1) for ' + folderName,
     )
 }
 
 function serializeOne(folderName) {
     const dist = findPieceDist(folderName)
-    // dist/package.json has workspace deps pinned to real versions by build-piece.
+    // dist/package.json is the tarball manifest written by the packaging step: 0.88 pieces are
+    // self-contained esbuild bundles, so it carries no @activepieces/* deps at all.
     const pkg = JSON.parse(fs.readFileSync(path.join(dist, 'package.json'), 'utf8'))
 
     // Engine-equivalent load: dist/src/index.js, pick the export that is a Piece
-    // (has a .metadata() method). dist/node_modules is symlinked by build-piece,
-    // so framework imports resolve.
+    // (has a .metadata() method). The bundle inlines @activepieces/*, so framework imports
+    // resolve without any node_modules next to it.
     const mod = require(path.join(dist, 'src', 'index.js'))
     const piece = Object.values(mod).find((v) => v && typeof v.metadata === 'function')
     if (!piece) throw new Error(`${folderName}: no Piece export found in dist/src/index.js`)
@@ -71,7 +72,7 @@ function serializeOne(folderName) {
     fs.writeFileSync(outPath, JSON.stringify(out, null, 2) + '\n')
     console.log(`wrote ${path.relative(process.cwd(), outPath)} (${pkg.name}@${pkg.version}, ` +
         `${Object.keys(out.actions).length} actions, ${Object.keys(out.triggers).length} triggers)`)
-    console.log(`  activepieces/hermes/pieces.json entry: { "name": "${pkg.name}", "version": "${pkg.version}" }`)
+    console.log(`  automation/hermes/pieces.json entry: { "name": "${pkg.name}", "version": "${pkg.version}" }`)
 }
 
 const folders = process.argv.slice(2)

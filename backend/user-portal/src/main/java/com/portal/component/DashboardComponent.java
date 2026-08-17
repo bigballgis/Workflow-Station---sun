@@ -14,6 +14,7 @@ import com.portal.repository.BusinessUnitRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.UserBusinessUnitRepository;
 import com.portal.service.UserDisplayNameResolver;
+import com.portal.util.RequestContextInheritanceUtils;
 import com.platform.security.util.SecurityContextUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,13 +24,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * Dashboard aggregation component.
@@ -86,6 +92,25 @@ public class DashboardComponent {
     }
 
     /**
+     * Fan out onto {@link #aggregationExecutor} carrying the caller's request + security context.
+     *
+     * <p>Plain {@code supplyAsync} loses them: the worker thread has an empty
+     * {@code RequestContextHolder}, so {@link WorkflowEngineClient} finds no inbound Authorization to
+     * forward and workflow-engine answers 403. Every branch below swallows that into a zero-valued
+     * result, so the failure is invisible in the UI — the Home "Process Overview" card showed 0/0/0
+     * for every user while the engine logged one 403 per dashboard load.</p>
+     */
+    private <T> CompletableFuture<T> supplyWithRequestContext(Supplier<T> supplier) {
+        SecurityContext securityContext = SecurityContextHolder.getContext();
+        ServletRequestAttributes requestAttributes =
+                RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes sra ? sra : null;
+        return CompletableFuture.supplyAsync(
+                () -> RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(
+                        securityContext, requestAttributes, supplier::get),
+                aggregationExecutor);
+    }
+
+    /**
      * Returns dashboard overview data
      */
     public DashboardOverview getDashboardOverview(String userId) {
@@ -99,7 +124,7 @@ public class DashboardComponent {
 
         // Fetch process stats in parallel with queryTasks (both hit workflow-engine; snapshot speeds first paint)
         CompletableFuture<DashboardOverview.ProcessOverview> processOverviewFuture =
-                CompletableFuture.supplyAsync(() -> getProcessOverview(userId), aggregationExecutor);
+                supplyWithRequestContext(() -> getProcessOverview(userId));
 
         TaskQueryRequest dashTaskRequest = TaskQueryRequest.builder()
                 .userId(userId)
@@ -112,7 +137,7 @@ public class DashboardComponent {
 
         // Overlaps with history inside buildTaskOverviewFromPage (local CPU or light logic)
         CompletableFuture<DashboardOverview.PerformanceOverview> performanceFuture =
-                CompletableFuture.supplyAsync(() -> getPerformanceOverview(userId), aggregationExecutor);
+                supplyWithRequestContext(() -> getPerformanceOverview(userId));
 
         DashboardOverview.TaskOverview taskOverview = buildTaskOverviewFromPage(userId, taskPage);
         List<TaskInfo> recentTasks = taskPage.getContent().stream().limit(5).toList();
@@ -183,10 +208,10 @@ public class DashboardComponent {
                     userId, completedRangeStart, completedRangeEnd);
             avgProcessingHours = 2.5;
         } else {
-            CompletableFuture<Long> completedTodayFuture = CompletableFuture.supplyAsync(() ->
-                    fetchCompletedTasksTotalInRange(userId, completedRangeStart, completedRangeEnd), aggregationExecutor);
-            CompletableFuture<Double> avgHoursFuture = CompletableFuture.supplyAsync(() ->
-                    estimateAvgProcessingHoursFromRecentCompletions(userId), aggregationExecutor);
+            CompletableFuture<Long> completedTodayFuture = supplyWithRequestContext(() ->
+                    fetchCompletedTasksTotalInRange(userId, completedRangeStart, completedRangeEnd));
+            CompletableFuture<Double> avgHoursFuture = supplyWithRequestContext(() ->
+                    estimateAvgProcessingHoursFromRecentCompletions(userId));
             completedTodayCount = completedTodayFuture.join();
             avgProcessingHours = avgHoursFuture.join();
         }
@@ -219,7 +244,7 @@ public class DashboardComponent {
                 String now = LocalDateTime.now().toString();
 
                 List<CompletableFuture<long[]>> futures = teamMemberIds.stream()
-                        .map(memberId -> CompletableFuture.supplyAsync(() -> {  // aggregationExecutor: 体内调 queryTasks(→taskQueryExecutor)，分池避免自等待死锁
+                        .map(memberId -> supplyWithRequestContext(() -> {  // aggregationExecutor: 体内调 queryTasks(→taskQueryExecutor)，分池避免自等待死锁
                             long memberPending = 0;
                             long memberOverdue = 0;
                             long memberCompleted = 0;
@@ -238,19 +263,12 @@ public class DashboardComponent {
                                 log.warn("Failed to get tasks for team member {}: {}", memberId, e.getMessage());
                             }
                             try {
-                                Optional<Map<String, Object>> memberResult = workflowEngineClient.getCompletedTasks(
-                                        memberId, 0, 1000, null, todayStart, now);
-                                if (memberResult.isPresent()) {
-                                    Object totalElements = memberResult.get().get("totalElements");
-                                    if (totalElements instanceof Number) {
-                                        memberCompleted = ((Number) totalElements).longValue();
-                                    }
-                                }
+                                memberCompleted = fetchCompletedTasksTotalInRange(memberId, todayStart, now);
                             } catch (Exception e) {
                                 log.warn("Failed to get completed tasks for team member {}: {}", memberId, e.getMessage());
                             }
                             return new long[]{memberPending, memberOverdue, memberCompleted};
-                        }, aggregationExecutor))
+                        }))
                         .toList();
 
                 long aggregatedPending = 0;
@@ -292,10 +310,15 @@ public class DashboardComponent {
                 .build();
     }
 
+    /**
+     * Only {@code totalElements} is read here, and the engine derives it from {@code query.count()}
+     * independently of the page size — so ask for a single row instead of a thousand. The rows we
+     * used to request were all built into response maps and then thrown away.
+     */
     private long fetchCompletedTasksTotalInRange(String userId, String startIso, String endIso) {
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
-                    userId, 0, 1000, null, startIso, endIso);
+                    userId, 0, 1, null, startIso, endIso);
             if (result.isPresent()) {
                 Object totalElements = result.get().get("totalElements");
                 if (totalElements instanceof Number) {

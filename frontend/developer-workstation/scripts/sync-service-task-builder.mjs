@@ -5,8 +5,8 @@
  * option from AG-02.8. No registry and no network at runtime, so it stays air-gap
  * capable (X-3).
  *
- * Source:  activepieces/dist/packages/web-embed   (built by
- *          `npx vite build --config vite.embed.config.mts` in activepieces/packages/web)
+ * Source:  automation/dist/packages/web-embed   (built by
+ *          `npx vite build --config vite.embed.config.mts` in automation/packages/web)
  * Target:  public/service-task-builder            (gitignored — a build artifact)
  *
  * Runs as a `prebuild` hook and is deliberately tolerant by default: if the bundle has
@@ -23,7 +23,7 @@
  * SERVICE_TASK_BUILDER_SKIP=1 (build-and-push-k8s.ps1 -NoServiceTaskBuilder). Not copying
  * is not enough there: a bundle left in public/ by an earlier normal build would be picked
  * up by Vite regardless, so this also REMOVES the destination. public/service-task-builder
- * is a gitignored copy — the source in activepieces/dist/ is untouched and the next normal
+ * is a gitignored copy — the source in automation/dist/ is untouched and the next normal
  * build recreates it.
  */
 import { cp, rm, stat, mkdir } from 'node:fs/promises';
@@ -31,7 +31,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SRC = resolve(here, '../../../activepieces/dist/packages/web-embed');
+const SRC = resolve(here, '../../../automation/dist/packages/web-embed');
 const DEST = resolve(here, '../public/service-task-builder');
 
 const exists = async (p) => {
@@ -59,7 +59,7 @@ if (process.env.SERVICE_TASK_BUILDER_SKIP) {
 
 if (!(await exists(SRC))) {
   const howToBuild =
-    '  Build it first: cd activepieces/packages/web && ' +
+    '  Build it first: cd automation/packages/web && ' +
     'npx vite build --config vite.embed.config.mts';
   if (process.env.SERVICE_TASK_BUILDER_REQUIRED) {
     console.error(

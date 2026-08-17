@@ -24,7 +24,7 @@ export interface FormAutoSaveOptions {
 }
 
 export function useFormAutoSave(options: FormAutoSaveOptions) {
-  const { selectedForm, designerRef, handleSaveForm, relationViewState, t, autoSaving, lastAutoSaveTime } = options
+  const { selectedForm, designerRef, handleSaveForm, relationViewState, t, autoSaving } = options
 
   // --- State ---
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null

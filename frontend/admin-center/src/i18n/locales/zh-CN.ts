@@ -82,10 +82,10 @@ export default {
     tableStructure: '表结构管理',
     tableData: '表数据管理',
     biManagement: 'BI 管理',
-    serviceTask: '自动化工作台',
     biDashboardRegistry: '仪表盘注册',
     biDashboardAssignment: '仪表盘分配',
     biRbacMapping: 'RBAC 映射',
+    // 下两键既是左侧菜单项，也被审计页当作资源类型标签使用（auditMappings.ts）。
     automationPieces: '自动化组件',
     automationFlows: '自动化流程迁移'
   },
@@ -111,11 +111,13 @@ export default {
     exportFailed: '导出失败',
     import: '导入组件(.tgz)',
     importSuccess: '已导入 {name} v{version},设计器立即可见',
+    importFailed: '导入失败',
+    toggleFailed: '组件启停失败',
     deleteConfirm: '确认删除 {name} v{version}?其元数据与运行时包将被移除。',
-    deleteInUse: '该组件被 {count} 个 flow 引用,强制删除后这些 flow 运行会失败。仍要删除?',
+    deleteInUse: '该组件被以下 flow 使用:{flows}。强制删除后这些 flow 运行会失败。仍要删除?',
     forceDelete: '强制删除',
     deleted: '组件已删除',
-    deleteOfficialConfirm: '确认把烘焙件 {name} v{version} 从目录中删除?镜像内预装的运行时包不受影响;若它仍在白名单(activepieces/hermes/pieces.json)且重跑 seed SQL,该组件会再次出现。仍要删除?'
+    deleteOfficialConfirm: '确认把烘焙件 {name} v{version} 从目录中删除?镜像内预装的运行时包不受影响;若它仍在白名单(automation/hermes/pieces.json)且重跑 seed SQL,该组件会再次出现。仍要删除?'
   },
   automationFlow: {
     title: '自动化流程迁移',

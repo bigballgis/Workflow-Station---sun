@@ -200,7 +200,7 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
                     "tarball 内 package/package.json 缺少合法 name/version(须为 build-piece 产物)");
         }
 
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
+        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInAsCurrentActor();
 
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
         form.add("packageType", "ARCHIVE");
@@ -236,7 +236,7 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
                 throw new PieceInUseException(name, refs);
             }
         }
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
+        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInAsCurrentActor();
         HttpHeaders headers = bearerHeaders(session.token());
         headers.setContentType(MediaType.APPLICATION_JSON);
         Map<String, String> body = Map.of("pieceName", name, "pieceVersion", version);
@@ -246,7 +246,7 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
 
     @Override
     public void setPieceDisabled(String name, boolean disabled) {
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
+        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInAsCurrentActor();
         if (session.platformId() == null) {
             throw new ServiceTaskApiException("AP sign-in response has no platformId");
         }

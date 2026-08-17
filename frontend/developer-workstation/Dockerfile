@@ -19,7 +19,7 @@ COPY . .
 
 # Build the application (vite build only, skip type check for Docker)
 # `pnpm run build`, not a bare vite call, so the `prebuild` hook runs. Here it has no
-# activepieces/ in the build context, so it warns and no-ops, leaving whatever
+# automation/ in the build context, so it warns and no-ops, leaving whatever
 # public/service-task-builder the context already carried — same net effect as before,
 # but the log now says so instead of staying silent.
 RUN pnpm run build

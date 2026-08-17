@@ -40,7 +40,7 @@ export function useFieldImport(options: UseFieldImportOptions) {
   const {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, designerSubBindings,
     activeDesignerTab, relationViewState, subTableViewState,
-    getSubTableListViewBaseColumns, appendSubTableListFieldColumns,
+    getSubTableListViewBaseColumns,
     mapFieldsToFormRules, getRequestIdConfigByTableId, mergeTaskPermissionsForFields,
     refreshFormRulesFromTableMetadata, t,
   } = options
@@ -330,11 +330,6 @@ export function useFieldImport(options: UseFieldImportOptions) {
       // of SUB type (e.g. a miParticipantRow binding without a PRIMARY binding).
       if (activeDesignerTab.value !== 'main' && isImportingSubTable()) {
         // Update sub-table list view state
-        const subFields = selectedImportFields.value.map((f) => ({
-          fieldName: f.fieldName,
-          dataType: f.dataType || 'VARCHAR',
-          displayName: f.displayName || f.fieldName,
-        })) as SubTableFieldDTO[]
         const allSubFields = availableFields.value.map((f: FieldDefinition) => ({
           fieldName: f.fieldName,
           dataType: f.dataType || 'VARCHAR',

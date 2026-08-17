@@ -70,9 +70,37 @@ spec:
         port:
           number: 8080
     timeout: 30s
+  # AP native credential sign-in/sign-up: terminated at the gateway.
+  # Identity is "whoever acts, that's the identity": an AP session may only be minted by
+  # admin-center via managed-authn for the current actor. AP's own
+  # POST /api/v1/authentication/sign-{in,up} are public() endpoints, so without this rule
+  # anyone holding a password on an AP identity could sign in here and bypass the platform
+  # entirely. sign-up is already refused in the application layer (HERMES-PATCH-022);
+  # sign-in is untouched upstream code, hence this gateway rule.
+  #
+  # Must be declared BEFORE the catch-all: Istio evaluates http rules in order and the
+  # catch-all below has no match block, so it would swallow these paths.
+  #
+  # Not an IP allowlist: uat/preprod users sit on the corporate network, so their client
+  # IPs are private too — allowing "internal" IPs would allow exactly the traffic we are
+  # trying to stop. The real boundary is whether the caller traverses this gateway at all:
+  # the migration/export scripts (deploy/scripts/ap-*.js) talk to activepieces-service:80
+  # (ClusterIP, not exposed) via AP_INTERNAL_URL and never come through here.
+  #
+  # Only these two paths — /v1/authentication/switch-platform is still used by the AP SPA
+  # (packages/web/src/lib/authentication-session.ts); blocking it would break live sessions.
+  - match:
+    - uri:
+        exact: /api/v1/authentication/sign-in
+    - uri:
+        exact: /api/v1/authentication/sign-up
+    directResponse:
+      status: 404
+      body:
+        string: '{"message":"Not Found"}'
   # Everything else -> Activepieces (the app + its own /api). AP self-protects with the
   # localStorage token minted by the bridge; an un-platform-authed visitor just sees AP's
-  # own login (no token, harmless).
+  # own login page, which can no longer submit (the endpoint above is terminated).
   - route:
     - destination:
         host: activepieces-service

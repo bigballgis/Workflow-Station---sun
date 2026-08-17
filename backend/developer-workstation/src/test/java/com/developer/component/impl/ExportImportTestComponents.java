@@ -43,24 +43,6 @@ public final class ExportImportTestComponents {
             TableRelationRepository tableRelationRepository,
             FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
             ObjectMapper objectMapper) {
-        return exporter(functionUnitRepository, tableDefinitionRepository, formDefinitionRepository,
-                actionDefinitionRepository, decisionDefinitionRepository, formStageBindingRepository,
-                tableRelationRepository, functionUnitWorkspaceAccessService,
-                Mockito.mock(AdminCenterAutomationFlowClient.class), objectMapper);
-    }
-
-    /** 需要断言 Automation flow 随包导出行为时，传入受控的 flow 通道客户端 */
-    public static FunctionUnitExporter exporter(
-            FunctionUnitRepository functionUnitRepository,
-            TableDefinitionRepository tableDefinitionRepository,
-            FormDefinitionRepository formDefinitionRepository,
-            ActionDefinitionRepository actionDefinitionRepository,
-            DecisionDefinitionRepository decisionDefinitionRepository,
-            FormStageBindingRepository formStageBindingRepository,
-            TableRelationRepository tableRelationRepository,
-            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
-            AdminCenterAutomationFlowClient automationFlowClient,
-            ObjectMapper objectMapper) {
         EmailConnectionRepository emailConnectionRepository = Mockito.mock(EmailConnectionRepository.class);
         Mockito.lenient().when(emailConnectionRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
                 .thenReturn(java.util.List.of());
@@ -96,7 +78,6 @@ public final class ExportImportTestComponents {
                 relationTablePortability,
                 mainTableViewPortability,
                 functionUnitWorkspaceAccessService,
-                automationFlowClient,
                 objectMapper);
         ReflectionTestUtils.setField(exporter, "platformVersion", "1.0.0");
         return exporter;
@@ -118,6 +99,32 @@ public final class ExportImportTestComponents {
             EntityManager entityManager,
             ObjectMapper objectMapper,
             DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer) {
+        return build(functionUnitRepository, processDefinitionRepository, tableDefinitionRepository,
+                formDefinitionRepository, actionDefinitionRepository, decisionDefinitionRepository,
+                formTableBindingRepository, formStageBindingRepository, tableRelationRepository,
+                dmnXmlParser, functionUnitWorkspaceAccessService, functionUnitDevGroupAssignmentRepository,
+                entityManager, objectMapper, sequenceSynchronizer,
+                Mockito.mock(AdminCenterAutomationFlowClient.class));
+    }
+
+    /** 需要断言 FR-B13 导入前 flow 引用校验行为时，传入受控的 flow 解析客户端 */
+    public static ExportImportComponentImpl build(
+            FunctionUnitRepository functionUnitRepository,
+            ProcessDefinitionRepository processDefinitionRepository,
+            TableDefinitionRepository tableDefinitionRepository,
+            FormDefinitionRepository formDefinitionRepository,
+            ActionDefinitionRepository actionDefinitionRepository,
+            DecisionDefinitionRepository decisionDefinitionRepository,
+            FormTableBindingRepository formTableBindingRepository,
+            FormStageBindingRepository formStageBindingRepository,
+            TableRelationRepository tableRelationRepository,
+            DmnXmlParser dmnXmlParser,
+            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
+            FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository,
+            EntityManager entityManager,
+            ObjectMapper objectMapper,
+            DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
+            AdminCenterAutomationFlowClient automationFlowClient) {
 
         ExportImportPackageParser packageParser = new ExportImportPackageParser(objectMapper);
 
@@ -165,7 +172,7 @@ public final class ExportImportTestComponents {
                 Mockito.mock(RelationTableStructurePortability.class),
                 Mockito.mock(MainTableViewPortability.class),
                 Mockito.mock(com.developer.service.MainTableViewService.class),
-                Mockito.mock(AdminCenterAutomationFlowClient.class));
+                automationFlowClient);
 
         return new ExportImportComponentImpl(
                 functionUnitRepository,

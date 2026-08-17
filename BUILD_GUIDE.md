@@ -21,7 +21,7 @@
 10. **环境变量名必须是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`。
 11. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有 PostgreSQL 数据库。Redis、Kafka 在 K8S 中自行部署。
 12. **后端运行时基础镜像可覆盖** — 各后端 `Dockerfile` 使用 `ARG JAVA_BASE_IMAGE`（默认 `eclipse-temurin:17-jre`）。`deploy/environments/dev/build-and-deploy.ps1` 与 `deploy/scripts/build-and-push-k8s.ps1` 支持 **`-JavaBaseImage`**，默认优先使用 **`docker.m.daocloud.io/library/eclipse-temurin:17-jre`**：构建前预拉取，并传 `--build-arg JAVA_BASE_IMAGE=...` 与 `docker build --pull=false`，减轻对 Docker Hub 元数据的依赖。
-    **Activepieces 同理但入口不同**：`activepieces/Dockerfile` 使用 `ARG NODE_IMAGE`（默认 `node:24.14.0-bullseye-slim`）。
+    **Activepieces 同理但入口不同**：`automation/Dockerfile` 使用 `ARG NODE_IMAGE`（默认 `node:24.14.0-bullseye-slim`）。
     它经 Compose 构建（`docker compose build activepieces`），**两个 ps1 脚本都不管它**，故没有对应的 `-NodeBaseImage` 开关；
     构建机够不到 Docker Hub 时手工传 `--build-arg NODE_IMAGE=<nexus3 镜像>`。
 
@@ -306,7 +306,7 @@ Get-ChildItem backend/user-portal/target/*.jar -Exclude *original*
 
 ### 7.2 前端 pnpm 构建
 
-> 前端与 `activepieces/` 统一用 **pnpm 9.15.9**，版本由各 `package.json` 的
+> 前端与 `automation/` 统一用 **pnpm 9.15.9**，版本由各 `package.json` 的
 > `"packageManager"` 锁定。构建机只需 `corepack enable`，corepack 会按该字段自动取到
 > 正确版本，无需全局装 pnpm。仓库内**不再有** `package-lock.json`。
 
@@ -324,7 +324,7 @@ Push-Location frontend/user-portal; pnpm install --frozen-lockfile; pnpm run bui
 #    不需要任何 NPM_TOKEN / registry 环境变量（见下方 .npmrc 说明）。
 Push-Location activepieces; pnpm install --frozen-lockfile; Pop-Location
 # ① 再构建内嵌的 Activepieces builder（产物 gitignore，干净 checkout 上不存在）
-Push-Location activepieces/packages/web; pnpm exec vite build --config vite.embed.config.mts; Pop-Location
+Push-Location automation/packages/web; pnpm exec vite build --config vite.embed.config.mts; Pop-Location
 # ② 必须用 pnpm run build（不是直接调 vite）——只有前者会触发 prebuild 钩子，
 #    把 ① 的产物拷进 public/service-task-builder/
 Push-Location frontend/developer-workstation; pnpm install --frozen-lockfile; pnpm run build; Pop-Location
@@ -335,13 +335,13 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 
 成功标志：每个前端输出 `✓ built in XXs`，`dist/` 目录生成。
 
-> ⚠️ **⓪ 是重活也是唯一联网前置**：`activepieces/node_modules` 约 2.9 GB、几千个包。
-> 气隙构建机在这一步会断，此时改走"别处构建 bundle + 拷 `activepieces/dist/packages/web-embed/` 过来"
+> ⚠️ **⓪ 是重活也是唯一联网前置**：`automation/node_modules` 约 2.9 GB、几千个包。
+> 气隙构建机在这一步会断，此时改走"别处构建 bundle + 拷 `automation/dist/packages/web-embed/` 过来"
 > （见 7.2 末尾脚本行为说明）。想减负可只装 web 及其 workspace 依赖：
 > `pnpm install --frozen-lockfile --filter web...`。
 >
 > ℹ️ **registry 完全跟随机器的默认配置**（公司 Nexus 私服直接可用，无需任何额外开关）。
-> `activepieces/.npmrc` 原本写死 `@activepieces:registry=https://registry.npmjs.org/` 加一行
+> `automation/.npmrc` 原本写死 `@activepieces:registry=https://registry.npmjs.org/` 加一行
 > `//registry.npmjs.org/:_authToken=${NPM_TOKEN}`，两行已删（原因见该文件顶部的 HERMES-PATCH 注释）：
 > token 行只服务上游发布 `@activepieces/*` 的 CI（在本仓库根本不会触发），却让 NPM_TOKEN 未设时
 > pnpm 静默丢弃整个文件；scope pin 若单独留下会首次生效、把那几个包顶到公网、绕过私服。
@@ -354,7 +354,7 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 > ⚠️ **内网私服只部分镜像了公共 npm 时**（某个版本干脆不存在，`ERR_PNPM_FETCH_404`）：`pnpm install`
 > 是 fail-fast，一轮只暴露一个包，而五个 lockfile 合计几千个包。先用
 > `deploy/scripts/probe-npm-registry-coverage.ps1 -Registry <私服地址>` 一次探全，拿到完整缺口清单
-> 再决定——批量申请入库，还是像 `mdurl` 那样在 `activepieces/package.json` 的 `pnpm.overrides` 里降到
+> 再决定——批量申请入库，还是像 `mdurl` 那样在 `automation/package.json` 的 `pnpm.overrides` 里降到
 > 私服有的版本（只有语义化范围收得住时才安全，降完必须重算并提交 lockfile）。缺口太多就别硬降，
 > 改走"带 `web-embed` 产物过去"那条路。
 >
@@ -366,13 +366,13 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 > 走 `deploy/scripts/build-and-push-k8s.ps1` 则 **⓪①② 全部内置**，日常发布只需要这一条命令，
 > 上面那段手工步骤只在不用脚本、单独构建某个前端时才需要照抄。脚本的 AP 相关行为：
 >
-> 1. **⓪ 自动装**：判定方式与四个前端一致（`activepieces/node_modules/.modules.yaml` 的 mtime
+> 1. **⓪ 自动装**：判定方式与四个前端一致（`automation/node_modules/.modules.yaml` 的 mtime
 >    对比 `package.json` / `pnpm-lock.yaml`）—— 已是最新就打一行 `skipping pnpm install` 跳过，
->    否则在 `activepieces/` 跑 `pnpm install --frozen-lockfile`。**每个 checkout 只会真装一次**；
+>    否则在 `automation/` 跑 `pnpm install --frozen-lockfile`。**每个 checkout 只会真装一次**；
 >    同一台机器换新目录会重新装（2.9 GB 不跨目录复用）。
 > 2. **① 每次重建 bundle**，② 由 DW 的 `prebuild` 钩子拷贝；缺产物直接构建失败
 >    （`SERVICE_TASK_BUILDER_REQUIRED`），不会静默放过。
-> 3. **装不上或建不出来都不立即停**：只要 `activepieces/dist/packages/web-embed/ap-builder.mjs`
+> 3. **装不上或建不出来都不立即停**：只要 `automation/dist/packages/web-embed/ap-builder.mjs`
 >    已存在（从别处拷来），就**告警并复用**该 bundle 继续构建。三种触发复用的情形：装依赖失败、
 >    `node_modules` 压根不存在、以及 `node_modules` 存在但 vite 构建失败（半成品 workspace ——
 >    fetch 中途死掉会留下目录，光看目录在不在会误判"能重建"）。只有"建不出来 + 也没有可复用 bundle"
@@ -390,11 +390,11 @@ Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Po
 >    机制是两个环境变量，脚本对 DW 这个服务两个方向都显式赋值（thread job 共享宿主进程环境变量，
 >    同一个 shell 里先跑过常规发布会把值漏给下一趟）：
 >    - 清掉 `SERVICE_TASK_BUILDER_REQUIRED` —— 否则缺 bundle 时 `prebuild` 硬失败（exit 1）；
->    - 设上 `SERVICE_TASK_BUILDER_SKIP=1` —— 只清上面那个还不够：`activepieces/dist/packages/web-embed`
+>    - 设上 `SERVICE_TASK_BUILDER_SKIP=1` —— 只清上面那个还不够：`automation/dist/packages/web-embed`
 >      或上一次构建留下的 `public/service-task-builder` 仍会被钩子拷进去 / 被 vite 打进 `dist/`，
 >      镜像照样带着整个 AP builder。设了它，钩子改为**删除** `public/service-task-builder` 后 exit 0。
 >      （实测三条路径：SKIP 有残留时删并 exit 0、无残留时直接 exit 0、常规运行照常拷回。
->      被删的只是 gitignore 的副本，源 `activepieces/dist/` 不动，下次常规构建自动重建。）
+>      被删的只是 gitignore 的副本，源 `automation/dist/` 不动，下次常规构建自动重建。）
 >
 >    与 `-UsePrebuiltFrontendDist` 同时用时不走 vite、钩子根本不跑，脚本改为直接从拷过来的
 >    `frontend/developer-workstation/dist/service-task-builder` 里删掉该目录，语义两条路径一致。

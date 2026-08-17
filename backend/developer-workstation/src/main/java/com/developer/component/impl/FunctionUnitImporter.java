@@ -17,6 +17,7 @@ import com.developer.service.MainTableViewService;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.BpmnProcessIdRewriter;
+import com.developer.util.BpmnServiceTaskFlowRefs;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.XmlEncodingUtil;
 import jakarta.persistence.EntityManager;
@@ -88,17 +89,20 @@ public class FunctionUnitImporter {
         String version = (String) manifest.get("version");
         String description = (String) manifest.get("description");
 
-        // Restore the packaged Automation flows FIRST: it is the only step that writes outside this
-        // transaction (Activepieces, via admin-center), so a failure here must abort before any
-        // function unit content is touched. Flows already resolvable in this environment are left
-        // untouched — a re-import must not overwrite the draft someone is editing.
-        List<Map<String, Object>> automationFlowResults = List.of();
-        if (packageData.containsKey("automationFlows")) {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> automationFlows =
-                    (List<Map<String, Object>>) packageData.get("automationFlows");
-            automationFlowResults = automationFlowClient.restoreFlows(automationFlows);
+        // FR-B12: FU packages no longer carry Automation flow bodies. Legacy packages exported
+        // before the decoupling are still accepted — their automation-flows/ entries are ignored
+        // (flows migrate via the DW Automation page's migration channel).
+        if (packageData.containsKey("legacyAutomationFlowFiles")) {
+            log.info("Import package carries legacy automation flow entries {}; ignored — flows "
+                            + "migrate via the Automation migration channel, not inside FU packages (FR-B12)",
+                    packageData.get("legacyAutomationFlowFiles"));
         }
+
+        // FR-B13: validate FIRST that every automation flow the BPMN references resolves in this
+        // environment (business key ap:flowKey or legacy ap:flowId, via admin-center /resolve).
+        // A missing flow must abort the import before any function unit content is touched —
+        // importing anyway would land a half-working unit whose service tasks fail at runtime.
+        assertReferencedAutomationFlowsResolvable((String) packageData.get("process"));
 
         // Name exists → replace the existing unit's content with the imported package (snapshotting the
         // old content for rollback); the version number is NOT changed here — deploy/publish owns version
@@ -314,8 +318,35 @@ public class FunctionUnitImporter {
         result.put("name", functionUnit.getName());
         result.put("version", functionUnit.getCurrentVersion());
         result.put("versioned", versioned);
-        result.put("automationFlows", automationFlowResults);
         return result;
+    }
+
+    /**
+     * FR-B13 导入前校验：BPMN 引用的每个 Automation flow（{@code ap:flowKey} 业务键或
+     * legacy {@code ap:flowId}）必须能经 admin-center {@code /resolve} 在本环境解析
+     * （且已发布，FR-C05）。任一解析不到 → 显式失败并列出缺失清单；解析通道未配置
+     * 而 BPMN 确有引用 → 同样显式失败（NFR-304 不静默）。
+     */
+    private void assertReferencedAutomationFlowsResolvable(String bpmnXml) {
+        List<String> flowRefs = BpmnServiceTaskFlowRefs.extract(bpmnXml);
+        if (flowRefs.isEmpty()) {
+            return;
+        }
+        List<String> missing = new ArrayList<>();
+        for (String flowRef : flowRefs) {
+            // Channel unavailable / admin-center unreachable throws its own explicit
+            // DeveloperBusinessException here — never silently skip the check.
+            if (automationFlowClient.resolveFlow(flowRef).isEmpty()) {
+                missing.add(flowRef);
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw new DeveloperBusinessException("AP_FLOW_REF_MISSING",
+                    "The package's BPMN references automation flow(s) that do not resolve in this "
+                            + "environment (missing or unpublished): " + missing
+                            + ". Import and publish the flow(s) via the Automation page's migration "
+                            + "channel first, then re-import this function unit.");
+        }
     }
 
     /**

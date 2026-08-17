@@ -82,10 +82,10 @@ export default {
     tableStructure: 'Table Structure',
     tableData: 'Table Data',
     biManagement: 'BI Management',
-    serviceTask: 'Automation Studio',
     biDashboardRegistry: 'Dashboard Registry',
     biDashboardAssignment: 'Dashboard Assignment',
     biRbacMapping: 'RBAC Mapping',
+    // 下两键既是左侧菜单项，也被审计页当作资源类型标签使用（auditMappings.ts）。
     automationPieces: 'Automation Pieces',
     automationFlows: 'Automation Flow Migration'
   },
@@ -111,11 +111,13 @@ export default {
     exportFailed: 'Export failed',
     import: 'Import Piece (.tgz)',
     importSuccess: 'Imported {name} v{version} — visible in the designer immediately',
+    importFailed: 'Import failed',
+    toggleFailed: 'Failed to change the piece status',
     deleteConfirm: 'Delete {name} v{version}? Its metadata and runtime archive will be removed.',
-    deleteInUse: 'This piece is referenced by {count} flow(s). Force-deleting will break those flows at runtime. Delete anyway?',
+    deleteInUse: 'This piece is used by the following flows: {flows}. Force-deleting will break those flows at runtime. Delete anyway?',
     forceDelete: 'Force Delete',
     deleted: 'Piece deleted',
-    deleteOfficialConfirm: 'Delete baked piece {name} v{version} from the catalog? The runtime package baked into the image is not affected, and the piece will REAPPEAR if the seed SQL is re-run while it is still in the whitelist (activepieces/hermes/pieces.json). Continue?'
+    deleteOfficialConfirm: 'Delete baked piece {name} v{version} from the catalog? The runtime package baked into the image is not affected, and the piece will REAPPEAR if the seed SQL is re-run while it is still in the whitelist (automation/hermes/pieces.json). Continue?'
   },
   automationFlow: {
     title: 'Automation Flow Migration',

@@ -48,6 +48,18 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'functionUnit.edit', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
       },
       {
+        path: 'automation',
+        name: 'Automation',
+        component: () => import('@/views/automation/AutomationPage.vue'),
+        meta: { titleKey: 'automation.title', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+      },
+      {
+        path: 'automation/:flowId',
+        name: 'AutomationFlowEdit',
+        component: () => import('@/views/automation/AutomationFlowEdit.vue'),
+        meta: { titleKey: 'automation.title', hidden: true, requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),
@@ -131,7 +143,11 @@ router.beforeEach(async (to, _from, next) => {
       // Members of a team (virtual group) that owns function units have no DW capability
       // role but may still enter the workspace read-only. The backend is the source of
       // truth (it knows team→FU ownership); ask it before denying access.
-      const canView = await resolveWorkspaceAccess()
+      // FR-B15: the fallback covers ONLY the function-unit workspace — Automation (and
+      // any other role-gated page) requires a real capability role; no bypass.
+      const workspaceFallbackApplies =
+        to.name === 'FunctionUnits' || to.name === 'FunctionUnitEdit'
+      const canView = workspaceFallbackApplies && (await resolveWorkspaceAccess())
       if (!canView) {
         next('/403')
         return

@@ -1,0 +1,116 @@
+import { t } from 'i18next';
+import { FolderPlus, Loader2, Upload, Workflow } from 'lucide-react';
+import { useState } from 'react';
+
+import { PermissionNeededTooltip } from '@/components/custom/permission-needed-tooltip';
+import { useEmbedding } from '@/components/providers/embed-provider';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+export const CreateNewMenu = ({
+  children,
+  scope = 'root',
+  align = 'end',
+  userHasPermissionToWriteFlow,
+  userHasPermissionToWriteFolder,
+  isCreatingFlow = false,
+  onCreateFlow,
+  onCreateFolder,
+  onImportFlow,
+  onOpenChange,
+}: CreateNewMenuProps) => {
+  const { embedState } = useEmbedding();
+  const [isOpen, setIsOpen] = useState(false);
+
+  const showFolder = scope === 'root' && !embedState.hideFolders;
+  // HERMES FR-D2: templates and tables entries removed with their domains.
+  const busy = isCreatingFlow;
+
+  return (
+    <DropdownMenu
+      open={isOpen}
+      onOpenChange={(next) => {
+        if (busy && !next) return;
+        setIsOpen(next);
+        onOpenChange?.(next);
+      }}
+    >
+      <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+      <DropdownMenuContent align={align} className="w-48">
+        <PermissionNeededTooltip hasPermission={userHasPermissionToWriteFlow}>
+          <DropdownMenuItem
+            disabled={!userHasPermissionToWriteFlow || busy}
+            onSelect={(e) => {
+              e.preventDefault();
+              onCreateFlow();
+            }}
+            className="cursor-pointer"
+          >
+            {isCreatingFlow ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Workflow className="h-4 w-4 mr-2" />
+            )}
+            {isCreatingFlow ? t('Creating...') : t('New Flow')}
+          </DropdownMenuItem>
+        </PermissionNeededTooltip>
+
+        {scope === 'folder' && !embedState.hideExportAndImportFlow && (
+          <>
+            <DropdownMenuSeparator />
+            <PermissionNeededTooltip
+              hasPermission={userHasPermissionToWriteFlow}
+            >
+              <DropdownMenuItem
+                disabled={!userHasPermissionToWriteFlow}
+                onClick={onImportFlow}
+                className="cursor-pointer"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {t('Import Flow')}
+              </DropdownMenuItem>
+            </PermissionNeededTooltip>
+          </>
+        )}
+
+        {showFolder && onCreateFolder && (
+          <>
+            <DropdownMenuSeparator />
+            <PermissionNeededTooltip
+              hasPermission={userHasPermissionToWriteFolder}
+            >
+              <DropdownMenuItem
+                disabled={!userHasPermissionToWriteFolder || busy}
+                onClick={onCreateFolder}
+                className="cursor-pointer"
+              >
+                <FolderPlus className="h-4 w-4 mr-2" />
+                {t('New Folder')}
+              </DropdownMenuItem>
+            </PermissionNeededTooltip>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+type CreateNewMenuProps = {
+  children: React.ReactNode;
+  scope?: 'root' | 'folder';
+  align?: 'start' | 'end' | 'center';
+  userHasPermissionToWriteFlow: boolean;
+  userHasPermissionToWriteFolder: boolean;
+  isCreatingFlow?: boolean;
+  onCreateFlow: () => void;
+  onCreateFolder?: () => void;
+  onImportFlow: () => void;
+  onOpenChange?: (open: boolean) => void;
+};
+
+export type CreateInFolderKind = 'flow' | 'import-flow';
