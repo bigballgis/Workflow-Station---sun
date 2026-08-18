@@ -58,6 +58,14 @@ const { t } = useI18n()
 
 const rowModel = ref<Record<string, unknown>>({})
 
+const INLINE_ROW_IDENTITY_KEYS = ['row_id', 'sub_task_id', 'id', 'id_idw'] as const
+
+function identityKeyValue(row: Record<string, unknown>, key: string): string | null {
+  const v = row[key]
+  if (v == null || String(v).trim() === '') return null
+  return String(v)
+}
+
 /**
  * Stable row id for bootstrap. Prefer business keys (`row_id` / `sub_task_id`)
  * before allocated `id` / `id_idw` — otherwise PK allocation changes the identity
@@ -65,11 +73,35 @@ const rowModel = ref<Record<string, unknown>>({})
  */
 function inlineFormRowIdentity(row: Record<string, unknown> | null | undefined): string {
   if (!row) return ''
-  for (const k of ['row_id', 'sub_task_id', 'id', 'id_idw']) {
-    const v = row[k]
-    if (v != null && String(v).trim() !== '') return `${k}:${String(v)}`
+  for (const k of INLINE_ROW_IDENTITY_KEYS) {
+    const v = identityKeyValue(row, k)
+    if (v != null) return `${k}:${v}`
   }
   return ''
+}
+
+/**
+ * Same selected row after parent write-back (PK appeared, or only one identity
+ * key is present on each side). A real row switch has at least one shared key
+ * with a different value.
+ */
+function inlineFormIsSameLogicalRow(
+  prev: Record<string, unknown> | null,
+  next: Record<string, unknown> | null,
+): boolean {
+  if (!prev || !next) return false
+  let compared = false
+  for (const k of INLINE_ROW_IDENTITY_KEYS) {
+    const a = identityKeyValue(prev, k)
+    const b = identityKeyValue(next, k)
+    if (a == null || b == null) continue
+    compared = true
+    if (a !== b) return false
+  }
+  if (compared) return true
+  const prevHadId = INLINE_ROW_IDENTITY_KEYS.some(k => identityKeyValue(prev, k) != null)
+  const nextHadId = INLINE_ROW_IDENTITY_KEYS.some(k => identityKeyValue(next, k) != null)
+  return !prevHadId && nextHadId
 }
 
 function formOptionsEventFingerprint(options: Record<string, unknown> | null | undefined): string {
@@ -123,12 +155,23 @@ const {
  * that snapshot back (and emitting it) was overwriting in-progress Y/N edits and
  * triggering sub-table autosave of the page-load value, so Save/reload showed N again.
  * Dialog Event runtime also keeps bootstrap mutations local until the user confirms.
+ *
+ * Identity string can still change on the same row (`''` → `id:…` after PK
+ * allocation). Rebootstrap would run onChange('__bootstrap__'), which field-gated
+ * scripts skip, wiping api.hidden from the click that just allocated the PK.
  */
+let lastBoundRow: Record<string, unknown> | null = null
+
 watch(
   () => inlineFormRowIdentity(props.currentRow),
-  (nextId, prevId) => {
+  (_nextId, prevId) => {
     const r = props.currentRow
-    rowModel.value = r != null && typeof r === 'object' ? { ...r } : {}
+    if (r && lastBoundRow && inlineFormIsSameLogicalRow(lastBoundRow, r)) {
+      lastBoundRow = { ...r }
+      return
+    }
+    lastBoundRow = r != null && typeof r === 'object' ? { ...r } : null
+    rowModel.value = lastBoundRow ? { ...lastBoundRow } : {}
     resetDialogEventVisibility()
     if (!r) {
       if (prevId) runFormOnReset()
