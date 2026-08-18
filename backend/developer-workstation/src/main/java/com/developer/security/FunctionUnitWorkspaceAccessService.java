@@ -31,8 +31,9 @@ import java.util.Set;
  * <p>
  * 可见范围（scope）：
  * <ul>
- * <li><b>仅 {@code ADMIN} 型角色（如 {@code SYS_ADMIN}）</b>为平台级超级视角，默认全局可见；
- * 可通过 {@code X-Dev-Group-Id} 收窄到某一团队或 Public。</li>
+ * <li><b>{@code SYS_ADMIN} 与 {@code AUDITOR}</b>为平台级超级视角，默认全局可见；
+ * 可通过 {@code X-Dev-Group-Id} 收窄到某一团队或 Public。{@code SYS_ADMIN} 可写；
+ * 纯 {@code AUDITOR} 仅 VIEW。</li>
  * <li>其余用户（含 {@code TECH_LEAD}）只能看到「当前所选团队」（或未选择时其全部团队）
  * 或主动选择的 Public 组。</li>
  * </ul>
@@ -45,13 +46,15 @@ import java.util.Set;
  * {@code TECH_LEAD}/{@code TEAM_LEAD}/{@code DEVELOPER}
  * 可编辑；{@code TECH_LEAD}/{@code TEAM_LEAD}
  * 可删除/维护团队分配；仅团队成员身份（无能力角色）为<b>只读</b>。Public 组功能单元
- * 仅 {@code ADMIN} 可改（承载历史/共享，团队成员只读）。
+ * 仅 {@code SYS_ADMIN} 可改（承载历史/共享，团队成员与 Auditor 只读）。
  * </p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FunctionUnitWorkspaceAccessService {
+    private static final String ROLE_SYS_ADMIN = "SYS_ADMIN";
+    private static final String ROLE_AUDITOR = "AUDITOR";
     private static final String ROLE_TECH_LEAD = "TECH_LEAD";
     private static final String ROLE_TEAM_LEAD = "TEAM_LEAD";
     private static final String ROLE_DEVELOPER = "DEVELOPER";
@@ -78,25 +81,23 @@ public class FunctionUnitWorkspaceAccessService {
         if (!functionUnitRepository.existsById(functionUnitId)) {
             return false;
         }
-        // 仅 ADMIN 型角色全局豁免团队隔离（TECH_LEAD 已收窄为团队 scope）
-        if (roleRepository.userHasActiveAdminTypeRole(userId)) {
+        if (hasRole(userId, ROLE_SYS_ADMIN)) {
+            return true;
+        }
+        if (action == WorkspaceAccessAction.VIEW && hasRole(userId, ROLE_AUDITOR)) {
             return true;
         }
         boolean inMemberScope = isAssignedViaVirtualGroup(userId, functionUnitId);
         boolean inPublic = publicFunctionUnitIds().contains(functionUnitId);
-        // 既不在自己团队、也不属于 Public —— 不可做任何操作
         if (!inMemberScope && !inPublic) {
             return false;
         }
-        boolean techLead = roleRepository.hasRoleByUserId(userId, ROLE_TECH_LEAD);
-        boolean teamLead = roleRepository.hasRoleByUserId(userId, ROLE_TEAM_LEAD);
-        boolean developer = roleRepository.hasRoleByUserId(userId, ROLE_DEVELOPER);
+        boolean techLead = hasRole(userId, ROLE_TECH_LEAD);
+        boolean teamLead = hasRole(userId, ROLE_TEAM_LEAD);
+        boolean developer = hasRole(userId, ROLE_DEVELOPER);
         return switch (action) {
-            // 团队成员与 Public 组功能单元：任何可进入工作区者均可查看
             case VIEW -> true;
-            // 编辑/设计/发布/部署/回滚：需能力角色，且必须在自己团队 scope 内（Public 仅 ADMIN 可改）
             case MODIFY -> inMemberScope && (techLead || teamLead || developer);
-            // 删除、维护团队分配：团队内的 Tech Lead / Team Lead（Public 仅 ADMIN）
             case DELETE, ASSIGN_DEV_GROUPS -> inMemberScope && (techLead || teamLead);
         };
     }
@@ -138,7 +139,7 @@ public class FunctionUnitWorkspaceAccessService {
     /**
      * 能否进入 DW 功能单元工作区（能力门禁）：
      * <ul>
-     * <li>{@code ADMIN} 型 / {@code TECH_LEAD} / {@code TEAM_LEAD} /
+     * <li>{@code SYS_ADMIN} / {@code AUDITOR} / {@code TECH_LEAD} / {@code TEAM_LEAD} /
      * {@code DEVELOPER} 能力角色；或</li>
      * <li>任一团队（CUSTOM 或 DEVELOPER 虚拟组）成员（团队成员身份 → 只读基线）。</li>
      * </ul>
@@ -148,16 +149,17 @@ public class FunctionUnitWorkspaceAccessService {
         if (userId == null || userId.isBlank()) {
             return false;
         }
-        if (roleRepository.userHasActiveAdminTypeRole(userId)
-                || roleRepository.hasRoleByUserId(userId, ROLE_TECH_LEAD)
-                || roleRepository.hasRoleByUserId(userId, ROLE_TEAM_LEAD)
-                || roleRepository.hasRoleByUserId(userId, ROLE_DEVELOPER)) {
+        if (hasRole(userId, ROLE_SYS_ADMIN)
+                || hasRole(userId, ROLE_AUDITOR)
+                || hasRole(userId, ROLE_TECH_LEAD)
+                || hasRole(userId, ROLE_TEAM_LEAD)
+                || hasRole(userId, ROLE_DEVELOPER)) {
             return true;
         }
         return isMemberOfAnyDevTeam(userId);
     }
 
-    /** 当前用户可选择的团队列表；ADMIN 可选择所有活跃团队。 */
+    /** 当前用户可选择的团队列表；SYS_ADMIN / AUDITOR 可选择所有活跃团队。 */
     public List<DevGroupOptionDTO> getSelectableTeams(String userId) {
         if (userId == null || userId.isBlank()) {
             return Collections.emptyList();
@@ -168,9 +170,10 @@ public class FunctionUnitWorkspaceAccessService {
         return virtualGroupMembershipDao.findSelectableTeamsByUserId(userId, DevGroupConstants.PUBLIC_GROUP_ID);
     }
 
-    /** 当前用户是否为 ADMIN 型角色（可查看全部功能单元、选择「全部团队」）。 */
+    /** 当前用户是否可查看全部功能单元、选择「全部团队」（SYS_ADMIN 或 AUDITOR）。 */
     public boolean canSeeAllGroups(String userId) {
-        return userId != null && !userId.isBlank() && roleRepository.userHasActiveAdminTypeRole(userId);
+        return userId != null && !userId.isBlank()
+                && (hasRole(userId, ROLE_SYS_ADMIN) || hasRole(userId, ROLE_AUDITOR));
     }
 
     /**
@@ -192,8 +195,8 @@ public class FunctionUnitWorkspaceAccessService {
                 .orElseThrow(() -> new IllegalStateException("No authenticated user"));
         Optional<String> selected = DevGroupContextHolder.getSelectedGroupId();
         List<String> memberships = virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId);
-        boolean admin = roleRepository.userHasActiveAdminTypeRole(userId);
-        boolean techLead = roleRepository.hasRoleByUserId(userId, ROLE_TECH_LEAD);
+        boolean admin = hasRole(userId, ROLE_SYS_ADMIN);
+        boolean techLead = hasRole(userId, ROLE_TECH_LEAD);
         if (admin || techLead) {
             Set<String> allowed = null; // admin: 任意
             if (!admin) {
@@ -251,7 +254,7 @@ public class FunctionUnitWorkspaceAccessService {
     /**
      * 列表/可见范围：
      * <ul>
-     * <li><b>ADMIN</b>：未选择团队（或 __ALL__）→ 全部（返回 {@code null}）；选择团队或 Public →
+     * <li><b>SYS_ADMIN / AUDITOR</b>：未选择团队（或 __ALL__）→ 全部（返回 {@code null}）；选择团队或 Public →
      * 仅显示所选组。</li>
      * <li><b>其余用户</b>：选择 Public → 仅 Public；选择团队（若为其成员）→ 仅该团队；
      * 未选择或伪造团队 → 回退到其全部团队。</li>
@@ -265,7 +268,7 @@ public class FunctionUnitWorkspaceAccessService {
         }
         String userId = userIdOpt.get();
         Optional<String> selected = DevGroupContextHolder.getSelectedGroupId();
-        if (roleRepository.userHasActiveAdminTypeRole(userId)) {
+        if (canSeeAllGroups(userId)) {
             if (selected.isEmpty()) {
                 return null;
             }
@@ -276,7 +279,6 @@ public class FunctionUnitWorkspaceAccessService {
             return publicFunctionUnitIds();
         }
         List<String> memberships = virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId);
-        // 所选团队必须是用户真实成员的组才据此收窄（防伪造）；否则回退到全部团队。
         Collection<String> scope = (selected.isPresent() && memberships.contains(selected.get()))
                 ? List.of(selected.get())
                 : memberships;
@@ -285,5 +287,47 @@ public class FunctionUnitWorkspaceAccessService {
             ids.addAll(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(scope));
         }
         return ids;
+    }
+
+    /**
+     * 可修改范围：{@code SYS_ADMIN} 返回 {@code null}（全部）；纯 {@code AUDITOR} 返回空集；
+     * 能力角色只返回其成员团队已分配的 FU（不含 Public）。
+     */
+    public Set<Long> modifiableFunctionUnitIds() {
+        Optional<String> userIdOpt = SecurityContextUtils.getCurrentUserId();
+        if (userIdOpt.isEmpty()) {
+            return Collections.emptySet();
+        }
+        String userId = userIdOpt.get();
+        if (hasRole(userId, ROLE_SYS_ADMIN)) {
+            return null;
+        }
+        boolean canModify = hasRole(userId, ROLE_TECH_LEAD)
+                || hasRole(userId, ROLE_TEAM_LEAD)
+                || hasRole(userId, ROLE_DEVELOPER);
+        if (!canModify) {
+            return Collections.emptySet();
+        }
+        List<String> groups = new java.util.ArrayList<>(
+                virtualGroupMembershipDao.findVirtualGroupIdsByUserId(userId));
+        groups.remove(DevGroupConstants.PUBLIC_GROUP_ID);
+        if (groups.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return new HashSet<>(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(groups));
+    }
+
+    /**
+     * Current authenticated user prefers JWT roles; other callers fall back to the repository.
+     */
+    boolean hasRole(String userId, String roleCode) {
+        if (userId == null || roleCode == null) {
+            return false;
+        }
+        Optional<String> current = SecurityContextUtils.getCurrentUserId();
+        if (current.isPresent() && current.get().equals(userId) && SecurityContextUtils.hasRole(roleCode)) {
+            return true;
+        }
+        return roleRepository.hasRoleByUserId(userId, roleCode);
     }
 }

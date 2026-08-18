@@ -5,7 +5,10 @@
     width="600px"
     @open="onDialogOpen"
   >
-    <div class="approvers-header">
+    <div
+      v-if="!readOnly"
+      class="approvers-header"
+    >
       <el-select
         v-model="selectedUserId"
         :placeholder="t('user.searchUserPlaceholder')"
@@ -47,6 +50,7 @@
         :label="t('user.username')"
       />
       <el-table-column
+        v-if="!readOnly"
         :label="t('common.operation')"
         width="100"
       >
@@ -75,7 +79,7 @@ import { useI18n } from 'vue-i18n'
 import { useBusinessUnitApprovers } from '@/composables/modules/useBusinessUnitApprovers'
 import type { BusinessUnit } from '@/api/businessUnit'
 
-const props = defineProps<{ businessUnit: BusinessUnit | null }>()
+const props = defineProps<{ businessUnit: BusinessUnit | null; readOnly?: boolean }>()
 const visible = defineModel<boolean>({ default: false })
 const emit = defineEmits(['success'])
 const { t } = useI18n()

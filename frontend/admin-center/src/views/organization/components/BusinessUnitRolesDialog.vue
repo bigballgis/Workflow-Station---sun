@@ -8,7 +8,10 @@
     <div class="hint-text">
       {{ t('organization.eligibleRolesDesc') }}
     </div>
-    <div class="roles-header">
+    <div
+      v-if="!readOnly"
+      class="roles-header"
+    >
       <el-select
         v-model="selectedRoleId"
         :placeholder="t('common.selectPlaceholder')"
@@ -46,6 +49,7 @@
         :label="t('role.roleCode')"
       />
       <el-table-column
+        v-if="!readOnly"
         :label="t('common.operation')"
         width="100"
       >
@@ -69,7 +73,7 @@ import { useI18n } from 'vue-i18n'
 import { useBusinessUnitRoles } from '@/composables/modules/useBusinessUnitRoles'
 import type { BusinessUnit } from '@/api/businessUnit'
 
-const props = defineProps<{ businessUnit: BusinessUnit | null }>()
+const props = defineProps<{ businessUnit: BusinessUnit | null; readOnly?: boolean }>()
 const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
 

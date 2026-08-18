@@ -4105,3 +4105,16 @@ ALTER TABLE sys_virtual_groups
 COMMENT ON COLUMN sys_virtual_groups.type IS
     'SYSTEM (built-in, non-deletable), CUSTOM (business/task-pool), DEVELOPER (DW team)';
 
+-- =============================================================================
+-- 66-add-auditor-role-type.sql
+-- Source file: deploy/init-scripts/00-schema/66-add-auditor-role-type.sql
+-- =============================================================================
+ALTER TABLE sys_roles DROP CONSTRAINT IF EXISTS chk_role_type;
+
+ALTER TABLE sys_roles
+    ADD CONSTRAINT chk_role_type
+    CHECK (type IN ('ADMIN', 'AUDITOR', 'DEVELOPER', 'BU_BOUNDED', 'BU_UNBOUNDED'));
+
+COMMENT ON COLUMN sys_roles.type IS
+    'ADMIN (system administration), AUDITOR (read-only audit), DEVELOPER (design studio), BU_BOUNDED / BU_UNBOUNDED (business roles)';
+

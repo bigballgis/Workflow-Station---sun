@@ -46,8 +46,6 @@ data:
   SECURITY_LOGIN_MAX_FAILED_ATTEMPTS: "3"
   SECURITY_PASSWORD_MIN_LENGTH: "10"
   SECURITY_SESSION_TIMEOUT_MINUTES: "30"
-  # admin-center Admin UI「重置密码」后的明文（application.yml: admin.user.reset-password）；生产建议改 Secret
-  USER_RESET_PASSWORD: "password"
   SERVER_PORT: "8080"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://uat-postgres.internal:5432/workflow_platform_uat"
   SPRING_DATASOURCE_USERNAME: "platform_uat"

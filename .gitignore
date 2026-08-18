@@ -152,6 +152,9 @@ desktop.ini
 # 注意仅忽略不足以生效：该文件此前是被跟踪的，已同时 `git rm --cached` 停止跟踪。
 deploy/environments/dev/.env
 
+# Local PostgreSQL dumps taken before schema apply — never commit
+deploy/environments/dev/backups/
+
 # Superset BuildKit pip secret (Nexus credentials) — never commit real pip.conf
 deploy/superset/pip.conf
 

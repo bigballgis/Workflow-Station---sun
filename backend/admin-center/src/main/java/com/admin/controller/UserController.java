@@ -125,13 +125,6 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
     
-    @PostMapping("/{userId}/reset-password")
-    @Operation(summary = "重置用户密码", description = "重置用户密码；新密码不通过 API 响应返回（用户须通过首次登录修改密码或线下告知）")
-    public ResponseEntity<java.util.Map<String, Boolean>> resetPassword(@PathVariable String userId) {
-        userManager.resetPassword(userId);
-        return ResponseEntity.ok(java.util.Map.of("success", true));
-    }
-    
     @DeleteMapping("/{userId}")
     @Operation(summary = "删除用户", description = "删除指定用户")
     public ResponseEntity<Void> deleteUser(@PathVariable String userId) {

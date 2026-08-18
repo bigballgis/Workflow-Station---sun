@@ -3,6 +3,7 @@
     <PageHeader :title="t('menu.virtualGroup')">
       <template #actions>
         <el-button
+          v-if="!readOnly"
           type="primary"
           @click="showCreateDialog"
         >
@@ -138,6 +139,7 @@
         <template #default="{ row }">
           <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
             <el-button
+              v-if="!readOnly"
               link
               type="primary"
               @click="showEditDialog(row)"
@@ -159,7 +161,7 @@
               {{ t('virtualGroup.bindRoles') }}
             </el-button>
             <el-button
-              v-if="row.type !== 'SYSTEM'"
+              v-if="!readOnly && row.type !== 'SYSTEM'"
               link
               type="primary"
               :loading="statusToggleLoadingId === row.id"
@@ -168,7 +170,7 @@
               {{ row.status === 'ACTIVE' ? t('virtualGroup.deactivate') : t('virtualGroup.activate') }}
             </el-button>
             <el-button
-              v-if="row.type !== 'SYSTEM'"
+              v-if="!readOnly && row.type !== 'SYSTEM'"
               link
               type="danger"
               @click="handleDelete(row.id)"
@@ -200,17 +202,19 @@
     <VirtualGroupMembersDialog
       v-model="membersDialogVisible"
       :group="currentGroup"
+      :read-only="readOnly"
     />
     <VirtualGroupRolesDialog
       v-model="rolesDialogVisible"
       :group="currentGroup"
+      :read-only="readOnly"
       @success="fetchGroups"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -219,8 +223,10 @@ import VirtualGroupMembersDialog from './components/VirtualGroupMembersDialog.vu
 import VirtualGroupRolesDialog from './components/VirtualGroupRolesDialog.vue'
 import { useVirtualGroup } from '@/composables/modules/useVirtualGroup'
 import { virtualGroupTypeKey, roleTypeKey } from '@/utils/format'
+import { hasPermission, PERMISSIONS } from '@/utils/permission'
 
 const { t } = useI18n()
+const readOnly = computed(() => !hasPermission(PERMISSIONS.USER_WRITE))
 
 const {
   loading,

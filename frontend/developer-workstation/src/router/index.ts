@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { hasAnyRole } from '@/utils/permission'
+import { hasAnyRole, isAuditorBlockedFromWorkstation } from '@/utils/permission'
 import i18n from '@/i18n'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 
@@ -135,6 +135,14 @@ router.beforeEach(async (to, _from, next) => {
       redirectToUnifiedLogin('developer-workstation', { autoSso: true })
       return next(false)
     }
+  }
+
+  // Pure Auditor: do not enter DW (including the workspace-access fallback).
+  // Overlay users with a capability role still enter; keep AUDITOR out of requiredRoles
+  // so this gate can be removed later without touching backend read-only logic.
+  if (isAuditorBlockedFromWorkstation() && to.name !== 'Forbidden') {
+    next('/403')
+    return
   }
 
   const requiredRoles = to.meta.requiredRoles as string[] | undefined

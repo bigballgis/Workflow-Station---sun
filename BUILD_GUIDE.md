@@ -843,7 +843,6 @@ Kafka(K8S) ───────────────────────
 | `JWT_EXPIRATION` | JWT 过期时间(ms) | `86400000` |
 | `JWT_REFRESH_EXPIRATION` | 刷新令牌过期时间(ms) | `604800000` |
 | `ENCRYPTION_SECRET_KEY` | AES-256 加密密钥 | 32 字节字符串 |
-| `USER_RESET_PASSWORD` | admin-center 用户管理「重置密码」后的明文（仅注入服务端，不在 UI 展示） | dev Docker: `.env`；K8s: `deploy/k8s/config_map/<Environment>/configmap-workflow-platform-config.yml`（preprod 默认 `password`） |
 | `CORS_ALLOWED_ORIGINS` | CORS 允许的源 | `http://localhost:3000,...` |
 | `SWAGGER_ENABLED` | 是否启用 Swagger | `true` / `false` |
 

@@ -426,6 +426,27 @@ class RoleHelperTest {
     }
     
     @Test
+    @DisplayName("isAdminRole: Should return false for AUDITOR type")
+    void testIsAdminRole_Auditor() {
+        assertFalse(roleHelper.isAdminRole("AUDITOR"));
+    }
+
+    @Test
+    @DisplayName("isAdminCenterRole: Should return true for ADMIN and AUDITOR")
+    void testIsAdminCenterRole() {
+        assertTrue(roleHelper.isAdminCenterRole("ADMIN"));
+        assertTrue(roleHelper.isAdminCenterRole("AUDITOR"));
+        assertFalse(roleHelper.isAdminCenterRole("DEVELOPER"));
+        assertFalse(roleHelper.isAdminCenterRole(null));
+    }
+
+    @Test
+    @DisplayName("isValidRoleType: Should return true for AUDITOR")
+    void testIsValidRoleType_Auditor() {
+        assertTrue(roleHelper.isValidRoleType("AUDITOR"));
+    }
+
+    @Test
     @DisplayName("isValidRoleType: Should return true for ADMIN")
     void testIsValidRoleType_Admin() {
         assertTrue(roleHelper.isValidRoleType("ADMIN"));

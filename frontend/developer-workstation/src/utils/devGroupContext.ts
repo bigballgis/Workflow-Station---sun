@@ -6,16 +6,23 @@
  * the backend re-validates the user is actually a member before narrowing, so a spoofed
  * value cannot escalate access (non-member selections are ignored server-side).
  *
- * Special value {@link ALL_GROUPS} (`__ALL__`) — admins only — means "do not filter to a
- * single team" (see all function units). It is stored locally but never sent as a header.
- * The Public group is a concrete group id and is sent so the backend can return only public
- * function units.
+ * Special value {@link ALL_GROUPS} (`__ALL__`) — global-view users (SYS_ADMIN / AUDITOR
+ * overlay / canSeeAllGroups) — means "do not filter to a single team". It is stored
+ * locally but never sent as a header. The Public group is a concrete group id and is
+ * sent so the backend can return only public function units.
  */
 
 const ACTIVE_GROUP_KEY = 'ws_dw_active_group'
 
-/** Admin-only sentinel meaning "all teams" (no single-team filter). */
+/** Sentinel meaning "all teams" (no single-team filter). Used by global-view users. */
 export const ALL_GROUPS = '__ALL__'
+
+/** Built-in Public developer group. */
+export const PUBLIC_GROUP_ID = 'vg-dev-public'
+
+export function isPublicGroupSelected(): boolean {
+  return getActiveGroupRaw() === PUBLIC_GROUP_ID
+}
 
 /** Raw stored selection (group id, {@link ALL_GROUPS}, or null when unset). */
 export function getActiveGroupRaw(): string | null {
@@ -31,7 +38,7 @@ export function getActiveGroupHeaderValue(): string | null {
   return raw
 }
 
-/** Persist the active team selection (pass {@link ALL_GROUPS} for admin "all"). */
+/** Persist the active team selection (pass {@link ALL_GROUPS} for global-view "all"). */
 export function setActiveGroup(groupId: string): void {
   localStorage.setItem(ACTIVE_GROUP_KEY, groupId)
 }

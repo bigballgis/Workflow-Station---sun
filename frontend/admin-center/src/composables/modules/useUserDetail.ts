@@ -26,6 +26,7 @@ export function useUserDetail(userId: Ref<string>) {
     if (type === 'BU_BOUNDED') return 'warning'
     if (type === 'BU_UNBOUNDED') return 'success'
     if (type === 'ADMIN') return 'danger'
+    if (type === 'AUDITOR') return 'info'
     if (type === 'DEVELOPER') return 'primary'
     return 'info'
   }
@@ -115,18 +116,10 @@ export function useUserDetail(userId: Ref<string>) {
     catch (e: unknown) { const msg = e instanceof Error ? e.message : undefined; notifyError(msg || terr(AppErrorCode.USER_ACTION_FAILED)) }
   }
 
-  const resetPassword = async () => {
-    if (!user.value) return
-    try { await notifyConfirm(t('user.resetPassword') + ` - ${user.value.fullName}?`, t('common.confirm'), { type: 'warning' }) }
-    catch { return }
-    try { await userApi.resetPassword(user.value.id); notifySuccess(t('user.passwordResetNoPlaintext')) }
-    catch (e: unknown) { const msg = e instanceof Error ? e.message : undefined; notifyError(msg || terr(AppErrorCode.USER_ACTION_FAILED)) }
-  }
-
   return { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, platformVirtualGroups,
     platformRoles, buRoles, buRoleGroups, assignDialogVisible, assignRoleLoading, assignSubmitting,
     assignRoleOptions, assignRoleLoaded, assignForm,
     getPlatformRoleTagType, statusType, statusText, formatDate,
-    loadDetail, reloadBuRoles, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole, resetPassword,
+    loadDetail, reloadBuRoles, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole,
   }
 }

@@ -1,8 +1,10 @@
 package com.admin.config;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -14,11 +16,31 @@ import org.springframework.web.util.pattern.PathPatternParser;
  * Disables static resource handling so all requests route to controllers.
  */
 @Configuration
+@RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
+
+    private final OrganizationMutationAccessInterceptor organizationMutationAccessInterceptor;
     
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:3001}")
     private String allowedOrigins;
     
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(organizationMutationAccessInterceptor)
+                .addPathPatterns(
+                        "/business-units",
+                        "/business-units/**",
+                        "/virtual-groups",
+                        "/virtual-groups/**",
+                        "/approvers",
+                        "/approvers/**",
+                        "/exit",
+                        "/exit/**")
+                .excludePathPatterns(
+                        "/virtual-groups/*/tasks/*/claim",
+                        "/virtual-groups/tasks/*/delegate");
+    }
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // 完全禁用资源处理器

@@ -2000,3 +2000,24 @@
     PK id 出现不 rebootstrap、formOptions 迟到再跑 Event）；sibling hydration 6/6。
     二次修复：bootstrap 不再 emit update:row；rowModel 只在换行时从 currentRow 拷贝；
     Save 把 Y 同步到同表 leftover sibling slice，避免 reopen 回 N。
+
+- id: "1520"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: architecture
+  summary: "AUDITOR 从 ADMIN 类型拆出；Admin Center 只读，纯 Auditor 进 DW 直接 403"
+  file: "backend/admin-center/src/main/java/com/admin/config/OrganizationMutationAccessInterceptor.java"
+  note: |
+    原 AUDITOR 角色 type=ADMIN，DW 把任意 ADMIN 类型当全权。现独立 type=AUDITOR。
+    Admin Center：读组织/虚拟组；写 org/VG/approver/exit 403；前端隐藏创建/编辑/删除。
+    DW 后端只读授权保留（SYS_ADMIN 全写、AUDITOR 全局 VIEW、canModify fail-closed），
+    以便日后若允许 Auditor 进设计器可直接复用。前端不把 AUDITOR 加入 requiredRoles；
+    纯 AUDITOR（无 SYS_ADMIN/TECH_LEAD/TEAM_LEAD/DEVELOPER）进 DW 跳 /403。
+    叠加 DEVELOPER 仍可进工作区，写范围仍按团队。
+    验证：Java auditor 相关单测通过；admin-center/DW vitest 通过；compose 重建健康。
+    截图：admin-center .../2026-08-17_auditor-organization-read-only.png、
+    .../2026-08-17_auditor-virtual-group-read-only.png；
+    DW .../2026-08-17_auditor-function-units-read-only.png（403）。
+    测试账号 username=auditor，绑定 vg-auditors（口令不写入仓库）。
+    未做：#1532 users/bi rbac、#1524 exit userId、User Portal。

@@ -25,8 +25,8 @@ import static org.mockito.Mockito.*;
 /**
  * Property 1: Role Type Validation for Binding
  * *For any* role binding operation (to Virtual_Group or Business_Unit), 
- * the system shall accept only roles with type BU_BOUNDED or BU_UNBOUNDED, 
- * and reject any role with type ADMIN or DEVELOPER.
+ * the system shall accept only roles with type BU_BOUNDED or BU_UNBOUNDED,
+ * and reject any role with type ADMIN, AUDITOR or DEVELOPER.
  * 
  * **Validates: Requirements 5.5**
  */
@@ -320,6 +320,6 @@ public class BusinessUnitRoleBindingProperties {
     
     @Provide
     Arbitrary<RoleType> nonBusinessRoleTypes() {
-        return Arbitraries.of(RoleType.ADMIN, RoleType.DEVELOPER);
+        return Arbitraries.of(RoleType.ADMIN, RoleType.AUDITOR, RoleType.DEVELOPER);
     }
 }

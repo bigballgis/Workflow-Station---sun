@@ -258,6 +258,7 @@ export default {
     deletePermanentSuccess: '已永久刪除',
     confirmTitle: '確認',
     noDescription: '暫無描述',
+    readOnlyHint: '此功能單元為唯讀。你可以檢視設計，但不能修改。',
     validationResult: '驗證結果',
     checkLogin: '正在檢查登入狀態',
     notLoggedIn: '未登入，正在跳轉',

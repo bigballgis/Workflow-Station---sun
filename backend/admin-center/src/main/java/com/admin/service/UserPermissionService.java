@@ -141,7 +141,7 @@ public class UserPermissionService {
             return roleHelper.isBusinessRole(t);
         }
         if ("ADMIN".equalsIgnoreCase(profileContext)) {
-            return roleHelper.isAdminRole(t);
+            return roleHelper.isAdminCenterRole(t);
         }
         if ("DEVELOPER".equalsIgnoreCase(profileContext)) {
             return roleHelper.isDeveloperRole(t);

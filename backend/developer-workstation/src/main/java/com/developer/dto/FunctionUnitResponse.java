@@ -39,6 +39,12 @@ public class FunctionUnitResponse {
 
     /** 已分配的虚拟开发组 ID（sys_virtual_groups.id） */
     private List<String> assignedVirtualGroupIds;
+
+    /**
+     * Whether the current user may modify this function unit.
+     * Missing/false must be treated as read-only by clients (fail-closed).
+     */
+    private boolean canModify;
     
     /**
      * 图标信息内部类

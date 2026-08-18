@@ -172,4 +172,20 @@ describe('useLaunchpadLayout paging', () => {
       vi.useRealTimers()
     }
   })
+
+  it('does not merge tiles when layout is read-only', async () => {
+    const list = ref(Array.from({ length: 4 }, (_, i) => fu(i + 1)))
+    const size = ref(20)
+    const canModifyLayout = ref(false)
+    const layout = useLaunchpadLayout({
+      list,
+      visibleList: list,
+      pageSize: size,
+      defaultGroupName: () => 'New Group',
+      canModifyLayout,
+    })
+    await nextTick()
+    mergeInto(layout, 1, 'i:2')
+    expect(layout.entries.value.every((e) => e.type === 'item')).toBe(true)
+  })
 })

@@ -41,7 +41,7 @@ public class SubTableViewController {
 
     @GetMapping("/{bindingId}/or-create")
     @Operation(summary = "获取或创建 View 配置")
-    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<ViewConfigDTO>> getOrCreateViewConfig(
             @PathVariable Long formId,
             @PathVariable Long bindingId) {

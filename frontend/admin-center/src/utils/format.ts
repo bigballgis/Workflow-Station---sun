@@ -69,6 +69,7 @@ export const roleTypeTagType = (type: string): TagType =>
     BU_UNBOUNDED: 'success',
     BUSINESS: 'success',
     ADMIN: 'danger',
+    AUDITOR: 'warning',
     DEVELOPER: 'primary',
   } as Record<string, TagType>)[type] || 'info'
 
@@ -120,6 +121,7 @@ export const roleTypeKey = (type: string) =>
     BU_UNBOUNDED: 'role.buUnbounded',
     BUSINESS: 'role.businessRole',
     ADMIN: 'role.adminRole',
+    AUDITOR: 'role.auditorRole',
     DEVELOPER: 'role.developerRole',
   }[type] || type)
 
@@ -227,7 +229,7 @@ export const permissionActionKey = (action: string) =>
 // ==================== Role display helpers ====================
 
 export const ROLE_TYPE_LABELS: Record<string, string> = {
-  BU_BOUNDED: 'BU Bounded', BU_UNBOUNDED: 'BU Unbounded', BUSINESS: 'Business', ADMIN: 'Admin', DEVELOPER: 'Developer',
+  BU_BOUNDED: 'BU Bounded', BU_UNBOUNDED: 'BU Unbounded', BUSINESS: 'Business', ADMIN: 'Admin', AUDITOR: 'Auditor', DEVELOPER: 'Developer',
 }
 
 export const roleTypeDisplayLabel = (type: string) => ROLE_TYPE_LABELS[type] ?? type
@@ -236,6 +238,7 @@ export const roleTagType = (type?: string): TagType => {
   if (type === 'BU_BOUNDED') return 'warning'
   if (type === 'BU_UNBOUNDED' || type === 'BUSINESS') return 'success'
   if (type === 'ADMIN') return 'danger'
+  if (type === 'AUDITOR') return 'info'
   if (type === 'DEVELOPER') return 'primary'
   return 'info'
 }

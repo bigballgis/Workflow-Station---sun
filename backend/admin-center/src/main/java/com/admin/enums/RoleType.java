@@ -11,6 +11,8 @@ public enum RoleType {
     BU_UNBOUNDED,
     /** 管理角色 - 用于 Admin Center 管理功能 */
     ADMIN,
+    /** 审计角色 - 用于 Admin Center / DW 只读查看，不授予管理写权限 */
+    AUDITOR,
     /** 开发角色 - 用于 Developer Workstation 功能权限控制 */
     DEVELOPER;
     
