@@ -261,7 +261,7 @@ async function saveBundlesToDiskIfNotCached(rootWorkspace: string, pieces: Piece
         if (await fileSystemUtils.fileExists(bundlePath)) {
             return
         }
-        const url = pieceBundleEndpointUrl(publicApiUrl, piece)
+        const url = pieceBundleEndpointUrl(bundleBaseUrl(publicApiUrl), piece)
         const response = await fetch(url, { headers: { Authorization: `Bearer ${engineToken}` } })
         if (!response.ok) {
             throw new Error(`Failed to fetch piece bundle ${piece.pieceName}@${piece.pieceVersion}: ${response.status} ${response.statusText}`)
@@ -269,6 +269,32 @@ async function saveBundlesToDiskIfNotCached(rootWorkspace: string, pieces: Piece
         await fileSystemUtils.threadSafeMkdir(dirname(bundlePath))
         await writeFile(bundlePath, Buffer.from(await response.arrayBuffer()))
     }))
+}
+
+/**
+ * HERMES-PATCH-031: base URL for pulling a piece bundle back from AP.
+ *
+ * `publicApiUrl` derives from AP_FRONTEND_URL, which is the address a **browser** uses.
+ * This fetch, however, runs inside the AP container — so a browser-facing address is the
+ * wrong thing to dial. In dev, AP_FRONTEND_URL is `http://localhost:8085/` (the edge
+ * gateway); nothing listens on 8085 inside the container, so every ARCHIVE piece install
+ * died with a bare `TypeError: fetch failed`, surfacing to the admin as
+ * ENGINE_OPERATION_FAILURE with no hint of the cause. Admin Center's "Import Piece (.tgz)"
+ * was unusable for exactly this reason — not because of the allowlist or the offline store,
+ * which this path never consults.
+ *
+ * AP_INTERNAL_API_URL overrides the base for this call only. Webhook URLs still come from
+ * the public one, because those genuinely must be reachable from outside.
+ * Unset => previous behaviour, so a deployment whose public URL happens to resolve from
+ * inside the pod keeps working untouched.
+ */
+function bundleBaseUrl(publicApiUrl: string): string {
+    const internal = process.env['AP_INTERNAL_API_URL']
+    if (isNil(internal) || internal.trim().length === 0) {
+        return publicApiUrl
+    }
+    const trimmed = internal.trim().replace(/\/+$/, '')
+    return `${trimmed}/api/`
 }
 
 function pieceBundleEndpointUrl(publicApiUrl: string, piece: PiecePackage): string {

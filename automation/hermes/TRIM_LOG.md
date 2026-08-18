@@ -1217,3 +1217,99 @@ AP_EDITION=ce /Users/qiweige/.local/bin/node node_modules/vitest/vitest.mjs \
    哪天确认要清，得单开一条 breaking 迁移并同步删实体里的列与索引——那是不可逆动作，要单独裁决。
 3. 上面第四节那个 node 劫持是**宿主环境**问题，pre-push 钩子在这台机器上仍会因此红；
    仓库里没有能修它的地方。
+
+---
+
+## 2026-08-15　HERMES-PATCH-028：移除 AP 原生登录页与 `/v1/authn` 死调用
+
+身份模型是「谁进去就是谁」——AP 会话只能由 admin-center 按当前操作人经 managed-authn 换取。
+但 AP 自带的登录表单还在，而且它 POST 的 `/v1/authentication/sign-{in,up}` 是 `public()` 端点。
+
+**前端**：`features/authentication/` 整个目录删除（14 文件 / 2,912 行）——登录/注册表单、重置密码、
+验证邮箱、修改密码、第三方登录、密码强度校验、auth 模板与动画。删前逐个确认 12 个导出在目录外
+零消费者。
+
+`/sign-in` 路由**保留但换成无凭据的会话过期页**：五处守卫（`allow-logged-in-user-only-guard`、
+`project-layout`、`default-route`、`project-route-wrapper` ×2）在无会话时会 `<Navigate to="/sign-in">`，
+删掉路由它们只会落到 404 页、什么也不说。按钮回 `/__ap/bridge`——那个路径 dev nginx 与 k8s
+VirtualService 都有，不是环境特定的。
+
+`/verify-email` 路由删除：它调 `POST /v1/authn/local/verify-email`，而本分叉**没有注册 `/v1/authn`
+这个前缀**（实测 404，对照组 `POST /v1/authentication/sign-in` 与 `/v1/platforms` 均返 400，
+所以那些 404 是"没有这条路由"而不是"参数不对"）。
+
+`api/authentication-api.ts` 从 9 个方法砍到 2 个，只留还能打到已注册路由的：`switchPlatform`
+（`lib/authentication-session.ts` 在用）与 `getCurrentProjectRole`（其实不是 authn 路由，
+在 `/v1/project-members` 下）。
+
+`app/routes/redirect.tsx` **只删一半**：第三方登录分支两头都死（后端 404，且成功后跳的
+`/create-platform` 路由已随 FR-D2 移除），但同一文件里的 `window.opener.postMessage` 是
+**piece OAuth 连接弹窗**在用（`features/connections/utils/oauth2-utils.ts:73` 监听它），
+整文件删掉会打断所有需要 OAuth 授权的 piece 连接。
+
+**后端**：`/sign-in` 端点**不删**，改为在控制器加注释说明「集群内可达、边缘终止」的安排。
+它必须活着——`deploy/scripts/ap-{bootstrap-shared-account,export,import,import-to-id,verify-provisioning}.js`
+与两个 Jenkinsfile 都靠它，且它们走 `AP_INTERNAL_URL` 直连 ClusterIP，不经任何网关。
+暴露面由网关侧解决（见 Kong 的 `activepieces-authn-block-route`、dev edge nginx、k8s ap-gateway
+VirtualService 三处 404 终止）。
+
+> 为什么不是 IP 白名单：uat/preprod 的使用者本就在公司内网，客户端 IP 是私网段，按 IP 放行
+> 等于不设防。真正的分界是「是否经过网关」。
+
+---
+
+## 2026-08-18　HERMES-PATCH-030：自研 piece 启停，替代上游删掉的 platform 级过滤
+
+上游 `DropPlatformPieceFilters1809000000000`（**自带 `breaking = true`**）删掉
+`platform.filteredPieceNames` / `filteredPieceBehavior`，替代机制 piece_set 属 EE、已随 EE 剥离。
+admin-center 的启停开关因此两头落空——`listPieces()` 的第一步就查那个已删列，
+**Automation Pieces 整页 500**（2026-08 UAT 事故）。
+
+代码里 `pieces/metadata/utils/index.ts` 的 HERMES-PATCH-004 注释早已指明缺口与决策点
+（"needs a schema decision on the platform entity"），本条就是那个决定。
+
+**存储**：新建 HERMES 自有表 `hermes_piece_block`（`pieces/hermes-piece-block.entity.ts` +
+迁移 `1826000000000`），不把两列加回 `platform`。复活一个上游明确删掉的列，会让后来人读迁移链时
+无从判断谁是权威；`hermes_` 前缀天然不冲突；且能记下**谁在何时**停用的，
+`platform` 上那个字符串数组做不到。
+
+**过滤点**：`pieceMetadataService.list()`，**且只在 list()**。`get()` 保持不过滤，
+所以已经引用了被停用 piece 的存量 flow 照常加载、照常执行——停用是「不让人再选它」，
+不是「把已有的打断」，与 0.84 的 BLOCKED 语义一致。
+
+**不加缓存**：piece 列表本就每次读库（`dedupe` 只是并发去重不是结果缓存），屏蔽表也每次读，
+写入即生效。故意不加——那只会引入「点了停用但设计器还看得见」的窗口期。
+
+dev 实测：写入屏蔽行后（未重启 AP）目录 13→12、csv 消失；`GET /v1/pieces/<被停用>` 仍 200 且
+actions 完整；删除屏蔽行后回到 13。
+
+> 踩坑：`check-migrations` 报漂移两次，两次都对。先是实体写 `CURRENT_TIMESTAMP` 而 TypeORM
+> 期望 `now()`（Postgres 等价，字面量不同）；改齐后仍红，那是本地 PGLITE 测试库里表已按旧默认
+> 建好、`CREATE TABLE IF NOT EXISTS` 不会重建，重置测试库才过。
+
+---
+
+## 2026-08-18　HERMES-PATCH-031：piece bundle 回拉改用集群内地址，修好 Import Piece
+
+Admin Center 的「Import Piece (.tgz)」**必然 500**，日志只有一个光秃秃的
+`TypeError: fetch failed`，冒到管理员那里是 `ENGINE_OPERATION_FAILURE`，看不出任何线索。
+
+根因：`piece-installer.ts` 的 `saveBundlesToDiskIfNotCached()` 用 `publicApiUrl` 去 fetch
+`/v1/engine/pieces/bundle?archiveId=...`，而 `publicApiUrl` 派生自 `AP_FRONTEND_URL`——
+那是**浏览器视角**的地址。这个 fetch 却跑在 **AP 容器内**。dev 里 `AP_FRONTEND_URL` 是
+`http://localhost:8085/`（边缘网关），容器内 8085 无监听（实测 `curl` 返 `000`），
+于是每次 ARCHIVE 件安装都死在这里。
+
+新增 `AP_INTERNAL_API_URL`，**只覆盖这一处**的 base；webhook URL 仍走对外地址，那个确实必须
+外部可达。不设时回退原行为，所以「公网地址恰好能从 Pod 内解析」的部署不受影响。
+
+配置三处同步：`docker-compose.dev.yml`（`http://localhost:80`）、uat/preprod ConfigMap 的
+`ACTIVEPIECES_SELF_INTERNAL_URL`（`http://activepieces-service:80`）、`activepieces.yaml` 的 env
+接线（`optional: true`）。
+
+dev 实测：修复前 500；修复后上传 243,572 字节的自研件，`file` 表存下**同样字节数**，
+元数据提取出 `displayName=Import Smoke Test` / `actions=echo`，`pieceType=CUSTOM`、`archiveId` 非空。
+
+> ⚠️ uat/preprod 的 `ACTIVEPIECES_FRONTEND_URL` 是 `http://hermes-workflow-activepieces.<域>/`，
+> **能否从 Pod 内解析回自己未实测**。若不能，那两个环境的 Import 会以完全相同的方式失败——
+> 新增的 `ACTIVEPIECES_SELF_INTERNAL_URL` 正是为此。

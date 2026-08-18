@@ -145,6 +145,21 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: ACTIVEPIECES_FRONTEND_URL
+        # HERMES-PATCH-031: in-cluster base for pulling a piece bundle back from AP.
+        # AP_FRONTEND_URL above is what a BROWSER uses. Installing an ARCHIVE piece runs
+        # inside this pod and fetches /v1/engine/pieces/bundle, so dialling the external
+        # host there depends on it resolving back to this same service from within the
+        # cluster — it need not. When it does not, the install dies with a bare
+        # `TypeError: fetch failed` and Admin Center's "Import Piece (.tgz)" returns 500
+        # with no usable cause (measured in dev, where AP_FRONTEND_URL is localhost:8085
+        # and nothing listens on 8085 inside the container).
+        # Unset => falls back to AP_FRONTEND_URL, i.e. the previous behaviour.
+        - name: AP_INTERNAL_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_SELF_INTERNAL_URL
+              optional: true
         - name: AP_WEBHOOK_URL
           valueFrom:
             configMapKeyRef:

@@ -124,6 +124,11 @@ data:
   # 报 "403 Egress blocked" 并在 HTTP 步失败。
   # 用主机名而非 ClusterIP:Service 重建后 ClusterIP 会变,主机名不会。
   # 只列 flow 确实需要的主机——填 CIDR 等于把整个集群内网开放给 flow 作者写的 HTTP 步。
+  # HERMES-PATCH-031: AP 容器内回拉 piece bundle 的地址(注入为 AP_INTERNAL_API_URL)。
+  # ACTIVEPIECES_FRONTEND_URL 是浏览器视角的地址;ARCHIVE 件安装时 worker 在 Pod 内 fetch
+  # /v1/engine/pieces/bundle,用对外地址未必解析得回自己 => fetch failed => Import Piece 500。
+  # webhook 仍用对外地址,不受影响。
+  ACTIVEPIECES_SELF_INTERNAL_URL: "http://activepieces-service:80"
   ACTIVEPIECES_SSRF_ALLOW_LIST: "developer-workstation-service.__NAMESPACE__"
   # admin-center 已不读共享账号(身份一律 per-user managed)。保留这两项仅供空库引导
   # (ap-bootstrap-job.yaml 用 sign-up 建 AP 的第一个身份)与 deploy/scripts/ap-{export,import}.js。

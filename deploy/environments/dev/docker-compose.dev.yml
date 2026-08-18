@@ -171,6 +171,11 @@ services:
       AP_JWT_SECRET: ${ACTIVEPIECES_JWT_SECRET:-dev-ap-jwt-secret-change-me}
       AP_FRONTEND_URL: ${ACTIVEPIECES_FRONTEND_URL:-http://localhost:8085/}
       AP_WEBHOOK_URL: ${ACTIVEPIECES_WEBHOOK_URL:-http://localhost:8085/}
+      # HERMES-PATCH-031: 容器内回拉 piece bundle 用的地址(仅此一处用它)。
+      # 上面两个是**浏览器视角**的地址;而 ARCHIVE 件安装时 worker 在容器内 fetch
+      # /v1/engine/pieces/bundle,用浏览器地址会打到容器自己的 8085(无监听)=> fetch failed
+      # => Admin Center 的 Import Piece 必然 500。webhook 仍用对外地址,不受影响。
+      AP_INTERNAL_API_URL: ${ACTIVEPIECES_SELF_INTERNAL_URL:-http://localhost:80}
       AP_TRIGGER_DEFAULT_POLL_INTERVAL: 1
       AP_ENVIRONMENT: prod
       # Sync-webhook wait (AP default 30s → 204 No Content on slow flows). Kept at 300s for
