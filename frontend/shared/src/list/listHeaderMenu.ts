@@ -7,6 +7,7 @@ export type ListHeaderCommand =
   | 'group'
   | 'filter'
   | 'clearFilter'
+  | 'columnWidth'
   | 'moveLeft'
   | 'moveRight'
 
@@ -14,6 +15,8 @@ export interface ListHeaderState {
   sort?: 'ASC' | 'DESC' | null
   grouped?: boolean
   filtered?: boolean
+  /** Offer an exact-width entry alongside the drag handle (lists that persist column widths). */
+  showWidth?: boolean
   showMove?: boolean
   canMoveLeft?: boolean
   canMoveRight?: boolean
@@ -74,6 +77,14 @@ export function listHeaderMenuItems(
     if (state.filtered) {
       items.push({ command: 'clearFilter', labelKey: 'sharedList.clearFilter' })
     }
+  }
+
+  if (state.showWidth) {
+    items.push({
+      command: 'columnWidth',
+      labelKey: 'sharedList.columnWidth',
+      divided: items.length > 0 && !column.filterable,
+    })
   }
 
   if (state.showMove) {

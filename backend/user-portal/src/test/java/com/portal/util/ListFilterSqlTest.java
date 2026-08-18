@@ -182,6 +182,29 @@ class ListFilterSqlTest {
         assertThrows(IllegalArgumentException.class, () -> sortBy("payload", "ASC"));
     }
 
+    // ---- grouping ----
+
+    @Test
+    void groupingLeadsTheOrderSoAGroupsRowsCannotStraddleAPage() {
+        Map<String, PortalListColumnMeta> byField = columns();
+        byField.put("status", new PortalListColumnMeta("status", "status", Kind.ENUM, true, true, true,
+                PortalListColumnMeta.operatorsFor(Kind.ENUM), List.of()));
+        ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
+
+        String groupExpression = sql.groupByExpression("status");
+        assertEquals("data->>'status'", groupExpression);
+        assertEquals(" ORDER BY data->>'status' ASC NULLS LAST, data->>'name' ASC NULLS LAST, id",
+                sql.orderByGrouped(groupExpression, "name", "ASC"));
+    }
+
+    @Test
+    void groupByRejectsUnknownOrNonGroupableColumn() {
+        ListFilterSql sql = jsonRow();
+        assertThrows(IllegalArgumentException.class, () -> sql.groupByExpression("ghost"));
+        // Declared groupable=false: offering it would produce counts the query cannot stand behind.
+        assertThrows(IllegalArgumentException.class, () -> sql.groupByExpression("name"));
+    }
+
     @Test
     void aListWithItsOwnDefaultOrderStillEndsOnTheTiebreak() {
         ListFilterSql byStartTime = new ListFilterSql(columns(), ListFilterSql.JSON_ROW,

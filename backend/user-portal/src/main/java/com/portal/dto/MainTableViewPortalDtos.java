@@ -57,7 +57,15 @@ public final class MainTableViewPortalDtos {
             /** From form lookupConfig.searchFields — PK hydration hint for the portal. */
             List<String> lookupSearchFields,
             /** For fk_display: referenced DW table id (from FieldDefinition.refTableId). */
-            Long fkRefTableId
+            Long fkRefTableId,
+            // What the column header may offer. Declared by the backend because only it knows
+            // whether the query can answer that question about this column — see
+            // MainTableViewColumnSpec.
+            PortalListColumnMeta.Kind kind,
+            Boolean filterable,
+            Boolean sortable,
+            Boolean groupable,
+            List<String> operators
     ) {}
 
     @Builder
@@ -66,12 +74,22 @@ public final class MainTableViewPortalDtos {
             Map<String, Object> values
     ) {}
 
+    /**
+     * A group of the whole result set. Counted by the database over the same predicate as the
+     * page, so a header still reads the true size of its group on a page that only holds part
+     * of it.
+     */
+    @Builder
+    public record MainTableViewGroup(String label, long count) {}
+
     @Builder
     public record MainTableViewDataPage(
             List<MainTableViewFieldColumn> columns,
             List<MainTableViewDataRow> rows,
             long total,
             int page,
-            int size
+            int size,
+            /** Empty unless the request grouped by a column. */
+            List<MainTableViewGroup> groups
     ) {}
 }

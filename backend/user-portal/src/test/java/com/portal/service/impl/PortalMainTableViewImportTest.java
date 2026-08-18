@@ -5,6 +5,8 @@ import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
 import com.portal.component.MainTableViewInvolvementChecker;
+import com.portal.component.MainTableViewInvolvementScope;
+import com.portal.component.MainTableViewRowQueryComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.ProcessInstanceInfo;
@@ -56,6 +58,12 @@ class PortalMainTableViewImportTest {
     private MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
 
     @Mock
+    private MainTableViewInvolvementScope involvementScope;
+
+    @Mock
+    private MainTableViewRowQueryComponent rowQueryComponent;
+
+    @Mock
     private ProcessInstanceRepository processInstanceRepository;
 
     @Mock
@@ -76,6 +84,8 @@ class PortalMainTableViewImportTest {
                 functionUnitAccessComponent,
                 accessResolver,
                 mainTableViewInvolvementChecker,
+                involvementScope,
+                rowQueryComponent,
                 processInstanceRepository,
                 processComponent,
                 computedFieldRecalculator);

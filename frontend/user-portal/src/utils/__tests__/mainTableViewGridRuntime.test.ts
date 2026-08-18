@@ -1,37 +1,41 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyGridRuntime,
-  applyGroupBy,
   clampColumnWidth,
   createDefaultGridRuntime,
+  insertGroupHeaders,
+  loadGridRuntimeFromSession,
   moveColumn,
+  saveGridRuntimeToSession,
   setColumnWidth,
 } from '../mainTableViewGridRuntime'
 
 describe('mainTableViewGridRuntime', () => {
   const rows = [
     { processInstanceId: '1', values: { name: 'Beta', status: 'Open' } },
-    { processInstanceId: '2', values: { name: 'Alpha', status: 'Closed' } },
+    { processInstanceId: '2', values: { name: 'Alpha', status: 'Open' } },
+    { processInstanceId: '3', values: { name: 'Gamma', status: 'Closed' } },
   ]
 
-  it('sorts rows ascending by field', () => {
-    const state = createDefaultGridRuntime()
-    state.sort = { fieldName: 'name', direction: 'ASC' }
-    const sorted = applyGridRuntime(rows, state)
-    expect(sorted[0].values.name).toBe('Alpha')
+  const groups = [
+    { label: 'Open', count: 7 },
+    { label: 'Closed', count: 4 },
+  ]
+
+  it('heads each run of rows with the count the server reported, not the count on this page', () => {
+    const display = insertGroupHeaders(rows, 'status', groups)
+
+    expect(display[0]).toMatchObject({ _isGroupHeader: true, _groupLabel: 'Open', _groupCount: 7 })
+    expect(display[3]).toMatchObject({ _isGroupHeader: true, _groupLabel: 'Closed', _groupCount: 4 })
+    expect(display).toHaveLength(5)
   })
 
-  it('filters rows by contains operator', () => {
-    const state = createDefaultGridRuntime()
-    state.filters.status = { operator: 'eq', value: 'Open' }
-    const filtered = applyGridRuntime(rows, state)
-    expect(filtered).toHaveLength(1)
-    expect(filtered[0].processInstanceId).toBe('1')
+  it('leaves rows untouched when nothing is grouped', () => {
+    expect(insertGroupHeaders(rows, null, [])).toBe(rows)
   })
 
-  it('groups rows with header rows', () => {
-    const grouped = applyGroupBy(rows, 'status')
-    expect(grouped[0]).toMatchObject({ _isGroupHeader: true, _groupLabel: 'Open' })
+  it('refuses to render a group the server did not count', () => {
+    expect(() => insertGroupHeaders(rows, 'status', [{ label: 'Open', count: 7 }]))
+      .toThrow(/Closed/)
   })
 
   it('moveColumn swaps order', () => {
@@ -50,5 +54,23 @@ describe('mainTableViewGridRuntime', () => {
     const state = createDefaultGridRuntime()
     setColumnWidth(state, 'name', 180)
     expect(state.columnWidths.name).toBe(180)
+  })
+
+  it('remembers layout across a reload but never the query, which the server may since reject', () => {
+    const state = createDefaultGridRuntime()
+    state.columnOrder = ['name', 'status']
+    state.columnWidths.name = 200
+    state.sort = { fieldName: 'name', direction: 'ASC' }
+    state.groupBy = 'status'
+    state.filters.status = { operator: 'eq', value: 'Open' }
+
+    saveGridRuntimeToSession(9, state)
+    const restored = loadGridRuntimeFromSession(9)
+
+    expect(restored.columnOrder).toEqual(['name', 'status'])
+    expect(restored.columnWidths.name).toBe(200)
+    expect(restored.sort).toBeNull()
+    expect(restored.groupBy).toBeNull()
+    expect(restored.filters).toEqual({})
   })
 })

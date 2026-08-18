@@ -34,7 +34,24 @@ public class MainTableViewInvolvementChecker {
         if (hasHistoricAssigneeTask(userId, processInstance.getId())) {
             return true;
         }
-        return isMiParticipantInVariables(userId, processInstance.getVariables());
+        return isMiParticipant(userId, processInstance.getVariables());
+    }
+
+    /**
+     * The MI-participant branch on its own, for callers that have already settled the initiator
+     * and historic-assignee branches in SQL and only need this one rechecked. Exposed rather than
+     * reimplemented so pushed-down row scoping and per-instance checking cannot drift apart.
+     *
+     * <p>Note the invariant this guarantees to a SQL pre-filter: a true answer requires some
+     * participant-hint key whose value equals {@code userId} exactly, so {@code userId} is
+     * necessarily present in the JSON text of {@code __subTables__}. A substring pre-filter over
+     * that text therefore returns a superset of what this method accepts — never a subset.
+     */
+    public boolean isMiParticipant(String userId, Map<String, Object> variables) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        return isMiParticipantInVariables(userId, variables);
     }
 
     private boolean hasHistoricAssigneeTask(String userId, String processInstanceId) {

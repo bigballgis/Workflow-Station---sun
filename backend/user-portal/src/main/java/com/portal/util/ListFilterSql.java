@@ -33,6 +33,9 @@ public final class ListFilterSql {
     private static final String SQL_NUMERIC_GUARD = "'^-?[0-9]+(\\.[0-9]+)?$'";
     private static final Pattern DATE_VALUE = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
     private static final Pattern IDENTIFIER = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    /** Ordering refs may be table-qualified ({@code pi.id}); user-supplied field names may not. */
+    private static final Pattern ORDERING_REF =
+            Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)?$");
 
     /** Resolves a declared column name to the SQL expression holding its value. */
     @FunctionalInterface
@@ -61,7 +64,7 @@ public final class ListFilterSql {
                          String tiebreak, String defaultOrderBy) {
         this.columnsByField = Map.copyOf(columnsByField);
         this.columnRef = columnRef;
-        this.tiebreak = requireIdentifier(tiebreak);
+        this.tiebreak = requireOrderingRef(tiebreak);
         this.defaultOrderBy = defaultOrderBy;
     }
 
@@ -86,10 +89,22 @@ public final class ListFilterSql {
 
     /** @return full {@code  ORDER BY ...} clause, always ending in the tiebreak column */
     public String orderBy(String sortField, String sortDirection) {
+        return " ORDER BY " + orderTerms(sortField, sortDirection);
+    }
+
+    /**
+     * Orders by the group expression first, then by whatever the caller sorts on. A group's rows
+     * have to be contiguous for the page to be able to render group headers at all — without this
+     * the same group would reappear on later pages.
+     */
+    public String orderByGrouped(String groupExpression, String sortField, String sortDirection) {
+        return " ORDER BY " + groupExpression + " ASC NULLS LAST, "
+                + orderTerms(sortField, sortDirection);
+    }
+
+    private String orderTerms(String sortField, String sortDirection) {
         if (sortField == null) {
-            return defaultOrderBy == null
-                    ? " ORDER BY " + tiebreak
-                    : " ORDER BY " + defaultOrderBy + ", " + tiebreak;
+            return defaultOrderBy == null ? tiebreak : defaultOrderBy + ", " + tiebreak;
         }
         PortalListColumnMeta column = columnsByField.get(sortField);
         if (column == null) {
@@ -99,11 +114,35 @@ public final class ListFilterSql {
             throw new IllegalArgumentException("Column is not sortable: " + sortField);
         }
         String direction = "DESC".equalsIgnoreCase(sortDirection) ? "DESC" : "ASC";
+        return sortExpression(column, columnRef) + " " + direction + " NULLS LAST, " + tiebreak;
+    }
+
+    /**
+     * The expression a column groups by. Grouping and its counts have to come from the same
+     * expression as the ordering that makes a group's rows contiguous, otherwise a page can show
+     * the same group header twice with counts that do not add up.
+     */
+    public String groupByExpression(String field) {
+        PortalListColumnMeta column = columnsByField.get(field);
+        if (column == null) {
+            throw new IllegalArgumentException("Unknown group column: " + field);
+        }
+        if (!column.groupable()) {
+            throw new IllegalArgumentException("Column is not groupable: " + field);
+        }
+        return columnRef.sqlFor(column.field());
+    }
+
+    /**
+     * The value expression a column sorts by. Numbers are cast so 9 sorts before 10, which text
+     * ordering of a JSON value would get wrong; the cast is guarded so a non-numeric stored value
+     * sorts as null rather than aborting the query.
+     */
+    public static String sortExpression(PortalListColumnMeta column, ColumnRef columnRef) {
         String ref = columnRef.sqlFor(column.field());
-        String expr = column.kind() == PortalListColumnMeta.Kind.NUMBER
+        return column.kind() == PortalListColumnMeta.Kind.NUMBER
                 ? "(CASE WHEN " + ref + " ~ " + SQL_NUMERIC_GUARD + " THEN (" + ref + ")::numeric END)"
                 : ref;
-        return " ORDER BY " + expr + " " + direction + " NULLS LAST, " + tiebreak;
     }
 
     /**
@@ -269,6 +308,13 @@ public final class ListFilterSql {
             throw new IllegalArgumentException("Invalid field identifier: " + field);
         }
         return field;
+    }
+
+    private static String requireOrderingRef(String ref) {
+        if (ref == null || !ORDERING_REF.matcher(ref).matches()) {
+            throw new IllegalArgumentException("Invalid ordering reference: " + ref);
+        }
+        return ref;
     }
 
     private static String requireValue(ListColumnFilter filter, String value) {

@@ -1,4 +1,5 @@
 import type { AxiosRequestConfig } from 'axios'
+import type { ListColumnFilterRequest, ListColumnKind } from '@platform-shared/list/columnMeta'
 import { request } from './request'
 
 export type ImportProgressPhase = 'upload' | 'process'
@@ -44,11 +45,40 @@ export interface MainTableViewFieldColumn {
   lookupSearchFields?: string[] | null
   /** For fk_display: DW table id of the FK target (e.g. Case table). */
   fkRefTableId?: number | null
+  // What the header may offer on this column. Declared by the backend, which is the only side
+  // that knows whether the query can answer that question — never inferred here.
+  kind: ListColumnKind
+  filterable: boolean
+  sortable: boolean
+  groupable: boolean
+  operators: string[]
+}
+
+/** Mirrors MainTableViewQueryRequest: paging plus everything the shared header produces. */
+export interface MainTableViewQueryRequest {
+  page: number
+  size: number
+  search?: string | null
+  filters?: ListColumnFilterRequest[]
+  sortField?: string | null
+  sortDirection?: 'ASC' | 'DESC' | null
+  /** Field to group by; the response then carries a count per group. */
+  groupBy?: string | null
 }
 
 export interface MainTableViewDataRow {
   processInstanceId: string
   values: Record<string, unknown>
+}
+
+/**
+ * A group of the whole result set. The count comes from the server's GROUP BY over the same
+ * predicate as the page, so a header still reads the true size of its group when the page holds
+ * only part of it.
+ */
+export interface MainTableViewGroup {
+  label: string
+  count: number
 }
 
 export interface MainTableViewDataPage {
@@ -57,6 +87,8 @@ export interface MainTableViewDataPage {
   total: number
   page: number
   size: number
+  /** Empty unless the request grouped by a column. */
+  groups: MainTableViewGroup[]
 }
 
 export interface MainTableViewImportResult {
@@ -76,11 +108,12 @@ export const mainTableViewApi = {
       `/main-table-views/function-units/${encodeURIComponent(functionUnitCode)}/views`,
     ),
 
-  queryData: (viewId: number, params: { page?: number; size?: number; search?: string }) =>
-    request.get<{ data: MainTableViewDataPage }>(`/main-table-views/${viewId}/data`, { params }),
+  queryData: (viewId: number, body: MainTableViewQueryRequest) =>
+    request.post<{ data: MainTableViewDataPage }>(`/main-table-views/${viewId}/data`, body),
 
-  exportCsv: (viewId: number, maxRows = 10000) =>
-    request.get<Blob>(`/main-table-views/${viewId}/export`, {
+  /** Exports what the same query would list — paging aside — so the CSV matches the screen. */
+  exportCsv: (viewId: number, body: MainTableViewQueryRequest, maxRows = 10000) =>
+    request.post<Blob>(`/main-table-views/${viewId}/export`, body, {
       params: { maxRows },
       responseType: 'blob',
     }),

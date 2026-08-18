@@ -7,6 +7,7 @@ import {
   CaretBottom,
   CaretTop,
   Close,
+  DCaret,
   Filter,
   Grid,
   Right,
@@ -24,6 +25,8 @@ const props = withDefaults(
     filtered?: boolean
     /** Current column width; pass null to hide the resize handle. */
     width?: number | null
+    /** Offer an exact-width menu entry (the host owns the dialog). */
+    showWidth?: boolean
     showMove?: boolean
     canMoveLeft?: boolean
     canMoveRight?: boolean
@@ -33,6 +36,7 @@ const props = withDefaults(
     grouped: false,
     filtered: false,
     width: null,
+    showWidth: false,
     showMove: false,
     canMoveLeft: false,
     canMoveRight: false,
@@ -45,6 +49,7 @@ const emit = defineEmits<{
   'group-change': [grouped: boolean]
   'filter-open': []
   'clear-filter': []
+  'width-open': []
   move: [direction: 'left' | 'right']
   'width-change': [width: number]
   'width-commit': []
@@ -57,6 +62,7 @@ const menuItems = computed(() =>
     sort: props.sort,
     grouped: props.grouped,
     filtered: props.filtered,
+    showWidth: props.showWidth,
     showMove: props.showMove,
     canMoveLeft: props.canMoveLeft,
     canMoveRight: props.canMoveRight,
@@ -70,6 +76,7 @@ const COMMAND_ICONS: Record<ListHeaderCommand, Component> = {
   group: Grid,
   filter: Filter,
   clearFilter: Close,
+  columnWidth: DCaret,
   moveLeft: Back,
   moveRight: Right,
 }
@@ -83,6 +90,7 @@ function onCommand(command: ListHeaderCommand) {
   else if (command === 'group') emit('group-change', !props.grouped)
   else if (command === 'filter') emit('filter-open')
   else if (command === 'clearFilter') emit('clear-filter')
+  else if (command === 'columnWidth') emit('width-open')
   else if (command === 'moveLeft') emit('move', 'left')
   else emit('move', 'right')
 }

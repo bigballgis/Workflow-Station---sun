@@ -6,6 +6,7 @@ import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataPage;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewSummary;
+import com.portal.dto.MainTableViewQueryRequest;
 import com.portal.security.CurrentUserId;
 import com.portal.service.PortalMainTableViewService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,32 +50,32 @@ public class PortalMainTableViewController {
                 portalMainTableViewService.listPublishedViews(userId, functionUnitCode)));
     }
 
-    @GetMapping("/{viewId}/data")
-    @Operation(summary = "Query view data (process instance main table rows)")
+    @PostMapping("/{viewId}/data")
+    @Operation(summary = "Query view data (true paging; column filters and sort are pushed into SQL)")
     public ResponseEntity<ApiResponse<MainTableViewDataPage>> queryData(
             @CurrentUserId String userId,
             @PathVariable Long viewId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String search) {
+            @RequestBody MainTableViewQueryRequest request) {
         if (userId == null || userId.isBlank()) {
-            return ResponseEntity.ok(ApiResponse.success(MainTableViewDataPage.builder()
-                    .columns(List.of()).rows(List.of()).total(0).page(page).size(size).build()));
+            throw new PortalException("403", "User context required");
         }
         return ResponseEntity.ok(ApiResponse.success(
-                portalMainTableViewService.queryViewData(userId, viewId, page, size, search)));
+                portalMainTableViewService.queryViewData(userId, viewId, request)));
     }
 
-    @GetMapping("/{viewId}/export")
-    @Operation(summary = "Export view data as CSV")
+    @PostMapping("/{viewId}/export")
+    @Operation(summary = "Export the rows the caller is currently looking at as CSV")
     public ResponseEntity<byte[]> exportCsv(
             @CurrentUserId String userId,
             @PathVariable Long viewId,
-            @RequestParam(defaultValue = "10000") int maxRows) {
+            @RequestParam(defaultValue = "10000") int maxRows,
+            @RequestBody MainTableViewQueryRequest request) {
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.status(403).build();
         }
-        byte[] csv = portalMainTableViewService.exportViewCsv(userId, viewId, maxRows);
+        // The export carries the caller's filters, search and sort: paging is what the list and the
+        // export differ on, so exporting anything else would hand back a different set of rows.
+        byte[] csv = portalMainTableViewService.exportViewCsv(userId, viewId, maxRows, request);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"main-table-view.csv\"")
                 .contentType(MediaType.parseMediaType("text/csv"))

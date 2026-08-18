@@ -7,14 +7,16 @@ import { Search, Download, Refresh, Upload } from '@element-plus/icons-vue'
 import {
   mainTableViewApi,
   type FunctionUnitViewMenuItem, type MainTableViewSummary, type MainTableViewDataPage,
-  type MainTableViewFieldColumn, type MainTableViewDataRow, type MainTableViewImportResult,
-  type ImportProgressPhase,
+  type MainTableViewFieldColumn, type MainTableViewDataRow, type MainTableViewGroup,
+  type MainTableViewImportResult, type ImportProgressPhase,
 } from '@/api/mainTableView'
+import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 import {
-  applyGridRuntime, applyGroupBy, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, columnWidth, setColumnWidth,
-  createDefaultGridRuntime, initColumnOrder, isGroupHeaderRow, loadGridRuntimeFromSession, moveColumn,
-  orderedColumns, pruneRuntimeToColumns, saveGridRuntimeToSession,
-  type GridColumnFilter, type GridDisplayRow, type GridRuntimeState,
+  COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, columnWidth, setColumnWidth,
+  createDefaultGridRuntime, initColumnOrder, insertGroupHeaders, isGroupHeaderRow,
+  loadGridRuntimeFromSession, moveColumn, orderedColumns, pruneRuntimeToColumns,
+  saveGridRuntimeToSession, toListColumnMeta,
+  type GridColumnFilter, type GridDisplayRow, type GridRuntimeState, type GridSortDirection,
 } from '@/utils/mainTableViewGridRuntime'
 import {
   downloadMainTableViewRowsAsCsv, formatMainTableViewCell, extractFileLinks, type FileLink,
@@ -41,9 +43,13 @@ const selectedViewId = ref<number | null>(null)
 const searchKeyword = ref('')
 const gridColumns = ref<MainTableViewFieldColumn[]>([])
 const allRows = ref<MainTableViewDataRow[]>([])
+const dataGroups = ref<MainTableViewGroup[]>([])
 const dataTotal = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
+// Every state change reloads, so a slow response for an abandoned view must not overwrite a newer
+// one. Only the reply to the most recently issued request is allowed to land.
+let latestQuery = 0
 
 const {
   hydrateLookupCells,
@@ -181,18 +187,13 @@ const gridTableKey = computed(() =>
   `${selectedViewId.value ?? 'none'}|${gridRuntime.groupBy ?? ''}|${gridColumns.value.map(c => c.fieldName).join(',')}`,
 )
 
-const processedRows = computed(() => applyGridRuntime(allRows.value, gridRuntime))
-
-const groupedRows = computed<GridDisplayRow[]>(() =>
-  applyGroupBy(processedRows.value, gridRuntime.groupBy),
+// The database already applied the filters, the sort and the paging, so the rows in hand ARE the
+// page. All that is left is to slot in the group headers the same query counted.
+const pagedRows = computed<GridDisplayRow[]>(() =>
+  insertGroupHeaders(allRows.value, gridRuntime.groupBy, dataGroups.value),
 )
 
-const pagedRows = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return groupedRows.value.slice(start, start + pageSize.value)
-})
-
-const displayTotal = computed(() => groupedRows.value.length)
+const displayTotal = computed(() => dataTotal.value)
 
 function persistRuntime() {
   if (selectedViewId.value) {
@@ -240,29 +241,42 @@ async function loadViews() {
   }
 }
 
+/** The filters the user has completed, in the shape the backend list contract expects. */
+function activeFilters(): ListColumnFilterRequest[] {
+  return Object.entries(gridRuntime.filters).map(([field, filter]) => ({ field, ...filter }))
+}
+
 async function loadData() {
   if (!selectedViewId.value) {
     gridColumns.value = []
     allRows.value = []
+    dataGroups.value = []
     dataTotal.value = 0
     return
   }
+  const viewId = selectedViewId.value
+  const queryId = ++latestQuery
   dataLoading.value = true
   try {
-    const res = await mainTableViewApi.queryData(selectedViewId.value, {
-      page: 0,
-      size: 5000,
+    const res = await mainTableViewApi.queryData(viewId, {
+      page: currentPage.value - 1,
+      size: pageSize.value,
       search: searchKeyword.value.trim() || undefined,
+      filters: activeFilters(),
+      sortField: gridRuntime.sort?.fieldName ?? undefined,
+      sortDirection: gridRuntime.sort?.direction ?? undefined,
+      groupBy: gridRuntime.groupBy ?? undefined,
     })
+    if (queryId !== latestQuery) return
     const page: MainTableViewDataPage = res.data
     gridColumns.value = page.columns || []
     allRows.value = page.rows || []
+    dataGroups.value = page.groups || []
     dataTotal.value = page.total
     initColumnOrder(gridColumns.value, gridRuntime)
     // Drop any groupBy / sort / filter that references a column the new view doesn't have, so runtime
     // state from a previously-selected view can never mis-render against this view's data.
     pruneRuntimeToColumns(gridRuntime, gridColumns.value)
-    currentPage.value = 1
     selectedTableRows.value = []
     tableRef.value?.clearSelection()
     await hydrateLookupCells()
@@ -270,12 +284,16 @@ async function loadData() {
     await nextTick()
     tableRef.value?.doLayout?.()
   } catch (e: unknown) {
+    if (queryId !== latestQuery) return
     ElMessage.error((e instanceof Error ? e.message : undefined) || t('mainTableView.loadDataFailed'))
     gridColumns.value = []
     allRows.value = []
+    dataGroups.value = []
     dataTotal.value = 0
   } finally {
-    dataLoading.value = false
+    if (queryId === latestQuery) {
+      dataLoading.value = false
+    }
   }
 }
 
@@ -325,13 +343,11 @@ function handleSearch() {
   loadData()
 }
 
-function handlePageChange(page: number) {
-  currentPage.value = page
-}
-
-function handleSizeChange(size: number) {
+function handlePageChange(page: number, size: number) {
+  const sizeChanged = size !== pageSize.value
   pageSize.value = size
-  currentPage.value = 1
+  currentPage.value = sizeChanged ? 1 : page
+  loadData()
 }
 
 function formatCell(colOrValue: MainTableViewFieldColumn | unknown, row?: GridDisplayRow | MainTableViewDataRow) {
@@ -387,13 +403,30 @@ async function handleExport() {
     return
   }
 
-  const rows = processedRows.value as MainTableViewDataRow[]
-  if (!rows.length) {
+  if (!dataTotal.value) {
     ElMessage.warning(t('mainTableView.exportNoRows'))
     return
   }
-  downloadMainTableViewRowsAsCsv(projectHydrated(rows), cols, baseName)
-  ElMessage.success(t('mainTableView.exportAllHint', { count: rows.length }))
+  // Only one page is in memory now, so exporting everything the current query matches is the
+  // server's job — it re-runs that same query without the paging.
+  const blob = await mainTableViewApi.exportCsv(selectedViewId.value, {
+    page: 0,
+    size: pageSize.value,
+    search: searchKeyword.value.trim() || undefined,
+    filters: activeFilters(),
+    sortField: gridRuntime.sort?.fieldName ?? undefined,
+    sortDirection: gridRuntime.sort?.direction ?? undefined,
+    groupBy: gridRuntime.groupBy ?? undefined,
+  })
+  const url = window.URL.createObjectURL(new Blob([blob as unknown as BlobPart]))
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', `${baseName}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+  ElMessage.success(t('mainTableView.exportAllHint', { count: dataTotal.value }))
 }
 
 function openRow(row: GridDisplayRow) {
@@ -500,69 +533,63 @@ function columnIndex(fieldName: string): number {
   return gridRuntime.columnOrder.indexOf(fieldName)
 }
 
-function handleColumnCommand(col: MainTableViewFieldColumn, action: string) {
-  switch (action) {
-    case 'sortAsc':
-      gridRuntime.sort = { fieldName: col.fieldName, direction: 'ASC' }
-      currentPage.value = 1
-      persistRuntime()
-      break
-    case 'sortDesc':
-      gridRuntime.sort = { fieldName: col.fieldName, direction: 'DESC' }
-      currentPage.value = 1
-      persistRuntime()
-      break
-    case 'groupBy':
-      gridRuntime.groupBy = gridRuntime.groupBy === col.fieldName ? null : col.fieldName
-      currentPage.value = 1
-      persistRuntime()
-      break
-    case 'filterBy':
-      filterDialogField.value = col
-      filterDraft.value = {
-        operator: gridRuntime.filters[col.fieldName]?.operator || 'contains',
-        value: gridRuntime.filters[col.fieldName]?.value || '',
-      }
-      filterDialogVisible.value = true
-      break
-    case 'columnWidth':
-      widthDialogField.value = col
-      widthDraft.value = columnWidth(col, gridRuntime)
-      widthDialogVisible.value = true
-      break
-    case 'moveLeft':
-      moveColumn(gridRuntime, col.fieldName, 'left')
-      persistRuntime()
-      break
-    case 'moveRight':
-      moveColumn(gridRuntime, col.fieldName, 'right')
-      persistRuntime()
-      break
-    default:
-      break
-  }
+/** Sorting, grouping and filtering are all questions for the database, so each one re-queries. */
+function handleSortChange(col: MainTableViewFieldColumn, direction: GridSortDirection) {
+  gridRuntime.sort = { fieldName: col.fieldName, direction }
+  currentPage.value = 1
+  loadData()
 }
 
-function applyColumnFilter() {
-  if (!filterDialogField.value) return
-  const field = filterDialogField.value.fieldName
-  const needsValue = filterDraft.value.operator !== 'isNull' && filterDraft.value.operator !== 'isNotNull'
-  if (needsValue && !filterDraft.value.value.trim()) {
-    delete gridRuntime.filters[field]
-  } else {
-    gridRuntime.filters[field] = { ...filterDraft.value }
-  }
+function handleClearSort() {
+  gridRuntime.sort = null
   currentPage.value = 1
-  persistRuntime()
-  filterDialogVisible.value = false
+  loadData()
 }
 
-function clearColumnFilter() {
-  if (!filterDialogField.value) return
-  delete gridRuntime.filters[filterDialogField.value.fieldName]
+function handleGroupChange(col: MainTableViewFieldColumn, grouped: boolean) {
+  gridRuntime.groupBy = grouped ? col.fieldName : null
   currentPage.value = 1
+  loadData()
+}
+
+function openFilterDialog(col: MainTableViewFieldColumn) {
+  filterDialogField.value = col
+  filterDraft.value = gridRuntime.filters[col.fieldName]
+    ? { ...gridRuntime.filters[col.fieldName] }
+    : { operator: col.operators[0] ?? '', value: '' }
+  filterDialogVisible.value = true
+}
+
+function openWidthDialog(col: MainTableViewFieldColumn) {
+  widthDialogField.value = col
+  widthDraft.value = columnWidth(col, gridRuntime)
+  widthDialogVisible.value = true
+}
+
+function handleMoveColumn(col: MainTableViewFieldColumn, direction: 'left' | 'right') {
+  moveColumn(gridRuntime, col.fieldName, direction)
   persistRuntime()
+}
+
+function applyColumnFilter(filter: GridColumnFilter) {
+  if (!filterDialogField.value) return
+  gridRuntime.filters[filterDialogField.value.fieldName] = { ...filter }
+  currentPage.value = 1
   filterDialogVisible.value = false
+  loadData()
+}
+
+function clearColumnFilter(col: MainTableViewFieldColumn) {
+  delete gridRuntime.filters[col.fieldName]
+  currentPage.value = 1
+  filterDialogVisible.value = false
+  loadData()
+}
+
+/** The dialog's clear button knows the column only through the dialog's own state. */
+function clearFilterFromDialog() {
+  if (!filterDialogField.value) return
+  clearColumnFilter(filterDialogField.value)
 }
 
 function applyColumnWidth() {
@@ -741,10 +768,12 @@ onMounted(async () => {
     selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
     viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
     MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
-    processedRows, groupedRows, pagedRows, displayTotal,
-    handleSearch, handlePageChange, handleSizeChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
+    pagedRows, displayTotal, toListColumnMeta,
+    handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
     isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,
-    handleColumnCommand, applyColumnFilter, clearColumnFilter, applyColumnWidth, handleColumnResize, handleColumnResizeEnd,
+    handleSortChange, handleClearSort, handleGroupChange, openFilterDialog, openWidthDialog, handleMoveColumn,
+    applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
+    handleColumnResize, handleColumnResizeEnd,
     handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName, rowClassName, spanMethod,
     loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
   }

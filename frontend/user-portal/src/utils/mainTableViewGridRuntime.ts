@@ -1,15 +1,16 @@
-import type { MainTableViewDataRow, MainTableViewFieldColumn } from '@/api/mainTableView'
+import type {
+  MainTableViewDataRow, MainTableViewFieldColumn, MainTableViewGroup,
+} from '@/api/mainTableView'
 import { clampColumnWidth } from '@platform-shared/list/columnResizeCursor'
+import type { ListColumnFilter, ListColumnMeta } from '@platform-shared/list/columnMeta'
 import { formatMainTableViewCell } from '@/utils/mainTableViewCsvExport'
 
 export { COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, clampColumnWidth } from '@platform-shared/list/columnResizeCursor'
 
 export type GridSortDirection = 'ASC' | 'DESC'
 
-export interface GridColumnFilter {
-  operator: string
-  value: string
-}
+/** Column filters are the shared list's, so what the UI collects is what the backend receives. */
+export type GridColumnFilter = ListColumnFilter
 
 export interface GridRuntimeState {
   columnOrder: string[]
@@ -88,99 +89,60 @@ function cellText(row: MainTableViewDataRow, fieldName: string): string {
   return formatted === '-' ? '' : formatted
 }
 
-function compareValues(a: unknown, b: unknown): number {
-  if (a == null && b == null) return 0
-  if (a == null) return -1
-  if (b == null) return 1
-  if (typeof a === 'number' && typeof b === 'number') return a - b
-  const sa = String(a)
-  const sb = String(b)
-  const na = Number(sa)
-  const nb = Number(sb)
-  if (!Number.isNaN(na) && !Number.isNaN(nb) && sa.trim() !== '' && sb.trim() !== '') {
-    return na - nb
-  }
-  return sa.localeCompare(sb, undefined, { sensitivity: 'base' })
-}
-
-function matchesColumnFilter(value: unknown, filter: GridColumnFilter): boolean {
-  const text = value == null ? '' : String(value)
-  const expected = filter.value ?? ''
-  switch (filter.operator) {
-    case 'eq':
-      return text.toLowerCase() === expected.toLowerCase()
-    case 'ne':
-      return text.toLowerCase() !== expected.toLowerCase()
-    case 'contains':
-      return text.toLowerCase().includes(expected.toLowerCase())
-    case 'notContains':
-      return !text.toLowerCase().includes(expected.toLowerCase())
-    case 'startsWith':
-      return text.toLowerCase().startsWith(expected.toLowerCase())
-    case 'endsWith':
-      return text.toLowerCase().endsWith(expected.toLowerCase())
-    case 'isNull':
-      return text.trim() === ''
-    case 'isNotNull':
-      return text.trim() !== ''
-    default:
-      return true
-  }
-}
-
-export function applyGridRuntime(
-  rows: MainTableViewDataRow[],
-  state: GridRuntimeState,
-): MainTableViewDataRow[] {
-  let out = [...rows]
-
-  const filterEntries = Object.entries(state.filters).filter(([, f]) => {
-    if (f.operator === 'isNull' || f.operator === 'isNotNull') return true
-    return (f.value ?? '').trim() !== ''
-  })
-  if (filterEntries.length) {
-    out = out.filter(row =>
-      filterEntries.every(([field, filter]) =>
-        matchesColumnFilter(row.values[field], filter),
-      ),
-    )
-  }
-
-  if (state.sort) {
-    const { fieldName, direction } = state.sort
-    out.sort((a, b) => {
-      const cmp = compareValues(a.values[fieldName], b.values[fieldName])
-      return direction === 'DESC' ? -cmp : cmp
-    })
-  }
-
-  return out
-}
-
-export function applyGroupBy(
+/**
+ * Slot a header in front of each run of rows sharing a group value.
+ *
+ * The page only holds part of the result set, so the count on a header cannot be derived from the
+ * rows in hand — it comes from the backend's GROUP BY over the same predicate the page was drawn
+ * from. A label the backend did not count means the two disagree about the grouping expression,
+ * which would silently understate a group; that is an error, not something to paper over.
+ */
+export function insertGroupHeaders(
   rows: MainTableViewDataRow[],
   groupByField: string | null,
+  groups: MainTableViewGroup[],
 ): GridDisplayRow[] {
   if (!groupByField) return rows
 
-  const groups = new Map<string, MainTableViewDataRow[]>()
-  for (const row of rows) {
-    const label = cellText(row, groupByField) || '—'
-    const bucket = groups.get(label) ?? []
-    bucket.push(row)
-    groups.set(label, bucket)
-  }
-
+  const countByLabel = new Map(groups.map(g => [g.label ?? '', g.count]))
   const out: GridDisplayRow[] = []
-  for (const [label, items] of groups) {
-    out.push({
-      _isGroupHeader: true,
-      _groupLabel: label,
-      _groupCount: items.length,
-    })
-    out.push(...items)
+  let currentLabel: string | null = null
+
+  for (const row of rows) {
+    const label = cellText(row, groupByField)
+    if (label !== currentLabel) {
+      const count = countByLabel.get(label)
+      if (count === undefined) {
+        throw new Error(
+          `Group "${label}" on ${groupByField} was not counted by the server — the page and its group counts came from different queries`,
+        )
+      }
+      out.push({
+        _isGroupHeader: true,
+        _groupLabel: label || '—',
+        _groupCount: count,
+      })
+      currentLabel = label
+    }
+    out.push(row)
   }
   return out
+}
+
+/**
+ * The shared list header reads a column declaration, not this app's column DTO. The capability
+ * flags are the backend's answer about what the query can do, so they are passed through as-is.
+ */
+export function toListColumnMeta(col: MainTableViewFieldColumn): ListColumnMeta {
+  return {
+    field: col.fieldName,
+    label: col.displayLabel,
+    kind: col.kind,
+    filterable: col.filterable,
+    sortable: col.sortable,
+    groupable: col.groupable,
+    operators: col.operators,
+  }
 }
 
 /**
@@ -223,27 +185,42 @@ export function isGroupHeaderRow(row: GridDisplayRow): row is Extract<GridDispla
   return !!(row as { _isGroupHeader?: boolean })._isGroupHeader
 }
 
+/**
+ * Only layout survives a reload — column order and widths.
+ *
+ * Filters, sort and grouping are questions the database answers, and it rejects a column the
+ * current view no longer declares. Restoring them from an earlier session would therefore make
+ * every load of a redesigned view fail with no way for the user to clear the offending state.
+ * They are built fresh from the columns the backend just declared instead.
+ */
+type PersistedGridLayout = Pick<GridRuntimeState, 'columnOrder' | 'columnWidths'>
+
 export function loadGridRuntimeFromSession(viewId: number): GridRuntimeState {
   try {
-    const raw = sessionStorage.getItem(`portal-mtv-runtime:${viewId}`)
+    const raw = sessionStorage.getItem(`portal-mtv-layout:${viewId}`)
     if (!raw) return createDefaultGridRuntime()
-    const parsed = JSON.parse(raw) as GridRuntimeState
+    const parsed = JSON.parse(raw) as PersistedGridLayout
     return {
       ...createDefaultGridRuntime(),
-      ...parsed,
-      filters: parsed.filters ?? {},
-      columnWidths: parsed.columnWidths ?? {},
       columnOrder: parsed.columnOrder ?? [],
+      columnWidths: parsed.columnWidths ?? {},
     }
   } catch {
+    // FALLBACK(ux): unreadable layout costs the user their column widths, nothing else — the data
+    // shown is unaffected. Throwing here would wedge the view until session storage is cleared.
     return createDefaultGridRuntime()
   }
 }
 
 export function saveGridRuntimeToSession(viewId: number, state: GridRuntimeState): void {
+  const layout: PersistedGridLayout = {
+    columnOrder: state.columnOrder,
+    columnWidths: state.columnWidths,
+  }
   try {
-    sessionStorage.setItem(`portal-mtv-runtime:${viewId}`, JSON.stringify(state))
+    sessionStorage.setItem(`portal-mtv-layout:${viewId}`, JSON.stringify(layout))
   } catch {
-    /* ignore quota errors */
+    // FALLBACK(ux): a storage quota error means widths are not remembered next visit; it must not
+    // interrupt the resize the user just performed.
   }
 }

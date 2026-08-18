@@ -33,6 +33,11 @@ export interface ListColumnFilter {
   value2?: string
 }
 
+/** A filter on its way to a list endpoint: what the dialog produced, plus the column it applies to. */
+export interface ListColumnFilterRequest extends ListColumnFilter {
+  field: string
+}
+
 const NO_VALUE_OPERATORS = new Set(['isNull', 'isNotNull'])
 const RANGE_OPERATORS = new Set(['between'])
 
