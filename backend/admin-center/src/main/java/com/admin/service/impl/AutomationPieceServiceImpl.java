@@ -1,6 +1,7 @@
 package com.admin.service.impl;
 
 import com.admin.dto.response.AutomationPieceSummary;
+import com.admin.exception.AdminConflictException;
 import com.admin.exception.ServiceTaskApiException;
 import com.admin.service.AutomationPieceService;
 import com.admin.servicetask.client.ServiceTaskApiClient;
@@ -75,9 +76,14 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
 
     private static final String ARCHIVE_SQL = "SELECT data FROM file WHERE id = ?";
 
-    /** 单 platform 部署:AP 的启停黑名单(只读;写走 AP platform API) */
-    private static final String DISABLED_NAMES_SQL =
-            "SELECT \"filteredPieceNames\" FROM platform LIMIT 1";
+    // HERMES-PATCH-029: 原本这里有
+    //     SELECT "filteredPieceNames" FROM platform LIMIT 1
+    // AP 0.88 的迁移 DropPlatformPieceFilters1809000000000（上游自己标了 breaking=true）
+    // 把 platform.filteredPieceNames / filteredPieceBehavior 两列删了，替代品是 piece_set —— 而
+    // piece_set 是 EE 域，已随 EE 剥离删除。于是「停用某个 piece」这个能力在本分叉上两头落空。
+    //
+    // 该 SQL 是 listPieces() 的第一步，列不存在 => SQLException => Automation Pieces 整页 500。
+    // UAT 实测就是这样崩的。止血：不再查该列，启停能力显式声明为不支持（见 setPieceDisabled）。
 
     /** flow_version 的 trigger JSON 内嵌整条 step 链,包名以带引号字符串出现 */
     /**
@@ -246,48 +252,34 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
 
     @Override
     public void setPieceDisabled(String name, boolean disabled) {
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInAsCurrentActor();
-        if (session.platformId() == null) {
-            throw new ServiceTaskApiException("AP sign-in response has no platformId");
-        }
-        HttpHeaders headers = bearerHeaders(session.token());
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        String platformUrl = apUrl("/api/v1/platforms/" + session.platformId());
-        ResponseEntity<Map<String, Object>> platformResp = restTemplate.exchange(
-                platformUrl, HttpMethod.GET, new HttpEntity<>(headers),
-                new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
-        Set<String> names = new HashSet<>();
-        Object current = platformResp.getBody() != null ? platformResp.getBody().get("filteredPieceNames") : null;
-        if (current instanceof List<?> list) {
-            list.forEach(item -> names.add(String.valueOf(item)));
-        }
-        boolean changed = disabled ? names.add(name) : names.remove(name);
-        if (!changed) {
-            return;
-        }
-        // BLOCKED 语义:名单即黑名单;list 过滤为 HERMES-PATCH 恢复,get() 不受影响
-        Map<String, Object> body = Map.of(
-                "filteredPieceNames", new ArrayList<>(names),
-                "filteredPieceBehavior", "BLOCKED");
-        restTemplate.exchange(platformUrl, HttpMethod.POST,
-                new HttpEntity<>(body, headers), Void.class);
+        // HERMES-PATCH-029: 0.88 起不支持。
+        //
+        // 原实现 GET/POST AP 的 /v1/platforms/{id}，读写 filteredPieceNames + filteredPieceBehavior。
+        // 迁移 DropPlatformPieceFilters1809000000000（上游标记 breaking=true）删掉了这两列，
+        // 上游的替代品 piece_set 属 EE 域、已随 EE 剥离移除。两条路都不存在了。
+        //
+        // 明确抛 409 而不是「POST 上去让 AP 静默忽略」：后者会让管理员以为已停用，
+        // 而设计器目录里那个 piece 照常出现 —— 一个自称成功却什么都没做的开关比没有开关更糟。
+        throw new AdminConflictException("AP_PIECE_TOGGLE_UNSUPPORTED",
+                "Activepieces 0.88 移除了 platform 级 piece 过滤（filteredPieceNames），"
+                        + "其替代机制 piece set 属企业版、已在本分叉剥离，因此无法停用/启用单个 piece。"
+                        + "要控制设计器目录里出现哪些 piece，请改用 piece 白名单："
+                        + "调整 automation/hermes/pieces.json 后重新构建镜像并重新灌 piece 元数据。");
     }
 
+    /**
+     * HERMES-PATCH-029: 恒为空集。
+     *
+     * <p>AP 0.88 删除了承载它的 {@code platform.filteredPieceNames}（见类内 SQL 常量处的说明），
+     * 而替代机制 piece_set 属 EE、已剥离。没有任何持久化位置能记住「哪些 piece 被停用」，
+     * 所以这里返回空集 —— 语义是<b>所有 piece 都可见</b>，与 {@link #setPieceDisabled} 直接拒绝
+     * 写入保持一致：读不出停用状态，也不假装能写入。
+     *
+     * <p>不保留「尽力而为地读一下、失败就吞掉」的写法：那会让整页在 AP 换版后再次静默劣化，
+     * 而这次事故恰恰是靠整页 500 才被发现的。
+     */
     private Set<String> fetchDisabledNames() {
-        Set<String> result = jdbcTemplate.query(DISABLED_NAMES_SQL, rs -> {
-            Set<String> names = new HashSet<>();
-            if (rs.next()) {
-                Array array = rs.getArray(1);
-                if (array != null) {
-                    for (Object item : (Object[]) array.getArray()) {
-                        names.add(String.valueOf(item));
-                    }
-                }
-            }
-            return names;
-        });
-        return result != null ? result : Collections.emptySet();
+        return Collections.emptySet();
     }
 
     /**
