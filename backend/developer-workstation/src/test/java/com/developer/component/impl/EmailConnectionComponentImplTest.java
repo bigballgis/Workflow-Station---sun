@@ -188,6 +188,32 @@ class EmailConnectionComponentImplTest {
     }
 
     @Test
+    void create_inbound_acceptsAdminImapOnPrivateAddress() {
+        FunctionUnit functionUnit = FunctionUnit.builder().id(1L).name("FU").build();
+        EmailConnectionRequest request = new EmailConnectionRequest();
+        request.setName("corp@example.com");
+        request.setConnectionType(ConnectionType.SMTP);
+        request.setUsername("svc");
+        request.setPassword("pwd");
+        request.setDirection(EmailConnectionDirection.INBOUND);
+        request.setEnabled(true);
+
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(emailConnectionRepository.existsByFunctionUnitIdAndNameAndDirection(
+                eq(1L), eq("corp@example.com"), eq(EmailConnectionDirection.INBOUND))).thenReturn(false);
+        when(adminCenterSystemImapClient.fetchSystemImapEndpoint())
+                .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("10.1.2.3", 993, true));
+        when(encryptionService.encrypt("pwd")).thenReturn("enc");
+        when(emailConnectionRepository.save(any(EmailConnection.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        EmailConnectionResponse response = emailConnectionComponent.create(1L, request);
+
+        assertEquals("10.1.2.3", response.getImapHost());
+        assertEquals(993, response.getImapPort());
+    }
+
+    @Test
     void create_inbound_allowedWhenOutboundExistsWithSameEmail() {
         FunctionUnit functionUnit = FunctionUnit.builder().id(1L).name("FU").build();
         EmailConnectionRequest request = new EmailConnectionRequest();

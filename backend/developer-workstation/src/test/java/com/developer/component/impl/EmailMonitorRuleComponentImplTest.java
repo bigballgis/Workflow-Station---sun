@@ -3,8 +3,10 @@ package com.developer.component.impl;
 import com.developer.dto.EmailMonitorRuleRequest;
 import com.developer.dto.EmailMonitorRuleResponse;
 import com.developer.dto.EmailMonitorStartEventBindRequest;
+import com.developer.entity.EmailConnection;
 import com.developer.entity.EmailMonitorRule;
 import com.developer.entity.FunctionUnit;
+import com.developer.enums.EmailConnectionDirection;
 import com.developer.enums.EmailMonitorActionType;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.EmailConnectionRepository;
@@ -108,6 +110,8 @@ class EmailMonitorRuleComponentImplTest {
 
         when(functionUnitRepository.findById(FUNCTION_UNIT_ID)).thenReturn(Optional.of(functionUnit));
         when(emailMonitorRuleRepository.findById(TEMPLATE_RULE_ID)).thenReturn(Optional.of(template));
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(inboundConnection(functionUnit)));
         when(emailMonitorRuleRepository.findByFunctionUnitIdAndStartEventId(FUNCTION_UNIT_ID, START_EVENT_ID))
                 .thenReturn(Optional.empty());
         when(emailMonitorRuleRepository.existsByFunctionUnitIdAndName(
@@ -148,6 +152,8 @@ class EmailMonitorRuleComponentImplTest {
 
         when(functionUnitRepository.findById(FUNCTION_UNIT_ID)).thenReturn(Optional.of(functionUnit));
         when(emailMonitorRuleRepository.findById(TEMPLATE_RULE_ID)).thenReturn(Optional.of(template));
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(inboundConnection(functionUnit)));
         when(emailMonitorRuleRepository.findByFunctionUnitIdAndStartEventId(FUNCTION_UNIT_ID, START_EVENT_ID))
                 .thenReturn(Optional.empty());
         when(emailMonitorRuleRepository.existsByFunctionUnitIdAndName(FUNCTION_UNIT_ID, expectedName))
@@ -180,6 +186,223 @@ class EmailMonitorRuleComponentImplTest {
         assertNull(templates.get(0).getStartEventId());
     }
 
+    @Test
+    void create_disabledConnection_rejects() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailConnection connection = inboundConnection(functionUnit);
+        connection.setEnabled(false);
+        EmailMonitorRuleRequest request = sampleTemplateRequest();
+
+        when(functionUnitRepository.findById(FUNCTION_UNIT_ID)).thenReturn(Optional.of(functionUnit));
+        when(emailMonitorRuleRepository.existsByFunctionUnitIdAndName(FUNCTION_UNIT_ID, request.getName()))
+                .thenReturn(false);
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(connection));
+        when(i18nService.getMessage("email.monitor.connection_disabled"))
+                .thenReturn("Enable the mailbox connection");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> component.create(FUNCTION_UNIT_ID, request));
+
+        assertEquals("VALIDATION_CONNECTION_DISABLED", ex.getErrorCode());
+        verify(emailMonitorRuleRepository, never()).save(any());
+    }
+
+    @Test
+    void create_bothDirection_rejects() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailConnection connection = inboundConnection(functionUnit);
+        connection.setDirection(EmailConnectionDirection.BOTH);
+        EmailMonitorRuleRequest request = sampleTemplateRequest();
+
+        when(functionUnitRepository.findById(FUNCTION_UNIT_ID)).thenReturn(Optional.of(functionUnit));
+        when(emailMonitorRuleRepository.existsByFunctionUnitIdAndName(FUNCTION_UNIT_ID, request.getName()))
+                .thenReturn(false);
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(connection));
+        when(i18nService.getMessage("email.monitor.connection_not_inbound"))
+                .thenReturn("Email Monitor requires a connection with direction INBOUND");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> component.create(FUNCTION_UNIT_ID, request));
+
+        assertEquals("VALIDATION_CONNECTION_NOT_INBOUND", ex.getErrorCode());
+        verify(emailMonitorRuleRepository, never()).save(any());
+    }
+
+    @Test
+    void create_oauthOnly_rejects() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailConnection connection = inboundConnection(functionUnit);
+        connection.setPasswordEncrypted(null);
+        connection.setOauthRefreshTokenEncrypted("oauth-enc");
+        EmailMonitorRuleRequest request = sampleTemplateRequest();
+
+        when(functionUnitRepository.findById(FUNCTION_UNIT_ID)).thenReturn(Optional.of(functionUnit));
+        when(emailMonitorRuleRepository.existsByFunctionUnitIdAndName(FUNCTION_UNIT_ID, request.getName()))
+                .thenReturn(false);
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(connection));
+        when(i18nService.getMessage("email.monitor.connection_missing_credentials"))
+                .thenReturn("Mailbox username/address and password are required for Email Monitor");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> component.create(FUNCTION_UNIT_ID, request));
+
+        assertEquals("VALIDATION_CONNECTION_CREDENTIALS", ex.getErrorCode());
+        verify(emailMonitorRuleRepository, never()).save(any());
+    }
+
+    @Test
+    void assertRuntimeBindingsForDeploy_enabledTemplateWithoutBinding_throws() {
+        when(functionUnitRepository.existsById(FUNCTION_UNIT_ID)).thenReturn(true);
+        when(emailMonitorRuleRepository.findByFunctionUnitIdAndSourceRuleIdIsNullAndStartEventIdIsNullOrderByNameAsc(
+                FUNCTION_UNIT_ID))
+                .thenReturn(List.of(sampleTemplate(TEMPLATE_RULE_ID)));
+        when(emailMonitorRuleRepository.findByFunctionUnitIdAndStartEventIdIsNotNull(FUNCTION_UNIT_ID))
+                .thenReturn(List.of());
+        when(i18nService.getMessage("email.monitor.deploy_missing_start_event_binding", "Inbox Monitor"))
+                .thenReturn("Bind Start Event before Deploy");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> component.assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID));
+
+        assertEquals("VALIDATION_MONITOR_BINDING_REQUIRED", ex.getErrorCode());
+    }
+
+    @Test
+    void assertRuntimeBindingsForDeploy_enabledTemplateWithReadyBinding_passes() {
+        EmailMonitorRule binding = readyBinding(TEMPLATE_RULE_ID);
+        FunctionUnit functionUnit = sampleFunctionUnit();
+
+        when(functionUnitRepository.existsById(FUNCTION_UNIT_ID)).thenReturn(true);
+        when(emailMonitorRuleRepository.findByFunctionUnitIdAndSourceRuleIdIsNullAndStartEventIdIsNullOrderByNameAsc(
+                FUNCTION_UNIT_ID))
+                .thenReturn(List.of(sampleTemplate(TEMPLATE_RULE_ID)));
+        when(emailMonitorRuleRepository.findByFunctionUnitIdAndStartEventIdIsNotNull(FUNCTION_UNIT_ID))
+                .thenReturn(List.of(binding));
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(inboundConnection(functionUnit)));
+
+        component.assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID);
+    }
+
+    @Test
+    void assertRuntimeBindingsForDeploy_secondEnabledTemplateUnbound_throws() {
+        EmailMonitorRule binding = readyBinding(TEMPLATE_RULE_ID);
+
+        when(functionUnitRepository.existsById(FUNCTION_UNIT_ID)).thenReturn(true);
+        when(emailMonitorRuleRepository.findByFunctionUnitIdAndSourceRuleIdIsNullAndStartEventIdIsNullOrderByNameAsc(
+                FUNCTION_UNIT_ID))
+                .thenReturn(List.of(sampleTemplate(TEMPLATE_RULE_ID), sampleTemplate(11L)));
+        when(emailMonitorRuleRepository.findByFunctionUnitIdAndStartEventIdIsNotNull(FUNCTION_UNIT_ID))
+                .thenReturn(List.of(binding));
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(inboundConnection(sampleFunctionUnit())));
+        when(i18nService.getMessage("email.monitor.deploy_missing_start_event_binding", "Inbox Monitor"))
+                .thenReturn("Bind Start Event before Deploy");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> component.assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID));
+
+        assertEquals("VALIDATION_MONITOR_BINDING_REQUIRED", ex.getErrorCode());
+    }
+
+    @Test
+    void assertRuntimeBindingsForDeploy_disabledConnection_throws() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailConnection connection = inboundConnection(functionUnit);
+        connection.setEnabled(false);
+        stubDeployWithConnection(connection);
+        when(i18nService.getMessage("email.monitor.connection_disabled"))
+                .thenReturn("Enable the mailbox connection");
+        when(i18nService.getMessage(
+                "email.monitor.deploy_connection_unready", "Inbox Monitor", "Enable the mailbox connection"))
+                .thenReturn("template Inbox Monitor: Enable the mailbox connection");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> component.assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID));
+
+        assertEquals("VALIDATION_CONNECTION_DISABLED", ex.getErrorCode());
+    }
+
+    @Test
+    void assertRuntimeBindingsForDeploy_legacyBothWithPassword_passes() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailConnection connection = inboundConnection(functionUnit);
+        connection.setDirection(EmailConnectionDirection.BOTH);
+        stubDeployWithConnection(connection);
+
+        component.assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID);
+    }
+
+    @Test
+    void assertRuntimeBindingsForDeploy_oauthOnly_throws() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailConnection connection = inboundConnection(functionUnit);
+        connection.setPasswordEncrypted(null);
+        connection.setOauthRefreshTokenEncrypted("oauth-enc");
+        stubDeployWithConnection(connection);
+        when(i18nService.getMessage("email.monitor.connection_missing_credentials"))
+                .thenReturn("password required");
+        when(i18nService.getMessage(
+                "email.monitor.deploy_connection_unready", "Inbox Monitor", "password required"))
+                .thenReturn("template Inbox Monitor: password required");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> component.assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID));
+
+        assertEquals("VALIDATION_CONNECTION_CREDENTIALS", ex.getErrorCode());
+    }
+
+    @Test
+    void assertRuntimeBindingsForDeploy_outboundDirection_throws() {
+        FunctionUnit functionUnit = sampleFunctionUnit();
+        EmailConnection connection = inboundConnection(functionUnit);
+        connection.setDirection(EmailConnectionDirection.OUTBOUND);
+        stubDeployWithConnection(connection);
+        when(i18nService.getMessage("email.monitor.connection_not_monitor_capable"))
+                .thenReturn("must be INBOUND or legacy BOTH");
+        when(i18nService.getMessage(
+                "email.monitor.deploy_connection_unready", "Inbox Monitor", "must be INBOUND or legacy BOTH"))
+                .thenReturn("template Inbox Monitor: must be INBOUND or legacy BOTH");
+
+        DeveloperBusinessException ex = assertThrows(
+                DeveloperBusinessException.class,
+                () -> component.assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID));
+
+        assertEquals("VALIDATION_CONNECTION_NOT_INBOUND", ex.getErrorCode());
+    }
+
+    private EmailMonitorRule readyBinding(Long templateId) {
+        return EmailMonitorRule.builder()
+                .id(20L)
+                .sourceRuleId(templateId)
+                .startEventId(START_EVENT_ID)
+                .processDefinitionKey("debit-card-process")
+                .enabled(true)
+                .functionUnit(sampleFunctionUnit())
+                .build();
+    }
+
+    private void stubDeployWithConnection(EmailConnection connection) {
+        when(functionUnitRepository.existsById(FUNCTION_UNIT_ID)).thenReturn(true);
+        when(emailMonitorRuleRepository.findByFunctionUnitIdAndSourceRuleIdIsNullAndStartEventIdIsNullOrderByNameAsc(
+                FUNCTION_UNIT_ID))
+                .thenReturn(List.of(sampleTemplate(TEMPLATE_RULE_ID)));
+        when(emailMonitorRuleRepository.findByFunctionUnitIdAndStartEventIdIsNotNull(FUNCTION_UNIT_ID))
+                .thenReturn(List.of(readyBinding(TEMPLATE_RULE_ID)));
+        when(emailConnectionRepository.findByConnectionUid(CONNECTION_UID))
+                .thenReturn(Optional.of(connection));
+    }
+
     private FunctionUnit sampleFunctionUnit() {
         FunctionUnit fu = new FunctionUnit();
         fu.setId(FUNCTION_UNIT_ID);
@@ -208,5 +431,17 @@ class EmailMonitorRuleComponentImplTest {
         request.setConnectionUid(CONNECTION_UID);
         request.setEnabled(true);
         return request;
+    }
+
+    private EmailConnection inboundConnection(FunctionUnit functionUnit) {
+        return EmailConnection.builder()
+                .connectionUid(CONNECTION_UID)
+                .name("Inbound")
+                .enabled(true)
+                .direction(EmailConnectionDirection.INBOUND)
+                .mailboxAddress("monitor@example.test")
+                .passwordEncrypted("enc")
+                .functionUnit(functionUnit)
+                .build();
     }
 }

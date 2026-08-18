@@ -1952,7 +1952,7 @@ export default {
     connection: '入站邮箱',
     connectionPlaceholder: '选择入站连接',
     connectionRequired: '请选择入站连接',
-    noInboundConnection: '尚无入站连接。请先在「连接」中将某个连接的方向设为「入站」或「双向」。',
+    noInboundConnection: '尚无入站连接。请先在「连接」中将某个连接的方向设为「入站」。',
     process: '流程 Key',
     processPlaceholder: '要发起的 BPMN 流程定义 Key',
     systemInitiator: '系统发起人',

@@ -60,6 +60,9 @@ class DeploymentComponentMultiInstanceValidationTest {
 
     @Mock
     private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+
+    @Mock
+    private EmailMonitorRuleComponent emailMonitorRuleComponent;
     
     private DeploymentComponentImpl deploymentComponent;
     
@@ -78,7 +81,8 @@ class DeploymentComponentMultiInstanceValidationTest {
             new SyncTaskExecutor(),
             deploymentJobService,
             functionUnitWorkspaceAccessService,
-            new com.platform.security.config.JwtProperties()
+            new com.platform.security.config.JwtProperties(),
+            emailMonitorRuleComponent
         );
         
         // Setup default i18n messages
@@ -116,11 +120,13 @@ class DeploymentComponentMultiInstanceValidationTest {
         // When: 执行部署
         DeployResponse response = deploymentComponent.deployToAdminCenter(FUNCTION_UNIT_ID, request);
         
-        // Then: 应该调用 validateMultiInstance 与 LAST_TASK 拓扑校验
+        // Then: 应该调用 validateMultiInstance、LAST_TASK 拓扑与邮件监控 Deploy 校验
         verify(processDesignComponent, timeout(2000).times(1))
             .validateMultiInstance(processDefinition.getBpmnXml(), FUNCTION_UNIT_ID);
         verify(processDesignComponent, timeout(2000).times(1))
             .validateLastTaskAssigneeTopology(processDefinition.getBpmnXml());
+        verify(emailMonitorRuleComponent, timeout(2000).times(1))
+            .assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID);
     }
     
     @Test
@@ -163,6 +169,7 @@ class DeploymentComponentMultiInstanceValidationTest {
         DeployResponse finalSnapshot = updates.get(updates.size() - 1);
         assertEquals(DeployResponse.DeployStatus.FAILED, finalSnapshot.getStatus());
         assertNotNull(finalSnapshot.getMessage());
+        verify(emailMonitorRuleComponent, never()).assertRuntimeBindingsForDeploy(anyLong());
     }
     
     @Test
@@ -186,11 +193,13 @@ class DeploymentComponentMultiInstanceValidationTest {
         // When: 执行部署
         DeployResponse response = deploymentComponent.deployToAdminCenter(FUNCTION_UNIT_ID, request);
         
-        // Then: 不应该调用 validateMultiInstance / LAST_TASK 拓扑
+        // Then: 不应该调用 validateMultiInstance / LAST_TASK 拓扑；邮件监控校验仍执行
         verify(processDesignComponent, timeout(2000).times(0))
             .validateMultiInstance(anyString(), anyLong());
         verify(processDesignComponent, timeout(2000).times(0))
             .validateLastTaskAssigneeTopology(anyString());
+        verify(emailMonitorRuleComponent, timeout(2000).times(1))
+            .assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID);
     }
     
     @Test
@@ -217,10 +226,12 @@ class DeploymentComponentMultiInstanceValidationTest {
         // When: 执行部署
         DeployResponse response = deploymentComponent.deployToAdminCenter(FUNCTION_UNIT_ID, request);
         
-        // Then: 不应该调用 validateMultiInstance / LAST_TASK 拓扑
+        // Then: 不应该调用 validateMultiInstance / LAST_TASK 拓扑；邮件监控校验仍执行
         verify(processDesignComponent, timeout(2000).times(0))
             .validateMultiInstance(anyString(), anyLong());
         verify(processDesignComponent, timeout(2000).times(0))
             .validateLastTaskAssigneeTopology(anyString());
+        verify(emailMonitorRuleComponent, timeout(2000).times(1))
+            .assertRuntimeBindingsForDeploy(FUNCTION_UNIT_ID);
     }
 }

@@ -134,7 +134,7 @@ const showFormDialog = ref(false)
 const editingId = ref<number | null>(null)
 
 const inboundConnections = computed(() =>
-  connections.value.filter(c => c.direction === 'INBOUND' || c.direction === 'BOTH')
+  connections.value.filter(c => c.direction === 'INBOUND')
 )
 
 const defaultForm = (): EmailMonitorRuleRequest => ({

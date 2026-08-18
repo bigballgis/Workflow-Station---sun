@@ -9,6 +9,7 @@ import com.workflow.email.inbound.repository.SysEmailConnectionRepository;
 import com.workflow.email.inbound.repository.SysEmailMonitorRuleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -33,6 +34,7 @@ class EmailMonitorSchedulerTest {
     private SysEmailConnectionRepository connectionRepository;
     private InboundMailClient imapClient;
     private EmailMonitorProcessor processor;
+    private AdminCenterSystemImapClient systemImapClient;
     private EmailMonitorScheduler scheduler;
 
     @BeforeEach
@@ -42,7 +44,7 @@ class EmailMonitorSchedulerTest {
         imapClient = mock(InboundMailClient.class);
         processor = mock(EmailMonitorProcessor.class);
         EncryptionService encryptionService = mock(EncryptionService.class);
-        AdminCenterSystemImapClient systemImapClient = mock(AdminCenterSystemImapClient.class);
+        systemImapClient = mock(AdminCenterSystemImapClient.class);
 
         when(encryptionService.decrypt("enc")).thenReturn("secret");
         when(systemImapClient.fetchSystemImapEndpoint())
@@ -85,6 +87,34 @@ class EmailMonitorSchedulerTest {
     }
 
     @Test
+    void noEnabledRulesDoesNotFetch() {
+        when(ruleRepository.findByEnabledTrue()).thenReturn(List.of());
+
+        scheduler.poll();
+        scheduler.poll();
+
+        verify(imapClient, never()).fetchNew(any(), any(), any(), anyInt());
+        verify(processor, never()).process(any(), any());
+    }
+
+    @Test
+    void filterMismatchDoesNotProcessAndAdvancesCursor() {
+        SysEmailMonitorRule rule = enabledRule();
+        rule.setFilterFrom("alerts@example.test");
+        when(ruleRepository.findByEnabledTrue()).thenReturn(List.of(rule));
+        when(connectionRepository.findById("conn-1")).thenReturn(Optional.of(inboundConnection()));
+        EmailMessage email = new EmailMessage("m1", "s", "other@example.test", "body", null, Map.of());
+        when(imapClient.fetchNew(any(), any(), any(), anyInt()))
+                .thenReturn(new FetchResult(List.of(email), "11"));
+
+        scheduler.poll();
+
+        assertThat(rule.getLastSyncCursor()).isEqualTo("11");
+        verify(processor, never()).process(any(), any());
+        verify(ruleRepository).save(rule);
+    }
+
+    @Test
     void processThrowDoesNotAdvanceCursor() {
         SysEmailMonitorRule rule = enabledRule();
         when(ruleRepository.findByEnabledTrue()).thenReturn(List.of(rule));
@@ -99,6 +129,45 @@ class EmailMonitorSchedulerTest {
         assertThat(rule.getLastSyncCursor()).isEqualTo("10");
         verify(processor).process(any(), any());
         verify(ruleRepository).save(rule);
+    }
+
+    @Test
+    void reviewStatusAdvancesCursorWithoutStartProcessThrow() {
+        SysEmailMonitorRule rule = enabledRule();
+        when(ruleRepository.findByEnabledTrue()).thenReturn(List.of(rule));
+        when(connectionRepository.findById("conn-1")).thenReturn(Optional.of(inboundConnection()));
+        EmailMessage email = new EmailMessage("m1", "s", "a@b.com", "body", null, Map.of());
+        when(imapClient.fetchNew(any(), any(), any(), anyInt()))
+                .thenReturn(new FetchResult(List.of(email), "11"));
+        when(processor.process(any(), any())).thenReturn("REVIEW");
+
+        scheduler.poll();
+
+        assertThat(rule.getLastSyncCursor()).isEqualTo("11");
+        verify(processor).process(any(), any());
+        verify(ruleRepository).save(rule);
+    }
+
+    @Test
+    void usesLiveAdminImapHostEvenWhenConnectionStoresDifferentHost() {
+        SysEmailMonitorRule rule = enabledRule();
+        SysEmailConnection connection = inboundConnection();
+        connection.setImapHost("imap.qq.com");
+        when(ruleRepository.findByEnabledTrue()).thenReturn(List.of(rule));
+        when(connectionRepository.findById("conn-1")).thenReturn(Optional.of(connection));
+        when(systemImapClient.fetchSystemImapEndpoint())
+                .thenReturn(new AdminCenterSystemImapClient.SystemImapEndpoint("10.20.30.40", 993, true));
+        when(imapClient.fetchNew(any(), any(), any(), anyInt()))
+                .thenReturn(new FetchResult(List.of(), "1"));
+
+        scheduler.poll();
+
+        ArgumentCaptor<MailboxAccess> captor = ArgumentCaptor.forClass(MailboxAccess.class);
+        verify(imapClient).fetchNew(captor.capture(), any(), any(), anyInt());
+        assertThat(captor.getValue().host()).isEqualTo("10.20.30.40");
+        assertThat(captor.getValue().port()).isEqualTo(993);
+        assertThat(captor.getValue().ssl()).isTrue();
+        assertThat(captor.getValue().username()).isEqualTo("monitor@example.test");
     }
 
     private static SysEmailMonitorRule enabledRule() {

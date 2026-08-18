@@ -3,6 +3,7 @@ package com.workflow.email.inbound;
 import com.platform.security.encryption.EncryptionService;
 import com.workflow.client.AdminCenterSystemImapClient;
 import com.workflow.email.extract.EmailMessage;
+import com.workflow.email.inbound.entity.ProcessedEmailMessage;
 import com.workflow.email.inbound.entity.SysEmailConnection;
 import com.workflow.email.inbound.entity.SysEmailMonitorRule;
 import com.workflow.email.inbound.repository.SysEmailConnectionRepository;
@@ -44,6 +45,10 @@ public class EmailMonitorScheduler {
     private final AdminCenterSystemImapClient adminCenterSystemImapClient;
     private final EmailMonitorPollBackoff pollBackoff = new EmailMonitorPollBackoff();
 
+    /** Throttle "0 enabled rules" so a missing Deploy does not WARN every 30s tick. */
+    private static final int EMPTY_RULES_WARN_SECONDS = 300;
+    private volatile Instant lastEmptyRulesWarnAt;
+
     @Value("${workflow.email.monitor.enabled:true}")
     private boolean enabled;
 
@@ -73,12 +78,26 @@ public class EmailMonitorScheduler {
             return;
         }
         Instant now = Instant.now();
+        if (rules.isEmpty()) {
+            warnNoEnabledRules(now);
+            return;
+        }
         for (SysEmailMonitorRule rule : rules) {
             if (pollBackoff.shouldPoll(
                     rule.getId(), now, rule.getPollIntervalSeconds(), rule.getLastSyncedAt())) {
                 pollRule(rule, now);
             }
         }
+    }
+
+    private void warnNoEnabledRules(Instant now) {
+        Instant previous = lastEmptyRulesWarnAt;
+        if (previous != null && now.isBefore(previous.plusSeconds(EMPTY_RULES_WARN_SECONDS))) {
+            return;
+        }
+        lastEmptyRulesWarnAt = now;
+        log.warn("[EMAIL-MONITOR] poll found 0 enabled rules in sys_email_monitor_rules; "
+                + "bind a monitor to a Start Event and deploy the Function Unit");
     }
 
     private void pollRule(SysEmailMonitorRule rule, Instant now) {
@@ -116,16 +135,34 @@ public class EmailMonitorScheduler {
      */
     private boolean processFetched(SysEmailMonitorRule rule, EmailMessage email) {
         if (!matchesFilters(rule, email)) {
+            // Filter miss is not a monitored event: no process, no log.
+            // Still consume the UID so the same mail is not fetched every poll.
             return true;
         }
         try {
-            processor.process(rule, email);
+            String status = processor.process(rule, email);
+            logProcessOutcome(rule, email, status);
             return true;
         } catch (Exception e) {
-            log.error("[EMAIL-MONITOR] rule {} failed to process messageId={}: {}",
-                    rule.getId(), email.messageId(), e.getMessage());
+            log.error("[EMAIL-MONITOR] rule {} failed to process messageId={}",
+                    rule.getId(), email.messageId(), e);
             return false;
         }
+    }
+
+    private void logProcessOutcome(SysEmailMonitorRule rule, EmailMessage email, String status) {
+        if (status == null) {
+            log.info("[EMAIL-MONITOR] rule {} skipped messageId={} (duplicate or missing messageId)",
+                    rule.getId(), email.messageId());
+            return;
+        }
+        if (ProcessedEmailMessage.STATUS_STARTED.equals(status)) {
+            log.info("[EMAIL-MONITOR] rule {} messageId={} started process",
+                    rule.getId(), email.messageId());
+            return;
+        }
+        log.warn("[EMAIL-MONITOR] rule {} messageId={} recorded status={} (no new process instance)",
+                rule.getId(), email.messageId(), status);
     }
 
     private void markPollAttempt(SysEmailMonitorRule rule) {
@@ -178,7 +215,7 @@ public class EmailMonitorScheduler {
 
         String username = StringUtils.hasText(connection.getMailboxAddress())
                 ? connection.getMailboxAddress() : connection.getUsername();
-        String password = decrypt(connection.getPasswordEncrypted());
+        String password = decrypt(rule.getId(), connection.getPasswordEncrypted());
         if (!StringUtils.hasText(username) || password == null) {
             log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} missing IMAP credentials (username/password)",
                     rule.getId(), rule.getConnectionUid());
@@ -187,6 +224,10 @@ public class EmailMonitorScheduler {
         return new MailboxAccess(host, port, ssl, username, password);
     }
 
+    /**
+     * Runtime still accepts legacy BOTH so already-deployed packages keep polling.
+     * DW no longer lets designers create or save BOTH; new monitors must be INBOUND.
+     */
     private boolean isInbound(SysEmailConnection connection) {
         String direction = connection.getDirection();
         return "INBOUND".equalsIgnoreCase(direction) || "BOTH".equalsIgnoreCase(direction);
@@ -212,14 +253,15 @@ public class EmailMonitorScheduler {
         ruleRepository.save(rule);
     }
 
-    private String decrypt(String encrypted) {
+    private String decrypt(String ruleId, String encrypted) {
         if (!StringUtils.hasText(encrypted)) {
             return null;
         }
         try {
             return encryptionService.decrypt(encrypted);
         } catch (Exception e) {
-            log.warn("Failed to decrypt mailbox password: {}", e.getMessage());
+            log.warn("[EMAIL-MONITOR] rule {} skipped: mailbox password decrypt failed: {}",
+                    ruleId, e.getMessage());
             return null;
         }
     }

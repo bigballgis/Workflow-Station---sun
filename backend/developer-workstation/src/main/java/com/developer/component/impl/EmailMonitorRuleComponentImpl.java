@@ -4,8 +4,10 @@ import com.developer.component.EmailMonitorRuleComponent;
 import com.developer.dto.EmailMonitorRuleRequest;
 import com.developer.dto.EmailMonitorRuleResponse;
 import com.developer.dto.EmailMonitorStartEventBindRequest;
+import com.developer.entity.EmailConnection;
 import com.developer.entity.EmailMonitorRule;
 import com.developer.entity.FunctionUnit;
+import com.developer.enums.EmailConnectionDirection;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.EmailConnectionRepository;
@@ -128,6 +130,7 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
         EmailMonitorRule template = getTemplateEntity(functionUnitId, request.getTemplateRuleId());
+        validateConnection(functionUnitId, template.getConnectionUid());
 
         String startEventId = request.getStartEventId().trim();
         String bindingName = bindingName(template.getName(), startEventId);
@@ -174,6 +177,50 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
         }
         emailMonitorRuleRepository.findByFunctionUnitIdAndStartEventId(functionUnitId, startEventId.trim())
                 .ifPresent(emailMonitorRuleRepository::delete);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void assertRuntimeBindingsForDeploy(Long functionUnitId) {
+        ensureFunctionUnitExists(functionUnitId);
+        List<EmailMonitorRule> templates = emailMonitorRuleRepository
+                .findByFunctionUnitIdAndSourceRuleIdIsNullAndStartEventIdIsNullOrderByNameAsc(functionUnitId);
+        List<EmailMonitorRule> bindings = emailMonitorRuleRepository
+                .findByFunctionUnitIdAndStartEventIdIsNotNull(functionUnitId);
+        for (EmailMonitorRule template : templates) {
+            if (Boolean.FALSE.equals(template.getEnabled())) {
+                continue;
+            }
+            assertEnabledTemplateReadyToDeploy(functionUnitId, template, bindings);
+        }
+    }
+
+    private void assertEnabledTemplateReadyToDeploy(
+            Long functionUnitId, EmailMonitorRule template, List<EmailMonitorRule> bindings) {
+        String templateName = templateDisplayName(template);
+        if (!hasReadyBinding(template.getId(), bindings)) {
+            throw new DeveloperBusinessException("VALIDATION_MONITOR_BINDING_REQUIRED",
+                    i18nService.getMessage("email.monitor.deploy_missing_start_event_binding", templateName));
+        }
+        assertMonitorConnection(functionUnitId, template.getConnectionUid(), true, templateName);
+    }
+
+    private static String templateDisplayName(EmailMonitorRule template) {
+        if (StringUtils.hasText(template.getName())) {
+            return template.getName().trim();
+        }
+        return template.getRuleUid();
+    }
+
+    private static boolean hasReadyBinding(Long templateId, List<EmailMonitorRule> bindings) {
+        return bindings.stream().anyMatch(binding ->
+                templateId.equals(binding.getSourceRuleId()) && isRuntimeBinding(binding));
+    }
+
+    private static boolean isRuntimeBinding(EmailMonitorRule rule) {
+        return !Boolean.FALSE.equals(rule.getEnabled())
+                && StringUtils.hasText(rule.getStartEventId())
+                && StringUtils.hasText(rule.getProcessDefinitionKey());
     }
 
     private void rejectTemplatePollution(EmailMonitorRuleRequest request) {
@@ -261,17 +308,64 @@ public class EmailMonitorRuleComponentImpl implements EmailMonitorRuleComponent 
     }
 
     private void validateConnection(Long functionUnitId, String connectionUid) {
+        assertMonitorConnection(functionUnitId, connectionUid, false, null);
+    }
+
+    private void assertMonitorConnection(
+            Long functionUnitId, String connectionUid, boolean allowLegacyBoth, String templateName) {
+        EmailConnection connection = requireOwnedConnection(functionUnitId, connectionUid, templateName);
+        if (Boolean.FALSE.equals(connection.getEnabled())) {
+            throw connectionError("VALIDATION_CONNECTION_DISABLED",
+                    "email.monitor.connection_disabled", templateName);
+        }
+        if (!isMonitorDirection(connection.getDirection(), allowLegacyBoth)) {
+            throw connectionError("VALIDATION_CONNECTION_NOT_INBOUND",
+                    allowLegacyBoth
+                            ? "email.monitor.connection_not_monitor_capable"
+                            : "email.monitor.connection_not_inbound",
+                    templateName);
+        }
+        String username = StringUtils.hasText(connection.getMailboxAddress())
+                ? connection.getMailboxAddress() : connection.getUsername();
+        if (!StringUtils.hasText(username) || !StringUtils.hasText(connection.getPasswordEncrypted())) {
+            throw connectionError("VALIDATION_CONNECTION_CREDENTIALS",
+                    "email.monitor.connection_missing_credentials", templateName);
+        }
+    }
+
+    private EmailConnection requireOwnedConnection(
+            Long functionUnitId, String connectionUid, String templateName) {
         if (!StringUtils.hasText(connectionUid)) {
-            throw new DeveloperBusinessException("VALIDATION_CONNECTION_REQUIRED",
-                    i18nService.getMessage("email.monitor.connection_required"));
+            throw connectionError("VALIDATION_CONNECTION_REQUIRED",
+                    "email.monitor.connection_required", templateName);
         }
-        boolean belongs = emailConnectionRepository.findByConnectionUid(connectionUid)
-                .map(conn -> conn.getFunctionUnit().getId().equals(functionUnitId))
-                .orElse(false);
-        if (!belongs) {
+        EmailConnection connection = emailConnectionRepository.findByConnectionUid(connectionUid).orElse(null);
+        if (connection == null || !functionUnitId.equals(connection.getFunctionUnit().getId())) {
             throw new DeveloperBusinessException("VALIDATION_CONNECTION_INVALID",
-                    i18nService.getMessage("email.monitor.connection_invalid", connectionUid));
+                    deployAwareMessage("email.monitor.connection_invalid", templateName, connectionUid));
         }
+        return connection;
+    }
+
+    private static boolean isMonitorDirection(EmailConnectionDirection direction, boolean allowLegacyBoth) {
+        if (direction == EmailConnectionDirection.INBOUND) {
+            return true;
+        }
+        return allowLegacyBoth && direction == EmailConnectionDirection.BOTH;
+    }
+
+    private DeveloperBusinessException connectionError(String code, String key, String templateName) {
+        return new DeveloperBusinessException(code, deployAwareMessage(key, templateName));
+    }
+
+    private String deployAwareMessage(String key, String templateName, Object... args) {
+        String detail = args.length == 0
+                ? i18nService.getMessage(key)
+                : i18nService.getMessage(key, args);
+        if (!StringUtils.hasText(templateName)) {
+            return detail;
+        }
+        return i18nService.getMessage("email.monitor.deploy_connection_unready", templateName, detail);
     }
 
     private EmailMonitorRule getTemplateEntity(Long functionUnitId, Long ruleId) {

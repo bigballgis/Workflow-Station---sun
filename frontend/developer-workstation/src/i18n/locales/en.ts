@@ -1960,7 +1960,7 @@ export default {
     connection: 'Inbound Mailbox',
     connectionPlaceholder: 'Select an inbound connection',
     connectionRequired: 'An inbound connection is required',
-    noInboundConnection: 'No inbound connection yet. In Connections, set a connection Direction to Inbound or Both first.',
+    noInboundConnection: 'No inbound connection yet. In Connections, set a connection Direction to Inbound first.',
     process: 'Process Key',
     processPlaceholder: 'BPMN process definition key to start',
     systemInitiator: 'System Initiator',

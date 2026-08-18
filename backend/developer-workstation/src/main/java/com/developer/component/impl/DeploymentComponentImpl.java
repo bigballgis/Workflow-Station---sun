@@ -1,6 +1,7 @@
 package com.developer.component.impl;
 
 import com.developer.component.DeploymentComponent;
+import com.developer.component.EmailMonitorRuleComponent;
 import com.developer.component.ExportImportComponent;
 import com.developer.component.FunctionUnitComponent;
 import com.developer.component.ProcessDesignComponent;
@@ -70,6 +71,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final DeploymentJobService deploymentJobService;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final JwtProperties jwtProperties;
+    private final EmailMonitorRuleComponent emailMonitorRuleComponent;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String defaultAdminCenterUrl;
@@ -100,7 +102,8 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             TaskExecutor taskExecutor,
             DeploymentJobService deploymentJobService,
             FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
-            JwtProperties jwtProperties) {
+            JwtProperties jwtProperties,
+            EmailMonitorRuleComponent emailMonitorRuleComponent) {
         this.functionUnitRepository = functionUnitRepository;
         this.exportImportComponent = exportImportComponent;
         this.restTemplate = restTemplate;
@@ -112,6 +115,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         this.deploymentJobService = deploymentJobService;
         this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
         this.jwtProperties = jwtProperties;
+        this.emailMonitorRuleComponent = emailMonitorRuleComponent;
     }
 
     @Override
@@ -240,6 +244,8 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             updateStep(steps, stepLastTaskTopo, "SUCCESS", i18nService.getMessage("deploy.last_task_assignee_topology_ok"));
             response.setProgress(19);
             deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
+
+            emailMonitorRuleComponent.assertRuntimeBindingsForDeploy(functionUnitId);
 
             updateStep(steps, i18nService.getMessage("deploy.step.export"), "RUNNING", null);
             response.setProgress(20);

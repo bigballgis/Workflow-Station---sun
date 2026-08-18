@@ -2237,3 +2237,46 @@
     测试账号 username=auditor，绑定 vg-auditors（口令不写入仓库）。
     未做：users/BI RBAC 写路径、exit userId 归属校验、User Portal。
     编号说明：common 已占用 #1520，本条在合并后记为 #1533。
+
+- id: "1534"
+  status: fixed
+  fixed_at: "2026-08-18"
+  severity: major
+  category: bug
+  summary: "Admin IMAP 配好仍无法用邮件创建流程：引擎无 enabled 规则且跳过无日志"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorScheduler.java; backend/developer-workstation/src/main/java/com/developer/component/impl/EmailMonitorRuleComponentImpl.java"
+  note: |
+    根因：DW 仅有未绑定 Start Event 的模板，MCY 未 Deploy 到 Admin，sys_email_monitor_rules=0；
+    连接 disabled 且无密码；imap.host 为空。引擎空规则 poll 完全静默。
+    修复：空规则节流 WARN；过滤/REVIEW/FAILED 打日志；Deploy 时每个已启用模板都必须有 Start Event 绑定；
+    连接须启用、方向 INBOUND，且有邮箱密码（OAuth token 不足）。
+    编号说明：远端已占用 #1533（AUDITOR），本条记为 #1534。
+
+- id: "1535"
+  status: fixed
+  fixed_at: "2026-08-18"
+  severity: major
+  category: bug
+  summary: "家用 QQ IMAP 可 monitor，公司内网邮箱被 SSRF/无 STARTTLS 拦住无法建 case"
+  file: "backend/admin-center/src/main/java/com/admin/component/SystemImapConfigResolver.java; backend/developer-workstation/src/main/java/com/developer/component/impl/EmailConnectionComponentImpl.java; backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/ImapInboundMailClient.java"
+  note: |
+    发送在公司内网正常、Monitor 不能建 case：SMTP 已有 ssl.trust / STARTTLS，
+    IMAP 没有，内网 CA 或 CN 不匹配会在握手失败。引擎 poll 还受 Admin imap.host SSRF 拦截。
+    修复：IMAP 会话属性与 SMTP 对齐（ssl.trust、STARTTLS required、同一 SMTP_SSL_* env）；
+    Admin SMTP/IMAP 共用 SystemMailHostValidator（允许已配置内网主机，拒绝 loopback/metadata）；
+    DW inbound 不再二次套 SMTP SSRF。
+    验证：ImapTransportPropertiesTest 与 SMTP trust 对齐；GreenMail IMAPS 自签证书
+    先打基线再收取新信；SystemMailHostValidatorTest / Scheduler 使用 live Admin IMAP 主机。
+
+- id: "1536"
+  status: fixed
+  fixed_at: "2026-08-19"
+  severity: minor
+  category: quality
+  summary: "Email Monitors 无入站连接提示仍写 Both，与 INBOUND-only 选择器不一致"
+  file: "frontend/developer-workstation/src/i18n/locales/en.ts; frontend/developer-workstation/src/i18n/locales/zh-CN.ts; frontend/developer-workstation/src/i18n/locales/zh-TW.ts"
+  note: |
+    三语改为只提示 Inbound。en: "No inbound connection yet. In Connections, set a
+    connection Direction to Inbound first." zh-CN/zh-TW 对应「入站」无「双向」。
+    截图：FU 48 Demo QQ Mailbox（BOTH）时 warning 不含 Both，下拉为空。
+    路径：frontend/developer-workstation/verification-screenshots/2026-08-19_email-monitor-inbound-03-no-inbound-warning.png

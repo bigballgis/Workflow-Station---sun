@@ -62,10 +62,24 @@ class SystemSmtpConfigResolverTest {
 
     @Test
     void requireSystemSmtpEndpoint_invalidPort_throws() {
-        when(configManager.getConfigValue(SystemSmtpConfigResolver.KEY_HOST)).thenReturn("localhost");
+        when(configManager.getConfigValue(SystemSmtpConfigResolver.KEY_HOST)).thenReturn("smtp.example.com");
         when(configManager.getConfigValue(SystemSmtpConfigResolver.KEY_PORT)).thenReturn("abc");
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, resolver::requireSystemSmtpEndpoint);
         assertTrue(ex.getMessage().contains("smtp.port"));
+    }
+
+    @Test
+    void requireSystemSmtpEndpoint_allowsConfiguredIntranetHost() {
+        ReflectionTestUtils.setField(resolver, "ssrfAllowedHosts", List.of("activepieces"));
+        when(configManager.getConfigValue(SystemSmtpConfigResolver.KEY_HOST)).thenReturn("10.20.30.40");
+        when(configManager.getConfigValue(SystemSmtpConfigResolver.KEY_PORT)).thenReturn("587");
+        when(configManager.getConfigValue(SystemSmtpConfigResolver.KEY_USE_TLS)).thenReturn("true");
+
+        SystemSmtpConfigResolver.SystemSmtpEndpoint endpoint = resolver.requireSystemSmtpEndpoint();
+
+        assertEquals("10.20.30.40", endpoint.host());
+        assertEquals(587, endpoint.port());
+        assertTrue(endpoint.useTls());
     }
 }

@@ -1953,7 +1953,7 @@ export default {
     connection: '入站信箱',
     connectionPlaceholder: '選擇入站連線',
     connectionRequired: '請選擇入站連線',
-    noInboundConnection: '尚無入站連線。請先在「連線」中將某個連線的方向設為「入站」或「雙向」。',
+    noInboundConnection: '尚無入站連線。請先在「連線」中將某個連線的方向設為「入站」。',
     process: '流程 Key',
     processPlaceholder: '要發起的 BPMN 流程定義 Key',
     systemInitiator: '系統發起人',
