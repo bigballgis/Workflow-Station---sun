@@ -148,6 +148,8 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/06-hase-organization-seed.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/08-fu-public-group-migration.sql
 # Remove deprecated FU_VIEWER role seeded by earlier 01-admin scripts (append-only cleanup).
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/09-remove-fu-viewer-role.sql
+# Independent AUDITOR role type + DW view-only permission clamp.
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/10-add-auditor-role-type.sql
 
 # Step 4 used to run 99-maintenance/00-wipe-all-function-units.sql here. Removed: this script
 # only runs when the data directory is empty, and Steps 1-3 create no function units, so the

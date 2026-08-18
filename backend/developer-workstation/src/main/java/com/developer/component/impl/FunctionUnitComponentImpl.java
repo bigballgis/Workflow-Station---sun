@@ -318,7 +318,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     public FunctionUnitResponse getByIdAsResponse(Long id) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.VIEW);
         FunctionUnit entity = getById(id);
-        return toResponse(entity);
+        FunctionUnitResponse response = toResponse(entity);
+        response.setCanModify(functionUnitWorkspaceAccessService.canAccess(id, WorkspaceAccessAction.MODIFY));
+        return response;
     }
 
     @Override
@@ -414,7 +416,12 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             }
         });
 
-        return page.map(this::toResponse);
+        java.util.Set<Long> modifiable = functionUnitWorkspaceAccessService.modifiableFunctionUnitIds();
+        return page.map(entity -> {
+            FunctionUnitResponse response = toResponse(entity);
+            response.setCanModify(modifiable == null || modifiable.contains(entity.getId()));
+            return response;
+        });
     }
 
     @Override

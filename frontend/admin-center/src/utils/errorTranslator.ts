@@ -55,7 +55,6 @@ const ERROR_I18N_MAP: Record<AppErrorCodeType, string> = {
 
   // ---- User ----
   [AppErrorCode.USER_ACTION_FAILED]:                 'errors.userActionFailed',
-  [AppErrorCode.USER_RESET_PASSWORD_FAILED]:         'errors.userResetPasswordFailed',
   [AppErrorCode.USER_DELETE_FAILED]:                 'errors.userDeleteFailed',
 
   // ---- Profile ----

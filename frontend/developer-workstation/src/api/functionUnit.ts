@@ -104,6 +104,8 @@ export interface FunctionUnit {
   formDefinitions?: FormDefinition[]
   actionDefinitions?: ActionDefinition[]
   processDefinition?: ProcessDefinition
+  /** Backend resource-level write flag. Missing means not writable. */
+  canModify?: boolean
 }
 
 export interface FunctionUnitResponse {
@@ -121,6 +123,8 @@ export interface FunctionUnitResponse {
   formCount: number
   actionCount: number
   hasProcess: boolean
+  /** Backend resource-level write flag. Missing means not writable. */
+  canModify?: boolean
 }
 
 export interface FunctionUnitRequest {

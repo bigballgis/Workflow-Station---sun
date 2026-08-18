@@ -58,8 +58,11 @@ export function useLaunchpadLayout(options: {
   pageSize: Ref<number>
   /** 新分组默认名（i18n，延迟求值） */
   defaultGroupName: () => string
+  /** 为 false 时禁止拖拽/改名/服务端保存。未传入时保持可写（既有单测默认）。 */
+  canModifyLayout?: Ref<boolean>
 }) {
   const { list, visibleList, pageSize, defaultGroupName } = options
+  const layoutWritable = () => options.canModifyLayout?.value !== false
 
   const entries = ref<LaunchpadEntry[]>(loadLayout())
 
@@ -83,6 +86,7 @@ export function useLaunchpadLayout(options: {
   let serverSaveTimer: ReturnType<typeof setTimeout> | undefined
 
   function scheduleServerSave() {
+    if (!layoutWritable()) return
     clearTimeout(serverSaveTimer)
     serverSaveTimer = setTimeout(() => {
       const payload = JSON.stringify({ version: LAYOUT_VERSION, entries: entries.value })
@@ -126,6 +130,7 @@ export function useLaunchpadLayout(options: {
    *                   否则「列表接口先返回」会让服务端布局被误跳过。
    */
   function persist(userChange = true) {
+    if (userChange && !layoutWritable()) return
     try {
       localStorage.setItem(storageKey(), JSON.stringify({ version: LAYOUT_VERSION, entries: entries.value }))
     } catch {
@@ -228,6 +233,7 @@ export function useLaunchpadLayout(options: {
   })
 
   function onDragStart(entry: LaunchpadEntry) {
+    if (!layoutWritable()) return
     draggingKey.value = keyOf(entry)
     dropTarget.value = null
   }
@@ -264,7 +270,7 @@ export function useLaunchpadLayout(options: {
     const dragKey = draggingKey.value
     const target = dropTarget.value
     onDragEnd()
-    if (!dragKey || !target || target.key !== keyOf(entry)) return
+    if (!layoutWritable() || !dragKey || !target || target.key !== keyOf(entry)) return
     applyDrop(dragKey, target.key, target.mode)
   }
 
@@ -272,7 +278,7 @@ export function useLaunchpadLayout(options: {
   function onDropToEnd() {
     const dragKey = draggingKey.value
     onDragEnd()
-    if (!dragKey) return
+    if (!layoutWritable() || !dragKey) return
     moveToVisibleIndex(dragKey, page.value * pageSize.value - 1)
   }
 
@@ -333,6 +339,7 @@ export function useLaunchpadLayout(options: {
   }
 
   function applyDrop(dragKey: string, targetKey: string, mode: DropMode) {
+    if (!layoutWritable()) return
     const arr = entries.value
     const fromIdx = arr.findIndex((e) => keyOf(e) === dragKey)
     const targetIdx = arr.findIndex((e) => keyOf(e) === targetKey)
@@ -376,6 +383,7 @@ export function useLaunchpadLayout(options: {
   }
 
   function renameFolder(folderId: string, name: string) {
+    if (!layoutWritable()) return
     const folder = folderById(folderId)
     if (!folder) return
     const trimmed = name.trim()
@@ -385,6 +393,7 @@ export function useLaunchpadLayout(options: {
 
   /** 组内重排（浮层里拖动） */
   function reorderInFolder(folderId: string, fromId: number, toId: number, mode: 'before' | 'after') {
+    if (!layoutWritable()) return
     const folder = folderById(folderId)
     if (!folder || fromId === toId) return
     const fromIdx = folder.itemIds.indexOf(fromId)
@@ -402,6 +411,7 @@ export function useLaunchpadLayout(options: {
 
   /** 移出分组：成员回到根网格（分组之后）；组内不足 2 人自动解散 */
   function removeFromFolder(folderId: string, itemId: number) {
+    if (!layoutWritable()) return
     const idx = entries.value.findIndex(
       (e) => e.type === 'folder' && e.id === folderId
     )

@@ -146,6 +146,18 @@ public class RoleHelper {
         
         return "ADMIN".equals(roleType);
     }
+
+    /**
+     * Checks if a role type can enter Admin Center (ADMIN or AUDITOR).
+     *
+     * {@link #isAdminRole(String)} stays strictly ADMIN so auditors are not treated as administrators.
+     */
+    public boolean isAdminCenterRole(String roleType) {
+        if (roleType == null) {
+            return false;
+        }
+        return "ADMIN".equals(roleType) || "AUDITOR".equals(roleType);
+    }
     
     /**
      * Gets the RoleType enum for a Role entity.
@@ -203,7 +215,7 @@ public class RoleHelper {
      * Validates if a role type string is a valid RoleType.
      * 
      * <p>This method checks if the given string can be converted to a valid RoleType enum.
-     * Valid values are: BU_BOUNDED, BU_UNBOUNDED, DEVELOPER, ADMIN.</p>
+     * Valid values are: BU_BOUNDED, BU_UNBOUNDED, DEVELOPER, ADMIN, AUDITOR.</p>
      * 
      * @param roleType the role type string to validate
      * @return true if the role type is valid, false if null or invalid

@@ -273,7 +273,6 @@ public class AdminAuditAspect {
             case "batchImport"      -> new AuditMeta(AuditAction.CREATE, "USER", null);
             case "updateUser"       -> new AuditMeta(AuditAction.UPDATE, "USER", userId);
             case "updateUserStatus" -> new AuditMeta(AuditAction.UPDATE, "USER", userId);
-            case "resetPassword"    -> new AuditMeta(AuditAction.UPDATE, "USER", userId);
             case "deleteUser"       -> new AuditMeta(AuditAction.DELETE, "USER", userId);
             case "getUser"          -> AuditMeta.skip();
             case "listUsers"        -> AuditMeta.skip();

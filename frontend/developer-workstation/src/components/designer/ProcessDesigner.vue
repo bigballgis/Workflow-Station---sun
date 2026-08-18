@@ -3,18 +3,21 @@
     <div class="designer-toolbar">
       <el-button-group>
         <el-button
+          data-read-only-allowed
           :disabled="!modelerReady"
           @click="handleZoomIn"
         >
           <el-icon><ZoomIn /></el-icon>
         </el-button>
         <el-button
+          data-read-only-allowed
           :disabled="!modelerReady"
           @click="handleZoomOut"
         >
           <el-icon><ZoomOut /></el-icon>
         </el-button>
         <el-button
+          data-read-only-allowed
           :disabled="!modelerReady"
           @click="handleFitViewport"
         >
@@ -62,24 +65,28 @@
       </div>
       <el-button-group>
         <el-button
+          data-read-only-allowed
           :disabled="!modelerReady"
           @click="handleValidate"
         >
           {{ t('process.validate') }}
         </el-button>
         <el-button
+          data-read-only-allowed
           :disabled="!modelerReady"
           @click="handleExportSVG"
         >
           {{ t('process.exportSVG') }}
         </el-button>
         <el-button
+          data-read-only-allowed
           :disabled="!modelerReady"
           @click="handleExportXML"
         >
           {{ t('process.exportXML') }}
         </el-button>
         <el-button
+          data-read-only-allowed
           :type="showDebugPanel ? 'primary' : ''"
           @click="showDebugPanel = !showDebugPanel"
         >

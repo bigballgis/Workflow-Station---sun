@@ -146,30 +146,4 @@ public interface RoleRepository extends JpaRepository<Role, String> {
            ") AS combined_roles",
            nativeQuery = true)
     boolean hasRoleByUserId(@Param("userId") String userId, @Param("role") String role);
-
-    /**
-     * 是否拥有 type=ADMIN 的平台角色（如 SYS_ADMIN），用于设计站工作区与 developer-permissions 的 ADMIN 放行一致
-     */
-    @Query(value = "SELECT CASE WHEN COUNT(*) > 0 THEN true ELSE false END FROM ( " +
-           "  SELECT ur.role_id AS rid FROM sys_user_roles ur WHERE ur.user_id = :userId " +
-           "  UNION " +
-           "  SELECT vgr.role_id FROM sys_virtual_group_roles vgr " +
-           "  JOIN sys_virtual_group_members vgm ON vgr.virtual_group_id = vgm.group_id " +
-           "  WHERE vgm.user_id = :userId " +
-           "  UNION " +
-           "  SELECT ra.role_id FROM sys_role_assignments ra " +
-           "  WHERE ra.target_type = 'USER' AND ra.target_id = :userId " +
-           "  AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) " +
-           "  AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) " +
-           "  UNION " +
-           "  SELECT ra.role_id FROM sys_role_assignments ra " +
-           "  INNER JOIN sys_virtual_group_members vgm ON ra.target_type = 'VIRTUAL_GROUP' AND ra.target_id = vgm.group_id " +
-           "  WHERE vgm.user_id = :userId " +
-           "  AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) " +
-           "  AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) " +
-           ") x " +
-           "JOIN sys_roles r ON r.id = x.rid " +
-           "WHERE r.type = 'ADMIN' AND r.status = 'ACTIVE'",
-           nativeQuery = true)
-    boolean userHasActiveAdminTypeRole(@Param("userId") String userId);
 }

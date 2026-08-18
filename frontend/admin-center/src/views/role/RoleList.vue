@@ -47,6 +47,10 @@
             value="ADMIN"
           />
           <el-option
+            :label="t('role.auditorRole')"
+            value="AUDITOR"
+          />
+          <el-option
             :label="t('role.developerRole')"
             value="DEVELOPER"
           />

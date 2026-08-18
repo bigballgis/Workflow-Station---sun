@@ -25,6 +25,7 @@
       <template #actions="{ row }">
         <div class="action-buttons">
           <el-button
+            data-read-only-allowed
             link
             type="primary"
             @click="handleCompare(row)"
@@ -40,6 +41,7 @@
             {{ t('common.rollback') }}
           </el-button>
           <el-button
+            data-read-only-allowed
             link
             type="success"
             @click="handleExport(row)"
@@ -84,6 +86,7 @@
             />
           </el-select>
           <el-button
+            data-read-only-allowed
             type="primary"
             :loading="comparing"
             :disabled="!compareVersion1 || !compareVersion2" 

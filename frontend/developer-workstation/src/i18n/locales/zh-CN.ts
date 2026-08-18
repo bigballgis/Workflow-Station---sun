@@ -295,6 +295,7 @@ export default {
     deletePermanentSuccess: '已永久删除',
     confirmTitle: '确认',
     noDescription: '暂无描述',
+    readOnlyHint: '此功能单元为只读。你可以查看设计，但不能修改。',
     validationResult: '验证结果',
     checkLogin: '正在检查登录状态',
     notLoggedIn: '未登录，正在跳转',

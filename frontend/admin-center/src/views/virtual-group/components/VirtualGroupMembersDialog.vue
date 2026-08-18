@@ -5,7 +5,10 @@
     width="1100px"
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <div class="members-header">
+    <div
+      v-if="!readOnly"
+      class="members-header"
+    >
       <el-button
         type="primary"
         size="small"
@@ -65,6 +68,7 @@
         </template>
       </el-table-column>
       <el-table-column
+        v-if="!readOnly"
         :label="t('common.operation')"
         min-width="80"
         fixed="right"
@@ -145,7 +149,7 @@ import { watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualGroupMembers } from '@/composables/modules/useVirtualGroupMembers'
 
-const props = defineProps<{ modelValue: boolean; group: any }>()
+const props = defineProps<{ modelValue: boolean; group: any; readOnly?: boolean }>()
 const emit = defineEmits(['update:modelValue'])
 const { t } = useI18n()
 

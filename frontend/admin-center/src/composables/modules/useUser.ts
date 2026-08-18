@@ -87,9 +87,6 @@ export function useUser() {
       case 'unlock':
         await handleStatusChange(user, 'ACTIVE', t('user.unlockUser'))
         break
-      case 'resetPassword':
-        await handleResetPassword(user)
-        break
       case 'delete':
         await handleDelete(user)
         break
@@ -111,24 +108,6 @@ export function useUser() {
     } catch (error: unknown) {
       if (error !== 'cancel') {
         notifyError(extractErrorDetail(error) || t('user.actionFailed', { action }))
-      }
-    }
-  }
-
-  // ==================== Reset Password ====================
-
-  const handleResetPassword = async (user: User) => {
-    try {
-      await notifyConfirm(
-        t('user.confirmResetPassword', { name: user.fullName }),
-        t('user.hint'),
-        { type: 'warning' },
-      )
-      await userApi.resetPassword(user.id)
-      notifySuccess(t('user.passwordResetNoPlaintext'))
-    } catch (error: unknown) {
-      if (error !== 'cancel') {
-        notifyError(extractErrorDetail(error) || t('user.resetPasswordFailed'))
       }
     }
   }
@@ -183,7 +162,6 @@ export function useUser() {
     showImportDialog,
     handleCommand,
     handleStatusChange,
-    handleResetPassword,
     handleDelete,
   }
 }

@@ -4,7 +4,6 @@ import com.admin.entity.DeveloperRolePermission;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.User;
 import com.admin.enums.DeveloperPermission;
-import com.admin.enums.RoleType;
 import com.admin.repository.DeveloperRolePermissionRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
@@ -72,6 +71,8 @@ public class DeveloperPermissionService {
         developer.remove(DeveloperPermission.FUNCTION_UNIT_DELETE);
         developer.remove(DeveloperPermission.FUNCTION_UNIT_ASSIGN_DEV_GROUP);
         DEFAULT_ROLE_PERMISSIONS.put("DEVELOPER", developer);
+
+        DEFAULT_ROLE_PERMISSIONS.put("AUDITOR", EnumSet.of(DeveloperPermission.FUNCTION_UNIT_VIEW));
     }
     
     /**
@@ -110,58 +111,62 @@ public class DeveloperPermissionService {
             return Collections.emptySet();
         }
         
-        log.info("Getting permissions for user: {} (resolved to userId: {})", userIdOrUsername, userId);
-        
-        // 首先检查用户是否是管理员（ADMIN 类型角色拥有所有权限）
-        // 使用 findAllRoleIdsByUserId 来获取包括虚拟组分配的所有角色
+        List<Role> activeRoles = loadActiveRoles(userId);
+        if (hasSysAdmin(activeRoles)) {
+            log.info("User {} has SYS_ADMIN, granting all developer permissions", userId);
+            return EnumSet.allOf(DeveloperPermission.class);
+        }
+        Set<DeveloperPermission> permissions = collectStudioPermissions(activeRoles);
+        return clampWithoutDeveloperRole(activeRoles, permissions);
+    }
+
+    private List<Role> loadActiveRoles(String userId) {
         List<String> allRoleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
-        log.info("User {} has {} roles: {}", userId, allRoleIds.size(), allRoleIds);
-        
+        List<Role> roles = new ArrayList<>();
         for (String roleId : allRoleIds) {
             Role role = roleRepository.findById(roleId).orElse(null);
-            if (role != null) {
-                log.info("Checking role: id={}, code={}, type={}", role.getId(), role.getCode(), role.getType());
-                if ("ADMIN".equals(role.getType())) {
-                    // 管理员拥有所有开发权限
-                    log.info("User {} has ADMIN role, granting all developer permissions", userId);
-                    return EnumSet.allOf(DeveloperPermission.class);
-                }
+            if (role != null && "ACTIVE".equals(role.getStatus())) {
+                roles.add(role);
             }
         }
-        
-        // 获取用户的开发角色ID列表
-        List<String> developerRoleIds = getUserDeveloperRoleIds(userId);
-        log.info("User {} has {} developer roles: {}", userId, developerRoleIds.size(), developerRoleIds);
-        
-        if (developerRoleIds.isEmpty()) {
-            log.info("User {} has no developer roles", userId);
-            return Collections.emptySet();
+        return roles;
+    }
+
+    private boolean hasSysAdmin(List<Role> roles) {
+        return roles.stream().anyMatch(role -> "SYS_ADMIN".equals(role.getCode()));
+    }
+
+    private Set<DeveloperPermission> collectStudioPermissions(List<Role> roles) {
+        List<String> studioRoleIds = roles.stream()
+                .filter(role -> "DEVELOPER".equals(role.getType()) || "AUDITOR".equals(role.getType()))
+                .map(Role::getId)
+                .collect(Collectors.toList());
+        if (studioRoleIds.isEmpty()) {
+            return new HashSet<>();
         }
-        
-        // 从数据库获取权限
-        Set<DeveloperPermission> permissions = permissionRepository.findPermissionsByRoleIds(developerRoleIds);
-        log.info("Found {} permissions from database for roles: {}", permissions.size(), developerRoleIds);
-        
-        // 如果数据库没有配置，使用默认权限
-        if (permissions.isEmpty()) {
-            log.info("No permissions in database, using default permissions");
-            permissions = new HashSet<>();
-            for (String roleId : developerRoleIds) {
-                Role role = roleRepository.findById(roleId).orElse(null);
-                if (role != null) {
-                    log.info("Checking default permissions for role: code={}, hasDefault={}", 
-                        role.getCode(), DEFAULT_ROLE_PERMISSIONS.containsKey(role.getCode()));
-                    if (DEFAULT_ROLE_PERMISSIONS.containsKey(role.getCode())) {
-                        Set<DeveloperPermission> rolePerms = DEFAULT_ROLE_PERMISSIONS.get(role.getCode());
-                        log.info("Adding {} default permissions for role {}", rolePerms.size(), role.getCode());
-                        permissions.addAll(rolePerms);
-                    }
-                }
+        Set<DeveloperPermission> permissions = new HashSet<>(
+                permissionRepository.findPermissionsByRoleIds(studioRoleIds));
+        if (!permissions.isEmpty()) {
+            return permissions;
+        }
+        for (Role role : roles) {
+            if (DEFAULT_ROLE_PERMISSIONS.containsKey(role.getCode())) {
+                permissions.addAll(DEFAULT_ROLE_PERMISSIONS.get(role.getCode()));
             }
         }
-        
-        log.info("Final permissions for user {}: {} permissions", userId, permissions.size());
         return permissions;
+    }
+
+    private Set<DeveloperPermission> clampWithoutDeveloperRole(
+            List<Role> roles, Set<DeveloperPermission> permissions) {
+        boolean hasDeveloperType = roles.stream().anyMatch(role -> "DEVELOPER".equals(role.getType()));
+        if (hasDeveloperType) {
+            return permissions;
+        }
+        if (permissions.contains(DeveloperPermission.FUNCTION_UNIT_VIEW)) {
+            return EnumSet.of(DeveloperPermission.FUNCTION_UNIT_VIEW);
+        }
+        return Collections.emptySet();
     }
     
     /**
@@ -247,20 +252,5 @@ public class DeveloperPermissionService {
                 }
             });
         }
-    }
-    
-    /**
-     * 获取用户的开发角色ID列表（包括通过虚拟组分配的角色）
-     */
-    private List<String> getUserDeveloperRoleIds(String userId) {
-        // 使用 findAllRoleIdsByUserId 来获取包括虚拟组分配的所有角色
-        List<String> allRoleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
-        
-        return allRoleIds.stream()
-            .filter(roleId -> {
-                Role role = roleRepository.findById(roleId).orElse(null);
-                return role != null && "DEVELOPER".equals(role.getType());
-            })
-            .collect(Collectors.toList());
     }
 }

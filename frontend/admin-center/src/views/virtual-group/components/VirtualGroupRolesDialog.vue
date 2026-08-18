@@ -14,7 +14,10 @@
       style="margin-bottom: 16px"
     />
 
-    <div class="roles-header">
+    <div
+      v-if="!readOnly"
+      class="roles-header"
+    >
       <el-select 
         v-model="selectedRoleId" 
         :placeholder="t('virtualGroup.selectRolePlaceholder')" 
@@ -55,7 +58,7 @@
             {{ getRoleTypeLabel(boundRole.roleType) }}
           </el-tag>
           <el-button 
-            v-if="!isSystemGroup"
+            v-if="!isSystemGroup && !readOnly"
             link 
             type="danger" 
             style="margin-left: 16px" 
@@ -92,7 +95,7 @@ import { useI18n } from 'vue-i18n'
 import { useVirtualGroupRoles } from '@/composables/modules/useVirtualGroupRoles'
 import type { VirtualGroup } from '@/api/virtualGroup'
 
-const props = defineProps<{ group: VirtualGroup | null }>()
+const props = defineProps<{ group: VirtualGroup | null; readOnly?: boolean }>()
 const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
 

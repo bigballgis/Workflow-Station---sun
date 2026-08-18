@@ -30,6 +30,7 @@ public class EntityTypeConverter {
      *   <li>"BU_BOUNDED" → RoleType.BU_BOUNDED</li>
      *   <li>"BU_UNBOUNDED" → RoleType.BU_UNBOUNDED</li>
      *   <li>"ADMIN" → RoleType.ADMIN</li>
+     *   <li>"AUDITOR" → RoleType.AUDITOR</li>
      *   <li>"DEVELOPER" → RoleType.DEVELOPER</li>
      * </ul>
      * 
@@ -47,6 +48,7 @@ public class EntityTypeConverter {
             case "BU_UNBOUNDED" -> RoleType.BU_UNBOUNDED;
             case "DEVELOPER" -> RoleType.DEVELOPER;
             case "ADMIN" -> RoleType.ADMIN;
+            case "AUDITOR" -> RoleType.AUDITOR;
             default -> {
                 log.error("Unknown role type: {}", typeStr);
                 throw new IllegalArgumentException("Unknown role type: " + typeStr);
@@ -62,6 +64,7 @@ public class EntityTypeConverter {
      *   <li>RoleType.BU_BOUNDED → "BU_BOUNDED"</li>
      *   <li>RoleType.BU_UNBOUNDED → "BU_UNBOUNDED"</li>
      *   <li>RoleType.ADMIN → "ADMIN"</li>
+     *   <li>RoleType.AUDITOR → "AUDITOR"</li>
      *   <li>RoleType.DEVELOPER → "DEVELOPER"</li>
      * </ul>
      * 
@@ -79,6 +82,7 @@ public class EntityTypeConverter {
             case BU_UNBOUNDED -> "BU_UNBOUNDED";
             case DEVELOPER -> "DEVELOPER";
             case ADMIN -> "ADMIN";
+            case AUDITOR -> "AUDITOR";
             default -> {
                 log.error("Unknown RoleType enum: {}", type);
                 throw new IllegalArgumentException("Unknown RoleType enum: " + type);

@@ -1,6 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.FileUploadComponent;
+import com.developer.security.RequireDeveloperPermission;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.exception.ErrorResponse;
 import com.developer.entity.UploadedFile;
@@ -38,6 +39,7 @@ public class FileUploadController {
      */
     @PostMapping
     @Operation(summary = "Upload file", description = "Any file type, max 10MB")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Map<String, Object>>> upload(
             @RequestParam("file") MultipartFile file) {
         try {
@@ -97,6 +99,7 @@ public class FileUploadController {
      */
     @DeleteMapping("/files/{filename}")
     @Operation(summary = "Delete file", description = "Delete an uploaded file")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> deleteFile(@PathVariable String filename) {
         if (filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
             return ResponseEntity.badRequest().build();

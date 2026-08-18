@@ -63,6 +63,7 @@
         {{ item.description }}
       </p>
       <div
+        v-if="!itemReadOnly"
         class="card-actions"
         @click.stop
       >
@@ -121,7 +122,7 @@ import { useI18n } from 'vue-i18n'
 import { Edit, CopyDocument, Delete, Box, Setting, RefreshLeft } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
-import { permissions } from '@/utils/permission'
+import { permissions, isFunctionUnitReadOnly } from '@/utils/permission'
 
 const { t } = useI18n()
 const MAX_DISPLAY_TAGS = 3
@@ -142,6 +143,7 @@ const emit = defineEmits<{
 
 const displayTags = computed(() => props.tags.slice(0, MAX_DISPLAY_TAGS))
 const extraTagCount = computed(() => Math.max(0, props.tags.length - MAX_DISPLAY_TAGS))
+const itemReadOnly = computed(() => isFunctionUnitReadOnly(props.item))
 
 const statusType = computed(() => {
   const map: Record<string, string> = { 

@@ -1,6 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.UserPreferenceComponent;
+import com.developer.security.DeveloperPermissionChecker;
 import com.platform.common.dto.ApiResponse;
 import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +32,7 @@ public class UserPreferenceController {
     private static final String SHARED_SCOPE_ID = "__shared__";
 
     private final UserPreferenceComponent userPreferenceComponent;
+    private final DeveloperPermissionChecker developerPermissionChecker;
 
     @GetMapping("/{key}")
     @Operation(summary = "Get preference value (null when absent); scope=shared reads the platform-wide value")
@@ -62,6 +64,9 @@ public class UserPreferenceController {
         String ownerId = resolveOwnerId(scope, userId);
         if (ownerId == null || !KEY_PATTERN.matcher(key).matches()) {
             return ResponseEntity.badRequest().build();
+        }
+        if ("shared".equals(scope) && !developerPermissionChecker.hasPermission(userId, "function_unit:update")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         String value = request.getValue();
         if (value == null || value.length() > MAX_VALUE_LENGTH) {

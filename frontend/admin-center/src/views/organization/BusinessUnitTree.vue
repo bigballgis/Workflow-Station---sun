@@ -3,6 +3,7 @@
     <PageHeader :title="t('menu.organization')">
       <template #actions>
         <el-button
+          v-if="!readOnly"
           type="primary"
           @click="showCreateDialog()"
         >
@@ -33,7 +34,7 @@
               node-key="id"
               default-expand-all
               highlight-current
-              draggable
+              :draggable="!readOnly"
               :indent="24"
               @node-click="handleNodeClick"
               @node-drop="handleNodeDrop"
@@ -54,7 +55,10 @@
                       {{ data.memberCount }} {{ t('role.people') }}
                     </el-tag>
                   </div>
-                  <div class="node-actions">
+                  <div
+                    v-if="!readOnly"
+                    class="node-actions"
+                  >
                     <el-button
                       link
                       type="primary"
@@ -261,15 +265,18 @@
     <BusinessUnitRolesDialog
       v-model="rolesDialogVisible"
       :business-unit="selectedBusinessUnit"
+      :read-only="readOnly"
     />
     <BusinessUnitApproversDialog
       v-model="approversDialogVisible"
       :business-unit="selectedBusinessUnit"
+      :read-only="readOnly"
       @success="fetchApprovers"
     />
     <BusinessUnitMembersDialog
       v-model="membersDialogVisible"
       :business-unit="selectedBusinessUnit"
+      :read-only="readOnly"
       @success="handleMembersChange"
     />
     <UserDetailDialog
@@ -280,10 +287,11 @@
 </template>
 
 <script setup lang="ts">
-import { watch, onMounted } from 'vue'
+import { watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, OfficeBuilding } from '@element-plus/icons-vue'
 import { useOrganizationStore } from '@/stores/organization'
+import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import BusinessUnitFormDialog from './components/BusinessUnitFormDialog.vue'
 import BusinessUnitRolesDialog from './components/BusinessUnitRolesDialog.vue'
 import BusinessUnitApproversDialog from './components/BusinessUnitApproversDialog.vue'
@@ -295,6 +303,7 @@ import { useBusinessUnit } from '@/composables/modules/useBusinessUnit'
 
 const { t } = useI18n()
 const orgStore = useOrganizationStore()
+const readOnly = computed(() => !hasPermission(PERMISSIONS.USER_WRITE))
 
 const {
   treeRef,

@@ -2,7 +2,7 @@ import { get, post, put, del } from './request'
 import type { PageResult } from '@/types/common'
 
 /** 角色类型 */
-export type RoleType = 'BU_BOUNDED' | 'BU_UNBOUNDED' | 'BUSINESS' | 'ADMIN' | 'DEVELOPER'
+export type RoleType = 'BU_BOUNDED' | 'BU_UNBOUNDED' | 'BUSINESS' | 'ADMIN' | 'AUDITOR' | 'DEVELOPER'
 
 export interface Role {
   id: string

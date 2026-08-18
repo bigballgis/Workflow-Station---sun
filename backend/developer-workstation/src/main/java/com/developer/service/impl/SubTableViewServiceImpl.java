@@ -144,7 +144,7 @@ public class SubTableViewServiceImpl implements SubTableViewService {
     @Override
     @Transactional(readOnly = true)
     public ViewConfigDTO getViewConfigDTO(Long bindingId) {
-        SubTableViewConfig config = getOrCreateViewConfig(bindingId);
+        SubTableViewConfig config = getViewConfig(bindingId);
         FormTableBinding binding = config.getBinding();
         Long tableId = binding != null ? binding.getTableId() : null;
 

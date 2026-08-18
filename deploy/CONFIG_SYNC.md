@@ -39,7 +39,7 @@
 |------|------|
 | 默认值 / 本地密钥（勿提交生产真值） | `deploy/environments/dev/.env` |
 | 各服务注入 | `deploy/environments/dev/docker-compose.dev.yml` → 对应 `service` 的 `environment:` |
-| 共享变量 | 与 K8s ConfigMap 使用**相同 key**（如 `USER_RESET_PASSWORD`） |
+| 共享变量 | 与 K8s ConfigMap 使用**相同 key**（如 `CORS_ALLOWED_ORIGINS`） |
 
 ---
 
@@ -60,8 +60,7 @@
 | 建议 ConfigMap | 建议 Secret |
 |----------------|-------------|
 | `LOG_LEVEL`、`SWAGGER_ENABLED`、`SPRING_FLYWAY_ENABLED` | `JWT_SECRET`、`ENCRYPTION_SECRET_KEY` |
-| `*_URL`、`CORS_ALLOWED_ORIGINS` | `SPRING_DATASOURCE_PASSWORD`、`SPRING_REDIS_PASSWORD` |
-| `USER_RESET_PASSWORD`（仅 dev/SIT；生产用 Secret） | `SSO_INTERNAL_TOKEN`、第三方 API Key |
+| `*_URL`、`CORS_ALLOWED_ORIGINS` | `SPRING_DATASOURCE_PASSWORD`、`SPRING_REDIS_PASSWORD`、`SSO_INTERNAL_TOKEN`、第三方 API Key |
 | `SUPERSET_DB_SCHEMA`、`SUPERSET_APP_ROOT`、`SUPERSET_HOST` | `SUPERSET_SECRET_KEY`、`SUPERSET_DATABASE_URI`、`BI_SUPERSET_PASSWORD` |
 
 ---

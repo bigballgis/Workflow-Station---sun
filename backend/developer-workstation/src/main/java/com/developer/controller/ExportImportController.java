@@ -1,6 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.ExportImportComponent;
+import com.developer.security.RequireDeveloperPermission;
 import com.platform.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,6 +25,7 @@ public class ExportImportController {
     
     @GetMapping("/function-units/{id}/export")
     @Operation(summary = "Export function unit")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<byte[]> export(@PathVariable Long id) {
         byte[] data = exportImportComponent.exportFunctionUnit(id);
         return ResponseEntity.ok()
@@ -36,6 +38,7 @@ public class ExportImportController {
     @Operation(summary = "Import function unit",
             description = "Name does not exist → create a new function unit; name exists → add a version "
                     + "(snapshot current content, then replace with the imported package).")
+    @RequireDeveloperPermission(value = {"FUNCTION_UNIT_CREATE", "FUNCTION_UNIT_UPDATE"}, mode = RequireDeveloperPermission.Mode.ALL)
     public ResponseEntity<ApiResponse<Map<String, Object>>> importFunctionUnit(
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) String changeLog) {
@@ -45,6 +48,7 @@ public class ExportImportController {
 
     @PostMapping("/validate")
     @Operation(summary = "Validate import package")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Map<String, Object>>> validate(
             @RequestParam("file") MultipartFile file) {
         Map<String, Object> result = exportImportComponent.validateImportPackage(file);
@@ -53,6 +57,7 @@ public class ExportImportController {
     
     @PostMapping("/check-conflicts")
     @Operation(summary = "Check import conflicts")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkConflicts(
             @RequestParam("file") MultipartFile file) {
         Map<String, Object> result = exportImportComponent.checkConflicts(file);

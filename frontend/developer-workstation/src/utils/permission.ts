@@ -1,4 +1,5 @@
 import { getStoredUser } from '@/api/auth'
+import { isPublicGroupSelected } from '@/utils/devGroupContext'
 
 /**
  * Permission utility functions for role-based access control.
@@ -9,9 +10,16 @@ import { getStoredUser } from '@/api/auth'
  * - DEVELOPER: EDIT, DEPLOY, PUBLISH（仅团队 scope 内；不能 CREATE / DELETE / CLONE）
  * - 无能力角色的团队成员：只读基线（后端 workspace-access / 团队 scope 校验）
  *
+ * SYS_ADMIN is the only global write bypass. AUDITOR is a read overlay; a pure
+ * Auditor is blocked at the DW router, but these helpers stay in place so an
+ * overlay (AUDITOR + developer capability) or a later product change can reuse them.
+ *
  * 说明：这里的按钮可见性仅为 UX；具体某个 FU 能否被编辑由后端工作区隔离
- * （FunctionUnitWorkspaceAccessService）按团队 scope 逐 FU 校验。
+ * （FunctionUnitWorkspaceAccessService）按团队 scope 逐 FU 校验，并以资源级
+ * `canModify` 为准（缺失时 fail-closed）。
  */
+
+const DW_CAPABILITY_ROLES = ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] as const
 
 /**
  * Check if the current user has a specific role
@@ -47,18 +55,48 @@ export function hasAllRoles(roleCodes: string[]): boolean {
 }
 
 /**
- * Check if the current user has an ADMIN-type role (SYS_ADMIN).
- * Mirrors backend FunctionUnitWorkspaceAccessService.userHasActiveAdminTypeRole()
- * and DeveloperPermissionService.getUserPermissions() ADMIN bypass.
+ * Check if the current user is SYS_ADMIN. Mirrors backend
+ * FunctionUnitWorkspaceAccessService: only SYS_ADMIN is global full write.
  */
 function isAdmin(): boolean {
   return hasRole('SYS_ADMIN')
 }
 
 /**
+ * Pure Auditor (no DW capability role) must not enter the workstation UI.
+ * Overlay users (AUDITOR + TECH_LEAD/TEAM_LEAD/DEVELOPER) still enter.
+ */
+export function isAuditorBlockedFromWorkstation(): boolean {
+  return hasRole('AUDITOR') && !hasAnyRole([...DW_CAPABILITY_ROLES])
+}
+
+/**
+ * Whether the current team scope is writeable. Public function units are
+ * read-only for everyone except SYS_ADMIN.
+ */
+export function isCurrentScopeReadOnly(): boolean {
+  if (isAdmin()) return false
+  return isPublicGroupSelected()
+}
+
+/**
+ * Whether the current user may mutate function units in the active scope.
+ */
+export function canModifyFunctionUnits(): boolean {
+  return permissions.canEdit() && !isCurrentScopeReadOnly()
+}
+
+/**
+ * Resource-level write flag from the backend. Missing `canModify` is false.
+ */
+export function isFunctionUnitReadOnly(item: { canModify?: boolean } | null | undefined): boolean {
+  return item?.canModify !== true
+}
+
+/**
  * Permission checks for function unit operations.
  * SYS_ADMIN bypasses all checks — mirrors backend workspace-access and
- * developer-permission rules (ADMIN type → full access).
+ * developer-permission rules (SYS_ADMIN → full access).
  */
 export const permissions = {
   /**

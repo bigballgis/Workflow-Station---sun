@@ -255,9 +255,6 @@ admin:
     permission-ttl-minutes: 60
     dictionary-ttl-minutes: 120
 
-  user:
-    reset-password: ${USER_RESET_PASSWORD:?USER_RESET_PASSWORD is required}
-
 # Workflow Engine Configuration
 workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}

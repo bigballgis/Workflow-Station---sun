@@ -143,9 +143,6 @@ export const userApi = {
   updateStatus: (id: string, data: StatusUpdateRequest) => 
     put<void>(`/users/${id}/status`, data),
   
-  resetPassword: (id: string) =>
-    post<{ success: boolean }>(`/users/${id}/reset-password`, null),
-  
   batchImport: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)

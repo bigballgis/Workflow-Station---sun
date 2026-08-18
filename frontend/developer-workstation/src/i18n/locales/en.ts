@@ -295,6 +295,7 @@ export default {
     deletePermanentSuccess: 'Permanently deleted',
     confirmTitle: 'Confirm',
     noDescription: 'No description',
+    readOnlyHint: 'This function unit is read-only. You can inspect the design but cannot change it.',
     validationResult: 'Validation Result',
     checkLogin: 'Checking login status',
     notLoggedIn: 'Not logged in, redirecting',

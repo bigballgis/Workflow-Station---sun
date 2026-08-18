@@ -32,6 +32,7 @@
           :title="statusLabel"
         />
         <el-dropdown
+          v-if="showMenu"
           trigger="click"
           class="tile-menu"
           popper-class="launchpad-dropdown-popper"
@@ -48,31 +49,31 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item
-                v-if="permissions.canEdit()"
+                v-if="!itemReadOnly && permissions.canEdit()"
                 command="settings"
               >
                 <el-icon><Setting /></el-icon>{{ t('functionUnit.setting') }}
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="permissions.canClone()"
+                v-if="!itemReadOnly && permissions.canClone()"
                 command="clone"
               >
                 <el-icon><CopyDocument /></el-icon>{{ t('functionUnit.clone') }}
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="item.status === 'ARCHIVED' && permissions.canEdit()"
+                v-if="!itemReadOnly && item.status === 'ARCHIVED' && permissions.canEdit()"
                 command="restore"
               >
                 <el-icon><RefreshLeft /></el-icon>{{ t('functionUnit.restore') }}
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="inFolder"
+                v-if="inFolder && canModifyLayout"
                 command="remove"
               >
                 <el-icon><Remove /></el-icon>{{ t('functionUnit.removeFromGroup') }}
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="permissions.canDelete()"
+                v-if="!itemReadOnly && permissions.canDelete()"
                 command="delete"
                 divided
               >
@@ -93,7 +94,7 @@ import { useI18n } from 'vue-i18n'
 import { Setting, CopyDocument, Delete, Box, RefreshLeft, MoreFilled, Remove } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
-import { permissions } from '@/utils/permission'
+import { permissions, isFunctionUnitReadOnly } from '@/utils/permission'
 
 const { t } = useI18n()
 
@@ -101,8 +102,10 @@ const props = withDefaults(defineProps<{
   item: FunctionUnitResponse
   /** 在分组浮层内时提供「移出分组」菜单项 */
   inFolder?: boolean
+  canModifyLayout?: boolean
 }>(), {
   inFolder: false,
+  canModifyLayout: true,
 })
 
 const emit = defineEmits<{
@@ -116,6 +119,11 @@ const emit = defineEmits<{
 
 // 描述气泡也挂在磁贴上，菜单打开时两者会重叠并盖住菜单项，故开菜单即禁用气泡
 const menuOpen = ref(false)
+const itemReadOnly = computed(() => isFunctionUnitReadOnly(props.item))
+const showMenu = computed(() => {
+  if (!itemReadOnly.value) return true
+  return props.inFolder && props.canModifyLayout
+})
 
 const statusLabel = computed(() => {
   const map: Record<string, string> = {
