@@ -1,8 +1,8 @@
 package com.admin.service.impl;
 
 import com.admin.dto.response.AutomationPieceSummary;
-import com.admin.exception.AdminConflictException;
 import com.admin.exception.ServiceTaskApiException;
+import com.admin.servicetask.CurrentActor;
 import com.admin.service.AutomationPieceService;
 import com.admin.servicetask.client.ServiceTaskApiClient;
 import com.admin.servicetask.config.ServiceTaskProperties;
@@ -76,14 +76,29 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
 
     private static final String ARCHIVE_SQL = "SELECT data FROM file WHERE id = ?";
 
-    // HERMES-PATCH-029: 原本这里有
-    //     SELECT "filteredPieceNames" FROM platform LIMIT 1
-    // AP 0.88 的迁移 DropPlatformPieceFilters1809000000000（上游自己标了 breaking=true）
-    // 把 platform.filteredPieceNames / filteredPieceBehavior 两列删了，替代品是 piece_set —— 而
-    // piece_set 是 EE 域，已随 EE 剥离删除。于是「停用某个 piece」这个能力在本分叉上两头落空。
-    //
-    // 该 SQL 是 listPieces() 的第一步，列不存在 => SQLException => Automation Pieces 整页 500。
-    // UAT 实测就是这样崩的。止血：不再查该列，启停能力显式声明为不支持（见 setPieceDisabled）。
+    /**
+     * HERMES-PATCH-030: 自研 piece 启停的存储。
+     *
+     * <p>原先查的是 {@code platform.filteredPieceNames}。AP 0.88 的迁移
+     * DropPlatformPieceFilters1809000000000（上游自己标了 breaking=true）删掉了那两列，
+     * 替代机制 piece_set 属 EE、已随 EE 剥离 —— 列不存在导致本方法抛 SQLException，
+     * Automation Pieces 整页 500（2026-08 UAT 事故）。
+     *
+     * <p>现在落在 HERMES 自有的 hermes_piece_block 表（automation 侧
+     * app/pieces/hermes-piece-block.entity.ts + 迁移 1826000000000）。表名带 hermes_ 前缀，
+     * 不与上游冲突；AP 的 piece list 读同一张表做过滤。
+     */
+    private static final String DISABLED_NAMES_SQL =
+            "SELECT \"pieceName\" FROM hermes_piece_block";
+
+    /** 停用：写入即生效（AP 的 list() 每次读库，无缓存窗口）。重复停用是幂等的。 */
+    private static final String BLOCK_PIECE_SQL =
+            "INSERT INTO hermes_piece_block (\"pieceName\", \"blockedAt\", \"blockedBy\") "
+                    + "VALUES (?, now(), ?) ON CONFLICT (\"pieceName\") DO NOTHING";
+
+    /** 启用：删掉屏蔽行。 */
+    private static final String UNBLOCK_PIECE_SQL =
+            "DELETE FROM hermes_piece_block WHERE \"pieceName\" = ?";
 
     /** flow_version 的 trigger JSON 内嵌整条 step 链,包名以带引号字符串出现 */
     /**
@@ -252,36 +267,31 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
 
     @Override
     public void setPieceDisabled(String name, boolean disabled) {
-        // HERMES-PATCH-029: 0.88 起不支持。
+        // HERMES-PATCH-030: 自研实现，替代上游删掉的 platform 级 piece 过滤。
         //
-        // 原实现 GET/POST AP 的 /v1/platforms/{id}，读写 filteredPieceNames + filteredPieceBehavior。
-        // 迁移 DropPlatformPieceFilters1809000000000（上游标记 breaking=true）删掉了这两列，
-        // 上游的替代品 piece_set 属 EE 域、已随 EE 剥离移除。两条路都不存在了。
+        // 语义与 0.84 一致 —— 只影响设计器目录，不影响运行：AP 的 piece list() 读同一张
+        // hermes_piece_block 过滤，而 get() 刻意不过滤，所以已经引用了该 piece 的存量 flow
+        // 照常加载、照常执行。停用是「不让人再选它」，不是「把已有的打断」。
         //
-        // 明确抛 409 而不是「POST 上去让 AP 静默忽略」：后者会让管理员以为已停用，
-        // 而设计器目录里那个 piece 照常出现 —— 一个自称成功却什么都没做的开关比没有开关更糟。
-        throw new AdminConflictException("AP_PIECE_TOGGLE_UNSUPPORTED",
-                "Enabling or disabling an individual piece is not supported on Activepieces 0.88. "
-                        + "The platform-level piece filter it relied on (platform.filteredPieceNames) was "
-                        + "dropped upstream, and its replacement (piece sets) is an enterprise feature that "
-                        + "is stripped from this fork. To control which pieces appear in the designer "
-                        + "catalogue, edit the piece allowlist in automation/hermes/pieces.json, rebuild the "
-                        + "Activepieces image, and re-seed the piece metadata.");
+        // 直接写库而非经 AP REST：这是 HERMES 自有的表（不是上游的），AP 与平台共库，
+        // 且 AP 的 list() 每次读库无结果缓存，写入即生效，不需要缓存失效握手。
+        String actor = CurrentActor.require().getUserId();
+        if (disabled) {
+            jdbcTemplate.update(BLOCK_PIECE_SQL, name, actor);
+        }
+        else {
+            jdbcTemplate.update(UNBLOCK_PIECE_SQL, name);
+        }
     }
 
     /**
-     * HERMES-PATCH-029: 恒为空集。
+     * 读取被停用的 piece 名单（HERMES-PATCH-030 起落在 hermes_piece_block）。
      *
-     * <p>AP 0.88 删除了承载它的 {@code platform.filteredPieceNames}（见类内 SQL 常量处的说明），
-     * 而替代机制 piece_set 属 EE、已剥离。没有任何持久化位置能记住「哪些 piece 被停用」，
-     * 所以这里返回空集 —— 语义是<b>所有 piece 都可见</b>，与 {@link #setPieceDisabled} 直接拒绝
-     * 写入保持一致：读不出停用状态，也不假装能写入。
-     *
-     * <p>不保留「尽力而为地读一下、失败就吞掉」的写法：那会让整页在 AP 换版后再次静默劣化，
-     * 而这次事故恰恰是靠整页 500 才被发现的。
+     * <p>不吞异常：读不到就让调用方失败。吞掉会静默退化成「所有 piece 都可见」，
+     * 管理员以为停用生效、设计器里那个 piece 照常出现 —— 比报错更难排查。
      */
     private Set<String> fetchDisabledNames() {
-        return Collections.emptySet();
+        return new HashSet<>(jdbcTemplate.queryForList(DISABLED_NAMES_SQL, String.class));
     }
 
     /**

@@ -16,6 +16,7 @@ import { FolderEntity } from '../flows/folder/folder.entity'
 import { system } from '../helper/system/system'
 import { AppSystemProp } from '../helper/system/system-props'
 import { PieceMetadataEntity } from '../pieces/metadata/piece-metadata-entity'
+import { HermesPieceBlockEntity } from '../pieces/hermes-piece-block.entity'
 import { PlatformEntity } from '../platform/platform.entity'
 import { ConcurrencyPoolEntity } from '../project/concurrency-pool.entity'
 import { ProjectEntity } from '../project/project-entity'
@@ -57,6 +58,8 @@ function getEntities(): EntitySchema<unknown>[] {
         VariableEntity,
         FolderEntity,
         PieceMetadataEntity,
+        // HERMES-PATCH-030: 自研 piece 启停的存储（上游 platform 级过滤已删）
+        HermesPieceBlockEntity,
         PlatformEntity,
         ProjectRoleEntity,
         UserIdentityEntity,

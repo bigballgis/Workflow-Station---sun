@@ -399,6 +399,7 @@ import { RenameChatTablesToAgent1822000000000 } from './migration/postgres/18220
 import { AddRenamedChatTableCompatViews1823000000000 } from './migration/postgres/1823000000000-AddRenamedChatTableCompatViews'
 import { HermesLocalizeCdnAssets1824000000000 } from './migration/postgres/1824000000000-HermesLocalizeCdnAssets'
 import { HermesDropProjectPieceSetFk1825000000000 } from './migration/postgres/1825000000000-HermesDropProjectPieceSetFk'
+import { HermesCreatePieceBlock1826000000000 } from './migration/postgres/1826000000000-HermesCreatePieceBlock'
 
 const getSslConfig = (): boolean | TlsOptions => {
     const useSsl = system.get(AppSystemProp.POSTGRES_USE_SSL)
@@ -816,6 +817,7 @@ export const getMigrations = (): (new () => Migration)[] => {
         // the FK from project.pieceSetId. Drop it so the database matches the entity
         // (HERMES-PATCH-027).
         HermesDropProjectPieceSetFk1825000000000,
+        HermesCreatePieceBlock1826000000000,
     ]
     return migrations
 }

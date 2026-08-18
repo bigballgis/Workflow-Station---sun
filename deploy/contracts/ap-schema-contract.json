@@ -128,6 +128,19 @@
         "status",
         "projectIds"
       ]
+    },
+    "hermes_piece_block": {
+      "usedBy": [
+        "AutomationPieceServiceImpl.DISABLED_NAMES_SQL",
+        "AutomationPieceServiceImpl.BLOCK_PIECE_SQL",
+        "AutomationPieceServiceImpl.UNBLOCK_PIECE_SQL"
+      ],
+      "$comment": "HERMES 自有表（非上游），承载自研的 piece 启停。AP 侧由 app/pieces/hermes-piece-block.entity.ts 定义、piece list() 读它做目录过滤。登记进契约是为了让门禁同样盯着它——虽然上游不会动它，但我们自己改实体时同样会漂移。",
+      "columns": [
+        "pieceName",
+        "blockedAt",
+        "blockedBy"
+      ]
     }
   }
 }

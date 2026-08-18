@@ -10,10 +10,13 @@ import { repoFactory } from '../../core/db/repo-factory'
 import { flowVersionRepo } from '../../flows/flow-version/flow-version.service'
 import { projectService } from '../../project/project-service'
 import { pieceCache, PieceRegistryEntry } from './piece-cache'
+import { HermesPieceBlockEntity } from '../hermes-piece-block.entity'
 import { PieceMetadataEntity, PieceMetadataSchema } from './piece-metadata-entity'
 import { filterActionsByAudience, filterPieceBasedOnType, isNewerVersion, isSupportedRelease, lastVersionOfEachPiece, loadDevPiecesIfEnabled, pieceListUtils } from './utils'
 
 export const pieceRepos = repoFactory(PieceMetadataEntity)
+// HERMES-PATCH-030: 自研 piece 启停的存储（见 ../hermes-piece-block.entity.ts）
+const hermesPieceBlockRepo = repoFactory(HermesPieceBlockEntity)
 
 export const pieceMetadataService = (log: FastifyBaseLogger) => {
     return {
@@ -28,8 +31,17 @@ export const pieceMetadataService = (log: FastifyBaseLogger) => {
                 log,
             }))
             // HERMES: EE piece-visibility policy (resolveVisibility) removed (AG-EE);
-            // CE has no per-project piece filtering — mirrors 0.84's service. See the
-            // HERMES-PATCH-004 note in ./utils/index.ts for the platform-level filter gap.
+            // CE has no per-project piece filtering — mirrors 0.84's service.
+            //
+            // HERMES-PATCH-030 closes the platform-level gap that HERMES-PATCH-004 left open:
+            // upstream dropped platform.filteredPieceNames and its piece_set replacement is EE,
+            // so the Admin Center enable/disable toggle had nowhere to store state. It now lives
+            // in our own hermes_piece_block table and is applied HERE, in list() only.
+            //
+            // list() only, deliberately: get() stays unfiltered so a flow that already references
+            // a blocked piece keeps loading and running. Blocking means "nobody can pick it any
+            // more", not "break what is already built" — same BLOCKED semantics 0.84 had.
+            const blockedPieceNames = await fetchBlockedPieceNames()
             const audience = params.audience ?? PieceAudienceFilter.HUMAN
             const audiencePieces = translatedPieces.map((piece) => ({ ...piece, actions: filterActionsByAudience(piece.actions, audience) }))
             const sortedPieces = await pieceListUtils(log).sortAndSearchPieces({
@@ -37,7 +49,10 @@ export const pieceMetadataService = (log: FastifyBaseLogger) => {
                 pieces: audiencePieces,
                 suggestionType: params.suggestionType,
             })
-            const visiblePieces = params.includeHidden ? sortedPieces : sortedPieces.filter((piece) => !piece.deprecated)
+            const listedPieces = blockedPieceNames.size === 0
+                ? sortedPieces
+                : sortedPieces.filter((piece) => !blockedPieceNames.has(piece.name))
+            const visiblePieces = params.includeHidden ? listedPieces : listedPieces.filter((piece) => !piece.deprecated)
 
             return toPieceMetadataModelSummary(visiblePieces, audiencePieces, params.suggestionType)
         },
@@ -577,3 +592,17 @@ type PieceKey = {
     maximumSupportedRelease?: string
 }
 
+/**
+ * HERMES-PATCH-030: 读取被停用的 piece 名单。
+ *
+ * 每次 list() 都查一次库，不加缓存 —— piece 列表本身就是每次读库的
+ * （fetchLatestCompatiblePiecesFromDB，dedupe 只是并发去重不是结果缓存），
+ * 再加一层缓存只会引入「Admin Center 点了停用但设计器还看得见」的窗口期。
+ * 表极小（被停用的 piece 数量级是个位数），查询成本可忽略。
+ *
+ * 查询失败时**不吞异常**：吞了就会静默退化成「停用不生效」，而那正是这次事故的形态。
+ */
+async function fetchBlockedPieceNames(): Promise<Set<string>> {
+    const rows = await hermesPieceBlockRepo().find({ select: ['pieceName'] })
+    return new Set(rows.map((row) => row.pieceName))
+}
