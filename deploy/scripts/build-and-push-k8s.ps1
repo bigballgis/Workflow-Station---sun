@@ -55,6 +55,9 @@ param(
     # activepieces:$Tag unpublished while activepieces.yaml/ap-bootstrap-job.yaml resolve
     # __IMAGE_TAG__ to exactly that tag ⇒ ImagePullBackOff. Only for a run whose images are
     # not being deployed as a set (the script warns).
+    # 跳过 AP schema 契约校验。仅用于「明知契约已破、正在修」的临时构建 —— 常规发布绝不要用,
+    # 它关掉的正是 2026-08 UAT 事故(admin-center 查 AP 已删列导致整页 500)的唯一防线。
+    [switch]$SkipSchemaContractCheck = $false,
     [switch]$SkipActivepieces = $false,
     # Optional override; empty means "same tag as the platform images". The manifests use
     # __IMAGE_TAG__, so this must match what the apply script is given as -ImageTag.
@@ -455,6 +458,37 @@ if ($buildActivepieces) {
     # the workspace manifests fails the build minutes in. Catch it here instead.
     if (-not (Test-Path (Join-Path $apContext "pnpm-lock.yaml"))) {
         Write-Fail "No pnpm-lock.yaml at $apContext — the image build needs the committed lockfile (both stages use --frozen-lockfile)."
+    }
+
+    # --- 发布门禁：AP schema 契约 -------------------------------------------------
+    # 2026-08 UAT 事故：AP 0.88 的迁移 DropPlatformPieceFilters1809000000000 删掉了
+    # platform.filteredPieceNames，而 admin-center 仍在 SELECT 它（AP 与平台共库，
+    # admin-center 用裸 SQL 直查 AP 私有表），结果 Automation Pieces 整页 500。
+    # 那条迁移自带 breaking = true 标记，但当时没有任何环节消费它 —— 现在有了。
+    #
+    # 在 build 之前跑：构建要 20 分钟以上，让它先失败远好过推完镜像才发现。
+    # 校验器只读、不连数据库，靠 AP 的 TypeORM 实体判断；实体与真实 schema 的等价性
+    # 由 AP 自己的 check-migrations 保证。
+    if (-not $SkipSchemaContractCheck) {
+        Write-Host "   preflight: AP schema 契约校验..." -ForegroundColor Gray
+        $apiDir = Join-Path $apContext "packages/server/api"
+        $checker = Join-Path $ProjectRoot "deploy/scripts/check-ap-schema-contract.ts"
+        Push-Location $apiDir
+        try {
+            npx ts-node --transpile-only -r tsconfig-paths/register -P tsconfig.app.json $checker
+            $checkExit = $LASTEXITCODE
+        }
+        finally { Pop-Location }
+        if ($checkExit -ne 0) {
+            Write-Fail @"
+AP schema 契约校验失败(见上)。admin-center 依赖的 AP 列已不存在 —— 这会在运行时打掉
+Admin Center 的 Automation 页面,而不是在编译期报错。
+
+不要用 -SkipSchemaContractCheck 绕过它来发版:那正是 2026-08 UAT 事故的复现路径。
+按上面的提示改 SQL + 契约,或补一条 HERMES 迁移。
+"@
+        }
+        Write-Ok "AP schema 契约校验通过"
     }
 
     if (-not $PushOnly) {
