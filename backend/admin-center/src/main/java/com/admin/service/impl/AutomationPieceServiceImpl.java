@@ -261,10 +261,12 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
         // 明确抛 409 而不是「POST 上去让 AP 静默忽略」：后者会让管理员以为已停用，
         // 而设计器目录里那个 piece 照常出现 —— 一个自称成功却什么都没做的开关比没有开关更糟。
         throw new AdminConflictException("AP_PIECE_TOGGLE_UNSUPPORTED",
-                "Activepieces 0.88 移除了 platform 级 piece 过滤（filteredPieceNames），"
-                        + "其替代机制 piece set 属企业版、已在本分叉剥离，因此无法停用/启用单个 piece。"
-                        + "要控制设计器目录里出现哪些 piece，请改用 piece 白名单："
-                        + "调整 automation/hermes/pieces.json 后重新构建镜像并重新灌 piece 元数据。");
+                "Enabling or disabling an individual piece is not supported on Activepieces 0.88. "
+                        + "The platform-level piece filter it relied on (platform.filteredPieceNames) was "
+                        + "dropped upstream, and its replacement (piece sets) is an enterprise feature that "
+                        + "is stripped from this fork. To control which pieces appear in the designer "
+                        + "catalogue, edit the piece allowlist in automation/hermes/pieces.json, rebuild the "
+                        + "Activepieces image, and re-seed the piece metadata.");
     }
 
     /**
