@@ -106,11 +106,30 @@
           </template>
         </el-table-column>
         <el-table-column
-          prop="version"
           :label="t('automationPiece.version')"
-          width="85"
+          width="130"
           align="center"
-        />
+        >
+          <template #default="{ row }">
+            <!-- 同包多版本合成一行,这里切换要看/要操作的是哪个版本。
+                 只有一个版本时不给下拉,避免一个永远只有一项的选择器。 -->
+            <el-select
+              v-if="versionOptions(row).length > 1"
+              :model-value="row.version"
+              size="small"
+              class="version-select"
+              @change="(v: string) => selectedVersion[row.name] = v"
+            >
+              <el-option
+                v-for="opt in versionOptions(row)"
+                :key="opt.version"
+                :label="opt.version"
+                :value="opt.version"
+              />
+            </el-select>
+            <span v-else>{{ row.version }}</span>
+          </template>
+        </el-table-column>
         <el-table-column
           :label="t('automationPiece.type')"
           width="105"
@@ -131,9 +150,11 @@
           align="center"
         >
           <template #default="{ row }">
+            <!-- 启停是**包级**的(黑名单按包名,见 handleToggle)。现在一行就是一个包,
+                 语义与控件天然一致——不再需要"只在首行给开关"那类补偿。 -->
             <el-switch
               :model-value="!row.disabled"
-              :loading="togglingKey === rowKey(row)"
+              :loading="togglingKey === row.name"
               @change="(val: string | number | boolean) => handleToggle(row, val as boolean)"
             />
           </template>
@@ -222,7 +243,7 @@ const importing = ref(false)
 
 const rowKey = (row: AutomationPieceSummary) => `${row.name}@${row.version}`
 
-const filteredList = computed(() => {
+const matchedList = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return pieceList.value
   return pieceList.value.filter(p =>
@@ -231,6 +252,58 @@ const filteredList = computed(() => {
     || p.actionNames.some(a => a.toLowerCase().includes(kw))
     || p.triggerNames.some(tr => tr.toLowerCase().includes(kw)))
 })
+
+/**
+ * 同一个包的多个版本合成一行,版本用下拉切换。
+ *
+ * 为什么这么做:AP 的目录只暴露每个包的最新版(lastVersionOfEachPiece),启停也是包级的
+ * (黑名单按包名)。一行一个版本会让人以为版本之间能独立启停/独立可见——实测停用 0.4.20
+ * 时 0.4.15 一起变灰,正是这个误解的来源。合成一行后,"包"和"版本"的层级关系一眼可见。
+ *
+ * 每个包的可选版本按新→旧排序,默认选最新的那个。
+ */
+const versionsByPackage = computed(() => {
+  const map = new Map<string, AutomationPieceSummary[]>()
+  for (const p of matchedList.value) {
+    const list = map.get(p.name)
+    if (list) list.push(p)
+    else map.set(p.name, [p])
+  }
+  for (const list of map.values()) {
+    list.sort((a, b) => compareVersionDesc(a.version, b.version))
+  }
+  return map
+})
+
+/** 用户在某个包上手动选择的版本;未选过的包回落到最新版。 */
+const selectedVersion = ref<Record<string, string>>({})
+
+/** 表格数据:每包一行,行内容 = 当前选中版本的完整记录(所以各列模板无需改动)。 */
+const filteredList = computed(() => {
+  const rows: AutomationPieceSummary[] = []
+  for (const [name, versions] of versionsByPackage.value) {
+    const picked = versions.find(v => v.version === selectedVersion.value[name]) ?? versions[0]
+    rows.push(picked)
+  }
+  return rows.sort((a, b) => a.name.localeCompare(b.name))
+})
+
+/** 语义化版本倒序;非法版本号回落到字符串比较,不抛错。 */
+function compareVersionDesc(a: string, b: string): number {
+  const pa = a.split('.').map(n => Number.parseInt(n, 10))
+  const pb = b.split('.').map(n => Number.parseInt(n, 10))
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i]
+    const y = pb[i]
+    if (Number.isNaN(x) || Number.isNaN(y) || x === undefined || y === undefined) {
+      return b.localeCompare(a)
+    }
+    if (x !== y) return y - x
+  }
+  return 0
+}
+
+const versionOptions = (row: AutomationPieceSummary) => versionsByPackage.value.get(row.name) ?? []
 
 const fetchList = async () => {
   loading.value = true
@@ -281,7 +354,8 @@ const handleImportFile = async (file: UploadFile) => {
 }
 
 const handleToggle = async (row: AutomationPieceSummary, enabled: boolean) => {
-  togglingKey.value = rowKey(row)
+  // 包级:开关是按包名的,loading 也按包名,避免同包另一行看起来没在动
+  togglingKey.value = row.name
   try {
     await automationPieceApi.togglePiece(row.name, !enabled)
     // 同名多版本共享一个启停开关(黑名单按包名),本地同步全部同名行
@@ -342,6 +416,11 @@ onMounted(fetchList)
 </script>
 
 <style scoped>
+/* 版本下拉：同包多版本合成一行后，用它切换要查看/操作的版本。 */
+.version-select {
+  width: 100px;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
