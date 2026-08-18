@@ -58,6 +58,10 @@ param(
     # 跳过 AP schema 契约校验。仅用于「明知契约已破、正在修」的临时构建 —— 常规发布绝不要用,
     # 它关掉的正是 2026-08 UAT 事故(admin-center 查 AP 已删列导致整页 500)的唯一防线。
     [switch]$SkipSchemaContractCheck = $false,
+    # 声明:目标环境的 Activepieces **已经**跑过 admin-center 所需的全部迁移。
+    # 只在「发 admin-center 但不发 AP」时需要,且你确实核对过目标环境的 migrations 表。
+    # 这是一个有意留痕的人工断言,不是「让告警闭嘴」的开关。
+    [switch]$AssertApMigrationsPresent = $false,
     [switch]$SkipActivepieces = $false,
     # Optional override; empty means "same tag as the platform images". The manifests use
     # __IMAGE_TAG__, so this must match what the apply script is given as -ImageTag.
@@ -130,6 +134,52 @@ if (-not $buildActivepieces) {
     Write-Host "           publishing that image => ImagePullBackOff." -ForegroundColor Yellow
     Write-Host "           Re-run with -Services activepieces, or deploy an -ImageTag whose" -ForegroundColor Yellow
     Write-Host "           activepieces image already exists in the registry." -ForegroundColor Yellow
+
+    # --- 跨服务迁移依赖门禁 ------------------------------------------------------
+    # 上面的 WARNING 只覆盖 ImagePullBackOff —— 那种会立刻炸、看得见。真正阴险的是另一半:
+    # admin-center 直查 AP 库里的表,其中 hermes_* 是 HERMES 自有表、由 AP 侧迁移创建。
+    # 只发 admin-center 而 AP 仍是旧镜像 => 表不存在 => admin-center 运行时炸,
+    # 而编译期与 schema 契约门禁都发现不了(源码树里迁移在,缺的是目标环境实际跑的镜像)。
+    $acInScope = ($Services -eq "all") -or (($Services -split ",") -contains "admin-center")
+    if ($acInScope) {
+        $contractPath = Join-Path $ProjectRoot "deploy/contracts/ap-schema-contract.json"
+        $requiredMigrations = @()
+        if (Test-Path $contractPath) {
+            $contract = Get-Content -Raw $contractPath | ConvertFrom-Json
+            foreach ($p in $contract.tables.PSObject.Properties) {
+                $m = $p.Value.createdByApMigration
+                if (-not [string]::IsNullOrWhiteSpace($m)) {
+                    $requiredMigrations += "$m  (table: $($p.Name))"
+                }
+            }
+        }
+        if ($requiredMigrations.Count -gt 0 -and -not $AssertApMigrationsPresent) {
+            Write-Fail @"
+Refusing to release admin-center without Activepieces.
+
+admin-center reads $($requiredMigrations.Count) HERMES-owned table(s) that an AP-side
+migration creates:
+  $($requiredMigrations -join "`n  ")
+
+If the target environment's Activepieces has not run those migrations, the table is
+absent and admin-center fails at RUNTIME — the compiler cannot see it (the SQL is a
+string) and the schema-contract gate cannot either (the migration is present in this
+source tree; what is missing is the image the environment actually runs).
+
+Either:
+  * include AP in this release      -> re-run without -SkipActivepieces / -Services activepieces
+  * or, if you have checked the target environment's `migrations` table and those
+    migrations are already applied there:
+        -AssertApMigrationsPresent
+"@
+        }
+        if ($requiredMigrations.Count -gt 0) {
+            Write-Host ""
+            Write-Host "  -AssertApMigrationsPresent given: proceeding on your assertion that the target" -ForegroundColor Yellow
+            Write-Host "  environment's Activepieces already ran:" -ForegroundColor Yellow
+            foreach ($m in $requiredMigrations) { Write-Host "    $m" -ForegroundColor Yellow }
+        }
+    }
 }
 
 # 0. Pre-pull Java runtime base (avoids docker build hitting Docker Hub for FROM metadata)
