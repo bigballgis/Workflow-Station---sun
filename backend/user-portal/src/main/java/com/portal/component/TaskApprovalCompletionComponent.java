@@ -12,6 +12,8 @@ import com.portal.util.SubTableNestingSanitizer;
 import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
@@ -45,6 +47,11 @@ public class TaskApprovalCompletionComponent {
     private final TaskFormComponent taskFormComponent;
     private final MiCollectionVariableBuilder miCollectionVariableBuilder;
     private final ProcessInstanceSyncComponent processInstanceSyncComponent;
+
+    /** Lazy: server-side formula columns; null in {@code new}-constructed tests skips recalculation. */
+    @Lazy
+    @Autowired
+    private ComputedFieldRecalculator computedFieldRecalculator;
 
     /**
      * Handles approval completion
@@ -123,9 +130,13 @@ public class TaskApprovalCompletionComponent {
         preserveEngineSubTablesOnComplete(
             task.getProcessInstanceId(), variables, explicitlySubmittedSubTables);
 
-        log.info("Variables before calling workflowEngineClient: {}", variables);
+        Map<String, Object> variablesForEngine =
+                mergeApprovalVariables(task.getProcessInstanceId(), variables);
 
-        Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
+        log.info("Variables before calling workflowEngineClient: {}", variablesForEngine);
+
+        Optional<Map<String, Object>> result = workflowEngineClient.completeTask(
+                taskId, userId, action, variablesForEngine);
 
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to complete task: " + taskId);
@@ -143,7 +154,7 @@ public class TaskApprovalCompletionComponent {
         }
 
         log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})",
-                taskId, userId, action, variables.get("approvalStatus"));
+                taskId, userId, action, variablesForEngine.get("approvalStatus"));
 
         
         AtomicReference<Map<String, Object>> preSyncVariablesRef = new AtomicReference<>(Map.of());
@@ -159,18 +170,15 @@ public class TaskApprovalCompletionComponent {
                 Map<String, Object> existingVars = syncInstance.getVariables();
                 
                 preSyncVariablesRef.set(existingVars != null ? new HashMap<>(existingVars) : Map.of());
-                
-                Map<String, Object> mergedVars = new HashMap<>();
-                if (existingVars != null) {
-                    mergedVars.putAll(existingVars);
-                }
-                mergedVars.putAll(variables);
-                
+
+                Map<String, Object> mergedVars = new HashMap<>(variablesForEngine);
+
                 taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
                         taskId, userId, task.getTaskDefinitionKey(), syncProcessId, mergedVars);
                 // Prevent geometric __subTables__ bloat: collapse deep nested copies to the canonical
                 // one-level structure before persisting the approval write-back.
                 SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
+                recalculateComputedFields(syncInstance.getFunctionUnitCode(), mergedVars);
                 syncInstance.setVariables(mergedVars);
 
                 processInstanceRepository.save(syncInstance);
@@ -611,5 +619,37 @@ public class TaskApprovalCompletionComponent {
         }
 
         return changes;
+    }
+
+    /**
+     * Merges the portal's stored variables with this approval submission, then recomputes formula
+     * columns on the full record.
+     *
+     * <p>Approval payloads are often incremental: recomputing on {@code submission} alone would treat
+     * fields not present in this form as blank and overwrite correct stored values. Flowable also
+     * needs authoritative computed values before gateway conditions run.
+     */
+    private Map<String, Object> mergeApprovalVariables(String processInstanceId, Map<String, Object> submission) {
+        Map<String, Object> merged = new HashMap<>();
+        Optional<ProcessInstance> processInstance = processInstanceRepository.findById(processInstanceId);
+        String functionUnitCode = processInstance.map(ProcessInstance::getFunctionUnitCode).orElse(null);
+        processInstance.map(ProcessInstance::getVariables).ifPresent(existing -> {
+            if (existing != null) {
+                merged.putAll(existing);
+            }
+        });
+        if (submission != null) {
+            merged.putAll(submission);
+        }
+        recalculateComputedFields(functionUnitCode, merged);
+        return merged;
+    }
+
+    private void recalculateComputedFields(String functionUnitCode, Map<String, Object> variables) {
+        ComputedFieldRecalculator recalculator = computedFieldRecalculator;
+        if (recalculator == null || functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
+            return;
+        }
+        recalculator.recalculate(functionUnitCode, variables);
     }
 }

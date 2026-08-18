@@ -173,13 +173,15 @@ public class FunctionUnitPackageParser {
             }
         }
 
-        // Relation-table (rt_) structures exported by Developer Workstation
+        // Relation-table (rt_) structures exported by Developer Workstation.
+        // Fail closed: a truncated JSON file would otherwise import the FU with no rt_ rows
+        // and drop computed-field formulas on those tables.
         if (rawFiles.containsKey("relation-tables/relation_tables.json")) {
             try {
                 relationTables.addAll(objectMapper.readValue(
                         rawFiles.get("relation-tables/relation_tables.json"), List.class));
             } catch (Exception e) {
-                log.warn("Failed to parse relation_tables.json: {}", e.getMessage());
+                throw new IOException("Invalid relation-tables/relation_tables.json in package", e);
             }
         }
 

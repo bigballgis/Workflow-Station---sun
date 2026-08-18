@@ -16,18 +16,18 @@
       <!-- Tab layout: render siblings outside tab panes in designer order -->
       <template v-if="hasTabs">
         <el-row
-          v-if="fields.length > 0"
+          v-if="renderedFields.length > 0"
           :gutter="20"
           class="form-fields-before-tabs"
         >
-          <FormRendererFields :fields="fields" />
+          <FormRendererFields :fields="renderedFields" />
         </el-row>
         <el-tabs
           v-model="activeTab"
           class="form-renderer-tabs"
         >
           <el-tab-pane
-            v-for="(tab, tabIdx) in tabs"
+            v-for="(tab, tabIdx) in renderedTabs"
             :key="`tab-${tabIdx}-${String(tab.name)}`"
             :label="tab.label"
             :name="tab.name"
@@ -38,18 +38,18 @@
           </el-tab-pane>
         </el-tabs>
         <el-row
-          v-if="fieldsAfterTabs.length > 0"
+          v-if="renderedFieldsAfterTabs.length > 0"
           :gutter="20"
           class="form-fields-after-tabs"
         >
-          <FormRendererFields :fields="fieldsAfterTabs" />
+          <FormRendererFields :fields="renderedFieldsAfterTabs" />
         </el-row>
       </template>
 
       <!-- Flat layout mode -->
       <template v-else>
         <el-row :gutter="20">
-          <FormRendererFields :fields="fields" />
+          <FormRendererFields :fields="renderedFields" />
         </el-row>
       </template>
     </el-form>
@@ -58,6 +58,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, provide, reactive, toRefs } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { watchThrottled } from '@vueuse/core'
 import { debounce } from 'lodash-es'
 import type { FormInstance } from 'element-plus'
@@ -77,12 +78,14 @@ import {
 import {
   collectFieldComponentEventsFromRules,
 } from '@/utils/formCreateComponentEvents'
+import { applyComputedReadonlyToFormFields } from '@/utils/computedFieldRuntime'
 import { useSubTableBindings, type SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
 import { useSubTablePortalViews } from '@/composables/formRenderer/useSubTablePortalViews'
 import { useInlineSubTableForm } from '@/composables/formRenderer/useInlineSubTableForm'
 import { useBusinessLogicEngine } from '@/composables/formRenderer/useBusinessLogicEngine'
 import { useFormCreateEvents } from '@/composables/formRenderer/useFormCreateEvents'
 import { useFormData } from '@/composables/formRenderer/useFormData'
+import { useComputedFields } from '@/composables/formRenderer/useComputedFields'
 import { useFormValidation } from '@/composables/formRenderer/useFormValidation'
 import { useFormAutoSave } from '@/composables/formRenderer/useFormAutoSave'
 
@@ -207,6 +210,8 @@ const departmentTreeLoading = ref(false)
 provide('departmentTreeData', departmentTreeData)
 provide('departmentTreeLoading', departmentTreeLoading)
 
+const { t } = useI18n()
+
 const hasTabs = computed(() => props.tabs && props.tabs.length > 0)
 const effectiveReadonly = computed(() => props.readonly || props.primaryReadOnly)
 
@@ -239,9 +244,26 @@ watch(
 // ---------------------------------------------------------------------------
 // Derived field collections / form-create rules
 // ---------------------------------------------------------------------------
+// Computed columns are forced read-only here rather than trusted from the form design: the server
+// overwrites them on every write regardless of what the designer left editable.
+const primaryFieldDefinitions = computed(() => props.primaryTableBinding?.fieldDefinitions)
+
+const renderedFields = computed(() =>
+  applyComputedReadonlyToFormFields(props.fields, primaryFieldDefinitions.value),
+)
+const renderedFieldsAfterTabs = computed(() =>
+  applyComputedReadonlyToFormFields(props.fieldsAfterTabs ?? [], primaryFieldDefinitions.value),
+)
+const renderedTabs = computed<FormTab[]>(() =>
+  (props.tabs ?? []).map(tab => ({
+    ...tab,
+    fields: applyComputedReadonlyToFormFields(tab.fields, primaryFieldDefinitions.value),
+  })),
+)
+
 // Get all fields (including fields in tabs)
 const allFields = computed(() =>
-  flattenAllFormFieldSegments(props.fields, props.tabs, props.fieldsAfterTabs),
+  flattenAllFormFieldSegments(renderedFields.value, renderedTabs.value, renderedFieldsAfterTabs.value),
 )
 
 const resolvedFormOptionForm = computed(() => {
@@ -392,6 +414,17 @@ function handleUserSearch(query: string, fieldKey: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Composable — computed (formula) columns preview
+// ---------------------------------------------------------------------------
+const computedFieldsApi = useComputedFields({
+  primaryFieldDefinitions: () => primaryFieldDefinitions.value,
+  subTableBindings: () => props.subTableBindings,
+  // wrapper closure breaks ordering dependency with useFormData (formData created later)
+  formData: { get value() { return formData.value }, set value(v: Record<string, any>) { formData.value = v } } as { value: Record<string, any> },
+})
+const { computedFieldErrors, recomputeComputedFields } = computedFieldsApi
+
+// ---------------------------------------------------------------------------
 // Composable — form data, rules, field/upload/lookup handlers
 // ---------------------------------------------------------------------------
 const formDataApi = useFormData({
@@ -414,6 +447,7 @@ const formDataApi = useFormData({
   engineOnSubTableChange: (bindingId, rows, fd) => engine.onSubTableChange(bindingId, rows, fd),
   engineCalculatedValues,
   requestIdConfig: () => props.requestIdConfig,
+  recomputeComputedFields,
 })
 const {
   formData,
@@ -466,12 +500,25 @@ const {
 // ---------------------------------------------------------------------------
 // Composable — validation (Task 7.3)
 // ---------------------------------------------------------------------------
+/**
+ * One per-field error surface for the two sources that can produce one. A computed field whose
+ * formula fails under onError=fail is included because the server rejects that write, so letting
+ * the user submit would only trade an inline message for a failed save.
+ */
+const fieldErrors = computed<Record<string, string>>(() => {
+  const merged = { ...scriptFieldErrors.value }
+  for (const [key, code] of Object.entries(computedFieldErrors.value)) {
+    merged[key] = t('computedField.evaluationFailed', { code })
+  }
+  return merged
+})
+
 const { validate } = useFormValidation({
   formRef,
   formData,
   config: () => props.config,
   engine,
-  scriptFieldErrors,
+  scriptFieldErrors: fieldErrors,
 })
 
 // ---------------------------------------------------------------------------
@@ -620,7 +667,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   handleLookupClear,
   handleFieldChange,
   handleFieldBlur,
-  scriptFieldErrors,
+  scriptFieldErrors: fieldErrors,
   handleUploadSuccess,
   handleUploadRemove,
   handleUserSearch,

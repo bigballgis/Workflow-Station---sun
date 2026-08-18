@@ -2,6 +2,7 @@ package com.admin.component;
 
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
+import com.admin.exception.AdminBusinessException;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
@@ -117,6 +118,7 @@ public class RelationTableStructureImporter {
             }
             Map<String, Object> f = (Map<String, Object>) raw;
             Integer sortOrder = f.get("sortOrder") instanceof Number num ? num.intValue() : order;
+            boolean computed = Boolean.TRUE.equals(f.get("isComputed"));
             RelationFieldDefinition field = RelationFieldDefinition.builder()
                     .tableDefinition(def)
                     .fieldName((String) f.get("fieldName"))
@@ -133,6 +135,10 @@ public class RelationTableStructureImporter {
                     .refPrimaryKeyFields(parseStringList(f.get("refPrimaryKeyFields")))
                     .pkGenerationJson(parseJsonMap(f.get("pkGenerationJson")))
                     .fkDisplayMode(f.get("fkDisplayMode") != null ? (String) f.get("fkDisplayMode") : "readonly")
+                    .isComputed(computed)
+                    .computedFieldJson(computed
+                            ? requireComputedDefinition(f.get("fieldName"), f.get("computedField"))
+                            : null)
                     .sortOrder(sortOrder)
                     .build();
             result.add(field);
@@ -242,5 +248,19 @@ public class RelationTableStructureImporter {
             }
         }
         return null;
+    }
+
+    /**
+     * A computed column must carry formula JSON (Map or JSON object string). Dropping the flag
+     * and inserting a blank {@code computed_field_json} would make re-import look successful
+     * while the portal write path has nothing to evaluate.
+     */
+    private Map<String, Object> requireComputedDefinition(Object fieldName, Object raw) {
+        Map<String, Object> definition = parseJsonMap(raw);
+        if (definition == null || definition.isEmpty()) {
+            throw new AdminBusinessException("COMPUTED_FIELD_IMPORT_INVALID",
+                    "Field '" + fieldName + "' is marked computed but has no usable formula JSON");
+        }
+        return definition;
     }
 }

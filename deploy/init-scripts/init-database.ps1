@@ -129,7 +129,8 @@ $migrations = @(
     "00-schema/63-virtual-group-type-developer.sql",
     "00-schema/64-email-monitor-template-binding.sql",
     "00-schema/65-add-dw-field-computed.sql",
-    "00-schema/66-add-auditor-role-type.sql"
+    "00-schema/66-add-auditor-role-type.sql",
+    "00-schema/66-add-rt-field-computed.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

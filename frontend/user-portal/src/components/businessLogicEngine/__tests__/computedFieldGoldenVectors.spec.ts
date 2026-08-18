@@ -29,6 +29,7 @@ interface BaseCase {
 interface EvalCase extends BaseCase {
   row: Record<string, unknown>
   subTables?: Record<string, Array<Record<string, unknown>>>
+  parents?: Record<string, Record<string, unknown>>
 }
 
 interface AliasCase extends BaseCase {
@@ -81,6 +82,7 @@ describe('computed field golden vectors', () => {
     assertOutcome(testCase, run(testCase.formula, {
       row: testCase.row ?? {},
       subTables: testCase.subTables,
+      parents: testCase.parents,
     }))
   })
 
@@ -115,6 +117,19 @@ describe('dependency derivation', () => {
     if (!parsed.ok) return
     expect(parsed.dependsOn).toEqual(['request_items.amount', 'scale_digits', 'tax_rate'])
     // The backend trusts only this derivation, never the client-supplied list.
+    expect(collectDependencies(parsed.ast)).toEqual(parsed.dependsOn)
+  })
+
+  it('records a qualified parent field as table.column, not as an aggregate', () => {
+    const parsed = parseFormula('LEN(leave_request.name)')
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.ast).toMatchObject({
+      type: 'call',
+      fn: 'LEN',
+      args: [{ type: 'field', table: 'leave_request', name: 'name' }],
+    })
+    expect(parsed.dependsOn).toEqual(['leave_request.name'])
     expect(collectDependencies(parsed.ast)).toEqual(parsed.dependsOn)
   })
 })

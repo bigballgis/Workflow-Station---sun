@@ -19,6 +19,8 @@ export interface BindingFieldDefinition {
   pkGeneration?: PkGenerationConfig
   pkGenerationJson?: PkGenerationConfig | Record<string, unknown>
   fkDisplayMode?: 'readonly' | 'hidden'
+  isComputed?: boolean
+  computedField?: Record<string, unknown>
 }
 
 export type AllocatePrimaryKeysFn = (payload: {
@@ -101,6 +103,8 @@ export function relationFieldsToBindingDefs(
     pkGeneration?: PkGenerationConfig
     pkGenerationJson?: PkGenerationConfig | Record<string, unknown>
     fkDisplayMode?: string
+    isComputed?: boolean
+    computedField?: Record<string, unknown>
   }>,
 ): BindingFieldDefinition[] {
   return fields.map(f => ({
@@ -112,6 +116,8 @@ export function relationFieldsToBindingDefs(
     pkGeneration: f.pkGeneration ?? (f.pkGenerationJson as PkGenerationConfig | undefined),
     pkGenerationJson: f.pkGenerationJson,
     fkDisplayMode: f.fkDisplayMode === 'hidden' ? 'hidden' : f.fkDisplayMode === 'readonly' ? 'readonly' : undefined,
+    isComputed: f.isComputed,
+    computedField: f.computedField,
   }))
 }
 

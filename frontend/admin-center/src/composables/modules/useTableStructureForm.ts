@@ -7,6 +7,7 @@ import { notifySuccess, notifyError, notifyWarning } from '@/utils/notify'
 import { relationTableStructureApi, type RelationDataType, type CreateFieldDefinitionRequest, type UpdateFieldDefinitionRequest, type RelationTableResponse, type LookupConfig } from '@/api/relationTable'
 import { suggestFieldName, suggestTableName } from '@/utils/fieldNameSlug'
 import { serializePkGeneration } from '@/utils/pkGenerationConfig'
+import { parseComputedFieldFromApi, type ComputedFieldDefinition } from '@/utils/computedFieldConfig'
 
 interface FieldRow {
   id?: number
@@ -25,6 +26,8 @@ interface FieldRow {
   refPrimaryKeyFields?: string[]
   fkDisplayMode?: string
   lookupConfig?: LookupConfig
+  isComputed?: boolean
+  computedField?: ComputedFieldDefinition
 }
 
 export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: Ref<boolean> }) {
@@ -62,6 +65,16 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
 
   const isAuditField = (row: FieldRow): boolean => AUDIT_FIELD_NAMES.has(row.fieldName)
 
+  // Mirrors the backend eligibility check in ComputedFieldDesignValidator: a derived column cannot
+  // also be a key, a reference, or carry a default the user could edit.
+  const canBeComputed = (row: FieldRow): boolean =>
+    !isAuditField(row) && !row.isPrimaryKey && !row.isForeignKey && row.dataType !== 'LOOKUP'
+
+  const serializeComputedField = (row: FieldRow): Record<string, unknown> | undefined => {
+    if (!row.isComputed || !canBeComputed(row) || !row.computedField) return undefined
+    return { ...row.computedField } as unknown as Record<string, unknown>
+  }
+
   const sortFieldsAuditLast = () => {
     form.fieldDefinitions = [
       ...form.fieldDefinitions.filter(f => !AUDIT_FIELD_NAMES.has(f.fieldName)),
@@ -88,6 +101,8 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
       row.pkGeneration = undefined
       return
     }
+    row.isComputed = false
+    row.computedField = undefined
     if (!row.pkGeneration) {
       row.pkGeneration = { strategy: 'uuid' }
     }
@@ -165,6 +180,8 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
         refPrimaryKeyFields: f.refPrimaryKeyFields || [],
         fkDisplayMode: f.fkDisplayMode || 'readonly',
         lookupConfig: f.lookupConfig || undefined,
+        isComputed: f.isComputed || false,
+        computedField: parseComputedFieldFromApi(f.computedField) ?? undefined,
       }))
       const names = new Set(form.fieldDefinitions.map(f => f.fieldName))
       for (const af of createAuditFields()) {
@@ -205,6 +222,8 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           refPrimaryKeyFields: f.isForeignKey ? f.refPrimaryKeyFields : undefined,
           fkDisplayMode: f.isForeignKey ? (f.fkDisplayMode || 'readonly') : undefined,
           lookupConfig: f.dataType === 'LOOKUP' ? f.lookupConfig : undefined,
+          isComputed: !!serializeComputedField(f),
+          computedField: serializeComputedField(f),
         }))
         await relationTableStructureApi.update(tableId.value, {
           displayName: form.displayName || undefined,
@@ -228,6 +247,8 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           refPrimaryKeyFields: f.isForeignKey ? f.refPrimaryKeyFields : undefined,
           fkDisplayMode: f.isForeignKey ? (f.fkDisplayMode || 'readonly') : undefined,
           lookupConfig: f.dataType === 'LOOKUP' ? f.lookupConfig : undefined,
+          isComputed: !!serializeComputedField(f),
+          computedField: serializeComputedField(f),
         }))
         await relationTableStructureApi.create({
           tableName: form.tableName,
@@ -251,7 +272,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   }
 
   return {
-    form, rules, submitting, dataTypes, fkRefTables, isAuditField, addField, removeField, loadTableData, submit,
+    form, rules, submitting, dataTypes, fkRefTables, isAuditField, canBeComputed, addField, removeField, loadTableData, submit,
     onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange,
   }
 }

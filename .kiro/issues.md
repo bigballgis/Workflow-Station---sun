@@ -3,13 +3,13 @@
 > **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-07-06)
+## 统计 (截至 2026-08-18)
 
 | 状态 | 数量 | 位置 |
 |------|------|------|
-| 🔓 Open | **12** | `index.yaml` |
-| ⏸️ Wontfix | **1** | `index.yaml` |
-| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1520 等） |
+| 🔓 Open | **14** | `index.yaml` |
+| ⏸️ Wontfix | **2** | `index.yaml` |
+| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+、#1461–#1495、#1497–#1500、#1504、#1512–#1519、#1521、#1523–#1530、#1532–#1533 等） |
 
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
@@ -26,12 +26,15 @@
 | 1407 | minor | quality | 动作测试仍为占位实现（流程 simulate 已接入 BpmnProcessSimulator） |
 | 1408 | minor | quality | 表单 boundTable 深绑定校验缺失 |
 | 1501 | major | bug | Main Table View / Relation Tables 列表未应用 Input 敏感打码 |
+| 1522 | major | deploy | dev 库流程实例数据全空，regression:mi 截图门禁全部无法执行（环境 fixture 缺口） |
+| 1531 | minor | quality | Form Business Rules 未交付脚手架（DW 无入口 / Portal 无传参 / 库内 0 数据）— 技术债，非线上缺陷 |
 
 ### Wontfix
 
 | ID | 分类 | 描述 |
 |----|------|------|
 | 095 | quality | auth.ts 三端重复 — 无共享包，维持各应用内模块 |
+| 1520 | architecture | 并入 #1531 — mathjs 属未交付脚手架，非双引擎并存 |
 
 ---
 

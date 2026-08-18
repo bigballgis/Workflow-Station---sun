@@ -5,7 +5,6 @@ import com.admin.component.EmailConnectionSyncComponent;
 import com.admin.component.EmailMonitorSyncComponent;
 import com.admin.component.FunctionUnitManagerComponent;
 import com.admin.component.ProcessDeploymentComponent;
-import com.admin.component.ActionDefinitionImportWriter;
 import com.admin.dto.request.FunctionUnitImportRequest;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
@@ -28,8 +27,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +51,6 @@ public class FunctionUnitImportController {
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
     private final ProcessDeploymentComponent processDeploymentComponent;
-    private final ActionDefinitionImportWriter actionDefinitionImportWriter;
     private final EmailConnectionSyncComponent emailConnectionSyncComponent;
     private final EmailMonitorSyncComponent emailMonitorSyncComponent;
     private final ObjectMapper objectMapper;
@@ -73,8 +71,8 @@ public class FunctionUnitImportController {
         Map<String, Object> result = new HashMap<>();
         
         try {
-            // Parse uploaded archive
-            Map<String, Object> packageData = parseZipFile(file);
+            byte[] zipBytes = file.getBytes();
+            Map<String, Object> packageData = parseZipFile(zipBytes);
             
             @SuppressWarnings("unchecked")
             Map<String, Object> manifest = (Map<String, Object>) packageData.get("manifest");
@@ -98,56 +96,26 @@ public class FunctionUnitImportController {
             String version = trimToNull((String) manifest.get("version"));
             String description = trimToNull((String) manifest.get("description"));
             
+            // Pass the ZIP bytes (Base64), not the BPMN text. importFunctionPackage then uses
+            // FunctionUnitPackageParser — tables/*.json, views, forms, actions, email-templates,
+            // and relation-tables (including computed fields) land in one place. Sending BPMN
+            // while the fileName still ends in .zip made parseBase64Zip fail and fall back to
+            // an empty relationTables list.
             FunctionUnitImportRequest importRequest = FunctionUnitImportRequest.builder()
                     .fileName(file.getOriginalFilename())
                     .name(name)
                     .code(code)
                     .version(version != null ? version : "1.0.0")
                     .description(description)
-                    .fileContent((String) packageData.get("process"))
+                    .fileContent(Base64.getEncoder().encodeToString(zipBytes))
                     .iconSvg(extractIconSvg(manifest))
                     .build();
             
             ImportResult importResult = functionUnitManager.importFunctionPackage(importRequest, userId);
             
             if (importResult.isSuccess()) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> forms = (List<Map<String, Object>>) packageData.get("forms");
-                if (forms != null && !forms.isEmpty()) {
-                    for (Map<String, Object> formData : forms) {
-                        try {
-                            String formName = (String) formData.get("formName");
-                            Object formIdObj = formData.get("formId");
-                            String sourceId = formIdObj != null ? String.valueOf(formIdObj) : null;
-                            
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> configJson = (Map<String, Object>) formData.get("configJson");
-                            
-                            if (formName != null && configJson != null) {
-                                String formConfigStr = objectMapper.writeValueAsString(configJson);
-                                functionUnitManager.addFunctionUnitContent(
-                                        importResult.getFunctionUnit().getId(),
-                                        com.admin.enums.ContentType.FORM,
-                                        formName,
-                                        formConfigStr,
-                                        sourceId
-                                );
-                                log.info("Saved form content: {} with sourceId: {} for function unit: {}", 
-                                        formName, sourceId, importResult.getFunctionUnit().getId());
-                            }
-                        } catch (Exception e) {
-                            log.warn("Failed to save form content", e);
-                        }
-                    }
-                }
-                
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> actions = (List<Map<String, Object>>) packageData.get("actions");
-                // Delegate to a transactional bean: the delete-then-insert must run in an active
-                // transaction (derived delete -> em.remove), which a plain controller method lacks.
-                actionDefinitionImportWriter.replaceActions(
-                        importResult.getFunctionUnit().getId(), actions);
-
+                // Forms / actions / email templates / relation tables are already persisted by
+                // importFunctionPackage. Connections and monitors are not in PackageParser.
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> connections = (List<Map<String, Object>>) packageData.get("connections");
                 if (connections != null && !connections.isEmpty()) {
@@ -167,31 +135,6 @@ public class FunctionUnitImportController {
                             emailMonitors.size(), importResult.getFunctionUnit().getId());
                 }
 
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> emailTemplates =
-                        (List<Map<String, Object>>) packageData.get("emailTemplates");
-                if (emailTemplates != null && !emailTemplates.isEmpty()) {
-                    for (Map<String, Object> templateData : emailTemplates) {
-                        String templateName = templateData.get("name") != null
-                                ? String.valueOf(templateData.get("name"))
-                                : "email-template";
-                        Object templateIdObj = templateData.get("templateId");
-                        if (templateIdObj == null) {
-                            templateIdObj = templateData.get("id");
-                        }
-                        String sourceId = templateIdObj != null ? String.valueOf(templateIdObj) : null;
-                        String templateJson = objectMapper.writeValueAsString(templateData);
-                        functionUnitManager.addFunctionUnitContent(
-                                importResult.getFunctionUnit().getId(),
-                                com.admin.enums.ContentType.EMAIL_TEMPLATE,
-                                templateName,
-                                templateJson,
-                                sourceId);
-                    }
-                    log.info("Saved {} email templates for function unit {}",
-                            emailTemplates.size(), importResult.getFunctionUnit().getId());
-                }
-                
                 result.put("status", "SUCCESS");
                 result.put("functionUnitId", importResult.getFunctionUnit().getId());
                 result.put("name", importResult.getFunctionUnit().getName());
@@ -502,12 +445,16 @@ public class FunctionUnitImportController {
         }
     }
     
-    /** Walk workstation bundle layout and hydrate manifest/forms/actions payloads. */
-    private Map<String, Object> parseZipFile(MultipartFile file) throws IOException {
+    /**
+     * Reads only what this controller still applies after {@code importFunctionPackage}:
+     * manifest (name/code), email connections, and email monitors. Forms, actions, BPMN,
+     * relation tables and email templates are persisted by {@link FunctionUnitPackageParser}.
+     */
+    private Map<String, Object> parseZipFile(byte[] zipBytes) throws IOException {
         Map<String, Object> result = new HashMap<>();
         Map<String, byte[]> rawFiles = new HashMap<>();
         
-        try (ZipInputStream zis = new ZipInputStream(file.getInputStream())) {
+        try (ZipInputStream zis = new ZipInputStream(new java.io.ByteArrayInputStream(zipBytes))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -525,13 +472,6 @@ public class FunctionUnitImportController {
         } else if (rawFiles.containsKey("metadata.json")) {
             result.put("metadata", objectMapper.readValue(rawFiles.get("metadata.json"), Map.class));
         }
-        
-        for (String fileName : rawFiles.keySet()) {
-            if (fileName.endsWith(".bpmn")) {
-                result.put("process", new String(rawFiles.get(fileName), StandardCharsets.UTF_8));
-                break;
-            }
-        }
 
         // FR-B12: FU packages no longer carry Automation (Activepieces) flows. Legacy packages
         // exported before the decoupling may still contain automation-flows/ entries — ignore
@@ -544,48 +484,6 @@ public class FunctionUnitImportController {
             log.info("Function unit package carries legacy automation flow entries {}; ignored — "
                     + "flows migrate via the Automation migration channel, not inside FU packages "
                     + "(FR-B12)", legacyAutomationFlowFiles);
-        }
-
-        List<Map<String, Object>> forms = new ArrayList<>();
-        for (String fileName : rawFiles.keySet()) {
-            if (fileName.startsWith("forms/") && fileName.endsWith(".json")) {
-                try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> formData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
-                    forms.add(formData);
-                } catch (Exception e) {
-                    log.warn("Failed to parse form file: {}", fileName, e);
-                }
-            }
-        }
-        if (!forms.isEmpty()) {
-            result.put("forms", forms);
-        }
-        
-        List<Map<String, Object>> actions = new ArrayList<>();
-        if (rawFiles.containsKey("actions.json")) {
-            try {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> actionList = objectMapper.readValue(rawFiles.get("actions.json"), List.class);
-                actions.addAll(actionList);
-            } catch (Exception e) {
-                log.warn("Failed to parse actions.json", e);
-            }
-        } else {
-            for (String fileName : rawFiles.keySet()) {
-                if (fileName.startsWith("actions/") && fileName.endsWith(".json")) {
-                    try {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> actionData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
-                        actions.add(actionData);
-                    } catch (Exception e) {
-                        log.warn("Failed to parse action file: {}", fileName, e);
-                    }
-                }
-            }
-        }
-        if (!actions.isEmpty()) {
-            result.put("actions", actions);
         }
 
         List<Map<String, Object>> connections = new ArrayList<>();
@@ -620,22 +518,6 @@ public class FunctionUnitImportController {
             result.put("emailMonitors", emailMonitors);
         }
 
-        List<Map<String, Object>> emailTemplates = new ArrayList<>();
-        for (String fileName : rawFiles.keySet()) {
-            if (fileName.startsWith("email-templates/") && fileName.endsWith(".json")) {
-                try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> templateData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
-                    emailTemplates.add(templateData);
-                } catch (Exception e) {
-                    throw new IOException("Invalid email template JSON in package: " + fileName, e);
-                }
-            }
-        }
-        if (!emailTemplates.isEmpty()) {
-            result.put("emailTemplates", emailTemplates);
-        }
-        
         return result;
     }
     

@@ -48,6 +48,7 @@ class RelationTableStructurePropertyTest {
         service = new RelationTableStructureServiceImpl(
                 tableDefinitionRepository,
                 fieldDefinitionRepository,
+                new com.admin.service.RelationComputedFieldValidator(),
                 jdbcTemplate
         );
     }

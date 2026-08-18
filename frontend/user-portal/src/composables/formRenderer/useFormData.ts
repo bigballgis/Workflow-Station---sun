@@ -40,6 +40,8 @@ interface FormDataDeps {
   engineCalculatedValues: Ref<Map<string, number>>
   /** Main-table Request ID config — drives live recompute of the readonly __request_id field. */
   requestIdConfig?: () => RequestIdConfig | null | undefined
+  /** Re-previews the main table's computed columns; no-op when the table has none. */
+  recomputeComputedFields?: (changedSubTable?: { bindingId: number; rows: unknown[] }) => void
 }
 
 export function useFormData(deps: FormDataDeps) {
@@ -161,6 +163,9 @@ export function useFormData(deps: FormDataDeps) {
 
     deps.setInternalUpdate(true)
     formData.value = data
+    // Preview the formulas over the seeded values: on a fresh request there is no server-computed
+    // value yet, and on an existing record this confirms the stored value against what is on screen.
+    deps.recomputeComputedFields?.()
     setTimeout(() => { deps.setInternalUpdate(false) }, 0)
     // Element Plus AsyncValidator resolves as micro-tasks after nextTick;
     // use setTimeout (macro-task) to guarantee clearValidate runs last.
@@ -228,6 +233,9 @@ export function useFormData(deps: FormDataDeps) {
     if (fieldFeedsRequestId(key, ridCfg)) {
       formData.value[REQUEST_ID_FIELD] = computeRequestId(formData.value, ridCfg) ?? ''
     }
+
+    // Same idea as Request ID above: readonly derived columns follow the field that feeds them.
+    deps.recomputeComputedFields?.()
 
     deps.emitChange(key, value)
 
@@ -299,6 +307,9 @@ export function useFormData(deps: FormDataDeps) {
 
   function handleSubTableUpdate(bindingId: number, rows: any[]) {
     deps.emitSubTableData(bindingId, rows)
+
+    // Aggregate formulas read these rows, so the total has to move with the row that changed.
+    deps.recomputeComputedFields?.({ bindingId, rows })
 
     // Form Design SubTable on.change / hook_value (keyed as __subTable_${bindingId}).
     const eventKey = subTableComponentEventFieldKey(bindingId)

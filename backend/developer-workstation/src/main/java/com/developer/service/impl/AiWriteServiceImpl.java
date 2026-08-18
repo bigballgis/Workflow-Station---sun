@@ -282,6 +282,8 @@ public class AiWriteServiceImpl implements AiWriteService {
                         dataType = DataType.VARCHAR;
                     }
 
+                    rejectComputedFieldFromAi(fieldData);
+
                     FieldDefinition field = FieldDefinition.builder()
                             .tableDefinition(table)
                             .fieldName((String) fieldData.get("fieldName"))
@@ -360,6 +362,20 @@ public class AiWriteServiceImpl implements AiWriteService {
                 .filter(f -> fieldName.equals(f.getFieldName()))
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * AI generation has no formula editor or AST validator. Persisting {@code isComputed}
+     * here would bypass Table Design, so a computed column in the model is a hard error.
+     */
+    private static void rejectComputedFieldFromAi(Map<String, Object> fieldData) {
+        if (fieldData == null) {
+            return;
+        }
+        if (Boolean.TRUE.equals(fieldData.get("isComputed")) || fieldData.get("computedField") != null) {
+            throw new AiGenerationException("AI_COMPUTED_FIELD_UNSUPPORTED",
+                    "AI generation cannot author computed fields; define them in Table Design");
+        }
     }
 
     private void writeTableRelations(FunctionUnit functionUnit, AiGeneratedData generatedData,

@@ -218,13 +218,20 @@ class Parser {
       }
       return this.parseCallArguments(upper, token.position)
     }
-    // A bare `a.b` outside an aggregate is not a valid row-field reference.
     if (next && next.type === 'dot') {
-      return {
-        code: 'SYNTAX_ERROR',
-        message: `Qualified reference '${token.value}.…' is only allowed inside an aggregate such as SUM(table.column)`,
-        position: next.position,
+      this.index++
+      const column = this.peek()
+      if (!column || column.type !== 'identifier') {
+        return {
+          code: 'SYNTAX_ERROR',
+          message: `Expected a column name after '${token.value}.'`,
+          position: column ? column.position : next.position,
+        }
       }
+      this.index++
+      const qualified = `${token.value}.${column.value}`
+      this.fields.add(qualified)
+      return { type: 'field', table: token.value, name: column.value }
     }
     this.fields.add(token.value)
     return { type: 'field', name: token.value }
@@ -361,7 +368,7 @@ export function collectDependencies(ast: AstNode): string[] {
   const walk = (node: AstNode): void => {
     switch (node.type) {
       case 'field':
-        found.add(node.name)
+        found.add(node.table ? `${node.table}.${node.name}` : node.name)
         return
       case 'aggregate':
         found.add(node.column ? `${node.table}.${node.column}` : node.table)

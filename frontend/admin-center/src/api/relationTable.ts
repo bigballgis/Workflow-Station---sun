@@ -89,6 +89,8 @@ export interface FieldDefinitionResponse {
   pkGeneration?: Record<string, unknown>
   fkDisplayMode?: string
   lookupConfig?: LookupConfig
+  isComputed?: boolean
+  computedField?: Record<string, unknown>
 }
 
 /** 表定义响应 */
@@ -176,6 +178,8 @@ export interface CreateFieldDefinitionRequest {
   refPrimaryKeyFields?: string[]
   fkDisplayMode?: string
   lookupConfig?: LookupConfig
+  isComputed?: boolean
+  computedField?: Record<string, unknown>
 }
 
 /** 创建表请求 */
@@ -205,6 +209,8 @@ export interface UpdateFieldDefinitionRequest {
   refPrimaryKeyFields?: string[]
   fkDisplayMode?: string
   lookupConfig?: LookupConfig
+  isComputed?: boolean
+  computedField?: Record<string, unknown>
 }
 
 /** 更新表请求 */

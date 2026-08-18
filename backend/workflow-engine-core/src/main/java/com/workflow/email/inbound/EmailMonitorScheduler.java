@@ -24,8 +24,10 @@ import java.util.List;
  *
  * <p>The mailbox provider and credentials are entirely connection-determined: IMAP host comes
  * from the connection type preset, and the app password is decrypted from the synced connection.
- * Per-rule poll cadence is throttled by {@code pollIntervalSeconds}; idempotency is guaranteed by
- * the processor's ledger, and multi-replica polling is serialized by {@code @SchedulerLock}.
+ * Per-rule poll cadence is throttled by {@code pollIntervalSeconds}; IMAP/config failures use
+ * exponential backoff so a down mailbox is not hit on every scheduler tick. Idempotency is
+ * guaranteed by the processor's ledger, and multi-replica polling is serialized by
+ * {@code @SchedulerLock}.
  */
 @Slf4j
 @Component
@@ -40,6 +42,7 @@ public class EmailMonitorScheduler {
     private final EmailMonitorProcessor processor;
     private final EncryptionService encryptionService;
     private final AdminCenterSystemImapClient adminCenterSystemImapClient;
+    private final EmailMonitorPollBackoff pollBackoff = new EmailMonitorPollBackoff();
 
     @Value("${workflow.email.monitor.enabled:true}")
     private boolean enabled;
@@ -66,43 +69,80 @@ public class EmailMonitorScheduler {
         try {
             rules = ruleRepository.findByEnabledTrue();
         } catch (Exception e) {
-            log.debug("Email monitor poll skipped (rules unavailable): {}", e.getMessage());
+            log.warn("Email monitor poll skipped (rules unavailable): {}", e.getMessage());
             return;
         }
         Instant now = Instant.now();
         for (SysEmailMonitorRule rule : rules) {
-            if (isDue(rule, now)) {
-                pollRule(rule);
+            if (pollBackoff.shouldPoll(
+                    rule.getId(), now, rule.getPollIntervalSeconds(), rule.getLastSyncedAt())) {
+                pollRule(rule, now);
             }
         }
     }
 
-    private boolean isDue(SysEmailMonitorRule rule, Instant now) {
-        if (rule.getLastSyncedAt() == null) {
-            return true;
-        }
-        int interval = rule.getPollIntervalSeconds() != null ? rule.getPollIntervalSeconds() : 60;
-        return now.isAfter(rule.getLastSyncedAt().plusSeconds(interval));
-    }
-
-    private void pollRule(SysEmailMonitorRule rule) {
+    private void pollRule(SysEmailMonitorRule rule, Instant now) {
         MailboxAccess access = resolveAccess(rule);
         if (access == null) {
+            onPollFailure(rule, now, "mailbox access unresolved");
             return;
         }
+        FetchResult result;
         try {
-            FetchResult result = imapClient.fetchNew(
+            result = imapClient.fetchNew(
                     access, rule.getFolderLabel(), rule.getLastSyncCursor(), MAX_PER_POLL);
-            for (EmailMessage email : result.messages()) {
-                if (matchesFilters(rule, email)) {
-                    processor.process(rule, email);
-                }
-            }
-            persistCursor(rule, result.nextCursor());
         } catch (Exception e) {
-            log.warn("Email monitor poll failed for rule {} ({}): {}",
-                    rule.getId(), rule.getName(), e.getMessage());
+            onPollFailure(rule, now, e.getMessage());
+            return;
         }
+        boolean processFailed = false;
+        for (EmailMessage email : result.messages()) {
+            if (!processFetched(rule, email)) {
+                processFailed = true;
+            }
+        }
+        pollBackoff.recordSuccess(rule.getId());
+        if (processFailed) {
+            // IMAP succeeded; do not advance the UID cursor or this batch is skipped forever
+            // if process() threw before the processed-message ledger write.
+            markPollAttempt(rule);
+            return;
+        }
+        persistCursor(rule, result.nextCursor());
+    }
+
+    /**
+     * @return {@code false} when a matching message threw before it could be recorded
+     */
+    private boolean processFetched(SysEmailMonitorRule rule, EmailMessage email) {
+        if (!matchesFilters(rule, email)) {
+            return true;
+        }
+        try {
+            processor.process(rule, email);
+            return true;
+        } catch (Exception e) {
+            log.error("[EMAIL-MONITOR] rule {} failed to process messageId={}: {}",
+                    rule.getId(), email.messageId(), e.getMessage());
+            return false;
+        }
+    }
+
+    private void markPollAttempt(SysEmailMonitorRule rule) {
+        rule.setLastSyncedAt(Instant.now());
+        ruleRepository.save(rule);
+    }
+
+    private void onPollFailure(SysEmailMonitorRule rule, Instant now, String reason) {
+        EmailMonitorPollBackoff.FailureState state =
+                pollBackoff.recordFailure(rule.getId(), now, rule.getPollIntervalSeconds());
+        log.error("[EMAIL-MONITOR] poll failed ruleId={} name={} consecutiveFailures={} retryAfter={} cap={} reason={}",
+                rule.getId(),
+                rule.getName(),
+                state.consecutiveFailures(),
+                state.retryAfter(),
+                state.atCap(),
+                reason);
     }
 
     private MailboxAccess resolveAccess(SysEmailMonitorRule rule) {

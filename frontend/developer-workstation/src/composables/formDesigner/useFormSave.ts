@@ -3,7 +3,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { functionUnitApi } from '@/api/functionUnit'
-import type { FormDefinition } from '@/api/functionUnit'
+import type { FormDefinition, FieldDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
@@ -18,7 +18,7 @@ import {
 } from '@/utils/formDesignerPreviewValidation'
 import { walkRulesApplyTableFieldDefaultsToPersistedRules } from '@/utils/formCreateRuleDefaults'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
-import { isRequestIdRule } from '@/utils/formFieldMeta'
+import { isRequestIdRule, taskFieldPermissionForField } from '@/utils/formFieldMeta'
 import { TABLE_AUDIT_FIELD_NAMES } from '@/utils/tableAuditFields'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 import type { PortalViewsValue } from './useSubTablePortalViews'
@@ -132,13 +132,24 @@ export function useFormSave(options: UseFormSaveOptions) {
   })
 
   /** Get field permission value */
+  function isFieldPermissionLocked(fieldName: string): boolean {
+    const field = getPrimaryBindingFieldDefinitions().find(f => f.fieldName === fieldName)
+    return field ? taskFieldPermissionForField(field) === 'READONLY' : false
+  }
+
   function getFieldPermission(fieldName: string): string {
+    if (isFieldPermissionLocked(fieldName)) {
+      return 'READONLY'
+    }
     return selectedForm.value?.fieldPermissions?.[fieldName] || 'EDITABLE'
   }
 
   /** Set field permission value */
   function setFieldPermission(fieldName: string, value: string) {
     if (!selectedForm.value) return
+    if (value === 'EDITABLE' && isFieldPermissionLocked(fieldName)) {
+      return
+    }
     if (!selectedForm.value.fieldPermissions) {
       selectedForm.value.fieldPermissions = {}
     }
@@ -525,6 +536,7 @@ export function useFormSave(options: UseFormSaveOptions) {
     currentFormFields,
     getFieldPermission,
     setFieldPermission,
+    isFieldPermissionLocked,
     handleSaveForm,
     savingForm,
   }

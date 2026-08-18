@@ -217,6 +217,25 @@
           </template>
         </el-table-column>
         <el-table-column
+          :label="t('form.labelComputed')"
+          width="110"
+          align="center"
+        >
+          <template #default="{ row }">
+            <ComputedFieldEditor
+              v-if="canBeComputed(row)"
+              :is-computed="row.isComputed"
+              :computed-field="row.computedField"
+              @update:is-computed="row.isComputed = $event"
+              @update:computed-field="row.computedField = $event"
+            />
+            <span
+              v-else
+              class="lookup-na"
+            >—</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           :label="t('form.labelDefaultValue')"
           width="130"
         >
@@ -274,6 +293,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import PkGenerationEditor from '@/components/relation-table/PkGenerationEditor.vue'
 import FieldForeignKeyEditor from '@/components/relation-table/FieldForeignKeyEditor.vue'
 import FieldLookupEditor from '@/components/relation-table/FieldLookupEditor.vue'
+import ComputedFieldEditor from '@/components/relation-table/ComputedFieldEditor.vue'
 import { useTableStructureForm } from '@/composables/modules/useTableStructureForm'
 
 const { t } = useI18n()
@@ -284,7 +304,7 @@ const isEdit = computed(() => !!route.params.id)
 const tableId = computed(() => Number(route.params.id))
 const formRef = ref<FormInstance>()
 
-const { form, rules, submitting, dataTypes, fkRefTables, isAuditField, addField, removeField, loadTableData, submit,
+const { form, rules, submitting, dataTypes, fkRefTables, isAuditField, canBeComputed, addField, removeField, loadTableData, submit,
   onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange }
   = useTableStructureForm({ tableId, isEdit: toRef(isEdit) })
 

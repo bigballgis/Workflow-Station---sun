@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { hasAnyRole, isAuditorBlockedFromWorkstation } from '@/utils/permission'
 import i18n from '@/i18n'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
+import { COMPUTED_FIELD_GUIDE_ROUTE_NAME } from '@/utils/computedFieldGuide'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -64,6 +65,16 @@ const routes: RouteRecordRaw[] = [
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),
         meta: { titleKey: 'profile.title', hidden: true }
+      },
+      {
+        path: 'help/computed-fields',
+        name: COMPUTED_FIELD_GUIDE_ROUTE_NAME,
+        component: () => import('@/views/help/ComputedFieldGuide.vue'),
+        meta: {
+          titleKey: 'computedFieldGuide.pageTitle',
+          hidden: true,
+          requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER']
+        }
       },
       {
         path: '403',
@@ -154,7 +165,7 @@ router.beforeEach(async (to, _from, next) => {
       // FR-B15: the fallback covers ONLY the function-unit workspace — Automation (and
       // any other role-gated page) requires a real capability role; no bypass.
       const workspaceFallbackApplies =
-        to.name === 'FunctionUnits' || to.name === 'FunctionUnitEdit'
+        to.name === 'FunctionUnits' || to.name === 'FunctionUnitEdit' || to.name === COMPUTED_FIELD_GUIDE_ROUTE_NAME
       const canView = workspaceFallbackApplies && (await resolveWorkspaceAccess())
       if (!canView) {
         next('/403')

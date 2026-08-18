@@ -123,7 +123,8 @@ class ComputedFieldGoldenVectorTest {
     private void runEvaluationCase(JsonNode testCase) {
         Map<String, Object> row = toMap(testCase.path("row"));
         Map<String, List<Map<String, Object>>> subTables = toSubTables(testCase.path("subTables"));
-        ComputedFieldContext context = new ComputedFieldContext(row, subTables);
+        Map<String, Map<String, Object>> parents = toParents(testCase.path("parents"));
+        ComputedFieldContext context = new ComputedFieldContext(row, subTables, parents);
         EvalOutcome outcome = ComputedFieldEvaluator.evaluate(testCase.path("ast"), context);
         assertOutcome(testCase, outcome);
     }
@@ -259,6 +260,16 @@ class ComputedFieldGoldenVectorTest {
             // SubTableNormalizer instead.
             result.put(entry.getKey().toLowerCase(), rows);
         });
+        return result;
+    }
+
+    private Map<String, Map<String, Object>> toParents(JsonNode node) {
+        Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+        if (!node.isObject()) {
+            return result;
+        }
+        node.fields().forEachRemaining(entry ->
+                result.put(entry.getKey().toLowerCase(), toMap(entry.getValue())));
         return result;
     }
 }

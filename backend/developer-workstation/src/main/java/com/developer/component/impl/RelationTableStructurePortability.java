@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.exception.DeveloperBusinessException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,7 +70,7 @@ public class RelationTableStructurePortability {
         table.put("fields", jdbcTemplate.query(
                 "SELECT field_name, data_type, length, precision_value, scale, nullable, is_primary_key, "
                         + "default_value, display_name, is_foreign_key, ref_table_id, ref_primary_key_fields, "
-                        + "pk_generation_json, fk_display_mode, sort_order "
+                        + "pk_generation_json, fk_display_mode, sort_order, is_computed, computed_field_json "
                         + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC, id ASC",
                 (rs, n) -> {
                     Map<String, Object> f = new LinkedHashMap<>();
@@ -89,6 +90,15 @@ public class RelationTableStructurePortability {
                     f.put("pkGenerationJson", rs.getString("pk_generation_json"));
                     f.put("fkDisplayMode", rs.getString("fk_display_mode"));
                     f.put("sortOrder", rs.getObject("sort_order", Integer.class));
+                    boolean computed = Boolean.TRUE.equals(rs.getObject("is_computed", Boolean.class));
+                    String formulaJson = rs.getString("computed_field_json");
+                    if (computed && (formulaJson == null || formulaJson.isBlank())) {
+                        throw new DeveloperBusinessException("COMPUTED_FIELD_EXPORT_INVALID",
+                                "Field '" + rs.getString("field_name")
+                                        + "' is marked computed but has no usable formula JSON");
+                    }
+                    f.put("isComputed", computed);
+                    f.put("computedField", computed ? formulaJson : null);
                     return f;
                 }, id));
         return table;
@@ -179,12 +189,14 @@ public class RelationTableStructurePortability {
             }
             Map<String, Object> f = (Map<String, Object>) raw;
             Integer sortOrder = f.get("sortOrder") instanceof Number num ? num.intValue() : order;
+            boolean computed = Boolean.TRUE.equals(f.get("isComputed"));
             jdbcTemplate.update(
                     "INSERT INTO rt_field_definitions "
                             + "(table_id, field_name, data_type, length, precision_value, scale, nullable, "
                             + " is_primary_key, default_value, display_name, is_foreign_key, ref_table_id, "
-                            + " ref_primary_key_fields, pk_generation_json, fk_display_mode, sort_order) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?::jsonb, ?::jsonb, ?, ?)",
+                            + " ref_primary_key_fields, pk_generation_json, fk_display_mode, sort_order, "
+                            + " is_computed, computed_field_json) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?::jsonb, ?::jsonb, ?, ?, ?, ?::jsonb)",
                     tableId,
                     f.get("fieldName"),
                     f.get("dataType"),
@@ -199,7 +211,9 @@ public class RelationTableStructurePortability {
                     asJsonText(f.get("refPrimaryKeyFields")),
                     asJsonText(f.get("pkGenerationJson")),
                     f.get("fkDisplayMode") != null ? f.get("fkDisplayMode") : "readonly",
-                    sortOrder);
+                    sortOrder,
+                    computed,
+                    computed ? requireJsonText(f.get("computedField"), tableId, f.get("fieldName")) : null);
             order++;
         }
     }
@@ -244,6 +258,16 @@ public class RelationTableStructurePortability {
 
     private Boolean asBool(Object v, boolean dflt) {
         return v instanceof Boolean b ? b : dflt;
+    }
+
+    private String requireJsonText(Object v, Long tableId, Object fieldName) {
+        String text = asJsonText(v);
+        if (text == null) {
+            throw new DeveloperBusinessException("COMPUTED_FIELD_IMPORT_INVALID",
+                    "Computed field '" + fieldName + "' on relation table " + tableId
+                            + " is marked computed but has no usable formula JSON");
+        }
+        return text;
     }
 
     /** Normalize a value that may already be a JSON string or a parsed list/map into JSON text (or null). */

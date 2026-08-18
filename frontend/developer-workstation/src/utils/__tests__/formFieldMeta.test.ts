@@ -70,6 +70,16 @@ describe('formFieldMeta', () => {
     expect(taskFieldPermissionForField(pk)).toBe('READONLY')
   })
 
+  it('marks computed fields readonly and locks task permission', () => {
+    const computed = field({
+      fieldName: 'total',
+      isComputed: true,
+    })
+    const rule = applyTableFieldMetaToFormRule(computed, { field: 'total', type: 'input', props: {} })
+    expect(rule.readonly).toBe(true)
+    expect(taskFieldPermissionForField(computed)).toBe('READONLY')
+  })
+
   it('respects designer readonly=false override on auto PK after save reload sync', () => {
     const pk = field({
       fieldName: 'case_number',

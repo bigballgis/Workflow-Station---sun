@@ -12,7 +12,8 @@ interface ValidationDeps {
   formData: Ref<Record<string, any>>
   config: () => FormBusinessLogicConfig | undefined
   engine: BusinessLogicEngine
-  scriptFieldErrors: Ref<Record<string, string>>
+  /** Read-only: merges script errors with derived ones (e.g. failing computed-field formulas). */
+  scriptFieldErrors: Readonly<Ref<Record<string, string>>>
 }
 
 export function useFormValidation(deps: ValidationDeps) {

@@ -951,6 +951,9 @@ export default {
     restore: 'Restore',
     discard: 'Discard',
   },
+  computedField: {
+    evaluationFailed: '#ERR — formula could not be calculated ({code}). Fix the values it depends on.',
+  },
   linkForm: {
     defaultLinkText: 'Details',
     linkedForm: 'Linked Form',

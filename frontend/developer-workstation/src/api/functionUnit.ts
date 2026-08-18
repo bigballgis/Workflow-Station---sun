@@ -173,6 +173,9 @@ export interface FieldDefinition {
   pkGenerationJson?: Record<string, unknown>
   fkDisplayMode?: 'readonly' | 'hidden'
   relationCardinality?: string
+  isComputed?: boolean
+  computedField?: Record<string, unknown>
+  computedFieldJson?: Record<string, unknown>
 }
 
 export type FormType = 'PROCESS' | 'TASK' | 'ACTION'

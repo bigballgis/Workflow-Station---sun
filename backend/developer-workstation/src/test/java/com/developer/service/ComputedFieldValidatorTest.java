@@ -70,6 +70,26 @@ class ComputedFieldValidatorTest {
         }
 
         @Test
+        @DisplayName("sub-table row formula reading a plain MAIN column as table.column")
+        void subTableReadsMainColumn() {
+            List<FieldDefinitionRequest> fields = List.of(
+                    computed("requester", DataType.VARCHAR, "purchase_request.title", "row",
+                            parentField("purchase_request", "title"),
+                            List.of("purchase_request.title")));
+
+            TableDefinition main = mainTableWithColumns(1L, "purchase_request",
+                    FieldDefinition.builder()
+                            .fieldName("title")
+                            .dataType(DataType.VARCHAR)
+                            .sortOrder(0)
+                            .build());
+
+            assertThatCode(() -> validator.validateIncomingFields(
+                    subTable(2L, "request_items"), fields, List.of(main)))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
         @DisplayName("a table with no computed fields is left entirely alone")
         void ignoresPlainTables() {
             // Guards the AI write path and every existing Function Unit: fields that do not opt in
@@ -236,7 +256,43 @@ class ComputedFieldValidatorTest {
                     computed("total", DataType.DECIMAL, "UPPER(code)", "row",
                             call("UPPER", field("code")), List.of("code")));
 
-            expectRejection(fields, List.of(), "COMPUTED_FIELD_TYPE_MISMATCH");
+            assertThatThrownBy(() -> validator.validateIncomingFields(
+                    mainTable(1L, "purchase_request"), fields, List.of()))
+                    .isInstanceOf(DeveloperBusinessException.class)
+                    .satisfies(thrown -> {
+                        DeveloperBusinessException failure = (DeveloperBusinessException) thrown;
+                        assertThat(failure.getErrorCode()).isEqualTo("COMPUTED_FIELD_TYPE_MISMATCH");
+                        assertThat(failure.getMessage())
+                                .contains("produces a text")
+                                .contains("DECIMAL")
+                                .contains("Change the Data Type of 'total' to VARCHAR, or use a numeric formula");
+                    });
+        }
+
+        @Test
+        @DisplayName("a numeric formula (including date difference) stored in a VARCHAR column")
+        void numberFormulaOnVarcharColumn() {
+            List<FieldDefinitionRequest> fields = List.of(
+                    plain("startdate", DataType.VARCHAR),
+                    plain("enddate", DataType.VARCHAR),
+                    computed("day", DataType.VARCHAR, "enddate - startdate", "row",
+                            binary("-", field("enddate"), field("startdate")),
+                            List.of("enddate", "startdate")));
+
+            assertThatThrownBy(() -> validator.validateIncomingFields(
+                    mainTable(1L, "date_info"), fields, List.of()))
+                    .isInstanceOf(DeveloperBusinessException.class)
+                    .satisfies(thrown -> {
+                        DeveloperBusinessException failure = (DeveloperBusinessException) thrown;
+                        assertThat(failure.getErrorCode()).isEqualTo("COMPUTED_FIELD_TYPE_MISMATCH");
+                        assertThat(failure.getMessage())
+                                .contains("Computed field 'day'")
+                                .contains("produces a number")
+                                .contains("VARCHAR")
+                                .contains("Change the Data Type of 'day' to INTEGER or DECIMAL")
+                                .doesNotContain("startdate")
+                                .doesNotContain("enddate");
+                    });
         }
 
         @Test
@@ -270,6 +326,74 @@ class ComputedFieldValidatorTest {
 
             expectRejection(List.of(total), List.of(), "COMPUTED_FIELD_SOURCE_REQUIRED");
         }
+
+        @Test
+        @DisplayName("a qualified table.column on the MAIN table")
+        void parentRefOnMainTable() {
+            List<FieldDefinitionRequest> fields = List.of(
+                    computed("copy", DataType.VARCHAR, "purchase_request.title", "row",
+                            parentField("purchase_request", "title"),
+                            List.of("purchase_request.title")));
+
+            expectRejection(fields, List.of(), "COMPUTED_FIELD_PARENT_REF_NOT_ALLOWED");
+        }
+
+        @Test
+        @DisplayName("a sub-table formula naming a table that is not MAIN")
+        void unknownParentTable() {
+            List<FieldDefinitionRequest> fields = List.of(
+                    computed("copy", DataType.VARCHAR, "other.title", "row",
+                            parentField("other", "title"),
+                            List.of("other.title")));
+
+            TableDefinition main = mainTableWithColumns(1L, "purchase_request",
+                    FieldDefinition.builder().fieldName("title").dataType(DataType.VARCHAR)
+                            .sortOrder(0).build());
+
+            assertThatThrownBy(() -> validator.validateIncomingFields(
+                    subTable(2L, "request_items"), fields, List.of(main)))
+                    .isInstanceOf(DeveloperBusinessException.class)
+                    .satisfies(thrown -> assertThat(((DeveloperBusinessException) thrown).getErrorCode())
+                            .isEqualTo("COMPUTED_FIELD_UNKNOWN_PARENT_TABLE"));
+        }
+
+        @Test
+        @DisplayName("a sub-table formula naming a MAIN column that does not exist")
+        void unknownParentColumn() {
+            List<FieldDefinitionRequest> fields = List.of(
+                    computed("copy", DataType.VARCHAR, "purchase_request.ghost", "row",
+                            parentField("purchase_request", "ghost"),
+                            List.of("purchase_request.ghost")));
+
+            TableDefinition main = mainTableWithColumns(1L, "purchase_request",
+                    FieldDefinition.builder().fieldName("title").dataType(DataType.VARCHAR)
+                            .sortOrder(0).build());
+
+            assertThatThrownBy(() -> validator.validateIncomingFields(
+                    subTable(2L, "request_items"), fields, List.of(main)))
+                    .isInstanceOf(DeveloperBusinessException.class)
+                    .satisfies(thrown -> assertThat(((DeveloperBusinessException) thrown).getErrorCode())
+                            .isEqualTo("COMPUTED_FIELD_UNKNOWN_PARENT_COLUMN"));
+        }
+
+        @Test
+        @DisplayName("a sub-table formula reading a computed MAIN column")
+        void parentComputedColumn() {
+            List<FieldDefinitionRequest> fields = List.of(
+                    computed("copy", DataType.VARCHAR, "purchase_request.display", "row",
+                            parentField("purchase_request", "display"),
+                            List.of("purchase_request.display")));
+
+            TableDefinition main = mainTableWithColumns(1L, "purchase_request",
+                    FieldDefinition.builder().fieldName("display").dataType(DataType.VARCHAR)
+                            .isComputed(true).sortOrder(0).build());
+
+            assertThatThrownBy(() -> validator.validateIncomingFields(
+                    subTable(2L, "request_items"), fields, List.of(main)))
+                    .isInstanceOf(DeveloperBusinessException.class)
+                    .satisfies(thrown -> assertThat(((DeveloperBusinessException) thrown).getErrorCode())
+                            .isEqualTo("COMPUTED_FIELD_PARENT_COMPUTED_DEPENDENCY"));
+        }
     }
 
     private void expectRejection(List<FieldDefinitionRequest> fields,
@@ -291,6 +415,12 @@ class ComputedFieldValidatorTest {
                 .tableType(TableType.MAIN)
                 .fieldDefinitions(new ArrayList<>())
                 .build();
+    }
+
+    private static TableDefinition mainTableWithColumns(Long id, String name, FieldDefinition... columns) {
+        TableDefinition table = mainTable(id, name);
+        table.setFieldDefinitions(new ArrayList<>(List.of(columns)));
+        return table;
     }
 
     private static TableDefinition subTable(Long id, String name, String... columns) {
@@ -350,6 +480,10 @@ class ComputedFieldValidatorTest {
 
     private static String field(String name) {
         return "{\"type\":\"field\",\"name\":\"" + name + "\"}";
+    }
+
+    private static String parentField(String table, String name) {
+        return "{\"type\":\"field\",\"table\":\"" + table + "\",\"name\":\"" + name + "\"}";
     }
 
     private static String binary(String op, String left, String right) {

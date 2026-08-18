@@ -44,6 +44,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     private final RoleAccessComponent roleAccessComponent;
     private final ObjectMapper objectMapper;
     private final com.platform.common.fk.PrimaryKeyAllocationService primaryKeyAllocationService;
+    private final com.portal.component.RelationTableComputedFieldRecalculator computedFieldRecalculator;
     private final RelationTableTemplateService templateService = new RelationTableTemplateService();
 
     @Override
@@ -750,7 +751,8 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         String sql = "SELECT field_name, data_type, length, precision_value, scale, nullable, "
                 + "is_primary_key, default_value, display_name, sort_order, pk_generation_json::text AS pk_json, "
                 + "lookup_config::text AS lookup_json, is_foreign_key, ref_table_id, "
-                + "ref_primary_key_fields::text AS ref_pk_json, fk_display_mode "
+                + "ref_primary_key_fields::text AS ref_pk_json, fk_display_mode, "
+                + "is_computed, computed_field_json::text AS computed_json "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
         return jdbcTemplate.query(sql, (rs, n) -> RelationFieldDTO.builder()
                 .fieldName(rs.getString("field_name"))
@@ -763,24 +765,26 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 .defaultValue(rs.getString("default_value"))
                 .displayName(rs.getString("display_name"))
                 .sortOrder((Integer) rs.getObject("sort_order"))
-                .pkGeneration(parsePkGeneration(rs.getString("pk_json")))
-                .lookupConfig(parsePkGeneration(rs.getString("lookup_json")))
+                .pkGeneration(parseFieldConfigJson(rs.getString("pk_json")))
+                .lookupConfig(parseFieldConfigJson(rs.getString("lookup_json")))
                 .isForeignKey((Boolean) rs.getObject("is_foreign_key"))
                 .refTableId((Long) rs.getObject("ref_table_id"))
                 .refPrimaryKeyFields(parseStringList(rs.getString("ref_pk_json")))
                 .fkDisplayMode(rs.getString("fk_display_mode"))
+                .isComputed(rs.getBoolean("is_computed"))
+                .computedField(parseFieldConfigJson(rs.getString("computed_json")))
                 .build(), tableId);
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> parsePkGeneration(String json) {
+    private Map<String, Object> parseFieldConfigJson(String json) {
         if (json == null || json.isBlank()) return null;
         try {
             return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
         } catch (Exception e) {
-            // Corrupt pk_generation config must not fail the whole field load, but silently
-            // treating it as "no config" would change PK generation behavior — leave a trace.
-            log.warn("Failed to parse pk_generation config, treating as unset: json={}", json, e);
+            // Corrupt column config must not fail the whole field load, but silently treating it as
+            // "no config" would change PK generation / lookup / formula behavior — leave a trace.
+            log.warn("Failed to parse field config JSON, treating as unset: json={}", json, e);
             return null;
         }
     }
@@ -847,6 +851,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         Object pkVal = pkField != null ? row.get(pkField) : null;
         String rowId = pkVal != null ? String.valueOf(pkVal) : UUID.randomUUID().toString();
 
+        // Runs last: formulas may read the audit fields and the freshly allocated primary key, and
+        // whatever the client sent for a computed column is discarded in favour of this result.
+        computedFieldRecalculator.recalculate(tableId, row);
+
         jdbcTemplate.update(
                 "INSERT INTO " + DATA_ROWS_TABLE
                         + " (table_id, row_id, data, status, created_at, created_by, updated_at, updated_by)"
@@ -877,6 +885,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         Timestamp now = Timestamp.from(Instant.now());
         if (validFieldNames.contains("updated_at")) merged.put("updated_at", now.toString());
         if (validFieldNames.contains("updated_by")) merged.put("updated_by", userId);
+
+        // Recomputed from the merged row, not the submitted delta: a formula may read a column this
+        // request never touched.
+        computedFieldRecalculator.recalculate(tableId, merged);
 
         jdbcTemplate.update(
                 "UPDATE " + DATA_ROWS_TABLE + " SET data = ?::jsonb, updated_at = ?, updated_by = ? "

@@ -2002,6 +2002,221 @@
     Save 把 Y 同步到同表 leftover sibling slice，避免 reopen 回 N。
 
 - id: "1520"
+  status: wontfix
+  severity: minor
+  category: architecture
+  summary: "（并入 #1531）mathjs / evaluateFormula 属未交付的 Form Business Rules 脚手架，非双引擎并存问题"
+  file: "frontend/user-portal/src/components/businessLogicEngine/formula.ts"
+  note: |
+    本条已并入 #1531，不单独跟踪。
+    立条时的判断有误：初记为"计算字段共享 AST 引擎 vs Form Business Rules mathjs
+    双引擎并存，违反红线 3"。后续核实发现 Form Business Rules 从未上线（DW 无编辑器
+    入口 / Portal config 无人传入 / 库内 0 条数据，证据见 #1531），mathjs 在运行时
+    不可达，不构成"同一决策两处实现"——不存在第二个生效的公式引擎。
+    evaluateFormula 的静默 0 兜底同理：无数据经过，无实际风险，随脚手架一并处置。
+
+- id: "1521"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: deploy
+  summary: "dev 库缺失 hmdc_dropdown 字典表（relation table id 7），ATM Case FU 所有 lookup 返回空、子表行必填项无法满足因而永远存不下"
+  file: "frontend/scripts/fixtures/hmdc-dropdown.sql"
+  note: |
+    发现于批次 4 计算字段 aggregate 预览的端到端验证：ATM Transaction 子表弹窗
+    Incoming Channel / Dispute Reason 两个必填 lookup 恒为空，Save 永远被校验拦下。
+    根因不在前端——表单 lookupConfig 绑定 tableId=7 / tableName=hmdc_dropdown，
+    而 dev 库 rt_table_definitions 只剩 id=1（test），字典表连同流程实例数据一起丢失。
+    处置：新增幂等 seed 脚本 frontend/scripts/fixtures/hmdc-dropdown.sql，按绑定要求
+    以显式 id=7 重建表定义 + 8 个字段 + 四类目录数据行（Incoming channel / Billing
+    currency / Dispute currency / Dispute reason）+ 角色访问授权，并 setval 修正序列。
+    未改任何 FU 设计。执行后子表行可保存，aggregate 预览端到端通过。
+
+- id: "1522"
+  status: open
+  severity: major
+  category: deploy
+  summary: "dev 库流程实例数据全空（act_hi_procinst / act_ru_task 均 0 行），regression:mi 的截图门禁全部无法执行，只剩单测层可跑"
+  file: "frontend/scripts/run-mi-regression.mjs"
+  note: |
+    2026-08-17 实测：act_hi_procinst = 0、act_ru_task = 0，MI 回归的 6 个场景脚本
+    全部按硬编码 taskId / applicationId 定位（如 verify-myrequest-details-modal.mjs
+    的 app 3777ff51… 与 Test-000060），目标数据不存在 → `pnpm run regression:mi`
+    必然在 e2e 阶段失败，单测层 12 文件 117 项仍全绿。
+    这不是代码缺陷，是环境 fixture 缺口，但它使 performance-change-safety 规定的
+    MI 截图门禁在当前 dev 环境形同虚设（任何触达热路径的改动都无法真正过闸）。
+    处置建议（需人工决定）：要么补一份可重放的 MI 流程实例 seed（起流程 + 走到
+    多实例节点 + 固定 business key），要么让场景脚本改为按语义查找而非硬编码 ID。
+
+- id: "1523"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "计算字段 end_date - start_date 对 YYYY-MM-DD 报 TYPE_MISMATCH，不能算出整天差"
+  file: "frontend/shared/src/computedField/evaluator.ts"
+  note: |
+    根因：'-' 一律走 toNumber()，日期字符串不是数字。v1 两边都是日历日期时按整天
+    相减（左减右）；并加 DATEDIFF(start, end)（Power Fx：end 减 start）。
+    VALUE() / 通用 toNumber 不变。goldenVectors 双边契约 + DW 预览 Result 1。
+    2026-08-17 续：解析扩到年在前 YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD（月日可 1～2 位）
+    及可选时间后缀（忽略时钟只算整天）。02/06/2026 日月对调仍 TYPE_MISMATCH。
+    2026-08-17 续：Save 类型不匹配提示改为点名要改的列。数字公式写入 VARCHAR 时
+    提示 Change the Data Type of '<field>' to INTEGER or DECIMAL；文本公式写入
+    数值列时提示改 VARCHAR 或改公式。不放松校验。DW 保存 catch 改为读取
+    ApiResponse.error.message（pickHttpErrorBodyMessage），避免只显示 Operation failed。
+    2026-08-17 续：门户 New Request Add Record 对 YYYY-MM-DD 仍 TYPE_MISMATCH，因
+    user-portal-frontend 镜像早于日期差引擎，未打进 date.ts。重建门户前端后
+    startdate=2026-08-16 / enddate=2026-08-18 预览 day=2。
+
+- id: "1526"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: quality
+  summary: "Formula 对话框标题栏增加帮助标记，打开站内计算字段规则页"
+  file: "frontend/developer-workstation/src/views/help/ComputedFieldGuide.vue"
+  note: |
+    标题栏「Formula」右侧问号；悬停显示 http://localhost:3000/dev/help/computed-fields；
+    点击新标签打开。规则页三语，覆盖本行 / 关联行 / table.column / 日期 /
+    函数白名单 / 失败策略 / 关联表不含 parent lookup。Admin 公式对话框未改。
+    截图 frontend/developer-workstation/verification-screenshots/
+    2026-08-17_computed-field-11-dw-formula-help-marker.png 与
+    2026-08-17_computed-field-12-dw-formula-guide-page.png。
+
+- id: "1525"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: quality
+  summary: "子表计算字段可用 table.column 读取主表非计算列"
+  file: "frontend/shared/src/computedField/parser.ts"
+  note: |
+    子表 row 公式 leave_request.name 解析为 field{table,name}，不是聚合。
+    设计期仅允许本 FU 的 MAIN 且目标列非计算列；求值从 MAIN 行 variables 取值。
+    goldenVectors 双边契约；DW 公式对话框样例 Vin；门户需在 Date Info 增加
+    VARCHAR 计算列并 republish 后才能在 Add Record 看到 Vin（已发布快照仍是日期差）。
+
+- id: "1524"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: bug
+  summary: "Table Design 保存计算字段类型不匹配时只显示 Operation failed"
+  file: "frontend/developer-workstation/src/utils/tableSaveComputedField.ts"
+  note: |
+    反例：leave_request.day 为 VARCHAR + SUM(date_info.day)，Save 只出 Operation failed。
+    保存前拦截数字公式写在文本列，三语文案指出改 INTEGER/DECIMAL；后端
+    COMPUTED_FIELD_TYPE_MISMATCH 同样映射该文案。截图
+    frontend/developer-workstation/verification-screenshots/2026-08-17_computed-field-03-save-type-mismatch-toast.png。
+
+- id: "1527"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Admin Function Unit 导入关联表时丢弃 isComputed / computedFieldJson"
+  file: "backend/admin-center/src/main/java/com/admin/component/RelationTableStructureImporter.java"
+  note: |
+    DW RelationTableStructurePortability 会写入公式，Admin 导入只建字段不带
+    isComputed。再导入看起来成功，门户写路径没有 AST 可算。buildFields 现在
+    持久化公式 JSON；isComputed 但无可用 JSON 抛 COMPUTED_FIELD_IMPORT_INVALID。
+    单测 RelationTableStructureImporterComputedFieldTest 2/2。
+
+- id: "1528"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "计算字段写路径跳过损坏定义并保留客户端提交值"
+  file: "backend/user-portal/src/main/java/com/portal/component/ComputedFieldRowEvaluation.java"
+  note: |
+    toMeta 空定义 / 无 AST 曾 warn+return null；parseJsonMap 不可读 JSON 曾
+    当空 map；resolveFunctionUnitId 吞掉 PortalException 后整单跳过重算。
+    现改为抛 COMPUTED_FIELD_DEFINITION_INVALID；FU 解析失败向上抛。
+    ComputedFieldRecalculatorTest Errors 7、RelationTableComputedFieldRecalculatorTest
+    Errors 含 unusableDefinitionBlocksWrite。
+
+- id: "1529"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Admin multipart ZIP 导入把 BPMN 当 ZIP 内容，关联表计算字段整包丢失"
+  file: "backend/admin-center/src/main/java/com/admin/controller/FunctionUnitImportController.java"
+  note: |
+    POST /function-units-import/import 把 ZIP 里抽出的 BPMN 文本放进 fileContent，
+    而 fileName 仍以 .zip 结尾。parseBase64Zip 失败后走 legacy，relationTables=[]。
+    JSON 路径 POST /function-units/import 已走 PackageParser。现改为把 ZIP 字节
+    Base64 交给 importFunctionPackage；损坏的 relation_tables.json 抛 IOException。
+    导出/克隆同步 fail-closed：公式缺失分别抛 COMPUTED_FIELD_EXPORT_INVALID /
+    COMPUTED_FIELD_CLONE_INVALID；导入接受 Map 或 JSON 字符串。
+    parseZipFile 只读 manifest / connections / email-monitors，不再解析
+    forms、actions、BPMN、email-templates。
+    FunctionUnitImportControllerMultipartTest 断言 fileContent 解码后是 ZIP 魔数，
+    且 relation_tables.json 含 isComputed，而不是 BPMN 全文。
+    单测 FunctionUnitPackageParserRelationTableTest、
+    FunctionUnitComputedFieldPortabilityTest、FunctionUnitCloneFieldMetadataTest。
+
+- id: "1530"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Portal 预览对损坏计算字段 JSON 跳过并保留陈旧值"
+  file: "frontend/user-portal/src/utils/computedFieldRuntime.ts"
+  note: |
+    isComputed 但公式 JSON 不可用时 collectComputedColumns 曾跳过该列，预览
+    留下上次值。现记 parseError=COMPUTED_FIELD_DEFINITION_INVALID，preview
+    写入 errors，界面走 #ERR。computedFieldRuntime.test.ts 覆盖。
+
+- id: "1531"
+  status: open
+  severity: minor
+  category: quality
+  summary: "Form Business Rules 为未交付的半成品脚手架：DW 无编辑器入口、Portal config prop 无人传入、mathjs 运行时不可达（技术债，非线上缺陷）"
+  file: "frontend/user-portal/src/components/FormRenderer.vue"
+  note: |
+    原拟编号 #1519，但该 id 已被 PR #106（form-below-table Events）占用，故改为 #1531。
+    发现于计算字段特性开发（批次 4 范围确认）时的旁路审查。**不是线上缺陷**——
+    该能力从未上线，用户配不出、数据里没有、运行时也跑不到。仅作技术债留档。
+    三层证据：
+      1) DW 无入口：formBusinessLogicTypes.ts 里 FormulaRule / RowFormulaRule /
+         LinkageRule / CrossFieldRule / SummaryRule 无任何组件 import（只有
+         ConditionExpression / ValidationRule / SubTableValidationConfig 被
+         ActionDesigner / ValidationRuleList / ConditionBuilder 等实际使用）；
+         i18n 里 `// FormulaEditor` `// RowFormulaEditor` 段落的文案没有对应组件。
+      2) Portal 无传参：FormRenderer 声明 config?: FormBusinessLogicConfig（L116），
+         useFormData 的 config()（L247/270/277/285）驱动 BusinessLogicEngine、
+         getSubFormRowFormulas、summaryRules、子表校验——但全仓没有任何调用方给
+         FormRenderer 传 :config（唯一 :config= 是 RecordNote 的 _recordNote；
+         三个视图传的 :form-config 是另一个 prop；portal src 内无 v-bind 展开）。
+         故上述四类规则同时恒为 undefined，evaluateFormula / mathjs 仅单测触达。
+      3) 数据为空：dev 库 dw_form_definitions 共 20 条，config_json 含
+         formulas / rowFormulas / summaryRules / linkages / crossFieldRules 的
+         各为 0 条（2026-08-17 实测）。
+    唯一理论产生路径：useAiTemplates.ts L30 的 dataEntry 模板 prompt 要求 AI 生成
+    formulas / linkages / summaryRules，而 AiWriteServiceImpl L407-430 把 configJson
+    整体持久化，故 AI 有可能写入这些字段并被静默忽略。实测未发生。
+    处置：日后若真要做表单业务规则，作为新特性单独立项（届时应直接采用
+    frontend/shared/src/computedField 共享 AST 引擎，不要复活 mathjs）；
+    或反向清理脚手架（删 businessLogicEngine 死代码 + 卸 mathjs + 清 i18n 文案）。
+    与计算字段特性无关，不阻塞其交付。
+
+- id: "1532"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: quality
+  summary: "Email Monitor IMAP/配置失败只 warn 且每 30s 重打邮箱，无有界退避"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorScheduler.java"
+  note: |
+    Confluence Email Monitor 运维对齐（不引入 Kafka/POP3/审批状态机）。
+    失败不推进 lastSyncCursor；指数退避（pollInterval × 2^(n-1)，上限 15min）；
+    ERROR 日志含 ruleId / consecutiveFailures / retryAfter，不含密码。
+    单测 EmailMonitorPollBackoffTest、EmailMonitorSchedulerTest。
+
+- id: "1533"
   status: fixed
   fixed_at: "2026-08-17"
   severity: major
@@ -2020,4 +2235,5 @@
     .../2026-08-17_auditor-virtual-group-read-only.png；
     DW .../2026-08-17_auditor-function-units-read-only.png（403）。
     测试账号 username=auditor，绑定 vg-auditors（口令不写入仓库）。
-    未做：#1532 users/bi rbac、#1524 exit userId、User Portal。
+    未做：users/BI RBAC 写路径、exit userId 归属校验、User Portal。
+    编号说明：common 已占用 #1520，本条在合并后记为 #1533。

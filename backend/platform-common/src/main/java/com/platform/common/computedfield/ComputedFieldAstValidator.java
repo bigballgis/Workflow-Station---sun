@@ -18,8 +18,8 @@ import java.util.Set;
  * read from the request, so a tampered {@code dependsOn} cannot smuggle in a reference.
  *
  * <p>Table-aware checks — does the field exist, is there a dependency cycle, is the target column
- * allowed to be computed — need the Function Unit's field definitions and therefore live in the
- * developer-workstation validator that calls this one.
+ * allowed to be computed — need the surrounding table metadata and therefore live in
+ * {@link ComputedFieldDesignValidator}, which calls this one.
  */
 public final class ComputedFieldAstValidator {
 
@@ -166,7 +166,12 @@ public final class ComputedFieldAstValidator {
                 fail(ComputedFieldErrorCode.SYNTAX_ERROR, "Field reference has no name");
                 return;
             }
-            fields.add(name);
+            String table = node.path("table").asText("");
+            if (table.isBlank()) {
+                fields.add(name);
+                return;
+            }
+            fields.add(table + "." + name);
         }
 
         private void validateAggregate(JsonNode node) {

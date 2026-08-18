@@ -6,6 +6,7 @@ import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
+import com.developer.exception.DeveloperBusinessException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +48,13 @@ class FunctionUnitSnapshotFactory {
         }
     }
 
+    /**
+     * Incomplete pre-v2 serializer. Publish / rollback now go through
+     * {@link FunctionUnitExporter#buildVersionSnapshotPayload}. Calling this with a computed
+     * field would silently drop the formula — refuse rather than produce a lossy snapshot.
+     */
     byte[] createSnapshot(FunctionUnit functionUnit) throws Exception {
+        rejectComputedFields(functionUnit);
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("name", functionUnit.getName());
         snapshot.put("code", functionUnit.getCode());
@@ -128,5 +135,22 @@ class FunctionUnitSnapshotFactory {
         snapshot.put("decisionDefinitions", decisionSnapshots);
 
         return objectMapper.writeValueAsBytes(snapshot);
+    }
+
+    private static void rejectComputedFields(FunctionUnit functionUnit) {
+        if (functionUnit == null || functionUnit.getTableDefinitions() == null) {
+            return;
+        }
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            if (table.getFieldDefinitions() == null) {
+                continue;
+            }
+            for (FieldDefinition field : table.getFieldDefinitions()) {
+                if (Boolean.TRUE.equals(field.getIsComputed()) || field.getComputedFieldJson() != null) {
+                    throw new DeveloperBusinessException("COMPUTED_FIELD_LEGACY_PATH",
+                            "Legacy snapshot serializer cannot carry computed fields; use FunctionUnitExporter");
+                }
+            }
+        }
     }
 }

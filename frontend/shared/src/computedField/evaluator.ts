@@ -25,6 +25,8 @@ import {
   toNumber,
   valuesEqual,
 } from './coerce'
+import { calendarEpochDay } from './date'
+import { DATE_FUNCTIONS } from './functionsDate'
 import { checkArity, MATH_FUNCTIONS } from './functionsMath'
 import { TEXT_FUNCTIONS } from './functionsText'
 import {
@@ -40,6 +42,7 @@ import {
 const EAGER_FUNCTIONS: Record<string, (args: ComputedValue[]) => EvalResult> = {
   ...MATH_FUNCTIONS,
   ...TEXT_FUNCTIONS,
+  ...DATE_FUNCTIONS,
   NOT: (args) => {
     const arityError = checkArity('NOT', args, 1, 1)
     if (arityError) return arityError
@@ -73,6 +76,11 @@ export interface EvaluationContext {
   row: Record<string, unknown>
   /** Canonical table name (lower-cased) -> rows. */
   subTables?: Record<string, Array<Record<string, unknown>>>
+  /**
+   * Parent rows a SUB-table formula may read via `table.column`. Keyed by lower-cased
+   * physical table name; MVP only the Function Unit MAIN row is supplied.
+   */
+  parents?: Record<string, Record<string, unknown>>
 }
 
 /** What a `__subTables__` slice key actually refers to, as resolved by the caller. */
@@ -125,6 +133,27 @@ function lookupRows(
   table: string,
 ): Array<Record<string, unknown>> | undefined {
   return context.subTables?.[table.toLowerCase()]
+}
+
+function lookupParentRow(
+  context: EvaluationContext,
+  table: string,
+): Record<string, unknown> | undefined {
+  return context.parents?.[table.toLowerCase()]
+}
+
+function evaluateField(
+  node: { name: string; table?: string },
+  context: EvaluationContext,
+): EvalResult {
+  if (!node.table) {
+    return evalOk(fromRowValue(context.row[node.name]))
+  }
+  const parent = lookupParentRow(context, node.table)
+  if (!parent) {
+    return evalErr('UNKNOWN_TABLE', `Parent table '${node.table}' is not present on this record`)
+  }
+  return evalOk(fromRowValue(parent[node.name]))
 }
 
 function evaluateAggregate(node: AggregateNode, context: EvaluationContext): EvalResult {
@@ -194,6 +223,10 @@ function evaluateBinary(node: AstNode & { type: 'binary' }, context: EvaluationC
     return evalOk({ kind: 'boolean', value })
   }
 
+  if (node.op === '-') {
+    const dateDiff = tryCalendarDateSubtract(left.value, right.value)
+    if (dateDiff) return dateDiff
+  }
   const a = toNumber(left.value, `Operator '${node.op}'`)
   if (isEvalFailure(a)) return a
   const b = toNumber(right.value, `Operator '${node.op}'`)
@@ -214,6 +247,14 @@ function evaluateBinary(node: AstNode & { type: 'binary' }, context: EvaluationC
     default:
       return evalErr('UNSUPPORTED_NODE', `Unsupported operator '${node.op}'`)
   }
+}
+
+/** Whole-day difference when both sides are calendar dates; otherwise null so '-' stays numeric. */
+function tryCalendarDateSubtract(left: ComputedValue, right: ComputedValue): EvalResult | null {
+  const leftDay = calendarEpochDay(left)
+  const rightDay = calendarEpochDay(right)
+  if (leftDay == null || rightDay == null) return null
+  return evalOk({ kind: 'number', value: { unscaled: BigInt(leftDay - rightDay), scale: 0 } })
 }
 
 function evaluateLazyCall(fn: string, args: AstNode[], context: EvaluationContext): EvalResult {
@@ -295,7 +336,7 @@ export function evaluateAst(node: AstNode, context: EvaluationContext): EvalResu
     case 'boolean':
       return evalOk({ kind: 'boolean', value: node.value })
     case 'field':
-      return evalOk(fromRowValue(context.row[node.name]))
+      return evaluateField(node, context)
     case 'aggregate':
       return evaluateAggregate(node, context)
     case 'unary': {
