@@ -2280,3 +2280,18 @@
     connection Direction to Inbound first." zh-CN/zh-TW 对应「入站」无「双向」。
     截图：FU 48 Demo QQ Mailbox（BOTH）时 warning 不含 Both，下拉为空。
     路径：frontend/developer-workstation/verification-screenshots/2026-08-19_email-monitor-inbound-03-no-inbound-warning.png
+
+- id: "1537"
+  status: fixed
+  fixed_at: "2026-08-19"
+  severity: major
+  category: bug
+  summary: "Portal New Request 列出用户全部业务角色可发起的 FU，未按右上角当前工作台 Role 过滤"
+  file: "backend/user-portal/src/main/java/com/portal/component/FunctionUnitAccessComponent.java"
+  note: |
+    根因：filterAccessibleFunctionUnits 用 profileContext=PORTAL 拉用户全部 UBR 角色并集，
+    不读 JWT activeRoleId。多 BU/Role 用户切工作台后仍看到其他 Role 的 FU。
+    修复：有 activeRoleId 时只匹配该 Role 的 id+code；无工作台上下文仍回退全部门户角色。
+    canAccessFunctionUnit / My Requests / Views 未改。
+    验证：FunctionUnitAccessComponentTest + FunctionUnitAccessProperties pass；
+    mvn -pl backend/user-portal -am package -DskipTests；compose rebuild user-portal。
