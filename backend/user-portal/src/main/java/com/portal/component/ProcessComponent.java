@@ -89,8 +89,8 @@ public class ProcessComponent {
     // ==================== Process definitions and start ====================
 
     /**
-     * Returns startable process definitions
-     * Loads deployed function units from admin center and filters by business role
+     * Returns startable process definitions (New Request).
+     * Loads deployed function units from admin center and filters by the JWT active workspace role.
      */
     public List<ProcessDefinitionInfo> getAvailableProcessDefinitions(String userId, String category, String keyword) {
         log.info("Getting available process definitions for user: {}", userId);
@@ -110,8 +110,8 @@ public class ProcessComponent {
                 if (!units.isEmpty()) {
                     log.info("Got {} deployed function units", units.size());
 
-                    // Filter function units by user business roles
-                    List<Map<String, Object>> accessibleUnits = functionUnitAccessComponent.filterAccessibleFunctionUnits(userId, units);
+                    List<Map<String, Object>> accessibleUnits =
+                            functionUnitAccessComponent.filterAccessibleFunctionUnits(userId, units);
                     log.info("After filtering, {} function units are accessible to user {}", accessibleUnits.size(), userId);
 
                     for (Map<String, Object> unit : accessibleUnits) {
