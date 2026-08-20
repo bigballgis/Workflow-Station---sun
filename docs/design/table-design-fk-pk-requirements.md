@@ -154,6 +154,11 @@ interface FieldUiMeta {
 | `uuid` | 后端生成 UUID |
 | `autoIncrement` | 后端递增整数 |
 | `prefixedSequence` | `{prefix}{zeroPaddedSeq}`，如 `CASE-000001` |
+| `dailyDateSequence` | 紧凑 `yyyyMMdd` + 当日序号（上海时区，按日重置） |
+| `monthlyDateSequence` | 紧凑 `yyyyMM` + 当月序号（上海时区，按月重置） |
+| `customFormat` | 模板 `{DATETIME:pattern}` / `{SEQNUM:n}` / `{RANDSTRING:n}`；`SEQNUM` 可按日/按月重置（模板须含对应日期 token） |
+
+已保存的 `datePrefixedSequence` 在解析/分配时迁为等价 `customFormat`（`{DATETIME:<pattern>}-{SEQNUM:<pad>}` + 原 `resetPeriod`）。
 
 **配置项（`prefixedSequence` / `autoIncrement`）：**
 

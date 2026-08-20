@@ -19,7 +19,7 @@
     </el-select>
     <el-popover
       v-if="showExtra"
-      :width="300"
+      :width="popoverWidth"
       trigger="click"
       placement="bottom-end"
     >
@@ -37,47 +37,10 @@
         <div class="pk-popover-title">
           {{ t('form.pkGenerationSettings') }}
         </div>
-        <el-form
-          label-position="top"
-          size="small"
-        >
-          <el-form-item :label="t('form.pkGenerationStartValue')">
-            <el-input-number
-              v-model="local.startValue"
-              :min="0"
-              controls-position="right"
-              style="width: 100%;"
-              @change="emitChange"
-            />
-          </el-form-item>
-          <template v-if="showPrefix">
-            <el-form-item :label="t('form.pkGenerationPrefix')">
-              <el-input
-                v-model="local.prefix"
-                :placeholder="t('form.pkGenerationPrefixPlaceholder')"
-                @input="emitChange"
-              />
-            </el-form-item>
-          </template>
-          <template v-if="showPadWidth">
-            <el-form-item :label="t('form.pkGenerationPadWidth')">
-              <el-input-number
-                v-model="local.padWidth"
-                :min="1"
-                :max="20"
-                controls-position="right"
-                style="width: 100%;"
-                @change="emitChange"
-              />
-            </el-form-item>
-          </template>
-        </el-form>
-        <div
-          v-if="showPreview"
-          class="pk-preview"
-        >
-          {{ t('form.pkGenerationPreview') }}: <code>{{ previewLabel }}</code>
-        </div>
+        <PkGenerationSettingsForm
+          :local="local"
+          @change="emitChange"
+        />
       </div>
     </el-popover>
   </div>
@@ -91,11 +54,13 @@
 import { computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Setting } from '@element-plus/icons-vue'
+import PkGenerationSettingsForm from './PkGenerationSettingsForm.vue'
 import {
+  CUSTOM_FORMAT_DEFAULT,
   DAILY_DATE_SEQUENCE_DEFAULT_PAD,
   PK_GENERATION_STRATEGIES,
-  formatCalendarDateSequencePreview,
   isCalendarDateSequence,
+  isCustomFormat,
   parsePkGeneration,
   pkGenerationNeedsExtraConfig,
   serializePkGeneration,
@@ -117,10 +82,8 @@ const enabled = computed(() => props.enabled === true)
 const local = reactive(parsePkGeneration(props.modelValue))
 
 const showExtra = computed(() => pkGenerationNeedsExtraConfig(local.strategy))
-const showPrefix = computed(() => local.strategy === 'prefixedSequence')
-const showPadWidth = computed(() =>
-  local.strategy === 'prefixedSequence' || isCalendarDateSequence(local.strategy))
-const showPreview = computed(() => showPadWidth.value && !!previewLabel.value)
+const popoverWidth = computed(() =>
+  isCustomFormat(local.strategy) ? 400 : 300)
 
 const hasExtraValues = computed(() => {
   if (local.strategy === 'autoIncrement') {
@@ -132,22 +95,12 @@ const hasExtraValues = computed(() => {
   if (isCalendarDateSequence(local.strategy)) {
     return local.startValue !== 1 || local.padWidth !== DAILY_DATE_SEQUENCE_DEFAULT_PAD
   }
-  return false
-})
-
-const previewLabel = computed(() => {
-  if (isCalendarDateSequence(local.strategy)) {
-    return formatCalendarDateSequencePreview(
-      local.strategy === 'monthlyDateSequence' ? 'month' : 'day',
-      local.padWidth,
-      local.startValue,
-    )
+  if (isCustomFormat(local.strategy)) {
+    return local.startValue !== 1
+      || local.format !== CUSTOM_FORMAT_DEFAULT
+      || local.resetPeriod !== 'none'
   }
-  if (local.strategy !== 'prefixedSequence') return ''
-  const prefix = local.prefix ?? ''
-  const pad = local.padWidth ?? 6
-  const start = local.startValue ?? 1
-  return `${prefix}${String(start).padStart(pad, '0')}`
+  return false
 })
 
 watch(
@@ -172,6 +125,12 @@ function onStrategyChange() {
   if (isCalendarDateSequence(local.strategy)) {
     local.padWidth = DAILY_DATE_SEQUENCE_DEFAULT_PAD
     local.prefix = ''
+  }
+  if (isCustomFormat(local.strategy)) {
+    local.format = CUSTOM_FORMAT_DEFAULT
+    local.prefix = ''
+    local.datePattern = ''
+    local.resetPeriod = 'none'
   }
   emitChange()
 }

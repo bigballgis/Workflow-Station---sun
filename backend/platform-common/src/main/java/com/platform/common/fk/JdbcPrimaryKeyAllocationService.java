@@ -7,19 +7,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Random;
 import java.util.UUID;
 
 /**
  * DB-backed PK allocation using {@code dw_pk_sequences} / {@code rt_pk_sequences}.
  *
- * <p>{@code autoIncrement} / {@code prefixedSequence} counters are global per (table_id, field_name).
- * {@code dailyDateSequence} / {@code monthlyDateSequence} use one row per calendar period
- * ({@code perDay} / {@code perMonth}) and must not be merged by {@link #consolidateAndEnsureSequenceRow}.
+ * <p>{@code autoIncrement} / {@code prefixedSequence} / {@code customFormat} (reset none)
+ * counters are global per (table_id, field_name).
+ * {@code dailyDateSequence} / {@code monthlyDateSequence} / {@code customFormat} with
+ * day/month reset use one row per calendar period ({@code perDay} / {@code perMonth}) and must not
+ * be merged by {@link #consolidateAndEnsureSequenceRow}.
  */
 @Service
 public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationService {
@@ -29,6 +33,7 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
 
     private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
+    private final Random random;
 
     @Autowired
     public JdbcPrimaryKeyAllocationService(JdbcTemplate jdbcTemplate) {
@@ -36,8 +41,13 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
     }
 
     JdbcPrimaryKeyAllocationService(JdbcTemplate jdbcTemplate, Clock clock) {
+        this(jdbcTemplate, clock, new SecureRandom());
+    }
+
+    JdbcPrimaryKeyAllocationService(JdbcTemplate jdbcTemplate, Clock clock, Random random) {
         this.jdbcTemplate = jdbcTemplate;
         this.clock = Objects.requireNonNull(clock);
+        this.random = Objects.requireNonNull(random);
     }
 
     @Override
@@ -54,15 +64,17 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
             throw new IllegalArgumentException("tableId and fieldName are required");
         }
         int n = count <= 0 ? 1 : count;
-        String strategy = config != null && config.getStrategy() != null
-                ? config.getStrategy() : "manual";
+        PkGenerationConfig effective = CustomPkFormat.normalizeConfig(config);
+        String strategy = effective != null && effective.getStrategy() != null
+                ? effective.getStrategy() : "manual";
         String table = resolveSequenceTable(tableId, sequenceTable);
         if (CalendarDateSequence.Period.forStrategy(strategy) != null) {
-            return allocateCalendarDateSequence(table, tableId, fieldName, config, n);
+            return allocateCalendarDateSequence(table, tableId, fieldName, effective, n);
         }
         return switch (strategy) {
             case "uuid" -> allocateUuid(n);
-            case "autoIncrement", "prefixedSequence" -> allocateSequence(table, tableId, fieldName, config, n);
+            case "autoIncrement", "prefixedSequence" -> allocateSequence(table, tableId, fieldName, effective, n);
+            case CustomPkFormat.STRATEGY -> allocateCustomFormat(table, tableId, fieldName, effective, n);
             default -> throw new IllegalArgumentException("PK strategy does not support allocation: " + strategy);
         };
     }
@@ -94,6 +106,45 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
             } else {
                 out.add(String.valueOf(val));
             }
+        }
+        return out;
+    }
+
+    private List<String> allocateCustomFormat(
+            String sequenceTable, Long tableId, String fieldName, PkGenerationConfig config, int count) {
+        CustomPkFormat.Parsed parsed = CustomPkFormat.parse(config != null ? config.getFormat() : null);
+        PkResetPeriod reset = PkResetPeriod.fromJson(config != null ? config.getResetPeriod() : null);
+        CustomPkFormat.validateReset(parsed, reset);
+        long startValue = config != null && config.getStartValue() != null ? config.getStartValue() : 1L;
+        List<Long> values = nextSequenceValues(
+                sequenceTable, tableId, fieldName, reset, parsed.seqWidth(), startValue, count);
+        List<String> out = new ArrayList<>(count);
+        for (long val : values) {
+            out.add(CustomPkFormat.render(parsed, clock, val, random));
+        }
+        return out;
+    }
+
+    private List<Long> nextSequenceValues(
+            String sequenceTable, Long tableId, String fieldName,
+            PkResetPeriod reset, int padWidth, long startValue, int count) {
+        CalendarDateSequence.Period period = reset.toCalendarPeriod();
+        if (period == null) {
+            consolidateAndEnsureSequenceRow(
+                    sequenceTable, tableId, fieldName, "", padWidth, startValue);
+            return range(incrementCounter(
+                    sequenceTable, tableId, fieldName, SCOPE_TYPE_PER_TABLE, SCOPE_KEY_GLOBAL, count), count);
+        }
+        ensurePeriodSequenceRow(sequenceTable, tableId, fieldName, period, padWidth, startValue);
+        String periodKey = CalendarDateSequence.periodKey(clock, period);
+        return range(incrementCounter(
+                sequenceTable, tableId, fieldName, period.scopeType(), periodKey, count), count);
+    }
+
+    private static List<Long> range(long first, int count) {
+        List<Long> out = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            out.add(first + i);
         }
         return out;
     }
