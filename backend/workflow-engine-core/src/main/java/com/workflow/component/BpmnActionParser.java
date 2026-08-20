@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,14 +28,11 @@ import java.util.regex.Pattern;
 
 /**
  * BPMN actionIds parser component.
- * Extracts actionIds (action definition ID list) bound to userTasks from BPMN process definitions.
- * 
- * Supports three-tier fallback strategy:
- * 1. Flowable BpmnModel in-memory model (extension elements)
- * 2. BPMN XML DOM parsing
- * 3. BPMN XML regex matching
- * 
- * Extracted from TaskManagerComponent to reduce its complexity.
+ * Extracts the action definition IDs bound to a userTask.
+ * <p>
+ * Node {@code actionIds} and process-level {@code globalActionIds} are independent sources:
+ * they are merged (node first, then global, first-seen wins) rather than treated as fallbacks.
+ * Each source still uses model → XML DOM/regex when that source is missing from the in-memory model.
  */
 @Slf4j
 @Component
@@ -233,47 +231,87 @@ public class BpmnActionParser {
     }
 
     /**
-     * Extract actionIds from a task's BPMN definition.
-     * Three-tier fallback: BpmnModel extension → BPMN XML DOM → BPMN XML regex.
+     * Extract action IDs for a runtime task: node bindings plus process-level Global bindings.
      */
     public List<String> extractActionIds(Task task) {
         try {
             org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(
                 task.getProcessDefinitionId()
             );
-
-            org.flowable.bpmn.model.UserTask userTask = (org.flowable.bpmn.model.UserTask) bpmnModel.getFlowElement(
-                task.getTaskDefinitionKey()
-            );
-
+            org.flowable.bpmn.model.UserTask userTask = resolveUserTask(bpmnModel, task);
             if (userTask == null) {
-                log.debug("UserTask not found in BPMN for task: {}", task.getId());
-                return extractActionIdsFromBpmnXmlResource(task, null);
+                log.debug("UserTask not found in BPMN model for task: {}", task.getId());
             }
+            String xmlTaskId = userTask != null ? userTask.getId() : task.getTaskDefinitionKey();
 
-            // 1) Recursively scan all extensions under UserTask (supports custom:properties / flat property)
-            List<String> fromExt = extractActionIdsRecursive(userTask.getExtensionElements(), "actionIds");
-            if (fromExt != null && !fromExt.isEmpty()) {
-                return fromExt;
-            }
-
-            // 2) Process-level globalActionIds (designer "global binding")
-            org.flowable.bpmn.model.Process mainProcess = bpmnModel.getMainProcess();
-            if (mainProcess != null) {
-                List<String> global = extractActionIdsRecursive(mainProcess.getExtensionElements(), "globalActionIds");
-                if (global != null && !global.isEmpty()) {
-                    return global;
+            List<String> nodeIds = userTask == null
+                    ? null
+                    : extractActionIdsRecursive(userTask.getExtensionElements(), "actionIds");
+            List<String> globalIds = extractGlobalActionIdsFromModel(bpmnModel);
+            if (isEmpty(nodeIds) || isEmpty(globalIds)) {
+                XmlActionSources xml = readActionIdsFromBpmnXml(task, xmlTaskId);
+                if (xml != null) {
+                    if (isEmpty(nodeIds)) {
+                        nodeIds = xml.nodeIds();
+                    }
+                    if (isEmpty(globalIds)) {
+                        globalIds = xml.globalIds();
+                    }
                 }
             }
-
-            // 3) Raw BPMN text fallback (Flowable sometimes does not put custom namespace child nodes in the in-memory model)
-            return extractActionIdsFromBpmnXmlResource(task, userTask.getId());
-
+            return mergeActionIds(nodeIds, globalIds);
         } catch (Exception e) {
             log.warn("Failed to extract actionIds for task {}: {}", task.getId(), e.getMessage());
             return extractActionIdsFromBpmnXmlResource(task, task.getTaskDefinitionKey());
         }
     }
+
+    private static org.flowable.bpmn.model.UserTask resolveUserTask(
+            org.flowable.bpmn.model.BpmnModel bpmnModel, Task task) {
+        if (bpmnModel == null || task.getTaskDefinitionKey() == null) {
+            return null;
+        }
+        org.flowable.bpmn.model.FlowElement el = bpmnModel.getFlowElement(task.getTaskDefinitionKey());
+        return el instanceof org.flowable.bpmn.model.UserTask userTask ? userTask : null;
+    }
+
+    private List<String> extractGlobalActionIdsFromModel(org.flowable.bpmn.model.BpmnModel bpmnModel) {
+        if (bpmnModel == null) {
+            return null;
+        }
+        org.flowable.bpmn.model.Process mainProcess = bpmnModel.getMainProcess();
+        if (mainProcess == null) {
+            return null;
+        }
+        return extractActionIdsRecursive(mainProcess.getExtensionElements(), "globalActionIds");
+    }
+
+    /**
+     * Node IDs first, then Global IDs; first occurrence of an ID wins.
+     */
+    List<String> mergeActionIds(List<String> nodeIds, List<String> globalIds) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>();
+        appendIds(merged, nodeIds);
+        appendIds(merged, globalIds);
+        return merged.isEmpty() ? null : new ArrayList<>(merged);
+    }
+
+    private static void appendIds(LinkedHashSet<String> target, List<String> ids) {
+        if (ids == null) {
+            return;
+        }
+        for (String id : ids) {
+            if (id != null && !id.isBlank()) {
+                target.add(id);
+            }
+        }
+    }
+
+    private static boolean isEmpty(List<String> ids) {
+        return ids == null || ids.isEmpty();
+    }
+
+    private record XmlActionSources(List<String> nodeIds, List<String> globalIds) {}
 
     /**
      * Depth-first search for extension nodes whose name attribute matches the given
@@ -311,6 +349,11 @@ public class BpmnActionParser {
     }
 
     private List<String> extractActionIdsFromBpmnXmlResource(Task task, String userTaskElementId) {
+        XmlActionSources xml = readActionIdsFromBpmnXml(task, userTaskElementId);
+        return xml == null ? null : mergeActionIds(xml.nodeIds(), xml.globalIds());
+    }
+
+    private XmlActionSources readActionIdsFromBpmnXml(Task task, String userTaskElementId) {
         try {
             ProcessDefinition pd = repositoryService
                 .createProcessDefinitionQuery()
@@ -324,25 +367,21 @@ public class BpmnActionParser {
                 return null;
             }
             String key = userTaskElementId != null ? userTaskElementId : task.getTaskDefinitionKey();
-            // 1) DOM parsing (most robust: handles any namespace and attribute order)
-            List<String> fromDom = parseActionIdsFromBpmnDom(xml, key, "actionIds");
-            if (fromDom != null && !fromDom.isEmpty()) {
-                return fromDom;
-            }
-            // 2) Regex (double-quoted / single-quoted)
-            List<String> fromTask = parseActionIdsFromUserTaskXmlBlock(xml, key, "actionIds");
-            if (fromTask != null && !fromTask.isEmpty()) {
-                return fromTask;
-            }
-            List<String> global = parseActionIdsFromProcessXmlBlock(xml, "globalActionIds");
-            if (global != null && !global.isEmpty()) {
-                return global;
-            }
-            return parseActionIdsFromProcessXmlBlockDom(xml, "globalActionIds");
+            List<String> node = firstNonEmpty(
+                    parseActionIdsFromBpmnDom(xml, key, "actionIds"),
+                    parseActionIdsFromUserTaskXmlBlock(xml, key, "actionIds"));
+            List<String> global = firstNonEmpty(
+                    parseActionIdsFromProcessXmlBlock(xml, "globalActionIds"),
+                    parseActionIdsFromProcessXmlBlockDom(xml, "globalActionIds"));
+            return new XmlActionSources(node, global);
         } catch (Exception e) {
             log.debug("BPMN XML fallback for actionIds failed: {}", e.getMessage());
             return null;
         }
+    }
+
+    private static List<String> firstNonEmpty(List<String> primary, List<String> fallback) {
+        return isEmpty(primary) ? fallback : primary;
     }
 
     // ==================== Internal Methods ====================
