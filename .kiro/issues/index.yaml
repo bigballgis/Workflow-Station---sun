@@ -2295,3 +2295,19 @@
     canAccessFunctionUnit / My Requests / Views 未改。
     验证：FunctionUnitAccessComponentTest + FunctionUnitAccessProperties pass；
     mvn -pl backend/user-portal -am package -DskipTests；compose rebuild user-portal。
+
+- id: "1538"
+  status: fixed
+  fixed_at: "2026-08-20"
+  severity: major
+  category: bug
+  summary: "Global 动作在节点已有 actionIds 时被 BpmnActionParser 丢弃，Portal 待办不显示 SAVE"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/BpmnActionParser.java"
+  note: |
+    根因：extractActionIds 把 process 级 globalActionIds 当成节点动作缺失时的 fallback，
+    节点 actionIds 非空就立刻 return。MCY 节点 [1223] + Global SAVE [1225] 只返回 [1223]；
+    Guide Unit 无节点动作才会 fallback 到 Global。
+    修复：节点动作与 Global 按来源独立读取后去重合并（节点在前，Global 在后）。
+    验证：BpmnActionParserTest + BpmnActionParserMergeTest + BpmnActionParserMergePropertyTest
+    共 20 tests pass（含 XML/模型合并、兄弟节点隔离、模型优先于 XML、异常回退、
+    jqwik 80–100 tries 的 merge/XML/parse 不变量）。
