@@ -31,9 +31,10 @@ import java.util.regex.Pattern;
  *       take {@code YYYY-MM-DD} from the dialog.</li>
  *   <li>BOOLEAN — case-insensitive eq/ne against true/false; {@code ne} also matches
  *       empty cells, so Not equals True is not the same as Equals False.</li>
- *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
- *       (id, username, display_name, full_name, employee_id), so a people picker can
- *       send the user id even when legacy rows stored a display name.</li>
+   *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
+       *       (id, {@code user:}<id>, username, display_name, full_name, employee_id), so a
+       *       people picker can send the user id even when legacy rows stored a prefixed id
+       *       or a display name. Grouping uses the same table to produce a display label.</li>
  * </ul>
  */
 public final class ListFilterSql {
@@ -155,7 +156,12 @@ public final class ListFilterSql {
         if (!column.groupable()) {
             throw new IllegalArgumentException("Column is not groupable: " + field);
         }
-        return columnRef.sqlFor(column.field());
+        String ref = columnRef.sqlFor(column.field());
+        // USER groups by the display label resolved from sys_users so headers match cells
+        // that also resolve bare ids / user:<id> / legacy name storage through the same table.
+        return column.kind() == PortalListColumnMeta.Kind.USER
+                ? userDisplayLabelExpression(ref)
+                : ref;
     }
 
     /**
@@ -238,8 +244,8 @@ public final class ListFilterSql {
     }
 
     /**
-     * The picker sends {@code sys_users.id}. Stored values may be that id, a username,
-     * a display name, or an employee id — match any of them for the selected row.
+     * The picker sends {@code sys_users.id}. Stored values may be that id, {@code user:}<id>,
+     * a username, a display name, or an employee id — match any of them for the selected row.
      */
     private static String userIdentityPredicate(String ref, String operator, String userId,
                                                 List<Object> outParams) {
@@ -250,6 +256,7 @@ public final class ListFilterSql {
         String fullName = SqlIdentifiers.requireIdentifier("full_name");
         String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
         String match = "(" + ref + " = u." + id + "::text"
+                + " OR " + ref + " = ('user:' || u." + id + "::text)"
                 + " OR " + ref + " = u." + username
                 + " OR " + ref + " = u." + displayName
                 + " OR " + ref + " = u." + fullName
@@ -263,6 +270,34 @@ public final class ListFilterSql {
             return "(NOT " + exists + ")";
         }
         throw new IllegalArgumentException("Operator " + operator + " is not allowed on a USER column");
+    }
+
+    /**
+     * Display label for a USER cell/group key, resolved through {@code sys_users}. Bare id,
+     * {@code user:}<id>, username, and legacy name storage all map to one label so GROUP BY
+     * headers match what the portal paints after the same resolution.
+     */
+    static String userDisplayLabelExpression(String ref) {
+        String users = SqlIdentifiers.requireQualifiedName("sys_users");
+        String id = SqlIdentifiers.requireIdentifier("id");
+        String username = SqlIdentifiers.requireIdentifier("username");
+        String displayName = SqlIdentifiers.requireIdentifier("display_name");
+        String fullName = SqlIdentifiers.requireIdentifier("full_name");
+        String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
+        String value = "(" + ref + ")";
+        String stripped = "(CASE WHEN left(COALESCE(" + value + ", ''), 5) = 'user:'"
+                + " THEN substring(COALESCE(" + value + ", '') from 6) ELSE " + value + " END)";
+        String label = "COALESCE(NULLIF(TRIM(u." + displayName + "), ''),"
+                + " NULLIF(TRIM(u." + fullName + "), ''), u." + username + ")";
+        return "COALESCE((SELECT " + label
+                + " FROM " + users + " u WHERE u." + id + "::text = " + stripped
+                + " OR u." + id + "::text = " + value
+                + " OR ('user:' || u." + id + "::text) = " + value
+                + " OR u." + username + " = " + value
+                + " OR u." + displayName + " = " + value
+                + " OR u." + fullName + " = " + value
+                + " OR u." + employeeId + " = " + value
+                + " LIMIT 1), " + value + ")";
     }
 
     private static String textPredicate(String ref, ListColumnFilter filter, String value,

@@ -2333,3 +2333,9 @@
     ProcessInstanceSubTableRowIdentityTest + user-portal 全量 1065 项；
     dev 回填 1→0 行且二次运行 0 更新；运行时经 /tasks/{id}/submit 提交无身份行后读回带 row_id。
     编号说明：0731 已占用 #1538（Global 动作合并），本条在 Views PR 记为 #1539。
+
+- id: "1540"
+  status: open
+  severity: minor
+  category: quality
+  summary: "Views CSV export: FE comment says unpaged but body still sends page size; BE overrides with maxRows — clarify contract"

@@ -2,6 +2,7 @@ package com.portal.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.audit.SystemAuditFields;
 import com.platform.common.jdbc.SubTableRowIdentity;
 import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
@@ -84,9 +85,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                     WHERE v.status = 'PUBLISHED'
                     ORDER BY fu.name, v.id
                     """);
-        } catch (Exception e) {
-            log.warn("Main table view menu query failed: {}", e.getMessage());
-            return List.of();
+        } catch (DataAccessException e) {
+            throw new IllegalStateException("Main table view menu query failed", e);
         }
 
         Map<String, List<Long>> viewIdsByFuCode = new LinkedHashMap<>();
@@ -160,9 +160,9 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             return summaries.stream()
                     .filter(summary -> canUserSeeView(userId, summary.id()))
                     .toList();
-        } catch (Exception e) {
-            log.warn("List published views failed for {}: {}", functionUnitCode, e.getMessage());
-            return List.of();
+        } catch (DataAccessException e) {
+            throw new IllegalStateException(
+                    "List published views failed for function unit " + functionUnitCode, e);
         }
     }
 
@@ -650,9 +650,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             }
         }
         Object raw = source.get(field.fieldName());
-        Object liveUser = liveResolveUserPrefixed(raw, ownerCache);
-        if (liveUser != null) {
-            return liveUser;
+        if (shouldResolveAsUserIdentity(field.fieldName(), raw)) {
+            Object liveUser = liveResolveUserIdentity(raw, ownerCache);
+            if (liveUser != null) {
+                return liveUser;
+            }
         }
         if (raw instanceof String s && s.startsWith("group:")) {
             Object display = source.get(field.fieldName() + "__display");
@@ -675,6 +677,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         for (MainTableViewSubRowQueryComponent.Row row : rows) {
             collectOwnerUserKeys(row.instance(), keys);
             collectUserPrefixedKeys(row.subRow(), keys);
+            collectKnownUserFieldKeys(row.subRow(), keys);
         }
         return userDisplayNameResolver.resolveBatch(keys);
     }
@@ -683,6 +686,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         keys.addAll(userDisplayNameResolver.collectAssigneeUserKeys(
                 pi.getCurrentAssignee(), pi.getCandidateUsers()));
         collectUserPrefixedKeys(pi.getVariables(), keys);
+        collectKnownUserFieldKeys(pi.getVariables(), keys);
     }
 
     private static void collectUserPrefixedKeys(Map<String, Object> source, Set<String> keys) {
@@ -696,16 +700,65 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         }
     }
 
-    private String liveResolveUserPrefixed(Object raw, Map<String, String> ownerCache) {
-        if (!(raw instanceof String s) || !s.startsWith("user:") || s.length() <= 5) {
+    /** Audit USER columns often store a bare id / name without the {@code user:} prefix. */
+    private static void collectKnownUserFieldKeys(Map<String, Object> source, Set<String> keys) {
+        if (source == null) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (SystemAuditFields.isUser(entry.getKey())) {
+                collectUserIdentityKey(entry.getValue(), keys);
+            }
+        }
+    }
+
+    /**
+     * Collect keys for {@link UserDisplayNameResolver}: {@code user:}<id> strips to id; bare
+     * strings (id / username / employee id / legacy display name) are kept as-is so batch
+     * resolve can match {@code sys_users} the same way list USER filters do.
+     */
+    private static void collectUserIdentityKey(Object value, Set<String> keys) {
+        if (!(value instanceof String s) || s.isBlank()) {
+            return;
+        }
+        String trimmed = s.trim();
+        if (trimmed.startsWith("user:") && trimmed.length() > 5) {
+            keys.add(trimmed.substring(5).trim());
+            return;
+        }
+        if (trimmed.startsWith("group:")) {
+            return;
+        }
+        keys.add(trimmed);
+    }
+
+    private static boolean shouldResolveAsUserIdentity(String fieldName, Object raw) {
+        if (raw instanceof String s && s.startsWith("user:") && s.length() > 5) {
+            return true;
+        }
+        return SystemAuditFields.isUser(fieldName);
+    }
+
+    /**
+     * Same resolution path as {@link ListFilterSql#userDisplayLabelExpression}: map stored
+     * identity forms through {@code sys_users} so group headers and cells share one label.
+     */
+    private String liveResolveUserIdentity(Object raw, Map<String, String> ownerCache) {
+        if (!(raw instanceof String s) || s.isBlank()) {
             return null;
         }
-        String id = s.substring(5).trim();
-        if (id.isEmpty()) {
+        String trimmed = s.trim();
+        if (trimmed.startsWith("group:")) {
             return null;
         }
-        String live = userDisplayNameResolver.resolveCached(id, ownerCache);
-        return live != null && !live.isBlank() ? live : id;
+        String key = trimmed.startsWith("user:") && trimmed.length() > 5
+                ? trimmed.substring(5).trim()
+                : trimmed;
+        if (key.isEmpty()) {
+            return null;
+        }
+        String live = userDisplayNameResolver.resolveCached(key, ownerCache);
+        return live != null && !live.isBlank() ? live : null;
     }
 
     private Object systemFieldValue(ProcessInstance pi, String fieldName) {

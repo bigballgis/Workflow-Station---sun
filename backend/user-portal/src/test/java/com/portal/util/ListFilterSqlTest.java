@@ -94,6 +94,25 @@ class ListFilterSqlTest {
     }
 
     @Test
+    void userEqAlsoMatchesUserPrefixedStoredId() {
+        String sql = where("created_by", "eq", "user-dev", null);
+        assertTrue(sql.contains("data->>'created_by' = ('user:' || u.id::text)"), sql);
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
+    void userGroupExpressionResolvesLabelThroughSysUsers() {
+        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
+        byField.put("created_by", PortalListColumnMeta.of(
+                "created_by", "Created by", Kind.USER));
+        ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
+        String expr = sql.groupByExpression("created_by");
+        assertTrue(expr.contains("sys_users"), expr);
+        assertTrue(expr.contains("('user:' || u.id::text)"), expr);
+        assertTrue(expr.contains("data->>'created_by'"), expr);
+    }
+
+    @Test
     void numberGtGuardsNonNumericStoredValues() {
         String sql = where("amount", "gt", "500", null);
         assertTrue(sql.contains("data->>'amount' ~ '^-?[0-9]+(\\.[0-9]+)?$'"));

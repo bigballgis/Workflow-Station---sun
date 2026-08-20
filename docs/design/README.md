@@ -10,7 +10,6 @@
 | 前缀 | 功能域 |
 |------|--------|
 | `mi-*` | 多实例（MI）子任务分派 |
-| `owner-*` | Owner 人员组件（表单 + View） |
 | `portal-*` | User Portal 终端用户身份与权限 |
 | `developer-workstation-*` | Developer Workstation 设计器侧 |
 | `table-design-*` | Table Design 建模规则 |
@@ -28,18 +27,6 @@
 | [mi-assignment-mode-component.md](./mi-assignment-mode-component.md) | **Assignment Mode 表单组件**：容器化与拖拽、DW 设计器/DW Preview/Portal 三端渲染、form-create 框架约束、排查手册 |
 
 > 改这两处任一侧前，两篇都值得扫一眼：契约字段名由前者定义，后者依赖它做门控。
-
-## Owner 组件（Creator / Current Assignee）
-
-Table Design 先建 VARCHAR 列，表单上把控件改成 Owner，每个控件选 **Creator**（流程发起人 / 子表建行人）或 **Current Assignee**（办理人快照）。一表、一表单可以多个。流转按 source 自动赋值，只读。View 勾选该列即可。不是每表一个，也不自动建列。
-
-| 文档 | 覆盖 |
-|------|------|
-| [owner-field-component.md](./owner-field-component.md) | **Owner 组件**（状态：方案已定稿 2026-08-19）：先建列再改类型、`source` 二选一、可多个、`user:<id>` + `__display`、Assignee 列跟办理人写点同步 |
-
-> Owner **不是** User Task「谁办理」配置，也不和实例列 `current_assignee` 合成一列。分派仍看 BPMN `assigneeType`；MI 行内分派仍看上面两篇。改 Owner 不转办。
-> 08-17「拖组件建列 / 每表一个 / 可改派 / 禁止跟办理人 / `group:BU|Role`」**作废**（2026-08-20 确认；仅 fork 有过提交、未合入 origin）。实现以该文档为准。Current Assignee **跟 Flowable 办理人快照**：1 人写 `user:<id>`；BU 池是已展开的 userId 列表，主值为空、展示姓名，不存 `group:`。
-> 「owned by me」筛选、手改派、行级可见性均另开设计。
 
 ## User Portal 身份与权限
 

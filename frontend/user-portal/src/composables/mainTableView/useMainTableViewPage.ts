@@ -269,9 +269,15 @@ async function loadData() {
     })
     if (queryId !== latestQuery) return
     const page: MainTableViewDataPage = res.data
-    gridColumns.value = page.columns || []
-    allRows.value = page.rows || []
-    dataGroups.value = page.groups || []
+    if (!page || !Array.isArray(page.columns) || !Array.isArray(page.rows) || !Array.isArray(page.groups)) {
+      throw new Error('main table view data page is missing columns, rows, or groups')
+    }
+    if (typeof page.total !== 'number') {
+      throw new Error('main table view data page is missing total')
+    }
+    gridColumns.value = page.columns
+    allRows.value = page.rows
+    dataGroups.value = page.groups
     dataTotal.value = page.total
     initColumnOrder(gridColumns.value, gridRuntime)
     // Drop any groupBy / sort / filter that references a column the new view doesn't have, so runtime
