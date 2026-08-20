@@ -142,6 +142,7 @@ export function toListColumnMeta(col: MainTableViewFieldColumn): ListColumnMeta 
     sortable: col.sortable,
     groupable: col.groupable,
     operators: col.operators,
+    options: col.options,
   }
 }
 

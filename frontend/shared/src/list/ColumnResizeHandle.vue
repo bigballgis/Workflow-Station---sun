@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
-import { clampColumnWidth, COL_RESIZE_CURSOR } from './columnResizeCursor'
+import {
+  attachColumnResizeGuide,
+  clampColumnWidth,
+  COL_RESIZE_CURSOR,
+  type ColumnResizeGuide,
+} from './columnResizeCursor'
 
 const props = defineProps<{
   initialWidth: number
@@ -18,13 +23,17 @@ function onMouseDown(event: MouseEvent) {
   event.preventDefault()
   event.stopPropagation()
 
+  const handle = event.currentTarget as HTMLElement
   const startX = event.clientX
   const startWidth = props.initialWidth
+  const guide: ColumnResizeGuide = attachColumnResizeGuide(handle, startWidth)
   isResizing.value = true
   document.body.classList.add('is-column-resizing')
 
   function onMouseMove(ev: MouseEvent) {
-    emit('resize', clampColumnWidth(startWidth + ev.clientX - startX))
+    const width = clampColumnWidth(startWidth + ev.clientX - startX)
+    emit('resize', width)
+    guide.move(width)
   }
 
   function detach() {
@@ -33,6 +42,7 @@ function onMouseDown(event: MouseEvent) {
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
     document.body.classList.remove('is-column-resizing')
+    guide.detach()
     isResizing.value = false
     detachActiveDrag = null
   }
@@ -49,8 +59,6 @@ function onMouseDown(event: MouseEvent) {
   detachActiveDrag = detach
 }
 
-// Unmounting mid-drag (e.g. route change while the button is held) must not leak the
-// document listeners or leave the body stuck in resize-cursor / no-select mode.
 onBeforeUnmount(() => {
   detachActiveDrag?.()
 })

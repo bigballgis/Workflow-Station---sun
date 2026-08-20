@@ -6,6 +6,8 @@ import com.portal.dto.PortalListColumnMeta.Kind;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,12 +26,16 @@ class ListFilterSqlTest {
         byField.put("name", filterable("name", Kind.TEXT));
         byField.put("amount", filterable("amount", Kind.NUMBER));
         byField.put("created_at", filterable("created_at", Kind.DATETIME));
+        byField.put("created_by", filterable("created_by", Kind.USER));
         byField.put("active", filterable("active", Kind.BOOLEAN));
         byField.put("payload", PortalListColumnMeta.displayOnly("payload", "Payload", Kind.TEXT));
         return byField;
     }
 
     private PortalListColumnMeta filterable(String field, Kind kind) {
+        if (kind == Kind.BOOLEAN) {
+            return PortalListColumnMeta.of(field, field, kind);
+        }
         return new PortalListColumnMeta(field, field, kind, true, true, false,
                 PortalListColumnMeta.operatorsFor(kind), List.of());
     }
@@ -65,6 +71,26 @@ class ListFilterSqlTest {
         assertEquals(" AND (data->>'name' IS NULL OR data->>'name' = '')",
                 where("name", "isNull", null, null));
         assertTrue(params.isEmpty());
+        params.clear();
+        assertEquals(" AND (data->>'active' IS NULL OR data->>'active' = '')",
+                where("active", "isNull", null, null));
+        assertTrue(params.isEmpty());
+    }
+
+    @Test
+    void userEqMatchesAnyStoredIdentityOfTheSelectedSysUser() {
+        String sql = where("created_by", "eq", "user-dev", null);
+        assertTrue(sql.contains("EXISTS (SELECT 1 FROM sys_users u WHERE u.id = ?"));
+        assertTrue(sql.contains("data->>'created_by' = u.display_name"));
+        assertTrue(sql.contains("data->>'created_by' = u.employee_id"));
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
+    void userNeNegatesTheIdentityMatch() {
+        String sql = where("created_by", "ne", "user-dev", null);
+        assertTrue(sql.startsWith(" AND (NOT EXISTS"));
+        assertEquals(List.of("user-dev"), params);
     }
 
     @Test
@@ -106,8 +132,42 @@ class ListFilterSqlTest {
     }
 
     @Test
+    void relativeTodayExpandsAgainstTheClockCalendarDayWithoutAValue() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-19T08:00:00Z"), ListRelativeDates.ZONE);
+        ListFilterSql sql = new ListFilterSql(columns(), ListFilterSql.JSON_ROW, "id", null, clock);
+        String clause = sql.whereClause(
+                List.of(new ListColumnFilter("created_at", "today", "", null)), params);
+        assertEquals(" AND (left(data->>'created_at', 10) >= ? AND left(data->>'created_at', 10) <= ?)",
+                clause);
+        assertEquals(List.of("2026-08-19", "2026-08-19"), params);
+    }
+
+    @Test
+    void relativeThisWeekIsMondayThroughSundayInShanghai() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-19T08:00:00Z"), ListRelativeDates.ZONE);
+        ListFilterSql sql = new ListFilterSql(columns(), ListFilterSql.JSON_ROW, "id", null, clock);
+        sql.whereClause(List.of(new ListColumnFilter("created_at", "thisWeek", null, null)), params);
+        assertEquals(List.of("2026-08-17", "2026-08-23"), params);
+    }
+
+    @Test
+    void relativeLast7DaysIncludesToday() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-19T08:00:00Z"), ListRelativeDates.ZONE);
+        ListFilterSql sql = new ListFilterSql(columns(), ListFilterSql.JSON_ROW, "id", null, clock);
+        sql.whereClause(List.of(new ListColumnFilter("created_at", "last7days", null, null)), params);
+        assertEquals(List.of("2026-08-13", "2026-08-19"), params);
+    }
+
+    @Test
     void booleanEqNormalizesCase() {
         assertEquals(" AND lower(data->>'active') = ?", where("active", "eq", "TRUE", null));
+        assertEquals(List.of("true"), params);
+    }
+
+    @Test
+    void booleanNeIncludesEmptyCells() {
+        assertEquals(" AND (data->>'active' IS NULL OR lower(data->>'active') <> ?)",
+                where("active", "ne", "true", null));
         assertEquals(List.of("true"), params);
     }
 
@@ -187,8 +247,8 @@ class ListFilterSqlTest {
     @Test
     void groupingLeadsTheOrderSoAGroupsRowsCannotStraddleAPage() {
         Map<String, PortalListColumnMeta> byField = columns();
-        byField.put("status", new PortalListColumnMeta("status", "status", Kind.ENUM, true, true, true,
-                PortalListColumnMeta.operatorsFor(Kind.ENUM), List.of()));
+        byField.put("status", PortalListColumnMeta.withOptions("status", "status", Kind.ENUM,
+                List.of(new PortalListColumnMeta.Option("OPEN", "Open"))));
         ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
 
         String groupExpression = sql.groupByExpression("status");

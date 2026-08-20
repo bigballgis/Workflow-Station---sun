@@ -15,6 +15,7 @@ public final class MainTableViewPortalDtos {
             String functionUnitCode,
             String functionUnitName,
             int viewCount,
+            /** Inline SVG markup from DW icon library; null when none. */
             String iconSvg
     ) {}
 
@@ -65,11 +66,36 @@ public final class MainTableViewPortalDtos {
             Boolean filterable,
             Boolean sortable,
             Boolean groupable,
-            List<String> operators
-    ) {}
+            List<String> operators,
+            /** Closed choices for ENUM / BOOLEAN; empty for open-value kinds. */
+            List<PortalListColumnMeta.Option> options
+    ) {
+        /**
+         * Copies the list-header contract onto a view column. {@code options} must travel:
+         * BOOLEAN / ENUM filters are a closed select, and omitting the list makes the portal
+         * throw (or, if that guard is bypassed, fall through to a text box).
+         */
+        public static MainTableViewFieldColumnBuilder applyListCapabilities(
+                MainTableViewFieldColumnBuilder builder, PortalListColumnMeta cap) {
+            return builder
+                    .kind(cap.kind())
+                    .filterable(cap.filterable())
+                    .sortable(cap.sortable())
+                    .groupable(cap.groupable())
+                    .operators(cap.operators())
+                    .options(cap.options());
+        }
+    }
 
+    /**
+     * @param rowKey what makes this row distinct from every other row of the view. On a MAIN view
+     *               that is the process instance; on a SUB view one instance contributes many
+     *               rows, so the instance id alone would repeat and the grid could not tell two
+     *               of them apart when selecting or re-rendering.
+     */
     @Builder
     public record MainTableViewDataRow(
+            String rowKey,
             String processInstanceId,
             Map<String, Object> values
     ) {}

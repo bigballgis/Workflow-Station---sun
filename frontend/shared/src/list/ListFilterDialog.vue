@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   isCompleteFilter,
@@ -8,12 +8,18 @@ import {
   operatorNeedsValue,
   type ListColumnFilter,
   type ListColumnMeta,
+  type ListColumnOption,
 } from './columnMeta'
 
 const props = defineProps<{
   visible: boolean
   column: ListColumnMeta | null
   filter: ListColumnFilter | null
+  /**
+   * Host-owned people search for USER columns (name or staff ID). The dialog never
+   * calls an API itself — shared list chrome does not know users.
+   */
+  remoteSearch?: (query: string) => Promise<ListColumnOption[]>
 }>()
 
 const emit = defineEmits<{
@@ -25,6 +31,10 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const draft = ref<ListColumnFilter>({ operator: '', value: '', value2: '' })
+const remoteHits = ref<ListColumnOption[]>([])
+const remoteLoading = ref(false)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let searchGen = 0
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -41,6 +51,17 @@ watch(
         `ListFilterDialog opened for ${props.column?.field ?? 'unknown column'} without an operator whitelist — the column declaration is broken`,
       )
     }
+    const closed = props.column.kind === 'ENUM' || props.column.kind === 'BOOLEAN'
+    if (closed && (props.column.options?.length ?? 0) === 0) {
+      throw new Error(
+        `ListFilterDialog opened for ${props.column.field} (${props.column.kind}) without options — the column declaration is broken`,
+      )
+    }
+    if (props.column.kind === 'USER' && (props.column.options?.length ?? 0) === 0 && !props.remoteSearch) {
+      throw new Error(
+        `ListFilterDialog opened for ${props.column.field} (USER) without a people search — the host must supply remoteSearch`,
+      )
+    }
     draft.value = {
       operator:
         props.filter && operators.includes(props.filter.operator)
@@ -49,6 +70,10 @@ watch(
       value: props.filter?.value ?? '',
       value2: props.filter?.value2 ?? '',
     }
+    remoteHits.value = []
+    if (props.column.kind === 'USER' && props.remoteSearch && draft.value.value) {
+      runUserSearch(draft.value.value)
+    }
   },
   { immediate: true },
 )
@@ -56,12 +81,54 @@ watch(
 const needsValue = computed(() => operatorNeedsValue(draft.value.operator))
 const needsRange = computed(() => operatorNeedsRange(draft.value.operator))
 const hasOptions = computed(() => (props.column?.options?.length ?? 0) > 0)
+const isUser = computed(() => props.column?.kind === 'USER')
 const valueInputType = computed(() => {
   if (props.column?.kind === 'NUMBER') return 'number'
   return 'text'
 })
+const showOperator = computed(() => (props.column?.operators?.length ?? 0) > 1)
 const isDate = computed(() => props.column?.kind === 'DATETIME')
 const canApply = computed(() => isCompleteFilter(draft.value))
+
+function onUserSearch(query: string) {
+  if (searchTimer != null) {
+    clearTimeout(searchTimer)
+  }
+  searchTimer = setTimeout(() => {
+    searchTimer = null
+    runUserSearch(query)
+  }, 300)
+}
+
+function runUserSearch(query: string) {
+  if (!props.remoteSearch) return
+  const trimmed = query.trim()
+  if (!trimmed) {
+    searchGen += 1
+    remoteHits.value = []
+    remoteLoading.value = false
+    return
+  }
+  const gen = ++searchGen
+  remoteLoading.value = true
+  void props.remoteSearch(trimmed).then(
+    (hits) => {
+      if (gen === searchGen) {
+        remoteHits.value = hits
+      }
+    },
+  ).finally(() => {
+    if (gen === searchGen) {
+      remoteLoading.value = false
+    }
+  })
+}
+
+onBeforeUnmount(() => {
+  if (searchTimer != null) {
+    clearTimeout(searchTimer)
+  }
+})
 
 function onApply() {
   const payload: ListColumnFilter = { operator: draft.value.operator, value: '' }
@@ -88,7 +155,10 @@ function onClear() {
     destroy-on-close
   >
     <el-form label-position="top">
-      <el-form-item :label="t('sharedList.filterOperator')">
+      <el-form-item
+        v-if="showOperator"
+        :label="t('sharedList.filterOperator')"
+      >
         <el-select
           v-model="draft.operator"
           class="list-filter-operator"
@@ -116,6 +186,25 @@ function onClear() {
         >
           <el-option
             v-for="opt in column?.options ?? []"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+        <el-select
+          v-else-if="isUser"
+          v-model="draft.value"
+          class="list-filter-value list-filter-user"
+          style="width: 100%;"
+          clearable
+          filterable
+          remote
+          :remote-method="onUserSearch"
+          :loading="remoteLoading"
+          :placeholder="t('sharedList.filterUserPlaceholder')"
+        >
+          <el-option
+            v-for="opt in remoteHits"
             :key="opt.value"
             :label="opt.label"
             :value="opt.value"

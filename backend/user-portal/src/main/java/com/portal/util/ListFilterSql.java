@@ -1,9 +1,12 @@
 package com.portal.util;
 
+import com.platform.common.jdbc.SqlIdentifiers;
 import com.portal.dto.ListColumnFilter;
 import com.portal.dto.PortalListColumnMeta;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -22,9 +25,15 @@ import java.util.regex.Pattern;
  *       ne/notContains also match rows where the field is null.</li>
  *   <li>NUMBER — comparisons only match rows whose stored value parses as a number (regex-guarded
  *       cast), so a non-numeric stored value simply fails the predicate instead of erroring.</li>
- *   <li>DATETIME — the filter dialog sends {@code YYYY-MM-DD}; comparison is on the first 10
- *       chars of the stored ISO string, so date-only bounds are inclusive.</li>
- *   <li>BOOLEAN — case-insensitive equality against true/false.</li>
+ *   <li>DATETIME — calendar-day comparison on the first 10 chars of the stored ISO string.
+ *       Relative operators ({@code today}, {@code last7days}, …) expand to inclusive bounds
+ *       in {@link ListRelativeDates#ZONE}; {@code on}/{@code before}/{@code after}/{@code between}
+ *       take {@code YYYY-MM-DD} from the dialog.</li>
+ *   <li>BOOLEAN — case-insensitive eq/ne against true/false; {@code ne} also matches
+ *       empty cells, so Not equals True is not the same as Equals False.</li>
+ *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
+ *       (id, username, display_name, full_name, employee_id), so a people picker can
+ *       send the user id even when legacy rows stored a display name.</li>
  * </ul>
  */
 public final class ListFilterSql {
@@ -33,9 +42,14 @@ public final class ListFilterSql {
     private static final String SQL_NUMERIC_GUARD = "'^-?[0-9]+(\\.[0-9]+)?$'";
     private static final Pattern DATE_VALUE = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
     private static final Pattern IDENTIFIER = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
-    /** Ordering refs may be table-qualified ({@code pi.id}); user-supplied field names may not. */
-    private static final Pattern ORDERING_REF =
-            Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)?$");
+    /**
+     * Ordering refs may be table-qualified ({@code pi.id}); user-supplied field names may not.
+     * A tiebreak may name several columns, because what makes a row unique is not always one
+     * column — a sub-table row takes both its instance and its own identity to pin down.
+     */
+    private static final Pattern ORDERING_REF = Pattern.compile(
+            "^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)?"
+                    + "(, *[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)?)*$");
 
     /** Resolves a declared column name to the SQL expression holding its value. */
     @FunctionalInterface
@@ -53,6 +67,7 @@ public final class ListFilterSql {
     private final ColumnRef columnRef;
     private final String tiebreak;
     private final String defaultOrderBy;
+    private final Clock clock;
 
     /**
      * @param tiebreak       column appended to every ORDER BY so equal values page deterministically
@@ -62,10 +77,20 @@ public final class ListFilterSql {
      */
     public ListFilterSql(Map<String, PortalListColumnMeta> columnsByField, ColumnRef columnRef,
                          String tiebreak, String defaultOrderBy) {
+        this(columnsByField, columnRef, tiebreak, defaultOrderBy, Clock.system(ListRelativeDates.ZONE));
+    }
+
+    public ListFilterSql(Map<String, PortalListColumnMeta> columnsByField, ColumnRef columnRef,
+                         String tiebreak, String defaultOrderBy, Clock clock) {
         this.columnsByField = Map.copyOf(columnsByField);
         this.columnRef = columnRef;
         this.tiebreak = requireOrderingRef(tiebreak);
         this.defaultOrderBy = defaultOrderBy;
+        if (clock == null) {
+            throw new IllegalArgumentException(
+                    "clock is required so relative date filters expand against a known calendar");
+        }
+        this.clock = clock;
     }
 
     /** Rows keep their insertion order when nothing else is asked for. */
@@ -191,13 +216,53 @@ public final class ListFilterSql {
         if ("isNotNull".equals(op)) {
             return "(" + ref + " IS NOT NULL AND " + ref + " <> '')";
         }
+        if (column.kind() == PortalListColumnMeta.Kind.DATETIME && ListRelativeDates.isRelative(op)) {
+            return relativeDatePredicate(ref, op, outParams);
+        }
         String value = requireValue(filter, filter.value());
         return switch (column.kind()) {
-            case TEXT, ENUM, USER -> textPredicate(ref, filter, value, outParams);
+            case TEXT, ENUM -> textPredicate(ref, filter, value, outParams);
+            case USER -> userIdentityPredicate(ref, filter.operator(), value, outParams);
             case NUMBER -> numberPredicate(ref, filter, value, outParams);
             case DATETIME -> datePredicate(ref, filter, value, outParams);
             case BOOLEAN -> booleanPredicate(ref, filter, value, outParams);
         };
+    }
+
+    private String relativeDatePredicate(String ref, String operator, List<Object> outParams) {
+        ListRelativeDates.DayRange range = ListRelativeDates.range(operator, LocalDate.now(clock));
+        String day = "left(" + ref + ", 10)";
+        outParams.add(range.start().toString());
+        outParams.add(range.end().toString());
+        return "(" + day + " >= ? AND " + day + " <= ?)";
+    }
+
+    /**
+     * The picker sends {@code sys_users.id}. Stored values may be that id, a username,
+     * a display name, or an employee id — match any of them for the selected row.
+     */
+    private static String userIdentityPredicate(String ref, String operator, String userId,
+                                                List<Object> outParams) {
+        String users = SqlIdentifiers.requireQualifiedName("sys_users");
+        String id = SqlIdentifiers.requireIdentifier("id");
+        String username = SqlIdentifiers.requireIdentifier("username");
+        String displayName = SqlIdentifiers.requireIdentifier("display_name");
+        String fullName = SqlIdentifiers.requireIdentifier("full_name");
+        String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
+        String match = "(" + ref + " = u." + id + "::text"
+                + " OR " + ref + " = u." + username
+                + " OR " + ref + " = u." + displayName
+                + " OR " + ref + " = u." + fullName
+                + " OR " + ref + " = u." + employeeId + ")";
+        outParams.add(userId);
+        String exists = "EXISTS (SELECT 1 FROM " + users + " u WHERE u." + id + " = ? AND " + match + ")";
+        if ("eq".equals(operator)) {
+            return exists;
+        }
+        if ("ne".equals(operator)) {
+            return "(NOT " + exists + ")";
+        }
+        throw new IllegalArgumentException("Operator " + operator + " is not allowed on a USER column");
     }
 
     private static String textPredicate(String ref, ListColumnFilter filter, String value,
@@ -286,20 +351,22 @@ public final class ListFilterSql {
 
     private static String booleanPredicate(String ref, ListColumnFilter filter, String value,
                                            List<Object> outParams) {
-        if (!"eq".equals(filter.operator())) {
-            throw unsupported(filter);
-        }
         String normalized = value.trim().toLowerCase();
         if (!"true".equals(normalized) && !"false".equals(normalized)) {
             throw new IllegalArgumentException(
                     "Boolean filter on " + filter.field() + " requires true/false, got: " + value);
         }
         outParams.add(normalized);
-        return "lower(" + ref + ") = ?";
+        return switch (filter.operator()) {
+            case "eq" -> "lower(" + ref + ") = ?";
+            case "ne" -> "(" + ref + " IS NULL OR lower(" + ref + ") <> ?)";
+            default -> throw unsupported(filter);
+        };
     }
 
     /** Escapes LIKE wildcards so user input matches literally (PG default escape is backslash). */
-    private static String escapeLike(String value) {
+    /** Wildcards a user typed are literal text, not pattern syntax. */
+    public static String escapeLike(String value) {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 

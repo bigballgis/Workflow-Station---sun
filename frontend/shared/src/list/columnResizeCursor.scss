@@ -1,7 +1,35 @@
-/* Keep cursor SVG in sync with columnResizeCursor.ts */
+/* Keep cursor SVG in sync with columnResizeCursor.ts.
+   Visual contract: invisible until hover, then a thin nav-red edge (no fill). */
 $col-resize-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cline x1='8' y1='3' x2='8' y2='17' stroke='%23303133' stroke-width='2'/%3E%3Cline x1='12' y1='3' x2='12' y2='17' stroke='%23303133' stroke-width='2'/%3E%3Cpath d='M4 10 L6.5 7 L6.5 13 Z' fill='%23303133'/%3E%3Cpath d='M16 10 L13.5 7 L13.5 13 Z' fill='%23303133'/%3E%3C/svg%3E")
   10 10,
   ew-resize;
+
+$resize-line: var(--hsbc-red, #DB0011);
+
+/* el-table clips header cells by default, which hides the handle sitting on the right edge.
+   Any th that hosts the shared header (or the handle itself) must overflow so the drag
+   target is reachable. Host pages do not re-declare this. */
+.el-table__header-wrapper th:has(.list-col-header),
+.el-table__header-wrapper th:has(.col-resize-handle) {
+  position: relative;
+  overflow: visible !important;
+}
+
+.el-table__header-wrapper th:has(.list-col-header) .cell,
+.el-table__header-wrapper th:has(.col-resize-handle) .cell {
+  position: static !important;
+  display: flex !important;
+  align-items: center;
+  width: 100% !important;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip;
+}
+
+.el-table__header-wrapper th:has(.col-resize-handle:hover),
+.el-table__header-wrapper th:has(.col-resize-handle.is-active) {
+  z-index: 12;
+}
 
 .col-resize-handle {
   position: absolute;
@@ -13,21 +41,22 @@ $col-resize-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
   z-index: 100;
   box-sizing: border-box;
   border-right: 2px solid transparent;
-  transition:
-    border-color 0.12s ease,
-    background-color 0.12s ease;
+  background-color: transparent;
+  transition: border-color 0.12s ease;
 }
 
-.col-resize-handle:hover,
-.col-resize-handle.is-active {
+/* Hover only — a 2px line, no fill. The full-height guide covers the in-drag state. */
+.col-resize-handle:hover:not(.is-active) {
   cursor: $col-resize-cursor;
-  border-right-color: #409eff;
-  background-color: rgba(64, 158, 255, 0.18);
+  border-right-color: $resize-line;
 }
 
-.col-resize-handle.is-active {
-  border-right-width: 3px;
-  background-color: rgba(64, 158, 255, 0.28);
+.col-resize-guide {
+  position: fixed;
+  width: 2px;
+  background-color: $resize-line;
+  z-index: 4000;
+  pointer-events: none;
 }
 
 body.is-column-resizing,

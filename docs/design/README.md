@@ -29,16 +29,17 @@
 
 > 改这两处任一侧前，两篇都值得扫一眼：契约字段名由前者定义，后者依赖它做门控。
 
-## Owner 归属组件（Dataverse 式）
+## Owner 组件（Creator / Current Assignee）
 
-表单拖 Owner 后保存即建列（同 lookup）：每张表最多一列。值 = 一个用户或一个 BU+Role 组（对应 Dataverse 的 User / Team），默认创建人（空才填），之后可在表单里改派。**不跟** `current_assignee` 走，转办不改 Owner。
+Table Design 先建 VARCHAR 列，表单上把控件改成 Owner，每个控件选 **Creator**（流程发起人 / 子表建行人）或 **Current Assignee**（办理人快照）。一表、一表单可以多个。流转按 source 自动赋值，只读。View 勾选该列即可。不是每表一个，也不自动建列。
 
 | 文档 | 覆盖 |
 |------|------|
-| [owner-field-component.md](./owner-field-component.md) | **Owner 组件**（状态：方案已定稿 2026-08-17 改版，未实现）：拖组件建列（同 lookup）、`user:<id>` / `group:<buCode>\|<roleCode>` + `__display`、默认创建人 + 可改派、每表一个 |
+| [owner-field-component.md](./owner-field-component.md) | **Owner 组件**（状态：方案已定稿 2026-08-19）：先建列再改类型、`source` 二选一、可多个、`user:<id>` + `__display`、Assignee 列跟办理人写点同步 |
 
-> Owner **不是** User Task「谁办理」配置，也**不是**办理人镜像（旧「跟着 assignee 变」方案已作废）。分派仍看 BPMN `assigneeType`；MI 行内分派仍看上面两篇。
-> 「owned by me」筛选、独立 Assign 权限、行级可见性均另开设计。
+> Owner **不是** User Task「谁办理」配置，也不和实例列 `current_assignee` 合成一列。分派仍看 BPMN `assigneeType`；MI 行内分派仍看上面两篇。改 Owner 不转办。
+> 08-17「拖组件建列 / 每表一个 / 可改派 / 禁止跟办理人」已作废，且 **未合入 origin**。实现以该文档为准，样式跟 Lookup / `ws-theme`。
+> 「owned by me」筛选、手改派、行级可见性均另开设计。
 
 ## User Portal 身份与权限
 
@@ -77,12 +78,19 @@
 | [feature-blueprint.md](./feature-blueprint.md) | 1.0 功能总蓝图（三应用 = 三层楼的整体视图，2.0 规划树） |
 | [user-profile-information-architecture.md](./user-profile-information-architecture.md) | 三端「个人中心 / 顶栏用户菜单」的信息边界与术语 |
 | [shared-list-components.md](./shared-list-components.md) | **列表共享组件 + 服务端分页接入规范**（状态：**方案已定稿，未实现**）：列头 / 列宽 / 筛选弹窗 / 分页四组件落 `frontend/shared/src/list/`；**本期范围只有 UP + AD，developer-workstation 一行不改**（`designer-list` 只作只读参考）；按菜单增量接入，每次必答「不越权 / 真分页 / 算子随字段类型 / 分组标签单边」，且**全程零兜底** |
+| [list-file-name-filter.md](./list-file-name-filter.md) | **列表 FILE 列按文件名筛选**（状态：**方案评审中，未实现**）：基线仍是 display-only；下一期用与格子同一套抽名规则筛，禁止当 TEXT 比 URL；推荐查询侧 SQL 抽名（MVP），落库结构化为后续 |
 
 > 列表改造是**增量**的：共享组件纯新增，一个菜单一个提交，未接入的菜单行为不变。
 > 行可见范围沿用现有权限语义，子串匹配只能做**候选粗筛**、必须接精确复核（§6.1）。
 > SUB 视图的行身份取 JSON 上的 `row_id`（优先级见 §6.1.1），**不走物理表 PK**——业务子表是
 > JSON 行存储、没有物理表，走那条路必然取空；没有身份键的行**抛错**不静默合并。
 > 分组能力**按字段语义逐列声明**，不是每个列头都挂分组入口（§6.3.1）。
+> 筛选 kind 的权威是表 `data_type` / 视图系统列，**不是** Form 组件；`current_step` 是 TEXT。
+> SUB 的四列系统字段同样筛 `pi.*`（和 MAIN 同一套 kind），不是 display-only（§6.3.2）。
+> `FILE` 列基线只展示；按文件名筛见 [list-file-name-filter.md](./list-file-name-filter.md)，禁止当 TEXT 凑合（§6.3.2）。
+> 封闭选项列（Status / Legal Hold / 人员）筛选一律 Equals / Not equals / No data / Has data（§6.3）。
+> 排序按 kind：文本字母、数字大小、时间新旧（§6.3.3）。
+> 翻页 loading：网格 `v-loading` 一只转圈；`ListPagination` 只禁用，不在页码左边再画一只。
 > 深分页**不设页数上限**，改为 >1s 记 WARN 慢查询日志，按生产真实分布再决定（§6.2）。
 
 ---

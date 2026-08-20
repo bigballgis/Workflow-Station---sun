@@ -24,9 +24,13 @@ function textColumn(overrides: Partial<ListColumnMeta> = {}): ListColumnMeta {
 
 let wrapper: VueWrapper | null = null
 
-async function mountDialog(column: ListColumnMeta | null, filter: ListColumnFilter | null) {
+async function mountDialog(
+  column: ListColumnMeta | null,
+  filter: ListColumnFilter | null,
+  remoteSearch?: (query: string) => Promise<{ value: string; label: string }[]>,
+) {
   wrapper = mount(ListFilterDialog, {
-    props: { visible: true, column, filter },
+    props: { visible: true, column, filter, remoteSearch },
     global: { plugins: [ElementPlus] },
     attachTo: document.body,
   })
@@ -95,6 +99,38 @@ describe('shared ListFilterDialog', () => {
     expect(w.emitted('apply')).toEqual([[{ operator: 'between', value: '10', value2: '90' }]])
   })
 
+  it('BOOLEAN offers True/False plus the same four operators as ENUM', async () => {
+    await mountDialog(
+      textColumn({
+        kind: 'BOOLEAN',
+        operators: ['eq', 'ne', 'isNull', 'isNotNull'],
+        options: [
+          { value: 'true', label: 'True' },
+          { value: 'false', label: 'False' },
+        ],
+      }),
+      null,
+    )
+    expect(document.querySelector('.list-filter-operator')).toBeTruthy()
+    expect(document.querySelector('.list-filter-value')?.classList.contains('el-select')).toBe(true)
+  })
+
+  it('BOOLEAN no-data hides the True/False list', async () => {
+    await mountDialog(
+      textColumn({
+        kind: 'BOOLEAN',
+        operators: ['eq', 'ne', 'isNull', 'isNotNull'],
+        options: [
+          { value: 'true', label: 'True' },
+          { value: 'false', label: 'False' },
+        ],
+      }),
+      { operator: 'isNull', value: '' },
+    )
+    expect(document.querySelector('.list-filter-value')).toBeNull()
+    expect(confirmButton().disabled).toBe(false)
+  })
+
   it('columns with options render a closed value select instead of free text', async () => {
     await mountDialog(
       textColumn({
@@ -124,5 +160,62 @@ describe('shared ListFilterDialog', () => {
     await expect(mountDialog(textColumn({ operators: [] }), null)).rejects.toThrow(
       /operator whitelist/,
     )
+  })
+
+  it('ENUM without options throws instead of falling back to a text box', async () => {
+    await expect(
+      mountDialog(
+        textColumn({
+          kind: 'ENUM',
+          operators: ['eq', 'ne'],
+          options: [],
+        }),
+        null,
+      ),
+    ).rejects.toThrow(/without options/)
+  })
+
+  it('relative date operators hide the value picker and apply without a date', async () => {
+    const w = await mountDialog(
+      textColumn({
+        kind: 'DATETIME',
+        operators: ['today', 'on', 'between'],
+      }),
+      { operator: 'today', value: '' },
+    )
+    expect(document.querySelector('.list-filter-value')).toBeNull()
+    expect(confirmButton().disabled).toBe(false)
+
+    confirmButton().click()
+    await w.vm.$nextTick()
+    expect(w.emitted('apply')).toEqual([[{ operator: 'today', value: '' }]])
+  })
+
+  it('USER without a people search throws instead of falling back to a text box', async () => {
+    await expect(
+      mountDialog(
+        textColumn({
+          kind: 'USER',
+          operators: ['eq', 'ne'],
+        }),
+        null,
+      ),
+    ).rejects.toThrow(/people search/)
+  })
+
+  it('USER with remoteSearch renders a remote people picker', async () => {
+    const remoteSearch = vi.fn().mockResolvedValue([
+      { value: 'user-dev', label: 'Developer Tester (developer)' },
+    ])
+    await mountDialog(
+      textColumn({
+        kind: 'USER',
+        operators: ['eq', 'ne'],
+      }),
+      null,
+      remoteSearch,
+    )
+    expect(document.querySelector('.list-filter-user')).toBeTruthy()
+    expect(remoteSearch).not.toHaveBeenCalled()
   })
 })

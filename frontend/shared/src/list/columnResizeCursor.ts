@@ -17,3 +17,48 @@ export const COLUMN_WIDTH_MAX = 600
 export function clampColumnWidth(width: number): number {
   return Math.min(COLUMN_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, width))
 }
+
+export interface ColumnResizeGuide {
+  move: (width: number) => void
+  detach: () => void
+}
+
+/**
+ * Full-height column guide drawn on `document.body` while a drag is in progress.
+ * Position is computed from the handle's starting right edge plus the width delta,
+ * so it does not wait for the table DOM to reflow.
+ */
+export function attachColumnResizeGuide(
+  handle: HTMLElement,
+  startWidth: number,
+): ColumnResizeGuide {
+  const table = handle.closest('.el-table')
+  const line = document.createElement('div')
+  line.className = 'col-resize-guide'
+  line.setAttribute('aria-hidden', 'true')
+  document.body.appendChild(line)
+
+  const startRight = handle.getBoundingClientRect().right
+
+  function move(width: number) {
+    const tableRect = table?.getBoundingClientRect()
+    line.style.left = `${startRight + (width - startWidth) - 1}px`
+    if (tableRect && tableRect.height > 0) {
+      line.style.top = `${tableRect.top}px`
+      line.style.height = `${tableRect.height}px`
+      return
+    }
+    // FALLBACK(ux): unit tests mount the handle without el-table; live grids always have one.
+    const handleRect = handle.getBoundingClientRect()
+    line.style.top = `${handleRect.top}px`
+    line.style.height = `${handleRect.height}px`
+  }
+
+  move(startWidth)
+  return {
+    move,
+    detach() {
+      line.remove()
+    },
+  }
+}

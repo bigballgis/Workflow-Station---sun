@@ -1,12 +1,16 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}))
+
 let wrapper: VueWrapper | null = null
 
-function mountPagination(props: Partial<{ page: number; size: number; total: number }> = {}) {
+function mountPagination(props: Partial<{ page: number; size: number; total: number; loading: boolean }> = {}) {
   wrapper = mount(ListPagination, {
     props: { page: 1, size: 20, total: 200, ...props },
     global: { plugins: [ElementPlus] },
@@ -63,5 +67,16 @@ describe('shared ListPagination', () => {
     expect(w.find('.el-pagination__total').exists()).toBe(true)
     expect(w.find('.el-pagination__sizes').exists()).toBe(true)
     expect(w.find('.el-pagination__jump').exists()).toBe(true)
+  })
+
+  it('uses the filled pager buttons (PR #107 background chrome)', () => {
+    const w = mountPagination()
+    expect(w.find('.el-pagination').classes()).toContain('is-background')
+  })
+
+  it('disables the pager while loading without drawing a second spinner', () => {
+    const w = mountPagination({ loading: true })
+    expect(w.find('.list-pagination-spinner').exists()).toBe(false)
+    expect(w.findComponent({ name: 'ElPagination' }).props('disabled')).toBe(true)
   })
 })

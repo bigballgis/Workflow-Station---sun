@@ -45,22 +45,28 @@ function onPageChange(page: number) {
 </script>
 
 <template>
-  <el-pagination
-    class="list-pagination"
-    :current-page="page"
-    :page-size="size"
-    :total="total"
-    :page-sizes="pageSizes"
-    :disabled="loading"
-    layout="total, sizes, prev, pager, next, jumper"
-    @size-change="onSizeChange"
-    @current-change="onPageChange"
-  />
+  <div class="list-pagination">
+    <el-pagination
+      background
+      :current-page="page"
+      :page-size="size"
+      :total="total"
+      :page-sizes="pageSizes"
+      :disabled="loading"
+      layout="total, sizes, prev, pager, next, jumper"
+      @size-change="onSizeChange"
+      @current-change="onPageChange"
+    />
+  </div>
 </template>
 
 <style scoped>
 .list-pagination {
   margin-top: 16px;
+  display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 </style>

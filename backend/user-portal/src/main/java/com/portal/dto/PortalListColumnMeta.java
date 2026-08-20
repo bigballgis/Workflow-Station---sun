@@ -37,13 +37,16 @@ public record PortalListColumnMeta(
 
     private static final List<String> TEXT_OPERATORS = List.of(
             "contains", "notContains", "eq", "ne", "startsWith", "endsWith", "isNull", "isNotNull");
+    /** ENUM / USER / BOOLEAN share this: a choice filter is eq/ne plus empty/non-empty. */
     private static final List<String> CLOSED_VALUE_OPERATORS = List.of(
             "eq", "ne", "isNull", "isNotNull");
+    /** Relative calendar windows first so the filter dialog opens on Today, not a date picker. */
     private static final List<String> DATETIME_OPERATORS = List.of(
+            "today", "yesterday", "last7days", "last30days",
+            "thisWeek", "thisMonth", "thisYear",
             "on", "before", "after", "between", "isNull", "isNotNull");
     private static final List<String> NUMBER_OPERATORS = List.of(
             "eq", "ne", "gt", "gte", "lt", "lte", "between", "isNull", "isNotNull");
-    private static final List<String> BOOLEAN_OPERATORS = List.of("eq");
 
     public PortalListColumnMeta {
         if (field == null || field.isBlank()) {
@@ -61,6 +64,11 @@ public record PortalListColumnMeta(
             throw new IllegalArgumentException(
                     "filterable column " + field + " declared without an operator whitelist");
         }
+        if (filterable && requiresClosedOptions(kind) && options.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "filterable " + kind + " column " + field
+                            + " declared without options — a choice filter has no free-text fallback");
+        }
         if (groupable && !defaultGroupable(kind)) {
             throw new IllegalArgumentException(
                     "column " + field + " of kind " + kind
@@ -72,10 +80,9 @@ public record PortalListColumnMeta(
     public static List<String> operatorsFor(Kind kind) {
         return switch (kind) {
             case TEXT -> TEXT_OPERATORS;
-            case ENUM, USER -> CLOSED_VALUE_OPERATORS;
+            case ENUM, USER, BOOLEAN -> CLOSED_VALUE_OPERATORS;
             case DATETIME -> DATETIME_OPERATORS;
             case NUMBER -> NUMBER_OPERATORS;
-            case BOOLEAN -> BOOLEAN_OPERATORS;
         };
     }
 
@@ -84,8 +91,24 @@ public record PortalListColumnMeta(
         return kind == Kind.ENUM || kind == Kind.USER || kind == Kind.BOOLEAN;
     }
 
+    /** True/False labels for a BOOLEAN column — the filter dialog is a select, never a text box. */
+    public static List<Option> booleanOptions() {
+        return List.of(new Option("true", "True"), new Option("false", "False"));
+    }
+
+    private static boolean requiresClosedOptions(Kind kind) {
+        return kind == Kind.ENUM || kind == Kind.BOOLEAN;
+    }
+
     /** Standard column: filterable + sortable, kind-derived operators and groupable default. */
     public static PortalListColumnMeta of(String field, String label, Kind kind) {
+        if (kind == Kind.ENUM) {
+            throw new IllegalArgumentException(
+                    "ENUM column " + field + " must be declared with withOptions — a filterable choice has no free-text fallback");
+        }
+        if (kind == Kind.BOOLEAN) {
+            return withOptions(field, label, kind, booleanOptions());
+        }
         return new PortalListColumnMeta(
                 field, label, kind, true, true, defaultGroupable(kind), operatorsFor(kind), List.of());
     }
@@ -108,6 +131,16 @@ public record PortalListColumnMeta(
     /** Display-only column: no filter, no sort, no group (e.g. computed/action columns). */
     public static PortalListColumnMeta displayOnly(String field, String label, Kind kind) {
         return new PortalListColumnMeta(field, label, kind, false, false, false, List.of(), List.of());
+    }
+
+    /**
+     * A label column whose stored key lives elsewhere (lookup / FK display). The header may
+     * filter by the visible text; conversion to the stored key happens before SQL. Sort and
+     * group stay off because those would still run against the key.
+     */
+    public static PortalListColumnMeta displayMapped(String field, String label) {
+        return new PortalListColumnMeta(
+                field, label, Kind.TEXT, true, false, false, operatorsFor(Kind.TEXT), List.of());
     }
 
     public boolean allowsOperator(String operator) {

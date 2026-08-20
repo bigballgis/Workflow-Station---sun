@@ -7,7 +7,6 @@ export type ListHeaderCommand =
   | 'group'
   | 'filter'
   | 'clearFilter'
-  | 'columnWidth'
   | 'moveLeft'
   | 'moveRight'
 
@@ -15,8 +14,6 @@ export interface ListHeaderState {
   sort?: 'ASC' | 'DESC' | null
   grouped?: boolean
   filtered?: boolean
-  /** Offer an exact-width entry alongside the drag handle (lists that persist column widths). */
-  showWidth?: boolean
   showMove?: boolean
   canMoveLeft?: boolean
   canMoveRight?: boolean
@@ -35,24 +32,35 @@ export interface ListHeaderMenuItem {
  * Menu entries are driven by the column declaration: a non-sortable column gets no
  * sort entries and a groupable:false column gets NO group entry at all (not a
  * disabled one) — grouping is a per-field semantic capability, not generic list
- * chrome. DATETIME columns label their sort directions older/newer instead of
- * A→Z (replaces user-portal's old field-name sniffing).
+ * chrome. DATETIME columns label their sort directions older/newer, NUMBER
+ * small-to-large, and everything else A→Z — the SQL already sorts that way
+ * (`ListFilterSql.sortExpression`); the menu must not say A→Z on a numeric column.
  */
+export function sortLabelKeys(kind: ListColumnMeta['kind']): { asc: string; desc: string } {
+  if (kind === 'DATETIME') {
+    return { asc: 'sharedList.sortOlder', desc: 'sharedList.sortNewer' }
+  }
+  if (kind === 'NUMBER') {
+    return { asc: 'sharedList.sortSmallToLarge', desc: 'sharedList.sortLargeToSmall' }
+  }
+  return { asc: 'sharedList.sortAsc', desc: 'sharedList.sortDesc' }
+}
+
 export function listHeaderMenuItems(
   column: ListColumnMeta,
   state: ListHeaderState,
 ): ListHeaderMenuItem[] {
   const items: ListHeaderMenuItem[] = []
-  const dateLike = column.kind === 'DATETIME'
+  const sortLabels = sortLabelKeys(column.kind)
 
   if (column.sortable) {
     items.push({
       command: 'sortAsc',
-      labelKey: dateLike ? 'sharedList.sortOlder' : 'sharedList.sortAsc',
+      labelKey: sortLabels.asc,
     })
     items.push({
       command: 'sortDesc',
-      labelKey: dateLike ? 'sharedList.sortNewer' : 'sharedList.sortDesc',
+      labelKey: sortLabels.desc,
     })
     if (state.sort) {
       items.push({ command: 'clearSort', labelKey: 'sharedList.clearSort' })
@@ -77,14 +85,6 @@ export function listHeaderMenuItems(
     if (state.filtered) {
       items.push({ command: 'clearFilter', labelKey: 'sharedList.clearFilter' })
     }
-  }
-
-  if (state.showWidth) {
-    items.push({
-      command: 'columnWidth',
-      labelKey: 'sharedList.columnWidth',
-      divided: items.length > 0 && !column.filterable,
-    })
   }
 
   if (state.showMove) {

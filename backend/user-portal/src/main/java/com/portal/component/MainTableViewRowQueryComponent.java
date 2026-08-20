@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.ListColumnFilter;
 import com.portal.entity.ProcessInstance;
 import com.portal.util.ListFilterSql;
+import com.portal.util.SqlFragment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,13 +37,16 @@ public class MainTableViewRowQueryComponent {
     private final ObjectMapper objectMapper;
 
     /**
-     * @param involvement predicate restricting rows to the ones the user is involved in, or null
-     *                    for views open to everyone who can see the view
-     * @param searchable  fields the keyword search covers
+     * @param designerFilter the view's own filter, compiled — it decides which rows the view is
+     *                       about, so it belongs in the predicate the page and the total share
+     * @param involvement    predicate restricting rows to the ones the user is involved in, or
+     *                       null for views open to everyone who can see the view
+     * @param searchable     fields the keyword search covers
      */
     public record Query(
             String functionUnitCode,
             ListFilterSql sql,
+            SqlFragment designerFilter,
             List<ListColumnFilter> filters,
             String sortField,
             String sortDirection,
@@ -65,6 +69,8 @@ public class MainTableViewRowQueryComponent {
         List<Object> params = new ArrayList<>();
         params.add(query.functionUnitCode());
         StringBuilder where = new StringBuilder(" WHERE pi.function_unit_code = ?");
+        where.append(query.designerFilter().sql());
+        params.addAll(query.designerFilter().params());
         if (query.involvement() != null) {
             where.append(query.involvement().sql());
             params.addAll(query.involvement().params());

@@ -38,7 +38,17 @@ export interface ListColumnFilterRequest extends ListColumnFilter {
   field: string
 }
 
-const NO_VALUE_OPERATORS = new Set(['isNull', 'isNotNull'])
+const NO_VALUE_OPERATORS = new Set([
+  'isNull',
+  'isNotNull',
+  'today',
+  'yesterday',
+  'last7days',
+  'last30days',
+  'thisWeek',
+  'thisMonth',
+  'thisYear',
+])
 const RANGE_OPERATORS = new Set(['between'])
 
 const OPERATOR_LABEL_KEYS: Record<string, string> = {
@@ -50,6 +60,13 @@ const OPERATOR_LABEL_KEYS: Record<string, string> = {
   endsWith: 'sharedList.opEndsWith',
   isNull: 'sharedList.opNoData',
   isNotNull: 'sharedList.opHasData',
+  today: 'sharedList.opToday',
+  yesterday: 'sharedList.opYesterday',
+  last7days: 'sharedList.opLast7days',
+  last30days: 'sharedList.opLast30days',
+  thisWeek: 'sharedList.opThisWeek',
+  thisMonth: 'sharedList.opThisMonth',
+  thisYear: 'sharedList.opThisYear',
   on: 'sharedList.opOn',
   before: 'sharedList.opBefore',
   after: 'sharedList.opAfter',

@@ -99,6 +99,29 @@ public final class SubTableRowIdentity {
         return true;
     }
 
+    /**
+     * The same priority, expressed as SQL over a jsonb row.
+     *
+     * <p>Derived from {@link #IDENTITY_FIELDS} rather than written out, so SQL that
+     * de-duplicates sub-table rows cannot drift from the Java that compares them. The two
+     * sides need not produce byte-identical strings — only the same answer to "are these the
+     * same row". Note SQL matches keys case-sensitively while Java does not; a row spelling
+     * its key differently in case is therefore treated as having no identity in SQL, which
+     * surfaces as an error rather than as a silent merge.
+     *
+     * @param rowExpression SQL expression yielding the row as jsonb, e.g. {@code expanded.elem}
+     */
+    public static String sqlIdentityExpression(String rowExpression) {
+        StringBuilder sql = new StringBuilder("COALESCE(");
+        for (int i = 0; i < IDENTITY_FIELDS.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            sql.append(rowExpression).append("->>'").append(IDENTITY_FIELDS.get(i)).append('\'');
+        }
+        return sql.append(')').toString();
+    }
+
     /** Blank strings do not identify anything, so they count as absent. */
     private static String stringValue(Object raw) {
         if (raw == null) {

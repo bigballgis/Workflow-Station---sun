@@ -42,6 +42,10 @@ describe('listHeaderMenuItems — declaration-driven menu', () => {
     const dateItems = listHeaderMenuItems(column({ kind: 'DATETIME', groupable: false }), {})
     expect(dateItems.find((i) => i.command === 'sortAsc')?.labelKey).toBe('sharedList.sortOlder')
     expect(dateItems.find((i) => i.command === 'sortDesc')?.labelKey).toBe('sharedList.sortNewer')
+
+    const numberItems = listHeaderMenuItems(column({ kind: 'NUMBER', groupable: false }), {})
+    expect(numberItems.find((i) => i.command === 'sortAsc')?.labelKey).toBe('sharedList.sortSmallToLarge')
+    expect(numberItems.find((i) => i.command === 'sortDesc')?.labelKey).toBe('sharedList.sortLargeToSmall')
   })
 
   it('active sort adds clearSort; active filter adds clearFilter and the dot marker', () => {
@@ -50,6 +54,11 @@ describe('listHeaderMenuItems — declaration-driven menu', () => {
     expect(commands).toContain('clearSort')
     expect(commands).toContain('clearFilter')
     expect(items.find((i) => i.command === 'filter')?.activeDot).toBe(true)
+  })
+
+  it('has no column-width command (resize is header-edge drag only)', () => {
+    const commands = listHeaderMenuItems(column(), { showMove: true }).map((i) => i.command) as string[]
+    expect(commands).not.toContain('columnWidth')
   })
 
   it('move entries appear only with showMove and honor boundary disabling', () => {
@@ -89,6 +98,7 @@ describe('columnMeta operator helpers', () => {
 
   it('operatorLabelKey throws on operators outside the shared map (no blank menu entries)', () => {
     expect(operatorLabelKey('gte')).toBe('sharedList.opGte')
+    expect(operatorLabelKey('today')).toBe('sharedList.opToday')
     expect(() => operatorLabelKey('regexMatch')).toThrow(/out of sync/)
   })
 })

@@ -20,9 +20,29 @@ class PortalListColumnMetaTest {
 
     @Test
     void closedValueKindsGroupByDefault() {
-        assertThat(PortalListColumnMeta.of("status", "Status", Kind.ENUM).groupable()).isTrue();
+        assertThat(PortalListColumnMeta.withOptions("status", "Status", Kind.ENUM,
+                List.of(new Option("OPEN", "Open"))).groupable()).isTrue();
         assertThat(PortalListColumnMeta.of("assignee", "Assignee", Kind.USER).groupable()).isTrue();
         assertThat(PortalListColumnMeta.of("urgent", "Urgent", Kind.BOOLEAN).groupable()).isTrue();
+        assertThat(PortalListColumnMeta.of("urgent", "Urgent", Kind.BOOLEAN).options())
+                .extracting(Option::value)
+                .containsExactly("true", "false");
+    }
+
+    @Test
+    void enumMustBeDeclaredWithOptions() {
+        assertThatThrownBy(() -> PortalListColumnMeta.of("status", "Status", Kind.ENUM))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("withOptions");
+    }
+
+    @Test
+    void filterableClosedKindWithoutOptionsIsRejected() {
+        assertThatThrownBy(() -> new PortalListColumnMeta(
+                "status", "Status", Kind.ENUM, true, true, true,
+                PortalListColumnMeta.operatorsFor(Kind.ENUM), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("without options");
     }
 
     @Test
@@ -31,12 +51,16 @@ class PortalListColumnMetaTest {
                 .contains("gt", "gte", "lt", "lte", "between")
                 .doesNotContain("contains", "startsWith");
         assertThat(PortalListColumnMeta.operatorsFor(Kind.DATETIME))
+                .startsWith("today", "yesterday", "last7days", "last30days",
+                        "thisWeek", "thisMonth", "thisYear")
                 .contains("on", "before", "after", "between")
                 .doesNotContain("contains", "gt");
         assertThat(PortalListColumnMeta.operatorsFor(Kind.TEXT))
                 .contains("contains", "startsWith", "endsWith")
                 .doesNotContain("gt", "between");
-        assertThat(PortalListColumnMeta.operatorsFor(Kind.BOOLEAN)).containsExactly("eq");
+        assertThat(PortalListColumnMeta.operatorsFor(Kind.BOOLEAN))
+                .containsExactly("eq", "ne", "isNull", "isNotNull")
+                .isEqualTo(PortalListColumnMeta.operatorsFor(Kind.ENUM));
     }
 
     @Test
@@ -82,5 +106,14 @@ class PortalListColumnMetaTest {
         assertThat(col.sortable()).isFalse();
         assertThat(col.groupable()).isFalse();
         assertThat(col.operators()).isEmpty();
+    }
+
+    @Test
+    void displayMappedColumnFiltersByLabelWithoutSorting() {
+        PortalListColumnMeta col = PortalListColumnMeta.displayMapped("customer_label", "Customer");
+        assertThat(col.filterable()).isTrue();
+        assertThat(col.sortable()).isFalse();
+        assertThat(col.groupable()).isFalse();
+        assertThat(col.operators()).contains("contains", "eq", "isNull");
     }
 }

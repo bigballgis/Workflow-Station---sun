@@ -3,6 +3,9 @@
 > **状态：方案已定稿，尚未实现（2026-08-17）。** §12 的 6 项待确认**全部关闭**。
 > 关键决策：§6.1（行可见范围两级过滤）、§6.1.1（SUB 行身份取 `row_id` 优先，写入侧→MAIN→SUB
 > 三步走）、§6.2（深分页不设上限，改慢查询日志）、§6.3.1（分组按字段语义声明，不是每列都给）、
+> **§6.3.2（筛选 kind 的权威是表 `data_type` / 视图系统列，不是 Form 组件；`FILE` 本期
+> display-only，禁止当 TEXT 按文件名凑合筛）**、
+> **§6.3.3（排序按 kind：字母 / 数值大小 / 新旧，数字不得按文本排）**、
 > **范围排除 developer-workstation**、**全程零兜底**。
 > 可以按 §8 分期 + playbook 逐提交执行。
 >
@@ -169,7 +172,7 @@ body class 改名只动 **UP 一侧**（DW 的 `dwl-column-resizing` 原样保�
 | `ListColumnHeader`   | 列定义（字段、标题、类型 kind、`filterable` / `sortable` / `groupable`、可选项）、当前排序、当前筛选、当前分组 | `sort-change`、`filter-change`、`group-change`、`clear-sort`、`clear-filter`、`width-change` | 取数、决定算子有哪些（由 props 传入）、持久化。`**groupable = false` 的列不渲染分组项**（不是灰掉），见 §6.3.1      |
 | `ColumnResizeHandle` | 起始宽度、最小宽度                                                                     | `resize`（拖拽中）、`resize-end`（落定）                                                          | 记住宽度。**必须**在 `onBeforeUnmount` 里清理 document 监听与 body 光标样式——UP / DW 现有两份**都缺**这段 |
 | `ListFilterDialog`   | 列的 kind、该 kind 允许的算子、可选项、当前筛选值                                                | `confirm(filter)`、`cancel`                                                              | 决定算子有哪些（由 `/columns` 下发经 props 传入）；未识别的算子**不许**静默放行                             |
-| `ListPagination`     | `page`、`size`、`total`、`loading`、可选页长选项                                        | `change({ page, size })`                                                                | 自己发请求；页长变化时**必须**同时把 page 归 1 后再抛一次事件                                           |
+| `ListPagination`     | `page`、`size`、`total`、`loading`、可选页长选项                                        | `change({ page, size })`                                                                | 自己发请求；页长变化时**必须**同时把 page 归 1 后再抛一次事件。**不画转圈**：`loading` 只禁用翻页；网格中间的 overlay 由宿主 `v-loading` 负责，禁止两只转圈 |
 
 
 **来源**（DW 文件一律只读参考，不改不搬，见 §3）：
@@ -399,11 +402,11 @@ tiebreak 时必须显式 cast，否则 `'10' < '9'`。
 | 字段类型 kind                      | 可用算子                                                                   | 默认可分组 |
 | ------------------------------ | ---------------------------------------------------------------------- | ----- |
 | `TEXT`                         | contains, eq, ne, startsWith, endsWith, notContains, isNull, isNotNull | **否** |
-| `ENUM`                         | eq, ne, isNull, isNotNull（并下发可选项列表）                                    | **是** |
-| `USER`                         | eq, ne, isNull, isNotNull（并下发可选项列表）                                    | **是** |
-| `DATETIME`                     | on, before, after, between, isNull, isNotNull（按日历日比较）                  | **否** |
+| `ENUM`                         | eq, ne, isNull, isNotNull（**必须**下发 `options`，弹窗是封闭下拉）                    | **是** |
+| `USER`                         | eq, ne, isNull, isNotNull（弹窗是按姓名/工号搜的人员选择器，不是把全公司当 `options` 下发）        | **是** |
+| `DATETIME`                     | today…thisYear（先相对窗口、无日期选择器），再 on / before / after / between，以及 isNull / isNotNull（按日历日、`Asia/Shanghai`） | **否** |
 | `NUMBER`**（PR #107 缺失，必须新增）**  | eq, ne, gt, gte, lt, lte, between, isNull, isNotNull                   | **否** |
-| `BOOLEAN`**（PR #107 缺失，必须新增）** | eq, isNull, isNotNull                                                  | **是** |
+| `BOOLEAN`                      | eq, ne, isNull, isNotNull（True / False 封闭下拉，与 ENUM 同一套）。**没值（格子里的 `-`）≠ False**；Not equals True 会带上空单元格，不等于选 False | **是** |
 
 
 `NUMBER` 类型缺失就是 PR #107 里"数值列用 `gt`/`lt` 直接 500"的根因：前端敢发，后端的算子解析
@@ -411,6 +414,14 @@ tiebreak 时必须显式 cast，否则 `'10' < '9'`。
 
 **未知算子的处理是硬规定：** 后端返回明确的 400 错误。**禁止**两种静默行为——前端"未知算子就当筛选不存在"
 （等于展示全量却显示已筛选）和后端"未知算子返回 null"（等于 500）。
+
+**封闭 kind 的 `options` 必须跟列声明一起下发。** `ENUM` / `BOOLEAN` 没有选项列表时，弹窗**抛错**，
+不许退化成文本框。Views 把 `PortalListColumnMeta` 拷到 `MainTableViewFieldColumn` 时漏掉
+`options` 就是这个契约的反例（Legal Hold / Status 会变成无法选值）。
+
+每个可筛选 kind 都带 `isNull` / `isNotNull`（No data / Has data）。封闭选项列（ENUM / BOOLEAN / USER）
+一律四则：Equals / Not equals / No data / Has data。BOOLEAN 不能只给 Equals：空单元格是 `-`，和
+`false` 不是同一回事；Not equals 也不能省，因为它会带上空值，和选另一个选项不是同一筛选。
 
 #### 6.3.1 分组能力按字段含义声明，不是每列都给
 
@@ -435,6 +446,68 @@ tiebreak 时必须显式 cast，否则 `'10' < '9'`。
 **前端契约：`groupable = false` 的列，列头菜单里不出现分组项**——不是灰掉、不是点了报错，
 而是根本不渲染。后端 `groupFields()` 白名单同时拒绝该字段的 `groupBy` 参数（返回 400，
 与未知算子同一处理），防止有人绕过 UI 直接调接口。
+
+#### 6.3.2 kind 权威：表存储类型 + 视图系统列，不是 Form 组件
+
+设计师往视图加列，**不改代码、不把业务字段名写进白名单**。每次查询读当前视图的可见列，按下面的
+优先级定 `kind`（实现：`MainTableViewColumnSpec` / `RelationTableColumnSpec`）：
+
+1. **视图系统列**（只这四名，值在流程实例上，不在业务表字段里）
+
+   | 字段 | 存哪 | kind | 弹窗 |
+   |---|---|---|---|
+   | `process_status` | `pi.status` | `ENUM` | Running / Completed / Withdrawn |
+   | `start_time` | `pi.start_time` | `DATETIME` | 相对日期 + 日历 |
+   | `initiator` | `start_user_name` / `start_user_id` | `USER` | 人员选择器 |
+   | `current_step` | `pi.current_node`（当前 BPMN 节点名） | **`TEXT`** | 包含/等于。各 Function Unit 节点名不同，平台没有封闭步骤表，**不做下拉** |
+
+   SUB 视图的行不是流程实例，但仍然**属于**一个实例。这四列在 SUB 上同样筛 `pi.*`（和 MAIN
+   同一套 kind / 算子），**不是** `sub_elem` 里的成员，也不是 display-only。格子上的 Status /
+   Start Time 来自那条流程实例，筛选必须跟格子一致。
+
+2. **平台审计四名**（精确匹配，与 Form 画布解耦）：`created_at` / `updated_at` → `DATETIME`；
+   `created_by` / `updated_by` → `USER`（按姓名或工号搜；单元格里常存显示名，同名两人在存储改成
+   user id 之前无法在结果里拆开）。
+3. **Table Design `data_type`**（`dw_field_definitions` / 关联表字段定义）。VARCHAR → 文本，
+   DATE → 日期，BOOLEAN → True/False，以此类推。**列集合跟设计走。** 绑定表优先；SUB 视图
+   若展示本 FU 其它表（通常是 MAIN）同名字段，用那张表的类型补上。名字在本 FU 任何表上都
+   没有 → display-only，**禁止**按列名 `date` / `user` 猜 DATETIME / USER。
+
+**禁止**用「该字段在某张表单里用了什么组件」来定筛选类型。同一字段可绑多张表单、控件可以不同，
+Views 展示的是表列（可以完全不出现在任何表单上）。
+
+Function Unit 的 Table Design **没有 LOOKUP / CHOICE 类型**。`select` / `radio` / `lookup` /
+`user` / `owner` 落库都是 VARCHAR，因此：
+
+- 业务 Choice（表单静态选项）→ 现在是文本筛。要做成封闭下拉，选项必须落到**表字段定义**上，本期不做。
+- 业务 Lookup（存对端主键）→ 源字段按文本比 id；设计师在视图上加的 **lookup 显示列** 才按看到的
+  名字筛（有存储键映射才能筛，没有就只展示）。关联表字段类型可以是真 `LOOKUP`，列表仍按存的主键当文本。
+
+扫表单 JSON 里的 `type:"lookup"` 只用于显示列 hydrate / 反查存储键，**不是**筛选 kind 的来源。
+
+**`FILE` 列（当前 shared-list 基线）：只展示，不筛选、不排序。** Table Design
+`data_type = FILE` → `displayOnly`。禁止把 FILE 当普通 `TEXT` 打开 Contains（会比到 URL，
+与格子文件名不一致）。按文件名筛的产品方案见专文
+[list-file-name-filter.md](./list-file-name-filter.md)；**未合入前**列头行为维持本段。
+
+#### 6.3.3 排序：按 kind 比大小，不是一律按字母
+
+列头排序和 SQL 必须用**同一套 kind**，禁止前端按字段名猜、也禁止后端把 JSON 文本拿来排数字。
+
+| kind | 菜单文案（ASC / DESC） | SQL |
+|---|---|---|
+| `TEXT` / `ENUM` / `USER` / `BOOLEAN` | A to Z / Z to A | 存什么比什么（字典序）。BOOLEAN 存 `true`/`false` 文本，ASC 是 False 在 True 前 |
+| `NUMBER` | Small to large / Large to small | 有守卫的 `::numeric` 转换：`9` 在 `10` 前。非数字当 null，**不让整页查询失败** |
+| `DATETIME` | Older to newer / Newer to older | 按存储的时间字符串比；审计时间与 `start_time` 是 ISO / timestamp text，字典序 ≈ 时间序。筛选按日历日（`left(..., 10)` + `Asia/Shanghai`），排序仍用完整值，同一天内有先后 |
+
+其它约定：
+
+- 用户点的排序 **NULLS LAST**，稳定次序靠 `pi.id`（或 SUB 的行身份）收尾。
+- 设计师给视图配的默认排序：升序 **NULLS FIRST**、降序 **NULLS LAST**（对齐搬 SQL 之前内存比较器的空值位置，避免整页被重排）。用户再点列头后走上面的 NULLS LAST。
+- lookup / FK **显示列不可排序**（`displayMapped`）：格子上是名字，库里是主键，按名字排会和显示对不上。
+- `sortable = false` 的列菜单里不出现排序项。
+
+前端文案由 `sortLabelKeys(kind)` 一处决定（`listHeaderMenu.ts`），列头图标 tooltip 与下拉菜单必须走同一函数。
 
 ### 6.4 分组的渲染与计数
 

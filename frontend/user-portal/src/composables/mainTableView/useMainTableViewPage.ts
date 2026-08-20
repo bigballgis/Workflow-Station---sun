@@ -371,7 +371,7 @@ function getRowKey(row: GridDisplayRow) {
   if (isGroupHeaderRow(row)) {
     return `group-${row._groupLabel}`
   }
-  return row.processInstanceId
+  return row.rowKey
 }
 
 function onSelectionChange(rows: GridDisplayRow[]) {

@@ -7,14 +7,13 @@ import {
   CaretBottom,
   CaretTop,
   Close,
-  DCaret,
   Filter,
   Grid,
   Right,
   Sort,
 } from '@element-plus/icons-vue'
 import type { ListColumnMeta } from './columnMeta'
-import { listHeaderMenuItems, type ListHeaderCommand } from './listHeaderMenu'
+import { listHeaderMenuItems, sortLabelKeys, type ListHeaderCommand } from './listHeaderMenu'
 import ColumnResizeHandle from './ColumnResizeHandle.vue'
 
 const props = withDefaults(
@@ -25,8 +24,6 @@ const props = withDefaults(
     filtered?: boolean
     /** Current column width; pass null to hide the resize handle. */
     width?: number | null
-    /** Offer an exact-width menu entry (the host owns the dialog). */
-    showWidth?: boolean
     showMove?: boolean
     canMoveLeft?: boolean
     canMoveRight?: boolean
@@ -36,7 +33,6 @@ const props = withDefaults(
     grouped: false,
     filtered: false,
     width: null,
-    showWidth: false,
     showMove: false,
     canMoveLeft: false,
     canMoveRight: false,
@@ -49,7 +45,6 @@ const emit = defineEmits<{
   'group-change': [grouped: boolean]
   'filter-open': []
   'clear-filter': []
-  'width-open': []
   move: [direction: 'left' | 'right']
   'width-change': [width: number]
   'width-commit': []
@@ -62,7 +57,6 @@ const menuItems = computed(() =>
     sort: props.sort,
     grouped: props.grouped,
     filtered: props.filtered,
-    showWidth: props.showWidth,
     showMove: props.showMove,
     canMoveLeft: props.canMoveLeft,
     canMoveRight: props.canMoveRight,
@@ -76,12 +70,15 @@ const COMMAND_ICONS: Record<ListHeaderCommand, Component> = {
   group: Grid,
   filter: Filter,
   clearFilter: Close,
-  columnWidth: DCaret,
   moveLeft: Back,
   moveRight: Right,
 }
 
 const hasActiveState = computed(() => props.filtered || props.grouped || !!props.sort)
+
+// A column that declares no capability (display-only payload columns) has no menu at all;
+// rendering the dropdown anyway would open an empty popper on click.
+const hasMenu = computed(() => menuItems.value.length > 0)
 
 function onCommand(command: ListHeaderCommand) {
   if (command === 'sortAsc') emit('sort-change', 'ASC')
@@ -90,7 +87,6 @@ function onCommand(command: ListHeaderCommand) {
   else if (command === 'group') emit('group-change', !props.grouped)
   else if (command === 'filter') emit('filter-open')
   else if (command === 'clearFilter') emit('clear-filter')
-  else if (command === 'columnWidth') emit('width-open')
   else if (command === 'moveLeft') emit('move', 'left')
   else emit('move', 'right')
 }
@@ -98,20 +94,49 @@ function onCommand(command: ListHeaderCommand) {
 
 <template>
   <div class="list-col-header">
+    <span
+      v-if="!hasMenu"
+      class="list-col-label list-col-plain"
+    >{{ column.label }}</span>
     <el-dropdown
+      v-else
       class="list-col-dropdown"
       trigger="click"
       @command="onCommand"
     >
       <span
         class="list-col-trigger"
+        :class="{ 'is-active-state': hasActiveState }"
         @click.stop
       >
         <span class="list-col-label">{{ column.label }}</span>
-        <el-icon
-          class="list-col-caret"
-          :class="{ 'is-active': hasActiveState }"
-        ><ArrowDown /></el-icon>
+        <span
+          v-if="hasActiveState"
+          class="list-col-state"
+          aria-hidden="true"
+        >
+          <el-icon
+            v-if="sort === 'ASC'"
+            class="state-icon"
+            :title="t(sortLabelKeys(column.kind).asc)"
+          ><CaretTop /></el-icon>
+          <el-icon
+            v-else-if="sort === 'DESC'"
+            class="state-icon"
+            :title="t(sortLabelKeys(column.kind).desc)"
+          ><CaretBottom /></el-icon>
+          <el-icon
+            v-if="grouped"
+            class="state-icon"
+            :title="t('sharedList.groupBy')"
+          ><Grid /></el-icon>
+          <el-icon
+            v-if="filtered"
+            class="state-icon is-filter"
+            :title="t('sharedList.filterBy')"
+          ><Filter /></el-icon>
+        </span>
+        <el-icon class="list-col-caret"><ArrowDown /></el-icon>
       </span>
       <template #dropdown>
         <el-dropdown-menu class="list-col-menu">
@@ -127,7 +152,7 @@ function onCommand(command: ListHeaderCommand) {
             <el-tag
               v-if="item.activeDot"
               size="small"
-              type="info"
+              type="danger"
               class="list-col-active-tag"
             >
               ●
@@ -146,12 +171,16 @@ function onCommand(command: ListHeaderCommand) {
 </template>
 
 <style scoped lang="scss">
+/* Compact header metrics — same as PR #107 / DW designer-list, not an inflated cell. */
 .list-col-header {
+  position: static;
   display: flex;
   align-items: center;
   width: 100%;
   min-width: 0;
-  position: relative;
+  min-height: 23px;
+  box-sizing: border-box;
+  padding-right: 12px;
 }
 
 .list-col-dropdown {
@@ -174,6 +203,11 @@ function onCommand(command: ListHeaderCommand) {
   &:hover {
     color: var(--el-color-primary);
   }
+
+  &.is-active-state .list-col-label {
+    color: var(--hsbc-red, var(--el-color-primary));
+    font-weight: 600;
+  }
 }
 
 .list-col-label {
@@ -184,22 +218,37 @@ function onCommand(command: ListHeaderCommand) {
   white-space: nowrap;
 }
 
+.list-col-plain {
+  cursor: default;
+}
+
+.list-col-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.state-icon {
+  font-size: 13px;
+  color: var(--hsbc-red, var(--el-color-primary));
+
+  &.is-filter {
+    font-size: 14px;
+  }
+}
+
 .list-col-caret {
   font-size: 12px;
   flex-shrink: 0;
-  opacity: 0.55;
-
-  &.is-active {
-    opacity: 1;
-    color: var(--el-color-primary);
-  }
+  opacity: 0.65;
 }
 
 :deep(.el-dropdown-menu__item) {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 180px;
+  min-width: 200px;
 }
 
 .list-col-active-tag {

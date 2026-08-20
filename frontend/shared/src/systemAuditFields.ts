@@ -24,3 +24,15 @@ export function normalizeAuditFieldName(name: string): string {
 export function isSystemAuditField(fieldName: string): boolean {
   return SYSTEM_AUDIT_FIELD_SET.has(normalizeAuditFieldName(fieldName))
 }
+
+/** created_at / updated_at — timestamps even when a legacy table declared them as text. */
+export function isAuditTimestampField(fieldName: string): boolean {
+  const name = normalizeAuditFieldName(fieldName)
+  return name === 'created_at' || name === 'updated_at'
+}
+
+/** created_by / updated_by — a person, even when a legacy table declared them as text. */
+export function isAuditUserField(fieldName: string): boolean {
+  const name = normalizeAuditFieldName(fieldName)
+  return name === 'created_by' || name === 'updated_by'
+}

@@ -7,13 +7,14 @@ import {
   moveColumn,
   saveGridRuntimeToSession,
   setColumnWidth,
+  toListColumnMeta,
 } from '../mainTableViewGridRuntime'
 
 describe('mainTableViewGridRuntime', () => {
   const rows = [
-    { processInstanceId: '1', values: { name: 'Beta', status: 'Open' } },
-    { processInstanceId: '2', values: { name: 'Alpha', status: 'Open' } },
-    { processInstanceId: '3', values: { name: 'Gamma', status: 'Closed' } },
+    { rowKey: '1', processInstanceId: '1', values: { name: 'Beta', status: 'Open' } },
+    { rowKey: '2', processInstanceId: '2', values: { name: 'Alpha', status: 'Open' } },
+    { rowKey: '3', processInstanceId: '3', values: { name: 'Gamma', status: 'Closed' } },
   ]
 
   const groups = [
@@ -43,6 +44,27 @@ describe('mainTableViewGridRuntime', () => {
     state.columnOrder = ['a', 'b', 'c']
     moveColumn(state, 'b', 'left')
     expect(state.columnOrder).toEqual(['b', 'a', 'c'])
+  })
+
+  it('toListColumnMeta copies closed options onto the shared header contract', () => {
+    expect(
+      toListColumnMeta({
+        fieldName: 'process_status',
+        displayLabel: 'Status',
+        kind: 'ENUM',
+        filterable: true,
+        sortable: true,
+        groupable: true,
+        operators: ['eq', 'ne'],
+        options: [
+          { value: 'RUNNING', label: 'Running' },
+          { value: 'COMPLETED', label: 'Completed' },
+        ],
+      }).options,
+    ).toEqual([
+      { value: 'RUNNING', label: 'Running' },
+      { value: 'COMPLETED', label: 'Completed' },
+    ])
   })
 
   it('clampColumnWidth enforces min and max', () => {

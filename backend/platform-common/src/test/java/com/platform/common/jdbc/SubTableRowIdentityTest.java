@@ -76,4 +76,17 @@ class SubTableRowIdentityTest {
         // hashing would have merged.
         assertThat(first.get("row_id")).isNotEqualTo(second.get("row_id"));
     }
+
+    @Test
+    void theSqlExpressionKeepsTheSamePriorityAsTheJavaLookup() {
+        String sql = SubTableRowIdentity.sqlIdentityExpression("elem");
+
+        // Derived from the one list, in the one order — SQL that de-duplicates rows and Java that
+        // compares them must not be able to disagree about which key wins.
+        assertThat(sql).isEqualTo("COALESCE(elem->>'row_id', elem->>'rowId', elem->>'rowID',"
+                + " elem->>'id_idw', elem->>'_rowKey', elem->>'rowKey', elem->>'id')");
+        for (String field : SubTableRowIdentity.IDENTITY_FIELDS) {
+            assertThat(sql).contains("elem->>'" + field + "'");
+        }
+    }
 }

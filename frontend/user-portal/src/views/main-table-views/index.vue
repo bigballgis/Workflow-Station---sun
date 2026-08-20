@@ -5,6 +5,7 @@ import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { GridDisplayRow } from '@/utils/mainTableViewGridRuntime'
 import { useMainTableViewPage } from '@/composables/mainTableView/useMainTableViewPage'
+import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 
 const {
   t, Search, Download, Refresh, dataLoading, selectedViewId, searchKeyword,
@@ -270,6 +271,7 @@ const {
             :page="currentPage"
             :size="pageSize"
             :total="displayTotal"
+            :loading="dataLoading"
             @change="({ page, size }) => handlePageChange(page, size)"
           />
         </div>
@@ -286,6 +288,7 @@ const {
       v-model:visible="filterDialogVisible"
       :column="filterDialogField ? toListColumnMeta(filterDialogField) : null"
       :filter="filterDraft"
+      :remote-search="searchListFilterUsers"
       @apply="applyColumnFilter"
       @clear="clearFilterFromDialog"
     />

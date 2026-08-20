@@ -10,7 +10,6 @@ export interface FunctionUnitViewMenuItem {
   functionUnitCode: string
   functionUnitName: string
   viewCount: number
-  iconSvg?: string | null
 }
 
 export interface MainTableViewSummary {
@@ -52,6 +51,8 @@ export interface MainTableViewFieldColumn {
   sortable: boolean
   groupable: boolean
   operators: string[]
+  /** Closed choices for ENUM / BOOLEAN; omitted or empty for open-value kinds. */
+  options?: { value: string; label: string }[]
 }
 
 /** Mirrors MainTableViewQueryRequest: paging plus everything the shared header produces. */
@@ -67,6 +68,12 @@ export interface MainTableViewQueryRequest {
 }
 
 export interface MainTableViewDataRow {
+  /**
+   * What makes this row distinct from every other row of the view. Equal to the process instance
+   * on a MAIN view; on a SUB view one instance contributes many rows, so the instance id alone
+   * would repeat.
+   */
+  rowKey: string
   processInstanceId: string
   values: Record<string, unknown>
 }
