@@ -38,7 +38,7 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner，每个控件�
 | [owner-field-component.md](./owner-field-component.md) | **Owner 组件**（状态：方案已定稿 2026-08-19）：先建列再改类型、`source` 二选一、可多个、`user:<id>` + `__display`、Assignee 列跟办理人写点同步 |
 
 > Owner **不是** User Task「谁办理」配置，也不和实例列 `current_assignee` 合成一列。分派仍看 BPMN `assigneeType`；MI 行内分派仍看上面两篇。改 Owner 不转办。
-> 08-17「拖组件建列 / 每表一个 / 可改派 / 禁止跟办理人」已作废，且 **未合入 origin**。实现以该文档为准，样式跟 Lookup / `ws-theme`。
+> 08-17「拖组件建列 / 每表一个 / 可改派 / 禁止跟办理人 / `group:BU|Role`」**作废**（2026-08-20 确认；仅 fork 有过提交、未合入 origin）。实现以该文档为准。Current Assignee **跟 Flowable 办理人快照**：1 人写 `user:<id>`；BU 池是已展开的 userId 列表，主值为空、展示姓名，不存 `group:`。
 > 「owned by me」筛选、手改派、行级可见性均另开设计。
 
 ## User Portal 身份与权限
