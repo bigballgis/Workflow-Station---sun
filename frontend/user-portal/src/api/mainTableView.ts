@@ -9,6 +9,7 @@ export interface FunctionUnitViewMenuItem {
   functionUnitCode: string
   functionUnitName: string
   viewCount: number
+  iconSvg?: string | null
 }
 
 export interface MainTableViewSummary {

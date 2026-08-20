@@ -24,6 +24,7 @@ import com.portal.util.PortalMainTableViewCsvUtils;
 import com.portal.util.PortalMainTableViewFilterUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -86,6 +87,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                     .add(((Number) row.get("view_id")).longValue());
         }
 
+        Map<String, String> iconSvgByFuCode = loadFunctionUnitIconSvgs(fuMetaByCode.keySet());
+
         List<FunctionUnitViewMenuItem> result = new ArrayList<>();
         for (Map.Entry<String, Map<String, Object>> entry : fuMetaByCode.entrySet()) {
             String code = entry.getKey();
@@ -105,9 +108,41 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                     .functionUnitCode(code)
                     .functionUnitName(stringVal(row.get("fu_name")))
                     .viewCount((int) visibleCount)
+                    .iconSvg(iconSvgByFuCode.get(code))
                     .build());
         }
         return result;
+    }
+
+    /**
+     * Load at most one {@code svg_content} per Function Unit after view rows are grouped.
+     * Joining icons onto every published view row would repeat TEXT per view.
+     */
+    private Map<String, String> loadFunctionUnitIconSvgs(Set<String> fuCodes) {
+        if (fuCodes.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            String placeholders = String.join(",", Collections.nCopies(fuCodes.size(), "?"));
+            List<Map<String, Object>> iconRows = jdbcTemplate.queryForList(
+                    "SELECT fu.code AS fu_code, ic.svg_content AS icon_svg"
+                            + " FROM dw_function_units fu"
+                            + " LEFT JOIN dw_icons ic ON ic.id = fu.icon_id"
+                            + " WHERE fu.code IN (" + placeholders + ")",
+                    fuCodes.toArray());
+            Map<String, String> icons = new HashMap<>(iconRows.size());
+            for (Map<String, Object> row : iconRows) {
+                String code = stringVal(row.get("fu_code"));
+                if (code != null) {
+                    icons.put(code, stringVal(row.get("icon_svg")));
+                }
+            }
+            return icons;
+        } catch (DataAccessException e) {
+            // FALLBACK(ux): menu remains usable; placeholder icon is used when SVG is absent.
+            log.warn("Main table view menu icon query failed: {}", e.getMessage());
+            return Map.of();
+        }
     }
 
     @Override

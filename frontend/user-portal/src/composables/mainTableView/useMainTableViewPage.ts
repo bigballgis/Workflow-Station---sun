@@ -21,9 +21,16 @@ import {
 } from '@/utils/mainTableViewCsvExport'
 import { useMainTableViewLookupHydration } from '@/composables/mainTableView/useMainTableViewLookupHydration'
 import { useMainTableViewFkHydration } from '@/composables/mainTableView/useMainTableViewFkHydration'
+import {
+  filterTableGroups,
+  groupViewsByTable,
+  pickDefaultView,
+  sortViewsByName,
+  tableGroupKey,
+} from '@/composables/mainTableView/mainTableViewNav'
 
 export function useMainTableViewPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const route = useRoute()
   const router = useRouter()
 
@@ -105,43 +112,36 @@ const selectedFu = computed(() =>
 const viewListCollapsed = ref(false)
 const viewSearchKeyword = ref('')
 
-// Group views by their owning table for the left nav (parity with DW View Design left nav).
-const groupedViews = computed(() => {
-  const groups: Array<{ tableId: number | null; label: string; views: MainTableViewSummary[] }> = []
-  const byTable = new Map<string, { tableId: number | null; label: string; views: MainTableViewSummary[] }>()
-  for (const v of views.value) {
-    const key = String(v.tableId ?? v.tableLabel ?? '')
-    let g = byTable.get(key)
-    if (!g) {
-      g = { tableId: v.tableId ?? null, label: v.tableLabel || v.viewName, views: [] }
-      byTable.set(key, g)
-      groups.push(g)
-    }
-    g.views.push(v)
+// Group views by owning table for the left nav; tables with no visible views are dropped.
+const groupedViews = computed(() => groupViewsByTable(views.value))
+
+const filteredGroupedViews = computed(() =>
+  filterTableGroups(groupedViews.value, viewSearchKeyword.value),
+)
+
+const selectedTableKey = computed(() => {
+  const meta = selectedViewMeta.value
+  if (!meta) return ''
+  return tableGroupKey({
+    tableId: meta.tableId ?? null,
+    label: meta.tableLabel || meta.viewName || '',
+  })
+})
+
+const currentTableViewsSorted = computed(() => {
+  const group = groupedViews.value.find(g => tableGroupKey(g) === selectedTableKey.value)
+  return sortViewsByName(group?.views ?? [], locale.value)
+})
+
+function handleSelectTable(index: string) {
+  const group = groupedViews.value.find(g => tableGroupKey(g) === index)
+  if (!group) return
+  if (selectedViewId.value && group.views.some(v => v.id === selectedViewId.value)) {
+    return
   }
-  return groups
-})
-
-// Search-filtered groups for the left panel; empty groups are dropped.
-const filteredGroupedViews = computed(() => {
-  const kw = viewSearchKeyword.value.trim().toLowerCase()
-  if (!kw) return groupedViews.value
-  return groupedViews.value
-    .map(g => ({
-      ...g,
-      views: g.views.filter(v =>
-        (v.viewName || '').toLowerCase().includes(kw)
-        || (g.label || '').toLowerCase().includes(kw),
-      ),
-    }))
-    .filter(g => g.views.length > 0)
-})
-
-// Select a view from the left panel (el-menu emits the view id as a string).
-function handleSelectView(index: string) {
-  const id = Number(index)
-  if (id && id !== selectedViewId.value) {
-    selectedViewId.value = id
+  const next = pickDefaultView(group.views, locale.value)
+  if (next && next.id !== selectedViewId.value) {
+    selectedViewId.value = next.id
   }
 }
 
@@ -231,7 +231,8 @@ async function loadViews() {
     if (targetViewId && views.value.some(v => v.id === targetViewId)) {
       selectedViewId.value = targetViewId
     } else if (!views.value.some(v => v.id === selectedViewId.value)) {
-      selectedViewId.value = views.value[0]?.id ?? null
+      const firstGroup = groupViewsByTable(views.value)[0]
+      selectedViewId.value = pickDefaultView(firstGroup?.views ?? [], locale.value)?.id ?? null
     }
   } catch {
     views.value = []
@@ -737,8 +738,8 @@ onMounted(async () => {
     filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows, importing,
     importInputRef, importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
     importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
-    selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns, groupedViews,
-    viewListCollapsed, viewSearchKeyword, filteredGroupedViews, handleSelectView,
+    selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
+    viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
     MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
     processedRows, groupedRows, pagedRows, displayTotal,
     handleSearch, handlePageChange, handleSizeChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,

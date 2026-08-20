@@ -10,8 +10,8 @@ const {
   filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows,
   importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
   importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
-  selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns, groupedViews,
-  viewListCollapsed, viewSearchKeyword, filteredGroupedViews, handleSelectView,
+  selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns,
+  viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
   MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
   processedRows, groupedRows, pagedRows, displayTotal,
   handleSearch, handlePageChange, handleSizeChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
@@ -82,33 +82,17 @@ const {
           </el-input>
         </div>
         <el-menu
-          :default-active="selectedViewId ? String(selectedViewId) : ''"
-          unique-opened
-          @select="handleSelectView"
+          :key="selectedTableKey || selectedFuCode"
+          :default-active="selectedTableKey"
+          @select="handleSelectTable"
         >
-          <el-menu-item-group
+          <el-menu-item
             v-for="group in filteredGroupedViews"
             :key="group.tableId ?? group.label"
-            :title="group.label"
+            :index="String(group.tableId ?? group.label)"
           >
-            <el-menu-item
-              v-for="v in group.views"
-              :key="v.id"
-              :index="String(v.id)"
-            >
-              <span class="mtv-view-option">
-                <span class="mtv-view-option-name">{{ v.viewName }}</span>
-                <el-tag
-                  v-if="v.isDefault"
-                  size="small"
-                  type="info"
-                  effect="plain"
-                >
-                  {{ t('mainTableView.defaultTag') }}
-                </el-tag>
-              </span>
-            </el-menu-item>
-          </el-menu-item-group>
+            <span class="mtv-view-option-name">{{ group.label }}</span>
+          </el-menu-item>
         </el-menu>
         <el-empty
           v-if="!filteredGroupedViews.length"
@@ -124,6 +108,19 @@ const {
       >
         <template v-if="selectedFuCode && selectedViewId">
           <div class="grid-toolbar">
+            <el-select
+              v-model="selectedViewId"
+              :placeholder="t('mainTableView.selectView')"
+              :disabled="!currentTableViewsSorted.length"
+              style="width: 220px;"
+            >
+              <el-option
+                v-for="v in currentTableViewsSorted"
+                :key="v.id"
+                :label="v.viewName"
+                :value="v.id"
+              />
+            </el-select>
             <el-input
               v-model="searchKeyword"
               :placeholder="t('common.search')"
@@ -744,27 +741,9 @@ const {
   padding: 12px 0 8px;
 }
 
-/* Left-nav view row: name on the left, Default tag pushed to the right. */
-.mtv-view-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-}
 .mtv-view-option-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Per-table group header in the left nav — uppercased + muted so grouping reads clearly. */
-.view-list-panel :deep(.el-menu-item-group__title) {
-  padding: 8px 12px 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--el-text-color-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 </style>

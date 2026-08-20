@@ -14,7 +14,8 @@ public final class MainTableViewPortalDtos {
             String functionUnitId,
             String functionUnitCode,
             String functionUnitName,
-            int viewCount
+            int viewCount,
+            String iconSvg
     ) {}
 
     @Builder
