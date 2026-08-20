@@ -7,7 +7,7 @@
     <el-popover
       v-if="variant === 'popover'"
       v-model:visible="popoverVisible"
-      :width="300"
+      :width="popoverWidth"
       trigger="click"
       placement="bottom-end"
       popper-class="pk-generation-popover"
@@ -49,45 +49,12 @@
               />
             </el-select>
           </el-form-item>
-          <template v-if="showExtra">
-            <el-form-item :label="t('table.pkGenerationStartValue')">
-              <el-input-number
-                v-model="local.startValue"
-                :min="0"
-                controls-position="right"
-                style="width: 100%;"
-                @change="emitChange"
-              />
-            </el-form-item>
-            <template v-if="showPrefix">
-              <el-form-item :label="t('table.pkGenerationPrefix')">
-                <el-input
-                  v-model="local.prefix"
-                  :placeholder="t('table.pkGenerationPrefixPlaceholder')"
-                  @input="emitChange"
-                />
-              </el-form-item>
-            </template>
-            <template v-if="showPadWidth">
-              <el-form-item :label="t('table.pkGenerationPadWidth')">
-                <el-input-number
-                  v-model="local.padWidth"
-                  :min="1"
-                  :max="20"
-                  controls-position="right"
-                  style="width: 100%;"
-                  @change="emitChange"
-                />
-              </el-form-item>
-            </template>
-          </template>
         </el-form>
-        <div
-          v-if="showPreview"
-          class="pk-preview"
-        >
-          {{ t('table.pkGenerationPreview') }}: <code>{{ previewLabel }}</code>
-        </div>
+        <PkGenerationSettingsForm
+          v-if="showExtra"
+          :local="local"
+          @change="emitChange"
+        />
         <div class="pk-popover-footer">
           <el-button
             size="small"
@@ -117,7 +84,7 @@
       </el-select>
       <el-popover
         v-if="showExtra"
-        :width="300"
+        :width="popoverWidth"
         trigger="click"
         placement="bottom-end"
         popper-class="pk-generation-popover"
@@ -136,47 +103,10 @@
           <div class="pk-popover-title">
             {{ t('table.pkGenerationSettings') }}
           </div>
-          <el-form
-            label-position="top"
-            size="small"
-          >
-            <el-form-item :label="t('table.pkGenerationStartValue')">
-              <el-input-number
-                v-model="local.startValue"
-                :min="0"
-                controls-position="right"
-                style="width: 100%;"
-                @change="emitChange"
-              />
-            </el-form-item>
-            <template v-if="showPrefix">
-              <el-form-item :label="t('table.pkGenerationPrefix')">
-                <el-input
-                  v-model="local.prefix"
-                  :placeholder="t('table.pkGenerationPrefixPlaceholder')"
-                  @input="emitChange"
-                />
-              </el-form-item>
-            </template>
-            <template v-if="showPadWidth">
-              <el-form-item :label="t('table.pkGenerationPadWidth')">
-                <el-input-number
-                  v-model="local.padWidth"
-                  :min="1"
-                  :max="20"
-                  controls-position="right"
-                  style="width: 100%;"
-                  @change="emitChange"
-                />
-              </el-form-item>
-            </template>
-          </el-form>
-          <div
-            v-if="showPreview"
-            class="pk-preview"
-          >
-            {{ t('table.pkGenerationPreview') }}: <code>{{ previewLabel }}</code>
-          </div>
+          <PkGenerationSettingsForm
+            :local="local"
+            @change="emitChange"
+          />
         </div>
       </el-popover>
     </template>
@@ -191,11 +121,13 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Setting } from '@element-plus/icons-vue'
+import PkGenerationSettingsForm from './PkGenerationSettingsForm.vue'
 import {
+  CUSTOM_FORMAT_DEFAULT,
   DAILY_DATE_SEQUENCE_DEFAULT_PAD,
   PK_GENERATION_STRATEGIES,
-  formatCalendarDateSequencePreview,
   isCalendarDateSequence,
+  isCustomFormat,
   parsePkGeneration,
   pkGenerationNeedsExtraConfig,
   serializePkGeneration,
@@ -227,22 +159,12 @@ const editorClasses = computed(() => ({
 }))
 
 const showExtra = computed(() => pkGenerationNeedsExtraConfig(local.strategy))
-
-const showPrefix = computed(() => local.strategy === 'prefixedSequence')
-const showPadWidth = computed(() =>
-  local.strategy === 'prefixedSequence' || isCalendarDateSequence(local.strategy))
-const showPreview = computed(() => showPadWidth.value && !!previewLabel.value)
+const popoverWidth = computed(() =>
+  isCustomFormat(local.strategy) ? 400 : 300)
 
 const strategyShortLabel = computed(() => {
-  const map: Record<string, string> = {
-    manual: 'Manual',
-    uuid: 'UUID',
-    autoIncrement: 'Auto',
-    prefixedSequence: 'Prefix',
-    dailyDateSequence: 'Daily',
-    monthlyDateSequence: 'Monthly',
-  }
-  return map[local.strategy] ?? local.strategy
+  const strategy = local.strategy ?? 'uuid'
+  return t(`table.pkGen_${strategy}`)
 })
 
 const hasExtraValues = computed(() => {
@@ -255,22 +177,12 @@ const hasExtraValues = computed(() => {
   if (isCalendarDateSequence(local.strategy)) {
     return local.startValue !== 1 || local.padWidth !== DAILY_DATE_SEQUENCE_DEFAULT_PAD
   }
-  return false
-})
-
-const previewLabel = computed(() => {
-  if (isCalendarDateSequence(local.strategy)) {
-    return formatCalendarDateSequencePreview(
-      local.strategy === 'monthlyDateSequence' ? 'month' : 'day',
-      local.padWidth,
-      local.startValue,
-    )
+  if (isCustomFormat(local.strategy)) {
+    return local.startValue !== 1
+      || local.format !== CUSTOM_FORMAT_DEFAULT
+      || local.resetPeriod !== 'none'
   }
-  if (local.strategy !== 'prefixedSequence') return ''
-  const prefix = local.prefix ?? ''
-  const pad = local.padWidth ?? 6
-  const start = local.startValue ?? 1
-  return `${prefix}${String(start).padStart(pad, '0')}`
+  return false
 })
 
 watch(
@@ -295,6 +207,12 @@ function onStrategyChange() {
   if (isCalendarDateSequence(local.strategy)) {
     local.padWidth = DAILY_DATE_SEQUENCE_DEFAULT_PAD
     local.prefix = ''
+  }
+  if (isCustomFormat(local.strategy)) {
+    local.format = CUSTOM_FORMAT_DEFAULT
+    local.prefix = ''
+    local.datePattern = ''
+    local.resetPeriod = 'none'
   }
   emitChange()
 }

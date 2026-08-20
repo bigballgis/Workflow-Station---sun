@@ -16,11 +16,14 @@ export interface FieldFkMeta {
 }
 
 export interface PkGenerationConfig {
-  strategy?: 'manual' | 'uuid' | 'autoIncrement' | 'prefixedSequence' | 'dailyDateSequence' | 'monthlyDateSequence'
+  strategy?: 'manual' | 'uuid' | 'autoIncrement' | 'prefixedSequence' | 'dailyDateSequence' | 'monthlyDateSequence' | 'customFormat' | 'datePrefixedSequence'
   scope?: 'perTable' | 'perFunctionUnit' | 'perPrefix' | 'perDay' | 'perMonth'
   startValue?: number
   padWidth?: number
   prefix?: string
+  datePattern?: string
+  resetPeriod?: 'none' | 'day' | 'month'
+  format?: string
 }
 
 export interface RowAddContext {
