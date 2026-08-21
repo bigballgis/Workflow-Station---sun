@@ -2,7 +2,6 @@ package com.portal.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.platform.common.audit.SystemAuditFields;
 import com.platform.common.jdbc.SubTableRowIdentity;
 import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
@@ -11,6 +10,7 @@ import com.portal.component.MainTableViewAccessResolver.AccessRule;
 import com.portal.component.MainTableViewInvolvementScope;
 import com.portal.component.MainTableViewRowQueryComponent;
 import com.portal.component.MainTableViewSubRowQueryComponent;
+import com.portal.component.OwnerFieldComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.MainTableViewQueryRequest;
@@ -48,11 +48,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class PortalMainTableViewServiceImpl implements PortalMainTableViewService {
-
-    /** Views-only PR: Owner field projection lives in a separate change; empty hints here. */
-    private record OwnerViewHints(java.util.Set<String> assigneeFields) {
-        static final OwnerViewHints NONE = new OwnerViewHints(java.util.Set.of());
-    }
 
     private static final String PROCESS_INSTANCE_ID_FIELD = "processInstanceId";
     private static final Set<String> PROCESS_INSTANCE_ID_HEADERS = Set.of(
@@ -189,13 +184,12 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         MainTableViewRowQueryComponent.Page page = rowQueryComponent.query(
                 mainViewQuery(userId, view, request, request.page(), request.size()));
         Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
-        OwnerViewHints ownerHints = OwnerViewHints.NONE;
         Map<String, String> ownerCache = ownerDisplayCacheForInstances(page.instances());
         List<MainTableViewDataRow> rows = page.instances().stream()
                 .map(pi -> MainTableViewDataRow.builder()
                         .rowKey(pi.getId())
                         .processInstanceId(pi.getId())
-                        .values(stripInternalKeys(projectInstanceRow(pi, view, fkSource, ownerHints, ownerCache)))
+                        .values(stripInternalKeys(projectInstanceRow(pi, view, fkSource, ownerCache)))
                         .build())
                 .toList();
         return MainTableViewDataPage.builder()
@@ -219,7 +213,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         MainTableViewSubRowQueryComponent.Page page = subRowQueryComponent.query(
                 subViewQuery(userId, view, request, request.page(), request.size()));
         Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
-        OwnerViewHints ownerHints = OwnerViewHints.NONE;
         Map<String, String> ownerCache = ownerDisplayCacheForSubRows(page.rows());
         return MainTableViewDataPage.builder()
                 .columns(visibleColumns(view))
@@ -227,7 +220,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                         .map(row -> MainTableViewDataRow.builder()
                                 .rowKey(row.instance().getId() + "|" + SubTableRowIdentity.identityOf(row.subRow()))
                                 .processInstanceId(row.instance().getId())
-                                .values(stripInternalKeys(projectSubRow(row, view, fkSource, ownerHints, ownerCache)))
+                                .values(stripInternalKeys(projectSubRow(row, view, fkSource, ownerCache)))
                                 .build())
                         .toList())
                 .total(page.total())
@@ -547,18 +540,17 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private List<Map<String, Object>> exportRows(String userId, ViewDefinition view,
                                                  MainTableViewQueryRequest request, int limit) {
         Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
-        OwnerViewHints ownerHints = OwnerViewHints.NONE;
         if (isSubView(view)) {
             var page = subRowQueryComponent.query(subViewQuery(userId, view, request, 0, limit));
             Map<String, String> ownerCache = ownerDisplayCacheForSubRows(page.rows());
             return page.rows().stream()
-                    .map(row -> projectSubRow(row, view, fkSource, ownerHints, ownerCache))
+                    .map(row -> projectSubRow(row, view, fkSource, ownerCache))
                     .toList();
         }
         var page = rowQueryComponent.query(mainViewQuery(userId, view, request, 0, limit));
         Map<String, String> ownerCache = ownerDisplayCacheForInstances(page.instances());
         return page.instances().stream()
-                .map(pi -> projectInstanceRow(pi, view, fkSource, ownerHints, ownerCache))
+                .map(pi -> projectInstanceRow(pi, view, fkSource, ownerCache))
                 .toList();
     }
 
@@ -569,7 +561,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private Map<String, Object> projectSubRow(MainTableViewSubRowQueryComponent.Row row,
                                               ViewDefinition view,
                                               Map<String, FkSourceMeta> fkSource,
-                                              OwnerViewHints ownerHints,
                                               Map<String, String> ownerCache) {
         Map<String, Object> vars = row.instance().getVariables() != null
                 ? row.instance().getVariables()
@@ -585,8 +576,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 projected.put(field.fieldName(), systemFieldValue(row.instance(), field.fieldName()));
             } else {
                 projected.put(field.fieldName(),
-                        resolveProjectedFieldValue(row.subRow(), field, mainVars, fkSource,
-                                row.instance(), ownerHints, ownerCache));
+                        resolveProjectedFieldValue(row.subRow(), field, mainVars, fkSource, ownerCache));
             }
         }
         return projected;
@@ -594,7 +584,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
     private Map<String, Object> projectInstanceRow(ProcessInstance pi, ViewDefinition view,
                                                    Map<String, FkSourceMeta> fkSource,
-                                                   OwnerViewHints ownerHints,
                                                    Map<String, String> ownerCache) {
         Map<String, Object> vars = pi.getVariables() != null ? pi.getVariables() : Map.<String, Object>of();
         Map<String, Object> mainVars = stripInternalKeys(vars);
@@ -608,8 +597,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             if (Boolean.TRUE.equals(field.systemField())) {
                 row.put(field.fieldName(), systemFieldValue(pi, field.fieldName()));
             } else {
-                row.put(field.fieldName(), resolveProjectedFieldValue(vars, field, mainVars, fkSource,
-                        pi, ownerHints, ownerCache));
+                row.put(field.fieldName(), resolveProjectedFieldValue(vars, field, mainVars, fkSource, ownerCache));
             }
         }
         return row;
@@ -625,8 +613,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             ViewFieldDef field,
             Map<String, Object> mainVars,
             Map<String, FkSourceMeta> fkSourceMeta,
-            ProcessInstance pi,
-            OwnerViewHints ownerHints,
             Map<String, String> ownerCache) {
         if ("lookup_display".equalsIgnoreCase(field.columnType())
                 && field.lookupSourceField() != null && !field.lookupSourceField().isBlank()) {
@@ -642,19 +628,10 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             // FALLBACK(ux): unmatched FK — show raw scalar rather than inventing a value
             return resolved != null ? resolved : fkVal;
         }
-        if (ownerHints != null && ownerHints.assigneeFields().contains(field.fieldName()) && pi != null) {
-            String live = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
-                    pi.getCurrentAssignee(), pi.getCandidateUsers(), ownerCache);
-            if (live != null && !live.isBlank()) {
-                return live;
-            }
-        }
         Object raw = source.get(field.fieldName());
-        if (shouldResolveAsUserIdentity(field.fieldName(), raw)) {
-            Object liveUser = liveResolveUserIdentity(raw, ownerCache);
-            if (liveUser != null) {
-                return liveUser;
-            }
+        Object liveUser = liveResolveUserPrefixed(raw, ownerCache);
+        if (liveUser != null) {
+            return liveUser;
         }
         if (raw instanceof String s && s.startsWith("group:")) {
             Object display = source.get(field.fieldName() + "__display");
@@ -677,16 +654,12 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         for (MainTableViewSubRowQueryComponent.Row row : rows) {
             collectOwnerUserKeys(row.instance(), keys);
             collectUserPrefixedKeys(row.subRow(), keys);
-            collectKnownUserFieldKeys(row.subRow(), keys);
         }
         return userDisplayNameResolver.resolveBatch(keys);
     }
 
     private void collectOwnerUserKeys(ProcessInstance pi, Set<String> keys) {
-        keys.addAll(userDisplayNameResolver.collectAssigneeUserKeys(
-                pi.getCurrentAssignee(), pi.getCandidateUsers()));
         collectUserPrefixedKeys(pi.getVariables(), keys);
-        collectKnownUserFieldKeys(pi.getVariables(), keys);
     }
 
     private static void collectUserPrefixedKeys(Map<String, Object> source, Set<String> keys) {
@@ -694,71 +667,26 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             return;
         }
         for (Object value : source.values()) {
-            if (value instanceof String s && s.startsWith("user:") && s.length() > 5) {
-                keys.add(s.substring(5).trim());
+            if (value instanceof String s) {
+                keys.addAll(OwnerFieldComponent.parseStoredUserIds(s));
             }
         }
     }
 
-    /** Audit USER columns often store a bare id / name without the {@code user:} prefix. */
-    private static void collectKnownUserFieldKeys(Map<String, Object> source, Set<String> keys) {
-        if (source == null) {
-            return;
-        }
-        for (Map.Entry<String, Object> entry : source.entrySet()) {
-            if (SystemAuditFields.isUser(entry.getKey())) {
-                collectUserIdentityKey(entry.getValue(), keys);
-            }
-        }
-    }
-
-    /**
-     * Collect keys for {@link UserDisplayNameResolver}: {@code user:}<id> strips to id; bare
-     * strings (id / username / employee id / legacy display name) are kept as-is so batch
-     * resolve can match {@code sys_users} the same way list USER filters do.
-     */
-    private static void collectUserIdentityKey(Object value, Set<String> keys) {
-        if (!(value instanceof String s) || s.isBlank()) {
-            return;
-        }
-        String trimmed = s.trim();
-        if (trimmed.startsWith("user:") && trimmed.length() > 5) {
-            keys.add(trimmed.substring(5).trim());
-            return;
-        }
-        if (trimmed.startsWith("group:")) {
-            return;
-        }
-        keys.add(trimmed);
-    }
-
-    private static boolean shouldResolveAsUserIdentity(String fieldName, Object raw) {
-        if (raw instanceof String s && s.startsWith("user:") && s.length() > 5) {
-            return true;
-        }
-        return SystemAuditFields.isUser(fieldName);
-    }
-
-    /**
-     * Same resolution path as {@link ListFilterSql#userDisplayLabelExpression}: map stored
-     * identity forms through {@code sys_users} so group headers and cells share one label.
-     */
-    private String liveResolveUserIdentity(Object raw, Map<String, String> ownerCache) {
-        if (!(raw instanceof String s) || s.isBlank()) {
+    private String liveResolveUserPrefixed(Object raw, Map<String, String> ownerCache) {
+        if (!(raw instanceof String s)) {
             return null;
         }
-        String trimmed = s.trim();
-        if (trimmed.startsWith("group:")) {
+        List<String> ids = OwnerFieldComponent.parseStoredUserIds(s);
+        if (ids.isEmpty()) {
             return null;
         }
-        String key = trimmed.startsWith("user:") && trimmed.length() > 5
-                ? trimmed.substring(5).trim()
-                : trimmed;
-        if (key.isEmpty()) {
-            return null;
+        List<String> names = new ArrayList<>();
+        for (String id : ids) {
+            String live = userDisplayNameResolver.resolveCached(id, ownerCache);
+            names.add(live != null && !live.isBlank() ? live : id);
         }
-        String live = userDisplayNameResolver.resolveCached(key, ownerCache);
-        return live != null && !live.isBlank() ? live : null;
+        return String.join(UserDisplayNameResolver.MULTI_ASSIGNEE_DISPLAY_SEPARATOR, names);
     }
 
     private Object systemFieldValue(ProcessInstance pi, String fieldName) {

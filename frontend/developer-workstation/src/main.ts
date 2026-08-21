@@ -27,6 +27,9 @@ import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designe
 import LookupComponent from './components/designer/LookupComponent.vue'
 import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
 import RecordNotePlaceholderWidget from './components/designer/RecordNotePlaceholderWidget.vue'
+import OwnerPlaceholderWidget from './components/designer/OwnerPlaceholderWidget.vue'
+import OwnerConfigEditor from './components/designer/OwnerConfigEditor.vue'
+import FormControlTypeSelect from './components/designer/FormControlTypeSelect.vue'
 import RecordNoteScopeSelect from './components/designer/RecordNoteScopeSelect.vue'
 import SensitiveMaskPropsEditor from './components/designer/SensitiveMaskPropsEditor.vue'
 import SensitiveMaskedInput from './components/designer/SensitiveMaskedInput.vue'
@@ -80,6 +83,11 @@ FcDesigner.component('LookupBindingSelect', LookupBindingSelect)
 
 // Register RecordNotePlaceholderWidget as the canvas renderer for 'recordNote' type
 FcDesigner.component('RecordNote', RecordNotePlaceholderWidget)
+
+// Owner field: canvas placeholder + props-panel editor for ownerConfig
+FcDesigner.component('Owner', OwnerPlaceholderWidget)
+FcDesigner.component('OwnerConfigEditor', OwnerConfigEditor)
+FcDesigner.component('FormControlTypeSelect', FormControlTypeSelect)
 FcDesigner.component('RecordNoteScopeSelect', RecordNoteScopeSelect)
 FcDesigner.component('MiAssignment', MiAssignmentPlaceholderWidget)
 
@@ -448,6 +456,47 @@ FcDesigner.addDragRule({
   }
 })
 
+// Owner field (docs/design/owner-field-component.md): control type on an existing
+// VARCHAR column. Source is CREATOR or CURRENT_ASSIGNEE. Multiple per table/form.
+FcDesigner.addDragRule({
+  name: 'owner',
+  label: String(i18n.global.t('form.ownerTitle')),
+  icon: 'icon-owner',
+  menu: 'main',
+  mask: false,
+  input: true,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  rule() {
+    return {
+      type: 'owner',
+      field: 'owner',
+      title: String(i18n.global.t('form.ownerTitle')),
+      props: { ownerConfig: '{"source":"CREATOR"}' }
+    }
+  },
+  props() {
+    return [
+      {
+        type: 'FormControlTypeSelect',
+        field: '_controlType',
+        title: String(i18n.global.t('form.ownerControlType')),
+        props: {}
+      },
+      {
+        type: 'OwnerConfigEditor',
+        field: 'ownerConfig',
+        title: String(i18n.global.t('form.ownerSourceLabel')),
+        props: {}
+      }
+    ]
+  }
+})
+
 // RecordNote: rich-text comments + attachments panel scoped to the hosting form's table.
 // Display-only (no data field) — the portal runtime resolves the target from form context.
 FcDesigner.addDragRule({
@@ -629,6 +678,24 @@ overrideStyle.textContent = `
     background-color: #409eff;
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath d='M909.6 854.5L649.9 594.8C690.2 542.7 714 478.4 714 408c0-167.4-135.6-303-303-303S108 240.6 108 408s135.6 303 303 303c70.4 0 134.7-23.8 186.8-64.1l259.7 259.6c6.2 6.2 16.4 6.2 22.6 0l29.5-29.5c6.3-6.2 6.3-16.4 0-22.5zM411 680c-150.1 0-272-121.9-272-272s121.9-272 272-272 272 121.9 272 272-121.9 272-272 272z'/%3E%3C/svg%3E") no-repeat center / contain;
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath d='M909.6 854.5L649.9 594.8C690.2 542.7 714 478.4 714 408c0-167.4-135.6-303-303-303S108 240.6 108 408s135.6 303 303 303c70.4 0 134.7-23.8 186.8-64.1l259.7 259.6c6.2 6.2 16.4 6.2 22.6 0l29.5-29.5c6.3-6.2 6.3-16.4 0-22.5zM411 680c-150.1 0-272-121.9-272-272s121.9-272 272-272 272 121.9 272 272-121.9 272-272 272z'/%3E%3C/svg%3E") no-repeat center / contain;
+  }
+
+  /* Owner palette tile: person-head silhouette (fc-icon has no owner glyph). */
+  .fc-icon.icon-owner,
+  i.icon-owner {
+    font-family: inherit !important;
+  }
+  .fc-icon.icon-owner::before,
+  i.icon-owner::before {
+    content: '' !important;
+    font-family: inherit !important;
+    display: inline-block !important;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20.5C4 16.4 7.6 14 12 14s8 2.4 8 6.5V21H4z'/%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20.5C4 16.4 7.6 14 12 14s8 2.4 8 6.5V21H4z'/%3E%3C/svg%3E") no-repeat center / contain;
   }
 `
 document.head.appendChild(overrideStyle)

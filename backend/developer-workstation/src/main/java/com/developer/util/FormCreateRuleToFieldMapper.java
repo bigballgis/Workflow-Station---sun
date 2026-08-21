@@ -132,7 +132,7 @@ public final class FormCreateRuleToFieldMapper {
                     : DataType.VARCHAR;
             case "editor" -> DataType.TEXT;
             case "select", "radio", "checkbox", "cascader", "treeSelect", "elTreeSelect",
-                 "userSelect", "user", "departmentSelect", "department", "lookup",
+                 "userSelect", "user", "departmentSelect", "department", "lookup", "owner",
                  "colorPicker", "rate", "slider", "signature", "transfer", "treeselect" -> DataType.VARCHAR;
             default -> DataType.VARCHAR;
         };

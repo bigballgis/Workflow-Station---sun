@@ -70,6 +70,7 @@ public class ProcessStartComponent {
     private final MeetingParticipantVariablesPersistence meetingParticipantVariablesPersistence;
     private final ProcessSubTablePrimaryKeyEnricherComponent processSubTablePrimaryKeyEnricherComponent;
     private final ComputedFieldRecalculator computedFieldRecalculator;
+    private final OwnerFieldComponent ownerFieldComponent;
     private final TaskFormComponent taskFormComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final I18nService i18nService;
@@ -196,6 +197,10 @@ public class ProcessStartComponent {
         }
         applyWorkspaceContextVariables(userId, variables);
         processSubTablePrimaryKeyEnricherComponent.allocateMissingPrimaryKeysInVariables(pin.code(), variables);
+        // Owner fields: Creator uses startUserId; Current Assignee waits for the
+        // first-task snapshot written after persist.
+        ownerFieldComponent.applyOnSubmit(pin.code(),
+                new OwnerFieldComponent.OwnerWriteContext(userId, userId, null, null, null), variables);
         // System audit fields are platform-managed: written at real insert regardless of
         // Form Design canvas (audit widgets are stripped from the designer by design).
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
@@ -665,6 +670,18 @@ public class ProcessStartComponent {
                     flowableProcessInstanceId, outcome.currentNodeName,
                     outcome.nextAssigneeSnapshot.getAssigneeUserId(),
                     outcome.nextAssigneeSnapshot.getCandidateUserIds());
+            processInstanceRepository.findById(flowableProcessInstanceId).ifPresent(instance -> {
+                Map<String, Object> vars = instance.getVariables() == null
+                        ? new HashMap<>()
+                        : new HashMap<>(instance.getVariables());
+                ownerFieldComponent.applyAssigneeSnapshot(
+                        instance.getFunctionUnitCode(),
+                        vars,
+                        outcome.nextAssigneeSnapshot.getAssigneeUserId(),
+                        outcome.nextAssigneeSnapshot.getCandidateUserIds());
+                instance.setVariables(vars);
+                processInstanceRepository.save(instance);
+            });
         } else {
             log.info("Process instance {} already COMPLETED, skipped currentNode update (race condition avoided)",
                     flowableProcessInstanceId);

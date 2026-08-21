@@ -181,6 +181,11 @@
               @update:model-value="(val) => onLookupCellChange(col, scope.$index, val)"
             />
           </template>
+          <template v-else-if="col.type === 'owner'">
+            <span class="owner-preview-tag">{{
+              formatDefaultCellDisplay(col, scope.row[col.field]) || t('form.ownerPlaceholder')
+            }}</span>
+          </template>
           <!-- default -->
           <span v-else>{{ formatDefaultCellDisplay(col, scope.row[col.field]) }}</span>
         </template>
@@ -862,6 +867,18 @@ defineExpose(exposed)
     :deep(.lookup-label-text) {
       display: none;
     }
+  }
+
+  .owner-preview-tag {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: #f0f2f5;
+    font-size: 13px;
+    color: #909399;
+    line-height: 24px;
   }
 
   .file-download-link {

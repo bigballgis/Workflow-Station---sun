@@ -611,6 +611,16 @@
       </div>
     </template>
 
+    <!-- Owner field: readonly Lookup chrome; value is auto-filled from Creator or Current Assignee. -->
+    <template v-else-if="field.type === 'owner'">
+      <OwnerField
+        :model-value="modelValue"
+        :owner-config="(field as any)._ownerConfig"
+        :display="ownerDisplayValue"
+        readonly
+      />
+    </template>
+
     <!-- RecordNote is rendered by FormRendererFields (main form only); skip in nested contexts -->
     <template v-else-if="field.type === 'recordNote'" />
 
@@ -643,6 +653,7 @@ import '@wangeditor/editor/dist/css/style.css'
 import type { FormField } from './formRendererHelpers'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
+import OwnerField from './owner/OwnerField.vue'
 import { useFieldCore } from '@/composables/fieldRenderer/useFieldCore'
 import { useFieldSanitize } from '@/composables/fieldRenderer/useFieldSanitize'
 import { useFieldLookup } from '@/composables/fieldRenderer/useFieldLookup'
@@ -732,6 +743,13 @@ const {
 
 const formRendererCtx = inject(FORM_RENDERER_FIELDS_CTX, null)
 const inlineLookupCtx = inject(INLINE_LOOKUP_CASCADE_CTX, null)
+
+// Owner display: the backend-written "<field>__display" companion (docs/design/
+// owner-field-component.md §4.3), used to label the stored value without a lookup.
+const ownerDisplayValue = computed(() => {
+  const display = props.formData?.[`${props.field.key}__display`]
+  return typeof display === 'string' ? display : ''
+})
 
 const effectiveLookupFilterConditions = computed(() => {
   if (formRendererCtx?.lookupFilterConditionsFor) {

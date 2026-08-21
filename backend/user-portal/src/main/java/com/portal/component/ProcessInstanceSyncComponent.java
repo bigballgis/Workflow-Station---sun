@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -28,6 +29,7 @@ public class ProcessInstanceSyncComponent {
 
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final OwnerFieldComponent ownerFieldComponent;
 
     /**
      * Generic catch blocks must not swallow exceptions that already poisoned the Spring transaction;
@@ -67,6 +69,12 @@ public class ProcessInstanceSyncComponent {
                 if (currentNode != null) {
                     instance.setCurrentNode(currentNode);
                 }
+                Map<String, Object> vars = instance.getVariables() == null
+                        ? new HashMap<>()
+                        : new HashMap<>(instance.getVariables());
+                ownerFieldComponent.applyAssigneeSnapshot(
+                        instance.getFunctionUnitCode(), vars, assigneeUserId, candidateUserIds);
+                instance.setVariables(vars);
                 processInstanceRepository.save(instance);
                 log.info("Updated process instance {} with currentAssignee={}, candidateUsers={}, currentNode={}",
                         processInstanceId, assigneeUserId, candidateUserIds, currentNode);

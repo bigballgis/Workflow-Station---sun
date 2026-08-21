@@ -18,6 +18,19 @@ import {
 import { subTableComponentEventFieldKey } from '../../utils/formCreateComponentEvents'
 import { isAuditField } from '../../components/subTableAddDialogHelpers/rowInit'
 
+/** Copy Owner/Lookup `"<field>__display"` companions that leaf-field init would otherwise drop. */
+export function copyFieldDisplayCompanion(
+  parent: Record<string, unknown>,
+  fieldKey: string,
+  target: Record<string, unknown>,
+): void {
+  const displayKey = `${fieldKey}__display`
+  const display = parent[displayKey]
+  if (typeof display === 'string' && display.length > 0) {
+    target[displayKey] = display
+  }
+}
+
 interface FormDataDeps {
   formRef: Ref<FormInstance | undefined>
   allFields: ComputedRef<FormField[]>
@@ -122,8 +135,9 @@ export function useFormData(deps: FormDataDeps) {
   // ---------------------------------------------------------------------------
   const initFormData = () => {
     const data: Record<string, any> = {}
+    const parent = deps.modelValue() || {}
     deps.allFields.value.forEach(field => {
-      const bound = deps.modelValue()[field.key]
+      const bound = parent[field.key]
       if (bound !== undefined && bound !== null && bound !== '') {
         data[field.key] = bound
       } else if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== '') {
@@ -135,6 +149,7 @@ export function useFormData(deps: FormDataDeps) {
       } else {
         data[field.key] = null
       }
+      copyFieldDisplayCompanion(parent, field.key, data)
     })
     // Seed the readonly Request ID: prefer the backend-filled value, else compute from
     // the contributing fields already present (e.g. new-request page has no backend fill yet).

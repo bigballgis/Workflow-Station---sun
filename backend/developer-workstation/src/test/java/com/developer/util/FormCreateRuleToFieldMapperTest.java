@@ -38,6 +38,19 @@ class FormCreateRuleToFieldMapperTest {
     }
 
     @Test
+    @DisplayName("maps owner to VARCHAR (docs/design/owner-field-component.md §5.2)")
+    void mapsOwnerToVarchar() {
+        List<?> rule = List.of(
+                Map.of("type", "owner", "field", "owner", "title", "Owner",
+                        "props", Map.of("ownerConfig", "{\"source\":\"CREATOR\"}"))
+        );
+        List<FieldDefinitionRequest> fields = FormCreateRuleToFieldMapper.fromRules(rule);
+        assertEquals(1, fields.size());
+        assertEquals("owner", fields.get(0).getFieldName());
+        assertEquals(DataType.VARCHAR, fields.get(0).getDataType());
+    }
+
+    @Test
     void sanitizeTableNamePart() {
         assertEquals("mcy_debit", FormCreateRuleToFieldMapper.sanitizeTableNamePart("MCY Debit"));
         assertTrue(FormCreateRuleToFieldMapper.sanitizeTableNamePart("123").startsWith("t_"));

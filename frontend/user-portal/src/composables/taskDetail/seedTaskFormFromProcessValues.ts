@@ -35,6 +35,18 @@ export function seedTaskFormFromProcessValues(
     if (!isEmptySeedableFormValue(next[key])) continue
     next[key] = fromProcess
     patched = true
+    const displayKey = `${key}__display`
+    if (isEmptySeedableFormValue(next[displayKey]) && !isEmptySeedableFormValue(processValues[displayKey])) {
+      next[displayKey] = processValues[displayKey]
+    }
+  }
+  for (const key of fieldKeys) {
+    if (!key || key.startsWith('__')) continue
+    const displayKey = `${key}__display`
+    if (isEmptySeedableFormValue(next[displayKey]) && !isEmptySeedableFormValue(processValues[displayKey])) {
+      next[displayKey] = processValues[displayKey]
+      patched = true
+    }
   }
   return { next, patched }
 }

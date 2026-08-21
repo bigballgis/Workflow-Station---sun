@@ -58,6 +58,14 @@ public class TaskFormFieldMapper {
             if (allVariables.containsKey(fieldName)) {
                 subset.put(fieldName, allVariables.get(fieldName));
             }
+            // Owner / Lookup store a companion "<field>__display". Permissions only list
+            // the main field, so the label must be copied or the widget falls back to the raw id.
+            if (fieldName != null && !fieldName.endsWith("__display")) {
+                String displayKey = fieldName + "__display";
+                if (allVariables.containsKey(displayKey)) {
+                    subset.put(displayKey, allVariables.get(displayKey));
+                }
+            }
         }
         return subset;
     }

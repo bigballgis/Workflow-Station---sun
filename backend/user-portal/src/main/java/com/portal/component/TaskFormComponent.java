@@ -119,6 +119,14 @@ public class TaskFormComponent {
     private UserDisplayNameResolver userDisplayNameResolver;
 
     /**
+     * Lazy: Owner-field validation / display re-resolution / default fill on task-form
+     * submits (null in `new`-constructed tests, which do not exercise owner fields).
+     */
+    @Lazy
+    @Autowired
+    private OwnerFieldComponent ownerFieldComponent;
+
+    /**
      * Display name for audit fields; falls back to the raw user id when the
      * resolver is unavailable.
      */
@@ -306,6 +314,17 @@ public class TaskFormComponent {
         // form submissions. Gap-fill from the live engine variables so task forms
         // render those results.
         mergeEngineOnlyVariables(taskInfo.processInstanceId, hydratedVariables);
+        if (ownerFieldComponent != null) {
+            ownerFieldComponent.projectForRead(
+                    processInstance.getFunctionUnitCode(),
+                    new OwnerFieldComponent.OwnerWriteContext(
+                            processInstance.getStartUserId(),
+                            processInstance.getStartUserId(),
+                            processInstance.getCurrentAssignee(),
+                            processInstance.getCandidateUsers(),
+                            null),
+                    hydratedVariables);
+        }
         if (processComponent != null) {
             __t = System.nanoTime();
             processComponent.enrichSubTablesVariablesFromPhysicalTables(taskInfo.processInstanceId, hydratedVariables);
@@ -483,6 +502,19 @@ public class TaskFormComponent {
             // Defense in depth: strip even if filterEditableFields missed a case variant.
             SystemAuditFieldFiller.stripClientAuditKeys(inbound);
             updatedVariables.putAll(inbound);
+
+            // Owner fields: Creator pins startUserId; Current Assignee follows snapshot.
+            if (ownerFieldComponent != null) {
+                ownerFieldComponent.applyOnSubmit(
+                        processInstance.getFunctionUnitCode(),
+                        new OwnerFieldComponent.OwnerWriteContext(
+                                userId,
+                                processInstance.getStartUserId(),
+                                processInstance.getCurrentAssignee(),
+                                processInstance.getCandidateUsers(),
+                                currentVariables),
+                        updatedVariables);
+            }
 
             // System audit fields: refresh updated_at/updated_by at real update
             // (platform-managed; not gated on Form Design). created_* preserved from insert.

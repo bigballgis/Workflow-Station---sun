@@ -98,6 +98,9 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
           passProps.fieldDefs = lookupPreviewConfig.fieldDefs
           passProps.showBackfillView = lookupPreviewConfig.showBackfillView
         }
+        if (type === 'owner') {
+          passProps.ownerConfig = rProps.ownerConfig || '{}'
+        }
         if (options) passProps.options = options
         const readonly = isFormCreateRuleReadonly(r)
         const defaultValue = resolveRuleDefaultValue(r as Record<string, unknown>)
@@ -303,6 +306,16 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
               fieldDefs: lookupPreviewConfig.fieldDefs,
               showBackfillView: lookupPreviewConfig.showBackfillView
             }
+          }
+        }
+        if (fieldRule?.type === 'owner') {
+          return {
+            field: column.fieldName,
+            label: column.displayName || column.columnLabel || fieldRule.title || column.fieldName,
+            type: 'owner',
+            minWidth: 200,
+            props: { ownerConfig: fieldRule.props?.ownerConfig || '{}' },
+            sourceRule: fieldRule as Record<string, unknown>,
           }
         }
         const colType = fieldRule?.type === 'upload'

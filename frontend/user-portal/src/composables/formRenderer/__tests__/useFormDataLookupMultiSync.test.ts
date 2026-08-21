@@ -97,3 +97,44 @@ describe('useFormData multi LOOKUP parent sync', () => {
     expect(parentModel.test_status).toEqual(rows)
   })
 })
+
+describe('useFormData Owner __display companions', () => {
+  it('copies <field>__display from parent so Owner chips do not fall back to user ids', () => {
+    const allFields = computed(() => [
+      { key: 'creator', label: 'Creator', type: 'owner' } as FormField,
+      { key: 'owner', label: 'Current Assignee', type: 'owner' } as FormField,
+    ])
+    const parentModel: Record<string, unknown> = {
+      creator: 'user:user-dev',
+      creator__display: 'Developer Tester',
+      owner: 'user:user-e2e-lina',
+      owner__display: '李娜',
+    }
+    const api = useFormData({
+      formRef: ref(undefined),
+      allFields,
+      modelValue: () => parentModel,
+      readonly: () => true,
+      config: () => undefined,
+      getInternalUpdate: () => false,
+      setInternalUpdate: () => {},
+      emitChange: () => {},
+      emitModelValue: () => {},
+      emitSubTableData: () => {},
+      runComponentEventsOnFieldChange: () => {},
+      formOptionsOnChange: () => undefined,
+      fieldComponentEventsHas: () => false,
+      runFormOptionsOnChange: () => {},
+      engineOnFieldChange: () => ({}),
+      applyEngineResult: () => {},
+      engineOnSubTableChange: () => ({ summaryValues: new Map() }),
+      engineCalculatedValues: ref(new Map()),
+      requestIdConfig: () => undefined,
+    })
+    api.initFormData()
+    expect(api.formData.value.creator).toBe('user:user-dev')
+    expect(api.formData.value.creator__display).toBe('Developer Tester')
+    expect(api.formData.value.owner).toBe('user:user-e2e-lina')
+    expect(api.formData.value.owner__display).toBe('李娜')
+  })
+})
