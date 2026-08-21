@@ -8,6 +8,7 @@ import com.admin.entity.RelationTableDefinition;
 import com.admin.exception.RelationTableNameDuplicateException;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.service.impl.RelationTableStructureServiceImpl;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
@@ -37,6 +38,7 @@ class RelationTableStructurePropertyTest {
 
     private RelationTableDefinitionRepository tableDefinitionRepository;
     private RelationFieldDefinitionRepository fieldDefinitionRepository;
+    private FunctionUnitRepository functionUnitRepository;
     private JdbcTemplate jdbcTemplate;
     private RelationTableStructureServiceImpl service;
 
@@ -44,10 +46,12 @@ class RelationTableStructurePropertyTest {
     void setUp() {
         tableDefinitionRepository = Mockito.mock(RelationTableDefinitionRepository.class);
         fieldDefinitionRepository = Mockito.mock(RelationFieldDefinitionRepository.class);
+        functionUnitRepository = Mockito.mock(FunctionUnitRepository.class);
         jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         service = new RelationTableStructureServiceImpl(
                 tableDefinitionRepository,
                 fieldDefinitionRepository,
+                functionUnitRepository,
                 jdbcTemplate
         );
     }
@@ -238,5 +242,92 @@ class RelationTableStructurePropertyTest {
             assertThat(resField.getDisplayName()).isEqualTo(reqField.getDisplayName());
             assertThat(resField.getSortOrder()).isEqualTo(reqField.getSortOrder());
         }
+    }
+
+    private RelationTableDefinition existingTableForFunctionUnitUpdate(Long tableId, String currentFunctionUnitId) {
+        return RelationTableDefinition.builder()
+                .id(tableId)
+                .tableName("existing_table")
+                .displayName("Display")
+                .description("Description")
+                .status(RelationTableStatus.DEPLOYED)
+                .enabled(true)
+                .portalVisible(false)
+                .currentVersion(1)
+                .functionUnitId(currentFunctionUnitId)
+                .fieldDefinitions(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+    }
+
+    /**
+     * request.functionUnitId == null must leave the existing grouping untouched — the field is
+     * simply absent from the request, not an instruction to clear it.
+     */
+    @Example
+    void updateTable_nullFunctionUnitIdLeavesExistingGroupingUnchanged() {
+        Long tableId = 1L;
+        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId, "fu-1");
+        when(tableDefinitionRepository.findById(eq(tableId))).thenReturn(Optional.of(existing));
+        when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
+                .displayName("Display")
+                .description("Description")
+                .fieldDefinitions(new ArrayList<>())
+                .functionUnitId(null)
+                .build();
+
+        service.updateTable(tableId, request);
+
+        assertThat(existing.getFunctionUnitId()).as("null functionUnitId must not clear the existing value").isEqualTo("fu-1");
+    }
+
+    /**
+     * request.functionUnitId == "" (empty string) is the explicit "clear to ungrouped" signal —
+     * distinct from null, which leaves the field untouched (see previous test).
+     */
+    @Example
+    void updateTable_blankFunctionUnitIdClearsToUngrouped() {
+        Long tableId = 2L;
+        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId, "fu-1");
+        when(tableDefinitionRepository.findById(eq(tableId))).thenReturn(Optional.of(existing));
+        when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
+                .displayName("Display")
+                .description("Description")
+                .fieldDefinitions(new ArrayList<>())
+                .functionUnitId("")
+                .build();
+
+        service.updateTable(tableId, request);
+
+        assertThat(existing.getFunctionUnitId()).as("blank functionUnitId must clear to ungrouped (null)").isNull();
+    }
+
+    /**
+     * request.functionUnitId == a non-empty id sets/reassigns the grouping.
+     */
+    @Example
+    void updateTable_nonBlankFunctionUnitIdSetsGrouping() {
+        Long tableId = 3L;
+        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId, null);
+        when(tableDefinitionRepository.findById(eq(tableId))).thenReturn(Optional.of(existing));
+        when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
+                .displayName("Display")
+                .description("Description")
+                .fieldDefinitions(new ArrayList<>())
+                .functionUnitId("fu-2")
+                .build();
+
+        service.updateTable(tableId, request);
+
+        assertThat(existing.getFunctionUnitId()).isEqualTo("fu-2");
     }
 }

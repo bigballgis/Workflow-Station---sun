@@ -118,9 +118,14 @@ export function createTaskDetailNodeFormMap(ctx: TaskDetailCtx): TaskDetailNodeF
           }
         }
       }
+      // Only `formId` is read above, so the node's My Requests design (carried as
+      // requestFormId) is already out of scope here. The name fallback still needs
+      // a scene guard: both designs of a node commonly share a name.
       let matchedForm: any = null
       if (formId) matchedForm = content.forms.find((f: any) => String(f.sourceId) === formId)
-      if (!matchedForm && formName) matchedForm = content.forms.find((f: any) => f.name === formName)
+      if (!matchedForm && formName) {
+        matchedForm = content.forms.find((f: any) => f.name === formName && f.scene !== 'REQUEST')
+      }
       if (!matchedForm) continue
 
       const nodeFields: FormField[] = []
@@ -152,23 +157,18 @@ export function createTaskDetailNodeFormMap(ctx: TaskDetailCtx): TaskDetailNodeF
         }
         let subForms: Record<string, any> = {}
         let configForSubTables: Record<string, any> = {}
-        let subTablePortalViewsNode: Record<string, any> = {}
         configForSubTables = cfg
         subForms = cfg.subForms || {}
-        subTablePortalViewsNode = cfg.subTablePortalViews || {}
         for (const b of (matchedForm.tableBindings || [])) {
           if (b.bindingType === 'PRIMARY') continue
           const cols = ctx.deriveColumnsFromBinding(b, subForms, configForSubTables)
           const subFormDesign = ctx.resolveSubFormDesign(b, subForms)
-          const bindingPortalViews =
-            subTablePortalViewsNode[b.bindingId] ?? subTablePortalViewsNode[String(b.bindingId)] ?? null
           const binding = {
             bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
             foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
             tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
-            portalViews: bindingPortalViews,
             primaryKeyFields: resolveSubTablePrimaryKeyFields(b.primaryKeyFields, b.bindingId, configForSubTables),
             data: [] as any[],
           }

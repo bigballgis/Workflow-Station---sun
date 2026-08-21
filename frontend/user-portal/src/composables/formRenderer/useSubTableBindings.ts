@@ -22,7 +22,6 @@ export interface SubTableBinding {
   data: any[]
   formFields?: FormField[]
   formOptions?: Record<string, any>
-  portalViews?: Partial<import('../../components/formRendererHelpers').SubTablePortalViews> | null
   primaryKeyFields?: string[]
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: string

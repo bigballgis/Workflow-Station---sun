@@ -54,6 +54,10 @@ export interface ApplicationDiagramNodeFormInfo {
   nativeSubTableBindingIds: number[]
   /** Designer configJson for link-form suppression (subListViews). */
   formConfig: Record<string, any>
+  /** This node's PRIMARY table binding — feeds FormRenderer so main-form recordNote
+   *  fields can resolve a target instead of showing "available after save" on every
+   *  non-current (already-completed) diagram node. */
+  primaryTableBinding: { tableId?: number | null; tableName?: string } | null
 }
 
 export type ApplicationDetailSecondaryCtx = {

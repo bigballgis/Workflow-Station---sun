@@ -111,11 +111,12 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     return getTableFieldDefinitionsByTableId(tableId)
   }
 
-  function mergeTaskPermissionsForFields(fields: FieldDefinition[]) {
+  function mergeTaskPermissionsForFields(fields: FieldDefinition[], bindingId?: number) {
     if (!selectedForm.value || selectedForm.value.formType !== 'TASK' || !fields.length) return
     selectedForm.value.fieldPermissions = applyTaskFieldPermissionsFromTableFields(
       selectedForm.value.fieldPermissions,
       fields,
+      bindingId,
     )
   }
 
@@ -153,7 +154,7 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
         inflateComponentEventsForDesigner(synced as unknown[])
         injectUploadButtonLabels(synced as any[], t('form.clickToUpload'))
         subRef.setRule(synced)
-        mergeTaskPermissionsForFields(fields)
+        mergeTaskPermissionsForFields(fields, binding.bindingId)
       } catch {
         // sub designer not ready
       }
@@ -351,7 +352,11 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     bindings: TableBinding[],
     tableId: number,
   ): { rule: unknown[]; options: Record<string, unknown>; miAssignmentAdopted: boolean } {
-    const resolved = resolveBindingKeyedEntry(subForms, bindingId, bindings, 'SUB')
+    // Resolve the requested binding's own type (SUB or ACTION) so orphan-key recovery
+    // only matches candidates of the same type — an ACTION table must never adopt a
+    // stray SUB binding's saved rule, and vice versa.
+    const targetBindingType = bindings.find(b => b.id === bindingId)?.bindingType ?? 'SUB'
+    const resolved = resolveBindingKeyedEntry(subForms, bindingId, bindings, targetBindingType)
       ?? subForms?.[bindingId]
       ?? subForms?.[String(bindingId)]
     const resolvedMap = (resolved && typeof resolved === 'object'

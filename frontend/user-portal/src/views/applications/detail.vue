@@ -198,6 +198,9 @@
               :form-config="
                 selectedNodeForm.isCurrentStep ? mainFormConfig : selectedNodeForm.formConfig
               "
+              :primary-table-binding="
+                (selectedNodeForm.isCurrentStep ? primaryTableBinding : selectedNodeForm.primaryTableBinding) ?? undefined
+              "
               view-context="initiatorRequest"
               :initiator-snapshot-mode="!!snapshotTaskName"
               @view-subtask-detail="(row: any, sib?: any[]) => openSubTaskDetailDialog(row, sib)"
@@ -390,6 +393,7 @@
         >
           <FormRenderer
             v-model="subTaskDetailData"
+            :process-instance-id="processId"
             :fields="subTaskDetailFields"
             :tabs="[]"
             label-width="auto"

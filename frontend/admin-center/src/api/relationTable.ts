@@ -101,6 +101,10 @@ export interface RelationTableResponse {
   enabled: boolean
   portalVisible: boolean
   currentVersion: number
+  /** Optional Function Unit grouping; undefined/null = ungrouped */
+  functionUnitId?: string
+  functionUnitCode?: string
+  functionUnitName?: string
   fieldDefinitions: FieldDefinitionResponse[]
   /** 当前管理员对该表的权限级别：READONLY=只读, READ_WRITE=读写 */
   permissionLevel?: 'READONLY' | 'READ_WRITE'
@@ -183,6 +187,8 @@ export interface CreateRelationTableRequest {
   tableName: string
   displayName?: string
   description?: string
+  /** Optional Function Unit grouping (sys_function_units.id) */
+  functionUnitId?: string
   fieldDefinitions: CreateFieldDefinitionRequest[]
 }
 
@@ -212,6 +218,8 @@ export interface UpdateRelationTableRequest {
   tableName?: string
   displayName?: string
   description?: string
+  /** Optional Function Unit grouping (sys_function_units.id); empty string clears to ungrouped */
+  functionUnitId?: string
   fieldDefinitions?: UpdateFieldDefinitionRequest[]
 }
 
@@ -290,12 +298,24 @@ export const relationTableStructureApi = {
     del<void>(`/relation-tables/structures/${id}/access/${accessId}`)
 }
 
+/** 已部署表按 Function Unit 分组的轻量清单（导航侧边栏用） */
+export interface FunctionUnitTableGroup {
+  functionUnitId: string
+  functionUnitCode?: string
+  functionUnitName?: string
+  tableCount: number
+}
+
 // ==================== 表数据 API ====================
 
 export const relationTableDataApi = {
   /** 获取已部署的表列表 */
   getDeployedTables: () =>
     get<RelationTableResponse[]>('/relation-tables/data/tables'),
+
+  /** 获取已部署表按 Function Unit 分组的轻量清单（导航侧边栏用） */
+  getFunctionUnitGroups: () =>
+    get<FunctionUnitTableGroup[]>('/relation-tables/data/function-units'),
 
   /** 分页查询表数据 */
   queryData: (tableId: number, params?: { search?: string; page?: number; size?: number }) =>

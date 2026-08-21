@@ -51,3 +51,39 @@ describe('Sub-table per-operation permission', () => {
     )
   })
 })
+
+/**
+ * ACTION 绑定（FORM_POPUP 弹窗写入的记录表，如 "Meeting Remark"）挂到主画布后必须恒只读——
+ * 不依赖 allowAdd/allowEdit/allowDelete props 的值（设计器属性面板本就不再暴露这三个开关，
+ * 见 FormDesigner.vue componentRule.subTable.rule()），运行时用 bindingType 直接短路 editable。
+ */
+function resolveEditableForBinding(bindingType: string | undefined, configuredEditable: boolean): boolean {
+  if (bindingType === 'ACTION') return false
+  return configuredEditable
+}
+
+describe('ACTION binding forces read-only regardless of allow* flags', () => {
+  const boolOrUndef = fc.constantFrom<boolean | undefined>(true, false, undefined)
+
+  it('ACTION binding ⇒ editable=false ⇒ 三项一律关闭，无论 configuredEditable/allow* 取值', () => {
+    fc.assert(
+      fc.property(fc.boolean(), boolOrUndef, boolOrUndef, boolOrUndef, (configuredEditable, add, edit, del) => {
+        const editable = resolveEditableForBinding('ACTION', configuredEditable)
+        expect(editable).toBe(false)
+        expect(canDo(editable, add)).toBe(false)
+        expect(canDo(editable, edit)).toBe(false)
+        expect(canDo(editable, del)).toBe(false)
+      }),
+      { numRuns: 50 },
+    )
+  })
+
+  it('SUB binding 不受影响，沿用 configuredEditable', () => {
+    fc.assert(
+      fc.property(fc.boolean(), (configuredEditable) => {
+        expect(resolveEditableForBinding('SUB', configuredEditable)).toBe(configuredEditable)
+      }),
+      { numRuns: 20 },
+    )
+  })
+})

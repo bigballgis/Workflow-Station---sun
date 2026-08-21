@@ -20,7 +20,7 @@ import './styles/designer-validate-panel.scss'
 import './styles/form-readonly.scss'
 import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholderWidget.vue'
 import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
-import SubTablePortalViewsEditor from './components/designer/SubTablePortalViewsEditor.vue'
+import InlineSubFormPlaceholderWidget from './components/designer/InlineSubFormPlaceholderWidget.vue'
 import LinkFormPlaceholderWidget from './components/designer/LinkFormPlaceholderWidget.vue'
 import LinkFormBindingSelect from './components/designer/LinkFormBindingSelect.vue'
 import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
@@ -60,11 +60,12 @@ registerFormCreateReadonlyParser(formCreateWithParser as { parser: (name: string
 // Register SubTableBindingSelect into both designerForm (props panel) and formCreate (canvas)
 // FcDesigner.component() calls addComponent() which registers to both instances
 FcDesigner.component('SubTableBindingSelect', SubTableBindingSelect)
-// Register portalViews editor (used in the sub-table component's property panel)
-FcDesigner.component('SubTablePortalViewsEditor', SubTablePortalViewsEditor)
 
 // Register SubTablePlaceholderWidget as the canvas renderer for 'subTable' type
 FcDesigner.component('SubTable', SubTablePlaceholderWidget)
+
+// Register InlineSubFormPlaceholderWidget as the canvas renderer for 'inlineSubForm' type
+FcDesigner.component('InlineSubForm', InlineSubFormPlaceholderWidget)
 
 // Register LinkFormPlaceholderWidget as the canvas renderer for 'linkForm' type
 FcDesigner.component('LinkForm', LinkFormPlaceholderWidget)
@@ -111,26 +112,15 @@ FcDesigner.addDragRule({
   only: false,
   handleBtn: true,
   languageKey: [],
-  // When loading a saved rule, copy top-level _bindingId into props so the config panel can read it,
-  // and seed default portalViews when missing (legacy rules treated as "tableOnly" so behavior is preserved).
+  // When loading a saved rule, copy top-level _bindingId into props so the config panel can read it.
   loadRule(rule: any) {
     ensureEmptyRuleComponentEvents(rule)
     rule.props = rule.props || {}
     if (rule._bindingId !== undefined) {
       rule.props._bindingId = rule._bindingId
     }
-    // Backward-compat default: legacy forms without portalViews → tableOnly + mirrorTodo
-    // (matches today's runtime where no nested form-below-table is rendered).
-    if (!rule.props.portalViews || typeof rule.props.portalViews !== 'object') {
-      rule.props.portalViews = {
-        assigneeTodo: 'tableOnly',
-        assigneeTodoFormSource: { type: 'subForm', formId: null, linkFormColumnId: null },
-        initiatorRequest: 'mirrorTodo'
-      }
-    }
   },
   // When saving/exporting, move props._bindingId back to top-level _bindingId.
-  // portalViews stays inside rule.props so the runtime can read it.
   parseRule(rule: any) {
     if (rule.props && rule.props._bindingId !== undefined) {
       rule._bindingId = rule.props._bindingId
@@ -153,12 +143,6 @@ FcDesigner.addDragRule({
       title: 'Sub-Table',
       props: {
         _bindingId: null,
-        // Default = simple sub-table; multi-instance flows switch to form-below / linkForm / summary in the panel.
-        portalViews: {
-          assigneeTodo: 'tableOnly',
-          assigneeTodoFormSource: { type: 'subForm', formId: null, linkFormColumnId: null },
-          initiatorRequest: 'mirrorTodo'
-        }
       }
     }
     ensureEmptyRuleComponentEvents(r)
@@ -172,14 +156,74 @@ FcDesigner.addDragRule({
         title: 'Sub Table Binding',
         props: {}
       },
-      {
-        type: 'SubTablePortalViewsEditor',
-        field: 'portalViews',
-        title: '',
-        props: {
-          showSectionHeading: false
-        }
+    ]
+  }
+})
+
+// Inline Form: lays the bound SUB table's designed form out IN PLACE, with no grid above
+// it and no dialog. Contrast with `subTable` (renders a grid) and `linkForm` (opens a modal).
+//
+// The loadRule/parseRule/watch triad is load-bearing and copied verbatim from `subTable`:
+// this rule is `input: false`, so form-create forwards neither rule.props nor rule.on, and
+// the top-level `_bindingId` <-> props round-trip is the ONLY channel that reaches the
+// props panel. See docs/design/inline-sub-form-component.md.
+FcDesigner.addDragRule({
+  name: 'inlineSubForm',
+  label: String(i18n.global.t('form.inlineSubFormLabel')),
+  icon: 'icon-form',
+  menu: 'main',
+  mask: true,
+  input: false,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  // When loading a saved rule, copy top-level _bindingId into props so the config panel can read it.
+  loadRule(rule: any) {
+    ensureEmptyRuleComponentEvents(rule)
+    rule.props = rule.props || {}
+    if (rule._bindingId !== undefined) {
+      rule.props._bindingId = rule._bindingId
+    }
+  },
+  // When saving/exporting, move props._bindingId back to top-level _bindingId.
+  parseRule(rule: any) {
+    if (rule.props && rule.props._bindingId !== undefined) {
+      rule._bindingId = rule.props._bindingId
+      delete rule.props._bindingId
+    } else {
+      // Ensure _bindingId exists even if props was empty
+      if (rule._bindingId === undefined) rule._bindingId = null
+    }
+  },
+  // Keep top-level _bindingId in sync when the props panel changes props._bindingId
+  watch: {
+    _bindingId({ value, rule }: { value: any; rule: any }) {
+      rule._bindingId = value ?? null
+    }
+  },
+  rule() {
+    const r = {
+      type: 'inlineSubForm',
+      _bindingId: null,
+      title: String(i18n.global.t('form.inlineSubFormLabel')),
+      props: {
+        _bindingId: null,
       }
+    }
+    ensureEmptyRuleComponentEvents(r)
+    return r
+  },
+  props() {
+    return [
+      {
+        type: 'SubTableBindingSelect',
+        field: '_bindingId',
+        title: String(i18n.global.t('form.inlineSubFormBinding')),
+        props: {}
+      },
     ]
   }
 })
@@ -468,11 +512,11 @@ FcDesigner.addDragRule({
     if (rule.props.scope !== 'TABLE' && rule.props.scope !== 'RECORD') {
       rule.props.scope = 'TABLE'
     }
-    // Forms designed before Allow Delete existed must load with the switch OFF
-    // (the runtime reads `=== true`, so this only keeps the panel in sync).
-    if (rule.props.allowDelete !== true) {
-      rule.props.allowDelete = false
-    }
+    // Notes are permanently immutable once written (nobody, not even the author or
+    // SYS_ADMIN, may edit/delete them) — these switches no longer control anything
+    // at runtime. Drop them from existing configJson so the panel doesn't show dead controls.
+    delete rule.props.allowEditOwn
+    delete rule.props.allowDelete
   },
   rule() {
     return {
@@ -485,9 +529,6 @@ FcDesigner.addDragRule({
         panelTitle: 'Notes',
         allowAttachment: true,
         maxFileSizeMb: 10,
-        allowEditOwn: true,
-        // Notes are an audit trail: deletion stays off unless the designer opts in.
-        allowDelete: false,
         pageSize: 5
       }
     }
@@ -502,8 +543,6 @@ FcDesigner.addDragRule({
       { type: 'input', field: 'panelTitle', title: 'Panel Title' },
       { type: 'switch', field: 'allowAttachment', title: 'Allow Attachments' },
       { type: 'inputNumber', field: 'maxFileSizeMb', title: 'Max File Size (MB)', props: { min: 1, max: 10 } },
-      { type: 'switch', field: 'allowEditOwn', title: 'Allow Edit Own Notes' },
-      { type: 'switch', field: 'allowDelete', title: 'Allow Delete', value: false },
       { type: 'inputNumber', field: 'pageSize', title: 'Visible Notes', props: { min: 1, max: 20 } }
     ]
   }

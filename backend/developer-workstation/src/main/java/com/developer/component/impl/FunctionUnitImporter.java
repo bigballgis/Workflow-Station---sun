@@ -168,17 +168,6 @@ public class FunctionUnitImporter {
             }
         }
 
-        // Import "View Design": recreate Main Table views, remapping mainTableName → new table id.
-        if (packageData.containsKey("mainTableViews")) {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> mainTableViews =
-                    (List<Map<String, Object>>) packageData.get("mainTableViews");
-            mainTableViewPortability.importAll(mainTableViews, functionUnit, importedTableNameToId);
-        }
-        // Backfill per-table default views (MAIN + SUB). Older packages only carried the single MAIN
-        // default (or none at all); this is idempotent and never overwrites an imported default.
-        mainTableViewService.seedDefaultViewsForFunctionUnit(functionUnit.getId());
-
         Map<Long, Long> formIdMapping = new HashMap<>();
         Map<String, Long> importedFormNameToId = new HashMap<>();
         List<Map<String, Object>> formDataList = new ArrayList<>();
@@ -192,6 +181,20 @@ public class FunctionUnitImporter {
                 importedFormNameToId.put(form.getFormName(), form.getId());
             }
         }
+
+        // Import "View Design": recreate Main Table views, remapping mainTableName → new table id.
+        // Runs after the form shells above because a view's detail form is carried by name and
+        // can only be resolved once those forms exist.
+        if (packageData.containsKey("mainTableViews")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> mainTableViews =
+                    (List<Map<String, Object>>) packageData.get("mainTableViews");
+            mainTableViewPortability.importAll(
+                    mainTableViews, functionUnit, importedTableNameToId, importedFormNameToId);
+        }
+        // Backfill per-table default views (MAIN + SUB). Older packages only carried the single MAIN
+        // default (or none at all); this is idempotent and never overwrites an imported default.
+        mainTableViewService.seedDefaultViewsForFunctionUnit(functionUnit.getId());
 
         // Import link form components between form shells (need form ids) and form finalization
         // (whose configJson remap consumes the componentId mapping for linkForm column references).

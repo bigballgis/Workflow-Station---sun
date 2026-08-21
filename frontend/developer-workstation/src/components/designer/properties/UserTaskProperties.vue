@@ -71,11 +71,58 @@
               @change="handleFormChange"
             >
               <el-option
-                v-for="form in forms"
+                v-for="form in bindableForms"
                 :key="form.id"
                 :label="form.formName"
                 :value="form.id"
-              />
+              >
+                <span>{{ form.formName }}</span>
+                <el-tag
+                  size="small"
+                  type="success"
+                  style="margin-left: 8px;"
+                >
+                  {{ t('form.sceneTask') }}
+                </el-tag>
+              </el-option>
+            </el-select>
+            <!--
+              This slot IS the To Do design: it writes the TASK-scene BPMN properties
+              (formId / formName), and the actions configured below dispatch only on the
+              To Do page. My Requests is the sibling field just below.
+            -->
+            <div class="form-tip">
+              {{ t('properties.bindFormTodoOnlyHint') }}
+            </div>
+          </el-form-item>
+
+          <!--
+            The same node can also carry a My Requests design (requestFormId/requestFormName
+            ext props). Editable here in addition to Form Design > My Requests > row menu >
+            Bound Node — both paths write the same BPMN fields, so either one works.
+          -->
+          <el-form-item :label="t('properties.bindFormRequest')">
+            <el-select
+              v-model="requestFormId"
+              :placeholder="t('properties.selectForm')"
+              clearable
+              @change="handleRequestFormChange"
+            >
+              <el-option
+                v-for="form in requestableForms"
+                :key="form.id"
+                :label="form.formName"
+                :value="form.id"
+              >
+                <span>{{ form.formName }}</span>
+                <el-tag
+                  size="small"
+                  type="info"
+                  style="margin-left: 8px;"
+                >
+                  {{ t('form.sceneRequest') }}
+                </el-tag>
+              </el-option>
             </el-select>
           </el-form-item>
         </el-form>
@@ -113,6 +160,11 @@
                 </el-tag>
               </el-option>
             </el-select>
+            <!-- Actions ride the node's actionIds and only ever render on the To Do page,
+                 i.e. against the form bound above. Say so, so the pairing is not guesswork. -->
+            <div class="form-tip">
+              {{ t('properties.actionsTodoOnlyHint') }}
+            </div>
           </el-form-item>
           <div
             v-if="actionIds.length > 0"
@@ -257,7 +309,7 @@
  * `@/composables/userTaskProperties/*`。此处仅做组装、加载编排与生命周期绑定，
  * 模板/样式与拆分前逐字节一致，emit/props/i18n key/行为均零变化。
  */
-import { ref, reactive, watch, onMounted, onUnmounted, provide } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties } from '@/utils/bpmnExtensions'
@@ -300,6 +352,8 @@ const {
   taskDescription,
   formId,
   forms,
+  requestFormId,
+  requestFormName,
   actionIds,
   actions,
   timeoutEnabled,
@@ -313,6 +367,23 @@ const {
   updateBasicProp,
   updateExtProp,
 } = ctx
+
+/**
+ * Only To Do (TASK-scene) designs may be bound here.
+ *
+ * <p>This field writes the TASK-scene BPMN properties (`formId` / `formName`) — there is no
+ * code path by which it could produce a My Requests binding, which lives under
+ * `requestFormId` / `requestFormName` and is set from Form Design > Bind Process Node.
+ * Listing REQUEST forms therefore offered a choice that silently mislabels them as the To Do
+ * design; the actions configured just below dispatch only on the To Do page, so the pairing
+ * shown here has to be unambiguous.
+ *
+ * <p>`scene` is optional on older rows — absent means TASK (same defaulting as
+ * FormListSidebar.sceneOf).
+ */
+const bindableForms = computed(() =>
+  (forms.value ?? []).filter(f => ((f as { scene?: string }).scene ?? 'TASK') !== 'REQUEST'),
+)
 
 // Assignee config 逻辑
 const assigneeApi = useUserTaskAssignee(ctx)
@@ -336,20 +407,24 @@ const {
   loadSubTaskMiProgressFields
 } = multiInstanceApi
 
+// 动作 / 表单加载逻辑
+const actionsApi = useUserTaskActions(propsAccessor, ctx)
+const {
+  handleActionsChange,
+  handleFormChange,
+  requestableForms,
+  handleRequestFormChange,
+  actionTypeLabel,
+  loadForms,
+  loadActions
+} = actionsApi
+
 provide(USER_TASK_PANEL_KEY, {
   ctx,
   assignee: assigneeApi,
   multiInstance: multiInstanceApi,
+  actions: actionsApi,
 })
-
-// 动作 / 表单加载逻辑
-const {
-  handleActionsChange,
-  handleFormChange,
-  actionTypeLabel,
-  loadForms,
-  loadActions
-} = useUserTaskActions(propsAccessor, ctx)
 
 /** 顺序流变化时递增，驱动「单入线」校验刷新 */
 const topologyTick = ctx.topologyTick // retained for backward compatibility; anchor UI removed
@@ -419,6 +494,11 @@ async function loadPropertiesAsync() {
     ? 'both' : (ctx.allowRole.value ? 'role' : 'user')
   ctx.rowIdVariable.value = ext.rowIdVariable || ''
   formId.value = ext.formId || null
+  // My Requests binding is read-only here: it is owned by Form Design > My Requests > Bound
+  // Node, which writes requestFormId / requestFormName. Surfacing it makes the node's two
+  // designs visible side by side instead of only the To Do half.
+  requestFormId.value = (ext.requestFormId as number | undefined) ?? null
+  requestFormName.value = (ext.requestFormName as string | undefined) ?? ''
   actionIds.value = ext.actionIds || []
   timeoutEnabled.value = ext.timeoutEnabled || false
   timeoutDuration.value = ext.timeoutDuration || ''

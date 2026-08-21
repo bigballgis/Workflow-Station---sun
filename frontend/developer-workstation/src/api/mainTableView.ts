@@ -74,6 +74,8 @@ export interface MainTableViewDefinition {
   isDefault?: boolean
   status?: string
   restrictToInvolvedUsers?: boolean
+  /** DETAIL form opened when a portal user clicks a row; null = rows not clickable. */
+  detailFormId?: number | null
   accessRules?: MainTableViewAccessRule[]
   sortConfig?: Array<{ fieldName: string; direction: string; systemField?: boolean }>
   filterConfig?: FilterConfig
@@ -123,11 +125,23 @@ export const mainTableViewApi = {
       {
         viewName: payload.viewName,
         restrictToInvolvedUsers: payload.restrictToInvolvedUsers,
+        detailFormId: payload.detailFormId ?? null,
         accessRules: payload.accessRules,
         sortConfig: payload.sortConfig,
         filterConfig: payload.filterConfig,
         fields: payload.fields,
       },
+    ),
+
+  /**
+   * Sets only the detail form. Prefer this over `update` when that is all that changed: `update`
+   * is a whole-design save that resets the view to DRAFT, which would hide a published view from
+   * the portal as a side effect.
+   */
+  updateDetailForm: (functionUnitId: number, viewId: number, detailFormId: number | null) =>
+    functionUnitAxios.patch<any, { data: MainTableViewDefinition }>(
+      `/api/v1/function-units/${functionUnitId}/main-table-views/${viewId}/detail-form`,
+      { detailFormId },
     ),
 
   delete: (functionUnitId: number, viewId: number) =>

@@ -151,6 +151,15 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
 
   function hydrateCurrentSubTablesFromPreviousForms() {
     for (const current of subTableBindings.value) {
+      // MI collection/dashboard bindings (e.g. Participants): every sibling BPMN node's
+      // `previousForms` snapshot duplicates the SAME logical row under its OWN bindingId, so
+      // `subTableBindingMatches` (tableName/tableId only, not participant-aware) treats them as
+      // interchangeable. The current node's own row for THIS participant can legitimately be
+      // "thin" (still awaiting `resyncMiParticipantSubTablesFromVariables`'s scoped hydrate) —
+      // that thinness must not be read as "lacks payload, backfill from a sibling", or a stale
+      // sibling's copy of this SAME participant's row silently wins the merge (no field on our
+      // own thin row to overwrite it with). Skip entirely; the later MI-aware resync owns this.
+      if (isMiDashboardSubTableBinding(current)) continue
       const prevMatches = previousForms.value
         .flatMap(form => form.subTableBindings)
         .filter(binding =>

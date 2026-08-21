@@ -17,6 +17,7 @@ import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.service.FunctionUnitAccessService;
+import com.admin.service.FunctionUnitAuditAccessService;
 import com.admin.util.ChecksumUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.i18n.I18nService;
@@ -49,6 +50,7 @@ public class FunctionUnitImportComponent {
     private final FunctionUnitContentRepository contentRepository;
     private final FunctionUnitAccessRepository accessRepository;
     private final FunctionUnitAccessService functionUnitAccessService;
+    private final FunctionUnitAuditAccessService functionUnitAuditAccessService;
     private final FunctionUnitPackageParser packageParser;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final FunctionUnitVersionComponent versionComponent;
@@ -112,6 +114,10 @@ public class FunctionUnitImportComponent {
 
             if (overwriteTarget == null && existingByName != null && packageContent.getCode() != null) {
                 functionUnitAccessService.copyAccessFromSiblingVersions(
+                        packageContent.getCode(), functionUnit.getId());
+                // Audit grants live on the catalog row too; without this a redeploy
+                // silently strips reviewers of access.
+                functionUnitAuditAccessService.copyAuditAccessFromSiblingVersions(
                         packageContent.getCode(), functionUnit.getId());
             }
 

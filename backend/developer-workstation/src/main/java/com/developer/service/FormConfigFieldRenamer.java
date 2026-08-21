@@ -134,12 +134,12 @@ public final class FormConfigFieldRenamer {
             if (walkRuleNodes(rule, byOldFieldName)) changed = true;
         }
 
-        // 2) Sub-form rules — only SUB/RELATED bindings that point at this table via subForms[bindingId].
+        // 2) Sub-form rules — only SUB/RELATED/ACTION bindings that point at this table via subForms[bindingId].
         Object subFormsRaw = next.get("subForms");
         if (subFormsRaw instanceof Map<?, ?> subForms) {
             for (FormTableBinding b : safeBindings(form)) {
                 BindingType t = b.getBindingType();
-                if (t != BindingType.SUB && t != BindingType.RELATED) continue;
+                if (t != BindingType.SUB && t != BindingType.RELATED && t != BindingType.ACTION) continue;
                 if (b.getTable() == null || !Objects.equals(b.getTable().getId(), tableId)) continue;
                 Object sub = lookup(subForms, b.getId());
                 if (sub instanceof Map<?, ?> subMap) {

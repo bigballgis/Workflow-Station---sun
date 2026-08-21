@@ -103,7 +103,16 @@ export default {
     settings: '個人設定',
     relationTables: '關聯表',
     relationTableGroup: '關聯表',
-    views: '視圖'
+    allFunctionUnits: '全部功能單元',
+    commonTables: '公共',
+    views: '視圖',
+    audit: '全部申請',
+    auditLoadFailed: '無法載入您有稽核權的功能單元。',
+    sectionTask: '任務',
+    sectionRequest: '申請',
+    sectionAudit: '稽核',
+    sectionData: '資料',
+    sectionSetup: '設置'
   },
   mainTableView: {
     openRelatedRecord: '開啟關聯記錄',
@@ -115,6 +124,11 @@ export default {
     defaultTag: '預設',
     functionUnits: '功能單元',
     noPublishedFu: '暫無已發佈且配置了視圖的功能單元',
+    detailTitle: '記錄詳情',
+    noDetailForm: '該視圖未配置詳情表單。',
+    noDetailPage: '該視圖沒有詳情頁。',
+    rowNotFound: '無法載入該筆記錄。',
+    rowNotAddressable: '該列沒有可用識別碼，無法開啟。',
     selectFuAndView: '請選擇功能單元與視圖',
     loadFuFailed: '載入功能單元失敗',
     loadDataFailed: '載入視圖資料失敗',
@@ -455,6 +469,13 @@ export default {
     subTaskFormTitle: '參與者資訊表',
     close: '關閉'
   },
+  audit: {
+    title: '稽核',
+    initiator: '發起人',
+    noRequests: '該功能單元下暫無申請。',
+    noAccess: '無稽核權限',
+    noAccessHint: '您沒有該功能單元的稽核權限。請聯絡管理員為您的角色授予該功能單元的稽核權。',
+  },
   application: {
     title: '我的請求',
     processTitle: '流程標題',
@@ -478,6 +499,8 @@ export default {
     continueFilling: '繼續填寫',
     noDrafts: '暫無草稿',
     noApplications: '暫無申請記錄',
+    noSceneForm: '未配置此場景的表單設計。',
+    noSceneFormHint: '請在開發者工作台為「我的申請」場景設計一份表單。',
     loadFailed: '載入申請列表失敗',
     loadDraftsFailed: '載入草稿列表失敗',
     deleteDraftConfirm: '確定要刪除該草稿嗎？',

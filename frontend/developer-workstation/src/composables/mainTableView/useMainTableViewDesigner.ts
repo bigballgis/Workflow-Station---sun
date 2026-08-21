@@ -21,6 +21,7 @@ import {
   buildFkCatalogGroups, flattenFkCatalogItems,
 } from '@/utils/mainTableViewFkCatalog'
 import { functionUnitApi, type TableDefinition } from '@/api/functionUnit'
+import { resolveFormTableId } from '@/utils/formDesigner'
 import { relationTableBindingApi } from '@/api/relationTable'
 import { adminCenterApi, type BusinessUnitInfo, type RoleInfo } from '@/api/adminCenter'
 
@@ -50,6 +51,10 @@ const sortConfig = ref<Array<{ fieldName: string; direction: string; systemField
 const filterConfig = ref<FilterConfig>({ logic: 'and', conditions: [], groups: [] })
 const filterEditorRoot = ref(parseFilterConfigToEditorRoot(null))
 const enableExport = ref(true)
+/** DETAIL form opened when a portal user clicks a row of this view; null = not clickable. */
+const detailFormId = ref<number | null>(null)
+/** Only DETAIL forms are offered — task and process forms belong to workflow steps. */
+const detailFormOptions = ref<Array<{ id: number; formName: string }>>([])
 const enableImport = ref(true)
 const restrictToInvolvedUsers = ref(false)
 const selectedBusinessUnitIds = ref<string[]>([])
@@ -119,6 +124,7 @@ watch(
     enableExport.value = v.filterConfig?.toolbar?.enableExport !== false
     enableImport.value = v.filterConfig?.toolbar?.enableImport !== false
     restrictToInvolvedUsers.value = v.restrictToInvolvedUsers === true
+    detailFormId.value = v.detailFormId ?? null
     selectedBusinessUnitIds.value = (v.accessRules || [])
       .filter(r => r.targetType === 'BUSINESS_UNIT')
       .map(r => r.targetId)
@@ -207,20 +213,40 @@ async function loadCatalog() {
     const relationTables = (rtRes as { data?: unknown })?.data
       || (Array.isArray(rtRes) ? rtRes : [])
     const allForms = formsRes.data || []
+    // One bindings fetch per form, shared by the lookup catalog and the detail-form picker below.
+    // Fetching twice would double the request count for no new information.
     const formsForTable: typeof allForms = []
+    const detailFormsForTable: typeof allForms = []
     await Promise.all(allForms.map(async (form) => {
       if (form.id == null) return
+      let servesThisTable: boolean
       try {
         const bindRes = await functionUnitApi.getFormBindings(props.functionUnitId, form.id)
         const binds = bindRes.data || []
-        if (binds.some(b => b.tableId === props.view.mainTableId)) {
-          formsForTable.push(form)
-        }
+        servesThisTable = binds.some(b => b.tableId === props.view.mainTableId)
+          // Older forms carry only the legacy single-table column, or a lone unmarked binding.
+          || resolveFormTableId({ tableBindings: binds, boundTableId: form.boundTableId })
+            === props.view.mainTableId
       } catch {
         // FALLBACK(ux): if bindings fail to load, still scan the form for lookup widgets
-        formsForTable.push(form)
+        servesThisTable = true
       }
+      if (!servesThisTable) return
+      formsForTable.push(form)
+      if (form.formType === 'DETAIL') detailFormsForTable.push(form)
     }))
+    // Only forms bound to THIS view's table can render its rows: the portal detail page maps row
+    // values onto form fields by name and never checks the table, so a mismatched pick renders a
+    // blank page instead of failing. The currently saved form is always kept so opening the panel
+    // cannot silently drop a pre-existing cross-table selection.
+    const detailOptions = detailFormsForTable
+      .map(f => ({ id: f.id as number, formName: f.formName }))
+    const savedDetailFormId = detailFormId.value
+    if (savedDetailFormId != null && !detailOptions.some(o => o.id === savedDetailFormId)) {
+      const saved = allForms.find(f => f.id === savedDetailFormId)
+      if (saved) detailOptions.unshift({ id: saved.id as number, formName: saved.formName })
+    }
+    detailFormOptions.value = detailOptions
     const groups = buildLookupCatalogGroups(formsForTable, relationTables as never[])
     lookupCatalogGroups.value = groups
     lookupCatalogFields.value = flattenLookupCatalogItems(groups)
@@ -637,6 +663,7 @@ async function handleSave() {
     const res = await mainTableViewApi.update(props.functionUnitId, props.view.id, {
       viewName: viewName.value.trim() || props.view.viewName,
       restrictToInvolvedUsers: restrictToInvolvedUsers.value,
+      detailFormId: detailFormId.value,
       accessRules: buildAccessRulesPayload(),
       sortConfig: sortConfig.value,
       filterConfig: {
@@ -738,7 +765,7 @@ const previewRowCount = 3
   return {
     t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, EditPen, Calendar, Document, Coin, SwitchIcon, Filter, CaretTop, CaretBottom, Connection, Key,
     columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig, filterEditorRoot,
-    enableExport, enableImport, restrictToInvolvedUsers, selectedBusinessUnitIds, selectedRoleIds,
+    enableExport, enableImport, restrictToInvolvedUsers, detailFormId, detailFormOptions, selectedBusinessUnitIds, selectedRoleIds,
     businessUnitOptions, roleOptions, accessOptionsLoading,
     catalogFields, lookupCatalogGroups, fkCatalogGroups, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
     dragColIndex, dragOverIndex, isDraggingFromPanel, dragSourceField, visibleColumns, displayFilterConditions,

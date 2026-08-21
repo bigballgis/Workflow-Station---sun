@@ -90,6 +90,12 @@ export function createTaskDetailLoader(
           formReadOnly.value = true
           currentNodeId.value = ''
         }
+        // Set before any hydration runs (loadFunctionUnitContent / loadProcessAndTaskFormData /
+        // rehydrateSharedProcessSubTableBindings below): those calls gate cross-binding sibling-slice
+        // merging on this flag for MI dashboard bindings, and observing it still `false` here let an
+        // early pass merge in an unrelated sibling MI node's stale row data (#1524-class: reload
+        // showing another participant's old value instead of this task's own saved edit).
+        isMiSubTaskMode.value = ctx.isMiSubTask(data)
         if (data.variables) formData.value = data.variables
         const processSubTablesSnapshot =
           data.variables?.__subTables__ && typeof data.variables.__subTables__ === 'object'

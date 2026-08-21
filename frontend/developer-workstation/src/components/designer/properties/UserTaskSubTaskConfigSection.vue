@@ -187,6 +187,30 @@
       </div>
     </el-form-item>
 
+    <!--
+      The same node can also carry a My Requests design (requestFormId/requestFormName
+      ext props). Editable here in addition to Form Design > My Requests > row menu >
+      Bound Node — both paths write the same BPMN fields, so either one works. Mirrors
+      the regular UserTaskProperties panel.
+    -->
+    <el-form-item :label="t('properties.bindFormRequest')">
+      <el-select
+        v-model="requestFormId"
+        :placeholder="t('properties.selectForm')"
+        clearable
+        filterable
+        style="width: 100%"
+        @change="handleRequestFormChange"
+      >
+        <el-option
+          v-for="form in requestableForms"
+          :key="form.id"
+          :label="form.formName"
+          :value="form.id"
+        />
+      </el-select>
+    </el-form-item>
+
     <el-form-item :label="t('properties.rowIdVariableLabel')">
       <el-input
         v-model="rowIdVariable"
@@ -264,7 +288,7 @@
 import { ref, watch } from 'vue'
 import { injectUserTaskPanel } from './userTaskPropertiesInject'
 
-const { ctx, multiInstance } = injectUserTaskPanel()
+const { ctx, multiInstance, actions } = injectUserTaskPanel()
 const { t, updateExtProp } = ctx
 const {
   elementSubTableId,
@@ -283,6 +307,7 @@ const {
   miCurrentNodeFieldInvalid,
   formId,
   forms,
+  requestFormId,
 } = ctx
 const {
   handleFormChange,
@@ -298,6 +323,7 @@ const {
   handleMiTaskStatusFieldChange,
   handleMiTaskCurrentNodeFieldChange,
 } = multiInstance
+const { requestableForms, handleRequestFormChange } = actions
 
 // 字段区当前 tab（纯 UI，不持久化）。保证 activeTab 始终指向一个已启用的 tab。
 const fieldTab = ref<'user' | 'role'>('user')

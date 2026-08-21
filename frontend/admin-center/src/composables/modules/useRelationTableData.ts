@@ -6,12 +6,14 @@
  */
 
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { isFkHidden, isFkReadonly, type FieldFkMeta } from '@platform-shared/tableFkRuntime'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
 import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse, type RelationImportResult, type LookupConfig, type LookupFilterCondition } from '@/api/relationTable'
 import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, type FieldLike } from '@/components/lookup/useLookupBehaviors'
 
 export function useRelationTableData() {
+  const route = useRoute()
   const tableListLoading = ref(false)
   const dataLoading = ref(false)
   const exporting = ref(false)
@@ -63,10 +65,18 @@ export function useRelationTableData() {
       })
   })
 
+  /**
+   * Deployed Tables panel list: scoped to the Function Unit selected via the nav sidebar
+   * (route.params.functionUnitCode), then narrowed further by the search box. FU grouping
+   * itself is now the nav sidebar's job (Relation Tables > Table Data > <Function Unit>) —
+   * this panel just lists that FU's tables (or all tables when no FU is selected).
+   */
   const filteredTables = computed(() => {
+    const fuCode = route.params.functionUnitCode as string | undefined
+    const scoped = fuCode ? tables.value.filter(t => t.functionUnitCode === fuCode) : tables.value
     const kw = tableSearchKeyword.value.trim().toLowerCase()
-    if (!kw) return tables.value
-    return tables.value.filter(t => (t.displayName || '').toLowerCase().includes(kw) || (t.tableName || '').toLowerCase().includes(kw))
+    if (!kw) return scoped
+    return scoped.filter(t => (t.displayName || '').toLowerCase().includes(kw) || (t.tableName || '').toLowerCase().includes(kw))
   })
 
   const isNumericType = (dt: string) => ['INTEGER', 'BIGINT', 'DECIMAL'].includes(dt)
@@ -84,7 +94,9 @@ export function useRelationTableData() {
     try {
       tables.value = await relationTableDataApi.getDeployedTables()
       if (!selectedTableId.value && tables.value.length > 0) {
-        selectedTableId.value = tables.value[0].id
+        // Nav sidebar "Table Data > <Function Unit>" links here with the FU code as a route
+        // param — land on that FU's first table instead of the global first table.
+        selectedTableId.value = (filteredTables.value[0] ?? tables.value[0]).id
         await fetchData()
       }
     } catch { tables.value = [] }

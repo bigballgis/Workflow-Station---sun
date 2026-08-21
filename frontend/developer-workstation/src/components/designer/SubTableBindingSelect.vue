@@ -31,8 +31,9 @@ const { t } = useI18n()
 const injectedSubBindings = inject<() => DesignerSubBinding[]>('designerSubBindings', () => [])
 const allSubBindings = computed(() => props.subBindings?.length ? props.subBindings : injectedSubBindings())
 
-// Only show SUB type bindings for sub-table widget binding selection
-const subBindings = computed(() => allSubBindings.value.filter(b => b.bindingType === 'SUB'))
+// SUB and ACTION bindings both render through the same subTable canvas widget — ACTION
+// bindings render read-only (see FormDesigner.vue componentRule.subTable and SubTableField.vue).
+const subBindings = computed(() => allSubBindings.value.filter(b => b.bindingType === 'SUB' || b.bindingType === 'ACTION'))
 const normalizedModelValue = computed(() => normalizeBindingId(props.modelValue))
 const scriptHideKey = computed(() => {
   const id = normalizedModelValue.value

@@ -2,7 +2,7 @@ import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 import type { ApplicationDetailCtx } from './context'
 
 export interface ApplicationDetailBpmnCurrentFormFns {
-  parseBpmnXmlAndGetFormId: (xml: string) => { formId: string | null, formName: string | null }
+  parseBpmnXmlAndGetFormId: (xml: string) => { formId: string | null, formName: string | null, scene: 'TASK' | 'REQUEST' }
   parseBpmnXmlAndGetPreviousFormIds: (xml: string) => Array<{ formId: string | null, formName: string | null, taskName: string | null }>
   getSubProcessUserTaskIds: (subProcessId: string) => string[]
 }
@@ -10,21 +10,32 @@ export interface ApplicationDetailBpmnCurrentFormFns {
 export function createApplicationDetailBpmnCurrentForm(ctx: ApplicationDetailCtx): ApplicationDetailBpmnCurrentFormFns {
   const { snapshotTaskName, snapshotTaskDefinitionKey, snapshotActivityId, processInfo, bpmnXml } = ctx
 
-  // Parse BPMN XML and get the current node formId and formName
-  const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formName: string | null } => {
-    if (!xml) return { formId: null, formName: null }
+  // Parse BPMN XML and get the current node's form. My Requests / Audit render the REQUEST
+  // design of a node when one exists — the TASK (To Do) design is laid out for filling in,
+  // not for a read-only aggregate view, and is not used as a fallback. See
+  // useApplicationDetailNodeFormMap.ts buildApplicationNodeFormMap for the same rule applied
+  // to diagram-node preview.
+  const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formName: string | null, scene: 'TASK' | 'REQUEST' } => {
+    if (!xml) return { formId: null, formName: null, scene: 'TASK' }
 
     try {
       const doc = getCachedBpmnDocument(xml)
-      if (!doc) return { formId: null, formName: null }
+      if (!doc) return { formId: null, formName: null, scene: 'TASK' }
       // Snapshot mode (from Completed Tasks): use snapshotTaskName; otherwise use currentNode
       const currentNodeName = snapshotActivityId.value || snapshotTaskDefinitionKey || snapshotTaskName || processInfo.value.currentNode || ''
 
       const allElements = doc.getElementsByTagName('*')
 
       // Collect all userTasks and sequenceFlows
-      const tasks = new Map<string, { name: string; formId: string | null; formName: string | null }>()
+      const tasks = new Map<string, { name: string; formId: string | null; formName: string | null; requestFormId: string | null; requestFormName: string | null }>()
       const flows: Array<{ source: string; target: string }> = []
+
+      const pickFormInfo = (info: { formId: string | null; formName: string | null; requestFormId: string | null; requestFormName: string | null }) => {
+        const hasRequestDesign = !!(info.requestFormId || info.requestFormName)
+        return hasRequestDesign
+          ? { formId: info.requestFormId, formName: info.requestFormName, scene: 'REQUEST' as const }
+          : { formId: info.formId, formName: info.formName, scene: 'TASK' as const }
+      }
 
       for (let i = 0; i < allElements.length; i++) {
         const el = allElements[i]
@@ -33,6 +44,7 @@ export function createApplicationDetailBpmnCurrentForm(ctx: ApplicationDetailCtx
           const id = el.getAttribute('id') || ''
           const name = el.getAttribute('name') || ''
           let formId: string | null = null, formName: string | null = null
+          let requestFormId: string | null = null, requestFormName: string | null = null
           const props = el.getElementsByTagName('*')
           for (let j = 0; j < props.length; j++) {
             const p = props[j]
@@ -41,14 +53,17 @@ export function createApplicationDetailBpmnCurrentForm(ctx: ApplicationDetailCtx
               const n = p.getAttribute('name'), v = p.getAttribute('value')
               if (n === 'formId' && v) formId = v
               if (n === 'formName' && v) formName = v
+              if (n === 'requestFormId' && v) requestFormId = v
+              if (n === 'requestFormName' && v) requestFormName = v
             }
           }
-          tasks.set(id, { name, formId, formName })
+          const info = { name, formId, formName, requestFormId, requestFormName }
+          tasks.set(id, info)
           // Direct match on current node (whitespace-normalized for robustness)
           const normName = currentNodeName.trim().replace(/\s+/g, ' ')
           const normBpmnName = name.trim().replace(/\s+/g, ' ')
           if (normBpmnName === normName || id === currentNodeName) {
-            return { formId, formName }
+            return pickFormInfo(info)
           }
         } else if (localName === 'sequenceFlow') {
           flows.push({ source: el.getAttribute('sourceRef') || '', target: el.getAttribute('targetRef') || '' })
@@ -62,17 +77,17 @@ export function createApplicationDetailBpmnCurrentForm(ctx: ApplicationDetailCtx
         const outTargets = flows.filter(f => f.source === id).map(f => f.target)
         const hasUserTaskSuccessor = outTargets.some(t => taskIds.has(t))
         if (!hasUserTaskSuccessor) {
-          return { formId: info.formId, formName: info.formName }
+          return pickFormInfo(info)
         }
       }
       // Final fallback: take the last one
       const last = [...tasks.values()].pop()
-      if (last) return { formId: last.formId, formName: last.formName }
+      if (last) return pickFormInfo(last)
     } catch (error) {
       console.error('Failed to parse BPMN for formId:', error)
     }
 
-    return { formId: null, formName: null }
+    return { formId: null, formName: null, scene: 'TASK' }
   }
 
   // Parse BPMN XML: return form info bound to all nodes before the current node, in topological order (deduplicated)

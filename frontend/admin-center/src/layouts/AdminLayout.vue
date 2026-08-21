@@ -130,9 +130,21 @@
             <el-menu-item index="/relation-tables/structure">
               {{ t('menu.tableStructure') }}
             </el-menu-item>
-            <el-menu-item index="/relation-tables/data">
-              {{ t('menu.tableData') }}
-            </el-menu-item>
+            <el-sub-menu index="relation-tables-data">
+              <template #title>
+                <span>{{ t('menu.tableData') }}</span>
+              </template>
+              <el-menu-item index="/relation-tables/data">
+                {{ t('menu.allFunctionUnits') }}
+              </el-menu-item>
+              <el-menu-item
+                v-for="fu in tableDataFunctionUnits"
+                :key="fu.functionUnitId"
+                :index="`/relation-tables/data/${fu.functionUnitCode}`"
+              >
+                {{ fu.functionUnitName || fu.functionUnitCode }}
+              </el-menu-item>
+            </el-sub-menu>
           </el-sub-menu>
 
           <!-- Automation Pieces - read-only piece catalog + export, requires system:admin -->
@@ -226,7 +238,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -236,6 +248,7 @@ import {
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import { launchServiceTask } from '@/api/serviceTask'
+import { relationTableDataApi, type FunctionUnitTableGroup } from '@/api/relationTable'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -290,6 +303,20 @@ const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ) || has
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
 }
+
+// Table Data nav sub-menu: one entry per Function Unit that has deployed relation tables.
+const tableDataFunctionUnits = ref<FunctionUnitTableGroup[]>([])
+const loadTableDataFunctionUnits = async () => {
+  try {
+    tableDataFunctionUnits.value = await relationTableDataApi.getFunctionUnitGroups()
+  } catch {
+    tableDataFunctionUnits.value = []
+  }
+}
+
+onMounted(() => {
+  if (isSystemAdmin.value) void loadTableDataFunctionUnits()
+})
 </script>
 
 <style scoped lang="scss">
@@ -402,6 +429,13 @@ $primary-dark: #8b0000;
 
   :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
     color: $primary-color;
+  }
+
+  // Third-level items (e.g. Relation Tables > Table Data > <Function Unit>) default to a deeper
+  // indent than their second-level siblings (Table Structure, Table Data) — force the same 40px
+  // so nested Function Unit entries stay left-aligned with the rest of the second-level group.
+  :deep(.el-sub-menu .el-sub-menu .el-menu-item) {
+    padding-left: 40px !important;
   }
 
   :deep(.el-menu) {

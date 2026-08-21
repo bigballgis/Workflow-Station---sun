@@ -94,27 +94,25 @@ public class RecordNoteComponent {
         return recordNoteService.createAttachment(target, file, true, userId, resolveName(userId));
     }
 
+    /**
+     * Notes are immutable once written — nobody may edit them, not even the author.
+     * They are a record of what was said at a point in time, and the request they
+     * belong to is reviewed on that basis; a later edit would rewrite that record.
+     * Corrections are made by adding a further note.
+     */
     public NoteDetail update(String userId, String noteId, String subject, String bodyHtml,
                              String processInstanceId) {
-        RecordNote note = requireLive(noteId);
-        checkAccess(userId, targetOf(note), processInstanceId);
-        String before = RecordNoteAuditSummary.existing(note);
-        NoteDetail updated = recordNoteService.update(noteId, subject, bodyHtml, userId);
-        audit(userId, targetOf(note), processInstanceId, ChangeType.RECORD_NOTE_UPDATE,
-                before, RecordNoteAuditSummary.updated(updated));
-        return updated;
+        requireLive(noteId);
+        throw new RecordNoteException("NOT_EDITABLE", "Notes cannot be edited once written; add a new note instead");
     }
 
+    /**
+     * Notes are immutable once written — nobody may delete them, author and system
+     * administrator alike. See {@link #update} for the reasoning.
+     */
     public void delete(String userId, String noteId, String processInstanceId) {
-        RecordNote note = requireLive(noteId);
-        checkAccess(userId, targetOf(note), processInstanceId);
-        boolean owner = note.getCreatedBy().equals(userId);
-        if (!owner && !functionUnitAccessComponent.isSystemAdministrator(userId)) {
-            throw new RecordNoteException("NOT_OWNER", "Only the author or an administrator can delete a note");
-        }
-        String before = RecordNoteAuditSummary.existing(note);
-        recordNoteService.softDelete(noteId, userId);
-        audit(userId, targetOf(note), processInstanceId, ChangeType.RECORD_NOTE_DELETE, before, null);
+        requireLive(noteId);
+        throw new RecordNoteException("NOT_DELETABLE", "Notes cannot be deleted once written");
     }
 
     /**
@@ -179,7 +177,10 @@ public class RecordNoteComponent {
      * The instance an audit row belongs to. A TABLE-scope target id *is* the instance id
      * (also true of legacy RECORD-on-instance rows). RECORD-scope targets are sub-table row
      * ids, so the caller supplies the hosting instance — accepted only after the same
-     * participant/admin gate that guards note access, never on the client's word alone.
+     * gate that guards note access, never on the client's word alone.
+     *
+     * <p>Tracks {@code requireParticipant} deliberately: a reviewer who may add the note
+     * must also be able to anchor it, otherwise the note lands with no audit trail.
      */
     private String resolveAuditInstanceId(String userId, NoteTarget target, String claimedProcessInstanceId) {
         if (target != null && processComponent.getProcessDetail(target.getTargetId()) != null) {
@@ -193,7 +194,7 @@ public class RecordNoteComponent {
             return null;
         }
         if (functionUnitAccessComponent.isSystemAdministrator(userId)
-                || processComponent.canAccessProcessDetail(userId, detail)) {
+                || processComponent.canAuditProcessDetail(userId, detail)) {
             return claimedProcessInstanceId;
         }
         return null;
@@ -249,8 +250,14 @@ public class RecordNoteComponent {
         requireParticipant(userId, host);
     }
 
+    /**
+     * Gate for reading and adding notes. Reviewers holding an audit grant pass here
+     * — commenting is the point of the audit view — but deliberately not at
+     * {@code requireArchiveAccess} (bulk export) or {@code adoptDraftNotes} (a write
+     * that re-anchors someone else's drafts).
+     */
     private void requireParticipant(String userId, ProcessInstanceInfo detail) {
-        if (!processComponent.canAccessProcessDetail(userId, detail)) {
+        if (!processComponent.canAuditProcessDetail(userId, detail)) {
             throw new RecordNoteException("FORBIDDEN", "You are not a participant of this process");
         }
     }

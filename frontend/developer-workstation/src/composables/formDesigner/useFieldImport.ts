@@ -6,7 +6,7 @@ import { isRequestIdRule, buildRequestIdSyntheticField } from '@/utils/formField
 import { functionUnitApi } from '@/api/functionUnit'
 import { relationTableBindingApi } from '@/api/relationTable'
 import type { SubTableFieldDTO } from '@/api/subTableView'
-import { injectUploadButtonLabels } from '@/utils/formDesigner'
+import { injectUploadButtonLabels, flattenRuleLayoutContainers } from '@/utils/formDesigner'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 
 interface UseFieldImportOptions {
@@ -113,6 +113,39 @@ export function useFieldImport(options: UseFieldImportOptions) {
     }
     return fields
   })
+
+  // Resolve the form-designer ref that fields would be imported into for the
+  // currently selected table (main canvas or the active sub-table designer).
+  function getImportTargetRef(): any {
+    if (activeDesignerTab.value === 'main') return designerRef.value
+    const bindingId = importTableId.value
+      ? getBindingIdForTable(importTableId.value)
+      : Number(activeDesignerTab.value)
+    if (!bindingId) return null
+    const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
+    return index >= 0 ? subDesignerRefs.value[index] : null
+  }
+
+  // Computed: field names already present on the target form/sub-table canvas,
+  // so the dialog can flag fields that would be skipped as duplicates.
+  const existingFieldNames = computed(() => {
+    if (isImportingRelationTable()) {
+      const bindingId = importTableId.value ? getBindingIdForTable(importTableId.value) : null
+      const state = bindingId != null ? relationViewState.value[bindingId] : null
+      return new Set((state?.viewFields || []).map((f: any) => f.fieldName))
+    }
+    const targetRef = getImportTargetRef()
+    const currentRules: any[] = targetRef?.getRule?.() || []
+    const flatRules = flattenRuleLayoutContainers(currentRules)
+    return new Set(flatRules.map((r: any) => r.field).filter(Boolean))
+  })
+
+  /**
+   * Whether a field is already present on the target form/sub-table canvas.
+   */
+  function isFieldAlreadyImported(field: FieldDefinition): boolean {
+    return existingFieldNames.value.has(field.fieldName)
+  }
 
   // Computed: all fields selected
   const isAllFieldsSelected = computed(() => {
@@ -355,9 +388,12 @@ export function useFieldImport(options: UseFieldImportOptions) {
           if (index >= 0) targetRef = subDesignerRefs.value[index]
         }
 
+        let addedCount = 0
         if (targetRef) {
           const currentRules: any[] = targetRef.getRule() || []
-          const existingFields = new Set(currentRules.map((r: any) => r.field))
+          const existingFields = new Set(
+            flattenRuleLayoutContainers(currentRules).map((r: any) => r.field).filter(Boolean),
+          )
           const newRules = rules.filter(r => !existingFields.has(r.field))
           const duplicateCount = rules.length - newRules.length
 
@@ -369,6 +405,7 @@ export function useFieldImport(options: UseFieldImportOptions) {
             const merged = [...currentRules, ...newRules]
             injectUploadButtonLabels(merged, t('form.clickToUpload'))
             targetRef.setRule(merged)
+            addedCount = newRules.length
           }
         }
 
@@ -384,7 +421,11 @@ export function useFieldImport(options: UseFieldImportOptions) {
 
         refreshFormRulesFromTableMetadata()
 
-        ElMessage.success(t('form.importedSuccess', { count: selectedImportFields.value.length }))
+        if (addedCount > 0) {
+          ElMessage.success(t('form.importedSuccess', { count: addedCount }))
+        } else if (!targetRef) {
+          ElMessage.error(t('form.importTargetNotFound'))
+        }
         showImportFieldsDialog.value = false
         return
       }
@@ -407,7 +448,9 @@ export function useFieldImport(options: UseFieldImportOptions) {
       if (targetRef) {
         const currentRules: any[] = targetRef.getRule() || []
         const hasRequestIdAlready = currentRules.some(isRequestIdRule)
-        const existingFields = new Set(currentRules.map((r: any) => r.field))
+        const existingFields = new Set(
+          flattenRuleLayoutContainers(currentRules).map((r: any) => r.field).filter(Boolean),
+        )
         // Skip fields already on canvas; also skip a duplicate Request ID rule.
         const newRules = rules.filter(
           r => !existingFields.has(r.field) && !(hasRequestIdAlready && isRequestIdRule(r)),
@@ -441,6 +484,7 @@ export function useFieldImport(options: UseFieldImportOptions) {
     availableFields,
     isAllFieldsSelected,
     isFieldsIndeterminate,
+    isFieldAlreadyImported,
     getImportTableBinding,
     isFieldSelected,
     toggleFieldSelection,

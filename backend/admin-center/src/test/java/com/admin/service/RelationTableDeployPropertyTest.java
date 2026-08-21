@@ -46,6 +46,7 @@ class RelationTableDeployPropertyTest {
     private RelationTableDefinitionRepository tableDefinitionRepository;
     private RelationTableVersionRepository versionRepository;
     private com.admin.repository.RelationFieldDefinitionRepository fieldDefinitionRepository;
+    private com.admin.repository.FunctionUnitRepository functionUnitRepository;
     private JdbcTemplate jdbcTemplate;
     private ObjectMapper objectMapper;
     private com.admin.config.DatabaseSchemaResolver schemaResolver;
@@ -56,12 +57,14 @@ class RelationTableDeployPropertyTest {
         tableDefinitionRepository = mock(RelationTableDefinitionRepository.class);
         versionRepository = mock(RelationTableVersionRepository.class);
         fieldDefinitionRepository = mock(com.admin.repository.RelationFieldDefinitionRepository.class);
+        functionUnitRepository = mock(com.admin.repository.FunctionUnitRepository.class);
         jdbcTemplate = mock(JdbcTemplate.class);
         objectMapper = new ObjectMapper();
         schemaResolver = mock(com.admin.config.DatabaseSchemaResolver.class);
         when(schemaResolver.getSchema()).thenReturn("public");
         service = new RelationTableDeployServiceImpl(
-                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, jdbcTemplate, objectMapper, schemaResolver,
+                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, functionUnitRepository,
+                jdbcTemplate, objectMapper, schemaResolver,
                 mock(com.platform.common.i18n.I18nService.class));
     }
 
@@ -426,7 +429,7 @@ class RelationTableDeployPropertyTest {
             throw new IllegalStateException(e);
         }
         RelationTableDeployServiceImpl failingService = new RelationTableDeployServiceImpl(
-                tableDefinitionRepository, versionRepository, fieldDefinitionRepository,
+                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, functionUnitRepository,
                 jdbcTemplate, failingMapper, schemaResolver,
                 mock(com.platform.common.i18n.I18nService.class));
 

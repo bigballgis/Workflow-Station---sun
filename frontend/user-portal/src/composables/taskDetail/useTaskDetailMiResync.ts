@@ -71,23 +71,35 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
         && ctx.isCurrentMiCollectionSubTableBinding(current)
       ) {
         const participantPk = pk ?? ctx.miCollectionPrimaryKeyFields()
-        let candidates: any[] = cloneSubTableRows(Array.isArray(current.data) ? current.data : [])
-        const tableIdRaw =
-          current.tableId != null
-            ? Number(current.tableId)
-            : lastBindingRelationTableMap.value.get(current.bindingId)
-        if (Number.isFinite(Number(tableIdRaw))) {
-          candidates.push(
-            ...collectSubTableSliceRowsForRelationTableId(
-              flat,
-              Number(tableIdRaw),
-              lastBindingRelationTableMap.value,
-              current.tableName,
-              current.physicalTableName,
-            ),
-          )
-        } else {
-          candidates.push(...(ctx.getSavedSubTableRows(flat, current) ?? []))
+        const existingRows: any[] = cloneSubTableRows(Array.isArray(current.data) ? current.data : [])
+        const existingHasOwnRow = existingRows.some(row =>
+          rowMatchesSubTablePrimaryKey(row, myRowId, participantPk),
+        )
+        let candidates: any[] = existingRows
+        // Same cross-binding PK collision as resyncMiParticipantSubTablesFromVariables above: sibling
+        // BPMN nodes duplicate this MI collection under their OWN bindingId, and their rows can share
+        // this binding's exact PK. Only scrape those siblings when this binding's own data doesn't
+        // already have the current participant's row — otherwise a stale sibling duplicate can win
+        // the merge purely by array order.
+        if (!existingHasOwnRow) {
+          const tableIdRaw =
+            current.tableId != null
+              ? Number(current.tableId)
+              : lastBindingRelationTableMap.value.get(current.bindingId)
+          if (Number.isFinite(Number(tableIdRaw))) {
+            candidates = [
+              ...candidates,
+              ...collectSubTableSliceRowsForRelationTableId(
+                flat,
+                Number(tableIdRaw),
+                lastBindingRelationTableMap.value,
+                current.tableName,
+                current.physicalTableName,
+              ),
+            ]
+          } else {
+            candidates = [...candidates, ...(ctx.getSavedSubTableRows(flat, current) ?? [])]
+          }
         }
         const scoped = candidates.filter(row =>
           rowMatchesSubTablePrimaryKey(row, myRowId, participantPk),
@@ -339,17 +351,29 @@ export function createTaskDetailMiResync(ctx: TaskDetailCtx): TaskDetailMiResync
       const tableIdRaw =
         binding.tableId != null ? Number(binding.tableId) : rtMap.get(binding.bindingId)
       const participantPk = ctx.resolveMiCollectionParticipantPkFields()
+      // MI collection rows can share the same designer PK across sibling BPMN nodes' OWN binding
+      // aliases of the very same logical table (each node duplicates the whole participant
+      // collection under its own bindingId). Unlike link-child tables, that duplication means a
+      // stale sibling binding's row can carry the identical PK as this binding's fresh one — the
+      // per-row scope filter below cannot tell them apart. Only fall back to the cross-tableId
+      // sibling scrape when this binding's OWN resolution has nothing for the current participant;
+      // once `byKey` already has our row, unioning in siblings risks a stale duplicate winning the
+      // merge purely by array order (#1524-class: reload showing another participant's old value).
+      const byKeyHasOwnRow = isCollection
+        && byKey.some((row: unknown) => rowMatchesSubTablePrimaryKey(row, myRowId, participantPk ?? binding.primaryKeyFields))
       const siblingSlices =
         isCollection
-          ? Number.isFinite(Number(tableIdRaw))
-            ? collectSubTableSliceRowsForRelationTableId(
-                flattened,
-                Number(tableIdRaw),
-                rtMap,
-                binding.tableName,
-                binding.physicalTableName,
-              )
-            : (ctx.getSavedSubTableRows(flattened, binding, ambiguous.has(binding.bindingId)) ?? [])
+          ? byKeyHasOwnRow
+            ? []
+            : Number.isFinite(Number(tableIdRaw))
+              ? collectSubTableSliceRowsForRelationTableId(
+                  flattened,
+                  Number(tableIdRaw),
+                  rtMap,
+                  binding.tableName,
+                  binding.physicalTableName,
+                )
+              : (ctx.getSavedSubTableRows(flattened, binding, ambiguous.has(binding.bindingId)) ?? [])
           : !participantScoped
             ? isMiDashboardSubTableBinding(binding)
               ? []

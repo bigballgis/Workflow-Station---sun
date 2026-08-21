@@ -9,18 +9,12 @@
  */
 
 import type { FormDefinition, TableBinding, TableDefinition } from '@/api/functionUnit'
-import type { FormPreviewItem, PreviewSubTableBinding, SubTablePortalViewsPreview } from '@/components/designer/formPreviewTypes'
+import type { FormPreviewItem, PreviewSubTableBinding } from '@/components/designer/formPreviewTypes'
 import { flattenRuleLayoutContainers, getRuleChildren, isCardRule, getLayoutLabel, walkFormCreateRules, withSubTableBindingIdInProps } from '@/utils/formDesigner'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { derivePreviewColumns, parseLookupConfig } from '@/utils/formPreview'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
-
-const DEFAULT_PORTAL_VIEWS: SubTablePortalViewsPreview = {
-  assigneeTodo: 'tableOnly',
-  initiatorRequest: 'mirrorTodo',
-  assigneeTodoFormSource: { type: 'subForm', formId: null, linkFormColumnId: null },
-}
 
 const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
 
@@ -154,25 +148,6 @@ function resolveLookupPreviewConfig(
     showBackfillView: lookupConfig.showBackfillView !== false,
     bindingId,
   }
-}
-
-function mergePortalViewsForSavedPreview(
-  ruleItem: any,
-  bindingId: number,
-  config: Record<string, any>,
-): SubTablePortalViewsPreview {
-  const base: SubTablePortalViewsPreview =
-    (config.subTablePortalViews?.[bindingId] as SubTablePortalViewsPreview | undefined)
-    || { ...DEFAULT_PORTAL_VIEWS, assigneeTodoFormSource: { ...DEFAULT_PORTAL_VIEWS.assigneeTodoFormSource! } }
-  const ov = ruleItem?.props?.portalViews
-  if (!ov || typeof ov !== 'object') return base
-  const assigneeTodo =
-    ov.assigneeTodo === 'formBelowTable' ? 'formBelowTable' : ov.assigneeTodo === 'tableOnly' ? 'tableOnly' : base.assigneeTodo
-  let initiatorRequest = base.initiatorRequest
-  if (ov.initiatorRequest === 'summaryWithLinkFormModal') initiatorRequest = 'summaryWithLinkFormModal'
-  else if (ov.initiatorRequest === 'tableOnly') initiatorRequest = 'tableOnly'
-  else if (ov.initiatorRequest === 'mirrorTodo') initiatorRequest = 'mirrorTodo'
-  return { assigneeTodo, initiatorRequest, assigneeTodoFormSource: base.assigneeTodoFormSource }
 }
 
 function toSubTablePreviewColumns(
@@ -309,7 +284,9 @@ function containsSubTableRule(item: any): boolean {
   let found = false
   walkFormCreateRules([item], (rule) => {
     if (found) return
-    if (rule.type === 'subTable' && (rule._bindingId ?? (rule.props as Record<string, unknown> | undefined)?._bindingId) != null) {
+    // Both rule types bind a SUB table and get their own preview item kind.
+    if ((rule.type === 'subTable' || rule.type === 'inlineSubForm')
+      && (rule._bindingId ?? (rule.props as Record<string, unknown> | undefined)?._bindingId) != null) {
       found = true
     }
   })
@@ -324,6 +301,13 @@ function buildPreviewItems(
   tableBindings: TableBinding[],
   keyPrefix = 'seg',
   seen: WeakSet<object> = new WeakSet<object>(),
+  /**
+   * The unpruned binding map. `localBindingMap` has entries deleted as bindings get claimed,
+   * which is right for de-duplicating grids but wrong for the Inline Form widget: the same
+   * binding may also be placed as a grid earlier in the rule, and reading the pruned map made
+   * the inline block silently vanish. Defaults to localBindingMap for callers that pass neither.
+   */
+  fullBindingMap: Map<number, PreviewSubTableBinding> = localBindingMap,
 ): FormPreviewItem[] {
   const items: FormPreviewItem[] = []
   let currentSegment: any[] = []
@@ -348,12 +332,30 @@ function buildPreviewItems(
       flushSegment()
       const binding = localBindingMap.get(Number(itemBindingId))
       if (binding) {
-        const mergedPv = mergePortalViewsForSavedPreview(ruleItem, Number(itemBindingId), config)
+        // Summary presentation designed on the canvas.
+        const placedProps = (ruleItem?.props ?? {}) as Record<string, unknown>
         items.push({
           kind: 'subTable',
-          binding: { ...binding, portalViews: mergedPv },
+          binding: {
+            ...binding,
+            compactCells: placedProps.compactCells === true ? true : undefined,
+          },
           sourceRule: ruleItem as Record<string, unknown>,
         })
+        localBindingMap.delete(Number(itemBindingId))
+      }
+    } else if (ruleItem.type === 'inlineSubForm' && itemBindingId != null) {
+      // Inline Form: render the bound sub-form's rule in place — no grid, no Add button.
+      flushSegment()
+      const binding = fullBindingMap.get(Number(itemBindingId))
+      if (binding) {
+        items.push({
+          kind: 'inlineSubForm',
+          binding,
+          modelKey: `${keyPrefix}_inline_${itemBindingId}`,
+          sourceRule: ruleItem as Record<string, unknown>,
+        })
+        // Claim the binding so it is not ALSO rendered as a standalone table below.
         localBindingMap.delete(Number(itemBindingId))
       }
     } else if (isCardRule(ruleItem)) {
@@ -369,6 +371,7 @@ function buildPreviewItems(
           tableBindings,
           `card_${segmentIndex++}`,
           new WeakSet<object>(),
+          fullBindingMap,
         ),
         modelKey: `${keyPrefix}_card_${segmentIndex}`,
       })
@@ -386,6 +389,7 @@ function buildPreviewItems(
           tableBindings,
           `${keyPrefix}_layout_${segmentIndex++}`,
           seen,
+          fullBindingMap,
         ))
       }
     } else {
@@ -422,8 +426,12 @@ export function buildSavedFormPreviewItems(options: SavedFormPreviewBuildOptions
   rawRule = mapFormCreateRulesReadonlyDeep(rawRule) as typeof rawRule
 
   const bindingMap = buildBindingMap(options)
+  // Snapshot before the walk prunes it — Inline Form resolves against the full set.
+  const fullBindingMap = new Map(bindingMap)
   try {
-    return buildPreviewItems(rawRule, bindingMap, config, options.tables, bindings)
+    return buildPreviewItems(
+      rawRule, bindingMap, config, options.tables, bindings, 'seg', new WeakSet<object>(), fullBindingMap,
+    )
   } catch (e) {
     // FALLBACK(ux): read-only preview — degrade to plain fields (sub-tables omitted) rather
     // than a blank panel. Log so a systematically broken config is still discoverable.

@@ -24,6 +24,9 @@ public class TaskFormFieldMapper {
      * Filters read-only fields, keeping EDITABLE fields only.
      * When fieldPermissions is empty, accepts all non-audit fields (backward compatible).
      * Platform audit columns are never accepted from the client.
+     * {@code __subTables__} passes through unfiltered here — callers needing sub-table
+     * field-level enforcement additionally apply {@link ChangeHistorySubmissionFilter}'s
+     * binding-aware, alias-safe sub-table filtering (see {@code TaskFormComponent#submitTaskForm}).
      */
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
                                                     Map<String, String> fieldPermissions) {

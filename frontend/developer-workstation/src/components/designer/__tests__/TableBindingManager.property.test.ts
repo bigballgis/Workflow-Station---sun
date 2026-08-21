@@ -144,20 +144,21 @@ describe('TableBindingManager Property Tests', () => {
  */
 describe('Binding Type Label Tests', () => {
   const bindingTypeLabel = (type: BindingType): string => {
-    const map: Record<BindingType, string> = { PRIMARY: '主表', SUB: '子表', RELATED: '关联表' }
+    const map: Record<BindingType, string> = { PRIMARY: '主表', SUB: '子表', RELATED: '关联表', ACTION: '动作表' }
     return map[type] || type
   }
 
   it('should return correct labels for all binding types', () => {
     fc.assert(
-      fc.property(fc.constantFrom<BindingType>('PRIMARY', 'SUB', 'RELATED'), (type) => {
+      fc.property(fc.constantFrom<BindingType>('PRIMARY', 'SUB', 'RELATED', 'ACTION'), (type) => {
         const label = bindingTypeLabel(type)
         expect(label).toBeTruthy()
         expect(typeof label).toBe('string')
-        
+
         if (type === 'PRIMARY') expect(label).toBe('主表')
         if (type === 'SUB') expect(label).toBe('子表')
         if (type === 'RELATED') expect(label).toBe('关联表')
+        if (type === 'ACTION') expect(label).toBe('动作表')
       }),
       { numRuns: 10 }
     )

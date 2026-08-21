@@ -99,7 +99,7 @@ class RecordNoteAuditTest {
     @Test
     void tableScopeCreateAuditsAgainstTheTargetInstance() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
         when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT)
                         .bodyText("Hello reviewer").build());
@@ -115,7 +115,7 @@ class RecordNoteAuditTest {
     void recordScopeCreateAnchorsOnTheCallerSuppliedInstanceAndKeepsTheRowId() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
         // Row-id targets carry no resolvable instance, so note access adds no gate of its own.
         MockMultipartFile file = new MockMultipartFile(
                 "files", "report.pdf", "application/pdf", "x".getBytes(StandardCharsets.UTF_8));
@@ -138,7 +138,7 @@ class RecordNoteAuditTest {
     void recordScopeCreateIsRejectedWhenTheCallerIsNotAParticipantOfTheClaimedInstance() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(false);
+        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(false);
         when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
 
         assertThatThrownBy(() ->
@@ -160,7 +160,7 @@ class RecordNoteAuditTest {
     void rowScopeNotesAreReadableByAParticipantWithoutFunctionUnitRoleAccess() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
         when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
         when(recordNoteService.list(any(), eq(0), eq(5), eq("u1"))).thenReturn(null);
 
@@ -179,7 +179,7 @@ class RecordNoteAuditTest {
     void rowScopeNotesRejectANonParticipantOfTheHostingInstance() {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(false);
+        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(false);
         when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
 
         assertThatThrownBy(() -> component.list("u1", rowTarget(), 0, 5, INSTANCE_ID))
@@ -220,7 +220,7 @@ class RecordNoteAuditTest {
     @Test
     void instanceScopeNotesStillRejectNonParticipants() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(false);
+        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(false);
         when(functionUnitAccessComponent.isSystemAdministrator("u1")).thenReturn(false);
 
         assertThatThrownBy(() -> component.list("u1", tableTarget(), 0, 5, null))
@@ -259,40 +259,50 @@ class RecordNoteAuditTest {
         verify(changeHistoryComponent, never()).recordNoteChange(any(), any(), any(), any(), any(), any());
     }
 
+    /**
+     * Notes are a record of what was said at a point in time; editing one would
+     * rewrite the history a request is reviewed against. Even the author is refused.
+     */
     @Test
-    void updateAuditsBothSidesOfTheEdit() {
+    void updateIsRefusedForEveryoneAndWritesNoAudit() {
         when(recordNoteService.getLive("note-1")).thenReturn(storedNote(RecordNote.TARGET_TABLE, INSTANCE_ID));
-        when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
-        when(recordNoteService.update(eq("note-1"), any(), anyString(), eq("u1")))
-                .thenReturn(NoteDetail.builder().id("note-1").subject("Subject")
-                        .bodyHtml("<p>Revised body</p>").build());
 
-        component.update("u1", "note-1", "Subject", "<p>Revised body</p>", null);
+        assertThatThrownBy(() -> component.update("u1", "note-1", "Subject", "<p>Revised body</p>", null))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("cannot be edited");
 
-        verify(changeHistoryComponent).recordNoteChange(
-                eq(INSTANCE_ID), eq("u1"), eq(ChangeType.RECORD_NOTE_UPDATE),
-                isNull(), eq("Subject · Original body"), eq("Subject · Revised body"));
+        verify(recordNoteService, never()).update(any(), any(), any(), any());
+        verify(changeHistoryComponent, never()).recordNoteChange(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    void deleteAuditsTheRemovedNoteAsOldValue() {
+    void deleteIsRefusedForEveryoneAndWritesNoAudit() {
         when(recordNoteService.getLive("note-1")).thenReturn(storedNote(RecordNote.TARGET_TABLE, INSTANCE_ID));
-        when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
 
-        component.delete("u1", "note-1", null);
+        assertThatThrownBy(() -> component.delete("u1", "note-1", null))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("cannot be deleted");
 
-        verify(recordNoteService).softDelete("note-1", "u1");
-        verify(changeHistoryComponent).recordNoteChange(
-                eq(INSTANCE_ID), eq("u1"), eq(ChangeType.RECORD_NOTE_DELETE),
-                isNull(), eq("Subject · Original body"), isNull());
+        verify(recordNoteService, never()).softDelete(any(), any());
+        verify(changeHistoryComponent, never()).recordNoteChange(any(), any(), any(), any(), any(), any());
+    }
+
+    /** A system administrator gets no exemption from immutability either. */
+    @Test
+    void deleteIsRefusedEvenForSystemAdministrator() {
+        when(recordNoteService.getLive("note-1")).thenReturn(storedNote(RecordNote.TARGET_TABLE, INSTANCE_ID));
+
+        assertThatThrownBy(() -> component.delete("admin", "note-1", null))
+                .isInstanceOf(RecordNoteService.RecordNoteException.class)
+                .hasMessageContaining("cannot be deleted");
+
+        verify(recordNoteService, never()).softDelete(any(), any());
     }
 
     @Test
     void inlineImageUploadsAreNotAuditedSeparately() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
-        when(processComponent.canAccessProcessDetail(eq("u1"), any())).thenReturn(true);
+        when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
         MockMultipartFile img = new MockMultipartFile(
                 "file", "shot.png", "image/png", "x".getBytes(StandardCharsets.UTF_8));
         when(recordNoteService.createAttachment(any(), any(), anyBoolean(), anyString(), any()))

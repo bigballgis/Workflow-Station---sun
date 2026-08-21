@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { processApi } from '@/api/process'
+import { submitActionFormPopup } from '@/api/processForm'
 import type { TaskActionInfo } from '@/api/task'
 import type { FormField, FormTab, PortalViewContext } from '@/components/formRendererHelpers'
 import type { PreparedFormPopupContext } from './customActionTypes'
@@ -167,10 +168,17 @@ export function createCustomActionFormPopup(deps: {
   }
 
   async function submitFormPopup() {
+    const action = currentFormPopupAction.value
+    const taskId = taskInfo.value.taskId || taskInfo.value.id
+    if (!action?.actionId || !taskId) {
+      ElMessage.error(t('task.formSubmitFailed'))
+      return
+    }
     submitting.value = true
     try {
-      // Stub: no server endpoint for ACTION form popup submit yet; dialog closes after ack.
-      // Sub-table edits stay in formPopupSubTableBindings for future submit wiring.
+      await submitActionFormPopup(taskId, action.actionId, formPopupData.value)
+      // Sub-table edits (formPopupSubTableBindings) are not part of this ACTION-table
+      // submission — ACTION forms write directly to their own table, not process variables.
       ElMessage.success(t('task.formSubmitSuccess'))
       formPopupVisible.value = false
       loadTaskDetail()

@@ -45,6 +45,7 @@ public final class FunctionUnitManagerTestFactory {
         FunctionUnitImportComponent importComponent = new FunctionUnitImportComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(FunctionUnitAccessService.class),
+                Mockito.mock(com.admin.service.FunctionUnitAuditAccessService.class),
                 packageParser, actionDefinitionRepository, versionComponent, relationTableStructureImporter,
                 objectMapper, i18nService);
         FormTableBindingLoader bindingLoader = new FormTableBindingLoader(jdbcTemplate, objectMapper);
@@ -52,6 +53,7 @@ public final class FunctionUnitManagerTestFactory {
                 contentRepository, jdbcTemplate, lookup, bindingLoader);
         FunctionUnitLifecycleComponent lifecycleComponent = new FunctionUnitLifecycleComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
+                Mockito.mock(com.admin.repository.FunctionUnitAuditAccessRepository.class),
                 validationComponent, versionComponent, lookup, i18nService);
         PortalRuntimePurgeClient purgeClient = new PortalRuntimePurgeClient(restTemplate);
 

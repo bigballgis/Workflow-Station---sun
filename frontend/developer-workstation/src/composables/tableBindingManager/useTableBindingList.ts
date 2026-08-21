@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, type ComputedRef } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { functionUnitApi, type TableBinding, type BindingType } from '@/api/functionUnit'
 
@@ -7,6 +7,8 @@ interface UseTableBindingListOptions {
   getFormId: () => number
   t: (key: string, params?: Record<string, unknown>) => string
   emitUpdate: () => void
+  /** PRIMARY binding is only mandatory (and thus non-deletable) for PROCESS / TASK forms. */
+  restrictPrimarySubOnly: ComputedRef<boolean>
 }
 
 /**
@@ -14,7 +16,7 @@ interface UseTableBindingListOptions {
  * 加载已绑定的表、表名/类型标签、删除绑定。
  */
 export function useTableBindingList(options: UseTableBindingListOptions) {
-  const { functionUnitId, getFormId, t, emitUpdate } = options
+  const { functionUnitId, getFormId, t, emitUpdate, restrictPrimarySubOnly } = options
 
   const loading = ref(false)
   const bindings = ref<TableBinding[]>([])
@@ -44,14 +46,15 @@ export function useTableBindingList(options: UseTableBindingListOptions) {
     const map: Record<BindingType, string> = {
       PRIMARY: t('tableBinding.primaryTable'),
       SUB: t('tableBinding.subTable'),
-      RELATED: t('tableBinding.relatedTable')
+      RELATED: t('tableBinding.relatedTable'),
+      ACTION: t('tableBinding.actionBindingTable')
     }
     return map[type] || type
   }
 
   // Binding type tag color
   function bindingTypeTag(type: BindingType): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
-    const map: Record<BindingType, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { PRIMARY: 'primary', SUB: 'success', RELATED: 'warning' }
+    const map: Record<BindingType, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { PRIMARY: 'primary', SUB: 'success', RELATED: 'warning', ACTION: 'danger' }
     return map[type] || 'info'
   }
 
@@ -70,7 +73,7 @@ export function useTableBindingList(options: UseTableBindingListOptions) {
 
   // Delete binding
   async function handleDelete(binding: TableBinding) {
-    if (binding.bindingType === 'PRIMARY') {
+    if (binding.bindingType === 'PRIMARY' && restrictPrimarySubOnly.value) {
       ElMessage.warning(t('tableBinding.cannotDeletePrimary'))
       return
     }

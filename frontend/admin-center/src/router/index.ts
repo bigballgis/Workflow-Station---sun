@@ -264,7 +264,7 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        path: "relation-tables/data",
+        path: "relation-tables/data/:functionUnitCode?",
         name: "RelationTableData",
         component: () => import("@/views/relation-table/data/index.vue"),
         meta: {

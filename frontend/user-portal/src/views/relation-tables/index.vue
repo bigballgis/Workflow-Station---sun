@@ -453,10 +453,28 @@ const isRowInactive = (row: Record<string, any>): boolean =>
 const rowId = (row: Record<string, any>): string | null =>
   pkField.value ? String(row[pkField.value]) : null
 
+// Built-in system tables (e.g. the read-only User table) have no Function Unit of their own;
+// the nav sidebar files them under a fixed "Common" group, so the ":functionUnitCode" route
+// param uses this same synthetic code to scope the panel to just those tables.
+const COMMON_FU_CODE = '__common__'
+const COMMON_TABLE_NAMES = new Set(['sys_users'])
+
+/**
+ * Deployed tables panel: scoped to the Function Unit selected via the nav sidebar
+ * (route.params.functionUnitCode), then narrowed further by the search box. FU grouping
+ * itself is the nav sidebar's job (Relation Tables > <Function Unit>) — this panel just
+ * lists that FU's tables (or all tables when no FU is selected).
+ */
 const filteredTables = computed(() => {
+  const fuCode = route.params.functionUnitCode as string | undefined
+  const scoped = !fuCode
+    ? tables.value
+    : fuCode === COMMON_FU_CODE
+      ? tables.value.filter(t => COMMON_TABLE_NAMES.has(t.tableName))
+      : tables.value.filter(t => t.functionUnitCode === fuCode)
   const kw = tableSearchKeyword.value.trim().toLowerCase()
-  if (!kw) return tables.value
-  return tables.value.filter(t =>
+  if (!kw) return scoped
+  return scoped.filter(t =>
     (t.displayName || '').toLowerCase().includes(kw) ||
     (t.tableName || '').toLowerCase().includes(kw)
   )
@@ -471,7 +489,7 @@ const fetchTables = async () => {
     const queryTableId = route.query.tableId != null ? Number(route.query.tableId) : null
     const target = queryTableId != null && tables.value.some(t => t.id === queryTableId)
       ? queryTableId
-      : (tables.value.length > 0 ? tables.value[0].id : null)
+      : (filteredTables.value.length > 0 ? filteredTables.value[0].id : (tables.value.length > 0 ? tables.value[0].id : null))
     if (!selectedTableId.value && target != null) {
       selectedTableId.value = target
       if (queryTableId === target && typeof route.query.search === 'string') {

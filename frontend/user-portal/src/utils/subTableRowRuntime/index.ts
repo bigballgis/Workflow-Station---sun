@@ -21,6 +21,7 @@ export {
 export {
   applyFkPresentationToDialogColumns,
   applyFieldDefinitionsToFormFields,
+  applyFieldPermissionsToDialogColumns,
 } from './columnPresentation'
 
 export {

@@ -3,6 +3,7 @@ import {
   mergeSubTableRowsByRowId,
   stripNestedSubTablesFromRows,
   isMiParticipantScopedSubTableBinding,
+  isMiDashboardSubTableBinding,
   isSharedAttachmentFileBinding,
 } from '@/composables/tasks/shared'
 import {
@@ -12,6 +13,7 @@ import {
   unwrapUserLikeValueToDisplayString,
   extractUserIdFromCellValue,
 } from '@/components/subTableAddDialogHelpers'
+import type { MiParticipantRowId } from '@/composables/tasks/miSubProcessScope'
 import {
   cloneSubTableRows,
   bindingIdsPreferStrictSubTableLookup,
@@ -23,7 +25,7 @@ import type { TaskDetailCtx } from './context'
 export interface TaskDetailSyncFns {
   syncMainSubTableRows: (bindingId: number, rows: any[]) => void
   patchFormDataSubTablesFromCurrentBindings: () => void
-  rebuildIsolatedSubTablesPayload: () => Record<string, any>
+  rebuildIsolatedSubTablesPayload: (myRowId?: MiParticipantRowId | null) => Record<string, any>
   stripNestedFromAllTaskBindings: () => void
   markBindingRowsNonReactive: () => void
   applyTaskAssigneeNameToMatchingSubTableRows: (taskData: { assignee?: unknown; assigneeName?: unknown }) => void
@@ -51,13 +53,31 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
     for (const info of nodeFormMap.value.values()) strip(info.subTableBindings)
   }
 
-  /** After MI isolation, __subTables__ must carry all participants again; current binding only has this MI row. */
-  function rebuildIsolatedSubTablesPayload(): Record<string, any> {
+  /**
+   * After MI isolation, __subTables__ must carry all participants again; current binding only has
+   * this MI row.
+   *
+   * @param myRowId current MI sub-task's own participant row id. For MI collection/dashboard
+   *   bindings, a `previousForms` snapshot can carry a STALE copy of this SAME participant's row
+   *   (each sub-task node duplicates the whole collection table under its own bindingId — see
+   *   `hydrateBindingsRowsFromVariablesBySharedRelationTableId`'s equivalent guard). Since
+   *   `mergeSubTableRowsByRowId` never lets an absent/empty field overwrite a filled one, that stale
+   *   row would survive even after `subTableBindings.value`'s own (thin, freshly-loaded) row is
+   *   ingested last — the current binding has nothing to overwrite it with (#1524-class: reload
+   *   showing this participant's own OLD value). Dropping the current participant's row from
+   *   `previousForms` ingestion for these bindings closes that gap; other participants' rows in
+   *   `previousForms` are unaffected and still backfill normally.
+   */
+  function rebuildIsolatedSubTablesPayload(myRowId?: MiParticipantRowId | null): Record<string, any> {
     const subTables: Record<string, any> = {}
-    const ingest = (bindings: typeof subTableBindings.value) => {
+    const ingest = (bindings: typeof subTableBindings.value, dropCurrentMiRow: boolean) => {
       const collision = bindingIdsPreferStrictSubTableLookup(bindings)
       for (const binding of bindings) {
-        const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
+        let rows = Array.isArray(binding.data) ? binding.data : []
+        if (dropCurrentMiRow && myRowId != null && isMiDashboardSubTableBinding(binding)) {
+          rows = rows.filter((row: any) => !ctx.rowBelongsToCurrentMiScope(row, myRowId, binding))
+        }
+        rows = cloneSubTableRows(rows)
         const canonical = String(binding.bindingId)
         const prev = ctx.getSavedSubTableRows(subTables, binding, collision.has(binding.bindingId))
         const merged = mergeSubTableRowsByRowId(prev, rows, binding.primaryKeyFields)
@@ -71,9 +91,9 @@ export function createTaskDetailSubTableSync(ctx: TaskDetailCtx): TaskDetailSync
       }
     }
     for (const pf of previousForms.value) {
-      ingest(pf.subTableBindings)
+      ingest(pf.subTableBindings, true)
     }
-    ingest(subTableBindings.value)
+    ingest(subTableBindings.value, false)
     return subTables
   }
 

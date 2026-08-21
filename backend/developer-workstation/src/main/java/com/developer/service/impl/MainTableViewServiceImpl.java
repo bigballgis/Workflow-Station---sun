@@ -101,6 +101,9 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         if (request.restrictToInvolvedUsers() != null) {
             config.setRestrictToInvolvedUsers(request.restrictToInvolvedUsers());
         }
+        // Null clears the detail form, which is how a view is set back to
+        // "rows are not clickable".
+        config.setDetailFormId(request.detailFormId());
         if (request.accessRules() != null) {
             validateAccessRules(request.accessRules());
             replaceAccessRules(config, request.accessRules());
@@ -118,12 +121,18 @@ public class MainTableViewServiceImpl implements MainTableViewService {
 
     @Override
     @Transactional
+    public MainTableViewDTO updateViewDetailForm(Long functionUnitId, Long viewId, Long detailFormId) {
+        MainTableViewConfig config = loadView(functionUnitId, viewId);
+        // Deliberately does not touch status: choosing a detail form is not a design change that
+        // should withdraw a published view from the portal (the portal serves PUBLISHED views only).
+        config.setDetailFormId(detailFormId);
+        return toDto(viewConfigRepository.save(config));
+    }
+
+    @Override
+    @Transactional
     public void deleteView(Long functionUnitId, Long viewId) {
         MainTableViewConfig config = loadView(functionUnitId, viewId);
-        if (Boolean.TRUE.equals(config.getIsDefault())) {
-            throw new DeveloperBusinessException("BIZ_MAIN_VIEW_DELETE_DEFAULT",
-                    "Default Main view cannot be deleted");
-        }
         viewConfigRepository.delete(config);
     }
 
@@ -521,6 +530,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                 .isDefault(config.getIsDefault())
                 .status(config.getStatus() != null ? config.getStatus().name() : MainTableViewStatus.DRAFT.name())
                 .restrictToInvolvedUsers(Boolean.TRUE.equals(config.getRestrictToInvolvedUsers()))
+                .detailFormId(config.getDetailFormId())
                 .accessRules(loadAccessRuleDtos(config.getId()))
                 .sortConfig(config.getSortConfig())
                 .filterConfig(config.getFilterConfig())

@@ -45,7 +45,6 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
     if (placed.size === 0) return
     const have = new Set(bindings.map(b => Number(b.bindingId)))
     const subForms = (formConfig?.subForms ?? {}) as Record<string, any>
-    const portalViewsMap = (formConfig?.subTablePortalViews ?? {}) as Record<string, any>
 
     for (const bid of placed) {
       if (legacyBindingIdAliases(bid).some(alias => have.has(alias))) continue
@@ -75,7 +74,6 @@ export function createTaskDetailLayoutSync(ctx: TaskDetailCtx): TaskDetailLayout
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
         assignmentConfig: raw.assignmentConfig,
-        portalViews: portalViewsMap[bid] ?? portalViewsMap[String(bid)] ?? null,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(raw.primaryKeyFields, bid, cfg),
         fieldDefinitions: raw.fieldDefinitions ?? [],
         bindingLinkMode: raw.bindingLinkMode,

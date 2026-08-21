@@ -27,6 +27,10 @@ interface FormProps {
   rowFormulas?: RowFormulaRule[]
   columnValidationRules?: Record<string, ValidationRule[]>
   saveRow?: (row: Record<string, unknown>) => void | Promise<void>
+  /** This dialog's own hosting binding id — resolves this binding's `${bindingId}:${fieldName}` entries in fieldPermissions. */
+  bindingId?: number | null
+  /** Task-node field permissions (`TaskFormData.fieldPermissions`); composite-keyed entries gate Add/Edit dialog fields, same as the Link Form dialog paths. */
+  fieldPermissions?: Record<string, string> | null
 }
 
 /** Emit signature subset the form orchestrator depends on (mirrors SFC defineEmits). */
@@ -107,8 +111,22 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     return new Set(props.rowFormulas.map(f => f.targetColumn))
   })
 
+  /**
+   * True when this composite key is explicitly READONLY in task-node field permissions. No entry
+   * for this binding at all (the common case for Function Units that never configured sub-table
+   * field permissions) → false, preserving full backward compatibility.
+   */
+  function isFieldPermissionReadonly(col: DialogColumn): boolean {
+    if (!props.fieldPermissions || props.bindingId == null) return false
+    const permission = props.fieldPermissions[`${props.bindingId}:${col.field}`]
+    return permission != null && String(permission).toUpperCase() === 'READONLY'
+  }
+
   function isColDisabled(col: DialogColumn): boolean {
-    return col.readonly === true || calculatedColumns.value.has(col.field) || isAuditField(col.field)
+    return col.readonly === true
+      || calculatedColumns.value.has(col.field)
+      || isAuditField(col.field)
+      || isFieldPermissionReadonly(col)
   }
 
   // Watch dependent column values and recompute target columns.

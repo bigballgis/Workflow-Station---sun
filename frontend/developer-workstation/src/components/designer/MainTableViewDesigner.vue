@@ -12,7 +12,7 @@ const emit = defineEmits<{
 const {
   t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, Filter, CaretTop, CaretBottom, Connection, Key,
   columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig,
-  enableExport, restrictToInvolvedUsers, selectedBusinessUnitIds, selectedRoleIds,
+  enableExport, restrictToInvolvedUsers, detailFormId, detailFormOptions, selectedBusinessUnitIds, selectedRoleIds,
   businessUnitOptions, roleOptions, accessOptionsLoading,
   mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
   dragOverIndex, dragSourceField, visibleColumns, displayFilterConditions,
@@ -601,6 +601,29 @@ const {
             </el-checkbox>
 
           </div>
+
+        </div>
+
+
+
+        <div class="properties-section">
+
+          <label class="section-label">{{ t('mainTableView.detailForm') }}</label>
+
+          <el-select
+            v-model="detailFormId"
+            clearable
+            filterable
+            :placeholder="t('mainTableView.detailFormNone')"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="f in detailFormOptions"
+              :key="f.id"
+              :label="f.formName"
+              :value="f.id"
+            />
+          </el-select>
 
         </div>
 

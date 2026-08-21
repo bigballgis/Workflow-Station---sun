@@ -46,6 +46,7 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     private final ProcessBpmnValidator bpmnValidator;
     private final ProcessSimulationHelper simulationHelper;
     private final ProcessDebugProbeRunner debugProbeRunner;
+    private final ProcessBpmnFormStageBindingSync formStageBindingSync;
 
     @Autowired
     public ProcessDesignComponentImpl(
@@ -54,20 +55,24 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
             ProcessBpmnStaleIdFixer staleIdFixer,
             ProcessBpmnValidator bpmnValidator,
             ProcessSimulationHelper simulationHelper,
-            ProcessDebugProbeRunner debugProbeRunner) {
+            ProcessDebugProbeRunner debugProbeRunner,
+            ProcessBpmnFormStageBindingSync formStageBindingSync) {
         this.processDefinitionRepository = processDefinitionRepository;
         this.functionUnitRepository = functionUnitRepository;
         this.staleIdFixer = staleIdFixer;
         this.bpmnValidator = bpmnValidator;
         this.simulationHelper = simulationHelper;
         this.debugProbeRunner = debugProbeRunner;
+        this.formStageBindingSync = formStageBindingSync;
     }
 
     /**
      * Backward-compatible constructor for existing unit/property tests.
      *
      * <p>仅注入 4 个仓库；缺失的调试依赖（FormTableBinding/Action 仓库、JdbcTemplate、ObjectMapper）
-     * 以 null 占位，与拆分前的行为一致（仅调试场景使用，校验/解析/模拟不受影响）。</p>
+     * 以 null 占位，与拆分前的行为一致（仅调试场景使用，校验/解析/模拟不受影响）。
+     * {@code formStageBindingSync} 同样以 null 占位——依赖 {@code FormStageBindingRepository}，
+     * 该仓库在这个精简构造器里没有对应入参；{@code save()} 对 null 直接跳过同步，不影响其余行为。</p>
      */
     public ProcessDesignComponentImpl(
             ProcessDefinitionRepository processDefinitionRepository,
@@ -80,7 +85,8 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
                 new ProcessBpmnStaleIdFixer(tableDefinitionRepository, formDefinitionRepository, null),
                 new ProcessBpmnValidator(tableDefinitionRepository, formDefinitionRepository, testI18nService()),
                 new ProcessSimulationHelper(tableDefinitionRepository),
-                new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null));
+                new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null),
+                null);
     }
 
     /**
@@ -139,7 +145,21 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
         String encodedXml = XmlEncodingUtil.encode(bpmnXml);
         processDefinition.setBpmnXml(encodedXml);
 
-        return processDefinitionRepository.save(processDefinition);
+        ProcessDefinition saved = processDefinitionRepository.save(processDefinition);
+
+        // Keep dw_form_stage_bindings in sync with whatever the Bind Process Node dialog just
+        // wrote into the BPMN extension properties — that dialog only ever touches the XML, and
+        // this table is the only thing user-portal's runtime Task Form resolution reads.
+        if (formStageBindingSync != null) {
+            try {
+                formStageBindingSync.sync(functionUnitId, bpmnXml);
+            } catch (RuntimeException e) {
+                log.warn("Form-stage-binding sync failed for functionUnitId={}: {}",
+                        functionUnitId, e.getMessage());
+            }
+        }
+
+        return saved;
     }
 
     @Override

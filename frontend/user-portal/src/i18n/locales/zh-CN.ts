@@ -103,7 +103,16 @@ export default {
     settings: '个人设置',
     relationTables: '关联表',
     relationTableGroup: '关联表',
-    views: '视图'
+    allFunctionUnits: '全部功能单元',
+    commonTables: '公共',
+    views: '视图',
+    audit: '全部申请',
+    auditLoadFailed: '无法加载您有审计权的功能单元。',
+    sectionTask: '任务',
+    sectionRequest: '申请',
+    sectionAudit: '审计',
+    sectionData: '数据',
+    sectionSetup: '设置'
   },
   mainTableView: {
     openRelatedRecord: '打开关联记录',
@@ -115,6 +124,11 @@ export default {
     defaultTag: '默认',
     functionUnits: '功能单元',
     noPublishedFu: '暂无已发布且配置了视图的功能单元',
+    detailTitle: '记录详情',
+    noDetailForm: '该视图未配置详情表单。',
+    noDetailPage: '该视图没有详情页。',
+    rowNotFound: '无法加载该条记录。',
+    rowNotAddressable: '该行没有可用标识，无法打开。',
     selectFuAndView: '请选择功能单元和视图',
     loadFuFailed: '加载功能单元失败',
     loadDataFailed: '加载视图数据失败',
@@ -496,6 +510,13 @@ export default {
     hoursAgo: '{n}小时前',
     daysAgo: '{n}天前'
   },
+  audit: {
+    title: '审计',
+    initiator: '发起人',
+    noRequests: '该功能单元下暂无申请。',
+    noAccess: '无审计权限',
+    noAccessHint: '您没有该功能单元的审计权限。请联系管理员为您的角色授予该功能单元的审计权。',
+  },
   application: {
     title: '我的请求',
     processTitle: '流程标题',
@@ -519,6 +540,8 @@ export default {
     continueFilling: '继续填写',
     noDrafts: '暂无草稿',
     noApplications: '暂无申请记录',
+    noSceneForm: '未配置此场景的表单设计。',
+    noSceneFormHint: '请在开发者工作台为「我的申请」场景设计一份表单。',
     loadFailed: '加载申请列表失败',
     loadDraftsFailed: '加载草稿列表失败',
     deleteDraftConfirm: '确定要删除该草稿吗？',

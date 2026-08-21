@@ -1,12 +1,16 @@
 package com.portal.controller;
 
+import com.portal.component.ActionFormPopupSubmitComponent;
+import com.portal.component.ActionTableReadComponent;
 import com.portal.component.TaskFormComponent;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
 import com.platform.common.dto.ApiResponse;
+import com.portal.dto.ActionTableRowsDTO;
 import com.portal.dto.TaskInfo;
 import com.portal.security.CurrentUserId;
 import com.platform.security.util.SecurityContextUtils;
+import com.portal.dto.ActionFormPopupSubmitRequest;
 import com.portal.dto.CompletedTaskFormData;
 import com.portal.dto.TaskFormData;
 import com.portal.dto.TaskFormSubmitRequest;
@@ -20,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,6 +41,8 @@ public class TaskFormController {
     private final TaskFormComponent taskFormComponent;
     private final TaskQueryComponent taskQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
+    private final ActionFormPopupSubmitComponent actionFormPopupSubmitComponent;
+    private final ActionTableReadComponent actionTableReadComponent;
 
     @GetMapping("/{taskId}/form-data")
     @Operation(summary = "获取 Task Form 布局 + 当前流程变量值（字段子集）")
@@ -72,6 +79,33 @@ public class TaskFormController {
         }
         taskFormComponent.submitTaskForm(taskId, userId, formData, request.getBaselineValues());
         return ApiResponse.success(null);
+    }
+
+    @PostMapping("/{taskId}/actions/{actionId}/form-popup-submit")
+    @Operation(summary = "提交 FORM_POPUP 动作表单数据（写入其绑定的 ACTION 表）")
+    public ApiResponse<Void> submitActionFormPopup(
+            @PathVariable String taskId,
+            @PathVariable String actionId,
+            @CurrentUserId String userId,
+            @Valid @RequestBody ActionFormPopupSubmitRequest request) {
+        log.debug("POST /tasks/{}/actions/{}/form-popup-submit by user {}", taskId, actionId, userId);
+        TaskInfo task = requireTaskFormAccess(taskId, userId);
+        if (!taskProcessComponent.canProcessTask(task, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null))) {
+            throw new PortalException("403", "You do not have permission to submit this action form");
+        }
+        actionFormPopupSubmitComponent.submit(task, actionId, request.getFormData(), userId);
+        return ApiResponse.success(null);
+    }
+
+    @GetMapping("/{taskId}/action-table-rows")
+    @Operation(summary = "获取当前请求下所有已挂载 ACTION 表绑定的只读行数据（如 Meeting Remark 历史记录）")
+    public ApiResponse<List<ActionTableRowsDTO>> getActionTableRows(
+            @PathVariable String taskId,
+            @CurrentUserId String userId) {
+        log.debug("GET /tasks/{}/action-table-rows", taskId);
+        TaskInfo task = requireTaskFormAccess(taskId, userId);
+        return ApiResponse.success(actionTableReadComponent.getActionTableRows(task));
     }
 
     @GetMapping("/{taskId}/completed-form")

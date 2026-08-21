@@ -309,6 +309,68 @@ class ChangeHistorySubmissionFilterTest {
     }
 
     @Test
+    void compositeKeyFieldPermissionDropsOnlyThatSubTableFieldNotSameNamedMainTableField() {
+        // "name" is READONLY only for sub-table binding "participants" (composite key);
+        // the main-table's own bare "name" field must stay editable — this is exactly the
+        // collision the composite-key format exists to prevent.
+        Map<String, Object> form = Map.of(
+                "configJson", Map.of(
+                        "rule", List.of(rule("name", false)),
+                        "subForms", Map.of("participants", Map.of("rule", List.of(
+                                rule("name", false), rule("notes", false))))),
+                "fieldPermissions", Map.of("participants:name", "READONLY"));
+        Map<String, Object> submitted = Map.of(
+                "name", "Main Table Name",
+                "__subTables__", Map.of("participants", List.of(Map.of(
+                        "id", "ROW-1", "name", "Participant Name", "notes", "hello"))));
+        Map<String, Object> actual = filter.retainUserEditableSubmission(submitted, submitted, form);
+        assertThat(actual).containsEntry("name", "Main Table Name");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> tables = (Map<String, Object>) actual.get("__subTables__");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) tables.get("participants");
+        assertThat(rows).containsExactly(Map.of("id", "ROW-1", "notes", "hello"));
+        assertThat(rows.get(0)).doesNotContainKey("name");
+    }
+
+    @Test
+    void resolveSubFormFieldPermissionsByBindingReturnsOnlyReadonlyCompositeKeys() {
+        // Deny-list: EDITABLE composite keys carry no restriction and are excluded from the
+        // result — only explicit READONLY entries are returned, keyed by bindingId. A field never
+        // mentioned at all (e.g. "assignee" here) is editable by default and never appears either.
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        ChangeHistorySubmissionFilter resolverFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
+                new ObjectMapper());
+        when(jdbcTemplate.queryForList(anyString(), eq("process-9"), eq("participants-stage")))
+                .thenReturn(List.of(Map.of(
+                        "form_id", "70001",
+                        "config_json", "{}",
+                        "field_permissions",
+                        "{\"bu_code\":\"READONLY\",\"50544:bu_code\":\"READONLY\",\"50544:name\":\"EDITABLE\"}",
+                        "read_only", false)));
+        Map<String, java.util.Set<String>> result = resolverFilter
+                .resolveSubFormFieldPermissionsByBinding("process-9", "participants-stage");
+        assertThat(result).containsOnlyKeys("50544");
+        assertThat(result.get("50544")).containsExactly("bu_code");
+    }
+
+    @Test
+    void resolveSubFormFieldPermissionsByBindingIsEmptyWhenNoCompositeKeysConfigured() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        ChangeHistorySubmissionFilter resolverFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
+                new ObjectMapper());
+        when(jdbcTemplate.queryForList(anyString(), eq("process-9"), eq("participants-stage")))
+                .thenReturn(List.of(Map.of(
+                        "form_id", "70001",
+                        "config_json", "{}",
+                        "field_permissions", "{\"name\":\"READONLY\"}",
+                        "read_only", false)));
+        Map<String, java.util.Set<String>> result = resolverFilter
+                .resolveSubFormFieldPermissionsByBinding("process-9", "participants-stage");
+        assertThat(result).isEmpty();
+    }
+
+    @Test
     void sameRowIdentifierInDifferentTablesIsNotDeduplicated() {
         Map<String, List<Map<String, Object>>> normalized = ChangeHistoryComponent
                 .normalizeSubTableRowsByHistoryName(Map.of(

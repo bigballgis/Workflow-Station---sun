@@ -121,21 +121,6 @@
                 v-if="isEdited(note)"
                 class="rn-edited"
               >{{ t('recordNote.edited') }}</span>
-              <span class="rn-item-actions">
-                <el-button
-                  v-if="note.noteType === 'COMMENT' && note.editable && allowEditOwn && canWrite"
-                  size="small"
-                  link
-                  @click="startEdit(note)"
-                >{{ t('recordNote.edit') }}</el-button>
-                <el-button
-                  v-if="note.editable && canWrite && allowDelete"
-                  size="small"
-                  link
-                  type="danger"
-                  @click="removeNote(note)"
-                >{{ t('recordNote.delete') }}</el-button>
-              </span>
             </div>
             <div
               v-if="note.subject"
@@ -202,7 +187,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, provide, reactive, ref, shallowRef, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { formContextKey } from 'element-plus'
 import type { UploadFile, UploadUserFile } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -214,13 +199,10 @@ import '@wangeditor/editor/dist/css/style.css'
 i18nChangeLanguage('en')
 import {
   createRecordNote,
-  deleteRecordNote,
   downloadRecordNoteAttachment,
   fetchRecordNoteBlobUrl,
-  getRecordNoteDetail,
   listRecordNotes,
   recordNoteContentUrl,
-  updateRecordNote,
   uploadInlineImage,
   type RecordNoteItem,
   type RecordNoteTargetParams,
@@ -232,9 +214,6 @@ export interface RecordNoteConfig {
   panelTitle?: string
   allowAttachment?: boolean
   maxFileSizeMb?: number
-  allowEditOwn?: boolean
-  /** Designer switch, default OFF: notes are an audit trail, so deletion is opt-in. */
-  allowDelete?: boolean
   pageSize?: number
 }
 
@@ -262,10 +241,6 @@ const scope = computed(() => (props.config?.scope === 'TABLE' ? 'TABLE' : 'RECOR
 const compact = computed(() => scope.value === 'RECORD')
 const panelTitle = computed(() => props.config?.panelTitle || t('recordNote.defaultTitle'))
 const allowAttachment = computed(() => props.config?.allowAttachment !== false)
-const allowEditOwn = computed(() => props.config?.allowEditOwn !== false)
-// Opt-in, unlike every other switch here: a note is a record of what was said, so the
-// designer must explicitly enable removal (absent config => no Delete button).
-const allowDelete = computed(() => props.config?.allowDelete === true)
 const pageSize = computed(() => Math.max(1, Number(props.config?.pageSize) || 5))
 const maxFileBytes = computed(() => Math.min(Number(props.config?.maxFileSizeMb) || 10, 10) * 1024 * 1024)
 
@@ -383,7 +358,6 @@ onBeforeUnmount(() => {
 // ---- editor state ----
 const showEditor = ref(false)
 const editorHtml = ref('')
-const editingNoteId = ref<string | null>(null)
 const submitting = ref(false)
 const inlineImageIds = ref<string[]>([])
 const pickedFiles = ref<File[]>([])
@@ -426,22 +400,7 @@ function onEditorCreated(editor: any) {
 }
 
 function openEditor() {
-  editingNoteId.value = null
   editorHtml.value = ''
-  inlineImageIds.value = []
-  pickedFiles.value = []
-  uploadList.value = []
-  showEditor.value = true
-}
-
-async function startEdit(note: RecordNoteItem) {
-  let body = note.bodyHtml
-  if (!body) {
-    const detail = await getRecordNoteDetail(note.id, props.processInstanceId ?? null)
-    body = detail?.bodyHtml || ''
-  }
-  editingNoteId.value = note.id
-  editorHtml.value = body || ''
   inlineImageIds.value = []
   pickedFiles.value = []
   uploadList.value = []
@@ -450,7 +409,6 @@ async function startEdit(note: RecordNoteItem) {
 
 function closeEditor() {
   showEditor.value = false
-  editingNoteId.value = null
   editorHtml.value = ''
   pickedFiles.value = []
   uploadList.value = []
@@ -491,20 +449,12 @@ async function submit() {
   }
   submitting.value = true
   try {
-    if (editingNoteId.value) {
-      await updateRecordNote(editingNoteId.value, {
-        bodyHtml: html,
-        processInstanceId: props.processInstanceId ?? null,
-      })
-      delete displayHtml[editingNoteId.value]
-    } else {
-      await createRecordNote(target.value, {
-        bodyHtml: html || undefined,
-        inlineImageIds: inlineImageIds.value,
-        files: allowAttachment.value ? pickedFiles.value : [],
-        processInstanceId: props.processInstanceId ?? null,
-      })
-    }
+    await createRecordNote(target.value, {
+      bodyHtml: html || undefined,
+      inlineImageIds: inlineImageIds.value,
+      files: allowAttachment.value ? pickedFiles.value : [],
+      processInstanceId: props.processInstanceId ?? null,
+    })
     closeEditor()
     notifyRecordNoteChanged(props.processInstanceId ?? null)
     await load(true)
@@ -512,21 +462,6 @@ async function submit() {
     /* surfaced by interceptor */
   } finally {
     submitting.value = false
-  }
-}
-
-async function removeNote(note: RecordNoteItem) {
-  try {
-    await ElMessageBox.confirm(t('recordNote.deleteConfirm'), { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await deleteRecordNote(note.id, props.processInstanceId ?? null)
-    notifyRecordNoteChanged(props.processInstanceId ?? null)
-    await load(true)
-  } catch {
-    /* surfaced by interceptor */
   }
 }
 

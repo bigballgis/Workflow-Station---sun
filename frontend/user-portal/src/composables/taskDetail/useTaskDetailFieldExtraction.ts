@@ -1,6 +1,5 @@
 import type { FormField } from '@/components/FormRenderer.vue'
 import {
-  normalizePortalViews,
   isFormCreateRuleReadonly,
   applyDesignerHideFlagToFormField,
   isRowRule,
@@ -74,23 +73,35 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
     for (const item of items) {
       const bindingId = item._bindingId ?? item.props?._bindingId
       if (item.type === 'subTable' && bindingId != null) {
-        const rawPv = item.props?.portalViews
-        const hasWidgetPortalViews =
-          rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
         const subTableField: FormField = {
           key: `__subTable_${bindingId}`,
           label: '',
           type: 'subTable',
           _bindingId: Number(bindingId),
-          ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
           // 子表逐操作权限：仅显式 false 才下发（undefined 由 SubTableField 回退 editable）
           ...(item.props?.allowAdd === false ? { allowAdd: false } : {}),
           ...(item.props?.allowEdit === false ? { allowEdit: false } : {}),
           ...(item.props?.allowDelete === false ? { allowDelete: false } : {}),
+          // Summary presentation designed on the canvas; only forwarded when
+          // switched on, so unset behaves exactly as before.
+          ...(item.props?.compactCells === true ? { compactCells: true } : {}),
           span: 24
         }
         applyDesignerHideFlagToFormField(subTableField, item)
         fields.push(subTableField)
+        continue
+      }
+      // Inline Form: the bound SUB table's form laid out in place (no grid, no dialog).
+      if (item.type === 'inlineSubForm' && bindingId != null) {
+        const inlineSubFormField: FormField = {
+          key: `__inlineSubForm_${bindingId}`,
+          label: '',
+          type: 'inlineSubForm',
+          _bindingId: Number(bindingId),
+          span: 24
+        }
+        applyDesignerHideFlagToFormField(inlineSubFormField, item)
+        fields.push(inlineSubFormField)
         continue
       }
       const auxField = convertAuxiliaryLayoutField(item, fields.length)

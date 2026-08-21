@@ -7,13 +7,11 @@
  *
  * - formRendererTypes:            interfaces / type aliases (FormField, portalViews, configJson)
  * - formRendererFieldUtils:       readonly/hidden flags + leaf-field flattening
- * - formRendererPortalViews:      sub-table portal display resolution / merge
  * - formRendererRuleParsing:      form-create rule → FormField layout parsing
  * - formRendererSubTableBindings: sub-table binding collection / merge / filter
  */
 
 export * from './formRendererTypes'
 export * from './formRendererFieldUtils'
-export * from './formRendererPortalViews'
 export * from './formRendererRuleParsing'
 export * from './formRendererSubTableBindings'

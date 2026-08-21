@@ -7,6 +7,7 @@ import com.admin.entity.RelationTableDefinition;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.service.RelationTableAuditService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.enums.RelationDataType;
@@ -44,6 +45,7 @@ class RelationTableStatusBugConditionTest {
     @Mock private RelationTableDefinitionRepository tableDefinitionRepository;
     @Mock private RelationFieldDefinitionRepository fieldDefinitionRepository;
     @Mock private RelationTableVersionRepository versionRepository;
+    @Mock private FunctionUnitRepository functionUnitRepository;
     @Mock private RelationTableAuditService auditService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private ObjectMapper objectMapper;
@@ -53,9 +55,9 @@ class RelationTableStatusBugConditionTest {
     @BeforeEach
     void setUp() {
         structureService = new RelationTableStructureServiceImpl(
-                tableDefinitionRepository, fieldDefinitionRepository, jdbcTemplate);
+                tableDefinitionRepository, fieldDefinitionRepository, functionUnitRepository, jdbcTemplate);
         dataService = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, auditService,
+                tableDefinitionRepository, versionRepository, functionUnitRepository, auditService,
                 org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class),
                 org.mockito.Mockito.mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
                 jdbcTemplate, objectMapper);

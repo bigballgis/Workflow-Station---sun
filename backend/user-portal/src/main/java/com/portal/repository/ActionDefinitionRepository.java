@@ -46,4 +46,17 @@ public interface ActionDefinitionRepository extends JpaRepository<ActionDefiniti
             "FROM dw_action_definitions d " +
             "WHERE CAST(d.id AS VARCHAR) IN :ids", nativeQuery = true)
     List<ActionDefinition> findFromDwByIds(@Param("ids") List<String> ids);
+
+    /**
+     * 单个 dw_action_definitions 按 id 查找，供 FORM_POPUP 提交等按 actionId 直接定位配置的场景使用。
+     */
+    @Query(value = "SELECT CAST(d.id AS VARCHAR) AS id, " +
+            "CAST(d.function_unit_id AS VARCHAR) AS function_unit_id, " +
+            "d.action_name, d.action_type, d.display_name AS description, d.config_json, " +
+            "d.icon, d.button_color, d.is_default, " +
+            "d.created_at, d.updated_at, " +
+            "NULL AS created_by, NULL AS updated_by " +
+            "FROM dw_action_definitions d " +
+            "WHERE CAST(d.id AS VARCHAR) = :id", nativeQuery = true)
+    java.util.Optional<ActionDefinition> findFromDwById(@Param("id") String id);
 }

@@ -51,6 +51,13 @@ public class RelationTableDataController {
         return ResponseEntity.ok(tables);
     }
 
+    @GetMapping("/function-units")
+    @Operation(summary = "Get Function Unit groups for deployed tables",
+            description = "Distinct Function Units referenced by deployed Relation Tables, with table counts (for the nav sidebar)")
+    public ResponseEntity<List<com.admin.dto.response.FunctionUnitTableGroupResponse>> getFunctionUnitGroups() {
+        return ResponseEntity.ok(dataService.getDeployedTableFunctionUnitGroups());
+    }
+
     // ==================== Table Data CRUD ====================
 
     @GetMapping("/{tableId}/export")

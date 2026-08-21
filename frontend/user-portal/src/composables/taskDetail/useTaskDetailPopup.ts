@@ -42,7 +42,25 @@ export function createTaskDetailPopupHelpers(ctx: TaskDetailCtx) {
    */
   const preparePopupContext = (formContent: any, formConfig: Record<string, unknown>): PreparedFormPopupContext | null => {
     const cfg = formConfig as Record<string, any>
-    const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
+
+    // ACTION-type forms (e.g. FORM_POPUP "Meeting Remark") design their real fields on the
+    // ACTION binding's own canvas (configJson.subForms[bindingId].rule), the same place a SUB
+    // binding's canvas lives — the top-level cfg.rule stays bound to the form's PRIMARY table
+    // and is not what the designer actually authored for this popup. Prefer the ACTION binding's
+    // rule when present; fall back to cfg.rule for legacy ACTION forms saved before this existed.
+    let rules: any[] | null = null
+    if (formContent?.formType === 'ACTION') {
+      const actionBinding = ((formContent as any).tableBindings || []).find(
+        (b: any) => b.bindingType === 'ACTION',
+      )
+      const actionRule = actionBinding ? cfg.subForms?.[actionBinding.bindingId]?.rule : null
+      if (Array.isArray(actionRule) && actionRule.length > 0) {
+        rules = actionRule
+      }
+    }
+    if (!rules) {
+      rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
+    }
     if (!rules) return null
 
     const popupTabs: FormTab[] = []
@@ -66,7 +84,6 @@ export function createTaskDetailPopupHelpers(ctx: TaskDetailCtx) {
     }
 
     const subForms = cfg.subForms || {}
-    const subTablePortalViewsCfg = cfg.subTablePortalViews || {}
     const tableBindings: any[] = (formContent as any).tableBindings || []
     const popupBindings: typeof subTableBindings.value = []
     const nativeIds: number[] = []
@@ -74,8 +91,6 @@ export function createTaskDetailPopupHelpers(ctx: TaskDetailCtx) {
       if (b.bindingType === 'PRIMARY') continue
       const cols = ctx.deriveColumnsFromBinding(b, subForms, cfg)
       const subFormDesign = ctx.resolveSubFormDesign(b, subForms)
-      const bindingPortalViews =
-        subTablePortalViewsCfg[b.bindingId] ?? subTablePortalViewsCfg[String(b.bindingId)] ?? null
       popupBindings.push({
         bindingId: b.bindingId,
         tableId: b.tableId ?? null,
@@ -90,7 +105,6 @@ export function createTaskDetailPopupHelpers(ctx: TaskDetailCtx) {
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
         assignmentConfig: b.assignmentConfig,
-        portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(b.primaryKeyFields, b.bindingId, cfg),
         data: [],
       })

@@ -4,7 +4,7 @@
 import { ref, computed, type Ref } from 'vue'
 import type { CascaderValue } from 'element-plus'
 import { notifySuccess, notifyError } from '@/utils/notify'
-import { functionUnitApi, type FunctionUnitAccess } from '@/api/functionUnit'
+import { functionUnitApi, type FunctionUnitAccess, type FunctionUnitAuditAccess } from '@/api/functionUnit'
 import { roleApi, type Role } from '@/api/role'
 import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
 import { formatDate as fmtDate, roleTypeDisplayLabel, roleTagType } from '@/utils/format'
@@ -12,6 +12,9 @@ import { formatDate as fmtDate, roleTypeDisplayLabel, roleTagType } from '@/util
 export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefined>) {
   const loading = ref(false)
   const accessList = ref<FunctionUnitAccess[]>([])
+  /** Which grant the dialog is showing: launch access, or audit (review) access. */
+  const grantTab = ref<'access' | 'audit'>('access')
+  const auditAccessList = ref<FunctionUnitAuditAccess[]>([])
   const allRoles = ref<Role[]>([])
   const rolesLoading = ref(false)
   const allRolesMap = computed(() => { const m = new Map<string, Role>(); allRoles.value.forEach(r => m.set(r.id, r)); return m })
@@ -28,7 +31,13 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
 
   const buCascaderProps = { value: 'id', label: 'name', children: 'children', checkStrictly: true, emitPath: false }
 
-  const assignedIds = computed(() => new Set(accessList.value.map(a => a.targetId || a.roleId)))
+  const currentGrantList = computed<Array<FunctionUnitAccess | FunctionUnitAuditAccess>>(
+    () => (grantTab.value === 'audit' ? auditAccessList.value : accessList.value)
+  )
+
+  // Scoped to the active tab on purpose: the two grants are independent, so a role
+  // already holding launch access must still be offerable for audit access.
+  const assignedIds = computed(() => new Set(currentGrantList.value.map(a => a.targetId || a.roleId)))
   const availableSystemRoles = computed(() => allRoles.value.filter(r => r.status === 'ACTIVE' && r.type !== 'BU_BOUNDED' && !assignedIds.value.has(r.id)))
   const availableBuRoles = computed(() => buRoles.value.filter(r => !assignedIds.value.has(r.id)))
 
@@ -44,7 +53,14 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
   const fetchAccessConfig = async () => {
     if (!functionUnitId.value) return
     loading.value = true
-    try { accessList.value = await functionUnitApi.getAccessConfigs(functionUnitId.value) }
+    try {
+      const [access, audit] = await Promise.all([
+        functionUnitApi.getAccessConfigs(functionUnitId.value),
+        functionUnitApi.getAuditAccessConfigs(functionUnitId.value),
+      ])
+      accessList.value = access
+      auditAccessList.value = audit
+    }
     catch { /* silent */ } finally { loading.value = false }
   }
 
@@ -89,32 +105,49 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
     finally { buRolesLoading.value = false }
   }
 
+  /** Grants go to whichever list the dialog is currently showing. */
+  const addGrant = (roleId: string) => (
+    grantTab.value === 'audit'
+      ? functionUnitApi.addAuditAccessConfig(functionUnitId.value!, { roleId })
+      : functionUnitApi.addAccessConfig(functionUnitId.value!, { roleId })
+  )
+
   const handleAddRole = async () => {
     if (!functionUnitId.value) return
+    const addedLabel = grantTab.value === 'audit' ? 'Audit access added' : 'Access added'
     if (addRoleTab.value === 'system') {
       const ids = selectedSystemRoleIds.value.filter(id => !assignedIds.value.has(id))
       if (!ids.length) return
       addLoading.value = true
-      try { await Promise.all(ids.map(id => functionUnitApi.addAccessConfig(functionUnitId.value!, { roleId: id }))); notifySuccess(`Added ${ids.length} role(s)`); showAddRole.value = false; await fetchAccessConfig() }
+      try { await Promise.all(ids.map(id => addGrant(id))); notifySuccess(`Added ${ids.length} role(s)`); showAddRole.value = false; await fetchAccessConfig() }
       catch (e) { notifyError((e as any)?.response?.data?.error?.message || (e as any)?.response?.data?.message || 'Failed') }
       finally { addLoading.value = false }
     } else {
       const roleId = selectedBuRoleId.value
       if (!roleId) return
       addLoading.value = true
-      try { await functionUnitApi.addAccessConfig(functionUnitId.value, { roleId }); notifySuccess('Access added'); showAddRole.value = false; await fetchAccessConfig() }
+      try { await addGrant(roleId); notifySuccess(addedLabel); showAddRole.value = false; await fetchAccessConfig() }
       catch (e) { notifyError((e as any)?.response?.data?.error?.message || (e as any)?.response?.data?.message || 'Failed') }
       finally { addLoading.value = false }
     }
   }
 
-  const handleRemove = async (access: FunctionUnitAccess) => {
+  const handleRemove = async (access: FunctionUnitAccess | FunctionUnitAuditAccess) => {
     if (!functionUnitId.value) return
-    try { await functionUnitApi.removeAccessConfig(functionUnitId.value, access.id); notifySuccess('Access removed'); await fetchAccessConfig() }
+    try {
+      if (grantTab.value === 'audit') {
+        await functionUnitApi.removeAuditAccessConfig(functionUnitId.value, access.id)
+        notifySuccess('Audit access removed')
+      } else {
+        await functionUnitApi.removeAccessConfig(functionUnitId.value, access.id)
+        notifySuccess('Access removed')
+      }
+      await fetchAccessConfig()
+    }
     catch { /* silent */ }
   }
 
-  return { loading, accessList, allRoles, rolesLoading, allRolesMap,
+  return { loading, accessList, auditAccessList, grantTab, currentGrantList, allRoles, rolesLoading, allRolesMap,
     showAddRole, addLoading, addRoleTab, selectedSystemRoleIds, selectedBuId, selectedBuRoleId,
     buCascaderOptions, buRoles, buRolesLoading, buCascaderProps,
     assignedIds, availableSystemRoles, availableBuRoles,

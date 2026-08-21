@@ -41,15 +41,27 @@ export function parseProcessNodesFromBpmnXml(bpmnXml: string, types: string[]): 
 
 /**
  * 更新BPMN XML中多个节点的表单绑定，返回新的 XML 字符串。
- * 先从所有节点移除此表单的绑定属性（formId/formName/formReadOnly），
- * 再为选中节点写入新的绑定。
+ * 先从所有节点移除此表单的绑定属性，再为选中节点写入新的绑定。
+ *
+ * <p>场景（scene）决定写哪一组属性：TASK 写 formId/formName/formReadOnly，
+ * REQUEST 写 requestFormId/requestFormName。两组并存，因此同一节点可以同时挂
+ * To Do 与 My Requests 两份设计，互不覆盖。
  */
 export function buildUpdatedBpmnFormBindingsXml(
   bpmnXml: string,
   formId: number,
   formName: string,
-  nodes: BpmnBoundNode[]
+  nodes: BpmnBoundNode[],
+  scene: 'TASK' | 'REQUEST' = 'TASK'
 ): string {
+  const isRequestScene = scene === 'REQUEST'
+  const idPropName = isRequestScene ? 'requestFormId' : 'formId'
+  const namePropName = isRequestScene ? 'requestFormName' : 'formName'
+  // Only the To Do binding carries a read-only flag; the My Requests design is
+  // read-only by definition.
+  const ownedPropNames = isRequestScene
+    ? ['requestFormId', 'requestFormName']
+    : ['formId', 'formName', 'formReadOnly']
   console.log('[FormDesigner] updateBpmnFormBindings called with:', { formId, formName, nodesCount: nodes.length, nodes })
 
   const parser = new DOMParser()
@@ -91,9 +103,9 @@ export function buildUpdatedBpmnFormBindingsXml(
         const value = prop.getAttribute('value')
         console.log(`[FormDesigner] Found property/values in task ${taskId}: name=${name}, value=${value}, nodeName=${prop.nodeName}, localName=${localName}`)
 
-        if (name === 'formId' && value === String(formId)) {
+        if (name === idPropName && value === String(formId)) {
           formIdProps.push(prop)
-          console.log(`[FormDesigner] ✓ Matched formId property in task ${taskId}: name=${name}, value=${value}`)
+          console.log(`[FormDesigner] ✓ Matched ${idPropName} property in task ${taskId}: name=${name}, value=${value}`)
         }
       }
     }
@@ -139,7 +151,7 @@ export function buildUpdatedBpmnFormBindingsXml(
           // 检查是否是 property 或 values 元素
           if (propLocalName === 'property' || propLocalName === 'values') {
             const name = prop.getAttribute('name')
-            if (name && ['formId', 'formName', 'formReadOnly'].includes(name)) {
+            if (name && ownedPropNames.includes(name)) {
               // 检查这个 property/values 是否在当前 properties 元素下（直接或间接）
               let parent: Element | null = prop.parentElement as Element
               while (parent && parent !== properties) {
@@ -247,39 +259,37 @@ export function buildUpdatedBpmnFormBindingsXml(
     const existingFormId = existingProps.find(p => {
       const localName = p.localName || p.nodeName.split(':').pop()
       if (localName === 'property') {
-        return p.getAttribute('name') === 'formId' && p.getAttribute('value') === String(formId)
+        return p.getAttribute('name') === idPropName && p.getAttribute('value') === String(formId)
       }
       return false
     })
 
     if (existingFormId) {
-      // 移除现有的 formId, formName, formReadOnly
+      // 只移除本场景拥有的属性，另一场景的绑定保持不动
       const propsToRemove = existingProps.filter(p => {
         const localName = p.localName || p.nodeName.split(':').pop()
         if (localName === 'property') {
           const name = p.getAttribute('name')
-          return name && ['formId', 'formName', 'formReadOnly'].includes(name)
+          return name && ownedPropNames.includes(name)
         }
         return false
       })
       propsToRemove.forEach(p => p.remove())
     }
 
-    // 添加formId
     const customNamespace = 'http://custom.bpmn.io/schema'
     const formIdProp = xmlDoc.createElementNS(customNamespace, 'property')
-    formIdProp.setAttribute('name', 'formId')
+    formIdProp.setAttribute('name', idPropName)
     formIdProp.setAttribute('value', String(formId))
     properties.appendChild(formIdProp)
 
-    // 添加formName
     const formNameProp = xmlDoc.createElementNS(customNamespace, 'property')
-    formNameProp.setAttribute('name', 'formName')
+    formNameProp.setAttribute('name', namePropName)
     formNameProp.setAttribute('value', formName)
     properties.appendChild(formNameProp)
 
-    // 如果是只读，添加formReadOnly
-    if (node.readOnly) {
+    // My Requests designs are read-only by definition, so the flag is To Do only.
+    if (!isRequestScene && node.readOnly) {
       const readOnlyProp = xmlDoc.createElementNS(customNamespace, 'property')
       readOnlyProp.setAttribute('name', 'formReadOnly')
       readOnlyProp.setAttribute('value', 'true')

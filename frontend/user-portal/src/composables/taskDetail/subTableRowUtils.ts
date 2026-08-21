@@ -10,6 +10,40 @@ export function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
 }
 
+/**
+ * Whole-form readonly lock from `TaskFormData.fieldPermissions` — true only when EVERY field
+ * actually on the MAIN TABLE canvas (per `configJson.rule`) is explicitly READONLY.
+ *
+ * A field with no `fieldPermissions` entry at all defaults to editable (same default the
+ * backend submit-time filter uses) — so an unconfigured field, not just an explicit EDITABLE
+ * one, is enough to keep the whole form open. Checking only the *configured subset* (as an
+ * earlier version of this function did) is wrong: a form with one READONLY field and four
+ * entirely unconfigured (implicitly editable) fields would otherwise look "100% READONLY" and
+ * incorrectly lock everything.
+ *
+ * Composite `${bindingId}:${fieldName}` sub-table keys never count toward this check — a form
+ * whose only configured permissions are sub-table field permissions (main-table fields
+ * unconfigured) must not lock the whole form. `mainTableRule` (not just the configured-keys
+ * subset) is also needed to filter out foreign/stale bare keys: `mergeTaskPermissionsForFields`
+ * could (before a same-session fix) write a SUB-table field's auto-PK/FK-readonly permission
+ * under its own bare field name (e.g. a sub-table's `id_idw`/`main_id`) into this same flat
+ * map, colliding with the main-table namespace.
+ */
+export function isWholeFormLockedByFieldPermissions(
+  fieldPermissions: Record<string, unknown> | null | undefined,
+  mainTableRule?: unknown,
+): boolean {
+  if (!fieldPermissions) return false
+  const mainTableFieldNames = (Array.isArray(mainTableRule) ? mainTableRule : [])
+    .map(r => (r && typeof r === 'object' ? (r as Record<string, unknown>).field : undefined))
+    .filter((f): f is string => typeof f === 'string' && f.length > 0)
+  if (mainTableFieldNames.length === 0) return false
+  return mainTableFieldNames.every(field => {
+    const permission = fieldPermissions[field]
+    return permission != null && String(permission).toUpperCase() === 'READONLY'
+  })
+}
+
 /** Same form / node may place multiple sub-tables backed by identical relation-table metadata — never resolve {@code __subTables__} by display/physical/tableId keys then (everyone steals the same slice). */
 export function bindingIdsPreferStrictSubTableLookup(
   bindings: Array<{ bindingId: number; tableId?: number | null; tableName: string; physicalTableName?: string }>,

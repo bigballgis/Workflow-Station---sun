@@ -63,6 +63,21 @@ public class RelationTableDTO implements Serializable {
     private Integer currentVersion;
 
     /**
+     * Optional Function Unit grouping (sys_function_units.id); null = ungrouped.
+     */
+    private String functionUnitId;
+
+    /**
+     * Function Unit code, resolved for display; null = ungrouped.
+     */
+    private String functionUnitCode;
+
+    /**
+     * Function Unit name, resolved for display; null = ungrouped.
+     */
+    private String functionUnitName;
+
+    /**
      * Field definitions of this table
      */
     private List<RelationFieldDTO> fieldDefinitions;

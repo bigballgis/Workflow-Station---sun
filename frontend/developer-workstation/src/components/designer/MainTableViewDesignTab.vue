@@ -140,10 +140,6 @@ async function handleSeedDefaults() {
 }
 
 async function handleDeleteView(view: MainTableViewDefinition) {
-  if (view.isDefault) {
-    ElMessage.warning(t('mainTableView.cannotDeleteDefault'))
-    return
-  }
   try {
     await ElMessageBox.confirm(
       t('mainTableView.deleteConfirm', { name: view.viewName }),
@@ -230,26 +226,33 @@ onMounted(async () => {
             v-show="!navCollapsed"
             class="view-groups"
           >
-            <div
-              v-for="group in viewGroups"
-              :key="group.table.id"
-              class="view-group"
+            <!--
+              Single shared el-menu across all table groups. Element Plus computes
+              each el-menu's active-index state in its own instance scope on mount —
+              nesting one el-menu PER table group meant clicking a view in a different
+              group never deactivated the previously-selected group's menu (stale
+              highlight) and could route @select to a stale/mismatched instance.
+              One el-menu = one source of truth for active-item + click routing.
+            -->
+            <el-menu
+              :default-active="selectedViewId ? String(selectedViewId) : ''"
+              @select="(idx: string) => { selectedViewId = Number(idx) }"
             >
-              <div class="view-group-header">
-                <span class="view-group-title">{{ tableLabel(group.table) }}</span>
-                <el-button
-                  type="primary"
-                  size="small"
-                  link
-                  :icon="Plus"
-                  :title="t('mainTableView.createView')"
-                  @click="handleAddView(group.table)"
-                />
-              </div>
-              <el-menu
-                :default-active="selectedViewId ? String(selectedViewId) : ''"
-                @select="(idx: string) => { selectedViewId = Number(idx) }"
+              <template
+                v-for="group in viewGroups"
+                :key="group.table.id"
               >
+                <div class="view-group-header">
+                  <span class="view-group-title">{{ tableLabel(group.table) }}</span>
+                  <el-button
+                    type="primary"
+                    size="small"
+                    link
+                    :icon="Plus"
+                    :title="t('mainTableView.createView')"
+                    @click="handleAddView(group.table)"
+                  />
+                </div>
                 <el-menu-item
                   v-for="view in group.views"
                   :key="view.id"
@@ -265,7 +268,6 @@ onMounted(async () => {
                       {{ t('mainTableView.defaultTag') }}
                     </el-tag>
                     <el-button
-                      v-if="!view.isDefault"
                       type="danger"
                       size="small"
                       link
@@ -274,8 +276,8 @@ onMounted(async () => {
                     />
                   </div>
                 </el-menu-item>
-              </el-menu>
-            </div>
+              </template>
+            </el-menu>
           </div>
         </div>
 

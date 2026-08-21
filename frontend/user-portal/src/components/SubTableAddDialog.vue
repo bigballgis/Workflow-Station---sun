@@ -608,6 +608,8 @@
         :primary-table-display-name="hostPrimaryTableDisplayName"
         :sub-table-bindings-for-context="hostSubTableBindingsForContext"
         :linked-sub-table-bindings="hostLinkedSubTableBindings"
+        :binding-id="nested.bindingId"
+        :field-permissions="fieldPermissions"
         @update:model-value="(nestedRows: unknown[]) => onNestedRowsUpdate(nested, nestedRows)"
         @update:parent-row="onNestedParentRowPatch"
       />
@@ -766,6 +768,14 @@ const props = defineProps<{
   recordNoteFunctionUnitId?: string | number | null
   /** This sub-table's PK fields — resolve the edited row's stable id for RECORD scope. */
   primaryKeyFields?: string[]
+  /** This dialog's own hosting binding id — resolves this binding's `${bindingId}:${fieldName}` entries in fieldPermissions. */
+  bindingId?: number | null
+  /**
+   * Task-node field permissions. Gates this dialog's own top-level columns (via isColDisabled in
+   * useSubTableDialogForm) AND is forwarded to nested sub-tables-in-sub-tables so their fields get
+   * the same enforcement.
+   */
+  fieldPermissions?: Record<string, string> | null
 }>()
 
 const emit = defineEmits<{

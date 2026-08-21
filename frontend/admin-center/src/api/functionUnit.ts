@@ -143,6 +143,24 @@ export interface FunctionUnitAccess {
   createdBy: string
 }
 
+/**
+ * 审计授权 —— 允许某角色查看该功能单元下的全部申请，
+ * 不含发起权（与 FunctionUnitAccess 分表存储）。
+ */
+export interface FunctionUnitAuditAccess {
+  id: string
+  functionUnitId: string
+  functionUnitName: string
+  targetType: string
+  targetId: string
+  targetName?: string
+  targetCode?: string
+  roleId: string
+  roleName: string
+  createdAt: string
+  createdBy: string
+}
+
 // 访问权限请求（简化后只需要角色ID）
 export interface FunctionUnitAccessRequest {
   roleId: string
@@ -181,6 +199,10 @@ export const functionUnitApi = {
   // 获取已归档的功能单元列表
   listArchived: (page = 0, size = 20) =>
     get<PageResult<FunctionUnit>>('/function-units/archived', { params: { page, size } }),
+
+  // 获取已部署的功能单元列表（按 code 去重取最新版本，供选择下拉使用）
+  listDeployedLatest: async () =>
+    unwrapApiData<FunctionUnit[]>(await get<unknown>('/function-units/deployed/latest')),
 
   // 根据ID获取功能单元
   getById: (id: string) =>
@@ -337,6 +359,22 @@ export const functionUnitApi = {
   // 检查用户访问权限
   checkUserAccess: (id: string, userId: string) =>
     get<boolean>(`/function-units/${id}/access/check`, { params: { userId } }),
+
+  // ==================== 审计授权 API ====================
+  // 与上面的访问权限分开：审计授权只让持有者查看该功能单元下的全部申请，
+  // 不赋予任何发起能力。
+
+  // 获取审计授权列表
+  getAuditAccessConfigs: (id: string) =>
+    get<FunctionUnitAuditAccess[]>(`/function-units/${id}/audit-access`),
+
+  // 添加审计授权
+  addAuditAccessConfig: (id: string, data: FunctionUnitAccessRequest) =>
+    post<FunctionUnitAuditAccess>(`/function-units/${id}/audit-access`, data),
+
+  // 删除审计授权
+  removeAuditAccessConfig: (id: string, accessId: string) =>
+    del<void>(`/function-units/${id}/audit-access/${accessId}`),
 
   // ==================== 批量操作 API (Req 20) ====================
 

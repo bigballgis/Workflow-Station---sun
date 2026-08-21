@@ -9,15 +9,40 @@ const FORM_TYPE_SORT_ORDER: Record<FormType, number> = {
   PROCESS: 0,
   TASK: 1,
   ACTION: 2,
+  DETAIL: 3,
 }
 
-/** Sort forms for Form Design list: Process → Task → Action, then by name. */
+/** Sort forms for Form Design list: Process → Task → Action → Detail, then by name. */
 export function sortFormsByType(forms: FormDefinition[]): FormDefinition[] {
   return [...forms].sort((a, b) => {
     const typeDiff = FORM_TYPE_SORT_ORDER[a.formType] - FORM_TYPE_SORT_ORDER[b.formType]
     if (typeDiff !== 0) return typeDiff
     return a.formName.localeCompare(b.formName, undefined, { sensitivity: 'base' })
   })
+}
+
+/**
+ * Which table a form renders. Single source of truth for every "group / filter forms by table"
+ * caller, so the Views Form grouping and the View Design detail-form picker can never disagree
+ * about where a form belongs.
+ *
+ * <p>Resolution order mirrors {@code useTableFieldRules.getPrimaryBindingFieldDefinitions}:
+ * the PRIMARY binding, then the legacy {@code boundTableId}, and finally a lone binding of any
+ * type — older forms exist whose only binding is not marked PRIMARY.
+ */
+export function resolveFormTableId(form: {
+  tableBindings?: Array<{ bindingType?: string; tableId?: number | null }> | null
+  boundTableId?: number | null
+} | null | undefined): number | null {
+  if (!form) return null
+  const bindings = form.tableBindings ?? []
+  const primary = bindings.find(
+    b => String(b?.bindingType ?? '').toUpperCase() === 'PRIMARY',
+  )
+  if (primary?.tableId != null) return primary.tableId
+  if (form.boundTableId != null) return form.boundTableId
+  if (bindings.length === 1 && bindings[0]?.tableId != null) return bindings[0].tableId
+  return null
 }
 
 /**
@@ -237,13 +262,40 @@ export function flattenRuleLayoutContainers(rules: any[]): any[] {
 }
 
 /**
- * Recursively collect all subTable-type rules from a rule tree.
+ * Rule types that carry a SUB binding in `_bindingId`. Both must clear the same save-time
+ * guards (binding selected + binding is of type SUB) and both need the top-level
+ * `_bindingId` copied back into props for preview surfaces.
+ */
+export const SUB_BINDING_RULE_TYPES = new Set(['subTable', 'inlineSubForm'])
+
+/**
+ * MVP boundary enforcement for the Inline Form (`inlineSubForm`) widget: it may only be dropped
+ * onto the main-form canvas, never into a SUB table's own Form Design canvas. Every fc-designer
+ * instance (main + each sub-binding tab) shares the same designerConfig/component registration,
+ * so nothing else stops a designer from placing it inside a sub-designer, where it can construct
+ * an indirect self-reference cycle (binding A embeds an Inline Form pointing at B, whose own form
+ * embeds one pointing back at A) that the runtime's visited-bindingId guard does not fully cover
+ * either — see docs/design/inline-sub-form-component.md §关键约束 3.
+ *
+ * @param draggedRuleName the drag-rule name being dropped (fc-designer's `checkDrag` `menu.name`)
+ * @param activeDesignerTabName the currently active designer tab ('main' or a binding id string)
+ */
+export function isInlineSubFormDropAllowed(
+  draggedRuleName: string | undefined,
+  activeDesignerTabName: string,
+): boolean {
+  if (draggedRuleName !== 'inlineSubForm') return true
+  return activeDesignerTabName === 'main'
+}
+
+/**
+ * Recursively collect all rules that bind a SUB table (subTable / inlineSubForm) from a rule tree.
  */
 export function collectSubTableRules(items: any[]): any[] {
   const result: any[] = []
   for (const item of items || []) {
     if (!item) continue
-    if (item.type === 'subTable') result.push(item)
+    if (SUB_BINDING_RULE_TYPES.has(item.type)) result.push(item)
     const children = getRuleChildren(item)
     if (children.length) result.push(...collectSubTableRules(children))
   }
@@ -268,9 +320,9 @@ export function collectRecordNoteScopes(items: any[]): string[] {
 }
 
 /**
- * Copy top-level `_bindingId` into `props._bindingId` on every subTable rule (non-mutating).
+ * Copy top-level `_bindingId` into `props._bindingId` on every SUB-binding rule (non-mutating).
  * Persisted rules keep `_bindingId` only at top level (the drag rule's parseRule strips the
- * props copy on save), but SubTablePlaceholderWidget reads props — so preview surfaces that
+ * props copy on save), but the placeholder widgets read props — so preview surfaces that
  * feed saved rules straight into form-create must run this or nested placeholders render
  * as "unconfigured".
  */
@@ -287,7 +339,7 @@ export function withSubTableBindingIdInProps(items: any[]): any[] {
     visited.add(item)
 
     let next = item
-    if (item.type === 'subTable' && item._bindingId != null && item.props?._bindingId == null) {
+    if (SUB_BINDING_RULE_TYPES.has(item.type) && item._bindingId != null && item.props?._bindingId == null) {
       next = { ...item, props: { ...(item.props || {}), _bindingId: item._bindingId } }
     }
     const children = getRuleChildren(next)

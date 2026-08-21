@@ -1,6 +1,7 @@
 package com.portal.controller;
 
 import com.portal.component.FunctionUnitAccessComponent;
+import com.portal.component.FunctionUnitAuditScopeComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
@@ -36,6 +37,7 @@ public class ProcessController {
     private final ProcessComponent processComponent;
     private final I18nService i18nService;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
+    private final FunctionUnitAuditScopeComponent functionUnitAuditScopeComponent;
     private final com.portal.component.PortalPrimaryKeyAllocationComponent portalPrimaryKeyAllocationComponent;
     private final TaskQueryComponent taskQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
@@ -141,7 +143,34 @@ public class ProcessController {
         if (taskGrantsFunctionUnitContentAccess(userId, functionUnitIdOrCode, taskId)) {
             return;
         }
+        if (auditGrantsFunctionUnitContentAccess(userId, functionUnitIdOrCode)) {
+            return;
+        }
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
+    }
+
+    /**
+     * Audit-scoped grant for FU content: reviewers are not in the unit's start-access
+     * roles, but without BPMN + form content their request pages render blank.
+     * Narrow by design — the grant is checked against this exact unit, and the
+     * disabled gate still applies, mirroring the task-scoped bypass above.
+     */
+    private boolean auditGrantsFunctionUnitContentAccess(String userId, String functionUnitIdOrCode) {
+        try {
+            if (!functionUnitAccessComponent.canAuditFunctionUnit(userId, functionUnitIdOrCode)) {
+                return false;
+            }
+            functionUnitAccessComponent.requireEnabledFunctionUnit(userId, functionUnitIdOrCode);
+            log.info("Granting function unit {} content access to user {} via audit grant",
+                    functionUnitIdOrCode, userId);
+            return true;
+        } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Audit-based function unit content access check failed ({}): {}",
+                    functionUnitIdOrCode, e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -271,6 +300,44 @@ public class ProcessController {
         return ApiResponse.success(PageResponse.of(result));
     }
 
+    @GetMapping("/audit-function-units")
+    @Operation(summary = "获取当前用户有审计权的功能单元列表")
+    public ApiResponse<List<AuditFunctionUnitItem>> getAuditFunctionUnits(@CurrentUserId String userId) {
+        // Empty is the normal answer for most users — the portal hides the audit
+        // menu on an empty list, so this must not throw.
+        if (userId == null || userId.isBlank()) {
+            return ApiResponse.success(List.of());
+        }
+        return ApiResponse.success(functionUnitAuditScopeComponent.listAuditableFunctionUnits(userId));
+    }
+
+    @GetMapping("/fu-applications")
+    @Operation(summary = "获取某功能单元下的全部申请（需审计权）")
+    public ApiResponse<PageResponse<ProcessInstanceInfo>> getFunctionUnitApplications(
+            @CurrentUserId String userId,
+            @RequestParam String functionUnitCode,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (userId == null || userId.isBlank()) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
+                    "Please login first before reviewing requests");
+        }
+        if (functionUnitCode == null || functionUnitCode.isBlank()) {
+            return ApiResponse.error("400", "functionUnitCode is required");
+        }
+        // The grant is per function unit: holding one elsewhere must not open this one.
+        if (!functionUnitAuditScopeComponent.canAudit(userId, functionUnitCode)) {
+            log.warn("User {} attempted to review function unit {} without an audit grant", userId, functionUnitCode);
+            return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
+        }
+        int safePage = Math.max(0, page);
+        int safeSize = size < 1 ? 20 : Math.min(size, 100);
+        Page<ProcessInstanceInfo> result = processComponent.getFunctionUnitApplications(
+                functionUnitCode, status, PageRequest.of(safePage, safeSize));
+        return ApiResponse.success(PageResponse.of(result));
+    }
+
     @GetMapping("/{processId}")
     @Operation(summary = "获取流程详情")
     public ApiResponse<ProcessInstanceInfo> getProcessDetail(
@@ -281,7 +348,7 @@ public class ProcessController {
                     "Please login first before viewing process details");
         }
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
-        if (detail != null && !processComponent.canAccessProcessDetail(userId, detail)) {
+        if (detail != null && !processComponent.canAuditProcessDetail(userId, detail)) {
             log.warn("User {} attempted to access process {} without detail access", userId, processId);
             return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
         }
@@ -393,7 +460,7 @@ public class ProcessController {
                     "Please login first before viewing process history");
         }
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
-        if (detail != null && !processComponent.canAccessProcessDetail(userId, detail)) {
+        if (detail != null && !processComponent.canAuditProcessDetail(userId, detail)) {
             log.warn("User {} attempted to access process history {} without detail access", userId, processId);
             return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
         }

@@ -49,6 +49,7 @@ class ProcessApplicationQueryComponentCompletionReconcileTest {
                 requestIdEnricher,
                 mainTableViewInvolvementChecker,
                 mainTableViewAccessResolver,
+                org.mockito.Mockito.mock(FunctionUnitAccessComponent.class),
                 jdbcTemplate);
     }
 

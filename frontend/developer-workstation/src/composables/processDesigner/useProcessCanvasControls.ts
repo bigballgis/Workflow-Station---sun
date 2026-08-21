@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { fitDiagramWithPadding } from './fitDiagramWithPadding'
 
 interface UseProcessCanvasControlsOptions {
   /** Accessor for the live bpmn-js modeler instance (avoids holding a stale reference). */
@@ -34,8 +35,7 @@ export function useProcessCanvasControls(options: UseProcessCanvasControlsOption
   function handleFitViewport() {
     const bpmnModeler = getModeler()
     if (!bpmnModeler) return
-    const canvas = bpmnModeler.get('canvas')
-    canvas.zoom('fit-viewport')
+    fitDiagramWithPadding(bpmnModeler)
     currentZoom.value = 1
   }
 

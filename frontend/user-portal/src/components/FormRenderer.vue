@@ -79,7 +79,8 @@ import {
 } from '@/utils/formCreateComponentEvents'
 import { useSubTableBindings, type SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
 import { useSubTablePortalViews } from '@/composables/formRenderer/useSubTablePortalViews'
-import { useInlineSubTableForm } from '@/composables/formRenderer/useInlineSubTableForm'
+import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
+import { getSavedSubTableRows } from '@/composables/tasks/shared'
 import { useBusinessLogicEngine } from '@/composables/formRenderer/useBusinessLogicEngine'
 import { useFormCreateEvents } from '@/composables/formRenderer/useFormCreateEvents'
 import { useFormData } from '@/composables/formRenderer/useFormData'
@@ -162,6 +163,12 @@ interface Props {
   formOptions?: Record<string, unknown> | null
   /** Raw form-create rule tree (for per-component on/_hook events). Falls back to formConfig.rule. */
   formCreateRules?: unknown[] | null
+  /**
+   * Task-node field permissions (`TaskFormData.fieldPermissions`). Main-table fields use a bare
+   * field-name key; sub-table fields use a composite `${bindingId}:${fieldName}` key. Absent
+   * entries default to editable — this only narrows fields explicitly marked READONLY.
+   */
+  fieldPermissions?: Record<string, string> | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -292,27 +299,11 @@ const {
 } = subTableBindingsApi
 
 const portalViewsApi = useSubTablePortalViews({
-  viewContext: () => props.viewContext,
-  nativeSubTableBindingIds: () => props.nativeSubTableBindingIds,
-  formConfig: () => props.formConfig,
-  readonly: () => props.readonly,
   resolveBinding,
-  linkableSubTableBindings,
-  isBindingModeEditable,
 })
 const {
-  subTableMode,
-  shouldRenderPlacedSubTableField,
   subTableCompactLookupCells,
-  linkFormScrollToInlineEnabled,
-  setSubTableInlineAnchor,
-  scrollSubTableInlineIntoView,
-  subTableShowTaskStatusInitiator,
-  subTableShowViewDetailInitiator,
-  resolveInlineFormSourceBinding,
-  inlineSubTableFormReadonly,
-  resolveInlineFormTableTitle,
-  resolveInlineFormFields,
+  subTableShowTaskStatus,
 } = portalViewsApi
 
 // ---------------------------------------------------------------------------
@@ -441,27 +432,31 @@ const {
 } = formDataApi
 
 // ---------------------------------------------------------------------------
-// Composable — inline sub-table form (MI row picking / update)
+// Composable — Inline Form widget (`inlineSubForm`): sub-table form rendered in place
 // ---------------------------------------------------------------------------
-const inlineFormApi = useInlineSubTableForm({
-  currentMiRowId: () => props.currentMiRowId,
-  suppressLinkFormInitialData: () => props.suppressLinkFormInitialData,
-  previewSubTables: () => props.previewSubTables,
-  modelValue: () => props.modelValue,
-  effectiveReadonly,
-  linkableSubTableBindings,
-  resolveBinding,
-  resolveInlineFormSourceBinding,
-  resolveInlineFormFields,
-  handleSubTableUpdate,
-  emitSave: () => emit('save'),
-})
 const {
-  getCurrentRowForInlineForm,
-  handleInlineFormUpdate,
-  handleInlineFormSave,
-  setInlineFormSelectedRow,
-} = inlineFormApi
+  resolveInlineSubFormFields,
+  resolveInlineSubFormRow,
+  resolveInlineSubFormTitle,
+  inlineSubFormReadonly,
+  handleInlineSubFormUpdate,
+} = useInlineSubFormComponent({
+  // Matches useSubTableBindings' isSubTableEditable: whole-form readonly (props.readonly) wins,
+  // but primaryReadOnly (the PRIMARY table's own bindingMode) must NOT bleed into a sub-table's
+  // editability — see inlineSubFormReadonly's own doc comment, which this wiring previously
+  // contradicted by using effectiveReadonly (readonly || primaryReadOnly) instead.
+  readonly: () => props.readonly,
+  resolveBinding,
+  isBindingModeEditable,
+  getSavedRowsForBinding: (binding) => {
+    const st = props.modelValue?.__subTables__
+    if (!st || typeof st !== 'object') return undefined
+    return getSavedSubTableRows(st as Record<string, unknown>, binding)
+  },
+  handleSubTableUpdate,
+  fieldPermissions: () => props.fieldPermissions,
+  currentMiRowId: () => props.currentMiRowId,
+})
 
 // ---------------------------------------------------------------------------
 // Composable — validation (Task 7.3)
@@ -507,7 +502,7 @@ watchThrottled(
       emit('update:modelValue', { ...newVal })
     }
   },
-  { throttle: 150 },
+  { throttle: 150, deep: true },
 )
 
 // Watch modelValue changes — use JSON fingerprint instead of deep watch
@@ -546,6 +541,7 @@ watch(
 // same reactivity behavior (refs auto-unwrap inside reactive() provide).
 const {
   labelWidth: propLabelWidth,
+  labelPosition: propLabelPosition,
   uploadUrl: propUploadUrl,
   taskId: propTaskId,
   viewContext: propViewContext,
@@ -556,12 +552,14 @@ const {
   subTablePollingInterval: propSubTablePollingInterval,
   suppressLinkFormInitialData: propSuppressLinkFormInitialData,
   showLinkFormDialogFooter: propShowLinkFormDialogFooter,
+  fieldPermissions: propFieldPermissions,
 } = toRefs(props)
 
 provide(FORM_RENDERER_FIELDS_CTX, reactive({
   formData,
   readonly: effectiveReadonly,
   labelWidth: propLabelWidth,
+  labelPosition: propLabelPosition,
   uploadUrl: propUploadUrl,
   taskId: propTaskId,
   viewContext: propViewContext,
@@ -588,32 +586,26 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   userSearchResults,
   isFieldReadonly,
   resolveBinding,
-  shouldRenderPlacedSubTableField,
   isSubTableEditable,
+  fieldPermissions: propFieldPermissions,
   getSubFormRowFormulas,
   getSummaryColumns,
   getSummaryAggregations,
   getSubTableValidation,
   subTableAssigneeField,
   showSubTableAssignColumn,
-  linkFormScrollToInlineEnabled,
-  subTableShowTaskStatusInitiator,
-  subTableShowViewDetailInitiator,
+  subTableShowTaskStatus,
   subTableCompactLookupCells,
-  subTableMode,
-  resolveInlineFormTableTitle,
-  resolveInlineFormFields,
-  getCurrentRowForInlineForm,
-  inlineSubTableFormReadonly,
+  // Inline Form widget (`inlineSubForm`)
+  resolveInlineSubFormFields,
+  resolveInlineSubFormRow,
+  resolveInlineSubFormTitle,
+  inlineSubFormReadonly,
+  handleInlineSubFormUpdate,
   lookupShowBackfillView,
   lookupFilterConditionsFor,
   handleSubTableUpdate,
   handlePrimaryFormDataPatch,
-  handleInlineFormSave,
-  handleInlineFormUpdate,
-  setInlineFormSelectedRow,
-  scrollSubTableInlineIntoView,
-  setSubTableInlineAnchor,
   handleLookupSelect,
   handleLookupModelUpdate,
   handleLookupClear,

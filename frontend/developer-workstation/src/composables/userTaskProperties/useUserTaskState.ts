@@ -83,6 +83,12 @@ export function useUserTaskState(
   // Form binding
   const formId = ref<number | null>(null)
   const forms = ref<FormDefinition[]>([])
+  // The My Requests design bound to this node (requestFormId / requestFormName ext props).
+  // Editable on both the regular and MI sub-task panels via useUserTaskActions.handleRequestFormChange,
+  // in addition to Form Design > My Requests > row menu > Bound Node — both paths write the
+  // same BPMN fields.
+  const requestFormId = ref<number | null>(null)
+  const requestFormName = ref('')
 
   // Action binding
   const actionIds = ref<number[]>([])
@@ -150,6 +156,8 @@ export function useUserTaskState(
     loadingRoles,
     formId,
     forms,
+    requestFormId,
+    requestFormName,
     actionIds,
     actions,
     timeoutEnabled,

@@ -3,6 +3,7 @@ package com.developer.controller;
 import com.platform.common.dto.ApiResponse;
 import com.developer.dto.MainTableViewDtos.CreateMainTableViewRequest;
 import com.developer.dto.MainTableViewDtos.MainTableViewDTO;
+import com.developer.dto.MainTableViewDtos.UpdateMainTableViewDetailFormRequest;
 import com.developer.dto.MainTableViewDtos.UpdateMainTableViewRequest;
 import com.developer.security.RequireDeveloperPermission;
 import com.developer.service.MainTableViewService;
@@ -64,6 +65,17 @@ public class MainTableViewController {
             @PathVariable Long viewId,
             @Valid @RequestBody UpdateMainTableViewRequest request) {
         return ResponseEntity.ok(ApiResponse.success(mainTableViewService.updateView(functionUnitId, viewId, request)));
+    }
+
+    @PatchMapping("/{viewId}/detail-form")
+    @Operation(summary = "Set only the DETAIL form opened when a row of this view is clicked")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<MainTableViewDTO>> updateDetailForm(
+            @PathVariable Long functionUnitId,
+            @PathVariable Long viewId,
+            @RequestBody UpdateMainTableViewDetailFormRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                mainTableViewService.updateViewDetailForm(functionUnitId, viewId, request.detailFormId())));
     }
 
     @DeleteMapping("/{viewId}")

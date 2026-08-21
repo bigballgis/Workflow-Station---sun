@@ -19,7 +19,7 @@ public class TableBindingDTO {
     private Long bindingId;
     /** Physical or relation-bound table id (dw_table_definitions.id for SUB/PRIMARY). */
     private Long tableId;
-    private String bindingType;    // "PRIMARY", "SUB", "RELATED"
+    private String bindingType;    // "PRIMARY", "SUB", "RELATED", "ACTION"
     private String bindingMode;    // "EDITABLE", "READONLY"
     /** When bindingType is SUB: FULL (default) or FORM_ONLY (inline / link-form detail only, not standalone list). */
     private String subMode;

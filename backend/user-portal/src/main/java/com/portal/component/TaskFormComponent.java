@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.audit.SystemAuditFields;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.*;
 import com.portal.entity.ProcessInstance;
@@ -142,6 +143,24 @@ public class TaskFormComponent {
 
     private ProcessSubTablePrimaryKeyEnricherComponent subTablePrimaryKeyEnricher() {
         return processSubTablePrimaryKeyEnricherComponent;
+    }
+
+    /**
+     * Lazy: MI (multi-instance) sub-task row-level save isolation — merges only the current
+     * sub-task's own {@code __subTables__} row into the persisted baseline instead of replacing
+     * the whole shared array. See {@link MiSubTaskSubTableRowMerger}.
+     */
+    @Lazy
+    @Autowired
+    private MiSubTaskSubTableRowMerger miSubTaskSubTableRowMerger;
+
+    private MiSubTaskSubTableRowMerger miSubTaskSubTableRowMerger() {
+        MiSubTaskSubTableRowMerger m = miSubTaskSubTableRowMerger;
+        if (m == null) {
+            m = new MiSubTaskSubTableRowMerger(jdbcTemplate);
+            miSubTaskSubTableRowMerger = m;
+        }
+        return m;
     }
 
     private ChangeHistorySubmissionFilter changeHistorySubmissionFilter() {
@@ -440,12 +459,27 @@ public class TaskFormComponent {
                     }
                 }
             });
+            filterSubTableFieldsInPlace(editableData, taskInfo.processInstanceId, taskInfo.taskDefinitionKey);
         }
 
         Map<String, Object> userChanges = changeHistorySubmissionFilter().filterTaskSubmission(
                 taskInfo.processInstanceId, taskInfo.taskDefinitionKey, submittedSnapshot, editableData);
         AtomicReference<Map<String, Object>> snapshotOldVarsRef = new AtomicReference<>();
         AtomicReference<Set<String>> concurrentFieldsRef = new AtomicReference<>(Set.of());
+
+        // MI (multi-instance) sub-task detection: presence of the BPMN _currentItem/currentItem
+        // loop variable in the submitted form data means this task owns exactly one row of a
+        // shared __subTables__ collection. Resolved once, outside the transaction, since it only
+        // depends on the submitted payload — not on the process instance's persisted state.
+        // An MI submission whose row key can't be resolved fails outright, before any DB access,
+        // rather than silently falling back to a whole-array replace that could overwrite other
+        // participants' data.
+        Map<String, Object> resolvedMiCurrentRowKey = null;
+        if (editableData.containsKey("__subTables__") && miSubTaskSubTableRowMerger().isMiSubTaskSubmission(formData)) {
+            resolvedMiCurrentRowKey = miSubTaskSubTableRowMerger().resolveCurrentItemRowKey(formData);
+            miSubTaskSubTableRowMerger().requireResolvedRowKey(resolvedMiCurrentRowKey);
+        }
+        final Map<String, Object> miCurrentRowKey = resolvedMiCurrentRowKey;
 
         taskFormWriteTx().executeWithoutResult(status -> {
             ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
@@ -469,6 +503,20 @@ public class TaskFormComponent {
             Map<String, Object> inbound = new HashMap<>(editableData);
             // Defense in depth: strip even if filterEditableFields missed a case variant.
             SystemAuditFieldFiller.stripClientAuditKeys(inbound);
+
+            if (miCurrentRowKey != null) {
+                // Row-level isolation: merge only this MI sub-task's own row into whatever is
+                // already persisted for every __subTables__ alias key, so another participant's
+                // sub-task saving concurrently (or earlier) never gets its data overwritten by
+                // this submission's necessarily-thin view of sibling rows.
+                @SuppressWarnings("unchecked")
+                Map<String, Object> submittedSubTables = (Map<String, Object>) inbound.get("__subTables__");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> baselineSubTables = (Map<String, Object>) currentVariables.get("__subTables__");
+                inbound.put("__subTables__",
+                        miSubTaskSubTableRowMerger().mergeCurrentRowOnly(submittedSubTables, baselineSubTables, miCurrentRowKey));
+            }
+
             updatedVariables.putAll(inbound);
 
             // System audit fields: refresh updated_at/updated_by at real update
@@ -530,6 +578,64 @@ public class TaskFormComponent {
             }
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
+        }
+    }
+
+    /**
+     * Enforces sub-table field-level permissions (composite {@code bindingId:field} keys, see
+     * {@code FormDefinition.fieldPermissions}) on {@code editableData.get("__subTables__")},
+     * in place, on the numeric-bindingId-keyed slice only.
+     *
+     * <p>The portal frontend submits every sub-table under several key aliases pointing at the
+     * same row array (numeric bindingId, table name, normalized name — see
+     * {@code useTaskForm.ts buildSubTableSubmitPayload}). Only the numeric-bindingId alias is
+     * resolvable here without an extra DB round trip, so only it is filtered; other aliases of a
+     * gated binding are left as submitted, unchanged from the pre-existing behavior (this method
+     * only narrows the previously fully-unfiltered numeric-keyed entry — it does not widen any
+     * other key's exposure). Bindings with no composite-key permission configured are untouched,
+     * preserving full backward compatibility for unconfigured Function Units.
+     */
+    @SuppressWarnings("unchecked")
+    private void filterSubTableFieldsInPlace(Map<String, Object> editableData,
+            String processInstanceId, String stageId) {
+        Object subTablesObj = editableData.get("__subTables__");
+        if (!(subTablesObj instanceof Map)) {
+            return;
+        }
+        Map<String, Set<String>> readonlyFieldsByBinding = changeHistorySubmissionFilter()
+                .resolveSubFormFieldPermissionsByBinding(processInstanceId, stageId);
+        if (readonlyFieldsByBinding.isEmpty()) {
+            return;
+        }
+        Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+        for (Map.Entry<String, Set<String>> gated : readonlyFieldsByBinding.entrySet()) {
+            String bindingId = gated.getKey();
+            Set<String> readonlyFields = gated.getValue();
+            if (readonlyFields.isEmpty()) {
+                continue;
+            }
+            Object rowsObj = subTables.get(bindingId);
+            if (!(rowsObj instanceof List)) {
+                continue;
+            }
+            List<Object> filteredRows = new ArrayList<>();
+            for (Object rowObj : (List<?>) rowsObj) {
+                if (!(rowObj instanceof Map)) {
+                    filteredRows.add(rowObj);
+                    continue;
+                }
+                Map<String, Object> row = (Map<String, Object>) rowObj;
+                Map<String, Object> filteredRow = new HashMap<>();
+                for (Map.Entry<String, Object> field : row.entrySet()) {
+                    if (!readonlyFields.contains(field.getKey())
+                            || ChangeHistorySubmissionFilter.ROW_IDENTITY_FIELDS.contains(field.getKey())
+                            || SystemAuditFields.isAuditField(field.getKey())) {
+                        filteredRow.put(field.getKey(), field.getValue());
+                    }
+                }
+                filteredRows.add(filteredRow);
+            }
+            subTables.put(bindingId, filteredRows);
         }
     }
 
@@ -744,6 +850,15 @@ public class TaskFormComponent {
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
             Map<String, String> fieldPermissions) {
         return fieldMapper().filterEditableFields(formData, fieldPermissions);
+    }
+
+    /**
+     * Enforces sub-table field-level permissions on {@code editableData.get("__subTables__")},
+     * in place. See {@link #filterSubTableFieldsInPlace(Map, String, String)}.
+     */
+    public void filterSubTableFieldsForTesting(Map<String, Object> editableData,
+            String processInstanceId, String stageId) {
+        filterSubTableFieldsInPlace(editableData, processInstanceId, stageId);
     }
 
     /**

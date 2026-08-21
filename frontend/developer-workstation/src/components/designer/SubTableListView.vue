@@ -146,7 +146,7 @@
         </div>
 
         <!-- Column headers + mock row: single preview, or dual To Do / My Requests -->
-        <template v-if="viewColumns.length > 0 && !dualPortalListPreview">
+        <template v-if="viewColumns.length > 0">
           <div class="column-headers">
             <div
               v-for="(column, index) in viewColumns"
@@ -209,117 +209,6 @@
           </div>
         </template>
 
-        <div
-          v-else-if="viewColumns.length > 0 && dualPortalListPreview"
-          class="dual-portal-split"
-        >
-          <div
-            v-for="pane in dualPreviewPanes"
-            :key="pane.key"
-            class="portal-preview-pane"
-          >
-            <div class="portal-preview-pane-title">
-              {{ pane.title }}
-            </div>
-            <div class="column-headers">
-              <div
-                v-for="(column, index) in viewColumns"
-                :key="getColumnKey(column) + '-' + pane.key"
-                class="column-header"
-                :class="{ 'drag-over': dragOverIndex === index, 'link-column': isLinkColumn(column) }"
-                draggable="true"
-                @dragstart="onColDragStart($event, index)"
-                @dragover.prevent="onColDragOver($event, index)"
-                @dragleave="onColDragLeave"
-                @drop.stop="onColDrop($event, index)"
-                @dragend="onColDragEnd"
-              >
-                <span class="col-name">{{ getColumnLabel(column) }}</span>
-                <span class="col-actions">
-                  <el-icon
-                    v-if="isConfigurableActionColumn(column)"
-                    class="col-edit"
-                    @click.stop="openActionColumnConfig(column, index)"
-                  ><EditPen /></el-icon>
-                  <el-icon
-                    class="col-remove"
-                    @click.stop="removeField(index)"
-                  ><Close /></el-icon>
-                </span>
-              </div>
-            </div>
-            <div class="data-row">
-              <div
-                v-for="column in viewColumns"
-                :key="getColumnKey(column) + '-' + pane.key + '-cell'"
-                class="data-cell"
-              >
-                <el-link
-                  v-if="isLinkColumn(column)"
-                  type="primary"
-                  :underline="false"
-                  @click.stop="openLinkFormDialog(column)"
-                >
-                  {{ getLinkText(column) }}
-                </el-link>
-                <LookupPreview
-                  v-else-if="isLookupColumn(column)"
-                  class="list-view-lookup-preview"
-                  :label="''"
-                  :model-value="lookupMockRow[column.fieldName]"
-                  :placeholder="getLookupPreviewConfig(column).placeholder"
-                  :search-fields="getLookupPreviewConfig(column).searchFields"
-                  :display-fields="getLookupPreviewConfig(column).displayFields"
-                  :selected-display-field="getLookupPreviewConfig(column).selectedDisplayField"
-                  :filter-conditions="getLookupFilterConditionsForMockRow(column, lookupMockRow)"
-                  :view-fields="getLookupPreviewConfig(column).viewFields"
-                  :field-defs="getLookupPreviewConfig(column).fieldDefs"
-                  :show-backfill-view="pane.key === 'initiator' && initiatorIsSummary
-                    ? false
-                    : (getLookupPreviewConfig(column).showBackfillView !== false)"
-                  :multiple="getLookupPreviewConfig(column).multiple === true"
-                  @update:model-value="(val) => onLookupMockRowChange(column, val)"
-                />
-                <span v-else>{{ getMockValue(column) }}</span>
-              </div>
-            </div>
-            <div
-              v-if="pane.key === 'todo' && assigneeTodoIsFormBelow"
-              class="inline-form-below-preview"
-            >
-              <el-divider content-position="left">
-                {{ t('subTableView.assigneeFormBelowDivider') }}
-              </el-divider>
-              <div class="inline-form-below-body">
-                <form-create
-                  v-if="inlineFormBelowDesign.rule.length"
-                  v-model="inlineFormPreviewData"
-                  locale="en"
-                  :rule="inlineFormBelowDesign.rule"
-                  :option="inlineFormPreviewOption"
-                />
-                <el-empty
-                  v-else
-                  :description="t('subTable.noFormDesign')"
-                  :image-size="48"
-                />
-                <div
-                  v-if="inlineFormBelowDesign.rule.length"
-                  class="inline-form-actions"
-                >
-                  <el-button
-                    type="primary"
-                    disabled
-                    @click="handleInlineFormBelowPreviewSave"
-                  >
-                    {{ t('common.save') }}
-                  </el-button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <el-empty
           v-if="viewColumns.length === 0"
           :description="t('subTableView.noFieldsImported')"
@@ -332,7 +221,6 @@
     <SubTablePreviewDialog
       v-model="showPreview"
       :columns="previewColumns"
-      :split-columns="splitPreviewColumns"
     />
 
     <el-dialog
@@ -389,7 +277,6 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Search, Close, Menu, DArrowRight, EditPen, Link, Operation } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import SubTablePreviewDialog from './sub-table-list/SubTablePreviewDialog.vue'
 import SubTableColumnConfigDialog from './sub-table-list/SubTableColumnConfigDialog.vue'
 import LookupPreview from './LookupPreview.vue'
@@ -417,7 +304,6 @@ const columnsPanelOpen = ref(true)
 const fieldSearchKeyword = ref('')
 const showPreview = ref(false)
 /** Dummy model for read-only inline form-below preview (assignee pane). */
-const inlineFormPreviewData = ref<Record<string, unknown>>({})
 
 const subTableBindingOptions = computed<SubTableBindingOption[]>(() => {
   if (props.subTableBindings?.length) return props.subTableBindings
@@ -546,23 +432,14 @@ const {
 
 // --- User Portal dual-view preview (To Do / My Requests) ---
 const {
-  inlineFormBelowDesign,
-  inlineFormPreviewOption,
-  dualPortalListPreview,
-  assigneeTodoIsFormBelow,
-  initiatorIsSummary,
-  dualPreviewPanes,
   previewColumns,
-  splitPreviewColumns,
 } = usePortalPreview({
-  props,
   viewColumns,
   isLinkColumn,
   isLookupColumn,
   getLinkText,
   getColumnLabel,
   getMockValue,
-  t,
 })
 
 // If parent hasn't populated allFields yet, load from API on mount
@@ -573,11 +450,6 @@ onMounted(() => {
 })
 
 const handlePreview = () => { showPreview.value = true }
-
-/** Portal parity: Save control on assignee form-below-table strip (design-time preview is read-only). */
-function handleInlineFormBelowPreviewSave() {
-  ElMessage.success(t('common.saveSuccess'))
-}
 
 // --- Expose for parent (getters for save) ---
 defineExpose({

@@ -18,7 +18,7 @@ import java.util.Set;
 public final class FormCreateRuleToFieldMapper {
 
     private static final Set<String> SKIP_TYPES = Set.of(
-            "subTable", "linkForm", "elCard", "el-card", "card",
+            "subTable", "inlineSubForm", "linkForm", "elCard", "el-card", "card",
             "elRow", "el-row", "row", "elCol", "el-col", "col",
             "group", "tableForm", "tableFormColumn", "divider", "html", "text", "button"
     );

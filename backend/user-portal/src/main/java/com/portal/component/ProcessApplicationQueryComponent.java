@@ -49,6 +49,7 @@ public class ProcessApplicationQueryComponent {
     private final RequestIdEnricher requestIdEnricher;
     private final MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
     private final MainTableViewAccessResolver mainTableViewAccessResolver;
+    private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final JdbcTemplate jdbcTemplate;
 
     /** 聚合扇出线程池（引擎 HTTP，不碰 DB），移出共享 commonPool。见 {@link com.portal.config.PortalAsyncConfig}。 */
@@ -159,6 +160,36 @@ public class ProcessApplicationQueryComponent {
             instancePage = processInstanceRepository.findByStartUserIdOrderByStartTimeDesc(userId, pageable);
         }
 
+        return toInfoPage(instancePage, pageable);
+    }
+
+    /**
+     * Every request of a function unit, for reviewers holding an audit grant.
+     *
+     * <p>Callers must have already established that the user may audit this unit —
+     * this method answers "what is in it", not "who may look".
+     */
+    public Page<ProcessInstanceInfo> getFunctionUnitApplications(String functionUnitCode, String status,
+                                                                 Pageable pageable) {
+        log.info("Getting all applications of function unit {} for audit, status: {}", functionUnitCode, status);
+
+        Page<ProcessInstance> instancePage;
+        if (status != null && !status.isEmpty()) {
+            instancePage = processInstanceRepository
+                    .findByFunctionUnitCodeAndStatusOrderByStartTimeDesc(functionUnitCode, status, pageable);
+        } else {
+            instancePage = processInstanceRepository
+                    .findByFunctionUnitCodeOrderByStartTimeDesc(functionUnitCode, pageable);
+        }
+
+        return toInfoPage(instancePage, pageable);
+    }
+
+    /**
+     * Shared list enrichment. None of it depends on who initiated the requests, so
+     * My Requests and the audit list produce identical rows for the same instance.
+     */
+    private Page<ProcessInstanceInfo> toInfoPage(Page<ProcessInstance> instancePage, Pageable pageable) {
         List<ProcessInstance> pageContent = instancePage.getContent();
         enrichRunningAssigneesFromEngine(pageContent);
 
@@ -592,6 +623,36 @@ public class ProcessApplicationQueryComponent {
             return false;
         }
         return canAccessViaPublishedMainTableViews(userId, functionUnitCode, detail.getId());
+    }
+
+    /**
+     * Detail/history access for reviewers: everything {@link #canAccessProcessDetail}
+     * allows, plus holders of an audit grant on the owning function unit.
+     *
+     * <p>Deliberately a separate method rather than a branch inside
+     * {@code canAccessProcessDetail}: that method also guards note archiving and
+     * draft adoption, which reviewers must not gain. New call sites therefore
+     * default to no audit access and have to opt in explicitly.
+     */
+    public boolean canAuditProcessDetail(String userId, ProcessInstanceInfo detail) {
+        if (canAccessProcessDetail(userId, detail)) {
+            return true;
+        }
+        if (detail == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        String functionUnitCode = detail.getFunctionUnitCode();
+        if (functionUnitCode == null || functionUnitCode.isBlank()) {
+            log.warn("Audit access denied for user {} on process {}: instance carries no function unit code",
+                    userId, detail.getId());
+            return false;
+        }
+        if (functionUnitAccessComponent.canAuditFunctionUnit(userId, functionUnitCode)) {
+            return true;
+        }
+        log.warn("Audit access denied for user {} on process {}: no audit grant on function unit {}",
+                userId, detail.getId(), functionUnitCode);
+        return false;
     }
 
     private boolean canAccessViaPublishedMainTableViews(

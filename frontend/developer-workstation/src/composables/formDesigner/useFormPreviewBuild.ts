@@ -31,7 +31,6 @@ import {
   mapFormCreateRulesReadonlyDeep,
 } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
-import type { PortalViewsValue } from './useSubTablePortalViews'
 import { nestAssignmentFieldsIntoContainer, type AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
@@ -58,7 +57,6 @@ interface UseFormPreviewBuildOptions {
   getPrimaryBindingFieldDefinitions: () => FieldDefinition[]
   toSubTablePreviewColumns: (bindingId: number, rule: any[], config: any) => any[]
   makeLookupPreviewItem: (ruleItem: any, config: any) => any
-  mergePortalViewsForPreview: (ruleItem: any, bindingId: number) => PortalViewsValue
   getTableName: (tableId: number, fallback?: string) => string
   getAssignmentConfig: (tableId: number) => AssignmentConfig | undefined
   t: (key: string, params?: Record<string, unknown>) => string
@@ -76,7 +74,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, subFormCache,
     designerSubBindings, getActiveDesignerRef, getTableFieldDefinitions,
     getPrimaryBindingFieldDefinitions,
-    toSubTablePreviewColumns, makeLookupPreviewItem, mergePortalViewsForPreview,
+    toSubTablePreviewColumns, makeLookupPreviewItem,
     getTableName, getAssignmentConfig, t,
   } = options
 
@@ -353,11 +351,14 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
     // form-create proprietary types that should not be rendered in preview
     const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
 
+    // Both rule types bind a SUB table and get their own preview item kind.
+    const isSubBindingRuleType = (type: unknown) => type === 'subTable' || type === 'inlineSubForm'
+
     function containsSubTableRule(item: any): boolean {
       let found = false
       walkFormCreateRules([item], (rule) => {
         if (found) return
-        if (rule.type === 'subTable' && (rule._bindingId ?? (rule.props as Record<string, unknown> | undefined)?._bindingId) != null) {
+        if (isSubBindingRuleType(rule.type) && (rule._bindingId ?? (rule.props as Record<string, unknown> | undefined)?._bindingId) != null) {
           found = true
         }
       })
@@ -396,20 +397,41 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
           flushSegment()
           const binding = localBindingMap.get(Number(itemBindingId))
           if (binding) {
-            const mergedPv = mergePortalViewsForPreview(ruleItem, Number(itemBindingId))
             // 逐操作权限来自放置组件 rule.props（仅显式 false 下发，undefined 由 SubTableField 回退 editable）
             const placedProps = (ruleItem.props ?? {}) as Record<string, unknown>
             items.push({
               kind: 'subTable',
               binding: {
                 ...binding,
-                portalViews: mergedPv,
+                // Summary presentation designed on the canvas.
+                compactCells: placedProps.compactCells === true ? true : undefined,
                 allowAdd: placedProps.allowAdd === false ? false : undefined,
                 allowEdit: placedProps.allowEdit === false ? false : undefined,
                 allowDelete: placedProps.allowDelete === false ? false : undefined,
               },
               sourceRule: ruleItem as Record<string, unknown>,
             })
+            localBindingMap.delete(Number(itemBindingId))
+          }
+        } else if (ruleItem.type === 'inlineSubForm' && itemBindingId != null) {
+          // Inline Form: render the bound sub-form's rule in place — no grid, no Add button.
+          if (isFormCreateRuleHidden(ruleItem)) {
+            continue
+          }
+          flushSegment()
+          // Resolve against the FULL map, not localBindingMap: the subTable branch deletes a
+          // binding once it has rendered a grid for it, and the same binding may legitimately
+          // be shown both as a grid and inline (or the grid may simply appear earlier in the
+          // rule). Reading the pruned map made the inline block silently vanish in that case.
+          const binding = fullBindingMap.get(Number(itemBindingId))
+          if (binding) {
+            items.push({
+              kind: 'inlineSubForm',
+              binding,
+              modelKey: `${keyPrefix}_inline_${itemBindingId}`,
+              sourceRule: ruleItem as Record<string, unknown>,
+            })
+            // Claim it so an unplaced-binding pass cannot append a duplicate standalone table.
             localBindingMap.delete(Number(itemBindingId))
           }
         } else if (isCardRule(ruleItem)) {
@@ -454,6 +476,9 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       return items
     }
 
+    // Snapshot before the walk prunes it — Inline Form resolves against the full set
+    // (buildPreviewItems deletes each binding as it claims one for a grid).
+    const fullBindingMap = new Map(bindingMap)
     const items = buildPreviewItems(rawRule, bindingMap)
     // Only SUB bindings that were explicitly placed via subTable component are shown;
     // unplaced bindings (no component in the form) are not rendered.

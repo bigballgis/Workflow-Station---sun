@@ -54,6 +54,25 @@
           :placeholder="t('form.placeholderTableDescription')"
         />
       </el-form-item>
+      <el-form-item
+        :label="t('form.labelFunctionUnit')"
+        prop="functionUnitId"
+      >
+        <el-select
+          v-model="form.functionUnitId"
+          clearable
+          filterable
+          :placeholder="t('form.placeholderSelectFunctionUnit')"
+          style="width: 100%;"
+        >
+          <el-option
+            v-for="fu in allFunctionUnitOptions"
+            :key="fu.id"
+            :label="fu.name || fu.code"
+            :value="fu.id"
+          />
+        </el-select>
+      </el-form-item>
     </el-form>
 
     <div style="margin-top: 24px;">
@@ -284,7 +303,7 @@ const isEdit = computed(() => !!route.params.id)
 const tableId = computed(() => Number(route.params.id))
 const formRef = ref<FormInstance>()
 
-const { form, rules, submitting, dataTypes, fkRefTables, isAuditField, addField, removeField, loadTableData, submit,
+const { form, rules, submitting, dataTypes, fkRefTables, allFunctionUnitOptions, isAuditField, addField, removeField, loadTableData, submit,
   onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange }
   = useTableStructureForm({ tableId, isEdit: toRef(isEdit) })
 

@@ -45,7 +45,7 @@
         :loading="loading"
         :storage-key="`${functionUnitId}:tables`"
         :columns="listColumns"
-        :rows="() => store.tables"
+        :rows="() => orderedTables"
         @row-click="handleSelectTable"
       >
         <template #cell-tableType="{ row }">
@@ -826,6 +826,20 @@ const {
   handleDeleteTable,
 } = list
 loadTablesImpl = list.loadTables
+
+/**
+ * Table list order: MAIN first, then SUB, RELATION, ACTION.
+ *
+ * <p>The API returns creation order, which scatters the main table among the others — it is
+ * the one readers look for first, so it leads. Ties keep the server order (stable sort), so
+ * tables of the same type stay in the sequence the author created them.
+ */
+const TABLE_TYPE_ORDER: Record<string, number> = { MAIN: 0, SUB: 1, RELATION: 2, ACTION: 3 }
+
+const orderedTables = computed(() => {
+  const rank = (t: TableDefinition) => TABLE_TYPE_ORDER[String(t.tableType)] ?? 99
+  return [...store.tables].sort((a, b) => rank(a) - rank(b))
+})
 
 const listColumns = computed<DesignerListTableColumn<TableDefinition>[]>(() => [
   {

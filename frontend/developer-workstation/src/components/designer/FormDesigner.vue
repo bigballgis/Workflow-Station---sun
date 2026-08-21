@@ -12,12 +12,16 @@
       :get-sub-bindings-count="getSubBindingsCount"
       :get-table-name="getTableName"
       :get-form-bound-nodes="getFormBoundNodes"
+      :tables="store.tables"
+      :main-table-views="mainTableViews"
+      :initial-scene="lastFormListScene"
       @create="showCreateDialog = true"
       @refresh="loadForms"
       @import-from-table="handleImportFromTable"
       @select-form="handleSelectForm"
       @delete-form="handleDeleteForm"
       @more-action="onFormListMoreAction"
+      @set-form-bound-views="handleSetFormBoundViews"
     />
 
     <!-- Form designer view -->
@@ -46,6 +50,13 @@
           @click="startInlineRename(selectedForm)"
         >{{ selectedForm.formName }}</span>
         <el-tag
+          type="info"
+          size="small"
+          class="form-scene-tag"
+        >
+          {{ formTypeLabel(selectedForm.formType) }} · {{ selectedFormSceneLabel }}
+        </el-tag>
+        <el-tag
           v-if="selectedForm.boundTableId"
           type="success"
           size="small"
@@ -72,19 +83,6 @@
           </div>
           <el-button @click="handleManageBindings(selectedForm)">
             {{ t('form.manageBindings') }}
-          </el-button>
-          <el-button
-            :disabled="!selectedForm.id"
-            @click="openPasteConfigDialog"
-          >
-            {{ t('form.pasteFormConfig') }}
-          </el-button>
-          <el-button
-            :disabled="!selectedForm.id"
-            :loading="pasteRepairing"
-            @click="repairCurrentDesignerBindings(true)"
-          >
-            {{ t('form.repairStaleBindings') }}
           </el-button>
           <el-button
             :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)"
@@ -121,6 +119,7 @@
       <!-- Grouped tab navigation: Main Table | Sub Tables ▾ | Relation Tables ▾ -->
       <div class="designer-grouped-nav">
         <button
+          v-if="showMainTableTab"
           class="designer-nav-btn"
           :class="{ 'is-active': activeDesignerTab === 'main' }"
           @click="switchToMain"
@@ -147,6 +146,42 @@
             <el-dropdown-menu>
               <el-dropdown-item
                 v-for="b in designerSubBindingsGrouped"
+                :key="b.bindingId"
+                :command="String(b.bindingId)"
+                :class="{ 'is-active-item': activeDesignerTab === String(b.bindingId) }"
+              >
+                <span class="dropdown-item-inner">
+                  <el-icon
+                    class="check-icon"
+                    :class="{ 'is-visible': activeDesignerTab === String(b.bindingId) }"
+                  >
+                    <Check />
+                  </el-icon>
+                  <span class="dropdown-item-label">{{ b.tableName }}</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
+        <el-dropdown
+          v-if="designerActionBindingsGrouped.length > 0"
+          trigger="click"
+          placement="bottom-start"
+          @command="(id: string) => switchToBinding(id)"
+        >
+          <button
+            class="designer-nav-btn"
+            :class="{ 'is-active': activeTabGroup === 'action' }"
+          >
+            <el-tag type="danger" size="small" class="nav-tag">{{ t('tableBinding.actionTableType') }}</el-tag>
+            <span class="nav-label">{{ actionBindingsNavLabel }}</span>
+            <el-icon class="nav-arrow"><ArrowDown /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="b in designerActionBindingsGrouped"
                 :key="b.bindingId"
                 :command="String(b.bindingId)"
                 :class="{ 'is-active-item': activeDesignerTab === String(b.bindingId) }"
@@ -207,7 +242,10 @@
         class="designer-tabs designer-tabs--headless"
         @tab-change="handleTabChange"
       >
-        <el-tab-pane name="main">
+        <el-tab-pane
+          v-if="showMainTableTab"
+          name="main"
+        >
           <template #label>
             <span>
               <el-tag
@@ -249,11 +287,13 @@
           <template #label>
             <span>
               <el-tag
-                :type="binding.bindingType === 'SUB' ? 'success' : 'warning'"
+                :type="bindingTypeTag(binding.bindingType)"
                 size="small"
                 style="margin-right: 6px;"
               >
-                {{ binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
+                {{ binding.bindingType === 'SUB' ? t('tableBinding.subTableType')
+                  : binding.bindingType === 'ACTION' ? t('tableBinding.actionTableType')
+                  : t('tableBinding.relationTableType') }}
               </el-tag>
               {{ binding.tableName }}
             </span>
@@ -270,26 +310,13 @@
             @update:model-value="(val: any) => updateRelationViewFields(binding.bindingId, val)"
             @update:available-fields="(val: any) => updateRelationViewAllFields(binding.bindingId, val)"
           />
-          <!-- Sub Table: show form designer with List View tab (FORM_ONLY has no list view) -->
+          <!-- Sub Table / Action Table: show form designer with List View tab (FORM_ONLY has no list view).
+               ACTION bindings (e.g. FORM_POPUP "Meeting Remark") get the same canvas as SUB — they are a
+               table of their own that the popup form writes to, structurally identical to a sub-table. -->
           <div
-            v-else-if="binding.bindingType === 'SUB'"
+            v-else-if="binding.bindingType === 'SUB' || binding.bindingType === 'ACTION'"
             class="sub-table-design-wrapper"
           >
-            <!--
-              Per-binding portalViews. Lets designers configure user-portal display for
-              sub-tables that are *not* placed on the main form canvas (e.g. accessed only
-              via a Link Form column on another sub-table's list view).
-              Persists into selectedForm.configJson.subTablePortalViews[binding.bindingId].
-            -->
-            <div class="sub-table-portal-views-bar">
-              <SubTablePortalViewsEditor
-                :model-value="getBindingPortalViews(binding.bindingId)"
-                :binding-id="binding.bindingId"
-                :link-form-columns-by-binding="designerLinkFormColumnsMap"
-                show-section-heading
-                @update:model-value="(val: any) => updateBindingPortalViews(binding.bindingId, val)"
-              />
-            </div>
             <div class="sub-inner-tabs">
               <div class="sub-inner-tabs__header">
                 <button
@@ -298,7 +325,7 @@
                   @click="subTableActiveTab = 'form'"
                 >{{ t('subTableView.formDesign') }}</button>
                 <button
-                  v-if="binding.subMode !== 'FORM_ONLY'"
+                  v-if="binding.subMode !== 'FORM_ONLY' && binding.bindingType !== 'ACTION'"
                   class="sub-inner-tab-btn"
                   :class="{ 'is-active': subTableActiveTab === 'listView' }"
                   @click="handleSubTableInnerTabChange('listView', binding); subTableActiveTab = 'listView'"
@@ -330,7 +357,7 @@
                 </div>
               </div>
 
-              <div v-show="subTableActiveTab === 'listView' && binding.subMode !== 'FORM_ONLY'">
+              <div v-show="subTableActiveTab === 'listView' && binding.subMode !== 'FORM_ONLY' && binding.bindingType !== 'ACTION'">
                 <SubTableListView
                   :ref="(el: any) => setSubTableListViewRef(el, binding.bindingId)"
                   :binding="binding"
@@ -344,7 +371,6 @@
                   :resolve-lookup-preview-config="resolveLookupPreviewConfig"
                   :form-rule="getSubTableFormRule(binding.bindingId)"
                   :form-option="getSubTableFormOption(binding.bindingId)"
-                  :portal-views="getBindingPortalViews(binding.bindingId)"
                   @update:model-value="(val: any) => updateSubTableViewFields(binding.bindingId, val)"
                   @update:available-fields="(val: any) => updateSubTableViewAllFields(binding.bindingId, val)"
                   @save="handleSubTableViewSave(binding.bindingId)"
@@ -428,6 +454,59 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
+
+        <!-- Sub-table field permissions, grouped by SUB binding -->
+        <div
+          v-for="group in currentSubFormFieldGroups"
+          :key="group.bindingId"
+          class="field-permission-subform-group"
+          style="margin-top: 12px;"
+        >
+          <div class="field-permission-subform-label" style="margin-bottom: 4px; font-size: 13px; color: var(--el-text-color-secondary);">
+            {{ group.label }}
+          </div>
+          <div class="table-scroll-wrap">
+          <el-table
+            :data="group.fields"
+            size="small"
+            max-height="300"
+            border
+          >
+            <el-table-column
+              prop="field"
+              :label="t('form.fieldName')"
+              width="200"
+            />
+            <el-table-column
+              prop="title"
+              label="Label"
+              width="200"
+            />
+            <el-table-column
+              :label="t('form.fieldPermission')"
+              width="180"
+            >
+              <template #default="{ row }">
+                <el-select
+                  :model-value="getFieldPermission(row.field, group.bindingId)"
+                  size="small"
+                  style="width: 100%"
+                  @update:model-value="setFieldPermission(row.field, $event, group.bindingId)"
+                >
+                  <el-option
+                    :label="t('form.fieldPermissionEditable')"
+                    value="EDITABLE"
+                  />
+                  <el-option
+                    :label="t('form.fieldPermissionReadonly')"
+                    value="READONLY"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+          </el-table>
+          </div>
         </div>
       </div>
     </div>
@@ -529,7 +608,7 @@
     <el-dialog
       v-model="showImportFieldsDialog"
       :title="t('form.importFieldsTitle')"
-      width="800px"
+      width="960px"
     >
       <div class="import-fields-dialog">
         <el-alert
@@ -619,19 +698,40 @@
             :data="availableFields"
             size="small"
             max-height="300"
+            :row-class-name="importFieldsRowClassName"
           >
             <el-table-column width="50">
               <template #default="{ row }">
-                <el-checkbox 
+                <el-tooltip
+                  v-if="isFieldAlreadyImported(row)"
+                  :content="t('form.alreadyOnForm')"
+                  placement="top"
+                >
+                  <el-icon class="already-imported-icon">
+                    <CircleCheck />
+                  </el-icon>
+                </el-tooltip>
+                <el-checkbox
+                  v-else
                   :model-value="isFieldSelected(row.fieldName)"
                   @change="toggleFieldSelection(row)"
                 />
               </template>
             </el-table-column>
             <el-table-column
+              prop="displayName"
+              :label="t('form.displayName')"
+              width="150"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                <span>{{ row.displayName || row.fieldName }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
               prop="fieldName"
               :label="t('form.fieldName')"
-              width="150"
+              min-width="150"
             >
               <template #default="{ row }">
                 <span>{{ isRequestIdSyntheticField(row) ? (row.displayName || row.fieldName) : row.fieldName }}</span>
@@ -657,7 +757,7 @@
             </el-table-column>
             <el-table-column
               :label="t('form.formComponent')"
-              width="120"
+              width="150"
             >
               <template #default="{ row }">
                 <el-tag size="small">
@@ -668,21 +768,16 @@
             <el-table-column
               v-if="formBindings.length > 0"
               :label="t('form.sourceTable')"
-              width="120"
+              width="130"
             >
               <template #default>
                 <span class="source-table">{{ getTableName(importTableId!) }}</span>
               </template>
             </el-table-column>
             <el-table-column
-              prop="description"
-              :label="t('table.description')"
-              show-overflow-tooltip
-            />
-            <el-table-column
               prop="nullable"
               :label="t('form.required')"
-              width="60"
+              width="90"
             >
               <template #default="{ row }">
                 <el-tag
@@ -784,6 +879,8 @@ import { ArrowLeft, ArrowDown, Check, Connection, Loading, CircleCheck } from '@
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, TableBinding } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
+import type { MainTableViewDefinition } from '@/api/mainTableView'
+import { mainTableViewApi } from '@/api/mainTableView'
 import fcDesignerEnLocale from '@form-create/designer/locale/en.js'
 import {
   buildDefaultFormCreateOptions,
@@ -801,11 +898,10 @@ import {
 import { lookupStore } from './lookupStore'
 import {
   PREVIEW_MY_REQUESTS_ACTIVE_KEY,
-  PREVIEW_RESOLVE_SUBTABLE_FORM_KEY,
   PREVIEW_SUBTABLE_DIALOG_KEY,
   type PreviewSubTableRowDialogOpen,
 } from './previewSubTableDialog'
-import { cloneFormRules, getRuleChildren, injectUploadButtonLabels, walkFormCreateRules } from '@/utils/formDesigner'
+import { cloneFormRules, getRuleChildren, injectUploadButtonLabels, isInlineSubFormDropAllowed, walkFormCreateRules } from '@/utils/formDesigner'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
@@ -816,7 +912,6 @@ import FormNodeBindDialog from './form-designer/FormNodeBindDialog.vue'
 import FormListSidebar from './form-designer/FormListSidebar.vue'
 import RelationTableView from './RelationTableView.vue'
 import SubTableListView from './SubTableListView.vue'
-import SubTablePortalViewsEditor from './SubTablePortalViewsEditor.vue'
 import FormPreviewItems from './FormPreviewItems.vue'
 import FormDesignerCanvasToolbar from './FormDesignerCanvasToolbar.vue'
 import SubTableFormDialog from './SubTableFormDialog.vue'
@@ -827,7 +922,7 @@ import { useFormAutoSave } from '@/composables/modules/useFormAutoSave'
 import { useFormDesignerCanvasChrome } from '@/composables/modules/useFormDesignerCanvasChrome'
 import { useTableFieldRules } from '@/composables/formDesigner/useTableFieldRules'
 import { useSubTableViews } from '@/composables/formDesigner/useSubTableViews'
-import { useSubTablePortalViews } from '@/composables/formDesigner/useSubTablePortalViews'
+import { useDesignerLinkFormColumns } from '@/composables/formDesigner/useDesignerLinkFormColumns'
 import { useFieldImport } from '@/composables/formDesigner/useFieldImport'
 import { useFormConfigPaste } from '@/composables/formDesigner/useFormConfigPaste'
 import { useFormPreviewColumns } from '@/composables/formDesigner/useFormPreviewColumns'
@@ -889,6 +984,43 @@ function getTableName(tableId: number, fallback?: string): string {
   return table?.tableDisplayName || table?.tableName || fallback || t('form.unknownTable')
 }
 
+/**
+ * Which list tab this form lives under (mirrors FormListSidebar.sceneOf), so the detail
+ * header can show it — nothing else on this screen indicates To Do vs My Requests vs Views Form.
+ */
+const selectedFormSceneLabel = computed(() => {
+  const form = selectedForm.value
+  if (!form) return ''
+  if (form.formType === 'DETAIL') return t('form.viewsForm')
+  return (form as { scene?: string }).scene === 'REQUEST' ? t('form.sceneRequest') : t('form.sceneTask')
+})
+
+/**
+ * Which FormListSidebar tab to reopen on "Back to List" — the scene of the form the developer
+ * is currently in, so leaving a My Requests design doesn't drop them back on the To Do tab.
+ * Mirrors FormListSidebar.sceneOf; kept as the last non-null value once the form closes.
+ */
+const lastFormListScene = ref<'TASK' | 'REQUEST' | 'DETAIL'>('TASK')
+watch(selectedForm, (form) => {
+  if (!form) return
+  lastFormListScene.value =
+    form.formType === 'DETAIL' ? 'DETAIL' : (form as { scene?: string }).scene === 'REQUEST' ? 'REQUEST' : 'TASK'
+})
+
+/**
+ * Whether the "Main Table" tab has anything meaningful to show. PROCESS/TASK forms always
+ * have (and require) a PRIMARY binding, so the Main Table canvas is their real content.
+ * ACTION forms (FORM_POPUP) are reached via their Action Button, not a PRIMARY table row —
+ * their real content lives on the ACTION binding's own canvas — so Main Table only appears
+ * for them when a PRIMARY binding actually exists (e.g. legacy data not yet cleaned up).
+ */
+const hasPrimaryBinding = computed(() =>
+  !!selectedForm.value?.tableBindings?.some(b => b.bindingType === 'PRIMARY'),
+)
+const showMainTableTab = computed(() =>
+  selectedForm.value?.formType !== 'ACTION' || hasPrimaryBinding.value,
+)
+
 // Non-PRIMARY bindings for tabs（RELATED 用于 Lookup，也需要显示在设计器里配置视图字段）
 const designerSubBindings = computed(() => {
   if (!selectedForm.value) return []
@@ -913,9 +1045,12 @@ const designerSubBindings = computed(() => {
   })
 })
 
-// Grouped sub/relation bindings for the grouped nav
+// Grouped sub/action/relation bindings for the grouped nav
 const designerSubBindingsGrouped = computed(() =>
   designerSubBindings.value.filter(b => b.bindingType === 'SUB')
+)
+const designerActionBindingsGrouped = computed(() =>
+  designerSubBindings.value.filter(b => b.bindingType === 'ACTION')
 )
 const designerRelationBindingsGrouped = computed(() =>
   designerSubBindings.value.filter(b => b.bindingType === 'RELATED')
@@ -982,10 +1117,11 @@ const activeMiAssignmentWarning = computed(() => {
   return ''
 })
 
-const activeTabGroup = computed<'main' | 'sub' | 'relation' | null>(() => {
+const activeTabGroup = computed<'main' | 'sub' | 'action' | 'relation' | null>(() => {
   if (activeDesignerTab.value === 'main') return 'main'
   const id = Number(activeDesignerTab.value)
   if (designerSubBindingsGrouped.value.some(b => b.bindingId === id)) return 'sub'
+  if (designerActionBindingsGrouped.value.some(b => b.bindingId === id)) return 'action'
   if (designerRelationBindingsGrouped.value.some(b => b.bindingId === id)) return 'relation'
   return null
 })
@@ -1007,6 +1143,11 @@ function formatBindingGroupNavLabel(
 const subBindingsNavLabel = computed(() => {
   if (activeTabGroup.value === 'sub') return activeBindingLabel.value
   return formatBindingGroupNavLabel(designerSubBindingsGrouped.value)
+})
+
+const actionBindingsNavLabel = computed(() => {
+  if (activeTabGroup.value === 'action') return activeBindingLabel.value
+  return formatBindingGroupNavLabel(designerActionBindingsGrouped.value)
 })
 
 const relationBindingsNavLabel = computed(() => {
@@ -1243,8 +1384,6 @@ const {
   getSubTableFormOption,
 } = subTableViews
 
-provide(PREVIEW_RESOLVE_SUBTABLE_FORM_KEY, getSubTableFormDesign)
-
 // ── Auto-save ───────────────────────────────────────────────────────────────
 const { formatAutoSaveTime, scheduleAutoSave, setupAutoSavePolling, cleanupAutoSavePolling } = useFormAutoSave({
   selectedForm,
@@ -1256,19 +1395,12 @@ const { formatAutoSaveTime, scheduleAutoSave, setupAutoSavePolling, cleanupAutoS
   lastAutoSaveTime,
 })
 
-// ── Per-binding portalViews ─────────────────────────────────────────────────
-const {
-  subTablePortalViewsState,
-  getBindingPortalViews,
-  updateBindingPortalViews,
-  mergePortalViewsForPreview,
-  designerLinkFormColumnsMap,
-} = useSubTablePortalViews({
+// ── Link Form columns available to sub-table list views ─────────────────────
+const { designerLinkFormColumnsMap } = useDesignerLinkFormColumns({
   selectedForm,
   designerSubBindings,
   subTableViewState,
   resolveDesignerBindingDisplayName,
-  scheduleAutoSave,
 })
 
 // ── Preview column derivation ───────────────────────────────────────────────
@@ -1315,7 +1447,6 @@ const {
   getPrimaryBindingFieldDefinitions,
   toSubTablePreviewColumns,
   makeLookupPreviewItem,
-  mergePortalViewsForPreview,
   getTableName,
   getAssignmentConfig: resolveAssignmentConfigForTable,
   t,
@@ -1338,6 +1469,7 @@ const {
   availableFields,
   isAllFieldsSelected,
   isFieldsIndeterminate,
+  isFieldAlreadyImported,
   getImportTableBinding,
   isFieldSelected,
   toggleFieldSelection,
@@ -1364,6 +1496,13 @@ const {
   refreshFormRulesFromTableMetadata,
   t,
 })
+
+// Named function instead of an inline arrow, because Vue SFC template expressions don't support
+// inline TS type annotations on destructured arrow-function params (`({ row }: { row: T }) => …`
+// is a hard vue-tsc parse error, not just a lint warning).
+function importFieldsRowClassName({ row }: { row: Parameters<typeof isFieldAlreadyImported>[0] }): string {
+  return isFieldAlreadyImported(row) ? 'is-already-imported' : ''
+}
 
 const {
   showPasteConfigDialog,
@@ -1411,7 +1550,6 @@ const formSave = useFormSave({
   relationViewState,
   subTableViewState,
   subTableListViewRefs,
-  subTablePortalViewsState,
   getActiveDesignerRef,
   getPrimaryBindingFieldDefinitions,
   syncSubTableListViewFromFormRules,
@@ -1423,10 +1561,12 @@ const formSave = useFormSave({
   blockingProgress,
   getBpmnXml: () => store.process?.bpmnXml,
   t,
+  hasMainTableTab: showMainTableTab,
 })
 const {
   loadDataTableColumns,
   currentFormFields,
+  currentSubFormFieldGroups,
   getFieldPermission,
   setFieldPermission,
   handleSaveForm,
@@ -1464,7 +1604,6 @@ const formLifecycle = useFormLifecycle({
   subTableListViewRefs,
   subTableViewState,
   relationViewState,
-  subTablePortalViewsState,
   designerSubBindings,
   activeDesignerTab,
   showCreateDialog,
@@ -1683,7 +1822,9 @@ async function handleBindingAdded(payload: { tableId: number; bindingType: strin
     }
     refreshFormRulesFromTableMetadata()
 
-  } else if (bindingType === 'SUB') {
+  } else if (bindingType === 'SUB' || bindingType === 'ACTION') {
+    // ACTION bindings (e.g. FORM_POPUP "Meeting Remark") get the exact same auto-populate
+    // treatment as SUB — they render through the identical canvas/list-view branch above.
     const rules = mapFieldsToFormRules(fields)
     mergeTaskPermissionsForFields(fields)
     injectUploadButtonLabels(rules, t('form.clickToUpload'))
@@ -1752,6 +1893,13 @@ const designerConfig = computed(() => ({
     flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
     ensureEmptyRuleComponentEvents(rule)
   },
+  // MVP boundary enforcement — see isInlineSubFormDropAllowed's doc comment for why this is
+  // this component's only enforcement point.
+  checkDrag: (drag: { menu?: { name?: string } }) => {
+    if (isInlineSubFormDropAllowed(drag?.menu?.name, activeDesignerTab.value)) return true
+    ElMessage.warning(t('form.inlineSubFormMainCanvasOnly'))
+    return false
+  },
   updateDefaultRule: buildDesignerUpdateDefaultRule(),
   // formCreateValue → rule.value (Select Default Value). Required by fc-designer mapping.
   appendConfigData: ['formCreateValue'],
@@ -1783,13 +1931,38 @@ const designerConfig = computed(() => ({
     // 子表：右侧属性面板追加 新增/编辑/删除 三个逐操作开关（写入 rule.props.allowAdd/allowEdit/allowDelete）。
     // 默认全开 → 与历史「只要可编辑就全放开」一致；关掉某项 → SubTableField 隐藏对应 Add/Edit/Delete。
     // 只追加这三项；Readonly 已由 form-create 内建面板提供，不再重复。
+    // ACTION 绑定（FORM_POPUP 弹窗写入的记录表，如 "Meeting Remark"）语义上是操作留痕、天生只读——
+    // 不提供这三个开关（没有"关掉的选项"，因为压根不该有开的选项）。绑定已被删除等异常情况保守地
+    // 按非 ACTION 处理（不隐藏开关），避免历史脏数据下属性面板突然消失控件。
     subTable: {
       append: true,
-      rule() {
+      rule(activeRule: { props?: Record<string, unknown> }) {
+        const bindingId = activeRule?.props?._bindingId
+        const bindingType = bindingId != null
+          ? designerSubBindings.value.find(b => b.bindingId === Number(bindingId))?.bindingType
+          : undefined
+        const isActionBinding = bindingType === 'ACTION'
+
+        const presentationSwitches = [
+          // Presentation. A plain table is the default; each of these is opted into.
+          {
+            type: 'switch',
+            field: 'compactCells',
+            title: t('form.subTableSummary.compactCells'),
+            value: false,
+            info: t('form.subTableSummary.compactCellsHint'),
+          },
+        ]
+
+        if (isActionBinding) {
+          return presentationSwitches
+        }
+
         return [
           { type: 'switch', field: 'allowAdd', title: t('form.subTablePermission.allowAdd'), value: true },
           { type: 'switch', field: 'allowEdit', title: t('form.subTablePermission.allowEdit'), value: true },
           { type: 'switch', field: 'allowDelete', title: t('form.subTablePermission.allowDelete'), value: true },
+          ...presentationSwitches,
         ]
       },
     },
@@ -1825,6 +1998,7 @@ const designerConfig = computed(() => ({
     default: ['disabled', 'hidden'],
     lookup: ['disabled', 'hidden'],
     subTable: ['disabled', 'hidden'],
+    inlineSubForm: ['disabled', 'hidden'],
     linkForm: ['disabled', 'hidden'],
     editor: ['disabled', 'hidden'],
     transfer: ['disabled', 'hidden'],
@@ -1990,9 +2164,61 @@ async function loadLinkFormComponents() {
   }
 }
 
+/**
+ * Main-table views of this function unit, so the Views Form tab can show which views use each
+ * DETAIL form and let the developer point a view at one.
+ */
+const mainTableViews = ref<MainTableViewDefinition[]>([])
+
+async function loadMainTableViews() {
+  try {
+    const res = await mainTableViewApi.list(props.functionUnitId)
+    mainTableViews.value = res.data || []
+  } catch (e: any) {
+    // Surfaced rather than swallowed: without views the Views Form tab silently looks empty.
+    mainTableViews.value = []
+    ElMessage.error(e?.response?.data?.message || t('mainTableView.loadFailed'))
+  }
+}
+
+/**
+ * Bind-from-the-form-side (Views Form's "Bind Views" button): `checkedViewIds` is the full
+ * next-state selection for `form` among `candidateViews`, not a delta. Each view's detailFormId
+ * is a single slot (a view can show only one detail form), so:
+ *  - newly checked → point that view's detailFormId at `form`
+ *  - unchecked but was pointing at `form` → clear it (never touch a view already pointing at a
+ *    DIFFERENT form — that binding belongs to that other form's checkbox, not this one).
+ */
+async function handleSetFormBoundViews(
+  form: FormDefinition,
+  candidateViews: MainTableViewDefinition[],
+  checkedViewIds: number[],
+) {
+  const checked = new Set(checkedViewIds.map(Number))
+  const toBind = candidateViews.filter(
+    v => checked.has(v.id) && Number(v.detailFormId) !== Number(form.id),
+  )
+  const toUnbind = candidateViews.filter(
+    v => !checked.has(v.id) && Number(v.detailFormId) === Number(form.id),
+  )
+  if (toBind.length === 0 && toUnbind.length === 0) return
+
+  try {
+    await Promise.all([
+      ...toBind.map(v => mainTableViewApi.updateDetailForm(props.functionUnitId, v.id, form.id)),
+      ...toUnbind.map(v => mainTableViewApi.updateDetailForm(props.functionUnitId, v.id, null)),
+    ])
+    ElMessage.success(t('form.viewDetailFormSaved'))
+    await loadMainTableViews()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || t('form.saveFailed'))
+  }
+}
+
 onMounted(() => {
   loadForms()
   loadDataTableColumns()
+  loadMainTableViews()
   formLifecycle.loadCreateDialogProcessNodes()
 })
 </script>
@@ -2493,6 +2719,22 @@ onMounted(() => {
     :deep(.el-table) {
       width: 100%;
     }
+
+    // Fields already on the target form/sub-table: muted text, no checkbox — re-selecting
+    // them is a no-op (import silently skips duplicates), so the row reads as "done" at a glance.
+    :deep(.el-table__row.is-already-imported) {
+      color: #a8abb2;
+
+      .el-tag {
+        opacity: 0.7;
+      }
+    }
+  }
+
+  .already-imported-icon {
+    color: #67c23a;
+    font-size: 16px;
+    vertical-align: middle;
   }
 }
 
@@ -2502,6 +2744,7 @@ onMounted(() => {
   margin-top: 4px;
 }
 
+.form-scene-tag,
 .bound-table-tag {
   margin-left: 8px;
 }

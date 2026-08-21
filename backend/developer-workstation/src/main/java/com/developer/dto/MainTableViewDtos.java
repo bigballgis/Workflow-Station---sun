@@ -49,6 +49,8 @@ public final class MainTableViewDtos {
             Boolean isDefault,
             String status,
             Boolean restrictToInvolvedUsers,
+            /** DETAIL form opened when a row of this view is clicked; null = no detail page. */
+            Long detailFormId,
             List<MainTableViewAccessRuleDTO> accessRules,
             List<Map<String, Object>> sortConfig,
             Map<String, Object> filterConfig,
@@ -63,9 +65,21 @@ public final class MainTableViewDtos {
     public record UpdateMainTableViewRequest(
             String viewName,
             Boolean restrictToInvolvedUsers,
+            Long detailFormId,
             List<MainTableViewAccessRuleDTO> accessRules,
             List<Map<String, Object>> sortConfig,
             Map<String, Object> filterConfig,
             List<MainTableViewFieldDTO> fields
+    ) {}
+
+    /**
+     * Sets only a view's detail form. Separate from {@link UpdateMainTableViewRequest} because that
+     * one is a whole-design save and resets the view to DRAFT — which would pull a published view
+     * out of the portal as a side effect of picking a form.
+     *
+     * @param detailFormId form to open on row click; null clears the detail page.
+     */
+    public record UpdateMainTableViewDetailFormRequest(
+            Long detailFormId
     ) {}
 }

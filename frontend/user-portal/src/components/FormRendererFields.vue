@@ -13,7 +13,6 @@ import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import type { FormField } from './formRendererHelpers'
 import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
 import { isDisplayOnlyLayoutField } from './formRendererHelpers'
-import { collectRecordNoteFields, resolveRowStableId } from './formRendererHelpers/recordNoteFields'
 
 defineOptions({ name: 'FormRendererFields' })
 
@@ -37,18 +36,6 @@ if (!ctx) {
 }
 
 const collapseActiveByKey = ref<Record<string, string[]>>({})
-
-// Form-below-table: recordNote components of the binding's sub-form design render
-// under the inline form — RECORD scope follows the selected row, TABLE scope the
-// current process instance.
-function inlineFormRecordNoteFields(field: FormField): FormField[] {
-  return collectRecordNoteFields(ctx!.resolveInlineFormFields(field))
-}
-
-function inlineFormRowStableId(field: FormField): string | null {
-  const binding = ctx!.resolveBinding(field._bindingId) as { primaryKeyFields?: string[] } | undefined
-  return resolveRowStableId(ctx!.getCurrentRowForInlineForm(field), binding?.primaryKeyFields)
-}
 
 function collapseActiveNames(field: FormField): string[] {
   const key = field.key
@@ -283,14 +270,13 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
         style="padding: 0;"
       >
         <SubTableField
-          v-if="ctx.resolveBinding(field._bindingId) && ctx.shouldRenderPlacedSubTableField(field)"
+          v-if="ctx.resolveBinding(field._bindingId)"
           :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
           :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
           :assignment-config="ctx.resolveBinding(field._bindingId)?.assignmentConfig"
-          :enable-row-select="ctx.subTableMode(field) === 'formBelowTable'"
           :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
           :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
           :mi-parent-participant-row="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentRow ?? null"
@@ -313,15 +299,16 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :linked-sub-table-bindings="ctx.linkableSubTableBindings"
           :suppress-link-form-initial-data="ctx.suppressLinkFormInitialData"
           :show-link-form-dialog-footer="ctx.showLinkFormDialogFooter"
-          :link-form-click-scroll-to-inline="ctx.linkFormScrollToInlineEnabled(field)"
-          :show-task-status="ctx.subTableShowTaskStatusInitiator(field)"
-          :show-view-detail="ctx.subTableShowViewDetailInitiator(field)"
+          :show-task-status="ctx.subTableShowTaskStatus(field)"
           :compact-lookup-cells="ctx.subTableCompactLookupCells(field)"
           :primary-key-fields="ctx.resolveBinding(field._bindingId)?.primaryKeyFields as string[] | undefined"
           :field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
           :binding-link-mode="ctx.resolveBinding(field._bindingId)?.bindingLinkMode"
           :binding-foreign-key-field="ctx.resolveBinding(field._bindingId)?.foreignKeyField"
           :table-id="ctx.resolveBinding(field._bindingId)?.tableId"
+          :binding-id="field._bindingId"
+          :binding-type="ctx.resolveBinding(field._bindingId)?.bindingType"
+          :field-permissions="ctx.fieldPermissions"
           :function-unit-id="ctx.functionUnitId"
           :primary-form-data="ctx.primaryFormData"
           :sub-table-bindings-for-context="ctx.subTableBindingsForContext"
@@ -333,56 +320,20 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           @update:primary-form-data="ctx.handlePrimaryFormDataPatch?.($event)"
           @update:linked-sub-table-data="ctx.handleSubTableUpdate"
           @view-detail="(row: any) => ctx.emitViewSubtaskDetail(row, ctx.resolveBinding(field._bindingId)?.data as any[])"
-          @link-form-scroll-to-inline="ctx.scrollSubTableInlineIntoView(field._bindingId)"
-          @current-row-change="(row: Record<string, unknown> | null) => ctx.setInlineFormSelectedRow?.(field._bindingId, row)"
         />
-        <div
-          v-if="ctx.resolveBinding(field._bindingId) && ctx.subTableMode(field) === 'formBelowTable'"
-          class="sub-table-inline-anchor"
-          :ref="(el) => ctx.setSubTableInlineAnchor(field._bindingId, el as HTMLElement | null)"
-        >
-          <SubTableInlineForm
-            :title="ctx.resolveInlineFormTableTitle(field)"
-            :fields="ctx.resolveInlineFormFields(field)"
-            :current-row="ctx.getCurrentRowForInlineForm(field)"
-            :readonly="ctx.inlineSubTableFormReadonly(field)"
-            :label-width="ctx.labelWidth"
-            :sub-table-bindings="ctx.subTableBindings as any[]"
-            :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
-            :suppress-link-only-standalone-sub-tables="ctx.viewContext === 'initiatorRequest'"
-            :host-table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
-            :host-field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
-            :host-function-unit-id="ctx.functionUnitId as string | undefined"
-            :host-task-id="ctx.taskId as string | undefined"
-            :host-primary-form-data="ctx.primaryFormData as Record<string, unknown> | undefined"
-            :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
-            @update:row="(row: Record<string, any>) => ctx.handleInlineFormUpdate(field, row)"
-            @save="ctx.handleInlineFormSave?.()"
-          />
-          <RecordNoteField
-            v-for="rn in inlineFormRecordNoteFields(field)"
-            :key="rn.key"
-            :config="rn._recordNote"
-            :table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
-            :record-id="inlineFormRowStableId(field)"
-            :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
-            :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
-          />
-        </div>
       </el-col>
       <div
         v-else-if="inColumn && ctx.isFieldVisible(field.key)"
         class="form-col-subtable"
       >
         <SubTableField
-          v-if="ctx.resolveBinding(field._bindingId) && ctx.shouldRenderPlacedSubTableField(field)"
+          v-if="ctx.resolveBinding(field._bindingId)"
           :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :dialog-columns="(ctx.resolveBinding(field._bindingId)?.dialogColumns as any[]) || undefined"
           :form-fields="ctx.resolveBinding(field._bindingId)?.formFields"
           :form-options="ctx.resolveBinding(field._bindingId)?.formOptions"
           :assignment-config="ctx.resolveBinding(field._bindingId)?.assignmentConfig"
-          :enable-row-select="ctx.subTableMode(field) === 'formBelowTable'"
           :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
           :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
           :mi-parent-participant-row="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentRow ?? null"
@@ -405,15 +356,16 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :linked-sub-table-bindings="ctx.linkableSubTableBindings"
           :suppress-link-form-initial-data="ctx.suppressLinkFormInitialData"
           :show-link-form-dialog-footer="ctx.showLinkFormDialogFooter"
-          :link-form-click-scroll-to-inline="ctx.linkFormScrollToInlineEnabled(field)"
-          :show-task-status="ctx.subTableShowTaskStatusInitiator(field)"
-          :show-view-detail="ctx.subTableShowViewDetailInitiator(field)"
+          :show-task-status="ctx.subTableShowTaskStatus(field)"
           :compact-lookup-cells="ctx.subTableCompactLookupCells(field)"
           :primary-key-fields="ctx.resolveBinding(field._bindingId)?.primaryKeyFields as string[] | undefined"
           :field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
           :binding-link-mode="ctx.resolveBinding(field._bindingId)?.bindingLinkMode"
           :binding-foreign-key-field="ctx.resolveBinding(field._bindingId)?.foreignKeyField"
           :table-id="ctx.resolveBinding(field._bindingId)?.tableId"
+          :binding-id="field._bindingId"
+          :binding-type="ctx.resolveBinding(field._bindingId)?.bindingType"
+          :field-permissions="ctx.fieldPermissions"
           :function-unit-id="ctx.functionUnitId"
           :primary-form-data="ctx.primaryFormData"
           :sub-table-bindings-for-context="ctx.subTableBindingsForContext"
@@ -425,8 +377,70 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           @update:primary-form-data="ctx.handlePrimaryFormDataPatch?.($event)"
           @update:linked-sub-table-data="ctx.handleSubTableUpdate"
           @view-detail="(row: any) => ctx.emitViewSubtaskDetail(row, ctx.resolveBinding(field._bindingId)?.data as any[])"
-          @link-form-scroll-to-inline="ctx.scrollSubTableInlineIntoView(field._bindingId)"
-          @current-row-change="(row: Record<string, unknown> | null) => ctx.setInlineFormSelectedRow?.(field._bindingId, row)"
+        />
+      </div>
+    </template>
+
+    <!--
+      Inline Form (`inlineSubForm`): the bound sub-table's designed form laid out right here —
+      no grid above it, no dialog, no Save button of its own (rows persist with the host form).
+      Both arms render it: the el-col one for top-level placement, the plain-div one for
+      placement inside a Col layout container.
+    -->
+    <template v-else-if="field.type === 'inlineSubForm'">
+      <el-col
+        v-if="!inColumn && ctx.isFieldVisible(field.key)"
+        :span="24"
+        style="padding: 0;"
+      >
+        <SubTableInlineForm
+          v-if="ctx.resolveBinding(field._bindingId)"
+          :title="ctx.resolveInlineSubFormTitle(field)"
+          :fields="ctx.resolveInlineSubFormFields(field)"
+          :current-row="ctx.resolveInlineSubFormRow(field)"
+          :readonly="ctx.inlineSubFormReadonly(field)"
+          :label-width="ctx.labelWidth"
+          :label-position="ctx.labelPosition"
+          hide-save-button
+          framed
+          :sub-table-bindings="ctx.subTableBindings as any[]"
+          :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
+          :host-table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
+          :host-field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
+          :host-function-unit-id="ctx.functionUnitId as string | undefined"
+          :host-task-id="ctx.taskId as string | undefined"
+          :host-primary-form-data="ctx.primaryFormData as Record<string, unknown> | undefined"
+          :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
+          :visited-inline-sub-form-binding-ids="new Set([Number(field._bindingId)])"
+          :field-permissions="ctx.fieldPermissions"
+          @update:row="(row: Record<string, any>) => ctx.handleInlineSubFormUpdate(field, row)"
+        />
+      </el-col>
+      <div
+        v-else-if="inColumn && ctx.isFieldVisible(field.key)"
+        class="form-col-inline-sub-form"
+      >
+        <SubTableInlineForm
+          v-if="ctx.resolveBinding(field._bindingId)"
+          :title="ctx.resolveInlineSubFormTitle(field)"
+          :fields="ctx.resolveInlineSubFormFields(field)"
+          :current-row="ctx.resolveInlineSubFormRow(field)"
+          :readonly="ctx.inlineSubFormReadonly(field)"
+          :label-width="ctx.labelWidth"
+          :label-position="ctx.labelPosition"
+          hide-save-button
+          framed
+          :sub-table-bindings="ctx.subTableBindings as any[]"
+          :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
+          :host-table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
+          :host-field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
+          :host-function-unit-id="ctx.functionUnitId as string | undefined"
+          :host-task-id="ctx.taskId as string | undefined"
+          :host-primary-form-data="ctx.primaryFormData as Record<string, unknown> | undefined"
+          :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
+          :visited-inline-sub-form-binding-ids="new Set([Number(field._bindingId)])"
+          :field-permissions="ctx.fieldPermissions"
+          @update:row="(row: Record<string, any>) => ctx.handleInlineSubFormUpdate(field, row)"
         />
       </div>
     </template>

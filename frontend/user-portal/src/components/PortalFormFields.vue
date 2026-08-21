@@ -6,7 +6,7 @@
  */
 import FieldRenderer from './FieldRenderer.vue'
 import SubTableField from './SubTableField.vue'
-import { computed, provide, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, provide, ref, watch } from 'vue'
 import type { FormField } from './formRendererHelpers'
 import {
   filterLinkOnlyStandaloneSubTableFields,
@@ -16,8 +16,14 @@ import {
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shared'
 import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
 import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
+import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
+import type { SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
+
+// Lazily required to avoid a module-load cycle: SubTableInlineForm imports PortalFormFields
+// itself (nested subTable widgets inside the inline form use PortalFormFields recursively).
+const SubTableInlineForm = defineAsyncComponent(() => import('./SubTableInlineForm.vue'))
 
 export interface PortalSubTableBindingLite {
   bindingId: number
@@ -37,6 +43,10 @@ export interface PortalSubTableBindingLite {
   primaryKeyFields?: string[]
   /** Field FK/PK metadata from tableBindings — drives auto PK allocation and FK seeding. */
   fieldDefinitions?: BindingFieldDefinition[]
+  /** SUB / ACTION / RELATED — ACTION bindings render permanently read-only regardless of allow* props. */
+  bindingType?: string | null
+  /** EDITABLE / READONLY, from Table Design — gates whether the inline form can be edited at all. */
+  bindingMode?: string | null
 }
 
 const props = withDefaults(
@@ -67,6 +77,21 @@ const props = withDefaults(
     hostTaskId?: string
     hostPrimaryFormData?: Record<string, unknown>
     hostPrimaryTableId?: number | null
+    /**
+     * inlineSubForm bindingIds already resolved along this render path (this component's own
+     * ancestor chain, not just its direct parent) — accumulated by
+     * {@link resolveInlineSubFormFields} and threaded back down when an inlineSubForm field is
+     * itself nested inside another inlineSubForm's own resolved fields, so an indirect cycle
+     * (A embeds one pointing at B, whose form embeds one pointing back at A) is pruned instead of
+     * recursing forever. Absent/undefined at the top level (fresh render, nothing visited yet).
+     */
+    visitedInlineSubFormBindingIds?: ReadonlySet<number>
+    /**
+     * Task-node field permissions (`TaskFormData.fieldPermissions`); composite `${bindingId}:${fieldName}`
+     * entries mark individual inlineSubForm fields READONLY, same as SubTableField's Add/Edit dialog.
+     * Absent here (undefined) → no field-level enforcement, same as if the FU never configured any.
+     */
+    fieldPermissions?: Record<string, string> | null
   }>(),
   {
     readonly: false,
@@ -131,6 +156,18 @@ function isSubTableEditable(): boolean {
   return props.editable && !props.readonly
 }
 
+/**
+ * Ancestry to pass to a nested inlineSubForm's own PortalFormFields render: this component's
+ * incoming visited set plus the binding the field currently being rendered points at (added here
+ * rather than left to the child, so the child's OWN self-check also sees the parent already
+ * on the path — matches resolveInlineSubFormFields' own accumulation behavior).
+ */
+function nextVisitedInlineSubFormBindingIds(bindingId: number | undefined): ReadonlySet<number> {
+  const next = new Set(props.visitedInlineSubFormBindingIds ?? [])
+  if (bindingId != null) next.add(Number(bindingId))
+  return next
+}
+
 function onFieldUpdate(key: string, val: unknown) {
   emit('update:field', key, val)
 }
@@ -146,8 +183,9 @@ provide(INLINE_LOOKUP_CASCADE_CTX, inlineLookupCascade)
 
 /**
  * Nested sub-table rows changed (add/edit/delete in SubTableField). Persist them under the
- * host row's `__subTables__` and emit as a field update so the host (SubTableInlineForm →
- * handleInlineFormUpdate, or the Link Form dialog → linkedFormData) carries them to save.
+ * host row's `__subTables__` and emit as a field update so the host (the `inlineSubForm`
+ * widget's handleInlineSubFormUpdate, or the Link Form dialog → linkedFormData) carries them
+ * to save.
  */
 function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
   const binding = resolveBinding(field._bindingId)
@@ -157,10 +195,37 @@ function onNestedSubTableRowsUpdate(field: FormField, rows: unknown[]) {
     { bindingId: binding.bindingId, tableName: binding.tableName },
     rows,
   )
-  // The host mirrors these onto the nested binding's own top-level slice (SubTableInlineForm →
-  // handleInlineFormUpdate → syncNestedSubTableBindings); that flat slice is what wins on save.
   emit('update:field', '__subTables__', sto)
 }
+
+/**
+ * Merges an inlineSubForm edit back into the bound sub-table's rows and persists them the
+ * same way onNestedSubTableRowsUpdate does — the nested-in-a-dialog and inline-on-the-canvas
+ * paths both ultimately write through __subTables__ on the same host row.
+ */
+function onInlineSubFormRowUpdate(bindingId: number, rows: unknown[]) {
+  const binding = resolveBinding(bindingId)
+  if (!binding) return
+  const sto = mergeNestedSubTableRowsIntoSto(
+    [props.parentRow, props.model],
+    { bindingId: binding.bindingId, tableName: binding.tableName },
+    rows,
+  )
+  emit('update:field', '__subTables__', sto)
+}
+
+// PortalSubTableBindingLite and SubTableBinding are intentionally loose sibling types over the
+// same upstream binding data (see useSubTableBindings.ts's own comment) — useInlineSubFormComponent
+// only reads the overlapping subset (bindingId/tableName/formFields/fieldDefinitions/data/bindingMode).
+const inlineSubForm = useInlineSubFormComponent({
+  readonly: () => props.readonly || !props.editable,
+  resolveBinding: (id) => resolveBinding(id) as unknown as SubTableBinding | undefined,
+  isBindingModeEditable: (mode) => String(mode ?? '').trim().toUpperCase() === 'EDITABLE',
+  getSavedRowsForBinding: (binding) =>
+    resolveSubTableRows(binding as unknown as PortalSubTableBindingLite) as Record<string, unknown>[],
+  handleSubTableUpdate: (bindingId, rows) => onInlineSubFormRowUpdate(bindingId, rows),
+  fieldPermissions: () => props.fieldPermissions,
+})
 
 /** Host row's own table joins the ancestor pool so a nested FK to it can be auto-filled. */
 const nestedParentTablesById = computed(() => {
@@ -203,6 +268,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :assignment-config="resolveBinding(field._bindingId)!.assignmentConfig"
         :model-value="resolveSubTableRows(resolveBinding(field._bindingId)!)"
         :editable="isSubTableEditable()"
+        :binding-type="resolveBinding(field._bindingId)?.bindingType"
         :allow-add="field.allowAdd"
         :allow-edit="field.allowEdit"
         :allow-delete="field.allowDelete"
@@ -222,6 +288,33 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         style="margin-bottom: 16px;"
         @update:model-value="(rows: any[]) => onNestedSubTableRowsUpdate(field, rows)"
         @update:parent-row="onNestedParentRowPatch"
+      />
+    </el-col>
+    <el-col
+      v-else-if="field.type === 'inlineSubForm'"
+      :span="24"
+      style="padding: 0;"
+    >
+      <SubTableInlineForm
+        v-if="resolveBinding(field._bindingId)"
+        :title="inlineSubForm.resolveInlineSubFormTitle(field)"
+        :fields="inlineSubForm.resolveInlineSubFormFields(field, visitedInlineSubFormBindingIds)"
+        :current-row="inlineSubForm.resolveInlineSubFormRow(field)"
+        :readonly="inlineSubForm.inlineSubFormReadonly(field)"
+        hide-save-button
+        framed
+        :sub-table-bindings="subTableBindings"
+        :linked-sub-table-bindings="linkedSubTableBindings ?? subTableBindings"
+        :host-table-id="resolveBinding(field._bindingId)?.tableId ?? null"
+        :host-field-definitions="resolveBinding(field._bindingId)?.fieldDefinitions"
+        :host-function-unit-id="hostFunctionUnitId"
+        :host-task-id="hostTaskId"
+        :host-primary-form-data="hostPrimaryFormData"
+        :host-primary-table-id="hostPrimaryTableId ?? null"
+        :visited-inline-sub-form-binding-ids="nextVisitedInlineSubFormBindingIds(field._bindingId)"
+        :field-permissions="fieldPermissions"
+        style="margin-bottom: 16px;"
+        @update:row="(row: Record<string, any>) => inlineSubForm.handleInlineSubFormUpdate(field, row)"
       />
     </el-col>
     <el-col
@@ -245,6 +338,8 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :parent-row="parentRow"
             :show-link-form-dialog-footer="showLinkFormDialogFooter"
             :compact-lookup-cells="compactLookupCells"
+            :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+            :field-permissions="fieldPermissions"
             @update:field="(k, v) => onFieldUpdate(k, v)"
           />
         </el-tab-pane>
@@ -277,6 +372,8 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :parent-row="parentRow"
           :show-link-form-dialog-footer="showLinkFormDialogFooter"
           :compact-lookup-cells="compactLookupCells"
+          :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+          :field-permissions="fieldPermissions"
           row-columns
           @update:field="(k, v) => onFieldUpdate(k, v)"
         />
@@ -296,6 +393,8 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :parent-row="parentRow"
         :show-link-form-dialog-footer="showLinkFormDialogFooter"
         :compact-lookup-cells="compactLookupCells"
+        :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+        :field-permissions="fieldPermissions"
         in-column
         @update:field="(k, v) => onFieldUpdate(k, v)"
       />
@@ -321,6 +420,8 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :parent-row="parentRow"
             :show-link-form-dialog-footer="showLinkFormDialogFooter"
             :compact-lookup-cells="compactLookupCells"
+            :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+            :field-permissions="fieldPermissions"
             @update:field="(k, v) => onFieldUpdate(k, v)"
           />
         </el-collapse-item>
@@ -351,6 +452,8 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :parent-row="parentRow"
             :show-link-form-dialog-footer="showLinkFormDialogFooter"
             :compact-lookup-cells="compactLookupCells"
+            :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
+            :field-permissions="fieldPermissions"
             @update:field="(k, v) => onFieldUpdate(k, v)"
           />
         </el-row>

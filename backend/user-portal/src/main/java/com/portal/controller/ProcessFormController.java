@@ -1,9 +1,13 @@
 package com.portal.controller;
 
+import com.portal.component.ActionTableReadComponent;
+import com.portal.component.ProcessComponent;
 import com.portal.component.ProcessFormComponent;
 import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
+import com.portal.dto.ActionTableRowsDTO;
 import com.portal.dto.ProcessFormData;
+import com.portal.dto.ProcessInstanceInfo;
 import com.portal.exception.PortalException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,12 +31,26 @@ import java.util.Map;
 public class ProcessFormController {
 
     private final ProcessFormComponent processFormComponent;
+    private final ProcessComponent processComponent;
+    private final ActionTableReadComponent actionTableReadComponent;
+
+    @GetMapping("/{processInstanceId}/action-table-rows")
+    @Operation(summary = "获取该请求下所有已挂载 ACTION 表绑定的只读行数据（My Request / Application Detail 场景）")
+    public ApiResponse<List<ActionTableRowsDTO>> getActionTableRows(
+            @CurrentUserId String userId,
+            @PathVariable String processInstanceId) {
+        log.debug("GET /processes/{}/action-table-rows", processInstanceId);
+        requireProcessReadAccess(userId, processInstanceId);
+        return ApiResponse.success(actionTableReadComponent.getActionTableRows(processInstanceId));
+    }
 
     @GetMapping("/{processInstanceId}/form")
     @Operation(summary = "获取 Process Form 布局 + 当前流程变量值")
     public ApiResponse<ProcessFormData> getProcessFormData(
+            @CurrentUserId String userId,
             @PathVariable String processInstanceId) {
         log.debug("GET /processes/{}/form", processInstanceId);
+        requireProcessReadAccess(userId, processInstanceId);
         ProcessFormData data = processFormComponent.getProcessFormData(processInstanceId);
         return ApiResponse.success(data);
     }
@@ -45,6 +64,25 @@ public class ProcessFormController {
         log.debug("PUT /processes/{}/form by user {}", processInstanceId, userId);
         processFormComponent.submitProcessFormUpdate(processInstanceId, userId, formData);
         return ApiResponse.success(null);
+    }
+
+    /**
+     * Process form layout carries another user's submitted values, so reading it
+     * requires the same participant/admin/view/audit gate as the process detail itself.
+     * An unresolvable instance is left to the component's own 404 handling rather
+     * than being reported as a permission failure.
+     */
+    private void requireProcessReadAccess(String userId, String processInstanceId) {
+        if (userId == null || userId.isBlank()) {
+            log.warn("Anonymous attempt to read process form of {}", processInstanceId);
+            throw new PortalException("403", "You do not have permission to view this process");
+        }
+        ProcessInstanceInfo detail = processComponent.getProcessDetail(processInstanceId);
+        if (detail != null && !processComponent.canAuditProcessDetail(userId, detail)) {
+            log.warn("User {} attempted to read process form of {} without detail access",
+                    userId, processInstanceId);
+            throw new PortalException("403", "You do not have permission to view this process");
+        }
     }
 
     /**

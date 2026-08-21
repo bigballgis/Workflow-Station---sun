@@ -190,6 +190,8 @@ public class FunctionUnitContentComponent {
                         .sourceId(content.getSourceId())
                         .data(latest.configJson())
                         .formType(latest.formType())
+                        // Lets the portal tell a node's To Do design from its My Requests one.
+                        .scene(latest.scene())
                         .type(ContentType.FORM.name())
                         .build());
             } else if (content.getContentType() == ContentType.DATA_TABLE) {
@@ -237,7 +239,7 @@ public class FunctionUnitContentComponent {
         }
     }
 
-    private record FormDefinitionSnapshot(String configJson, String formType) {}
+    private record FormDefinitionSnapshot(String configJson, String formType, String scene) {}
 
     /**
      * For FORM content, try to fetch the latest config_json + form_type from dw_form_definitions
@@ -246,7 +248,7 @@ public class FunctionUnitContentComponent {
     private FormDefinitionSnapshot fetchLatestFormDefinitionOrFallback(
             FunctionUnitContent content, String fallbackData) {
         if (content.getSourceId() == null) {
-            return new FormDefinitionSnapshot(fallbackData, null);
+            return new FormDefinitionSnapshot(fallbackData, null, null);
         }
         try {
             Long sourceIdLong = Long.parseLong(content.getSourceId());
@@ -256,11 +258,12 @@ public class FunctionUnitContentComponent {
                 }
                 return new FormDefinitionSnapshot(
                         rs.getString("config_json"),
-                        rs.getString("form_type"));
+                        rs.getString("form_type"),
+                        rs.getString("scene"));
             };
             FormDefinitionSnapshot latest = jdbcTemplate.query(
                     """
-                            SELECT config_json::text AS config_json, form_type
+                            SELECT config_json::text AS config_json, form_type, scene
                             FROM dw_form_definitions
                             WHERE id = ?
                             """,
@@ -277,7 +280,7 @@ public class FunctionUnitContentComponent {
             log.warn("Could not fetch latest form definition for form sourceId={}, using content_data: {}",
                     content.getSourceId(), e.getMessage());
         }
-        return new FormDefinitionSnapshot(fallbackData, null);
+        return new FormDefinitionSnapshot(fallbackData, null, null);
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.developer.repository;
 
 import com.developer.entity.FormDefinition;
+import com.developer.enums.FormScene;
 import com.developer.enums.FormType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -54,4 +55,13 @@ public interface FormDefinitionRepository extends JpaRepository<FormDefinition, 
     boolean existsByBoundTable_Id(Long tableId);
     
     long countByFunctionUnitIdAndFormType(Long functionUnitId, FormType formType);
+
+    /**
+     * A function unit may hold one PROCESS form per scene — one for New Request
+     * (TASK) and one for the My Requests view (REQUEST).
+     */
+    long countByFunctionUnitIdAndFormTypeAndScene(Long functionUnitId, FormType formType, FormScene scene);
+
+    List<FormDefinition> findByFunctionUnitIdAndFormTypeAndScene(
+            Long functionUnitId, FormType formType, FormScene scene);
 }

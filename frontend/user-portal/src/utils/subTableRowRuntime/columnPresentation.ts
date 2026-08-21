@@ -49,6 +49,35 @@ export function applyFkPresentationToDialogColumns(
   return { visibleColumns, allColumns }
 }
 
+/**
+ * Applies Process Design task-node field permissions (composite `${bindingId}:${fieldName}`
+ * keys, see field-level sub-table permission extension) as {@code readonly} overrides on the
+ * Add/Edit dialog columns of one sub-table binding.
+ *
+ * No entry for this binding at all → every column unaffected (backward-compatible default for
+ * Function Units that never configured sub-table field permissions). A column already
+ * `readonly` from FK/auto-PK presentation stays readonly regardless (this only narrows, never
+ * widens, editability).
+ */
+export function applyFieldPermissionsToDialogColumns(
+  columns: DialogColumn[],
+  bindingId: number | null | undefined,
+  fieldPermissions: Record<string, string> | null | undefined,
+): DialogColumn[] {
+  if (bindingId == null || !fieldPermissions) return columns
+  const prefix = `${bindingId}:`
+  const hasAnyForBinding = Object.keys(fieldPermissions).some(key => key.startsWith(prefix))
+  if (!hasAnyForBinding) return columns
+  return columns.map(col => {
+    if (col.readonly) return col
+    const permission = fieldPermissions[`${prefix}${col.field}`]
+    if (permission != null && String(permission).toUpperCase() === 'READONLY') {
+      return { ...col, readonly: true }
+    }
+    return col
+  })
+}
+
 /** Inline / modal subForm fields: auto-PK and string FK values must not use el-input-number. */
 export function applyFieldDefinitionsToFormFields<
   T extends { key: string; type?: string; readonly?: boolean },

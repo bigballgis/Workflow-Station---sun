@@ -103,7 +103,16 @@ export default {
     settings: 'Settings',
     relationTables: 'Relation Tables',
     relationTableGroup: 'Relation Table',
-    views: 'Views'
+    allFunctionUnits: 'All Function Units',
+    commonTables: 'Common',
+    views: 'Views',
+    audit: 'All Requests',
+    auditLoadFailed: 'Could not load the function units you may audit.',
+    sectionTask: 'Task',
+    sectionRequest: 'Request',
+    sectionAudit: 'Audit',
+    sectionData: 'Data',
+    sectionSetup: 'Setup'
   },
   mainTableView: {
     openRelatedRecord: 'Open related record',
@@ -115,6 +124,11 @@ export default {
     defaultTag: 'Default',
     functionUnits: 'Function Units',
     noPublishedFu: 'No published function units with views',
+    detailTitle: 'Record',
+    noDetailForm: 'No detail form is configured for this view.',
+    noDetailPage: 'This view has no detail page.',
+    rowNotFound: 'This record could not be loaded.',
+    rowNotAddressable: 'This row cannot be opened — it has no identifier.',
     selectFuAndView: 'Select a function unit and view',
     loadFuFailed: 'Failed to load function units',
     loadDataFailed: 'Failed to load view data',
@@ -496,6 +510,13 @@ export default {
     hoursAgo: '{n} hr ago',
     daysAgo: '{n} days ago'
   },
+  audit: {
+    title: 'Audit',
+    initiator: 'Raised by',
+    noRequests: 'No requests in this function unit.',
+    noAccess: 'No audit access',
+    noAccessHint: 'You do not have audit access to this function unit. Ask an administrator to grant your role audit access to it.',
+  },
   application: {
     title: 'My Requests',
     processTitle: 'Process Title',
@@ -519,6 +540,8 @@ export default {
     continueFilling: 'Continue',
     noDrafts: 'No drafts',
     noApplications: 'No applications yet',
+    noSceneForm: 'No form design configured for this scene.',
+    noSceneFormHint: 'Design one in Developer Workstation for the My Requests scene.',
     loadFailed: 'Failed to load applications',
     loadDraftsFailed: 'Failed to load drafts',
     deleteDraftConfirm: 'Are you sure to delete this draft?',

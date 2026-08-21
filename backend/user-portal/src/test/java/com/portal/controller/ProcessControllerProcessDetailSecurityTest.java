@@ -34,6 +34,9 @@ class ProcessControllerProcessDetailSecurityTest {
     @Mock
     private FunctionUnitAccessComponent functionUnitAccessComponent;
 
+    @Mock
+    private com.portal.component.FunctionUnitAuditScopeComponent functionUnitAuditScopeComponent;
+
     @InjectMocks
     private ProcessController processController;
 
@@ -61,7 +64,7 @@ class ProcessControllerProcessDetailSecurityTest {
                 .startUserId("other-user")
                 .build();
         when(processComponent.getProcessDetail("proc-1")).thenReturn(detail);
-        when(processComponent.canAccessProcessDetail("viewer", detail)).thenReturn(false);
+        when(processComponent.canAuditProcessDetail("viewer", detail)).thenReturn(false);
         when(i18nService.getMessage("portal.process_detail_access_denied"))
                 .thenReturn("You do not have permission to view this process");
 
@@ -82,7 +85,7 @@ class ProcessControllerProcessDetailSecurityTest {
                 .functionUnitCode("test-fu")
                 .build();
         when(processComponent.getProcessDetail("proc-1")).thenReturn(detail);
-        when(processComponent.canAccessProcessDetail("viewer", detail)).thenReturn(true);
+        when(processComponent.canAuditProcessDetail("viewer", detail)).thenReturn(true);
 
         ApiResponse<ProcessInstanceInfo> response = processController.getProcessDetail("viewer", "proc-1");
 
@@ -106,7 +109,7 @@ class ProcessControllerProcessDetailSecurityTest {
                 .startUserId("user-1")
                 .build();
         when(processComponent.getProcessDetail("proc-1")).thenReturn(detail);
-        when(processComponent.canAccessProcessDetail(eq("user-1"), eq(detail))).thenReturn(true);
+        when(processComponent.canAuditProcessDetail(eq("user-1"), eq(detail))).thenReturn(true);
         when(processComponent.getProcessHistory("proc-1")).thenReturn(java.util.List.of());
 
         ApiResponse<java.util.List<java.util.Map<String, Object>>> response =

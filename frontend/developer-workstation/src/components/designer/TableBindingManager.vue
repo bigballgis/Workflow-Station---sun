@@ -132,7 +132,7 @@
                 link
                 type="danger"
                 size="small"
-                :disabled="row.bindingType === 'PRIMARY'"
+                :disabled="row.bindingType === 'PRIMARY' && restrictPrimarySubOnly"
                 @click="handleDelete(row)"
               >
                 {{ t('common.delete') }}
@@ -198,6 +198,10 @@
               :disabled="needsPrimaryFirst"
             />
             <el-option
+              :label="t('tableBinding.actionBindingTable')"
+              value="ACTION"
+            />
+            <el-option
               :label="t('tableBinding.relatedTable')"
               value="RELATED"
             />
@@ -210,9 +214,9 @@
           </div>
         </el-form-item>
 
-        <!-- Sub binding mode (only show for SUB type) -->
+        <!-- Sub binding mode (SUB and ACTION types both generate a form-design canvas + optional list view) -->
         <el-form-item
-          v-if="bindingForm.bindingType === 'SUB'"
+          v-if="bindingForm.bindingType === 'SUB' || bindingForm.bindingType === 'ACTION'"
           :label="t('tableBinding.subMode')"
         >
           <el-radio-group v-model="bindingForm.subMode">
@@ -299,7 +303,7 @@
         </el-form-item>
 
         <el-form-item
-          v-if="bindingForm.bindingType === 'SUB' && bindingForm.bindingLinkMode === 'structuralFk'"
+          v-if="(bindingForm.bindingType === 'SUB' || bindingForm.bindingType === 'ACTION') && bindingForm.bindingLinkMode === 'structuralFk'"
           :label="t('tableBinding.structuralFkFields')"
         >
           <div v-if="structuralFkFieldNames.length">
@@ -406,6 +410,7 @@ const {
   getFormId: () => props.formId,
   t,
   emitUpdate: () => emit('update'),
+  restrictPrimarySubOnly,
 })
 
 // Get table name by ID

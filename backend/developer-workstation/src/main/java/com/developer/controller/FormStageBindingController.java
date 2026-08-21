@@ -4,6 +4,7 @@ import com.developer.component.FormDesignComponent;
 import com.platform.common.dto.ApiResponse;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
+import com.developer.enums.FormScene;
 import com.developer.repository.FormStageBindingRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,27 +47,33 @@ public class FormStageBindingController {
             @RequestParam(value = "stageId", required = false) String stageId,
             @Parameter(description = "Owning function unit code. Optional only because a caller may fail to "
                     + "resolve it; without it the same stage id may match another function unit's form.")
-            @RequestParam(value = "functionUnitCode", required = false) String functionUnitCode) {
+            @RequestParam(value = "functionUnitCode", required = false) String functionUnitCode,
+            @Parameter(description = "Rendering scene: TASK (To Do/Completed) or REQUEST (My Requests/audit). "
+                    + "Defaults to TASK so existing callers keep resolving the To Do design.")
+            @RequestParam(value = "scene", required = false) FormScene scene) {
         if (stageId == null || stageId.isBlank()) {
             return ResponseEntity.ok(ApiResponse.success(Map.of()));
         }
         String stage = stageId.trim();
+        FormScene resolvedScene = scene == null ? FormScene.TASK : scene;
 
         if (functionUnitCode != null && !functionUnitCode.isBlank()) {
             // Scoped resolution: a miss here is a definitive negative — the function unit is
-            // known and simply has no form bound to this stage. Falling through to the global
-            // lookup would serve another unit's form.
-            return firstBinding(
-                    formStageBindingRepository.findByFunctionUnitCodeAndStageId(functionUnitCode.trim(), stage));
+            // known and simply has no form bound to this stage in this scene. Falling through
+            // to the global lookup would serve another unit's form, and falling back to the
+            // other scene would silently render the To Do design inside My Requests.
+            return firstBinding(formStageBindingRepository
+                    .findByFunctionUnitCodeAndStageIdAndScene(functionUnitCode.trim(), stage, resolvedScene));
         }
 
         // No function unit resolvable by the caller: stay deterministic (highest form id
         // wins) instead of throwing on the legitimately ambiguous multi-unit case.
-        List<FormStageBinding> candidates = formStageBindingRepository.findByStageIdOrderByFormIdDesc(stage);
+        List<FormStageBinding> candidates =
+                formStageBindingRepository.findByStageIdAndSceneOrderByFormIdDesc(stage, resolvedScene);
         if (candidates.size() > 1) {
-            log.warn("Stage id '{}' is bound in {} function units and no functionUnitCode was supplied; "
-                    + "resolving to form {}. Pass functionUnitCode to disambiguate.",
-                    stage, candidates.size(), candidates.get(0).getForm().getId());
+            log.warn("Stage id '{}' is bound in {} function units for scene {} and no functionUnitCode was "
+                    + "supplied; resolving to form {}. Pass functionUnitCode to disambiguate.",
+                    stage, candidates.size(), resolvedScene, candidates.get(0).getForm().getId());
         }
         return firstBinding(candidates);
     }

@@ -26,6 +26,7 @@ import com.developer.enums.EmailConnectionDirection;
 import com.developer.enums.EmailMonitorActionType;
 import com.developer.enums.OAuthProvider;
 import com.developer.enums.DataType;
+import com.developer.enums.FormScene;
 import com.developer.enums.FormType;
 import com.developer.enums.SubMode;
 import com.developer.enums.TableType;
@@ -270,6 +271,7 @@ public class FunctionUnitImportWriter {
                 .functionUnit(functionUnit)
                 .formName((String) formData.get("formName"))
                 .formType(FormType.valueOf((String) formData.get("formType")))
+                .scene(parseScene(formData.get("scene")))
                 .displayName((String) formData.get("description"))
                 .configJson(configJsonMap != null ? configJsonMap : new HashMap<>())
                 .fieldPermissions(fieldPermissions)
@@ -469,9 +471,25 @@ public class FunctionUnitImportWriter {
                     .stageId((String) stageData.get("stageId"))
                     .stageName((String) stageData.get("stageName"))
                     .readOnly(readOnly)
+                    .scene(parseScene(stageData.get("scene")))
                     .build();
             form.getStageBindings().add(stageBinding);
         }
+    }
+
+    /**
+     * Packages exported before the scene axis carry no scene; they describe the
+     * To Do design, which is what TASK means.
+     */
+    private static FormScene parseScene(Object raw) {
+        if (raw instanceof String name && !name.isBlank()) {
+            try {
+                return FormScene.valueOf(name.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                log.warn("Unknown form scene '{}' in import package; treating as TASK", name);
+            }
+        }
+        return FormScene.TASK;
     }
 
     @SuppressWarnings("unchecked")

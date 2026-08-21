@@ -4,34 +4,9 @@
  */
 
 /**
- * Sub-table portal display strategy. Designed in developer-workstation's
- * FormDesigner (Sub-Table property panel → "Portal Display") and consumed
- * by user-portal's FormRenderer to decide rendering per page (To Do vs My Request).
- */
-export type SubTableAssigneeTodoMode = 'formBelowTable' | 'tableOnly'
-export type SubTableInitiatorRequestMode = 'mirrorTodo' | 'summaryWithLinkFormModal' | 'tableOnly'
-export type SubTableFormSourceType = 'subForm' | 'linkForm' | 'formId'
-
-export interface SubTablePortalViews {
-  assigneeTodo: SubTableAssigneeTodoMode
-  assigneeTodoFormSource?: {
-    type: SubTableFormSourceType
-    formId?: number | string | null
-    /**
-     * When `type='linkForm'`, identifies WHICH Link Form column on the sub-table's
-     * list view should drive the inline form-below-table. Matched against the
-     * `componentId` of `dw_link_form_components`. Unset → runtime falls back to the
-     * first Link Form column it finds on the binding (legacy behavior).
-     */
-    linkFormColumnId?: number | string | null
-  }
-  initiatorRequest: SubTableInitiatorRequestMode
-}
-
-/**
- * View context driving how FormRenderer resolves portalViews on subTable nodes.
- * - `assigneeTodo`: To Do detail page (办理人待办)
- * - `initiatorRequest`: My Request / process instance detail (发起人我的申请)
+ * Which portal block a form is being rendered inside. To Do and My Requests each
+ * have their own form design now, so this no longer selects a layout — it only
+ * labels the surrounding block (a task page still embeds a process-form section).
  */
 export type PortalViewContext = 'assigneeTodo' | 'initiatorRequest'
 
@@ -65,7 +40,7 @@ export interface FormField {
   uploadUrl?: string
   uploadAccept?: string
   uploadLimit?: number
-  _bindingId?: number  // set when type === 'subTable'
+  _bindingId?: number  // set when type === 'subTable' | 'inlineSubForm'
   /** RecordNote panel config; only present when type === 'recordNote'. */
   _recordNote?: {
     scope: 'TABLE' | 'RECORD'
@@ -78,7 +53,6 @@ export interface FormField {
     pageSize?: number
   }
   /** Designer-driven portal display strategy; only present when type === 'subTable'. */
-  portalViews?: SubTablePortalViews
   /**
    * 子表逐操作权限（type === 'subTable'）：设计器右侧属性面板 props.allowAdd/allowEdit/allowDelete。
    * undefined => 视为放开（回退 editable，历史表单三项全开）；显式 false => 隐藏该操作。
@@ -86,6 +60,11 @@ export interface FormField {
   allowAdd?: boolean
   allowEdit?: boolean
   allowDelete?: boolean
+  /**
+   * Presentation, designed on the form canvas. `compactCells` keeps lookup/user
+   * cells to a single line instead of expanding a detail block below them.
+   */
+  compactCells?: boolean
   children?: FormField[] // set for layout containers such as card
   /** Nested el-tabs inside a tab pane (type === 'tabs'). */
   tabs?: FormTab[]

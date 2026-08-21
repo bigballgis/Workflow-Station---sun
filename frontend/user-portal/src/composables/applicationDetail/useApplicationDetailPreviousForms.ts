@@ -46,12 +46,7 @@ export function createApplicationDetailPreviousForms(ctx: ApplicationDetailCtx):
       const cols = ctx.resolveSubTableBindingColumnsForPortal(b, prevFormConfig, allContentForms)
       if (!Array.isArray(cols) || cols.length === 0) continue
       const prevSubForms = prevFormConfig.subForms || {}
-      const prevSubTablePortalViews = prevFormConfig.subTablePortalViews || {}
       const subFormDesign = ctx.resolveSubFormDesign(b, prevSubForms)
-      const bindingPortalViews =
-        prevSubTablePortalViews[b.bindingId]
-        ?? prevSubTablePortalViews[String(b.bindingId)]
-        ?? null
       const binding = {
         bindingId: b.bindingId,
         tableId: b.tableId != null ? Number(b.tableId) : null,
@@ -68,7 +63,6 @@ export function createApplicationDetailPreviousForms(ctx: ApplicationDetailCtx):
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
         assignmentConfig: b.assignmentConfig,
-        portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(
           b.primaryKeyFields,
           b.bindingId,

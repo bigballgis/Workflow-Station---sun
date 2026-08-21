@@ -1,5 +1,6 @@
 package com.admin.dto.response;
 
+import com.admin.entity.FunctionUnit;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
 import com.platform.common.enums.RelationDataType;
@@ -31,6 +32,15 @@ public class RelationTableResponse {
     private Boolean enabled;
     private Boolean portalVisible;
     private Integer currentVersion;
+
+    /**
+     * Optional Function Unit grouping. functionUnitId references sys_function_units.id;
+     * code/name are resolved by the service layer for display and are null when ungrouped.
+     */
+    private String functionUnitId;
+    private String functionUnitCode;
+    private String functionUnitName;
+
     private List<FieldDefinitionResponse> fieldDefinitions;
     private Instant createdAt;
     private String createdBy;
@@ -122,11 +132,23 @@ public class RelationTableResponse {
                 .enabled(entity.getEnabled())
                 .portalVisible(entity.getPortalVisible())
                 .currentVersion(entity.getCurrentVersion())
+                .functionUnitId(entity.getFunctionUnitId())
                 .fieldDefinitions(fields)
                 .createdAt(entity.getCreatedAt())
                 .createdBy(entity.getCreatedBy())
                 .updatedAt(entity.getUpdatedAt())
                 .updatedBy(entity.getUpdatedBy())
                 .build();
+    }
+
+    /**
+     * Fills functionUnitCode/functionUnitName for display; pass null to leave both unset (ungrouped).
+     */
+    public void applyFunctionUnit(FunctionUnit functionUnit) {
+        if (functionUnit == null) {
+            return;
+        }
+        this.functionUnitCode = functionUnit.getCode();
+        this.functionUnitName = functionUnit.getName();
     }
 }

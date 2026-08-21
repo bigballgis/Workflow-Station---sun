@@ -221,15 +221,20 @@ export function taskFieldPermissionForField(field: FieldDefinition): TaskFieldPe
   return null
 }
 
+/**
+ * bindingId 非空时用复合 key `${bindingId}:${fieldName}` 写入子表字段权限,
+ * 避免与主表或其它子表同名字段互相覆盖(见 subtable field permission collision)。
+ */
 export function applyTaskFieldPermissionsFromTableFields(
   fieldPermissions: Record<string, string> | undefined,
   fields: FieldDefinition[],
+  bindingId?: number,
 ): Record<string, string> {
   const next = { ...(fieldPermissions || {}) }
   for (const field of fields) {
     const perm = taskFieldPermissionForField(field)
     if (perm) {
-      next[field.fieldName] = perm
+      next[bindingId != null ? `${bindingId}:${field.fieldName}` : field.fieldName] = perm
     }
   }
   return next

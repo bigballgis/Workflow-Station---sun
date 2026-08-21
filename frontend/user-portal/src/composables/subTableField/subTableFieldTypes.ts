@@ -74,13 +74,15 @@ export interface SubTableFieldProps {
   columns: Column[]
   /** Form-design canvas columns for Add/Edit row dialog (Designer parity). */
   dialogColumns?: Column[]
+  /** This binding's numeric id — resolves this binding's `${bindingId}:${fieldName}` entries in fieldPermissions. */
+  bindingId?: number | null
+  /** Task-node field permissions (`TaskFormData.fieldPermissions`); composite-keyed entries gate Add/Edit dialog fields. */
+  fieldPermissions?: Record<string, string> | null
   /** This binding's own form-design fields — nested subTable widgets here render inside the Add/Edit dialog. */
   formFields?: FormField[]
   /** Sub-form Form Design options for Add/Edit dialog lifecycle events. */
   formOptions?: Record<string, unknown> | null
   assignmentConfig?: AssignmentConfig
-  /** Form-below-table hosts: row click highlights + drives the inline form via currentRowChange. */
-  enableRowSelect?: boolean
   modelValue?: any[]
   editable?: boolean
   loading?: boolean
@@ -108,10 +110,6 @@ export interface SubTableFieldProps {
   suppressLinkFormInitialData?: boolean
   /** Task To Do only: show Cancel/Save on Link Form detail (completed / My Request omit). */
   showLinkFormDialogFooter?: boolean
-  /**
-   * 办理人待办 + form below table + 表单来源为 Link 子表时：点击链接不打开弹层，由宿主滚动到表格下方内联表单。
-   */
-  linkFormClickScrollToInline?: boolean
   /**
    * My Request + 「汇总列表 + Link/Details」：表格内 lookup / 用户快照只显示摘要标签，不在单元格内展开 el-descriptions，
    * 避免与「详情走 Link 弹层」的设计冲突（否则看起来像待办的 inline 表单区）。
@@ -158,7 +156,6 @@ export interface SubTableFieldEmit {
   (e: 'viewDetail', row: any, index: number): void
   (e: 'fillForm', row: any, index: number): void
   (e: 'update:linkedSubTableData', bindingId: number, rows: any[]): void
-  (e: 'linkFormScrollToInline'): void
 }
 
 /** Loose i18n translate signature (same shape as utils/subTableRowRuntime). */

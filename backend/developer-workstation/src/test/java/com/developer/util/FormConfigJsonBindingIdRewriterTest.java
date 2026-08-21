@@ -286,4 +286,53 @@ class FormConfigJsonBindingIdRewriterTest {
         assertTrue(virtualCfg.contains("\"tableId\":-1000000001"), virtualCfg);
         assertTrue(virtualCfg.contains("\"bindingId\":336"), virtualCfg);
     }
+
+    /**
+     * The Inline Form widget points at a SUB binding via the same {@code _bindingId} key as
+     * {@code subTable}. Without it in the type gate, an imported / cloned / rolled-back FU keeps
+     * the SOURCE environment's bindingId — the widget then binds to an unrelated table or shows
+     * "stale", with no error anywhere.
+     */
+    @Test
+    void remapBindingIds_remapsInlineSubFormBindingIdAtTopLevelAndInProps() {
+        Map<String, Object> configJson = new HashMap<>();
+        List<Map<String, Object>> rule = new ArrayList<>();
+        rule.add(new LinkedHashMap<>(Map.of(
+                "type", "inlineSubForm",
+                "_bindingId", 101,
+                "title", "Inline Form",
+                "props", new LinkedHashMap<>(Map.of("_bindingId", 101))
+        )));
+        configJson.put("rule", rule);
+
+        FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, Map.of(101L, 501L));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inline = (Map<String, Object>) ((List<?>) configJson.get("rule")).get(0);
+        assertEquals(501L, ((Number) inline.get("_bindingId")).longValue());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> props = (Map<String, Object>) inline.get("props");
+        assertEquals(501L, ((Number) props.get("_bindingId")).longValue());
+    }
+
+    @Test
+    void remapBindingIds_remapsInlineSubFormNestedInChildren() {
+        Map<String, Object> child = new LinkedHashMap<>();
+        child.put("type", "inlineSubForm");
+        child.put("_bindingId", 102);
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("type", "fcRow");
+        row.put("children", List.of(child));
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("rule", new ArrayList<>(List.of(row)));
+
+        FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, Map.of(102L, 502L));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> nested = (Map<String, Object>) ((List<?>) ((Map<?, ?>) ((List<?>) configJson.get("rule")).get(0))
+                .get("children")).get(0);
+        assertEquals(502L, ((Number) nested.get("_bindingId")).longValue());
+    }
 }

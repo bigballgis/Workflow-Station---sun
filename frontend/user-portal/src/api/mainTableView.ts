@@ -19,6 +19,8 @@ export interface MainTableViewSummary {
   tableLabel?: string | null
   enableExport?: boolean
   enableImport?: boolean
+  /** DETAIL form opened when a row is clicked; null = rows are not clickable. */
+  detailFormId?: number | null
 }
 
 export type MainTableViewColumnType = 'field' | 'lookup_display' | 'fk_display'

@@ -21,7 +21,7 @@ import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdRule } from '@/utils/formFieldMeta'
 import { TABLE_AUDIT_FIELD_NAMES } from '@/utils/tableAuditFields'
 import type { SubTableListColumnDTO } from './useSubTableViews'
-import type { PortalViewsValue } from './useSubTablePortalViews'
+import type { FieldDefinition } from '@/api/functionUnit'
 import type { BlockingProgressApi } from '@/composables/useBlockingProgress'
 import {
   parseMiAssignmentsFromBpmn,
@@ -40,12 +40,13 @@ interface UseFormSaveOptions {
     bindingId: number
     bindingType: string
     assignmentTableName: string
+    tableName?: string
+    tableDisplayName?: string
   }>>
   subFormCache: Ref<Record<number, { rule: any[]; options: any }>>
   relationViewState: Ref<Record<number, { allFields: any[]; viewFields: any[] }>>
   subTableViewState: Ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }>>
   subTableListViewRefs: Ref<Record<number, any>>
-  subTablePortalViewsState: Ref<Record<number, PortalViewsValue>>
   getActiveDesignerRef: () => DesignerLike
   getPrimaryBindingFieldDefinitions: () => FieldDefinition[]
   syncSubTableListViewFromFormRules: (bindingId: number, rule: any[]) => void
@@ -60,6 +61,14 @@ interface UseFormSaveOptions {
   blockingProgress?: BlockingProgressApi
   getBpmnXml: () => string | undefined
   t: (key: string, params?: Record<string, unknown>) => string
+  /**
+   * Whether this form currently has a Main Table tab (and thus a mounted `designerRef`
+   * fc-designer instance) to collect a rule from. ACTION forms with no PRIMARY binding
+   * hide the Main Table tab entirely (see FormDesigner.vue's showMainTableTab) — Save
+   * must still work for their ACTION/RELATED tabs, so the main-rule collection below is
+   * skipped (not treated as "designer not ready") whenever this is false.
+   */
+  hasMainTableTab?: ComputedRef<boolean>
 }
 
 /**
@@ -71,9 +80,10 @@ export function useFormSave(options: UseFormSaveOptions) {
   const {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, designerSubBindings,
     subFormCache, relationViewState, subTableViewState, subTableListViewRefs,
-    subTablePortalViewsState, getActiveDesignerRef, getPrimaryBindingFieldDefinitions,
+    getActiveDesignerRef, getPrimaryBindingFieldDefinitions,
     syncSubTableListViewFromFormRules, loadForms, autoSaving, lastAutoSaveTime,
     provisionAndRepairForSave, willProvisionOnSave, blockingProgress, getBpmnXml, t,
+    hasMainTableTab,
   } = options
 
   const savingForm = ref(false)
@@ -113,7 +123,7 @@ export function useFormSave(options: UseFormSaveOptions) {
     return fieldNames.filter(name => !ALWAYS_VALID_FIELDS.has(name) && !dataTableColumns.value.includes(name))
   }
 
-  /** Get current form fields from the designer for field permission config */
+  /** Get current main-table form fields from the designer for field permission config */
   const currentFormFields = computed(() => {
     if (!designerRef.value || !selectedForm.value) return []
     try {
@@ -131,22 +141,57 @@ export function useFormSave(options: UseFormSaveOptions) {
     }
   })
 
-  /** Get field permission value */
-  function getFieldPermission(fieldName: string): string {
-    return selectedForm.value?.fieldPermissions?.[fieldName] || 'EDITABLE'
+  /**
+   * Sub-table fields for the field permission panel, grouped by SUB binding.
+   * Prefers the live subFormCache (seeded once the user visits that sub-table's tab, so it
+   * reflects unsaved canvas edits) but falls back to the saved config — the cache is empty
+   * until a tab is actually visited (e.g. Assignment-mode accordion layouts never auto-visit
+   * every sub-table tab the way the main canvas always mounts), mirroring currentFormFields'
+   * own fallback for the main table.
+   */
+  const currentSubFormFieldGroups = computed(() => {
+    if (!selectedForm.value) return []
+    const subForms = (selectedForm.value.configJson?.subForms || {}) as Record<string, { rule?: unknown[] }>
+    return designerSubBindings.value
+      .filter((b) => b.bindingType === 'SUB')
+      .map((b) => {
+        const cachedRule = subFormCache.value[b.bindingId]?.rule
+        const savedRule = subForms[b.bindingId]?.rule ?? subForms[String(b.bindingId)]?.rule
+        const rule = (cachedRule?.length ? cachedRule : savedRule) || []
+        const fields = rule
+          .filter((r: any) => r.field && r.type !== 'subTable')
+          .map((r: any) => ({ field: r.field, title: r.title || r.field }))
+        return {
+          bindingId: b.bindingId,
+          label: b.tableDisplayName || b.tableName || String(b.bindingId),
+          fields,
+        }
+      })
+      .filter((group) => group.fields.length > 0)
+  })
+
+  /** Get field permission value. bindingId scopes the lookup to a sub-table field (composite key). */
+  function getFieldPermission(fieldName: string, bindingId?: number): string {
+    const key = bindingId != null ? `${bindingId}:${fieldName}` : fieldName
+    return selectedForm.value?.fieldPermissions?.[key] || 'EDITABLE'
   }
 
-  /** Set field permission value */
-  function setFieldPermission(fieldName: string, value: string) {
+  /** Set field permission value. bindingId scopes the write to a sub-table field (composite key). */
+  function setFieldPermission(fieldName: string, value: string, bindingId?: number) {
     if (!selectedForm.value) return
     if (!selectedForm.value.fieldPermissions) {
       selectedForm.value.fieldPermissions = {}
     }
-    selectedForm.value.fieldPermissions[fieldName] = value
+    const key = bindingId != null ? `${bindingId}:${fieldName}` : fieldName
+    selectedForm.value.fieldPermissions[key] = value
   }
 
   async function handleSaveForm(isManual = false) {
-    if (!selectedForm.value || !designerRef.value) return
+    if (!selectedForm.value) return
+    // Forms without a Main Table tab (ACTION forms with no PRIMARY binding) never mount the
+    // main fc-designer, so designerRef.value is legitimately null here — not "not ready".
+    const mainTablePresent = hasMainTableTab ? hasMainTableTab.value : true
+    if (mainTablePresent && !designerRef.value) return
 
     // The form this save is for. If the user switches to another form while this save is
     // in flight (awaits below yield), the canvas/collected state belongs to THIS form —
@@ -165,27 +210,36 @@ export function useFormSave(options: UseFormSaveOptions) {
         if (subRef) flushDesignerValidatePanelToActiveRule(subRef as Parameters<typeof flushDesignerValidatePanelToActiveRule>[0])
       })
 
-      // getRule() returning null/undefined means the designer is not ready (distinct from a
-      // legitimately emptied canvas, which returns []). Saving anyway would persist an empty
-      // rule and wipe the whole form design — and auto-save fires on a timer, so the damage
-      // would be silent. Abort instead.
-      const rawRule = designerRef.value.getRule()
-      if (rawRule == null) {
-        console.error('[FormDesigner] getRule() returned null/undefined; aborting save to protect persisted form design')
-        if (isManual) ElMessage.error(t('form.saveFailed'))
-        return
+      let rule: any[]
+      let options: Record<string, unknown>
+      if (mainTablePresent) {
+        // getRule() returning null/undefined means the designer is not ready (distinct from a
+        // legitimately emptied canvas, which returns []). Saving anyway would persist an empty
+        // rule and wipe the whole form design — and auto-save fires on a timer, so the damage
+        // would be silent. Abort instead.
+        const rawRule = designerRef.value.getRule()
+        if (rawRule == null) {
+          console.error('[FormDesigner] getRule() returned null/undefined; aborting save to protect persisted form design')
+          if (isManual) ElMessage.error(t('form.saveFailed'))
+          return
+        }
+        rule = stripFormCreateRulesDisabledDeep(rawRule) as any[]
+        ensureFormCreateRulesValidationDeep(rule)
+        walkRulesApplyTableFieldDefaultsToPersistedRules(rule, getPrimaryBindingFieldDefinitions())
+        // prepare flattens `_on`→`on` and drops empty `$FNX:` stubs. Do NOT call
+        // walkRulesEnsureComponentEvents here: with leftover `_fc_id` it treats the
+        // persist snapshot as a live canvas rule, moves handlers back to `_on`, and
+        // Event panel / reload then look empty after Save.
+        prepareFormCreateRulesForPersist(rule)
+        options = serializeFormCreateOptionsForPersist(
+          designerRef.value.getOption() as Record<string, unknown>,
+        )
+      } else {
+        // No Main Table canvas mounted — preserve whatever was already persisted (typically
+        // an empty rule for a cleaned-up ACTION form) instead of touching it.
+        rule = Array.isArray(selectedForm.value.configJson?.rule) ? selectedForm.value.configJson.rule : []
+        options = (selectedForm.value.configJson?.options as Record<string, unknown>) || {}
       }
-      const rule = stripFormCreateRulesDisabledDeep(rawRule) as any[]
-      ensureFormCreateRulesValidationDeep(rule)
-      walkRulesApplyTableFieldDefaultsToPersistedRules(rule, getPrimaryBindingFieldDefinitions())
-      // prepare flattens `_on`→`on` and drops empty `$FNX:` stubs. Do NOT call
-      // walkRulesEnsureComponentEvents here: with leftover `_fc_id` it treats the
-      // persist snapshot as a live canvas rule, moves handlers back to `_on`, and
-      // Event panel / reload then look empty after Save.
-      prepareFormCreateRulesForPersist(rule)
-      const options = serializeFormCreateOptionsForPersist(
-        designerRef.value.getOption() as Record<string, unknown>,
-      )
 
       const subTableRules = collectSubTableRules(rule)
 
@@ -334,7 +388,8 @@ export function useFormSave(options: UseFormSaveOptions) {
         ...(selectedForm.value.configJson?.subListViews || {})
       }
       designerSubBindings.value.forEach((binding) => {
-        if (binding.bindingType !== 'SUB') return
+        // ACTION bindings (e.g. FORM_POPUP "Meeting Remark") save a list view the same way SUB does.
+        if (binding.bindingType !== 'SUB' && binding.bindingType !== 'ACTION') return
         const listRef = subTableListViewRefs.value[binding.bindingId]
         if (listRef) {
           const columns = listRef.getListColumns?.() || listRef.getViewFields?.() || []
@@ -369,17 +424,13 @@ export function useFormSave(options: UseFormSaveOptions) {
 
       // Collect per-binding portalViews — start from previously saved config so untouched
       // bindings keep their settings, then overlay anything the designer edited in this session.
-      const subTablePortalViews: Record<number, PortalViewsValue> = {
-        ...(selectedForm.value.configJson?.subTablePortalViews || {}),
-        ...subTablePortalViewsState.value
-      }
 
       if (selectedForm.value?.id !== targetFormId) {
         console.warn(`[FormDesigner] form switched (${targetFormId} -> ${selectedForm.value?.id ?? 'none'}) while collecting save payload; aborting to avoid saving one table's fields onto another form`)
         return
       }
 
-      let nextConfig: Record<string, unknown> = { rule, options, subForms, relationViews, subListViews, subTablePortalViews }
+      let nextConfig: Record<string, unknown> = { rule, options, subForms, relationViews, subListViews }
 
       // Manual Save: full-screen lock when provisioning tables (slow); always mark savingForm.
       let blockingOpened = false
@@ -411,7 +462,8 @@ export function useFormSave(options: UseFormSaveOptions) {
           }
         }
 
-        // 子表占位符必须绑定 SUB 类型表绑定（流程/任务表单下一主多子）— after provision so
+        // 子表占位符（subTable / inlineSubForm）必须绑定 SUB 或 ACTION 类型表绑定（流程/任务表单
+        // 下一主多子；ACTION = 操作留痕表，如 Meeting Remark，渲染为只读）— after provision so
         // newly created SUB bindings and remapped _bindingId are visible in designerSubBindings.
         if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
           const ruleAfter = Array.isArray(nextConfig.rule) ? nextConfig.rule as any[] : rule
@@ -424,7 +476,7 @@ export function useFormSave(options: UseFormSaveOptions) {
             const bindingId = normalizeBindingId(st._bindingId)
             if (bindingId == null) continue
             const bindingType = bindingMap.get(bindingId)
-            if (!bindingType || bindingType !== 'SUB') {
+            if (!bindingType || (bindingType !== 'SUB' && bindingType !== 'ACTION')) {
               if (isManual) ElMessage.error(t('form.subTableOnlySubBinding'))
               return
             }
@@ -523,6 +575,7 @@ export function useFormSave(options: UseFormSaveOptions) {
     loadDataTableColumns,
     validateFieldNames,
     currentFormFields,
+    currentSubFormFieldGroups,
     getFieldPermission,
     setFieldPermission,
     handleSaveForm,

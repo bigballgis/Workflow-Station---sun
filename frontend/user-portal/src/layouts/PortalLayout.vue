@@ -38,20 +38,19 @@
               BI Dashboard
             </template>
           </el-menu-item>
+          <!-- Task 区：待办 + 已处理任务 -->
+          <li
+            v-if="showFullPortal"
+            class="menu-section-label"
+          >
+            {{ t('menu.sectionTask') }}
+          </li>
           <el-menu-item
             v-if="showFullPortal"
             index="/tasks"
             class="menu-item-tasks"
           >
-            <el-badge
-              :value="pendingTaskCount"
-              :max="99"
-              :hidden="pendingTaskCount === 0"
-              type="danger"
-              class="task-menu-badge-icon"
-            >
-              <el-icon class="nav-anim nav-anim--wobble"><List /></el-icon>
-            </el-badge>
+            <el-icon class="nav-anim nav-anim--wobble"><List /></el-icon>
             <template #title>
               <span class="task-menu-title-with-badge">
                 <span class="task-menu-title-text">{{ t('menu.tasks') }}</span>
@@ -69,16 +68,24 @@
             v-if="showFullPortal"
             index="/tasks/completed"
           >
-            <el-icon class="nav-anim nav-anim--pop"><Finished /></el-icon>
+            <el-icon class="nav-anim nav-anim--rise"><List /></el-icon>
             <template #title>
               {{ t('menu.completedTasks') }}
             </template>
           </el-menu-item>
+
+          <!-- Request 区：新建申请 + 我的请求 + 全部申请（原 Audit） -->
+          <li
+            v-if="showFullPortal"
+            class="menu-section-label"
+          >
+            {{ t('menu.sectionRequest') }}
+          </li>
           <el-menu-item
             v-if="showFullPortal"
             index="/processes"
           >
-            <el-icon class="nav-anim nav-anim--pop"><Plus /></el-icon>
+            <el-icon class="nav-anim nav-anim--pop"><Document /></el-icon>
             <template #title>
               {{ t('menu.processes') }}
             </template>
@@ -87,61 +94,66 @@
             v-if="showFullPortal"
             index="/my-applications"
           >
-            <el-icon class="nav-anim nav-anim--wobble"><Document /></el-icon>
+            <el-icon class="nav-anim nav-anim--bounce"><Document /></el-icon>
             <template #title>
               {{ t('menu.myApplications') }}
             </template>
           </el-menu-item>
-          <el-menu-item
+
+          <!-- Audit 区：全部申请（原 Audit，仅在有权限的功能单元时出现） -->
+          <!-- Rendered only once a grant is known, so users without one never see
+               this appear and then vanish. -->
+          <template v-if="showFullPortal && auditFunctionUnits.length > 0">
+            <li class="menu-section-label">
+              {{ t('menu.sectionAudit') }}
+            </li>
+            <el-sub-menu index="audit-group">
+              <template #title>
+                <el-icon class="nav-anim nav-anim--wobble"><Document /></el-icon>
+                <span>{{ t('menu.audit') }}</span>
+              </template>
+              <el-menu-item
+                v-for="fu in auditFunctionUnits"
+                :key="fu.functionUnitCode"
+                :index="`/audit/${fu.functionUnitCode}`"
+              >
+                {{ fu.functionUnitName }}
+              </el-menu-item>
+            </el-sub-menu>
+          </template>
+
+          <!-- Data 区：关联表 + 视图 -->
+          <li
             v-if="showFullPortal"
-            index="/delegations"
+            class="menu-section-label"
           >
-            <el-icon class="nav-anim nav-anim--wobble"><Share /></el-icon>
+            {{ t('menu.sectionData') }}
+          </li>
+          <el-sub-menu
+            v-if="showFullPortal"
+            index="relation-tables-group"
+          >
             <template #title>
-              {{ t('menu.delegations') }}
+              <el-icon class="nav-anim nav-anim--blink"><Grid /></el-icon>
+              <span>{{ t('menu.relationTables') }}</span>
             </template>
-          </el-menu-item>
-          <el-menu-item
-            index="/permissions"
-            class="menu-item-permissions"
-          >
-            <el-badge
-              :value="pendingApprovalCount"
-              :max="99"
-              :hidden="pendingApprovalCount === 0"
-              type="danger"
-              class="perm-menu-badge-icon"
+            <el-menu-item index="/relation-tables">
+              {{ t('menu.allFunctionUnits') }}
+            </el-menu-item>
+            <el-menu-item
+              v-for="fu in relationTableFunctionUnits"
+              :key="fu.functionUnitCode"
+              :index="`/relation-tables/${fu.functionUnitCode}`"
             >
-              <el-icon class="nav-anim nav-anim--nudge"><Key /></el-icon>
-            </el-badge>
-            <template #title>
-              <span class="perm-menu-title-with-badge">
-                <span class="perm-menu-title-text">{{ t('menu.permissions') }}</span>
-                <el-badge
-                  :value="pendingApprovalCount"
-                  :max="99"
-                  :hidden="pendingApprovalCount === 0"
-                  type="danger"
-                  class="perm-menu-badge-text"
-                />
-              </span>
-            </template>
-          </el-menu-item>
-          <el-menu-item
-            v-if="showFullPortal"
-            index="/relation-tables"
-          >
-            <el-icon class="nav-anim nav-anim--pop"><Grid /></el-icon>
-            <template #title>
-              {{ t('menu.relationTables') }}
-            </template>
-          </el-menu-item>
+              {{ fu.functionUnitName }}
+            </el-menu-item>
+          </el-sub-menu>
           <el-sub-menu
             v-if="showFullPortal"
             index="views-group"
           >
             <template #title>
-              <el-icon class="nav-anim nav-anim--blink"><ViewIcon /></el-icon>
+              <el-icon class="nav-anim nav-anim--pop"><Grid /></el-icon>
               <span>{{ t('menu.views') }}</span>
             </template>
             <el-menu-item
@@ -159,6 +171,38 @@
               {{ t('mainTableView.noPublishedFu') }}
             </el-menu-item>
           </el-sub-menu>
+
+          <!-- Setup 区：委托管理 + 权限审批 + 用户档案设置（放到菜单最后） -->
+          <li class="menu-section-label">
+            {{ t('menu.sectionSetup') }}
+          </li>
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/delegations"
+          >
+            <el-icon class="nav-anim nav-anim--nudge"><Share /></el-icon>
+            <template #title>
+              {{ t('menu.delegations') }}
+            </template>
+          </el-menu-item>
+          <el-menu-item
+            index="/permissions"
+            class="menu-item-permissions"
+          >
+            <el-icon class="nav-anim nav-anim--blink"><Share /></el-icon>
+            <template #title>
+              <span class="perm-menu-title-with-badge">
+                <span class="perm-menu-title-text">{{ t('menu.permissions') }}</span>
+                <el-badge
+                  :value="pendingApprovalCount"
+                  :max="99"
+                  :hidden="pendingApprovalCount === 0"
+                  type="danger"
+                  class="perm-menu-badge-text"
+                />
+              </span>
+            </template>
+          </el-menu-item>
         </el-menu>
       </el-scrollbar>
       <div
@@ -220,9 +264,10 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import {
-  HomeFilled, List, Plus, Document, Share, Key,
-  Fold, Expand, Finished, DataAnalysis, Grid, View as ViewIcon
+  HomeFilled, List, Document, Share,
+  Fold, Expand, DataAnalysis, Grid
 } from '@element-plus/icons-vue'
 import SelfServiceBanner from '@/components/SelfServiceBanner.vue'
 import WorkspaceContextBar from '@/components/WorkspaceContextBar.vue'
@@ -241,6 +286,8 @@ import { biDashboardApi } from '@/api/biDashboard'
 import { usePendingApprovalStore } from '@/stores/pendingApproval'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 import { mainTableViewApi, type FunctionUnitViewMenuItem } from '@/api/mainTableView'
+import { processApi, type AuditFunctionUnit } from '@/api/process'
+import { relationTableApi } from '@/api/relationTable'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -257,11 +304,18 @@ const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
 const hasBiDashboards = ref(false)
 const viewFunctionUnits = ref<FunctionUnitViewMenuItem[]>([])
 const viewFuLoading = ref(false)
+const auditFunctionUnits = ref<AuditFunctionUnit[]>([])
+const relationTableFunctionUnits = ref<{ functionUnitCode: string; functionUnitName: string }[]>([])
 
 const activeMenu = computed(() => route.path)
 
-// 顶栏面包屑：当前页标题取路由 meta.titleKey（与 admin-center 同构）
+// 顶栏面包屑：当前页标题取路由 meta.titleKey（与 admin-center 同构）；
+// ApplicationDetail 被 My Requests 和 All Requests(Audit) 共用同一路由，
+// 靠 ?from=audit 区分入口，否则面包屑永远显示「My Requests」。
 const currentTitle = computed(() => {
+  if (route.name === 'ApplicationDetail' && route.query.from === 'audit') {
+    return t('menu.audit')
+  }
   const key = route.meta.titleKey as string | undefined
   return key ? t(key) : ''
 })
@@ -332,11 +386,55 @@ async function loadViewFunctionUnits() {
   }
 }
 
+async function loadAuditFunctionUnits() {
+  try {
+    const res = await processApi.getAuditFunctionUnits()
+    auditFunctionUnits.value = res.data || []
+  } catch {
+    // A failure here silently removes the audit entry, which looks identical to
+    // having no grant — say so instead of leaving reviewers guessing.
+    auditFunctionUnits.value = []
+    ElMessage.error(t('menu.auditLoadFailed'))
+  }
+}
+
+// Built-in system tables (e.g. the read-only User table) have no Function Unit of their own;
+// the sidebar files them under a fixed "Common" entry using this synthetic code — kept in sync
+// with the same constant in relation-tables/index.vue (COMMON_FU_CODE) and its table-name set.
+const COMMON_FU_CODE = '__common__'
+const COMMON_TABLE_NAMES = new Set(['sys_users'])
+
+/** Distinct Function Units among the user's visible Relation Tables, for the nav sub-menu. */
+async function loadRelationTableFunctionUnits() {
+  try {
+    const res = await relationTableApi.getVisibleTables()
+    const tables = res.data || []
+    const byCode = new Map<string, string>()
+    let hasCommon = false
+    for (const t of tables) {
+      if (COMMON_TABLE_NAMES.has(t.tableName)) {
+        hasCommon = true
+      } else if (t.functionUnitCode) {
+        byCode.set(t.functionUnitCode, t.functionUnitName || t.functionUnitCode)
+      }
+    }
+    const groups = [...byCode.entries()]
+      .map(([functionUnitCode, functionUnitName]) => ({ functionUnitCode, functionUnitName }))
+      .sort((a, b) => a.functionUnitName.localeCompare(b.functionUnitName))
+    relationTableFunctionUnits.value = hasCommon
+      ? [{ functionUnitCode: COMMON_FU_CODE, functionUnitName: t('menu.commonTables') }, ...groups]
+      : groups
+  } catch {
+    relationTableFunctionUnits.value = []
+  }
+}
+
 onMounted(() => {
   void (async () => {
     await syncPortalAccessFromServer()
     if (showFullPortal.value) {
-      await Promise.all([checkBiDashboards(), loadViewFunctionUnits()])
+      // Parallel: a third serial round-trip would delay first paint of the menu.
+      await Promise.all([checkBiDashboards(), loadViewFunctionUnits(), loadAuditFunctionUnits(), loadRelationTableFunctionUnits()])
     }
   })()
 })
@@ -511,71 +609,24 @@ $aside-collapsed-width: 64px;
       }
     }
 
-    /* 展开：徽标在菜单文字右侧；收起：徽标在图标上 */
-    &:not(.el-menu--collapse) .menu-item-tasks .task-menu-badge-icon :deep(.el-badge__content) {
-      display: none !important;
-    }
-    &.el-menu--collapse .menu-item-tasks .task-menu-badge-text {
-      display: none !important;
-    }
-
-    &:not(.el-menu--collapse) .menu-item-permissions .perm-menu-badge-icon :deep(.el-badge__content) {
-      display: none !important;
-    }
-    &.el-menu--collapse .menu-item-permissions .perm-menu-badge-text {
-      display: none !important;
-    }
-
     /* el-menu-item 全局有 * { vertical-align: bottom }，会把徽标压到偏下；此处拉回垂直居中 */
-    .menu-item-tasks {
-      .task-menu-title-with-badge,
-      .task-menu-title-with-badge :deep(*) {
-        vertical-align: middle !important;
-      }
-
-      .task-menu-badge-icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .task-menu-badge-icon :deep(.el-badge__content.is-fixed) {
-        top: 50%;
-        transform: translateY(-50%) translateX(100%);
-      }
-    }
-
     .menu-item-tasks .task-menu-title-with-badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       width: 100%;
       min-width: 0;
+
+      &,
+      :deep(*) {
+        vertical-align: middle !important;
+      }
     }
     .menu-item-tasks .task-menu-title-text {
       flex: 1;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
-    }
-
-    .menu-item-permissions {
-      .perm-menu-title-with-badge,
-      .perm-menu-title-with-badge :deep(*) {
-        vertical-align: middle !important;
-      }
-
-      .perm-menu-badge-icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      /* 角标相对图标垂直居中（默认 top:0 + translateY(-50%) 会贴在图标上沿） */
-      .perm-menu-badge-icon :deep(.el-badge__content.is-fixed) {
-        top: 50%;
-        transform: translateY(-50%) translateX(100%);
-      }
     }
 
     .menu-item-permissions .perm-menu-title-with-badge {
@@ -590,6 +641,37 @@ $aside-collapsed-width: 64px;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    // 纯文字分区标题：不可点击/不可折叠，与 admin-center 的 group label 同构；
+    // 中性灰 + 细分割线：与正文菜单项的品牌红（激活态/badge）区分开，避免两种红混在一起显乱。
+    .menu-section-label {
+      position: relative;
+      height: auto;
+      line-height: 1;
+      padding: 12px 16px 6px;
+      margin: 8px 0 0;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      color: #A8ABB2;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      user-select: none;
+      border-top: 1px solid #F0F0F2;
+
+      &:first-child {
+        margin-top: 0;
+        padding-top: 4px;
+        border-top: none;
+      }
+    }
+
+    // 收起态：分区标题占位没有意义，隐藏
+    &.el-menu--collapse .menu-section-label {
+      display: none;
     }
 
     // 收起态：菜单容器 8px padding 把条目压到 48px 宽，而 EP 仍按「64px 宽 + 20px 左 padding」

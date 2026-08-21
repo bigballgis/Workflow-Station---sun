@@ -7,6 +7,7 @@ import com.admin.dto.request.FunctionUnitAccessRequest;
 import com.admin.dto.request.FunctionUnitImportRequest;
 import com.admin.dto.response.DeploymentInfo;
 import com.admin.dto.response.FunctionUnitAccessInfo;
+import com.admin.dto.response.FunctionUnitAuditAccessInfo;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
@@ -18,6 +19,7 @@ import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.service.FunctionUnitAccessService;
+import com.admin.service.FunctionUnitAuditAccessService;
 import com.admin.service.UserReferenceResolver;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.i18n.I18nService;
@@ -62,6 +64,7 @@ public class FunctionUnitController extends AbstractBaseController {
     private final DeploymentManagerComponent deploymentManager;
     private final ProcessDeploymentComponent processDeploymentComponent;
     private final FunctionUnitAccessService accessService;
+    private final FunctionUnitAuditAccessService auditAccessService;
     private final UserReferenceResolver userReferenceResolver;
     private final I18nService i18nService;
 
@@ -607,7 +610,40 @@ public class FunctionUnitController extends AbstractBaseController {
         boolean hasAccess = accessService.hasAccess(id, userId);
         return ResponseEntity.ok(hasAccess);
     }
-    
+
+    // ==================== Audit access ====================
+    // Kept apart from the launch grants above on purpose: an audit grant lets a
+    // reviewer read every request of the unit, and must never imply the right to
+    // start one.
+
+    @GetMapping("/{id}/audit-access")
+    @Operation(summary = "List audit grants", description = "Roles allowed to review all requests of this unit")
+    public ResponseEntity<List<FunctionUnitAuditAccessInfo>> getAuditAccessConfigs(
+            @Parameter(description = "Function unit id") @PathVariable String id) {
+        log.info("Getting audit access configs for function unit: {}", id);
+        return ResponseEntity.ok(auditAccessService.getAuditAccessConfigs(id));
+    }
+
+    @PostMapping("/{id}/audit-access")
+    @Operation(summary = "Add audit grant", description = "Grant a business role review access")
+    public ResponseEntity<FunctionUnitAuditAccessInfo> addAuditAccessConfig(
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Valid @RequestBody FunctionUnitAccessRequest request) {
+        log.info("Adding audit access for function unit {}: roleId={}", id, request.getRoleId());
+        FunctionUnitAuditAccessInfo config = auditAccessService.addAuditAccessConfig(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(config);
+    }
+
+    @DeleteMapping("/{id}/audit-access/{accessId}")
+    @Operation(summary = "Remove audit grant", description = "Delete concrete audit-access row")
+    public ResponseEntity<Void> removeAuditAccessConfig(
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "Audit access config id") @PathVariable String accessId) {
+        log.info("Removing audit access {} from function unit {}", accessId, id);
+        auditAccessService.removeAuditAccessConfig(id, accessId);
+        return ResponseEntity.noContent().build();
+    }
+
     // ==================== Content payloads (portal consumers) ====================
     
     @GetMapping("/by-process-key/{processKey}")

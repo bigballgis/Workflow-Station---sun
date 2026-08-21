@@ -7,7 +7,7 @@
  * 所有 notify* 调用均在此处处理。错误通过 AppErrorCode 标准化。
  */
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -31,6 +31,38 @@ export function useRelationTable() {
   const showVersionDialog = ref(false)
   const showAccessDialog = ref(false)
   const showCompareDialog = ref(false)
+
+  // Function Unit sidebar grouping (Table Structure page): left panel groups all tables by FU,
+  // Ungrouped always sorts first; selecting a group filters the right-side table, '' = show all.
+  const selectedGroupKey = ref('')
+  const ALL_TABLES_KEY = ''
+  const UNGROUPED_KEY = '__ungrouped__'
+
+  interface TableGroup {
+    key: string
+    label: string | null
+    tables: RelationTableResponse[]
+  }
+
+  const groupedTableList = computed<TableGroup[]>(() => {
+    const groups = new Map<string, TableGroup>()
+    for (const t of tableList.value) {
+      const key = t.functionUnitId || UNGROUPED_KEY
+      const label = t.functionUnitId ? (t.functionUnitName || t.functionUnitCode || key) : null
+      if (!groups.has(key)) groups.set(key, { key, label, tables: [] })
+      groups.get(key)!.tables.push(t)
+    }
+    const entries = [...groups.values()]
+    const ungrouped = entries.filter(g => g.key === UNGROUPED_KEY)
+    const rest = entries.filter(g => g.key !== UNGROUPED_KEY)
+      .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
+    return [...ungrouped, ...rest]
+  })
+
+  const filteredTableList = computed(() => {
+    if (selectedGroupKey.value === ALL_TABLES_KEY) return tableList.value
+    return groupedTableList.value.find(g => g.key === selectedGroupKey.value)?.tables ?? []
+  })
 
   // ==================== Helpers ====================
 
@@ -144,6 +176,9 @@ export function useRelationTable() {
     // State
     loading,
     tableList,
+    filteredTableList,
+    groupedTableList,
+    selectedGroupKey,
     enableLoadingMap,
     portalLoadingMap,
     currentTable,

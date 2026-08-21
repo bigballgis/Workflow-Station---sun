@@ -63,6 +63,10 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
     Page<ProcessInstance> findByFunctionUnitCodeOrderByStartTimeDesc(
             String functionUnitCode, Pageable pageable);
 
+    // Same, narrowed by status — the audit list offers the same status filter as My Requests.
+    Page<ProcessInstance> findByFunctionUnitCodeAndStatusOrderByStartTimeDesc(
+            String functionUnitCode, String status, Pageable pageable);
+
 
     /**
      * Conditional update: updates {@code currentNode} and {@code currentAssignee} only when status is not COMPLETED.

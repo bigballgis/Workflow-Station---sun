@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   allocateChildRowAutoPrimaryKeys,
   applyFieldDefinitionsToFormFields,
+  applyFieldPermissionsToDialogColumns,
   applyFkPresentationToDialogColumns,
   applyMiParticipantRowSeedToInitialRow,
   filterStructuralFkMetasForBinding,
@@ -59,6 +60,48 @@ describe('applyFkPresentationToDialogColumns auto-PK', () => {
     )
     expect(allColumns[0].readonly).toBe(true)
     expect(allColumns[0].type).toBe('text')
+  })
+})
+
+describe('applyFieldPermissionsToDialogColumns', () => {
+  const columns = [
+    { field: 'name', label: 'Name', type: 'text' as const },
+    { field: 'bu_code', label: 'Business Unit', type: 'select' as const },
+    { field: 'role_code', label: 'Role', type: 'select' as const },
+  ]
+
+  it('marks READONLY composite-keyed fields readonly, leaves EDITABLE/unlisted fields untouched', () => {
+    const out = applyFieldPermissionsToDialogColumns(columns, 50544, {
+      '50544:bu_code': 'READONLY',
+      '50544:role_code': 'READONLY',
+      '50544:name': 'EDITABLE',
+    })
+    expect(out.find(c => c.field === 'bu_code')?.readonly).toBe(true)
+    expect(out.find(c => c.field === 'role_code')?.readonly).toBe(true)
+    expect(out.find(c => c.field === 'name')?.readonly).toBeFalsy()
+  })
+
+  it('does not apply another binding\'s composite key to this binding\'s same-named field', () => {
+    const out = applyFieldPermissionsToDialogColumns(columns, 50544, {
+      '50999:bu_code': 'READONLY',
+    })
+    expect(out.find(c => c.field === 'bu_code')?.readonly).toBeFalsy()
+  })
+
+  it('passes through unchanged when no composite key exists for this binding (backward compatible)', () => {
+    const out = applyFieldPermissionsToDialogColumns(columns, 50544, { name: 'READONLY' })
+    expect(out).toEqual(columns)
+  })
+
+  it('passes through unchanged when fieldPermissions or bindingId is absent', () => {
+    expect(applyFieldPermissionsToDialogColumns(columns, undefined, { '50544:name': 'READONLY' })).toEqual(columns)
+    expect(applyFieldPermissionsToDialogColumns(columns, 50544, null)).toEqual(columns)
+  })
+
+  it('never turns an already-readonly column (e.g. auto-PK) editable', () => {
+    const readonlyCol = [{ field: 'id_idw', label: 'Id', type: 'text' as const, readonly: true }]
+    const out = applyFieldPermissionsToDialogColumns(readonlyCol, 50544, { '50544:id_idw': 'EDITABLE' })
+    expect(out[0]?.readonly).toBe(true)
   })
 })
 

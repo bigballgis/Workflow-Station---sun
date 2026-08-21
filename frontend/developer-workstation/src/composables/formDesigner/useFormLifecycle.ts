@@ -2,7 +2,7 @@ import { nextTick, reactive, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { TabPaneName } from 'element-plus'
-import type { FieldDefinition, FormDefinition, FormType } from '@/api/functionUnit'
+import type { FieldDefinition, FormDefinition, FormScene, FormType } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { cloneFormRules, injectUploadButtonLabels, mergeLoadedFormOptions } from '@/utils/formDesigner'
@@ -16,7 +16,6 @@ import { resolveRelationViewEntry, resolveBindingKeyedEntry } from '@/utils/form
 import type { TableFieldDefLike } from '@/utils/formCreateRuleDefaults'
 import { parseProcessNodesFromBpmnXml, type BpmnProcessNode } from '@/utils/bpmnFormBindingUpdate'
 import type { SubTableListColumnDTO } from './useSubTableViews'
-import type { PortalViewsValue } from './useSubTablePortalViews'
 
 interface UseFormLifecycleOptions {
   functionUnitId: number
@@ -36,7 +35,6 @@ interface UseFormLifecycleOptions {
   subTableListViewRefs: Ref<Record<number, any>>
   subTableViewState: Ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }>>
   relationViewState: Ref<Record<number, { allFields: any[]; viewFields: any[] }>>
-  subTablePortalViewsState: Ref<Record<number, PortalViewsValue>>
   designerSubBindings: ComputedRef<Array<{ bindingId: number; bindingType: string; tableId: number }>>
   activeDesignerTab: Ref<string>
   showCreateDialog: Ref<boolean>
@@ -75,7 +73,7 @@ interface UseFormLifecycleOptions {
 export function useFormLifecycle(options: UseFormLifecycleOptions) {
   const {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, subFormCache,
-    subTableListViewRefs, subTableViewState, relationViewState, subTablePortalViewsState,
+    subTableListViewRefs, subTableViewState, relationViewState,
     designerSubBindings, activeDesignerTab, showCreateDialog, defaultFormOption,
     buildEffectiveMainFormConfig, buildEffectiveSubFormConfig, getTableFieldDefinitions, getPrimaryBindingFieldDefinitions,
     getTableFieldDefinitionsByTableId, mergeTaskPermissionsForFields,
@@ -90,7 +88,13 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
   // Sub-table tabs default to form design
   const subTableActiveTab = ref('form')
 
-  const createForm = reactive({ formName: '', formType: 'PROCESS' as FormType, description: '', boundTableId: null as number | null })
+  const createForm = reactive({
+    formName: '',
+    formType: 'PROCESS' as FormType,
+    scene: 'TASK' as FormScene,
+    description: '',
+    boundTableId: null as number | null,
+  })
   // Stage binding state for create dialog (TASK type)
   const createFormStageIds = ref<string[]>([])
   const createDialogProcessNodes = ref<BpmnProcessNode[]>([])
@@ -130,7 +134,6 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
     subTableViewState.value = {}
     // Seed per-binding portalViews from previously saved configJson so the editor reflects
     // persisted values immediately when the user opens any sub-table tab.
-    subTablePortalViewsState.value = { ...((row.configJson?.subTablePortalViews as Record<number, PortalViewsValue> | undefined) || {}) }
     activeDesignerTab.value = 'main'
     subTableActiveTab.value = 'form'
 
@@ -142,6 +145,21 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
       bindings = res.data || []
     } catch {
       bindings = []
+    }
+
+    // ACTION forms (FORM_POPUP) are reached via their Action Button, not a PRIMARY table row,
+    // so they don't require a PRIMARY binding — the Main Table tab is hidden entirely when one
+    // is absent (see FormDesigner.vue's showMainTableTab). Land on the ACTION binding's own
+    // canvas instead of a tab that won't render.
+    const hasPrimary = bindings.some((b) => b.bindingType === 'PRIMARY')
+    if (!hasPrimary) {
+      const firstBinding =
+        bindings.find((b) => b.bindingType === 'ACTION')
+        ?? bindings.find((b) => b.bindingType === 'SUB')
+        ?? bindings.find((b) => b.bindingType === 'RELATED')
+      if (firstBinding) {
+        activeDesignerTab.value = String(firstBinding.id)
+      }
     }
 
     const config = row.configJson || {}
@@ -160,9 +178,10 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
     const savedSubListViews = config.subListViews || {}
     const initialSubTableViewState: Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }> = {}
     for (const b of bindings) {
-      if (b.bindingType === 'SUB') {
+      // ACTION bindings (e.g. FORM_POPUP "Meeting Remark") get a list view the same way SUB does.
+      if (b.bindingType === 'SUB' || b.bindingType === 'ACTION') {
         const id = b.id as number
-        const saved = resolveBindingKeyedEntry(savedSubListViews, id, bindings, 'SUB')
+        const saved = resolveBindingKeyedEntry(savedSubListViews, id, bindings, b.bindingType)
           ?? savedSubListViews[id]
         initialSubTableViewState[id] = {
           allFields: [],
@@ -322,8 +341,8 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
       return
     }
 
-    // For SUB bindings, load sub-table list view config
-    if (binding.bindingType === 'SUB') {
+    // For SUB / ACTION bindings, load sub-table list view config
+    if (binding.bindingType === 'SUB' || binding.bindingType === 'ACTION') {
       if (!subTableViewState.value[bindingId] || subTableViewState.value[bindingId].allFields.length === 0) {
         loadSubTableViewConfig(bindingId, binding)
       }
@@ -391,9 +410,17 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
       ElMessage.warning(t('form.enterFormName'))
       return
     }
-    // PROCESS type: check uniqueness
+    // Step forms (PROCESS / TASK) are created as a To Do + My Requests pair: every step needs both
+    // designs, and the two rows are linked by BPMN node id rather than by name.
+    const createBothScenes = createForm.formType === 'PROCESS' || createForm.formType === 'TASK'
+    // PROCESS type: one per scene, not one per function unit — the start step needs
+    // its own read-only design for My Requests alongside the New Request one.
+    // A paired create needs BOTH slots free, or the second row would fail after the first is saved.
     if (createForm.formType === 'PROCESS') {
-      const existingProcess = store.forms.find(f => f.formType === 'PROCESS')
+      const scenesNeeded = createBothScenes ? ['TASK', 'REQUEST'] : [createForm.scene]
+      const existingProcess = store.forms.find(
+        f => f.formType === 'PROCESS' && scenesNeeded.includes(f.scene ?? 'TASK')
+      )
       if (existingProcess) {
         ElMessage.warning(t('form.processFormAlreadyExists'))
         return
@@ -407,23 +434,26 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
       }
     }
     try {
-      const stageBindings = createForm.formType === 'TASK'
-        ? createFormStageIds.value.map(id => {
-            const node = createDialogProcessNodes.value.find(n => n.id === id)
-            return { stageId: id, stageName: node?.name }
-          })
-        : undefined
+      // The selected stage ids are deliberately NOT sent: FormDefinitionRequest has no
+      // stageBindings field, so they were dropped on arrival (Jackson ignores unknown properties)
+      // and the create looked like it had bound the nodes when it never did. Node binding runs
+      // through the BPMN write in useFormNodeBinding / FormStageBindingController instead; the
+      // picker above stays as the up-front prompt to choose nodes.
       await store.createForm(functionUnitId, {
         formName: createForm.formName,
         formType: createForm.formType,
+        // A paired create always starts from the To Do scene; the backend adds the My Requests row.
+        scene: createBothScenes ? 'TASK' : createForm.scene,
         description: createForm.description,
         boundTableId: createForm.boundTableId || undefined,
         configJson: { rule: [], options: {} },
-        ...(stageBindings ? { stageBindings } : {})
+        ...(createBothScenes ? { createBothScenes: true } : {}),
       })
       ElMessage.success(t('form.createSuccess'))
       showCreateDialog.value = false
-      Object.assign(createForm, { formName: '', formType: 'PROCESS', description: '', boundTableId: null })
+      Object.assign(createForm, {
+        formName: '', formType: 'PROCESS', scene: 'TASK', description: '', boundTableId: null,
+      })
       createFormStageIds.value = []
       loadForms()
     } catch (e: any) {
@@ -452,6 +482,13 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
       loadCreateDialogProcessNodes()
     }
     createFormStageIds.value = []
+    // DETAIL forms are opened from a view row, not from a workflow step, so the
+    // scene axis (To Do vs My Requests) does not apply to them.
+    // ACTION forms are opened by a To Do action button, and My Requests has no action buttons,
+    // so they are pinned to To Do as well (the dialog also disables the My Requests option).
+    if (type === 'DETAIL' || type === 'ACTION') {
+      createForm.scene = 'TASK'
+    }
   }
 
   return {

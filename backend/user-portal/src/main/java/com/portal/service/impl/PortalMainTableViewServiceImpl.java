@@ -115,7 +115,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         try {
             List<MainTableViewSummary> summaries = jdbcTemplate.query("""
                             SELECT v.id, v.view_name, v.is_default, v.filter_config::text AS filter_config,
-                                   v.main_table_id,
+                                   v.main_table_id, v.detail_form_id,
                                    COALESCE(td.table_display_name, td.table_name) AS table_label
                             FROM dw_main_table_view_configs v
                             INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
@@ -134,6 +134,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                                 .tableLabel(rs.getString("table_label"))
                                 .enableExport(toolbarEnable(toolbar, "enableExport", true))
                                 .enableImport(toolbarEnable(toolbar, "enableImport", true))
+                                .detailFormId(rs.getObject("detail_form_id") != null
+                                        ? rs.getLong("detail_form_id") : null)
                                 .build();
                     },
                     functionUnitCode.trim());

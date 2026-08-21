@@ -9,7 +9,8 @@ export function useFormLabels(t: (key: string) => string) {
     const map: Record<string, string> = {
       PROCESS: t('form.processForm'),
       TASK: t('form.taskForm'),
-      ACTION: t('form.actionForm')
+      ACTION: t('form.actionForm'),
+      DETAIL: t('form.detailForm')
     }
     return map[type] || type
   }
@@ -38,16 +39,18 @@ export function useFormLabels(t: (key: string) => string) {
     const map: Record<BindingType, string> = {
       PRIMARY: t('form.bindingTypePrimary'),
       SUB: t('form.bindingTypeSub'),
-      RELATED: t('form.bindingTypeRelated')
+      RELATED: t('form.bindingTypeRelated'),
+      ACTION: t('form.bindingTypeAction')
     }
     return map[type] || type
   }
 
-  const bindingTypeTag = (type: BindingType): 'primary' | 'success' | 'warning' | 'info' => {
-    const map: Record<BindingType, 'primary' | 'success' | 'warning' | 'info'> = {
+  const bindingTypeTag = (type: BindingType): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+    const map: Record<BindingType, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
       PRIMARY: 'primary',
       SUB: 'success',
-      RELATED: 'warning'
+      RELATED: 'warning',
+      ACTION: 'danger'
     }
     return map[type] || 'info'
   }

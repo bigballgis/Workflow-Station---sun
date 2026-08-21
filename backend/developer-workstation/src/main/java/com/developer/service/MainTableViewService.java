@@ -19,6 +19,12 @@ public interface MainTableViewService {
 
     MainTableViewDTO updateView(Long functionUnitId, Long viewId, UpdateMainTableViewRequest request);
 
+    /**
+     * Sets a view's detail form and nothing else — in particular it leaves {@code status} alone,
+     * so pointing a published view at a different form does not withdraw it from the portal.
+     */
+    MainTableViewDTO updateViewDetailForm(Long functionUnitId, Long viewId, Long detailFormId);
+
     void deleteView(Long functionUnitId, Long viewId);
 
     void seedDefaultViewIfAbsent(Long functionUnitId, Long tableId);

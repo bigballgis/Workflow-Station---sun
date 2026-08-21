@@ -25,6 +25,7 @@ import {
 import {
   bindingIdsPreferStrictSubTableLookup,
   cloneSubTableRows,
+  isWholeFormLockedByFieldPermissions,
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
 import { seedTaskFormFromProcessValues } from './seedTaskFormFromProcessValues'
@@ -257,11 +258,9 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
         if (taskFormNodeReadOnly) {
           formReadOnly.value = true
         }
-        if (tfData.configJson && tfData.fieldPermissions) {
-          const perms = Object.values(tfData.fieldPermissions || {})
-          if (perms.length > 0 && perms.every((p: unknown) => String(p).toUpperCase() === 'READONLY')) {
-            formReadOnly.value = true
-          }
+        if (tfData.configJson && tfData.fieldPermissions
+            && isWholeFormLockedByFieldPermissions(tfData.fieldPermissions, (tfData.configJson as any)?.rule)) {
+          formReadOnly.value = true
         }
         if (tfData.fieldValues) {
           ctx.mergeIncomingTaskFormFieldValues(tfData.fieldValues as Record<string, any>, taskData)
@@ -337,17 +336,12 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
   function buildProcessFormSubTableBindings(pfData: ProcessFormData) {
     const cfg = (pfData.configJson || {}) as Record<string, any>
     const subForms = (cfg.subForms || {}) as Record<string, any>
-    const subTablePortalViewsCfg = (cfg.subTablePortalViews || {}) as Record<string, any>
     const bindings: typeof subTableBindings.value = []
     const nativeIds: number[] = []
     for (const b of (pfData.subTableBindings || [])) {
       if (b.bindingType === 'PRIMARY') continue
       // resolveSubFormDesign signature: ({ bindingId }, subForms) → uses bindingId to look up cfg.subForms[bindingId].
       const subFormDesign = ctx.resolveSubFormDesign({ bindingId: b.bindingId } as any, subForms)
-      const bindingPortalViews =
-        subTablePortalViewsCfg[b.bindingId as any]
-          ?? subTablePortalViewsCfg[String(b.bindingId)]
-          ?? null
       bindings.push({
         bindingId: b.bindingId,
         tableId: null,
@@ -362,7 +356,6 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
         assignmentConfig: b.assignmentConfig,
-        portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(null, b.bindingId, cfg),
         data: Array.isArray(b.data) ? (b.data as any[]) : [],
       } as any)

@@ -128,12 +128,26 @@
                 @change="handleFormChange"
               >
                 <el-option
-                  v-for="form in forms"
+                  v-for="form in bindableForms"
                   :key="form.id"
                   :label="form.formName"
                   :value="form.id"
-                />
+                >
+                  <span>{{ form.formName }}</span>
+                  <el-tag
+                    size="small"
+                    type="success"
+                    style="margin-left: 8px;"
+                  >
+                    {{ t('form.sceneTask') }}
+                  </el-tag>
+                </el-option>
               </el-select>
+              <!-- Same contract as UserTaskProperties: this writes the TASK-scene
+                   formId / formName, so only To Do designs belong here. -->
+              <div class="form-tip">
+                {{ t('properties.bindFormTodoOnlyHint') }}
+              </div>
             </el-form-item>
           </el-form>
         </el-collapse-item>
@@ -463,7 +477,7 @@
  * `@/composables/taskProperties/*`。此处仅做组装、props 透传与生命周期绑定，
  * 模板/样式与拆分前逐字节一致，emit/props/i18n key/行为均零变化。
  */
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskPropertiesState'
@@ -537,6 +551,17 @@ const {
   formId,
   updateExtProp
 })
+
+/**
+ * Only To Do (TASK-scene) designs may be bound: this field writes the TASK-scene BPMN
+ * properties (`formId` / `formName`), so a My Requests design selected here would be
+ * silently mislabeled as the To Do one. Absent `scene` means TASK (legacy rows).
+ */
+const bindableForms = computed(() =>
+  (forms.value ?? []).filter(
+    (f: { scene?: string }) => (f.scene ?? 'TASK') !== 'REQUEST',
+  ),
+)
 
 watch(() => props.element, loadProperties, { immediate: true })
 

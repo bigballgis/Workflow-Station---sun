@@ -56,8 +56,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         try {
             // Query portal-visible, deployed, enabled tables
             String sql = "SELECT t.id, t.table_name, t.display_name, t.description, t.status, "
-                    + "t.enabled, t.portal_visible, t.current_version "
+                    + "t.enabled, t.portal_visible, t.current_version, "
+                    + "t.function_unit_id, fu.code AS function_unit_code, fu.name AS function_unit_name "
                     + "FROM rt_table_definitions t "
+                    + "LEFT JOIN sys_function_units fu ON fu.id = t.function_unit_id "
                     + "WHERE t.status = ? AND t.enabled = true AND t.portal_visible = true";
             allVisible = jdbcTemplate.query(sql, (rs, rowNum) ->
                     RelationTableDTO.builder()
@@ -69,6 +71,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                             .enabled(rs.getBoolean("enabled"))
                             .portalVisible(rs.getBoolean("portal_visible"))
                             .currentVersion(rs.getInt("current_version"))
+                            .functionUnitId(rs.getString("function_unit_id"))
+                            .functionUnitCode(rs.getString("function_unit_code"))
+                            .functionUnitName(rs.getString("function_unit_name"))
                             .build(),
                     RelationTableStatus.DEPLOYED.getCode());
         } catch (Exception e) {

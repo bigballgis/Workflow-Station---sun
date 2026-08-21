@@ -131,7 +131,7 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
 
       selectedNodeId.value = null
 
-      let currentFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
+      let currentFormInfo: { formId: string | null, formName: string | null, scene: 'TASK' | 'REQUEST' } = { formId: null, formName: null, scene: 'TASK' }
       /**
        * Initiator My Request: still use dedicated BFS for `previousForms` (MI subprocess), but the
        * **main** form always follows the current BPMN userTask — including MI subtask (`subform_copy`)
@@ -161,6 +161,10 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
         ctx.cachedRelationTableFieldIndex = buildRelationTableFieldIndexFromDataTables(content.dataTables)
         let selectedForm = content.forms[0] // Default to first
 
+        // Name matching only within the same scene — a To Do and a My Requests design of one
+        // node often share a name, and matching across them would quietly render the wrong one.
+        const sceneOfForm = (f: any): 'TASK' | 'REQUEST' => (f?.scene === 'REQUEST' ? 'REQUEST' : 'TASK')
+
         // Prefer matching formId to sourceId (original form ID)
         if (currentFormInfo.formId) {
           const matchedForm = content.forms.find((f: any) =>
@@ -170,7 +174,9 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             selectedForm = matchedForm
           } else {
             if (currentFormInfo.formName) {
-              const matchedByName = content.forms.find((f: any) => f.name === currentFormInfo.formName)
+              const matchedByName = content.forms.find((f: any) =>
+                f.name === currentFormInfo.formName && sceneOfForm(f) === currentFormInfo.scene
+              )
               if (matchedByName) {
                 selectedForm = matchedByName
               }
@@ -178,7 +184,9 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           }
         } else if (currentFormInfo.formName) {
           // If no formId, try matching by formName
-          const matchedForm = content.forms.find((f: any) => f.name === currentFormInfo.formName)
+          const matchedForm = content.forms.find((f: any) =>
+            f.name === currentFormInfo.formName && sceneOfForm(f) === currentFormInfo.scene
+          )
           if (matchedForm) {
             selectedForm = matchedForm
           }
@@ -201,6 +209,18 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
 
         ctx.parseFormConfig(selectedForm.data)
 
+        // ACTION-table rows (e.g. FORM_POPUP "Meeting Remark" history) are per-request data that
+        // must NOT come from the cached FU content payload above (shared across every request of
+        // this FU) — fetched fresh per request in parallel, keyed by bindingId, and merged into
+        // the matching binding's `data` after the tableBindings loop below (mirrors the To Do side
+        // in useTaskDetailFuLoader.ts; this path uses processInstanceId since My Request has no
+        // taskId in scope).
+        const actionTableRowsPromise = processId
+          ? processApi.getActionTableRowsForProcess(processId)
+              .then(res => (res as any).data || [])
+              .catch(e => { console.warn('[applicationDetail] Failed to load action table rows:', e); return [] as Array<{ bindingId: number; rows: Array<Record<string, unknown>> }> })
+          : Promise.resolve([] as Array<{ bindingId: number; rows: Array<Record<string, unknown>> }>)
+
         // Load sub-table bindings (SUB and RELATED, not PRIMARY).
         // FORM_ONLY bindings without a subTable node still join linkableSubTableBindings so Link Form can resolve;
         // bottomSubTableBindings / unplacedSubTableBindings omit them to avoid empty duplicate sections.
@@ -212,7 +232,6 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           .filter((n: number) => Number.isFinite(n))
         mainFormConfig.value = selectedFormConfig
         const subFormsPayload = selectedFormConfig.subForms || {}
-        const subTablePortalViewsPayload = selectedFormConfig.subTablePortalViews || {}
         for (const b of tableBindings) {
           if (b.bindingType === 'PRIMARY') {
             primaryTableBinding.value = {
@@ -246,10 +265,6 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             lookupDbConfigs: ctx.lookupDbConfigs.value,
             relationViewConfigs: ctx.relationViewConfigs.value,
           })
-          const bindingPortalViews =
-            subTablePortalViewsPayload[b.bindingId]
-            ?? subTablePortalViewsPayload[String(b.bindingId)]
-            ?? null
           bindings.push({
             bindingId: b.bindingId,
             tableId: b.tableId != null ? Number(b.tableId) : null,
@@ -266,7 +281,6 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             subMode: b.subMode,
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
-            portalViews: bindingPortalViews,
             primaryKeyFields: resolveSubTablePrimaryKeyFields(
               b.primaryKeyFields,
               b.bindingId,
@@ -291,6 +305,10 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
         const savedSubTables = formData.value.__subTables__
         if (savedSubTables && typeof savedSubTables === 'object') {
           for (const binding of bindings) {
+            // ACTION bindings never participate in __subTables__ (they write directly to their
+            // own physical table, keyed by foreignKeyField=requestId) — filled separately below
+            // from actionTableRowsPromise.
+            if (binding.bindingType === 'ACTION') continue
             const raw = tableBindings.find((x: any) => Number(x.bindingId) === Number(binding.bindingId))
             const saved = getSavedSubTableRowsFromVariables(
               savedSubTables,
@@ -316,6 +334,19 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
           enrichChildBindingRowsFromParentsNestedSubTables(bindings)
         }
         attachAssignmentConfigsToBindings(bindings, content.miAssignments)
+        // Fill ACTION binding rows from the dedicated per-request query (never __subTables__) —
+        // applied last so nothing above (which only knows __subTables__ semantics) can touch it.
+        const actionTableRowsByBindingId = new Map<number, Array<Record<string, unknown>>>()
+        for (const entry of await actionTableRowsPromise) {
+          if (entry?.bindingId != null) {
+            actionTableRowsByBindingId.set(Number(entry.bindingId), entry.rows || [])
+          }
+        }
+        for (const binding of bindings) {
+          if (binding.bindingType !== 'ACTION') continue
+          const rows = actionTableRowsByBindingId.get(Number(binding.bindingId))
+          binding.data = rows ? [...rows] : []
+        }
         subTableBindings.value = bindings
         ctx.applyLinkOnlySubTableFieldFilterToMainForm(selectedFormConfig)
         ctx.alignMainSubTableBindingsOnly()

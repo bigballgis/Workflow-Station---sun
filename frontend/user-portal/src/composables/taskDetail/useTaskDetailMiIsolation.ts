@@ -195,7 +195,7 @@ export function createTaskDetailMiIsolation(ctx: TaskDetailCtx): TaskDetailMiIso
       }
     }
 
-    cleanedFormData.__subTables__ = ctx.rebuildIsolatedSubTablesPayload()
+    cleanedFormData.__subTables__ = ctx.rebuildIsolatedSubTablesPayload(myRowId)
     if (myRow && typeof myRow === 'object') {
       const rowRec = myRow as Record<string, unknown>
       const prevNestRaw = rowRec.__subTables__

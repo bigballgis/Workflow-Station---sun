@@ -135,6 +135,14 @@ public class TaskFormDefinitionLoader {
     /**
      * Local lookup when sharing DB with developer-workstation (avoids localhost misconfiguration inside containers).
      *
+     * <p>Filters {@code b.scene = 'TASK'}: a stage can carry one binding per scene, both keyed on the SAME
+     * {@code stage_id} (unique key is {@code (form_id, stage_id, scene)}). This loader serves the To Do /
+     * Completed task page, which is the TASK scene by definition — the REQUEST design belongs to My Requests
+     * and is resolved separately from the BPMN {@code requestFormId} property. Without the filter,
+     * {@code ORDER BY fd.id DESC} would hand a paired REQUEST design to the task page whenever it happened to
+     * have the higher form id. This mirrors the remote path, where
+     * {@code FormStageBindingController} already defaults {@code scene} to TASK.
+     *
      * @param functionUnitCode owning function unit; {@code null} only when it could not be resolved, in which
      *                         case the lookup stays global and warns on cross-unit ambiguity
      */
@@ -151,7 +159,7 @@ public class TaskFormDefinitionLoader {
                                 FROM dw_form_stage_bindings b
                                 INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
                                 INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                                WHERE b.stage_id = ? AND fu.code = ?
+                                WHERE b.stage_id = ? AND fu.code = ? AND b.scene = 'TASK'
                                 ORDER BY fd.id DESC
                                 LIMIT 1
                                 """,
@@ -172,6 +180,9 @@ public class TaskFormDefinitionLoader {
      * Global stage lookup used only when no function unit could be resolved. Deterministic (highest form id
      * wins) and warns when the stage id is bound in more than one unit, so the ambiguity is visible in logs
      * instead of silently deciding which unit's form a user sees.
+     *
+     * <p>Scene-filtered to TASK for the same reason as the scoped query above; here it also keeps the
+     * multi-unit warning honest, which would otherwise count a unit's paired REQUEST binding as a second unit.
      */
     private Map<String, Object> fetchTaskFormUnscoped(String stage) {
         List<Map<String, Object>> rows = jdbcTemplate.query(
@@ -179,7 +190,7 @@ public class TaskFormDefinitionLoader {
                         SELECT fd.form_name, fd.config_json, fd.field_permissions, b.read_only
                         FROM dw_form_stage_bindings b
                         INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
-                        WHERE b.stage_id = ?
+                        WHERE b.stage_id = ? AND b.scene = 'TASK'
                         ORDER BY fd.id DESC
                         """,
                 (ResultSet rs, int rowNum) -> mapRowToTaskFormDefinition(rs),

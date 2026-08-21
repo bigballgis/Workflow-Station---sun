@@ -4,9 +4,8 @@
  * and the top-level configJson parsers.
  */
 
-import type { FormField, FormCollapsePanel, FormTab, SubTablePortalViews } from './formRendererTypes'
+import type { FormField, FormCollapsePanel, FormTab } from './formRendererTypes'
 import { applyDesignerHideFlagToFormField } from './formRendererFieldUtils'
-import { normalizePortalViews } from './formRendererPortalViews'
 
 export function getRuleChildren(item: Record<string, unknown>): Record<string, unknown>[] {
   const props = item.props as Record<string, unknown> | undefined
@@ -247,23 +246,36 @@ export function extractFieldsRecursive(
       continue
     }
     if (item.type === 'subTable' && bindingId != null) {
-      const rawPv = props?.portalViews as Partial<SubTablePortalViews> | undefined
-      const hasWidgetPortalViews =
-        rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
       const subTableField: FormField = {
         key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
         _bindingId: Number(bindingId),
-        ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
         // 逐操作权限：仅在显式为 false 时下发（undefined 由 SubTableField 回退到 editable）
         ...(props?.allowAdd === false ? { allowAdd: false } : {}),
         ...(props?.allowEdit === false ? { allowEdit: false } : {}),
         ...(props?.allowDelete === false ? { allowDelete: false } : {}),
+        // Summary presentation designed on the canvas.
+        ...(props?.compactCells === true ? { compactCells: true } : {}),
         span: 24,
       }
       applyDesignerHideFlagToFormField(subTableField, item)
       fields.push(subTableField)
+      continue
+    }
+    // Inline Form: the bound SUB table's form laid out in place (no grid, no dialog).
+    // Needs its own branch — it carries no `field`, so the `if (item.field)` fallthrough
+    // below would silently drop it (exactly how the linkForm drag widget died at runtime).
+    if (item.type === 'inlineSubForm' && bindingId != null) {
+      const inlineSubFormField: FormField = {
+        key: `__inlineSubForm_${bindingId}`,
+        label: '',
+        type: 'inlineSubForm',
+        _bindingId: Number(bindingId),
+        span: 24,
+      }
+      applyDesignerHideFlagToFormField(inlineSubFormField, item)
+      fields.push(inlineSubFormField)
       continue
     }
     if (isCardRule(item)) {

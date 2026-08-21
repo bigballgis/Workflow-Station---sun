@@ -5,7 +5,6 @@ import type { FormField, FormTab } from '@/components/FormRenderer.vue'
 import FormRenderer from '@/components/FormRenderer.vue'
 import type { RelationFieldDef } from '@/components/subTableAddDialogHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
-import type { SubTablePortalViews } from '@/components/formRendererHelpers'
 import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 
 /**
@@ -32,7 +31,6 @@ export interface ProcessStartSubTableBinding {
   /** Designer Form events (onChange / onCreated / …) — same contract as task-detail subFormDesign. */
   formOptions?: Record<string, unknown>
   assignmentConfig?: AssignmentConfig
-  portalViews?: Partial<SubTablePortalViews> | null
   data: any[]
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: string

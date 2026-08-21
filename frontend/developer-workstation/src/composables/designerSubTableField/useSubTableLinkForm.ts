@@ -1,21 +1,15 @@
-import { nextTick, ref } from 'vue'
-import type { Ref } from 'vue'
+import { ref } from 'vue'
 import type { ColumnConfig, SubTableFieldProps } from './types'
 
 interface UseSubTableLinkFormOptions {
   props: SubTableFieldProps
   editable: { value: boolean }
-  previewInlineFormData: Ref<Record<string, unknown>>
-  inlineFormBelowRef: Ref<HTMLElement | null>
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
-/**
- * 子表 linkForm 单元格的关联表单弹层：标题归一、规则/选项装配，
- * 以及 Form Preview（To Do）下滚动到内联表单的分支。
- */
+/** 子表 linkForm 单元格的关联表单弹层：标题归一、规则/选项装配。 */
 export function useSubTableLinkForm(options: UseSubTableLinkFormOptions) {
-  const { props, editable, previewInlineFormData, inlineFormBelowRef, t } = options
+  const { props, editable, t } = options
 
   const linkFormDialogVisible = ref(false)
   const linkFormDialogTitle = ref('')
@@ -31,14 +25,6 @@ export function useSubTableLinkForm(options: UseSubTableLinkFormOptions) {
   }
 
   function openLinkFormDialog(col: ColumnConfig, row: Record<string, any>) {
-    if (props.previewLinkFormScrollToInline) {
-      previewInlineFormData.value = { ...row }
-      nextTick(() => {
-        inlineFormBelowRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
-      return
-    }
-
     const raw = col.props?.boundSubTableName || props.config.title || ''
     const tableName = linkFormTitleTableName(raw)
     linkFormDialogTitle.value = tableName

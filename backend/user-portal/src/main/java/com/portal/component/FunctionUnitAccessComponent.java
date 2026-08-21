@@ -591,6 +591,82 @@ public class FunctionUnitAccessComponent {
     }
 
     /**
+     * Role CODEs granted audit access to a function unit — i.e. permitted to review
+     * every request of that unit without being its initiator or a participant.
+     *
+     * <p>Read from a table of its own, never from the launch-access list: that list
+     * is filtered on {@code targetType} alone, so anything added to it is understood
+     * as "may start this unit". Audit is strictly a read grant.
+     */
+    public Set<String> getFunctionUnitAuditRoleCodes(String functionUnitId) {
+        // Live fetch, like the launch grants above: an admin may revoke review
+        // rights at any moment and a cached yes would outlive the revocation.
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/function-units/"
+                    + SafeUrlInput.requirePathToken(functionUnitId) + "/audit-access";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+
+            Set<String> roleCodes = new HashSet<>();
+            if (response.getBody() != null) {
+                for (Map<String, Object> access : response.getBody()) {
+                    if (!"ROLE".equals(access.get("targetType"))) {
+                        continue;
+                    }
+                    String targetCode = (String) access.get("targetCode");
+                    String key = (targetCode != null && !targetCode.isBlank())
+                            ? targetCode
+                            : (String) access.get("targetId");
+                    if (key != null) {
+                        roleCodes.add(key);
+                    }
+                }
+            }
+            return roleCodes;
+
+        } catch (Exception e) {
+            log.error("Failed to get function unit audit access codes for {}: {}",
+                    functionUnitId, e.getMessage(), e);
+            return Collections.emptySet();
+        }
+    }
+
+    /**
+     * Whether the user holds a role granted audit access to this function unit.
+     *
+     * @param functionUnitIdOrCode function unit id or code
+     */
+    public boolean canAuditFunctionUnit(String userId, String functionUnitIdOrCode) {
+        if (userId == null || userId.isBlank() || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+            return false;
+        }
+        String resolvedId = resolveFunctionUnitId(functionUnitIdOrCode);
+        if (resolvedId == null) {
+            log.warn("Audit check denied: cannot resolve function unit '{}'", functionUnitIdOrCode);
+            return false;
+        }
+        Set<String> auditRoleCodes = getFunctionUnitAuditRoleCodes(resolvedId);
+        if (auditRoleCodes.isEmpty()) {
+            log.debug("Audit check denied for user {}: function unit {} has no audit grants",
+                    userId, functionUnitIdOrCode);
+            return false;
+        }
+        Set<String> userRoleCodes = getUserBusinessRoleCodes(userId);
+        for (String roleCode : userRoleCodes) {
+            if (auditRoleCodes.contains(roleCode)) {
+                return true;
+            }
+        }
+        log.debug("Audit check denied for user {}: roles {} do not intersect audit grants {} of unit {}",
+                userId, userRoleCodes, auditRoleCodes, functionUnitIdOrCode);
+        return false;
+    }
+
+    /**
      * Clear user role cache
      */
     public void clearUserRolesCache(String userId) {

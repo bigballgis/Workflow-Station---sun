@@ -49,6 +49,13 @@ export interface ProcessStartRequest {
   activeBusinessUnitId?: string
 }
 
+/** A function unit the current user may review. */
+export interface AuditFunctionUnit {
+  functionUnitId: string
+  functionUnitCode: string
+  functionUnitName: string
+}
+
 export interface FunctionUnitContent {
   id: string
   name: string
@@ -61,8 +68,10 @@ export interface FunctionUnitContent {
     name: string
     data: string
     type: string
-    /** DW form type when assembled from admin-center (PROCESS / TASK / ACTION). */
+    /** DW form type when assembled from admin-center (PROCESS / TASK / ACTION / DETAIL). */
     formType?: string
+    /** Portal scene this design serves; absent on pre-split forms, read as TASK. */
+    scene?: 'TASK' | 'REQUEST'
     sourceId?: string
   }>
   processes: Array<{
@@ -82,6 +91,12 @@ export interface FunctionUnitContent {
   error?: string
 }
 
+/** Read-only row data for one ACTION-type table binding (e.g. FORM_POPUP "Meeting Remark"). */
+export interface ActionTableRowsResult {
+  bindingId: number
+  rows: Array<Record<string, unknown>>
+}
+
 export const processApi = {
   // 获取可发起的流程定义列表
   getDefinitions(params?: { category?: string; keyword?: string }) {
@@ -96,6 +111,21 @@ export const processApi = {
   // 获取我的申请列表
   getMyApplications(params: { page?: number; size?: number; status?: string }) {
     return request.get('/processes/my-applications', { params })
+  },
+
+  // 当前用户有审计权的功能单元；返回空表示不显示审计入口
+  getAuditFunctionUnits() {
+    return request.get<AuditFunctionUnit[]>('/processes/audit-function-units')
+  },
+
+  // 某功能单元下的全部申请（需审计权）
+  getFunctionUnitApplications(params: {
+    functionUnitCode: string
+    page?: number
+    size?: number
+    status?: string
+  }) {
+    return request.get('/processes/fu-applications', { params })
   },
 
   // 获取流程详情
@@ -198,6 +228,22 @@ export const processApi = {
   // 获取流程历史记录
   getProcessHistory(processId: string) {
     return request.get(`/processes/${processId}/history`)
+  },
+
+  /**
+   * ACTION 表（如 FORM_POPUP "Meeting Remark"）只读行数据，按当前任务所属请求精确查询——
+   * 与 getFunctionUnitContent 的按 functionUnitId 缓存严格分离，不共享缓存，防止跨请求数据泄漏。
+   */
+  getActionTableRows(taskId: string) {
+    return request.get<ActionTableRowsResult[]>(`/tasks/${taskId}/action-table-rows`)
+  },
+
+  /**
+   * My Request（Application Detail）场景版——发起人视角没有 taskId，只有 processInstanceId，
+   * 走独立的按流程实例查询接口（同一份只读查询逻辑，权限校验换成流程参与权限）。
+   */
+  getActionTableRowsForProcess(processInstanceId: string) {
+    return request.get<ActionTableRowsResult[]>(`/processes/${processInstanceId}/action-table-rows`)
   },
 
   // 根据ID列表获取动作定义

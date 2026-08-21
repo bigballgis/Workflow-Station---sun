@@ -78,15 +78,6 @@ export interface SubTableListViewProps {
   /** Sub-table form design rendered when a Link Form column is clicked */
   formRule?: any[]
   formOption?: Record<string, unknown>
-  /**
-   * Binding-level portal display (User Portal To Do / My Requests). When To Do is
-   * "form below table" and My Requests is not "same as To Do", the list preview shows
-   * two panes and the preview dialog uses two tabs.
-   */
-  portalViews?: {
-    assigneeTodo: 'formBelowTable' | 'tableOnly'
-    initiatorRequest: 'mirrorTodo' | 'summaryWithLinkFormModal' | 'tableOnly'
-  } | null
 }
 
 export interface SubTableListViewEmit {

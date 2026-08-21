@@ -28,4 +28,6 @@ public class SubTableBindingData {
     private List<Map<String, Object>> data;
     /** Primary key field names from dw_field_definitions.is_primary_key. */
     private List<String> primaryKeyFields;
+    /** MI assignment contract (allowUser/allowRole/assigneeField/roleField/buField) parsed from BPMN, keyed by tableName. */
+    private Map<String, Object> assignmentConfig;
 }

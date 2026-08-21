@@ -3,11 +3,13 @@ package com.admin.service.impl;
 import com.admin.dto.request.CreateRelationTableRequest;
 import com.admin.dto.request.UpdateRelationTableRequest;
 import com.admin.dto.response.RelationTableResponse;
+import com.admin.entity.FunctionUnit;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
 import com.admin.exception.RelationTableBindingExistsException;
 import com.admin.exception.RelationTableNameDuplicateException;
 import com.admin.exception.RelationTableNotFoundException;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.service.RelationTableStructureService;
@@ -36,6 +38,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
 
     private final RelationTableDefinitionRepository tableDefinitionRepository;
     private final RelationFieldDefinitionRepository fieldDefinitionRepository;
+    private final FunctionUnitRepository functionUnitRepository;
     private final JdbcTemplate jdbcTemplate;
 
     @Override
@@ -50,6 +53,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                 .tableName(request.getTableName())
                 .displayName(request.getDisplayName())
                 .description(request.getDescription())
+                .functionUnitId(request.getFunctionUnitId())
                 .status(RelationTableStatus.INIT)
                 .enabled(true)
                 .portalVisible(false)
@@ -128,7 +132,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         log.info("Created relation table: id={}, tableName={}", saved.getId(), saved.getTableName());
 
-        return RelationTableResponse.fromEntity(saved);
+        return withFunctionUnit(RelationTableResponse.fromEntity(saved));
     }
 
     @Override
@@ -152,6 +156,10 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         if (request.getDescription() != null) {
             tableDefinition.setDescription(request.getDescription());
         }
+        if (request.getFunctionUnitId() != null) {
+            // Empty string clears to ungrouped; a non-empty id sets/reassigns the Function Unit.
+            tableDefinition.setFunctionUnitId(request.getFunctionUnitId().isBlank() ? null : request.getFunctionUnitId());
+        }
 
         // 更新字段定义
         if (request.getFieldDefinitions() != null) {
@@ -166,7 +174,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         log.info("Updated relation table: id={}, tableName={}", saved.getId(), saved.getTableName());
 
-        return RelationTableResponse.fromEntity(saved);
+        return withFunctionUnit(RelationTableResponse.fromEntity(saved));
     }
 
     @Override
@@ -189,8 +197,11 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
     @Override
     @Transactional(readOnly = true)
     public List<RelationTableResponse> getTableList() {
-        return tableDefinitionRepository.findAll().stream()
+        List<RelationTableDefinition> tables = tableDefinitionRepository.findAll();
+        Map<String, FunctionUnit> functionUnits = loadFunctionUnits(tables);
+        return tables.stream()
                 .map(RelationTableResponse::fromEntity)
+                .peek(r -> r.applyFunctionUnit(functionUnits.get(r.getFunctionUnitId())))
                 .collect(Collectors.toList());
     }
 
@@ -199,7 +210,33 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
     public RelationTableResponse getTableById(Long id) {
         RelationTableDefinition tableDefinition = tableDefinitionRepository.findById(id)
                 .orElseThrow(() -> new RelationTableNotFoundException(id));
-        return RelationTableResponse.fromEntity(tableDefinition);
+        return withFunctionUnit(RelationTableResponse.fromEntity(tableDefinition));
+    }
+
+    /**
+     * Resolves functionUnitCode/functionUnitName for a single response (one extra lookup by id).
+     */
+    private RelationTableResponse withFunctionUnit(RelationTableResponse response) {
+        if (response.getFunctionUnitId() != null) {
+            functionUnitRepository.findById(response.getFunctionUnitId()).ifPresent(response::applyFunctionUnit);
+        }
+        return response;
+    }
+
+    /**
+     * Batch-resolves Function Units referenced by a list of tables, avoiding N+1 lookups.
+     */
+    private Map<String, FunctionUnit> loadFunctionUnits(List<RelationTableDefinition> tables) {
+        List<String> ids = tables.stream()
+                .map(RelationTableDefinition::getFunctionUnitId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (ids.isEmpty()) {
+            return new java.util.HashMap<>();
+        }
+        return functionUnitRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(FunctionUnit::getId, Function.identity()));
     }
 
     @Override
@@ -214,7 +251,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
 
         log.info("Toggled enabled for relation table: id={}, enabled={}", id, enabled);
-        return RelationTableResponse.fromEntity(saved);
+        return withFunctionUnit(RelationTableResponse.fromEntity(saved));
     }
 
     @Override
@@ -229,7 +266,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
 
         log.info("Toggled portal visibility for relation table: id={}, portalVisible={}", id, portalVisible);
-        return RelationTableResponse.fromEntity(saved);
+        return withFunctionUnit(RelationTableResponse.fromEntity(saved));
     }
 
     /**

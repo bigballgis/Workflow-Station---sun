@@ -405,6 +405,7 @@ class FunctionUnitCloner {
                 .functionUnit(target)
                 .formName(source.getFormName())
                 .formType(source.getFormType())
+                .scene(source.getScene())
                 .configJson(configJson != null ? configJson : new HashMap<>())
                 .displayName(source.getDisplayName())
                 .fieldPermissions(fieldPermissions)
@@ -444,6 +445,7 @@ class FunctionUnitCloner {
                     .stageId(sourceStage.getStageId())
                     .stageName(sourceStage.getStageName())
                     .readOnly(sourceStage.getReadOnly())
+                    .scene(sourceStage.getScene())
                     .build();
             formStageBindingRepository.save(clonedStage);
         }

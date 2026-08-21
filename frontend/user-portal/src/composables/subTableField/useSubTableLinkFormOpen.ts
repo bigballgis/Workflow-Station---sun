@@ -3,7 +3,7 @@ import {
   mergeSubTableRowsByRowId,
   pullNestedRowsForBindingFromParentRows
 } from '@/composables/tasks/shared'
-import type { Column, SubTableBinding, SubTableFieldEmit, SubTableFieldProps } from './subTableFieldTypes'
+import type { Column, SubTableBinding, SubTableFieldProps } from './subTableFieldTypes'
 import {
   collapseMiLinkFormRowsForParent,
   filterLinkedChildRowsByMiTaskStatus,
@@ -27,7 +27,6 @@ import type { useSubTableLinkFormScope } from './useSubTableLinkFormScope'
 /** Open flow for the Link Form detail modal: resolve the child rows that belong to the clicked parent row. */
 export function useSubTableLinkFormOpen(
   props: SubTableFieldProps,
-  emit: SubTableFieldEmit,
   dialog: ReturnType<typeof useSubTableLinkFormDialog>,
   scope: ReturnType<typeof useSubTableLinkFormScope>,
 ) {
@@ -57,10 +56,6 @@ export function useSubTableLinkFormOpen(
   } = scope
 
   function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: number) {
-    if (props.linkFormClickScrollToInline) {
-      emit('linkFormScrollToInline')
-      return
-    }
     activeLinkColumn.value = col
     activeLinkRowIndex.value = rowIndex
     const binding = resolveLinkBindingForColumn(col)

@@ -68,6 +68,63 @@ describe('bpmnFormBindings', () => {
   })
 })
 
+/**
+ * Most deployed function units bind forms through these extension properties
+ * rather than the stage-binding table, so this is the path the scene split has
+ * to survive.
+ */
+describe('bpmnFormBindings — portal scene', () => {
+  const BOTH_SCENES_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:custom="http://workflow.platform/schema/custom">
+  <bpmn:process id="Process_1" isExecutable="true">
+    <bpmn:userTask id="Task_1" name="Approve">
+      <bpmn:extensionElements>
+        <custom:property name="formId" value="10" />
+        <custom:property name="formName" value="Approve (edit)" />
+        <custom:property name="requestFormId" value="11" />
+        <custom:property name="requestFormName" value="Approve (read-only)" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_2" name="Review">
+      <bpmn:extensionElements>
+        <custom:property name="formId" value="20" />
+        <custom:property name="formName" value="Review (edit)" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+  </bpmn:process>
+</bpmn:definitions>`
+
+  it('resolves each scene to its own design on the same node', () => {
+    const map = parseBpmnNodeFormBindings(BOTH_SCENES_BPMN)
+
+    expect(lookupNodeFormBinding(map, 'Task_1', 'TASK')?.formId).toBe(10)
+    expect(lookupNodeFormBinding(map, 'Task_1', 'REQUEST')?.formId).toBe(11)
+  })
+
+  it('marks the My Requests design read-only without needing a flag', () => {
+    const map = parseBpmnNodeFormBindings(BOTH_SCENES_BPMN)
+
+    expect(lookupNodeFormBinding(map, 'Task_1', 'REQUEST')?.readOnly).toBe(true)
+  })
+
+  /** Falling back would silently render the editable To Do layout in My Requests. */
+  it('returns nothing for a scene the node does not bind, instead of falling back', () => {
+    const map = parseBpmnNodeFormBindings(BOTH_SCENES_BPMN)
+
+    expect(lookupNodeFormBinding(map, 'Task_2', 'TASK')?.formId).toBe(20)
+    expect(lookupNodeFormBinding(map, 'Task_2', 'REQUEST')).toBeNull()
+  })
+
+  it('reads diagrams without any scene property as the To Do design', () => {
+    const map = parseBpmnNodeFormBindings(SAMPLE_BPMN)
+
+    expect(lookupNodeFormBinding(map, 'Task_1', 'TASK')?.formId).toBe(42)
+    expect(lookupNodeFormBinding(map, 'Task_1')?.scene).toBe('TASK')
+    expect(lookupNodeFormBinding(map, 'Task_1', 'REQUEST')).toBeNull()
+  })
+})
+
 describe('isTaskElement', () => {
   it('recognizes all BPMN 2.0 task types', () => {
     for (const name of TASK_LOCAL_NAMES) {

@@ -18,8 +18,46 @@
       />
     </div>
 
+    <!--
+      Inline Form (`inlineSubForm`): the bound sub-table's designed form, rendered right here.
+      Deliberately NOT the subTable arm — no grid, no Add button. Mirrors the portal, where the
+      widget edits row[0] of the binding.
+    -->
     <div
-      v-else-if="item.kind === 'subTable' && isPreviewSubTableVisible(item) && hasSubTablePreviewSurface(item.binding) && isDualPortalSubTablePreview(item.binding)"
+      v-else-if="item.kind === 'inlineSubForm'"
+      class="form-preview-wrapper form-readonly-surface inline-sub-form-preview"
+    >
+      <!--
+        Labelled frame, matching the portal: these fields come from a DIFFERENT table than the
+        host form, and without a boundary they read as ordinary host fields.
+      -->
+      <div class="inline-sub-form-preview__header">
+        <el-icon class="inline-sub-form-preview__icon"><Document /></el-icon>
+        <span class="inline-sub-form-preview__title">{{ item.binding.tableName }}</span>
+      </div>
+      <!-- The sub-form rule may hold the MI assignment container; bind it to THIS
+           sub-table rather than whichever designer tab happens to be open. -->
+      <MiAssignmentConfigScope :assignment-config="item.binding.assignmentConfig">
+        <template v-if="visiblePreviewRules(item.binding.rule || []).length">
+          <form-create
+            :key="'preview-inline-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed') + '-v' + previewVisibilityRenderTick"
+            :model-value="inlineSubFormModel(item.binding.bindingId)"
+            locale="en"
+            :rule="visiblePreviewRules(item.binding.rule || [])"
+            :option="effectivePreviewOption"
+            @update:model-value="(v: Record<string, any>) => setInlineSubFormModel(item.binding.bindingId, v)"
+          />
+        </template>
+        <el-empty
+          v-else
+          :description="t('form.noFormContent')"
+          :image-size="60"
+        />
+      </MiAssignmentConfigScope>
+    </div>
+
+    <div
+      v-else-if="item.kind === 'subTable' && isPreviewSubTableVisible(item) && hasSubTablePreviewSurface(item.binding)"
       class="sub-table-preview-item"
     >
       <div class="sub-preview-header">
@@ -31,66 +69,27 @@
         </el-tag>
         <span class="sub-preview-title">{{ item.binding.tableName }}</span>
       </div>
-      <el-tabs
-        :model-value="subTableFormPreviewTabModel(idx)"
-        class="sub-table-form-preview-tabs"
-        @update:model-value="setSubTableFormPreviewTabModel(idx, $event)"
-      >
-        <el-tab-pane
-          :label="t('form.portalViews.toDoDisplay')"
-          name="todo"
-          lazy
-        >
-          <SubTableField
-            :config="{ title: item.binding.tableName, columns: item.binding.columns, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField }"
-            :model-value="previewTableRows[item.binding.bindingId]"
-            :editable="true"
-            :allow-add="item.binding.allowAdd"
-            :allow-edit="item.binding.allowEdit"
-            :allow-delete="item.binding.allowDelete"
-            :form-rule="item.binding.rule"
-            :form-option="item.binding.option"
-            :primary-form-data="previewModel"
-            :function-unit-id="functionUnitId"
-            :primary-table-display-name="primaryTableDisplayName"
-            :primary-table-id="primaryTableId"
-            :parent-tables-by-id="parentTablesById"
-            :preview-table-bindings="previewTableBindings"
-            :preview-inline-form-rule="inlineFormBelowForBinding(item.binding).rule"
-            :preview-inline-form-option="inlineFormBelowForBinding(item.binding).option"
-            :preview-show-form-below="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
-            :preview-link-form-scroll-to-inline="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
-            :preview-lookup-compact="false"
-            :assignment-config="item.binding.assignmentConfig"
-            @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
-            @update:primary-form-data="mergePrimaryFormData"
-          />
-        </el-tab-pane>
-        <el-tab-pane
-          :label="t('form.portalViews.myRequestsDisplay')"
-          name="myRequest"
-          lazy
-        >
-          <SubTableField
-            :config="{ title: item.binding.tableName, columns: item.binding.columns, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField }"
-            :model-value="previewTableRows[item.binding.bindingId]"
-            :editable="false"
-            :form-rule="item.binding.rule"
-            :form-option="item.binding.option"
-            :primary-form-data="previewModel"
-            :function-unit-id="functionUnitId"
-            :primary-table-display-name="primaryTableDisplayName"
-            :primary-table-id="primaryTableId"
-            :parent-tables-by-id="parentTablesById"
-            :preview-table-bindings="previewTableBindings"
-            :preview-show-form-below="false"
-            :preview-lookup-compact="initiatorPreviewIsSummary(item.binding)"
-            :assignment-config="item.binding.assignmentConfig"
-            @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
-            @update:primary-form-data="mergePrimaryFormData"
-          />
-        </el-tab-pane>
-      </el-tabs>
+      <!-- One design, one preview: the form being edited is the form that renders. -->
+      <SubTableField
+        :config="{ title: item.binding.tableName, columns: item.binding.columns, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, bindingType: item.binding.bindingType }"
+        :model-value="previewTableRows[item.binding.bindingId]"
+        :editable="true"
+        :allow-add="item.binding.allowAdd"
+        :allow-edit="item.binding.allowEdit"
+        :allow-delete="item.binding.allowDelete"
+        :form-rule="item.binding.rule"
+        :form-option="item.binding.option"
+        :primary-form-data="previewModel"
+        :function-unit-id="functionUnitId"
+        :primary-table-display-name="primaryTableDisplayName"
+        :primary-table-id="primaryTableId"
+        :parent-tables-by-id="parentTablesById"
+        :preview-table-bindings="previewTableBindings"
+        :preview-lookup-compact="item.binding.compactCells === true"
+        :assignment-config="item.binding.assignmentConfig"
+        @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows, item.sourceRule)"
+        @update:primary-form-data="mergePrimaryFormData"
+      />
     </div>
 
     <div
@@ -108,7 +107,7 @@
       </div>
       <SubTableField
         v-if="hasSubTablePreviewSurface(item.binding)"
-        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField }"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField, bindingType: item.binding.bindingType }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="!isMyRequestsPreview"
         :allow-add="item.binding.allowAdd"
@@ -210,21 +209,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, provide, reactive, watch } from 'vue'
+import { computed, inject, provide, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   PREVIEW_MY_REQUESTS_ACTIVE_KEY,
-  PREVIEW_RESOLVE_SUBTABLE_FORM_KEY,
 } from './previewSubTableDialog'
 import { PREVIEW_LOOKUP_CASCADE_KEY } from './previewLookupCascade'
 import SubTableField from './SubTableField.vue'
+import MiAssignmentConfigScope from './MiAssignmentConfigScope.vue'
 import LookupPreview from './LookupPreview.vue'
 import type { FormPreviewItem, PreviewSubTableBinding } from './formPreviewTypes'
 import {
   hasSubTablePreviewSurface,
-  initiatorPreviewIsSummary,
-  isDualPortalSubTablePreview,
-  resolvePreviewInlineFormBelowDesign,
 } from './formPreviewTypes'
 import {
   dispatchPreviewFieldValueChange,
@@ -260,40 +256,34 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const resolveSubTableFormDesign = inject(PREVIEW_RESOLVE_SUBTABLE_FORM_KEY, undefined)
 const previewMyRequestsGlobal = inject(PREVIEW_MY_REQUESTS_ACTIVE_KEY, undefined)
 
-/** Active tab per item index for dual To Do / My Requests sub-table form preview */
-const subTableFormPreviewTab = reactive<Record<number, string>>({})
-
-function subTableFormPreviewTabModel(idx: number): string {
-  return subTableFormPreviewTab[idx] ?? 'todo'
-}
-function setSubTableFormPreviewTabModel(idx: number, name: string | number) {
-  subTableFormPreviewTab[idx] = String(name)
-}
-
-/** My Requests tab active on a dual-portal sub-table in this preview tree. */
-const myRequestsPreviewActive = computed(() =>
-  Object.values(subTableFormPreviewTab).some((tab) => tab === 'myRequest'),
-)
-
-watch(
-  myRequestsPreviewActive,
-  (active) => {
-    if (previewMyRequestsGlobal) previewMyRequestsGlobal.value = active
-  },
-  { immediate: true },
-)
-
-const isMyRequestsPreview = computed(
-  () => myRequestsPreviewActive.value || previewMyRequestsGlobal?.value === true,
-)
+const isMyRequestsPreview = computed(() => previewMyRequestsGlobal?.value === true)
 
 const previewModel = computed({
   get: () => props.previewData,
   set: (value: Record<string, any>) => emit('update:previewData', value),
 })
+
+/**
+ * Inline Form preview model: the widget is 1:1 with row[0] of its binding, so preview backs it
+ * with that same row rather than the main-form model — otherwise sub-form field names would
+ * collide with same-named main-table fields.
+ */
+function inlineSubFormModel(bindingId: number): Record<string, any> {
+  const rows = props.previewTableRows[Number(bindingId)]
+  const first = Array.isArray(rows) ? rows[0] : undefined
+  return first && typeof first === 'object' ? first : {}
+}
+
+function setInlineSubFormModel(bindingId: number, value: Record<string, any>) {
+  const id = Number(bindingId)
+  const next = { ...props.previewTableRows }
+  const rows = Array.isArray(next[id]) ? [...next[id]] : []
+  rows[0] = { ...(rows[0] ?? {}), ...(value ?? {}) }
+  next[id] = rows
+  emit('update:previewTableRows', next)
+}
 
 const parentCascade = inject(PREVIEW_LOOKUP_CASCADE_KEY, null)
 const lookupSelectedRows =
@@ -398,9 +388,6 @@ function ensureMockFieldsForLookup(
   return Array.from(fields)
 }
 
-function inlineFormBelowForBinding(binding: PreviewSubTableBinding) {
-  return resolvePreviewInlineFormBelowDesign(binding, resolveSubTableFormDesign)
-}
 
 function updateTableRows(
   bindingId: number,
@@ -479,6 +466,43 @@ function mergePrimaryFormData(patch: Record<string, unknown>) {
 
 <style scoped lang="scss">
 @import '@/styles/form-readonly.scss';
+
+/*
+ * Inline Form preview: labelled boundary around the embedded sub-table's fields, so they are
+ * not mistaken for host-form fields. Kept visually identical to the portal's framed variant
+ * (SubTableInlineForm.is-framed) — design parity is the whole point of Preview.
+ */
+.inline-sub-form-preview {
+  margin: 8px 0 16px;
+  padding: 0 0 4px;
+  /* Neutral grey only: the brand accent here is red, which reads as an error state on a
+     block that is merely a grouping boundary. */
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  border-radius: 4px;
+  background: var(--el-fill-color-blank, #fff);
+}
+
+.inline-sub-form-preview__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5);
+  background: var(--el-fill-color-light, #f5f7fa);
+  border-radius: 3px 3px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-regular, #606266);
+}
+
+.inline-sub-form-preview__icon {
+  color: var(--el-text-color-secondary, #909399);
+}
+
+.inline-sub-form-preview :deep(.form-create) {
+  padding: 0 12px;
+}
 
 .form-preview-wrapper {
   :deep(.form-create) {

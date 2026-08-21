@@ -191,7 +191,8 @@ public class RecordNoteController {
     @ExceptionHandler(RecordNoteException.class)
     public ApiResponse<Void> handleRecordNoteException(RecordNoteException e) {
         String code = switch (e.getCode()) {
-            case "FORBIDDEN", "NOT_OWNER" -> "403";
+            // Notes are immutable, so edit/delete are refusals of permission, not bad input.
+            case "FORBIDDEN", "NOT_OWNER", "NOT_EDITABLE", "NOT_DELETABLE" -> "403";
             case "NOT_FOUND" -> "404";
             default -> "400";
         };
@@ -200,7 +201,7 @@ public class RecordNoteController {
 
     private static HttpStatus binaryStatus(RecordNoteException e) {
         return switch (e.getCode()) {
-            case "FORBIDDEN", "NOT_OWNER" -> HttpStatus.FORBIDDEN;
+            case "FORBIDDEN", "NOT_OWNER", "NOT_EDITABLE", "NOT_DELETABLE" -> HttpStatus.FORBIDDEN;
             case "NOT_FOUND" -> HttpStatus.NOT_FOUND;
             default -> HttpStatus.BAD_REQUEST;
         };

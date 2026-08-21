@@ -44,11 +44,24 @@ public class MainTableViewPortability {
      * @param tableIdToName map of this FU's table id → table name (the exporter already builds it)
      */
     public List<Map<String, Object>> export(Long functionUnitId, Map<Long, String> tableIdToName) {
+        return export(functionUnitId, tableIdToName, Map.of());
+    }
+
+    /**
+     * @param formIdToName resolves the detail form to a name — database ids differ
+     *                     per environment, so exporting the raw id would point the
+     *                     imported view at an unrelated form or at nothing.
+     */
+    public List<Map<String, Object>> export(Long functionUnitId,
+                                            Map<Long, String> tableIdToName,
+                                            Map<Long, String> formIdToName) {
         List<MainTableViewConfig> views = mainTableViewConfigRepository.findByFunctionUnitIdWithFields(functionUnitId);
         List<Map<String, Object>> out = new ArrayList<>();
         for (MainTableViewConfig view : views) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("mainTableName", view.getMainTableId() != null ? tableIdToName.get(view.getMainTableId()) : null);
+            m.put("detailFormName",
+                    view.getDetailFormId() != null ? formIdToName.get(view.getDetailFormId()) : null);
             m.put("viewName", view.getViewName());
             m.put("isDefault", view.getIsDefault());
             m.put("status", view.getStatus() != null ? view.getStatus().name() : MainTableViewStatus.DRAFT.name());
@@ -90,6 +103,18 @@ public class MainTableViewPortability {
     public void importAll(List<Map<String, Object>> mainTableViews,
                           FunctionUnit functionUnit,
                           Map<String, Long> importedTableNameToId) {
+        importAll(mainTableViews, functionUnit, importedTableNameToId, Map.of());
+    }
+
+    /**
+     * @param importedFormNameToId form name → newly-imported form id. Must be populated
+     *                             by the caller <em>before</em> views are imported;
+     *                             an empty map leaves every detail form unset.
+     */
+    public void importAll(List<Map<String, Object>> mainTableViews,
+                          FunctionUnit functionUnit,
+                          Map<String, Long> importedTableNameToId,
+                          Map<String, Long> importedFormNameToId) {
         if (mainTableViews == null || mainTableViews.isEmpty()) {
             return;
         }
@@ -105,10 +130,24 @@ public class MainTableViewPortability {
                         viewName, mainTableName);
                 continue;
             }
+            // A named detail form that did not come across is reported rather than
+            // silently dropped: the view would otherwise look configured but open
+            // nothing when a row is clicked.
+            String detailFormName = (String) v.get("detailFormName");
+            Long detailFormId = null;
+            if (detailFormName != null && !detailFormName.isBlank()) {
+                detailFormId = importedFormNameToId.get(detailFormName);
+                if (detailFormId == null) {
+                    log.warn("Main-table view '{}' references detail form '{}', which is not in the "
+                            + "imported forms; the view will have no detail page", viewName, detailFormName);
+                }
+            }
+
             MainTableViewStatus status = parseStatus(v.get("status"));
             MainTableViewConfig config = MainTableViewConfig.builder()
                     .functionUnit(functionUnit)
                     .mainTableId(mainTableId)
+                    .detailFormId(detailFormId)
                     .viewName(viewName)
                     .isDefault(v.get("isDefault") instanceof Boolean b ? b : false)
                     .sortConfig(asMapList(v.get("sortConfig")))

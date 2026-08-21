@@ -26,7 +26,9 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 public class ChangeHistorySubmissionFilter {
-    private static final List<String> ROW_IDENTITY_FIELDS = List.of(
+    /** Row-identity field names preserved through any field-level filtering so row matching on
+     *  subsequent saves keeps working even when the identity field itself is not user-editable. */
+    public static final List<String> ROW_IDENTITY_FIELDS = List.of(
             "row_id", "rowId", "rowID", "id_idw", "_rowKey", "rowKey", "id");
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -73,6 +75,58 @@ public class ChangeHistorySubmissionFilter {
             return null;
         Map<String, Object> wrapper = Map.of("__subTables__", castMap(tables));
         return retainUserEditableSubmission(wrapper, wrapper, formDefinition).get("__subTables__");
+    }
+
+    /**
+     * Resolves which fields are explicitly marked {@code READONLY} for each sub-table binding
+     * (composite-key {@code bindingId:field} permission entries), keyed by numeric bindingId (as
+     * it appears in {@code configJson.subForms} and in the {@code __subTables__}
+     * numeric-bindingId alias) — bindings absent from the result have no field-level permission
+     * configured at all.
+     *
+     * <p>Deny-list, not allow-list: the Form Designer's field-permission editor
+     * ({@code useFormSave.ts}'s {@code fieldPermissions?.[key] || 'EDITABLE'}) only ever persists
+     * an entry when a field was explicitly toggled away from the default, and the default is
+     * {@code EDITABLE} — a field with no entry at all is exactly as editable as an explicit
+     * {@code EDITABLE} entry. Treating "no explicit EDITABLE entry" as "not editable" (the
+     * allow-list this method used to build) silently strips every field from a binding's rows the
+     * moment ANY single field on that binding gets an explicit {@code READONLY} entry (e.g. a
+     * designer marking just {@code bu_code}/{@code role_code} read-only also wiped {@code name},
+     * {@code assignee}, … from every save — #1524-class regression, confirmed via a captured
+     * submit payload that had the correct edited row going in and thin identity-only rows coming
+     * out the other side).
+     *
+     * <p>Used by {@code TaskFormComponent#submitTaskForm} to enforce sub-table field permissions
+     * on the numeric-bindingId-keyed slice actually persisted into process variables, in place,
+     * preserving values (e.g. allocated primary keys) already computed by upstream enrichment on
+     * the same map. This intentionally does not consider design-time
+     * readonly/disabled/hidden rule flags (those are a separate, unrelated axis that
+     * {@link #retainUserEditableSubmission}'s audit-trail computation already applies, but which
+     * main-form submit-time enforcement has never applied either).
+     */
+    public Map<String, Set<String>> resolveSubFormFieldPermissionsByBinding(String processInstanceId,
+            String stageId) {
+        Map<String, Object> formDefinition = loadTaskFormDefinition(processInstanceId, stageId);
+        if (formDefinition == null || formDefinition.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> permissions = stringMapValue(formDefinition.get("fieldPermissions"));
+        if (permissions.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Set<String>> result = new HashMap<>();
+        for (Map.Entry<String, String> entry : permissions.entrySet()) {
+            int sep = entry.getKey().indexOf(':');
+            if (sep <= 0) {
+                continue;
+            }
+            String bindingId = entry.getKey().substring(0, sep);
+            String field = entry.getKey().substring(sep + 1);
+            if (!"EDITABLE".equalsIgnoreCase(entry.getValue())) {
+                result.computeIfAbsent(bindingId, ignored -> new HashSet<>()).add(field);
+            }
+        }
+        return result;
     }
 
     public Map<String, Object> retainUserEditableSubmission(Map<String, Object> submitted,
@@ -323,7 +377,7 @@ public class ChangeHistorySubmissionFilter {
     private Set<String> collectEditableFields(Map<String, Object> config,
             Map<String, String> permissions) {
         Set<String> fields = new HashSet<>();
-        collectEditableRules(config.get("rule"), permissions, fields, true);
+        collectEditableRules(config.get("rule"), permissions, fields, true, null);
         return fields;
     }
 
@@ -338,7 +392,7 @@ public class ChangeHistorySubmissionFilter {
             if (bindingId == null || !(entry.getValue() instanceof Map<?, ?> rawConfig))
                 continue;
             Set<String> fields = new HashSet<>();
-            collectEditableRules(rawConfig.get("rule"), permissions, fields, true);
+            collectEditableRules(rawConfig.get("rule"), permissions, fields, true, bindingId);
             result.put(bindingId, fields);
         }
         return result;
@@ -347,7 +401,8 @@ public class ChangeHistorySubmissionFilter {
     private void collectEditableRules(Object rulesValue,
             Map<String, String> permissions,
             Set<String> fields,
-            boolean ancestorEditable) {
+            boolean ancestorEditable,
+            String bindingId) {
         if (!(rulesValue instanceof List<?> rules))
             return;
         for (Object ruleValue : rules) {
@@ -355,9 +410,9 @@ public class ChangeHistorySubmissionFilter {
                 continue;
             String field = stringValue(rule.get("field"));
             boolean effectiveEditable = ancestorEditable && isRuleContainerEditable(rule);
-            if (field != null && effectiveEditable && isEditableRule(field, rule, permissions))
+            if (field != null && effectiveEditable && isEditableRule(field, rule, permissions, bindingId))
                 fields.add(field);
-            collectEditableRules(rule.get("children"), permissions, fields, effectiveEditable);
+            collectEditableRules(rule.get("children"), permissions, fields, effectiveEditable, bindingId);
         }
     }
 
@@ -373,15 +428,24 @@ public class ChangeHistorySubmissionFilter {
                         && !truthy(props.get("hidden")));
     }
 
+    /**
+     * @param bindingId when non-null, this is a sub-form field: permission is looked up under
+     *                  the composite {@code "${bindingId}:${field}"} key, namespaced separately
+     *                  from the main form's bare-{@code field} keys so same-named fields on
+     *                  different tables cannot collide (see field-level sub-table permission
+     *                  extension). {@code null} means the main-form field, preserving the
+     *                  original bare-key lookup exactly.
+     */
     private boolean isEditableRule(String field,
             Map<?, ?> rule,
-            Map<String, String> permissions) {
+            Map<String, String> permissions,
+            String bindingId) {
         if (field.startsWith("__"))
             return false;
         // Platform-managed audit columns are never user edits (even if a form rule exists).
         if (SystemAuditFields.isAuditField(field))
             return false;
-        String permission = permissions.get(field);
+        String permission = permissions.get(bindingId != null ? bindingId + ":" + field : field);
         if (permission != null && !"EDITABLE".equalsIgnoreCase(permission))
             return false;
         return isRuleContainerEditable(rule);

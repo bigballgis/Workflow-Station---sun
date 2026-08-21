@@ -4105,3 +4105,32 @@ ALTER TABLE sys_virtual_groups
 COMMENT ON COLUMN sys_virtual_groups.type IS
     'SYSTEM (built-in, non-deletable), CUSTOM (business/task-pool), DEVELOPER (DW team)';
 
+-- =============================================================================
+-- 66-add-action-binding-type.sql
+-- Source file: deploy/init-scripts/00-schema/66-add-action-binding-type.sql
+-- =============================================================================
+-- Allow ACTION-type tables to be bound to forms (dw_form_table_bindings.binding_type),
+-- so FORM_POPUP action forms (e.g. Meeting Remark) can bind their own dw_table_definitions
+-- row (table_type='ACTION') the same way SUB tables bind to PROCESS/TASK forms.
+ALTER TABLE dw_form_table_bindings DROP CONSTRAINT IF EXISTS chk_binding_type;
+ALTER TABLE dw_form_table_bindings ADD CONSTRAINT chk_binding_type
+    CHECK (binding_type IN ('PRIMARY', 'SUB', 'RELATED', 'ACTION'));
+
+-- =============================================================================
+-- 67-add-rt-function-unit.sql
+-- Source file: deploy/init-scripts/00-schema/67-add-rt-function-unit.sql
+-- =============================================================================
+-- Allow Relation Tables to be optionally grouped under a Function Unit,
+-- so admin-center Table Structure / Table Data and user-portal Relation Tables
+-- can group/filter the (growing) flat table list by Function Unit.
+-- NULL = ungrouped; deleting the Function Unit does not delete the relation table.
+ALTER TABLE rt_table_definitions ADD COLUMN IF NOT EXISTS function_unit_id VARCHAR(64);
+
+ALTER TABLE rt_table_definitions DROP CONSTRAINT IF EXISTS fk_rt_table_function_unit;
+ALTER TABLE rt_table_definitions ADD CONSTRAINT fk_rt_table_function_unit
+    FOREIGN KEY (function_unit_id) REFERENCES sys_function_units(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_rt_table_function_unit ON rt_table_definitions(function_unit_id);
+
+COMMENT ON COLUMN rt_table_definitions.function_unit_id IS 'Optional Function Unit grouping (sys_function_units.id); NULL = ungrouped';
+

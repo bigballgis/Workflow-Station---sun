@@ -87,6 +87,11 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
         .filter(t => t.tableType === 'SUB')
         .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
     }
+    if (bt === 'ACTION') {
+      return getTables()
+        .filter(t => t.tableType === 'ACTION')
+        .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
+    }
     // RELATED：列出本功能单元的 RELATION 表 + 管理中心已部署的关联表
     const localRelation = getTables()
       .filter(t => t.tableType === 'RELATION')
@@ -108,6 +113,7 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     const bt = bindingForm.value.bindingType
     if (bt === 'PRIMARY') return t('tableBinding.noMainTableAvailable')
     if (bt === 'SUB') return t('tableBinding.noSubTableAvailable')
+    if (bt === 'ACTION') return t('tableBinding.noActionTableAvailable')
     if (bt === 'RELATED') return t('tableBinding.noRelationTableAvailable')
     return t('tableBinding.selectBindingTypeFirst')
   })
@@ -157,6 +163,10 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     if (bindingForm.value.bindingType === 'SUB') {
       bindingForm.value.subMode = bindingForm.value.subMode || 'FULL'
       bindingForm.value.bindingLinkMode = bindingForm.value.bindingLinkMode || 'structuralFk'
+    } else if (bindingForm.value.bindingType === 'ACTION') {
+      // ACTION forms are popup submissions, never MI participant rows — always structural FK.
+      bindingForm.value.subMode = bindingForm.value.subMode || 'FULL'
+      bindingForm.value.bindingLinkMode = 'structuralFk'
     } else {
       bindingForm.value.subMode = undefined
       bindingForm.value.bindingLinkMode = undefined
@@ -188,14 +198,16 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
   // 这样 filteredAvailableTables 已经保证了 tableType 与 bindingType 一致，不会再出现后端报错
   function handleTableSelect(_tableId?: number) {
     const bt = bindingForm.value.bindingType
-    if (bt === 'PRIMARY') {
+    if (bt === 'PRIMARY' || bt === 'ACTION') {
+      // ACTION bindings write submitted popup-form data back to their own table, same as PRIMARY.
       bindingForm.value.bindingMode = 'EDITABLE'
     } else {
       bindingForm.value.bindingMode = 'READONLY'
     }
     // Re-derive the link field from the newly selected table (a field name from the previous table may
     // not exist here). Only on user table change — handleEdit sets tableId programmatically without this.
-    if (bt === 'SUB') {
+    // ACTION tables link back to the primary table the same way SUB tables do (a foreign key field).
+    if (bt === 'SUB' || bt === 'ACTION') {
       if (bindingForm.value.bindingLinkMode === 'miParticipantRow') {
         suggestParticipantRowField()
       } else if (bindingForm.value.bindingLinkMode === 'structuralFk') {

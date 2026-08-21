@@ -135,16 +135,35 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'BI Dashboard', icon: 'DataAnalysis', requiresAuth: true }
       },
       {
-        path: 'relation-tables',
+        path: 'relation-tables/:functionUnitCode?',
         name: 'RelationTables',
         component: () => import('@/views/relation-tables/index.vue'),
         meta: { titleKey: 'menu.relationTables', icon: 'Grid' }
+      },
+      {
+        // Read-only record page for a view row. Declared before the list route so
+        // the optional-parameter pattern below cannot claim `/detail` as a code.
+        // viewId + rowKey travel as query params: which view is active is page
+        // state, not part of the views path.
+        path: 'views/:functionUnitCode/detail',
+        name: 'MainTableViewDetail',
+        component: () => import('@/views/main-table-views/detail.vue'),
+        meta: { titleKey: 'mainTableView.detailTitle', hidden: true }
       },
       {
         path: 'views/:functionUnitCode?',
         name: 'MainTableViews',
         component: () => import('@/views/main-table-views/index.vue'),
         meta: { titleKey: 'menu.views', icon: 'View' }
+      },
+      {
+        // Audit access is granted per function unit, which `requiredRoles` (a flat
+        // role-name list) cannot express — the page itself resolves the grant and
+        // renders a refusal when there is none.
+        path: 'audit/:functionUnitCode',
+        name: 'AuditRequests',
+        component: () => import('@/views/audit/index.vue'),
+        meta: { titleKey: 'menu.audit', icon: 'Search' }
       }
     ]
   },

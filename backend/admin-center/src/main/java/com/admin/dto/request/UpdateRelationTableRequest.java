@@ -30,6 +30,12 @@ public class UpdateRelationTableRequest {
 
     private String description;
 
+    /**
+     * Optional Function Unit grouping (sys_function_units.id). null = leave unchanged;
+     * empty string = clear to ungrouped.
+     */
+    private String functionUnitId;
+
     @Valid
     private List<FieldDefinitionRequest> fieldDefinitions;
 

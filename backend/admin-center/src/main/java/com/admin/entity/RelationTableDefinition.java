@@ -63,6 +63,12 @@ public class RelationTableDefinition {
     @Builder.Default
     private Integer currentVersion = 0;
 
+    /**
+     * Optional Function Unit grouping (sys_function_units.id); null = ungrouped.
+     */
+    @Column(name = "function_unit_id", length = 64)
+    private String functionUnitId;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

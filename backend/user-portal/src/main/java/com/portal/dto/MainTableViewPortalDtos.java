@@ -26,7 +26,9 @@ public final class MainTableViewPortalDtos {
             Long tableId,
             String tableLabel,
             Boolean enableExport,
-            Boolean enableImport
+            Boolean enableImport,
+            /** DETAIL form opened when a row is clicked; null means rows are not clickable. */
+            Long detailFormId
     ) {}
 
     @Builder

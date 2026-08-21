@@ -62,6 +62,7 @@ class FunctionUnitControllerPropertyTest {
                 mock(com.admin.component.DeploymentManagerComponent.class),
                 mock(com.admin.component.ProcessDeploymentComponent.class),
                 mock(com.admin.service.FunctionUnitAccessService.class),
+                mock(com.admin.service.FunctionUnitAuditAccessService.class),
                 mock(com.admin.service.UserReferenceResolver.class),
                 i18n);
     }

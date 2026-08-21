@@ -8,6 +8,7 @@ import {
 } from '@/utils/customModdle'
 import { customTranslateModule } from '@/utils/customTranslate'
 import { isEmptyBpmnDiagram } from '@/utils/bpmnDiagramContent'
+import { fitDiagramWithPadding } from './fitDiagramWithPadding'
 
 // @ts-ignore - bpmn-js types
 import BpmnModeler from 'bpmn-js/lib/Modeler'
@@ -167,9 +168,7 @@ export function useProcessModeler(options: UseProcessModelerOptions) {
       bpmnModelerRef.value = bpmnModeler
       modelerReady.value = true
 
-      // Fit to viewport after import
-      const canvas = bpmnModeler.get('canvas')
-      canvas.zoom('fit-viewport')
+      fitDiagramWithPadding(bpmnModeler)
 
       // Listen for changes and trigger auto-save
       bpmnModeler.on('commandStack.changed', () => {

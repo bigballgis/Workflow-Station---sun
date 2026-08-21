@@ -107,13 +107,6 @@ public class FunctionUnitSnapshotRestorer {
 
         Map<Long, Long> relationTableIdMapping = importRelationTables(snapshot);
 
-        if (snapshot.containsKey("mainTableViews")) {
-            List<Map<String, Object>> mainTableViews =
-                    (List<Map<String, Object>>) snapshot.get("mainTableViews");
-            mainTableViewPortability.importAll(mainTableViews, functionUnit, importedTableNameToId);
-        }
-        mainTableViewService.seedDefaultViewsForFunctionUnit(functionUnit.getId());
-
         Map<Long, Long> formIdMapping = new HashMap<>();
         Map<String, Long> importedFormNameToId = new HashMap<>();
         List<Map<String, Object>> formDataList = new ArrayList<>();
@@ -126,6 +119,16 @@ public class FunctionUnitSnapshotRestorer {
                 importedFormNameToId.put(form.getFormName(), form.getId());
             }
         }
+
+        // Runs after the form shells above because a view's detail form is carried by name and
+        // can only be resolved once those forms exist (mirrors FunctionUnitImporter's ordering).
+        if (snapshot.containsKey("mainTableViews")) {
+            List<Map<String, Object>> mainTableViews =
+                    (List<Map<String, Object>>) snapshot.get("mainTableViews");
+            mainTableViewPortability.importAll(
+                    mainTableViews, functionUnit, importedTableNameToId, importedFormNameToId);
+        }
+        mainTableViewService.seedDefaultViewsForFunctionUnit(functionUnit.getId());
 
         Map<Long, Long> componentIdMapping = importLinkFormComponents(functionUnit, snapshot,
                 importedFormNameToId, formIdMapping);

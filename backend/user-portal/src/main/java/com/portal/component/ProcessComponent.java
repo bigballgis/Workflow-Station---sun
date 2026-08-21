@@ -213,6 +213,23 @@ public class ProcessComponent {
         return processApplicationQueryComponent.canAccessProcessDetail(userId, detail);
     }
 
+    /**
+     * Detail/history access including function-unit audit grants.
+     * @see ProcessApplicationQueryComponent#canAuditProcessDetail(String, ProcessInstanceInfo)
+     */
+    public boolean canAuditProcessDetail(String userId, ProcessInstanceInfo detail) {
+        return processApplicationQueryComponent.canAuditProcessDetail(userId, detail);
+    }
+
+    /**
+     * Every request of a function unit — for reviewers with an audit grant.
+     * @see ProcessApplicationQueryComponent#getFunctionUnitApplications(String, String, org.springframework.data.domain.Pageable)
+     */
+    public org.springframework.data.domain.Page<ProcessInstanceInfo> getFunctionUnitApplications(
+            String functionUnitCode, String status, org.springframework.data.domain.Pageable pageable) {
+        return processApplicationQueryComponent.getFunctionUnitApplications(functionUnitCode, status, pageable);
+    }
+
     // ==================== Process actions (withdraw, urge, favorite) ====================
 
     /**

@@ -1,5 +1,4 @@
 import {
-  resolveSubTableDisplayMode,
   filterLinkOnlyStandaloneSubTableFields,
 } from '@/components/formRendererHelpers'
 import {
@@ -14,10 +13,10 @@ import type { ApplicationDetailState } from './useApplicationDetailState'
 import type { ApplicationDetailCtx } from './context'
 
 export interface ApplicationDetailSubTaskDialogFns {
-  shouldShowBindingDetailsModal: (binding: { portalViews?: any; data?: any[] }) => boolean
-  shouldShowBindingTaskStatus: (binding: { portalViews?: any; data?: any[] }) => boolean
-  shouldShowBindingFormBelow: (binding: { portalViews?: any; formFields?: any[] }) => boolean
-  bindingCompactLookupCells: (binding: { portalViews?: any }) => boolean
+  shouldShowBindingDetailsModal: (binding: { data?: any[] }) => boolean
+  shouldShowBindingTaskStatus: (binding: { data?: any[] }) => boolean
+  shouldShowBindingFormBelow: (binding: { formFields?: any[] }) => boolean
+  bindingCompactLookupCells: (binding: unknown) => boolean
   resolveSubTaskSiblingRows: (siblingRowsOverride?: any[] | null) => any[]
   shouldMergeProcessVariablesIntoSubTaskDetailRow: (row: any, siblingRowsOverride?: any[] | null) => boolean
   buildSubTableBindingsForForm: (
@@ -44,42 +43,26 @@ export function createApplicationDetailSubTaskDialog(ctx: ApplicationDetailCtx):
   } = ctx
 
   /**
-   * Decide whether a bottom (unplaced) sub-table binding should expose a "Details" link
-   * that opens the sub-task form modal. Per the designer-driven contract:
-   *   - Explicit binding-level `initiatorRequest=summaryWithLinkFormModal` → always show
-   *   - Explicit binding-level `tableOnly` or `mirrorTodo` → never show summary modal
-   *   - No binding-level config → legacy heuristic preserved (hasSubTaskFormSchema && hasTaskStatusData)
+   * Bottom (unplaced) sub-tables are the ones the form design never placed on the
+   * canvas, so there are no canvas properties to read. They keep the long-standing
+   * heuristic: offer the sub-task modal and the status column when this request
+   * actually has sub-task data behind it.
    */
-  function shouldShowBindingDetailsModal(binding: { portalViews?: any; data?: any[] }): boolean {
-    const mode = binding?.portalViews?.initiatorRequest
-    // Match FormRenderer: designer list owns Actions/Detail when initiator uses summary+Link Form.
-    if (mode === 'summaryWithLinkFormModal') return false
-    if (mode === 'tableOnly' || mode === 'mirrorTodo') return false
+  function shouldShowBindingDetailsModal(binding: { data?: any[] }): boolean {
     return hasSubTaskFormSchema.value && ctx.hasTaskStatusData(binding.data || [])
   }
 
-  /** Task status column for unplaced bindings; aligns with placed sub-tables in FormRenderer (summary MI view). */
-  function shouldShowBindingTaskStatus(binding: { portalViews?: any; data?: any[] }): boolean {
-    const mode = binding?.portalViews?.initiatorRequest
-    if (mode === 'summaryWithLinkFormModal') return false
-    if (mode === 'tableOnly' || mode === 'mirrorTodo') return false
+  function shouldShowBindingTaskStatus(binding: { data?: any[] }): boolean {
     return hasSubTaskFormSchema.value && ctx.hasTaskStatusData(binding.data || [])
   }
 
-  /**
-   * Decide whether to render an inline form below an unplaced sub-table in My Request.
-   * Mirrors the rendering rule used by FormRenderer for placed sub-tables: `formBelowTable`
-   * (either explicitly via initiatorRequest, or via mirrorTodo → assigneeTodo). When the
-   * binding has no portalViews configured, defaults to NO inline form (legacy behavior).
-   */
-  function shouldShowBindingFormBelow(binding: { portalViews?: any; formFields?: any[] }): boolean {
-    if (!Array.isArray(binding.formFields) || binding.formFields.length === 0) return false
-    return resolveSubTableDisplayMode(binding.portalViews, 'initiatorRequest') === 'formBelowTable'
+  /** An unplaced sub-table has no designed inline form to show. */
+  function shouldShowBindingFormBelow(_binding: { formFields?: any[] }): boolean {
+    return false
   }
 
-  /** Aligns with FormRenderer: summary + Link/Details → compact cells (no inline lookup backfill block). */
-  function bindingCompactLookupCells(binding: { portalViews?: any }): boolean {
-    return resolveSubTableDisplayMode(binding.portalViews, 'initiatorRequest') === 'summaryWithLinkFormModal'
+  function bindingCompactLookupCells(_binding: unknown): boolean {
+    return false
   }
 
   /**
@@ -130,16 +113,11 @@ export function createApplicationDetailSubTaskDialog(ctx: ApplicationDetailCtx):
   ): typeof subTaskDetailSubTableBindings.value {
     const bindings: typeof subTaskDetailSubTableBindings.value = []
     const subFormsPayload = formConfig.subForms || {}
-    const subTablePortalViewsPayload = formConfig.subTablePortalViews || {}
     for (const b of formMeta.tableBindings || []) {
       if (b.bindingType === 'PRIMARY') continue
       const columns = ctx.deriveColumnsFromBinding(b, formConfig)
       if (!Array.isArray(columns) || columns.length === 0) continue
       const subFormDesign = ctx.resolveSubFormDesign(b, subFormsPayload)
-      const bindingPortalViews =
-        subTablePortalViewsPayload[b.bindingId]
-        ?? subTablePortalViewsPayload[String(b.bindingId)]
-        ?? null
       bindings.push({
         bindingId: b.bindingId,
         tableId: b.tableId != null ? Number(b.tableId) : null,
@@ -156,7 +134,6 @@ export function createApplicationDetailSubTaskDialog(ctx: ApplicationDetailCtx):
         formFields: subFormDesign.formFields,
         formOptions: subFormDesign.formOptions,
         assignmentConfig: b.assignmentConfig,
-        portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(
           b.primaryKeyFields,
           b.bindingId,

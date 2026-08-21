@@ -167,7 +167,7 @@ class MainTableViewServiceImplTest {
     }
 
     @Test
-    void deleteView_rejectsDefaultView() {
+    void deleteView_allowsDefaultView() {
         FunctionUnit fu = FunctionUnit.builder().id(1L).build();
         MainTableViewConfig config = MainTableViewConfig.builder()
                 .id(5L)
@@ -176,8 +176,52 @@ class MainTableViewServiceImplTest {
                 .build();
         when(viewConfigRepository.findByIdWithFields(5L)).thenReturn(Optional.of(config));
 
-        assertThatThrownBy(() -> service.deleteView(1L, 5L))
-                .isInstanceOf(DeveloperBusinessException.class);
+        service.deleteView(1L, 5L);
+
+        verify(viewConfigRepository).delete(config);
+    }
+
+    /**
+     * The portal serves PUBLISHED views only, so resetting the status here would pull a live view
+     * out of the portal as a side effect of picking a detail form — which is exactly why this has
+     * its own endpoint instead of reusing updateView.
+     */
+    @Test
+    void updateViewDetailForm_setsTheFormWithoutTouchingStatus() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig view = MainTableViewConfig.builder()
+                .id(5L)
+                .functionUnit(fu)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(5L)).thenReturn(Optional.of(view));
+        when(viewConfigRepository.save(any(MainTableViewConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateViewDetailForm(1L, 5L, 99L);
+
+        assertThat(view.getDetailFormId()).isEqualTo(99L);
+        assertThat(view.getStatus()).isEqualTo(MainTableViewStatus.PUBLISHED);
+    }
+
+    /** Null is the meaningful "rows are not clickable" state, so it must be writable. */
+    @Test
+    void updateViewDetailForm_clearsTheFormWhenGivenNull() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig view = MainTableViewConfig.builder()
+                .id(5L)
+                .functionUnit(fu)
+                .detailFormId(99L)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(5L)).thenReturn(Optional.of(view));
+        when(viewConfigRepository.save(any(MainTableViewConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateViewDetailForm(1L, 5L, null);
+
+        assertThat(view.getDetailFormId()).isNull();
+        assertThat(view.getStatus()).isEqualTo(MainTableViewStatus.PUBLISHED);
     }
 
     @Test
@@ -230,6 +274,7 @@ class MainTableViewServiceImplTest {
         UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
                 null,
                 null,
+                null,
                 List.of(MainTableViewAccessRuleDTO.builder()
                         .targetType("BUSINESS_UNIT")
                         .targetId("bu-e2e-finance")
@@ -250,6 +295,7 @@ class MainTableViewServiceImplTest {
         when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
 
         UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null,
                 null,
                 null,
                 List.of(MainTableViewAccessRuleDTO.builder()
@@ -276,6 +322,7 @@ class MainTableViewServiceImplTest {
         when(jdbcTemplate.queryForList(anyString(), eq(10L))).thenReturn(List.of());
 
         UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null,
                 null,
                 null,
                 List.of(
@@ -313,6 +360,7 @@ class MainTableViewServiceImplTest {
 
         UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
                 "HMDC Case23",
+                null,
                 null,
                 List.of(
                         MainTableViewAccessRuleDTO.builder()
@@ -371,6 +419,7 @@ class MainTableViewServiceImplTest {
                 null,
                 null,
                 null,
+                null,
                 List.of(MainTableViewFieldDTO.builder()
                         .fieldName("case_id@legal_hold")
                         .displayLabel("Legal Hold")
@@ -418,6 +467,7 @@ class MainTableViewServiceImplTest {
         when(tableDefinitionRepository.findByIdWithFields(20L)).thenReturn(Optional.of(attachment));
 
         UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null,
                 null,
                 null,
                 null,

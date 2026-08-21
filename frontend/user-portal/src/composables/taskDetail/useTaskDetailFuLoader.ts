@@ -173,6 +173,17 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
               .catch(e => { console.warn('[task] Failed to load lookup configs:', e); return {} as Record<string, any> })
           : Promise.resolve({} as Record<string, any>)
 
+        // ACTION-table rows (e.g. FORM_POPUP "Meeting Remark" history) are per-request data that
+        // must NOT come from the cached FU content payload above (shared across every task/request
+        // of this FU) — fetched fresh per task in parallel, keyed by bindingId, and merged into the
+        // matching binding's `data` after the tableBindings loop below (skipping __subTables__ for
+        // ACTION bindings entirely).
+        const actionTableRowsPromise = ctx.taskId
+          ? processApi.getActionTableRows(ctx.taskId)
+              .then(res => (res as any).data || [])
+              .catch(e => { console.warn('[task] Failed to load action table rows:', e); return [] as Array<{ bindingId: number; rows: Array<Record<string, unknown>> }> })
+          : Promise.resolve([] as Array<{ bindingId: number; rows: Array<Record<string, unknown>> }>)
+
         // Parse relationViews from configJson BEFORE parseFormConfig so lookup view fields are available
         try {
           const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
@@ -194,13 +205,10 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         // Parse subForms from configJson
         let subForms: Record<string, any> = {}
         let formConfigForSubTables: Record<string, any> = {}
-        let subTablePortalViews: Record<string, any> = {}
         try {
           const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
           formConfigForSubTables = cfg
           subForms = cfg.subForms || {}
-          // Per-binding portal display config (configured in FormDesigner's sub-table tab).
-          subTablePortalViews = cfg.subTablePortalViews || {}
         } catch {}
 
         // Load sub-table bindings for this form (SUB and RELATED, not PRIMARY)
@@ -243,6 +251,12 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         // Await lookup configs before deriving columns (needs lookupDbConfigs for lookup-type fields)
         const resolvedLookups = await lookupConfigsPromise
         lookupDbConfigs.value = resolvedLookups
+        const actionTableRowsByBindingId = new Map<number, Array<Record<string, unknown>>>()
+        for (const entry of await actionTableRowsPromise) {
+          if (entry?.bindingId != null) {
+            actionTableRowsByBindingId.set(Number(entry.bindingId), entry.rows || [])
+          }
+        }
 
         for (const b of tableBindings) {
           if (b.bindingType === 'PRIMARY') continue
@@ -275,10 +289,6 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
             lookupDbConfigs: lookupDbConfigs.value,
             relationViewConfigs: relationViewConfigs.value,
           })
-          // Per-binding portalViews lookup tolerates both numeric and string keys
-          // (JSON.parse always yields strings, but designer code may have stored numeric keys).
-          const bindingPortalViews =
-            subTablePortalViews[b.bindingId] ?? subTablePortalViews[String(b.bindingId)] ?? null
           bindings.push({
             bindingId: b.bindingId,
             tableId: b.tableId ?? null,
@@ -293,7 +303,6 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
             ...(dialogColumns.length > 0 ? { dialogColumns } : {}),
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
-            portalViews: bindingPortalViews,
             primaryKeyFields: resolveSubTablePrimaryKeyFields(
               b.primaryKeyFields,
               b.bindingId,
@@ -337,6 +346,11 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         if (savedSubTables && typeof savedSubTables === 'object') {
           const ambiguousMain = bindingIdsPreferStrictSubTableLookup(bindings)
           bindings.forEach(binding => {
+            // ACTION bindings never participate in __subTables__ (see ActionFormPopupSubmitComponent —
+            // they write directly to their own physical table, keyed by foreignKeyField=requestId).
+            // Their data is filled separately, after all __subTables__-oriented passes below, from
+            // actionTableRowsByBindingId — never from this process-variable path.
+            if (binding.bindingType === 'ACTION') return
             const saved = ctx.getSavedSubTableRows(savedSubTables, binding, ambiguousMain.has(binding.bindingId))
             if (saved) {
               binding.data = cloneSubTableRows(saved)
@@ -352,12 +366,25 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
           hydrateBindingsRowsFromVariablesBySharedRelationTableId(
             bindings,
             savedSubTables as Record<string, unknown>,
-            bindingRelationTableMap
+            bindingRelationTableMap,
+            {
+              // MI dashboard/collection bindings hydrate their own slice (filtered to the current
+              // participant) via getSavedSubTableRows above and resyncMiParticipantSubTablesFromVariables
+              // later. Sibling BPMN nodes duplicate this same designer table under their OWN bindingId,
+              // and their rows can share this binding's exact PK (all just aliases of the same logical
+              // participant collection) — pulling those siblings in here re-introduces another
+              // participant's stale row, which then wins the merge purely by array order (#1524-class:
+              // reload showing another participant's old value instead of this task's own saved edit).
+              excludeBinding: b => isMiDashboardSubTableBinding(b),
+            },
           )
         }
         enrichChildBindingRowsFromParentsNestedSubTables(bindings)
         // When subForms have no rule, columns are empty causing no columns/assignee inference; infer columns from loaded row data
         bindings.forEach(binding => {
+          // ACTION bindings' data is filled after this block, from actionTableRowsByBindingId —
+          // skip the __subTables__-oriented shared-process/MI filtering passes below entirely.
+          if (binding.bindingType === 'ACTION') return
           if ((!binding.columns || binding.columns.length === 0) && binding.data?.length) {
             const row0 = binding.data[0]
             if (row0 && typeof row0 === 'object') {
@@ -402,6 +429,13 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
         // ensure* appends layout-only bindings after the stamp above — re-apply so they carry it too.
         stampMiCollectionFromBpmn(ctx, bindings)
         attachAssignmentConfigsToBindings(bindings, content.miAssignments)
+        // Fill ACTION binding rows from the dedicated per-request query (never __subTables__) —
+        // applied last so nothing above (which only knows __subTables__ semantics) can touch it.
+        for (const binding of bindings) {
+          if (binding.bindingType !== 'ACTION') continue
+          const rows = actionTableRowsByBindingId.get(Number(binding.bindingId))
+          binding.data = rows ? [...rows] : []
+        }
         subTableBindings.value = bindings
         ctx.syncFormLayoutWithSubTableBindings()
         // Previous-node read-only form collection — moved verbatim to useTaskDetailPrevForms.ts.

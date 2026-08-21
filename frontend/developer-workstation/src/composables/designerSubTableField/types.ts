@@ -27,6 +27,11 @@ export interface SubTableConfig {
   fieldDefinitions?: BindingFieldDefinition[]
   bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
   bindingForeignKeyField?: string | null
+  /**
+   * ACTION 绑定（FORM_POPUP 弹窗写入的记录表）语义上是操作留痕，恒只读——SubTableField 据此
+   * 强制 editable=false，不依赖 allowAdd/allowEdit/allowDelete props 的值。
+   */
+  bindingType?: string
   pagination?: boolean
   pageSize?: number
   maxHeight?: number
@@ -43,13 +48,6 @@ export interface SubTableFieldProps {
   formOption?: any
   /** Form Preview: compact lookup cells (My Requests — summary mode) */
   previewLookupCompact?: boolean
-  /** Form Preview: show read-only form below table (assignee — form below table) */
-  previewShowFormBelow?: boolean
-  /** Form Preview (To Do): Link Form Details scrolls to inline form instead of opening modal */
-  previewLinkFormScrollToInline?: boolean
-  /** Form Preview: override schema for form-below strip (linkForm → target sub-table) */
-  previewInlineFormRule?: any[]
-  previewInlineFormOption?: any
   /** Form Preview: main form data for FK fill */
   primaryFormData?: Record<string, unknown>
   functionUnitId?: number

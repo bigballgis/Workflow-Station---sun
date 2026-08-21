@@ -8,6 +8,7 @@ import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.admin.repository.FunctionUnitAccessRepository;
+import com.admin.repository.FunctionUnitAuditAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
@@ -42,6 +43,7 @@ public class FunctionUnitLifecycleComponent {
     private final FunctionUnitDependencyRepository dependencyRepository;
     private final FunctionUnitContentRepository contentRepository;
     private final FunctionUnitAccessRepository accessRepository;
+    private final FunctionUnitAuditAccessRepository auditAccessRepository;
     private final FunctionUnitValidationComponent validationComponent;
     private final FunctionUnitVersionComponent versionComponent;
     private final FunctionUnitLookup functionUnitLookup;
@@ -221,6 +223,9 @@ public class FunctionUnitLifecycleComponent {
 
         // Delete access permissions
         accessRepository.deleteByFunctionUnitId(functionUnitId);
+
+        // Delete audit grants (separate table from the launch grants above)
+        auditAccessRepository.deleteByFunctionUnitId(functionUnitId);
 
         // Delete contents
         contentRepository.deleteByFunctionUnitId(functionUnitId);

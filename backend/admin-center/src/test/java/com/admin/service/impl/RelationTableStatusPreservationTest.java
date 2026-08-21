@@ -7,6 +7,7 @@ import com.admin.entity.RelationTableVersion;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.service.RelationTableAuditService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.enums.RelationTableStatus;
@@ -53,6 +54,10 @@ class RelationTableStatusPreservationTest {
 
     private RelationTableAuditService mockAuditService() {
         return Mockito.mock(RelationTableAuditService.class);
+    }
+
+    private FunctionUnitRepository mockFunctionUnitRepo() {
+        return Mockito.mock(FunctionUnitRepository.class);
     }
 
     private JdbcTemplate mockJdbcTemplate() {
@@ -128,7 +133,7 @@ class RelationTableStatusPreservationTest {
         ObjectMapper objectMapper = realObjectMapper();
 
         RelationTableDataServiceImpl dataService = new RelationTableDataServiceImpl(
-                tableRepo, versionRepo, auditService,
+                tableRepo, versionRepo, mockFunctionUnitRepo(), auditService,
                 org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class),
                 org.mockito.Mockito.mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
                 jdbcTemplate, objectMapper);
@@ -179,7 +184,7 @@ class RelationTableStatusPreservationTest {
         ObjectMapper objectMapper = realObjectMapper();
 
         RelationTableDataServiceImpl dataService = new RelationTableDataServiceImpl(
-                tableRepo, versionRepo, auditService,
+                tableRepo, versionRepo, mockFunctionUnitRepo(), auditService,
                 org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class),
                 org.mockito.Mockito.mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
                 jdbcTemplate, objectMapper);
@@ -242,7 +247,7 @@ class RelationTableStatusPreservationTest {
         JdbcTemplate jdbcTemplate = mockJdbcTemplate();
 
         RelationTableStructureServiceImpl structureService = new RelationTableStructureServiceImpl(
-                tableRepo, fieldRepo, jdbcTemplate);
+                tableRepo, fieldRepo, mockFunctionUnitRepo(), jdbcTemplate);
 
         // Build a DRAFT table (equivalent to INIT in unfixed code)
         RelationTableDefinition draftTable = buildTableDefinition(

@@ -11,6 +11,8 @@ export interface SubTableBindingData {
   bindingMode: string
   columns: Array<Record<string, unknown>>
   data: Array<Record<string, unknown>>
+  /** MI assignment contract (allowUser/allowRole/assigneeField/roleField/buField) parsed from BPMN. */
+  assignmentConfig?: Record<string, unknown>
 }
 
 export interface ProcessFormData {
@@ -100,6 +102,10 @@ export function submitTaskForm(taskId: string, data: TaskFormSubmitRequest) {
 
 export function getCompletedTaskFormData(taskId: string) {
   return request.get<{ data: CompletedTaskFormData }>(`/tasks/${taskId}/completed-form`)
+}
+
+export function submitActionFormPopup(taskId: string, actionId: string, formData: Record<string, unknown>) {
+  return request.post<{ data: void }>(`/tasks/${taskId}/actions/${actionId}/form-popup-submit`, { formData })
 }
 
 export function getChangeHistory(processInstanceId: string, rowIdentifier?: string, taskId?: string) {

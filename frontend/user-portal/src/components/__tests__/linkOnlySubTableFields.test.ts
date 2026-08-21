@@ -5,7 +5,7 @@ import {
   collectAllLinkFormTargetBindingIds,
   collectRuleBindingIds,
   filterLinkOnlyStandaloneSubTableFields,
-  shouldSuppressStandaloneSubTableInInitiatorRequest,
+  shouldSuppressLinkOnlyStandaloneSubTable,
 } from '../formRendererHelpers'
 
 describe('link-only sub-table placement', () => {
@@ -49,7 +49,7 @@ describe('link-only sub-table placement', () => {
     }
     expect(collectLinkFormTargetBindingIdsFromSubListViews(formConfig)).toEqual(new Set([30]))
     expect(collectAllLinkFormTargetBindingIds(runtimeBindings, formConfig)).toEqual(new Set([30]))
-    expect(shouldSuppressStandaloneSubTableInInitiatorRequest(30, runtimeBindings, null, null, formConfig)).toBe(true)
+    expect(shouldSuppressLinkOnlyStandaloneSubTable(30, runtimeBindings, null, formConfig)).toBe(true)
   })
 
   it('suppresses link targets on My Request even when stale rule still places them', () => {
@@ -58,8 +58,8 @@ describe('link-only sub-table placement', () => {
       { type: 'subTable', _bindingId: 66 },
     ]
     expect(collectRuleBindingIds(rule)).toEqual(new Set([64, 66]))
-    expect(shouldSuppressStandaloneSubTableInInitiatorRequest(66, bindings, null)).toBe(true)
-    expect(shouldSuppressStandaloneSubTableInInitiatorRequest(64, bindings, null)).toBe(false)
+    expect(shouldSuppressLinkOnlyStandaloneSubTable(66, bindings)).toBe(true)
+    expect(shouldSuppressLinkOnlyStandaloneSubTable(64, bindings)).toBe(false)
   })
 
   it('filters subTable fields for link targets from form field trees', () => {
@@ -76,23 +76,19 @@ describe('link-only sub-table placement', () => {
   it('suppresses merge-only bindings not in native tableBindings', () => {
     const nativeIds = new Set([64])
     expect(
-      shouldSuppressStandaloneSubTableInInitiatorRequest(66, bindings, null, nativeIds)
+      shouldSuppressLinkOnlyStandaloneSubTable(66, bindings, nativeIds)
     ).toBe(true)
     expect(
-      shouldSuppressStandaloneSubTableInInitiatorRequest(64, bindings, null, nativeIds)
+      shouldSuppressLinkOnlyStandaloneSubTable(64, bindings, nativeIds)
     ).toBe(false)
   })
 
   it('treats FORM_ONLY bindings as suppressible', () => {
     const formOnly = { bindingId: 99, subMode: 'FORM_ONLY', columns: [] }
-    expect(shouldSuppressStandaloneSubTableInInitiatorRequest(99, [formOnly], null)).toBe(true)
+    expect(shouldSuppressLinkOnlyStandaloneSubTable(99, [formOnly])).toBe(true)
   })
 
-  it('keeps native canvas sub-tables when binding is also a link-form target (mirrorTodo + tableOnly)', () => {
-    const portalViews = {
-      assigneeTodo: 'tableOnly' as const,
-      initiatorRequest: 'mirrorTodo' as const,
-    }
+  it('keeps native canvas sub-tables when binding is also a link-form target', () => {
     const selfRefBinding = {
       bindingId: 281,
       subMode: 'FULL',
@@ -116,17 +112,16 @@ describe('link-only sub-table placement', () => {
     }
     const nativeIds = new Set([281])
     expect(
-      shouldSuppressStandaloneSubTableInInitiatorRequest(
+      shouldSuppressLinkOnlyStandaloneSubTable(
         281,
         [selfRefBinding],
-        portalViews,
         nativeIds,
         formConfig,
       ),
     ).toBe(false)
 
     const fields = [
-      { key: '__subTable_281', label: '', type: 'subTable', _bindingId: 281, portalViews },
+      { key: '__subTable_281', label: '', type: 'subTable', _bindingId: 281 },
     ]
     const filtered = filterLinkOnlyStandaloneSubTableFields(
       fields,

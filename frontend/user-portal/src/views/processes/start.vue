@@ -548,7 +548,6 @@ const loadFunctionUnitContent = async () => {
       console.log('[start] tableBindings:', selectedForm.tableBindings?.length, 'subForms keys:', Object.keys(subForms))
 
       // Load sub-table bindings (SUB / RELATED, skip PRIMARY)
-      const subTablePortalViewsPayload = formConfigForPk.subTablePortalViews || {}
       const bindings: typeof subTableBindings.value = []
       let primaryBindingMeta: typeof primaryTableBinding.value = null
       for (const b of (selectedForm.tableBindings || [])) {
@@ -563,20 +562,16 @@ const loadFunctionUnitContent = async () => {
           }
           continue
         }
-        const tid = (b as { tableId?: number | null }).tableId
-        const bindingPortalViews =
-          subTablePortalViewsPayload[b.bindingId]
-          ?? subTablePortalViewsPayload[String(b.bindingId)]
-          ?? null
+        const tid = (b as { tableId?: number | null }).tableId ?? null
         const columns = resolveSubTableBindingColumnsForStart(b, subForms, formConfigForPk)
         const dialogColumns = deriveDialogColumnsFromBinding(b, subForms)
         const bindingFieldDefinitions = resolveBindingFieldDefinitions(
           { tableId: tid, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
           caches.cachedRelationTableFieldIndex,
         ) as unknown as BindingFieldDefinition[]
-        // Sub-form design fields back the form-below-table inline form (same contract as
-        // task detail's resolveSubFormDesign) — without them portalViews=formBelowTable
-        // renders an empty "no form fields configured" card on the start page.
+        // Sub-form design fields back the sub-table's Add/Edit dialog form (same contract
+        // as task detail's resolveSubFormDesign) — without them the dialog renders an
+        // empty "no form fields configured" card on the start page.
         // formOptions (Form onChange / onCreated / …) must also travel: without them
         // New Request subform dialog/bootstrap skips Form events that Todo already runs.
         const subFormDesign = subForms[b.bindingId] ?? subForms[String(b.bindingId)] ?? {}
@@ -602,7 +597,6 @@ const loadFunctionUnitContent = async () => {
           ...(dialogColumns.length > 0 ? { dialogColumns } : {}),
           ...(subFormFields.length > 0 ? { formFields: subFormFields } : {}),
           ...(subFormOptions ? { formOptions: subFormOptions } : {}),
-          portalViews: bindingPortalViews,
           fieldDefinitions: bindingFieldDefinitions,
           bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
           foreignKeyField: (b as { foreignKeyField?: string | null }).foreignKeyField ?? null,

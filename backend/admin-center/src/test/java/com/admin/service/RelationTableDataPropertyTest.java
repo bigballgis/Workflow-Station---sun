@@ -5,6 +5,7 @@ import com.admin.entity.RelationTableDefinition;
 import com.admin.entity.RelationTableVersion;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.config.DatabaseSchemaResolver;
 import com.admin.service.impl.RelationTableDataServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -42,6 +43,7 @@ class RelationTableDataPropertyTest {
 
     private RelationTableDefinitionRepository tableDefinitionRepository;
     private RelationTableVersionRepository versionRepository;
+    private FunctionUnitRepository functionUnitRepository;
     private RelationTableAuditService auditService;
     private JdbcTemplate jdbcTemplate;
     private ObjectMapper objectMapper;
@@ -51,11 +53,12 @@ class RelationTableDataPropertyTest {
     void setUp() {
         tableDefinitionRepository = mock(RelationTableDefinitionRepository.class);
         versionRepository = mock(RelationTableVersionRepository.class);
+        functionUnitRepository = mock(FunctionUnitRepository.class);
         auditService = mock(RelationTableAuditService.class);
         jdbcTemplate = mock(JdbcTemplate.class);
         objectMapper = new ObjectMapper();
         service = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, auditService,
+                tableDefinitionRepository, versionRepository, functionUnitRepository, auditService,
                 mock(com.admin.service.RelationTableAccessService.class),
                 mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
                 jdbcTemplate, objectMapper);
@@ -280,5 +283,90 @@ class RelationTableDataPropertyTest {
                             totalRows, pageSize)
                     .isEqualTo(totalRows);
         }
+    }
+
+    // ==================== getDeployedTableFunctionUnitGroups: grouping / sorting / count ====================
+
+    private com.admin.entity.FunctionUnit functionUnit(String id, String code, String name) {
+        return com.admin.entity.FunctionUnit.builder().id(id).code(code).name(name).build();
+    }
+
+    private RelationTableDefinition deployedTable(long id, String tableName, String functionUnitId) {
+        return RelationTableDefinition.builder()
+                .id(id)
+                .tableName(tableName)
+                .displayName("Display " + tableName)
+                .status(RelationTableStatus.DEPLOYED)
+                .enabled(true)
+                .portalVisible(false)
+                .currentVersion(1)
+                .functionUnitId(functionUnitId)
+                .fieldDefinitions(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+    }
+
+    /**
+     * Two tables grouped under the same FU must collapse into one group with tableCount=2;
+     * an ungrouped table (functionUnitId=null) must not produce a group at all.
+     */
+    @Example
+    void getDeployedTableFunctionUnitGroups_groupsAndCountsByFunctionUnit() {
+        List<RelationTableDefinition> tables = List.of(
+                deployedTable(1, "rt_a", "fu-1"),
+                deployedTable(2, "rt_b", "fu-1"),
+                deployedTable(3, "rt_c", "fu-2"),
+                deployedTable(4, "rt_d", null));
+        when(tableDefinitionRepository.findByStatusInAndEnabledTrue(anyList())).thenReturn(tables);
+        when(functionUnitRepository.findAllById(anyCollection())).thenReturn(List.of(
+                functionUnit("fu-1", "FU-CODE-1", "Alpha Unit"),
+                functionUnit("fu-2", "FU-CODE-2", "Beta Unit")));
+
+        List<com.admin.dto.response.FunctionUnitTableGroupResponse> groups =
+                service.getDeployedTableFunctionUnitGroups();
+
+        assertThat(groups).hasSize(2);
+        com.admin.dto.response.FunctionUnitTableGroupResponse fu1Group = groups.stream()
+                .filter(g -> "fu-1".equals(g.getFunctionUnitId())).findFirst().orElseThrow();
+        assertThat(fu1Group.getTableCount()).isEqualTo(2L);
+        assertThat(fu1Group.getFunctionUnitName()).isEqualTo("Alpha Unit");
+        com.admin.dto.response.FunctionUnitTableGroupResponse fu2Group = groups.stream()
+                .filter(g -> "fu-2".equals(g.getFunctionUnitId())).findFirst().orElseThrow();
+        assertThat(fu2Group.getTableCount()).isEqualTo(1L);
+        // Ungrouped table must not surface as a group of its own.
+        assertThat(groups).noneMatch(g -> g.getFunctionUnitId() == null);
+    }
+
+    /** Groups sort by function unit name (falling back to code when name is null), ascending. */
+    @Example
+    void getDeployedTableFunctionUnitGroups_sortsByNameFallingBackToCode() {
+        List<RelationTableDefinition> tables = List.of(
+                deployedTable(1, "rt_a", "fu-zebra"),
+                deployedTable(2, "rt_b", "fu-alpha"),
+                deployedTable(3, "rt_c", "fu-no-name"));
+        when(tableDefinitionRepository.findByStatusInAndEnabledTrue(anyList())).thenReturn(tables);
+        when(functionUnitRepository.findAllById(anyCollection())).thenReturn(List.of(
+                functionUnit("fu-zebra", "Z-CODE", "Zebra Unit"),
+                functionUnit("fu-alpha", "A-CODE", "Alpha Unit"),
+                functionUnit("fu-no-name", "M-CODE", null)));
+
+        List<com.admin.dto.response.FunctionUnitTableGroupResponse> groups =
+                service.getDeployedTableFunctionUnitGroups();
+
+        assertThat(groups).extracting(com.admin.dto.response.FunctionUnitTableGroupResponse::getFunctionUnitId)
+                .as("Alpha Unit < M-CODE (name-less FU falls back to code) < Zebra Unit")
+                .containsExactly("fu-alpha", "fu-no-name", "fu-zebra");
+    }
+
+    /** No deployed tables at all → no groups, and the batch FU lookup is skipped entirely (no N+1). */
+    @Example
+    void getDeployedTableFunctionUnitGroups_emptyWhenNoDeployedTables() {
+        when(tableDefinitionRepository.findByStatusInAndEnabledTrue(anyList())).thenReturn(List.of());
+
+        List<com.admin.dto.response.FunctionUnitTableGroupResponse> groups =
+                service.getDeployedTableFunctionUnitGroups();
+
+        assertThat(groups).isEmpty();
+        verify(functionUnitRepository, never()).findAllById(any());
     }
 }

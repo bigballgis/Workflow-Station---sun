@@ -129,30 +129,30 @@ export function useFormNodeBinding(options: UseFormNodeBindingOptions) {
       console.log('[FormDesigner] Saving bindings for form:', bindingForm.value.id, 'Selected nodes:', selectedBindNodes.value)
       // 更新BPMN XML中的节点formId属性
       if (store.process?.bpmnXml) {
-        await updateBpmnFormBindings(bindingForm.value.id, bindingForm.value.formName, selectedBindNodes.value)
+        await updateBpmnFormBindings(
+          bindingForm.value.id,
+          bindingForm.value.formName,
+          selectedBindNodes.value,
+          (bindingForm.value.scene ?? 'TASK') as 'TASK' | 'REQUEST',
+        )
       }
 
       // 重新加载流程数据，确保获取最新的 BPMN XML
       await store.fetchProcess(functionUnitId)
-      // 重新解析绑定信息
+      // 重新解析绑定信息，让列表页的「已绑定节点」列立即反映本次保存
       parseFormBindingsFromBpmn()
 
-      // 更新对话框中的选中状态，确保与保存后的数据一致
+      // 回写选中状态：对话框重新打开时应显示落库后的绑定，而不是本次的临时勾选。
       const boundNodes = getFormBoundNodes(bindingForm.value.id)
-      console.log('[FormDesigner] After save, bound nodes:', boundNodes)
-
-      // 创建一个新数组，确保 Vue 能够检测到变化
-      // 使用 splice 来替换整个数组，确保响应式更新
       selectedBindNodes.value.splice(0, selectedBindNodes.value.length, ...boundNodes.map(n => ({ ...n })))
-
-      // 强制更新对话框，确保复选框状态正确更新
       bindDialogKey.value++
-
-      // 使用 nextTick 确保 Vue 能够检测到变化并更新 UI
       await nextTick()
 
       ElMessage.success(t('form.bindSuccess'))
-      // 不关闭对话框，让用户看到更新后的状态
+      // Confirm is a commit: close on success. Leaving it open made the toast the only
+      // signal that anything happened, and users clicked Confirm again thinking it had not
+      // saved. Cancel/close still discards nothing, since the write already happened here.
+      showBindDialog.value = false
     } catch (e: any) {
       console.error('[FormDesigner] Save binding failed:', e)
       ElMessage.error(e.response?.data?.message || t('form.bindFailed'))
@@ -162,10 +162,15 @@ export function useFormNodeBinding(options: UseFormNodeBindingOptions) {
   /**
    * 更新BPMN XML中多个节点的表单绑定并保存流程
    */
-  async function updateBpmnFormBindings(formId: number, formName: string, nodes: BpmnBoundNode[]) {
+  async function updateBpmnFormBindings(
+    formId: number,
+    formName: string,
+    nodes: BpmnBoundNode[],
+    scene: 'TASK' | 'REQUEST' = 'TASK',
+  ) {
     if (!store.process?.bpmnXml) return
 
-    const newXml = buildUpdatedBpmnFormBindingsXml(store.process.bpmnXml, formId, formName, nodes)
+    const newXml = buildUpdatedBpmnFormBindingsXml(store.process.bpmnXml, formId, formName, nodes, scene)
 
     console.log('[FormDesigner] Serialized XML length:', newXml.length)
     console.log('[FormDesigner] Saving process with updated BPMN XML')

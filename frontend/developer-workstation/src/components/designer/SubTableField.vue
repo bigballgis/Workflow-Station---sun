@@ -225,42 +225,6 @@
     </el-table>
     </div>
 
-    <div
-      v-if="previewShowFormBelow"
-      ref="inlineFormBelowRef"
-      class="preview-inline-form-below"
-    >
-      <el-divider content-position="left">
-        {{ t('subTableView.assigneeFormBelowDivider') }}
-      </el-divider>
-      <div class="preview-inline-form-body">
-        <form-create
-          v-if="effectiveInlineFormRule.length && !hideInlineFormForRowDialog"
-          v-model="previewInlineFormData"
-          locale="en"
-          :rule="effectiveInlineFormRule"
-          :option="previewInlineFormOption"
-        />
-        <el-empty
-          v-else
-          :description="t('subTable.noFormDesign')"
-          :image-size="48"
-        />
-        <div
-          v-if="effectiveInlineFormRule.length"
-          class="inline-form-actions"
-        >
-          <el-button
-            type="primary"
-            :disabled="!editable"
-            @click="handleInlineFormBelowSave"
-          >
-            {{ t('common.save') }}
-          </el-button>
-        </div>
-      </div>
-    </div>
-
     <!-- 分页 -->
     <div
       v-if="config.pagination && total > (config.pageSize || 10)"
@@ -324,7 +288,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue'
+import { computed, inject, provide, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Loading, Document, Download, Upload } from '@element-plus/icons-vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
@@ -337,7 +301,6 @@ import type { SubTableConfig, ColumnConfig } from '@/composables/designerSubTabl
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import { useSubTableData } from '@/composables/designerSubTableField/useSubTableData'
 import { useSubTableUploadCells } from '@/composables/designerSubTableField/useSubTableUploadCells'
-import { useSubTableInlineForm } from '@/composables/designerSubTableField/useSubTableInlineForm'
 import { useSubTableLinkForm } from '@/composables/designerSubTableField/useSubTableLinkForm'
 import { useSubTableRowDialog } from '@/composables/designerSubTableField/useSubTableRowDialog'
 import {
@@ -353,7 +316,12 @@ import {
   isSensitiveMaskActive,
   normalizeSensitiveMaskConfig,
 } from '@/utils/sensitiveMask'
-import { DEMO_BU_OPTIONS, DEMO_ROLE_OPTIONS, type AssignmentConfig } from '@/utils/miAssignmentConfig'
+import {
+  DEMO_BU_OPTIONS,
+  DEMO_ROLE_OPTIONS,
+  MI_ASSIGNMENT_CONFIG_KEY,
+  type AssignmentConfig,
+} from '@/utils/miAssignmentConfig'
 
 const { t } = useI18n()
 
@@ -416,9 +384,6 @@ function formatDefaultCellDisplay(col: ColumnConfig, raw: unknown): string {
 }
 const previewDialogHost = inject(PREVIEW_SUBTABLE_DIALOG_KEY, null)
 const previewMyRequestsActive = inject(PREVIEW_MY_REQUESTS_ACTIVE_KEY, undefined)
-const hideInlineFormForRowDialog = computed(
-  () => previewDialogHost?.rowDialogOpen.value === true,
-)
 
 const props = withDefaults(defineProps<{
   config: SubTableConfig
@@ -438,13 +403,6 @@ const props = withDefaults(defineProps<{
   formOption?: any
   /** Form Preview: compact lookup cells (My Requests — summary mode) */
   previewLookupCompact?: boolean
-  /** Form Preview: show read-only form below table (assignee — form below table) */
-  previewShowFormBelow?: boolean
-  /** Form Preview (To Do): Link Form Details scrolls to inline form instead of opening modal */
-  previewLinkFormScrollToInline?: boolean
-  /** Form Preview: override schema for form-below strip (linkForm → target sub-table) */
-  previewInlineFormRule?: any[]
-  previewInlineFormOption?: any
   /** Form Preview: main form data for FK fill */
   primaryFormData?: Record<string, unknown>
   functionUnitId?: number
@@ -471,7 +429,10 @@ const emit = defineEmits<{
 }>()
 
 // 计算属性：是否可编辑（Form Preview My Requests 全局只读覆盖 props.editable）
+// ACTION 绑定（操作留痕记录表）恒只读，不依赖 allow*/editable props——防止历史脏数据或遗漏的
+// 调用点意外把它渲染成可编辑子表。
 const editable = computed(() => {
+  if (props.config?.bindingType === 'ACTION') return false
   if (previewMyRequestsActive?.value === true) return false
   return props.editable !== false
 })
@@ -480,6 +441,15 @@ const editable = computed(() => {
 const canAdd = computed(() => editable.value && props.allowAdd !== false)
 const canEdit = computed(() => editable.value && props.allowEdit !== false)
 const canDelete = computed(() => editable.value && props.allowDelete !== false)
+
+/**
+ * The inline form strip below the table renders this sub-table's own rule, which may
+ * contain the multi-instance assignment container. That container reads its BPMN
+ * contract from inject, so scope it to THIS binding — otherwise it falls back to the
+ * designer-level config, which follows whichever sub-table tab happens to be open and
+ * reports "no matching assignment" for every other one.
+ */
+provide(MI_ASSIGNMENT_CONFIG_KEY, computed(() => props.assignmentConfig))
 
 function hasVal(v: unknown): boolean {
   if (v == null) return false
@@ -753,15 +723,6 @@ const {
   downloadFile,
 } = useSubTableUploadCells({ displayColumns, uploadNames, t })
 
-// Form Preview：表格下方只读内联表单
-const {
-  previewInlineFormData,
-  inlineFormBelowRef,
-  effectiveInlineFormRule,
-  previewInlineFormOption,
-  handleInlineFormBelowSave,
-} = useSubTableInlineForm({ props, editable, t })
-
 // linkForm 关联表单弹层
 const {
   linkFormDialogVisible,
@@ -771,7 +732,7 @@ const {
   linkFormOption,
   openLinkFormDialog,
   handleLinkFormSave,
-} = useSubTableLinkForm({ props, editable, previewInlineFormData, inlineFormBelowRef, t })
+} = useSubTableLinkForm({ props, editable, t })
 
 // 行的添加/编辑弹层编排 + 增删改
 const {
@@ -886,38 +847,6 @@ defineExpose(exposed)
 
   .no-file {
     color: #909399;
-  }
-
-  .preview-inline-form-below {
-    margin-top: 12px;
-    border-top: 1px dashed var(--el-border-color, #dcdfe6);
-    background: var(--el-fill-color-lighter, #fafafa);
-    border-radius: 0 0 4px 4px;
-    margin-left: -12px;
-    margin-right: -12px;
-    margin-bottom: -12px;
-    padding: 0 12px 4px;
-  }
-
-  .preview-inline-form-body {
-    max-height: 280px;
-    overflow-y: auto;
-    padding-bottom: 8px;
-
-    :deep(.form-create) {
-      width: 100%;
-    }
-
-    :deep(.el-card) {
-      margin-bottom: 10px;
-    }
-  }
-
-  .inline-form-actions {
-    margin-top: 12px;
-    display: flex;
-    justify-content: flex-end;
-    padding-bottom: 8px;
   }
 }
 </style>

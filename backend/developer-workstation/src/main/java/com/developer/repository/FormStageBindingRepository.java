@@ -1,6 +1,7 @@
 package com.developer.repository;
 
 import com.developer.entity.FormStageBinding;
+import com.developer.enums.FormScene;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -29,6 +30,25 @@ public interface FormStageBindingRepository extends JpaRepository<FormStageBindi
             + "AND b.form.functionUnit.code = :functionUnitCode ORDER BY b.form.id DESC")
     List<FormStageBinding> findByFunctionUnitCodeAndStageId(@Param("functionUnitCode") String functionUnitCode,
                                                             @Param("stageId") String stageId);
+
+    /**
+     * 按功能单元编码 + 阶段ID + 场景查询绑定。
+     * <p>同一节点可同时挂 TASK（To Do）与 REQUEST（My Requests）两份设计，
+     * 解析时必须带上场景，否则两个场景会解析到同一份表单。</p>
+     */
+    @Query("SELECT b FROM FormStageBinding b WHERE b.stageId = :stageId "
+            + "AND b.form.functionUnit.code = :functionUnitCode AND b.scene = :scene "
+            + "ORDER BY b.form.id DESC")
+    List<FormStageBinding> findByFunctionUnitCodeAndStageIdAndScene(
+            @Param("functionUnitCode") String functionUnitCode,
+            @Param("stageId") String stageId,
+            @Param("scene") FormScene scene);
+
+    /** 场景收窄的全局回退查询，仅在调用方无法解析功能单元时使用。 */
+    @Query("SELECT b FROM FormStageBinding b WHERE b.stageId = :stageId AND b.scene = :scene "
+            + "ORDER BY b.form.id DESC")
+    List<FormStageBinding> findByStageIdAndSceneOrderByFormIdDesc(@Param("stageId") String stageId,
+                                                                  @Param("scene") FormScene scene);
 
     /**
      * 按阶段ID查询绑定（未按功能单元收窄，仅在调用方无法解析功能单元时使用）。

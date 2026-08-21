@@ -168,7 +168,10 @@ public final class FormConfigJsonBindingIdRewriter {
                 continue;
             }
             Map<String, Object> node = (Map<String, Object>) nodeRaw;
-            if ("subTable".equals(node.get("type"))) {
+            // Both rule types point at a SUB binding via `_bindingId`; without inlineSubForm here an
+            // imported/cloned FU keeps the SOURCE environment's bindingId (silent, no error).
+            Object nodeType = node.get("type");
+            if ("subTable".equals(nodeType) || "inlineSubForm".equals(nodeType)) {
                 remapBindingIdField(node, "_bindingId", ctx.bindingIds);
                 Object props = node.get("props");
                 if (props instanceof Map<?, ?> propsRaw) {

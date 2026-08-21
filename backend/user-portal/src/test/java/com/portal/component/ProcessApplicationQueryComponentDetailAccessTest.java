@@ -40,6 +40,7 @@ class ProcessApplicationQueryComponentDetailAccessTest {
     @Mock private MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
     @Mock private MainTableViewAccessResolver mainTableViewAccessResolver;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private FunctionUnitAccessComponent functionUnitAccessComponent;
 
     private ProcessApplicationQueryComponent component;
 
@@ -55,6 +56,7 @@ class ProcessApplicationQueryComponentDetailAccessTest {
                 requestIdEnricher,
                 mainTableViewInvolvementChecker,
                 mainTableViewAccessResolver,
+                functionUnitAccessComponent,
                 jdbcTemplate);
         lenient().when(workflowEngineClient.isAvailable()).thenReturn(false);
     }

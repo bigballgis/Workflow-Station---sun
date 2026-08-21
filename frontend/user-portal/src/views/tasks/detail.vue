@@ -222,6 +222,7 @@
               :function-unit-id="functionUnitIdRef"
               :primary-table-binding="primaryTableBinding ?? undefined"
               :request-id-config="requestIdConfig"
+              :field-permissions="selectedNodeForm.isCurrentTask ? taskFieldPermissions : undefined"
               @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
               @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />
@@ -349,6 +350,7 @@
               :function-unit-id="functionUnitIdRef"
               :primary-table-binding="primaryTableBinding ?? undefined"
               :request-id-config="requestIdConfig"
+              :field-permissions="taskFieldPermissions"
               @update:model-value="val => formData = { ...formData, ...val }"
               @update:sub-table-data="syncMainSubTableRows"
               @save="saveCurrentTaskFormWithMiPersist"
@@ -588,7 +590,7 @@ const {
   processFormFormConfig,
   processFormNativeSubTableBindingIds,
   taskFormDTO,
-  showImplicitSaveAction,
+  hasConfiguredSaveAction,
   completedFormData,
   isCompletedTask,
   miSubProcessScopeName,
@@ -610,6 +612,11 @@ const requestIdConfig = computed<{ fieldNames: string[]; separator?: string } | 
   if (fromProcessRef) return fromProcessRef
   const fromCompleted = (completedFormData.value as { processFormRef?: { requestIdConfig?: { fieldNames: string[]; separator?: string } | null } } | null)?.processFormRef?.requestIdConfig
   return fromCompleted ?? null
+})
+
+/** Current task-node field permissions (bare main-table key, `${bindingId}:${fieldName}` sub-table key). */
+const taskFieldPermissions = computed<Record<string, string> | null>(() => {
+  return (taskFormDTO.value as { fieldPermissions?: Record<string, string> | null } | null)?.fieldPermissions ?? null
 })
 
 watch(
@@ -650,6 +657,8 @@ const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml } =
 
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName })
 const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, buildCurrentTaskFormSubmitPayload, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
+
+const showImplicitSaveAction = computed(() => !formReadOnly.value && !hasConfiguredSaveAction.value)
 
 /** Mask configs for Change History only (form stages use each form's own sensitiveMask). */
 const sensitiveMaskLookup = computed(() => buildSensitiveMaskLookup({

@@ -17,6 +17,7 @@ import com.developer.entity.TableDefinition;
 import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
+import com.developer.enums.FormScene;
 import com.developer.enums.FormType;
 import com.developer.enums.SubMode;
 import com.developer.enums.TableType;
@@ -82,37 +83,124 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final JdbcTemplate jdbcTemplate;
     private final SubTableViewService subTableViewService;
     
+    /**
+     * Suffix that distinguishes the My Requests row of a scene pair. Form names are unique per
+     * function unit, and the pair is linked by BPMN node id rather than by name, so a suffix is
+     * enough — see {@code docs/design/form-design-scene-pairing-and-views-form.md}.
+     */
+    private static final String REQUEST_SCENE_NAME_SUFFIX = " (My Request)";
+
     @Override
     @Transactional
     public FormDefinition create(Long functionUnitId, FormDefinitionRequest request) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
-        
-        if (formDefinitionRepository.existsByFunctionUnitIdAndFormName(functionUnitId, request.getFormName())) {
-            throw new DeveloperBusinessException("CONFLICT_FORM_NAME_EXISTS", 
-                    i18nService.getMessage("form.name_exists", request.getFormName()),
-                    i18nService.getMessage("form.use_other_name"));
+
+        FormScene requestedScene = resolveScene(request.getScene());
+        validateActionFormScene(request.getFormType(), requestedScene);
+
+        if (isScenePairRequested(request)) {
+            return createScenePair(functionUnit, request);
         }
 
+        requireFormNameAvailable(functionUnitId, request.getFormName());
         if (request.getFormType() == FormType.PROCESS) {
-            validateProcessFormUniqueness(functionUnitId);
+            validateProcessFormUniqueness(functionUnitId, requestedScene);
         }
-        
+
+        return saveNewForm(functionUnit, request, request.getFormName(), requestedScene,
+                request.getConfigJson());
+    }
+
+    /**
+     * Pair creation applies only to the form types that render a workflow step. ACTION forms open
+     * from a To Do task page only, and DETAIL forms belong to a view rather than a step, so neither
+     * has a second scene to design.
+     */
+    private boolean isScenePairRequested(FormDefinitionRequest request) {
+        return Boolean.TRUE.equals(request.getCreateBothScenes())
+                && (request.getFormType() == FormType.PROCESS || request.getFormType() == FormType.TASK);
+    }
+
+    /**
+     * Creates the To Do and My Requests designs of one step in a single transaction, so a failure
+     * on the second row cannot leave half a pair behind. Both start as an empty canvas: the whole
+     * point of two rows is that each scene gets its own layout.
+     */
+    private FormDefinition createScenePair(FunctionUnit functionUnit, FormDefinitionRequest request) {
+        Long functionUnitId = functionUnit.getId();
+        String taskName = request.getFormName();
+        String requestName = taskName + REQUEST_SCENE_NAME_SUFFIX;
+
+        // Both names are checked up front: reporting the conflict before writing anything keeps the
+        // 409 accurate about which name the developer has to change.
+        requireFormNameAvailable(functionUnitId, taskName);
+        requireFormNameAvailable(functionUnitId, requestName);
+
+        if (request.getFormType() == FormType.PROCESS) {
+            validateProcessFormUniqueness(functionUnitId, FormScene.TASK);
+            validateProcessFormUniqueness(functionUnitId, FormScene.REQUEST);
+        }
+
+        FormDefinition taskForm = saveNewForm(functionUnit, request, taskName, FormScene.TASK,
+                request.getConfigJson());
+        saveNewForm(functionUnit, request, requestName, FormScene.REQUEST, emptyFormConfig());
+
+        // The To Do row is returned so the designer lands on it; the My Requests row is reachable
+        // from its own tab in the form list.
+        return taskForm;
+    }
+
+    private FormDefinition saveNewForm(FunctionUnit functionUnit, FormDefinitionRequest request,
+                                       String formName, FormScene scene,
+                                       Map<String, Object> configJson) {
         FormDefinition formDefinition = FormDefinition.builder()
                 .functionUnit(functionUnit)
-                .formName(request.getFormName())
+                .formName(formName)
                 .formType(request.getFormType())
-                .configJson(request.getConfigJson())
+                .scene(scene)
+                .configJson(configJson)
                 .displayName(request.getDescription())
                 .build();
-        
+
         if (request.getBoundTableId() != null) {
             TableDefinition boundTable = tableDefinitionRepository.findById(request.getBoundTableId())
                     .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getBoundTableId()));
             formDefinition.setBoundTable(boundTable);
         }
-        
+
         return formDefinitionRepository.save(formDefinition);
+    }
+
+    /** A fresh, empty form-create canvas. */
+    private static Map<String, Object> emptyFormConfig() {
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("rule", new ArrayList<>());
+        configJson.put("options", new HashMap<>());
+        return configJson;
+    }
+
+    private void requireFormNameAvailable(Long functionUnitId, String formName) {
+        if (formDefinitionRepository.existsByFunctionUnitIdAndFormName(functionUnitId, formName)) {
+            throw new DeveloperBusinessException("CONFLICT_FORM_NAME_EXISTS",
+                    i18nService.getMessage("form.name_exists", formName),
+                    i18nService.getMessage("form.use_other_name"));
+        }
+    }
+
+    /**
+     * ACTION forms are opened by a FORM_POPUP action button, and those exist only on To Do task
+     * pages: My Requests has no action-button mechanism at all, because action ids are carried by
+     * BPMN user tasks and My Requests does not correspond to one. A REQUEST-scene ACTION form could
+     * therefore never be opened, so it is rejected outright instead of being saved and silently
+     * never rendering.
+     */
+    private void validateActionFormScene(FormType formType, FormScene scene) {
+        if (formType == FormType.ACTION && scene == FormScene.REQUEST) {
+            throw new DeveloperBusinessException("INVALID_ACTION_FORM_SCENE",
+                    i18nService.getMessage("form.action_form_todo_only"),
+                    i18nService.getMessage("form.action_form_use_todo_scene"));
+        }
     }
     
     @Override
@@ -127,23 +215,42 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     i18nService.getMessage("form.use_other_name"));
         }
 
+        // An omitted scene means "leave it as it is". Defaulting to TASK here would
+        // let any ordinary save from the designer — which does not send the scene —
+        // silently demote a My Requests design back to the To Do scene.
+        FormScene targetScene = request.getScene() != null
+                ? request.getScene()
+                : resolveScene(formDefinition.getScene());
+        validateActionFormScene(request.getFormType(), targetScene);
         if (request.getFormType() == FormType.PROCESS) {
             long fuId = formDefinition.getFunctionUnit().getId();
-            long processCount = formDefinitionRepository.countByFunctionUnitIdAndFormType(fuId, FormType.PROCESS);
-            if (formDefinition.getFormType() != FormType.PROCESS && processCount > 0) {
+            long processCount = formDefinitionRepository
+                    .countByFunctionUnitIdAndFormTypeAndScene(fuId, FormType.PROCESS, targetScene);
+            // Uniqueness is per scene: turning into the PROCESS form of a scene
+            // this form does not already occupy is what needs a free slot.
+            boolean alreadyOccupiesSlot = formDefinition.getFormType() == FormType.PROCESS
+                    && resolveScene(formDefinition.getScene()) == targetScene;
+            if (!alreadyOccupiesSlot && processCount > 0) {
                 throw new DeveloperBusinessException("PROCESS_FORM_ALREADY_EXISTS",
                         i18nService.getMessage("form.process_form_already_exists"),
                         i18nService.getMessage("form.only_one_process_form"));
             }
         }
-        
+
         Map<String, Object> mergedConfigJson = preserveExistingSubListViewsOnAccidentalEmpty(
                 formDefinition.getConfigJson(), request.getConfigJson());
         formDefinition.setFormName(request.getFormName());
         formDefinition.setFormType(request.getFormType());
+        formDefinition.setScene(targetScene);
         formDefinition.setConfigJson(mergedConfigJson);
         formDefinition.setDisplayName(request.getDescription());
-        
+        // Omitted (null) means "not sent by this caller" — leave the persisted value as-is.
+        // ACTION/PROCESS-scene saves never send this key; only the TASK-scene Form Designer's
+        // field-permission panel does.
+        if (request.getFieldPermissions() != null) {
+            formDefinition.setFieldPermissions(request.getFieldPermissions());
+        }
+
         if (request.getBoundTableId() != null) {
             TableDefinition boundTable = tableDefinitionRepository.findById(request.getBoundTableId())
                     .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getBoundTableId()));
@@ -533,12 +640,24 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Override
     @Transactional(readOnly = true)
     public void validateProcessFormUniqueness(Long functionUnitId) {
-        long processFormCount = formDefinitionRepository.countByFunctionUnitIdAndFormType(functionUnitId, FormType.PROCESS);
+        validateProcessFormUniqueness(functionUnitId, FormScene.TASK);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void validateProcessFormUniqueness(Long functionUnitId, FormScene scene) {
+        long processFormCount = formDefinitionRepository
+                .countByFunctionUnitIdAndFormTypeAndScene(functionUnitId, FormType.PROCESS, resolveScene(scene));
         if (processFormCount > 0) {
             throw new DeveloperBusinessException("PROCESS_FORM_ALREADY_EXISTS",
                     i18nService.getMessage("form.process_form_already_exists"),
                     i18nService.getMessage("form.only_one_process_form"));
         }
+    }
+
+    /** Legacy payloads carry no scene; they mean the To Do design. */
+    private static FormScene resolveScene(FormScene scene) {
+        return scene == null ? FormScene.TASK : scene;
     }
     
     @Override

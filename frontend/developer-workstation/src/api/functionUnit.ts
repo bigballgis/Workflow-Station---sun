@@ -171,18 +171,29 @@ export interface FieldDefinition {
   relationCardinality?: string
 }
 
-export type FormType = 'PROCESS' | 'TASK' | 'ACTION'
+export type FormType = 'PROCESS' | 'TASK' | 'ACTION' | 'DETAIL'
+
+/**
+ * Which portal scene a form design serves. A node can hold one design per scene,
+ * so To Do and My Requests are laid out independently instead of sharing one
+ * form trimmed by sub-table config.
+ */
+export type FormScene = 'TASK' | 'REQUEST'
 
 export interface StageBinding {
   id?: number
   stageId: string
   stageName?: string
+  /** Omitted means TASK — the To Do design. */
+  scene?: FormScene
 }
 
 export interface FormDefinition {
   id: number
   formName: string
   formType: FormType
+  /** Omitted means TASK — the To Do design. */
+  scene?: FormScene
   description?: string
   configJson: Record<string, any>
   boundTableId?: number
@@ -192,10 +203,16 @@ export interface FormDefinition {
   fieldPermissions?: Record<string, string>
   showLiveValues?: boolean
   stageBindings?: StageBinding[]
+  /**
+   * Create-only flag: build the To Do and My Requests designs of one step in a single request.
+   * Honoured for PROCESS and TASK forms; the My Requests row takes a name suffix because form
+   * names are unique per function unit, and the two are linked by BPMN node id, not by name.
+   */
+  createBothScenes?: boolean
 }
 
 // Table binding type
-export type BindingType = 'PRIMARY' | 'SUB' | 'RELATED'
+export type BindingType = 'PRIMARY' | 'SUB' | 'RELATED' | 'ACTION'
 
 // Sub binding mode
 export type SubBindingMode = 'FULL' | 'FORM_ONLY'

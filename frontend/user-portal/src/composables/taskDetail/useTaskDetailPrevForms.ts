@@ -92,27 +92,22 @@ export function createTaskDetailPrevForms(ctx: TaskDetailCtx): TaskDetailPrevFor
         // Parse sub-table bindings
         let prevSubForms: Record<string, any> = {}
         let prevConfigForSubTables: Record<string, any> = {}
-        let prevSubTablePortalViews: Record<string, any> = {}
         try {
           const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
           prevConfigForSubTables = cfg
           prevSubForms = cfg.subForms || {}
-          prevSubTablePortalViews = cfg.subTablePortalViews || {}
         } catch {}
         const prevBindings: PreviousFormEntry['subTableBindings'] = []
         for (const b of (prevForm.tableBindings || [])) {
           if (b.bindingType === 'PRIMARY') continue
           const cols = ctx.deriveColumnsFromBinding(b, prevSubForms, prevConfigForSubTables)
           const subFormDesign = ctx.resolveSubFormDesign(b, prevSubForms)
-          const bindingPortalViews =
-            prevSubTablePortalViews[b.bindingId] ?? prevSubTablePortalViews[String(b.bindingId)] ?? null
           const binding = {
             bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
             foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
             tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
-            portalViews: bindingPortalViews,
             primaryKeyFields: resolveSubTablePrimaryKeyFields(
               b.primaryKeyFields,
               b.bindingId,

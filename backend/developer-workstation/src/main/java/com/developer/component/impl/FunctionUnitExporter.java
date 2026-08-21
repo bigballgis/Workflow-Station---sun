@@ -31,6 +31,7 @@ import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.LinkFormComponentRepository;
 import com.developer.repository.SubTableViewConfigRepository;
+import com.developer.enums.FormScene;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
@@ -179,7 +180,13 @@ public class FunctionUnitExporter {
             payload.put("relationTables", relationTableStructures);
         }
 
-        List<Map<String, Object>> mainTableViews = mainTableViewPortability.export(functionUnitId, tableIdToName);
+        // Shared by views (detail form) and link form components: both reference forms
+        // by name so they survive form-id remapping on import.
+        Map<Long, String> formIdToName = forms.stream()
+                .collect(Collectors.toMap(FormDefinition::getId, FormDefinition::getFormName));
+
+        List<Map<String, Object>> mainTableViews =
+                mainTableViewPortability.export(functionUnitId, tableIdToName, formIdToName);
         if (!mainTableViews.isEmpty()) {
             payload.put("mainTableViews", mainTableViews);
         }
@@ -187,8 +194,6 @@ public class FunctionUnitExporter {
         List<LinkFormComponent> linkFormComponents =
                 linkFormComponentRepository.findByFunctionUnitIdOrderBySortOrderAsc(functionUnitId);
         if (!linkFormComponents.isEmpty()) {
-            Map<Long, String> formIdToName = forms.stream()
-                    .collect(Collectors.toMap(FormDefinition::getId, FormDefinition::getFormName));
             payload.put("linkFormComponents", linkFormComponents.stream()
                     .map(c -> serializeLinkFormComponent(c, formIdToName))
                     .toList());
@@ -343,7 +348,10 @@ public class FunctionUnitExporter {
 
             // Export "View Design": Main Table view configs (by table NAME so they survive id remap).
             String viewsFile = null;
-            List<Map<String, Object>> mainTableViews = mainTableViewPortability.export(functionUnitId, tableIdToName);
+            Map<Long, String> formIdToName = forms.stream()
+                    .collect(Collectors.toMap(FormDefinition::getId, FormDefinition::getFormName));
+            List<Map<String, Object>> mainTableViews =
+                    mainTableViewPortability.export(functionUnitId, tableIdToName, formIdToName);
             if (!mainTableViews.isEmpty()) {
                 viewsFile = "views/main_table_views.json";
                 byte[] viewsData = objectMapper.writeValueAsBytes(mainTableViews);
@@ -356,8 +364,6 @@ public class FunctionUnitExporter {
             List<LinkFormComponent> linkFormComponents =
                     linkFormComponentRepository.findByFunctionUnitIdOrderBySortOrderAsc(functionUnitId);
             if (!linkFormComponents.isEmpty()) {
-                Map<Long, String> formIdToName = forms.stream()
-                        .collect(Collectors.toMap(FormDefinition::getId, FormDefinition::getFormName));
                 List<Map<String, Object>> lfcPayload = linkFormComponents.stream()
                         .map(c -> serializeLinkFormComponent(c, formIdToName))
                         .toList();
@@ -593,6 +599,7 @@ public class FunctionUnitExporter {
         map.put("formId", form.getId());
         map.put("formName", form.getFormName());
         map.put("formType", form.getFormType().name());
+        map.put("scene", form.getScene() != null ? form.getScene().name() : FormScene.TASK.name());
         map.put("description", form.getDisplayName());
         map.put("boundTableName", form.getBoundTableName());
         map.put("showLiveValues", form.getShowLiveValues());
@@ -655,6 +662,9 @@ public class FunctionUnitExporter {
         map.put("stageId", stageBinding.getStageId());
         map.put("stageName", stageBinding.getStageName());
         map.put("readOnly", stageBinding.getReadOnly());
+        // Without the scene the imported unit renders the To Do design in My Requests,
+        // or nothing at all once the REQUEST binding is expected.
+        map.put("scene", stageBinding.getScene() != null ? stageBinding.getScene().name() : FormScene.TASK.name());
         return map;
     }
 

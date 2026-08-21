@@ -395,11 +395,48 @@ async function handleExport() {
   ElMessage.success(t('mainTableView.exportAllHint', { count: rows.length }))
 }
 
+/**
+ * Row click. A view with its own detail form opens that; otherwise a row that
+ * belongs to a request falls back to the request page. Rows that can do neither
+ * say so rather than appearing inert.
+ */
 function openRow(row: GridDisplayRow) {
   if (isGroupHeaderRow(row)) return
+
+  const detailFormId = selectedViewMeta.value?.detailFormId
+  if (detailFormId && selectedViewId.value) {
+    const rowKey = resolveRowKey(row)
+    if (!rowKey) {
+      ElMessage.info(t('mainTableView.rowNotAddressable'))
+      return
+    }
+    router.push({
+      path: `/views/${selectedFuCode.value}/detail`,
+      query: { viewId: String(selectedViewId.value), rowKey },
+    })
+    return
+  }
+
   if (row.processInstanceId) {
     router.push(`/applications/${row.processInstanceId}`)
+    return
   }
+
+  ElMessage.info(t('mainTableView.noDetailPage'))
+}
+
+/**
+ * Stable identifier for a row. Prefers the declared primary key, then the common
+ * synthetic id columns, so sub-table views (which carry no process instance) are
+ * addressable too.
+ */
+function resolveRowKey(row: GridDisplayRow): string | null {
+  const values = row.values || {}
+  for (const candidate of ['id', 'id_idw', 'row_id']) {
+    const v = values[candidate]
+    if (v != null && String(v).trim() !== '') return String(v)
+  }
+  return row.processInstanceId ? String(row.processInstanceId) : null
 }
 
 // A cell renders as downloadable file link(s) when its value is one (or many) upload URLs.

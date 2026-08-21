@@ -20,6 +20,12 @@ public interface RelationTableDataService {
     List<RelationTableResponse> getDeployedTables();
 
     /**
+     * 已部署表按 Function Unit 分组的轻量清单（供左侧导航子菜单），不含字段定义。
+     * 每个已部署表所属的 Function Unit（code+name）去重后返回；未关联 FU 的表不出现在此列表中。
+     */
+    List<com.admin.dto.response.FunctionUnitTableGroupResponse> getDeployedTableFunctionUnitGroups();
+
+    /**
      * 分页查询表数据（根据已部署的最新表结构动态查询物理表数据，支持搜索过滤）
      */
     Page<RelationTableDataRowDTO> queryData(Long tableId, String search, Pageable pageable);

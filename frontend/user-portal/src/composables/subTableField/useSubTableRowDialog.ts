@@ -7,6 +7,7 @@ import {
 } from '@/components/subTableAddDialogHelpers'
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import {
+  applyFieldPermissionsToDialogColumns,
   applyFkPresentationToDialogColumns,
   buildRowAddContext,
   finalizeSubTableRowOnSave,
@@ -58,11 +59,15 @@ export function useSubTableRowDialog(
   )
 
   const subTableDialogColumns = computed(() => {
-    if (dialogAddColumns.value) return dialogAddColumns.value
+    const permissioned = (cols: DialogColumn[]) =>
+      applyFieldPermissionsToDialogColumns(cols, props.bindingId, props.fieldPermissions)
+    if (dialogAddColumns.value) return permissioned(dialogAddColumns.value)
     const base = editableColumns.value
     const fkMetas = toFieldFkMetas(props.fieldDefinitions)
-    if (!fkMetas.length) return base
-    return applyFkPresentationToDialogColumns(base, fkMetas, props.fieldDefinitions).visibleColumns
+    if (!fkMetas.length) return permissioned(base)
+    return permissioned(
+      applyFkPresentationToDialogColumns(base, fkMetas, props.fieldDefinitions).visibleColumns,
+    )
   })
 
   function handleAdd() {

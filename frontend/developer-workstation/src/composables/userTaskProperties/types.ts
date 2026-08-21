@@ -93,6 +93,13 @@ export interface UserTaskPropertyContext {
   // Form binding
   formId: Ref<number | null>
   forms: Ref<FormDefinition[]>
+  /**
+   * The My Requests design bound to this same node (requestFormId/requestFormName BPMN
+   * ext props). Editable via useUserTaskActions.handleRequestFormChange, in addition to
+   * Form Design > My Requests > row menu > Bound Node — both paths write the same fields.
+   */
+  requestFormId: Ref<number | null>
+  requestFormName: Ref<string>
 
   // Action binding
   actionIds: Ref<number[]>

@@ -74,6 +74,14 @@ public class MainTableViewConfig {
     @Builder.Default
     private Boolean restrictToInvolvedUsers = false;
 
+    /**
+     * DETAIL form rendered when a row of this view is opened. Null means the
+     * view has no detail page — rows stay non-navigable rather than falling back
+     * to some other view's design.
+     */
+    @Column(name = "detail_form_id")
+    private Long detailFormId;
+
     @OneToMany(mappedBy = "viewConfig", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<MainTableViewAccess> accessRules = new ArrayList<>();

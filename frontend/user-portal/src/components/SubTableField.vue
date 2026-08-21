@@ -45,8 +45,6 @@
         style="width: 100%"
         :show-summary="hasSummary"
         :summary-method="getSummaryMethod"
-        :highlight-current-row="enableRowSelect"
-        @current-change="onTableCurrentRowChange"
       >
         <el-table-column
           v-for="col in columns"
@@ -400,6 +398,8 @@
       :record-note-instance-id="recordNoteInstanceId"
       :record-note-function-unit-id="functionUnitId ?? null"
       :primary-key-fields="primaryKeyFields"
+      :binding-id="bindingId"
+      :field-permissions="fieldPermissions"
       @update:visible="dialogVisible = $event"
       :save-row="handleDialogSaveAndSyncNested"
     />
@@ -454,6 +454,7 @@
                   :linked-sub-table-bindings="linkedSubTableBindings"
                   :parent-row="linkedFormData"
                   :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                  :field-permissions="fieldPermissions"
                   @update:field="(k, v) => updateLinkedFormField(k, v)"
                 />
               </el-row>
@@ -467,6 +468,7 @@
               :linked-sub-table-bindings="linkedSubTableBindings"
               :show-link-form-dialog-footer="showLinkFormDialogFooter"
               :primary-key-fields="selectedLinkBinding.primaryKeyFields"
+              :field-permissions="fieldPermissions"
               @update:model-value="handleLinkedSubTableUpdate"
             />
             <el-empty
@@ -581,8 +583,6 @@ const props = withDefaults(defineProps<{
   formOptions?: Record<string, unknown> | null
   /** BPMN-derived MI assignment contract; absent means no Assignment Mode behavior. */
   assignmentConfig?: AssignmentConfig
-  /** Form-below-table hosts: row click highlights + drives the inline form via currentRowChange. */
-  enableRowSelect?: boolean
   modelValue?: any[]
   editable?: boolean
   /**
@@ -619,10 +619,6 @@ const props = withDefaults(defineProps<{
   /** Task To Do only: show Cancel/Save on Link Form detail (completed / My Request omit). */
   showLinkFormDialogFooter?: boolean
   /**
-   * 办理人待办 + form below table + 表单来源为 Link 子表时：点击链接不打开弹层，由宿主滚动到表格下方内联表单。
-   */
-  linkFormClickScrollToInline?: boolean
-  /**
    * My Request + 「汇总列表 + Link/Details」：表格内 lookup / 用户快照只显示摘要标签，不在单元格内展开 el-descriptions，
    * 避免与「详情走 Link 弹层」的设计冲突（否则看起来像待办的 inline 表单区）。
    */
@@ -635,6 +631,16 @@ const props = withDefaults(defineProps<{
   /** Field FK/PK metadata from tableBindings (PRD S5). */
   fieldDefinitions?: BindingFieldDefinition[]
   tableId?: number | null
+  /** This binding's numeric id — resolves this binding's `${bindingId}:${fieldName}` entries in fieldPermissions. */
+  bindingId?: number | null
+  /**
+   * This binding's own bindingType (SUB / ACTION / RELATED). ACTION bindings (FORM_POPUP 弹窗
+   * 写入的记录表，操作留痕语义) are forced read-only regardless of allowAdd/allowEdit/allowDelete —
+   * see canAdd/canEdit/canDelete below.
+   */
+  bindingType?: string | null
+  /** Task-node field permissions (`TaskFormData.fieldPermissions`); composite-keyed entries gate Add/Edit dialog fields. */
+  fieldPermissions?: Record<string, string> | null
   functionUnitId?: string
   primaryFormData?: Record<string, unknown>
   subTableBindingsForContext?: Array<{
@@ -657,7 +663,6 @@ const props = withDefaults(defineProps<{
   miParentTableId?: number | null
 }>(), {
   showLinkFormDialogFooter: false,
-  linkFormClickScrollToInline: false,
   compactLookupCells: false,
   // Per-op switches default OPEN. Without an explicit default, Vue casts an *absent*
   // Boolean prop to false (not undefined), so every call site that omits allow-add
@@ -677,14 +682,15 @@ const emit = defineEmits<{
   (e: 'viewDetail', row: any, index: number): void
   (e: 'fillForm', row: any, index: number): void
   (e: 'update:linkedSubTableData', bindingId: number, rows: any[]): void
-  (e: 'linkFormScrollToInline'): void
-  (e: 'currentRowChange', row: Record<string, unknown> | null): void
 }>()
 
 // 子表逐操作权限：editable 总开关优先，逐项标志缺省视为放开（历史数据三项全开）
-const canAdd = computed(() => props.editable === true && props.allowAdd !== false)
-const canEdit = computed(() => props.editable === true && props.allowEdit !== false)
-const canDelete = computed(() => props.editable === true && props.allowDelete !== false)
+// ACTION 绑定（操作留痕记录表）恒只读，不依赖 allow*/editable props——防止历史脏数据或遗漏的
+// 调用点意外把它渲染成可编辑子表。
+const isActionBinding = computed(() => props.bindingType === 'ACTION')
+const canAdd = computed(() => !isActionBinding.value && props.editable === true && props.allowAdd !== false)
+const canEdit = computed(() => !isActionBinding.value && props.editable === true && props.allowEdit !== false)
+const canDelete = computed(() => !isActionBinding.value && props.editable === true && props.allowDelete !== false)
 
 /**
  * MI role code resolved exclusively from the binding's AssignmentConfig.
@@ -705,12 +711,6 @@ function rowRoleCode(row: Record<string, any>): string {
   const rc = row?.[roleField]
   if (rc != null && String(rc).trim() !== '') return String(rc).trim()
   return ''
-}
-
-/** Row click (highlight-current-row) — hosts use it to pick the form-below-table row. */
-function onTableCurrentRowChange(row: Record<string, unknown> | null) {
-  if (!props.enableRowSelect) return
-  emit('currentRowChange', row)
 }
 
 // 判断列中是否存在 FILE 类型的字段（有 FILE 列时隐藏 Import 按钮）
@@ -914,7 +914,7 @@ const {
   handleLinkedSubTableUpdate
 } = linkFormDialog
 
-const { handleLinkFormClick } = useSubTableLinkFormOpen(props, emit, linkFormDialog, linkFormScope)
+const { handleLinkFormClick } = useSubTableLinkFormOpen(props, linkFormDialog, linkFormScope)
 
 const { uploadNames, downloadingKeys, downloadFile } = useSubTableFileDownload(t)
 

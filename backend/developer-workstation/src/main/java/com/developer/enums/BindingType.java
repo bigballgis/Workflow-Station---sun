@@ -17,5 +17,11 @@ public enum BindingType {
     /**
      * 关联表 - 与主表存在多对多或引用关系的表
      */
-    RELATED
+    RELATED,
+
+    /**
+     * 动作表 - ACTION 表单（如 FORM_POPUP 弹窗备注）自身的数据表，
+     * 与 SUB 一样通过外键关联回主表，但物理表的 table_type 必须是 ACTION。
+     */
+    ACTION
 }

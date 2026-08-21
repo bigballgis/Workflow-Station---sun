@@ -1,5 +1,6 @@
 package com.developer.entity;
 
+import com.developer.enums.FormScene;
 import com.developer.enums.FormType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -45,7 +46,17 @@ public class FormDefinition {
     @Enumerated(EnumType.STRING)
     @Column(name = "form_type", nullable = false, length = 20)
     private FormType formType;
-    
+
+    /**
+     * Rendering scene. Node-bound TASK forms carry their scene on the stage
+     * binding; this column is what lets the start step (which has no BPMN node)
+     * hold a separate REQUEST design of the PROCESS form.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "scene", nullable = false, length = 16)
+    @Builder.Default
+    private FormScene scene = FormScene.TASK;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "config_json", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> configJson;

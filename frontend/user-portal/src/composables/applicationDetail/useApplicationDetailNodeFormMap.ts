@@ -92,6 +92,11 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
     }
   }
 
+  /** Forms carry no scene before the split; those describe the To Do design. */
+  function sceneOf(form: any): 'TASK' | 'REQUEST' {
+    return form?.scene === 'REQUEST' ? 'REQUEST' : 'TASK'
+  }
+
   function buildApplicationNodeFormMap(content: any) {
     const newMap = new Map<string, ApplicationDiagramNodeFormInfo>()
     const bpmnData = content.processes?.[0]?.data as string | undefined
@@ -127,8 +132,13 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
         const nodeId = el.getAttribute('id') || ''
         if (!nodeId) continue
 
-        let formId: string | null = null
-        let formName: string | null = null
+        // My Requests renders the REQUEST design of a node when one exists. The
+        // To Do design is not a fallback: it is laid out for filling in, and the
+        // request view is meant to be a separate, read-only presentation.
+        let taskFormId: string | null = null
+        let taskFormName: string | null = null
+        let requestFormId: string | null = null
+        let requestFormName: string | null = null
         const props = el.getElementsByTagName('*')
         for (let j = 0; j < props.length; j++) {
           const p = props[j]!
@@ -136,17 +146,27 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
           if (ln === 'property' || ln === 'values') {
             const n = p.getAttribute('name')
             const v = p.getAttribute('value')
-            if (n === 'formId' && v) formId = v
-            if (n === 'formName' && v) formName = v
+            if (n === 'formId' && v) taskFormId = v
+            if (n === 'formName' && v) taskFormName = v
+            if (n === 'requestFormId' && v) requestFormId = v
+            if (n === 'requestFormName' && v) requestFormName = v
           }
         }
+
+        const hasRequestDesign = !!(requestFormId || requestFormName)
+        const formId = hasRequestDesign ? requestFormId : taskFormId
+        const formName = hasRequestDesign ? requestFormName : taskFormName
 
         let matchedForm: any = null
         if (formId) {
           matchedForm = formsList.find((f: any) => String(f.sourceId) === formId)
         }
+        // Name matching only within the same scene — a To Do and a My Requests
+        // design of one node often share a name, and matching across them would
+        // quietly render the wrong one.
         if (!matchedForm && formName) {
-          matchedForm = formsList.find((f: any) => f.name === formName)
+          matchedForm = formsList.find((f: any) => f.name === formName
+            && sceneOf(f) === (hasRequestDesign ? 'REQUEST' : 'TASK'))
         }
         if (!matchedForm) continue
 
@@ -164,6 +184,14 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
           .filter((b: { bindingType?: string }) => b.bindingType !== 'PRIMARY')
           .map((b: { bindingId?: number }) => Number(b.bindingId))
           .filter((n: number) => Number.isFinite(n))
+        const primaryBinding = (matchedForm.tableBindings || [])
+          .find((b: { bindingType?: string }) => b.bindingType === 'PRIMARY')
+        const primaryTableBinding = primaryBinding
+          ? {
+              tableId: primaryBinding.tableId != null ? Number(primaryBinding.tableId) : null,
+              tableName: primaryBinding.tableDisplayName || primaryBinding.tableName,
+            }
+          : null
         let configForSubTables: Record<string, any> = {}
         try {
           const cfg = typeof matchedForm.data === 'string' ? JSON.parse(matchedForm.data) : (matchedForm.data || {})
@@ -193,7 +221,6 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
           } catch {
             /* ignore */
           }
-          const subTablePortalViewsPayload = cfg.subTablePortalViews || {}
           for (const b of matchedForm.tableBindings || []) {
             if (b.bindingType === 'PRIMARY') continue
             let cols = ctx.resolveSubTableBindingColumnsForPortal(b, configForSubTables, formsList)
@@ -216,10 +243,6 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
             }
             if (cols.length === 0) continue
             const subFormDesign = ctx.resolveSubFormDesign(b, subForms)
-            const bindingPortalViews =
-              subTablePortalViewsPayload[b.bindingId]
-              ?? subTablePortalViewsPayload[String(b.bindingId)]
-              ?? null
             const binding = {
               bindingId: b.bindingId,
               tableId: b.tableId != null ? Number(b.tableId) : null,
@@ -235,7 +258,6 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
               subMode: b.subMode,
               formFields: subFormDesign.formFields,
               formOptions: subFormDesign.formOptions,
-              portalViews: bindingPortalViews,
               primaryKeyFields: resolveSubTablePrimaryKeyFields(b.primaryKeyFields, b.bindingId, configForSubTables)
             }
             if (savedSubTables && typeof savedSubTables === 'object') {
@@ -328,6 +350,7 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
           subTableBindings: nodeBindings,
           nativeSubTableBindingIds,
           formConfig: configForSubTables,
+          primaryTableBinding,
         })
       }
     } catch (e) {

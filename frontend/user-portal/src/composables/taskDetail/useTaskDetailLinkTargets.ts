@@ -153,8 +153,6 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
           const effSubForms = schemaSrc.subForms
           const columns = ctx.deriveColumnsFromBinding(raw, effSubForms, effFormConfig)
           const subFormDesign = ctx.resolveSubFormDesign(raw, effSubForms)
-          const stpv = effFormConfig.subTablePortalViews || {}
-          const bindingPortalViews = stpv[raw.bindingId] ?? stpv[String(raw.bindingId)] ?? null
           bindings.push({
             bindingId: raw.bindingId,
             tableId: raw.tableId ?? null,
@@ -169,7 +167,6 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
             formFields: subFormDesign.formFields,
             formOptions: subFormDesign.formOptions,
             assignmentConfig: raw.assignmentConfig,
-            portalViews: bindingPortalViews,
             primaryKeyFields: resolveSubTablePrimaryKeyFields(
               raw.primaryKeyFields,
               raw.bindingId,
@@ -207,8 +204,6 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
         }
         const columns = ctx.deriveColumnsFromBinding(synthetic, syntheticSchema.subForms, syntheticSchema.formConfig)
         const subFormDesign = ctx.resolveSubFormDesign(synthetic, syntheticSchema.subForms)
-        const stpvSchema = syntheticSchema.formConfig.subTablePortalViews || {}
-        const bindingPortalViews = stpvSchema[tid] ?? stpvSchema[String(tid)] ?? null
         bindings.push({
           bindingId: tid,
           tableId: null,
@@ -223,7 +218,6 @@ export function createTaskDetailLinkTargets(ctx: TaskDetailCtx): TaskDetailLinkT
           formFields: subFormDesign.formFields,
           formOptions: subFormDesign.formOptions,
           assignmentConfig: synthetic.assignmentConfig,
-          portalViews: bindingPortalViews,
           primaryKeyFields: resolveSubTablePrimaryKeyFields(null, tid, syntheticSchema.formConfig),
           fieldDefinitions: [],
           data: []

@@ -102,7 +102,8 @@ class ProcessDesignEmptyDiagramGuardTest {
                         actionDefinitionRepository),
                 new ProcessBpmnValidator(tableDefinitionRepository, formDefinitionRepository, null),
                 new ProcessSimulationHelper(tableDefinitionRepository),
-                new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null));
+                new ProcessDebugProbeRunner(formDefinitionRepository, null, null, null, null),
+                null);
     }
 
     private void existingProcess(String bpmnXml) {

@@ -8,6 +8,7 @@ import com.developer.dto.FormTableBindingResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
+import com.developer.enums.FormScene;
 
 import java.util.List;
 import java.util.Map;
@@ -83,10 +84,16 @@ public interface FormDesignComponent {
     // ========== Process/Task Form extension methods ==========
     
     /**
-     * Validate PROCESS form uniqueness.
+     * Validate PROCESS form uniqueness for the To Do scene.
      * Query the count of PROCESS forms under the FunctionUnit; throws 409 DeveloperBusinessException if > 0.
      */
     void validateProcessFormUniqueness(Long functionUnitId);
+
+    /**
+     * Validate PROCESS form uniqueness within one scene — a function unit may hold
+     * one start form for To Do and a separate one for the My Requests view.
+     */
+    void validateProcessFormUniqueness(Long functionUnitId, FormScene scene);
     
     /**
      * Validate that field names exist in Data_Table columns.

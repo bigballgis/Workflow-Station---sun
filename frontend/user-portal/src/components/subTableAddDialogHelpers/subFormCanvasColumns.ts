@@ -76,14 +76,15 @@ export function flattenSubFormRuleLayoutContainers(rules: unknown[] | undefined 
 
 /**
  * Only field-bearing input rules become dialog columns. Placeholders (`subTable` nested
- * tables, `linkForm` widgets) and layout containers have no editable `field` and cannot
- * live in the column-driven Add/Edit dialog — mapping them produced a bogus text input
- * labeled "Sub-Table". Nested sub-tables render via form-below-table instead.
+ * tables, `linkForm` widgets, `inlineSubForm` in-place forms) and layout containers have no
+ * editable `field` and cannot live in the column-driven Add/Edit dialog — mapping them
+ * produced a bogus text input labeled "Sub-Table". Nested sub-tables render via
+ * form-below-table instead.
  */
 export function isDialogMappableSubFormRule(rawRule: unknown): boolean {
   const r = rawRule as Record<string, unknown> | null
   if (!r || typeof r !== 'object') return false
-  if (r.type === 'subTable' || r.type === 'linkForm') return false
+  if (r.type === 'subTable' || r.type === 'linkForm' || r.type === 'inlineSubForm') return false
   return typeof r.field === 'string' && r.field.length > 0
 }
 

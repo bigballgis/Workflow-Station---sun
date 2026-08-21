@@ -5,13 +5,30 @@
     width="720px"
     @update:model-value="emit('update:modelValue', $event)"
   >
+    <el-tabs v-model="grantTab">
+      <el-tab-pane
+        label="Access"
+        name="access"
+      />
+      <el-tab-pane
+        label="Audit"
+        name="audit"
+      />
+    </el-tabs>
+
     <div class="access-config-header">
       <el-alert
         type="info"
         :closable="false"
         style="flex: 1; margin-right: 12px;"
       >
-        Configure which roles can access this function unit in User Portal.
+        <template v-if="grantTab === 'access'">
+          Configure which roles can access this function unit in User Portal.
+        </template>
+        <template v-else>
+          Configure which roles may review every request of this function unit in User
+          Portal. Audit is read-and-comment only — it does not allow raising requests.
+        </template>
       </el-alert>
       <el-button
         type="primary"
@@ -24,9 +41,9 @@
 
     <el-table
       v-loading="loading"
-      :data="accessList"
+      :data="currentGrantList"
       stripe
-      empty-text="No access configured"
+      :empty-text="grantTab === 'access' ? 'No access configured' : 'No audit access configured'"
     >
       <el-table-column
         label="Role"
@@ -218,7 +235,7 @@ const props = defineProps<{ modelValue: boolean; functionUnitId?: string; functi
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const {
-  loading, accessList, rolesLoading,
+  loading, rolesLoading, grantTab, currentGrantList,
   showAddRole, addLoading, addRoleTab, selectedSystemRoleIds, selectedBuId, selectedBuRoleId,
   buCascaderOptions, buRolesLoading, buCascaderProps,
   availableSystemRoles, availableBuRoles,

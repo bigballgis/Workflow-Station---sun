@@ -9,13 +9,8 @@ import type {
   FormLayoutBuckets,
   FormTab,
   SubTableBindingLinkRef,
-  SubTablePortalViews,
 } from './formRendererTypes'
 import { asNumberSet } from './formRendererFieldUtils'
-import {
-  mergeSubTablePortalViewsForRuntime,
-  normalizePortalViews,
-} from './formRendererPortalViews'
 
 /**
  * Designer configJson often keys subForms/subListViews with legacy short ids (66, 103) while
@@ -34,7 +29,19 @@ export function legacyBindingIdAliases(bindingId: number | string): number[] {
   return out
 }
 
-/** Collect `_bindingId` values from placed `subTable` nodes in parsed form field trees. */
+/**
+ * Field/rule types that occupy a SUB binding on a form layout: the `subTable` grid and the
+ * `inlineSubForm` in-place form. Both must count as "placed", or the binding is filtered out
+ * of `subTableBindings` upstream and `resolveBinding()` returns undefined — the widget then
+ * renders nothing, with no error. See docs/design/inline-sub-form-component.md (constraint 2).
+ */
+const SUB_TABLE_BINDING_NODE_TYPES = new Set(['subTable', 'inlineSubForm'])
+
+function isSubTableBindingNode(type: unknown): boolean {
+  return SUB_TABLE_BINDING_NODE_TYPES.has(String(type))
+}
+
+/** Collect `_bindingId` values from placed sub-table-backed nodes in parsed form field trees. */
 export function collectPlacedSubTableBindingIds(
   fields: FormField[],
   tabs?: FormTab[],
@@ -44,7 +51,7 @@ export function collectPlacedSubTableBindingIds(
   const walk = (arr?: FormField[]) => {
     if (!Array.isArray(arr)) return
     for (const f of arr) {
-      if (f.type === 'subTable' && f._bindingId != null) {
+      if (isSubTableBindingNode(f.type) && f._bindingId != null) {
         ids.add(Number(f._bindingId))
       }
       if (f.type === 'tabs' && Array.isArray(f.tabs)) {
@@ -74,7 +81,7 @@ export function collectSubTableFieldsFromLayout(
   const walk = (arr?: FormField[]) => {
     if (!Array.isArray(arr)) return
     for (const f of arr) {
-      if (f.type === 'subTable' && f._bindingId != null) {
+      if (isSubTableBindingNode(f.type) && f._bindingId != null) {
         out.push(f)
       }
       if (f.type === 'tabs' && Array.isArray(f.tabs)) {
@@ -146,8 +153,8 @@ export function mergeMissingSubTableFieldsIntoLayout(
  */
 export function ensureSubTableBindingsOnFormLayout(
   layout: FormLayoutBuckets,
-  bindings: Array<{ bindingId: number; portalViews?: Partial<SubTablePortalViews> | null; formFields?: FormField[] }>,
-  formConfig?: Record<string, unknown> | null,
+  bindings: Array<{ bindingId: number; formFields?: FormField[] }>,
+  _formConfig?: Record<string, unknown> | null,
 ): void {
   const placed = collectPlacedSubTableBindingIds(layout.fields, layout.tabs, layout.fieldsAfterTabs)
   for (const b of bindings) {
@@ -155,19 +162,14 @@ export function ensureSubTableBindingsOnFormLayout(
       for (const id of collectPlacedSubTableBindingIds(b.formFields)) placed.add(id)
     }
   }
-  const portalViewsMap = (formConfig?.subTablePortalViews ?? {}) as Record<string, unknown>
   for (const b of bindings) {
     const bid = Number(b.bindingId)
     if (!Number.isFinite(bid) || placed.has(bid)) continue
-    const pvRaw = b.portalViews ?? portalViewsMap[bid] ?? portalViewsMap[String(bid)]
     layout.fieldsAfterTabs.push({
       key: `__subTable_${bid}`,
       label: '',
       type: 'subTable',
       _bindingId: bid,
-      ...(pvRaw && typeof pvRaw === 'object'
-        ? { portalViews: normalizePortalViews(pvRaw as Partial<SubTablePortalViews>) }
-        : {}),
       span: 24,
     })
     placed.add(bid)
@@ -184,7 +186,7 @@ export function removeSubTableFieldsByBindingIds(
   const strip = (fields: FormField[]): FormField[] => {
     const out: FormField[] = []
     for (const f of fields) {
-      if (f.type === 'subTable' && f._bindingId != null && stripIds.has(Number(f._bindingId))) {
+      if (isSubTableBindingNode(f.type) && f._bindingId != null && stripIds.has(Number(f._bindingId))) {
         continue
       }
       const next: FormField = { ...f }
@@ -220,7 +222,7 @@ export function collectRuleBindingIds(rules: unknown[]): Set<number> {
     for (const r of items) {
       if (!r || typeof r !== 'object') continue
       const item = r as Record<string, unknown>
-      if (item.type === 'subTable') {
+      if (isSubTableBindingNode(item.type)) {
         const props = item.props as Record<string, unknown> | undefined
         const id = item._bindingId ?? props?._bindingId
         if (id != null) ids.add(Number(id))
@@ -362,13 +364,13 @@ export function computeNeededSubTableBindingIds(
 }
 
 /**
- * My Request / initiatorRequest: suppress duplicate standalone tables for bindings that
- * exist only for Link Form modals — even when a stale canvas {@code subTable} node remains in rule JSON.
+ * Suppress a duplicate standalone table for a binding that exists only to back a
+ * Link Form modal — including when a stale canvas {@code subTable} node for it is
+ * still present in the rule JSON.
  */
-export function shouldSuppressStandaloneSubTableInInitiatorRequest(
+export function shouldSuppressLinkOnlyStandaloneSubTable(
   bindingId: number,
   bindings: SubTableBindingLinkRef[],
-  portalViews?: Partial<SubTablePortalViews> | null,
   nativeBindingIds?: ReadonlySet<number> | Iterable<number> | null,
   formConfig?: Record<string, unknown> | null
 ): boolean {
@@ -380,21 +382,16 @@ export function shouldSuppressStandaloneSubTableInInitiatorRequest(
   // Canvas-placed sub-tables (native tableBindings) must render even when the binding is also
   // referenced as a Link Form target (e.g. self-ref linkForm column in subListViews).
   if (nativeIds && nativeIds.size > 0 && nativeIds.has(id)) return false
-  if (!collectAllLinkFormTargetBindingIds(bindings, formConfig).has(id)) return false
-  const pv = normalizePortalViews(
-    portalViews ?? ((binding as { portalViews?: Partial<SubTablePortalViews> } | undefined)?.portalViews)
-  )
-  return pv.initiatorRequest !== 'tableOnly'
+  return collectAllLinkFormTargetBindingIds(bindings, formConfig).has(id)
 }
 
-/** @deprecated Prefer {@link shouldSuppressStandaloneSubTableInInitiatorRequest}. */
+/** @deprecated Prefer {@link shouldSuppressLinkOnlyStandaloneSubTable}. */
 export function isLinkOnlyStandaloneSubTableBinding(
   bindingId: number,
   formRule: unknown[],
   bindings: SubTableBindingLinkRef[]
 ): boolean {
-  const binding = bindings.find(b => Number(b.bindingId) === Number(bindingId))
-  if (shouldSuppressStandaloneSubTableInInitiatorRequest(bindingId, bindings, (binding as { portalViews?: Partial<SubTablePortalViews> } | undefined)?.portalViews)) {
+  if (shouldSuppressLinkOnlyStandaloneSubTable(bindingId, bindings)) {
     const placed = collectRuleBindingIds(formRule)
     return !placed.has(Number(bindingId))
   }
@@ -460,15 +457,9 @@ export function filterLinkOnlyStandaloneSubTableFields(
     })
     .filter(field => {
       if (field.type !== 'subTable' || field._bindingId == null) return true
-      const binding = bindings.find(b => Number(b.bindingId) === Number(field._bindingId))
-      const merged = mergeSubTablePortalViewsForRuntime(
-        field.portalViews,
-        (binding as { portalViews?: Partial<SubTablePortalViews> } | undefined)?.portalViews
-      )
-      return !shouldSuppressStandaloneSubTableInInitiatorRequest(
+      return !shouldSuppressLinkOnlyStandaloneSubTable(
         field._bindingId,
         bindings,
-        merged,
         nativeBindingIds,
         formConfig
       )

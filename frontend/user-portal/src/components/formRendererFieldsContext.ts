@@ -5,6 +5,7 @@ export interface FormRendererFieldsContext {
   formData: Ref<Record<string, unknown>>
   readonly: Ref<boolean>
   labelWidth: Ref<string> | string
+  labelPosition?: Ref<'left' | 'right' | 'top'> | 'left' | 'right' | 'top'
   uploadUrl?: string
   taskId?: string
   viewContext: PortalViewContext
@@ -23,23 +24,28 @@ export interface FormRendererFieldsContext {
   userSearchResults: Ref<Map<string, unknown>>
   isFieldReadonly: (field: FormField) => boolean
   resolveBinding: (bindingId?: number) => Record<string, unknown> | undefined
-  shouldRenderPlacedSubTableField: (field: FormField) => boolean
   isSubTableEditable: (bindingId?: number) => boolean
+  /** Task-node field permissions (`TaskFormData.fieldPermissions`) — passed through to SubTableField for Add/Edit dialog gating. */
+  fieldPermissions?: Record<string, string> | null
   getSubFormRowFormulas: (bindingId?: number) => unknown
   getSummaryColumns: (bindingId?: number) => unknown
   getSummaryAggregations: (bindingId?: number) => unknown
   getSubTableValidation: (bindingId?: number) => unknown
   subTableAssigneeField: (bindingId?: number) => string | undefined
   showSubTableAssignColumn: (bindingId?: number) => boolean
-  linkFormScrollToInlineEnabled: (field: FormField) => boolean
-  subTableShowTaskStatusInitiator: (field: FormField) => boolean
-  subTableShowViewDetailInitiator: (field: FormField) => boolean
+  subTableShowTaskStatus: (field: FormField) => boolean
   subTableCompactLookupCells: (field: FormField) => boolean
-  subTableMode: (field: FormField) => string
-  resolveInlineFormTableTitle: (field: FormField) => string
-  resolveInlineFormFields: (field: FormField) => FormField[]
-  getCurrentRowForInlineForm: (field: FormField) => Record<string, unknown> | null
-  inlineSubTableFormReadonly: (field: FormField) => boolean
+  /**
+   * Inline Form widget (`inlineSubForm`) — the bound sub-table's form rendered in place.
+   * Distinct from the form-below-table helpers above, which hang off a subTable grid.
+   * NOTE: FormRenderer.vue casts the provide object, so a method declared here but missing
+   * there is NOT a compile error — it silently becomes undefined at runtime.
+   */
+  resolveInlineSubFormFields: (field: FormField) => FormField[]
+  resolveInlineSubFormRow: (field: FormField) => Record<string, unknown> | null
+  resolveInlineSubFormTitle: (field: FormField) => string
+  inlineSubFormReadonly: (field: FormField) => boolean
+  handleInlineSubFormUpdate: (field: FormField, row: Record<string, unknown>) => void
   lookupShowBackfillView: (field: FormField) => boolean
   primaryFormData?: Ref<Record<string, unknown>> | Record<string, unknown>
   primaryTableDisplayName?: Ref<string> | string
@@ -56,13 +62,6 @@ export interface FormRendererFieldsContext {
   }
   handlePrimaryFormDataPatch?: (patch: Record<string, unknown>) => void
   handleSubTableUpdate: (bindingId: number, rows: unknown[]) => void
-  /** Persist task form (form-below-table Save — same as action bar SAVE). */
-  handleInlineFormSave?: () => void
-  handleInlineFormUpdate: (field: FormField, row: Record<string, unknown>) => void
-  /** Row click on a form-below-table sub-table — pick which row the inline form edits. */
-  setInlineFormSelectedRow?: (bindingId: number | undefined, row: Record<string, unknown> | null) => void
-  scrollSubTableInlineIntoView: (bindingId?: number) => void
-  setSubTableInlineAnchor: (bindingId: number | undefined, el: HTMLElement | null) => void
   handleLookupSelect: (key: string, row: unknown) => void
   /** Multi LOOKUP model sync (tag remove / toggle) — optional for older inject sites. */
   handleLookupModelUpdate?: (key: string, value: unknown) => void

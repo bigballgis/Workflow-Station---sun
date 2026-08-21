@@ -14,6 +14,10 @@ export interface RelationTableDTO {
   currentVersion: number
   /** 当前用户(按 active role)对该表的权限：READONLY=只读, READ_WRITE=读写 */
   permissionLevel?: 'READONLY' | 'READ_WRITE'
+  /** Optional Function Unit grouping; undefined/null = ungrouped */
+  functionUnitId?: string
+  functionUnitCode?: string
+  functionUnitName?: string
 }
 
 /** 派生带出 / 级联的一条关联列 */

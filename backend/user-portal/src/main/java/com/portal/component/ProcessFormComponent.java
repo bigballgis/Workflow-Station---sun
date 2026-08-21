@@ -112,6 +112,11 @@ public class ProcessFormComponent {
     @Autowired
     private ProcessInstanceHydrationComponent processInstanceHydration;
 
+    /** Lazy: fetches deployed BPMN XML to derive MI assignment contracts (keeps ctor arity stable for tests). */
+    @Lazy
+    @Autowired
+    private com.portal.client.WorkflowEngineClient workflowEngineClient;
+
     private ProcessInstance requireProcessInstance(String processInstanceId) {
         ProcessInstanceHydrationComponent hydration = processInstanceHydration;
         if (hydration != null) {
@@ -157,6 +162,7 @@ public class ProcessFormComponent {
                     ? (String) formDefinition.get("name")
                     : "Process Form";
             subTableBindings = extractSubTableBindings(formDefinition);
+            attachMiAssignmentConfigs(subTableBindings, processDefinitionKey);
         }
 
         boolean editable = RETURN_TO_REQUESTER.equals(processInstance.getStatus());
@@ -707,5 +713,40 @@ public class ProcessFormComponent {
             return result;
         }
         return Collections.emptyList();
+    }
+
+    /**
+     * Parses the process's deployed BPMN for MI assignment contracts (allowUser/allowRole/assigneeField/
+     * roleField/buField) and stamps them onto matching bindings by table name, so the Process Form's
+     * sub-table Add/Edit dialog renders the same Assignment Mode block as the Task Form (portal-design-parity).
+     * Best-effort: BPMN fetch failure leaves bindings without assignmentConfig (dialog just omits the block).
+     */
+    private void attachMiAssignmentConfigs(List<SubTableBindingData> bindings, String processDefinitionKey) {
+        if (bindings.isEmpty() || processDefinitionKey == null || processDefinitionKey.isBlank()
+                || workflowEngineClient == null) {
+            return;
+        }
+        try {
+            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(processDefinitionKey);
+            if (bpmnOpt.isEmpty() || bpmnOpt.get().isBlank()) {
+                return;
+            }
+            Map<String, Map<String, Object>> assignments =
+                    BpmnMiXmlSupport.buildMiAssignmentsBySubTableName(bpmnOpt.get());
+            if (assignments.isEmpty()) {
+                return;
+            }
+            for (SubTableBindingData binding : bindings) {
+                Map<String, Object> config = assignments.get(binding.getTableName());
+                if (config != null) {
+                    binding.setAssignmentConfig(config);
+                }
+            }
+        } catch (BpmnMiXmlSupport.MiAssignmentConfigurationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.debug("Failed to attach MI assignment configs for processDefinitionKey={}: {}",
+                    processDefinitionKey, e.getMessage());
+        }
     }
 }
