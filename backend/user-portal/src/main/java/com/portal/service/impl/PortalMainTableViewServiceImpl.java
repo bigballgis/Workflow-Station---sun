@@ -2,33 +2,40 @@ package com.portal.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.audit.SystemAuditFields;
+import com.platform.common.jdbc.SubTableRowIdentity;
 import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
 import com.portal.component.MainTableViewAccessResolver.AccessRule;
-import com.portal.component.MainTableViewInvolvementChecker;
+import com.portal.component.MainTableViewInvolvementScope;
+import com.portal.component.MainTableViewRowQueryComponent;
+import com.portal.component.MainTableViewSubRowQueryComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewImportResult;
+import com.portal.dto.MainTableViewQueryRequest;
+import com.portal.dto.PortalListColumnMeta;
+import com.portal.util.MainTableViewColumnSpec;
+import com.portal.util.MainTableViewDerivedFilterSql;
+import com.portal.util.MainTableViewDesignerFilterSql;
+import com.portal.util.SqlFragment;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
 import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataPage;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataRow;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewFieldColumn;
+import com.portal.dto.MainTableViewPortalDtos.MainTableViewGroup;
 import com.portal.util.MainTableViewFkDisplaySupport;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewSummary;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalMainTableViewService;
+import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.PortalMainTableViewCsvUtils;
-import com.portal.util.PortalMainTableViewFilterUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +49,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortalMainTableViewServiceImpl implements PortalMainTableViewService {
 
+    /** Views-only PR: Owner field projection lives in a separate change; empty hints here. */
+    private record OwnerViewHints(java.util.Set<String> assigneeFields) {
+        static final OwnerViewHints NONE = new OwnerViewHints(java.util.Set.of());
+    }
+
     private static final String PROCESS_INSTANCE_ID_FIELD = "processInstanceId";
     private static final Set<String> PROCESS_INSTANCE_ID_HEADERS = Set.of(
             PROCESS_INSTANCE_ID_FIELD,
@@ -53,10 +65,13 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private final ObjectMapper objectMapper;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final MainTableViewAccessResolver mainTableViewAccessResolver;
-    private final MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
+    private final MainTableViewInvolvementScope involvementScope;
+    private final MainTableViewRowQueryComponent rowQueryComponent;
+    private final MainTableViewSubRowQueryComponent subRowQueryComponent;
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessComponent processComponent;
     private final ComputedFieldRecalculator computedFieldRecalculator;
+    private final UserDisplayNameResolver userDisplayNameResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -70,9 +85,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                     WHERE v.status = 'PUBLISHED'
                     ORDER BY fu.name, v.id
                     """);
-        } catch (Exception e) {
-            log.warn("Main table view menu query failed: {}", e.getMessage());
-            return List.of();
+        } catch (DataAccessException e) {
+            throw new IllegalStateException("Main table view menu query failed", e);
         }
 
         Map<String, List<Long>> viewIdsByFuCode = new LinkedHashMap<>();
@@ -87,7 +101,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                     .add(((Number) row.get("view_id")).longValue());
         }
 
-        Map<String, String> iconSvgByFuCode = loadFunctionUnitIconSvgs(fuMetaByCode.keySet());
+        Map<String, String> iconByFuCode = loadFunctionUnitIconSvgs(fuMetaByCode.keySet());
 
         List<FunctionUnitViewMenuItem> result = new ArrayList<>();
         for (Map.Entry<String, Map<String, Object>> entry : fuMetaByCode.entrySet()) {
@@ -107,42 +121,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                     .functionUnitId(String.valueOf(row.get("fu_id")))
                     .functionUnitCode(code)
                     .functionUnitName(stringVal(row.get("fu_name")))
+                    .iconSvg(iconByFuCode.get(code))
                     .viewCount((int) visibleCount)
-                    .iconSvg(iconSvgByFuCode.get(code))
                     .build());
         }
         return result;
-    }
-
-    /**
-     * Load at most one {@code svg_content} per Function Unit after view rows are grouped.
-     * Joining icons onto every published view row would repeat TEXT per view.
-     */
-    private Map<String, String> loadFunctionUnitIconSvgs(Set<String> fuCodes) {
-        if (fuCodes.isEmpty()) {
-            return Map.of();
-        }
-        try {
-            String placeholders = String.join(",", Collections.nCopies(fuCodes.size(), "?"));
-            List<Map<String, Object>> iconRows = jdbcTemplate.queryForList(
-                    "SELECT fu.code AS fu_code, ic.svg_content AS icon_svg"
-                            + " FROM dw_function_units fu"
-                            + " LEFT JOIN dw_icons ic ON ic.id = fu.icon_id"
-                            + " WHERE fu.code IN (" + placeholders + ")",
-                    fuCodes.toArray());
-            Map<String, String> icons = new HashMap<>(iconRows.size());
-            for (Map<String, Object> row : iconRows) {
-                String code = stringVal(row.get("fu_code"));
-                if (code != null) {
-                    icons.put(code, stringVal(row.get("icon_svg")));
-                }
-            }
-            return icons;
-        } catch (DataAccessException e) {
-            // FALLBACK(ux): menu remains usable; placeholder icon is used when SVG is absent.
-            log.warn("Main table view menu icon query failed: {}", e.getMessage());
-            return Map.of();
-        }
     }
 
     @Override
@@ -177,59 +160,193 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             return summaries.stream()
                     .filter(summary -> canUserSeeView(userId, summary.id()))
                     .toList();
-        } catch (Exception e) {
-            log.warn("List published views failed for {}: {}", functionUnitCode, e.getMessage());
-            return List.of();
+        } catch (DataAccessException e) {
+            throw new IllegalStateException(
+                    "List published views failed for function unit " + functionUnitCode, e);
         }
     }
 
     @Override
     @Transactional(readOnly = true)
-    public MainTableViewDataPage queryViewData(String userId, Long viewId, int page, int size, String search) {
+    public MainTableViewDataPage queryViewData(String userId, Long viewId,
+                                               MainTableViewQueryRequest request) {
         ViewDefinition view = loadPublishedView(viewId);
         assertFuAccess(userId, view.functionUnitCode());
         assertViewAccess(userId, view);
 
-        List<MainTableViewFieldColumn> columns = visibleColumns(view);
-        List<Map<String, Object>> allRows = loadAndProjectRows(userId, view, search);
-        PortalMainTableViewFilterUtils.applyViewSort(allRows, view.sortConfig());
+        return isSubView(view)
+                ? querySubViewPage(userId, view, request)
+                : queryMainViewPage(userId, view, request);
+    }
 
-        int safeSize = Math.min(Math.max(size, 1), 200);
-        int safePage = Math.max(page, 0);
-        int from = safePage * safeSize;
-        int to = Math.min(from + safeSize, allRows.size());
-        List<Map<String, Object>> pageSlice = from >= allRows.size()
-                ? List.of()
-                : allRows.subList(from, to);
-
-        List<MainTableViewDataRow> rows = pageSlice.stream()
-                .map(r -> MainTableViewDataRow.builder()
-                        .processInstanceId(String.valueOf(r.get("_processInstanceId")))
-                        .values(stripInternalKeys(r))
+    /**
+     * MAIN views page in the database: one process instance is one row, so the filters, the
+     * search, the sort and the row visibility all become one predicate and the total comes from
+     * counting it.
+     */
+    private MainTableViewDataPage queryMainViewPage(String userId, ViewDefinition view,
+                                                    MainTableViewQueryRequest request) {
+        MainTableViewRowQueryComponent.Page page = rowQueryComponent.query(
+                mainViewQuery(userId, view, request, request.page(), request.size()));
+        Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
+        OwnerViewHints ownerHints = OwnerViewHints.NONE;
+        Map<String, String> ownerCache = ownerDisplayCacheForInstances(page.instances());
+        List<MainTableViewDataRow> rows = page.instances().stream()
+                .map(pi -> MainTableViewDataRow.builder()
+                        .rowKey(pi.getId())
+                        .processInstanceId(pi.getId())
+                        .values(stripInternalKeys(projectInstanceRow(pi, view, fkSource, ownerHints, ownerCache)))
                         .build())
                 .toList();
-
         return MainTableViewDataPage.builder()
-                .columns(columns)
+                .columns(visibleColumns(view))
                 .rows(rows)
-                .total(allRows.size())
-                .page(safePage)
-                .size(safeSize)
+                .total(page.total())
+                .page(request.page())
+                .size(request.size())
+                .groups(page.groups().stream()
+                        .map(g -> new MainTableViewGroup(g.label(), g.count()))
+                        .toList())
                 .build();
+    }
+
+    /**
+     * SUB views page in the database too, but on the expansion rather than on the instances: one
+     * sub-table row is one row, so the total counts sub-table rows and the page slices them.
+     */
+    private MainTableViewDataPage querySubViewPage(String userId, ViewDefinition view,
+                                                   MainTableViewQueryRequest request) {
+        MainTableViewSubRowQueryComponent.Page page = subRowQueryComponent.query(
+                subViewQuery(userId, view, request, request.page(), request.size()));
+        Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
+        OwnerViewHints ownerHints = OwnerViewHints.NONE;
+        Map<String, String> ownerCache = ownerDisplayCacheForSubRows(page.rows());
+        return MainTableViewDataPage.builder()
+                .columns(visibleColumns(view))
+                .rows(page.rows().stream()
+                        .map(row -> MainTableViewDataRow.builder()
+                                .rowKey(row.instance().getId() + "|" + SubTableRowIdentity.identityOf(row.subRow()))
+                                .processInstanceId(row.instance().getId())
+                                .values(stripInternalKeys(projectSubRow(row, view, fkSource, ownerHints, ownerCache)))
+                                .build())
+                        .toList())
+                .total(page.total())
+                .page(request.page())
+                .size(request.size())
+                .groups(page.groups().stream()
+                        .map(g -> new MainTableViewGroup(g.label(), g.count()))
+                        .toList())
+                .build();
+    }
+
+    private MainTableViewRowQueryComponent.Query mainViewQuery(
+            String userId, ViewDefinition view, MainTableViewQueryRequest request, int page, int size) {
+        List<MainTableViewColumnSpec.FieldSource> fields = queryableFieldSources(view);
+        MainTableViewColumnSpec.SqlSource source = MainTableViewColumnSpec.SqlSource.INSTANCE;
+        return new MainTableViewRowQueryComponent.Query(
+                view.functionUnitCode(),
+                MainTableViewColumnSpec.sqlFor(fields, view.sortConfig()),
+                designerAndDerived(view, fields, source, request),
+                MainTableViewDerivedFilterSql.plainFilters(request.filters(), fields),
+                request.sortField(),
+                request.sortDirection(),
+                request.groupBy(),
+                request.search(),
+                searchableFields(fields, source),
+                involvementPredicate(userId, view),
+                page,
+                size);
+    }
+
+    private MainTableViewSubRowQueryComponent.Query subViewQuery(
+            String userId, ViewDefinition view, MainTableViewQueryRequest request, int page, int size) {
+        List<MainTableViewColumnSpec.FieldSource> fields = queryableFieldSources(view);
+        MainTableViewColumnSpec.SqlSource source = MainTableViewColumnSpec.SqlSource.EXPANDED_SUB_ROW;
+        return new MainTableViewSubRowQueryComponent.Query(
+                view.id(),
+                view.functionUnitCode(),
+                view.subBindingKeys(),
+                MainTableViewColumnSpec.sqlFor(fields, view.sortConfig(), source, "pi.id, pi.row_identity"),
+                designerAndDerived(view, fields, source, request),
+                MainTableViewDerivedFilterSql.plainFilters(request.filters(), fields),
+                request.sortField(),
+                request.sortDirection(),
+                request.groupBy(),
+                request.search(),
+                searchableFields(fields, source),
+                involvementPredicate(userId, view),
+                page,
+                size);
+    }
+
+    private SqlFragment designerAndDerived(ViewDefinition view,
+                                           List<MainTableViewColumnSpec.FieldSource> fields,
+                                           MainTableViewColumnSpec.SqlSource source,
+                                           MainTableViewQueryRequest request) {
+        return designerFilter(view, fields, source)
+                .and(MainTableViewDerivedFilterSql.whereClause(request.filters(), fields, source));
+    }
+
+    /**
+     * The designer's filter, compiled once per query. It used to be applied to each projected row
+     * in memory; now that the page is drawn in SQL it has to be part of the same predicate, or a
+     * view narrowed to a subset would page through everything and drop rows from each page.
+     */
+    private SqlFragment designerFilter(ViewDefinition view,
+                                       List<MainTableViewColumnSpec.FieldSource> fields,
+                                       MainTableViewColumnSpec.SqlSource source) {
+        List<Object> params = new ArrayList<>();
+        String sql = new MainTableViewDesignerFilterSql(
+                MainTableViewColumnSpec.designerRefFor(fields, source),
+                "View " + view.id() + " '" + view.viewName() + "'")
+                .whereClause(view.filterConfig(), params);
+        return new SqlFragment(sql, params);
+    }
+
+    /**
+     * The keyword search covers the columns the query can compare as text — the same ones whose
+     * values a user sees, minus display-mapped lookup / FK columns (those convert via
+     * {@link MainTableViewDerivedFilterSql}, not ILIKE on the stored key).
+     */
+    private List<String> searchableFields(List<MainTableViewColumnSpec.FieldSource> fields,
+                                          MainTableViewColumnSpec.SqlSource source) {
+        return MainTableViewColumnSpec.columnsFor(fields, source).stream()
+                .filter(PortalListColumnMeta::filterable)
+                .filter(column -> fields.stream()
+                        .noneMatch(f -> f.fieldName().equals(column.field())
+                                && MainTableViewColumnSpec.isDisplayMapped(f)))
+                .map(PortalListColumnMeta::field)
+                .toList();
+    }
+
+    private MainTableViewInvolvementScope.Predicate involvementPredicate(String userId, ViewDefinition view) {
+        if (!view.restrictToInvolvedUsers() || mainTableViewAccessResolver.isSystemAdministrator(userId)) {
+            return null;
+        }
+        return involvementScope.predicateFor(userId, view.functionUnitCode());
+    }
+
+    private boolean isSubView(ViewDefinition view) {
+        return "SUB".equalsIgnoreCase(view.tableType());
+    }
+
+    private MainTableViewColumnSpec.SqlSource sqlSourceOf(ViewDefinition view) {
+        return isSubView(view)
+                ? MainTableViewColumnSpec.SqlSource.EXPANDED_SUB_ROW
+                : MainTableViewColumnSpec.SqlSource.INSTANCE;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public byte[] exportViewCsv(String userId, Long viewId, int maxRows) {
+    public byte[] exportViewCsv(String userId, Long viewId, int maxRows,
+                                MainTableViewQueryRequest request) {
         ViewDefinition view = loadPublishedView(viewId);
         assertFuAccess(userId, view.functionUnitCode());
         assertViewAccess(userId, view);
 
         List<MainTableViewFieldColumn> columns = visibleColumns(view);
-        List<Map<String, Object>> allRows = loadAndProjectRows(userId, view, null);
-        PortalMainTableViewFilterUtils.applyViewSort(allRows, view.sortConfig());
         int limit = Math.min(Math.max(maxRows, 1), 10000);
-        List<Map<String, Object>> slice = allRows.size() <= limit ? allRows : allRows.subList(0, limit);
+        List<Map<String, Object>> slice = exportRows(userId, view, request, limit);
 
         StringBuilder sb = new StringBuilder();
         sb.append(PortalMainTableViewCsvUtils.csvEscape(PROCESS_INSTANCE_ID_FIELD));
@@ -426,101 +543,61 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         return raw;
     }
 
-    private List<Map<String, Object>> loadAndProjectRows(String userId, ViewDefinition view, String search) {
-        Pageable pageable = PageRequest.of(0, 5000, Sort.by(Sort.Direction.DESC, "startTime"));
-        Page<ProcessInstance> instances = processInstanceRepository
-                .findByFunctionUnitCodeOrderByStartTimeDesc(view.functionUnitCode(), pageable);
-
-        boolean isSub = "SUB".equalsIgnoreCase(view.tableType());
-        List<Map<String, Object>> rows = new ArrayList<>();
-        String needle = search != null ? search.trim().toLowerCase(Locale.ROOT) : null;
-        Set<String> seenSubKeys = new LinkedHashSet<>();
-        Map<String, Boolean> involvementCache = new HashMap<>();
-        boolean skipInvolvementFilter = mainTableViewAccessResolver.isSystemAdministrator(userId);
-
-        for (ProcessInstance pi : instances.getContent()) {
-            if (!skipInvolvementFilter && view.restrictToInvolvedUsers()) {
-                Boolean involved = involvementCache.computeIfAbsent(
-                        pi.getId(),
-                        id -> mainTableViewInvolvementChecker.isUserInvolved(userId, pi));
-                if (!Boolean.TRUE.equals(involved)) {
-                    continue;
-                }
-            }
-            List<Map<String, Object>> piRows = isSub
-                    ? projectSubTableRows(pi, view, seenSubKeys)
-                    : List.of(projectInstanceRow(pi, view));
-            for (Map<String, Object> row : piRows) {
-                if (!PortalMainTableViewFilterUtils.matchesFilter(row, view.filterConfig())) {
-                    continue;
-                }
-                if (needle != null && !needle.isEmpty()
-                        && !PortalMainTableViewFilterUtils.matchesSearch(row, needle)) {
-                    continue;
-                }
-                rows.add(row);
-            }
+    /** Export reads through the same path as the list, so a CSV matches what the user just saw. */
+    private List<Map<String, Object>> exportRows(String userId, ViewDefinition view,
+                                                 MainTableViewQueryRequest request, int limit) {
+        Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
+        OwnerViewHints ownerHints = OwnerViewHints.NONE;
+        if (isSubView(view)) {
+            var page = subRowQueryComponent.query(subViewQuery(userId, view, request, 0, limit));
+            Map<String, String> ownerCache = ownerDisplayCacheForSubRows(page.rows());
+            return page.rows().stream()
+                    .map(row -> projectSubRow(row, view, fkSource, ownerHints, ownerCache))
+                    .toList();
         }
-        return rows;
+        var page = rowQueryComponent.query(mainViewQuery(userId, view, request, 0, limit));
+        Map<String, String> ownerCache = ownerDisplayCacheForInstances(page.instances());
+        return page.instances().stream()
+                .map(pi -> projectInstanceRow(pi, view, fkSource, ownerHints, ownerCache))
+                .toList();
     }
 
     /**
-     * Flatten a SUB-table view's rows from a process instance's {@code variables.__subTables__}.
-     * Each of the view-table's form bindings contributes a list keyed by its binding id; rows are
-     * deduplicated by primary-key signature so the same child row bound into multiple forms appears once.
+     * One SUB view row: the sub-table row's own members, with the owning instance's variables
+     * available for the FK labels that resolve against the parent.
      */
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> projectSubTableRows(ProcessInstance pi, ViewDefinition view,
-                                                          Set<String> seenSubKeys) {
-        Map<String, Object> vars = pi.getVariables();
-        if (vars == null) {
-            return List.of();
-        }
-        Object subTablesObj = vars.get("__subTables__");
-        if (!(subTablesObj instanceof Map<?, ?> subTables)) {
-            return List.of();
-        }
-        List<Map<String, Object>> out = new ArrayList<>();
+    private Map<String, Object> projectSubRow(MainTableViewSubRowQueryComponent.Row row,
+                                              ViewDefinition view,
+                                              Map<String, FkSourceMeta> fkSource,
+                                              OwnerViewHints ownerHints,
+                                              Map<String, String> ownerCache) {
+        Map<String, Object> vars = row.instance().getVariables() != null
+                ? row.instance().getVariables()
+                : Map.<String, Object>of();
         Map<String, Object> mainVars = stripInternalKeys(vars);
-        Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
-        for (String bindingKey : view.subBindingKeys()) {
-            Object listObj = subTables.get(bindingKey);
-            if (!(listObj instanceof List<?> list)) {
+        Map<String, Object> projected = new LinkedHashMap<>();
+        projected.put("_processInstanceId", row.instance().getId());
+        for (ViewFieldDef field : view.fields()) {
+            if (!Boolean.TRUE.equals(field.visible())) {
                 continue;
             }
-            for (Object item : list) {
-                if (!(item instanceof Map<?, ?> rowMap)) {
-                    continue;
-                }
-                Map<String, Object> source = (Map<String, Object>) rowMap;
-                // Dedup by process instance + the row's own id — NOT the binding key. The same physical
-                // sub-row is duplicated under every binding key that maps this table into a form (and
-                // sometimes under both numeric + named keys), so keying on bindingKey would emit it once
-                // per binding → identical rows repeated N times.
-                String rowId = String.valueOf(source.getOrDefault("id",
-                        source.getOrDefault("id_idw", source.hashCode())));
-                String sig = pi.getId() + "|" + rowId;
-                if (!seenSubKeys.add(sig)) {
-                    continue;
-                }
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("_processInstanceId", pi.getId());
-                for (ViewFieldDef field : view.fields()) {
-                    if (!Boolean.TRUE.equals(field.visible())) {
-                        continue;
-                    }
-                    row.put(field.fieldName(), resolveProjectedFieldValue(source, field, mainVars, fkSource));
-                }
-                out.add(row);
+            if (Boolean.TRUE.equals(field.systemField())) {
+                projected.put(field.fieldName(), systemFieldValue(row.instance(), field.fieldName()));
+            } else {
+                projected.put(field.fieldName(),
+                        resolveProjectedFieldValue(row.subRow(), field, mainVars, fkSource,
+                                row.instance(), ownerHints, ownerCache));
             }
         }
-        return out;
+        return projected;
     }
 
-    private Map<String, Object> projectInstanceRow(ProcessInstance pi, ViewDefinition view) {
-        Map<String, Object> vars = pi.getVariables() != null ? pi.getVariables() : Map.of();
+    private Map<String, Object> projectInstanceRow(ProcessInstance pi, ViewDefinition view,
+                                                   Map<String, FkSourceMeta> fkSource,
+                                                   OwnerViewHints ownerHints,
+                                                   Map<String, String> ownerCache) {
+        Map<String, Object> vars = pi.getVariables() != null ? pi.getVariables() : Map.<String, Object>of();
         Map<String, Object> mainVars = stripInternalKeys(vars);
-        Map<String, FkSourceMeta> fkSource = loadFkSourceMeta(view.id());
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("_processInstanceId", pi.getId());
 
@@ -531,7 +608,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             if (Boolean.TRUE.equals(field.systemField())) {
                 row.put(field.fieldName(), systemFieldValue(pi, field.fieldName()));
             } else {
-                row.put(field.fieldName(), resolveProjectedFieldValue(vars, field, mainVars, fkSource));
+                row.put(field.fieldName(), resolveProjectedFieldValue(vars, field, mainVars, fkSource,
+                        pi, ownerHints, ownerCache));
             }
         }
         return row;
@@ -546,7 +624,10 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             Map<String, Object> source,
             ViewFieldDef field,
             Map<String, Object> mainVars,
-            Map<String, FkSourceMeta> fkSourceMeta) {
+            Map<String, FkSourceMeta> fkSourceMeta,
+            ProcessInstance pi,
+            OwnerViewHints ownerHints,
+            Map<String, String> ownerCache) {
         if ("lookup_display".equalsIgnoreCase(field.columnType())
                 && field.lookupSourceField() != null && !field.lookupSourceField().isBlank()) {
             return source.get(field.lookupSourceField());
@@ -561,7 +642,123 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             // FALLBACK(ux): unmatched FK — show raw scalar rather than inventing a value
             return resolved != null ? resolved : fkVal;
         }
-        return source.get(field.fieldName());
+        if (ownerHints != null && ownerHints.assigneeFields().contains(field.fieldName()) && pi != null) {
+            String live = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
+                    pi.getCurrentAssignee(), pi.getCandidateUsers(), ownerCache);
+            if (live != null && !live.isBlank()) {
+                return live;
+            }
+        }
+        Object raw = source.get(field.fieldName());
+        if (shouldResolveAsUserIdentity(field.fieldName(), raw)) {
+            Object liveUser = liveResolveUserIdentity(raw, ownerCache);
+            if (liveUser != null) {
+                return liveUser;
+            }
+        }
+        if (raw instanceof String s && s.startsWith("group:")) {
+            Object display = source.get(field.fieldName() + "__display");
+            return display instanceof String d && !d.isBlank() ? display : raw;
+        }
+        return raw;
+    }
+
+    private Map<String, String> ownerDisplayCacheForInstances(List<ProcessInstance> instances) {
+        Set<String> keys = new LinkedHashSet<>();
+        for (ProcessInstance pi : instances) {
+            collectOwnerUserKeys(pi, keys);
+        }
+        return userDisplayNameResolver.resolveBatch(keys);
+    }
+
+    private Map<String, String> ownerDisplayCacheForSubRows(
+            List<MainTableViewSubRowQueryComponent.Row> rows) {
+        Set<String> keys = new LinkedHashSet<>();
+        for (MainTableViewSubRowQueryComponent.Row row : rows) {
+            collectOwnerUserKeys(row.instance(), keys);
+            collectUserPrefixedKeys(row.subRow(), keys);
+            collectKnownUserFieldKeys(row.subRow(), keys);
+        }
+        return userDisplayNameResolver.resolveBatch(keys);
+    }
+
+    private void collectOwnerUserKeys(ProcessInstance pi, Set<String> keys) {
+        keys.addAll(userDisplayNameResolver.collectAssigneeUserKeys(
+                pi.getCurrentAssignee(), pi.getCandidateUsers()));
+        collectUserPrefixedKeys(pi.getVariables(), keys);
+        collectKnownUserFieldKeys(pi.getVariables(), keys);
+    }
+
+    private static void collectUserPrefixedKeys(Map<String, Object> source, Set<String> keys) {
+        if (source == null) {
+            return;
+        }
+        for (Object value : source.values()) {
+            if (value instanceof String s && s.startsWith("user:") && s.length() > 5) {
+                keys.add(s.substring(5).trim());
+            }
+        }
+    }
+
+    /** Audit USER columns often store a bare id / name without the {@code user:} prefix. */
+    private static void collectKnownUserFieldKeys(Map<String, Object> source, Set<String> keys) {
+        if (source == null) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (SystemAuditFields.isUser(entry.getKey())) {
+                collectUserIdentityKey(entry.getValue(), keys);
+            }
+        }
+    }
+
+    /**
+     * Collect keys for {@link UserDisplayNameResolver}: {@code user:}<id> strips to id; bare
+     * strings (id / username / employee id / legacy display name) are kept as-is so batch
+     * resolve can match {@code sys_users} the same way list USER filters do.
+     */
+    private static void collectUserIdentityKey(Object value, Set<String> keys) {
+        if (!(value instanceof String s) || s.isBlank()) {
+            return;
+        }
+        String trimmed = s.trim();
+        if (trimmed.startsWith("user:") && trimmed.length() > 5) {
+            keys.add(trimmed.substring(5).trim());
+            return;
+        }
+        if (trimmed.startsWith("group:")) {
+            return;
+        }
+        keys.add(trimmed);
+    }
+
+    private static boolean shouldResolveAsUserIdentity(String fieldName, Object raw) {
+        if (raw instanceof String s && s.startsWith("user:") && s.length() > 5) {
+            return true;
+        }
+        return SystemAuditFields.isUser(fieldName);
+    }
+
+    /**
+     * Same resolution path as {@link ListFilterSql#userDisplayLabelExpression}: map stored
+     * identity forms through {@code sys_users} so group headers and cells share one label.
+     */
+    private String liveResolveUserIdentity(Object raw, Map<String, String> ownerCache) {
+        if (!(raw instanceof String s) || s.isBlank()) {
+            return null;
+        }
+        String trimmed = s.trim();
+        if (trimmed.startsWith("group:")) {
+            return null;
+        }
+        String key = trimmed.startsWith("user:") && trimmed.length() > 5
+                ? trimmed.substring(5).trim()
+                : trimmed;
+        if (key.isEmpty()) {
+            return null;
+        }
+        String live = userDisplayNameResolver.resolveCached(key, ownerCache);
+        return live != null && !live.isBlank() ? live : null;
     }
 
     private Object systemFieldValue(ProcessInstance pi, String fieldName) {
@@ -588,48 +785,164 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         final Map<String, FkSourceMeta> fkSourceMeta = loadFkSourceMeta(view.id());
         // Lookup columns reference a Relation Table (via the form's lookupConfig), not a DW table.
         final Map<String, LookupColumnMeta> lookupMeta = loadLookupColumnMeta(view.mainTableId());
+        ColumnMetaBundle bundle = new ColumnMetaBundle(
+                fkMeta, fkSourceMeta, lookupMeta, declaredCapabilities(view));
         return view.fields().stream()
                 .filter(f -> Boolean.TRUE.equals(f.visible()))
                 .sorted(Comparator.comparingInt(f -> f.sortOrder() != null ? f.sortOrder() : 0))
-                .map(f -> {
-                    boolean lookupDisplay = "lookup_display".equalsIgnoreCase(
-                            f.columnType() != null ? f.columnType() : "");
-                    boolean fkDisplay = "fk_display".equalsIgnoreCase(
-                            f.columnType() != null ? f.columnType() : "");
-                    boolean derived = lookupDisplay || fkDisplay;
-                    String sourceField = derived && f.lookupSourceField() != null
-                            ? f.lookupSourceField()
-                            : f.fieldName();
-                    FkColumnMeta fk = derived ? null : fkMeta.get(f.fieldName());
-                    FkSourceMeta fkSrc = fkDisplay ? fkSourceMeta.get(sourceField) : null;
-                    LookupColumnMeta lookup = lookupDisplay || !derived
-                            ? lookupMeta.get(sourceField)
-                            : null;
-                    Long lookupTableId = lookup != null ? lookup.tableId() : null;
-                    String columnType = lookupDisplay ? "lookup_display"
-                            : (fkDisplay ? "fk_display" : "field");
-                    return MainTableViewFieldColumn.builder()
-                            .fieldName(f.fieldName())
-                            .displayLabel(f.displayLabel() != null ? f.displayLabel() : f.fieldName())
-                            .columnWidth(f.columnWidth())
-                            .systemField(f.systemField())
-                            .isForeignKey(fk != null)
-                            .refViewId(fk != null ? fk.refViewId() : null)
-                            .refFunctionUnitCode(fk != null ? fk.refFunctionUnitCode() : null)
-                            .refPrimaryKeyFields(fk != null ? fk.refPrimaryKeyFields()
-                                    : (fkSrc != null ? fkSrc.refPrimaryKeyFields() : null))
-                            .isLookup(lookupTableId != null)
-                            .lookupTableId(lookupTableId)
-                            .columnType(columnType)
-                            .lookupSourceField(derived ? f.lookupSourceField()
-                                    : (lookup != null ? sourceField : null))
-                            .lookupDisplayField(derived ? f.lookupDisplayField() : null)
-                            .lookupSelectedDisplayField(lookup != null ? lookup.selectedDisplayField() : null)
-                            .lookupSearchFields(lookup != null ? lookup.searchFields() : null)
-                            .fkRefTableId(fkSrc != null ? fkSrc.refTableId() : null)
-                            .build();
-                })
+                .map(f -> toFieldColumn(f, bundle))
                 .toList();
+    }
+
+    private MainTableViewFieldColumn toFieldColumn(ViewFieldDef f, ColumnMetaBundle meta) {
+        String type = f.columnType() != null ? f.columnType() : "";
+        boolean lookupDisplay = "lookup_display".equalsIgnoreCase(type);
+        boolean fkDisplay = "fk_display".equalsIgnoreCase(type);
+        boolean derived = lookupDisplay || fkDisplay;
+        String sourceField = derived && f.lookupSourceField() != null ? f.lookupSourceField() : f.fieldName();
+        FkColumnMeta fk = derived ? null : meta.fk().get(f.fieldName());
+        FkSourceMeta fkSrc = fkDisplay ? meta.fkSource().get(sourceField) : null;
+        LookupColumnMeta lookup = lookupDisplay || !derived ? meta.lookup().get(sourceField) : null;
+        Long lookupTableId = lookup != null ? lookup.tableId() : null;
+        PortalListColumnMeta capability = meta.capabilities().get(f.fieldName());
+        if (capability == null) {
+            throw new IllegalStateException("View column was not declared: " + f.fieldName());
+        }
+        MainTableViewFieldColumn.MainTableViewFieldColumnBuilder column = MainTableViewFieldColumn.builder()
+                .fieldName(f.fieldName())
+                .displayLabel(f.displayLabel() != null ? f.displayLabel() : f.fieldName())
+                .columnWidth(f.columnWidth())
+                .systemField(f.systemField())
+                .isForeignKey(fk != null)
+                .refViewId(fk != null ? fk.refViewId() : null)
+                .refFunctionUnitCode(fk != null ? fk.refFunctionUnitCode() : null)
+                .refPrimaryKeyFields(fk != null ? fk.refPrimaryKeyFields()
+                        : (fkSrc != null ? fkSrc.refPrimaryKeyFields() : null))
+                .isLookup(lookupTableId != null)
+                .lookupTableId(lookupTableId)
+                .columnType(lookupDisplay ? "lookup_display" : (fkDisplay ? "fk_display" : "field"))
+                .lookupSourceField(derived ? f.lookupSourceField() : (lookup != null ? sourceField : null))
+                .lookupDisplayField(derived ? f.lookupDisplayField() : null)
+                .lookupSelectedDisplayField(lookup != null ? lookup.selectedDisplayField() : null)
+                .lookupSearchFields(lookup != null ? lookup.searchFields() : null)
+                .fkRefTableId(fkSrc != null ? fkSrc.refTableId() : null);
+        return MainTableViewFieldColumn.applyListCapabilities(column, capability).build();
+    }
+
+    /** What the header may offer per column, given where this view's rows live. */
+    private Map<String, PortalListColumnMeta> declaredCapabilities(ViewDefinition view) {
+        List<MainTableViewColumnSpec.FieldSource> fields = queryableFieldSources(view);
+        List<PortalListColumnMeta> declared = MainTableViewColumnSpec.columnsFor(fields, sqlSourceOf(view));
+        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
+        declared.forEach(column -> byField.put(column.field(), column));
+        return byField;
+    }
+
+    /**
+     * The view's visible fields paired with the data type their table declares, which is what
+     * decides whether a column can be compared as a number, a date or text.
+     */
+    private List<MainTableViewColumnSpec.FieldSource> queryableFieldSources(ViewDefinition view) {
+        Map<String, String> dataTypes = fieldDataTypes(view);
+        Map<String, LookupColumnMeta> lookupMeta = loadLookupColumnMeta(view.mainTableId());
+        Map<String, FkSourceMeta> fkMeta = fkSourceMetaFor(view);
+        return view.fields().stream()
+                .filter(f -> Boolean.TRUE.equals(f.visible()))
+                .sorted(Comparator.comparingInt(f -> f.sortOrder() != null ? f.sortOrder() : 0))
+                .map(f -> toFieldSource(f, dataTypes, lookupMeta, fkMeta))
+                .toList();
+    }
+
+    private MainTableViewColumnSpec.FieldSource toFieldSource(
+            ViewFieldDef field,
+            Map<String, String> dataTypes,
+            Map<String, LookupColumnMeta> lookupMeta,
+            Map<String, FkSourceMeta> fkMeta) {
+        boolean lookupDisplay = "lookup_display".equalsIgnoreCase(field.columnType());
+        boolean fkDisplay = "fk_display".equalsIgnoreCase(field.columnType());
+        String sourceField = (lookupDisplay || fkDisplay) ? field.lookupSourceField() : null;
+        String displayField = (lookupDisplay || fkDisplay) ? field.lookupDisplayField() : null;
+        Long lookupTableId = null;
+        List<String> fkPks = List.of();
+        if (lookupDisplay && sourceField != null) {
+            LookupColumnMeta lookup = lookupMeta.get(sourceField);
+            if (lookup != null) {
+                lookupTableId = lookup.tableId();
+                if (displayField == null || displayField.isBlank()) {
+                    displayField = lookup.selectedDisplayField();
+                }
+            }
+        }
+        if (fkDisplay && sourceField != null) {
+            FkSourceMeta fk = fkMeta.get(sourceField);
+            if (fk != null && fk.refPrimaryKeyFields() != null) {
+                fkPks = fk.refPrimaryKeyFields();
+            }
+        }
+        return new MainTableViewColumnSpec.FieldSource(
+                field.fieldName(),
+                field.displayLabel(),
+                Boolean.TRUE.equals(field.systemField()),
+                field.columnType(),
+                dataTypes.get(field.fieldName()),
+                sourceField,
+                displayField,
+                lookupTableId,
+                fkPks);
+    }
+
+    private Map<String, FkSourceMeta> fkSourceMetaFor(ViewDefinition view) {
+        Map<String, FkSourceMeta> fkSource = new LinkedHashMap<>(loadFkSourceMeta(view.id()));
+        if (isSubView(view) && view.mainTableId() != null) {
+            loadSubMainFkMeta(view.mainTableId()).ifPresent(m -> fkSource.putIfAbsent(
+                    m.fieldName(),
+                    new FkSourceMeta(null, m.meta().refPrimaryKeyFields())));
+        }
+        return fkSource;
+    }
+
+    /**
+     * Types for designed view columns. The bound table wins; other tables in the same Function
+     * Unit fill names the bound table does not declare so a SUB view can still type a parent MAIN
+     * column it shows. A name that exists on none of them stays untyped (display-only) — we do
+     * not invent DATE/USER from the label.
+     */
+    private Map<String, String> fieldDataTypes(ViewDefinition view) {
+        Map<String, String> byField = new LinkedHashMap<>(fieldDataTypes(view.mainTableId()));
+        if (view.functionUnitCode() == null || view.functionUnitCode().isBlank()) {
+            return byField;
+        }
+        jdbcTemplate.queryForList("""
+                        SELECT fd.field_name, fd.data_type
+                        FROM dw_field_definitions fd
+                        INNER JOIN dw_table_definitions td ON td.id = fd.table_id
+                        INNER JOIN dw_function_units fu ON fu.id = td.function_unit_id
+                        WHERE fu.code = ?
+                        ORDER BY CASE WHEN UPPER(td.table_type) = 'MAIN' THEN 0 ELSE 1 END, td.id
+                        """,
+                view.functionUnitCode())
+                .forEach(row -> byField.putIfAbsent(
+                        stringVal(row.get("field_name")), stringVal(row.get("data_type"))));
+        return byField;
+    }
+
+    private Map<String, String> fieldDataTypes(Long mainTableId) {
+        if (mainTableId == null) {
+            return Map.of();
+        }
+        Map<String, String> byField = new LinkedHashMap<>();
+        jdbcTemplate.queryForList(
+                        "SELECT field_name, data_type FROM dw_field_definitions WHERE table_id = ?",
+                        mainTableId)
+                .forEach(row -> byField.put(stringVal(row.get("field_name")), stringVal(row.get("data_type"))));
+        return byField;
+    }
+
+    private record ColumnMetaBundle(
+            Map<String, FkColumnMeta> fk,
+            Map<String, FkSourceMeta> fkSource,
+            Map<String, LookupColumnMeta> lookup,
+            Map<String, PortalListColumnMeta> capabilities) {
     }
 
     /**
@@ -938,6 +1251,37 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
     private boolean canUserSeeView(String userId, Long viewId) {
         return mainTableViewAccessResolver.canUserSeeView(userId, loadAccessRules(viewId));
+    }
+
+    /**
+     * Load at most one {@code svg_content} per Function Unit after view rows are grouped.
+     * Joining icons onto every published view row would repeat TEXT per view.
+     */
+    private Map<String, String> loadFunctionUnitIconSvgs(Set<String> fuCodes) {
+        if (fuCodes.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            String placeholders = String.join(",", Collections.nCopies(fuCodes.size(), "?"));
+            List<Map<String, Object>> iconRows = jdbcTemplate.queryForList(
+                    "SELECT fu.code AS fu_code, ic.svg_content AS icon_svg"
+                            + " FROM dw_function_units fu"
+                            + " LEFT JOIN dw_icons ic ON ic.id = fu.icon_id"
+                            + " WHERE fu.code IN (" + placeholders + ")",
+                    fuCodes.toArray());
+            Map<String, String> icons = new HashMap<>(iconRows.size());
+            for (Map<String, Object> row : iconRows) {
+                String code = stringVal(row.get("fu_code"));
+                if (code != null) {
+                    icons.put(code, stringVal(row.get("icon_svg")));
+                }
+            }
+            return icons;
+        } catch (DataAccessException e) {
+            // FALLBACK(ux): menu remains usable; placeholder icon is used when SVG is absent.
+            log.warn("Main table view menu icon query failed: {}", e.getMessage());
+            return Map.of();
+        }
     }
 
     private long countVisibleViews(String userId, List<Long> viewIds) {

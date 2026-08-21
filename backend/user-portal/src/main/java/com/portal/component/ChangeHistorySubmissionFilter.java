@@ -3,6 +3,8 @@ package com.portal.component;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.audit.SystemAuditFields;
+import com.platform.common.jdbc.SubTableRowIdentity;
+import com.platform.common.jdbc.SubTableRowKeySupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,8 +28,6 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 public class ChangeHistorySubmissionFilter {
-    private static final List<String> ROW_IDENTITY_FIELDS = List.of(
-            "row_id", "rowId", "rowID", "id_idw", "_rowKey", "rowKey", "id");
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
@@ -146,7 +146,7 @@ public class ChangeHistorySubmissionFilter {
                     continue;
                 Map<?, ?> enrichedRow = findEnrichedRow(submittedRow, enrichedRows, i);
                 Map<String, Object> filteredRow = new LinkedHashMap<>();
-                for (String identityField : ROW_IDENTITY_FIELDS) {
+                for (String identityField : SubTableRowIdentity.IDENTITY_FIELDS) {
                     Object identity = enrichedRow.containsKey(identityField)
                             ? enrichedRow.get(identityField)
                             : submittedRow.get(identityField);
@@ -180,7 +180,7 @@ public class ChangeHistorySubmissionFilter {
                 rowsByIdentity.clear();
             }
             for (Map<String, Object> row : filteredRows) {
-                String identity = rowIdentity(row);
+                String identity = SubTableRowIdentity.identityOf(row);
                 if (identity == null)
                     identity = "__index_" + rowsByIdentity.size();
                 rowsByIdentity.putIfAbsent(identity, row);
@@ -215,22 +215,7 @@ public class ChangeHistorySubmissionFilter {
     }
 
     private Set<String> rowIdentities(Map<?, ?> row) {
-        Set<String> identities = new HashSet<>();
-        for (String field : ROW_IDENTITY_FIELDS) {
-            String value = stringValue(row.get(field));
-            if (value != null)
-                identities.add(value);
-        }
-        return identities;
-    }
-
-    private String rowIdentity(Map<String, Object> row) {
-        for (String field : ROW_IDENTITY_FIELDS) {
-            String value = stringValue(row.get(field));
-            if (value != null)
-                return field + "=" + value;
-        }
-        return null;
+        return SubTableRowIdentity.identityValuesOf(SubTableRowKeySupport.normalizeStringKeyMap(row));
     }
 
     private BindingAliases resolveBindingContract(Map<String, Object> formDefinition,

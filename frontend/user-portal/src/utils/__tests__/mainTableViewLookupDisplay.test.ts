@@ -5,6 +5,20 @@ import {
   formatLookupAwareMainTableViewCell,
 } from '../mainTableViewLookupDisplay'
 
+/** Cell formatting reads only the lookup hints, so the capability declaration is fixed noise here. */
+function column(overrides: Partial<MainTableViewFieldColumn>): MainTableViewFieldColumn {
+  return {
+    fieldName: 'f',
+    displayLabel: 'F',
+    kind: 'TEXT',
+    filterable: false,
+    sortable: false,
+    groupable: false,
+    operators: [],
+    ...overrides,
+  }
+}
+
 describe('mainTableViewLookupDisplay', () => {
   it('extracts PK from scalar and object lookup values', () => {
     expect(extractLookupPrimaryKey('uuid-1')).toBe('uuid-1')
@@ -13,7 +27,7 @@ describe('mainTableViewLookupDisplay', () => {
   })
 
   it('formats lookup_display columns from hydrated row attributes', () => {
-    const col: MainTableViewFieldColumn = {
+    const col = column({
       fieldName: 't@full_name',
       displayLabel: 'Full Name',
       columnType: 'lookup_display',
@@ -21,7 +35,7 @@ describe('mainTableViewLookupDisplay', () => {
       lookupTableId: -1_000_000_001,
       lookupSourceField: 't',
       lookupDisplayField: 'full_name',
-    }
+    })
     expect(
       formatLookupAwareMainTableViewCell(col, 'uuid-1', {
         id: 'uuid-1',
@@ -37,7 +51,7 @@ describe('mainTableViewLookupDisplay', () => {
   })
 
   it('formats source lookup columns with selectedDisplayField', () => {
-    const col: MainTableViewFieldColumn = {
+    const col = column({
       fieldName: 't',
       displayLabel: 't',
       columnType: 'field',
@@ -45,7 +59,7 @@ describe('mainTableViewLookupDisplay', () => {
       lookupTableId: -1_000_000_001,
       lookupSelectedDisplayField: 'full_name',
       lookupSearchFields: ['username', 'full_name'],
-    }
+    })
     expect(
       formatLookupAwareMainTableViewCell(col, 'uuid-1', {
         id: 'uuid-1',
@@ -56,7 +70,7 @@ describe('mainTableViewLookupDisplay', () => {
   })
 
   it('falls back to raw scalar when hydration misses', () => {
-    const col: MainTableViewFieldColumn = {
+    const col = column({
       fieldName: 't@email',
       displayLabel: 'Email',
       columnType: 'lookup_display',
@@ -64,7 +78,7 @@ describe('mainTableViewLookupDisplay', () => {
       lookupTableId: -1_000_000_001,
       lookupSourceField: 't',
       lookupDisplayField: 'email',
-    }
+    })
     expect(formatLookupAwareMainTableViewCell(col, 'uuid-missing', null)).toBe('uuid-missing')
   })
 })

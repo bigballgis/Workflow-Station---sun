@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import {
+  attachColumnResizeGuide,
   clampColumnWidth,
-  MTV_COL_RESIZE_CURSOR,
-} from '@/utils/mainTableViewColumnResizeCursor'
+  COL_RESIZE_CURSOR,
+  type ColumnResizeGuide,
+} from './columnResizeCursor'
 
 const props = defineProps<{
   initialWidth: number
@@ -15,35 +17,51 @@ const emit = defineEmits<{
 }>()
 
 const isResizing = ref(false)
+let detachActiveDrag: (() => void) | null = null
 
 function onMouseDown(event: MouseEvent) {
   event.preventDefault()
   event.stopPropagation()
 
+  const handle = event.currentTarget as HTMLElement
   const startX = event.clientX
   const startWidth = props.initialWidth
+  const guide: ColumnResizeGuide = attachColumnResizeGuide(handle, startWidth)
   isResizing.value = true
-  document.body.classList.add('mtv-column-resizing')
+  document.body.classList.add('is-column-resizing')
 
   function onMouseMove(ev: MouseEvent) {
-    emit('resize', clampColumnWidth(startWidth + ev.clientX - startX))
+    const width = clampColumnWidth(startWidth + ev.clientX - startX)
+    emit('resize', width)
+    guide.move(width)
   }
 
-  function onMouseUp() {
+  function detach() {
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    document.body.classList.remove('mtv-column-resizing')
+    document.body.classList.remove('is-column-resizing')
+    guide.detach()
     isResizing.value = false
+    detachActiveDrag = null
+  }
+
+  function onMouseUp() {
+    detach()
     emit('resizeEnd')
   }
 
-  document.body.style.cursor = MTV_COL_RESIZE_CURSOR
+  document.body.style.cursor = COL_RESIZE_CURSOR
   document.body.style.userSelect = 'none'
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
+  detachActiveDrag = detach
 }
+
+onBeforeUnmount(() => {
+  detachActiveDrag?.()
+})
 </script>
 
 <template>
@@ -55,5 +73,5 @@ function onMouseDown(event: MouseEvent) {
 </template>
 
 <style lang="scss">
-@import '@/utils/mainTableViewColumnResizeCursor.scss';
+@import './columnResizeCursor.scss';
 </style>

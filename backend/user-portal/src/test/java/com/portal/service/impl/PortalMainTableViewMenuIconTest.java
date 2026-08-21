@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
-import com.portal.component.MainTableViewInvolvementChecker;
+import com.portal.component.MainTableViewInvolvementScope;
+import com.portal.component.MainTableViewRowQueryComponent;
+import com.portal.component.MainTableViewSubRowQueryComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.service.UserDisplayNameResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,10 +54,13 @@ class PortalMainTableViewMenuIconTest {
                 new ObjectMapper(),
                 functionUnitAccessComponent,
                 accessResolver,
-                org.mockito.Mockito.mock(MainTableViewInvolvementChecker.class),
+                org.mockito.Mockito.mock(MainTableViewInvolvementScope.class),
+                org.mockito.Mockito.mock(MainTableViewRowQueryComponent.class),
+                org.mockito.Mockito.mock(MainTableViewSubRowQueryComponent.class),
                 org.mockito.Mockito.mock(ProcessInstanceRepository.class),
                 org.mockito.Mockito.mock(ProcessComponent.class),
-                org.mockito.Mockito.mock(ComputedFieldRecalculator.class));
+                org.mockito.Mockito.mock(ComputedFieldRecalculator.class),
+                org.mockito.Mockito.mock(UserDisplayNameResolver.class));
     }
 
     @Test

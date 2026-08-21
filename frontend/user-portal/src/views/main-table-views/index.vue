@@ -1,22 +1,27 @@
 <script setup lang="ts">
 import { Expand, Fold } from '@element-plus/icons-vue'
-import MainTableViewColumnMenu from '@/components/mainTableView/MainTableViewColumnMenu.vue'
-import MainTableViewColumnResizeHandle from '@/components/mainTableView/MainTableViewColumnResizeHandle.vue'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
+import ListPagination from '@platform-shared/list/ListPagination.vue'
+import type { GridDisplayRow } from '@/utils/mainTableViewGridRuntime'
 import { useMainTableViewPage } from '@/composables/mainTableView/useMainTableViewPage'
+import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 
 const {
-  t, Search, Download, Refresh, dataLoading, functionUnits, selectedViewId, searchKeyword,
-  gridColumns, allRows, dataTotal, currentPage, pageSize, gridRuntime, filterDialogVisible, filterDialogField,
+  t, Search, Download, Refresh, dataLoading, selectedViewId, searchKeyword,
+  currentPage, pageSize, gridRuntime, filterDialogVisible, filterDialogField,
   filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows,
-  importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
+  importProgressVisible, importProgressPercent, importProgressFileName,
   importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
   selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns,
   viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
   MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
-  processedRows, groupedRows, pagedRows, displayTotal,
-  handleSearch, handlePageChange, handleSizeChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
+  pagedRows, displayTotal, toListColumnMeta,
+  handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
   isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,
-  handleColumnCommand, applyColumnFilter, clearColumnFilter, applyColumnWidth, handleColumnResize, handleColumnResizeEnd,
+  handleSortChange, handleClearSort, handleGroupChange, openFilterDialog, openWidthDialog, handleMoveColumn,
+  applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
+  handleColumnResize, handleColumnResizeEnd,
   handleExport, mtvHeaderCellClassName, rowClassName, spanMethod,
   loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
 } = useMainTableViewPage()
@@ -153,12 +158,6 @@ const {
             >
               {{ t('mainTableView.selectedRows', { count: selectedTableRows.length }) }}
             </span>
-            <span
-              v-if="dataTotal > allRows.length"
-              class="grid-hint"
-            >
-              {{ t('mainTableView.rowsTruncated', { shown: allRows.length, total: dataTotal }) }}
-            </span>
           </div>
 
           <div
@@ -202,21 +201,26 @@ const {
             show-overflow-tooltip
           >
             <template #header>
-              <div class="col-header-cell">
-                <MainTableViewColumnMenu
-                  :column="col"
-                  :can-move-left="columnIndex(col.fieldName) > 0"
-                  :can-move-right="columnIndex(col.fieldName) < gridRuntime.columnOrder.length - 1"
-                  :is-grouped="gridRuntime.groupBy === col.fieldName"
-                  :has-filter="!!gridRuntime.filters[col.fieldName]"
-                  @command="(action) => handleColumnCommand(col, action)"
-                />
-                <MainTableViewColumnResizeHandle
-                  :initial-width="columnWidth(col, gridRuntime)"
-                  @resize="(width) => handleColumnResize(col.fieldName, width)"
-                  @resize-end="handleColumnResizeEnd"
-                />
-              </div>
+              <ListColumnHeader
+                :column="toListColumnMeta(col)"
+                :sort="gridRuntime.sort?.fieldName === col.fieldName ? gridRuntime.sort.direction : null"
+                :grouped="gridRuntime.groupBy === col.fieldName"
+                :filtered="!!gridRuntime.filters[col.fieldName]"
+                :width="columnWidth(col, gridRuntime)"
+                show-width
+                show-move
+                :can-move-left="columnIndex(col.fieldName) > 0"
+                :can-move-right="columnIndex(col.fieldName) < gridRuntime.columnOrder.length - 1"
+                @sort-change="(direction) => handleSortChange(col, direction)"
+                @clear-sort="handleClearSort"
+                @group-change="(grouped) => handleGroupChange(col, grouped)"
+                @filter-open="openFilterDialog(col)"
+                @clear-filter="clearColumnFilter(col)"
+                @width-open="openWidthDialog(col)"
+                @move="(direction) => handleMoveColumn(col, direction)"
+                @width-change="(width) => handleColumnResize(col.fieldName, width)"
+                @width-commit="handleColumnResizeEnd"
+              />
             </template>
             <template #default="{ row }">
               <template v-if="isGroupHeaderRow(row)">
@@ -263,15 +267,12 @@ const {
           v-if="displayTotal > 0"
           class="pagination-wrap"
         >
-          <el-pagination
-            v-model:current-page="currentPage"
-            background
-            :page-size="pageSize"
+          <ListPagination
+            :page="currentPage"
+            :size="pageSize"
             :total="displayTotal"
-            :page-sizes="[10, 20, 50, 100]"
-            layout="total, sizes, prev, pager, next"
-            @current-change="handlePageChange"
-            @size-change="handleSizeChange"
+            :loading="dataLoading"
+            @change="({ page, size }) => handlePageChange(page, size)"
           />
         </div>
         </template>
@@ -283,71 +284,14 @@ const {
       </div>
     </div>
 
-    <el-dialog
-      v-model="filterDialogVisible"
-      :title="filterDialogField ? `${t('mainTableView.colFilterBy')}: ${filterDialogField.displayLabel}` : ''"
-      width="420px"
-      destroy-on-close
-    >
-      <el-form label-position="top">
-        <el-form-item :label="t('mainTableView.filterOperator')">
-          <el-select
-            v-model="filterDraft.operator"
-            style="width: 100%;"
-          >
-            <el-option
-              :label="t('mainTableView.filterOpContains')"
-              value="contains"
-            />
-            <el-option
-              :label="t('mainTableView.filterOpEquals')"
-              value="eq"
-            />
-            <el-option
-              :label="t('mainTableView.filterOpNotEquals')"
-              value="ne"
-            />
-            <el-option
-              :label="t('mainTableView.filterOpStartsWith')"
-              value="startsWith"
-            />
-            <el-option
-              :label="t('mainTableView.filterOpEndsWith')"
-              value="endsWith"
-            />
-            <el-option
-              :label="t('mainTableView.filterOpNotContains')"
-              value="notContains"
-            />
-            <el-option
-              :label="t('mainTableView.filterOpHasData')"
-              value="isNotNull"
-            />
-            <el-option
-              :label="t('mainTableView.filterOpNoData')"
-              value="isNull"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item
-          v-if="filterDraft.operator !== 'isNull' && filterDraft.operator !== 'isNotNull'"
-          :label="t('mainTableView.filterValue')"
-        >
-          <el-input v-model="filterDraft.value" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="clearColumnFilter">
-          {{ t('common.clear') }}
-        </el-button>
-        <el-button
-          type="primary"
-          @click="applyColumnFilter"
-        >
-          {{ t('common.confirm') }}
-        </el-button>
-      </template>
-    </el-dialog>
+    <ListFilterDialog
+      v-model:visible="filterDialogVisible"
+      :column="filterDialogField ? toListColumnMeta(filterDialogField) : null"
+      :filter="filterDraft"
+      :remote-search="searchListFilterUsers"
+      @apply="applyColumnFilter"
+      @clear="clearFilterFromDialog"
+    />
 
     <el-dialog
       v-model="widthDialogVisible"

@@ -1,5 +1,6 @@
 package com.portal.entity;
 
+import com.portal.util.SubTableRowIdentityEnricher;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -126,4 +127,24 @@ public class ProcessInstance {
     @jakarta.persistence.Version
     @Column(name = "lock_version")
     private Long lockVersion;
+
+    /**
+     * Guarantee that every sub-table row reaching storage can be addressed later.
+     *
+     * <p>Rows enter {@code variables.__subTables__} from many directions — process start,
+     * task submit, snapshot capture, approval sync, engine hydration, and email-triggered
+     * starts that never pass through a portal form. Only rows whose sub-table declares an
+     * auto primary key get one from {@code ProcessSubTablePrimaryKeyEnricherComponent}, so
+     * enforcing identity at any single API entry point would leave the others without it
+     * (dev already holds a row with full business data and no identity key at all). The
+     * persistence callback is the one place all of those paths converge on.
+     *
+     * <p>Existing identities are never overwritten, so a designer-allocated primary key
+     * always wins over a generated {@code row_id}.
+     */
+    @PrePersist
+    @PreUpdate
+    void ensureSubTableRowIdentity() {
+        SubTableRowIdentityEnricher.ensureRowIdentities(variables);
+    }
 }
