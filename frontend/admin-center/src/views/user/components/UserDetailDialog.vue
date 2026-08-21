@@ -344,12 +344,6 @@
       <el-button @click="$emit('update:modelValue', false)">
         {{ t('common.close') }}
       </el-button>
-      <el-button
-        type="warning"
-        @click="resetPassword"
-      >
-        {{ t('user.resetPassword') }}
-      </el-button>
     </template>
 
     <el-dialog
@@ -441,7 +435,7 @@ const { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, plat
   platformRoles, buRoleGroups, assignDialogVisible, assignRoleLoading, assignSubmitting,
   assignRoleOptions, assignRoleLoaded, assignForm,
   getPlatformRoleTagType, statusType, statusText, formatDate,
-  loadDetail, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole, resetPassword,
+  loadDetail, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole,
 } = useUserDetail(toRef(props, 'userId'))
 
 const successfulLoginHistory = computed(() =>

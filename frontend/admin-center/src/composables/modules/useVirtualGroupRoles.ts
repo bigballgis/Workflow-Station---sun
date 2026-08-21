@@ -31,7 +31,7 @@ export function useVirtualGroupRoles(group: Ref<VirtualGroup | null>) {
   const getRoleTypeLabel = (type?: string) => {
     const map: Record<string, string> = {
       BU_BOUNDED: t('role.buBounded'), BU_UNBOUNDED: t('role.buUnbounded'),
-      BUSINESS: t('role.businessRole'), ADMIN: t('role.adminRole'), DEVELOPER: t('role.developerRole'),
+      BUSINESS: t('role.businessRole'), ADMIN: t('role.adminRole'), AUDITOR: t('role.auditorRole'), DEVELOPER: t('role.developerRole'),
     }
     return map[type || ''] || type || ''
   }

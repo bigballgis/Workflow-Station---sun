@@ -80,6 +80,8 @@ public class RelationTableResponse {
         private Map<String, Object> pkGeneration;
         private String fkDisplayMode;
         private Map<String, Object> lookupConfig;
+        private Boolean isComputed;
+        private Map<String, Object> computedField;
 
         /**
          * 从字段定义实体转换
@@ -106,6 +108,8 @@ public class RelationTableResponse {
                     .pkGeneration(entity.getPkGenerationJson())
                     .fkDisplayMode(entity.getFkDisplayMode())
                     .lookupConfig(entity.getLookupConfig())
+                    .isComputed(entity.getIsComputed())
+                    .computedField(entity.getComputedFieldJson())
                     .build();
         }
     }

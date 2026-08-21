@@ -23,4 +23,16 @@ public class TableFieldDefinitionDTO {
     private List<String> refPrimaryKeyFields;
     private Map<String, Object> pkGeneration;
     private String fkDisplayMode;
+
+    /**
+     * Whether the column is formula-driven. Runtime renderers use this rather than a persisted
+     * readonly flag, so a column becomes read-only the moment the designer marks it computed.
+     */
+    private Boolean isComputed;
+
+    /**
+     * Computed field definition (version, scope, source, AST, dependsOn, onError), so the runtime
+     * can preview the result while the user edits the fields it depends on.
+     */
+    private Map<String, Object> computedField;
 }

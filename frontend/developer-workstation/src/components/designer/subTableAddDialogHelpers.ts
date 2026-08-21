@@ -66,6 +66,27 @@ export interface DialogColumn {
     startPlaceholder?: string
     endPlaceholder?: string
     checkStrictly?: boolean
+    // --- 以下七项 SubTableAddDialog 的模板一直在读，但从未声明 ---
+    // 未声明的键会落到下面的索引签名（unknown），于是 `col.props?.nodeKey || 'id'`
+    // 之类的表达式被推成 `{}`，对着 el-tree / el-rate 的 string|boolean|number prop
+    // 报 TS2322。补声明而不是把索引签名放宽成 any——放宽等于把这一整块的检查永久关掉。
+    /** el-tree: 节点 label/children 字段名映射 */
+    labelProps?: { label?: string; children?: string }
+    /** el-tree: node-key */
+    nodeKey?: string
+    /** el-tree: 是否显示复选框（缺省视为 true，见模板的 !== false） */
+    showCheckbox?: boolean
+    /** el-color-picker: 是否支持透明度 */
+    showAlpha?: boolean
+    /** el-rate: 是否允许半选 */
+    allowHalf?: boolean
+    /** el-slider: 步长 */
+    step?: number
+    /** el-transfer: 左右两栏标题 */
+    leftTitle?: string
+    rightTitle?: string
+    /** el-cascader: 透传给 :props 的配置对象 */
+    cascaderProps?: Record<string, unknown>
     [key: string]: unknown
   }
 }

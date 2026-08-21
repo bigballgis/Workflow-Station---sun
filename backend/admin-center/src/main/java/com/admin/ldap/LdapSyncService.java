@@ -83,7 +83,7 @@ public class LdapSyncService {
     /** Hermes AD 组键 → 虚拟组 → 角色编码 预定义绑定。 */
     private static final List<HermesGroupBinding> HERMES_BINDINGS = List.of(
             new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_SYSTEM_ADMINISTRATORS, "System Administrators", ROLE_SYSTEM_ADMIN, "System Administrator", "ADMIN"),
-            new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_AUDITORS, "Auditors", ROLE_AUDITOR, "Auditor", "ADMIN"),
+            new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_AUDITORS, "Auditors", ROLE_AUDITOR, "Auditor", "AUDITOR"),
             new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_TECH_LEADS, "Technical Leads", ROLE_TECH_LEAD, "Technical Lead", "DEVELOPER"),
             new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_TEAM_LEADS, "Team Leads", ROLE_TEAM_LEAD, "Team Lead", "DEVELOPER"),
             new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_DEVELOPERS, "Developers", ROLE_DEVELOPER, "Developer", "DEVELOPER"),

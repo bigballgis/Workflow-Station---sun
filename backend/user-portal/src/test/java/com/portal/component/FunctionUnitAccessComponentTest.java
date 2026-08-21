@@ -80,6 +80,68 @@ class FunctionUnitAccessComponentTest {
         assertThat(component.canAccessFunctionUnit("user-view-admin", FU_CODE)).isTrue();
     }
 
+    @Test
+    void filterAccessibleFunctionUnits_withActiveRole_onlyReturnsThatRole() {
+        mockPortalRoles(USER_ID, List.of(
+                Map.of("id", "role-x-id", "code", "ROLE_X"),
+                Map.of("id", "role-y-id", "code", "ROLE_Y")));
+        mockAccessRoles("unit-x", List.of("ROLE_X"));
+        mockAccessRoles("unit-y", List.of("ROLE_Y"));
+
+        List<Map<String, Object>> filtered = component.filterAccessibleFunctionUnits(
+                USER_ID,
+                List.of(enabledUnit("unit-x"), enabledUnit("unit-y")),
+                "role-x-id");
+
+        assertThat(filtered).extracting(u -> u.get("id")).containsExactly("unit-x");
+    }
+
+    @Test
+    void filterAccessibleFunctionUnits_withoutActiveRole_keepsAllHeldRoles() {
+        mockPortalRoles(USER_ID, List.of(
+                Map.of("id", "role-x-id", "code", "ROLE_X"),
+                Map.of("id", "role-y-id", "code", "ROLE_Y")));
+        mockAccessRoles("unit-x", List.of("ROLE_X"));
+        mockAccessRoles("unit-y", List.of("ROLE_Y"));
+
+        List<Map<String, Object>> filtered = component.filterAccessibleFunctionUnits(
+                USER_ID,
+                List.of(enabledUnit("unit-x"), enabledUnit("unit-y")),
+                null);
+
+        assertThat(filtered).extracting(u -> u.get("id")).containsExactly("unit-x", "unit-y");
+    }
+
+    @Test
+    void filterAccessibleFunctionUnits_activeRoleNotHeld_returnsEmpty() {
+        mockPortalRoles(USER_ID, List.of(Map.of("id", "role-x-id", "code", "ROLE_X")));
+
+        List<Map<String, Object>> filtered = component.filterAccessibleFunctionUnits(
+                USER_ID,
+                List.of(enabledUnit("unit-x")),
+                "role-other-id");
+
+        assertThat(filtered).isEmpty();
+    }
+
+    @Test
+    void resolveNewRequestRoleKeys_includesIdAndCodeForActiveRole() {
+        mockPortalRoles(USER_ID, List.of(
+                Map.of("id", "role-x-id", "code", "ROLE_X"),
+                Map.of("id", "role-y-id", "code", "ROLE_Y")));
+
+        assertThat(component.resolveNewRequestRoleKeys(USER_ID, "role-x-id"))
+                .containsExactlyInAnyOrder("role-x-id", "ROLE_X");
+    }
+
+    private static Map<String, Object> enabledUnit(String id) {
+        Map<String, Object> unit = new HashMap<>();
+        unit.put("id", id);
+        unit.put("name", id);
+        unit.put("enabled", true);
+        return unit;
+    }
+
     @SuppressWarnings("unchecked")
     private void mockResolveCodeToCatalogId(String code, String catalogId) {
         String encoded = java.net.URLEncoder.encode(code, StandardCharsets.UTF_8);

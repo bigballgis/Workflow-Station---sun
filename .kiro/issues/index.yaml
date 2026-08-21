@@ -1947,6 +1947,27 @@
 
 - id: "1517"
   status: fixed
+  fixed_at: "2026-08-12"
+  severity: major
+  category: bug
+  summary: "AI apply 解析存量 BPMN 未先 Base64 解码：设计器保存过流程的 FU 一律 apply 失败"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/impl/AiWriteServiceImpl.java"
+  note: |
+    现象：FU 50030 (fghj) 任何 AI apply（AI Generate / AI Studio 提案）500，
+    AI_BPMN_MI_BINDING_FAILED "Content is not allowed in prolog"。
+    根因：流程设计器按 XmlEncodingUtil 约定把 bpmn_xml Base64 落库；本轮 apply 未重写
+    process 时（scoped apply / 提案不含流程），writeMultiInstanceAssignment 把 DB 里的
+    Base64 串直接喂给 XML 解析器。所有正常读路径都先 smartDecode，唯独该 AI 写路径漏了。
+    修复：writeMultiInstanceAssignment 解析前 XmlEncodingUtil.smartDecode；
+    writeProcessDefinition 返回本轮是否重写 process，失败发生在存量 BPMN 时重抛为
+    AI_EXISTING_BPMN_INVALID（带 FU id + process definition id + 修复指引），不再把
+    排查方向误导向 AI 回传 body。
+    验证：AiWriteServiceTest 7/7（新增 2 例）；dev 运行时 E2E——bpmn_xml 恢复 Base64 后
+    scoped apply 200 且存量 BPMN 正确解码回写；垃圾内容 500 AI_EXISTING_BPMN_INVALID，
+    事务回滚不丢数据。dev DB 曾把 50062 行就地解码为裸 XML（两种形态读路径均兼容）。
+
+- id: "1518"
+  status: fixed
   fixed_at: "2026-08-10"
   severity: major
   category: bug
@@ -1960,3 +1981,361 @@
     修复：pickSubFormOptionsFromDesign + ProcessStartSubTableBinding.formOptions；
     主路径与 subForms fallback 均写入。单测 pickSubFormOptionsFromDesign.test.ts；
     pnpm build user-portal 通过。dev compose 缺 .env 未重建镜像。
+
+- id: "1519"
+  status: fixed
+  fixed_at: "2026-08-14"
+  severity: major
+  category: bug
+  summary: "Form below table 不跑 Form Design Event，Y/N 显隐日期失效"
+  file: "frontend/user-portal/src/components/SubTableInlineForm.vue"
+  note: |
+    反例：Portal To Do 子表 portalViews.assigneeTodo=formBelowTable 时，改 Merchant Credit Y/N
+    不会显隐对应 Date（Add/Edit 弹窗正常）。
+    根因：SubTableInlineForm → PortalFormFields 未接入 useSubTableDialogComponentEvents，
+    也未传入子表 formOptions / sourceRule。
+    修复：复用对话框事件运行时；extract 时绑定 sourceRule；FormRenderer 传入 formOptions
+    与 dialogColumns；按行身份 bootstrap/onReload；isDialogFieldVisible 过滤叶子字段。
+    验证：subTableInlineFormEvents.test.ts 10/10（含 bootstrap 不 emit、同 id 旧快照不把 Y 打回 N、
+    PK id 出现不 rebootstrap、formOptions 迟到再跑 Event）；sibling hydration 6/6。
+    二次修复：bootstrap 不再 emit update:row；rowModel 只在换行时从 currentRow 拷贝；
+    Save 把 Y 同步到同表 leftover sibling slice，避免 reopen 回 N。
+
+- id: "1520"
+  status: wontfix
+  severity: minor
+  category: architecture
+  summary: "（并入 #1531）mathjs / evaluateFormula 属未交付的 Form Business Rules 脚手架，非双引擎并存问题"
+  file: "frontend/user-portal/src/components/businessLogicEngine/formula.ts"
+  note: |
+    本条已并入 #1531，不单独跟踪。
+    立条时的判断有误：初记为"计算字段共享 AST 引擎 vs Form Business Rules mathjs
+    双引擎并存，违反红线 3"。后续核实发现 Form Business Rules 从未上线（DW 无编辑器
+    入口 / Portal config 无人传入 / 库内 0 条数据，证据见 #1531），mathjs 在运行时
+    不可达，不构成"同一决策两处实现"——不存在第二个生效的公式引擎。
+    evaluateFormula 的静默 0 兜底同理：无数据经过，无实际风险，随脚手架一并处置。
+
+- id: "1521"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: deploy
+  summary: "dev 库缺失 hmdc_dropdown 字典表（relation table id 7），ATM Case FU 所有 lookup 返回空、子表行必填项无法满足因而永远存不下"
+  file: "frontend/scripts/fixtures/hmdc-dropdown.sql"
+  note: |
+    发现于批次 4 计算字段 aggregate 预览的端到端验证：ATM Transaction 子表弹窗
+    Incoming Channel / Dispute Reason 两个必填 lookup 恒为空，Save 永远被校验拦下。
+    根因不在前端——表单 lookupConfig 绑定 tableId=7 / tableName=hmdc_dropdown，
+    而 dev 库 rt_table_definitions 只剩 id=1（test），字典表连同流程实例数据一起丢失。
+    处置：新增幂等 seed 脚本 frontend/scripts/fixtures/hmdc-dropdown.sql，按绑定要求
+    以显式 id=7 重建表定义 + 8 个字段 + 四类目录数据行（Incoming channel / Billing
+    currency / Dispute currency / Dispute reason）+ 角色访问授权，并 setval 修正序列。
+    未改任何 FU 设计。执行后子表行可保存，aggregate 预览端到端通过。
+
+- id: "1522"
+  status: open
+  severity: major
+  category: deploy
+  summary: "dev 库流程实例数据全空（act_hi_procinst / act_ru_task 均 0 行），regression:mi 的截图门禁全部无法执行，只剩单测层可跑"
+  file: "frontend/scripts/run-mi-regression.mjs"
+  note: |
+    2026-08-17 实测：act_hi_procinst = 0、act_ru_task = 0，MI 回归的 6 个场景脚本
+    全部按硬编码 taskId / applicationId 定位（如 verify-myrequest-details-modal.mjs
+    的 app 3777ff51… 与 Test-000060），目标数据不存在 → `pnpm run regression:mi`
+    必然在 e2e 阶段失败，单测层 12 文件 117 项仍全绿。
+    这不是代码缺陷，是环境 fixture 缺口，但它使 performance-change-safety 规定的
+    MI 截图门禁在当前 dev 环境形同虚设（任何触达热路径的改动都无法真正过闸）。
+    处置建议（需人工决定）：要么补一份可重放的 MI 流程实例 seed（起流程 + 走到
+    多实例节点 + 固定 business key），要么让场景脚本改为按语义查找而非硬编码 ID。
+
+- id: "1523"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "计算字段 end_date - start_date 对 YYYY-MM-DD 报 TYPE_MISMATCH，不能算出整天差"
+  file: "frontend/shared/src/computedField/evaluator.ts"
+  note: |
+    根因：'-' 一律走 toNumber()，日期字符串不是数字。v1 两边都是日历日期时按整天
+    相减（左减右）；并加 DATEDIFF(start, end)（Power Fx：end 减 start）。
+    VALUE() / 通用 toNumber 不变。goldenVectors 双边契约 + DW 预览 Result 1。
+    2026-08-17 续：解析扩到年在前 YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD（月日可 1～2 位）
+    及可选时间后缀（忽略时钟只算整天）。02/06/2026 日月对调仍 TYPE_MISMATCH。
+    2026-08-17 续：Save 类型不匹配提示改为点名要改的列。数字公式写入 VARCHAR 时
+    提示 Change the Data Type of '<field>' to INTEGER or DECIMAL；文本公式写入
+    数值列时提示改 VARCHAR 或改公式。不放松校验。DW 保存 catch 改为读取
+    ApiResponse.error.message（pickHttpErrorBodyMessage），避免只显示 Operation failed。
+    2026-08-17 续：门户 New Request Add Record 对 YYYY-MM-DD 仍 TYPE_MISMATCH，因
+    user-portal-frontend 镜像早于日期差引擎，未打进 date.ts。重建门户前端后
+    startdate=2026-08-16 / enddate=2026-08-18 预览 day=2。
+
+- id: "1526"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: quality
+  summary: "Formula 对话框标题栏增加帮助标记，打开站内计算字段规则页"
+  file: "frontend/developer-workstation/src/views/help/ComputedFieldGuide.vue"
+  note: |
+    标题栏「Formula」右侧问号；悬停显示 http://localhost:3000/dev/help/computed-fields；
+    点击新标签打开。规则页三语，覆盖本行 / 关联行 / table.column / 日期 /
+    函数白名单 / 失败策略 / 关联表不含 parent lookup。Admin 公式对话框未改。
+    截图 frontend/developer-workstation/verification-screenshots/
+    2026-08-17_computed-field-11-dw-formula-help-marker.png 与
+    2026-08-17_computed-field-12-dw-formula-guide-page.png。
+
+- id: "1525"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: quality
+  summary: "子表计算字段可用 table.column 读取主表非计算列"
+  file: "frontend/shared/src/computedField/parser.ts"
+  note: |
+    子表 row 公式 leave_request.name 解析为 field{table,name}，不是聚合。
+    设计期仅允许本 FU 的 MAIN 且目标列非计算列；求值从 MAIN 行 variables 取值。
+    goldenVectors 双边契约；DW 公式对话框样例 Vin；门户需在 Date Info 增加
+    VARCHAR 计算列并 republish 后才能在 Add Record 看到 Vin（已发布快照仍是日期差）。
+
+- id: "1524"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: bug
+  summary: "Table Design 保存计算字段类型不匹配时只显示 Operation failed"
+  file: "frontend/developer-workstation/src/utils/tableSaveComputedField.ts"
+  note: |
+    反例：leave_request.day 为 VARCHAR + SUM(date_info.day)，Save 只出 Operation failed。
+    保存前拦截数字公式写在文本列，三语文案指出改 INTEGER/DECIMAL；后端
+    COMPUTED_FIELD_TYPE_MISMATCH 同样映射该文案。截图
+    frontend/developer-workstation/verification-screenshots/2026-08-17_computed-field-03-save-type-mismatch-toast.png。
+
+- id: "1527"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Admin Function Unit 导入关联表时丢弃 isComputed / computedFieldJson"
+  file: "backend/admin-center/src/main/java/com/admin/component/RelationTableStructureImporter.java"
+  note: |
+    DW RelationTableStructurePortability 会写入公式，Admin 导入只建字段不带
+    isComputed。再导入看起来成功，门户写路径没有 AST 可算。buildFields 现在
+    持久化公式 JSON；isComputed 但无可用 JSON 抛 COMPUTED_FIELD_IMPORT_INVALID。
+    单测 RelationTableStructureImporterComputedFieldTest 2/2。
+
+- id: "1528"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "计算字段写路径跳过损坏定义并保留客户端提交值"
+  file: "backend/user-portal/src/main/java/com/portal/component/ComputedFieldRowEvaluation.java"
+  note: |
+    toMeta 空定义 / 无 AST 曾 warn+return null；parseJsonMap 不可读 JSON 曾
+    当空 map；resolveFunctionUnitId 吞掉 PortalException 后整单跳过重算。
+    现改为抛 COMPUTED_FIELD_DEFINITION_INVALID；FU 解析失败向上抛。
+    ComputedFieldRecalculatorTest Errors 7、RelationTableComputedFieldRecalculatorTest
+    Errors 含 unusableDefinitionBlocksWrite。
+
+- id: "1529"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Admin multipart ZIP 导入把 BPMN 当 ZIP 内容，关联表计算字段整包丢失"
+  file: "backend/admin-center/src/main/java/com/admin/controller/FunctionUnitImportController.java"
+  note: |
+    POST /function-units-import/import 把 ZIP 里抽出的 BPMN 文本放进 fileContent，
+    而 fileName 仍以 .zip 结尾。parseBase64Zip 失败后走 legacy，relationTables=[]。
+    JSON 路径 POST /function-units/import 已走 PackageParser。现改为把 ZIP 字节
+    Base64 交给 importFunctionPackage；损坏的 relation_tables.json 抛 IOException。
+    导出/克隆同步 fail-closed：公式缺失分别抛 COMPUTED_FIELD_EXPORT_INVALID /
+    COMPUTED_FIELD_CLONE_INVALID；导入接受 Map 或 JSON 字符串。
+    parseZipFile 只读 manifest / connections / email-monitors，不再解析
+    forms、actions、BPMN、email-templates。
+    FunctionUnitImportControllerMultipartTest 断言 fileContent 解码后是 ZIP 魔数，
+    且 relation_tables.json 含 isComputed，而不是 BPMN 全文。
+    单测 FunctionUnitPackageParserRelationTableTest、
+    FunctionUnitComputedFieldPortabilityTest、FunctionUnitCloneFieldMetadataTest。
+
+- id: "1530"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "Portal 预览对损坏计算字段 JSON 跳过并保留陈旧值"
+  file: "frontend/user-portal/src/utils/computedFieldRuntime.ts"
+  note: |
+    isComputed 但公式 JSON 不可用时 collectComputedColumns 曾跳过该列，预览
+    留下上次值。现记 parseError=COMPUTED_FIELD_DEFINITION_INVALID，preview
+    写入 errors，界面走 #ERR。computedFieldRuntime.test.ts 覆盖。
+
+- id: "1531"
+  status: open
+  severity: minor
+  category: quality
+  summary: "Form Business Rules 为未交付的半成品脚手架：DW 无编辑器入口、Portal config prop 无人传入、mathjs 运行时不可达（技术债，非线上缺陷）"
+  file: "frontend/user-portal/src/components/FormRenderer.vue"
+  note: |
+    原拟编号 #1519，但该 id 已被 PR #106（form-below-table Events）占用，故改为 #1531。
+    发现于计算字段特性开发（批次 4 范围确认）时的旁路审查。**不是线上缺陷**——
+    该能力从未上线，用户配不出、数据里没有、运行时也跑不到。仅作技术债留档。
+    三层证据：
+      1) DW 无入口：formBusinessLogicTypes.ts 里 FormulaRule / RowFormulaRule /
+         LinkageRule / CrossFieldRule / SummaryRule 无任何组件 import（只有
+         ConditionExpression / ValidationRule / SubTableValidationConfig 被
+         ActionDesigner / ValidationRuleList / ConditionBuilder 等实际使用）；
+         i18n 里 `// FormulaEditor` `// RowFormulaEditor` 段落的文案没有对应组件。
+      2) Portal 无传参：FormRenderer 声明 config?: FormBusinessLogicConfig（L116），
+         useFormData 的 config()（L247/270/277/285）驱动 BusinessLogicEngine、
+         getSubFormRowFormulas、summaryRules、子表校验——但全仓没有任何调用方给
+         FormRenderer 传 :config（唯一 :config= 是 RecordNote 的 _recordNote；
+         三个视图传的 :form-config 是另一个 prop；portal src 内无 v-bind 展开）。
+         故上述四类规则同时恒为 undefined，evaluateFormula / mathjs 仅单测触达。
+      3) 数据为空：dev 库 dw_form_definitions 共 20 条，config_json 含
+         formulas / rowFormulas / summaryRules / linkages / crossFieldRules 的
+         各为 0 条（2026-08-17 实测）。
+    唯一理论产生路径：useAiTemplates.ts L30 的 dataEntry 模板 prompt 要求 AI 生成
+    formulas / linkages / summaryRules，而 AiWriteServiceImpl L407-430 把 configJson
+    整体持久化，故 AI 有可能写入这些字段并被静默忽略。实测未发生。
+    处置：日后若真要做表单业务规则，作为新特性单独立项（届时应直接采用
+    frontend/shared/src/computedField 共享 AST 引擎，不要复活 mathjs）；
+    或反向清理脚手架（删 businessLogicEngine 死代码 + 卸 mathjs + 清 i18n 文案）。
+    与计算字段特性无关，不阻塞其交付。
+
+- id: "1532"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: minor
+  category: quality
+  summary: "Email Monitor IMAP/配置失败只 warn 且每 30s 重打邮箱，无有界退避"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorScheduler.java"
+  note: |
+    Confluence Email Monitor 运维对齐（不引入 Kafka/POP3/审批状态机）。
+    失败不推进 lastSyncCursor；指数退避（pollInterval × 2^(n-1)，上限 15min）；
+    ERROR 日志含 ruleId / consecutiveFailures / retryAfter，不含密码。
+    单测 EmailMonitorPollBackoffTest、EmailMonitorSchedulerTest。
+
+- id: "1533"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: architecture
+  summary: "AUDITOR 从 ADMIN 类型拆出；Admin Center 只读，纯 Auditor 进 DW 直接 403"
+  file: "backend/admin-center/src/main/java/com/admin/config/OrganizationMutationAccessInterceptor.java"
+  note: |
+    原 AUDITOR 角色 type=ADMIN，DW 把任意 ADMIN 类型当全权。现独立 type=AUDITOR。
+    Admin Center：读组织/虚拟组；写 org/VG/approver/exit 403；前端隐藏创建/编辑/删除。
+    DW 后端只读授权保留（SYS_ADMIN 全写、AUDITOR 全局 VIEW、canModify fail-closed），
+    以便日后若允许 Auditor 进设计器可直接复用。前端不把 AUDITOR 加入 requiredRoles；
+    纯 AUDITOR（无 SYS_ADMIN/TECH_LEAD/TEAM_LEAD/DEVELOPER）进 DW 跳 /403。
+    叠加 DEVELOPER 仍可进工作区，写范围仍按团队。
+    验证：Java auditor 相关单测通过；admin-center/DW vitest 通过；compose 重建健康。
+    截图：admin-center .../2026-08-17_auditor-organization-read-only.png、
+    .../2026-08-17_auditor-virtual-group-read-only.png；
+    DW .../2026-08-17_auditor-function-units-read-only.png（403）。
+    测试账号 username=auditor，绑定 vg-auditors（口令不写入仓库）。
+    未做：users/BI RBAC 写路径、exit userId 归属校验、User Portal。
+    编号说明：common 已占用 #1520，本条在合并后记为 #1533。
+
+- id: "1534"
+  status: fixed
+  fixed_at: "2026-08-18"
+  severity: major
+  category: bug
+  summary: "Admin IMAP 配好仍无法用邮件创建流程：引擎无 enabled 规则且跳过无日志"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorScheduler.java; backend/developer-workstation/src/main/java/com/developer/component/impl/EmailMonitorRuleComponentImpl.java"
+  note: |
+    根因：DW 仅有未绑定 Start Event 的模板，MCY 未 Deploy 到 Admin，sys_email_monitor_rules=0；
+    连接 disabled 且无密码；imap.host 为空。引擎空规则 poll 完全静默。
+    修复：空规则节流 WARN；过滤/REVIEW/FAILED 打日志；Deploy 时每个已启用模板都必须有 Start Event 绑定；
+    连接须启用、方向 INBOUND，且有邮箱密码（OAuth token 不足）。
+    编号说明：远端已占用 #1533（AUDITOR），本条记为 #1534。
+
+- id: "1535"
+  status: fixed
+  fixed_at: "2026-08-18"
+  severity: major
+  category: bug
+  summary: "家用 QQ IMAP 可 monitor，公司内网邮箱被 SSRF/无 STARTTLS 拦住无法建 case"
+  file: "backend/admin-center/src/main/java/com/admin/component/SystemImapConfigResolver.java; backend/developer-workstation/src/main/java/com/developer/component/impl/EmailConnectionComponentImpl.java; backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/ImapInboundMailClient.java"
+  note: |
+    发送在公司内网正常、Monitor 不能建 case：SMTP 已有 ssl.trust / STARTTLS，
+    IMAP 没有，内网 CA 或 CN 不匹配会在握手失败。引擎 poll 还受 Admin imap.host SSRF 拦截。
+    修复：IMAP 会话属性与 SMTP 对齐（ssl.trust、STARTTLS required、同一 SMTP_SSL_* env）；
+    Admin SMTP/IMAP 共用 SystemMailHostValidator（允许已配置内网主机，拒绝 loopback/metadata）；
+    DW inbound 不再二次套 SMTP SSRF。
+    验证：ImapTransportPropertiesTest 与 SMTP trust 对齐；GreenMail IMAPS 自签证书
+    先打基线再收取新信；SystemMailHostValidatorTest / Scheduler 使用 live Admin IMAP 主机。
+
+- id: "1536"
+  status: fixed
+  fixed_at: "2026-08-19"
+  severity: minor
+  category: quality
+  summary: "Email Monitors 无入站连接提示仍写 Both，与 INBOUND-only 选择器不一致"
+  file: "frontend/developer-workstation/src/i18n/locales/en.ts; frontend/developer-workstation/src/i18n/locales/zh-CN.ts; frontend/developer-workstation/src/i18n/locales/zh-TW.ts"
+  note: |
+    三语改为只提示 Inbound。en: "No inbound connection yet. In Connections, set a
+    connection Direction to Inbound first." zh-CN/zh-TW 对应「入站」无「双向」。
+    截图：FU 48 Demo QQ Mailbox（BOTH）时 warning 不含 Both，下拉为空。
+    路径：frontend/developer-workstation/verification-screenshots/2026-08-19_email-monitor-inbound-03-no-inbound-warning.png
+
+- id: "1537"
+  status: fixed
+  fixed_at: "2026-08-19"
+  severity: major
+  category: bug
+  summary: "Portal New Request 列出用户全部业务角色可发起的 FU，未按右上角当前工作台 Role 过滤"
+  file: "backend/user-portal/src/main/java/com/portal/component/FunctionUnitAccessComponent.java"
+  note: |
+    根因：filterAccessibleFunctionUnits 用 profileContext=PORTAL 拉用户全部 UBR 角色并集，
+    不读 JWT activeRoleId。多 BU/Role 用户切工作台后仍看到其他 Role 的 FU。
+    修复：有 activeRoleId 时只匹配该 Role 的 id+code；无工作台上下文仍回退全部门户角色。
+    canAccessFunctionUnit / My Requests / Views 未改。
+    验证：FunctionUnitAccessComponentTest + FunctionUnitAccessProperties pass；
+    mvn -pl backend/user-portal -am package -DskipTests；compose rebuild user-portal。
+
+- id: "1538"
+  status: fixed
+  fixed_at: "2026-08-20"
+  severity: major
+  category: bug
+  summary: "Global 动作在节点已有 actionIds 时被 BpmnActionParser 丢弃，Portal 待办不显示 SAVE"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/BpmnActionParser.java"
+  note: |
+    根因：extractActionIds 把 process 级 globalActionIds 当成节点动作缺失时的 fallback，
+    节点 actionIds 非空就立刻 return。MCY 节点 [1223] + Global SAVE [1225] 只返回 [1223]；
+    Guide Unit 无节点动作才会 fallback 到 Global。
+    修复：节点动作与 Global 按来源独立读取后去重合并（节点在前，Global 在后）。
+    验证：BpmnActionParserTest + BpmnActionParserMergeTest + BpmnActionParserMergePropertyTest
+    共 20 tests pass（含 XML/模型合并、兄弟节点隔离、模型优先于 XML、异常回退、
+    jqwik 80–100 tries 的 merge/XML/parse 不变量）。
+
+- id: "1539"
+  status: fixed
+  fixed_at: "2026-08-17"
+  severity: major
+  category: bug
+  summary: "__subTables__ 行可无任何身份键落库，读侧无法区分两行只能靠内容哈希（会误并两行）"
+  file: "backend/user-portal/src/main/java/com/portal/entity/ProcessInstance.java"
+  note: |
+    只有声明了自增主键的子表才由 ProcessSubTablePrimaryKeyEnricherComponent 发号；
+    未声明主键的子表、邮件触发发起、引擎回灌的行都可能匿名落库（dev 实测 1 行有完整业务
+    数据却无任何身份键）。读侧（审计 diff、MTV SUB 展开去重）此时只剩内容哈希一条路，
+    而两行业务值相同就会被误并成一行。
+    修复：身份键清单与优先级收敛到 platform-common 的 SubTableRowIdentity（row_id / rowId /
+    rowID / id_idw / _rowKey / rowKey / id，大小写不敏感，空白视同缺失）；
+    ProcessInstance 的 @PrePersist/@PreUpdate 调 SubTableRowIdentityEnricher 给无身份的行补
+    row_id（已有身份一律不覆盖，设计器主键优先）——写入路径众多，实体回调是它们唯一的汇合点。
+    存量由 deploy/init-scripts/00-schema/67-backfill-subtable-row-id.sql 回填（幂等）。
+    验证：单测 SubTableRowIdentityTest / SubTableRowIdentityEnricherTest /
+    ProcessInstanceSubTableRowIdentityTest + user-portal 全量 1065 项；
+    dev 回填 1→0 行且二次运行 0 更新；运行时经 /tasks/{id}/submit 提交无身份行后读回带 row_id。
+    编号说明：0731 已占用 #1538（Global 动作合并），本条在 Views PR 记为 #1539。
+
+- id: "1540"
+  status: open
+  severity: minor
+  category: quality
+  summary: "Views CSV export: FE comment says unpaged but body still sends page size; BE overrides with maxRows — clarify contract"

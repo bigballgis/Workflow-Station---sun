@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { TOKEN_KEY, getUser } from './auth'
+import { getUser } from './auth'
 
 const workstationAuthAxios = axios.create({
   baseURL: '/api/v1/auth',

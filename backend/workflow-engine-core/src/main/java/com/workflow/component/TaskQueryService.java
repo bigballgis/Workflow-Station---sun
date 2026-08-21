@@ -101,9 +101,9 @@ public class TaskQueryService {
                 ? uniqueTasks.subList(start, end)
                 : Collections.emptyList();
 
-            taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
+            Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
             List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
-                .map(taskInfoAssembler::convertFlowableTaskToTaskInfo)
+                .map(t -> taskInfoAssembler.convertFlowableTaskToTaskInfo(t, startUsers))
                 .toList();
 
             int totalPages = (int) Math.ceil((double) totalCount / size);
@@ -221,9 +221,9 @@ public class TaskQueryService {
                 ? uniqueTasks.subList(start, end)
                 : Collections.emptyList();
 
-            taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
+            Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
             List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
-                .map(taskInfoAssembler::convertFlowableTaskToTaskInfo)
+                .map(t -> taskInfoAssembler.convertFlowableTaskToTaskInfo(t, startUsers))
                 .toList();
 
             int totalPages = (int) Math.ceil((double) totalCount / size);

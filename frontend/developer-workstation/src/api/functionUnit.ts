@@ -104,6 +104,8 @@ export interface FunctionUnit {
   formDefinitions?: FormDefinition[]
   actionDefinitions?: ActionDefinition[]
   processDefinition?: ProcessDefinition
+  /** Backend resource-level write flag. Missing means not writable. */
+  canModify?: boolean
 }
 
 export interface FunctionUnitResponse {
@@ -121,6 +123,8 @@ export interface FunctionUnitResponse {
   formCount: number
   actionCount: number
   hasProcess: boolean
+  /** Backend resource-level write flag. Missing means not writable. */
+  canModify?: boolean
 }
 
 export interface FunctionUnitRequest {
@@ -169,6 +173,9 @@ export interface FieldDefinition {
   pkGenerationJson?: Record<string, unknown>
   fkDisplayMode?: 'readonly' | 'hidden'
   relationCardinality?: string
+  isComputed?: boolean
+  computedField?: Record<string, unknown>
+  computedFieldJson?: Record<string, unknown>
 }
 
 export type FormType = 'PROCESS' | 'TASK' | 'ACTION' | 'DETAIL'

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -51,6 +52,11 @@ class RelationTableStructureServiceTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
+
+    // Real instance rather than a mock: these tests save plain columns, so they should also prove
+    // that computed-field validation stays a no-op for tables that use no formulas.
+    @Spy
+    private RelationComputedFieldValidator computedFieldValidator = new RelationComputedFieldValidator();
 
     @InjectMocks
     private RelationTableStructureServiceImpl service;

@@ -1,5 +1,19 @@
 # Vendor 树裁剪遗留 checklist（HERMES-PATCH-011 / 012 / 013）
 
+> ## ⚠️ 归档：本文描述 0.84 方案，其源码树已删除
+>
+> 本文的对象是仓库根的 `activepieces/`（Activepieces 0.84.0 硬分叉）。**该目录已于 2026-08-14
+> 删除**——0.88 重构（`automation/`）交付并验证后，它作为参考实现的使命结束。凡本文写成
+> `activepieces/...` 的路径，**在工作树里都已不存在**；要看当年的源码走 git 历史：
+> `git show de4f6469:activepieces/<path>`（0.84 vendor 基线）、
+> `git checkout de4f6469 -- activepieces/<dir>`（取整目录），
+> 或 `git show 4635f7950:activepieces/<path>`（删除前最后一个提交）。
+>
+> **现行真源：`automation/hermes/TRIM_LOG.md` 与 `automation/hermes/TRIM_LOG.web.md`；不变量守卫在 `automation/hermes/check-tsconfig-paths.mjs`（CI: `.github/workflows/vendor-trim-check.yml`）**
+>
+> 本文**不逐句改写**，作为决策依据的历史记录原样保留。
+
+
 > 2026-07-28 建。三个 patch 的内容见 [HERMES_PATCHES.md](HERMES_PATCHES.md#清单)。
 > **2026-08-07（[D13](DECISIONS.md#d13)）**：`trim-vendor-pieces.mjs` 已删除 —— 裁剪结果就是树的状态，
 > `packages/pieces/{core,custom}` 一并删除；它的 tsconfig 不变量拆成

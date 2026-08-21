@@ -16,7 +16,8 @@
     "lint:fix": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:regression:mi": "vitest run --config vitest.mi-regression.config.ts"
+    "test:regression:mi": "vitest run --config vitest.mi-regression.config.ts",
+    "vectors:build": "vitest run src/components/businessLogicEngine/__tests__/computedFieldVectorsCompile.spec.ts -u"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.0",

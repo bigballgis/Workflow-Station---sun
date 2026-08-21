@@ -27,7 +27,11 @@ export default defineConfig({
       // Cross-app shared TS sources (frontend/shared/src) — single source for logic that
       // must stay identical across portal/DW/admin (tableFkRuntime, pkGenerationConfig, ...).
       '@platform-shared': resolve(__dirname, '../shared/src')
-    }
+    },
+    // frontend/shared is not a package: bare imports inside its SFCs (vue-i18n, element-plus
+    // icons) cannot node-resolve upward from there. Dedupe pins them to this app's copy
+    // (plugin-vue already does this for 'vue' itself).
+    dedupe: ['vue', 'vue-i18n', 'element-plus', '@element-plus/icons-vue']
   },
   // sockjs-client (pulled in by the STOMP/WebSocket client) is CommonJS written for a Node/webpack
   // world and dereferences the bare identifier `global` at module load. `vite build` shims it, the

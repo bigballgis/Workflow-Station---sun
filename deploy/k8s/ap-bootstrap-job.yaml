@@ -202,12 +202,8 @@ spec:
               name: workflow-platform-config
               key: ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID
               optional: true
-        - name: ACTIVEPIECES_MANAGED_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: workflow-platform-config
-              key: ACTIVEPIECES_MANAGED_ENABLED
-              optional: true
+        # ACTIVEPIECES_MANAGED_ENABLED 已删除:managed-authn 是 AP 身份的唯一路径,
+        # 没有开关也没有回退,故这里不再注入(注入也没人读)。
         volumeMounts:
         - name: script
           mountPath: /scripts

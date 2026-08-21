@@ -82,5 +82,14 @@ public class CreateRelationTableRequest {
 
         /** LOOKUP field configuration; only meaningful when dataType == LOOKUP. */
         private Map<String, Object> lookupConfig;
+
+        /** Whether this column is derived from a formula instead of user input. */
+        private Boolean isComputed;
+
+        /**
+         * Computed field definition: version, scope, source text, compiled AST, dependsOn, onError.
+         * Validated by {@code RelationComputedFieldValidator} before persisting.
+         */
+        private Map<String, Object> computedField;
     }
 }

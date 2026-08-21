@@ -7,6 +7,15 @@ export interface PreviewSubTableBinding {
   tableName: string
   tableType: string
   tableDescription: string
+  /**
+   * 以下四项直通 SubTableField 的 `config`（见 FormPreviewItems.vue），是子表 FK/PK
+   * 运行时解析外键与字段元数据的输入。缺任意一项，保存态预览里的子表就拿不到外键上下文。
+   * 与 SubTableConfig（composables/designerSubTableField/types.ts）同名同义。
+   */
+  tableId?: number
+  fieldDefinitions?: unknown[]
+  bindingLinkMode?: string
+  bindingForeignKeyField?: string | null
   rule: any[]
   option?: any
   columns: any[]

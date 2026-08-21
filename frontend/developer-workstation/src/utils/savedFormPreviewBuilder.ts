@@ -270,6 +270,14 @@ function buildBindingMap(
       tableName: getTableName(tables, b.tableId, b.tableName),
       tableType: tables.find(tb => tb.id === b.tableId)?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: tables.find(tb => tb.id === b.tableId)?.description || '',
+      // FormPreviewItems 把这四个原样塞进 SubTableField 的 config（FK/PK 运行时靠它们解析
+      // 外键与字段元数据）。此处原本没有填，四个值在保存态预览里恒为 undefined —— 类型检查
+      // 一直在报（TS2339/TS2551），但 `npm run build` 是纯 vite build 不过 vue-tsc，所以没人看见。
+      // 取值方式与设计器实时预览路径 composables/formDesigner/useFormPreviewBuild.ts 保持一致。
+      tableId: b.tableId,
+      fieldDefinitions: tables.find(tb => tb.id === b.tableId)?.fieldDefinitions || [],
+      bindingLinkMode: b.bindingLinkMode,
+      bindingForeignKeyField: b.foreignKeyField,
       rule,
       option: subOpt,
       columns,

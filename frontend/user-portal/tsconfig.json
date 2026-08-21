@@ -18,10 +18,20 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@platform-shared/*": ["../shared/src/*"]
+      "@platform-shared/*": ["../shared/src/*"],
+      "vue": ["node_modules/vue"],
+      "vue-i18n": ["node_modules/vue-i18n"],
+      "element-plus": ["node_modules/element-plus"],
+      "@element-plus/icons-vue": ["node_modules/@element-plus/icons-vue"]
     },
     "types": ["vite/client", "node"]
   },
-  "include": ["../shared/src/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],
+  "include": [
+    "../shared/src/**/*.ts",
+    "../shared/src/**/*.vue",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

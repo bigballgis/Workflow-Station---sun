@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
 /**
  * Property 1: Role Type Validation for Virtual Group Binding
  * *For any* role binding operation to a Virtual_Group, the system shall accept only roles 
- * with type BU_BOUNDED or BU_UNBOUNDED, and reject any role with type ADMIN or DEVELOPER.
+ * with type BU_BOUNDED or BU_UNBOUNDED, and reject any role with type ADMIN, AUDITOR or DEVELOPER.
  * 
  * Property 2: Single Role Per Virtual Group
  * *For any* Virtual_Group, the system shall ensure that at most one role is bound at any time.

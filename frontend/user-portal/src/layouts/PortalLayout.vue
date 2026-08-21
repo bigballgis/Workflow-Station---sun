@@ -161,7 +161,8 @@
               :key="fu.functionUnitCode"
               :index="`/views/${fu.functionUnitCode}`"
             >
-              {{ fu.functionUnitName }}
+              <FunctionUnitMenuIcon :icon-svg="fu.iconSvg" />
+              <span>{{ fu.functionUnitName }}</span>
             </el-menu-item>
             <el-menu-item
               v-if="!viewFuLoading && viewFunctionUnits.length === 0"
@@ -288,6 +289,7 @@ import { usePendingTaskStore } from '@/stores/pendingTask'
 import { mainTableViewApi, type FunctionUnitViewMenuItem } from '@/api/mainTableView'
 import { processApi, type AuditFunctionUnit } from '@/api/process'
 import { relationTableApi } from '@/api/relationTable'
+import FunctionUnitMenuIcon from '@/components/mainTableView/FunctionUnitMenuIcon.vue'
 
 const { t } = useI18n()
 const route = useRoute()

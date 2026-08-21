@@ -28,7 +28,7 @@ alwaysApply: false
 prepareSubTableAddRow（deferPkAllocationUntilSave: true）
   → filterStructuralFkMetasForBinding
   → 跳过 guard 阻断 + 跳过 ensureParentRowsForChildAdd   // 主表空也允许开对话框
-  → applyFkPresentationToDialogColumns（auto-PK readonly；prefixedSequence/uuid 降级 text）
+  → applyFkPresentationToDialogColumns（auto-PK readonly；pkStrategyAllocatesString 的 number 列降级 text）
   → buildInitialRow
   → applyFkToInitialRow（仅父行已有 PK 时填 FK）
   → applyMiParticipantRowSeedToInitialRow（仅 miParticipantRowId 存在时）
@@ -459,7 +459,7 @@ FormRenderer.handleInlineFormSave → detail.saveCurrentTaskFormWithMiPersist
 - [ ] Portal 子表 Add 是否 **`deferPkAllocationUntilSave: true`**？PK 仅 **`finalizeSubTableRowOnSave`**？
 - [ ] Save 顺序：主表 PK → FK → 子表 PK？`primaryFormDataPatch` 是否回写主表单？
 - [ ] `miParticipantRow` 跳过 allocate 是否**仅**在 `miParticipantRowId` 存在时？
-- [ ] `applyFkPresentationToDialogColumns` 是否将 prefixedSequence/uuid 的 number 列降级 text？
+- [ ] `applyFkPresentationToDialogColumns` 是否将 `pkStrategyAllocatesString`（uuid / prefixedSequence / daily|monthlyDateSequence / customFormat）的 number 列降级 text？
 - [ ] `buildRules` 是否跳过 readonly 列 required？
 - [ ] Save 是否 **`mergeFormRowWithSeed`**（非 spread）？
 - [ ] 行数据 key 是否用 **`fieldName`**（`id_idw`），非 displayName（`id`）？

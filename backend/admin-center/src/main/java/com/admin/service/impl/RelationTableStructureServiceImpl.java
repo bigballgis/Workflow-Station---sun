@@ -12,6 +12,7 @@ import com.admin.exception.RelationTableNotFoundException;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.service.RelationComputedFieldValidator;
 import com.admin.service.RelationTableStructureService;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
@@ -39,6 +40,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
     private final RelationTableDefinitionRepository tableDefinitionRepository;
     private final RelationFieldDefinitionRepository fieldDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
+    private final RelationComputedFieldValidator computedFieldValidator;
     private final JdbcTemplate jdbcTemplate;
 
     @Override
@@ -82,6 +84,9 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         .refPrimaryKeyFields(fieldReq.getRefPrimaryKeyFields())
                         .fkDisplayMode(fieldReq.getFkDisplayMode() != null ? fieldReq.getFkDisplayMode() : "readonly")
                         .lookupConfig(fieldReq.getLookupConfig())
+                        .isComputed(Boolean.TRUE.equals(fieldReq.getIsComputed()))
+                        .computedFieldJson(Boolean.TRUE.equals(fieldReq.getIsComputed())
+                                ? fieldReq.getComputedField() : null)
                         .sortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i)
                         .build();
                 fieldDefinitions.add(field);
@@ -127,6 +132,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                     .build());
         }
 
+        validateComputedFields(fieldDefinitions);
         tableDefinition.setFieldDefinitions(fieldDefinitions);
 
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
@@ -334,6 +340,18 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                 // LOOKUP config: keep only for LOOKUP columns, clear when switched away.
                 existing.setLookupConfig(
                         RelationDataType.LOOKUP.equals(existing.getDataType()) ? fieldReq.getLookupConfig() : null);
+                if (fieldReq.getIsComputed() != null) {
+                    existing.setIsComputed(fieldReq.getIsComputed());
+                }
+                // Formula and flag move together: clearing the flag must not leave a stale formula
+                // behind for the recalculator to find.
+                if (Boolean.TRUE.equals(existing.getIsComputed())) {
+                    if (fieldReq.getComputedField() != null) {
+                        existing.setComputedFieldJson(fieldReq.getComputedField());
+                    }
+                } else {
+                    existing.setComputedFieldJson(null);
+                }
                 existing.setSortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i);
                 updatedFields.add(existing);
             } else {
@@ -355,15 +373,49 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         .refPrimaryKeyFields(fieldReq.getRefPrimaryKeyFields())
                         .fkDisplayMode(fieldReq.getFkDisplayMode() != null ? fieldReq.getFkDisplayMode() : "readonly")
                         .lookupConfig(fieldReq.getLookupConfig())
+                        .isComputed(Boolean.TRUE.equals(fieldReq.getIsComputed()))
+                        .computedFieldJson(Boolean.TRUE.equals(fieldReq.getIsComputed())
+                                ? fieldReq.getComputedField() : null)
                         .sortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i)
                         .build();
                 updatedFields.add(newField);
             }
         }
 
+        validateComputedFields(updatedFields);
+
         // 使用 orphanRemoval 自动删除不在新列表中的字段
         tableDefinition.getFieldDefinitions().clear();
         tableDefinition.getFieldDefinitions().addAll(updatedFields);
+    }
+
+    /**
+     * Validates the computed fields of a table structure that is about to be persisted.
+     *
+     * <p>Runs against the merged entity list rather than the request, because an update request is
+     * a partial patch: a column whose data type is untouched arrives as null, and validating that
+     * would compare the formula's result against nothing.
+     */
+    private void validateComputedFields(List<RelationFieldDefinition> fields) {
+        if (fields == null || fields.isEmpty()) {
+            return;
+        }
+        List<RelationComputedFieldValidator.IncomingField> incoming = new ArrayList<>(fields.size());
+        for (RelationFieldDefinition field : fields) {
+            if (field == null) {
+                continue;
+            }
+            incoming.add(new RelationComputedFieldValidator.IncomingField(
+                    field.getFieldName(),
+                    field.getDataType(),
+                    field.getIsComputed(),
+                    field.getComputedFieldJson(),
+                    field.getIsPrimaryKey(),
+                    field.getIsForeignKey(),
+                    field.getDefaultValue(),
+                    field.getPkGenerationJson()));
+        }
+        computedFieldValidator.validateIncomingFields(incoming);
     }
 
     /**

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import type { FieldDefinition, TableBinding, BindingType } from '@/api/functionUnit'
+import type { BindingType } from '@/api/functionUnit'
 
 /**
  * Property 4: Field import from multiple tables

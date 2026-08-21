@@ -98,9 +98,10 @@ public class DeveloperPermissionChecker {
         if (permissions.contains(FUNCTION_UNIT_VIEW_CODE)) {
             return;
         }
-        if (workspaceAccessService.isMemberOfAnyDevTeam(userId)) {
+        if (workspaceAccessService.canSeeAllGroups(userId)
+                || workspaceAccessService.isMemberOfAnyDevTeam(userId)) {
             permissions.add(FUNCTION_UNIT_VIEW_CODE);
-            log.info("Granted read-only {} to dev-team member user {}", FUNCTION_UNIT_VIEW_CODE, userId);
+            log.info("Granted read-only {} to global-view or team-member user {}", FUNCTION_UNIT_VIEW_CODE, userId);
         }
     }
     

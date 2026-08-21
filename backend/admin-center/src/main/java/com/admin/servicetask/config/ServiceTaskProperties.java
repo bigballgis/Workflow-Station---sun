@@ -6,8 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Activepieces 集成配置。
  *
- * <p>方案：社区版 + 网关共享账号。生产仅作 runtime（不开 UI 登录），非生产经边缘网关 :8085
- * 的「共享账号登录桥」进入 AP。本配置仅服务端使用（用共享账号调 AP sign-in 换取 AP token）。
+ * <p>方案：社区版 + 网关登录桥。生产仅作 runtime（不开 UI 登录），非生产经边缘网关 :8085
+ * 进入 AP。<b>身份一律 per-user</b>：服务端按当前操作人签发 managed 外部 token 换 AP 会话
+ * （共享账号已移除），私钥仅服务端持有。
  */
 @ConfigurationProperties(prefix = "service-task")
 @Data
@@ -15,12 +16,11 @@ public class ServiceTaskProperties {
 
     /**
      * AP 服务的服务端可达地址（容器内网，例如 {@code http://activepieces:80}）。
-     * 仅用于服务端 sign-in 调用，浏览器永远经 :8085 网关，不直连此地址。
+     * 仅用于服务端调用，浏览器永远经 :8085 网关，不直连此地址。
      */
     private String internalUrl = "http://localhost:8086";
 
     private Bridge bridge = new Bridge();
-    private SharedAccount sharedAccount = new SharedAccount();
     private Managed managed = new Managed();
 
     /**
@@ -46,31 +46,19 @@ public class ServiceTaskProperties {
     }
 
     /**
-     * AP 共享服务账号（platformRole=ADMIN，例如 {@code hermes-svc@platform.local}）。
-     * 服务端持有，浏览器永不接触其口令——只拿到换来的 AP token。
-     */
-    @Data
-    public static class SharedAccount {
-        private String email;
-        private String password;
-    }
-
-    /**
-     * Per-user provisioning（审计到人）配置。开启后登录桥 {@code /launch} 不再用共享账号，
-     * 改为按当前 DW 用户签发 AP 外部 token（RS256），换取<b>该用户专属</b>的 AP token——
-     * AP 侧 {@code user.externalId = DW userId}，每一步 AP 操作天然映射回发起的 DW 人。
+     * Per-user provisioning（审计到人）配置——<b>AP 身份的唯一路径</b>（没有开关，没有回退）。
+     * 按当前操作人签发 AP 外部 token（RS256），换取<b>该用户专属</b>的 AP token——
+     * AP 侧 {@code user.externalId = 平台 userId}，每一步 AP 操作天然映射回发起人。
      *
      * <p>依赖 AP 的 {@code /v1/managed-authn/external-token} 端点（vendored CE 重写）。
      * 签名私钥来自一次性 {@code POST /v1/signing-keys}（平台 admin），其 {@code id} 作为 JWT
      * header 的 {@code kid}，AP 据此查 publicKey 验签。私钥仅 HERMES 持有（secret），浏览器永不接触。
      *
-     * <p>{@code enabled=false}（默认）时桥回退到共享账号模式，不回归既有行为。
+     * <p><b>未配置</b>（signing-key-id / private-key 为空）时，任何 AP 操作在调用点
+     * fail-loud 抛 {@code ACTIVEPIECES_API_ERROR}，而不是悄悄换一个别的身份继续。
      */
     @Data
     public static class Managed {
-        /** 开启 per-user 外部 token 模式；关闭则登录桥 {@code /launch} 回退共享账号。 */
-        private boolean enabled = false;
-
         /** AP 签名密钥 id（{@code POST /v1/signing-keys} 返回的 id），作为外部 token 的 {@code kid}。 */
         private String signingKeyId;
 
@@ -80,8 +68,14 @@ public class ServiceTaskProperties {
         /**
          * 共享 project 的外部 id（{@code externalProjectId}）。所有 per-user 会话绑定到这一个
          * 共享 project（Q4a 共享-project 模型），AP 首次见到时按此 id getOrCreate。
+         *
+         * <p><b>默认值必须与运维侧 stamp 的值一致</b>：`ap-provision-db.js`、
+         * `ap-verify-provisioning.js`、`build-and-deploy.ps1` 与 PROD_WIRING_RUNBOOK 全部用
+         * {@code hermes-main}。此处曾是 {@code hermes-shared}——因为 managed 以前默认关闭，
+         * 这个默认值从不生效；去掉开关后它就成了活的，取错值会让 AP 对<b>每个用户各建一个
+         * project</b>（getOrCreate 找不到就新建），侧栏出现重名 project。
          */
-        private String projectExternalId = "hermes-shared";
+        private String projectExternalId = "hermes-main";
 
         /** 外部 token 有效期（秒），短时——仅用于换取 AP token 的一次握手。 */
         private int tokenTtlSeconds = 120;

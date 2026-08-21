@@ -39,7 +39,7 @@ import java.util.Optional;
 /**
  * flow 迁移实现。读走共库 SQL（与 {@link AutomationPieceServiceImpl} 同模式:
  * 列名为 TypeORM 生成的 camelCase 引号标识符,SQL 全静态、参数绑定）；
- * 写一律经 AP API（共享账号会话）,不直写 AP 表。
+ * 写一律经 AP API（按当前操作人换取的会话,见 ServiceTaskApiClient#signInAsCurrentActor）,不直写 AP 表。
  *
  * <p>迁移键 {@code hermesFlowKey} 放 flow.metadata（jsonb）:AP 的 REST 创建
  * 接口不接受 externalId,而 metadata 是 CreateFlowRequest 的一等字段——
@@ -87,10 +87,13 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             ORDER BY updated DESC
             """;
 
-    private static final String RESOLVE_BY_ID_SQL = "SELECT id FROM flow WHERE id = ?";
+    /** 解析同时带出发布态（FR-C05：未发布的 flow 对部署期 resolve 按 404 处理） */
+    private static final String RESOLVE_BY_ID_SQL =
+            "SELECT id, (\"publishedVersionId\" IS NOT NULL) AS published FROM flow WHERE id = ?";
 
     private static final String RESOLVE_BY_KEY_SQL = """
-            SELECT id FROM flow WHERE metadata->>'hermesFlowKey' = ?
+            SELECT id, ("publishedVersionId" IS NOT NULL) AS published
+            FROM flow WHERE metadata->>'hermesFlowKey' = ?
             ORDER BY updated DESC LIMIT 1
             """;
 
@@ -213,12 +216,12 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
 
     @Override
     public Optional<FlowExportFile> exportFlowByRef(String ref) {
-        return resolveFlowRef(ref).map(this::exportFlow);
+        return resolveFlowRef(ref).map(resolution -> exportFlow(resolution.flowId()));
     }
 
     @Override
     public FlowImportResult importFlow(byte[] json, boolean publish) {
-        return upsertFlow(serviceTaskApiClient.signInShared(), readExport(json), publish);
+        return upsertFlow(serviceTaskApiClient.signInAsCurrentActor(), readExport(json), publish);
     }
 
     @Override
@@ -235,15 +238,16 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             String displayName = export.path("displayName").asText();
 
             // 与引擎部署期同一把解析尺（跨 project 按迁移键全局查）：解析得到就意味着
-            // 部署期能接上,无须再造一份
-            Optional<String> existing = resolveFlowRef(flowKey);
+            // 部署期能接上,无须再造一份。发布态在此不设门槛——未发布的既有草稿同样不能被
+            // 包里的旧快照覆盖。
+            Optional<String> existing = resolveFlowRef(flowKey).map(FlowResolution::flowId);
             if (existing.isPresent()) {
                 results.add(new FlowRestoreResult(flowKey, displayName, existing.get(),
                         FlowRestoreStatus.ALREADY_PRESENT, null));
                 continue;
             }
             if (session == null) {
-                session = serviceTaskApiClient.signInShared();
+                session = serviceTaskApiClient.signInAsCurrentActor();
             }
             FlowImportResult drafted = upsertFlow(session, export, false);
             try {
@@ -311,7 +315,7 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     public void setFlowEnabled(String flowId, boolean enabled) {
         ObjectNode request = objectMapper.createObjectNode();
         request.put("status", enabled ? "ENABLED" : "DISABLED");
-        applyFlowOperation(serviceTaskApiClient.signInShared(), flowId, "CHANGE_STATUS", request);
+        applyFlowOperation(serviceTaskApiClient.signInAsCurrentActor(), flowId, "CHANGE_STATUS", request);
     }
 
     @Override
@@ -322,7 +326,7 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
                 throw new FlowInUseException(flowId, units);
             }
         }
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
+        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInAsCurrentActor();
         // 不带 Content-Type：AP(Fastify) 对无 body 却声明 application/json 的请求直接 400
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(session.token());
@@ -335,11 +339,16 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     }
 
     /**
-     * 找出 BPMN 里引用了该 flow 的 Function Unit。
+     * 找出 BPMN 里引用了该 flow 的 Function Unit（FR-B14 删除守卫）。
      *
      * <p>同时匹配 flow 自身 id 与其迁移键：跨环境导入后，FU 的 BPMN 携带的仍是<b>源环境</b>
      * flowId（=迁移键），本环境实值只在部署产物里（Q7 部署期改写）。只查本地 id 会让
      * 恰恰正在使用的迁移 flow 被判成"无引用"。</p>
+     *
+     * <p><b>{@code ap:flowKey} 业务键引用同样在保护范围内</b>：业务键即
+     * {@code metadata.hermesFlowKey}，已在 refs 列表里，SQL 粗筛的 LIKE 与 Java 侧判定都
+     * 按「值」匹配（不看属性名），再叠加一层显式的 {@code ap:flowKey}/{@code ap:flowId}
+     * property value 提取精确比对，保证按业务键引用的 Service Task 也能挡住删除。</p>
      */
     private List<String> findReferencingUnits(String flowId) {
         Map<String, Object> keys;
@@ -366,7 +375,8 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             if (decoded == null) {
                 continue;
             }
-            boolean referenced = refs.stream().anyMatch(decoded::contains);
+            boolean referenced = refs.stream().anyMatch(decoded::contains)
+                    || extractApFlowRefValues(decoded).stream().anyMatch(refs::contains);
             if (referenced) {
                 String unitName = (String) row.get("unitName");
                 if (unitName != null && !hits.contains(unitName)) {
@@ -375,6 +385,26 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
             }
         }
         return hits;
+    }
+
+    /** 含 {@code name="ap:flowKey"} 或 {@code name="ap:flowId"} 的单个元素标签（属性顺序无关） */
+    private static final java.util.regex.Pattern AP_FLOW_REF_ELEMENT = java.util.regex.Pattern.compile(
+            "<[^<>]*\\bname\\s*=\\s*[\"']ap:flow(?:Key|Id)[\"'][^<>]*>");
+
+    private static final java.util.regex.Pattern AP_FLOW_REF_VALUE = java.util.regex.Pattern.compile(
+            "\\bvalue\\s*=\\s*[\"']([^\"']*)[\"']");
+
+    /** 提取 BPMN 里全部 {@code ap:flowKey}/{@code ap:flowId} property 的 value（去空白） */
+    private List<String> extractApFlowRefValues(String bpmnXml) {
+        List<String> values = new ArrayList<>();
+        java.util.regex.Matcher elements = AP_FLOW_REF_ELEMENT.matcher(bpmnXml);
+        while (elements.find()) {
+            java.util.regex.Matcher value = AP_FLOW_REF_VALUE.matcher(elements.group());
+            if (value.find() && !value.group(1).isBlank()) {
+                values.add(value.group(1).trim());
+            }
+        }
+        return values;
     }
 
     /** 与 DW 的 XmlEncodingUtil.smartDecode 同语义：'<' 开头即明文，否则按 base64 解 */
@@ -430,13 +460,18 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
     }
 
     @Override
-    public Optional<String> resolveFlowRef(String ref) {
-        List<String> direct = jdbcTemplate.queryForList(RESOLVE_BY_ID_SQL, String.class, ref);
+    public Optional<FlowResolution> resolveFlowRef(String ref) {
+        List<Map<String, Object>> direct = jdbcTemplate.queryForList(RESOLVE_BY_ID_SQL, ref);
         if (!direct.isEmpty()) {
-            return Optional.of(direct.get(0));
+            return Optional.of(toFlowResolution(direct.get(0)));
         }
-        List<String> mapped = jdbcTemplate.queryForList(RESOLVE_BY_KEY_SQL, String.class, ref);
-        return mapped.stream().findFirst();
+        return jdbcTemplate.queryForList(RESOLVE_BY_KEY_SQL, ref).stream()
+                .findFirst()
+                .map(this::toFlowResolution);
+    }
+
+    private FlowResolution toFlowResolution(Map<String, Object> row) {
+        return new FlowResolution((String) row.get("id"), Boolean.TRUE.equals(row.get("published")));
     }
 
     // ==================== AP API 写路径 ====================
@@ -566,7 +601,7 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
         }
     }
 
-    /** 同 {@link #resolveTargetProjectId} 但按需才做共享账号 sign-in（比对预检不必然需要会话） */
+    /** 同 {@link #resolveTargetProjectId} 但按需才换 AP 会话（比对预检命中 externalId 时不必换会话） */
     private String resolveTargetProjectIdLazily() {
         String externalId = serviceTaskProperties.getManaged().getProjectExternalId();
         if (externalId != null && !externalId.isBlank()) {
@@ -576,12 +611,12 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
                 return ids.get(0);
             }
         }
-        return resolveTargetProjectId(serviceTaskApiClient.signInShared());
+        return resolveTargetProjectId(serviceTaskApiClient.signInAsCurrentActor());
     }
 
     /**
      * 导入目标 project：managed（审计到人）配置的共享 project 优先，
-     * 未配置或未建时回退共享账号会话自带的 project。
+     * 未配置或未建时回退当前操作人会话自带的 project。
      */
     private String resolveTargetProjectId(ServiceTaskApiClient.ApSession session) {
         String externalId = serviceTaskProperties.getManaged().getProjectExternalId();

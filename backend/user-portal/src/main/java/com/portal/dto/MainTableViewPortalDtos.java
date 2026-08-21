@@ -14,7 +14,9 @@ public final class MainTableViewPortalDtos {
             String functionUnitId,
             String functionUnitCode,
             String functionUnitName,
-            int viewCount
+            int viewCount,
+            /** Inline SVG markup from DW icon library; null when none. */
+            String iconSvg
     ) {}
 
     @Builder
@@ -58,14 +60,55 @@ public final class MainTableViewPortalDtos {
             /** From form lookupConfig.searchFields — PK hydration hint for the portal. */
             List<String> lookupSearchFields,
             /** For fk_display: referenced DW table id (from FieldDefinition.refTableId). */
-            Long fkRefTableId
-    ) {}
+            Long fkRefTableId,
+            // What the column header may offer. Declared by the backend because only it knows
+            // whether the query can answer that question about this column — see
+            // MainTableViewColumnSpec.
+            PortalListColumnMeta.Kind kind,
+            Boolean filterable,
+            Boolean sortable,
+            Boolean groupable,
+            List<String> operators,
+            /** Closed choices for ENUM / BOOLEAN; empty for open-value kinds. */
+            List<PortalListColumnMeta.Option> options
+    ) {
+        /**
+         * Copies the list-header contract onto a view column. {@code options} must travel:
+         * BOOLEAN / ENUM filters are a closed select, and omitting the list makes the portal
+         * throw (or, if that guard is bypassed, fall through to a text box).
+         */
+        public static MainTableViewFieldColumnBuilder applyListCapabilities(
+                MainTableViewFieldColumnBuilder builder, PortalListColumnMeta cap) {
+            return builder
+                    .kind(cap.kind())
+                    .filterable(cap.filterable())
+                    .sortable(cap.sortable())
+                    .groupable(cap.groupable())
+                    .operators(cap.operators())
+                    .options(cap.options());
+        }
+    }
 
+    /**
+     * @param rowKey what makes this row distinct from every other row of the view. On a MAIN view
+     *               that is the process instance; on a SUB view one instance contributes many
+     *               rows, so the instance id alone would repeat and the grid could not tell two
+     *               of them apart when selecting or re-rendering.
+     */
     @Builder
     public record MainTableViewDataRow(
+            String rowKey,
             String processInstanceId,
             Map<String, Object> values
     ) {}
+
+    /**
+     * A group of the whole result set. Counted by the database over the same predicate as the
+     * page, so a header still reads the true size of its group on a page that only holds part
+     * of it.
+     */
+    @Builder
+    public record MainTableViewGroup(String label, long count) {}
 
     @Builder
     public record MainTableViewDataPage(
@@ -73,6 +116,8 @@ public final class MainTableViewPortalDtos {
             List<MainTableViewDataRow> rows,
             long total,
             int page,
-            int size
+            int size,
+            /** Empty unless the request grouped by a column. */
+            List<MainTableViewGroup> groups
     ) {}
 }

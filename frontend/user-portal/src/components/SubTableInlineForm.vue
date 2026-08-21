@@ -2,13 +2,21 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PortalFormFields, { type PortalSubTableBindingLite } from './PortalFormFields.vue'
-import type { FormField } from './formRendererHelpers'
+import { flattenLeafFormFields, type FormField } from './formRendererHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import {
+  useSubTableDialogComponentEvents,
+  type DialogColumnWithEvents,
+} from '@/composables/subTableAddDialog/useSubTableDialogComponentEvents'
 
 /**
  * Sub-table form rendered inline: the bound sub-table's designed form, laid out
  * in place (the `inlineSubForm` widget). Nested subTable widgets use
  * {@link PortalFormFields} so structure matches Developer Workstation preview.
+ *
+ * Form Design Events reuse the Add/Edit dialog runtime (same subset: Form
+ * onCreated/onMounted/onChange/onReload/beforeSubmit/onSubmit/onReset and
+ * field change/blur + hook load/mounted/value).
  */
 
 interface Props {
@@ -56,6 +64,10 @@ interface Props {
    * as this form's own top-level fields already do via SubTableField's Add/Edit dialog.
    */
   fieldPermissions?: Record<string, string> | null
+  /** Sub-form Form Design options — Form-level onCreated / onMounted / onChange. */
+  formOptions?: Record<string, unknown> | null
+  /** Canvas columns from the source binding — sourceRule fallback when FormField has none. */
+  dialogColumns?: DialogColumnWithEvents[] | Array<Record<string, unknown>> | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -79,26 +91,159 @@ const { t } = useI18n()
 
 const rowModel = ref<Record<string, unknown>>({})
 
+const INLINE_ROW_IDENTITY_KEYS = ['row_id', 'sub_task_id', 'id', 'id_idw'] as const
+
+function identityKeyValue(row: Record<string, unknown>, key: string): string | null {
+  const v = row[key]
+  if (v == null || String(v).trim() === '') return null
+  return String(v)
+}
+
+/**
+ * Stable row id for bootstrap. Prefer business keys (`row_id` / `sub_task_id`)
+ * before allocated `id` / `id_idw` — otherwise PK allocation changes the identity
+ * string, rebootstrap copies the parent snapshot, and in-progress Y/N is dropped.
+ */
+function inlineFormRowIdentity(row: Record<string, unknown> | null | undefined): string {
+  if (!row) return ''
+  for (const k of INLINE_ROW_IDENTITY_KEYS) {
+    const v = identityKeyValue(row, k)
+    if (v != null) return `${k}:${v}`
+  }
+  return ''
+}
+
+/**
+ * Same selected row after parent write-back (PK appeared, or only one identity
+ * key is present on each side). A real row switch has at least one shared key
+ * with a different value.
+ */
+function inlineFormIsSameLogicalRow(
+  prev: Record<string, unknown> | null,
+  next: Record<string, unknown> | null,
+): boolean {
+  if (!prev || !next) return false
+  let compared = false
+  for (const k of INLINE_ROW_IDENTITY_KEYS) {
+    const a = identityKeyValue(prev, k)
+    const b = identityKeyValue(next, k)
+    if (a == null || b == null) continue
+    compared = true
+    if (a !== b) return false
+  }
+  if (compared) return true
+  const prevHadId = INLINE_ROW_IDENTITY_KEYS.some(k => identityKeyValue(prev, k) != null)
+  const nextHadId = INLINE_ROW_IDENTITY_KEYS.some(k => identityKeyValue(next, k) != null)
+  return !prevHadId && nextHadId
+}
+
+function formOptionsEventFingerprint(options: Record<string, unknown> | null | undefined): string {
+  if (!options || typeof options !== 'object') return ''
+  return ['onChange', 'onMounted', 'onCreated', 'onReload', 'beforeSubmit']
+    .map((k) => String(options[k] ?? ''))
+    .join('\0')
+}
+
+function eventColumnsFromInlineForm(): DialogColumnWithEvents[] {
+  const dialogByField = new Map<string, DialogColumnWithEvents>()
+  for (const col of props.dialogColumns ?? []) {
+    if (!col || typeof col !== 'object') continue
+    const field = String((col as DialogColumnWithEvents).field ?? '').trim()
+    if (!field) continue
+    dialogByField.set(field, col as DialogColumnWithEvents)
+  }
+  return flattenLeafFormFields(props.fields)
+    .filter(f => typeof f.key === 'string' && f.key.length > 0 && !f.key.startsWith('__'))
+    .map((f) => {
+      const d = dialogByField.get(f.key)
+      return {
+        field: f.key,
+        label: f.label,
+        type: f.type,
+        hidden: f.hidden === true || d?.hidden === true,
+        sourceRule: f.sourceRule ?? d?.sourceRule,
+      }
+    })
+}
+
+const {
+  onDialogFieldChange,
+  onDialogFieldBlur,
+  isDialogFieldVisible,
+  resetDialogEventVisibility,
+  bootstrapDialogFormLifecycle,
+  runFormOnReload,
+  runFormBeforeSubmit,
+  runFormOnSubmit,
+  runFormOnReset,
+} = useSubTableDialogComponentEvents(
+  rowModel,
+  eventColumnsFromInlineForm,
+  () => props.formOptions,
+)
+
+/**
+ * Bind rowModel + Event bootstrap only when the selected row changes.
+ * `getCurrentRowForInlineForm` returns a new object every parent render — copying
+ * that snapshot back (and emitting it) was overwriting in-progress Y/N edits and
+ * triggering sub-table autosave of the page-load value, so Save/reload showed N again.
+ * Dialog Event runtime also keeps bootstrap mutations local until the user confirms.
+ *
+ * Identity string can still change on the same row (`''` → `id:…` after PK
+ * allocation). Rebootstrap would run onChange('__bootstrap__'), which field-gated
+ * scripts skip, wiping api.hidden from the click that just allocated the PK.
+ */
+let lastBoundRow: Record<string, unknown> | null = null
+
 watch(
-  () => props.currentRow,
-  r => {
-    rowModel.value = r != null && typeof r === 'object' ? { ...r } : {}
+  () => inlineFormRowIdentity(props.currentRow),
+  (_nextId, prevId) => {
+    const r = props.currentRow
+    if (r && lastBoundRow && inlineFormIsSameLogicalRow(lastBoundRow, r)) {
+      lastBoundRow = { ...r }
+      return
+    }
+    lastBoundRow = r != null && typeof r === 'object' ? { ...r } : null
+    rowModel.value = lastBoundRow ? { ...lastBoundRow } : {}
+    resetDialogEventVisibility()
+    if (!r) {
+      if (prevId) runFormOnReset()
+      return
+    }
+    bootstrapDialogFormLifecycle()
+    if (prevId) runFormOnReload()
   },
-  { immediate: true, deep: true },
+  { immediate: true },
+)
+
+watch(
+  () => formOptionsEventFingerprint(props.formOptions),
+  (next, prev) => {
+    if (!next || next === prev) return
+    if (!inlineFormRowIdentity(props.currentRow) && !props.currentRow) return
+    resetDialogEventVisibility()
+    if (props.currentRow) bootstrapDialogFormLifecycle()
+  },
 )
 
 function handleFieldUpdate(key: string, value: unknown) {
-  const merged = { ...rowModel.value, [key]: value }
-  rowModel.value = merged
-  emit('update:row', merged)
+  onDialogFieldChange(key, value)
+  emit('update:row', { ...rowModel.value })
   emit('change', key, value)
+}
+
+function handleFieldBlur(key: string) {
+  onDialogFieldBlur(key)
+  emit('update:row', { ...rowModel.value })
 }
 
 /** Flush row model into bindings before persist so Save allocates PK on the latest inline edits. */
 function handleSaveClick() {
+  if (!runFormBeforeSubmit()) return
   const merged = { ...rowModel.value }
   rowModel.value = merged
   emit('update:row', merged)
+  runFormOnSubmit()
   emit('save')
 }
 
@@ -155,7 +300,9 @@ const cardTitle = computed(() =>
           :host-primary-table-id="hostPrimaryTableId ?? null"
           :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
           :field-permissions="fieldPermissions"
+          :is-field-visible="isDialogFieldVisible"
           @update:field="handleFieldUpdate"
+          @field-blur="handleFieldBlur"
         />
       </el-row>
       <el-empty

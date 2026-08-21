@@ -1,15 +1,19 @@
 ---
-description: 硬分叉进来的 Activepieces 子树（activepieces/**）的编码与安全约定 —— 从上游自带的 CLAUDE.md/.claude/rules 收编，只留对本仓库仍然成立的部分
-globs: activepieces/**/*.ts,activepieces/**/*.tsx,activepieces/**/*.mts,activepieces/**/*.mjs
+description: 硬分叉进来的 Activepieces 子树（automation/**）的编码与安全约定 —— 从上游自带的 CLAUDE.md/.claude/rules 收编，只留对本仓库仍然成立的部分
+globs: automation/**/*.ts,automation/**/*.tsx,automation/**/*.mts,automation/**/*.mjs
 alwaysApply: false
 ---
 
-# Activepieces 子树（`activepieces/**`）
+# Activepieces 子树（`automation/**`）
 
-`activepieces/` 是**我们自己的源码**（[D12](../../docs/ap-integration/DECISIONS.md#d12) 硬分叉 +
+`automation/`（0.88.0）是**我们自己的源码**（[D12](../../docs/ap-integration/DECISIONS.md#d12) 硬分叉 +
 [D13](../../docs/ap-integration/DECISIONS.md#d13) 纯自维护），不以对齐上游为约束。
-基线是单提交 `de4f6469`，`git diff de4f6469..HEAD -- activepieces/` 就是完整改动清单；
-动机层记在 [HERMES_PATCHES.md](../../docs/ap-integration/HERMES_PATCHES.md)。
+改动动机记在 [HERMES_PATCHES.md](../../docs/ap-integration/HERMES_PATCHES.md) 与
+`automation/hermes/TRIM_LOG.md`。
+
+> 前身 `activepieces/`（0.84.0 硬分叉，基线单提交 `de4f6469`）**已于 2026-08-14 删除**，
+> 只存在于 git 历史：`git show de4f6469:activepieces/<path>` 取单文件，
+> `git diff de4f6469..4635f7950 -- activepieces/` 看它当年的完整改动清单。
 
 本文件是上游自带 `CLAUDE.md` / `.claude/rules` / `.agents`（2026-08-07 随 VT-19 删除）里
 **仍然成立**那部分的收编。已作废、不要再遵守的：EE/CE edition 分层与 `hooksFactory`
@@ -66,7 +70,7 @@ React 18 + Vite + TanStack Query + RHF + Zod + Tailwind + Shadcn/Radix。
   **导出的类型与常量放文件末尾**。util 文件里多个纯函数聚成一个 `export const xxxUtils = {…}`；
   React 组件仍然各自具名导出。
 - 注释只解释 **why**，不复述 **what**。
-- 改 `packages/shared` **必须**在 `packages/shared/package.json` bump 版本
+- 改 `packages/core/shared` **必须**在 `packages/core/shared/package.json` bump 版本
   （修复 patch / 新导出或行为变更 minor），且它的 `dist` 是 api 解析的目标 ——
   改完要 `turbo run build` 才看得到新导出。
 
@@ -74,7 +78,9 @@ React 18 + Vite + TanStack Query + RHF + Zod + Tailwind + Shadcn/Radix。
 
 - **api 测试不需要任何外部服务**：`packages/server/api/.env.tests` 用 `AP_DB_TYPE=PGLITE`
   （进程内 Postgres）+ `AP_REDIS_TYPE=MEMORY`。`pnpm --filter api run test-unit` /
-  `test-ce` 直接能跑，CI 也在跑（`.github/workflows/ap-api-tests.yml`）。
+  `test-ce` 直接能跑。**CI 里这道门当前是停的**：`.github/workflows/ap-api-tests.yml` 仍
+  指向已删除的 `activepieces/`，路径过滤永不命中（该文件头部写明了重新接到 `automation/`
+  还差什么）。本地跑过再提交。
 - **只有 `ce` 一个 edition**：`test/integration/{ee,cloud}` 已删（[D13](../../docs/ap-integration/DECISIONS.md#d13)）。
   新的集成测试一律写在 `test/integration/ce/`；跑的时候带 `AP_EDITION=ce`，否则
   cloud/ee 分支的模块根本没注册，你会看到一堆莫名的 **404**。

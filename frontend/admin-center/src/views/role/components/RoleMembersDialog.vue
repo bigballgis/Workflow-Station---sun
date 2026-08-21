@@ -150,14 +150,16 @@ const boundVirtualGroup = ref<VirtualGroup | null>(null)
 const typeText = (type?: string) => ({ 
   BU_BOUNDED: t('role.buBounded'), 
   BU_UNBOUNDED: t('role.buUnbounded'), 
-  ADMIN: t('role.adminRole'), 
+  ADMIN: t('role.adminRole'),
+  AUDITOR: t('role.auditorRole'),
   DEVELOPER: t('role.developerRole') 
 }[type || ''] || type || '-')
 
 const typeTagType = (type?: string) => ({ 
   BU_BOUNDED: 'warning', 
   BU_UNBOUNDED: 'success', 
-  ADMIN: 'danger', 
+  ADMIN: 'danger',
+  AUDITOR: 'info',
   DEVELOPER: 'primary' 
 }[type || ''] || 'info') as any
 

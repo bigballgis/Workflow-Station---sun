@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { hasAnyRole } from '@/utils/permission'
+import { hasAnyRole, isAuditorBlockedFromWorkstation } from '@/utils/permission'
 import i18n from '@/i18n'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
+import { COMPUTED_FIELD_GUIDE_ROUTE_NAME } from '@/utils/computedFieldGuide'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -23,6 +24,13 @@ const routes: RouteRecordRaw[] = [
     meta: { titleKey: 'login.title' }
   },
   {
+    // AI Studio 工作台：全屏三栏布局，自带左侧阶段轨道，因此不挂在 MainLayout 下
+    path: '/function-units/:id/ai-studio',
+    name: 'AiStudioWorkspace',
+    component: () => import('@/views/function-unit/AiStudioWorkspace.vue'),
+    meta: { titleKey: 'ai.studio.entryButton', requiresAuth: true, requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER', 'FU_VIEWER'] }
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/function-units',
@@ -41,10 +49,32 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'functionUnit.edit', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
       },
       {
+        path: 'automation',
+        name: 'Automation',
+        component: () => import('@/views/automation/AutomationPage.vue'),
+        meta: { titleKey: 'automation.title', requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+      },
+      {
+        path: 'automation/:flowId',
+        name: 'AutomationFlowEdit',
+        component: () => import('@/views/automation/AutomationFlowEdit.vue'),
+        meta: { titleKey: 'automation.title', hidden: true, requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),
         meta: { titleKey: 'profile.title', hidden: true }
+      },
+      {
+        path: 'help/computed-fields',
+        name: COMPUTED_FIELD_GUIDE_ROUTE_NAME,
+        component: () => import('@/views/help/ComputedFieldGuide.vue'),
+        meta: {
+          titleKey: 'computedFieldGuide.pageTitle',
+          hidden: true,
+          requiredRoles: ['SYS_ADMIN', 'TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER']
+        }
       },
       {
         path: '403',
@@ -118,13 +148,25 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
+  // Pure Auditor: do not enter DW (including the workspace-access fallback).
+  // Overlay users with a capability role still enter; keep AUDITOR out of requiredRoles
+  // so this gate can be removed later without touching backend read-only logic.
+  if (isAuditorBlockedFromWorkstation() && to.name !== 'Forbidden') {
+    next('/403')
+    return
+  }
+
   const requiredRoles = to.meta.requiredRoles as string[] | undefined
   if (requiredRoles && requiredRoles.length > 0) {
     if (!hasAnyRole(requiredRoles)) {
       // Members of a team (virtual group) that owns function units have no DW capability
       // role but may still enter the workspace read-only. The backend is the source of
       // truth (it knows team→FU ownership); ask it before denying access.
-      const canView = await resolveWorkspaceAccess()
+      // FR-B15: the fallback covers ONLY the function-unit workspace — Automation (and
+      // any other role-gated page) requires a real capability role; no bypass.
+      const workspaceFallbackApplies =
+        to.name === 'FunctionUnits' || to.name === 'FunctionUnitEdit' || to.name === COMPUTED_FIELD_GUIDE_ROUTE_NAME
+      const canView = workspaceFallbackApplies && (await resolveWorkspaceAccess())
       if (!canView) {
         next('/403')
         return

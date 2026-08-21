@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import type { TableBinding, BindingType, BindingMode, TableDefinition } from '@/api/functionUnit'
+import type { BindingType, BindingMode } from '@/api/functionUnit'
 
 /**
  * Property 1: Multi-table binding support

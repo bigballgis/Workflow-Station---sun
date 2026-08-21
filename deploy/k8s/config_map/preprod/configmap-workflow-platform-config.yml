@@ -40,8 +40,6 @@ data:
   SECURITY_LOGIN_MAX_FAILED_ATTEMPTS: "5"
   SECURITY_PASSWORD_MIN_LENGTH: "8"
   SECURITY_SESSION_TIMEOUT_MINUTES: "30"
-  # admin-center Admin UI「重置密码」后的明文（application.yml: admin.user.reset-password）；生产建议改 Secret
-  USER_RESET_PASSWORD: "password"
   SERVER_PORT: "8080"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://hkl25243602.hc.cloud.hk.hsbc:25011/hmhkdev?currentSchema=hmwfst"
   SPRING_DATASOURCE_USERNAME: "hmhkodev1"
@@ -78,11 +76,19 @@ data:
   ACTIVEPIECES_REDIS_PORT: "6379"
   ACTIVEPIECES_FRONTEND_URL: "https://sit-activepieces.company.com/"
   ACTIVEPIECES_WEBHOOK_URL: "https://sit-activepieces.company.com/"
-  # --- AP shared-account login bridge (NON-PROD: uat/sit have the UI) ---
+  # --- AP login bridge, per-user identity (NON-PROD: uat/sit have the UI) ---
   # Share the platform JWT across sub-domains so the AP gateway host receives it.
   JWT_COOKIE_DOMAIN: ".__BASE_DOMAIN__"
   ACTIVEPIECES_BRIDGE_ENABLED: "true"
   ACTIVEPIECES_INTERNAL_URL: "http://activepieces-service:80"
+  # managed-authn 是 AP 身份的唯一路径(共享账号已从 admin-center 移除,没有回退开关)。
+  # 这两项 + secret 的 ACTIVEPIECES_MANAGED_PRIVATE_KEY 缺任意一个,登录桥 /internal/ap/*
+  # 与 AC 的 Automation Flows / Pieces 页就全部 fail-loud(ACTIVEPIECES_API_ERROR)。
+  # 生成密钥并写入 AP 的 signing_key 表的步骤见 docs/ap-integration/PROD_WIRING_RUNBOOK.md。
+  ACTIVEPIECES_MANAGED_SIGNING_KEY_ID: "CHANGE_ME_SIT_AP_SIGNING_KEY_ID"
+  # 必须与 AP 库里被 stamp 的那个 TEAM project 的 externalId 完全一致(runbook 第 5 步)。
+  # 不一致 => managed-authn 给每个用户各建一个新 project,侧栏出现重名 Personal Project。
+  ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID: "hermes-main"
   # AI Generate(developer-workstation)直连集团 AI gateway 的 OpenAI 兼容 chat/completions。
   # 不再经 Activepieces —— 原先的 piece-ai 版 flow 已随该链路废弃删除。
   # 凭证是**每用户**的 DSP AMToken,由浏览器经 X-AM-Token 头透传,故这里不配任何密钥。
@@ -112,7 +118,14 @@ data:
   # 报 "403 Egress blocked" 并在 HTTP 步失败。
   # 用主机名而非 ClusterIP:Service 重建后 ClusterIP 会变,主机名不会。
   # 只列 flow 确实需要的主机——填 CIDR 等于把整个集群内网开放给 flow 作者写的 HTTP 步。
+  # HERMES-PATCH-031: AP 容器内回拉 piece bundle 的地址(注入为 AP_INTERNAL_API_URL)。
+  # ACTIVEPIECES_FRONTEND_URL 是浏览器视角的地址;ARCHIVE 件安装时 worker 在 Pod 内 fetch
+  # /v1/engine/pieces/bundle,用对外地址未必解析得回自己 => fetch failed => Import Piece 500。
+  # webhook 仍用对外地址,不受影响。
+  ACTIVEPIECES_SELF_INTERNAL_URL: "http://activepieces-service:80"
   ACTIVEPIECES_SSRF_ALLOW_LIST: "developer-workstation-service.__NAMESPACE__"
+  # admin-center 已不读共享账号(身份一律 per-user managed)。保留这两项仅供空库引导
+  # (ap-bootstrap-job.yaml 用 sign-up 建 AP 的第一个身份)与 deploy/scripts/ap-{export,import}.js。
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
   # npm registry for AP runtime piece installs. bun is gone (X-4) — the installer runs
   # pnpm now, which honors NPM_CONFIG_REGISTRY (and npm_config_registry) just the same;

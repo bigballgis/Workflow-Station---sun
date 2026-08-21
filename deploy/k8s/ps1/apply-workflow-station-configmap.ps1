@@ -115,6 +115,26 @@ function New-RenderedManifestFile {
   if (Test-UnresolvedPlaceholder -Content $rendered -Placeholder '__INGRESS_HOST__') {
     throw "Rendered config map still contains __INGRESS_HOST__. Pass -IngressHost before applying '$([System.IO.Path]::GetFileName($SourcePath))'."
   }
+  # HERMES: CHANGE_ME_* 未替换即拒绝 apply。
+  #
+  # 2026-08 UAT 事故的一半就是这么滑过去的:ACTIVEPIECES_MANAGED_SIGNING_KEY_ID /
+  # ACTIVEPIECES_MANAGED_PRIVATE_KEY 保持占位符被 apply 上去,Pod 正常起、健康检查通过,
+  # 直到有人点开 Automation 页面才以 ACTIVEPIECES_API_ERROR 暴露。
+  # __BASE_DOMAIN__ 那类占位符本来就有 Test-UnresolvedPlaceholder 拦着,CHANGE_ME_* 却没有
+  # —— 两个 apply 脚本里 "CHANGE_ME" 的命中数曾经是 0。
+  #
+  # 只看非注释行(Test-UnresolvedPlaceholder 已内建该规则),所以文档性提示不会误伤。
+  $changeMe = [regex]::Matches($rendered, '(?m)^(?!\s*#).*?([A-Z0-9_]*CHANGE_ME[A-Z0-9_]*)')
+  if ($changeMe.Count -gt 0) {
+    $names = ($changeMe | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique) -join ', '
+    throw @"
+Refusing to apply '$([System.IO.Path]::GetFileName($SourcePath))': $($changeMe.Count) unreplaced CHANGE_ME placeholder(s) remain -> $names
+
+These apply cleanly and the pods start healthy, so the gap only surfaces when someone
+opens the feature that needs them. Fill them in for this environment first.
+Signing-key values: see docs/ap-integration/PROD_WIRING_RUNBOOK.md sections 1-3.
+"@
+  }
   $tempPath = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName() + [System.IO.Path]::GetExtension($SourcePath))
   [System.IO.File]::WriteAllText($tempPath, $rendered, [System.Text.UTF8Encoding]::new($false))
   return $tempPath

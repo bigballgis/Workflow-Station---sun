@@ -6,7 +6,6 @@ import com.workflow.dto.request.ServiceTaskActionRequest;
 import com.workflow.dto.response.ServiceTaskExecutionResult;
 import com.workflow.entity.ServiceTaskExecutionRecord;
 import com.workflow.repository.ServiceTaskExecutionRecordRepository;
-import com.workflow.util.ServiceTaskVariableMappingUtil;
 import com.platform.common.security.SsrfProtection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,8 +34,23 @@ import java.util.*;
  *
  * <p>AP integration is <b>synchronous</b>: the engine POSTs the input payload to the AP
  * <i>sync</i> webhook ({@code /api/v1/webhooks/{flowId}/sync}); the flow must end with a
- * "Return Response" step so the result comes back in the HTTP response. The output is mapped
- * back into process variables inline — there is no callback token / async wait / Redis state.
+ * "Return Response" step so the result comes back in the HTTP response. There is no callback
+ * token / async wait / Redis state.
+ *
+ * <p><b>Envelope contract v1 (FR-C, frozen)</b> — both directions are fixed, there is no
+ * per-task input/output mapping any more:
+ * <ul>
+ *   <li><b>Request</b>: {@code {"envelopeVersion":1, "variables":{...all process variables...},
+ *       "context":{"processInstanceId","executionId","activityId","flowKey","flowId"}}}.
+ *       {@code context} is always populated, so a pure-trigger flow that ignores the payload
+ *       still receives a valid, non-empty envelope (FR-C06).</li>
+ *   <li><b>Response</b>: the flow's "Return Response" step must return
+ *       {@code {"variables":{...}}}. Only the {@code variables} object is written back to the
+ *       process (an empty object is legal and writes nothing). A response without a top-level
+ *       {@code variables} object is a contract violation → the task fails with
+ *       {@link ApFlowContractViolationException}; the whole body is <b>never</b> merged into
+ *       the process variables (FR-C07 symmetry).</li>
+ * </ul>
  *
  * <p>That "must end with Return Response" is <b>enforced, not advisory</b>: AP publishes the sync
  * response only from that step, so a run that fails earlier returns {@code 204 No Content}. HTTP
@@ -76,6 +90,9 @@ public class ServiceTaskExecutor implements JavaDelegate {
     /** Base retry delay (milliseconds) */
     private static final long BASE_RETRY_DELAY_MS = 1000L;
 
+    /** Fixed request/response envelope contract version (FR-C). */
+    private static final int ENVELOPE_VERSION = 1;
+
     private final ServiceTaskExecutionRecordRepository executionRecordRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -114,11 +131,22 @@ public class ServiceTaskExecutor implements JavaDelegate {
         String processInstanceId = execution.getProcessInstanceId();
         log.info("ServiceTaskExecutor triggered: executionId={}, processInstanceId={}", executionId, processInstanceId);
 
-        // 1. Read AP config from BPMN extension attributes (ap: prefix)
-        String flowId = getExtensionProperty(execution, "ap:flowId");
+        // 1. Read AP config from BPMN extension attributes (ap: prefix).
+        //    ap:flowKey is the portable business key (new, FR-C); ap:flowId is the AP flow id —
+        //    on a deployed copy it carries the deploy-time-resolved id for THIS environment.
+        String flowKeyProp = getExtensionProperty(execution, "ap:flowKey");
+        String flowIdProp = getExtensionProperty(execution, "ap:flowId");
+        boolean hasFlowKey = flowKeyProp != null && !flowKeyProp.isBlank();
+        if (!hasFlowKey && flowIdProp != null && !flowIdProp.isBlank()) {
+            log.warn("AP service task '{}' uses a legacy ap:flowId-only reference '{}' (no ap:flowKey "
+                            + "business key); still supported, but re-save the process with a business key",
+                    execution.getCurrentActivityId(), flowIdProp);
+        }
+        // flowRef = the original reference as authored in the BPMN (context.flowKey);
+        // flowId  = the id actually used for the webhook call (context.flowId).
+        String flowRef = hasFlowKey ? flowKeyProp.trim() : flowIdProp;
+        String flowId = flowIdProp != null && !flowIdProp.isBlank() ? flowIdProp.trim() : flowRef;
         String webhookUrlOverride = getExtensionProperty(execution, "ap:webhookUrl");
-        String inputMappingJson = getExtensionProperty(execution, "ap:inputMapping");
-        String outputMappingJson = getExtensionProperty(execution, "ap:outputMapping");
         // ap:timeoutSeconds is RECORDED, NOT ENFORCED — see the class javadoc. It is kept only so
         // the execution record shows what the designer asked for; do not wire it to the HTTP client.
         int timeoutSeconds = parseIntOrDefault(getExtensionProperty(execution, "ap:timeoutSeconds"), 120);
@@ -127,32 +155,43 @@ public class ServiceTaskExecutor implements JavaDelegate {
         String webhookUrl = resolveWebhookUrl(flowId, webhookUrlOverride);
         validateWebhookUrl(webhookUrl);
 
-        // 2. Build request body from process variables via input mapping
-        Map<String, Object> processVariables = execution.getVariables();
-        Map<String, Object> inputData = ServiceTaskVariableMappingUtil.applyInputMapping(processVariables, inputMappingJson);
-        convertRelativeUrls(inputData);
+        // 2. Build the fixed envelope (contract v1): ALL process variables + execution context
+        Map<String, Object> variables = new LinkedHashMap<>(execution.getVariables());
+        convertRelativeUrls(variables);
+        Map<String, Object> envelope = buildEnvelope(variables, processInstanceId, executionId,
+                execution.getCurrentActivityId(), flowRef, flowId);
 
-        // 3. Create execution record (PENDING)
+        // 3. Create execution record (PENDING) — inputData stores the envelope verbatim (NFR-303)
         ServiceTaskExecutionRecord record = newRecord(processInstanceId, executionId, flowId, webhookUrl,
-                SOURCE_SERVICE_TASK, toJson(inputData), timeoutSeconds);
+                SOURCE_SERVICE_TASK, toJson(envelope), timeoutSeconds);
         record = executionRecordRepository.save(record);
 
         // 4. Synchronous POST to the AP sync webhook (with retries)
         Map<String, Object> responseBody;
         try {
-            responseBody = invokeWebhookWithRetry(webhookUrl, inputData, record, retryCount);
+            responseBody = invokeWebhookWithRetry(webhookUrl, envelope, record, retryCount);
         } catch (RuntimeException e) {
             // record already marked FAILED inside invokeWebhookWithRetry; rethrow for BPMN error handling
             throw e;
         }
 
-        // 5. Apply output mapping and write results back into process variables
-        Map<String, Object> outputData = responseBody;
-        if (outputMappingJson != null && !outputMappingJson.isBlank()) {
-            outputData = ServiceTaskVariableMappingUtil.applyOutputMapping(responseBody, outputMappingJson);
+        // 5. Contract v1 output: write back ONLY the response's top-level "variables" object.
+        //    A missing/non-object "variables" is a contract violation — never merge the whole body.
+        Map<String, Object> outputVariables;
+        try {
+            outputVariables = requireContractVariables(responseBody, webhookUrl);
+        } catch (ApFlowContractViolationException e) {
+            record.setStatus(STATUS_FAILED);
+            record.setErrorMessage(e.getMessage());
+            record.setOutputData(toJson(responseBody));
+            record.setCompletedAt(Instant.now());
+            persistFailureOutsideCallerTx(record);
+            log.error("AP flow response violated the envelope contract: flowId={}, error={}",
+                    flowId, e.getMessage());
+            throw e;
         }
-        if (outputData != null && !outputData.isEmpty()) {
-            execution.setVariables(outputData);
+        if (!outputVariables.isEmpty()) {
+            execution.setVariables(outputVariables);
         }
 
         record.setStatus(STATUS_SUCCESS);
@@ -177,29 +216,22 @@ public class ServiceTaskExecutor implements JavaDelegate {
         log.info("AP Action synchronous execution: webhookUrl={}, processInstanceId={}",
                 webhookUrl, request.getProcessInstanceId());
 
-        // Build input data, apply input mapping if provided
-        Map<String, Object> inputData = request.getInputData();
-        if (inputData == null) {
-            inputData = Collections.emptyMap();
-        }
-        if (request.getInputMapping() != null && !request.getInputMapping().isBlank()) {
-            inputData = ServiceTaskVariableMappingUtil.applyInputMapping(inputData, request.getInputMapping());
-        } else {
-            inputData = new LinkedHashMap<>(inputData);
-        }
-        convertRelativeUrls(inputData);
+        // Envelope contract v1 applies to Action mode too (same flows, same "Return Response"
+        // authoring). There is no BPMN activity here: executionId carries the portal task id.
+        Map<String, Object> variables = request.getInputData() == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(request.getInputData());
+        convertRelativeUrls(variables);
+        Map<String, Object> envelope = buildEnvelope(variables, request.getProcessInstanceId(),
+                request.getTaskId(), null, flowId, flowId);
 
         ServiceTaskExecutionRecord record = newRecord(request.getProcessInstanceId(), request.getTaskId(), flowId,
-                webhookUrl, SOURCE_ACTION, toJson(inputData), timeoutSeconds);
+                webhookUrl, SOURCE_ACTION, toJson(envelope), timeoutSeconds);
         record = executionRecordRepository.save(record);
 
         try {
-            Map<String, Object> responseBody = invokeWebhook(webhookUrl, inputData);
-
-            Map<String, Object> outputData = responseBody;
-            if (request.getOutputMapping() != null && !request.getOutputMapping().isBlank() && responseBody != null) {
-                outputData = ServiceTaskVariableMappingUtil.applyOutputMapping(responseBody, request.getOutputMapping());
-            }
+            Map<String, Object> responseBody = invokeWebhook(webhookUrl, envelope);
+            Map<String, Object> outputVariables = requireContractVariables(responseBody, webhookUrl);
 
             record.setStatus(STATUS_SUCCESS);
             record.setOutputData(toJson(responseBody));
@@ -207,7 +239,7 @@ public class ServiceTaskExecutor implements JavaDelegate {
             executionRecordRepository.save(record);
 
             log.info("AP Action executed successfully: recordId={}", record.getId());
-            return ServiceTaskExecutionResult.success(record.getId(), outputData);
+            return ServiceTaskExecutionResult.success(record.getId(), outputVariables);
         } catch (Exception e) {
             String errorMsg = extractErrorMessage(e);
             record.setStatus(STATUS_FAILED);
@@ -220,6 +252,57 @@ public class ServiceTaskExecutor implements JavaDelegate {
     }
 
     // ==================== Internal Methods ====================
+
+    /**
+     * Build the fixed request envelope (contract v1).
+     *
+     * <p>FR-C06 fail-fast: an envelope with neither variables nor context must never be sent —
+     * it could only mean a wiring bug, and AP would run the flow against an empty payload with
+     * no error anywhere. In practice {@code context} always carries the execution ids, which is
+     * exactly what makes a pure-trigger flow (one that ignores the payload) naturally
+     * contract-valid without any special casing.
+     *
+     * <p><b>The emptiness check below is defence-in-depth, not a live gate</b>: on the BPMN path
+     * {@code processInstanceId}/{@code executionId} are always populated by the engine, and on the
+     * Action path {@code flowId} is necessarily non-blank (it was just used to build the webhook
+     * URL). It therefore cannot fire today — it is kept so that a future caller that builds an
+     * envelope from somewhere else fails here instead of silently POSTing an empty payload.
+     */
+    private Map<String, Object> buildEnvelope(Map<String, Object> variables, String processInstanceId,
+                                              String executionId, String activityId,
+                                              String flowKey, String flowId) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("processInstanceId", processInstanceId);
+        context.put("executionId", executionId);
+        context.put("activityId", activityId);
+        context.put("flowKey", flowKey);
+        context.put("flowId", flowId);
+
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("envelopeVersion", ENVELOPE_VERSION);
+        envelope.put("variables", variables);
+        envelope.put("context", context);
+
+        boolean contextEmpty = context.values().stream()
+                .allMatch(v -> v == null || v.toString().isBlank());
+        if (variables.isEmpty() && contextEmpty) {
+            throw new ApEmptyEnvelopeException(flowKey, flowId);
+        }
+        return envelope;
+    }
+
+    /**
+     * Contract v1 response check: the body must carry a top-level {@code variables} object.
+     * Returns that object (possibly empty — a legal "write nothing back" response).
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> requireContractVariables(Map<String, Object> responseBody, String webhookUrl) {
+        Object vars = responseBody != null ? responseBody.get("variables") : null;
+        if (!(vars instanceof Map)) {
+            throw new ApFlowContractViolationException(webhookUrl, responseBody, vars);
+        }
+        return (Map<String, Object>) vars;
+    }
 
     /**
      * Resolve the AP sync webhook URL. Uses the explicit override when present, otherwise
@@ -347,6 +430,7 @@ public class ServiceTaskExecutor implements JavaDelegate {
             row.setWebhookUrl(inFlight.getWebhookUrl());
             row.setSourceType(inFlight.getSourceType());
             row.setInputData(inFlight.getInputData());
+            row.setOutputData(inFlight.getOutputData());
             row.setStatus(inFlight.getStatus());
             row.setErrorMessage(inFlight.getErrorMessage());
             row.setRetryCount(inFlight.getRetryCount());
@@ -396,6 +480,45 @@ public class ServiceTaskExecutor implements JavaDelegate {
             super("AP flow returned no response (HTTP 204) from " + webhookUrl
                     + " — the run failed before its \"Return Response\" step, or the flow has no such step. "
                     + "Check the run history for this flow in Automation Studio.");
+        }
+    }
+
+    /**
+     * The request envelope would carry neither variables nor context (FR-C06). Typed rather than a
+     * bare {@code RuntimeException} so callers and tests can tell "we refused to send" apart from
+     * an arbitrary failure inside envelope construction.
+     *
+     * <p>See {@link #buildEnvelope}: unreachable on both current call paths, kept as a guard for
+     * future callers.
+     */
+    public static class ApEmptyEnvelopeException extends RuntimeException {
+        public ApEmptyEnvelopeException(String flowKey, String flowId) {
+            super("AP envelope has neither variables nor context (flowKey=" + flowKey
+                    + ", flowId=" + flowId + ") — refusing to invoke the flow with an empty "
+                    + "payload (FR-C06)");
+        }
+    }
+
+    /**
+     * The AP flow answered, but its response violated the fixed envelope contract (v1): the body
+     * must be a JSON object with a top-level {@code "variables"} object ({@code {"variables":{...}}}).
+     *
+     * <p>Deterministic (the flow's "Return Response" step returns the same shape on every run),
+     * so callers must not retry it. The whole body is never merged into the process variables —
+     * failing loudly here is what keeps the write-back rule symmetric with the fixed request
+     * envelope (FR-C07).
+     */
+    public static class ApFlowContractViolationException extends RuntimeException {
+        public ApFlowContractViolationException(String webhookUrl, Map<String, Object> responseBody,
+                                                Object variablesValue) {
+            super("AP flow response from " + webhookUrl + " violated the envelope contract (v1): "
+                    + (responseBody == null || !responseBody.containsKey("variables")
+                            ? "no top-level \"variables\" key"
+                            : "\"variables\" is not a JSON object ("
+                                    + (variablesValue == null ? "null" : variablesValue.getClass().getSimpleName())
+                                    + ")")
+                    + ". The flow's \"Return Response\" step must return {\"variables\": {...}}; "
+                    + "nothing was written back to the process.");
         }
     }
 

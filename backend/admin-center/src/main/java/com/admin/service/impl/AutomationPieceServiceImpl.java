@@ -2,6 +2,7 @@ package com.admin.service.impl;
 
 import com.admin.dto.response.AutomationPieceSummary;
 import com.admin.exception.ServiceTaskApiException;
+import com.admin.servicetask.CurrentActor;
 import com.admin.service.AutomationPieceService;
 import com.admin.servicetask.client.ServiceTaskApiClient;
 import com.admin.servicetask.config.ServiceTaskProperties;
@@ -75,9 +76,29 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
 
     private static final String ARCHIVE_SQL = "SELECT data FROM file WHERE id = ?";
 
-    /** 单 platform 部署:AP 的启停黑名单(只读;写走 AP platform API) */
+    /**
+     * HERMES-PATCH-030: 自研 piece 启停的存储。
+     *
+     * <p>原先查的是 {@code platform.filteredPieceNames}。AP 0.88 的迁移
+     * DropPlatformPieceFilters1809000000000（上游自己标了 breaking=true）删掉了那两列，
+     * 替代机制 piece_set 属 EE、已随 EE 剥离 —— 列不存在导致本方法抛 SQLException，
+     * Automation Pieces 整页 500（2026-08 UAT 事故）。
+     *
+     * <p>现在落在 HERMES 自有的 hermes_piece_block 表（automation 侧
+     * app/pieces/hermes-piece-block.entity.ts + 迁移 1826000000000）。表名带 hermes_ 前缀，
+     * 不与上游冲突；AP 的 piece list 读同一张表做过滤。
+     */
     private static final String DISABLED_NAMES_SQL =
-            "SELECT \"filteredPieceNames\" FROM platform LIMIT 1";
+            "SELECT \"pieceName\" FROM hermes_piece_block";
+
+    /** 停用：写入即生效（AP 的 list() 每次读库，无缓存窗口）。重复停用是幂等的。 */
+    private static final String BLOCK_PIECE_SQL =
+            "INSERT INTO hermes_piece_block (\"pieceName\", \"blockedAt\", \"blockedBy\") "
+                    + "VALUES (?, now(), ?) ON CONFLICT (\"pieceName\") DO NOTHING";
+
+    /** 启用：删掉屏蔽行。 */
+    private static final String UNBLOCK_PIECE_SQL =
+            "DELETE FROM hermes_piece_block WHERE \"pieceName\" = ?";
 
     /** flow_version 的 trigger JSON 内嵌整条 step 链,包名以带引号字符串出现 */
     /**
@@ -200,7 +221,7 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
                     "tarball 内 package/package.json 缺少合法 name/version(须为 build-piece 产物)");
         }
 
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
+        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInAsCurrentActor();
 
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
         form.add("packageType", "ARCHIVE");
@@ -236,7 +257,7 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
                 throw new PieceInUseException(name, refs);
             }
         }
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
+        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInAsCurrentActor();
         HttpHeaders headers = bearerHeaders(session.token());
         headers.setContentType(MediaType.APPLICATION_JSON);
         Map<String, String> body = Map.of("pieceName", name, "pieceVersion", version);
@@ -246,48 +267,31 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
 
     @Override
     public void setPieceDisabled(String name, boolean disabled) {
-        ServiceTaskApiClient.ApSession session = serviceTaskApiClient.signInShared();
-        if (session.platformId() == null) {
-            throw new ServiceTaskApiException("AP sign-in response has no platformId");
+        // HERMES-PATCH-030: 自研实现，替代上游删掉的 platform 级 piece 过滤。
+        //
+        // 语义与 0.84 一致 —— 只影响设计器目录，不影响运行：AP 的 piece list() 读同一张
+        // hermes_piece_block 过滤，而 get() 刻意不过滤，所以已经引用了该 piece 的存量 flow
+        // 照常加载、照常执行。停用是「不让人再选它」，不是「把已有的打断」。
+        //
+        // 直接写库而非经 AP REST：这是 HERMES 自有的表（不是上游的），AP 与平台共库，
+        // 且 AP 的 list() 每次读库无结果缓存，写入即生效，不需要缓存失效握手。
+        String actor = CurrentActor.require().getUserId();
+        if (disabled) {
+            jdbcTemplate.update(BLOCK_PIECE_SQL, name, actor);
         }
-        HttpHeaders headers = bearerHeaders(session.token());
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        String platformUrl = apUrl("/api/v1/platforms/" + session.platformId());
-        ResponseEntity<Map<String, Object>> platformResp = restTemplate.exchange(
-                platformUrl, HttpMethod.GET, new HttpEntity<>(headers),
-                new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
-        Set<String> names = new HashSet<>();
-        Object current = platformResp.getBody() != null ? platformResp.getBody().get("filteredPieceNames") : null;
-        if (current instanceof List<?> list) {
-            list.forEach(item -> names.add(String.valueOf(item)));
+        else {
+            jdbcTemplate.update(UNBLOCK_PIECE_SQL, name);
         }
-        boolean changed = disabled ? names.add(name) : names.remove(name);
-        if (!changed) {
-            return;
-        }
-        // BLOCKED 语义:名单即黑名单;list 过滤为 HERMES-PATCH 恢复,get() 不受影响
-        Map<String, Object> body = Map.of(
-                "filteredPieceNames", new ArrayList<>(names),
-                "filteredPieceBehavior", "BLOCKED");
-        restTemplate.exchange(platformUrl, HttpMethod.POST,
-                new HttpEntity<>(body, headers), Void.class);
     }
 
+    /**
+     * 读取被停用的 piece 名单（HERMES-PATCH-030 起落在 hermes_piece_block）。
+     *
+     * <p>不吞异常：读不到就让调用方失败。吞掉会静默退化成「所有 piece 都可见」，
+     * 管理员以为停用生效、设计器里那个 piece 照常出现 —— 比报错更难排查。
+     */
     private Set<String> fetchDisabledNames() {
-        Set<String> result = jdbcTemplate.query(DISABLED_NAMES_SQL, rs -> {
-            Set<String> names = new HashSet<>();
-            if (rs.next()) {
-                Array array = rs.getArray(1);
-                if (array != null) {
-                    for (Object item : (Object[]) array.getArray()) {
-                        names.add(String.valueOf(item));
-                    }
-                }
-            }
-            return names;
-        });
-        return result != null ? result : Collections.emptySet();
+        return new HashSet<>(jdbcTemplate.queryForList(DISABLED_NAMES_SQL, String.class));
     }
 
     /**

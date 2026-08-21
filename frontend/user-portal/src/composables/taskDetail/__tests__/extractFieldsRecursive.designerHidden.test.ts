@@ -55,6 +55,14 @@ describe('extractFieldsRecursive — designer Hide stays in layout tree', () => 
     expect(fields[0].children?.find(c => c.key === 'merchant_credit_date')?.hidden).toBe(true)
     expect(fields[0].children?.find(c => c.key === 'temporary_refund_date')?.hidden).toBe(true)
     expect(fields[0].children?.find(c => c.key === 'rebilled_date')?.hidden).toBeUndefined()
+    expect(fields[0].children?.find(c => c.key === 'merchant_credit')?.sourceRule).toMatchObject({
+      field: 'merchant_credit',
+      type: 'select',
+    })
+    expect(fields[0].children?.find(c => c.key === 'merchant_credit_date')?.sourceRule).toMatchObject({
+      field: 'merchant_credit_date',
+      hidden: true,
+    })
   })
 
   it('places revealed Hide fields inside the card — not the dialog rest group', () => {

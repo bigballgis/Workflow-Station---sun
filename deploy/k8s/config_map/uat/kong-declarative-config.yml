@@ -136,6 +136,14 @@ data:
         write_timeout: 300000
         read_timeout: 300000
         routes:
+          # AP 原生凭据登录/注册:从公网网关封死(见 plugins 段 request-termination)。
+          # Kong 按最长前缀匹配,这两条比 /api/ap 更具体,故优先命中。
+          - name: activepieces-authn-block-route
+            paths:
+              - /api/ap/v1/authentication/sign-in
+              - /api/ap/v1/authentication/sign-up
+            strip_path: true
+            preserve_host: false
           - name: activepieces-builder-route
             paths:
               - /api/ap
@@ -224,6 +232,19 @@ data:
     # Plugins (全局插件)
     # ============================================================
     plugins:
+      # --- AP 原生凭据登录:在公网网关上终止 ---
+      # 身份只能经 admin-center 的 managed-authn 按当前操作人换取。AP 自带的
+      # POST /v1/authentication/sign-{in,up} 是 public(),经 /api/ap 原样可达 ——
+      # 任何在 AP 库里有口令的身份都能绕过平台直接登录。
+      # 用 request-termination 而非 ip-restriction:uat/preprod 的使用者本就在公司
+      # 内网(私网 IP),按 IP 放行等于不设防;真正的分界是"是否经过本网关"——
+      # deploy/scripts/ap-*.js 用 AP_INTERNAL_URL 直连 ClusterIP,不走 Kong。
+      # 只封这两条:switch-platform 仍被 SPA 使用,一并封会打断已登录会话。
+      - name: request-termination
+        route: activepieces-authn-block-route
+        config:
+          status_code: 404
+          message: 'Not Found'
       # --- correlation-id: 分布式追踪 ---
       - name: correlation-id
         config:

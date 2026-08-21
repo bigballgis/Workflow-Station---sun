@@ -4,6 +4,5 @@
 // Outside Docker (e.g. `vite dev`) the ${...} placeholders stay literal; the app detects
 // the un-substituted form and falls back to its dev defaults.
 window.__APP_CONFIG__ = window.__APP_CONFIG__ || {};
-// Activepieces login-bridge URL. Empty -> the admin "Activepieces" launcher stays hidden
-// (prod: AP is runtime-only, no UI). Non-prod sets it to the env's AP gateway bridge URL.
-window.__APP_CONFIG__.AP_BRIDGE_URL = "${AP_BRIDGE_URL}";
+// (No per-environment keys at present. The AP_BRIDGE_URL launcher gate was removed with
+// the Admin Center automation entries — automation management lives in DW now.)

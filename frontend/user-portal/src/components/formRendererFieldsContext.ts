@@ -69,8 +69,12 @@ export interface FormRendererFieldsContext {
   lookupFilterConditionsFor: (field: FormField) => unknown[]
   handleFieldChange: (key: string, val: unknown) => void
   handleFieldBlur: (key: string) => void
-  /** Form-event script errors (setFieldError), keyed by field binding key. */
-  scriptFieldErrors: Ref<Record<string, string>>
+  /**
+   * Per-field error messages keyed by field binding key: form-event script errors (setFieldError)
+   * plus computed-field formulas the server would refuse to save. Read-only because some sources
+   * are derived — write through the composable that owns them.
+   */
+  scriptFieldErrors: Readonly<Ref<Record<string, string>>>
   handleUploadSuccess: (res: unknown, file: unknown, key: string) => void
   handleUploadRemove: (file: unknown, key: string) => void
   handleUserSearch: (query: string, key: string) => void

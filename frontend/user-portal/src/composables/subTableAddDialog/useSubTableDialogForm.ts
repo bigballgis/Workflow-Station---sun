@@ -12,6 +12,8 @@ import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from '@/components/formRendererHelpers'
 import { evaluateFormula, validateField } from '@/components/businessLogicEngine'
 import { materializeFormCreateValidationRules } from '@/utils/formCreateValidateRules'
+import { collectComputedColumns, previewComputedRow } from '@/utils/computedFieldRuntime'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 
 /** i18n translate signature (kept loose to match the SFC's useI18n usage). */
 type DialogT = (key: string) => string
@@ -25,6 +27,10 @@ interface FormProps {
   mode: 'add' | 'edit'
   initialData?: Record<string, any>
   rowFormulas?: RowFormulaRule[]
+  /** This table's own columns — supplies the computed (formula) column definitions. */
+  fieldDefinitions?: BindingFieldDefinition[]
+  /** MAIN form values so a SUB-table formula can preview {@code table.column}. */
+  hostPrimaryFormData?: Record<string, unknown>
   columnValidationRules?: Record<string, ValidationRule[]>
   saveRow?: (row: Record<string, unknown>) => void | Promise<void>
   /** This dialog's own hosting binding id — resolves this binding's `${bindingId}:${fieldName}` entries in fieldPermissions. */
@@ -155,6 +161,70 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     }
   )
 
+  // ─── Computed (formula) columns from Table Design ───────────────────────────
+  // Distinct from the rowFormulas above, which are mathjs expressions authored in Form Design.
+  // These come from the table's own column definitions and the server recomputes them on write;
+  // previewing here only keeps the dialog in step with what the save will produce.
+  const computedColumns = computed(() => collectComputedColumns(props.fieldDefinitions))
+
+  /** fieldName → error code for formulas the server would refuse to save. */
+  const computedFieldErrors = ref<Record<string, string>>({})
+
+  function parentRowsForPreview(): Record<string, Record<string, unknown>> {
+    const primary = props.hostPrimaryFormData
+    if (!primary) return {}
+    const parents: Record<string, Record<string, unknown>> = {}
+    for (const column of computedColumns.value) {
+      for (const dep of column.definition?.dependsOn ?? []) {
+        const dot = dep.indexOf('.')
+        if (dot <= 0) continue
+        parents[dep.slice(0, dot).toLowerCase()] = primary
+      }
+    }
+    return parents
+  }
+
+  function recomputeComputedColumns(): void {
+    if (!computedColumns.value.length) return
+    // Row scope only: a sub-table row has no sub-tables of its own to aggregate over, and the
+    // designer's aggregate formulas belong to the parent record, not to this row.
+    const preview = previewComputedRow(
+      computedColumns.value,
+      formData.value,
+      {},
+      parentRowsForPreview(),
+    )
+    for (const [fieldName, value] of Object.entries(preview.values)) {
+      formData.value[fieldName] = value
+    }
+    for (const fieldName of Object.keys(preview.errors)) {
+      formData.value[fieldName] = null
+    }
+    computedFieldErrors.value = preview.errors
+  }
+
+  // Same stable-primitive getter as the rowFormulas watch above: returning the dependency values
+  // joined into a string avoids a deep traversal of the whole row on every keystroke.
+  watch(
+    () => {
+      if (!computedColumns.value.length) return ''
+      const parts: string[] = []
+      for (const column of computedColumns.value) {
+        for (const dep of column.definition?.dependsOn ?? []) {
+          const dot = dep.indexOf('.')
+          if (dot <= 0) {
+            parts.push(`${dep}=${String(formData.value[dep] ?? '')}`)
+            continue
+          }
+          const columnName = dep.slice(dot + 1)
+          parts.push(`${dep}=${String(props.hostPrimaryFormData?.[columnName] ?? '')}`)
+        }
+      }
+      return parts.join('|')
+    },
+    () => { recomputeComputedColumns() },
+  )
+
   // ─── Column validation errors (Task 8.7) ────────────────────────────────────
   const columnErrors = ref<Record<string, string[]>>({})
 
@@ -194,6 +264,11 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
         ? { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
         : buildInitialRow(props.columns)
     }
+
+    // Preview over the seeded row: an Add dialog has no server-computed value yet, and the watch
+    // below only fires once a dependency changes.
+    computedFieldErrors.value = {}
+    recomputeComputedColumns()
 
     // Form-level onCreated/onMounted/onChange(__bootstrap__). Must run after model seed.
     bootstrapDialogFormLifecycle?.()
@@ -247,6 +322,9 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     if (!valid) return
     // Run column validation rules (Task 8.7)
     if (!validateColumns()) return
+    // A formula the server refuses to evaluate would make the whole write fail; the inline error
+    // is already on the offending field, so stop here instead of round-tripping to a rejection.
+    if (Object.keys(computedFieldErrors.value).length > 0) return
     if (runFormBeforeSubmit && runFormBeforeSubmit() === false) return
     const seed = props.mode === 'add' ? props.initialData : undefined
     const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)
@@ -283,6 +361,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     calculatedColumns,
     isColDisabled,
     columnErrors,
+    computedFieldErrors,
     validateColumns,
     initDialogFormState,
     handleClose,

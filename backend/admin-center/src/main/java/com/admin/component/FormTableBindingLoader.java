@@ -188,9 +188,12 @@ public class FormTableBindingLoader {
             return Collections.emptyMap();
         }
         String placeholders = tableIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        // is_computed / computed_field_json exist on both dw_ and rt_ field definitions
+        // (00-schema/65 and /66), so the two table kinds still share one query.
         String sql =
                 "SELECT table_id, field_name, is_primary_key, is_foreign_key, ref_table_id, " +
-                "       ref_primary_key_fields, pk_generation_json, fk_display_mode " +
+                "       ref_primary_key_fields, pk_generation_json, fk_display_mode, " +
+                "       is_computed, computed_field_json " +
                 "FROM " + table + " WHERE table_id IN (" + placeholders + ") " +
                 "ORDER BY table_id, sort_order NULLS LAST, id";
         Map<Long, List<TableFieldDefinitionDTO>> byTable = new LinkedHashMap<>();
@@ -207,6 +210,8 @@ public class FormTableBindingLoader {
                     .refPrimaryKeyFields(readJsonStringList(rs, "ref_primary_key_fields"))
                     .pkGeneration(readJsonMap(rs, "pk_generation_json"))
                     .fkDisplayMode(rs.getString("fk_display_mode"))
+                    .isComputed(rs.getBoolean("is_computed"))
+                    .computedField(readJsonMap(rs, "computed_field_json"))
                     .build();
             byTable.computeIfAbsent(tableId, k -> new ArrayList<>()).add(field);
         }, tableIds.toArray());

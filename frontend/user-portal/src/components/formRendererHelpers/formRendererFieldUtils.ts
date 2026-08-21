@@ -46,10 +46,16 @@ export function isFormCreateRuleHidden(rule: unknown): boolean {
   )
 }
 
-/** Copy designer Hide flag onto parsed {@link FormField} (runtime visibility via event script). */
+/**
+ * Copy designer Hide flag onto parsed {@link FormField} and keep the original
+ * form-create rule so Event runtime (`on` / `_hook`) can run on form-below-table.
+ */
 export function applyDesignerHideFlagToFormField(field: FormField, rule: unknown): void {
   if (isFormCreateRuleHidden(rule)) {
     field.hidden = true
+  }
+  if (rule != null && typeof rule === 'object') {
+    field.sourceRule = rule as Record<string, unknown>
   }
 }
 

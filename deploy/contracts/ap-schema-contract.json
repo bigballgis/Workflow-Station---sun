@@ -1,0 +1,156 @@
+{
+  "$comment": [
+    "admin-center 对 Activepieces 私有表的 schema 依赖契约。",
+    "",
+    "背景：AP 与平台共用一个 Postgres 库（SPRING_DATASOURCE_URL 与 ACTIVEPIECES_POSTGRES_DATABASE",
+    "指向同一 database），admin-center 因此用 JdbcTemplate 裸 SQL 直查 AP 的表。这是既成事实，",
+    "短期内不会改（换成 REST 需要 AP 侧提供等价查询能力，例如 flow_version.trigger 的全文匹配）。",
+    "",
+    "代价是：AP 的任何一次迁移都可能在运行时打掉 admin-center，而编译期看不出（SQL 是字符串）、",
+    "测试也覆盖不到。2026-08 UAT 事故即为此：AP 0.88 的 DropPlatformPieceFilters1809000000000",
+    "删掉了 platform.filteredPieceNames，admin-center 仍在 SELECT 它，Automation Pieces 整页 500。",
+    "那条迁移自带 breaking=true 标记，但当时没有任何环节消费它。",
+    "",
+    "本文件就是被消费的那个东西：deploy/scripts/check-ap-schema-contract.mjs 在发布前把它与 AP",
+    "的 TypeORM 实体逐列比对，缺列即拒绝发布。",
+    "",
+    "维护规则：",
+    "  1. admin-center 新增/修改任何直查 AP 表的 SQL，必须同步更新本文件；",
+    "     ApSchemaContractTest 会校验 SQL 里出现的列都已在此声明，漏了就测试红。",
+    "  2. 只登记 AP 拥有的表。平台自有表（sys_*、up_*、dw_*、ac_*、we_*）不属于此契约。"
+  ],
+  "tables": {
+    "piece_metadata": {
+      "usedBy": [
+        "AutomationPieceServiceImpl.LIST_SQL",
+        "AutomationPieceServiceImpl.EXPORT_SQL"
+      ],
+      "columns": [
+        "id",
+        "name",
+        "displayName",
+        "description",
+        "logoUrl",
+        "version",
+        "pieceType",
+        "packageType",
+        "archiveId",
+        "platformId",
+        "actions",
+        "triggers",
+        "categories",
+        "authors",
+        "auth",
+        "i18n",
+        "minimumSupportedRelease",
+        "maximumSupportedRelease",
+        "projectUsage",
+        "created",
+        "updated"
+      ]
+    },
+    "file": {
+      "usedBy": [
+        "AutomationPieceServiceImpl.ARCHIVE_SQL"
+      ],
+      "columns": [
+        "id",
+        "data"
+      ]
+    },
+    "flow": {
+      "usedBy": [
+        "AutomationFlowServiceImpl.LIST_SQL",
+        "AutomationFlowServiceImpl.EXPORT_SQL",
+        "AutomationFlowServiceImpl.FIND_BY_KEY_SQL",
+        "AutomationFlowServiceImpl.RESOLVE_BY_ID_SQL",
+        "AutomationFlowServiceImpl.RESOLVE_BY_KEY_SQL",
+        "AutomationFlowServiceImpl.FLOW_METADATA_SQL",
+        "AutomationFlowServiceImpl.FLOW_REF_KEYS_SQL"
+      ],
+      "columns": [
+        "id",
+        "status",
+        "projectId",
+        "publishedVersionId",
+        "metadata",
+        "updated"
+      ]
+    },
+    "flow_version": {
+      "usedBy": [
+        "AutomationFlowServiceImpl.LIST_SQL",
+        "AutomationFlowServiceImpl.EXPORT_SQL",
+        "AutomationPieceServiceImpl.FLOW_REF_SQL"
+      ],
+      "columns": [
+        "id",
+        "flowId",
+        "displayName",
+        "valid",
+        "trigger",
+        "schemaVersion",
+        "notes",
+        "connectionIds",
+        "created",
+        "updated"
+      ]
+    },
+    "project": {
+      "usedBy": [
+        "AutomationFlowServiceImpl.LIST_SQL",
+        "AutomationFlowServiceImpl.PROJECT_BY_EXTERNAL_ID_SQL"
+      ],
+      "columns": [
+        "id",
+        "displayName",
+        "externalId"
+      ]
+    },
+    "user_identity": {
+      "usedBy": [
+        "AutomationFlowServiceImpl.LIST_SQL"
+      ],
+      "columns": [
+        "firstName",
+        "lastName"
+      ]
+    },
+    "app_connection": {
+      "usedBy": [
+        "AutomationFlowServiceImpl.checkConnections(动态 SQL)",
+        "AutomationFlowServiceImpl.collectConnectionItems(动态 SQL)"
+      ],
+      "columns": [
+        "externalId",
+        "displayName",
+        "pieceName",
+        "status",
+        "projectIds"
+      ]
+    },
+    "hermes_piece_block": {
+      "usedBy": [
+        "AutomationPieceServiceImpl.DISABLED_NAMES_SQL",
+        "AutomationPieceServiceImpl.BLOCK_PIECE_SQL",
+        "AutomationPieceServiceImpl.UNBLOCK_PIECE_SQL"
+      ],
+      "$comment": "HERMES 自有表（非上游），承载自研的 piece 启停。AP 侧由 app/pieces/hermes-piece-block.entity.ts 定义、piece list() 读它做目录过滤。登记进契约是为了让门禁同样盯着它——虽然上游不会动它，但我们自己改实体时同样会漂移。",
+      "createdByApMigration": "HermesCreatePieceBlock1826000000000",
+      "columns": [
+        "pieceName",
+        "blockedAt",
+        "blockedBy"
+      ]
+    }
+  },
+  "$migrationNote": [
+    "createdByApMigration:该表由 AP 侧的哪条迁移创建。只有 HERMES 自有表需要标注——",
+    "上游表由上游迁移建,其存在性已由 AP 自身的迁移链保证。",
+    "",
+    "为什么要记:admin-center 读这张表,但建表的是 AP 的迁移。若某次发布只发 admin-center",
+    "而 AP 仍是旧镜像,表根本不存在,admin-center 会在运行时炸——编译期与 schema 契约门禁",
+    "都发现不了,因为源码树里迁移是在的,缺的是**目标环境实际跑的那个镜像**。",
+    "build-and-push-k8s.ps1 的 preflight 消费本字段。"
+  ]
+}

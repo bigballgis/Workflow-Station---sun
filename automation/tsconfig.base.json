@@ -1,0 +1,99 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": [
+      "es2022",
+      "dom"
+    ],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@activepieces/core-execution": [
+        "packages/core/execution/src/index.ts"
+      ],
+      "@activepieces/core-formula": [
+        "packages/core/formula/src/index.ts"
+      ],
+      "@activepieces/core-piece-types": [
+        "packages/core/piece-types/src/index.ts"
+      ],
+      "@activepieces/core-utils": [
+        "packages/core/utils/src/index.ts"
+      ],
+      "@activepieces/engine": [
+        "packages/server/engine/src/main.ts"
+      ],
+      "@activepieces/piece-biz-calendar": [
+        "packages/pieces/community/biz-calendar/src/index.ts"
+      ],
+      "@activepieces/piece-csv": [
+        "packages/pieces/core/csv/src/index.ts"
+      ],
+      "@activepieces/piece-data-mapper": [
+        "packages/pieces/core/data-mapper/src/index.ts"
+      ],
+      "@activepieces/piece-file-helper": [
+        "packages/pieces/core/file-helper/src/index.ts"
+      ],
+      "@activepieces/piece-hash-helper": [
+        "packages/pieces/community/hash-helper/src/index.ts"
+      ],
+      "@activepieces/piece-http": [
+        "packages/pieces/core/http/src/index.ts"
+      ],
+      "@activepieces/piece-json": [
+        "packages/pieces/community/json/src/index.ts"
+      ],
+      "@activepieces/piece-pdf": [
+        "packages/pieces/core/pdf/src/index.ts"
+      ],
+      "@activepieces/piece-postgres": [
+        "packages/pieces/community/postgres/src/index.ts"
+      ],
+      "@activepieces/piece-schedule": [
+        "packages/pieces/core/schedule/src/index.ts"
+      ],
+      "@activepieces/piece-text-helper": [
+        "packages/pieces/core/text-helper/src/index.ts"
+      ],
+      "@activepieces/piece-webhook": [
+        "packages/pieces/core/webhook/src/index.ts"
+      ],
+      "@activepieces/piece-xml": [
+        "packages/pieces/core/xml/src/index.ts"
+      ],
+      "@activepieces/pieces-common": [
+        "packages/pieces/common/src/index.ts"
+      ],
+      "@activepieces/pieces-framework": [
+        "packages/pieces/framework/src/index.ts"
+      ],
+      "@activepieces/sandbox": [
+        "packages/server/sandbox/src/index.ts"
+      ],
+      "@activepieces/server-utils": [
+        "packages/server/utils/src/index.ts"
+      ],
+      "@activepieces/shared": [
+        "packages/core/shared/src/index.ts"
+      ]
+    },
+    "resolveJsonModule": true
+  },
+  "exclude": [
+    "node_modules",
+    "tmp"
+  ]
+}

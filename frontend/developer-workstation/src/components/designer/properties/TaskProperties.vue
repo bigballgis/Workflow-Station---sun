@@ -532,7 +532,6 @@ const {
   scriptBody,
   resultVariable,
   messageName,
-  messagePayload,
   ruleEngine,
   decisionRef,
   ruleResultVariable,

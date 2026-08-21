@@ -41,4 +41,30 @@ public final class SystemAuditFields {
         }
         return ALL.contains(fieldName.trim().toLowerCase(Locale.ROOT));
     }
+
+    /**
+     * {@code created_at} / {@code updated_at} are timestamps. Legacy tables sometimes
+     * declared them VARCHAR; the stored value is still an ISO datetime, so a list
+     * filter must compare calendar days, not run a text contains.
+     */
+    public static boolean isTimestamp(String fieldName) {
+        if (fieldName == null) {
+            return false;
+        }
+        String name = fieldName.trim().toLowerCase(Locale.ROOT);
+        return CREATED_AT.equals(name) || UPDATED_AT.equals(name);
+    }
+
+    /**
+     * {@code created_by} / {@code updated_by} identify a person. Legacy rows may store a
+     * display name; the list filter still treats the column as USER so the dialog is a
+     * people picker, not a free-text contains.
+     */
+    public static boolean isUser(String fieldName) {
+        if (fieldName == null) {
+            return false;
+        }
+        String name = fieldName.trim().toLowerCase(Locale.ROOT);
+        return CREATED_BY.equals(name) || UPDATED_BY.equals(name);
+    }
 }

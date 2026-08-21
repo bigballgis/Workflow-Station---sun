@@ -1,6 +1,5 @@
 package com.admin.component;
 
-import com.platform.common.security.SsrfProtection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -34,11 +33,7 @@ public class SystemImapConfigResolver {
         if (!StringUtils.hasText(host)) {
             throw new IllegalStateException("System IMAP host is not configured (imap.host)");
         }
-        try {
-            SsrfProtection.validateHostname(host, allowedHosts());
-        } catch (SsrfProtection.SsrfException ex) {
-            throw new IllegalStateException("System IMAP host blocked by SSRF protection: " + ex.getMessage(), ex);
-        }
+        validateConfiguredMailHost(host);
 
         String portRaw = trimToNull(configManager.getConfigValue(KEY_PORT));
         int port;
@@ -59,12 +54,20 @@ public class SystemImapConfigResolver {
         return new SystemImapEndpoint(host, port, useSsl);
     }
 
+    /**
+     * BOTH remains inbound-capable for packages already deployed before the designer
+     * dropped that direction. New DW connections cannot be saved as BOTH.
+     */
     public static boolean isInboundCapable(String direction) {
         if (direction == null || direction.isBlank()) {
             return false;
         }
         String d = direction.trim().toUpperCase();
         return "INBOUND".equals(d) || "BOTH".equals(d);
+    }
+
+    private void validateConfiguredMailHost(String host) {
+        SystemMailHostValidator.validate(host, allowedHosts(), "System IMAP");
     }
 
     private Set<String> allowedHosts() {

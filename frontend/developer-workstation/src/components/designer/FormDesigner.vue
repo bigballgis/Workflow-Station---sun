@@ -440,11 +440,13 @@
                 :model-value="getFieldPermission(row.field)"
                 size="small"
                 style="width: 100%"
+                :disabled="isFieldPermissionLocked(row.field)"
                 @update:model-value="setFieldPermission(row.field, $event)"
               >
                 <el-option
                   :label="t('form.fieldPermissionEditable')"
                   value="EDITABLE"
+                  :disabled="isFieldPermissionLocked(row.field)"
                 />
                 <el-option
                   :label="t('form.fieldPermissionReadonly')"
@@ -1569,6 +1571,7 @@ const {
   currentSubFormFieldGroups,
   getFieldPermission,
   setFieldPermission,
+  isFieldPermissionLocked,
   handleSaveForm,
   savingForm,
 } = formSave

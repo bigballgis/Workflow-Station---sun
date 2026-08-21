@@ -208,4 +208,34 @@ describe('mergeSubTableRowsByRowId MI dashboard columns', () => {
     const afterResync = mergeSubTableRowsByRowId(alignedBinding, allMerged, ['id'])
     expect(afterResync[0].task_current_node).toBe('sub form2')
   })
+
+  it('merges stale N and saved Y for the same row_id when id/id_idw are absent', () => {
+    const merged = mergeSubTableRowsByRowId(
+      [{
+        row_id: 'TRANS-1',
+        merchant_name: 'FBT',
+        merchant_credit: 'N',
+        temporary_refund: 'N',
+      }],
+      [{
+        row_id: 'TRANS-1',
+        merchant_name: 'FBT',
+        merchant_credit: 'Y',
+        temporary_refund: 'N',
+      }],
+      ['id_idw'],
+    )
+    expect(merged).toHaveLength(1)
+    expect(merged[0].merchant_credit).toBe('Y')
+    expect(merged[0].temporary_refund).toBe('N')
+  })
+
+  it('does not merge different row_id values when id/id_idw are absent', () => {
+    const merged = mergeSubTableRowsByRowId(
+      [{ row_id: 'TRANS-1', merchant_credit: 'N' }],
+      [{ row_id: 'TRANS-2', merchant_credit: 'Y' }],
+      ['id_idw'],
+    )
+    expect(merged).toHaveLength(2)
+  })
 })

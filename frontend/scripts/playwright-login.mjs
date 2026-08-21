@@ -141,6 +141,10 @@ export async function loginViaPortalPassword(page, opts = {}) {
     throw new Error('Portal password login failed: response missing user')
   }
 
+  // /portal/ may bounce to /login/ after commit; wait so evaluate is not racing a navigation.
+  await page.waitForLoadState('domcontentloaded').catch(() => {})
+  await page.waitForTimeout(300)
+
   await page.evaluate((userInfo) => {
     localStorage.setItem('ws_up_user', JSON.stringify(userInfo))
     localStorage.setItem('ws_up_user_id', String(userInfo.userId))
@@ -181,6 +185,10 @@ export async function loginViaDwPassword(page, opts = {}) {
   }
   const u = body.user ?? body.data?.user
   if (!u?.userId) throw new Error('DW password login failed: response missing user')
+
+  // /dev/ may bounce to /login/ after commit; wait so evaluate is not racing a navigation.
+  await page.waitForLoadState('domcontentloaded').catch(() => {})
+  await page.waitForTimeout(300)
 
   await page.evaluate((userInfo) => {
     localStorage.setItem('ws_dw_user', JSON.stringify(userInfo))

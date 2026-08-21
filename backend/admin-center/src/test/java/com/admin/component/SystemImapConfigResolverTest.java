@@ -59,4 +59,47 @@ class SystemImapConfigResolverTest {
         IllegalStateException ex = assertThrows(IllegalStateException.class, resolver::requireSystemImapEndpoint);
         assertTrue(ex.getMessage().contains("imap.host"));
     }
+
+    @Test
+    void requireSystemImapEndpoint_allowsConfiguredIntranetHost() {
+        ReflectionTestUtils.setField(resolver, "ssrfAllowedHosts", List.of("activepieces"));
+        when(configManager.getConfigValue(SystemImapConfigResolver.KEY_HOST)).thenReturn("imap.corp.internal");
+        when(configManager.getConfigValue(SystemImapConfigResolver.KEY_PORT)).thenReturn("993");
+        when(configManager.getConfigValue(SystemImapConfigResolver.KEY_USE_SSL)).thenReturn("true");
+
+        SystemImapConfigResolver.SystemImapEndpoint endpoint = resolver.requireSystemImapEndpoint();
+
+        assertEquals("imap.corp.internal", endpoint.host());
+        assertEquals(993, endpoint.port());
+    }
+
+    @Test
+    void requireSystemImapEndpoint_rejectsMetadataHost() {
+        when(configManager.getConfigValue(SystemImapConfigResolver.KEY_HOST)).thenReturn("169.254.169.254");
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, resolver::requireSystemImapEndpoint);
+        assertTrue(ex.getMessage().contains("not allowed"));
+    }
+
+    @Test
+    void requireSystemImapEndpoint_rejectsLoopbackHost() {
+        when(configManager.getConfigValue(SystemImapConfigResolver.KEY_HOST)).thenReturn("127.0.0.1");
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, resolver::requireSystemImapEndpoint);
+        assertTrue(ex.getMessage().contains("not allowed"));
+    }
+
+    @Test
+    void requireSystemImapEndpoint_allowsConfiguredPrivateLiteral() {
+        ReflectionTestUtils.setField(resolver, "ssrfAllowedHosts", List.of("activepieces"));
+        when(configManager.getConfigValue(SystemImapConfigResolver.KEY_HOST)).thenReturn("10.20.30.40");
+        when(configManager.getConfigValue(SystemImapConfigResolver.KEY_PORT)).thenReturn("143");
+        when(configManager.getConfigValue(SystemImapConfigResolver.KEY_USE_SSL)).thenReturn("false");
+
+        SystemImapConfigResolver.SystemImapEndpoint endpoint = resolver.requireSystemImapEndpoint();
+
+        assertEquals("10.20.30.40", endpoint.host());
+        assertEquals(143, endpoint.port());
+        assertFalse(endpoint.useSsl());
+    }
 }

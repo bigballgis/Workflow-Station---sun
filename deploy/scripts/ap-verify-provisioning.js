@@ -25,7 +25,6 @@
  *   AP_INTERNAL_URL                          AP 服务端地址（k8s: http://activepieces-service:80）
  *   ACTIVEPIECES_SHARED_EMAIL / _PASSWORD    共享账号（与 ap-bootstrap-shared-account.js 同源）
  *   ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID 期望的 project externalId（默认 hermes-main）
- *   ACTIVEPIECES_MANAGED_ENABLED             'true' 时才要求 signing-key（L7 per-user 供给）
  *   AP_VERIFY_TIMEOUT_MS                     等待 AP 就绪的超时（默认 180000）
  */
 'use strict';
@@ -36,7 +35,6 @@ const BASE = (process.env.AP_INTERNAL_URL || 'http://localhost:80').replace(/\/+
 const EMAIL = process.env.ACTIVEPIECES_SHARED_EMAIL || '';
 const PASSWORD = process.env.ACTIVEPIECES_SHARED_PASSWORD || '';
 const PROJECT_EXTERNAL_ID = process.env.ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID || 'hermes-main';
-const MANAGED_ENABLED = String(process.env.ACTIVEPIECES_MANAGED_ENABLED || '').toLowerCase() === 'true';
 const TIMEOUT_MS = parseInt(process.env.AP_VERIFY_TIMEOUT_MS || '180000', 10);
 
 function req(method, path, body, token) {
@@ -159,8 +157,12 @@ async function main() {
     console.log('[ap-verify] project externalId=' + PROJECT_EXTERNAL_ID + ' OK');
   }
 
-  // --- 3. signing key (only meaningful when L7 managed auth is on) ---
-  if (MANAGED_ENABLED) {
+  // --- 3. signing key ---
+  // HERMES 2026-08-14: was gated on ACTIVEPIECES_MANAGED_ENABLED. That switch is GONE —
+  // managed-authn is now the ONLY identity path (the shared account was removed), so the
+  // gate could only ever evaluate false and silently skip the check that matters most.
+  // A missing signing key means every admin-center → AP call 502s; it must always be a gap.
+  {
     const keysRes = await req('GET', '/api/v1/signing-keys', null, token);
     const keys = asList(keysRes.body);
     if (keys === null) {
@@ -171,7 +173,7 @@ async function main() {
       });
     } else if (keys.length === 0) {
       gaps.push({
-        what: 'signing key (ACTIVEPIECES_MANAGED_ENABLED=true)',
+        what: 'signing key (required: managed-authn is the only identity path)',
         detail: 'signing_key is empty — every managed sign-in will 401 and the DW Automation tab '
           + 'will fail to mount, even though AP itself looks healthy',
         fix: [
@@ -196,8 +198,6 @@ async function main() {
     } else {
       console.log('[ap-verify] signing keys: ' + keys.length + ' OK');
     }
-  } else {
-    console.log('[ap-verify] ACTIVEPIECES_MANAGED_ENABLED is not true -> signing key not required.');
   }
 
   // --- 4. piece catalog (designer half of the allowlist) ---

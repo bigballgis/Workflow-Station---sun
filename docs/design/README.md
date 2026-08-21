@@ -34,8 +34,9 @@
 |------|------|
 | [portal-bu-rbac.md](./portal-bu-rbac.md) | **身份从哪来**：BU + 角色（UBR）模型、工作台上下文、JWT 硬约束 |
 | [portal-permission-self-service.md](./portal-permission-self-service.md) | **门户能做什么**：UBR 自助申请/代办/退出、无 UBR（`C` 为空集）时的访问模式 |
+| [portal-task-delegation.md](./portal-task-delegation.md) | **任务委托（本期）**：仅站立规则 act-as；单任务 DELEGATE/TRANSFER 本期不理；与 UBR「代办」分域 |
 
-> 两篇互补且已互链：前者是硬约束，后者是产品规则。
+> 身份两篇互补且已互链：前者是硬约束，后者是产品规则。任务委托是第三条线——**不要**与 UBR「代办申请」混称。
 
 ## Developer Workstation
 
@@ -63,6 +64,21 @@
 |------|------|
 | [feature-blueprint.md](./feature-blueprint.md) | 1.0 功能总蓝图（三应用 = 三层楼的整体视图，2.0 规划树） |
 | [user-profile-information-architecture.md](./user-profile-information-architecture.md) | 三端「个人中心 / 顶栏用户菜单」的信息边界与术语 |
+| [shared-list-components.md](./shared-list-components.md) | **列表共享组件 + 服务端分页接入规范**（状态：**方案已定稿，未实现**）：列头 / 列宽 / 筛选弹窗 / 分页四组件落 `frontend/shared/src/list/`；**本期范围只有 UP + AD，developer-workstation 一行不改**（`designer-list` 只作只读参考）；按菜单增量接入，每次必答「不越权 / 真分页 / 算子随字段类型 / 分组标签单边」，且**全程零兜底** |
+| [list-file-name-filter.md](./list-file-name-filter.md) | **列表 FILE 列按文件名筛选**（状态：**方案评审中，未实现**）：基线仍是 display-only；下一期用与格子同一套抽名规则筛，禁止当 TEXT 比 URL；推荐查询侧 SQL 抽名（MVP），落库结构化为后续 |
+
+> 列表改造是**增量**的：共享组件纯新增，一个菜单一个提交，未接入的菜单行为不变。
+> 行可见范围沿用现有权限语义，子串匹配只能做**候选粗筛**、必须接精确复核（§6.1）。
+> SUB 视图的行身份取 JSON 上的 `row_id`（优先级见 §6.1.1），**不走物理表 PK**——业务子表是
+> JSON 行存储、没有物理表，走那条路必然取空；没有身份键的行**抛错**不静默合并。
+> 分组能力**按字段语义逐列声明**，不是每个列头都挂分组入口（§6.3.1）。
+> 筛选 kind 的权威是表 `data_type` / 视图系统列，**不是** Form 组件；`current_step` 是 TEXT。
+> SUB 的四列系统字段同样筛 `pi.*`（和 MAIN 同一套 kind），不是 display-only（§6.3.2）。
+> `FILE` 列基线只展示；按文件名筛见 [list-file-name-filter.md](./list-file-name-filter.md)，禁止当 TEXT 凑合（§6.3.2）。
+> 封闭选项列（Status / Legal Hold / 人员）筛选一律 Equals / Not equals / No data / Has data（§6.3）。
+> 排序按 kind：文本字母、数字大小、时间新旧（§6.3.3）。
+> 翻页 loading：网格 `v-loading` 一只转圈；`ListPagination` 只禁用，不在页码左边再画一只。
+> 深分页**不设页数上限**，改为 >1s 记 WARN 慢查询日志，按生产真实分布再决定（§6.2）。
 
 ---
 

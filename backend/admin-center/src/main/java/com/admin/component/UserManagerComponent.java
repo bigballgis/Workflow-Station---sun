@@ -25,7 +25,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,10 +52,6 @@ public class UserManagerComponent {
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
     private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final I18nService i18nService;
-
-    /** From env USER_RESET_PASSWORD (see application.yml); not logged or returned in API. */
-    @Value("${admin.user.reset-password}")
-    private String userResetPassword;
     
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
@@ -255,34 +250,6 @@ public class UserManagerComponent {
         userRepository.save(user);
         
         log.info("User status updated: {} from {} to {}", userId, oldStatus, newStatus);
-    }
-    
-    /**
-     * Reset credential to administrator-configured rotating secret.
-     */
-    @Transactional
-    @Audited(action = "PASSWORD_RESET", resourceType = "USER", resourceId = "#userId")
-    public void resetPassword(String userId) {
-        log.info("Resetting password for user: {}", userId);
-        
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
-        
-        if (userResetPassword == null || userResetPassword.isBlank()) {
-            throw new AdminBusinessException("USER_RESET_PASSWORD_NOT_CONFIGURED",
-                    i18nService.getMessage("admin.user.reset_password_not_configured"));
-        }
-        String encodedPassword = passwordEncoder.encode(userResetPassword);
-        
-        user.setPasswordHash(encodedPassword);
-        user.setMustChangePassword(true);
-        user.setPasswordExpiredAt(LocalDateTime.now().plusDays(90));
-        
-        userRepository.save(user);
-        
-        savePasswordHistory(userId, encodedPassword);
-        
-        log.info("Password reset successfully for user: {} (plaintext not returned in API response)", userId);
     }
     
     /**

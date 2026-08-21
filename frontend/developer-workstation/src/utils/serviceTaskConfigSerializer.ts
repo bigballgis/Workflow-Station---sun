@@ -1,74 +1,80 @@
 /**
- * ServiceTask (AP) Task Config Serialization/Deserialization utilities.
- * Handles conversion between ServiceTaskConfig objects and BPMN extension properties.
+ * ServiceTask (AP) config serialization for the BPMN designer.
  *
- * The engine reads these `ap:`-prefixed properties from the deployed service task and
- * (because `ap:flowId` is present) binds the task to the `${apTaskExecutor}` delegate at
- * deploy time.
+ * FR-C01/C02: a service task of type "ap" stores ONE business key (`ap:flowKey`,
+ * the flow's `metadata.hermesFlowKey`). The engine resolves the key to the
+ * environment-local flow id at deploy/run time; webhook URL, timeout, retry and
+ * variable mappings are no longer configured on the BPMN — the flow itself reads
+ * `{{trigger.body.variables.<name>}}` and returns `{"variables": {...}}`.
+ *
+ * Legacy BPMN may still carry `ap:flowId` (+ webhook/timeout/mapping keys). On
+ * load the old flow id is surfaced as `legacyFlowId` so the panel can prefill it;
+ * on save everything is written as `ap:flowKey` and every legacy key is cleared
+ * (the engine resolves by reference, so an id value in `ap:flowKey` still works).
  */
 
-import type { ServiceTaskConfig, VariableMapping } from '@/api/serviceTask'
+/** AP task config for BPMN serialization */
+export interface ServiceTaskConfig {
+  /** Business key of the automation flow (metadata.hermesFlowKey) */
+  flowKey: string
+}
 
 /** BPMN extension property prefix for AP config */
 export const AP_PREFIX = 'ap:'
 
-/** BPMN extension property keys */
-export const AP_KEYS = {
-  flowId: `${AP_PREFIX}flowId`,
-  webhookUrl: `${AP_PREFIX}webhookUrl`,
-  timeoutSeconds: `${AP_PREFIX}timeoutSeconds`,
-  retryCount: `${AP_PREFIX}retryCount`,
-  inputMapping: `${AP_PREFIX}inputMapping`,
-  outputMapping: `${AP_PREFIX}outputMapping`,
-} as const
+/** The single extension property the panel writes */
+export const AP_FLOW_KEY = `${AP_PREFIX}flowKey`
+
+/**
+ * Superseded `ap:*` keys — cleared on every save and on service-type switches so
+ * exports / version snapshots don't carry dead config.
+ */
+export const LEGACY_AP_KEYS = [
+  `${AP_PREFIX}flowId`,
+  `${AP_PREFIX}webhookUrl`,
+  `${AP_PREFIX}timeoutSeconds`,
+  `${AP_PREFIX}retryCount`,
+  `${AP_PREFIX}inputMapping`,
+  `${AP_PREFIX}outputMapping`,
+] as const
+
+/** All ap:* keys a service task may carry (current + legacy) */
+export const ALL_AP_KEYS = [AP_FLOW_KEY, ...LEGACY_AP_KEYS] as const
 
 /** Validation error messages */
 export interface ApValidationErrors {
-  flowId: string
+  flowKey: string
 }
 
 /** Default AP task config */
 export function createDefaultApConfig(): ServiceTaskConfig {
-  return {
-    flowId: '',
-    webhookUrl: '',
-    timeoutSeconds: 120,
-    retryCount: 3,
-    inputMapping: [],
-    outputMapping: [],
-  }
+  return { flowKey: '' }
 }
 
-/**
- * Serialize ServiceTaskConfig to BPMN extension property key-value pairs.
- * Variable mappings are serialized as JSON strings.
- */
+/** Serialize ServiceTaskConfig to BPMN extension property key-value pairs. */
 export function serializeApConfig(config: ServiceTaskConfig): Record<string, string> {
-  return {
-    [AP_KEYS.flowId]: config.flowId || '',
-    [AP_KEYS.webhookUrl]: config.webhookUrl || '',
-    [AP_KEYS.timeoutSeconds]: String(config.timeoutSeconds ?? 120),
-    [AP_KEYS.retryCount]: String(config.retryCount ?? 3),
-    [AP_KEYS.inputMapping]: JSON.stringify(config.inputMapping || []),
-    [AP_KEYS.outputMapping]: JSON.stringify(config.outputMapping || []),
-  }
+  return { [AP_FLOW_KEY]: config.flowKey || '' }
+}
+
+/** Result of reading a service task's ap:* properties. */
+export interface DeserializedApConfig extends ServiceTaskConfig {
+  /**
+   * Set when the task has no `ap:flowKey` but still carries a legacy `ap:flowId`.
+   * The panel prefills the input with it and flags the binding as legacy; saving
+   * rewrites it as `ap:flowKey` (same value — the engine resolves ids too).
+   */
+  legacyFlowId: string
 }
 
 /**
- * Deserialize BPMN extension properties (Record<string, any>) back to ServiceTaskConfig.
- * Handles both prefixed (ap:flowId) and raw property names.
+ * Deserialize BPMN extension properties back to ServiceTaskConfig.
+ * Handles both prefixed (ap:flowKey) and raw property names.
  */
-export function deserializeApConfig(ext: Record<string, any>): ServiceTaskConfig {
-  const get = (key: string): any => ext[`${AP_PREFIX}${key}`] ?? ext[key]
-
-  return {
-    flowId: String(get('flowId') ?? ''),
-    webhookUrl: String(get('webhookUrl') ?? ''),
-    timeoutSeconds: parseNumberWithDefault(get('timeoutSeconds'), 120),
-    retryCount: parseNumberWithDefault(get('retryCount'), 3),
-    inputMapping: parseMappingArray(get('inputMapping')),
-    outputMapping: parseMappingArray(get('outputMapping')),
-  }
+export function deserializeApConfig(ext: Record<string, unknown>): DeserializedApConfig {
+  const get = (key: string): unknown => ext[`${AP_PREFIX}${key}`] ?? ext[key]
+  const flowKey = String(get('flowKey') ?? '')
+  const legacyFlowId = flowKey ? '' : String(get('flowId') ?? '')
+  return { flowKey, legacyFlowId }
 }
 
 /**
@@ -77,33 +83,6 @@ export function deserializeApConfig(ext: Record<string, any>): ServiceTaskConfig
  */
 export function validateApConfig(config: ServiceTaskConfig): ApValidationErrors {
   return {
-    flowId: config.flowId || config.webhookUrl ? '' : 'AP flow ID is required',
+    flowKey: config.flowKey.trim() ? '' : 'Automation flow key is required',
   }
-}
-
-/** Parse a number with a default fallback */
-function parseNumberWithDefault(value: any, defaultValue: number): number {
-  if (value === undefined || value === null || value === '') return defaultValue
-  const num = Number(value)
-  return isNaN(num) ? defaultValue : num
-}
-
-/** Parse variable mapping array from JSON string or array */
-function parseMappingArray(value: any): VariableMapping[] {
-  if (!value) return []
-  if (Array.isArray(value)) return value.filter(isValidMapping)
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value)
-      if (Array.isArray(parsed)) return parsed.filter(isValidMapping)
-    } catch {
-      // ignore parse errors
-    }
-  }
-  return []
-}
-
-/** Check if an object is a valid VariableMapping */
-function isValidMapping(item: any): item is VariableMapping {
-  return item && typeof item === 'object' && 'source' in item && 'target' in item
 }

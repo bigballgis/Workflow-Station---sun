@@ -1,238 +1,142 @@
+<!--
+  Service Task (type=ap) panel — FR-C01/C02: the task references its automation
+  flow by ONE business key (`ap:flowKey` = the flow's metadata.hermesFlowKey).
+  Flows themselves are designed on the standalone Automation page; webhook URL,
+  timeout/retry and variable mappings are no longer BPMN concerns.
+
+  The picker lazy-loads the project's flows via the bridge session on first open;
+  a load failure only shows a hint — manual key entry is never blocked.
+-->
 <template>
   <div class="ap-task-properties">
-    <!-- AP Flow ID -->
     <el-form-item
-      :label="t('properties.apFlowId')"
-      :error="validationErrors.flowId"
+      :label="t('properties.apFlowKey')"
+      :error="validationErrors.flowKey"
     >
-      <el-input
-        v-model="apConfig.flowId"
-        :placeholder="t('properties.apFlowIdPlaceholder')"
+      <el-select
+        v-model="apConfig.flowKey"
+        class="flow-key-select"
+        filterable
+        clearable
+        allow-create
+        default-first-option
+        :loading="loadingFlows"
+        :placeholder="t('properties.apFlowKeyPlaceholder')"
+        @visible-change="onDropdownVisible"
         @change="saveConfig"
-      />
+      >
+        <el-option
+          v-for="flow in flowOptions"
+          :key="flow.key"
+          :label="`${flow.name} (${flow.key})`"
+          :value="flow.key"
+        />
+      </el-select>
       <div class="form-tip">
-        {{ t('properties.apFlowIdTip') }}
+        {{ t('properties.apFlowKeyTip') }}
+      </div>
+      <div
+        v-if="flowLoadFailed"
+        class="form-tip form-tip--warning"
+      >
+        {{ t('properties.apFlowKeyLoadFailed') }}
       </div>
     </el-form-item>
 
-    <!-- Webhook URL override (optional) -->
-    <el-form-item :label="t('properties.apWebhookUrl')">
-      <el-input
-        v-model="apConfig.webhookUrl"
-        :placeholder="t('properties.apWebhookUrlPlaceholder')"
-        @change="saveConfig"
-      />
-      <div class="form-tip">
-        {{ t('properties.apWebhookUrlTip') }}
-      </div>
-    </el-form-item>
+    <el-alert
+      v-if="legacyFlowId"
+      :title="t('properties.apFlowKeyLegacy', { id: legacyFlowId })"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="legacy-alert"
+    />
 
-    <!-- Timeout -->
-    <el-form-item :label="t('properties.apTimeout')">
-      <el-input-number
-        v-model="apConfig.timeoutSeconds"
-        :min="1"
-        :max="3600"
-        @change="saveConfig"
-      />
-      <span class="form-tip">{{ t('properties.apTimeoutUnit') }}</span>
-      <div class="form-tip">
-        {{ t('properties.apTimeoutRuntimeTip') }}
+    <!-- Envelope contract: how the flow receives and returns process variables -->
+    <div class="contract-tip">
+      <div class="contract-tip__title">
+        {{ t('properties.apContractTitle') }}
       </div>
-    </el-form-item>
-
-    <!-- Retry Count -->
-    <el-form-item :label="t('properties.apRetryCount')">
-      <el-input-number
-        v-model="apConfig.retryCount"
-        :min="0"
-        :max="10"
-        @change="saveConfig"
-      />
-    </el-form-item>
-
-    <!-- Input Mapping -->
-    <div class="mapping-section">
-      <div class="mapping-header">
-        <span>{{ t('properties.apInputMapping') }}</span>
-        <el-button
-          type="primary"
-          link
-          size="small"
-          @click="addInputMapping"
-        >
-          + {{ t('common.add') }}
-        </el-button>
+      <div class="contract-tip__line">
+        {{ t('properties.apContractInput') }}
+        <code>{{ INPUT_EXPRESSION }}</code>
       </div>
-      <div class="table-scroll-wrap">
-        <el-table
-          v-if="apConfig.inputMapping.length > 0"
-          :data="apConfig.inputMapping"
-          size="small"
-          border
-        >
-          <el-table-column
-            :label="t('properties.apMappingSource')"
-            min-width="120"
-          >
-            <template #default="{ row }">
-              <el-input
-                v-model="row.source"
-                size="small"
-                :placeholder="t('properties.apInputSourcePlaceholder')"
-                @change="saveConfig"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column
-            :label="t('properties.apMappingTarget')"
-            min-width="120"
-          >
-            <template #default="{ row }">
-              <el-input
-                v-model="row.target"
-                size="small"
-                :placeholder="t('properties.apInputTargetPlaceholder')"
-                @change="saveConfig"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column
-            width="50"
-            align="center"
-          >
-            <template #default="{ $index }">
-              <el-button
-                type="danger"
-                link
-                size="small"
-                @click="removeInputMapping($index)"
-              >
-                <el-icon><Close /></el-icon>
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </div>
-
-    <!-- Output Mapping -->
-    <div class="mapping-section">
-      <div class="mapping-header">
-        <span>{{ t('properties.apOutputMapping') }}</span>
-        <el-button
-          type="primary"
-          link
-          size="small"
-          @click="addOutputMapping"
-        >
-          + {{ t('common.add') }}
-        </el-button>
-      </div>
-      <div class="table-scroll-wrap">
-        <el-table
-          v-if="apConfig.outputMapping.length > 0"
-          :data="apConfig.outputMapping"
-          size="small"
-          border
-        >
-          <el-table-column
-            :label="t('properties.apMappingSource')"
-            min-width="120"
-          >
-            <template #default="{ row }">
-              <el-input
-                v-model="row.source"
-                size="small"
-                :placeholder="t('properties.apOutputSourcePlaceholder')"
-                @change="saveConfig"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column
-            :label="t('properties.apMappingTarget')"
-            min-width="120"
-          >
-            <template #default="{ row }">
-              <el-input
-                v-model="row.target"
-                size="small"
-                :placeholder="t('properties.apOutputTargetPlaceholder')"
-                @change="saveConfig"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column
-            width="50"
-            align="center"
-          >
-            <template #default="{ $index }">
-              <el-button
-                type="danger"
-                link
-                size="small"
-                @click="removeOutputMapping($index)"
-              >
-                <el-icon><Close /></el-icon>
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+      <div class="contract-tip__line">
+        {{ t('properties.apContractOutput') }}
+        <code>{{ OUTPUT_ENVELOPE }}</code>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, watch, onMounted } from 'vue'
+import { reactive, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Close } from '@element-plus/icons-vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
-import { getExtensionProperties, setExtensionProperty } from '@/utils/bpmnExtensions'
-import type { ServiceTaskConfig } from '@/api/serviceTask'
+import { getExtensionProperties, setExtensionProperty, removeExtensionProperty } from '@/utils/bpmnExtensions'
+import { fetchServiceTaskSession, listAutomationFlows } from '@/api/automation'
 import {
+  LEGACY_AP_KEYS,
   serializeApConfig,
   deserializeApConfig,
   validateApConfig,
   createDefaultApConfig,
+  type ServiceTaskConfig,
   type ApValidationErrors
 } from '@/utils/serviceTaskConfigSerializer'
 
 const { t } = useI18n()
+
+// 信封契约样例。字符串拼接是必需的：模板里直接写 `{{…}}` 字面量会被 Vue 编译器
+// 当成插值结束符，SFC 解析直接报错。
+const INPUT_EXPRESSION = `{${'{'}trigger.body.variables.<name>${'}'}}`
+const OUTPUT_ENVELOPE = '{ "variables": { ... } }'
 
 const props = defineProps<{
   modeler: BpmnModeler
   element: BpmnElement
 }>()
 
-const validationErrors = reactive<ApValidationErrors>({ flowId: '' })
+const validationErrors = reactive<ApValidationErrors>({ flowKey: '' })
 const apConfig = reactive<ServiceTaskConfig>(createDefaultApConfig())
+/** Legacy ap:flowId found on load (no ap:flowKey yet); cleared once re-saved as a key. */
+const legacyFlowId = ref('')
 
-/** Add input mapping row */
-function addInputMapping() {
-  apConfig.inputMapping.push({ source: '', target: '' })
-  saveConfig()
+/* ---- optional flow picker (lazy, non-blocking) ---- */
+interface FlowOption { key: string; name: string }
+const flowOptions = ref<FlowOption[]>([])
+const loadingFlows = ref(false)
+const flowLoadFailed = ref(false)
+let flowsLoaded = false
+
+async function onDropdownVisible(visible: boolean) {
+  if (!visible || flowsLoaded || loadingFlows.value) return
+  loadingFlows.value = true
+  flowLoadFailed.value = false
+  try {
+    const session = await fetchServiceTaskSession()
+    const page = await listAutomationFlows({
+      token: session.token,
+      projectId: session.projectId,
+      limit: 100,
+    })
+    flowOptions.value = (page.data || [])
+      .map((flow) => ({
+        key: flow.metadata?.hermesFlowKey || '',
+        name: flow.version?.displayName || flow.id,
+      }))
+      .filter((option) => option.key !== '')
+    flowsLoaded = true
+  } catch (error) {
+    // Manual entry stays available — only surface a hint.
+    flowLoadFailed.value = true
+    console.error('[ServiceTaskFlowPanel] flow list load failed', error)
+  } finally {
+    loadingFlows.value = false
+  }
 }
 
-/** Remove input mapping row */
-function removeInputMapping(index: number) {
-  apConfig.inputMapping.splice(index, 1)
-  saveConfig()
-}
-
-/** Add output mapping row */
-function addOutputMapping() {
-  apConfig.outputMapping.push({ source: '', target: '' })
-  saveConfig()
-}
-
-/** Remove output mapping row */
-function removeOutputMapping(index: number) {
-  apConfig.outputMapping.splice(index, 1)
-  saveConfig()
-}
-
-/** Save all AP config to BPMN extension properties */
+/** Save: write ap:flowKey and clear every legacy ap:* key (FR-C02). */
 function saveConfig() {
   if (!props.element || !props.modeler) return
   validate()
@@ -240,22 +144,29 @@ function saveConfig() {
   for (const [key, value] of Object.entries(serialized)) {
     setExtensionProperty(props.modeler, props.element, key, value)
   }
+  for (const key of LEGACY_AP_KEYS) {
+    removeExtensionProperty(props.modeler, props.element, key)
+  }
+  if (apConfig.flowKey) {
+    legacyFlowId.value = ''
+  }
 }
 
-/** Load AP config from BPMN extension properties */
+/** Load AP config from BPMN extension properties (legacy ap:flowId prefills the input). */
 function loadConfig() {
   if (!props.element) return
   const ext = getExtensionProperties(props.element)
   const loaded = deserializeApConfig(ext)
-  Object.assign(apConfig, loaded)
+  apConfig.flowKey = loaded.flowKey || loaded.legacyFlowId
+  legacyFlowId.value = loaded.legacyFlowId
   validate()
 }
 
 /** Validate required fields - returns true if valid */
 function validate(): boolean {
   const errors = validateApConfig(apConfig)
-  validationErrors.flowId = errors.flowId
-  return !errors.flowId
+  validationErrors.flowKey = errors.flowKey ? t('properties.apFlowKeyRequired') : ''
+  return !errors.flowKey
 }
 
 /** Expose validate method for parent component */
@@ -268,18 +179,8 @@ onMounted(loadConfig)
 
 <style lang="scss" scoped>
 .ap-task-properties {
-  .mapping-section {
-    margin-bottom: 16px;
-
-    .mapping-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--el-text-color-regular);
-    }
+  .flow-key-select {
+    width: 100%;
   }
 
   .form-tip {
@@ -287,6 +188,44 @@ onMounted(loadConfig)
     color: var(--el-text-color-secondary);
     margin-top: 4px;
     line-height: 1.4;
+  }
+
+  .form-tip--warning {
+    color: var(--el-color-warning);
+  }
+
+  .legacy-alert {
+    margin-bottom: 12px;
+
+    :deep(.el-alert__title) {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  }
+
+  .contract-tip {
+    margin-top: 4px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: var(--el-fill-color-lighter);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--el-text-color-secondary);
+
+    .contract-tip__title {
+      font-weight: 600;
+      color: var(--el-text-color-regular);
+      margin-bottom: 2px;
+    }
+
+    code {
+      font-size: 11px;
+      color: var(--el-text-color-regular);
+      background: var(--el-fill-color);
+      border-radius: 3px;
+      padding: 0 4px;
+      word-break: break-all;
+    }
   }
 }
 </style>

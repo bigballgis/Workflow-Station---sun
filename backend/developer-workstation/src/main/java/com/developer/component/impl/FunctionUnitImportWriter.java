@@ -132,6 +132,7 @@ public class FunctionUnitImportWriter {
                 if (fieldData.get("fkDisplayMode") instanceof String fkDisplayMode) {
                     fieldBuilder.fkDisplayMode(fkDisplayMode);
                 }
+                applyComputedField(fieldBuilder, fieldData);
                 table.getFieldDefinitions().add(fieldBuilder.build());
             }
             tableDefinitionRepository.save(table);
@@ -515,6 +516,23 @@ public class FunctionUnitImportWriter {
     }
 
     @SuppressWarnings("unchecked")
+    private void applyComputedField(FieldDefinition.FieldDefinitionBuilder fieldBuilder,
+                                    Map<String, Object> fieldData) {
+        boolean computed = Boolean.TRUE.equals(fieldData.get("isComputed"));
+        fieldBuilder.isComputed(computed);
+        if (!computed) {
+            fieldBuilder.computedFieldJson(null);
+            return;
+        }
+        Map<String, Object> definition = parseJsonMap(fieldData.get("computedField"));
+        if (definition == null || definition.isEmpty()) {
+            throw new DeveloperBusinessException("COMPUTED_FIELD_IMPORT_INVALID",
+                    "Field '" + fieldData.get("fieldName")
+                            + "' is marked computed but has no usable formula JSON");
+        }
+        fieldBuilder.computedFieldJson(definition);
+    }
+
     private List<String> parseStringList(Object obj) {
         if (obj instanceof List<?> list) {
             List<String> result = new java.util.ArrayList<>();
@@ -532,6 +550,13 @@ public class FunctionUnitImportWriter {
     private Map<String, Object> parseJsonMap(Object obj) {
         if (obj instanceof Map<?, ?> map) {
             return new HashMap<>((Map<String, Object>) map);
+        }
+        if (obj instanceof String s && !s.isBlank()) {
+            try {
+                return objectMapper.readValue(s, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                return null;
+            }
         }
         return null;
     }

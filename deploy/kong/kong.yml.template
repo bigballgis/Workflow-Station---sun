@@ -127,6 +127,16 @@ services:
     write_timeout: 300000
     read_timeout: 300000
     routes:
+      # AP 原生凭据登录/注册：从公网网关封死（见下方 request-termination 插件）。
+      # Kong 按最长前缀匹配，这两条比上面的 /api/ap 更具体，故优先命中。
+      # 必须先于 activepieces-builder-route 声明意图上无要求（匹配靠长度不靠顺序），
+      # 但放在这里是为了让读的人一眼看到"这个前缀有个洞已经堵上"。
+      - name: activepieces-authn-block-route
+        paths:
+          - /api/ap/v1/authentication/sign-in
+          - /api/ap/v1/authentication/sign-up
+        strip_path: true
+        preserve_host: false
       - name: activepieces-builder-route
         paths:
           - /api/ap
@@ -155,7 +165,7 @@ services:
 
   # --- Activepieces 本地 CDN 镜像 (/ap-cdn) ---
   # 气隙环境下 cdn.activepieces.com 不可达，镜像落在 AP 自己的 publicDir
-  # (activepieces/packages/web/public/ap-cdn -> 镜像内 dist/packages/web/ap-cdn)，
+  # (automation/packages/web/public/ap-cdn -> 镜像内 dist/packages/web/ap-cdn)，
   # 由 AP 容器直接静态提供。引用它的有两处，且都写成**根绝对路径** `/ap-cdn/...`：
   #   1. 构建期重写（vite-plugins/ap-cdn-rewrite.js，HERMES-PATCH-009）
   #   2. piece 元数据的 logoUrl（deploy/pieces/generate-metadata-seed.js 落库）
@@ -226,6 +236,27 @@ services:
 # Plugins (全局插件)
 # ============================================================
 plugins:
+  # --- AP 原生凭据登录：在公网网关上终止 ---
+  # 身份模型是「谁进去就是谁」：AP 会话只能由 admin-center 按当前操作人经 managed-authn
+  # (RS256 外部 token) 换取。AP 自带的 POST /v1/authentication/sign-{in,up} 是 public()
+  # 端点，经 /api/ap 前缀原样可达 —— 任何在 AP 库里有口令的身份都能绕过平台直接登录。
+  # sign-up 已在应用层显式拒绝(HERMES-PATCH-022)，sign-in 是上游原样代码，故在此堵住。
+  #
+  # 为什么用 request-termination 而不是 ip-restriction：
+  #   uat/preprod 的真实使用者在公司内网，其客户端 IP 本身就是私网段，按 IP 放行等于
+  #   不设防（"内网"对浏览器用户和对集群同样成立）。真正的分界不是 IP 而是**是否经过
+  #   本网关**：迁移/导出脚本(deploy/scripts/ap-*.js)用 AP_INTERNAL_URL 直连
+  #   activepieces-service:80(ClusterIP，不对外暴露)，根本不走 Kong；浏览器则只能经此。
+  #   所以在网关整条封死，恰好等价于"仅集群内可用"，且不误伤任何既有脚本。
+  #
+  # 只封这两条，不封整个 /v1/authentication 前缀：switch-platform 仍被 SPA 使用
+  # (packages/web/src/lib/authentication-session.ts)，一并封会打断已登录会话。
+  - name: request-termination
+    route: activepieces-authn-block-route
+    config:
+      status_code: 404
+      message: 'Not Found'
+
   # --- correlation-id: 分布式追踪 ---
   - name: correlation-id
     config:

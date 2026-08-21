@@ -1,0 +1,31 @@
+export { wideEvent } from './wide-event'
+export { apLogger } from './ap-logger'
+export type { ApLogger } from './ap-logger'
+export { evlogDrains } from './evlog-drains'
+export type { EvlogDrainConfig } from './evlog-drains'
+export { evlogSetup } from './evlog-setup'
+export type { EvlogSetupParams } from './evlog-setup'
+export { createLogger, defineAuditAction, defineErrorCatalog, parseError } from 'evlog'
+export type { AuditActor, DefinedAuditAction, ErrorCatalog } from 'evlog'
+export { evlog as evlogFastify, useLogger as useWideEventLogger } from 'evlog/fastify'
+export { apVersionUtil, UNKNOWN_VERSION } from './ap-version'
+export { cryptoUtils } from './crypto'
+export { DatabaseType } from './database-type'
+export { environmentMigrations } from './env-migrations'
+export { onCallService } from './on-call.service'
+export { apDayjs, apDayjsDuration } from './dayjs-helper'
+export { fileSystemUtils, INFINITE_LOCK_TIMEOUT } from './file-system-utils'
+export { loggerRedact } from './logger-redact'
+export type { RedactConfig } from './logger-redact'
+export { memoryLock } from './memory-lock'
+export type { ApLock } from './memory-lock'
+export { RedisType } from './redis-type'
+export { safeHttp } from './safe-http'
+export type { SsrfAgents } from './safe-http'
+export { systemUsage } from './system-usage'
+// HERMES-PATCH-015 (0.88): agent-ai-utils deleted with the agents/ai domains — it was the
+// last @ai-sdk/* importer in server/utils and had no consumer once the worker's EE agent job
+// was removed.
+// HERMES: mcp-transport deleted for the same reason — the mcp domain is gone, so this barrel
+// export (mcpTransport + its two DEFAULT_MCP_* constants) was the module's only consumer.
+// It was the last @modelcontextprotocol/sdk importer in the tree.

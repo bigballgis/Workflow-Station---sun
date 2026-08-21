@@ -34,16 +34,28 @@
           </span>
         </div>
         <div>
+          <el-button
+            v-if="AI_STUDIO_ENABLED && !isReadOnly"
+            type="primary"
+            plain
+            @click="showAiStudioDialog = true"
+          >
+            <el-icon><Guide /></el-icon>
+            {{ t('ai.studio.entryButton') }}
+          </el-button>
           <!-- AI Generate 入口：功能已停用，见 utils/featureFlags.ts -->
           <el-button
-            v-if="AI_GENERATION_ENABLED"
+            v-if="AI_GENERATION_ENABLED && !isReadOnly"
             type="primary"
             @click="showAiPanel = true"
           >
             <el-icon><MagicStick /></el-icon>
             {{ t('ai.panel.generateButton') }}
           </el-button>
-          <el-button @click="openEditDialog">
+          <el-button
+            v-if="!isReadOnly"
+            @click="openEditDialog"
+          >
             <el-icon><Setting /></el-icon>
             {{ t('functionUnit.settings') }}
           </el-button>
@@ -61,6 +73,7 @@
             {{ t('functionUnit.validate') }}
           </el-button>
           <el-button
+            v-if="!isReadOnly"
             type="warning"
             @click="showDeployDialog = true"
           >
@@ -70,6 +83,23 @@
         </div>
       </div>
 
+      <el-alert
+        v-if="isReadOnly"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="t('functionUnit.readOnlyHint')"
+        style="margin-bottom: 12px;"
+      />
+
+      <div
+        class="designer-workspace"
+        @click.capture="onReadOnlyInteraction"
+        @pointerdown.capture="onReadOnlyInteraction"
+        @keydown.capture="onReadOnlyInteraction"
+        @dragstart.capture="onReadOnlyInteraction"
+        @drop.capture="onReadOnlyInteraction"
+      >
       <el-tabs
         v-model="activeTab"
         type="border-card"
@@ -175,6 +205,7 @@
           />
         </el-tab-pane>
       </el-tabs>
+      </div>
     </div>
 
     <!-- Edit Function Unit Dialog -->
@@ -308,6 +339,14 @@
       :visible="showAiPanel"
       @update:visible="showAiPanel = $event"
       @data-applied="handleAiDataApplied"
+    />
+
+    <AiStudioEntryDialog
+      v-if="AI_STUDIO_ENABLED"
+      :function-unit-id="functionUnitId"
+      :visible="showAiStudioDialog"
+      @update:visible="showAiStudioDialog = $event"
+      @open="handleOpenAiStudio"
     />
 
     <!-- Deploy Dialog -->
@@ -461,7 +500,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick } from '@element-plus/icons-vue'
+import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick, Guide } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
 import ServiceTaskDesigner from '@/components/serviceTask/ServiceTaskDesigner.vue'
@@ -477,7 +516,11 @@ import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import AiPanel from '@/components/ai/AiPanel.vue'
-import { AI_GENERATION_ENABLED } from '@/utils/featureFlags'
+import AiStudioEntryDialog from '@/components/ai/AiStudioEntryDialog.vue'
+import { AI_GENERATION_ENABLED, AI_STUDIO_ENABLED } from '@/utils/featureFlags'
+import { blockReadOnlyDesignerInteraction } from '@/utils/readOnlyDesignerInteraction'
+import { isFunctionUnitReadOnly } from '@/utils/permission'
+import type { AiStudioOpenPayload } from '@/utils/aiStudioDraft'
 import { useFunctionUnitStatus } from '@/composables/functionUnitEdit/useFunctionUnitStatus'
 import { useFunctionUnitSettings } from '@/composables/functionUnitEdit/useFunctionUnitSettings'
 import { useFunctionUnitActions } from '@/composables/functionUnitEdit/useFunctionUnitActions'
@@ -489,6 +532,12 @@ const router = useRouter()
 const store = useFunctionUnitStore()
 
 const functionUnitId = computed(() => Number(route.params.id))
+const isReadOnly = computed(() => store.current != null && isFunctionUnitReadOnly(store.current))
+
+function onReadOnlyInteraction(event: Event): void {
+  if (!isReadOnly.value) return
+  blockReadOnlyDesignerInteraction(event)
+}
 
 // Back always means "up to the Function Unit list", never "the previous page": jumping
 // between function units from the sidebar's Recent list would otherwise make Back walk
@@ -505,6 +554,15 @@ watch(activeTab, (tab) => {
 })
 
 const showAiPanel = ref(false)
+const showAiStudioDialog = ref(false)
+
+function handleOpenAiStudio(payload: AiStudioOpenPayload) {
+  router.push({
+    name: 'AiStudioWorkspace',
+    params: { id: functionUnitId.value },
+    query: { mode: payload.mode }
+  })
+}
 /** 改这个值会重挂载流程设计器——见 handleAiDataApplied。 */
 const processDesignerReloadKey = ref(0)
 

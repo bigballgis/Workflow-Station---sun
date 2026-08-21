@@ -48,7 +48,8 @@ public final class RelationRowValidator {
 
     /**
      * Fields a user is expected to fill in an import file: all non-system fields, EXCEPT a primary key
-     * that is auto-generated (uuid / autoIncrement / prefixedSequence). Auto-generated PKs are produced
+     * that is auto-generated (uuid / autoIncrement / prefixedSequence / dailyDateSequence /
+     * monthlyDateSequence / customFormat). Auto-generated PKs are produced
      * by the server on insert, so they are omitted from the template and ignored on import — only a
      * {@code manual} PK is included (the user must supply it).
      */

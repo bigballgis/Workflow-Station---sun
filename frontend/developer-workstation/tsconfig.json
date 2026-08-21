@@ -3,7 +3,10 @@
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // lib 比 target 高一档是有意的：代码已在用 Object.hasOwn（ES2022 API），运行时也没问题
+    // ——打包走 vite/esbuild，只看它自己的 target，不读这里。这里钉 ES2020 的唯一效果是让
+    // vue-tsc 把 Object.hasOwn 报成 TS2550。target 保持 ES2020 以免改变语法降级行为。
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

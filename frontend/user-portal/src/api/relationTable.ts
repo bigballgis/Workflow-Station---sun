@@ -61,6 +61,9 @@ export interface RelationFieldDef {
   sortOrder?: number
   pkGeneration?: Record<string, any>
   lookupConfig?: LookupConfig
+  /** True when the column's value comes from a formula; read-only, recomputed by the server. */
+  isComputed?: boolean
+  computedField?: Record<string, unknown>
 }
 
 export interface RelationImportResult {

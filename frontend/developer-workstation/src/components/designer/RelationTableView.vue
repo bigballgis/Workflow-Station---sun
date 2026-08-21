@@ -171,7 +171,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Search, Close, Menu, DArrowRight, EditPen, Calendar, Document, Coin, Switch as SwitchIcon } from '@element-plus/icons-vue'
 import { relationTableViewApi, type RelationFieldDTO } from '@/api/relationTable'
 
@@ -277,15 +277,6 @@ const getMockValue = (field: RelationFieldDTO): string => {
   if (type === 'FILE') return 'file.pdf'
   return 'Sample'
 }
-
-const previewRows = computed(() => {
-  if (viewFields.value.length === 0) return []
-  const row: Record<string, any> = {}
-  for (const f of viewFields.value) {
-    row[f.fieldName] = getMockValue(f)
-  }
-  return [row]
-})
 
 const previewFieldRows = computed(() => {
   return viewFields.value.map(f => ({

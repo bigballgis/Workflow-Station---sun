@@ -80,7 +80,7 @@
             :title="isCardView ? t('functionUnit.viewIcon') : t('functionUnit.viewCard')"
           />
           <el-button
-            v-if="permissions.canCreate()"
+            v-if="canCreateInCurrentScope"
             @click="showImportDialog = true"
           >
             <el-icon><Upload /></el-icon>
@@ -95,7 +95,7 @@
             {{ t('common.export') }}
           </el-button>
           <el-button
-            v-if="permissions.canCreate()"
+            v-if="canCreateInCurrentScope"
             type="primary"
             @click="openCreateDialog"
           >
@@ -162,7 +162,7 @@
       >
         <el-empty :description="t('functionUnit.noData')">
           <el-button
-            v-if="permissions.canCreate()"
+            v-if="canCreateInCurrentScope"
             type="primary"
             @click="openCreateDialog"
           >
@@ -200,7 +200,7 @@
             :key="entryKey(entry)"
             class="launchpad-cell"
             :class="cellClasses(entryKey(entry))"
-            draggable="true"
+            :draggable="canModifyLayout"
             @dragstart="onDragStart(entry)"
             @dragend="onDragEnd"
             @dragover.prevent.stop="onDragOver(entry, $event)"
@@ -383,6 +383,7 @@
     <LaunchpadFolderOverlay
       :folder="openedFolder"
       :items="openedFolderItems"
+      :can-modify-layout="canModifyLayout"
       @close="openFolderId = null"
       @open-item="handleEdit"
       @settings="handleSettings"
@@ -461,7 +462,7 @@ import LaunchpadFolderCard from '@/components/function-unit/LaunchpadFolderCard.
 import LaunchpadFolderOverlay from '@/components/function-unit/LaunchpadFolderOverlay.vue'
 import FunctionUnitImportDialog from '@/components/function-unit/FunctionUnitImportDialog.vue'
 import { isAuthenticated } from '@/api/auth'
-import { permissions } from '@/utils/permission'
+import { permissions, isCurrentScopeReadOnly } from '@/utils/permission'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { useFunctionUnitFilters } from '@/composables/functionUnitList/useFunctionUnitFilters'
@@ -558,6 +559,9 @@ const isCardView = computed({
 const PAGE_SIZE_BY_VIEW = { card: 20, icon: 50 } as const
 const pageSize = computed(() => PAGE_SIZE_BY_VIEW[viewMode.value])
 
+const canCreateInCurrentScope = computed(() => permissions.canCreate() && !isCurrentScopeReadOnly())
+const canModifyLayout = computed(() => permissions.canEdit() && !isCurrentScopeReadOnly())
+
 // ==================== Launchpad (iOS-style icon layout + drag & drop + folders) ====================
 const {
   pagedEntries,
@@ -586,6 +590,7 @@ const {
   visibleList: filteredList,
   pageSize,
   defaultGroupName: () => t('functionUnit.newGroup'),
+  canModifyLayout,
 })
 
 // Edge drop zones shown only while dragging, so a tile can be moved to another page

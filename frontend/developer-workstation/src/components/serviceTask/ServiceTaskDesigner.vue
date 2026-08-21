@@ -1,15 +1,16 @@
 <!--
   Automation tab of the Function Unit editor.
 
-  Mounts the vendored Activepieces builder for the automation flow bound to a BPMN
-  service task of type "ap". The builder is embedded via lib-mode + Shadow DOM
+  Mounts the vendored Activepieces builder for the automation flow referenced by a
+  BPMN service task of type "ap". The builder is embedded via lib-mode + Shadow DOM
   (ServiceTaskBuilderCanvas), NOT an iframe — see decision X-6.
 
-  This tab is also where the flow is *created*: a service task can be declared as an
-  automation (serviceType=ap) in Process Design without a flow id yet, and this tab
-  turns that empty task into a real flow (POST /api/ap/v1/flows) and binds the new id
-  back onto the BPMN — otherwise the flow id in the Service Task panel would have
-  nowhere to come from.
+  Contract (FR-C01/C02): a service task references its flow by ONE business key
+  (`ap:flowKey` = the flow's metadata.hermesFlowKey; legacy BPMN may still carry a
+  raw `ap:flowId`, and the engine resolves ids too). Flows are designed on the
+  standalone Automation page as well — this tab is the per-Function-Unit view of the
+  same flows, plus the shortcut that creates a missing flow for a key that nothing
+  matches yet. The key already lives in the BPMN, so creation writes nothing back.
 
   Chain: the admin-center bridge issues the AP session (L7), the builder talks to AP
   through the Kong /api/ap prefix (L2), and the bundle itself is served from DW's own
@@ -39,38 +40,29 @@
           <div class="service-task-designer__option">
             <span class="service-task-designer__option-name">{{ task.name || task.id }}</span>
             <el-tag
-              :type="task.flowId ? 'success' : 'info'"
+              :type="taskStateType(task)"
               size="small"
               effect="light"
               disable-transitions
             >
-              {{ task.flowId ? t('functionUnit.serviceTaskBound') : t('functionUnit.serviceTaskUnbound') }}
+              {{ taskStateLabel(task) }}
             </el-tag>
           </div>
         </el-option>
       </el-select>
-      <!-- Three states, not two: a dangling binding still has a flowId, so keying only on that
-           painted a green "Flow ready" right above the "flow no longer exists" recovery prompt. -->
       <el-tag
         v-if="selectedTask"
-        :type="danglingFlowId ? 'warning' : selectedTask.flowId ? 'success' : 'info'"
+        :type="taskStateType(selectedTask)"
         size="small"
         effect="plain"
         disable-transitions
         class="service-task-designer__status"
       >
-        {{
-          danglingFlowId
-            ? t('functionUnit.serviceTaskFlowMissingTag')
-            : selectedTask.flowId
-              ? t('functionUnit.serviceTaskBound')
-              : t('functionUnit.serviceTaskUnbound')
-        }}
+        {{ taskStateLabel(selectedTask) }}
       </el-tag>
     </div>
 
-    <!-- One flow per service task; the list above switches between them. New automations
-         are born from a Service Task in Process Design, not created free-floating here. -->
+    <!-- One flow reference per service task; the list above switches between them. -->
     <div
       v-if="tasks.length > 0"
       class="service-task-designer__hint"
@@ -102,10 +94,17 @@
       :description="t('functionUnit.serviceTaskEmpty')"
     />
 
-    <!-- A service task is declared as automation but has no flow yet: create it here -->
+    <!-- Declared as automation but no flow key configured: the key is set in the
+         Service Task panel of Process Design, not here. -->
     <el-empty
-      v-else-if="!loading && selectedTask && !selectedTask.flowId"
-      :description="t('functionUnit.serviceTaskNoFlow')"
+      v-else-if="!loading && selectedTask && !selectedFlowRef"
+      :description="t('functionUnit.serviceTaskNoKey')"
+    />
+
+    <!-- A key is configured but no flow matches it yet: create it here -->
+    <el-empty
+      v-else-if="!loading && selectedTask && !selectedFlowId"
+      :description="t('functionUnit.serviceTaskNoFlow', { key: selectedFlowRef })"
     >
       <el-button
         type="primary"
@@ -116,24 +115,9 @@
       </el-button>
     </el-empty>
 
-    <!-- Bound to a flow that no longer exists. Without this the builder mounts and shows
-         AP's own "Flow not found", leaving no way to rebind from here. -->
-    <el-empty
-      v-else-if="!loading && danglingFlowId"
-      :description="t('functionUnit.serviceTaskFlowMissing', { id: danglingFlowId })"
-    >
-      <el-button
-        type="primary"
-        :loading="creating"
-        @click="createFlow"
-      >
-        {{ t('functionUnit.serviceTaskRecreateFlow') }}
-      </el-button>
-    </el-empty>
-
     <ServiceTaskBuilderCanvas
       v-else-if="session && selectedFlowId"
-      :key="selectedFlowId"
+      :key="`${selectedFlowId}-${sessionEpoch}`"
       class="service-task-designer__canvas"
       :flow-id="selectedFlowId"
       :project-id="session.projectId"
@@ -150,25 +134,24 @@
 
 <script setup lang="ts">
 import { InfoFilled } from '@element-plus/icons-vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { functionUnitApi } from '@/api/functionUnit'
 import {
-  createServiceTaskFlow,
+  createAutomationFlow,
   fetchServiceTaskSession,
-  serviceTaskFlowExists,
+  listAutomationFlows,
   type ServiceTaskSession,
-} from '@/api/serviceTask'
+} from '@/api/automation'
 import ServiceTaskBuilderCanvas from '@/components/serviceTask/ServiceTaskBuilderCanvas.vue'
 
 interface ApServiceTask {
   id: string
   name: string
-  flowId: string
+  /** ap:flowKey, or the legacy ap:flowId when no key is present (engine resolves both). */
+  flowRef: string
 }
-
-const CUSTOM_NS = 'http://workflow.platform/schema/custom'
 
 const props = defineProps<{ functionUnitId: number }>()
 
@@ -180,6 +163,13 @@ const errorMessage = ref('')
 const session = ref<ServiceTaskSession | null>(null)
 const tasks = ref<ApServiceTask[]>([])
 const selectedTaskId = ref('')
+/** Bump to remount the canvas after a session re-issue (401 recovery). */
+const sessionEpoch = ref(0)
+
+/** hermesFlowKey → flow id, over ALL of the project's flows (cursor walk). */
+const flowIdByKey = ref<Map<string, string>>(new Map())
+/** All known flow ids — a flowRef may hold a raw id instead of a business key. */
+const flowIds = ref<Set<string>>(new Set())
 
 // The builder bundle is served from DW's own origin, so REST/socket.io go to the
 // same origin too and Kong routes them on via the /api/ap prefix.
@@ -192,11 +182,34 @@ const cssUrl = `${import.meta.env.BASE_URL}service-task-builder/web.css`
 const selectedTask = computed(() =>
   tasks.value.find((task) => task.id === selectedTaskId.value),
 )
-/** Set when the bound flow is gone; suppresses the canvas in favour of the rebind prompt. */
-const danglingFlowId = ref('')
-const selectedFlowId = computed(() =>
-  danglingFlowId.value ? '' : selectedTask.value?.flowId || '',
-)
+const selectedFlowRef = computed(() => selectedTask.value?.flowRef || '')
+const selectedFlowId = computed(() => resolveFlowId(selectedFlowRef.value))
+
+/** Business key (or legacy id) → environment-local flow id; '' when nothing matches. */
+function resolveFlowId(flowRef: string): string {
+  if (!flowRef) {
+    return ''
+  }
+  return (
+    flowIdByKey.value.get(flowRef) || (flowIds.value.has(flowRef) ? flowRef : '')
+  )
+}
+
+function taskStateType(task: ApServiceTask): 'success' | 'warning' | 'info' {
+  if (!task.flowRef) {
+    return 'info'
+  }
+  return resolveFlowId(task.flowRef) ? 'success' : 'warning'
+}
+
+function taskStateLabel(task: ApServiceTask): string {
+  if (!task.flowRef) {
+    return t('functionUnit.serviceTaskNoKeyTag')
+  }
+  return resolveFlowId(task.flowRef)
+    ? t('functionUnit.serviceTaskBound')
+    : t('functionUnit.serviceTaskUnbound')
+}
 
 /** Parse one XML tag's attributes (order-independent). */
 function parseTagAttributes(tag: string): Record<string, string> {
@@ -211,8 +224,9 @@ function parseTagAttributes(tag: string): Record<string, string> {
 
 /**
  * Pull the automation service tasks out of the BPMN — those marked
- * serviceType=ap — INCLUDING ones without a flow id yet (they are the ones this
- * tab lets you create a flow for). The flow, when present, is in `ap:flowId`.
+ * serviceType=ap — INCLUDING ones without a flow key yet (their empty state tells
+ * the user where the key is configured). The reference, when present, is in
+ * `ap:flowKey`, falling back to the legacy `ap:flowId`.
  */
 function parseApServiceTasks(bpmnXml: string): ApServiceTask[] {
   const result: ApServiceTask[] = []
@@ -243,45 +257,42 @@ function parseApServiceTasks(bpmnXml: string): ApServiceTask[] {
     if (!id) {
       continue
     }
-    result.push({ id, name: taskAttrs.name || '', flowId: props['ap:flowId'] || '' })
+    result.push({
+      id,
+      name: taskAttrs.name || '',
+      flowRef: props['ap:flowKey'] || props['ap:flowId'] || '',
+    })
   }
   return result
 }
 
-/**
- * Write `ap:flowId` onto the given service task in the BPMN and return the new XML.
- * Uses DOM parsing (namespace-aware) and bails to the original XML on any structural
- * surprise rather than risking a corrupt document.
- */
-function bindFlowIdToBpmn(bpmnXml: string, taskId: string, flowId: string): string {
-  const doc = new DOMParser().parseFromString(bpmnXml, 'application/xml')
-  if (doc.getElementsByTagName('parsererror').length > 0) {
-    return bpmnXml
+/** Walk the whole flow list (cursor-paged) into the key→id map used for resolution. */
+async function loadFlowIndex(sess: ServiceTaskSession) {
+  const byKey = new Map<string, string>()
+  const ids = new Set<string>()
+  let cursor: string | undefined
+  // Bounded walk: 20 pages × 100 flows is far beyond any real project.
+  for (let page = 0; page < 20; page++) {
+    const result = await listAutomationFlows({
+      token: sess.token,
+      projectId: sess.projectId,
+      cursor,
+      limit: 100,
+    })
+    for (const flow of result.data || []) {
+      ids.add(flow.id)
+      const key = flow.metadata?.hermesFlowKey
+      if (key) {
+        byKey.set(key, flow.id)
+      }
+    }
+    if (!result.next) {
+      break
+    }
+    cursor = result.next
   }
-  const task = Array.from(doc.getElementsByTagName('*')).find(
-    (el) => el.localName === 'serviceTask' && el.getAttribute('id') === taskId,
-  )
-  if (!task) {
-    return bpmnXml
-  }
-  const propsEl = Array.from(task.getElementsByTagName('*')).find(
-    (el) => el.localName === 'properties',
-  )
-  if (!propsEl) {
-    return bpmnXml
-  }
-  const existing = Array.from(propsEl.getElementsByTagName('*')).find(
-    (el) => el.localName === 'property' && el.getAttribute('name') === 'ap:flowId',
-  )
-  if (existing) {
-    existing.setAttribute('value', flowId)
-  } else {
-    const prop = doc.createElementNS(CUSTOM_NS, 'custom:property')
-    prop.setAttribute('name', 'ap:flowId')
-    prop.setAttribute('value', flowId)
-    propsEl.appendChild(prop)
-  }
-  return new XMLSerializer().serializeToString(doc)
+  flowIdByKey.value = byKey
+  flowIds.value = ids
 }
 
 async function load() {
@@ -300,7 +311,8 @@ async function load() {
       selectedTaskId.value = tasks.value[0].id
     }
     session.value = await fetchServiceTaskSession()
-    await refreshDanglingState()
+    await loadFlowIndex(session.value)
+    sessionEpoch.value += 1
   } catch (error) {
     errorMessage.value = t('functionUnit.serviceTaskLoadFailed')
     console.error('[ServiceTaskDesigner] load failed', error)
@@ -309,22 +321,14 @@ async function load() {
   }
 }
 
-/** Probe the selected task's bound flow so a deleted one shows a rebind prompt, not a dead builder. */
-async function refreshDanglingState() {
-  danglingFlowId.value = ''
-  const flowId = selectedTask.value?.flowId
-  if (!flowId || !session.value) {
-    return
-  }
-  if (!(await serviceTaskFlowExists(flowId, session.value.token))) {
-    danglingFlowId.value = flowId
-  }
-}
-
-/** Create an empty flow for the selected task, bind it into the BPMN, then mount. */
+/**
+ * Create the flow for the selected task's key and mount it. The key is already in
+ * the BPMN, so nothing is written back — the new flow is stamped with
+ * metadata.hermesFlowKey = the key and resolution picks it up.
+ */
 async function createFlow() {
   const task = selectedTask.value
-  if (!task || creating.value) {
+  if (!task || !task.flowRef || creating.value) {
     return
   }
   creating.value = true
@@ -333,20 +337,18 @@ async function createFlow() {
     if (!session.value) {
       session.value = await fetchServiceTaskSession()
     }
-    const flowId = await createServiceTaskFlow({
-      projectId: session.value.projectId,
+    const flow = await createAutomationFlow({
       token: session.value.token,
+      projectId: session.value.projectId,
       displayName: task.name || 'Automation flow',
+      flowKey: task.flowRef,
     })
-    const processData = await functionUnitApi.getProcess(props.functionUnitId)
-    const bpmnXml = processData?.data?.bpmnXml || ''
-    const updatedXml = bindFlowIdToBpmn(bpmnXml, task.id, flowId)
-    await functionUnitApi.saveProcess(props.functionUnitId, {
-      ...processData?.data,
-      bpmnXml: updatedXml,
-    })
-    task.flowId = flowId
-    danglingFlowId.value = ''
+    const byKey = new Map(flowIdByKey.value)
+    byKey.set(task.flowRef, flow.id)
+    flowIdByKey.value = byKey
+    const ids = new Set(flowIds.value)
+    ids.add(flow.id)
+    flowIds.value = ids
   } catch (error) {
     errorMessage.value = t('functionUnit.serviceTaskCreateFailed')
     console.error('[ServiceTaskDesigner] create flow failed', error)
@@ -361,11 +363,6 @@ function onUnauthorized() {
   session.value = null
   void load()
 }
-
-// Each task has its own flow, so the dangling check is per-selection.
-watch(selectedTaskId, () => {
-  void refreshDanglingState()
-})
 
 onMounted(load)
 </script>

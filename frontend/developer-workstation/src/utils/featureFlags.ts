@@ -21,3 +21,13 @@
  * 另外后端还须配 `GROUP_AI_GATEWAY_URL`，否则每轮对话以 `AI_GATEWAY_NOT_CONFIGURED` 失败。
  */
 export const AI_GENERATION_ENABLED = true
+
+/**
+ * AI Studio（分阶段引导式 AI 设计，五阶段：Description & Roles → Workflow → Data Model →
+ * Forms & Actions → Review）。
+ *
+ * 当前增量只落地入口：FunctionUnitEdit 头部的 "AI Studio" 按钮 + "Build with AI" 弹窗
+ * （`components/ai/AiStudioEntryDialog.vue`）。工作台页面尚未实现，点 "Open AI Studio"
+ * 会给出显式的开发中提示。为 false 时按钮与弹窗都不渲染。
+ */
+export const AI_STUDIO_ENABLED = true

@@ -176,7 +176,8 @@
       width="520px"
       @closed="resetImportDialog"
     >
-      <el-form label-width="110px">
+      <!-- label-width="auto":弹窗表单统一规范,长 label 不折行且各行输入框左对齐 -->
+      <el-form label-width="auto">
         <el-form-item :label="t('automationFlow.importFile')">
           <el-upload
             :show-file-list="true"

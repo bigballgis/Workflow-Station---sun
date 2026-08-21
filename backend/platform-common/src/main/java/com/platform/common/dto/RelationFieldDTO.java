@@ -112,4 +112,17 @@ public class RelationFieldDTO implements Serializable {
      * FK display mode: {@code readonly | hidden | editable}. Null when not an FK.
      */
     private String fkDisplayMode;
+
+    /**
+     * Whether this column is derived from a formula rather than user input.
+     * Computed columns are read-only in forms; the server recomputes them on every write.
+     */
+    private Boolean isComputed;
+
+    /**
+     * Computed field definition: version, scope, source text, validated AST, dependsOn, onError.
+     * Only meaningful when {@link #isComputed} is true. Relation tables have no sub-tables,
+     * so the scope is always {@code row}.
+     */
+    private java.util.Map<String, Object> computedField;
 }

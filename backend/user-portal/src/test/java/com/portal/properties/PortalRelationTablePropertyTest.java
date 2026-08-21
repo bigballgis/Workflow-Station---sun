@@ -64,7 +64,8 @@ class PortalRelationTablePropertyTest {
                 .thenReturn(1L);
 
         PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
-                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class),
+                mock(com.portal.component.RelationTableComputedFieldRecalculator.class));
         List<RelationTableDTO> result = service.getVisibleTables(scenario.userId);
 
         // All returned tables should be portal_visible=true
@@ -110,7 +111,8 @@ class PortalRelationTablePropertyTest {
         when(roleAccess.getUserBusinessRoles(userId)).thenReturn(Collections.emptyList());
 
         PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
-                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class),
+                mock(com.portal.component.RelationTableComputedFieldRecalculator.class));
 
         // Verify: getVisibleTables returns empty when user has no roles
         List<RelationTableDTO> result = service.getVisibleTables(userId);
@@ -166,7 +168,8 @@ class PortalRelationTablePropertyTest {
                 .thenReturn(mockResults);
 
         PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
-                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class),
+                mock(com.portal.component.RelationTableComputedFieldRecalculator.class));
         List<Map<String, Object>> results = service.searchForLookup(tableId, keyword, searchFields, "display_col", null, 10, 0);
 
         // Each result should contain the keyword in at least one search field
@@ -186,7 +189,8 @@ class PortalRelationTablePropertyTest {
         RoleAccessComponent roleAccess = mock(RoleAccessComponent.class);
         ObjectMapper objectMapper = new ObjectMapper();
         PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
-                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class),
+                mock(com.portal.component.RelationTableComputedFieldRecalculator.class));
 
         List<Map<String, Object>> mockResults = List.of(Map.of(
                 "id", "user-1",
@@ -257,7 +261,8 @@ class PortalRelationTablePropertyTest {
                 .thenReturn(scenario.rows);
 
         PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
-                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class),
+                mock(com.portal.component.RelationTableComputedFieldRecalculator.class));
         String csv = service.exportCsv(tableId, userId, scenario.maxRows);
 
         // Parse CSV

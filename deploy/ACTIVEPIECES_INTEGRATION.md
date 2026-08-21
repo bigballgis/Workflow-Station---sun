@@ -23,12 +23,12 @@
 
 | 能力 | 现状 | 真源 |
 |---|---|---|
-| **L1 DW 内嵌编排器** —— Function Unit 的 **Automation** 标签直接挂 AP builder（lib-mode + Shadow DOM，**非 iframe**，X-6）；bundle 由 `activepieces/packages/web` 的 `vite.embed.config.mts` 产出，DW 的 `prebuild` 钩子拷进 `public/service-task-builder/` | dev 浏览器 E2E 通过 | `INTEGRATION_DESIGN.md` |
+| **L1 DW 内嵌编排器** —— Function Unit 的 **Automation** 标签直接挂 AP builder（lib-mode + Shadow DOM，**非 iframe**，X-6）；bundle 由 `automation/packages/web` 的 `vite.embed.config.mts` 产出，DW 的 `prebuild` 钩子拷进 `public/service-task-builder/` | dev 浏览器 E2E 通过 | `INTEGRATION_DESIGN.md` |
 | **L2 Kong `/api/ap`** —— builder 的 REST + socket.io 经网关收编（socket.io path `/api/ap/socket.io`）；**另有 `/ap-cdn`** 把气隙镜像的 piece 图标转回 AP（lib-mode bundle 不带 publicDir，不收编则内嵌 builder 里图标全 404 成灰块） | dev 通过 | 同上 + `HERMES_PATCHES.md` 009 |
-| **L7 per-user provisioning** —— 审计到人：managed-authn + signing-key，每用户签 RS256 外部 token 换 AP 会话（flow Owner 落真实用户，不再全是共享账号）。**dev 已启用**（`ACTIVEPIECES_MANAGED_ENABLED=true`） | dev 已启用 | 同上 + `DECISIONS.md` |
+| **L7 per-user provisioning** —— 审计到人：managed-authn + signing-key，每用户签 RS256 外部 token 换 AP 会话（flow Owner 落真实用户）。**这是 AP 身份的唯一路径**：共享账号已从 admin-center 移除，`ACTIVEPIECES_MANAGED_ENABLED` 开关随之删除，未配置签名密钥即 fail-loud 而非回退 | 全环境恒生效 | 同上 + `DECISIONS.md` + `PROD_WIRING_RUNBOOK.md` |
 | **vendored 源码镜像** —— EE 剥离 + 去 bun + 预烘焙 pieces（dev 本地 tag `activepieces:0.84.0-ee-removed`；k8s 跟平台发版 tag，见 §5 前置） | 已落地 | `EE_REMOVAL_PLAN.md` |
 | **自研 piece 开发** —— 从写代码到 DW 可用的全链路 + 可直接抄的完整示例 | 已落地（biz-calendar / hash-helper 实建） | [`PIECE_DEVELOPMENT_HOWTO.md`](../docs/ap-integration/PIECE_DEVELOPMENT_HOWTO.md) / [`PIECE_DEVELOPMENT_EXAMPLE.md`](../docs/ap-integration/PIECE_DEVELOPMENT_EXAMPLE.md) |
-| **离线 piece 白名单投放** —— 白名单 + 预装（运行时半） | 已落地 | `activepieces/hermes/README.md` |
+| **离线 piece 白名单投放** —— 白名单 + 预装（运行时半） | 已落地 | `automation/hermes/README.md` |
 | **元数据 seed / 自研件元数据序列化** —— `piece_metadata` 行（设计器半） | 已落地 | `deploy/pieces/README.md` |
 | **状态 / 未决口** —— 各层进度、待验证项、开放决策 | — | `STATUS.md` / `OPEN_GATES.md` / `DECISIONS.md` |
 
@@ -77,7 +77,7 @@ AP 自身流量（`/`、`/api/*`）不门禁——AP 前端调自己 API 用 AP 
 | **launch 入口（方案 B 核心）** | 在 **admin 域**命中（cookie 有效）：验平台 JWT → 共享账号 sign-in 拿会话 → 签发一次性 nonce → 返回 `{bridgeUrl: "<桥页>#nonce="}` | `ApTokenController#launch`（`GET /api/v1/admin/internal/ap/launch`） |
 | **一次性 nonce 存储** | 不可猜 UUID、单次消费、短 TTL（默认 60s）；状态在 **Redis**（多副本安全），复用 `PlatformSsoService` 范式 | `ap/service/ApBridgeNonceStore.java` |
 | **登录桥页** | 读 URL fragment 的 nonce（抹掉历史）→ `?nonce=` 兑换 → 写 localStorage 跳 AP。**无 nonce 时回退 cookie（dev 同源）** | `resources/ap/ap-bridge.html`（admin-center `GET /internal/ap/bridge` 返回，**不再门禁**） |
-| **token 端点** | 带 `?nonce=` → 单次兑换会话（**无需 cookie**）；无 nonce → 回退平台 JWT 校验 + 现场 sign-in（dev） | `ApTokenController#token` / `ActivepiecesApiClient#signInShared` |
+| **token 端点** | 带 `?nonce=` → 单次兑换会话（**无需 cookie**）；无 nonce → 回退平台 JWT 校验 + 现场按该用户换取（dev） | `ServiceTaskTokenController#token` / `ServiceTaskApiClient#signInManaged` |
 | **完整会话** | AP 会话 = localStorage `token` + `projectId`（都裸存）。只写 token 会死循环 | 桥页 + token/launch 端点 |
 | **跨域 nonce 握手** | 取代「跨子域 cookie」：AP 域**无需平台 cookie**，故 admin 与 AP 可分属不同父域，**不再需要 `JWT_COOKIE_DOMAIN`** | `ApBridgeNonceStore` + `bridge.public-url` 配置 |
 | **桥页公网地址** | `/launch` 拼 `bridgeUrl` 用的 AP 桥页地址；前端也用它作菜单显隐开关 | `activepieces.bridge.public-url` ← env `AP_BRIDGE_URL` |
@@ -169,12 +169,12 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 > **前置:AP 镜像现在是「仓库内源码构建」,不再是镜像上游二进制。**
 > k8s manifest 引用的是 `<Registry>/workflow-station2/activepieces:__IMAGE_TAG__`
 > （2026-08-07 起**跟平台发版 tag 走**，由 apply 脚本用 `-ImageTag` 替换）——
-> 由**本仓库 `activepieces/` 源码树 + `activepieces/Dockerfile`** 构建的 HERMES vendored 镜像:
-> **EE 剥离 + 去 bun(X-4,运行时装包改 pnpm) + 末层预烘焙白名单 pieces(`activepieces/hermes/pieces.json`,X-3 气隙)**。
+> 由**本仓库 `automation/` 源码树 + `automation/Dockerfile`** 构建的 HERMES vendored 镜像:
+> **EE 剥离 + 去 bun(X-4,运行时装包改 pnpm) + 末层预烘焙白名单 pieces(`automation/hermes/pieces.json`,X-3 气隙)**。
 > 与 dev compose 的 `activepieces` 服务同源同构。
 >
 > ⚠️ **不要再用 `mirror-thirdparty-images-k8s.ps1` 同步 AP**——那条路径拉的是上游
-> `activepieces/activepieces:0.84.0` 二进制:**既没剥 EE、没去 bun、也没预装 pieces**,气隙集群里跑不通
+> `activepieces/activepieces` 官方二进制(镜像名,非本仓目录):**既没剥 EE、没去 bun、也没预装 pieces**,气隙集群里跑不通
 > (该脚本的 activepieces 条目属历史遗留,其余 redis/kafka/kong 仍照常用它)。
 >
 > 正确做法:**`build-and-push-k8s.ps1` 会一并构建并推送它**(2026-08-07 起),**和 8 个平台镜像
@@ -183,8 +183,8 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 > 把 `__IMAGE_TAG__` 解析成 apply 时给的 `-ImageTag`,用 `-SkipActivepieces` 出的那个 tag
 > 没有 AP 镜像 ⇒ ImagePullBackOff(脚本会就此告警)。真要复用旧镜像就 deploy 一个已存在
 > AP 镜像的 `-ImageTag`,或用 `-ApImageTag` 显式覆盖。
-> 等价的手工命令仍然有效:`docker build -t <Registry>/workflow-station2/activepieces:<Tag> activepieces/`
-> → push 到 Nexus;或 `docker save | gzip` 带进内网 `docker load`(见 `activepieces/hermes/README.md`)。
+> 等价的手工命令仍然有效:`docker build -t <Registry>/workflow-station2/activepieces:<Tag> automation/`
+> → push 到 Nexus;或 `docker save | gzip` 带进内网 `docker load`(见 `automation/hermes/README.md`)。
 > `ap-bootstrap-job.yaml` 用的也是同一个镜像,一并就位。
 >
 > 镜像只含**运行时半**(piece 的可执行包)。**元数据半**(`piece_metadata` 行)不在镜像里,但**已不需要手工灌**:
@@ -382,8 +382,8 @@ schema 建回来但**数据一条不剩**——没有 platform / project / signi
   不静默回落公网）。此时命令行里的 `--registry` 只是 pnpm 离线元数据缓存的**命名空间**（按 registry 主机名归档），
   不是网络目标——改它会让缓存找不到。
   *（历史注记：旧版本靠镜像根 `bunfig.toml` 的 `minimumReleaseAge` 拦新包，该文件随去 bun 已删除，不必再查。）*
-  ⑤**已落地的投放通道**：白名单 + 预装脚本在 `activepieces/hermes/`（预装是 `activepieces/Dockerfile`
-  的最后一层），元数据 seed SQL 在 `deploy/pieces/`，运行时零联网，详见 `activepieces/hermes/README.md`
+  ⑤**已落地的投放通道**：白名单 + 预装脚本在 `automation/hermes/`（预装是 `automation/Dockerfile`
+  的最后一层），元数据 seed SQL 在 `deploy/pieces/`，运行时零联网，详见 `automation/hermes/README.md`
   与 `deploy/pieces/README.md`；Nexus npm 源改为兜底防线，非必需。
 
 ---

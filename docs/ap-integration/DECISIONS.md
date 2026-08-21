@@ -1,7 +1,17 @@
-# 架构决策记录（ADR）— Activepieces 0.84.0 集成
+# 架构决策记录（ADR）— Activepieces 集成
 
 > **全局约束来源**。本文件是 Q/D 系列裁决的**唯一事实来源**，其余文档只做引用。
 > 推翻任何一条须回到本文件修订并重新评审。日期标注为拍板日。
+>
+> ⚠️ **读路径时注意**：Q1–D13 是 0.84 时期的裁决，文中大量写 `activepieces/`（仓库根的
+> 0.84.0 硬分叉树）。**该目录已于 2026-08-14 删除**——0.88 重构（`automation/`）交付验证后，
+> 它作为参考实现的使命结束。**这些条目是历史记录，路径按拍板当时的事实原样保留**；
+> 除非另有说明，凡 `activepieces/<path>` 请读作今天的 `automation/<path>`
+> （少数目录已挪位，最常见的是 `packages/shared` → `packages/core/shared`）。
+> 要看当年的源码走 git 历史：`git show de4f6469:activepieces/<path>`（0.84 vendor 基线）
+> 或 `git show 4635f7950:activepieces/<path>`（删除前最后一个提交）。
+> 0.88 的现行需求/实施真源是 [REQUIREMENTS_0.88.md](REQUIREMENTS_0.88.md) 与
+> [IMPLEMENTATION_0.88.md](IMPLEMENTATION_0.88.md)。
 
 ---
 

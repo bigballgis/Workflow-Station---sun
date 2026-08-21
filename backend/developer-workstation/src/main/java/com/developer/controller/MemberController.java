@@ -1,5 +1,6 @@
 package com.developer.controller;
 
+import com.developer.security.RequireDeveloperPermission;
 import com.platform.common.dto.ApiResponse;
 import com.developer.dto.MemberRequest;
 import com.developer.dto.MemberResponse;
@@ -45,6 +46,7 @@ public class MemberController extends BaseController {
     
     @PostMapping
     @Operation(summary = "Create new member", description = "Create a new member with complete validation and business logic")
+    @RequireDeveloperPermission("FUNCTION_UNIT_ASSIGN_DEV_GROUP")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Member created successfully"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid input or validation error"),
@@ -101,6 +103,7 @@ public class MemberController extends BaseController {
     
     @GetMapping("/{id}")
     @Operation(summary = "Get member by ID", description = "Retrieve a specific member by their unique identifier")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Member found"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found"),
@@ -116,6 +119,7 @@ public class MemberController extends BaseController {
     
     @GetMapping("/username/{username}")
     @Operation(summary = "Get member by username", description = "Retrieve a member by their username")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Member found"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found"),
@@ -148,6 +152,7 @@ public class MemberController extends BaseController {
     
     @PutMapping("/{id}")
     @Operation(summary = "Update member", description = "Update an existing member with partial or complete data")
+    @RequireDeveloperPermission("FUNCTION_UNIT_ASSIGN_DEV_GROUP")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Member updated successfully"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid input or validation error"),
@@ -198,6 +203,7 @@ public class MemberController extends BaseController {
     
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete member", description = "Soft delete a member by setting active status to false")
+    @RequireDeveloperPermission("FUNCTION_UNIT_ASSIGN_DEV_GROUP")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Member deleted successfully"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found"),
@@ -231,6 +237,7 @@ public class MemberController extends BaseController {
     
     @GetMapping
     @Operation(summary = "Get all active members", description = "Retrieve all active members with pagination and optional search")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Members retrieved successfully"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error")
@@ -264,6 +271,7 @@ public class MemberController extends BaseController {
     
     @GetMapping("/business-unit/{businessUnitId}")
     @Operation(summary = "Get members by business unit", description = "Retrieve all members belonging to a specific business unit")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Members retrieved successfully"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error")

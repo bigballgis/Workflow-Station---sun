@@ -203,9 +203,6 @@
                     >
                       <el-icon><Unlock /></el-icon>{{ t('user.unlock') }}
                     </el-dropdown-item>
-                    <el-dropdown-item command="resetPassword">
-                      <el-icon><Key /></el-icon>{{ t('user.resetPassword') }}
-                    </el-dropdown-item>
                     <el-dropdown-item
                       v-if="canDeleteUser"
                       command="delete"
@@ -260,7 +257,7 @@ import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Plus, Search, Refresh, MoreFilled,
-  CircleCheck, CircleClose, Unlock, Key, Delete
+  CircleCheck, CircleClose, Unlock, Delete
 } from '@element-plus/icons-vue'
 import { statusTagType, userStatusKey } from '@/utils/format'
 import { useUser } from '@/composables/modules/useUser'

@@ -1,6 +1,5 @@
 package com.admin.component;
 
-import com.platform.common.security.SsrfProtection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -34,11 +33,7 @@ public class SystemSmtpConfigResolver {
         if (!StringUtils.hasText(host)) {
             throw new IllegalStateException("System SMTP host is not configured (smtp.host)");
         }
-        try {
-            SsrfProtection.validateHostname(host, allowedHosts());
-        } catch (SsrfProtection.SsrfException ex) {
-            throw new IllegalStateException("System SMTP host blocked by SSRF protection: " + ex.getMessage(), ex);
-        }
+        SystemMailHostValidator.validate(host, allowedHosts(), "System SMTP");
 
         String portRaw = trimToNull(configManager.getConfigValue(KEY_PORT));
         int port;

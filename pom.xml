@@ -61,6 +61,7 @@
         <junit.version>5.10.1</junit.version>
         <jqwik.version>1.8.2</jqwik.version>
         <testcontainers.version>2.0.2</testcontainers.version>
+        <greenmail.version>2.1.3</greenmail.version>
         
         <!-- Plugins -->
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
@@ -287,6 +288,12 @@
                 <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.icegreen</groupId>
+                <artifactId>greenmail-junit5</artifactId>
+                <version>${greenmail.version}</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>

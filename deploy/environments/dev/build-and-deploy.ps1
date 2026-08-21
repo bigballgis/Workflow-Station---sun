@@ -44,7 +44,7 @@ param(
     # Skip "mvn clean" only (still runs package). Use when clean fails on locked/corrupt target dirs.
     [switch]$SkipMavenClean,
     # Force-rebuild the vendored AP ServiceTask/Automation builder bundle even when present
-    # (activepieces/dist/packages/web-embed). Pass this after changing the AP builder source
+    # (automation/dist/packages/web-embed). Pass this after changing the AP builder source
     # or host-config; otherwise the existing bundle is reused (the build is heavy).
     [switch]$RebuildServiceTaskBuilder,
     # Ignore artifact/image freshness; rebuild Maven/Vite/Docker once (still no -v unless -Clean).
@@ -348,7 +348,7 @@ function Resolve-BaseImage {
 }
 
 # Build the vendored Activepieces "ServiceTask / Automation" builder bundle
-# (activepieces/packages/web -> activepieces/dist/packages/web-embed). The DW frontend's
+# (automation/packages/web -> automation/dist/packages/web-embed). The DW frontend's
 # `prebuild` hook (scripts/sync-service-task-builder.mjs) copies it into
 # public/service-task-builder (gitignored), so a clean checkout has NOTHING to copy unless
 # this runs first — the Automation tab would then report the builder assets unavailable.
@@ -357,24 +357,24 @@ function Resolve-BaseImage {
 # Returns $true only when it actually produced a new bundle. Callers MUST use that to
 # force their vite step: the bundle reaches dist/ solely through DW's `prebuild` hook,
 # which runs inside `pnpm run build`, and Test-FrontendDistFresh watches DW's own sources
-# — not activepieces/dist/packages/web-embed. Ignore the return value and a rebuilt
+# — not automation/dist/packages/web-embed. Ignore the return value and a rebuilt
 # bundle is silently dropped whenever DW's own dist still looks fresh.
 function Ensure-ServiceTaskBuilderBundle {
     param([switch]$Force)
 
-    $embedMarker = Join-Path $RootDir "activepieces/dist/packages/web-embed/ap-builder.mjs"
+    $embedMarker = Join-Path $RootDir "automation/dist/packages/web-embed/ap-builder.mjs"
     if (-not $Force -and (Test-Path $embedMarker)) {
         Write-Host "  ServiceTask builder bundle present (reuse; pass -RebuildServiceTaskBuilder to force)." -ForegroundColor DarkGray
         return $false
     }
 
-    $webDir = Join-Path $RootDir "activepieces/packages/web"
+    $webDir = Join-Path $RootDir "automation/packages/web"
     if (-not (Test-Path (Join-Path $webDir "vite.embed.config.mts"))) {
         Write-Host "  WARNING: activepieces embed config not found; DW Automation builder will be unavailable." -ForegroundColor Yellow
         return $false
     }
 
-    Write-Host "  Building ServiceTask/Automation builder bundle (activepieces/packages/web, heavy)..." -ForegroundColor Yellow
+    Write-Host "  Building ServiceTask/Automation builder bundle (automation/packages/web, heavy)..." -ForegroundColor Yellow
     $built = $false
     Push-Location $webDir
     try {
@@ -753,7 +753,7 @@ function req(method, path, body, token) {
     # --- 4. piece catalog (designer half of the allowlist) ---
     # AP_PIECES_SYNC_MODE=NONE means nothing ever populates piece_metadata on its own; without
     # this the Automation canvas offers zero steps. The seed is DELETE+INSERT per piece, so
-    # re-running it is safe; it is regenerated from activepieces/hermes/pieces.json.
+    # re-running it is safe; it is regenerated from automation/hermes/pieces.json.
     $pieceCount = Get-PgScalar "select count(*) from piece_metadata;"
     $seedSql = Join-Path $RootDir "deploy/pieces/metadata/pieces-seed.sql"
     if ($pieceCount -eq "0") {
@@ -981,7 +981,7 @@ if (-not $SkipFrontend) {
         }
 
         # $builderRebuilt must be part of this: a fresh bundle lands in
-        # activepieces/dist/packages/web-embed, which Test-FrontendDistFresh does not watch,
+        # automation/dist/packages/web-embed, which Test-FrontendDistFresh does not watch,
         # and it only reaches dist/ via the `prebuild` hook inside `pnpm run build`. Without
         # it, -RebuildServiceTaskBuilder rebuilds the bundle and then the vite step is
         # skipped as "fresh", so the image silently keeps the previous builder.
@@ -1138,12 +1138,12 @@ if ($SkipActivepieces) {
     Write-Host "  Skipping Activepieces build (-SkipActivepieces)." -ForegroundColor DarkGray
 } else {
     $apInputPaths = @(
-        (Join-Path $RootDir "activepieces/Dockerfile"),
-        (Join-Path $RootDir "activepieces/pnpm-lock.yaml"),
-        (Join-Path $RootDir "activepieces/tsconfig.base.json"),
-        (Join-Path $RootDir "activepieces/hermes"),
-        (Join-Path $RootDir "activepieces/packages/server"),
-        (Join-Path $RootDir "activepieces/packages/web/src")
+        (Join-Path $RootDir "automation/Dockerfile"),
+        (Join-Path $RootDir "automation/pnpm-lock.yaml"),
+        (Join-Path $RootDir "automation/tsconfig.base.json"),
+        (Join-Path $RootDir "automation/hermes"),
+        (Join-Path $RootDir "automation/packages/server"),
+        (Join-Path $RootDir "automation/packages/web/src")
     )
     if ($Clean -or $ForceBuild -or -not (Test-DockerImageFresh -ImageName "activepieces:0.84.0-ee-removed" -InputPaths $apInputPaths)) {
         $servicesToBuild.Add("activepieces") | Out-Null

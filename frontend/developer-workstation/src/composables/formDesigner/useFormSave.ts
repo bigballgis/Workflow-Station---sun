@@ -3,7 +3,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { functionUnitApi } from '@/api/functionUnit'
-import type { FormDefinition } from '@/api/functionUnit'
+import type { FormDefinition, FieldDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules, collectRecordNoteScopes } from '@/utils/formDesigner'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
@@ -18,10 +18,9 @@ import {
 } from '@/utils/formDesignerPreviewValidation'
 import { walkRulesApplyTableFieldDefaultsToPersistedRules } from '@/utils/formCreateRuleDefaults'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
-import { isRequestIdRule } from '@/utils/formFieldMeta'
+import { isRequestIdRule, taskFieldPermissionForField } from '@/utils/formFieldMeta'
 import { TABLE_AUDIT_FIELD_NAMES } from '@/utils/tableAuditFields'
 import type { SubTableListColumnDTO } from './useSubTableViews'
-import type { FieldDefinition } from '@/api/functionUnit'
 import type { BlockingProgressApi } from '@/composables/useBlockingProgress'
 import {
   parseMiAssignmentsFromBpmn,
@@ -170,8 +169,20 @@ export function useFormSave(options: UseFormSaveOptions) {
       .filter((group) => group.fields.length > 0)
   })
 
+  /** Computed/formula main-table fields are forced READONLY on the task panel — they fill
+   *  themselves, so a designer cannot flip them to EDITABLE. Sub-table fields (bindingId
+   *  present) never go through this: getPrimaryBindingFieldDefinitions() only covers the
+   *  primary/main-table binding. */
+  function isFieldPermissionLocked(fieldName: string): boolean {
+    const field = getPrimaryBindingFieldDefinitions().find(f => f.fieldName === fieldName)
+    return field ? taskFieldPermissionForField(field) === 'READONLY' : false
+  }
+
   /** Get field permission value. bindingId scopes the lookup to a sub-table field (composite key). */
   function getFieldPermission(fieldName: string, bindingId?: number): string {
+    if (bindingId == null && isFieldPermissionLocked(fieldName)) {
+      return 'READONLY'
+    }
     const key = bindingId != null ? `${bindingId}:${fieldName}` : fieldName
     return selectedForm.value?.fieldPermissions?.[key] || 'EDITABLE'
   }
@@ -179,6 +190,9 @@ export function useFormSave(options: UseFormSaveOptions) {
   /** Set field permission value. bindingId scopes the write to a sub-table field (composite key). */
   function setFieldPermission(fieldName: string, value: string, bindingId?: number) {
     if (!selectedForm.value) return
+    if (value === 'EDITABLE' && isFieldPermissionLocked(fieldName)) {
+      return
+    }
     if (!selectedForm.value.fieldPermissions) {
       selectedForm.value.fieldPermissions = {}
     }
@@ -578,6 +592,7 @@ export function useFormSave(options: UseFormSaveOptions) {
     currentSubFormFieldGroups,
     getFieldPermission,
     setFieldPermission,
+    isFieldPermissionLocked,
     handleSaveForm,
     savingForm,
   }

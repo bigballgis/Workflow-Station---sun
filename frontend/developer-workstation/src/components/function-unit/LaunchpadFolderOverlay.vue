@@ -13,6 +13,7 @@
             class="folder-name-input"
             :value="folder.name"
             :placeholder="t('functionUnit.groupNamePlaceholder')"
+            :readonly="!canModifyLayout"
             spellcheck="false"
             @change="onRename(($event.target as HTMLInputElement).value)"
             @keydown.enter="($event.target as HTMLInputElement).blur()"
@@ -43,7 +44,7 @@
                 <div
                   class="member-card"
                   :class="dropClasses(item.id)"
-                  draggable="true"
+                  :draggable="canModifyLayout"
                   @click="$emit('openItem', item)"
                   @dragstart="onCellDragStart(item.id)"
                   @dragend="onCellDragEnd"
@@ -65,6 +66,7 @@
                     >{{ statusLabel(item) }}</span>
                   </span>
                   <el-dropdown
+                    v-if="showMemberMenu(item)"
                     trigger="click"
                     popper-class="launchpad-dropdown-popper"
                     @command="(cmd: string) => handleCommand(cmd, item)"
@@ -80,28 +82,31 @@
                     <template #dropdown>
                       <el-dropdown-menu>
                         <el-dropdown-item
-                          v-if="permissions.canEdit()"
+                          v-if="!isItemReadOnly(item) && permissions.canEdit()"
                           command="settings"
                         >
                           <el-icon><Setting /></el-icon>{{ t('functionUnit.setting') }}
                         </el-dropdown-item>
                         <el-dropdown-item
-                          v-if="permissions.canClone()"
+                          v-if="!isItemReadOnly(item) && permissions.canClone()"
                           command="clone"
                         >
                           <el-icon><CopyDocument /></el-icon>{{ t('functionUnit.clone') }}
                         </el-dropdown-item>
                         <el-dropdown-item
-                          v-if="item.status === 'ARCHIVED' && permissions.canEdit()"
+                          v-if="!isItemReadOnly(item) && item.status === 'ARCHIVED' && permissions.canEdit()"
                           command="restore"
                         >
                           <el-icon><RefreshLeft /></el-icon>{{ t('functionUnit.restore') }}
                         </el-dropdown-item>
-                        <el-dropdown-item command="remove">
+                        <el-dropdown-item
+                          v-if="canModifyLayout"
+                          command="remove"
+                        >
                           <el-icon><Remove /></el-icon>{{ t('functionUnit.removeFromGroup') }}
                         </el-dropdown-item>
                         <el-dropdown-item
-                          v-if="permissions.canDelete()"
+                          v-if="!isItemReadOnly(item) && permissions.canDelete()"
                           command="delete"
                           divided
                         >
@@ -114,7 +119,10 @@
               </el-tooltip>
             </div>
           </div>
-          <p class="folder-hint">
+          <p
+            v-if="canModifyLayout"
+            class="folder-hint"
+          >
             {{ t('functionUnit.dragOutHint') }}
           </p>
         </div>
@@ -130,16 +138,19 @@ import { Setting, CopyDocument, Delete, Box, RefreshLeft, MoreFilled, Remove } f
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import type { LaunchpadFolderEntry } from '@/composables/functionUnitList/useLaunchpadLayout'
-import { permissions } from '@/utils/permission'
+import { permissions, isFunctionUnitReadOnly } from '@/utils/permission'
 
 const { t } = useI18n()
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** null = 关闭 */
   folder: LaunchpadFolderEntry | null
   /** 按组内顺序解析出的成员 */
   items: FunctionUnitResponse[]
-}>()
+  canModifyLayout?: boolean
+}>(), {
+  canModifyLayout: true,
+})
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -155,6 +166,15 @@ const emit = defineEmits<{
 
 // 描述气泡与操作菜单挂在同一张卡上，菜单打开时会被气泡盖住，故开菜单即禁用该卡气泡
 const menuOpenId = ref<number | null>(null)
+
+function isItemReadOnly(item: FunctionUnitResponse): boolean {
+  return isFunctionUnitReadOnly(item)
+}
+
+function showMemberMenu(item: FunctionUnitResponse): boolean {
+  if (!isItemReadOnly(item)) return true
+  return props.canModifyLayout
+}
 
 function statusLabel(item: FunctionUnitResponse): string {
   const map: Record<string, string> = {
@@ -181,6 +201,7 @@ function handleCommand(cmd: string, item: FunctionUnitResponse) {
 }
 
 function onRename(name: string) {
+  if (!props.canModifyLayout) return
   if (props.folder) emit('rename', props.folder.id, name)
 }
 
@@ -189,6 +210,7 @@ const draggingId = ref<number | null>(null)
 const dropTarget = ref<{ id: number; mode: 'before' | 'after' } | null>(null)
 
 function onCellDragStart(id: number) {
+  if (!props.canModifyLayout) return
   draggingId.value = id
   dropTarget.value = null
 }
@@ -231,6 +253,7 @@ function dropClasses(id: number) {
 
 /** 松手在面板外（遮罩层）：移出分组回到主网格 */
 function onDropOutside() {
+  if (!props.canModifyLayout) return
   const fromId = draggingId.value
   onCellDragEnd()
   if (fromId == null || !props.folder) return

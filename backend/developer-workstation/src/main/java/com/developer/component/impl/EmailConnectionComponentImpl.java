@@ -301,6 +301,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         }
     }
 
+    /** Read path: existing BOTH rows still resolve IMAP until the designer saves a new direction. */
     private static boolean isInboundCapable(EmailConnectionDirection direction) {
         return direction == EmailConnectionDirection.INBOUND
                 || direction == EmailConnectionDirection.BOTH;
@@ -310,7 +311,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         try {
             AdminCenterSystemImapClient.SystemImapEndpoint endpoint =
                     adminCenterSystemImapClient.fetchSystemImapEndpoint();
-            validateSmtpHost(endpoint.host());
+            // Admin already SSRF-validates imap.host (including intranet FQDNs). Do not
+            // re-apply SMTP allowlist here — company IMAP typically resolves to RFC1918.
             return new ResolvedImapEndpoint(endpoint.host(), endpoint.port(), endpoint.useSsl());
         } catch (IllegalStateException ex) {
             throw new DeveloperBusinessException(

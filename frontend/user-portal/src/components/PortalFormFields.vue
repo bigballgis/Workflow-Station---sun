@@ -92,6 +92,11 @@ const props = withDefaults(
      * Absent here (undefined) → no field-level enforcement, same as if the FU never configured any.
      */
     fieldPermissions?: Record<string, string> | null
+    /**
+     * Event-runtime visibility (form-below-table / dialog scripts).
+     * Unset → render every leaf (Link Form dialog unchanged).
+     */
+    isFieldVisible?: (fieldKey: string) => boolean
   }>(),
   {
     readonly: false,
@@ -106,6 +111,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'update:field', key: string, value: unknown): void
+  (e: 'field-blur', key: string): void
 }>()
 
 defineOptions({ name: 'PortalFormFields' })
@@ -170,6 +176,29 @@ function nextVisitedInlineSubFormBindingIds(bindingId: number | undefined): Read
 
 function onFieldUpdate(key: string, val: unknown) {
   emit('update:field', key, val)
+}
+
+function onFieldBlur(key: string) {
+  emit('field-blur', key)
+}
+
+const LAYOUT_CONTAINER_TYPES = new Set([
+  'subTable',
+  'tabs',
+  'row',
+  'col',
+  'collapse',
+  'card',
+  'miAssignment',
+  'recordNote',
+])
+
+/** Layout containers stay mounted so scripts can reveal hidden children in place. */
+function shouldRenderLeafField(field: FormField): boolean {
+  if (isDisplayOnlyLayoutField(field)) return true
+  if (LAYOUT_CONTAINER_TYPES.has(field.type)) return true
+  if (!props.isFieldVisible) return true
+  return props.isFieldVisible(field.key)
 }
 
 const inlineLookupCascade = createLookupCascadeHandlers({
@@ -340,7 +369,9 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :compact-lookup-cells="compactLookupCells"
             :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
             :field-permissions="fieldPermissions"
+            :is-field-visible="isFieldVisible"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @field-blur="onFieldBlur"
           />
         </el-tab-pane>
       </el-tabs>
@@ -374,8 +405,10 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :compact-lookup-cells="compactLookupCells"
           :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
           :field-permissions="fieldPermissions"
+          :is-field-visible="isFieldVisible"
           row-columns
           @update:field="(k, v) => onFieldUpdate(k, v)"
+          @field-blur="onFieldBlur"
         />
       </el-row>
     </el-col>
@@ -395,8 +428,10 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :compact-lookup-cells="compactLookupCells"
         :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
         :field-permissions="fieldPermissions"
+        :is-field-visible="isFieldVisible"
         in-column
         @update:field="(k, v) => onFieldUpdate(k, v)"
+        @field-blur="onFieldBlur"
       />
     </el-col>
     <el-col
@@ -422,7 +457,9 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :compact-lookup-cells="compactLookupCells"
             :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
             :field-permissions="fieldPermissions"
+            :is-field-visible="isFieldVisible"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @field-blur="onFieldBlur"
           />
         </el-collapse-item>
       </el-collapse>
@@ -454,13 +491,15 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
             :compact-lookup-cells="compactLookupCells"
             :visited-inline-sub-form-binding-ids="visitedInlineSubFormBindingIds"
             :field-permissions="fieldPermissions"
+            :is-field-visible="isFieldVisible"
             @update:field="(k, v) => onFieldUpdate(k, v)"
+            @field-blur="onFieldBlur"
           />
         </el-row>
       </el-card>
     </el-col>
     <el-col
-      v-else-if="!inColumn"
+      v-else-if="!inColumn && shouldRenderLeafField(field)"
       :span="field.span || 24"
     >
       <el-form-item
@@ -474,11 +513,12 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :form-data="model"
           :readonly="readonly || field.readonly === true || !editable"
           @update:model-value="(val: unknown) => onFieldUpdate(field.key, val)"
+          @field-blur="onFieldBlur"
         />
       </el-form-item>
     </el-col>
     <div
-      v-else
+      v-else-if="inColumn && shouldRenderLeafField(field)"
       class="portal-form-col-field"
     >
       <el-form-item
@@ -492,6 +532,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
           :form-data="model"
           :readonly="readonly || field.readonly === true || !editable"
           @update:model-value="(val: unknown) => onFieldUpdate(field.key, val)"
+          @field-blur="onFieldBlur"
         />
       </el-form-item>
     </div>

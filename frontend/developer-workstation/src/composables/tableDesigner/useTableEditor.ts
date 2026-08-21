@@ -4,8 +4,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { type TableDefinition, type FieldDefinition } from '@/api/functionUnit'
 import { suggestFieldName, suggestTableName } from '@/utils/fieldNameSlug'
 import { serializePkGeneration } from '@/utils/pkGenerationConfig'
+import { parseComputedFieldFromApi } from '@/utils/computedFieldConfig'
 import { hasRequestIdConfig } from '@/utils/formFieldMeta'
 import { isTableAuditField } from '@/utils/tableAuditFields'
+import {
+  computedFieldSaveWarning,
+  resolveTableSaveErrorMessage,
+} from '@/utils/tableSaveComputedField'
 
 type FieldRow = FieldDefinition & {
   __uid?: number
@@ -54,6 +59,8 @@ export function useTableEditor(options: UseTableEditorOptions) {
     row.refPrimaryKeyFields = row.refPrimaryKeyFields || []
     row.fkDisplayMode = row.fkDisplayMode || 'readonly'
     row.pkGeneration = row.pkGeneration ?? row.pkGenerationJson
+    row.isComputed = row.isComputed || false
+    row.computedField = parseComputedFieldFromApi(row.computedField ?? row.computedFieldJson)
     if (row.isPrimaryKey && !row.pkGeneration) {
       row.pkGeneration = { strategy: 'uuid' }
     }
@@ -180,6 +187,20 @@ export function useTableEditor(options: UseTableEditorOptions) {
     selectedTable.value.fieldDefinitions = [...fields]
   }
 
+  function onComputedFieldChange(row: FieldRow, enabled: boolean) {
+    row.isComputed = enabled
+    if (enabled) {
+      row.isPrimaryKey = false
+      row.isForeignKey = false
+      row.pkGeneration = undefined
+      row.refTableId = undefined
+      row.refPrimaryKeyFields = []
+      row.defaultValue = undefined
+      return
+    }
+    row.computedField = undefined
+  }
+
   async function handleSaveTable() {
     if (!selectedTable.value) return
     // MAIN tables must configure Request ID before saving — block with a popup.
@@ -223,6 +244,11 @@ export function useTableEditor(options: UseTableEditorOptions) {
         return
       }
     }
+    const computedWarning = computedFieldSaveWarning(selectedTable.value.fieldDefinitions, t)
+    if (computedWarning) {
+      ElMessage.warning({ message: computedWarning, duration: 8000, showClose: true })
+      return
+    }
     try {
       // 转换数据格式：将 fieldDefinitions 转换为 fields
       // 后端期望的是 TableDefinitionRequest，包含 fields 而不是 fieldDefinitions
@@ -247,6 +273,8 @@ export function useTableEditor(options: UseTableEditorOptions) {
           pkGeneration: serializePkGeneration(f.pkGeneration, f.isPrimaryKey),
           fkDisplayMode: f.fkDisplayMode || 'readonly',
           relationCardinality: f.relationCardinality,
+          isComputed: !!f.isComputed,
+          computedField: f.isComputed ? f.computedField : null,
           sortOrder: index
         }))
 
@@ -293,9 +321,13 @@ export function useTableEditor(options: UseTableEditorOptions) {
       setTimeout(() => {
       loadTables()
       }, 500)
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[TableDesigner] Save failed:', e)
-      ElMessage.error(e.response?.data?.message || t('common.error'))
+      ElMessage.error({
+        message: resolveTableSaveErrorMessage(e, t),
+        duration: 8000,
+        showClose: true,
+      })
     }
   }
 
@@ -306,6 +338,7 @@ export function useTableEditor(options: UseTableEditorOptions) {
     onTableNameManualInput,
     handleSelectTable,
     onPrimaryKeyChange,
+    onComputedFieldChange,
     onFieldDisplayNameInput,
     onFieldNameManualInput,
     handleBackToList,

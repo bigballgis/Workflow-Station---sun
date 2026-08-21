@@ -1,5 +1,6 @@
 package com.workflow.email.inbound;
 
+import com.platform.common.mail.ImapTransportProperties;
 import com.platform.common.mail.MailDiagnostics;
 import com.workflow.email.extract.EmailMessage;
 import jakarta.mail.Folder;
@@ -37,9 +38,14 @@ public class ImapInboundMailClient implements InboundMailClient {
 
     @Override
     public FetchResult fetchNew(MailboxAccess access, String folder, String cursor, int max) {
+        String protocol = access.ssl() ? "imaps" : "imap";
+        return fetchNew(access, folder, cursor, max, buildProps(access, protocol));
+    }
+
+    FetchResult fetchNew(MailboxAccess access, String folder, String cursor, int max, Properties props) {
         String folderName = StringUtils.hasText(folder) ? folder : "INBOX";
         String protocol = access.ssl() ? "imaps" : "imap";
-        Session session = Session.getInstance(buildProps(access, protocol));
+        Session session = Session.getInstance(props);
 
         log.info("[IMAP-FETCH] begin protocol={} host={} port={} ssl={} user={} folder={} cursor={} max={}",
                 protocol, access.host(), access.port(), access.ssl(), mask(access.username()), folderName, cursor, max);
@@ -85,14 +91,7 @@ public class ImapInboundMailClient implements InboundMailClient {
     }
 
     private Properties buildProps(MailboxAccess access, String protocol) {
-        Properties props = new Properties();
-        props.put("mail.store.protocol", protocol);
-        props.put("mail." + protocol + ".host", access.host());
-        props.put("mail." + protocol + ".port", String.valueOf(access.port()));
-        props.put("mail." + protocol + ".ssl.enable", String.valueOf(access.ssl()));
-        props.put("mail." + protocol + ".connectiontimeout", "15000");
-        props.put("mail." + protocol + ".timeout", "20000");
-        return props;
+        return ImapTransportProperties.apply(access.host(), access.port(), access.ssl(), protocol);
     }
 
     private FetchResult fetchSince(UIDFolder uidFolder, Folder folder, long lastUid, int max) throws Exception {

@@ -11,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.common.util.SafeUrlInput;
+import com.portal.util.PortalUserSecurityUtils;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -332,36 +333,92 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * Filter the list of function units accessible to a user
-     * Filter conditions: 1. Function unit is enabled 2. User has access permission
+     * New Request catalog: enabled FUs whose access roles intersect the current workspace role.
+     * When JWT has no {@code activeRoleId} (no UBR workspace), falls back to all portal business roles.
      */
     public List<Map<String, Object>> filterAccessibleFunctionUnits(String userId, List<Map<String, Object>> functionUnits) {
+        String activeRoleId = PortalUserSecurityUtils.getCurrentActiveRoleId().orElse(null);
+        return filterAccessibleFunctionUnits(userId, functionUnits, activeRoleId);
+    }
+
+    /**
+     * @param activeRoleId JWT workspace role id; blank means "no workspace" (all portal roles)
+     */
+    public List<Map<String, Object>> filterAccessibleFunctionUnits(
+            String userId, List<Map<String, Object>> functionUnits, String activeRoleId) {
         if (functionUnits == null || functionUnits.isEmpty()) {
             return Collections.emptyList();
         }
-        
-        // Match by role CODE (stable across environments); see getUserBusinessRoleCodes / getFunctionUnitAllowedRoleCodes.
-        Set<String> userRoleCodes = getUserBusinessRoleCodes(userId);
+
+        Set<String> userRoleKeys = resolveNewRequestRoleKeys(userId, activeRoleId);
+        if (userRoleKeys.isEmpty()) {
+            return Collections.emptyList();
+        }
+
         List<Map<String, Object>> accessible = new ArrayList<>();
-
         for (Map<String, Object> unit : functionUnits) {
-            String unitId = (String) unit.get("id");
-
-            // Check if the function unit is enabled
-            Boolean enabled = parseEnabledFlag(unit.get("enabled"));
-            if (enabled != null && !enabled) {
-                log.debug("Function unit {} is disabled, skipping", unitId);
-                continue;
-            }
-
-            Set<String> allowedRoleCodes = getFunctionUnitAllowedRoleCodes(unitId);
-
-            if (!allowedRoleCodes.isEmpty() && hasAnyRole(userRoleCodes, allowedRoleCodes)) {
+            if (isUnitVisibleForRoles(unit, userRoleKeys)) {
                 accessible.add(unit);
             }
         }
-        
         return accessible;
+    }
+
+    private boolean isUnitVisibleForRoles(Map<String, Object> unit, Set<String> userRoleKeys) {
+        String unitId = (String) unit.get("id");
+        Boolean enabled = parseEnabledFlag(unit.get("enabled"));
+        if (enabled != null && !enabled) {
+            log.debug("Function unit {} is disabled, skipping", unitId);
+            return false;
+        }
+        Set<String> allowedRoleCodes = getFunctionUnitAllowedRoleCodes(unitId);
+        return !allowedRoleCodes.isEmpty() && hasAnyRole(userRoleKeys, allowedRoleCodes);
+    }
+
+    /**
+     * Workspace mode: only the selected role (id + code). No workspace: all portal role codes.
+     */
+    Set<String> resolveNewRequestRoleKeys(String userId, String activeRoleId) {
+        if (activeRoleId == null || activeRoleId.isBlank()) {
+            return getUserBusinessRoleCodes(userId);
+        }
+        return matchKeysForActiveRole(userId, activeRoleId.trim());
+    }
+
+    private Set<String> matchKeysForActiveRole(String userId, String activeRoleId) {
+        Set<String> keys = new HashSet<>();
+        for (Map<String, Object> role : fetchUserPortalRolePayloads(userId)) {
+            String id = (String) role.get("id");
+            if (!activeRoleId.equals(id)) {
+                continue;
+            }
+            keys.add(id);
+            String code = (String) role.get("code");
+            if (code != null && !code.isBlank()) {
+                keys.add(code);
+            }
+        }
+        return keys;
+    }
+
+    private List<Map<String, Object>> fetchUserPortalRolePayloads(String userId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId)
+                    + "/roles?" + USER_BUSINESS_ROLES_QUERY;
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            if (response.getBody() != null) {
+                return response.getBody();
+            }
+        } catch (Exception e) {
+            // FALLBACK(external): admin-center roles API unavailable — New Request shows none
+            log.error("Failed to list portal roles for user {}: {}", userId, e.getMessage(), e);
+        }
+        return Collections.emptyList();
     }
 
     /**

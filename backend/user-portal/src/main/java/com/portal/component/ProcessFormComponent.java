@@ -57,6 +57,11 @@ public class ProcessFormComponent {
         }
         return filter;
     }
+    /** Lazy: server-side formula columns; null in {@code new}-constructed tests skips recalculation. */
+    @Lazy
+    @Autowired
+    private ComputedFieldRecalculator computedFieldRecalculator;
+
     /** Lazy: computes the readonly Request ID value; injected as a field to keep ctor arity stable for tests. */
     @Lazy
     @Autowired
@@ -89,6 +94,14 @@ public class ProcessFormComponent {
             log.debug("resolveAuditUserDisplay failed for {}: {}", userId, ex.getMessage());
             return userId;
         }
+    }
+
+    private void recalculateComputedFields(String functionUnitCode, Map<String, Object> variables) {
+        ComputedFieldRecalculator recalculator = computedFieldRecalculator;
+        if (recalculator == null || functionUnitCode == null || functionUnitCode.isBlank() || variables == null) {
+            return;
+        }
+        recalculator.recalculate(functionUnitCode, variables);
     }
 
     private volatile TransactionTemplate processFormWriteTxTemplate;
@@ -242,6 +255,7 @@ public class ProcessFormComponent {
             // System audit fields: refresh updated_at/updated_by at real update
             // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
+            recalculateComputedFields(processInstance.getFunctionUnitCode(), updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
 

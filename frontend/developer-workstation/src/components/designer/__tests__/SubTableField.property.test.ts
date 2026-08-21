@@ -19,16 +19,6 @@ interface ColumnConfig {
 }
 
 // Sub-table configuration interface
-interface SubTableConfig {
-  title?: string
-  bindingId?: number
-  tableId?: number
-  columns: ColumnConfig[]
-  pagination?: boolean
-  pageSize?: number
-  maxHeight?: number
-}
-
 describe('SubTableField Property Tests', () => {
   // Arbitrary for column type
   const columnTypeArb = fc.constantFrom<'input' | 'number' | 'date' | 'switch' | 'text'>('input', 'number', 'date', 'switch', 'text')

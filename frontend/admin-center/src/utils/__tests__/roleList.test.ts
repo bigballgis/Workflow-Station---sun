@@ -20,7 +20,7 @@ function role(partial: Partial<Role> & Pick<Role, 'id' | 'code' | 'name' | 'type
 describe('roleList', () => {
   const sample: Role[] = [
     role({ id: '1', code: 'SYS_ADMIN', name: 'System Administrator', type: 'ADMIN', isSystem: true }),
-    role({ id: '2', code: 'AUDITOR', name: 'Auditor', type: 'ADMIN', isSystem: true }),
+    role({ id: '2', code: 'AUDITOR', name: 'Auditor', type: 'AUDITOR', isSystem: true }),
     role({ id: '3', code: 'MANAGER', name: 'Department Manager', type: 'BU_BOUNDED', isSystem: true }),
     role({ id: '4', code: 'TECH_LEAD', name: 'Technical Lead', type: 'DEVELOPER', isSystem: true }),
     role({ id: '5', code: 'TEAM_LEAD', name: 'Team Lead', type: 'DEVELOPER', isSystem: true }),

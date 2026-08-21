@@ -81,7 +81,7 @@ yarn-error.log*
 .pnpm-store/
 # Note: pnpm-lock.yaml must be tracked to ensure consistent dependency versions
 # across environments. The frontends use pnpm (pinned via each package.json's
-# "packageManager"); activepieces/ has always used it.
+# "packageManager"); automation/ (the vendored Activepieces tree) has always used it.
 # pnpm-lock.yaml
 # yarn.lock
 
@@ -151,6 +151,9 @@ desktop.ini
 # 排在上面的否定之后才生效——.gitignore 里最后一条匹配规则说了算。
 # 注意仅忽略不足以生效：该文件此前是被跟踪的，已同时 `git rm --cached` 停止跟踪。
 deploy/environments/dev/.env
+
+# Local PostgreSQL dumps taken before schema apply — never commit
+deploy/environments/dev/backups/
 
 # Superset BuildKit pip secret (Nexus credentials) — never commit real pip.conf
 deploy/superset/pip.conf
@@ -353,7 +356,7 @@ BOOT-INF/
 !.claude/settings.json
 .claude/settings.local.json
 # Vendor/subtree local Claude workspace junk (not the repo-root .claude mirror)
-activepieces/.claude/
+automation/.claude/
 !documentation/*.md
 # Windows 上 core.ignorecase 会导致 *.MD 误匹配小写 .md；显式放行版本库文档目录
 !docs/**/*.md
@@ -364,8 +367,12 @@ frontend/scripts/_*.mjs
 deploy/pieces_metadata*
 
 # 前端/AP 构建产物压缩包不入库。web-embed 曾以 deploy/pieces/web-embed-<sha>.zip 提交过一次
-# （9.15 MiB，git 里删不掉），它绕开了 activepieces/.gitignore 的 `dist` 规则。产物走带外分发 +
+# （9.15 MiB，git 里删不掉），它绕开了 automation/.gitignore 的 `dist` 规则。产物走带外分发 +
 # build-and-push-k8s.ps1 的 -SkipApWorkspaceInstall 复用路径，见 BUILD_GUIDE 7.2。
-# 注意:activepieces/hermes/tarballs/*.tgz 是**有意**入库的（13 个件共 344 KB，气隙投放物料），
+# 注意:automation/hermes/tarballs/*.tgz 是**有意**入库的（13 个件共 344 KB，气隙投放物料），
 # 与此不同——那是无法重建的审批产物,这里是每次都能从源码重建的构建产物。
 deploy/**/*.zip
+
+# build-and-deploy.ps1 的本机 schema 迁移标记（按本地 Postgres 卷记录已应用 SQL 的
+# content-hash），机器本地状态，不入库
+deploy/environments/*/.schema-migration-markers/

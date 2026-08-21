@@ -14,10 +14,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PkGenerationConfig {
 
-    /** manual | uuid | autoIncrement | prefixedSequence */
+    /** manual | uuid | autoIncrement | prefixedSequence | dailyDateSequence | monthlyDateSequence | customFormat */
     private String strategy;
 
-    /** perTable | perFunctionUnit | perPrefix */
+    /** perTable | perFunctionUnit | perPrefix | perDay | perMonth */
     private String scope;
 
     private Long startValue;
@@ -25,4 +25,13 @@ public class PkGenerationConfig {
     private Integer padWidth;
 
     private String prefix;
+
+    /** Legacy {@code datePrefixedSequence} date style; migrated to {@code format} at allocate time. */
+    private String datePattern;
+
+    /** none | day | month — sequence reset for {@code customFormat}. */
+    private String resetPeriod;
+
+    /** Custom template for {@code customFormat}, e.g. {@code {DATETIME:yyyy-dd-MM}-{SEQNUM:4}}. */
+    private String format;
 }

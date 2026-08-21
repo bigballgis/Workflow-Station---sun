@@ -1,5 +1,6 @@
 package com.developer.security;
 
+import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.RoleRepository;
@@ -83,7 +84,7 @@ class FunctionUnitWorkspaceAccessServiceTest {
 
     @Test
     void admin_hasGlobalAccess() {
-        when(roleRepository.userHasActiveAdminTypeRole(USER_ID)).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
         for (WorkspaceAccessAction a : WorkspaceAccessAction.values()) {
             assertTrue(service.canAccess(FU_ID, a), "admin should pass " + a);
         }
@@ -170,7 +171,7 @@ class FunctionUnitWorkspaceAccessServiceTest {
     @Test
     void adminSelectedTeam_returnsOnlyThatTeamFunctionUnits() {
         selectGroup("vg-team-b");
-        when(roleRepository.userHasActiveAdminTypeRole(USER_ID)).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
         when(devGroupAssignmentRepository.findDistinctFunctionUnitIdsByVirtualGroupIdIn(List.of("vg-team-b")))
                 .thenReturn(List.of(FU_ID));
         assertEquals(Set.of(FU_ID), service.visibleFunctionUnitIds());
@@ -180,7 +181,7 @@ class FunctionUnitWorkspaceAccessServiceTest {
 
     @Test
     void admin_canSwitchToAnyActiveTeam() {
-        when(roleRepository.userHasActiveAdminTypeRole(USER_ID)).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
         List<DevGroupOptionDTO> allTeams = List.of(new DevGroupOptionDTO("vg-team-b", "Team B"));
         when(virtualGroupMembershipDao.findAllSelectableTeams(DevGroupConstants.PUBLIC_GROUP_ID))
                 .thenReturn(allTeams);
@@ -189,9 +190,47 @@ class FunctionUnitWorkspaceAccessServiceTest {
     }
 
     @Test
-    void missingFunctionUnit_denied() {
+    void auditor_hasGlobalViewButCannotModify() {
+        when(roleRepository.hasRoleByUserId(USER_ID, "AUDITOR")).thenReturn(true);
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.DELETE));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.ASSIGN_DEV_GROUPS));
+        assertNull(service.visibleFunctionUnitIds(), "auditor sees all (null)");
+        assertEquals(Set.of(), service.modifiableFunctionUnitIds());
+        assertTrue(service.canEnterWorkspace(USER_ID));
+        assertTrue(service.canSeeAllGroups(USER_ID));
+    }
+
+    @Test
+    void auditorPlusDeveloper_keepsTeamScopedWrites() {
+        inScope();
+        when(roleRepository.hasRoleByUserId(USER_ID, "AUDITOR")).thenReturn(true);
+        when(roleRepository.hasRoleByUserId(USER_ID, "DEVELOPER")).thenReturn(true);
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        assertTrue(service.canAccess(FU_ID, WorkspaceAccessAction.MODIFY));
+        assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.DELETE));
+        assertEquals(Set.of(FU_ID), service.modifiableFunctionUnitIds());
+    }
+
+    /** 缺失 FU：canAccess=false，但 assertCanAccess 抛 404（不是 403），SYS_ADMIN 也一样。 */
+    @Test
+    void missingFunctionUnit_surfacesAsNotFound() {
         when(functionUnitRepository.existsById(FU_ID)).thenReturn(false);
         assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.assertCanAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.assertCanAccess(FU_ID, WorkspaceAccessAction.VIEW));
+    }
+
+    /** 存在但越权的 FU 仍是 403 语义（FunctionUnitWorkspaceAccessDeniedException）。 */
+    @Test
+    void existingButDeniedFunctionUnit_staysForbidden() {
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(Collections.emptyList());
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.assertCanAccess(FU_ID, WorkspaceAccessAction.VIEW));
     }
 
     private void selectGroup(String groupId) {

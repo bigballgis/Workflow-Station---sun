@@ -43,6 +43,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/role': [PERMISSIONS.ROLE_READ],
   '/function-unit': [PERMISSIONS.SYSTEM_ADMIN],
   '/automation-pieces': [PERMISSIONS.SYSTEM_ADMIN],
+  '/automation-flows': [PERMISSIONS.SYSTEM_ADMIN],
   '/monitor': [PERMISSIONS.SYSTEM_ADMIN],
   '/audit': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
   '/audit/admin-center': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
@@ -61,6 +62,16 @@ const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
   AUDITOR: ['audit:read', 'log:read', 'user:read', 'basic:access'],
 }
 
+const AUDITOR_DENIED_PERMISSIONS = new Set([
+  'user:write',
+  'user:delete',
+  'role:write',
+  'role:delete',
+  'system:admin',
+  'system:config',
+  'tenant:admin',
+])
+
 /**
  * Check if user has a specific permission
  */
@@ -68,9 +79,14 @@ export function hasPermission(permission: string): boolean {
   const user = getUser()
   if (!user) return false
   
-  // System admin has all permissions
+  // System admin has all permissions (also bypasses AUDITOR deny-list when roles are stacked)
   if (user.roles?.includes('SYS_ADMIN') || user.roles?.includes('SUPER_ADMIN')) {
     return true
+  }
+
+  const auditorOnly = user.roles?.includes('AUDITOR')
+  if (auditorOnly && AUDITOR_DENIED_PERMISSIONS.has(permission)) {
+    return false
   }
   
   // Check explicit permissions from JWT

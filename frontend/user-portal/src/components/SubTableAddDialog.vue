@@ -90,7 +90,7 @@
               <el-form-item
                 :label="item.column.label"
                 :prop="item.column.field"
-                :error="columnErrors[item.column.field]?.join('; ')"
+                :error="columnErrorMessages[item.column.field]"
                 :class="{
                   'mi-assignment-block__field': !!item.assignmentSlot,
                   'mi-assignment-block__field--last': item.assignmentSlot === 'last',
@@ -734,6 +734,8 @@ const props = defineProps<{
   mode: 'add' | 'edit'
   initialData?: Record<string, any>
   rowFormulas?: RowFormulaRule[]
+  /** This binding's own table columns — supplies the computed (formula) column definitions. */
+  fieldDefinitions?: BindingFieldDefinition[]
   columnValidationRules?: Record<string, ValidationRule[]>
   uploadUrl?: string
   /** Nested sub-tables from this binding's form design — rows save under the row's `__subTables__`. */
@@ -1118,6 +1120,7 @@ const {
   formRules,
   isColDisabled,
   columnErrors,
+  computedFieldErrors,
   handleClose,
   handleSave,
 } = useSubTableDialogForm(props, emit, t, {
@@ -1142,6 +1145,21 @@ const {
   onTextFocus,
   onTextBlur,
 } = useSubTableDialogSensitiveMask(formData, isColDisabled)
+
+/**
+ * One inline error per field, from the two sources that can produce one. Precomputed as a map so
+ * the form does not re-derive a message for every column on every render.
+ */
+const columnErrorMessages = computed<Record<string, string>>(() => {
+  const messages: Record<string, string> = {}
+  for (const [field, errors] of Object.entries(columnErrors.value)) {
+    if (errors.length) messages[field] = errors.join('; ')
+  }
+  for (const [field, code] of Object.entries(computedFieldErrors.value)) {
+    messages[field] = t('computedField.evaluationFailed', { code })
+  }
+  return messages
+})
 
 // Re-measure whenever the visible field set changes (open, mode switch, row change).
 // Declared after formRef / dialogLayoutGroups exist, and flushed post-render so the

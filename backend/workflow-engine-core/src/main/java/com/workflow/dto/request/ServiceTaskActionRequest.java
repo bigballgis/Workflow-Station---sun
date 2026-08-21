@@ -23,10 +23,18 @@ public class ServiceTaskActionRequest {
     /** Execution timeout seconds (default 120) */
     private Integer timeoutSeconds = 120;
 
-    /** Input variable mapping JSON string [{"source":"xxx","target":"yyy"}] */
+    /**
+     * @deprecated Envelope contract v1 (FR-C07) removed per-task variable mapping; the field is
+     * kept only so older callers' request bodies still deserialize. Its value is ignored.
+     */
+    @Deprecated
     private String inputMapping;
 
-    /** Output variable mapping JSON string [{"source":"xxx","target":"yyy"}] */
+    /**
+     * @deprecated Envelope contract v1 (FR-C07) removed per-task variable mapping; the field is
+     * kept only so older callers' request bodies still deserialize. Its value is ignored.
+     */
+    @Deprecated
     private String outputMapping;
 
     /** User-supplied input parameter data */

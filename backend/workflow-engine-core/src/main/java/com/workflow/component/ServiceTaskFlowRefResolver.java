@@ -25,7 +25,9 @@ import java.util.Map;
  * 实际 flowId——BPMN 保持环境可携带，部署产物落环境实值。</p>
  *
  * <p>{@code resolve-url} 或 {@code service.internal-token} 未配置 ⇒ 解析关闭
- * （{@link Outcome#UNAVAILABLE}），部署按原引用继续（与既有行为一致）。</p>
+ * （{@link Outcome#UNAVAILABLE}）。FR-C12 起解析失败默认让部署 fail-fast；仅
+ * 「解析未配置 + BPMN 只有 legacy {@code ap:flowId}」的本地 dev 旧路径按原引用放行
+ * （见 {@code ProcessDeploymentManager#resolveApFlowRef}）。</p>
  */
 @Slf4j
 @Component
@@ -56,9 +58,18 @@ public class ServiceTaskFlowRefResolver {
     @Value("${service.internal-token:}")
     private String serviceInternalToken;
 
+    /**
+     * 解析通道是否已配置（resolve-url + service token 都有值）。未配置时 {@link #resolve}
+     * 恒返回 {@link Outcome#UNAVAILABLE}；部署期据此区分「本地 dev 未接 admin-center」与
+     * 「配置了但打不通」——后者必须让部署失败（FR-C12）。
+     */
+    public boolean isConfigured() {
+        return resolveUrl != null && !resolveUrl.isBlank()
+                && serviceInternalToken != null && !serviceInternalToken.isBlank();
+    }
+
     public Resolution resolve(String flowRef) {
-        if (resolveUrl == null || resolveUrl.isBlank()
-                || serviceInternalToken == null || serviceInternalToken.isBlank()) {
+        if (!isConfigured()) {
             return Resolution.unavailable();
         }
         String url = UriComponentsBuilder.fromUriString(resolveUrl)

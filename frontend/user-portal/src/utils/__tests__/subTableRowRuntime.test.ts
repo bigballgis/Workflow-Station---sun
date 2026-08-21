@@ -61,6 +61,57 @@ describe('applyFkPresentationToDialogColumns auto-PK', () => {
     expect(allColumns[0].readonly).toBe(true)
     expect(allColumns[0].type).toBe('text')
   })
+
+  it('coerces inputNumber to text for dailyDateSequence PK', () => {
+    const { allColumns } = applyFkPresentationToDialogColumns(
+      [{ field: 'id_idw', label: 'id', type: 'number', required: true }],
+      [],
+      [{
+        fieldName: 'id_idw',
+        isPrimaryKey: true,
+        pkGeneration: { strategy: 'dailyDateSequence', padWidth: 4 },
+      }],
+    )
+    expect(allColumns[0].readonly).toBe(true)
+    expect(allColumns[0].type).toBe('text')
+  })
+
+  it('coerces inputNumber to text for monthlyDateSequence PK', () => {
+    const { allColumns } = applyFkPresentationToDialogColumns(
+      [{ field: 'id_idw', label: 'id', type: 'number', required: true }],
+      [],
+      [{
+        fieldName: 'id_idw',
+        isPrimaryKey: true,
+        pkGeneration: { strategy: 'monthlyDateSequence', padWidth: 4 },
+      }],
+    )
+    expect(allColumns[0].readonly).toBe(true)
+    expect(allColumns[0].type).toBe('text')
+  })
+
+  it('coerces inputNumber to text for customFormat and legacy datePrefixedSequence PK', () => {
+    const datePrefixed = applyFkPresentationToDialogColumns(
+      [{ field: 'id_idw', label: 'id', type: 'number', required: true }],
+      [],
+      [{
+        fieldName: 'id_idw',
+        isPrimaryKey: true,
+        pkGeneration: { strategy: 'datePrefixedSequence' },
+      }],
+    )
+    expect(datePrefixed.allColumns[0].type).toBe('text')
+    const custom = applyFkPresentationToDialogColumns(
+      [{ field: 'id_idw', label: 'id', type: 'number', required: true }],
+      [],
+      [{
+        fieldName: 'id_idw',
+        isPrimaryKey: true,
+        pkGeneration: { strategy: 'customFormat' },
+      }],
+    )
+    expect(custom.allColumns[0].type).toBe('text')
+  })
 })
 
 describe('applyFieldPermissionsToDialogColumns', () => {

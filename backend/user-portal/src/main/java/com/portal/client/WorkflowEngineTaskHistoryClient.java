@@ -118,14 +118,20 @@ public class WorkflowEngineTaskHistoryClient {
     // ==================== User permissions ====================
 
     /**
-     * Returns user task permissions (virtual groups and department roles)
+     * Returns user task permissions (virtual groups only).
+     *
+     * <p>{@code includeRoles=false}: the only consumer is
+     * {@code WorkspaceTaskFilterComponent#fetchUserVirtualGroups}, which reads {@code virtualGroupIds}
+     * and nothing else. Asking for roles would cost a second serial admin-center round-trip inside the
+     * engine on a path every To Do and dashboard load blocks on.</p>
      */
     public Optional<Map<String, Object>> getUserTaskPermissions(String userId) {
         if (!engine.isAvailable()) {
             return Optional.empty();
         }
         try {
-            String url = engine.engineUrl() + "/api/v1/tasks/user-permissions?userId=" + SafeUrlInput.encodeQueryValue(userId);
+            String url = engine.engineUrl() + "/api/v1/tasks/user-permissions?includeRoles=false&userId="
+                    + SafeUrlInput.encodeQueryValue(userId);
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
                 url, HttpMethod.GET, engine.authorizedGetEntity(),

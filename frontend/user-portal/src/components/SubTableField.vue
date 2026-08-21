@@ -380,6 +380,7 @@
       :mode="dialogMode"
       :initial-data="dialogInitialData"
       :row-formulas="rowFormulas"
+      :field-definitions="fieldDefinitions"
       :column-validation-rules="validationConfig?.columnRules"
       :upload-url="uploadUrl"
       :nested-sub-tables="nestedSubTableDescriptors"

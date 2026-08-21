@@ -52,6 +52,7 @@ class RelationTableStructurePropertyTest {
                 tableDefinitionRepository,
                 fieldDefinitionRepository,
                 functionUnitRepository,
+                new com.admin.service.RelationComputedFieldValidator(),
                 jdbcTemplate
         );
     }

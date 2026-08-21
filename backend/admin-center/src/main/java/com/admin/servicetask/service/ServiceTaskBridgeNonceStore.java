@@ -39,7 +39,7 @@ public class ServiceTaskBridgeNonceStore {
     /**
      * 签发一次性 nonce 并把 AP 会话落 Redis（短 TTL）。
      *
-     * @param session  已用共享账号换得的 AP 会话
+     * @param session  已按当前操作人换得的 AP 会话
      * @param ttlSeconds  有效期（秒），下限 30s
      * @return 不可猜的 nonce（写入桥页 URL fragment）
      */

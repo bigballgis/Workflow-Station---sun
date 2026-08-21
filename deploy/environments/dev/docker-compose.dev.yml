@@ -105,18 +105,20 @@ services:
   # Non-prod: UI login via the edge gateway shared-account (see nginx :8085 + bridge).
   # Shares the platform Postgres/Redis. Runs the engine + UI + API on container :80.
   activepieces:
-    # HERMES vendored image: EE-removed + de-bunned Activepieces 0.84.0, built from the
-    # in-repo source tree (activepieces/) via its own Dockerfile. EE is stripped (AG-EE),
+    # HERMES vendored image: EE-removed + de-bunned Activepieces 0.88.0, built from the
+    # in-repo source tree (automation/) via its own Dockerfile. EE is stripped (AG-EE),
     # bun is gone (X-4, pnpm/Node), the Approvals tab is patched out at the source level
-    # (HERMES-PATCH-001, Q9), and the allowlisted pieces (activepieces/hermes/pieces.json)
+    # (HERMES-PATCH-001, Q9), and the allowlisted pieces (automation/hermes/pieces.json)
     # are PRE-INSTALLED by the last layer — the runtime installer is a no-op for them, so
     # an air-gapped cluster never reaches a registry. Custom (ARCHIVE) pieces imported via
-    # Admin Center resolve from the baked pnpm offline store instead.
+    # the retained admin-center service resolve from the baked pnpm offline store instead.
+    # The 0.84 predecessor tree was DELETED on 2026-08-14 once 0.88 was verified; retrieve it
+    # from git history if ever needed (`git show de4f6469:activepieces/<path>`).
     # Build (heavy — full monorepo): docker compose build activepieces
     build:
-      context: ../../../activepieces
+      context: ../../../automation
       dockerfile: Dockerfile
-    image: activepieces:0.84.0-ee-removed
+    image: activepieces:0.88.0-ee-removed
     container_name: platform-activepieces-dev
     depends_on:
       postgres:
@@ -169,6 +171,11 @@ services:
       AP_JWT_SECRET: ${ACTIVEPIECES_JWT_SECRET:-dev-ap-jwt-secret-change-me}
       AP_FRONTEND_URL: ${ACTIVEPIECES_FRONTEND_URL:-http://localhost:8085/}
       AP_WEBHOOK_URL: ${ACTIVEPIECES_WEBHOOK_URL:-http://localhost:8085/}
+      # HERMES-PATCH-031: 容器内回拉 piece bundle 用的地址(仅此一处用它)。
+      # 上面两个是**浏览器视角**的地址;而 ARCHIVE 件安装时 worker 在容器内 fetch
+      # /v1/engine/pieces/bundle,用浏览器地址会打到容器自己的 8085(无监听)=> fetch failed
+      # => Admin Center 的 Import Piece 必然 500。webhook 仍用对外地址,不受影响。
+      AP_INTERNAL_API_URL: ${ACTIVEPIECES_SELF_INTERNAL_URL:-http://localhost:80}
       AP_TRIGGER_DEFAULT_POLL_INTERVAL: 1
       AP_ENVIRONMENT: prod
       # Sync-webhook wait (AP default 30s → 204 No Content on slow flows). Kept at 300s for
@@ -185,7 +192,11 @@ services:
       # the offline switch that actually works is SYNC_MODE=NONE, which makes
       # piece-sync-service skip the cloud metadata sync (default OFFICIAL_AUTO
       # re-downloads piece metadata from cloud.activepieces.com into the DB).
+      # C-2 piece 冻结 + X-3 气隙：这两条与镜像内的代码默认值一致（HERMES-PATCH-019 已把上游
+      # 的 OFFICIAL_AUTO / true 翻成 fail-closed），此处显式重写一遍，让运维在 compose 里就能
+      # 看见闸门的位置，而不是要去读镜像里的默认值。改动任一条都等于允许运行期出公网。
       AP_PIECES_SYNC_MODE: NONE
+      AP_USE_CDN_FOR_BUNDLES: "false"
       AP_CLOUD_AUTH_ENABLED: "false"
       # Runtime piece installs run pnpm (bun removed, X-4), which honors NPM_CONFIG_REGISTRY
       # the same way. Empty (dev default) = pnpm's own default, i.e. PUBLIC npmjs —
@@ -385,18 +396,16 @@ services:
       SUPERSET_DB_SCHEMA: ${SUPERSET_DB_SCHEMA}
       BI_SUPERSET_USERNAME: ${BI_SUPERSET_USERNAME}
       BI_SUPERSET_PASSWORD: ${BI_SUPERSET_PASSWORD}
-      # Activepieces login bridge (non-prod): mint AP tokens via the shared account.
+      # Activepieces login bridge (non-prod): mint per-user AP tokens.
       # In-network AP is activepieces:80. Prod runtime leaves bridge disabled (no UI).
       ACTIVEPIECES_INTERNAL_URL: ${ACTIVEPIECES_INTERNAL_URL:-http://activepieces:80}
       ACTIVEPIECES_BRIDGE_ENABLED: ${ACTIVEPIECES_BRIDGE_ENABLED:-true}
-      ACTIVEPIECES_SHARED_EMAIL: ${ACTIVEPIECES_SHARED_EMAIL}
-      ACTIVEPIECES_SHARED_PASSWORD: ${ACTIVEPIECES_SHARED_PASSWORD}
-      # L7 per-user provisioning（审计到人）：开启后按当前用户换 AP token，flow Owner 落真实创建人。
+      # L7 per-user provisioning（审计到人）——AP 身份的唯一路径，无共享账号、无开关：
+      # 每次 AP 调用按当前操作人换 token，flow Owner 与 AP 审计落真实的人。
       # 密钥对来自一次性 POST /v1/signing-keys；私钥仅服务端持有（.env，单行 PEM）。
-      ACTIVEPIECES_MANAGED_ENABLED: ${ACTIVEPIECES_MANAGED_ENABLED:-false}
       ACTIVEPIECES_MANAGED_SIGNING_KEY_ID: ${ACTIVEPIECES_MANAGED_SIGNING_KEY_ID:-}
       ACTIVEPIECES_MANAGED_PRIVATE_KEY: ${ACTIVEPIECES_MANAGED_PRIVATE_KEY:-}
-      ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:-hermes-shared}
+      ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID: ${ACTIVEPIECES_MANAGED_PROJECT_EXTERNAL_ID:-hermes-main}
       # 影子用户角色（平台级 ADMIN|MEMBER / project 级 Admin|Editor|Viewer）。默认全权：
       # 从 admin center 进入的人要能用 AP 平台级页面。每次握手同步既有影子用户。
       ACTIVEPIECES_MANAGED_PLATFORM_ROLE: ${ACTIVEPIECES_MANAGED_PLATFORM_ROLE:-ADMIN}
@@ -404,8 +413,6 @@ services:
       # 桥页公网地址（浏览器侧）。/launch 在其后附 #nonce=<票> 整页跳转（方案 B 跨域 SSO 握手）。
       # dev 同源 :8085；k8s 经 configmap AP_BRIDGE_URL 注入 AP 网关主机。
       AP_BRIDGE_URL: ${ACTIVEPIECES_BRIDGE_PUBLIC_URL:-http://localhost:8085/__ap/bridge}
-      # Admin UI「重置密码」后的明文密码（仅 dev 默认 password；生产务必在 .env 中改为强密码）
-      USER_RESET_PASSWORD: ${USER_RESET_PASSWORD:-password}
       # AgentNdjsonLog：与下方 volumes 的 /app/logs 对齐，宿主机见 deploy/environments/dev/logs/debug-864cd4.log
       WORKFLOW_DEBUG_NDJSON_PATH: ${WORKFLOW_DEBUG_NDJSON_PATH:-/app/logs/debug-864cd4.log}
       # LDAP / SSO-DSP (local mock) — env 名须与 application.yml 中 ${LDAP_*} 一致

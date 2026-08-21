@@ -1,0 +1,92 @@
+import { isNil } from '@activepieces/core-utils'
+import { FlowStatus, FlowVersionState, PrewarmDataRequest, PrewarmDataResponse } from '@activepieces/shared'
+import { FastifyBaseLogger } from 'fastify'
+import { accessTokenManager } from '../authentication/lib/access-token-manager'
+import { distributedLock, distributedStore } from '../database/redis-connections'
+import Paginator from '../helper/pagination/paginator'
+import { platformService } from '../platform/platform.service'
+import { projectService } from '../project/project-service'
+import { flowService } from './flow/flow.service'
+
+
+const SHARED_CACHE_KEY = '__shared__'
+const CACHE_TTL_SECONDS = 5 * 60
+const LOCK_TIMEOUT_SECONDS = 30
+const EMPTY_RESPONSE: PrewarmDataResponse = { flows: [], platformId: '', engineToken: '' }
+const BASE_LIST_PARAMS = {
+    status: [FlowStatus.ENABLED],
+    versionState: FlowVersionState.LOCKED,
+    limit: Paginator.NO_LIMIT,
+    includeTriggerSource: false,
+}
+
+export const preWarmWorkersService = (log: FastifyBaseLogger) => ({
+    async getPrewarmData(input: PrewarmDataRequest): Promise<PrewarmDataResponse> {
+        // Targeted prewarm (flowPublished): the flow is already known, so skip listing (and the cache) and just mint a token for its project.
+        if (!isNil(input.flow)) {
+            // HERMES: CLOUD-only dedicated-worker gate removed (AG-EE / G5); every HERMES worker is SHARED.
+            const platformId = await projectService(log).getPlatformId(input.flow.projectId)
+            const engineToken = await accessTokenManager(log).generateEngineToken({ projectId: input.flow.projectId, platformId })
+            return { flows: [input.flow], platformId, engineToken }
+        }
+
+        const scope = await resolveCachedScope(input, log)
+        if (isNil(scope)) {
+            return EMPTY_RESPONSE
+        }
+        const engineToken = await accessTokenManager(log).generateEngineToken({
+            projectId: scope.tokenProjectId,
+            platformId: scope.platformId,
+        })
+        return { flows: scope.flows, platformId: scope.platformId, engineToken }
+    },
+})
+
+async function resolveCachedScope(input: PrewarmDataRequest, log: FastifyBaseLogger): Promise<PrewarmScope | null> {
+    const scopeId = input.workerGroupId ?? SHARED_CACHE_KEY
+    const cacheKey = `prewarm:scope:${scopeId}`
+    const cached = await distributedStore.get<PrewarmScope>(cacheKey)
+    if (!isNil(cached)) {
+        return cached
+    }
+    // Workers (re)connect in a herd on deploy; serialize the compute so only the first one lists flows
+    // and the rest wait for the lock, then read the populated cache below.
+    return distributedLock(log).runExclusive({
+        key: `${cacheKey}:lock`,
+        timeoutInSeconds: LOCK_TIMEOUT_SECONDS,
+        fn: async () => {
+            const cachedAfterLock = await distributedStore.get<PrewarmScope>(cacheKey)
+            if (!isNil(cachedAfterLock)) {
+                return cachedAfterLock
+            }
+            const scope = await computeScope(log)
+            if (!isNil(scope)) {
+                await distributedStore.put(cacheKey, scope, CACHE_TTL_SECONDS)
+            }
+            return scope
+        },
+    })
+}
+
+async function computeScope(log: FastifyBaseLogger): Promise<PrewarmScope | null> {
+    // HERMES: EE worker-group / dedicated-worker prewarm removed (AG-EE / G5). The CLOUD
+    // branch (workerGroupService + projectWorkerGroupService scoping) is gone — every
+    // HERMES worker is SHARED, so we always warm the oldest (single) platform's flows.
+    const platform = await platformService(log).getOldestPlatform()
+    if (isNil(platform)) {
+        return null
+    }
+    const platformId = platform.id
+
+    const activeFlows = await flowService(log).list({ ...BASE_LIST_PARAMS, platformId })
+    const flows = activeFlows.data.map((flow) => ({ id: flow.id, versionId: flow.version.id, projectId: flow.projectId }))
+    const tokenProjectId = (await projectService(log).getProjectIdsByPlatform(platformId))[0]
+    return { flows, platformId, tokenProjectId }
+}
+
+
+type PrewarmScope = {
+    flows: PrewarmDataResponse['flows']
+    platformId: string
+    tokenProjectId: string
+}

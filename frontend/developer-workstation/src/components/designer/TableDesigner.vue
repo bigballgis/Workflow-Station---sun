@@ -391,11 +391,11 @@
                 <div class="constraint-cell">
                   <el-checkbox
                     v-model="row.isPrimaryKey"
-                    :disabled="isTableAuditField(row.fieldName)"
+                    :disabled="isTableAuditField(row.fieldName) || row.isComputed"
                     @change="(val: boolean) => onPrimaryKeyChange(row, val)"
                   />
                   <PkGenerationEditor
-                    v-if="row.isPrimaryKey && !isTableAuditField(row.fieldName)"
+                    v-if="row.isPrimaryKey && !isTableAuditField(row.fieldName) && !row.isComputed"
                     v-model="row.pkGeneration"
                     :enabled="true"
                     variant="popover"
@@ -410,7 +410,7 @@
             >
               <template #default="{ row }">
                 <FieldForeignKeyEditor
-                  v-if="!isTableAuditField(row.fieldName)"
+                  v-if="!isTableAuditField(row.fieldName) && !row.isComputed"
                   :is-foreign-key="row.isForeignKey"
                   :ref-table-id="row.refTableId"
                   :ref-primary-key-fields="row.refPrimaryKeyFields"
@@ -419,6 +419,28 @@
                   @update:is-foreign-key="row.isForeignKey = $event"
                   @update:ref-table-id="row.refTableId = $event"
                   @update:ref-primary-key-fields="row.refPrimaryKeyFields = $event"
+                />
+                <span
+                  v-else-if="isTableAuditField(row.fieldName)"
+                  class="text-muted"
+                >—</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              :label="t('table.computedField.column')"
+              min-width="96"
+              align="center"
+            >
+              <template #default="{ row }">
+                <ComputedFieldEditor
+                  v-if="!isTableAuditField(row.fieldName)"
+                  :is-computed="row.isComputed"
+                  :computed-field="row.computedField"
+                  :computed-field-json="row.computedFieldJson"
+                  :table-type="selectedTable?.tableType"
+                  :disabled="row.isPrimaryKey || row.isForeignKey"
+                  @update:is-computed="onComputedFieldChange(row, $event)"
+                  @update:computed-field="row.computedField = $event"
                 />
                 <span
                   v-else
@@ -436,7 +458,7 @@
                 <el-input
                   v-model="row.defaultValue"
                   size="small"
-                  :disabled="isTableAuditField(row.fieldName)"
+                  :disabled="isTableAuditField(row.fieldName) || row.isComputed"
                   :placeholder="t('common.inputPlaceholder')"
                 />
               </template>
@@ -709,6 +731,7 @@ import RelationDiagramEditor from '@/components/designer/RelationDiagramEditor.v
 import RequestIdConfigDialog from '@/components/designer/RequestIdConfigDialog.vue'
 import PkGenerationEditor from '@/components/designer/PkGenerationEditor.vue'
 import FieldForeignKeyEditor from '@/components/designer/FieldForeignKeyEditor.vue'
+import ComputedFieldEditor from '@/components/designer/ComputedFieldEditor.vue'
 import { hasRequestIdConfig } from '@/utils/formFieldMeta'
 import { useTableNaming } from '@/composables/tableDesigner/useTableNaming'
 import { useTableList } from '@/composables/tableDesigner/useTableList'
@@ -798,6 +821,7 @@ const {
   onTableNameManualInput,
   handleSelectTable,
   onPrimaryKeyChange,
+  onComputedFieldChange,
   onFieldDisplayNameInput,
   onFieldNameManualInput,
   handleBackToList,

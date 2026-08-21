@@ -105,7 +105,6 @@ export const AppErrorCode = {
 
   // ---- User ----
   USER_ACTION_FAILED:                 'USER_ACTION_FAILED',
-  USER_RESET_PASSWORD_FAILED:         'USER_RESET_PASSWORD_FAILED',
   USER_DELETE_FAILED:                 'USER_DELETE_FAILED',
 
   // ---- Profile ----

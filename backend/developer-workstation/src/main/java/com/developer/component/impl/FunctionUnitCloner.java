@@ -316,6 +316,8 @@ class FunctionUnitCloner {
                     .refPrimaryKeyFields(sourceField.getRefPrimaryKeyFields() != null
                             ? new ArrayList<>(sourceField.getRefPrimaryKeyFields()) : null)
                     .pkGenerationJson(deepCopyMap(sourceField.getPkGenerationJson()))
+                    .isComputed(Boolean.TRUE.equals(sourceField.getIsComputed()))
+                    .computedFieldJson(copyComputedFieldJson(sourceField))
                     .relationCardinality(sourceField.getRelationCardinality());
             if (sourceField.getFkDisplayMode() != null) {
                 fieldBuilder.fkDisplayMode(sourceField.getFkDisplayMode());
@@ -593,6 +595,24 @@ class FunctionUnitCloner {
             throw new DeveloperBusinessException("SYS_JSON_ERROR",
                     "Failed to deep copy JSON configuration during clone: " + e.getMessage());
         }
+    }
+
+    /**
+     * Clone must carry the formula JSON. Copying {@code isComputed=true} with a null
+     * {@code computed_field_json} would make the clone look computed while Portal has nothing
+     * to evaluate — the same hole ImportWriter already rejects.
+     */
+    private Map<String, Object> copyComputedFieldJson(FieldDefinition sourceField) {
+        if (!Boolean.TRUE.equals(sourceField.getIsComputed())) {
+            return null;
+        }
+        Map<String, Object> copied = deepCopyMap(sourceField.getComputedFieldJson());
+        if (copied == null || copied.isEmpty()) {
+            throw new DeveloperBusinessException("COMPUTED_FIELD_CLONE_INVALID",
+                    "Field '" + sourceField.getFieldName()
+                            + "' is marked computed but has no usable formula JSON");
+        }
+        return copied;
     }
 
     private ActionDefinition cloneAction(ActionDefinition source, FunctionUnit target) {

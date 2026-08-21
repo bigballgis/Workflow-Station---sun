@@ -442,6 +442,41 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :field-permissions="ctx.fieldPermissions"
           @update:row="(row: Record<string, any>) => ctx.handleInlineSubFormUpdate(field, row)"
         />
+        <div
+          v-if="ctx.resolveBinding(field._bindingId) && ctx.subTableMode(field) === 'formBelowTable'"
+          class="sub-table-inline-anchor"
+          :ref="(el) => ctx.setSubTableInlineAnchor(field._bindingId, el as HTMLElement | null)"
+        >
+          <SubTableInlineForm
+            :title="ctx.resolveInlineFormTableTitle(field)"
+            :fields="ctx.resolveInlineFormFields(field)"
+            :form-options="ctx.resolveInlineFormSourceBinding(field)?.formOptions ?? undefined"
+            :dialog-columns="ctx.resolveInlineFormSourceBinding(field)?.dialogColumns"
+            :current-row="ctx.getCurrentRowForInlineForm(field)"
+            :readonly="ctx.inlineSubTableFormReadonly(field)"
+            :label-width="ctx.labelWidth"
+            :sub-table-bindings="ctx.subTableBindings as any[]"
+            :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
+            :suppress-link-only-standalone-sub-tables="ctx.viewContext === 'initiatorRequest'"
+            :host-table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
+            :host-field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
+            :host-function-unit-id="ctx.functionUnitId as string | undefined"
+            :host-task-id="ctx.taskId as string | undefined"
+            :host-primary-form-data="ctx.primaryFormData as Record<string, unknown> | undefined"
+            :host-primary-table-id="(ctx.primaryTableId ?? null) as number | null"
+            @update:row="(row: Record<string, any>) => ctx.handleInlineFormUpdate(field, row)"
+            @save="ctx.handleInlineFormSave?.()"
+          />
+          <RecordNoteField
+            v-for="rn in inlineFormRecordNoteFields(field)"
+            :key="`${rn.key}-col`"
+            :config="rn._recordNote"
+            :table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
+            :record-id="inlineFormRowStableId(field)"
+            :process-instance-id="(ctx.processInstanceId ?? null) as string | null"
+            :function-unit-id="(ctx.functionUnitId ?? null) as string | null"
+          />
+        </div>
       </div>
     </template>
 

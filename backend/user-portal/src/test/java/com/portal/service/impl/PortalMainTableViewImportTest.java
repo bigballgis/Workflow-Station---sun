@@ -1,9 +1,12 @@
 package com.portal.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portal.component.ComputedFieldRecalculator;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.MainTableViewAccessResolver;
-import com.portal.component.MainTableViewInvolvementChecker;
+import com.portal.component.MainTableViewInvolvementScope;
+import com.portal.component.MainTableViewRowQueryComponent;
+import com.portal.component.MainTableViewSubRowQueryComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.ProcessInstanceInfo;
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -52,7 +56,13 @@ class PortalMainTableViewImportTest {
     private UserBusinessUnitRepository userBusinessUnitRepository;
 
     @Mock
-    private MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
+    private MainTableViewInvolvementScope involvementScope;
+
+    @Mock
+    private MainTableViewRowQueryComponent rowQueryComponent;
+
+    @Mock
+    private MainTableViewSubRowQueryComponent subRowQueryComponent;
 
     @Mock
     private ProcessInstanceRepository processInstanceRepository;
@@ -60,20 +70,29 @@ class PortalMainTableViewImportTest {
     @Mock
     private ProcessComponent processComponent;
 
+    @Mock
+    private ComputedFieldRecalculator computedFieldRecalculator;
+
     private PortalMainTableViewServiceImpl service;
 
     @BeforeEach
     void setUp() throws Exception {
         MainTableViewAccessResolver accessResolver = new MainTableViewAccessResolver(
                 functionUnitAccessComponent, userBusinessUnitRepository);
+        com.portal.service.UserDisplayNameResolver names =
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class);
         service = new PortalMainTableViewServiceImpl(
                 jdbcTemplate,
                 new ObjectMapper(),
                 functionUnitAccessComponent,
                 accessResolver,
-                mainTableViewInvolvementChecker,
+                involvementScope,
+                rowQueryComponent,
+                subRowQueryComponent,
                 processInstanceRepository,
-                processComponent);
+                processComponent,
+                computedFieldRecalculator,
+                names);
         when(functionUnitAccessComponent.canAccessFunctionUnit(USER_ID, FU_CODE)).thenReturn(true);
         when(functionUnitAccessComponent.isFunctionUnitEnabled(FU_CODE)).thenReturn(true);
         when(functionUnitAccessComponent.isSystemAdministrator(USER_ID)).thenReturn(true);

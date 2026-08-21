@@ -1,0 +1,822 @@
+{
+  "$comment": [
+    "CONTRACT TEST DATA shared by the TypeScript interpreter (frontend/shared/src/computedField)",
+    "and the Java interpreter (backend user-portal + developer-workstation ComputedFieldEvaluator).",
+    "Both sides load THIS file. Neither side may add a case without the other passing it.",
+    "",
+    "'expect' holds the canonical decimal STRING (never a JSON number - JSON numbers go through a",
+    "double and would defeat the whole point of fixed-point arithmetic). 'expectError' holds an",
+    "error code from ComputedFieldErrorCode. 'expectBlank' asserts a blank result.",
+    "",
+    "Division, AVG and SQRT settle at DIVISION_SCALE = 10."
+  ],
+  "divisionScale": 10,
+  "cases": [
+    {
+      "name": "float trap: 0.1 + 0.2 is exactly 0.3",
+      "formula": "0.1 + 0.2",
+      "row": {},
+      "expect": "0.3"
+    },
+    {
+      "name": "float trap: repeated addition of 0.1",
+      "formula": "0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1",
+      "row": {},
+      "expect": "1.0"
+    },
+    {
+      "name": "multiplication adds scales",
+      "formula": "1.05 * 2.5",
+      "row": {},
+      "expect": "2.625"
+    },
+    {
+      "name": "money case: subtotal times tax rate (scale 2 x scale 4 = scale 6)",
+      "formula": "amount * (1 + tax_rate)",
+      "row": { "amount": "1999.99", "tax_rate": "0.0825" },
+      "expect": "2164.989175"
+    },
+    {
+      "name": "operator precedence: multiply before add",
+      "formula": "2 + 3 * 4",
+      "row": {},
+      "expect": "14"
+    },
+    {
+      "name": "parentheses override precedence",
+      "formula": "(2 + 3) * 4",
+      "row": {},
+      "expect": "20"
+    },
+    {
+      "name": "unary minus binds tighter than multiply",
+      "formula": "-2 * 3",
+      "row": {},
+      "expect": "-6"
+    },
+    {
+      "name": "subtraction is left associative",
+      "formula": "10 - 3 - 2",
+      "row": {},
+      "expect": "5"
+    },
+    {
+      "name": "division settles at DIVISION_SCALE with HALF_UP",
+      "formula": "1 / 3",
+      "row": {},
+      "expect": "0.3333333333"
+    },
+    {
+      "name": "division rounds HALF_UP at the last digit",
+      "formula": "2 / 3",
+      "row": {},
+      "expect": "0.6666666667"
+    },
+    {
+      "name": "division by zero is an error, never 0",
+      "formula": "amount / 0",
+      "row": { "amount": "10" },
+      "expectError": "DIVISION_BY_ZERO"
+    },
+    {
+      "name": "division by a zero-valued field is an error",
+      "formula": "total / qty",
+      "row": { "total": "100", "qty": "0" },
+      "expectError": "DIVISION_BY_ZERO"
+    },
+    {
+      "name": "IF short-circuits so the divide guard is writable",
+      "formula": "IF(qty = 0, 0, total / qty)",
+      "row": { "total": "100", "qty": "0" },
+      "expect": "0"
+    },
+    {
+      "name": "IF takes the else branch",
+      "formula": "IF(qty = 0, 0, total / qty)",
+      "row": { "total": "100", "qty": "4" },
+      "expect": "25.0000000000"
+    },
+    {
+      "name": "IF without an else branch yields blank",
+      "formula": "IF(1 = 2, 5)",
+      "row": {},
+      "expectBlank": true
+    },
+    {
+      "name": "AND short-circuits on the first false",
+      "formula": "AND(false, 1 / 0 = 1)",
+      "row": {},
+      "expect": false
+    },
+    {
+      "name": "OR short-circuits on the first true",
+      "formula": "OR(true, 1 / 0 = 1)",
+      "row": {},
+      "expect": true
+    },
+    {
+      "name": "NOT inverts",
+      "formula": "NOT(amount > 100)",
+      "row": { "amount": "50" },
+      "expect": true
+    },
+    {
+      "name": "blank behaves as zero in arithmetic",
+      "formula": "amount + missing_field_value",
+      "row": { "amount": "10", "missing_field_value": null },
+      "expect": "10"
+    },
+    {
+      "name": "empty string is blank, not text",
+      "formula": "ISBLANK(note)",
+      "row": { "note": "" },
+      "expect": true
+    },
+    {
+      "name": "zero is not blank",
+      "formula": "ISBLANK(amount)",
+      "row": { "amount": "0" },
+      "expect": false
+    },
+    {
+      "name": "text does not silently become a number",
+      "formula": "amount + note",
+      "row": { "amount": "10", "note": "abc" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "VALUE is the explicit text-to-number path",
+      "formula": "amount + VALUE(note)",
+      "row": { "amount": "10", "note": "2.5" },
+      "expect": "12.5"
+    },
+    {
+      "name": "VALUE rejects unparseable text",
+      "formula": "VALUE(note)",
+      "row": { "note": "12abc" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "blank equals blank",
+      "formula": "note = other_note",
+      "row": { "note": null, "other_note": "" },
+      "expect": true
+    },
+    {
+      "name": "blank does not equal zero",
+      "formula": "note = 0",
+      "row": { "note": null },
+      "expect": false
+    },
+    {
+      "name": "ROUND uses HALF_UP",
+      "formula": "ROUND(2.345, 2)",
+      "row": {},
+      "expect": "2.35"
+    },
+    {
+      "name": "ROUND HALF_UP on a negative moves away from zero",
+      "formula": "ROUND(-2.345, 2)",
+      "row": {},
+      "expect": "-2.35"
+    },
+    {
+      "name": "ROUND to whole number",
+      "formula": "ROUND(2.5, 0)",
+      "row": {},
+      "expect": "3"
+    },
+    {
+      "name": "ROUND defaults to zero digits",
+      "formula": "ROUND(2.5)",
+      "row": {},
+      "expect": "3"
+    },
+    {
+      "name": "ROUNDDOWN truncates toward zero",
+      "formula": "ROUNDDOWN(2.999, 2)",
+      "row": {},
+      "expect": "2.99"
+    },
+    {
+      "name": "ROUNDDOWN on a negative truncates toward zero",
+      "formula": "ROUNDDOWN(-2.999, 2)",
+      "row": {},
+      "expect": "-2.99"
+    },
+    {
+      "name": "ROUNDUP moves away from zero",
+      "formula": "ROUNDUP(2.001, 2)",
+      "row": {},
+      "expect": "2.01"
+    },
+    {
+      "name": "ROUNDUP on a negative moves away from zero",
+      "formula": "ROUNDUP(-2.001, 2)",
+      "row": {},
+      "expect": "-2.01"
+    },
+    {
+      "name": "ABS of a negative",
+      "formula": "ABS(0 - 7.5)",
+      "row": {},
+      "expect": "7.5"
+    },
+    {
+      "name": "INT truncates toward zero for positives",
+      "formula": "INT(7.9)",
+      "row": {},
+      "expect": "7"
+    },
+    {
+      "name": "INT truncates toward zero for negatives",
+      "formula": "INT(-7.9)",
+      "row": {},
+      "expect": "-7"
+    },
+    {
+      "name": "MOD keeps the dividend sign",
+      "formula": "MOD(10, 3)",
+      "row": {},
+      "expect": "1"
+    },
+    {
+      "name": "MOD of a negative dividend",
+      "formula": "MOD(-10, 3)",
+      "row": {},
+      "expect": "-1"
+    },
+    {
+      "name": "MOD by zero is an error",
+      "formula": "MOD(10, 0)",
+      "row": {},
+      "expectError": "DIVISION_BY_ZERO"
+    },
+    {
+      "name": "POWER with a whole exponent is exact",
+      "formula": "POWER(1.1, 3)",
+      "row": {},
+      "expect": "1.331"
+    },
+    {
+      "name": "POWER to the zero",
+      "formula": "POWER(5, 0)",
+      "row": {},
+      "expect": "1"
+    },
+    {
+      "name": "POWER with a negative exponent divides at DIVISION_SCALE",
+      "formula": "POWER(2, -2)",
+      "row": {},
+      "expect": "0.2500000000"
+    },
+    {
+      "name": "POWER rejects a fractional exponent to keep both engines identical",
+      "formula": "POWER(2, 0.5)",
+      "row": {},
+      "expectError": "NON_INTEGER_EXPONENT"
+    },
+    {
+      "name": "SQRT truncates at DIVISION_SCALE",
+      "formula": "SQRT(2)",
+      "row": {},
+      "expect": "1.4142135623"
+    },
+    {
+      "name": "SQRT of a perfect square",
+      "formula": "SQRT(144)",
+      "row": {},
+      "expect": "12.0000000000"
+    },
+    {
+      "name": "SQRT of zero",
+      "formula": "SQRT(0)",
+      "row": {},
+      "expect": "0.0000000000"
+    },
+    {
+      "name": "SQRT of a negative is an error, not NaN",
+      "formula": "SQRT(0 - 1)",
+      "row": {},
+      "expectError": "NEGATIVE_SQRT"
+    },
+    {
+      "name": "CONCAT joins mixed kinds using canonical text forms",
+      "formula": "CONCAT(code, \"-\", amount)",
+      "row": { "code": "INV", "amount": "10.50" },
+      "expect": "INV-10.50"
+    },
+    {
+      "name": "LEN counts characters",
+      "formula": "LEN(code)",
+      "row": { "code": "ABCDE" },
+      "expect": "5"
+    },
+    {
+      "name": "LEN of blank is zero",
+      "formula": "LEN(missing)",
+      "row": { "missing": null },
+      "expect": "0"
+    },
+    {
+      "name": "TRIM strips both ends",
+      "formula": "TRIM(code)",
+      "row": { "code": "  AB  " },
+      "expect": "AB"
+    },
+    {
+      "name": "LEFT takes a prefix",
+      "formula": "LEFT(code, 3)",
+      "row": { "code": "ABCDEF" },
+      "expect": "ABC"
+    },
+    {
+      "name": "LEFT beyond length returns the whole string",
+      "formula": "LEFT(code, 99)",
+      "row": { "code": "ABC" },
+      "expect": "ABC"
+    },
+    {
+      "name": "RIGHT takes a suffix",
+      "formula": "RIGHT(code, 2)",
+      "row": { "code": "ABCDEF" },
+      "expect": "EF"
+    },
+    {
+      "name": "RIGHT of zero length is empty",
+      "formula": "RIGHT(code, 0)",
+      "row": { "code": "ABC" },
+      "expect": ""
+    },
+    {
+      "name": "MID is one-based",
+      "formula": "MID(code, 2, 3)",
+      "row": { "code": "ABCDEF" },
+      "expect": "BCD"
+    },
+    {
+      "name": "MID without a count takes the rest",
+      "formula": "MID(code, 4)",
+      "row": { "code": "ABCDEF" },
+      "expect": "DEF"
+    },
+    {
+      "name": "MID past the end is empty",
+      "formula": "MID(code, 10, 2)",
+      "row": { "code": "ABC" },
+      "expect": ""
+    },
+    {
+      "name": "UPPER and LOWER",
+      "formula": "CONCAT(UPPER(code), LOWER(code))",
+      "row": { "code": "aB" },
+      "expect": "ABab"
+    },
+    {
+      "name": "SUBSTITUTE replaces every occurrence",
+      "formula": "SUBSTITUTE(code, \"-\", \"\")",
+      "row": { "code": "A-B-C" },
+      "expect": "ABC"
+    },
+    {
+      "name": "SUBSTITUTE with an empty needle returns the input unchanged",
+      "formula": "SUBSTITUTE(code, \"\", \"X\")",
+      "row": { "code": "AB" },
+      "expect": "AB"
+    },
+    {
+      "name": "FIND is one-based",
+      "formula": "FIND(\"B\", code)",
+      "row": { "code": "ABC" },
+      "expect": "2"
+    },
+    {
+      "name": "FIND returns blank when absent",
+      "formula": "FIND(\"Z\", code)",
+      "row": { "code": "ABC" },
+      "expectBlank": true
+    },
+    {
+      "name": "FIND honours the start position",
+      "formula": "FIND(\"A\", code, 2)",
+      "row": { "code": "ABA" },
+      "expect": "3"
+    },
+    {
+      "name": "STARTSWITH and ENDSWITH",
+      "formula": "AND(STARTSWITH(code, \"AB\"), ENDSWITH(code, \"EF\"))",
+      "row": { "code": "ABCDEF" },
+      "expect": true
+    },
+    {
+      "name": "SWITCH matches a branch",
+      "formula": "SWITCH(status, \"NEW\", 1, \"DONE\", 2, 0)",
+      "row": { "status": "DONE" },
+      "expect": "2"
+    },
+    {
+      "name": "SWITCH falls through to the default",
+      "formula": "SWITCH(status, \"NEW\", 1, \"DONE\", 2, 99)",
+      "row": { "status": "OTHER" },
+      "expect": "99"
+    },
+    {
+      "name": "SWITCH without a default yields blank",
+      "formula": "SWITCH(status, \"NEW\", 1, \"DONE\", 2)",
+      "row": { "status": "OTHER" },
+      "expectBlank": true
+    },
+    {
+      "name": "COALESCE picks the first non-blank",
+      "formula": "COALESCE(nickname, full_name, \"anonymous\")",
+      "row": { "nickname": null, "full_name": "Ada" },
+      "expect": "Ada"
+    },
+    {
+      "name": "COALESCE of all blanks is blank",
+      "formula": "COALESCE(nickname, full_name)",
+      "row": { "nickname": null, "full_name": "" },
+      "expectBlank": true
+    },
+    {
+      "name": "text ordering is code-unit lexicographic",
+      "formula": "code < other",
+      "row": { "code": "ABC", "other": "ABD" },
+      "expect": true
+    },
+    {
+      "name": "ordering a number against text is an error",
+      "formula": "amount > code",
+      "row": { "amount": "1", "code": "abc" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "booleans reject ordering comparisons",
+      "formula": "true > false",
+      "row": {},
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "SUM over sub-table rows",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [{ "amount": "10.50" }, { "amount": "20.25" }, { "amount": "0.25" }]
+      },
+      "expect": "31.00"
+    },
+    {
+      "name": "SUM skips blank cells rather than treating them as zero-width errors",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [{ "amount": "10" }, { "amount": null }, { "amount": "" }, { "amount": "5" }]
+      },
+      "expect": "15"
+    },
+    {
+      "name": "SUM of an empty sub-table is zero",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": { "request_items": [] },
+      "expect": "0"
+    },
+    {
+      "name": "MIN of an empty sub-table is blank, not zero",
+      "formula": "MIN(request_items.amount)",
+      "row": {},
+      "subTables": { "request_items": [] },
+      "expectBlank": true
+    },
+    {
+      "name": "AVG of an empty sub-table is blank, not zero",
+      "formula": "AVG(request_items.amount)",
+      "row": {},
+      "subTables": { "request_items": [] },
+      "expectBlank": true
+    },
+    {
+      "name": "MIN and MAX over rows",
+      "formula": "MAX(request_items.amount) - MIN(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [{ "amount": "5" }, { "amount": "17.5" }, { "amount": "9" }]
+      },
+      "expect": "12.5"
+    },
+    {
+      "name": "AVG settles at DIVISION_SCALE",
+      "formula": "AVG(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [{ "amount": "10" }, { "amount": "20" }, { "amount": "25" }]
+      },
+      "expect": "18.3333333333"
+    },
+    {
+      "name": "COUNT of a table counts rows including blank cells",
+      "formula": "COUNT(request_items)",
+      "row": {},
+      "subTables": {
+        "request_items": [{ "amount": "1" }, { "amount": null }, { "amount": "3" }]
+      },
+      "expect": "3"
+    },
+    {
+      "name": "COUNT of a column counts non-blank cells only",
+      "formula": "COUNT(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [{ "amount": "1" }, { "amount": null }, { "amount": "3" }]
+      },
+      "expect": "2"
+    },
+    {
+      "name": "aggregate combined with a row field",
+      "formula": "ROUND(SUM(request_items.amount) * (1 + tax_rate), 2)",
+      "row": { "tax_rate": "0.0825" },
+      "subTables": {
+        "request_items": [{ "amount": "100" }, { "amount": "49.99" }]
+      },
+      "expect": "162.36"
+    },
+    {
+      "name": "non-numeric cell in an aggregated column is an error, not a skipped row",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {
+        "request_items": [{ "amount": "10" }, { "amount": "oops" }]
+      },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "aggregate over an absent sub-table is an error, not zero",
+      "formula": "SUM(request_items.amount)",
+      "row": {},
+      "subTables": {},
+      "expectError": "UNKNOWN_TABLE"
+    },
+    {
+      "name": "unknown function is rejected",
+      "formula": "TOTALLY_MADE_UP(1)",
+      "row": {},
+      "expectError": "UNKNOWN_FUNCTION",
+      "parseOnly": false
+    },
+    {
+      "name": "wrong arity is rejected",
+      "formula": "ROUND(1, 2, 3)",
+      "row": {},
+      "expectError": "WRONG_ARG_COUNT"
+    },
+    {
+      "name": "numeric field arriving as a JSON number still computes exactly",
+      "formula": "amount * 3",
+      "row": { "amount": 0.1 },
+      "expect": "0.3"
+    },
+    {
+      "name": "boolean field compares with a literal",
+      "formula": "IF(urgent = true, 100, 0)",
+      "row": { "urgent": true },
+      "expect": "100"
+    },
+    {
+      "name": "deeply nested parentheses",
+      "formula": "((((1 + 2)) * ((3))))",
+      "row": {},
+      "expect": "9"
+    },
+    {
+      "name": "case-insensitive function names normalize to one AST",
+      "formula": "round(2.345, 2)",
+      "row": {},
+      "expect": "2.35"
+    },
+    {
+      "name": "TRUE and FALSE literals are case-insensitive",
+      "formula": "IF(TRUE, 1, 2)",
+      "row": {},
+      "expect": "1"
+    },
+    {
+      "name": "date subtraction is whole calendar days (left minus right)",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-01-02", "start_date": "2026-01-01" },
+      "expect": "1"
+    },
+    {
+      "name": "date subtraction can be negative",
+      "formula": "start_date - end_date",
+      "row": { "end_date": "2026-01-02", "start_date": "2026-01-01" },
+      "expect": "-1"
+    },
+    {
+      "name": "same calendar day difference is zero",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-01-01", "start_date": "2026-01-01" },
+      "expect": "0"
+    },
+    {
+      "name": "date subtraction crosses a year boundary",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-01-01", "start_date": "2025-12-31" },
+      "expect": "1"
+    },
+    {
+      "name": "ISO timestamps subtract by calendar date, ignoring time",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-01-02T15:00:00Z", "start_date": "2026-01-01T23:59:59Z" },
+      "expect": "1"
+    },
+    {
+      "name": "slash-separated year-first dates subtract as whole days",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026/06/02", "start_date": "2026/06/01" },
+      "expect": "1"
+    },
+    {
+      "name": "slash dates with a time suffix still subtract as whole days",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026/06/02 18:30:00", "start_date": "2026/06/01 00:00:00" },
+      "expect": "1"
+    },
+    {
+      "name": "hyphen dates with a space-separated time suffix ignore the clock",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-06-02 18:30:00", "start_date": "2026-06-01 00:00:00" },
+      "expect": "1"
+    },
+    {
+      "name": "dot-separated year-first dates subtract as whole days",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026.06.02", "start_date": "2026.06.01" },
+      "expect": "1"
+    },
+    {
+      "name": "unpadded month and day are accepted when the year comes first",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026/6/2", "start_date": "2026/6/1" },
+      "expect": "1"
+    },
+    {
+      "name": "day-first slash dates stay TYPE_MISMATCH (ambiguous)",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "02/06/2026", "start_date": "01/06/2026" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "VALUE still refuses a slash date string",
+      "formula": "VALUE(note)",
+      "row": { "note": "2026/06/02" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "impossible slash calendar date is not a date",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026/02/29", "start_date": "2026/01/01" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "DATEDIFF is Power Fx order: end minus start",
+      "formula": "DATEDIFF(start_date, end_date)",
+      "row": { "end_date": "2026-01-02", "start_date": "2026-01-01" },
+      "expect": "1"
+    },
+    {
+      "name": "DATEDIFF reversed arguments is negative",
+      "formula": "DATEDIFF(end_date, start_date)",
+      "row": { "end_date": "2026-01-02", "start_date": "2026-01-01" },
+      "expect": "-1"
+    },
+    {
+      "name": "VALUE still refuses a date string",
+      "formula": "VALUE(note)",
+      "row": { "note": "2026-01-02" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "numeric subtraction is unchanged next to dates",
+      "formula": "price - quantity",
+      "row": { "price": "10", "quantity": "3" },
+      "expect": "7"
+    },
+    {
+      "name": "non-date text subtraction stays TYPE_MISMATCH",
+      "formula": "left - right",
+      "row": { "left": "abc", "right": "def" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "date minus a number is TYPE_MISMATCH",
+      "formula": "end_date - 1",
+      "row": { "end_date": "2026-01-02" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "impossible calendar date is not a date",
+      "formula": "end_date - start_date",
+      "row": { "end_date": "2026-02-29", "start_date": "2026-01-01" },
+      "expectError": "TYPE_MISMATCH"
+    },
+    {
+      "name": "sub-table formula reads a main-table text column",
+      "formula": "leave_request.name",
+      "row": {},
+      "parents": { "leave_request": { "name": "Vin" } },
+      "expect": "Vin"
+    },
+    {
+      "name": "LEN of a main-table text column",
+      "formula": "LEN(leave_request.name)",
+      "row": {},
+      "parents": { "leave_request": { "name": "Vin" } },
+      "expect": "3"
+    },
+    {
+      "name": "qualified field without a parent row is UNKNOWN_TABLE",
+      "formula": "leave_request.name",
+      "row": {},
+      "expectError": "UNKNOWN_TABLE"
+    },
+    {
+      "name": "SUM still treats table.column as an aggregate, not a parent field",
+      "formula": "SUM(date_info.day)",
+      "row": {},
+      "subTables": { "date_info": [{ "day": "2" }, { "day": "3" }] },
+      "expect": "5"
+    }
+  ],
+  "syntaxErrorCases": [
+    { "name": "unbalanced parenthesis", "formula": "(1 + 2", "expectError": "SYNTAX_ERROR" },
+    { "name": "trailing operator", "formula": "1 +", "expectError": "SYNTAX_ERROR" },
+    { "name": "empty formula", "formula": "", "expectError": "SYNTAX_ERROR" },
+    { "name": "unterminated string", "formula": "CONCAT(\"ab", "expectError": "SYNTAX_ERROR" },
+    { "name": "stray character", "formula": "1 # 2", "expectError": "SYNTAX_ERROR" },
+    { "name": "trailing input after a complete expression", "formula": "1 2", "expectError": "SYNTAX_ERROR" },
+    {
+      "name": "qualified reference missing the column name",
+      "formula": "leave_request.",
+      "expectError": "SYNTAX_ERROR"
+    },
+    {
+      "name": "SUM without a column",
+      "formula": "SUM(request_items)",
+      "expectError": "SYNTAX_ERROR"
+    },
+    {
+      "name": "script injection attempt is just a syntax error, never executed",
+      "formula": "constructor.constructor(\"return 1\")()",
+      "expectError": "SYNTAX_ERROR"
+    }
+  ],
+  "aliasDeduplicationCases": [
+    {
+      "$comment": [
+        "Process variables carry __subTables__ under bindingId, table name AND display name, all",
+        "holding copies of the SAME rows. Summing every key triples the money. normalizeSubTables",
+        "must keep exactly one slice per tableId."
+      ],
+      "name": "three alias keys for one table must not triple the sum",
+      "formula": "SUM(request_items.amount)",
+      "rawSubTables": {
+        "42": [{ "amount": "100" }, { "amount": "50" }],
+        "request_items": [{ "amount": "100" }, { "amount": "50" }],
+        "Request Items": [{ "amount": "100" }, { "amount": "50" }]
+      },
+      "sliceIdentities": {
+        "42": { "tableId": 7, "tableName": "request_items" },
+        "request_items": { "tableId": 7, "tableName": "request_items" },
+        "Request Items": { "tableId": 7, "tableName": "request_items" }
+      },
+      "expectedCanonicalKeys": ["request_items"],
+      "expect": "150"
+    },
+    {
+      "name": "a slice arriving only under its bindingId is still found by table name",
+      "formula": "SUM(request_items.amount)",
+      "rawSubTables": {
+        "42": [{ "amount": "100" }, { "amount": "50" }]
+      },
+      "sliceIdentities": {
+        "42": { "tableId": 7, "tableName": "request_items" }
+      },
+      "expectedCanonicalKeys": ["request_items"],
+      "expect": "150"
+    },
+    {
+      "name": "two genuinely different tables stay separate",
+      "formula": "SUM(request_items.amount) + SUM(other_items.amount)",
+      "rawSubTables": {
+        "request_items": [{ "amount": "100" }],
+        "other_items": [{ "amount": "7" }]
+      },
+      "sliceIdentities": {
+        "request_items": { "tableId": 7, "tableName": "request_items" },
+        "other_items": { "tableId": 9, "tableName": "other_items" }
+      },
+      "expectedCanonicalKeys": ["other_items", "request_items"],
+      "expect": "107"
+    }
+  ]
+}

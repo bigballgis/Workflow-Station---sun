@@ -1,6 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.IconLibraryComponent;
+import com.developer.security.RequireDeveloperPermission;
 import com.platform.common.dto.ApiResponse;
 import com.developer.dto.IconDTO;
 import com.developer.entity.Icon;
@@ -29,6 +30,7 @@ public class IconLibraryController {
     
     @GetMapping
     @Operation(summary = "List icons (paginated)")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Page<IconDTO>>> list(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) IconCategory category,
@@ -41,18 +43,21 @@ public class IconLibraryController {
     
     @GetMapping("/tags")
     @Operation(summary = "Get all tags")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<String>>> getTags() {
         return ResponseEntity.ok(ApiResponse.success(iconLibraryComponent.getAllTags()));
     }
     
     @GetMapping("/categories")
     @Operation(summary = "Get all icon categories")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<IconCategory>>> getCategories() {
         return ResponseEntity.ok(ApiResponse.success(List.of(IconCategory.values())));
     }
     
     @PostMapping
     @Operation(summary = "Upload icon")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<IconDTO>> upload(
             @RequestParam("file") MultipartFile file,
             @RequestParam String name,
@@ -64,6 +69,7 @@ public class IconLibraryController {
     
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete icon")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         iconLibraryComponent.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
@@ -71,6 +77,7 @@ public class IconLibraryController {
     
     @GetMapping("/{id}")
     @Operation(summary = "Get icon details")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<IconDTO>> getById(@PathVariable Long id) {
         Icon result = iconLibraryComponent.getById(id);
         return ResponseEntity.ok(ApiResponse.success(IconDTO.fromEntity(result)));
@@ -78,6 +85,7 @@ public class IconLibraryController {
     
     @GetMapping("/{id}/usage")
     @Operation(summary = "Check icon usage")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Boolean>> checkUsage(@PathVariable Long id) {
         boolean inUse = iconLibraryComponent.isIconInUse(id);
         return ResponseEntity.ok(ApiResponse.success(inUse));
