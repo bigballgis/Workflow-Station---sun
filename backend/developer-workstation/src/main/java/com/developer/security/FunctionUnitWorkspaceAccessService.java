@@ -1,6 +1,7 @@
 package com.developer.security;
 
 import com.developer.dto.DevGroupOptionDTO;
+import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.RoleRepository;
@@ -63,7 +64,14 @@ public class FunctionUnitWorkspaceAccessService {
     private final FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository;
     private final VirtualGroupMembershipDao virtualGroupMembershipDao;
 
+    /**
+     * 缺失的 FU 抛 404（{@link ResourceNotFoundException}）而非 403：DW 是需登录的开发工作区，
+     * FU id 的存在性不作保密（403 会把「已删除/不存在」伪装成权限问题，误导排障）。
+     */
     public void assertCanAccess(Long functionUnitId, WorkspaceAccessAction action) {
+        if (!functionUnitRepository.existsById(functionUnitId)) {
+            throw new ResourceNotFoundException("FunctionUnit", functionUnitId);
+        }
         if (!canAccess(functionUnitId, action)) {
             log.warn("Workspace denied: functionUnitId={}, action={}, userId={}",
                     functionUnitId, action, SecurityContextUtils.getCurrentUserId().orElse("?"));

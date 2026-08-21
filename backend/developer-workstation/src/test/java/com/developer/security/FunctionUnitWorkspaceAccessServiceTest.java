@@ -1,5 +1,6 @@
 package com.developer.security;
 
+import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.RoleRepository;
@@ -212,10 +213,24 @@ class FunctionUnitWorkspaceAccessServiceTest {
         assertEquals(Set.of(FU_ID), service.modifiableFunctionUnitIds());
     }
 
+    /** 缺失 FU：canAccess=false，但 assertCanAccess 抛 404（不是 403），SYS_ADMIN 也一样。 */
     @Test
-    void missingFunctionUnit_denied() {
+    void missingFunctionUnit_surfacesAsNotFound() {
         when(functionUnitRepository.existsById(FU_ID)).thenReturn(false);
         assertFalse(service.canAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.assertCanAccess(FU_ID, WorkspaceAccessAction.VIEW));
+        when(roleRepository.hasRoleByUserId(USER_ID, "SYS_ADMIN")).thenReturn(true);
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.assertCanAccess(FU_ID, WorkspaceAccessAction.VIEW));
+    }
+
+    /** 存在但越权的 FU 仍是 403 语义（FunctionUnitWorkspaceAccessDeniedException）。 */
+    @Test
+    void existingButDeniedFunctionUnit_staysForbidden() {
+        when(virtualGroupMembershipDao.findVirtualGroupIdsByUserId(USER_ID)).thenReturn(Collections.emptyList());
+        assertThrows(FunctionUnitWorkspaceAccessDeniedException.class,
+                () -> service.assertCanAccess(FU_ID, WorkspaceAccessAction.VIEW));
     }
 
     private void selectGroup(String groupId) {

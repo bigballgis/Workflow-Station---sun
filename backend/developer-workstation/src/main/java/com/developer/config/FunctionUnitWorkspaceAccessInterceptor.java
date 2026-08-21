@@ -1,5 +1,6 @@
 package com.developer.config;
 
+import com.developer.exception.ResourceNotFoundException;
 import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
@@ -69,6 +70,13 @@ public class FunctionUnitWorkspaceAccessInterceptor implements HandlerIntercepto
                 workspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
             }
             return true;
+        } catch (ResourceNotFoundException ex) {
+            log.warn("Workspace interceptor missing FU: {} {}", request.getMethod(), path);
+            response.setStatus(HttpStatus.NOT_FOUND.value());
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write(
+                    "{\"error\":\"RES_NOT_FOUND\",\"message\":\"" + escapeJson(ex.getMessage()) + "\"}");
+            return false;
         } catch (FunctionUnitWorkspaceAccessDeniedException ex) {
             log.warn("Workspace interceptor denied: {} {}", request.getMethod(), path);
             response.setStatus(HttpStatus.FORBIDDEN.value());
