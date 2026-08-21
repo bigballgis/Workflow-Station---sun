@@ -1,7 +1,7 @@
 # 跨端列表共享组件与服务端分页接入规范
 
-> **状态：方案已定稿；Views / Relation Tables / 已办任务 / My Requests / Delegations（规则+审计）已接入（2026-08-24）。**
-> §12 的 6 项待确认**全部关闭**。To Do / Permissions 另分支；AD / DW 仍未做。
+> **状态：方案已定稿；Views / Relation Tables / 已办任务 / My Requests / Delegations（规则+审计）/ Permissions（申请+审批）已接入（2026-08-24）。**
+> §12 的 6 项待确认**全部关闭**。To Do 另分支；AD / DW 仍未做。
 > Delegations：My Rules + Audit 共享列表 + SQL 真分页；Proxy Tasks 页仍为空（另跟）。
 > 关键决策：§6.1（行可见范围两级过滤）、§6.1.1（SUB 行身份取 `row_id` 优先，写入侧→MAIN→SUB
 > 三步走）、§6.2（深分页不设上限，改慢查询日志）、§6.3.1（分组按字段语义声明，不是每列都给）、
