@@ -97,6 +97,28 @@ public class UserDisplayNameResolver {
     }
 
     /**
+     * Strict single-key resolution for write-path validation: unlike {@link #resolve},
+     * an unknown user yields {@code Optional.empty()} instead of echoing the key back.
+     * Used by Owner-field submit validation, where "user does not exist" must be a
+     * validation error rather than a silently stored raw id.
+     */
+    public java.util.Optional<String> resolveIfExists(String userIdOrKey) {
+        if (userIdOrKey == null || userIdOrKey.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String key = userIdOrKey.trim();
+        Map<String, String> aliasToDisplay = new HashMap<>();
+        registerUsers(aliasToDisplay, userRepository.findAllById(List.of(key)));
+        if (!aliasToDisplay.containsKey(key)) {
+            registerUsers(aliasToDisplay, userRepository.findByUsernameIn(List.of(key)));
+        }
+        if (!aliasToDisplay.containsKey(key)) {
+            registerUsers(aliasToDisplay, userRepository.findByEmployeeIdIn(List.of(key)));
+        }
+        return java.util.Optional.ofNullable(aliasToDisplay.get(key));
+    }
+
+    /**
      * Resolve comma-separated user ids to comma-separated display names.
      */
     public String resolveDelimitedDisplay(String delimitedUserKeys, Map<String, String> cache) {

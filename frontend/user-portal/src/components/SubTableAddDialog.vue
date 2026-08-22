@@ -518,6 +518,15 @@
                     />
                   </div>
 
+                  <!-- owner: readonly; backend fills Creator / Current Assignee -->
+                  <OwnerField
+                    v-else-if="col.type === 'owner'"
+                    :model-value="formData[col.field]"
+                    :owner-config="col.props?.ownerConfig as string | undefined"
+                    :display="typeof formData[`${col.field}__display`] === 'string' ? formData[`${col.field}__display`] : ''"
+                    readonly
+                  />
+
                   <!-- user -->
                   <el-select
                     v-else-if="col.type === 'user'"
@@ -664,6 +673,7 @@ import { resolveRowStableId } from './formRendererHelpers/recordNoteFields'
 import RecordNoteField from './RecordNoteField.vue'
 import DOMPurify from 'dompurify'
 import LookupField from './lookup/LookupField.vue'
+import OwnerField from './owner/OwnerField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import { useSubTableDialogLookup } from '@/composables/subTableAddDialog/useSubTableDialogLookup'
 import { useSubTableBuRoleCascade } from '@/composables/subTableAddDialog/useSubTableBuRoleCascade'
@@ -704,7 +714,7 @@ const HANDLED_TYPES = new Set([
   'text', 'textarea', 'number', 'select', 'radio', 'checkbox',
   'password', 'timerange', 'treeselect', 'tree', 'switch', 'date',
   'datetime', 'upload', 'colorPicker', 'rate', 'slider', 'editor',
-  'signature', 'transfer', 'cascader', 'lookup', 'user', 'department',
+  'signature', 'transfer', 'cascader', 'lookup', 'user', 'department', 'owner',
 ])
 
 /** Sanitize HTML content to prevent XSS */

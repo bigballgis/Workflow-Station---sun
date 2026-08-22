@@ -982,6 +982,10 @@ export default {
     emptySubmit: '請輸入內容或新增附件',
     fileTooLarge: '檔案超過 {size}MB 上限',
   },
+  owner: {
+    invalidConfig: '歸屬人欄位設定無效',
+    empty: '-',
+  },
   fieldRenderer: {
     signature: '簽名',
     clear: '清除',

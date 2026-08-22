@@ -5,7 +5,7 @@ import type { AssignmentConfig } from '@/utils/miAssignmentConfig'
 export interface ColumnConfig {
   field: string
   label: string
-  type?: 'input' | 'number' | 'date' | 'switch' | 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'datetime' | 'upload' | 'user' | 'department' | 'password' | 'timerange' | 'treeselect' | 'colorPicker' | 'rate' | 'slider' | 'tree' | 'editor' | 'signature' | 'transfer' | 'cascader' | 'linkForm' | 'lookup'
+  type?: 'input' | 'number' | 'date' | 'switch' | 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'datetime' | 'upload' | 'user' | 'department' | 'password' | 'timerange' | 'treeselect' | 'colorPicker' | 'rate' | 'slider' | 'tree' | 'editor' | 'signature' | 'transfer' | 'cascader' | 'linkForm' | 'lookup' | 'owner'
   width?: number
   minWidth?: number
   required?: boolean

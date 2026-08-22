@@ -318,6 +318,10 @@
           @change="(v: unknown) => onDialogFieldChange(col.field, v)"
         />
 
+        <div v-else-if="col.type === 'owner'" class="owner-preview-readonly">
+          <span class="owner-preview-tag">{{ t('form.ownerPlaceholder') }}</span>
+        </div>
+
         <!-- user / department -->
         <el-input
           v-else-if="col.type === 'user' || col.type === 'department'"
@@ -359,6 +363,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
@@ -367,6 +372,8 @@ import type { DialogColumn } from './subTableAddDialogHelpers'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { getFilenameFromUrl, extractUploadUrlFromResponse, normalizeUploadFieldsInRow } from './uploadFieldUtils'
 import { useSubTableDialogComponentEvents } from '@/composables/designerSubTableField/useSubTableDialogComponentEvents'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -520,6 +527,28 @@ function clearUpload(col: DialogColumn) {
 :deep(.el-form-item__label) {
   white-space: nowrap;
   min-width: max-content;
+}
+
+.owner-preview-readonly {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  border-radius: var(--ws-radius-input, 8px);
+  background: var(--el-disabled-bg-color, #f5f7fa);
+}
+
+.owner-preview-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: #f0f2f5;
+  font-size: 13px;
+  color: #909399;
+  line-height: 24px;
 }
 </style>
 

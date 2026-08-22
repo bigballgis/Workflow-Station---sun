@@ -42,6 +42,7 @@ public class FormDesignPropertyTest {
         FormDesignComponent component = new FormDesignComponentImpl(
                 mock(com.developer.component.impl.FormTableBindingRestorer.class),
                 mock(com.developer.component.impl.FormConfigJsonTableProvisioner.class),
+                mock(com.developer.component.impl.OwnerFieldFormReconciler.class),
                 repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository,
                 subTableViewConfigRepository, objectMapper, i18nService, jdbcTemplate, subTableViewService);
         

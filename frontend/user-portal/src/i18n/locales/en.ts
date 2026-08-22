@@ -987,6 +987,10 @@ export default {
     emptySubmit: 'Enter some content or attach a file',
     fileTooLarge: 'File exceeds the {size}MB limit',
   },
+  owner: {
+    invalidConfig: 'Invalid Owner field configuration',
+    empty: '-',
+  },
   fieldRenderer: {
     signature: 'Signature',
     clear: 'Clear',

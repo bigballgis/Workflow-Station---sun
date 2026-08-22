@@ -898,6 +898,7 @@ import {
   wrapFcDesignerOpenPreview,
 } from '@/utils/formDesignerPreviewValidation'
 import { lookupStore } from './lookupStore'
+import { formControlTypeStore } from './formControlTypeStore'
 import {
   PREVIEW_MY_REQUESTS_ACTIVE_KEY,
   PREVIEW_SUBTABLE_DIALOG_KEY,
@@ -1895,6 +1896,7 @@ const designerConfig = computed(() => ({
   beforeActiveRule: ({ rule }: { rule: Record<string, unknown> }) => {
     flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
     ensureEmptyRuleComponentEvents(rule)
+    formControlTypeStore.activeRule = rule
   },
   // MVP boundary enforcement — see isInlineSubFormDropAllowed's doc comment for why this is
   // this component's only enforcement point.
@@ -1979,6 +1981,11 @@ const designerConfig = computed(() => ({
         if (props.type === 'textarea' || props.type === 'password') return []
         return [
           {
+            type: 'FormControlTypeSelect',
+            field: '_controlType',
+            title: t('form.ownerControlType'),
+          },
+          {
             type: 'SensitiveMaskPropsEditor',
             field: 'sensitiveMask',
             title: t('form.sensitiveMask.panelTitle'),
@@ -2000,6 +2007,7 @@ const designerConfig = computed(() => ({
     // canvas. The built-in top toggle (props.hide → `_hidden`) is the single Hide control.
     default: ['disabled', 'hidden'],
     lookup: ['disabled', 'hidden'],
+    owner: ['disabled', 'hidden'],
     subTable: ['disabled', 'hidden'],
     inlineSubForm: ['disabled', 'hidden'],
     linkForm: ['disabled', 'hidden'],

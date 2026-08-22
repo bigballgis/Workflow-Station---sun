@@ -73,6 +73,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
 
     private final FormTableBindingRestorer formTableBindingRestorer;
     private final FormConfigJsonTableProvisioner formConfigJsonTableProvisioner;
+    private final OwnerFieldFormReconciler ownerFieldFormReconciler;
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -169,6 +170,10 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             formDefinition.setBoundTable(boundTable);
         }
 
+        // Owner field reconciliation: one per table / same column+config across forms /
+        // no silent reuse of an existing business column; provisions the column (§3.4, §4.2).
+        ownerFieldFormReconciler.reconcile(functionUnit.getId(), formDefinition, request.getConfigJson());
+
         return formDefinitionRepository.save(formDefinition);
     }
 
@@ -258,7 +263,12 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         } else {
             formDefinition.setBoundTable(null);
         }
-        
+
+        // Owner field reconciliation: one per table / same column+config across forms /
+        // no silent reuse of an existing business column; provisions the column (§3.4, §4.2).
+        ownerFieldFormReconciler.reconcile(
+                formDefinition.getFunctionUnit().getId(), formDefinition, mergedConfigJson);
+
         return formDefinitionRepository.save(formDefinition);
     }
     

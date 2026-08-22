@@ -244,6 +244,22 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
         }
         applyDesignerHideFlagToFormField(field, item)
         fields.push(field)
+      } else if (item.type === 'owner' && item.field) {
+        // Owner field — props.ownerConfig ({"source":"CREATOR"|"CURRENT_ASSIGNEE"})
+        const field: any = {
+          key: item.field,
+          label: item.title || item.field,
+          type: 'owner',
+          span: item.col?.span || 24,
+          _ownerConfig: typeof item.props?.ownerConfig === 'string'
+            ? item.props.ownerConfig
+            : JSON.stringify(item.props?.ownerConfig || {}),
+        }
+        if (isFormCreateRuleReadonly(item)) {
+          field.readonly = true
+        }
+        applyDesignerHideFlagToFormField(field, item)
+        fields.push(field)
       } else if (FC_SKIP_TYPES.has(item.type)) {
         // Traverse children only (see block below); `continue` would drop all nested row fields.
       } else if (item.field) {

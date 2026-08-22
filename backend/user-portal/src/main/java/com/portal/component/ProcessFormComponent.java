@@ -81,6 +81,14 @@ public class ProcessFormComponent {
     @Autowired
     private UserDisplayNameResolver userDisplayNameResolver;
 
+    /**
+     * Lazy: Owner-field validation / display re-resolution / default fill on process-form
+     * submits (null in `new`-constructed tests, which do not exercise owner fields).
+     */
+    @Lazy
+    @Autowired
+    private OwnerFieldComponent ownerFieldComponent;
+
     /** Display name for audit fields; falls back to the raw user id when the resolver is unavailable. */
     private String resolveAuditUserDisplay(String userId) {
         UserDisplayNameResolver resolver = userDisplayNameResolver;
@@ -182,6 +190,17 @@ public class ProcessFormComponent {
 
         // Readonly Request ID synthetic field: compute from the main-table config + variables.
         Map<String, Object> fieldValues = new HashMap<>(variables);
+        if (ownerFieldComponent != null) {
+            ownerFieldComponent.projectForRead(
+                    processInstance.getFunctionUnitCode(),
+                    new OwnerFieldComponent.OwnerWriteContext(
+                            processInstance.getStartUserId(),
+                            processInstance.getStartUserId(),
+                            processInstance.getCurrentAssignee(),
+                            processInstance.getCandidateUsers(),
+                            null),
+                    fieldValues);
+        }
         String requestId = requestIdEnricher().buildRequestId(processInstance.getFunctionUnitCode(), variables);
         if (requestId != null) {
             fieldValues.put(RequestIdEnricher.REQUEST_ID_FIELD, requestId);
@@ -252,6 +271,18 @@ public class ProcessFormComponent {
             // Drop forged audit keys so putAll cannot wipe created_* from insert.
             SystemAuditFieldFiller.stripClientAuditKeys(inbound);
             updatedVariables.putAll(inbound);
+            // Owner fields: Creator pins startUserId; Current Assignee follows snapshot.
+            if (ownerFieldComponent != null) {
+                ownerFieldComponent.applyOnSubmit(
+                        processInstance.getFunctionUnitCode(),
+                        new OwnerFieldComponent.OwnerWriteContext(
+                                userId,
+                                processInstance.getStartUserId(),
+                                processInstance.getCurrentAssignee(),
+                                processInstance.getCandidateUsers(),
+                                oldValues),
+                        updatedVariables);
+            }
             // System audit fields: refresh updated_at/updated_by at real update
             // (platform-managed; not gated on Form Design). created_* preserved from insert.
             SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));

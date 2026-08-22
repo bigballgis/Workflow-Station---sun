@@ -35,6 +35,7 @@ import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.time.LocalDateTime;
@@ -119,7 +120,8 @@ class TaskProcessProperties {
         TaskPermissionEvaluator taskPermissionEvaluator =
             new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient);
         ProcessInstanceSyncComponent processInstanceSyncComponent =
-            new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository);
+            new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository,
+                    Mockito.mock(com.portal.component.OwnerFieldComponent.class));
         MiCollectionVariableBuilder miCollectionVariableBuilder =
             new MiCollectionVariableBuilder(workflowEngineClient, jdbcTemplate);
         TaskApprovalCompletionComponent taskApprovalCompletionComponent = new TaskApprovalCompletionComponent(

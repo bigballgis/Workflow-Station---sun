@@ -982,6 +982,10 @@ export default {
     emptySubmit: '请输入内容或添加附件',
     fileTooLarge: '文件超过 {size}MB 上限',
   },
+  owner: {
+    invalidConfig: '归属人字段配置无效',
+    empty: '-',
+  },
   fieldRenderer: {
     signature: '签名',
     clear: '清除',

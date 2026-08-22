@@ -23,6 +23,7 @@ export type ColumnType =
   | 'transfer'
   | 'cascader'
   | 'lookup'
+  | 'owner'
 
 export interface TreeNode {
   label: string

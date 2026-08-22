@@ -94,6 +94,7 @@ class ProcessOperationProperties {
                 Mockito.mock(com.portal.component.MeetingParticipantVariablesPersistence.class),
                 Mockito.mock(com.portal.component.ProcessSubTablePrimaryKeyEnricherComponent.class),
                 Mockito.mock(ComputedFieldRecalculator.class),
+                Mockito.mock(com.portal.component.OwnerFieldComponent.class),
                 Mockito.mock(TaskFormComponent.class),
                 userDisplayNameResolver,
                 i18nService,

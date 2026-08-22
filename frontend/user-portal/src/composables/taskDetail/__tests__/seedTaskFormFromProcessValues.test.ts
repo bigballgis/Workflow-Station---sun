@@ -44,4 +44,21 @@ describe('seedTaskFormFromProcessValues', () => {
     expect(next.stage).toEqual({ id: 'CAST-1', code: 'A' })
     expect(next.test_status).toEqual(rows)
   })
+
+  it('copies owner __display even when the stored user: value is already on the task form', () => {
+    const { next, patched } = seedTaskFormFromProcessValues(
+      { creator: 'user:user-dev', owner: 'user:user-e2e-lina' },
+      {
+        creator: 'user:user-dev',
+        creator__display: 'Developer Tester',
+        owner: 'user:user-e2e-lina',
+        owner__display: '李娜',
+      },
+      ['creator', 'owner'],
+    )
+    expect(patched).toBe(true)
+    expect(next.creator).toBe('user:user-dev')
+    expect(next.creator__display).toBe('Developer Tester')
+    expect(next.owner__display).toBe('李娜')
+  })
 })

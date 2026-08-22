@@ -25,6 +25,7 @@ export const CONTROL_TYPE_MAP: Record<NonNullable<ColumnType> | 'text', string> 
   transfer: 'ElTransfer',
   cascader: 'ElCascader',
   lookup: 'LookupField',
+  owner: 'ElInput',
 }
 
 export function resolveControlComponent(col: DialogColumn): string {

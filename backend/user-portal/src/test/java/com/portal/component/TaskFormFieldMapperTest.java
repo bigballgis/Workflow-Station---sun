@@ -3,6 +3,7 @@ package com.portal.component;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,5 +38,23 @@ class TaskFormFieldMapperTest {
         Map<String, Object> accepted = mapper.filterEditableFields(formData, permissions);
 
         assertThat(accepted).containsOnlyKeys("title", "notes");
+    }
+
+    @Test
+    void extractFieldSubsetCopiesOwnerDisplayCompanion() {
+        Map<String, Object> variables = Map.of(
+                "creator", "user:user-dev",
+                "creator__display", "Developer Tester",
+                "owner", "user:user-e2e-lina",
+                "owner__display", "李娜",
+                "unrelated", "skip");
+
+        Map<String, Object> subset = mapper.extractFieldSubset(variables, Set.of("creator", "owner"));
+
+        assertThat(subset).containsEntry("creator", "user:user-dev")
+                .containsEntry("creator__display", "Developer Tester")
+                .containsEntry("owner", "user:user-e2e-lina")
+                .containsEntry("owner__display", "李娜")
+                .doesNotContainKey("unrelated");
     }
 }

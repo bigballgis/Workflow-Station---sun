@@ -56,6 +56,7 @@ class FormDesignComponentImplSceneTest {
     @Mock private I18nService i18nService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private SubTableViewService subTableViewService;
+    @Mock private OwnerFieldFormReconciler ownerFieldFormReconciler;
 
     @InjectMocks private FormDesignComponentImpl component;
 

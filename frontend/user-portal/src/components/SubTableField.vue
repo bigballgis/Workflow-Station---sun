@@ -232,6 +232,18 @@
                 {{ col.props?.linkText || t('linkForm.defaultLinkText') }}
               </el-link>
             </template>
+            <template v-else-if="col.type === 'owner'">
+              <template v-if="ownerChipsForRow(col, scope.row).length">
+                <OwnerChip
+                  v-for="(chip, chipIdx) in ownerChipsForRow(col, scope.row)"
+                  :key="`${col.field}-${chipIdx}-${chip.label}`"
+                  :kind="chip.kind"
+                  :label="chip.label"
+                  :size="22"
+                />
+              </template>
+              <span v-else>-</span>
+            </template>
             <span v-else>{{ resolveDisplayValue(col, scope.row[col.field]) }}</span>
           </template>
         </el-table-column>
@@ -546,6 +558,8 @@ import { collectRecordNoteFields, resolveRowStableId } from './formRendererHelpe
 import RecordNoteField from './RecordNoteField.vue'
 import { calculateSummary } from './businessLogicEngine'
 import FieldRenderer from './FieldRenderer.vue'
+import OwnerChip from './owner/OwnerChip.vue'
+import { ownerChips } from '@/composables/owner/useOwnerFieldModel'
 import PortalFormFields from './PortalFormFields.vue'
 import dayjs from 'dayjs'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
@@ -692,6 +706,14 @@ const isActionBinding = computed(() => props.bindingType === 'ACTION')
 const canAdd = computed(() => !isActionBinding.value && props.editable === true && props.allowAdd !== false)
 const canEdit = computed(() => !isActionBinding.value && props.editable === true && props.allowEdit !== false)
 const canDelete = computed(() => !isActionBinding.value && props.editable === true && props.allowDelete !== false)
+
+function ownerChipsForRow(col: Column, row: Record<string, unknown>) {
+  const display = row[`${col.field}__display`]
+  return ownerChips(
+    row[col.field] != null ? String(row[col.field]) : '',
+    typeof display === 'string' ? display : undefined,
+  )
+}
 
 /**
  * MI role code resolved exclusively from the binding's AssignmentConfig.

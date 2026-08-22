@@ -25,6 +25,7 @@ export type ColumnType =
   | 'signature'
   | 'transfer'
   | 'cascader'
+  | 'owner'
 
 export interface TreeNode {
   label: string
@@ -216,6 +217,7 @@ export const CONTROL_TYPE_MAP: Record<NonNullable<ColumnType> | 'text', string> 
   signature: 'ElInput',
   transfer: 'ElTransfer',
   cascader: 'ElCascader',
+  owner: 'ElInput',
 }
 
 export function resolveControlComponent(col: DialogColumn): string {
