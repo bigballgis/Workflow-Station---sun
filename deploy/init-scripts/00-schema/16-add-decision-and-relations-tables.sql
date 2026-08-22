@@ -42,20 +42,21 @@ CREATE INDEX IF NOT EXISTS idx_table_relations_target ON dw_table_relations(targ
 -- Rename MAIN→PROCESS, SUB→TASK, remove POPUP; align with Java FormType enum
 DO $$
 BEGIN
-    IF EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'chk_form_type'
-          AND conrelid = 'dw_form_definitions'::regclass
-    ) THEN
-        ALTER TABLE dw_form_definitions DROP CONSTRAINT chk_form_type;
-    END IF;
-
     UPDATE dw_form_definitions SET form_type = 'PROCESS' WHERE form_type = 'MAIN';
     UPDATE dw_form_definitions SET form_type = 'TASK'    WHERE form_type = 'SUB';
     UPDATE dw_form_definitions SET form_type = 'ACTION'  WHERE form_type = 'POPUP';
 
-    ALTER TABLE dw_form_definitions
-        ADD CONSTRAINT chk_form_type CHECK (form_type IN ('PROCESS', 'TASK', 'ACTION'));
+    -- Re-running this file on a DB where a later script (68-form-scene-and-fu-audit-access.sql)
+    -- already widened chk_form_type to include DETAIL must not clobber that back to the
+    -- original three-value set — only add the constraint when it is missing entirely.
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_form_type'
+          AND conrelid = 'dw_form_definitions'::regclass
+    ) THEN
+        ALTER TABLE dw_form_definitions
+            ADD CONSTRAINT chk_form_type CHECK (form_type IN ('PROCESS', 'TASK', 'ACTION'));
+    END IF;
 END $$;
 
 -- Task form fields (V307)
