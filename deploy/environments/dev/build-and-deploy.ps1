@@ -771,7 +771,10 @@ function req(method, path, body, token) {
         # single-piece lookup goes through the lazily-populated in-process cachedRegistry. If
         # anything touched a single piece while the table was empty, that cache is pinned to []
         # and /v1/pieces/<name> returns 404 forever. Verified both orderings on 2026-07-29.
-        docker exec $apContainer node -e "const R=require('/usr/src/app/node_modules/ioredis');const c=new R({host:process.env.AP_REDIS_HOST||'redis',port:+(process.env.AP_REDIS_PORT||6379),password:process.env.AP_REDIS_PASSWORD||undefined});c.publish('piece-registry-invalidation','1').then(n=>{console.log('subscribers reached: '+n);return c.quit()}).catch(e=>{console.error(e.message);process.exit(1)})"
+        # ioredis is only a dependency of packages/server/api, so pnpm's symlinked node_modules
+        # never surfaces it at the app root — cwd into that package so a bare require() resolves
+        # it the same way api's own code does (see packages/server/api/package.json).
+        docker exec -w /usr/src/app/packages/server/api $apContainer node -e "const R=require('ioredis');const c=new R({host:process.env.AP_REDIS_HOST||'redis',port:+(process.env.AP_REDIS_PORT||6379),password:process.env.AP_REDIS_PASSWORD||undefined});c.publish('piece-registry-invalidation','1').then(n=>{console.log('subscribers reached: '+n);return c.quit()}).catch(e=>{console.error(e.message);process.exit(1)})"
         if ($LASTEXITCODE -ne 0) { throw "piece registry invalidation failed — restart $apContainer or single-piece lookups will 404" }
         Write-Host "    Seeded $pieceCount piece(s) and invalidated the registry cache." -ForegroundColor Green
     } else {
