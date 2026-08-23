@@ -35,11 +35,13 @@ public class FileUploadController {
     private final FileUploadComponent fileUploadComponent;
 
     /**
-     * Upload a single file.
+     * Upload a single file. Any authenticated caller may upload — this endpoint backs
+     * ordinary form/sub-table Attachment fields used by portal end users, not just the
+     * developer workstation, so it is intentionally NOT gated by a developer permission
+     * (JwtAuthenticationFilter still requires a valid login).
      */
     @PostMapping
     @Operation(summary = "Upload file", description = "Any file type, max 10MB")
-    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Map<String, Object>>> upload(
             @RequestParam("file") MultipartFile file) {
         try {
