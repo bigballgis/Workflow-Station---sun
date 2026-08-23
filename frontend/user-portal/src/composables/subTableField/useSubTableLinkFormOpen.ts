@@ -96,7 +96,11 @@ export function useSubTableLinkFormOpen(
           peerMap.size > 0 ? peerMap : undefined
         )
         if (fromParent.length > 0) {
-          savedRows = mergeSubTableRowsByRowId(savedRows, fromParent, binding.primaryKeyFields ?? null)
+          // `savedRows` is this row's own nested slice for exactly this binding (collectNestedSavedRowsForLinkForm
+          // above); `fromParent` was resolved by scanning ALL keys that could plausibly match this binding,
+          // including a peer binding's own snapshot of the same shared table. The own slice is authoritative —
+          // merge it in second so its fields win over a peer's possibly-stale values.
+          savedRows = mergeSubTableRowsByRowId(fromParent, savedRows, binding.primaryKeyFields ?? null)
         }
         if (savedRows.length > 1) {
           const picked = pickBestLinkedChildRowsForParentRow(row, savedRows, binding)
@@ -151,7 +155,11 @@ export function useSubTableLinkFormOpen(
           )
         }
         if (narrowed.length > 0 && binding) {
-          pool = mergeSubTableRowsByRowId(pool, narrowed, binding.primaryKeyFields ?? null)
+          // `narrowed` may include peer-binding rows for the same table_id (e.g. another form's
+          // snapshot of this participant). `pool` is this binding's own nested payload for the
+          // clicked row and is authoritative — merge it in second so its non-empty fields win over
+          // a peer's possibly-stale values instead of being overwritten by them.
+          pool = mergeSubTableRowsByRowId(narrowed, pool, binding.primaryKeyFields ?? null)
         }
       }
       effectiveSavedRows = pool
@@ -173,9 +181,11 @@ export function useSubTableLinkFormOpen(
       effectiveSavedRows.length > 0 &&
       linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)
     ) {
+      // effectiveSavedRows may be incomplete (e.g. missing one field), but any field it does have is
+      // this row's own data and must win over fallbackRows (binding-wide / peer data) filling gaps.
       effectiveSavedRows = mergeSubTableRowsByRowId(
-        [...effectiveSavedRows],
         [...fallbackRows],
+        [...effectiveSavedRows],
         binding.primaryKeyFields ?? null
       )
     }
@@ -223,9 +233,13 @@ export function useSubTableLinkFormOpen(
         peerMap
       )
       if (fromClickedParent.length > 0) {
+        // Same rule as above: effectiveSavedRows already resolved down to this binding's own scope;
+        // fromClickedParent was pulled by scanning any key that could match this binding, which can
+        // include a peer binding's snapshot of the same shared table. Merge the own data in last so
+        // it wins over a peer's possibly-stale values instead of being unconditionally overwritten.
         effectiveSavedRows = mergeSubTableRowsByRowId(
-          effectiveSavedRows.length > 0 ? [...effectiveSavedRows] : [],
           collapseMiLinkFormRowsForParent(row, fromClickedParent),
+          effectiveSavedRows.length > 0 ? [...effectiveSavedRows] : [],
           binding.primaryKeyFields ?? null
         )
       }
@@ -247,9 +261,11 @@ export function useSubTableLinkFormOpen(
         null
       )
       if (nestedPeers.length > 0) {
+        // effectiveSavedRows is thin here (<=2 keys) but whatever it does have is this row's own
+        // data — still let it win over nestedPeers (other bindings' rows for the same table).
         effectiveSavedRows = mergeSubTableRowsByRowId(
-          [...effectiveSavedRows],
           nestedPeers,
+          [...effectiveSavedRows],
           binding.primaryKeyFields ?? null
         )
       }
@@ -301,9 +317,11 @@ export function useSubTableLinkFormOpen(
         binding
       )
       if (savedRows.length > 0 && pkPool.length > 0) {
+        // savedRows is this row's own nested slice for this binding; pkPool comes from fallbackRows
+        // (binding-wide / peer data) narrowed by parent — savedRows must win where both have a value.
         effectiveSavedRows = mergeSubTableRowsByRowId(
-          [...savedRows],
           pkPool,
+          [...savedRows],
           binding.primaryKeyFields ?? null
         )
       }
@@ -311,9 +329,11 @@ export function useSubTableLinkFormOpen(
         effectiveSavedRows.length === 0
         || linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)
       ) {
+        // Own data first (effectiveSavedRows, savedRows), fallbackRows (peer/binding-wide) last so
+        // mergeSubTableRowsByRowId's later-wins-for-non-empty-fields rule favors the row's own data.
         const pool = mergeSubTableRowsByRowId(
-          [],
-          [...effectiveSavedRows, ...savedRows, ...fallbackRows],
+          [...fallbackRows],
+          [...savedRows, ...effectiveSavedRows],
           binding.primaryKeyFields ?? null
         )
         const pickPool = pool.length > 0 ? pool : [...effectiveSavedRows, ...savedRows, ...fallbackRows]
@@ -385,9 +405,12 @@ export function useSubTableLinkFormOpen(
             row,
             parentScoped.length > 0 ? parentScoped : fromParent
           )
+          // effectiveSavedRows is this row's own accumulated data; collapsed comes from fromParent,
+          // which scans any key that could match this binding, including a peer binding's snapshot —
+          // own data must win where both have a value for the same field.
           const merged = mergeSubTableRowsByRowId(
-            [...effectiveSavedRows],
             collapsed,
+            [...effectiveSavedRows],
             binding.primaryKeyFields ?? null
           )
           if (merged.length > 0) {
@@ -395,10 +418,10 @@ export function useSubTableLinkFormOpen(
           }
         }
         if (linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)) {
-          const deepRoots: unknown[] = [row?.__subTables__, ...effectiveSavedRows.map(r => r?.__subTables__)]
-          for (const fb of fallbackRows) {
-            deepRoots.push(fb?.__subTables__)
-          }
+          // Peer/fallback roots first, own row + own accumulated data last, so that if the same PK
+          // shows up under both a peer root and an own root, the own root's fields win within deepHits.
+          const deepRoots: unknown[] = fallbackRows.map(fb => fb?.__subTables__)
+          deepRoots.push(row?.__subTables__, ...effectiveSavedRows.map(r => r?.__subTables__))
           let deepHits: any[] = []
           for (const root of deepRoots) {
             deepHits = mergeSubTableRowsByRowId(
@@ -434,14 +457,26 @@ export function useSubTableLinkFormOpen(
       && binding?.formFields?.length
       && linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)
     ) {
+      // Both candidate pools below are scanned process-/peer-wide (not scoped to this exact binding),
+      // so a same-shaped peer binding's row can score as a plausible match. Merge into effectiveSavedRows
+      // (own data wins per-field) instead of replacing it outright, and only when the candidate actually
+      // scores higher — a same-or-lower-scoring "best" is not worth risking a wholesale replacement.
+      const curScoreBefore = effectiveSavedRows.length > 0
+        ? scoreRowForLinkedFormFields(effectiveSavedRows[0], binding.formFields)
+        : 0
       const fromVariables = collectLinkFormRowsFromProcessVariables(binding, row)
       if (fromVariables.length > 0) {
         const best = pickBestLinkedChildRowsForParentRow(row, fromVariables, binding)
-        if (best.length > 0) {
-          effectiveSavedRows = best
+        if (best.length > 0 && scoreRowForLinkedFormFields(best[0], binding.formFields) > curScoreBefore) {
+          effectiveSavedRows = effectiveSavedRows.length > 0
+            ? mergeSubTableRowsByRowId(best, [...effectiveSavedRows], binding.primaryKeyFields ?? null)
+            : best
         }
       }
       if (linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)) {
+        const curScoreNow = effectiveSavedRows.length > 0
+          ? scoreRowForLinkedFormFields(effectiveSavedRows[0], binding.formFields)
+          : 0
         const allPeerRows = (props.linkedSubTableBindings ?? []).flatMap(b =>
           Array.isArray(b.data) ? b.data : [],
         )
@@ -450,8 +485,10 @@ export function useSubTableLinkFormOpen(
         )
         if (scoped.length > 0) {
           const best = pickBestLinkedChildRowsForParentRow(row, scoped, binding)
-          if (best.length > 0) {
-            effectiveSavedRows = best
+          if (best.length > 0 && scoreRowForLinkedFormFields(best[0], binding.formFields) > curScoreNow) {
+            effectiveSavedRows = effectiveSavedRows.length > 0
+              ? mergeSubTableRowsByRowId(best, [...effectiveSavedRows], binding.primaryKeyFields ?? null)
+              : best
           }
         }
       }

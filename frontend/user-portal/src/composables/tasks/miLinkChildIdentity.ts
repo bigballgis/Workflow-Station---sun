@@ -37,6 +37,32 @@ export function resolveMiChildStructuralParentFk(childRow: Record<string, unknow
 }
 
 /**
+ * True when a row carries a structural FK (sub_task_id / participant_id / parentId / …) that
+ * points back at its OWN primary key. The same physical table is often shared by several form
+ * bindings in one process (e.g. an MI participant row read by Assign Task / Sub task / Main);
+ * only the binding whose form actually owns the row's writes stamps this self-reference — peer
+ * bindings that merely carry an initialization-time copy never populate it. Used to prefer the
+ * genuinely-owning binding's field values when merging same-table peers (see
+ * {@link ../applicationDetail/subTableRowHelpers}'s applyUnionFindMergeToBindingList), instead of
+ * an arbitrary array-order tiebreak that can let a stale copy silently win.
+ */
+export function rowIsSelfOwnedByStructuralFk(
+  row: Record<string, unknown>,
+  pkFields: string[] | null | undefined,
+): boolean {
+  if (!pkFields?.length) return false
+  const pkValue = pkFields
+    .map(f => normalizeMiLinkMatchId(row[f]))
+    .find(v => v != null)
+  if (pkValue == null) return false
+  for (const fk of MI_STRUCTURAL_PARENT_FK_FIELDS) {
+    const fkValue = normalizeMiLinkMatchId(row[fk])
+    if (fkValue != null && fkValue === pkValue) return true
+  }
+  return false
+}
+
+/**
  * Legacy People rows sometimes carry another participant's stale {@code sub_task_id} while
  * {@code id}/{@code id_idw} already match the current MI element (sub form1 save → sub form2 load).
  * Participant filter would drop those rows and lose age/sex/name from the prior step.

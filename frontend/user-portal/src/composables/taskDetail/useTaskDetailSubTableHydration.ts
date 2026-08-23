@@ -67,6 +67,11 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
   } = ctx
   const { formData } = ctx.taskForm
 
+  /**
+   * `forbidNameFallback` param kept for call-site source compatibility (many callers pass
+   * `ambiguous.has(binding.bindingId)` positionally) but is now UNUSED — resolveSubTableRowsForBinding
+   * no longer has a table-name string-key fallback to forbid.
+   */
   function getSavedSubTableRows(
     savedSubTables: any,
     binding: {
@@ -77,10 +82,9 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
       primaryKeyFields?: string[] | null
       columns?: Array<{ field?: string }> | null
     },
-    forbidNameFallback = false,
+    _forbidNameFallback = false,
   ): any[] | undefined {
     return resolveSubTableRowsForBinding(savedSubTables, binding, {
-      forbidNameFallback,
       bindingTableById: lastBindingRelationTableMap.value,
       mergeSiblingSlices:
         isMiDashboardSubTableBinding(binding) && !isMiSubTaskMode.value,
@@ -264,12 +268,10 @@ export function createTaskDetailSubTableHydration(ctx: TaskDetailCtx): TaskDetai
     const rtMap = lastBindingRelationTableMap.value
 
     const applyTo = (bindings: typeof subTableBindings.value) => {
-      const ambiguous = bindingIdsPreferStrictSubTableLookup(bindings)
       for (const binding of bindings) {
         if (isMiDashboardSubTableBinding(binding)) {
           const resolved =
             resolveSubTableRowsForBinding(flattened, binding, {
-              forbidNameFallback: ambiguous.has(binding.bindingId),
               bindingTableById: rtMap,
               mergeSiblingSlices: !isMiSubTaskMode.value,
             }) ?? []

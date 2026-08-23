@@ -6,6 +6,7 @@ import {
   mergeSubTableRowsByRowId,
   dropSubsumedSubTableRows,
   isSharedAttachmentFileBinding,
+  rowIsSelfOwnedByStructuralFk,
 } from '@/composables/tasks/shared'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 
@@ -31,37 +32,26 @@ export function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
 }
 
+/**
+ * Exact-bindingId lookup ONLY — no table-name-string-key fallback. `__subTables__` also carries a
+ * shared display-name key (e.g. "Participants") for a table read by several MI form bindings
+ * (Assign Task / Sub task / Main); each binding's own save overwrites that SAME shared key, so it
+ * holds whichever binding saved LAST, with no way to tell whether it belongs to the binding being
+ * resolved here. Guessing via that key silently served a sibling binding's stale row as this
+ * binding's own data. A binding with no data under its own bindingId key genuinely has none here —
+ * callers needing the shared logical table's data must resolve it by table_id against other
+ * bindings (see resolveSameTableIdSliceForBinding), which identifies the actual owning binding
+ * instead of guessing by a shared string key.
+ */
 export function getSavedSubTableRowsFromVariables(
   savedSubTables: Record<string, any> | null | undefined,
-  rawBinding: { bindingId: number; tableName?: string; tableDisplayName?: string },
-  primaryKeyFields?: string[] | null
+  rawBinding: { bindingId: number },
+  _primaryKeyFields?: string[] | null
 ): any[] | undefined {
   if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
-  const keys = [
-    rawBinding.bindingId,
-    String(rawBinding.bindingId),
-    rawBinding.tableDisplayName,
-    rawBinding.tableName,
-    rawBinding.tableName ? normalizeSubTableName(rawBinding.tableName) : '',
-    rawBinding.tableDisplayName ? normalizeSubTableName(rawBinding.tableDisplayName) : ''
-  ]
-  const seenArrays = new Set<any>()
-  const chunks: any[][] = []
-  for (const key of keys) {
-    if (key === '' || key == null) continue
-    const v = savedSubTables[key as string]
-    if (!Array.isArray(v) || v.length === 0 || seenArrays.has(v)) continue
-    seenArrays.add(v)
-    chunks.push(v)
-  }
-  if (chunks.length === 0) return undefined
-  let merged: any[] = chunks.length === 1 ? [...chunks[0]!] : []
-  if (chunks.length > 1) {
-    for (const chunk of chunks) {
-      merged = mergeSubTableRowsByRowId(merged, chunk, primaryKeyFields ?? null)
-    }
-  }
-  return dropSubsumedSubTableRows(merged)
+  const v = savedSubTables[rawBinding.bindingId] ?? savedSubTables[String(rawBinding.bindingId)]
+  if (!Array.isArray(v) || v.length === 0) return undefined
+  return dropSubsumedSubTableRows(v)
 }
 
 export type SubTableBindingAlignable = {
@@ -172,9 +162,29 @@ export function applyUnionFindMergeToBindingList(all: SubTableBindingAlignable[]
         pkFields = pks.map(f => String(f).trim()).filter(Boolean)
       }
     }
+    /**
+     * A physical table shared by several form bindings (e.g. an MI participant table read by
+     * Assign Task / Sub task / Main) can carry a different snapshot of the same row per binding —
+     * only the binding whose form actually owns the row's writes keeps it current; the others hold
+     * an initialization-time copy that never gets edited again. mergeSubTableRowsByRowId's contract
+     * is "later argument wins for non-empty fields", so folding by array order let an arbitrary peer
+     * silently overwrite the genuinely-owning binding's fields (e.g. a stale `name` from a copy
+     * clobbering the value the owning sub-task actually saved). Fold rows carrying a structural
+     * self-reference FK (rowIsSelfOwnedByStructuralFk — sub_task_id/participant_id/parentId/… equal
+     * to the row's own PK) in LAST so they win, regardless of which binding or array position they
+     * came from; rows with no such marker (plain/non-MI tables) keep the prior array-order fold.
+     */
     let merged: any[] = []
+    const selfOwnedChunks: any[][] = []
     for (const b of group) {
-      merged = mergeSubTableRowsByRowId(merged, Array.isArray(b.data) ? b.data : [], pkFields)
+      const rows = Array.isArray(b.data) ? b.data : []
+      const ownRows = rows.filter((r: any) => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, pkFields))
+      const restRows = rows.filter((r: any) => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, pkFields)))
+      merged = mergeSubTableRowsByRowId(merged, restRows, pkFields)
+      if (ownRows.length > 0) selfOwnedChunks.push(ownRows)
+    }
+    for (const chunk of selfOwnedChunks) {
+      merged = mergeSubTableRowsByRowId(merged, chunk, pkFields)
     }
     if (merged.length === 0) continue
     const snapshot = sortRowsByStableKey(merged.map(r => ({ ...r })))

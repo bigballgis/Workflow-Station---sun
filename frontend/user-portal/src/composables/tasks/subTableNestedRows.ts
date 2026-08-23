@@ -146,7 +146,6 @@ export function pullNestedRowsForBindingFromParentRows(
     const st = (row as Record<string, unknown>).__subTables__
     if (!st || typeof st !== 'object') continue
     const sto = st as Record<string, unknown>
-    const rowOutBefore = out.length
     const nested = findNestedChildRowsInSto(sto, child)
     if (nested) {
       out.push(...nested)
@@ -163,28 +162,6 @@ export function pullNestedRowsForBindingFromParentRows(
         if (Array.isArray(v) && v.length > 0) {
           out.push(...v)
         }
-      }
-    }
-
-    // No direct / tableId match on this row: exactly one other numeric-keyed array → sole child slice.
-    if (out.length === rowOutBefore) {
-      const ambiguous: any[][] = []
-      for (const [k, v] of Object.entries(sto)) {
-        const kid = Number(k)
-        if (!Number.isFinite(kid) || kid === child.bindingId) continue
-        // A slice we can positively attribute to ANOTHER table is never this binding's rows.
-        // Without this, a 3-level nest fed the grandchild slice (nst_package) to the middle
-        // binding (nst_shipment) — phantom parent rows, grandchild rows detached from the parent.
-        if (bindingTableById != null && childTid != null) {
-          const otid = bindingTableById.get(kid)
-          if (otid != null && !Number.isNaN(Number(otid)) && Number(otid) !== Number(childTid)) {
-            continue
-          }
-        }
-        if (Array.isArray(v) && v.length > 0) ambiguous.push(v)
-      }
-      if (ambiguous.length === 1) {
-        out.push(...ambiguous[0]!)
       }
     }
   }

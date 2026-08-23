@@ -38,39 +38,6 @@ import {
   resolveSubTableRowsForBinding,
 } from '@/composables/tasks/shared'
 
-function bindingIdsPreferStrictSubTableLookup(
-  bindings: Array<{ bindingId: number; tableId?: number | null; tableName: string; physicalTableName?: string }>,
-): Set<number> {
-  const ambiguous = new Set<number>()
-  if (!Array.isArray(bindings) || bindings.length <= 1) return ambiguous
-  const normalize = (name?: string) => String(name || '').trim().toLowerCase()
-  const buckets = new Map<string, Set<number>>()
-  const bump = (key: string, bid: number) => {
-    const nk = normalize(key)
-    if (!nk) return
-    let s = buckets.get(nk)
-    if (!s) {
-      s = new Set()
-      buckets.set(nk, s)
-    }
-    s.add(bid)
-  }
-  for (const b of bindings) {
-    bump(b.tableName, b.bindingId)
-    if (typeof b.physicalTableName === 'string' && b.physicalTableName.trim())
-      bump(b.physicalTableName, b.bindingId)
-    if (b.tableId != null && Number.isFinite(Number(b.tableId))) {
-      bump(`__rtid:${Number(b.tableId)}`, b.bindingId)
-    }
-  }
-  for (const s of buckets.values()) {
-    if (s.size > 1) {
-      for (const id of s) ambiguous.add(id)
-    }
-  }
-  return ambiguous
-}
-
 function loadFuContent(): any {
   return fuContentFixture as any
 }
@@ -126,10 +93,8 @@ describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => 
     const flattened = structuredClone(savedMap) as Record<string, unknown>
     flattenNestedSubTableRowsIntoPayload(flattened)
 
-    const ambiguous = bindingIdsPreferStrictSubTableLookup(bindings)
     for (const binding of bindings) {
       const saved = resolveSubTableRowsForBinding(flattened, binding, {
-        forbidNameFallback: ambiguous.has(binding.bindingId),
         bindingTableById: rtMap,
         mergeSiblingSlices: isMiDashboardSubTableBinding(binding),
       })

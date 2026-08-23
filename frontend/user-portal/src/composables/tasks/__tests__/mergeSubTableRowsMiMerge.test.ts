@@ -8,6 +8,24 @@ import {
 } from '../shared'
 
 describe('mergeSubTableRowsByRowId MI dashboard columns', () => {
+  /**
+   * My Request link-form popup (useSubTableLinkFormOpen readOnlyIsolateLinkForm branch) merges this
+   * binding's own nested row ("pool") with peer-binding fallback rows sharing the same table_id
+   * ("narrowed") for the same PK. Peer bindings (e.g. Assign Task / Main forms) can carry a stale
+   * snapshot of a shared participant row's plain fields (like `name`) that diverges from the row's
+   * own binding (e.g. Sub task form). The caller must pass the peer/fallback rows as `existing` and
+   * the binding's own rows as `incoming` so its non-empty fields win — swapping this order silently
+   * let a peer's stale `name` clobber the binding's own current value (My Request popup showed "aaa"
+   * instead of the correct "aaad").
+   */
+  it('own-binding row (passed as incoming) wins over a peer-binding row with a different plain field value', () => {
+    const ownBindingRow = { id_idw: 'Test-000001', name: 'aaad', assignee: 'user-dev' }
+    const peerBindingRow = { id_idw: 'Test-000001', name: 'aaa', assignee: 'user-dev' }
+    const merged = mergeSubTableRowsByRowId([peerBindingRow], [ownBindingRow], ['id_idw'])
+    expect(merged).toHaveLength(1)
+    expect(merged[0].name).toBe('aaad')
+  })
+
   it('does not let later IN_PROGRESS overwrite COMPLETED for the same PK row', () => {
     const merged = mergeSubTableRowsByRowId(
       [{ id: 2323, task_status: 'COMPLETED', task_current_node: 'end' }],

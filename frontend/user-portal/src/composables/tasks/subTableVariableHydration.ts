@@ -6,6 +6,7 @@
 import { cloneSubTableRows } from './subTableCore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { isSharedAttachmentFileBinding } from './subTableBindingKinds'
+import { rowIsSelfOwnedByStructuralFk } from './miLinkChildIdentity'
 import {
   assignRowsPerBindingForSharedMetadataTid,
   claimedNumericSubTableSliceKeys,
@@ -157,8 +158,26 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
     }
 
     if (chunks.length === 0) continue
-    b.data = cloneSubTableRows(
-      mergeSubTableRowsByRowId(existing, chunks, b.primaryKeyFields ?? null),
+    /**
+     * `chunks` is gathered from every OTHER binding sharing this table_id (line ~119-127) — for a
+     * table read by several MI form bindings (Assign Task / Sub task / Main), those are snapshot
+     * copies unless a chunk row carries a structural self-reference FK (sub_task_id / … === its own
+     * PK), which only the binding that actually owns the row's writes ever stamps. Merge order is
+     * "later wins for non-empty fields", so: non-self-owned chunk rows merge in BEFORE `existing`
+     * (existing wins, preserving this function's original gap-filling behavior for thin/empty
+     * existing data); self-owned chunk rows merge in AFTER `existing` (they win, since they reflect
+     * the row's real current value even when `existing` already has non-empty fields for it).
+     */
+    const selfOwnedChunkRows = chunks.filter(
+      r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, b.primaryKeyFields ?? null),
     )
+    const restChunkRows = chunks.filter(
+      r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, b.primaryKeyFields ?? null)),
+    )
+    let mergedRows = mergeSubTableRowsByRowId(restChunkRows, existing, b.primaryKeyFields ?? null)
+    if (selfOwnedChunkRows.length > 0) {
+      mergedRows = mergeSubTableRowsByRowId(mergedRows, selfOwnedChunkRows, b.primaryKeyFields ?? null)
+    }
+    b.data = cloneSubTableRows(mergedRows)
   }
 }

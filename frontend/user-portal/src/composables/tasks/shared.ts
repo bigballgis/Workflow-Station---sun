@@ -76,6 +76,7 @@ export {
 export {
   miLinkChildRowBusinessFieldRank,
   resolveMiChildStructuralParentFk,
+  rowIsSelfOwnedByStructuralFk,
   repairMisassignedLinkChildStructuralFk,
   linkChildRowIsForeignParticipantPlaceholder,
   stripForeignParticipantIdIdwFromLinkChildRow,

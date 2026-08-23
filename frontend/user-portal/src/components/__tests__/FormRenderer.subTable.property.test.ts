@@ -388,12 +388,11 @@ describe('legacyBindingIdAliases', () => {
 })
 
 describe('resolveSubTableRowsForBinding — assignment sibling binding id', () => {
-  it('resolves rows from sibling binding id and table name when own key is missing', async () => {
+  it('resolves rows from a sibling binding id sharing the same table_id when own key is missing', async () => {
     const { resolveSubTableRowsForBinding } = await import('@/composables/tasks/shared')
     const rows64 = [{ id: 1, assignee: 'u1' }, { id: 2, assignee: 'u2' }]
     const saved = {
       '64': rows64,
-      'Sub Task': rows64,
     }
     const rtMap = new Map<number, number | null>([
       [64, 20],
@@ -407,17 +406,36 @@ describe('resolveSubTableRowsForBinding — assignment sibling binding id', () =
       columns: [{ field: 'assignee' }, { field: 'task_status' }],
     }
     const bySibling = resolveSubTableRowsForBinding(saved, binding, {
-      forbidNameFallback: true,
       bindingTableById: rtMap,
       mergeSiblingSlices: false,
     })
     expect(bySibling).toEqual(rows64)
+  })
 
-    const byName = resolveSubTableRowsForBinding(saved, binding, {
-      forbidNameFallback: false,
-      bindingTableById: rtMap,
+  /**
+   * Regression: a shared table-name string key (e.g. "Sub Task") is independently overwritten by
+   * each binding sharing the table on its own save — resolving by that key alone (with no table_id
+   * match) can silently serve a sibling binding's row instead of this binding's own data. There is
+   * no name-key fallback anymore: a binding with neither its own numeric key nor a resolvable
+   * same-table_id sibling key returns undefined rather than guessing via a shared string key.
+   */
+  it('does not resolve via a table-name string key when no bindingId/table_id match exists', async () => {
+    const { resolveSubTableRowsForBinding } = await import('@/composables/tasks/shared')
+    const rows64 = [{ id: 1, assignee: 'u1' }, { id: 2, assignee: 'u2' }]
+    const saved = {
+      'Sub Task': rows64,
+    }
+    const binding = {
+      bindingId: 66,
+      tableName: 'Sub Task',
+      physicalTableName: 'subtable',
+      tableId: 20,
+      columns: [{ field: 'assignee' }, { field: 'task_status' }],
+    }
+    const result = resolveSubTableRowsForBinding(saved, binding, {
+      bindingTableById: new Map(),
       mergeSiblingSlices: false,
     })
-    expect(byName).toEqual(rows64)
+    expect(result).toBeUndefined()
   })
 })

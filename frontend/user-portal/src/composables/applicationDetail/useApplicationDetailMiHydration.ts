@@ -5,7 +5,6 @@ import {
   subTableVariablesIncludeMiRows,
   dropSubsumedSubTableRows,
   coerceSubTablesVariableToMap,
-  collectSubTableSliceArraysDeep,
   cloneSubTableRows,
   applySharedAttachmentFinalizeAndMaterialize,
   isSharedAttachmentFileBinding,
@@ -17,6 +16,7 @@ import {
   filterRowsForMiCollectionSubTableBinding,
   collapseMiLinkChildRowsToOnePerParticipant,
   getSavedSubTableRows,
+  rowIsSelfOwnedByStructuralFk,
 } from '@/composables/tasks/shared'
 import {
   collectSubTableBindingMatchKeys,
@@ -36,6 +36,58 @@ export interface ApplicationDetailMiHydrationFns {
   hydrateMiLinkChildBindingsForInitiatorMyRequest: () => void
   resyncMiDashboardFieldsFromVariablesOnBindings: (all: SubTableBindingAlignable[]) => void
   backfillEmptySubTableBindingsFromVariables: () => void
+}
+
+/**
+ * Resolve saved rows for a binding that has no scoped slice of its own (e.g. a My Request REQUEST
+ * scene binding — it never writes __subTables__ under its own bindingId) by finding another
+ * binding sharing the SAME table_id whose slice IS present.
+ *
+ * This binding's own numeric __subTables__ key is always absent here (the "has no scoped data"
+ * check upstream already ruled that out), so this only needs to walk `savedMap`'s OTHER numeric
+ * keys and keep the ones `bindingTableById` maps to the same table_id — never a field-name/overlap
+ * guess across the whole process. Scanning by field-shape similarity previously let a completely
+ * unrelated relation table (different table_id, coincidentally same column names like `name` /
+ * `sub_task_id`) get selected as if it were this binding's own data.
+ *
+ * Among same-table_id candidates, prefer whichever carries a structural self-reference FK
+ * (sub_task_id / participant_id / … === its own PK) — that's only ever stamped by the binding whose
+ * form actually owns the row's writes; a binding that only holds an initialization-time copy never
+ * gets it. Falls back to the richest same-table_id candidate when none is self-owned.
+ */
+function resolveSameTableIdSliceForBinding(
+  binding: { bindingId?: number; tableId?: number | null; primaryKeyFields?: string[] },
+  savedMap: Record<string, unknown>,
+  bindingTableById: Map<number, number | null>,
+): any[] | null {
+  const selfTid =
+    binding.tableId != null && Number.isFinite(Number(binding.tableId))
+      ? Number(binding.tableId)
+      : (binding.bindingId != null ? bindingTableById.get(Number(binding.bindingId)) ?? null : null)
+  if (selfTid == null || !Number.isFinite(selfTid)) return null
+
+  let best: any[] | null = null
+  let bestIsSelfOwned = false
+  let bestLength = 0
+  for (const [key, val] of Object.entries(savedMap)) {
+    const kid = Number(key)
+    if (!Number.isFinite(kid) || kid === Number(binding.bindingId)) continue
+    if (!Array.isArray(val) || val.length === 0) continue
+    const otherTid = bindingTableById.get(kid)
+    if (otherTid == null || Number(otherTid) !== selfTid) continue
+    const isSelfOwned = val.some(
+      r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, binding.primaryKeyFields ?? null),
+    )
+    const better =
+      (isSelfOwned && !bestIsSelfOwned) ||
+      (isSelfOwned === bestIsSelfOwned && val.length > bestLength)
+    if (better) {
+      best = val as any[]
+      bestIsSelfOwned = isSelfOwned
+      bestLength = val.length
+    }
+  }
+  return best
 }
 
 export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): ApplicationDetailMiHydrationFns {
@@ -73,7 +125,6 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
     const savedMap = coerceSubTablesVariableToMap(formData.value.__subTables__)
     if (!savedMap || bindings.length === 0) return
     formData.value = { ...formData.value, __subTables__: savedMap }
-    const sliceArrays = collectSubTableSliceArraysDeep(savedMap)
 
     for (const b of bindings) {
       if (isSharedAttachmentFileBinding(b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null })) {
@@ -90,26 +141,9 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
         continue
       }
 
-      let best: any[] | null = null
-      let bestScore = 0
-      for (const val of sliceArrays) {
-        if (!Array.isArray(val) || val.length === 0) continue
-        const row0 = val[0]
-        if (!row0 || typeof row0 !== 'object') continue
-        const row0KeysLower = new Set(Object.keys(row0 as object).map(k => k.toLowerCase()))
-        let score = 0
-        for (const k of fieldKeys) {
-          if (row0KeysLower.has(k.toLowerCase())) score++
-        }
-        const threshold =
-          fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
-        if (score >= threshold && score > bestScore) {
-          bestScore = score
-          best = val as any[]
-        }
-      }
-      if (best) {
-        b.data = best.map((r: any) => (r && typeof r === 'object' ? { ...r } : r))
+      const found = resolveSameTableIdSliceForBinding(b, savedMap, lastBindingRelationTableMap.value)
+      if (found) {
+        b.data = found.map((r: any) => (r && typeof r === 'object' ? { ...r } : r))
       }
     }
   }
@@ -198,9 +232,27 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
       ) {
         const fromOwnSlice = bindingSaved ?? []
         if (fromOwnSlice.length === 0 && !(Array.isArray(b.data) && b.data.length > 0)) continue
+        /**
+         * fromOwnSlice (getSavedSubTableRowsFromVariables) already prefers self-owned rows among
+         * its OWN candidate keys, but b.data may independently already hold the correct value from
+         * an earlier hydration pass (e.g. hydrateChildSubTablesFromParentsNestedRows reading the
+         * clicked row's own nested __subTables__). Do not let fromOwnSlice unconditionally win here
+         * too — only its self-owned rows should override b.data; non-self-owned rows only fill gaps.
+         */
+        const existingData = Array.isArray(b.data) ? b.data : []
+        const ownFromSlice = fromOwnSlice.filter(
+          r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk),
+        )
+        const restFromSlice = fromOwnSlice.filter(
+          r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r as Record<string, unknown>, pk)),
+        )
+        let mergedRows = mergeSubTableRowsByRowId(restFromSlice, existingData, pk)
+        if (ownFromSlice.length > 0) {
+          mergedRows = mergeSubTableRowsByRowId(mergedRows, ownFromSlice, pk)
+        }
         b.data = dropSubsumedSubTableRows(
           filterRowsForMiCollectionSubTableBinding(
-            mergeSubTableRowsByRowId(Array.isArray(b.data) ? b.data : [], fromOwnSlice, pk),
+            mergedRows,
             b as { primaryKeyFields?: string[] | null; columns?: Array<{ field?: string }> | null },
           ),
         )
@@ -288,7 +340,6 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
     const savedMap = coerceSubTablesVariableToMap(formData.value.__subTables__)
     if (!savedMap) return
     formData.value = { ...formData.value, __subTables__: savedMap }
-    const sliceArrays = collectSubTableSliceArraysDeep(savedMap)
 
     const all = [
       ...subTableBindings.value,
@@ -311,26 +362,9 @@ export function createApplicationDetailMiHydration(ctx: ApplicationDetailCtx): A
         continue
       }
 
-      let best: any[] | null = null
-      let bestScore = 0
-      for (const val of sliceArrays) {
-        if (!Array.isArray(val) || val.length === 0) continue
-        const row0 = val[0]
-        if (!row0 || typeof row0 !== 'object') continue
-        const row0KeysLower = new Set(Object.keys(row0 as object).map(k => k.toLowerCase()))
-        let score = 0
-        for (const k of fieldKeys) {
-          if (row0KeysLower.has(k.toLowerCase())) score++
-        }
-        const threshold =
-          fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
-        if (score >= threshold && score > bestScore) {
-          bestScore = score
-          best = val as any[]
-        }
-      }
-      if (best) {
-        b.data = best.map((r: any) => (r && typeof r === 'object' ? { ...r } : r))
+      const found = resolveSameTableIdSliceForBinding(b, savedMap, lastBindingRelationTableMap.value)
+      if (found) {
+        b.data = found.map((r: any) => (r && typeof r === 'object' ? { ...r } : r))
       }
     }
   }

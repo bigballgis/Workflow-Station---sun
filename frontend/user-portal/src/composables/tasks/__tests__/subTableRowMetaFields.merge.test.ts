@@ -343,6 +343,69 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
     expect(bindings[1]!.data).toHaveLength(0)
   })
 
+  /**
+   * Regression: My Request "Sub task"'s Participants Details dialog showed a stale `name` even
+   * though the binding's own data (already correctly hydrated moments earlier by
+   * hydrateChildSubTablesFromParentsNestedRows, from the clicked row's own nested __subTables__)
+   * had the fresh value. Root cause: this function's "not multiPlacementSameTid" branch collects
+   * every OTHER same-table_id binding's raw slice into `chunks` with no self-ownership awareness,
+   * then merges `chunks` on top of `existing` (existing, chunks) — the peer's stale copy always won,
+   * clobbering the already-correct existing data. A chunk row is only trustworthy over existing when
+   * it carries a structural self-reference FK (sub_task_id === its own PK); a non-self-owned chunk
+   * row must still lose to non-empty existing data (that's this function's real gap-filling case).
+   */
+  it('existing data already correct is preserved when peer chunks are not self-owned, but a self-owned peer chunk still wins', () => {
+    const rtMap = new Map<number, number | null>([
+      [50539, 50331],
+      [50544, 50331],
+      [50617, 50331],
+    ])
+    const saved = {
+      50539: [{ id_idw: 'Test-000002', name: 'ss', main_id: 'Meeting-000001' }],
+      50544: [{ id_idw: 'Test-000002', name: 'ss', main_id: 'Meeting-000001', sub_task_id: 'Test-000002' }],
+    }
+    // Binding 50617 (REQUEST scene) has no own __subTables__ key, but hydrateChildSubTablesFromParentsNestedRows
+    // already correctly populated its `data` with the clicked row's own fresh nested value moments earlier.
+    const bindings = [
+      {
+        bindingId: 50617,
+        tableId: 50331,
+        tableName: 'Participants',
+        primaryKeyFields: ['id_idw'],
+        columns: [{ field: 'id_idw' }, { field: 'name' }, { field: 'main_id' }],
+        data: [{ id_idw: 'Test-000002', name: 'ssa', main_id: 'Meeting-000001' }],
+      },
+    ]
+    hydrateBindingsRowsFromVariablesBySharedRelationTableId(bindings as any, saved, rtMap)
+    const row = (bindings[0]!.data as any[]).find(r => r.id_idw === 'Test-000002')
+    // The self-owned peer (50544, stamped sub_task_id) still wins over existing when both diverge —
+    // it reflects the row's true current value, which in this fixture also happens to read "ss".
+    expect(row.name).toBe('ss')
+  })
+
+  it('existing data wins over a non-self-owned peer chunk when no peer is self-owned', () => {
+    const rtMap = new Map<number, number | null>([
+      [50539, 50331],
+      [50617, 50331],
+    ])
+    const saved = {
+      50539: [{ id_idw: 'Test-000002', name: 'ss', main_id: 'Meeting-000001' }],
+    }
+    const bindings = [
+      {
+        bindingId: 50617,
+        tableId: 50331,
+        tableName: 'Participants',
+        primaryKeyFields: ['id_idw'],
+        columns: [{ field: 'id_idw' }, { field: 'name' }, { field: 'main_id' }],
+        data: [{ id_idw: 'Test-000002', name: 'ssa', main_id: 'Meeting-000001' }],
+      },
+    ]
+    hydrateBindingsRowsFromVariablesBySharedRelationTableId(bindings as any, saved, rtMap)
+    const row = (bindings[0]!.data as any[]).find(r => r.id_idw === 'Test-000002')
+    expect(row.name).toBe('ssa')
+  })
+
   it('resolveSubTableRowsForBinding merges initiator slice 64 assignee into assignment binding 66', () => {
     const saved = {
       '64': [
@@ -383,6 +446,45 @@ describe('subTableRowMetaFields merge/materialize/hydrate', () => {
     expect(rows).toHaveLength(1)
     expect(rows![0].assignee).toEqual({ id: 'user-dev', display_name: 'Developer Tester' })
     expect(rows![0].assignee_display_name).toBe('Developer Tester')
+  })
+
+  /**
+   * Regression: To Do task detail's Participants "Name" field showed a stale value after the
+   * owning MI sub-task saved an edit. Assign Task (50539) / Sub task (50544) / Main (50627) all
+   * share the same Participants table_id; binding 50544's own slice (found first, by exact
+   * bindingId key) already carries the fresh `name` and a self-owning `sub_task_id` FK, but
+   * mergeSameTableIdNumericSlicesInto used to fold sibling slices (50539's stale copy) into it
+   * unconditionally — the later argument always wins for non-empty fields — clobbering the fresh
+   * value. The self-owned row must survive being merged with any number of stale siblings.
+   */
+  it('resolveSubTableRowsForBinding keeps the self-owned row\'s field over a stale sibling for the same PK', () => {
+    const saved = {
+      '50539': [{ id_idw: 'Test-000002', name: 'ss', main_id: 'Meeting-000001' }],
+      '50544': [{ id_idw: 'Test-000002', name: 'ssa', main_id: 'Meeting-000001', sub_task_id: 'Test-000002' }],
+      '50627': [{ id_idw: 'Test-000002', name: 'ss', main_id: 'Meeting-000001' }],
+    }
+    const rtMap = buildBindingIdToRelationTableIdMap([
+      {
+        tableBindings: [
+          { bindingId: 50539, tableId: 50331 },
+          { bindingId: 50544, tableId: 50331 },
+          { bindingId: 50627, tableId: 50331 },
+        ],
+      },
+    ])
+    const binding = {
+      bindingId: 50544,
+      tableId: 50331,
+      tableName: 'Participants',
+      primaryKeyFields: ['id_idw'],
+      columns: [{ field: 'id_idw' }, { field: 'name' }, { field: 'main_id' }],
+    }
+    const rows = resolveSubTableRowsForBinding(saved, binding, {
+      bindingTableById: rtMap,
+      mergeSiblingSlices: true,
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows![0].name).toBe('ssa')
   })
 
   it('finalizeSharedProcessSubTableBindingRows preserves assignee on MI dashboard bindings', () => {

@@ -134,4 +134,33 @@ describe('3-level nesting: grandchild rows never become parent rows', () => {
     hydrateChildSubTablesFromParentsNestedRows(bs as any, null, map)
     expect((bs[1]!.data as any[]).map(r => r.package_label)).toEqual(['P-9'])
   })
+
+  /**
+   * Regression: a nested slice whose key resolves to an unknown/null tableId (e.g. a RELATED lookup
+   * binding, or any binding this map has no entry for) must never be guessed as belonging to an
+   * unrelated sibling binding just because it's the only other numeric-keyed slice on the row. This
+   * previously fabricated a phantom row (no primary key, only whatever fields the stale slice held)
+   * in My Request's Participants grid, sourced from a Meeting Remark row nested under an unrelated
+   * RELATED (lookup) binding id.
+   */
+  it('a nested slice with unknown/null tableId is never guessed as belonging to an unrelated sibling', () => {
+    const rowWithUnattributableSlice = {
+      id_idw: 'ship-1',
+      shipment_name: 'S-9',
+      __subTables__: {
+        // '77000' has no entry in bindingTableById at all (unknown), '77001' has an entry but tableId=null
+        // (e.g. a RELATED/lookup binding) — neither should ever be adopted as nst_package's own rows.
+        '77000': [{ unrelated_field: 'x' }],
+        '77001': [{ another_unrelated_field: 'y' }],
+      },
+    }
+    const bs = [
+      { ...SHIP_BINDING, data: [rowWithUnattributableSlice], primaryKeyFields: ['id_idw'] },
+      { ...PKG_BINDING, data: [] as any[], primaryKeyFields: ['id_idw'] },
+    ]
+    const map = new Map<number, number | null>([[77001, null]])
+    hydrateChildSubTablesFromParentsNestedRows(bs as any, null, map)
+    const pkg = bs.find(b => b.bindingId === 50114)!
+    expect(pkg.data).toEqual([])
+  })
 })

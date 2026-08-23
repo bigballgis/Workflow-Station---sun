@@ -4,10 +4,10 @@
  */
 
 import { legacyBindingIdAliases } from '@/components/formRendererHelpers'
-import { normalizeSubTableName } from './subTableCore'
 import { mergeSubTableRowsByRowId } from './subTableRowMerge'
 import { isMiDashboardSubTableBinding } from './subTableBindingKinds'
 import { mergeAllSlicesForSharedProcessSubTableBinding } from './subTableSliceMerge'
+import { rowIsSelfOwnedByStructuralFk } from './miLinkChildIdentity'
 
 /**
  * Resolve saved rows for a binding — tolerates sibling binding-id keys and display/physical table names.
@@ -24,7 +24,6 @@ type ResolveSubTableRowsBinding = {
 }
 
 type ResolveSubTableRowsOpts = {
-  forbidNameFallback?: boolean
   bindingTableById?: Map<number, number | null>
   mergeSiblingSlices?: boolean
 }
@@ -40,32 +39,26 @@ function enrichMiDashboardResolvedRows(
   opts?: ResolveSubTableRowsOpts,
 ): any[] {
   // Always merge initiator / sibling binding-id slices for MI collection grids.
-  // {@link forbidNameFallback} only disables table-name slice keys — not numeric id union.
   if (!isMiDashboardSubTableBinding(binding)) return rows
   if (opts?.mergeSiblingSlices === false) return rows
   const rtMap = opts?.bindingTableById ?? new Map<number, number | null>()
   const allSlices = mergeAllSlicesForSharedProcessSubTableBinding(savedSubTables, binding, rtMap)
-  return mergeSubTableRowsByRowId(rows, allSlices, binding.primaryKeyFields ?? null)
-}
-
-function mergeTableNameSlicesInto(
-  rows: any[],
-  savedSubTables: Record<string, unknown>,
-  binding: ResolveSubTableRowsBinding,
-): any[] {
-  const seen = new Set<unknown>([rows])
-  let merged = rows
-  const nameKeys = [
-    binding.tableName,
-    binding.physicalTableName,
-    binding.tableName ? normalizeSubTableName(binding.tableName) : '',
-    binding.physicalTableName ? normalizeSubTableName(binding.physicalTableName) : '',
-  ].filter((k): k is string => typeof k === 'string' && k.trim().length > 0)
-  for (const key of nameKeys) {
-    const extra = savedSubTables[key] ?? savedSubTables[String(key)]
-    if (!Array.isArray(extra) || extra.length === 0 || seen.has(extra)) continue
-    seen.add(extra)
-    merged = mergeSubTableRowsByRowId(merged, extra as any[], binding.primaryKeyFields ?? null)
+  let merged = mergeSubTableRowsByRowId(rows, allSlices, binding.primaryKeyFields ?? null)
+  /**
+   * mergeAllSlicesForSharedProcessSubTableBinding ingests this binding's own slice first, then
+   * every sibling sharing the same table_id, so a stale sibling copy can win the field-level merge
+   * for a row this binding's own form actually owns (structural self-reference FK stamped by a
+   * genuine save). Re-apply this binding's own self-owned rows last so they always win regardless
+   * of how the internal ingestion order treated them.
+   */
+  const ownSlice = savedSubTables[binding.bindingId] ?? savedSubTables[String(binding.bindingId)]
+  if (Array.isArray(ownSlice) && ownSlice.length > 0) {
+    const ownSelfOwnedRows = ownSlice.filter(
+      (r: any) => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields),
+    )
+    if (ownSelfOwnedRows.length > 0) {
+      merged = mergeSubTableRowsByRowId(merged, ownSelfOwnedRows, binding.primaryKeyFields ?? null)
+    }
   }
   return merged
 }
@@ -84,7 +77,21 @@ function mergeSameTableIdNumericSlicesInto(
   if (selfTid == null || !Number.isFinite(Number(selfTid))) return rows
   const tid = Number(selfTid)
   const seen = new Set<unknown>([rows])
-  let merged = rows
+  /**
+   * `rows` is this binding's OWN slice (found by exact bindingId key above) — for a shared MI
+   * table (Assign Task / Sub task / Main all reading the same Participants table), this binding
+   * may be the one whose form actually owns a given row's writes, stamped by a structural
+   * self-reference FK (sub_task_id === the row's own PK). Sibling slices pulled in below can hold
+   * only an initialization-time copy of that same row. mergeSubTableRowsByRowId's contract is
+   * "later argument wins for non-empty fields", so merging sibling data straight into `rows` let a
+   * stale peer silently overwrite this binding's own current edit (e.g. To Do task detail showing
+   * an old `name` after the owning sub-task saved a new one). Split `rows` into self-owned vs. not:
+   * self-owned rows merge in LAST (after every sibling) so they always win; the rest keep the
+   * original fold-in-order behavior.
+   */
+  const ownRows = rows.filter(r => r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields))
+  const restRows = rows.filter(r => !(r && typeof r === 'object' && rowIsSelfOwnedByStructuralFk(r, binding.primaryKeyFields)))
+  let merged = restRows
   for (const [bid, mapped] of rtMap.entries()) {
     if (legacyBindingIdAliases(binding.bindingId).includes(Number(bid))) continue
     if (mapped == null || Number(mapped) !== tid) continue
@@ -94,6 +101,9 @@ function mergeSameTableIdNumericSlicesInto(
       seen.add(extra)
       merged = mergeSubTableRowsByRowId(merged, extra as any[], binding.primaryKeyFields ?? null)
     }
+  }
+  if (ownRows.length > 0) {
+    merged = mergeSubTableRowsByRowId(merged, ownRows, binding.primaryKeyFields ?? null)
   }
   return merged
 }
@@ -111,18 +121,14 @@ export function resolveSubTableRowsForBinding(
   }
 
   const finish = (found: any[]): any[] => {
-    // Overlay same-table-id sibling slices (leftover binding ids), then the
-    // table-name alias last so form-below-table Save (Y) wins on reopen.
-    // Own-slice-last would hide sibling Y when the current key is a leftover N.
-    let merged = mergeSameTableIdNumericSlicesInto(
+    // Overlay same-table-id sibling slices (leftover binding ids) — never a table-name string key,
+    // which several bindings sharing one logical table each overwrite independently on save.
+    const merged = mergeSameTableIdNumericSlicesInto(
       found,
       savedSubTables,
       binding,
       opts?.bindingTableById,
     )
-    if (!opts?.forbidNameFallback) {
-      merged = mergeTableNameSlicesInto(merged, savedSubTables, binding)
-    }
     return enrichMiDashboardResolvedRows(merged, savedSubTables, binding, opts)
   }
 
@@ -130,19 +136,6 @@ export function resolveSubTableRowsForBinding(
   for (const alias of legacyBindingIdAliases(binding.bindingId)) {
     rows = tryKey(alias)
     if (rows) return finish(rows)
-  }
-
-  if (!opts?.forbidNameFallback) {
-    const nameKeys = [
-      binding.tableName,
-      binding.physicalTableName,
-      binding.tableName ? normalizeSubTableName(binding.tableName) : '',
-      binding.physicalTableName ? normalizeSubTableName(binding.physicalTableName) : '',
-    ].filter((k): k is string => typeof k === 'string' && k.trim().length > 0)
-    for (const key of nameKeys) {
-      rows = tryKey(key)
-      if (rows) return enrichMiDashboardResolvedRows(rows, savedSubTables, binding, opts)
-    }
   }
 
   const selfTid =
@@ -241,6 +234,13 @@ export function resolveSubTablePrimaryKeyFields(
   return undefined
 }
 
+/**
+ * `forbidNameFallback` param kept for call-site source compatibility (many callers pass
+ * `ambiguous.has(binding.bindingId)` positionally) but is now UNUSED — there is no table-name
+ * string-key fallback left to forbid; resolveSubTableRowsForBinding only ever resolves by exact
+ * bindingId or by table_id against other bindings, never by a shared display-name key that
+ * multiple bindings sharing one logical table would otherwise stomp on independently.
+ */
 export function getSavedSubTableRows(
   subTables: Record<string, any>,
   binding: {
@@ -251,11 +251,10 @@ export function getSavedSubTableRows(
     primaryKeyFields?: string[] | null
     columns?: Array<{ field?: string }> | null
   },
-  forbidNameFallback = false,
+  _forbidNameFallback = false,
   bindingTableById?: Map<number, number | null>,
 ): any[] | undefined {
   return resolveSubTableRowsForBinding(subTables, binding, {
-    forbidNameFallback,
     bindingTableById,
     mergeSiblingSlices: isMiDashboardSubTableBinding(binding),
   })
