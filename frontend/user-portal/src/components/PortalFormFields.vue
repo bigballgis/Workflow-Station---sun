@@ -332,6 +332,7 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :readonly="inlineSubForm.inlineSubFormReadonly(field)"
         hide-save-button
         framed
+        :bordered="false"
         :sub-table-bindings="subTableBindings"
         :linked-sub-table-bindings="linkedSubTableBindings ?? subTableBindings"
         :host-table-id="resolveBinding(field._bindingId)?.tableId ?? null"

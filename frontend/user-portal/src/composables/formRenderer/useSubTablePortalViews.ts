@@ -21,9 +21,9 @@ interface PortalViewsDeps {
 export function useSubTablePortalViews(deps: PortalViewsDeps) {
   const { resolveBinding } = deps
 
-  /** Compact cells: no inline lookup / user-snapshot detail block inside a cell. */
+  /** Compact cells: no inline lookup / user-snapshot detail block inside a cell. Default compact — designers opt into the expanded backfill view explicitly. */
   function subTableCompactLookupCells(field: FormField): boolean {
-    return field.compactCells === true
+    return field.compactCells !== false
   }
 
   /**

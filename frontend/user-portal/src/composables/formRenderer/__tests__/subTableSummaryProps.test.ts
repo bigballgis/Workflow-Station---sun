@@ -18,10 +18,11 @@ const subTable = (extra: Partial<FormField> = {}): FormField => ({
 }) as FormField
 
 describe('sub-table summary presentation via canvas props', () => {
-  it('compactCells collapses cell detail', () => {
+  it('defaults to compact; only an explicit compactCells: false expands cell detail', () => {
     const { subTableCompactLookupCells } = makeComposable()
 
     expect(subTableCompactLookupCells(subTable({ compactCells: true }))).toBe(true)
-    expect(subTableCompactLookupCells(subTable())).toBe(false)
+    expect(subTableCompactLookupCells(subTable())).toBe(true)
+    expect(subTableCompactLookupCells(subTable({ compactCells: false }))).toBe(false)
   })
 })

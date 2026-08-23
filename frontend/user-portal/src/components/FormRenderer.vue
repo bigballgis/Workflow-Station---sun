@@ -722,6 +722,9 @@ defineExpose({
     font-weight: 500;
     white-space: nowrap;
     padding-right: 16px;
+    height: auto;
+    line-height: 1.5;
+    padding-top: 6px;
   }
 
   /* Form item content in flex layout must be shrinkable and fill remaining width so dropdowns/date pickers render at 100% */

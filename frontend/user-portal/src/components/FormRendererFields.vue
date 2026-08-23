@@ -403,6 +403,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :label-position="ctx.labelPosition"
           hide-save-button
           framed
+          :bordered="false"
           :sub-table-bindings="ctx.subTableBindings as any[]"
           :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
           :host-table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"
@@ -430,6 +431,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :label-position="ctx.labelPosition"
           hide-save-button
           framed
+          :bordered="false"
           :sub-table-bindings="ctx.subTableBindings as any[]"
           :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
           :host-table-id="(ctx.resolveBinding(field._bindingId)?.tableId ?? null) as number | null"

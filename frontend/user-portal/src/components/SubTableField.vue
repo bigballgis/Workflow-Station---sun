@@ -201,7 +201,7 @@
                   </div>
                 </div>
                 <div
-                  v-if="!compactLookupCells && userSnapshotViewFieldsFromRow(scope.row[col.field]).length > 0"
+                  v-if="shouldShowLookupBackfill(col) && userSnapshotViewFieldsFromRow(scope.row[col.field]).length > 0"
                   class="lookup-view-display"
                 >
                   <el-descriptions
