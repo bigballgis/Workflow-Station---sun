@@ -45,6 +45,10 @@ const isStaleSelection = computed(() => {
   return !subBindings.value.some((b) => b.id === id)
 })
 
+// Binding ID / script hide key are internal debug info for developers reading event-script
+// source; not useful in the property panel for everyday form design, so keep them out of the UI.
+const showBindingIdPanel = false
+
 // Use module-level store instead of inject — fc-designer registers this component in its own
 // Vue app context, so provide/inject from FormDesigner doesn't reach here.
 function goToDesigner() {
@@ -103,7 +107,7 @@ async function copyText(text: string): Promise<void> {
       @click.prevent="goToDesigner"
     >{{ t('form.subTableGoToDesigner') }}</a>
     <div
-      v-if="normalizedModelValue != null && scriptHideKey"
+      v-if="showBindingIdPanel && normalizedModelValue != null && scriptHideKey"
       class="binding-id-panel"
     >
       <div class="binding-id-row">

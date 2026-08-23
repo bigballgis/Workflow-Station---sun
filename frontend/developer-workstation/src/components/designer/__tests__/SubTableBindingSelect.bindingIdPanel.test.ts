@@ -52,13 +52,9 @@ function mountSelect(modelValue: number | null) {
 }
 
 describe('SubTableBindingSelect binding ID panel', () => {
-  it('shows Binding ID and __subTable_* hide key when bound', () => {
+  it('stays hidden from the property panel UI when bound', () => {
     const wrapper = mountSelect(271)
-    expect(wrapper.find('.binding-id-panel').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Binding ID')
-    expect(wrapper.text()).toContain('271')
-    expect(wrapper.text()).toContain('__subTable_271')
-    expect(wrapper.text()).toContain('Script hide key')
+    expect(wrapper.find('.binding-id-panel').exists()).toBe(false)
   })
 
   it('hides binding ID panel when unbound', () => {
