@@ -192,7 +192,8 @@ public class AdminAuditAspect {
     }
 
     @Around("within(com.admin.controller.AutomationPieceController) "
-            + "&& !execution(* *.listPieces(..))")
+            + "&& !execution(* *.listPieces(..)) "
+            + "&& !execution(* *.queryPieces(..))")
     public Object auditAutomationPiece(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "AUTOMATION_PIECE");
     }

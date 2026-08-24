@@ -16,7 +16,7 @@ import java.util.List;
  * 未来经在线安装面投放的件(P2)。</p>
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class AutomationPieceSummary {
@@ -45,4 +45,6 @@ public class AutomationPieceSummary {
     private int projectUsage;
     private OffsetDateTime created;
     private OffsetDateTime updated;
+    /** All versions of this package (list-query only; used by the version switcher). */
+    private List<AutomationPieceSummary> versions;
 }

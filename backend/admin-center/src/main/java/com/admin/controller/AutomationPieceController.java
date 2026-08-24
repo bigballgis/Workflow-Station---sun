@@ -1,5 +1,8 @@
 package com.admin.controller;
 
+import com.admin.component.AutomationPieceListQueryComponent;
+import com.admin.dto.list.AdminListPage;
+import com.admin.dto.request.AutomationPieceListQueryRequest;
 import com.admin.dto.response.AutomationPieceSummary;
 import com.admin.service.AutomationPieceService;
 import com.platform.common.dto.ApiResponse;
@@ -12,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +43,7 @@ public class AutomationPieceController {
     private static final String SYSTEM_ADMIN_PERMISSION = "system:admin";
 
     private final AutomationPieceService automationPieceService;
+    private final AutomationPieceListQueryComponent pieceListQueryComponent;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<AutomationPieceSummary>>> listPieces() {
@@ -46,6 +51,15 @@ public class AutomationPieceController {
             return forbidden();
         }
         return ResponseEntity.ok(ApiResponse.success(automationPieceService.listPieces()));
+    }
+
+    @PostMapping("/query")
+    public ResponseEntity<ApiResponse<AdminListPage<AutomationPieceSummary>>> queryPieces(
+            @RequestBody AutomationPieceListQueryRequest request) {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        return ResponseEntity.ok(ApiResponse.success(pieceListQueryComponent.query(request)));
     }
 
     @GetMapping("/export")

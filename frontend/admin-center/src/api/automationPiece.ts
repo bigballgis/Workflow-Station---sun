@@ -1,4 +1,6 @@
 import { del, get, post } from './request'
+import type { AdminListPage } from '@/types/common'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 /** 后端 ApiResponse 包装(与 LdapSync 等接口同构) */
 interface ApiEnvelope<T> {
@@ -30,11 +32,25 @@ export interface AutomationPieceSummary {
   projectUsage: number
   created: string
   updated: string
+  versions?: AutomationPieceSummary[]
+}
+
+export interface AutomationPieceListQuery {
+  page: number
+  size: number
+  keyword?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
 }
 
 export const automationPieceApi = {
   /** 目录列表(含同名多版本) */
   list: () => get<ApiEnvelope<AutomationPieceSummary[]>>('/automation/pieces'),
+
+  query: (body: AutomationPieceListQuery) =>
+    post<ApiEnvelope<AdminListPage<AutomationPieceSummary>>>('/automation/pieces/query', body),
 
   /** 导出:烘焙件 → 元数据 JSON;ARCHIVE 件 → zip(元数据 + 运行时 tgz) */
   exportPiece: (name: string, version: string) =>
