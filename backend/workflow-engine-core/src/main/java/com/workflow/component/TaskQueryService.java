@@ -180,68 +180,36 @@ public class TaskQueryService {
         try {
             validateUserId(userId);
             EngineTaskListCriteria safe = criteria != null ? criteria : EngineTaskListCriteria.empty();
+            int safePage = Math.max(page, 0);
+            int safeSize = Math.max(size, 1);
 
-            int fetchLimit = (page + 1) * size;
-            taskOrphanRepairService.maybeRepairOrphanTasks(fetchLimit);
-
-            List<Task> assignedTasks = applyListCriteria(
-                    taskService.createTaskQuery().taskAssignee(userId), safe)
-                    .listPage(0, fetchLimit);
-
-            List<Task> candidateTasks = applyListCriteria(
-                    taskService.createTaskQuery().taskCandidateUser(userId), safe)
-                    .listPage(0, fetchLimit);
-
-            LinkedHashMap<String, Task> taskMap = new LinkedHashMap<>();
-            for (Task t : assignedTasks) taskMap.putIfAbsent(t.getId(), t);
-            for (Task t : candidateTasks) taskMap.putIfAbsent(t.getId(), t);
-
-            if (groupIds != null && !groupIds.isEmpty()) {
-                List<Task> groupTasks = applyListCriteria(
-                        taskService.createTaskQuery().taskCandidateGroupIn(groupIds), safe)
-                        .listPage(0, fetchLimit);
-                for (Task t : groupTasks) taskMap.putIfAbsent(t.getId(), t);
-            }
-            taskOrphanRepairService.mergeOrphanInitiatorTasksRepair(userId, fetchLimit, taskMap);
-
-            List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
-            sortTasks(uniqueTasks, safe);
-            uniqueTasks = taskOrphanRepairService.applyActiveWorkspaceBuTaskFilter(
-                    uniqueTasks, activeBusinessUnitId, userId);
-
-            long totalCount;
-            if (uniqueTasks.size() < fetchLimit) {
-                totalCount = uniqueTasks.size();
-            } else {
-                long assignedCount = applyListCriteria(
-                        taskService.createTaskQuery().taskAssignee(userId), safe).count();
-                long candidateCount = applyListCriteria(
-                        taskService.createTaskQuery().taskCandidateUser(userId), safe).count();
-                totalCount = assignedCount + candidateCount;
-                if (groupIds != null && !groupIds.isEmpty()) {
-                    totalCount += applyListCriteria(
-                            taskService.createTaskQuery().taskCandidateGroupIn(groupIds), safe).count();
-                }
+            // Repair orphans in place first so the unified OR query can see them as assignee.
+            taskOrphanRepairService.maybeRepairOrphanTasks((safePage + 1) * safeSize);
+            if (!safe.hasFilterFragments()) {
+                LinkedHashMap<String, Task> repairSink = new LinkedHashMap<>();
+                taskOrphanRepairService.mergeOrphanInitiatorTasksRepair(
+                        userId, (safePage + 1) * safeSize, repairSink);
             }
 
-            int start = page * size;
-            int end = Math.min(start + size, uniqueTasks.size());
-            List<Task> pagedTasks = start < uniqueTasks.size()
-                ? uniqueTasks.subList(start, end)
-                : Collections.emptyList();
+            TaskQuery visibility = buildVisibleTaskQuery(userId, groupIds, safe);
+            long totalCount = visibility.count();
+            List<Task> pagedTasks = buildVisibleTaskQuery(userId, groupIds, safe)
+                    .listPage(safePage * safeSize, safeSize);
+            pagedTasks = taskOrphanRepairService.applyActiveWorkspaceBuTaskFilter(
+                    pagedTasks, activeBusinessUnitId, userId);
 
             Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
             List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
                 .map(t -> taskInfoAssembler.convertFlowableTaskToTaskInfo(t, startUsers))
                 .toList();
 
-            int totalPages = (int) Math.ceil((double) totalCount / size);
+            int totalPages = (int) Math.ceil((double) totalCount / safeSize);
 
             return TaskListResult.builder()
                 .tasks(taskInfos)
                 .totalCount(totalCount)
-                .currentPage(page)
-                .pageSize(size)
+                .currentPage(safePage)
+                .pageSize(safeSize)
                 .totalPages(totalPages)
                 .build();
 
@@ -251,9 +219,23 @@ public class TaskQueryService {
         }
     }
 
-    private static TaskQuery applyListCriteria(TaskQuery query, EngineTaskListCriteria criteria) {
+    private TaskQuery buildVisibleTaskQuery(
+            String userId, List<String> groupIds, EngineTaskListCriteria safe) {
+        TaskQuery visibility = taskService.createTaskQuery().active().or()
+                .taskAssignee(userId)
+                .taskCandidateUser(userId);
+        if (groupIds != null && !groupIds.isEmpty()) {
+            visibility = visibility.taskCandidateGroupIn(groupIds);
+        }
+        visibility = visibility.endOr();
+        visibility = applyListFilters(visibility, safe);
+        return applyOrder(visibility, safe.sortBy(), safe.sortDirection());
+    }
+
+    /** Apply pushdown filters only (ordering applied separately). */
+    private static TaskQuery applyListFilters(TaskQuery query, EngineTaskListCriteria criteria) {
         if (criteria == null) {
-            return query.orderByTaskCreateTime().desc();
+            return query;
         }
         if (criteria.taskNameExact() != null && !criteria.taskNameExact().isBlank()) {
             query = query.taskName(criteria.taskNameExact().trim());
@@ -269,10 +251,43 @@ public class TaskQueryService {
             };
             query = query.taskNameLikeIgnoreCase(like);
         }
+        if (criteria.processDefinitionNameExact() != null && !criteria.processDefinitionNameExact().isBlank()) {
+            query = query.processDefinitionName(criteria.processDefinitionNameExact().trim());
+        } else if (criteria.processDefinitionNameLike() != null
+                && !criteria.processDefinitionNameLike().isBlank()) {
+            query = query.processDefinitionNameLike(
+                    "%" + criteria.processDefinitionNameLike().trim() + "%");
+        }
         if (criteria.priority() != null) {
             query = query.taskPriority(criteria.priority());
         }
-        return applyOrder(query, criteria.sortBy(), criteria.sortDirection());
+        if (criteria.priorityMin() != null) {
+            query = query.taskMinPriority(criteria.priorityMin());
+        }
+        if (criteria.priorityMax() != null) {
+            query = query.taskMaxPriority(criteria.priorityMax());
+        }
+        if (criteria.createdAfter() != null) {
+            query = query.taskCreatedAfter(criteria.createdAfter());
+        }
+        if (criteria.createdBefore() != null) {
+            query = query.taskCreatedBefore(criteria.createdBefore());
+        }
+        if (criteria.dueAfter() != null) {
+            query = query.taskDueAfter(criteria.dueAfter());
+        }
+        if (criteria.dueBefore() != null) {
+            query = query.taskDueBefore(criteria.dueBefore());
+        }
+        return query;
+    }
+
+    /** @deprecated kept for older call sites that expect filter+order together */
+    private static TaskQuery applyListCriteria(TaskQuery query, EngineTaskListCriteria criteria) {
+        if (criteria == null) {
+            return query.orderByTaskCreateTime().desc();
+        }
+        return applyOrder(applyListFilters(query, criteria), criteria.sortBy(), criteria.sortDirection());
     }
 
     private static TaskQuery applyOrder(TaskQuery query, String sortBy, String sortDirection) {

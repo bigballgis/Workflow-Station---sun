@@ -145,6 +145,33 @@ public class WorkflowEngineTaskClient {
                 if (criteria.priority() != null) {
                     ub.queryParam("priority", criteria.priority());
                 }
+                if (criteria.priorityMin() != null) {
+                    ub.queryParam("priorityMin", criteria.priorityMin());
+                }
+                if (criteria.priorityMax() != null
+                        && criteria.priorityMax() < Integer.MAX_VALUE) {
+                    ub.queryParam("priorityMax", criteria.priorityMax());
+                }
+                if (criteria.createdAfter() != null) {
+                    ub.queryParam("createdAfter", criteria.createdAfter().getTime());
+                }
+                if (criteria.createdBefore() != null) {
+                    ub.queryParam("createdBefore", criteria.createdBefore().getTime());
+                }
+                if (criteria.dueAfter() != null) {
+                    ub.queryParam("dueAfter", criteria.dueAfter().getTime());
+                }
+                if (criteria.dueBefore() != null) {
+                    ub.queryParam("dueBefore", criteria.dueBefore().getTime());
+                }
+                if (criteria.processDefinitionNameLike() != null
+                        && !criteria.processDefinitionNameLike().isBlank()) {
+                    ub.queryParam("processDefinitionNameLike", criteria.processDefinitionNameLike());
+                }
+                if (criteria.processDefinitionNameExact() != null
+                        && !criteria.processDefinitionNameExact().isBlank()) {
+                    ub.queryParam("processDefinitionNameExact", criteria.processDefinitionNameExact());
+                }
                 if (criteria.sortBy() != null && !criteria.sortBy().isBlank()) {
                     ub.queryParam("sortBy", criteria.sortBy());
                 }

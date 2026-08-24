@@ -55,10 +55,31 @@ class EngineTaskPushdownTest {
     }
 
     @Test
-    void initiatorFilterIsNotPushable() {
+    void processNameAndPriorityAndDateArePushableTogether() {
         TaskQueryRequest request = TaskQueryRequest.builder()
-                .filters(List.of(new ListColumnFilter("initiatorName", "contains", "Ada", null)))
+                .filters(List.of(
+                        new ListColumnFilter("processDefinitionName", "contains", "Leave", null),
+                        new ListColumnFilter("priority", "eq", "HIGH", null),
+                        new ListColumnFilter("createTime", "today", null, null)))
+                .sortBy("dueDate")
+                .sortDirection("asc")
                 .build();
-        assertFalse(EngineTaskPushdown.canFullyPush(request));
+        assertTrue(EngineTaskPushdown.canFullyPush(request));
+        EngineTaskPushdown.Criteria criteria = EngineTaskPushdown.from(request);
+        assertEquals("Leave", criteria.processDefinitionNameLike());
+        assertEquals(50, criteria.priorityMin());
+        assertEquals(74, criteria.priorityMax());
+        assertTrue(criteria.createdAfter() != null);
+        assertTrue(criteria.createdBefore() != null);
+        assertEquals("dueDate", criteria.sortBy());
+    }
+
+    @Test
+    void currentStepNamePushesAsTaskName() {
+        TaskQueryRequest request = TaskQueryRequest.builder()
+                .filters(List.of(new ListColumnFilter("currentStepName", "contains", "Review", null)))
+                .build();
+        assertTrue(EngineTaskPushdown.canFullyPush(request));
+        assertEquals("Review", EngineTaskPushdown.from(request).taskNameLike());
     }
 }

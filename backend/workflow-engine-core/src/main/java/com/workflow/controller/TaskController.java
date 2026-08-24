@@ -93,6 +93,22 @@ public class TaskController {
             @RequestParam(value = "taskNameExact", required = false) String taskNameExact,
             @Parameter(description = "Optional Flowable priority")
             @RequestParam(value = "priority", required = false) Integer priority,
+            @Parameter(description = "Optional Flowable priority lower bound (inclusive)")
+            @RequestParam(value = "priorityMin", required = false) Integer priorityMin,
+            @Parameter(description = "Optional Flowable priority upper bound (inclusive)")
+            @RequestParam(value = "priorityMax", required = false) Integer priorityMax,
+            @Parameter(description = "Optional created-after (epoch millis)")
+            @RequestParam(value = "createdAfter", required = false) Long createdAfter,
+            @Parameter(description = "Optional created-before (epoch millis)")
+            @RequestParam(value = "createdBefore", required = false) Long createdBefore,
+            @Parameter(description = "Optional due-after (epoch millis)")
+            @RequestParam(value = "dueAfter", required = false) Long dueAfter,
+            @Parameter(description = "Optional due-before (epoch millis)")
+            @RequestParam(value = "dueBefore", required = false) Long dueBefore,
+            @Parameter(description = "Optional process definition name LIKE fragment (no %)")
+            @RequestParam(value = "processDefinitionNameLike", required = false) String processDefinitionNameLike,
+            @Parameter(description = "Optional process definition name exact")
+            @RequestParam(value = "processDefinitionNameExact", required = false) String processDefinitionNameExact,
             @Parameter(description = "Optional sort field pushed from portal")
             @RequestParam(value = "sortBy", required = false) String sortBy,
             @Parameter(description = "Optional sort direction pushed from portal")
@@ -142,7 +158,20 @@ public class TaskController {
             List<String> droles = deptRoles != null ? deptRoles : Collections.emptyList();
             com.workflow.dto.request.EngineTaskListCriteria criteria =
                     new com.workflow.dto.request.EngineTaskListCriteria(
-                            taskNameLike, taskNameExact, taskNameLikeMode, priority, sortBy, sortDirection);
+                            taskNameLike,
+                            taskNameExact,
+                            taskNameLikeMode,
+                            priority,
+                            priorityMin,
+                            priorityMax,
+                            createdAfter != null ? new java.util.Date(createdAfter) : null,
+                            createdBefore != null ? new java.util.Date(createdBefore) : null,
+                            dueAfter != null ? new java.util.Date(dueAfter) : null,
+                            dueBefore != null ? new java.util.Date(dueBefore) : null,
+                            processDefinitionNameLike,
+                            processDefinitionNameExact,
+                            sortBy,
+                            sortDirection);
             result = taskManagerComponent.getUserAllVisibleTasks(userId, gids, droles, page, pageSize,
                     activeBusinessUnitId, criteria);
         }
