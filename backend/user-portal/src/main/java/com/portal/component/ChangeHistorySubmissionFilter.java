@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,8 +31,7 @@ import java.util.Set;
 public class ChangeHistorySubmissionFilter {
     /** Row-identity field names preserved through any field-level filtering so row matching on
      *  subsequent saves keeps working even when the identity field itself is not user-editable. */
-    public static final List<String> ROW_IDENTITY_FIELDS = List.of(
-            "row_id", "rowId", "rowID", "id_idw", "_rowKey", "rowKey", "id");
+    public static final List<String> ROW_IDENTITY_FIELDS = SubTableRowIdentity.IDENTITY_FIELDS;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
@@ -193,7 +193,7 @@ public class ChangeHistorySubmissionFilter {
                 continue;
             int priority = aliasPriority(rawKey, aliases);
             Integer bestPriority = bestPriorityByBinding.putIfAbsent(bindingId, priority);
-            if (bestPriority != null && priority > bestPriority)
+            if (bestPriority != null && priority >= bestPriority)
                 continue;
             List<?> enrichedRows = findRows(enrichedTables, rawKey, bindingId, aliases);
             List<Map<String, Object>> filteredRows = new ArrayList<>();
@@ -403,6 +403,19 @@ public class ChangeHistorySubmissionFilter {
         }
     }
 
+    private void collectConfiguredFields(Object rulesValue, Set<String> fields) {
+        if (!(rulesValue instanceof List<?> rules))
+            return;
+        for (Object ruleValue : rules) {
+            if (!(ruleValue instanceof Map<?, ?> rule))
+                continue;
+            String field = stringValue(rule.get("field"));
+            if (field != null)
+                fields.add(field);
+            collectConfiguredFields(rule.get("children"), fields);
+        }
+    }
+
     private boolean isRuleContainerEditable(Map<?, ?> rule) {
         if (truthy(rule.get("readonly")) || truthy(rule.get("disabled")) || truthy(rule.get("hidden"))) {
             return false;
@@ -448,6 +461,7 @@ public class ChangeHistorySubmissionFilter {
         priorities.putIfAbsent(normalized, priority);
     }
 
+    /** TASK-scene PROCESS form only — REQUEST (My Request) clones are display-only. */
     private Map<String, Object> loadProcessFormDefinition(String functionUnitCode) {
         if (functionUnitCode == null || functionUnitCode.isBlank())
             return Map.of();
@@ -457,9 +471,41 @@ public class ChangeHistorySubmissionFilter {
                             fd.field_permissions::text AS field_permissions
                         FROM dw_form_definitions fd
                         INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                        WHERE fu.code = ? AND fd.form_type = 'PROCESS'
+                        WHERE fu.code = ? AND fd.form_type = 'PROCESS' AND fd.scene = 'TASK'
                         ORDER BY fd.id DESC LIMIT 1
                         """, functionUnitCode.trim());
+    }
+
+    /**
+     * Form Change History uses for a task stage: BPMN {@code formId} first, then
+     * {@code dw_form_stage_bindings}. Snapshot capture uses this same resolution.
+     */
+    public Map<String, Object> resolveTaskFormDefinition(String processInstanceId, String stageId) {
+        return loadTaskFormDefinition(processInstanceId, stageId);
+    }
+
+    /**
+     * Main-table field names to freeze in a completed-task snapshot: permission keys
+     * plus every {@code field} on the form config (including readonly). Composite
+     * {@code bindingId:field} keys stay out — those belong to {@code __subTables__}.
+     */
+    public Set<String> snapshotFieldKeys(String processInstanceId, String stageId) {
+        return snapshotFieldKeys(loadTaskFormDefinition(processInstanceId, stageId));
+    }
+
+    Set<String> snapshotFieldKeys(Map<String, Object> formDefinition) {
+        if (formDefinition == null || formDefinition.isEmpty())
+            return Set.of();
+        Set<String> keys = new LinkedHashSet<>();
+        Map<String, String> permissions = stringMapValue(formDefinition.get("fieldPermissions"));
+        for (String key : permissions.keySet()) {
+            if (key != null && !key.contains(":"))
+                keys.add(key);
+        }
+        Map<String, Object> config = mapValue(formDefinition.get("configJson"));
+        collectConfiguredFields(config.get("rule"), keys);
+        keys.removeIf(key -> key.startsWith("__") || SystemAuditFields.isAuditField(key));
+        return keys;
     }
 
     private Map<String, Object> loadTaskFormDefinition(String processInstanceId, String stageId) {
@@ -475,7 +521,7 @@ public class ChangeHistorySubmissionFilter {
                             fd.field_permissions::text AS field_permissions,
                             false AS read_only
                             FROM dw_form_definitions fd
-                            WHERE fd.id = ? AND fd.form_type = 'TASK'
+                            WHERE fd.id = ? AND fd.form_type IN ('TASK', 'PROCESS')
                             LIMIT 1
                             """, bpmnFormId);
             if (!deployedForm.isEmpty())

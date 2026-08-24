@@ -2359,3 +2359,75 @@
     审查跟进：Preview 表身份随 ACTION 画布（PRIMARY 误绑不再抢身份）；脏顶层 rule 回归；
     Process Debug saved preview 同构；live 空数组不 overlay（fc-designer 水合前 getRule 为 []）。
 
+- id: "1542"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: major
+  category: bug
+  summary: "Empty fieldPermissions wrote empty completed-task snapshots; alias-expanded __subTables__ polluted snapshot and Change History ADD/DELETE"
+  file: "backend/user-portal/src/main/java/com/portal/component/CompletedTaskSnapshotAssembler.java"
+  note: |
+    UAT ACQ-DC-PW-000014: Case Submission snapshot fieldValues={}; Transaction Assignment
+    snapshot copied whole alias-expanded __subTables__; Change History invented Correspondence
+    ADD/DELETE from alias copies with different row_id UUIDs; Snapshot Diff did not flatten
+    Card/Row/Column.
+    Fix: assemble snapshot from form tree (empty permissions ≠ no form), canonical binding
+    slices only; assign row identity before alias fan-out; Change History uses SubTableRowIdentity;
+    filter keeps highest-priority alias only; Snapshot Diff uses flattenAllFormFieldSegments.
+    Historical UAT rows were not rewritten.
+    验证：CompletedTaskSnapshotAssemblerTest + ChangeHistorySubmissionFilterTest
+    + SubTableRowIdentityEnricherTest + snapshotDiff.property.test.ts；
+    mvn -pl backend/user-portal -am package -DskipTests；portal pnpm build；
+    compose rebuild user-portal + user-portal-frontend；Started UserPortalApplication；
+    MI unit-only 127 pass. Live ACQ re-run still needed (dev completed-tasks empty, #1522).
+
+- id: "1543"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: major
+  category: bug
+  summary: "Completed-task snapshot stays empty when Task Form exists only on BPMN formId, not dw_form_stage_bindings"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskFormComponent.java"
+  note: |
+    Snapshot capture reused ChangeHistorySubmissionFilter.resolveTaskFormDefinition
+    (BPMN formId first, TASK or PROCESS, then dw_form_stage_bindings) plus
+    snapshotFieldKeys (permission keys + configJson.rule field names, including readonly).
+    Empty fieldPermissions no longer means empty snapshot. ATM-DC-PW-000001 / MI demo
+    with 0 stage bindings now freeze case_number etc. Existing _snapshot_* with
+    fieldValues={} are not rewritten — complete a later task or start a new process.
+    验证：ChangeHistorySubmissionFilterTest BPMN PROCESS formId 320;
+    TaskFormSnapshotBpmnFallbackTest; TaskFormSnapshotPropertyTest;
+    mvn -pl backend/user-portal -am package -DskipTests.
+
+- id: "1544"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: major
+  category: bug
+  summary: "Process-start Change History uses newest PROCESS form (My Request) instead of the start form, dropping Meeting Name / Meeting Doc / Participants fields"
+  file: "backend/user-portal/src/main/java/com/portal/component/ChangeHistorySubmissionFilter.java"
+  note: |
+    1_Meeting-000004: up_change_history only assignee/bu_code/role_code on table "subtable".
+    filterProcessSubmission loaded PROCESS via ORDER BY fd.id DESC LIMIT 1, which picked
+    50603 Main (My Request) over 50193 Main. 50603 marks Meeting Name/Host/Meeting Doc and
+    Participants name/test/file readonly; leftover miAssignment widgets stayed editable.
+    Fix: loadProcessFormDefinition requires fd.scene = 'TASK'. Historical rows not rewritten.
+    验证：ChangeHistorySubmissionFilterTest#processStartAuditUsesTaskSceneFormNotReadonlyMyRequestForm；
+    mvn -pl backend/user-portal -am package -DskipTests；compose rebuild user-portal；
+    Started UserPortalApplication. Re-run a new MI start to see Meeting Name / attachment / name.
+
+- id: "1545"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: minor
+  category: bug
+  summary: "Completed Task Snapshot dumps lookup JSON and internal __subTable_* placeholders instead of main-form display names"
+  file: "frontend/user-portal/src/components/snapshotDiffHelpers.ts"
+  note: |
+    ATM-DC-PW-000002 snapshot showed Case Stage/Status/Urge as raw objects and
+    __subTable_1127..1132 empty widgets. Snapshot is a main-field freeze; sub-table
+    diffs belong in Change History. computeDiffRows now flattens leaf data fields
+    only (skip __* / subTable / layout) and formatSnapshotDisplayValue uses
+    stage_name / status_name / dropdown_name / lookup display fields.
+    验证：snapshotDiff.property.test.ts 5 pass；pnpm run build；compose rebuild
+    user-portal-frontend. Live ATM task screenshot 403 for developer HMDC_Index_Role.

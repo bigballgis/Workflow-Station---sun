@@ -113,14 +113,24 @@ public class SubTableChangeHistoryPropertyTest {
         }
 
         @Example
-        @Label("Sub-table row identity prefers row_id over display fields")
+        @Label("Sub-table row identity prefers row_id over id and display fields")
         void rowIdentifierPrefersRowIdOverDisplayFields() {
                 Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", "business-id");
                 row.put("arn", "1");
                 row.put("row_id", "ATM-DC-PW-TRANS-000010");
                 row.put("card_number", "12");
                 assertThat(ChangeHistoryComponent.resolveRowIdentifier(row))
                                 .isEqualTo("ATM-DC-PW-TRANS-000010");
+        }
+
+        @Example
+        @Label("Anonymous rows do not invent an identity from business values")
+        void rowIdentifierDoesNotFallBackToBusinessFields() {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("channel", "Email");
+                row.put("mode", "Auto");
+                assertThat(ChangeHistoryComponent.resolveRowIdentifier(row)).isNull();
         }
 
         @Example

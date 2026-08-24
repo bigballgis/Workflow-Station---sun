@@ -725,9 +725,9 @@ public class TaskFormComponent {
 
         // Get current live values from process variables
         Map<String, Object> liveValues;
-        if (snapshot != null && snapshot.getFieldValues() != null) {
-            // Get live values for the same field subset as the snapshot
-            liveValues = fieldMapper().extractFieldSubset(allVariables, snapshot.getFieldValues().keySet());
+        Map<String, Object> snapshotFields = snapshot != null ? snapshot.getFieldValues() : null;
+        if (snapshotFields != null && !snapshotFields.isEmpty()) {
+            liveValues = fieldMapper().extractFieldSubset(allVariables, snapshotFields.keySet());
         } else {
             liveValues = Collections.emptyMap();
         }
@@ -780,18 +780,14 @@ public class TaskFormComponent {
      * <b>Anti-bloat guardrails:</b>
      * </p>
      * <ul>
-     * <li>When the stage has <em>no</em> Task Form binding
-     * ({@code fetchTaskFormByStageId} null or empty fieldPermissions),
-     * the snapshot stores <strong>empty fieldValues</strong>—no fallback to copying
-     * all process variables and no
-     * {@code __subTables__}. Live {@code __subTables__} already lives on root
-     * variables; duplicating it in snapshots
-     * inflates the {@code variables} JSON column (frontend alias keys per binding,
-     * multiplied by MI child completions →
-     * PostgreSQL parameter encoding OOM).</li>
-     * <li>When the stage <em>has</em> a Task Form binding, the snapshot keeps the
-     * fieldPermissions subset plus
-     * {@code __subTables__} so Portal can fully render the completed form.</li>
+     * <li>Form resolution matches Change History: BPMN {@code formId} first
+     * (TASK or PROCESS), then {@code dw_form_stage_bindings}. Empty permissions are
+     * not treated as “no form” — field names still come from {@code configJson}.</li>
+     * <li>When that resolution finds no form fields, the snapshot stores
+     * <strong>empty fieldValues</strong>—no fallback to copying all process
+     * variables and no {@code __subTables__}.</li>
+     * <li>When fieldPermissions is non-empty, the snapshot also keeps
+     * {@code __subTables__} so Portal can hydrate completed sub-tables.</li>
      * </ul>
      *
      * @param processInstanceId process instance owning the task; identifies the function unit that scopes
@@ -805,19 +801,19 @@ public class TaskFormComponent {
         if (mergedVariables == null || taskId == null || taskDefinitionKey == null) {
             return Set.of();
         }
-        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey, processInstanceId);
+        Map<String, Object> formDefinition = changeHistorySubmissionFilter()
+                .resolveTaskFormDefinition(processInstanceId, taskDefinitionKey);
+        Set<String> snapshotKeys = changeHistorySubmissionFilter().snapshotFieldKeys(formDefinition);
         Map<String, String> fieldPermissions = formDefinition != null
                 ? fieldMapper().extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
 
-        // Empty snapshot when no Task Form binding—avoid writing __subTables__ (with
-        // alias copies) with no UI consumer.
         Map<String, Object> fieldValues;
-        if (fieldPermissions.isEmpty()) {
+        if (snapshotKeys.isEmpty()) {
             fieldValues = new HashMap<>();
         } else {
-            fieldValues = fieldMapper().extractFieldSubset(mergedVariables, fieldPermissions.keySet());
-            if (mergedVariables.containsKey("__subTables__")) {
+            fieldValues = fieldMapper().extractFieldSubset(mergedVariables, snapshotKeys);
+            if (!fieldPermissions.isEmpty() && mergedVariables.containsKey("__subTables__")) {
                 fieldValues.put("__subTables__", mergedVariables.get("__subTables__"));
             }
         }

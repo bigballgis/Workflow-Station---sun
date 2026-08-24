@@ -11,7 +11,9 @@
       <SnapshotDiffRenderer
         :snapshot-values="completedFormData.snapshot.fieldValues || {}"
         :live-values="completedFormData.liveValues || {}"
-        :fields="fieldsForSnapshot"
+        :fields="formFields"
+        :tabs="formTabs"
+        :fields-after-tabs="formFieldsAfterTabs"
         :show-live-values="completedFormData.showLiveValues ?? true"
       />
     </div>
@@ -19,21 +21,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { Document } from '@element-plus/icons-vue'
 import SnapshotDiffRenderer from '@/components/SnapshotDiffRenderer.vue'
 import { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 
-const props = defineProps<{
+defineProps<{
   isCompletedTask: boolean
   completedFormData: { snapshot?: { fieldValues: Record<string, any> }; liveValues?: Record<string, any>; showLiveValues?: boolean } | null
   formFields: FormField[]
   formTabs: FormTab[]
+  formFieldsAfterTabs?: FormField[]
 }>()
-
-const fieldsForSnapshot = computed(() =>
-  props.formFields.length > 0 ? props.formFields : (props.formTabs.flatMap(tab => tab.fields) || [])
-)
 </script>
 
 <style lang="scss" scoped>

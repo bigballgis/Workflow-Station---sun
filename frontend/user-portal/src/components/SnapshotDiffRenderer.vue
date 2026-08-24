@@ -73,8 +73,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { FormField } from './formRendererHelpers'
-import { computeDiffRows, type DiffRow } from './snapshotDiffHelpers'
+import type { FormField, FormTab } from './formRendererHelpers'
+import {
+  collectSnapshotDiffFields,
+  computeDiffRows,
+  formatSnapshotDisplayValue,
+  type DiffRow,
+} from './snapshotDiffHelpers'
 import {
   applySensitiveMask,
   isSensitiveMaskActive,
@@ -86,6 +91,8 @@ interface Props {
   snapshotValues: Record<string, unknown>
   liveValues: Record<string, unknown>
   fields: FormField[]
+  tabs?: FormTab[]
+  fieldsAfterTabs?: FormField[]
   showLiveValues: boolean
 }
 
@@ -93,24 +100,41 @@ const props = withDefaults(defineProps<Props>(), {
   showLiveValues: true,
 })
 
-const diffRows = computed<DiffRow[]>(() =>
-  computeDiffRows(props.snapshotValues, props.liveValues, props.fields)
+const comparableFields = computed(() =>
+  collectSnapshotDiffFields(props.fields, props.tabs, props.fieldsAfterTabs)
 )
+
+const diffRows = computed<DiffRow[]>(() =>
+  computeDiffRows(
+    props.snapshotValues,
+    props.liveValues,
+    props.fields,
+    props.tabs,
+    props.fieldsAfterTabs,
+  )
+)
+
+const fieldByKey = computed(() => {
+  const map = new Map<string, FormField>()
+  for (const f of comparableFields.value) {
+    map.set(f.key, f)
+  }
+  return map
+})
 
 const maskByKey = computed(() => {
   const map = new Map<string, NonNullable<FormField['sensitiveMask']>>()
-  for (const f of props.fields) {
+  for (const f of comparableFields.value) {
     if (f.sensitiveMask?.enabled) map.set(f.key, f.sensitiveMask)
   }
   return map
 })
 
 function formatValue(value: unknown, fieldKey?: string): string {
-  if (value === null || value === undefined) return '-'
-  if (typeof value === 'object') return JSON.stringify(value)
-  const s = String(value)
+  const field = fieldKey ? fieldByKey.value.get(fieldKey) : undefined
+  const s = formatSnapshotDisplayValue(value, field)
   const cfg = fieldKey ? maskByKey.value.get(fieldKey) : undefined
-  if (isSensitiveMaskActive(cfg)) return applySensitiveMask(s, cfg!)
+  if (isSensitiveMaskActive(cfg) && s !== '-') return applySensitiveMask(s, cfg!)
   return s
 }
 </script>

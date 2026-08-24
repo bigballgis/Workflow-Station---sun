@@ -73,6 +73,40 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
     expect(subTables.subtable2).toBeUndefined()
     expect(Object.keys(payload?.variables?.__subTables__ ?? {}).sort()).toEqual(['30', '69'])
   })
+  it('stamps row_id on anonymous canonical rows and leaves alias copies out', async () => {
+    const anonymous = { channel: 'Email' }
+    const taskActions = useTaskActions({
+      taskId: 'task-1',
+      taskInfo: ref({}),
+      subTableBindings: ref([
+        { bindingId: 1301, tableName: 'ACQ Correspondence', columns: [], data: [anonymous] },
+      ]),
+      formData: ref({
+        __subTables__: {
+          '1301': [anonymous],
+          'ACQ Correspondence': [{ channel: 'Email' }],
+        },
+      }),
+      submitting: ref(false),
+      approveDialogVisible: ref(true),
+      approveDialogTitle: ref(''),
+      currentApproveAction: ref('APPROVE'),
+      approveForm: { comment: '' },
+      actionDialogVisible: ref(false),
+      actionDialogTitle: ref(''),
+      currentAction: ref(''),
+      actionForm: { targetUserId: '', reason: '' },
+      userOptions: ref([]),
+      userSearchLoading: ref(false),
+      loadTaskDetail: vi.fn(async () => {}),
+    })
+    await taskActions.submitApprove()
+    const payload = completeTaskMock.mock.calls[0]?.[1]
+    const subTables = payload?.variables?.__subTables__ ?? {}
+    expect(Object.keys(subTables)).toEqual(['1301'])
+    expect(String(subTables['1301'][0].row_id)).not.toBe('')
+    expect(subTables['ACQ Correspondence']).toBeUndefined()
+  })
   it('uses buildFormPayloadForComplete when provided (Save parity path)', async () => {
     const buildFormPayloadForComplete = vi.fn(() => ({
       fieldA: 'x',

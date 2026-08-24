@@ -366,6 +366,7 @@
         :completed-form-data="completedFormData"
         :form-fields="formFields"
         :form-tabs="formTabs"
+        :form-fields-after-tabs="formFieldsAfterTabs"
       />
 
         </el-tab-pane>

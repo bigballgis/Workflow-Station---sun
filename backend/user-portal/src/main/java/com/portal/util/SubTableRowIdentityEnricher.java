@@ -2,6 +2,7 @@ package com.portal.util;
 
 import com.platform.common.jdbc.SubTableRowIdentity;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -11,13 +12,10 @@ import java.util.Map;
  * that expands sub-table rows for Main Table Views, and by anything that must tell two
  * rows apart.
  *
- * <p>Rows are only identified today when their sub-table declares an auto primary key
- * ({@code ProcessSubTablePrimaryKeyEnricherComponent}); everything else — sub-tables with
- * no declared key, rows extracted from an inbound email, rows hydrated back from the
- * engine — can reach storage anonymous. Reading such a row leaves no honest option: two
- * anonymous rows cannot be distinguished without hashing their content, and content
- * hashing silently merges two genuinely different rows that happen to hold equal values.
- * So identity is established on the way in.
+ * <p>Identity is assigned on canonical (numeric binding-id) slices first. Name / case
+ * aliases of those slices must not receive a second UUID: JSON deserialization copies
+ * each alias into its own Map, and a later Change History diff would treat those copies
+ * as row add + delete.
  *
  * <p>Mutates the map in place, mirroring {@link SubTableNestingSanitizer}, and covers the
  * one legitimate level of {@code row.__subTables__} nesting that sanitizer preserves.
@@ -42,24 +40,53 @@ public final class SubTableRowIdentityEnricher {
 
     @SuppressWarnings("unchecked")
     private static int ensureInSlices(Map<?, ?> subTables) {
-        int assigned = 0;
-        for (Object sliceValue : subTables.values()) {
-            if (!(sliceValue instanceof List<?> rows)) {
-                continue;
+        List<Map.Entry<?, ?>> numeric = new ArrayList<>();
+        List<Map.Entry<?, ?>> aliases = new ArrayList<>();
+        for (Map.Entry<?, ?> entry : subTables.entrySet()) {
+            if (isNumericKey(entry.getKey())) {
+                numeric.add(entry);
+            } else {
+                aliases.add(entry);
             }
-            for (Object rowObject : rows) {
-                if (!(rowObject instanceof Map<?, ?>)) {
-                    continue;
-                }
-                Map<String, Object> row = (Map<String, Object>) rowObject;
-                if (SubTableRowIdentity.ensureIdentity(row)) {
-                    assigned++;
-                }
-                if (row.get("__subTables__") instanceof Map<?, ?> nested) {
-                    assigned += ensureInSlices(nested);
-                }
+        }
+        int assigned = 0;
+        for (Map.Entry<?, ?> entry : numeric) {
+            assigned += ensureInSliceValue(entry.getValue());
+        }
+        if (numeric.isEmpty()) {
+            for (Map.Entry<?, ?> entry : aliases) {
+                assigned += ensureInSliceValue(entry.getValue());
             }
         }
         return assigned;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static int ensureInSliceValue(Object sliceValue) {
+        if (!(sliceValue instanceof List<?> rows)) {
+            return 0;
+        }
+        int assigned = 0;
+        for (Object rowObject : rows) {
+            if (!(rowObject instanceof Map<?, ?>)) {
+                continue;
+            }
+            Map<String, Object> row = (Map<String, Object>) rowObject;
+            if (SubTableRowIdentity.ensureIdentity(row)) {
+                assigned++;
+            }
+            if (row.get("__subTables__") instanceof Map<?, ?> nested) {
+                assigned += ensureInSlices(nested);
+            }
+        }
+        return assigned;
+    }
+
+    private static boolean isNumericKey(Object key) {
+        if (key == null) {
+            return false;
+        }
+        String text = String.valueOf(key).trim();
+        return !text.isEmpty() && text.chars().allMatch(Character::isDigit);
     }
 }

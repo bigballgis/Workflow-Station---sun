@@ -14,6 +14,8 @@ import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.platform.common.audit.SystemAuditFields;
+import com.platform.common.jdbc.SubTableRowIdentity;
+import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.platform.security.entity.User;
 import com.platform.security.repository.UserRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -96,11 +98,6 @@ public class ChangeHistoryComponent {
         this.requiresNewTx = tt;
     }
 
-    /**
-     * Fallback row-id field names when the canonical {@code id} column is absent.
-     */
-    private static final String[] ROW_ID_FALLBACK_FIELDS = { "row_id", "rowId", "rowID", "id_idw", "_rowKey",
-            "rowKey" };
     private static final Set<String> SUB_TABLE_ROW_METADATA_FIELDS = Set.of(
             "id", "rowid", "rowkey", "ididw",
             "createdat", "createdby", "updatedat", "updatedby", "caserowid",
@@ -688,7 +685,7 @@ public class ChangeHistoryComponent {
         return raw;
     }
 
-    private static boolean isAssigneeValueField(String fieldName) {
+    static boolean isAssigneeValueField(String fieldName) {
         return fieldName != null
                 && ASSIGNEE_VALUE_FIELDS.contains(normalizeFieldKey(fieldName));
     }
@@ -1184,39 +1181,26 @@ public class ChangeHistoryComponent {
     }
 
     /**
-     * Resolves a human-readable row identifier from a sub-table row map.
-     * Tries {@code id}, then common fallback fields ({@code id_idw}, {@code rowId},
-     * …),
-     * falling back to the first non-internal key–value pair.
+     * Resolves the stable row identifier from a sub-table row map.
+     * Delegates to {@link SubTableRowIdentity} so audit matching uses the same
+     * priority as persist-time identity ({@code row_id} before {@code id}).
+     * Rows with no identity return {@code null}; callers must not invent a key
+     * from business field values.
      *
      * @param row the sub-table row map (never null)
      * @return a displayable row identifier, or {@code null}
      */
     public static String resolveRowIdentifier(Map<String, Object> row) {
-        // 1. Canonical "id"
-        Object id = row.get("id");
-        if (id != null) {
-            return String.valueOf(id);
+        String field = SubTableRowIdentity.identityFieldOf(row);
+        if (field == null) {
+            return null;
         }
-        // 2. Known fallback fields
-        for (String field : ROW_ID_FALLBACK_FIELDS) {
-            Object v = row.get(field);
-            if (v != null) {
-                return String.valueOf(v);
-            }
+        Object value = SubTableRowKeySupport.getRowValueIgnoreCase(row, field);
+        if (value == null) {
+            return null;
         }
-        // 3. First non-internal key-value pair as a last resort
-        for (Map.Entry<String, Object> e : row.entrySet()) {
-            String k = e.getKey();
-            if (k == null || k.startsWith("_") || isInternalField(k)) {
-                continue;
-            }
-            Object v = e.getValue();
-            if (v != null) {
-                return String.valueOf(v);
-            }
-        }
-        return null;
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
     }
 
     static boolean isSubTableRowMetadataField(String fieldName) {

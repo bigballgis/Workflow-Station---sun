@@ -29,6 +29,11 @@ import {
 } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
 import { seedTaskFormFromProcessValues } from './seedTaskFormFromProcessValues'
+import {
+  emptyProcessFormRef,
+  extractCompletedFormFromVariables,
+  hasSnapshotFieldValues,
+} from '@/utils/completedTaskSnapshot'
 
 export type PrefetchedTaskForms = {
   pfData: ProcessFormData | null
@@ -86,6 +91,24 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
   function hasCompletedSnapshotRoute(): boolean {
     return typeof route.query.snapshotTime === 'string' ||
       typeof route.query.snapshotTaskId === 'string'
+  }
+
+  function assignCompletedSnapshot(
+    ctData: CompletedTaskFormData | null,
+    taskData: Record<string, unknown>,
+    pfData: ProcessFormData | null,
+  ): void {
+    const currentTaskId = String(taskData.id || taskId)
+    const recovered = ctData ?? extractCompletedFormFromVariables(
+      taskData.variables,
+      currentTaskId,
+      pfData ?? emptyProcessFormRef(String(taskData.processInstanceId ?? '')),
+    )
+    if (!recovered) return
+    completedFormData.value = recovered
+    if (ctData || hasSnapshotFieldValues(recovered.snapshot.fieldValues)) {
+      ctx.applyCompletedSnapshotToForm(recovered)
+    }
   }
 
   const completedHistorySnapshotTime = computed(() => (
@@ -239,10 +262,7 @@ export function createTaskDetailFormsLoader(ctx: TaskDetailCtx): TaskDetailForms
       if (isCompleted) {
         isCompletedTask.value = true
         formReadOnly.value = true
-        if (ctData) {
-          completedFormData.value = ctData
-          ctx.applyCompletedSnapshotToForm(ctData)
-        }
+        assignCompletedSnapshot(ctData, taskData as Record<string, unknown>, pfData)
       } else if (tfData) {
         taskFormDTO.value = tfData
         const taskFormNodeReadOnly = tfData.formReadOnly === true
