@@ -175,6 +175,17 @@ export interface RbacMappingListParams {
   roleType?: string
 }
 
+export interface RbacMappingListQuery {
+  page: number
+  size: number
+  roleName?: string
+  roleType?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 // ==================== API ====================
 
 const DASHBOARD_BASE = '/bi/dashboards'
@@ -252,6 +263,9 @@ export const biManagementApi = {
     /** Get RBAC mapping list */
     listMappings: (params?: RbacMappingListParams) =>
       get<RbacMappingResponse[]>(`${RBAC_BASE}/mappings`, { params }),
+
+    queryMappings: (body: RbacMappingListQuery) =>
+      post<AdminListPage<RbacMappingResponse>>(`${RBAC_BASE}/mappings/query`, body),
 
     /** Update Sys_Role to Superset_Role mapping (full replace) */
     updateMapping: (sysRoleId: string, data: RbacMappingUpdateRequest) =>

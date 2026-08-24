@@ -172,6 +172,7 @@ public class AdminAuditAspect {
     @Around("within(com.admin.bi.controller.BiRbacMappingController) "
             + "&& !execution(* *.listSupersetRoles(..)) "
             + "&& !execution(* *.listMappings(..)) "
+            + "&& !execution(* *.queryMappings(..)) "
             + "&& !execution(* *.listUnmappedRoles(..))")
     public Object auditBiRbacMapping(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "BI_RBAC");

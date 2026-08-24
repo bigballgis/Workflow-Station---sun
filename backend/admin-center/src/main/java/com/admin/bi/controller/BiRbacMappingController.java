@@ -1,5 +1,6 @@
 package com.admin.bi.controller;
 
+import com.admin.bi.component.BiRbacListQueryComponent;
 import com.admin.bi.dto.request.RbacMappingCreateRequest;
 import com.admin.bi.dto.request.RbacMappingUpdateRequest;
 import com.admin.bi.dto.response.RbacMappingResponse;
@@ -7,6 +8,8 @@ import com.admin.bi.dto.response.RoleOptionResponse;
 import com.admin.bi.dto.response.SupersetRoleResponse;
 import com.admin.bi.dto.response.SyncResultResponse;
 import com.admin.bi.service.BiRbacMappingService;
+import com.admin.dto.list.AdminListPage;
+import com.admin.dto.request.BiRbacListQueryRequest;
 import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +32,7 @@ import java.util.List;
 public class BiRbacMappingController {
 
     private final BiRbacMappingService rbacMappingService;
+    private final BiRbacListQueryComponent rbacListQueryComponent;
 
     @PostMapping("/superset-roles/sync")
     @Operation(summary = "Manually sync Superset roles", description = "Immediately execute a Superset_Role_Sync_Operation and return sync result summary")
@@ -54,6 +58,13 @@ public class BiRbacMappingController {
             @RequestParam(required = false) String roleType) {
         List<RbacMappingResponse> mappings = rbacMappingService.listMappings(roleName, roleType);
         return ResponseEntity.ok(mappings);
+    }
+
+    @PostMapping("/mappings/query")
+    @Operation(summary = "Query RBAC mappings (true paging; column filters, sort and grouping)")
+    public ResponseEntity<AdminListPage<RbacMappingResponse>> queryMappings(
+            @RequestBody BiRbacListQueryRequest request) {
+        return ResponseEntity.ok(rbacListQueryComponent.query(request));
     }
 
     @GetMapping("/unmapped-roles")
