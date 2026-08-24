@@ -1,0 +1,93 @@
+/* Host wrapper for shared ListColumnHeader + column resize. Unscoped: el-table internals. */
+.list-data-grid-scroll {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+/*
+ * v-loading must not live on this scroller. An absolute mask is sized to the
+ * client box at scroll origin, so overflowing columns (and scrolled-right
+ * columns) stay undimmed. Hosts put v-loading on .portal-card; this sticky
+ * rule is only a fallback if a host forgets.
+ */
+.list-data-grid-scroll > .el-loading-mask {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.list-data-grid-inner {
+  display: block;
+}
+
+.list-data-grid .el-table__body-wrapper,
+.list-data-grid .el-table__header-wrapper {
+  overflow-x: visible !important;
+}
+
+.list-data-grid .el-table__inner-wrapper {
+  width: 100% !important;
+}
+
+.list-data-grid .el-table__header-wrapper th:has(.list-col-header),
+.list-data-grid .el-table__header-wrapper th:has(.col-resize-handle) {
+  position: relative;
+  overflow: visible !important;
+}
+
+.list-data-grid .el-table__header-wrapper th:has(.list-col-header) .cell,
+.list-data-grid .el-table__header-wrapper th:has(.col-resize-handle) .cell {
+  position: static !important;
+  display: flex !important;
+  align-items: center;
+  width: 100% !important;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip;
+}
+
+.list-data-grid--fit .el-scrollbar__view,
+.list-data-grid--fit .el-table__header-wrapper,
+.list-data-grid--fit .el-table__body-wrapper,
+.list-data-grid--fit .el-table__header,
+.list-data-grid--fit .el-table__body {
+  width: 100% !important;
+  min-width: 100% !important;
+}
+
+.list-data-grid .group-header-row {
+  background: var(--el-fill-color-light) !important;
+  cursor: default;
+  font-weight: 600;
+}
+
+.list-data-grid .group-header-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.list-data-grid .group-count {
+  color: var(--el-text-color-secondary);
+  font-weight: normal;
+  font-size: 12px;
+}
+
+/* Trailing leftover so drag-narrowed columns do not re-stretch. No handle. */
+.list-data-grid th.list-col-spacer,
+.list-data-grid td.list-col-spacer {
+  padding: 0;
+  border-left: none;
+  background: transparent;
+}
+
+.list-data-grid th.list-col-spacer .cell,
+.list-data-grid td.list-col-spacer .cell {
+  display: none;
+}
