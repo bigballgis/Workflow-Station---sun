@@ -158,7 +158,20 @@ export default {
     forceDelete: '强制删除',
     deleted: '已删除流程 {name}',
     loadFailed: '流程列表加载失败',
-    exportFailed: '导出失败'
+    exportFailed: '导出失败',
+    viewStructure: '查看结构',
+    structureTitle: '流程结构 · {name}',
+    structureDraftHint: '当前显示的是草稿版本(尚未发布)',
+    structureEmpty: '该流程还没有任何步骤',
+    structureLoadFailed: '流程结构加载失败',
+    branchLabel: '分支 {index}',
+    branchEmpty: '(空分支)',
+    loopBody: '循环体',
+    stepKindTrigger: '触发器',
+    stepKindRouter: '路由',
+    stepKindLoop: '循环',
+    stepKindCode: '代码',
+    stepKindUnknown: '未知类型'
   },
   dashboard: {
     totalUsers: '用户总数',

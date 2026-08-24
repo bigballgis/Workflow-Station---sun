@@ -149,6 +149,9 @@
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item command="structure">
+                      {{ t('automationFlow.viewStructure') }}
+                    </el-dropdown-item>
                     <el-dropdown-item
                       command="toggle"
                       :disabled="!row.published"
@@ -169,6 +172,12 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <FlowStructureDialog
+      v-model="structureDialogVisible"
+      :flow-id="structureFlow?.id ?? ''"
+      :flow-name="structureFlow?.displayName ?? ''"
+    />
 
     <el-dialog
       v-model="importDialogVisible"
@@ -247,6 +256,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { MoreFilled, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
+import FlowStructureDialog from '@/components/automation-flow/FlowStructureDialog.vue'
 import { formatDate } from '@/utils/format'
 import {
   automationFlowApi,
@@ -262,6 +272,9 @@ const keyword = ref('')
 const flowList = ref<AutomationFlowSummary[]>([])
 const exportingId = ref('')
 const actingId = ref('')
+
+const structureDialogVisible = ref(false)
+const structureFlow = ref<AutomationFlowSummary | null>(null)
 
 const importDialogVisible = ref(false)
 const importFile = ref<File | null>(null)
@@ -342,7 +355,10 @@ const handleExport = async (row: AutomationFlowSummary) => {
 }
 
 const handleRowCommand = (command: string, row: AutomationFlowSummary) => {
-  if (command === 'toggle') {
+  if (command === 'structure') {
+    structureFlow.value = row
+    structureDialogVisible.value = true
+  } else if (command === 'toggle') {
     void handleToggle(row)
   } else if (command === 'delete') {
     void handleDelete(row)

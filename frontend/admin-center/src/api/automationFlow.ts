@@ -1,4 +1,5 @@
 import { del, get, post } from './request'
+import type { FlowExportPackage } from '@/utils/flowStructure'
 
 /** 后端 ApiResponse 包装(与 automationPiece 同构) */
 interface ApiEnvelope<T> {
@@ -51,6 +52,10 @@ export const automationFlowApi = {
   /** 导出可携带 JSON(优先已发布版本);uat 导出 → prod 导入 */
   exportFlow: (flowId: string) =>
     get<Blob>(`/automation/flows/${flowId}/export`, { responseType: 'blob' }),
+
+  /** 查看结构:同 export 端点,直接拿解析后的 JSON(不落盘、不触发下载) */
+  getFlowExport: (flowId: string) =>
+    get<FlowExportPackage>(`/automation/flows/${flowId}/export`),
 
   /** 启停:可逆,保留执行历史与 flowId(已部署 BPMN 的引用不失效);启用要求已发布 */
   setEnabled: (flowId: string, enabled: boolean) =>
