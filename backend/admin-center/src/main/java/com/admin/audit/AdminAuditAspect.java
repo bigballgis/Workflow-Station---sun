@@ -92,6 +92,7 @@ public class AdminAuditAspect {
     }
 
     @Around("within(com.admin.controller.RoleController) "
+            + "&& !execution(* *.queryRoles(..)) "
             + "&& !execution(* *.getRoleMembers(..)) "
             + "&& !execution(* *.getRoleMembersPaged(..)) "
             + "&& !execution(* *.getMemberCount(..)) "
