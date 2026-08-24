@@ -12,8 +12,9 @@ import { errorTranslator } from '@/utils/errorTranslator'
 import { storeToRefs } from 'pinia'
 import { notifyError, notifySuccess } from '@/utils/notify'
 import type { TableInstance } from 'element-plus'
-import { type AuditLog } from '@/api/audit'
+import { queryAuditLogList, type AuditLog } from '@/api/audit'
 import { useAuditStore } from '@/stores/audit'
+import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 import * as XLSX from 'xlsx'
 import {
   actionType,
@@ -34,27 +35,35 @@ export function useAudit() {
 
   // Bridge store state via storeToRefs (preserves reactivity)
   const { logs, total, loading: storeLoading, query, dateRange, resourceTypes } = storeToRefs(store)
-  const { sort: storeSort } = storeToRefs(store)
 
   // ==================== Local State ====================
 
   const loading = storeLoading // alias for template compatibility
+  const SELECTION_COL_WIDTH = 40
+  const ACTIONS_COL_WIDTH = 80
+  const AUDIT_COL_WIDTHS: Record<string, number> = {
+    action: 110,
+    resourceType: 220,
+    username: 130,
+    ipAddress: 150,
+    result: 100,
+    duration: 100,
+    createdAt: 220,
+  }
+  const grid = useAdminListGrid<AuditLog>({
+    storageKey: 'admin-list-layout:audit',
+    extraWidth: SELECTION_COL_WIDTH + ACTIONS_COL_WIDTH,
+    defaultWidthOf: (field) => AUDIT_COL_WIDTHS[field] ?? 120,
+  })
   const page = computed({
-    get: () => store.pagination.page,
-    set: (v) => { store.pagination.page = v }
+    get: () => grid.pagination.page,
+    set: (v) => { grid.pagination.page = v }
   })
   const size = computed({
-    get: () => store.pagination.size,
-    set: (v) => { store.pagination.size = v }
+    get: () => grid.pagination.size,
+    set: (v) => { grid.pagination.size = v }
   })
-  const sortField = computed({
-    get: () => storeSort.value.field,
-    set: (v) => { store.sort.field = v; store.sort.order = storeSort.value.order }
-  })
-  const sortOrder = computed({
-    get: () => storeSort.value.order,
-    set: (v) => { store.sort.order = v; store.sort.field = storeSort.value.field }
-  })
+
 
   // ==================== Local UI State ====================
 
@@ -79,12 +88,27 @@ export function useAudit() {
   }
 
   const handleSearch = async () => {
+    const seq = grid.beginQuery()
     loading.value = true
     startAutoRefresh()
     try {
-      await store.fetchLogs()
+      const pageResult = await queryAuditLogList({
+        ...store.buildQueryRequest(),
+        ...grid.buildQuery(),
+      })
+      if (!grid.isCurrentQuery(seq)) return
+      grid.applyPage(pageResult, 'audit-logs/list-query response is missing its column declaration')
+      logs.value = pageResult.content
+      total.value = pageResult.totalElements
+      store.sort.field = grid.sort.field || 'createdAt'
+      store.sort.order = grid.sort.direction === 'ASC' ? 'ascending' : 'descending'
+    } catch (error: unknown) {
+      if (!grid.isCurrentQuery(seq)) return
+      if (!(error as { response?: unknown })?.response) {
+        notifyError(error instanceof Error ? error.message : t('audit.emptyText'))
+      }
     } finally {
-      loading.value = false
+      if (grid.isCurrentQuery(seq)) loading.value = false
     }
   }
 
@@ -181,19 +205,7 @@ export function useAudit() {
     })
   })
 
-  const sortedLogs = computed(() => {
-    if (!sortField.value) return logs.value
-    return [...logs.value].sort((a, b) => {
-      const av = a[sortField.value as keyof AuditLog]
-      const bv = b[sortField.value as keyof AuditLog]
-      const dir = sortOrder.value === 'ascending' ? 1 : -1
-      if (av == null && bv == null) return 0
-      if (av == null) return dir
-      if (bv == null) return -dir
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
-      return String(av).localeCompare(String(bv)) * dir
-    })
-  })
+  const sortedLogs = computed(() => grid.displayRows.value)
 
   // ==================== Helper Functions ====================
 
@@ -205,18 +217,13 @@ export function useAudit() {
 
   // ==================== Pagination ====================
 
-  const handleSizeChange = () => {
-    store.pagination.page = 1
-    handleSearch()
-  }
-
   const handleReset = () => {
     store.resetQuery()
-    handleSearch()
-  }
-
-  const handleSortChange = ({ prop, order }: { prop: string; order: string | null }) => {
-    store.setSort(prop || 'createdAt', order === 'ascending' ? 'ascending' : 'descending')
+    grid.clearSort()
+    grid.applyGroup('', false)
+    for (const field of Object.keys(grid.columnFilters.value)) {
+      grid.clearFilter(field)
+    }
     handleSearch()
   }
 
@@ -413,8 +420,9 @@ export function useAudit() {
     // State
     loading, exporting, logs, total, page, size,
     detailDialogVisible, currentLog, dateRange,
-    tableRef, selectedRows, sortField, sortOrder,
+    tableRef, selectedRows,
     query, resourceTypes, filterResourceTypes,
+    SELECTION_COL_WIDTH, ACTIONS_COL_WIDTH,
     // Auto-refresh
     refreshCountdown, autoRefreshPaused, toggleAutoRefresh,
     // Export
@@ -432,9 +440,10 @@ export function useAudit() {
     actionType, actionText, actionCategory, resourceTypeText, formatTime,
     formatJsonHighlight,
     // Search/Filter
-    handleSearch, handleReset, handleSizeChange, handleSortChange,
+    handleSearch, handleReset,
     handleSelectionChange, clearSelection,
     // Detail
     showDetail, getPreviewContent,
+    ...grid,
   }
 }
