@@ -1,4 +1,6 @@
 import { del, get, post } from './request'
+import type { AdminListPage } from '@/types/common'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 import type { FlowExportPackage } from '@/utils/flowStructure'
 
 /** 后端 ApiResponse 包装(与 automationPiece 同构) */
@@ -19,6 +21,8 @@ export interface AutomationFlowSummary {
   valid: boolean
   ownerName: string | null
   updated: string
+  /** DRAFT when unpublished, otherwise ENABLED / DISABLED. Set on list hydrate. */
+  readiness?: 'DRAFT' | 'ENABLED' | 'DISABLED'
 }
 
 export interface FlowImportResult {
@@ -45,9 +49,22 @@ export interface ConnectionCheckItem {
   status: string | null
 }
 
+export interface AutomationFlowListQuery {
+  page: number
+  size: number
+  keyword?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 export const automationFlowApi = {
   /** 全部 flow 概要(跨 project 管理面视角) */
   list: () => get<ApiEnvelope<AutomationFlowSummary[]>>('/automation/flows'),
+
+  query: (body: AutomationFlowListQuery) =>
+    post<ApiEnvelope<AdminListPage<AutomationFlowSummary>>>('/automation/flows/query', body),
 
   /** 导出可携带 JSON(优先已发布版本);uat 导出 → prod 导入 */
   exportFlow: (flowId: string) =>

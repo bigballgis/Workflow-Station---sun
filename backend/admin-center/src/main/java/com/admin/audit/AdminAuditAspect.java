@@ -185,6 +185,7 @@ public class AdminAuditAspect {
      */
     @Around("within(com.admin.controller.AutomationFlowController) "
             + "&& !execution(* *.listFlows(..)) "
+            + "&& !execution(* *.queryFlows(..)) "
             + "&& !execution(* *.checkConnections(..)) "
             + "&& !execution(* *.resolveFlowRef(..))")
     public Object auditAutomationFlow(ProceedingJoinPoint pjp) throws Throwable {
