@@ -27,171 +27,204 @@
       />
     </el-tabs>
 
-    <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+    <div class="toolbar">
       <el-input
         v-model="searchKeyword"
         :placeholder="t('virtualGroup.searchPlaceholder')"
         clearable
         style="width: 300px;"
+        @keyup.enter="fetchGroups"
+        @clear="fetchGroups"
       />
+      <el-button
+        type="primary"
+        @click="fetchGroups"
+      >
+        {{ t('common.search') }}
+      </el-button>
     </div>
 
     <el-empty
-      v-if="!loading && listTotal === 0"
+      v-if="!loading && pagination.total === 0"
       :description="searchKeyword.trim() ? t('virtualGroup.noSearchResults') : t('virtualGroup.noGroupsInTab')"
     />
 
-    <el-table
+    <el-card
       v-else
       v-loading="loading"
-      :data="pagedGroups"
-      stripe
-      table-layout="auto"
-      style="width: 100%"
+      class="table-card"
     >
-      <el-table-column
-        prop="name"
-        :label="t('virtualGroup.name')"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="code"
-        :label="t('virtualGroup.code')"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="type"
-        :label="t('virtualGroup.type')"
-        width="120"
+      <div
+        ref="gridScrollRef"
+        class="list-data-grid-scroll"
       >
-        <template #default="{ row }">
-          <el-tag :type="typeTagType(row.type)">
-            {{ t(virtualGroupTypeKey(row.type)) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="boundRoleName"
-        :label="t('virtualGroup.boundRole')"
-        min-width="220"
-      >
-        <template #default="{ row }">
-          <template v-if="row.boundRoleName">
-            <span>{{ row.boundRoleName }}</span>
-            <el-tag
-              size="small"
-              :type="row.boundRoleType === 'BU_BOUNDED' ? 'warning' : 'success'"
-              style="margin-left: 6px"
-            >
-              {{ t(roleTypeKey(row.boundRoleType)) }}
-            </el-tag>
-          </template>
-          <span
-            v-else
-            class="text-muted"
-          >-</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="adGroup"
-        :label="t('virtualGroup.adGroup')"
-        min-width="140"
-      >
-        <template #default="{ row }">
-          <span v-if="row.adGroup">{{ row.adGroup }}</span>
-          <span
-            v-else
-            class="text-muted"
-          >-</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="memberCount"
-        :label="t('virtualGroup.memberCount')"
-        width="100"
-        align="center"
-        :show-overflow-tooltip="false"
-        class-name="no-wrap-header"
-      />
-      <el-table-column
-        prop="status"
-        :label="t('virtualGroup.status')"
-        width="100"
-        :show-overflow-tooltip="false"
-        class-name="no-wrap-header"
-      >
-        <template #default="{ row }">
-          <el-tag
-            :type="row.status === 'ACTIVE' ? 'success' : 'info'"
-            size="small"
+        <div
+          class="list-data-grid-inner"
+          :style="gridInnerStyle"
+        >
+          <el-table
+            :data="displayRows"
+            stripe
+            border
+            :fit="false"
+            table-layout="fixed"
+            style="width: 100%"
+            class="list-data-grid"
+            :class="{ 'list-data-grid--fit': gridFits }"
+            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
+            :row-class-name="rowClassName"
           >
-            {{ row.status === 'ACTIVE' ? t('virtualGroup.active') : t('virtualGroup.inactive') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('common.operation')"
-        width="400"
-        fixed="right"
-      >
-        <template #default="{ row }">
-          <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
-            <el-button
-              v-if="!readOnly"
-              link
-              type="primary"
-              @click="showEditDialog(row)"
+            <el-table-column
+              v-for="(col, colIndex) in displayColumns"
+              :key="col.field"
+              :prop="col.field"
+              :width="widthOf(col.field)"
+              show-overflow-tooltip
             >
-              {{ t('virtualGroup.edit') }}
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="showMembersDialog(row)"
+              <template #header>
+                <ListColumnHeader
+                  :column="col"
+                  :sort="sort.field === col.field ? sort.direction : null"
+                  :grouped="groupBy === col.field"
+                  :filtered="!!columnFilters[col.field]"
+                  :width="widthOf(col.field)"
+                  :show-move="displayColumns.length > 1"
+                  :can-move-left="colIndex > 0"
+                  :can-move-right="colIndex < displayColumns.length - 1"
+                  @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
+                  @clear-sort="onClearSort"
+                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
+                  @filter-open="openFilter(col.field)"
+                  @clear-filter="onClearFilter(col.field)"
+                  @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
+                  @width-change="(width: number) => setWidth(col.field, width)"
+                  @width-commit="persistWidths"
+                />
+              </template>
+              <template #default="{ row }">
+                <template v-if="isListGroupHeaderRow(row)">
+                  <div class="group-header-cell">
+                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
+                    <span class="group-count">({{ row._groupCount }})</span>
+                  </div>
+                </template>
+                <el-tag
+                  v-else-if="col.field === 'type'"
+                  :type="typeTagType(row.type)"
+                >
+                  {{ t(virtualGroupTypeKey(row.type)) }}
+                </el-tag>
+                <template v-else-if="col.field === 'boundRoleName'">
+                  <template v-if="row.boundRoleName">
+                    <span>{{ row.boundRoleName }}</span>
+                  </template>
+                  <span
+                    v-else
+                    class="text-muted"
+                  >-</span>
+                </template>
+                <el-tag
+                  v-else-if="col.field === 'boundRoleType' && row.boundRoleType"
+                  size="small"
+                  :type="row.boundRoleType === 'BU_BOUNDED' ? 'warning' : 'success'"
+                >
+                  {{ t(roleTypeKey(row.boundRoleType)) }}
+                </el-tag>
+                <span
+                  v-else-if="col.field === 'adGroup'"
+                  :class="{ 'text-muted': !row.adGroup }"
+                >{{ row.adGroup || '-' }}</span>
+                <el-tag
+                  v-else-if="col.field === 'status'"
+                  :type="row.status === 'ACTIVE' ? 'success' : 'info'"
+                  size="small"
+                >
+                  {{ row.status === 'ACTIVE' ? t('virtualGroup.active') : t('virtualGroup.inactive') }}
+                </el-tag>
+                <template v-else>
+                  {{ row[col.field as keyof typeof row] ?? '-' }}
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="leftoverWidth > 0"
+              :width="leftoverWidth"
+              class-name="list-col-spacer"
+            />
+            <el-table-column
+              :label="t('common.operation')"
+              :width="ACTIONS_COL_WIDTH"
+              fixed="right"
             >
-              {{ t('virtualGroup.members') }}
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="showRolesDialog(row)"
-            >
-              {{ t('virtualGroup.bindRoles') }}
-            </el-button>
-            <el-button
-              v-if="!readOnly && row.type !== 'SYSTEM'"
-              link
-              type="primary"
-              :loading="statusToggleLoadingId === row.id"
-              @click="handleToggleStatus(row)"
-            >
-              {{ row.status === 'ACTIVE' ? t('virtualGroup.deactivate') : t('virtualGroup.activate') }}
-            </el-button>
-            <el-button
-              v-if="!readOnly && row.type !== 'SYSTEM'"
-              link
-              type="danger"
-              @click="handleDelete(row.id)"
-            >
-              {{ t('virtualGroup.delete') }}
-            </el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </el-table>
+              <template #header>
+                {{ t('common.operation') }}
+              </template>
+              <template #default="{ row }">
+                <div
+                  v-if="!isListGroupHeaderRow(row)"
+                  class="row-actions"
+                >
+                  <el-button
+                    v-if="!readOnly"
+                    link
+                    type="primary"
+                    @click="showEditDialog(row)"
+                  >
+                    {{ t('virtualGroup.edit') }}
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
+                    @click="showMembersDialog(row)"
+                  >
+                    {{ t('virtualGroup.members') }}
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
+                    @click="showRolesDialog(row)"
+                  >
+                    {{ t('virtualGroup.bindRoles') }}
+                  </el-button>
+                  <el-button
+                    v-if="!readOnly && row.type !== 'SYSTEM'"
+                    link
+                    type="primary"
+                    :loading="statusToggleLoadingId === row.id"
+                    @click="handleToggleStatus(row)"
+                  >
+                    {{ row.status === 'ACTIVE' ? t('virtualGroup.deactivate') : t('virtualGroup.activate') }}
+                  </el-button>
+                  <el-button
+                    v-if="!readOnly && row.type !== 'SYSTEM'"
+                    link
+                    type="danger"
+                    @click="handleDelete(row.id)"
+                  >
+                    {{ t('virtualGroup.delete') }}
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
 
-    <el-pagination
-      v-if="listTotal > 0"
-      v-model:current-page="listPagination.page"
-      v-model:page-size="listPagination.size"
-      :disabled="loading"
-      :total="listTotal"
-      :page-sizes="[10, 20, 50, 100]"
-      layout="total, sizes, prev, pager, next, jumper"
-      style="margin-top: 16px; justify-content: flex-end;"
-      @size-change="handleListSizeChange"
+      <ListPagination
+        v-model:page="pagination.page"
+        v-model:size="pagination.size"
+        :total="pagination.total"
+        :loading="loading"
+        @change="fetchGroups"
+      />
+    </el-card>
+
+    <ListFilterDialog
+      v-model:visible="filterDialog.visible"
+      :column="activeFilterColumn"
+      :filter="activeFilter"
+      @apply="onFilterApply"
+      @clear="onFilterClear"
     />
 
     <VirtualGroupFormDialog
@@ -224,6 +257,10 @@ import VirtualGroupRolesDialog from './components/VirtualGroupRolesDialog.vue'
 import { useVirtualGroup } from '@/composables/modules/useVirtualGroup'
 import { virtualGroupTypeKey, roleTypeKey } from '@/utils/format'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
+import ListPagination from '@platform-shared/list/ListPagination.vue'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 const { t } = useI18n()
 const readOnly = computed(() => !hasPermission(PERMISSIONS.USER_WRITE))
@@ -232,9 +269,6 @@ const {
   loading,
   activeTab,
   searchKeyword,
-  listPagination,
-  listTotal,
-  pagedGroups,
   formDialogVisible,
   membersDialogVisible,
   rolesDialogVisible,
@@ -247,8 +281,35 @@ const {
   showRolesDialog,
   handleDelete,
   handleCreateSuccess,
-  handleListSizeChange,
   handleToggleStatus,
+  ACTIONS_COL_WIDTH,
+  displayColumns,
+  displayRows,
+  groupBy,
+  columnFilters,
+  sort,
+  filterDialog,
+  pagination,
+  activeFilterColumn,
+  activeFilter,
+  gridScrollRef,
+  gridFits,
+  leftoverWidth,
+  gridInnerStyle,
+  widthOf,
+  setWidth,
+  persistWidths,
+  moveColumn,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  applySort,
+  clearSort,
+  applyGroup,
+  rowClassName,
+  spanMethod,
+  groupHeaderLabel,
+  isListGroupHeaderRow,
 } = useVirtualGroup()
 
 function typeTagType(type: string): 'warning' | 'info' | 'success' {
@@ -257,13 +318,54 @@ function typeTagType(type: string): 'warning' | 'info' | 'success' {
   return 'info'
 }
 
-onMounted(fetchGroups)
+function onSort(field: string, direction: 'ASC' | 'DESC') {
+  applySort(field, direction)
+  void fetchGroups()
+}
+
+function onClearSort() {
+  clearSort()
+  void fetchGroups()
+}
+
+function onGroup(field: string, grouped: boolean) {
+  applyGroup(field, grouped)
+  void fetchGroups()
+}
+
+function onClearFilter(field: string) {
+  clearFilter(field)
+  void fetchGroups()
+}
+
+function onFilterApply(filter: ListColumnFilter) {
+  applyFilter(filter)
+  void fetchGroups()
+}
+
+function onFilterClear() {
+  onClearFilter(filterDialog.field)
+}
+
+onMounted(() => { void fetchGroups() })
 </script>
 
 <style scoped>
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
 
-.page-container :deep(.no-wrap-header .cell) {
-  white-space: nowrap !important;
-  overflow: visible !important;
+.row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.text-muted {
+  color: var(--el-text-color-secondary);
 }
 </style>

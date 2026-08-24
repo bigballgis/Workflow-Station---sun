@@ -1,9 +1,12 @@
 package com.admin.controller;
 
 import com.admin.component.VirtualGroupManagerComponent;
+import com.admin.component.VirtualGroupListQueryComponent;
+import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.TaskClaimRequest;
 import com.admin.dto.request.TaskDelegationRequest;
 import com.admin.dto.request.VirtualGroupCreateRequest;
+import com.admin.dto.request.VirtualGroupListQueryRequest;
 import com.admin.dto.request.VirtualGroupMemberRequest;
 import com.admin.dto.response.*;
 import com.admin.service.VirtualGroupTaskService;
@@ -34,6 +37,7 @@ public class VirtualGroupController {
     private final VirtualGroupManagerComponent virtualGroupManager;
     private final VirtualGroupTaskService virtualGroupTaskService;
     private final I18nService i18nService;
+    private final VirtualGroupListQueryComponent virtualGroupListQueryComponent;
     
     // ==================== Virtual Group CRUD ====================
     
@@ -55,7 +59,14 @@ public class VirtualGroupController {
         List<VirtualGroupInfo> groups = virtualGroupManager.listVirtualGroups(type, status);
         return ResponseEntity.ok(groups);
     }
-    
+
+    @PostMapping("/query")
+    @Operation(summary = "Page virtual groups", description = "Shared list: COUNT(*) and the page share one predicate")
+    public ResponseEntity<AdminListPage<VirtualGroupInfo>> queryVirtualGroups(
+            @RequestBody VirtualGroupListQueryRequest request) {
+        return ResponseEntity.ok(virtualGroupListQueryComponent.query(request));
+    }
+
     @GetMapping("/{groupId}")
     @Operation(summary = "Get virtual group detail", description = "Get virtual group detail by ID")
     public ResponseEntity<VirtualGroupInfo> getVirtualGroup(

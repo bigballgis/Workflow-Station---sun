@@ -103,6 +103,7 @@ public class AdminAuditAspect {
 
     @Around("within(com.admin.controller.VirtualGroupController) "
             + "&& !execution(* *.listVirtualGroups(..)) "
+            + "&& !execution(* *.queryVirtualGroups(..)) "
             + "&& !execution(* *.getVirtualGroup(..)) "
             + "&& !execution(* *.getGroupMembers(..)) "
             + "&& !execution(* *.getGroupTasks(..)) "
