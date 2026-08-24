@@ -163,6 +163,7 @@ public class AdminAuditAspect {
 
     @Around("within(com.admin.bi.controller.BiDashboardAssignmentController) "
             + "&& !execution(* *.listAssignments(..)) "
+            + "&& !execution(* *.queryAssignments(..)) "
             + "&& !execution(* *.getUserDashboards(..))")
     public Object auditBiDashboardAssignment(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "BI_ASSIGNMENT");

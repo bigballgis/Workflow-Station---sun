@@ -159,6 +159,17 @@ export interface AssignmentListParams {
   dashboardTitle?: string
 }
 
+export interface AssignmentListQuery {
+  page: number
+  size: number
+  targetType?: string
+  dashboardTitle?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 export interface RbacMappingListParams {
   roleName?: string
   roleType?: string
@@ -211,6 +222,9 @@ export const biManagementApi = {
     /** Paginated assignment list */
     list: (params?: AssignmentListParams) =>
       get<PageResponse<DashboardAssignmentResponse>>(ASSIGNMENT_BASE, { params }),
+
+    query: (body: AssignmentListQuery) =>
+      post<AdminListPage<DashboardAssignmentResponse>>(`${ASSIGNMENT_BASE}/query`, body),
 
     /** Update assignment record */
     update: (id: string, data: DashboardAssignmentCreateRequest) =>
