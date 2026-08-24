@@ -48,6 +48,7 @@ export function createTaskDetailPopupHelpers(ctx: TaskDetailCtx) {
     // binding's canvas lives — the top-level cfg.rule stays bound to the form's PRIMARY table
     // and is not what the designer actually authored for this popup. Prefer the ACTION binding's
     // rule when present; fall back to cfg.rule for legacy ACTION forms saved before this existed.
+    // DW Preview counterpart: frontend/developer-workstation/src/utils/actionFormCanvasRule.ts
     let rules: any[] | null = null
     if (formContent?.formType === 'ACTION') {
       const actionBinding = ((formContent as any).tableBindings || []).find(

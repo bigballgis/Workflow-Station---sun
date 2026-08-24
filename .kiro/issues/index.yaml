@@ -2339,3 +2339,23 @@
   severity: minor
   category: quality
   summary: "Views CSV export: FE comment says unpaged but body still sends page size; BE overrides with maxRows — clarify contract"
+
+- id: "1541"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: major
+  category: bug
+  summary: "DW Form Preview empty for ACTION forms (Meeting Remark) because Preview read top-level rule instead of ACTION canvas"
+  file: "frontend/developer-workstation/src/utils/actionFormCanvasRule.ts"
+  note: |
+    根因：ACTION 表单（FORM_POPUP）字段画在 subForms[ACTION binding].rule，顶层 rule 为空；
+    Preview 只读主画布。Portal preparePopupContext 已按 ACTION 画布取 rule。
+    修复：resolveActionFormCanvasRule 与 Portal 同构；useFormPreviewBuild 在 bindingMap 之后切画布，
+    默认值用 ACTION 表 fieldDefs。
+    验证：actionFormCanvasRule.test.ts + useFormPreviewBuild.actionCanvas.test.ts
+    + savedFormPreviewBuilder.actionCanvas.test.ts；
+    Playwright frontend/scripts/verify-meeting-remark-form-preview.mjs 4/4；
+    截图 frontend/developer-workstation/verification-screenshots/2026-08-24_meeting-remark-form-preview.png
+    审查跟进：Preview 表身份随 ACTION 画布（PRIMARY 误绑不再抢身份）；脏顶层 rule 回归；
+    Process Debug saved preview 同构；live 空数组不 overlay（fc-designer 水合前 getRule 为 []）。
+
