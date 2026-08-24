@@ -1,11 +1,12 @@
 # 跨端列表共享组件与服务端分页接入规范
 
-> **状态：方案已定稿；Views / Relation Tables / 已办任务 / My Requests / To Do 已接入（2026-08-24）。**
-> §12 的 6 项待确认**全部关闭**。Delegations / Permissions 见独立 PR；AD / DW 仍未做。
+> **状态：方案已定稿；Views / Relation Tables / 已办任务 / My Requests / To Do / Delegations（规则+审计）/ Permissions（申请+审批）已接入（2026-08-24）。**
+> §12 的 6 项待确认**全部关闭**。AD / DW 仍未做。
 > To Do：引擎 `or()` 真分页 + 去重 COUNT；可 push 列（taskName/步骤名、流程名、priority 档、
 > createTime/dueDate）走 window；initiatorName / assignmentType / groupBy 仍 portal fullScan
 > （fullScan 已改为引擎真 OFFSET，不再 `(page+1)*size` 前缀重扫）。
 > **默认不再把 standing-rule Proxy 并进 To Do**（Proxy 仍走 Delegations / assignmentTypes=DELEGATED）。
+> Delegations：My Rules + Audit 共享列表 + SQL 真分页；Proxy Tasks 页仍为空（另跟）。
 > 投影表仍暂缓。
 > 关键决策：§6.1（行可见范围两级过滤）、§6.1.1（SUB 行身份取 `row_id` 优先，写入侧→MAIN→SUB
 > 三步走）、§6.2（深分页不设上限，改慢查询日志）、§6.3.1（分组按字段语义声明，不是每列都给）、
