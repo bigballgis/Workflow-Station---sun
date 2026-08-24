@@ -35,11 +35,11 @@
             :index="group.key"
           >
             <el-tooltip
-              :content="group.label || t('relationTable.ungrouped')"
+              :content="groupLabel(group)"
               placement="top"
               :show-after="400"
             >
-              <span class="group-title">{{ group.label || t('relationTable.ungrouped') }} ({{ group.tables.length }})</span>
+              <span class="group-title">{{ groupLabel(group) }} ({{ group.tables.length }})</span>
             </el-tooltip>
           </el-menu-item>
         </el-menu>
@@ -250,6 +250,7 @@ const {
   filteredTableList,
   groupedTableList,
   selectedGroupKey,
+  COMMON_KEY,
   enableLoadingMap,
   portalLoadingMap,
   currentTable,
@@ -267,6 +268,11 @@ const {
   handleCompare,
   handleDelete,
 } = useRelationTable()
+
+function groupLabel(group: { key: string; label: string | null }): string {
+  if (group.key === COMMON_KEY) return t('relationTable.common')
+  return group.label || t('relationTable.ungrouped')
+}
 
 function handleActionCommand(command: string, row: any) {
   switch (command) {

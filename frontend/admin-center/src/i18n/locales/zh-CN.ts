@@ -955,6 +955,7 @@ export default {
     confirmDeleteMsg: '删除表「{name}」？此操作不可撤销。',
     functionUnit: '功能单元',
     ungrouped: '未分组',
+    common: 'Common',
     allFunctionUnits: '全部功能单元',
     computedField: {
       dialogTitle: '公式',
@@ -1093,7 +1094,7 @@ export default {
     placeholderSearchTables: '搜索表...',
     placeholderDisplayName: '显示名称',
     placeholderSelectFunctionUnit: '选择功能单元（可多选，可选）',
-    hintEmptyMeansCommon: '留空表示 Common（对所有功能单元可见）',
+    optionCommonFunctionUnit: 'Common',
     placeholderTableDescription: '表描述',
     placeholderDataType: '类型',
     placeholderIp: 'IP',

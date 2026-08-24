@@ -54,13 +54,13 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   }
 
   // Function Unit grouping: selectable options are the deployed FUs (dedup by code, latest version).
-  // The table's currently-assigned FUs may point to an older version's id (not in that dedup list) —
-  // those options are added separately so the select still shows their labels instead of going blank.
+  // The table's currently-assigned FUs may point to an older version's id of the SAME code (not in
+  // that dedup list) — dedup extras by code too, else the same FU name shows up twice in the select.
   const functionUnitOptions = ref<FunctionUnit[]>([])
   const currentFunctionUnitOptions = ref<FunctionUnit[]>([])
   const allFunctionUnitOptions = computed<FunctionUnit[]>(() => {
     const extra = currentFunctionUnitOptions.value.filter(
-      fu => !functionUnitOptions.value.some(o => o.id === fu.id),
+      fu => !functionUnitOptions.value.some(o => (o.code || o.id) === (fu.code || fu.id)),
     )
     return [...functionUnitOptions.value, ...extra]
   })
@@ -77,6 +77,20 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   const rules = {
     displayName: [{ required: true, message: () => t('form.validationDisplayNameRequired'), trigger: 'blur' }],
     tableName: [{ required: true, message: () => t('form.validationTableNameRequired'), trigger: 'blur' }],
+  }
+
+  // A table with no Function Unit links is "Common" (visible to every FU). Modeled in the select as
+  // an explicit, mutually-exclusive option rather than "leave everything blank" so the intent is
+  // discoverable in the UI instead of relying on a hint line under the field.
+  const COMMON_OPTION_VALUE = '__COMMON__'
+  const onFunctionUnitSelectionChange = (values: string[]) => {
+    const commonJustPicked = values.includes(COMMON_OPTION_VALUE)
+    if (commonJustPicked && values.length > 1) {
+      const wasCommonAlreadySelected = form.functionUnitIds.includes(COMMON_OPTION_VALUE)
+      form.functionUnitIds = wasCommonAlreadySelected
+        ? values.filter(v => v !== COMMON_OPTION_VALUE)
+        : [COMMON_OPTION_VALUE]
+    }
   }
 
   const onTableDisplayNameInput = () => {
@@ -182,12 +196,23 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
       form.tableName = data.tableName
       form.displayName = data.displayName || ''
       form.description = data.description || ''
-      form.functionUnitIds = (data.functionUnits || []).map(fu => fu.id)
-      currentFunctionUnitOptions.value = (data.functionUnits || []).map(fu => ({
-        id: fu.id,
-        code: fu.code || '',
-        name: fu.name || fu.code || fu.id,
-      } as FunctionUnit))
+      // The table's saved link may point at an older FU version's id. Re-point selection to the
+      // latest deployed version's id when the code matches, so the select's value lines up with
+      // the option list it renders (same id space) instead of showing a duplicate/blank label.
+      const latestByCode = new Map(
+        functionUnitOptions.value.filter(fu => fu.code).map(fu => [fu.code, fu] as const),
+      )
+      const assignedFus = data.functionUnits || []
+      form.functionUnitIds = assignedFus.length
+        ? assignedFus.map(fu => latestByCode.get(fu.code || '')?.id ?? fu.id)
+        : [COMMON_OPTION_VALUE]
+      currentFunctionUnitOptions.value = assignedFus
+        .filter(fu => !fu.code || !latestByCode.has(fu.code))
+        .map(fu => ({
+          id: fu.id,
+          code: fu.code || '',
+          name: fu.name || fu.code || fu.id,
+        } as FunctionUnit))
       form.fieldDefinitions = (data.fieldDefinitions || []).map(f => ({
         id: f.id,
         fieldName: f.fieldName,
@@ -230,6 +255,11 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
       if (!await assertTableNameAvailable(form.tableName, tableId.value)) return false
     }
 
+    // "Common" is a UI-only sentinel — the backend contract is an empty list.
+    const functionUnitIdsForSubmit = form.functionUnitIds.includes(COMMON_OPTION_VALUE)
+      ? []
+      : form.functionUnitIds
+
     submitting.value = true
     try {
       if (isEdit.value) {
@@ -256,7 +286,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           displayName: form.displayName || undefined,
           description: form.description || undefined,
           // Always send functionUnitIds on edit: [] clears to Common, a non-empty list (re)assigns.
-          functionUnitIds: form.functionUnitIds,
+          functionUnitIds: functionUnitIdsForSubmit,
           fieldDefinitions: fields,
         })
         notifySuccess('Table updated successfully')
@@ -283,7 +313,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           tableName: form.tableName,
           displayName: form.displayName || undefined,
           description: form.description || undefined,
-          functionUnitIds: form.functionUnitIds,
+          functionUnitIds: functionUnitIdsForSubmit,
           fieldDefinitions: fields,
         })
         notifySuccess('Table created successfully')
@@ -304,5 +334,6 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   return {
     form, rules, submitting, dataTypes, fkRefTables, allFunctionUnitOptions, isAuditField, canBeComputed, addField, removeField, loadTableData, submit,
     onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange,
+    COMMON_OPTION_VALUE, onFunctionUnitSelectionChange,
   }
 }

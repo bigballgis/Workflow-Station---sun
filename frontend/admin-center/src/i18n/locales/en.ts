@@ -975,6 +975,7 @@ export default {
     confirmDeleteMsg: 'Delete table "{name}"? This action cannot be undone.',
     functionUnit: 'Function Unit',
     ungrouped: 'Ungrouped',
+    common: 'Common',
     allFunctionUnits: 'All Function Units',
     computedField: {
       dialogTitle: 'Formula',
@@ -1113,7 +1114,7 @@ export default {
     placeholderSearchTables: 'Search tables...',
     placeholderDisplayName: 'Display name',
     placeholderSelectFunctionUnit: 'Select Function Unit(s) (optional)',
-    hintEmptyMeansCommon: 'Leave empty for Common (visible to all Function Units)',
+    optionCommonFunctionUnit: 'Common',
     placeholderTableDescription: 'Table description',
     placeholderDataType: 'Type',
     placeholderIp: 'IP',

@@ -65,7 +65,13 @@
           filterable
           :placeholder="t('form.placeholderSelectFunctionUnit')"
           style="width: 100%;"
+          @change="onFunctionUnitSelectionChange"
         >
+          <el-option
+            :key="COMMON_OPTION_VALUE"
+            :label="t('form.optionCommonFunctionUnit')"
+            :value="COMMON_OPTION_VALUE"
+          />
           <el-option
             v-for="fu in allFunctionUnitOptions"
             :key="fu.id"
@@ -73,9 +79,6 @@
             :value="fu.id"
           />
         </el-select>
-        <div class="form-item-hint">
-          {{ t('form.hintEmptyMeansCommon') }}
-        </div>
       </el-form-item>
     </el-form>
 
@@ -328,7 +331,8 @@ const tableId = computed(() => Number(route.params.id))
 const formRef = ref<FormInstance>()
 
 const { form, rules, submitting, dataTypes, fkRefTables, allFunctionUnitOptions, isAuditField, canBeComputed, addField, removeField, loadTableData, submit,
-  onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange }
+  onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange,
+  COMMON_OPTION_VALUE, onFunctionUnitSelectionChange }
   = useTableStructureForm({ tableId, isEdit: toRef(isEdit) })
 
 const handleSubmit = async () => {

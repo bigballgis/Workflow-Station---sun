@@ -188,6 +188,7 @@ export function useRelationTable() {
     filteredTableList,
     groupedTableList,
     selectedGroupKey,
+    COMMON_KEY,
     enableLoadingMap,
     portalLoadingMap,
     currentTable,
