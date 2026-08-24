@@ -120,6 +120,7 @@ public class AdminAuditAspect {
 
     @Around("within(com.admin.controller.RelationTableStructureController) "
             + "&& !execution(* *.getTableList(..)) "
+            + "&& !execution(* *.queryTables(..)) "
             + "&& !execution(* *.getTableById(..)) "
             + "&& !execution(* *.getVersionHistory(..)) "
             + "&& !execution(* *.getAccessConfig(..))")

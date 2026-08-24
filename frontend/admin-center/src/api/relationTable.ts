@@ -1,5 +1,6 @@
-import { PageResult } from '@/types/common'
+import { PageResult, type AdminListPage } from '@/types/common'
 import { get, post, put, del } from './request'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 // ==================== 类型定义 ====================
 
@@ -242,6 +243,26 @@ export interface RollbackRequest {
   targetVersionId: number
 }
 
+export interface RelationTableFuGroup {
+  key: string
+  label: string | null
+  count: number
+}
+
+export interface RelationTableStructureListQuery {
+  page: number
+  size: number
+  functionUnitId?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
+export interface RelationTableStructureListPage extends AdminListPage<RelationTableResponse> {
+  functionUnitGroups: RelationTableFuGroup[]
+}
+
 // ==================== 表结构 API ====================
 
 export const relationTableStructureApi = {
@@ -252,6 +273,9 @@ export const relationTableStructureApi = {
   /** 获取表定义列表 */
   list: () =>
     get<RelationTableResponse[]>('/relation-tables/structures'),
+
+  query: (body: RelationTableStructureListQuery) =>
+    post<RelationTableStructureListPage>('/relation-tables/structures/query', body),
 
   /** 检查表名是否全平台可用 */
   checkTableNameAvailable: (tableName: string, excludeTableId?: number) =>
