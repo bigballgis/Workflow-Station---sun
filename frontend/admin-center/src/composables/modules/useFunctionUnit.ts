@@ -5,29 +5,38 @@
  * 组件仅保留 template + 调用此 composable。
  */
 
-import { ref, watch, type Ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { logger } from '@/utils/logger'
 import { notifyConfirm, notifyError, notifySuccess, notifyWarning } from '@/utils/notify'
-import { storeToRefs } from 'pinia'
 import { functionUnitApi, type FunctionUnit, type DeletePreviewResponse, type FunctionUnitValidationResult } from '@/api/functionUnit'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { ApiError } from '@/types/errors'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
-import { useFunctionUnitPagination } from '@/composables/modules/useFunctionUnitPagination'
+import { useFunctionUnitLists, type FunctionUnitRow } from '@/composables/modules/useFunctionUnitLists'
 
 export function useFunctionUnit() {
   const { t } = useI18n()
   const store = useFunctionUnitStore()
+  const lists = useFunctionUnitLists()
   const {
-    functionUnits,
-    archivedFunctionUnits,
-    deployments,
-    deploymentsTotal,
-    loading,
+    listLoading,
     archivedLoading,
     deploymentsLoading,
-  } = storeToRefs(store)
+    searchKeyword,
+    archiveSearchKeyword,
+    selectedUnits,
+    listGrid,
+    archiveGrid,
+    deployGrid,
+    fetchFunctionUnits,
+    fetchArchivedFunctionUnits,
+    fetchDeployments,
+    handleSelectionChange,
+    LIST_ACTIONS_WIDTH,
+    LIST_SELECTION_WIDTH,
+    ARCHIVE_ACTIONS_WIDTH,
+  } = lists
 
   // ==================== State ====================
 
@@ -39,10 +48,6 @@ export function useFunctionUnit() {
   const restoreLoadingId = ref<string | null>(null)
 
   const versionList = ref<FunctionUnit[]>([])
-  const searchKeyword = ref('')
-  const archiveSearchKeyword = ref('')
-  /** Current-page selection only (no cross-page reserve). */
-  const selectedUnits = ref<FunctionUnit[]>([])
 
   // Dialog visibility
   const showImportDialog = ref(false)
@@ -63,70 +68,9 @@ export function useFunctionUnit() {
   const showValidateResultDialog = ref(false)
   const validateResult = ref<FunctionUnitValidationResult | null>(null)
 
-  // ==================== Pagination ====================
-  // loadDeploymentsImpl assigned after pagination is created (needs deploymentsPagination).
-  let loadDeploymentsImpl: () => Promise<void> = async () => {}
-
-  const {
-    listPagination,
-    archivePagination,
-    deploymentsPagination,
-    filteredFunctionUnits,
-    filteredArchivedFunctionUnits,
-    listTotal,
-    archiveTotal,
-    pagedFunctionUnits,
-    pagedArchivedFunctionUnits,
-    handleListSizeChange,
-    handleArchiveSizeChange,
-    handleDeploymentsChange,
-  } = useFunctionUnitPagination({
-    functionUnits: functionUnits as Ref<FunctionUnit[]>,
-    archivedFunctionUnits: archivedFunctionUnits as Ref<FunctionUnit[]>,
-    searchKeyword,
-    archiveSearchKeyword,
-    loadDeployments: () => loadDeploymentsImpl(),
-  })
-
-  // ==================== Data Fetching ====================
-
-  const fetchFunctionUnits = async () => {
-    try {
-      await store.fetchFunctionUnits()
-      functionUnits.value = functionUnits.value.map(unit => ({
-        ...unit,
-        enabled: unit.enabled !== false,
-        _enabledLoading: false
-      }))
-    } catch (e) {
-      logger.error('functionUnit', 'Failed to load function units:', e)
-      notifyError(t('functionUnit.loadFailed'))
-    }
-  }
-
-  const fetchArchivedFunctionUnits = async () => {
-    try {
-      await store.fetchArchivedFunctionUnits()
-    } catch (e) {
-      logger.error('functionUnit', 'Failed to load archived function units:', e)
-      notifyError(t('functionUnit.loadFailed'))
-    }
-  }
-
-  const fetchDeployments = async () => {
-    try {
-      // UI page is 1-based; API is 0-based. Loading flag is owned by the store.
-      await store.fetchDeployments(deploymentsPagination.page - 1, deploymentsPagination.size)
-    } catch (e) {
-      logger.error('functionUnit', 'Failed to load deployments:', e)
-      notifyError(t('functionUnit.loadFailed'))
-    }
-  }
-  loadDeploymentsImpl = fetchDeployments
-
   watch(activeTab, (tab) => {
-    if (tab === 'deployments') fetchDeployments()
-    if (tab === 'archive') fetchArchivedFunctionUnits()
+    if (tab === 'deployments') void fetchDeployments()
+    if (tab === 'archive') void fetchArchivedFunctionUnits()
   })
 
   // ==================== Dialog Actions ====================
@@ -219,7 +163,6 @@ export function useFunctionUnit() {
     try {
       await functionUnitApi.restore(unit.id)
       notifySuccess(t('functionUnit.restoreSuccess'))
-      archivedFunctionUnits.value = archivedFunctionUnits.value.filter(u => u.code !== unit.code)
       await fetchArchivedFunctionUnits()
       await fetchFunctionUnits()
     } catch (e: unknown) {
@@ -257,7 +200,7 @@ export function useFunctionUnit() {
 
   // ==================== Enable/Disable ====================
 
-  const handleEnabledChange = async (unit: FunctionUnit & { _enabledLoading?: boolean }, enabled: boolean) => {
+  const handleEnabledChange = async (unit: FunctionUnitRow, enabled: boolean) => {
     if (!enabled) {
       try {
         await notifyConfirm(
@@ -416,7 +359,7 @@ export function useFunctionUnit() {
 
   return {
     activeTab,
-    loading,
+    listLoading,
     archivedLoading,
     deploymentsLoading,
     versionsLoading,
@@ -424,26 +367,17 @@ export function useFunctionUnit() {
     deployLoadingId,
     validateLoadingId,
     restoreLoadingId,
-    functionUnits,
-    archivedFunctionUnits,
-    deployments,
-    deploymentsTotal,
     versionList,
     searchKeyword,
     archiveSearchKeyword,
-    filteredFunctionUnits,
-    filteredArchivedFunctionUnits,
-    pagedFunctionUnits,
-    pagedArchivedFunctionUnits,
-    listTotal,
-    archiveTotal,
-    listPagination,
-    archivePagination,
-    deploymentsPagination,
-    handleListSizeChange,
-    handleArchiveSizeChange,
-    handleDeploymentsChange,
     selectedUnits,
+    listGrid,
+    archiveGrid,
+    deployGrid,
+    handleSelectionChange,
+    LIST_ACTIONS_WIDTH,
+    LIST_SELECTION_WIDTH,
+    ARCHIVE_ACTIONS_WIDTH,
     showImportDialog,
     showAccessDialogVisible,
     showDeleteDialogVisible,
