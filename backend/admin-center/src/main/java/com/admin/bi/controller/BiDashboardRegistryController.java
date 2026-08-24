@@ -1,11 +1,14 @@
 package com.admin.bi.controller;
 
+import com.admin.bi.component.BiDashboardListQueryComponent;
 import com.admin.bi.dto.request.DashboardRegistryUpdateRequest;
 import com.admin.bi.dto.request.DashboardStatusUpdateRequest;
 import com.admin.bi.dto.response.DashboardRegistryResponse;
 import com.admin.bi.dto.response.SyncResultResponse;
 import com.admin.bi.enums.DashboardStatus;
 import com.admin.bi.service.BiDashboardRegistryService;
+import com.admin.dto.list.AdminListPage;
+import com.admin.dto.request.BiDashboardListQueryRequest;
 import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 public class BiDashboardRegistryController {
 
     private final BiDashboardRegistryService dashboardRegistryService;
+    private final BiDashboardListQueryComponent dashboardListQueryComponent;
 
     @PostMapping("/sync")
     @Operation(summary = "Manually sync Dashboards", description = "Immediately execute a Sync_Operation and return sync result summary")
@@ -48,6 +52,13 @@ public class BiDashboardRegistryController {
             Pageable pageable) {
         Page<DashboardRegistryResponse> page = dashboardRegistryService.listDashboards(title, tags, status, pageable);
         return ResponseEntity.ok(page);
+    }
+
+    @PostMapping("/query")
+    @Operation(summary = "Query Dashboards (true paging; column filters, sort and grouping)")
+    public ResponseEntity<AdminListPage<DashboardRegistryResponse>> queryDashboards(
+            @RequestBody BiDashboardListQueryRequest request) {
+        return ResponseEntity.ok(dashboardListQueryComponent.query(request));
     }
 
     @GetMapping("/{id}")

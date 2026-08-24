@@ -155,6 +155,7 @@ public class AdminAuditAspect {
 
     @Around("within(com.admin.bi.controller.BiDashboardRegistryController) "
             + "&& !execution(* *.listDashboards(..)) "
+            + "&& !execution(* *.queryDashboards(..)) "
             + "&& !execution(* *.getDashboard(..))")
     public Object auditBiDashboardRegistry(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "BI_DASHBOARD");

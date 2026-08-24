@@ -1,4 +1,6 @@
 import { get, post, put, del } from './request'
+import type { AdminListPage } from '@/types/common'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 // ==================== Enums / Type Aliases ====================
 
@@ -138,6 +140,18 @@ export interface DashboardListParams {
   status?: DashboardStatus
 }
 
+export interface DashboardListQuery {
+  page: number
+  size: number
+  title?: string
+  tags?: string
+  status?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 export interface AssignmentListParams {
   page?: number
   size?: number
@@ -167,6 +181,9 @@ export const biManagementApi = {
     /** Paginated dashboard list */
     list: (params?: DashboardListParams) =>
       get<PageResponse<DashboardRegistryResponse>>(DASHBOARD_BASE, { params }),
+
+    query: (body: DashboardListQuery) =>
+      post<AdminListPage<DashboardRegistryResponse>>(`${DASHBOARD_BASE}/query`, body),
 
     /** Get dashboard details */
     getById: (id: string) =>

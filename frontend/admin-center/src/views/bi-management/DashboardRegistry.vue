@@ -69,164 +69,171 @@
       </el-form>
     </el-card>
 
-    <el-card class="table-card">
-      <el-table
-        v-loading="loading"
-        :data="dashboards"
-        stripe
-        border
-        table-layout="auto"
-        style="width: 100%"
+    <el-card
+      v-loading="loading"
+      class="table-card"
+    >
+      <div
+        ref="gridScrollRef"
+        class="list-data-grid-scroll"
       >
-        <el-table-column
-          prop="dashboardTitle"
-          :label="t('bi.dashboard.colDashboardTitle')"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="embedId"
-          :label="t('bi.dashboard.colEmbedId')"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="supersetDashboardUuid"
-          :label="t('bi.dashboard.colSupersetUuid')"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="tags"
-          :label="t('bi.dashboard.colTags')"
-          min-width="120"
-          show-overflow-tooltip
+        <div
+          class="list-data-grid-inner"
+          :style="gridInnerStyle"
         >
-          <template #default="{ row }">
-            <span v-if="row.tags">{{ row.tags }}</span>
-            <span
-              v-else
-              style="color: #c0c4cc"
-            >-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('bi.dashboard.colDefaultLanding')"
-          width="150"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-tag
-              v-if="row.isDefaultLanding"
-              type="success"
-              size="small"
+          <el-table
+            :data="displayRows"
+            stripe
+            border
+            :fit="false"
+            table-layout="fixed"
+            style="width: 100%"
+            class="list-data-grid"
+            :class="{ 'list-data-grid--fit': gridFits }"
+            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
+            :row-class-name="rowClassName"
+          >
+            <el-table-column
+              v-for="(col, colIndex) in displayColumns"
+              :key="col.field"
+              :prop="col.field"
+              :width="widthOf(col.field)"
+              show-overflow-tooltip
             >
-              {{ t('bi.dashboard.yes') }}
-            </el-tag>
-            <el-tag
-              v-else
-              type="info"
-              size="small"
+              <template #header>
+                <ListColumnHeader
+                  :column="col"
+                  :sort="sort.field === col.field ? sort.direction : null"
+                  :grouped="groupBy === col.field"
+                  :filtered="!!columnFilters[col.field]"
+                  :width="widthOf(col.field)"
+                  :show-move="displayColumns.length > 1"
+                  :can-move-left="colIndex > 0"
+                  :can-move-right="colIndex < displayColumns.length - 1"
+                  @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
+                  @clear-sort="onClearSort"
+                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
+                  @filter-open="openFilter(col.field)"
+                  @clear-filter="onClearFilter(col.field)"
+                  @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
+                  @width-change="(width: number) => setWidth(col.field, width)"
+                  @width-commit="persistWidths"
+                />
+              </template>
+              <template #default="{ row }">
+                <template v-if="isListGroupHeaderRow(row)">
+                  <div class="group-header-cell">
+                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
+                    <span class="group-count">({{ row._groupCount }})</span>
+                  </div>
+                </template>
+                <template v-else-if="col.field === 'isDefaultLanding'">
+                  <el-tag
+                    v-if="row.isDefaultLanding"
+                    type="success"
+                    size="small"
+                  >
+                    {{ t('bi.dashboard.yes') }}
+                  </el-tag>
+                  <el-tag
+                    v-else
+                    type="info"
+                    size="small"
+                  >
+                    {{ t('bi.dashboard.no') }}
+                  </el-tag>
+                </template>
+                <el-tag
+                  v-else-if="col.field === 'status'"
+                  :type="biDashboardStatusTagType(row.status) as 'success' | 'warning' | 'info'"
+                  size="small"
+                >
+                  {{ t(biDashboardStatusKey(row.status)) }}
+                </el-tag>
+                <span v-else-if="col.field === 'lastSyncedAt'">
+                  {{ row.lastSyncedAt ? formatDateTime(row.lastSyncedAt) : '-' }}
+                </span>
+                <template v-else>
+                  {{ row[col.field] || '-' }}
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="leftoverWidth > 0"
+              :width="leftoverWidth"
+              class-name="list-col-spacer"
+            />
+            <el-table-column
+              :label="t('bi.dashboard.colActions')"
+              :width="ACTIONS_COL_WIDTH"
+              fixed="right"
+              align="center"
             >
-              {{ t('bi.dashboard.no') }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('bi.dashboard.colStatus')"
-          width="110"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-tag
-              :type="biDashboardStatusTagType(row.status) as 'success' | 'warning' | 'info'"
-              size="small"
-            >
-              {{ t(biDashboardStatusKey(row.status)) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="lastSyncedAt"
-          :label="t('bi.dashboard.colLastSynced')"
-          min-width="170"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            <span v-if="row.lastSyncedAt">{{ formatDateTime(row.lastSyncedAt) }}</span>
-            <span
-              v-else
-              style="color: #c0c4cc"
-            >-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('bi.dashboard.colActions')"
-          width="220"
-          fixed="right"
-          align="center"
-        >
-          <template #default="{ row }">
-            <div style="display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; white-space: nowrap; gap: 4px;">
-              <el-button
-                link
-                type="primary"
-                size="small"
-                @click="showEditDialog(row)"
-              >
-                {{ t('bi.dashboard.edit') }}
-              </el-button>
-              <el-button
-                v-if="row.status === 'ACTIVE'"
-                link
-                type="warning"
-                size="small"
-                @click="handleToggleStatus(row)"
-              >
-                {{ t('bi.dashboard.disable') }}
-              </el-button>
-              <el-button
-                v-else-if="row.status === 'MANUAL_INACTIVE'"
-                link
-                type="success"
-                size="small"
-                @click="handleToggleStatus(row)"
-              >
-                {{ t('bi.dashboard.enable') }}
-              </el-button>
-              <el-button
-                v-else
-                link
-                type="info"
-                size="small"
-                disabled
-              >
-                {{ t('bi.dashboard.enable') }}
-              </el-button>
-              <el-button
-                link
-                type="danger"
-                size="small"
-                @click="handleDelete(row)"
-              >
-                {{ t('bi.dashboard.delete') }}
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="query.page"
-          v-model:page-size="query.size"
-          :total="total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSearch"
-          @current-change="handleSearch"
-        />
+              <template #header>
+                {{ t('bi.dashboard.colActions') }}
+              </template>
+              <template #default="{ row }">
+                <div
+                  v-if="!isListGroupHeaderRow(row)"
+                  style="display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; white-space: nowrap; gap: 4px;"
+                >
+                  <el-button
+                    link
+                    type="primary"
+                    size="small"
+                    @click="showEditDialog(row)"
+                  >
+                    {{ t('bi.dashboard.edit') }}
+                  </el-button>
+                  <el-button
+                    v-if="row.status === 'ACTIVE'"
+                    link
+                    type="warning"
+                    size="small"
+                    @click="handleToggleStatus(row)"
+                  >
+                    {{ t('bi.dashboard.disable') }}
+                  </el-button>
+                  <el-button
+                    v-else-if="row.status === 'MANUAL_INACTIVE'"
+                    link
+                    type="success"
+                    size="small"
+                    @click="handleToggleStatus(row)"
+                  >
+                    {{ t('bi.dashboard.enable') }}
+                  </el-button>
+                  <el-button
+                    v-else
+                    link
+                    type="info"
+                    size="small"
+                    disabled
+                  >
+                    {{ t('bi.dashboard.enable') }}
+                  </el-button>
+                  <el-button
+                    link
+                    type="danger"
+                    size="small"
+                    @click="handleDelete(row)"
+                  >
+                    {{ t('bi.dashboard.delete') }}
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </div>
+
+      <ListPagination
+        v-model:page="pagination.page"
+        v-model:size="pagination.size"
+        :total="pagination.total"
+        :loading="loading"
+        @change="loadDashboards"
+      />
     </el-card>
 
     <DashboardEditDialog
@@ -234,6 +241,14 @@
       :edit-form="editForm"
       :edit-loading="editLoading"
       @submit="handleEditSubmit"
+    />
+
+    <ListFilterDialog
+      v-model:visible="filterDialog.visible"
+      :column="activeFilterColumn"
+      :filter="activeFilter"
+      @apply="onFilterApply"
+      @clear="onFilterClear"
     />
   </div>
 </template>
@@ -246,16 +261,77 @@ import PageHeader from '@/components/PageHeader.vue'
 import { useBiDashboard } from '@/composables/modules/useBiDashboard'
 import { biDashboardStatusKey, biDashboardStatusTagType, formatDateTime } from '@/utils/format'
 import DashboardEditDialog from './components/DashboardEditDialog.vue'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
+import ListPagination from '@platform-shared/list/ListPagination.vue'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 const { t } = useI18n()
 
 const {
-  loading, syncing, editLoading, dashboards, total, query,
+  loading, syncing, editLoading, query,
   editDialogVisible, editForm,
-  handleSearch, handleReset, handleSync,
+  handleSearch, handleReset, handleSync, loadDashboards,
   showEditDialog, handleEditSubmit, handleToggleStatus, handleDelete,
+  ACTIONS_COL_WIDTH,
+  displayColumns,
+  displayRows,
+  groupBy,
+  columnFilters,
+  sort,
+  filterDialog,
+  pagination,
+  activeFilterColumn,
+  activeFilter,
+  gridScrollRef,
+  gridFits,
+  leftoverWidth,
+  gridInnerStyle,
+  widthOf,
+  setWidth,
+  persistWidths,
+  moveColumn,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  applySort,
+  clearSort,
+  applyGroup,
+  rowClassName,
+  spanMethod,
+  groupHeaderLabel,
+  isListGroupHeaderRow,
 } = useBiDashboard()
 
-onMounted(() => { handleSearch() })
-onActivated(() => { handleSearch() })
+function onSort(field: string, direction: 'ASC' | 'DESC') {
+  applySort(field, direction)
+  void loadDashboards()
+}
+
+function onClearSort() {
+  clearSort()
+  void loadDashboards()
+}
+
+function onGroup(field: string, grouped: boolean) {
+  applyGroup(field, grouped)
+  void loadDashboards()
+}
+
+function onClearFilter(field: string) {
+  clearFilter(field)
+  void loadDashboards()
+}
+
+function onFilterApply(filter: ListColumnFilter) {
+  applyFilter(filter)
+  void loadDashboards()
+}
+
+function onFilterClear() {
+  onClearFilter(filterDialog.field)
+}
+
+onMounted(() => { void loadDashboards() })
+onActivated(() => { void loadDashboards() })
 </script>

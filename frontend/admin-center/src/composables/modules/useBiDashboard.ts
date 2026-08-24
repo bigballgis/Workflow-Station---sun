@@ -10,8 +10,19 @@ import {
   biManagementApi,
   type DashboardRegistryResponse,
   type DashboardStatus,
-  type DashboardListParams
 } from '@/api/biManagement'
+import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+
+const ACTIONS_COL_WIDTH = 220
+const DASHBOARD_COL_WIDTHS: Record<string, number> = {
+  dashboardTitle: 180,
+  embedId: 160,
+  supersetDashboardUuid: 160,
+  tags: 120,
+  isDefaultLanding: 150,
+  status: 110,
+  lastSyncedAt: 170,
+}
 
 export function useBiDashboard() {
   const { t } = useI18n()
@@ -19,34 +30,44 @@ export function useBiDashboard() {
   const loading = ref(false)
   const syncing = ref(false)
   const editLoading = ref(false)
-  const dashboards = ref<DashboardRegistryResponse[]>([])
-  const total = ref(0)
+  const query = reactive({ title: '', tags: '', status: undefined as DashboardStatus | undefined })
 
-  const query = reactive<DashboardListParams & { page: number; size: number }>({
-    title: '', tags: '', status: undefined, page: 1, size: 20
+  const grid = useAdminListGrid<DashboardRegistryResponse>({
+    storageKey: 'admin-list-layout:bi-dashboards',
+    extraWidth: ACTIONS_COL_WIDTH,
+    defaultWidthOf: (field) => DASHBOARD_COL_WIDTHS[field] ?? 140,
   })
 
   const editDialogVisible = ref(false)
   const editForm = reactive({ id: '', dashboardTitle: '', tags: '', isDefaultLanding: false })
 
-  const handleSearch = async () => {
+  const loadDashboards = async () => {
+    const seq = grid.beginQuery()
     loading.value = true
     try {
-      const params: DashboardListParams = {
-        title: query.title || undefined, tags: query.tags || undefined,
-        status: query.status || undefined, page: query.page - 1, size: query.size
-      }
-      const result = await biManagementApi.dashboard.list(params)
-      dashboards.value = result.content
-      total.value = result.totalElements
+      const page = await biManagementApi.dashboard.query({
+        ...grid.buildQuery(),
+        title: query.title || undefined,
+        tags: query.tags || undefined,
+        status: query.status || undefined,
+      })
+      if (!grid.isCurrentQuery(seq)) return
+      grid.applyPage(page, 'bi/dashboards/query response is missing its column declaration')
     } catch {
+      if (!grid.isCurrentQuery(seq)) return
       notifyError(t(errorTranslator(AppErrorCode.BI_DASHBOARD_QUERY_FAILED)))
-    } finally { loading.value = false }
+    } finally {
+      if (grid.isCurrentQuery(seq)) loading.value = false
+    }
+  }
+
+  const handleSearch = () => {
+    void loadDashboards()
   }
 
   const handleReset = () => {
-    Object.assign(query, { title: '', tags: '', status: undefined, page: 1 })
-    handleSearch()
+    Object.assign(query, { title: '', tags: '', status: undefined })
+    void loadDashboards()
   }
 
   const handleSync = async () => {
@@ -110,9 +131,11 @@ export function useBiDashboard() {
   }
 
   return {
-    loading, syncing, editLoading, dashboards, total, query,
+    loading, syncing, editLoading, query,
     editDialogVisible, editForm,
-    handleSearch, handleReset, handleSync,
+    handleSearch, handleReset, handleSync, loadDashboards,
     showEditDialog, handleEditSubmit, handleToggleStatus, handleDelete,
+    ACTIONS_COL_WIDTH,
+    ...grid,
   }
 }
