@@ -106,142 +106,19 @@
             style="margin-bottom: 12px;"
           />
 
-          <el-table
-            v-loading="dataLoading"
-            :data="dataRows"
-            stripe
-            class="table-fixed-actions"
-            style="width: 100%;"
-            border
-          >
-            <!-- Field columns from table structure -->
-            <el-table-column
-              v-for="field in fieldColumns"
-              :key="field.fieldName"
-              :prop="'data.' + field.fieldName"
-              :label="field.displayName || field.fieldName"
-              :min-width="120"
-              sortable
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                {{ formatRelationCellDisplay(row.data?.[field.fieldName]) }}
-              </template>
-            </el-table-column>
-            <!-- System columns -->
-            <el-table-column
-              prop="data.created_at"
-              label="Created At"
-              width="170"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                {{ formatHKT(row.data?.created_at) }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="data.created_by"
-              label="Created By"
-              width="120"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                {{ row.data?.created_by ?? '' }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="data.updated_at"
-              label="Updated At"
-              width="170"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                {{ formatHKT(row.data?.updated_at) }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="data.updated_by"
-              label="Updated By"
-              width="120"
-              show-overflow-tooltip
-            >
-              <template #default="{ row }">
-                {{ row.data?.updated_by ?? '' }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              label="Status"
-              width="100"
-            >
-              <template #default="{ row }">
-                <el-tag
-                  :type="isRowDisabled(row) ? 'danger' : 'success'"
-                  size="small"
-                >
-                  {{ isRowDisabled(row) ? 'Inactive' : 'Active' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <!-- Action column -->
-            <el-table-column
-              v-if="canWrite"
-              label="Actions"
-              width="240"
-              fixed="right"
-              align="center"
-            >
-              <template #default="{ row }">
-                <div class="action-cell">
-                <el-button
-                  link
-                  type="primary"
-                  size="small"
-                  @click="openEditDialog(row)"
-                >
-                  Edit
-                </el-button>
-                <el-button
-                  v-if="isRowDisabled(row)"
-                  link
-                  type="success"
-                  size="small"
-                  @click="handleEnable(row)"
-                >
-                  Active
-                </el-button>
-                <el-button
-                  v-else
-                  link
-                  type="warning"
-                  size="small"
-                  @click="handleDisable(row)"
-                >
-                  Inactive
-                </el-button>
-                <el-button
-                  link
-                  type="danger"
-                  size="small"
-                  @click="handleDelete(row)"
-                >
-                  Delete
-                </el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <el-pagination
-            v-if="totalElements > 0"
-            style="margin-top: 16px; justify-content: flex-end;"
-            background
-            layout="total, sizes, prev, pager, next"
-            :total="totalElements"
-            :page-size="pageSize"
-            :current-page="currentPage"
-            :page-sizes="[10, 20, 50, 100]"
-            @current-change="handlePageChange"
-            @size-change="handleSizeChange"
+          <RelationTableDataGrid
+            :grid="grid"
+            :loading="dataLoading"
+            :can-write="canWrite"
+            :status-width="RT_DATA_STATUS_COL_WIDTH"
+            :actions-width="RT_DATA_ACTIONS_COL_WIDTH"
+            :is-row-disabled="isRowDisabled"
+            :format-date-time="formatHKT"
+            @fetch="fetchData"
+            @edit="openEditDialog"
+            @enable="handleEnable"
+            @disable="handleDisable"
+            @delete="handleDelete"
           />
         </template>
         <el-empty
@@ -443,20 +320,25 @@ import { Search, Download, Plus, Upload, ArrowDown, Loading } from '@element-plu
 import PageHeader from '@/components/PageHeader.vue'
 import LookupField from '@/components/lookup/LookupField.vue'
 import LookupViewDisplay from '@/components/lookup/LookupViewDisplay.vue'
-import { formatRelationCellDisplay } from '@/components/lookup/lookupHelpers'
-import { useRelationTableData } from '@/composables/modules/useRelationTableData'
+import {
+  useRelationTableData,
+  RT_DATA_STATUS_COL_WIDTH,
+  RT_DATA_ACTIONS_COL_WIDTH,
+} from '@/composables/modules/useRelationTableData'
+import RelationTableDataGrid from './components/RelationTableDataGrid.vue'
 
 const {
   tableListLoading, dataLoading, exporting, saving,
   exportingTemplate, importDialogVisible, importing, importResult,
-  selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
+  selectedTableId, searchKeyword, tableSearchKeyword,
   fetchDataError, dialogVisible, dialogMode, formData,
-  selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
+  selectedTable, canWrite, visibleFieldColumns, filteredTables,
   isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
   lookupSelectedData, lookupFilterConditionsFor, onLookupSelect, onLookupClear, lookupViewFieldsFor,
-  fetchData, handleSelectTable, handlePageChange, handleSizeChange,
+  fetchData, handleSelectTable,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
   formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, init, refresh,
+  grid,
 } = useRelationTableData()
 
 const onImportFileChange = (file: { raw?: File }) => {

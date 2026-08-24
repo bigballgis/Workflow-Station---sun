@@ -253,6 +253,12 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         return new PageImpl<>(dtoList, pageable, total);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<RelationFieldDTO> loadDeployedFieldsForQuery(Long tableId) {
+        return getDeployedFields(getDeployedTableDefinition(tableId));
+    }
+
     private static final int LOOKUP_MAX_LIMIT = 200;
 
     @Override

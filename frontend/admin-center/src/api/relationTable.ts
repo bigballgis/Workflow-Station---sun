@@ -355,9 +355,20 @@ export const relationTableDataApi = {
   getFunctionUnitGroups: () =>
     get<FunctionUnitTableGroup[]>('/relation-tables/data/function-units'),
 
-  /** 分页查询表数据 */
+  /** 分页查询表数据（legacy GET，lookup / 旧调用仍走这里） */
   queryData: (tableId: number, params?: { search?: string; page?: number; size?: number }) =>
     get<PageResult<RelationTableDataRow>>(`/relation-tables/data/${tableId}`, { params }),
+
+  query: (tableId: number, body: {
+    page: number
+    size: number
+    search?: string
+    filters?: Array<ListColumnFilter & { field: string }>
+    sortField?: string
+    sortDirection?: 'ASC' | 'DESC'
+    groupBy?: string
+  }) =>
+    post<AdminListPage<RelationTableDataRow>>(`/relation-tables/data/${tableId}/query`, body),
 
   /** 新增数据 */
   addData: (tableId: number, data: Record<string, unknown>) =>
