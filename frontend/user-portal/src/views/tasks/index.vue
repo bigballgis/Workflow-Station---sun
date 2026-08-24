@@ -8,6 +8,13 @@
       v-loading="loading"
       class="portal-card"
     >
+      <TodoListToolbar
+        v-model:assignment-types="filterForm.assignmentTypes"
+        v-model:priorities="filterForm.priorities"
+        v-model:keyword="filterForm.keyword"
+        @search="handleSearch"
+        @reset="handleReset"
+      />
       <div
         ref="gridScrollRef"
         class="list-data-grid-scroll"
@@ -19,12 +26,12 @@
           <el-table
             :data="displayRows"
             stripe
-            :fit="gridFits"
+            :fit="false"
             table-layout="fixed"
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
-            :span-method="spanMethod(1)"
+            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
             :row-class-name="rowClassName"
             :selectable="(row: object) => !isListGroupHeaderRow(row)"
             @selection-change="handleSelectionChange"
@@ -41,17 +48,16 @@
               </div>
               <span v-else>{{ t('task.noTasks') }}</span>
             </template>
+            <!-- Do not set `fixed`: EP's left overlay fills the viewport and hides the data columns. -->
             <el-table-column
               type="selection"
               width="50"
-              fixed
             />
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
               :key="col.field"
               :prop="col.field"
-              :width="gridFits ? undefined : widthOf(col.field)"
-              :min-width="gridFits ? widthOf(col.field) : undefined"
+              :width="widthOf(col.field)"
               show-overflow-tooltip
             >
               <template #header>
@@ -125,6 +131,11 @@
                 </template>
               </template>
             </el-table-column>
+            <el-table-column
+              v-if="leftoverWidth > 0"
+              :width="leftoverWidth"
+              class-name="list-col-spacer"
+            />
           </el-table>
         </div>
       </div>
@@ -209,13 +220,15 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
+import TodoListToolbar from './TodoListToolbar.vue'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
-import { queryTodoTasks, batchUrgeTasks, type TaskInfo } from '@/api/task'
+import { queryTodoTasks, batchUrgeTasks, type TaskInfo, type TodoTaskQueryRequest } from '@/api/task'
 import { usePortalListGrid } from '@/composables/list/usePortalListGrid'
 import { formatDate } from '@/utils/dateFormat'
+import { taskPriorityBand, taskPriorityCssClass } from '@/utils/taskPriority'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 
 const TODO_COL_WIDTHS: Record<string, number> = {
@@ -235,6 +248,11 @@ const { t } = useI18n()
 const router = useRouter()
 const loading = ref(true)
 const selectedTasks = ref<TaskInfo[]>([])
+const filterForm = reactive({
+  assignmentTypes: [] as string[],
+  priorities: [] as string[],
+  keyword: '',
+})
 
 const {
   displayColumns,
@@ -247,7 +265,7 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits,
+  gridFits, leftoverWidth,
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -285,7 +303,7 @@ const loadTasks = async () => {
   const seq = beginQuery()
   loading.value = true
   try {
-    const res = await queryTodoTasks(buildQuery())
+    const res = await queryTodoTasks(todoQueryBody())
     if (!isCurrentQuery(seq)) return
     applyPage(res.data, 'todo/query response is missing its column declaration')
     pendingTaskStore.syncCountFromListTotal(res.data.totalElements)
@@ -297,6 +315,27 @@ const loadTasks = async () => {
   } finally {
     if (isCurrentQuery(seq)) loading.value = false
   }
+}
+
+function todoQueryBody(): TodoTaskQueryRequest {
+  const body: TodoTaskQueryRequest = { ...buildQuery() }
+  const keyword = filterForm.keyword.trim()
+  if (keyword) body.keyword = keyword
+  if (filterForm.assignmentTypes.length > 0) body.assignmentTypes = filterForm.assignmentTypes
+  if (filterForm.priorities.length > 0) body.priorities = filterForm.priorities
+  return body
+}
+
+function handleSearch() {
+  pagination.page = 1
+  loadTasks()
+}
+
+function handleReset() {
+  filterForm.assignmentTypes = []
+  filterForm.priorities = []
+  filterForm.keyword = ''
+  handleSearch()
 }
 
 function onSort(field: string, direction: 'ASC' | 'DESC') {
@@ -399,37 +438,11 @@ const getAssignmentClass = (task: TaskInfo) => {
 }
 
 const getPriorityLabel = (priority: string | number | undefined): string => {
-  if (!priority) return t('task.normal')
-  if (typeof priority === 'string') {
-    const upperPriority = priority.toUpperCase()
-    if (['URGENT', 'HIGH', 'NORMAL', 'LOW'].includes(upperPriority)) {
-      return t(`task.${upperPriority.toLowerCase()}`)
-    }
-  }
-  if (typeof priority === 'number') {
-    if (priority >= 75) return t('task.urgent')
-    if (priority >= 50) return t('task.high')
-    if (priority >= 25) return t('task.normal')
-    return t('task.low')
-  }
-  return t('task.normal')
+  return t(`task.${taskPriorityBand(priority).toLowerCase()}`)
 }
 
 const getPriorityClass = (priority: string | number | undefined): string => {
-  if (!priority) return 'normal'
-  if (typeof priority === 'string') {
-    const upperPriority = priority.toUpperCase()
-    if (['URGENT', 'HIGH', 'NORMAL', 'LOW'].includes(upperPriority)) {
-      return upperPriority.toLowerCase()
-    }
-  }
-  if (typeof priority === 'number') {
-    if (priority >= 75) return 'urgent'
-    if (priority >= 50) return 'high'
-    if (priority >= 25) return 'normal'
-    return 'low'
-  }
-  return 'normal'
+  return taskPriorityCssClass(priority)
 }
 
 onMounted(() => {

@@ -8,6 +8,20 @@
   overflow: auto;
 }
 
+/*
+ * v-loading must not live on this scroller. An absolute mask is sized to the
+ * client box at scroll origin, so overflowing columns (and scrolled-right
+ * columns) stay undimmed. Hosts put v-loading on .portal-card; this sticky
+ * rule is only a fallback if a host forgets.
+ */
+.list-data-grid-scroll > .el-loading-mask {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .list-data-grid-inner {
   display: block;
 }
@@ -63,4 +77,17 @@
   color: var(--el-text-color-secondary);
   font-weight: normal;
   font-size: 12px;
+}
+
+/* Trailing leftover so drag-narrowed columns do not re-stretch. No handle. */
+.list-data-grid th.list-col-spacer,
+.list-data-grid td.list-col-spacer {
+  padding: 0;
+  border-left: none;
+  background: transparent;
+}
+
+.list-data-grid th.list-col-spacer .cell,
+.list-data-grid td.list-col-spacer .cell {
+  display: none;
 }

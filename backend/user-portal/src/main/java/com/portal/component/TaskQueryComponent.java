@@ -13,6 +13,7 @@ import com.portal.dto.TaskStatistics;
 import com.portal.dto.TaskHistoryInfo;
 import com.portal.dto.TodoTaskQueryRequest;
 import com.portal.util.EngineTaskPushdown;
+import com.portal.util.ListQuerySupport;
 import com.portal.util.RequestContextInheritanceUtils;
 import com.portal.util.TaskInfoListOps;
 import com.portal.util.TaskQueryColumnFilters;
@@ -59,6 +60,8 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class TaskQueryComponent {
+
+    static final String TODO_LIST_KEY = "todo-tasks";
 
     private final ProcessInstanceRepository processInstanceRepository;
     private final WorkflowEngineClient workflowEngineClient;
@@ -136,14 +139,20 @@ public class TaskQueryComponent {
      * and in-memory group counts when {@code groupBy} is set.
      */
     public PortalListPage<TaskInfo> queryTodoList(String userId, TodoTaskQueryRequest request) {
+        long started = System.nanoTime();
+        List<ListColumnFilter> filters = new ArrayList<>(request.filters());
+        if (!request.priorities().isEmpty()) {
+            filters.add(new ListColumnFilter("priority", "in", String.join(",", request.priorities()), null));
+        }
         TaskQueryRequest adapted = TaskQueryRequest.builder()
                 .userId(userId)
                 .page(request.page())
                 .size(request.size())
-                .filters(request.filters())
+                .filters(filters)
                 .sortBy(request.sortField())
                 .sortDirection(request.sortDirection())
                 .groupBy(request.groupBy())
+                .keyword(request.keyword())
                 .assignmentTypes(request.assignmentTypes().isEmpty() ? null : request.assignmentTypes())
                 .build();
         List<PortalListGroup> groups = new ArrayList<>();
@@ -152,8 +161,13 @@ public class TaskQueryComponent {
                 && page.getTotalElements() > 0 && groups.isEmpty()) {
             throw new IllegalStateException("GROUP BY returned no groups for a non-empty todo result");
         }
+        long total = page.getTotalElements();
+        long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
+        ListQuerySupport.logIfSlow(log, TODO_LIST_KEY, request.page(), request.size(), total, started);
+        ListQuerySupport.logIfOverSla(log, TODO_LIST_KEY, request.page(), request.size(), total,
+                elapsedMs, elapsedMs, 0L);
         return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(), List.copyOf(groups),
-                request.page(), request.size(), page.getTotalElements());
+                request.page(), request.size(), total);
     }
 
     private static boolean isDelegatedOnlyAssignmentFilter(List<String> assignmentTypes) {
@@ -282,9 +296,12 @@ public class TaskQueryComponent {
                 + String.valueOf(request.getIncludeOverdue());
     }
 
+    /** Fill requestId before filter, keyword, or A→Z sort so chrome matches the visible cell. */
     private void maybeEnrichRequestIdsForColumnFilter(List<TaskInfo> tasks, TaskQueryRequest request) {
         var filters = TaskQueryColumnFilters.normalize(request.getFilters());
-        boolean needsRequestId = filters.stream().anyMatch(f -> "requestId".equals(f.field()));
+        boolean needsRequestId = filters.stream().anyMatch(f -> "requestId".equals(f.field()))
+                || (request.getKeyword() != null && !request.getKeyword().isBlank())
+                || (request.getSortBy() != null && "requestId".equalsIgnoreCase(request.getSortBy().trim()));
         if (needsRequestId) {
             requestIdEnricher.enrichTaskRequestIds(tasks);
         }
@@ -686,16 +703,9 @@ public class TaskQueryComponent {
                             return false;
                         }
                     }
-                    // Keyword search (including initiator name)
-                    if (request.getKeyword() != null && !request.getKeyword().isEmpty()) {
-                        String keyword = request.getKeyword().toLowerCase();
-                        boolean matches = (t.getTaskName() != null && t.getTaskName().toLowerCase().contains(keyword))
-                                || (t.getDescription() != null && t.getDescription().toLowerCase().contains(keyword))
-                                || (t.getProcessDefinitionName() != null && t.getProcessDefinitionName().toLowerCase().contains(keyword))
-                                || (t.getInitiatorName() != null && t.getInitiatorName().toLowerCase().contains(keyword));
-                        if (!matches) {
-                            return false;
-                        }
+                    // Keyword search (visible To Do cells + description).
+                    if (!TaskQueryColumnFilters.toolbarKeywordMatches(t, request.getKeyword())) {
+                        return false;
                     }
                     if (!columnFilters.isEmpty() && !TaskQueryColumnFilters.matches(t, columnFilters)) {
                         return false;

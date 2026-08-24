@@ -49,6 +49,25 @@ public final class TaskQueryColumnFilters {
         return filters != null && !filters.isEmpty();
     }
 
+    /**
+     * Toolbar keyword: OR across cells the To Do list actually shows (requestId is filled
+     * before this runs). Description is included for parity with the pre-shared-list search.
+     */
+    public static boolean toolbarKeywordMatches(TaskInfo task, String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return true;
+        }
+        String expected = keyword.trim();
+        for (String field : List.of(
+                "requestId", "taskName", "currentStepName", "processDefinitionName", "initiatorName")) {
+            if (textMatches(resolveFieldValue(task, field), "contains", expected)) {
+                return true;
+            }
+        }
+        return textMatches(task.getDescription(), "contains", expected)
+                || textMatches(task.getProcessDefinitionKey(), "contains", expected);
+    }
+
     public static List<ListColumnFilter> normalize(List<ListColumnFilter> raw) {
         if (raw == null || raw.isEmpty()) {
             return List.of();

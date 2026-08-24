@@ -9,9 +9,11 @@ import java.util.List;
  * Fixed column declaration for To Do. Kind drives shared-header operators; filtering/sorting
  * that cannot be pushed into Flowable runs as an exact portal fullScan (see {@link EngineTaskPushdown}).
  *
- * <p>{@code requestId} is enriched after the page is chosen — same as Completed Tasks, display-only.
- * {@code priority} is stored as Flowable's numeric string ({@code "50"}); ENUM options map to
- * numeric bands in {@link TaskQueryColumnFilters} so chrome labels match the cell renderer.
+ * <p>{@code requestId} is computed (enriched before filter/sort). It is ordinary TEXT
+ * ({@link PortalListColumnMeta#of}) so the header can search and A→Z sort; grouping stays
+ * off because TEXT is not a closed-value kind. {@code priority} is stored as Flowable's
+ * numeric string ({@code "50"}); ENUM options map to numeric bands in
+ * {@link TaskQueryColumnFilters} so chrome labels match the cell renderer.
  */
 public final class TodoTaskColumnSpec {
 
@@ -20,7 +22,7 @@ public final class TodoTaskColumnSpec {
 
     public static List<PortalListColumnMeta> columns() {
         return List.of(
-                PortalListColumnMeta.displayOnly("requestId", "task.requestId", Kind.TEXT),
+                PortalListColumnMeta.of("requestId", "task.requestId", Kind.TEXT),
                 PortalListColumnMeta.of("taskName", "task.taskName", Kind.TEXT),
                 PortalListColumnMeta.of("currentStepName", "task.currentStep", Kind.TEXT),
                 PortalListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),

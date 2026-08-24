@@ -10,7 +10,8 @@ import java.util.Map;
 /**
  * Fixed column declaration for Completed Tasks. Kind follows the stored type (task name is
  * TEXT, duration is NUMBER, action is a closed ENUM derived from {@code DELETE_REASON_}).
- * Request ID is computed and therefore display-only — there is no honest SQL predicate for it.
+ * Request ID is the persisted process-variable text {@code __request_id} (same key the
+ * form writes); filter/sort compile to that JSON path so COUNT and the page share one predicate.
  */
 public final class CompletedTaskColumnSpec {
 
@@ -30,7 +31,7 @@ public final class CompletedTaskColumnSpec {
 
     public static List<PortalListColumnMeta> columns() {
         return List.of(
-                PortalListColumnMeta.displayOnly("requestId", "task.requestId", Kind.TEXT),
+                PortalListColumnMeta.of("requestId", "task.requestId", Kind.TEXT),
                 PortalListColumnMeta.of("taskName", "task.taskName", Kind.TEXT),
                 PortalListColumnMeta.displayOnly("currentStepName", "task.currentStep", Kind.TEXT),
                 PortalListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),
@@ -51,6 +52,7 @@ public final class CompletedTaskColumnSpec {
 
     private static String sqlFor(String field) {
         return switch (field) {
+            case "requestId" -> "pi.variables->>'__request_id'";
             case "taskName" -> "ht.NAME_";
             case "processDefinitionName" -> "pi.process_definition_name";
             case "action" -> ACTION_SQL;

@@ -90,6 +90,17 @@ class MyApplicationQuerySqlTest {
     }
 
     @Test
+    void requestIdFilterAndSortShareTheJsonTextPredicate() {
+        component.query("user-1", new MyApplicationQueryRequest(
+                0, 20, null, List.of(new ListColumnFilter("requestId", "contains", "ATM-DC", null)),
+                "requestId", "ASC", null));
+
+        assertThat(preparedSql.get(0)).contains("pi.variables->>'__request_id'");
+        assertThat(pageSql()).contains("pi.variables->>'__request_id'");
+        assertThat(pageSql()).contains("pi.variables->>'__request_id' ASC");
+    }
+
+    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
         assertThatThrownBy(() -> component.query("user-1", request(null, null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))

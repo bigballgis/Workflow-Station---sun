@@ -59,7 +59,7 @@ export function usePortalListGrid<T extends object>(opts: {
   )
 
   const layoutFields = computed(() => displayColumns.value.map((col) => col.field))
-  const { gridScrollRef, gridFits, gridInnerStyle, widthOf, setWidth, persistWidths } =
+  const { gridScrollRef, gridFits, leftoverWidth, gridInnerStyle, widthOf, setWidth, persistWidths } =
     useListColumnLayout({
       storageKey: opts.storageKey,
       fields: layoutFields,
@@ -253,6 +253,7 @@ export function usePortalListGrid<T extends object>(opts: {
     activeFilter,
     gridScrollRef,
     gridFits,
+    leftoverWidth,
     gridInnerStyle,
     widthOf,
     setWidth,

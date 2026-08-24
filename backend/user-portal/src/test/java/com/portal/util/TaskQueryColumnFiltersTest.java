@@ -56,4 +56,32 @@ class TaskQueryColumnFiltersTest {
         assertTrue(TaskQueryColumnFilters.matches(high, List.of(highEq)));
         assertFalse(TaskQueryColumnFilters.matches(urgent, List.of(highEq)));
     }
+
+    @Test
+    void toolbarKeywordMatchesVisibleListCells() {
+        TaskInfo task = TaskInfo.builder()
+                .taskId("1")
+                .taskName("Approve")
+                .currentStepName("Case Submission")
+                .requestId("ATM-DC-PW-0002")
+                .processDefinitionName("Leave Flow")
+                .processDefinitionKey("atm-20260623-g")
+                .initiatorName("Developer Test")
+                .description("weekend overtime")
+                .build();
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "ATM-DC"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "Case"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "atm-2026"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "overtime"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "zzz"));
+    }
+
+    @Test
+    void requestIdContainsFilterMatchesEnrichedValue() {
+        TaskInfo hit = TaskInfo.builder().taskId("1").requestId("ATM-DC-PW-000295").build();
+        TaskInfo miss = TaskInfo.builder().taskId("2").requestId("HR-2026-001").build();
+        ListColumnFilter contains = new ListColumnFilter("requestId", "contains", "ATM-DC", null);
+        assertTrue(TaskQueryColumnFilters.matches(hit, List.of(contains)));
+        assertFalse(TaskQueryColumnFilters.matches(miss, List.of(contains)));
+    }
 }

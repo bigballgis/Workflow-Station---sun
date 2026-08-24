@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type CSSProperties, type MaybeRefOrGetter, type Ref, toValue } from 'vue'
-import { clampColumnWidth } from '@platform-shared/list/columnResizeCursor'
+import { clampColumnWidth, leftoverColumnWidth } from '@platform-shared/list/columnResizeCursor'
 
 const DEFAULT_WIDTH = 120
 
@@ -103,6 +103,10 @@ export function useListColumnLayout(opts: {
     gridViewportWidth.value > 0 && gridTotalColumnWidth.value <= gridViewportWidth.value,
   )
 
+  const leftoverWidth = computed(() =>
+    leftoverColumnWidth(gridViewportWidth.value, gridTotalColumnWidth.value),
+  )
+
   const gridInnerStyle = computed<CSSProperties>(() => (
     gridFits.value
       ? { width: '100%' }
@@ -116,6 +120,7 @@ export function useListColumnLayout(opts: {
   return {
     gridScrollRef,
     gridFits,
+    leftoverWidth,
     gridInnerStyle,
     widthOf,
     setWidth,

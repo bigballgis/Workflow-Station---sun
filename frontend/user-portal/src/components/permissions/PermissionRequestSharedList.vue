@@ -14,12 +14,12 @@
         <el-table
           :data="displayRows"
           stripe
-          :fit="gridFits"
+          :fit="false"
           table-layout="fixed"
           style="width: 100%;"
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
-          :span-method="spanMethod(actionColumns)"
+          :span-method="spanMethod(actionColumns + (leftoverWidth > 0 ? 1 : 0))"
           :row-class-name="rowClassName"
         >
           <template #empty>
@@ -38,8 +38,7 @@
             v-for="(col, colIndex) in visibleColumns"
             :key="col.field"
             :prop="col.field"
-            :width="gridFits ? undefined : widthOf(col.field)"
-            :min-width="gridFits ? widthOf(col.field) : undefined"
+            :width="widthOf(col.field)"
             show-overflow-tooltip
           >
             <template #header>
@@ -102,6 +101,11 @@
               </template>
             </template>
           </el-table-column>
+          <el-table-column
+            v-if="leftoverWidth > 0"
+            :width="leftoverWidth"
+            class-name="list-col-spacer"
+          />
           <el-table-column
             v-if="actionMode !== 'none'"
             :label="t('common.actions')"
@@ -254,7 +258,7 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits,
+  gridFits, leftoverWidth,
   gridInnerStyle,
   widthOf,
   setWidth,

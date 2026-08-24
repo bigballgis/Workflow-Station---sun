@@ -9,8 +9,8 @@ import java.util.Map;
 
 /**
  * Fixed column declaration for My Requests. Status is the closed process-instance ENUM;
- * current assignee is USER (people picker + groupable). Request ID is computed, so it is
- * display-only.
+ * current assignee is USER (people picker + groupable). Request ID is the persisted
+ * process-variable text {@code __request_id}; filter/sort compile to that JSON path.
  */
 public final class MyApplicationColumnSpec {
 
@@ -19,7 +19,7 @@ public final class MyApplicationColumnSpec {
 
     public static List<PortalListColumnMeta> columns() {
         return List.of(
-                PortalListColumnMeta.displayOnly("requestId", "application.requestId", Kind.TEXT),
+                PortalListColumnMeta.of("requestId", "application.requestId", Kind.TEXT),
                 PortalListColumnMeta.of("businessKey", "application.processTitle", Kind.TEXT),
                 PortalListColumnMeta.of("currentStepName", "application.currentStep", Kind.TEXT),
                 PortalListColumnMeta.of("currentAssignee", "application.currentAssignee", Kind.USER),
@@ -38,6 +38,7 @@ public final class MyApplicationColumnSpec {
 
     private static String sqlFor(String field) {
         return switch (field) {
+            case "requestId" -> "pi.variables->>'__request_id'";
             case "businessKey" -> "pi.business_key";
             case "currentStepName" -> "pi.current_node";
             case "currentAssignee" -> "pi.current_assignee";

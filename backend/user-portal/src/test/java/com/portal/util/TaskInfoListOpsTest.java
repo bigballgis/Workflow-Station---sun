@@ -48,4 +48,15 @@ class TaskInfoListOpsTest {
                 TaskQueryRequest.builder().sortBy("taskName").sortDirection("ASC").build());
         assertEquals("Alpha", sorted.get(0).getTaskName());
     }
+
+    @Test
+    void applySortingByRequestIdAscIsTextOrder() {
+        TaskInfo later = TaskInfo.builder().taskId("1").requestId("ATM-DC-PW-000295").build();
+        TaskInfo earlier = TaskInfo.builder().taskId("2").requestId("ATM-DC-PW-000100").build();
+        List<TaskInfo> sorted = TaskInfoListOps.applySorting(
+                List.of(later, earlier),
+                TaskQueryRequest.builder().sortBy("requestId").sortDirection("ASC").build());
+        assertEquals("ATM-DC-PW-000100", sorted.get(0).getRequestId());
+        assertEquals("ATM-DC-PW-000295", sorted.get(1).getRequestId());
+    }
 }

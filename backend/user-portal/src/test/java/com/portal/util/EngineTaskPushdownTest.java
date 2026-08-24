@@ -47,6 +47,39 @@ class EngineTaskPushdownTest {
     }
 
     @Test
+    void toolbarKeywordForcesFullScan() {
+        TaskQueryRequest request = TaskQueryRequest.builder()
+                .keyword("请假")
+                .build();
+        assertFalse(EngineTaskPushdown.canFullyPush(request));
+    }
+
+    @Test
+    void requestIdTextFilterForcesFullScan() {
+        TaskQueryRequest request = TaskQueryRequest.builder()
+                .filters(List.of(new ListColumnFilter("requestId", "contains", "ATM-DC", null)))
+                .build();
+        assertFalse(EngineTaskPushdown.canFullyPush(request));
+    }
+
+    @Test
+    void requestIdTextSortForcesFullScan() {
+        TaskQueryRequest request = TaskQueryRequest.builder()
+                .sortBy("requestId")
+                .sortDirection("ASC")
+                .build();
+        assertFalse(EngineTaskPushdown.canFullyPush(request));
+    }
+
+    @Test
+    void toolbarPriorityInFilterForcesFullScan() {
+        TaskQueryRequest request = TaskQueryRequest.builder()
+                .filters(List.of(new ListColumnFilter("priority", "in", "HIGH,URGENT", null)))
+                .build();
+        assertFalse(EngineTaskPushdown.canFullyPush(request));
+    }
+
+    @Test
     void sortOnlyCriteriaHasNoFilterFragments() {
         EngineTaskPushdown.Criteria criteria = EngineTaskPushdown.from(
                 TaskQueryRequest.builder().sortBy("createTime").sortDirection("asc").build());

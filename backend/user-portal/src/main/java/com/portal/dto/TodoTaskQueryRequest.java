@@ -4,6 +4,9 @@ import java.util.List;
 
 /**
  * One page of To Do: paging plus shared-header filters, sort and grouping.
+ * {@code keyword} is the toolbar search (request id / task name / current step / process name /
+ * initiator / description) and ANDs with {@code filters}. Toolbar {@code priorities} compile to the same ENUM bands
+ * as column chrome. A non-blank keyword, assignmentTypes, or priorities forces portal fullScan.
  * Engine pushdown applies when chrome is fully Flowable-expressible; otherwise portal
  * fullScans for an exact filtered total (PR #107 path — not ACT_RU JDBC).
  */
@@ -14,7 +17,9 @@ public record TodoTaskQueryRequest(
         String sortField,
         String sortDirection,
         String groupBy,
-        List<String> assignmentTypes) {
+        String keyword,
+        List<String> assignmentTypes,
+        List<String> priorities) {
 
     public TodoTaskQueryRequest {
         if (page < 0) {
@@ -24,7 +29,14 @@ public record TodoTaskQueryRequest(
             throw new IllegalArgumentException("size must be between 1 and 200");
         }
         filters = filters == null ? List.of() : List.copyOf(filters);
+        if (keyword != null) {
+            keyword = keyword.trim();
+            if (keyword.isEmpty()) {
+                keyword = null;
+            }
+        }
         assignmentTypes = assignmentTypes == null ? List.of() : List.copyOf(assignmentTypes);
+        priorities = priorities == null ? List.of() : List.copyOf(priorities);
         if (sortDirection != null && !"ASC".equalsIgnoreCase(sortDirection)
                 && !"DESC".equalsIgnoreCase(sortDirection)) {
             throw new IllegalArgumentException("sortDirection must be ASC or DESC");

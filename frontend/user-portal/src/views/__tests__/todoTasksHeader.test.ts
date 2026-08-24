@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import TodoTasks from '../tasks/index.vue'
+import TodoListToolbar from '../tasks/TodoListToolbar.vue'
 import { queryTodoTasks } from '@/api/task'
 
 vi.mock('@/api/task', () => ({
@@ -27,7 +28,17 @@ function mountPage() {
     locale: 'en',
     messages: {
       en: {
-        common: { loading: 'Loading', cancel: 'Cancel', confirm: 'Confirm', success: 'OK', error: 'Error', reason: 'Reason' },
+        common: {
+          loading: 'Loading',
+          cancel: 'Cancel',
+          confirm: 'Confirm',
+          success: 'OK',
+          error: 'Error',
+          reason: 'Reason',
+          search: 'Search',
+          reset: 'Reset',
+          all: 'All',
+        },
         task: {
           title: 'To Do',
           noTasks: 'None',
@@ -35,8 +46,14 @@ function mountPage() {
           selected: '{count} selected',
           batchUrge: 'Batch',
           overdue: 'Overdue',
+          urgent: 'Urgent',
+          high: 'High',
           normal: 'Normal',
+          low: 'Low',
           user: 'User',
+          virtualGroup: 'Virtual Group',
+          deptRole: 'Dept Role',
+          delegated: 'Delegated',
           requestId: 'Request ID',
           taskName: 'Task Name',
           currentStep: 'Step',
@@ -57,10 +74,18 @@ function mountPage() {
         'el-table': true,
         'el-table-column': true,
         'el-dialog': true,
-        'el-form': true,
-        'el-form-item': true,
-        'el-input': true,
-        'el-button': true,
+        'el-input': {
+          props: ['modelValue', 'placeholder'],
+          emits: ['update:modelValue', 'clear'],
+          template:
+            '<input data-test="todo-search" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+        },
+        'el-select': true,
+        'el-option': true,
+        'el-button': {
+          inheritAttrs: false,
+          template: '<button v-bind="$attrs" @click="$emit(\'click\')"><slot /></button>',
+        },
         'el-link': true,
         'el-tag': true,
         'el-icon': true,
@@ -96,6 +121,59 @@ describe('To Do shared list', () => {
     expect(api).toHaveBeenCalled()
     const body = api.mock.calls[0][0]
     expect(body).toMatchObject({ page: 0, size: 20 })
+    expect(body).not.toHaveProperty('keyword')
+    expect(body).not.toHaveProperty('assignmentTypes')
+    expect(body).not.toHaveProperty('priorities')
     expect(w.text()).toContain('To Do')
+    expect(w.text()).toContain('Type')
+    expect(w.text()).toContain('Priority')
+    expect(w.get('[data-test="todo-reset-btn"]').text()).toContain('Reset')
+  })
+
+  it('sends trimmed keyword and resets to page 1', async () => {
+    const w = mountPage()
+    await flushPromises()
+    api.mockClear()
+    const input = w.get('[data-test="todo-search"]')
+    await input.setValue('  请假  ')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+    expect(api).toHaveBeenCalled()
+    expect(api.mock.calls[0][0]).toMatchObject({ page: 0, size: 20, keyword: '请假' })
+  })
+
+  it('sends assignmentTypes and priorities on search', async () => {
+    const w = mountPage()
+    await flushPromises()
+    api.mockClear()
+    const toolbar = w.getComponent(TodoListToolbar)
+    await toolbar.vm.$emit('update:assignmentTypes', ['USER', 'DELEGATED'])
+    await toolbar.vm.$emit('update:priorities', ['HIGH'])
+    await toolbar.vm.$emit('search')
+    await flushPromises()
+    expect(api.mock.calls[0][0]).toMatchObject({
+      page: 0,
+      size: 20,
+      assignmentTypes: ['USER', 'DELEGATED'],
+      priorities: ['HIGH'],
+    })
+  })
+
+  it('reset clears toolbar fields and omits them from the next query', async () => {
+    const w = mountPage()
+    await flushPromises()
+    const toolbar = w.getComponent(TodoListToolbar)
+    await toolbar.vm.$emit('update:assignmentTypes', ['USER'])
+    await toolbar.vm.$emit('update:priorities', ['URGENT'])
+    await toolbar.vm.$emit('update:keyword', '请假')
+    await toolbar.vm.$emit('search')
+    await flushPromises()
+    api.mockClear()
+    await w.get('[data-test="todo-reset-btn"]').trigger('click')
+    await flushPromises()
+    const body = api.mock.calls[0][0]
+    expect(body).not.toHaveProperty('keyword')
+    expect(body).not.toHaveProperty('assignmentTypes')
+    expect(body).not.toHaveProperty('priorities')
   })
 })

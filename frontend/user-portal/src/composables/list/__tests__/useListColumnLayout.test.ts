@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useListColumnLayout } from '../useListColumnLayout'
+import { leftoverColumnWidth } from '@platform-shared/list/columnResizeCursor'
 
 function mountLayout(storageKey: string, fields: string[]) {
   const Host = defineComponent({
@@ -65,5 +66,12 @@ describe('useListColumnLayout', () => {
     await nextTick()
     expect(sessionStorage.length).toBe(0)
     w.unmount()
+  })
+
+  it('parks leftover width at the trailing edge instead of stretching columns', () => {
+    expect(leftoverColumnWidth(1000, 800)).toBe(200)
+    expect(leftoverColumnWidth(800, 800)).toBe(0)
+    expect(leftoverColumnWidth(800, 900)).toBe(0)
+    expect(leftoverColumnWidth(0, 800)).toBe(0)
   })
 })

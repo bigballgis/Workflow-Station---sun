@@ -36,7 +36,10 @@ export interface TodoTaskQueryRequest {
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
   groupBy?: string
+  /** Toolbar keyword; ANDs with column filters. Matches request id / task / step / process / initiator. */
+  keyword?: string
   assignmentTypes?: string[]
+  priorities?: string[]
 }
 
 export interface TaskQueryRequest {
