@@ -15,6 +15,10 @@ import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { derivePreviewColumns, parseLookupConfig } from '@/utils/formPreview'
 import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
+import {
+  resolveActionFormCanvasRule,
+  selectPreviewCanvasTableBinding,
+} from '@/utils/actionFormCanvasRule'
 
 const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
 
@@ -414,22 +418,32 @@ function buildPreviewItems(
  */
 export function buildSavedFormPreviewItems(options: SavedFormPreviewBuildOptions): FormPreviewItem[] {
   const config = options.form.configJson || {}
-  let rawRule = config.rule || []
+  const bindings = options.tableBindings?.length
+    ? options.tableBindings
+    : (options.form.tableBindings || [])
+  const actionCanvas = resolveActionFormCanvasRule({
+    formType: options.form.formType,
+    tableBindings: bindings,
+    topLevelRule: config.rule || [],
+    subForms: config.subForms || {},
+  })
+  let rawRule = actionCanvas.rule
   if (!Array.isArray(rawRule) || !rawRule.length) {
     return []
   }
   rawRule = normalizeRulesForPreview(rawRule)
 
-  const bindings = options.tableBindings?.length
-    ? options.tableBindings
-    : (options.form.tableBindings || [])
-  const primaryBinding = bindings.find(b => b.bindingType === 'PRIMARY')
-  const primaryTable = primaryBinding
-    ? options.tables.find(t => t.id === primaryBinding.tableId)
+  const canvasBinding = selectPreviewCanvasTableBinding({
+    tableBindings: bindings,
+    usedActionCanvas: actionCanvas.usedActionCanvas,
+    actionBindingId: actionCanvas.actionBindingId,
+  })
+  const canvasTable = canvasBinding?.tableId != null
+    ? options.tables.find(t => t.id === canvasBinding.tableId)
     : undefined
-  const primaryFields = primaryTable?.fieldDefinitions || []
-  if (primaryFields.length) {
-    rawRule = syncFormRulesWithTableFields(rawRule, primaryFields) as typeof rawRule
+  const canvasFields = canvasTable?.fieldDefinitions || []
+  if (canvasFields.length) {
+    rawRule = syncFormRulesWithTableFields(rawRule, canvasFields) as typeof rawRule
   }
   rawRule = mapFormCreateRulesReadonlyDeep(rawRule) as typeof rawRule
 
