@@ -54,16 +54,15 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   }
 
   // Function Unit grouping: selectable options are the deployed FUs (dedup by code, latest version).
-  // The table's currently-assigned FU may point to an older version's id (not in that dedup list) —
-  // that option is added separately so the select still shows its label instead of going blank.
+  // The table's currently-assigned FUs may point to an older version's id (not in that dedup list) —
+  // those options are added separately so the select still shows their labels instead of going blank.
   const functionUnitOptions = ref<FunctionUnit[]>([])
-  const currentFunctionUnitOption = ref<FunctionUnit | null>(null)
+  const currentFunctionUnitOptions = ref<FunctionUnit[]>([])
   const allFunctionUnitOptions = computed<FunctionUnit[]>(() => {
-    if (!currentFunctionUnitOption.value) return functionUnitOptions.value
-    if (functionUnitOptions.value.some(fu => fu.id === currentFunctionUnitOption.value!.id)) {
-      return functionUnitOptions.value
-    }
-    return [...functionUnitOptions.value, currentFunctionUnitOption.value]
+    const extra = currentFunctionUnitOptions.value.filter(
+      fu => !functionUnitOptions.value.some(o => o.id === fu.id),
+    )
+    return [...functionUnitOptions.value, ...extra]
   })
 
   const loadFunctionUnitOptions = async () => {
@@ -74,7 +73,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
     }
   }
 
-  const form = reactive({ tableName: '', displayName: '', description: '', functionUnitId: '', fieldDefinitions: [] as FieldRow[] })
+  const form = reactive({ tableName: '', displayName: '', description: '', functionUnitIds: [] as string[], fieldDefinitions: [] as FieldRow[] })
   const rules = {
     displayName: [{ required: true, message: () => t('form.validationDisplayNameRequired'), trigger: 'blur' }],
     tableName: [{ required: true, message: () => t('form.validationTableNameRequired'), trigger: 'blur' }],
@@ -183,14 +182,12 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
       form.tableName = data.tableName
       form.displayName = data.displayName || ''
       form.description = data.description || ''
-      form.functionUnitId = data.functionUnitId || ''
-      currentFunctionUnitOption.value = data.functionUnitId
-        ? {
-            id: data.functionUnitId,
-            code: data.functionUnitCode || '',
-            name: data.functionUnitName || data.functionUnitCode || data.functionUnitId,
-          } as FunctionUnit
-        : null
+      form.functionUnitIds = (data.functionUnits || []).map(fu => fu.id)
+      currentFunctionUnitOptions.value = (data.functionUnits || []).map(fu => ({
+        id: fu.id,
+        code: fu.code || '',
+        name: fu.name || fu.code || fu.id,
+      } as FunctionUnit))
       form.fieldDefinitions = (data.fieldDefinitions || []).map(f => ({
         id: f.id,
         fieldName: f.fieldName,
@@ -258,8 +255,8 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
         await relationTableStructureApi.update(tableId.value, {
           displayName: form.displayName || undefined,
           description: form.description || undefined,
-          // Always send functionUnitId on edit: '' clears to ungrouped, a value (re)assigns.
-          functionUnitId: form.functionUnitId || '',
+          // Always send functionUnitIds on edit: [] clears to Common, a non-empty list (re)assigns.
+          functionUnitIds: form.functionUnitIds,
           fieldDefinitions: fields,
         })
         notifySuccess('Table updated successfully')
@@ -286,7 +283,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           tableName: form.tableName,
           displayName: form.displayName || undefined,
           description: form.description || undefined,
-          functionUnitId: form.functionUnitId || undefined,
+          functionUnitIds: form.functionUnitIds,
           fieldDefinitions: fields,
         })
         notifySuccess('Table created successfully')

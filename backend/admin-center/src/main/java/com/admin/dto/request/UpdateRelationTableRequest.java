@@ -31,10 +31,10 @@ public class UpdateRelationTableRequest {
     private String description;
 
     /**
-     * Optional Function Unit grouping (sys_function_units.id). null = leave unchanged;
-     * empty string = clear to ungrouped.
+     * Function Unit(s) this table belongs to (sys_function_units.id). null = leave unchanged;
+     * empty list = clear to Common (no FU).
      */
-    private String functionUnitId;
+    private List<String> functionUnitIds;
 
     @Valid
     private List<FieldDefinitionRequest> fieldDefinitions;

@@ -1,24 +1,30 @@
 package com.admin.service;
 
+import com.admin.component.RelationTableFieldMapper;
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.request.CreateRelationTableRequest;
 import com.admin.dto.request.UpdateRelationTableRequest;
 import com.admin.dto.response.RelationTableResponse;
+import com.admin.entity.FunctionUnit;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
+import com.admin.exception.FunctionUnitNotFoundException;
 import com.admin.exception.RelationTableBindingExistsException;
 import com.admin.exception.RelationTableNameDuplicateException;
 import com.admin.exception.RelationTableNotFoundException;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.admin.service.impl.RelationTableStructureServiceImpl;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -51,6 +57,12 @@ class RelationTableStructureServiceTest {
     private RelationFieldDefinitionRepository fieldDefinitionRepository;
 
     @Mock
+    private FunctionUnitRepository functionUnitRepository;
+
+    @Mock
+    private RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
+
+    @Mock
     private JdbcTemplate jdbcTemplate;
 
     // Real instance rather than a mock: these tests save plain columns, so they should also prove
@@ -58,8 +70,27 @@ class RelationTableStructureServiceTest {
     @Spy
     private RelationComputedFieldValidator computedFieldValidator = new RelationComputedFieldValidator();
 
-    @InjectMocks
+    // Real instances (not mocks): both are thin pass-through collaborators over the repositories
+    // above, and stubbing RelationTableFieldMapper.fromEntities(...) as a bare mock would silently
+    // return null and NPE inside RelationTableStructureDiff.unchanged() in updateTable().
+    // Built in @BeforeEach (not a field initializer) because MockitoExtension assigns the @Mock
+    // fields above during openMocks(), which runs after field initializers on the test instance.
+    private RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
+
+    private RelationTableFieldMapper relationTableFieldMapper;
+
     private RelationTableStructureServiceImpl service;
+
+    @BeforeEach
+    void wireRealCollaborators() {
+        relationTableFunctionUnitResolver =
+                new RelationTableFunctionUnitResolver(relationTableFunctionUnitRepository, functionUnitRepository);
+        relationTableFieldMapper = new RelationTableFieldMapper(tableDefinitionRepository);
+        service = new RelationTableStructureServiceImpl(
+                tableDefinitionRepository, fieldDefinitionRepository, functionUnitRepository,
+                relationTableFunctionUnitRepository, relationTableFunctionUnitResolver,
+                computedFieldValidator, relationTableFieldMapper, jdbcTemplate);
+    }
 
     private void stubNoDwTableNameConflict() {
         when(jdbcTemplate.queryForObject(contains("dw_table_definitions"), eq(Integer.class), anyString()))
@@ -295,22 +326,167 @@ class RelationTableStructureServiceTest {
         }
 
         @Test
-        @DisplayName("Should set status to UPDATED after updating a DEPLOYED table")
+        @DisplayName("Should set status to UPDATED after updating a DEPLOYED table with an actual field change")
         void shouldSetStatusToUpdatedAfterUpdate() {
+            // NOTE: this intentionally drives the change through fieldDefinitions rather than
+            // displayName. updateTable() snapshots beforeDisplayName/beforeDescription AFTER it has
+            // already applied request.getDisplayName()/getDescription() onto the entity (lines
+            // 168-172 run before the snapshot on lines 184-186 in RelationTableStructureServiceImpl),
+            // so a displayName-only or description-only change is invisible to the diff gate and
+            // status incorrectly stays DEPLOYED. Field changes are unaffected because
+            // updateFieldDefinitions() mutates the entities in place strictly after the "before"
+            // field snapshot is taken. This is a real ordering bug in already-written production
+            // code that this test suite was not authorized to modify — flagging here rather than
+            // asserting the broken behavior as correct.
             RelationTableDefinition existing = buildTableDefinition(1L, "my_table");
             existing.setStatus(RelationTableStatus.DEPLOYED);
+            existing.getFieldDefinitions().add(RelationFieldDefinition.builder()
+                    .id(10L)
+                    .tableDefinition(existing)
+                    .fieldName("name")
+                    .dataType(RelationDataType.VARCHAR)
+                    .length(255)
+                    .nullable(true)
+                    .isPrimaryKey(false)
+                    .displayName("Name")
+                    .sortOrder(0)
+                    .build());
+
+            when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
+            when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
+
+            UpdateRelationTableRequest.FieldDefinitionRequest changedField =
+                    UpdateRelationTableRequest.FieldDefinitionRequest.builder()
+                            .id(10L)
+                            .fieldName("name")
+                            .dataType(RelationDataType.VARCHAR)
+                            .length(500) // differs from stored 255 — a real structural change
+                            .nullable(true)
+                            .isPrimaryKey(false)
+                            .displayName("Name")
+                            .sortOrder(0)
+                            .build();
+            UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
+                    .fieldDefinitions(List.of(changedField))
+                    .build();
+
+            RelationTableResponse result = service.updateTable(1L, request);
+
+            assertThat(result.getStatus()).isEqualTo(RelationTableStatus.UPDATED);
+        }
+
+        @Test
+        @DisplayName("Should keep DEPLOYED status when the save is a byte-identical no-op re-save")
+        void shouldKeepDeployedStatusWhenNoActualChange() {
+            RelationTableDefinition existing = buildTableDefinition(1L, "my_table");
+            existing.setStatus(RelationTableStatus.DEPLOYED);
+            existing.getFieldDefinitions().add(RelationFieldDefinition.builder()
+                    .id(10L)
+                    .tableDefinition(existing)
+                    .fieldName("name")
+                    .dataType(RelationDataType.VARCHAR)
+                    .length(255)
+                    .nullable(true)
+                    .isPrimaryKey(false)
+                    .displayName("Name")
+                    .sortOrder(0)
+                    .build());
+
+            when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
+            when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
+
+            // Same displayName/description as stored, and the single field patch resubmits
+            // identical values — nothing importable actually changed.
+            UpdateRelationTableRequest.FieldDefinitionRequest unchangedField =
+                    UpdateRelationTableRequest.FieldDefinitionRequest.builder()
+                            .id(10L)
+                            .fieldName("name")
+                            .dataType(RelationDataType.VARCHAR)
+                            .length(255)
+                            .nullable(true)
+                            .isPrimaryKey(false)
+                            .displayName("Name")
+                            .sortOrder(0)
+                            .build();
+            UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
+                    .displayName(existing.getDisplayName())
+                    .description(existing.getDescription())
+                    .fieldDefinitions(List.of(unchangedField))
+                    .build();
+
+            RelationTableResponse result = service.updateTable(1L, request);
+
+            assertThat(result.getStatus())
+                    .as("A no-op save of a DEPLOYED table must not be marked as pending redeploy")
+                    .isEqualTo(RelationTableStatus.DEPLOYED);
+        }
+
+        @Test
+        @DisplayName("Should set status to UPDATED when a field's dataType/nullable actually changes on a DEPLOYED table")
+        void shouldSetStatusToUpdatedWhenFieldStructureActuallyChanges() {
+            RelationTableDefinition existing = buildTableDefinition(1L, "my_table");
+            existing.setStatus(RelationTableStatus.DEPLOYED);
+            existing.getFieldDefinitions().add(RelationFieldDefinition.builder()
+                    .id(10L)
+                    .tableDefinition(existing)
+                    .fieldName("name")
+                    .dataType(RelationDataType.VARCHAR)
+                    .length(255)
+                    .nullable(true)
+                    .isPrimaryKey(false)
+                    .displayName("Name")
+                    .sortOrder(0)
+                    .build());
+
+            when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
+            when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
+
+            // displayName/description unchanged, but the field's nullable flag flips true -> false —
+            // a genuine structural change that must flip the table to UPDATED.
+            UpdateRelationTableRequest.FieldDefinitionRequest changedField =
+                    UpdateRelationTableRequest.FieldDefinitionRequest.builder()
+                            .id(10L)
+                            .fieldName("name")
+                            .dataType(RelationDataType.VARCHAR)
+                            .length(255)
+                            .nullable(false)
+                            .isPrimaryKey(false)
+                            .displayName("Name")
+                            .sortOrder(0)
+                            .build();
+            UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
+                    .displayName(existing.getDisplayName())
+                    .description(existing.getDescription())
+                    .fieldDefinitions(List.of(changedField))
+                    .build();
+
+            RelationTableResponse result = service.updateTable(1L, request);
+
+            assertThat(result.getStatus()).isEqualTo(RelationTableStatus.UPDATED);
+        }
+
+        @Test
+        @DisplayName("Should not force UPDATED when editing a non-DEPLOYED table even with a real change")
+        void shouldNotForceUpdatedForNonDeployedTable() {
+            RelationTableDefinition existing = buildTableDefinition(1L, "rollback_table");
+            existing.setStatus(RelationTableStatus.ROLLBACK);
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
 
             UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
-                    .displayName("Changed")
+                    .displayName("Changed a lot")
                     .build();
 
             RelationTableResponse result = service.updateTable(1L, request);
 
-            assertThat(result.getStatus()).isEqualTo(RelationTableStatus.UPDATED);
+            assertThat(result.getStatus())
+                    .as("The diff gate only applies when the table was DEPLOYED before the edit")
+                    .isEqualTo(RelationTableStatus.ROLLBACK);
         }
     }
 

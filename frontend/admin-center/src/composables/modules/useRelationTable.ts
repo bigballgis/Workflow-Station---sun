@@ -32,11 +32,12 @@ export function useRelationTable() {
   const showAccessDialog = ref(false)
   const showCompareDialog = ref(false)
 
-  // Function Unit sidebar grouping (Table Structure page): left panel groups all tables by FU,
-  // Ungrouped always sorts first; selecting a group filters the right-side table, '' = show all.
+  // Function Unit sidebar grouping (Table Structure page): left panel groups all tables by FU.
+  // A table linked to multiple FUs appears under each of them; Common (no FU) always sorts first;
+  // selecting a group filters the right-side table, '' = show all.
   const selectedGroupKey = ref('')
   const ALL_TABLES_KEY = ''
-  const UNGROUPED_KEY = '__ungrouped__'
+  const COMMON_KEY = '__common__'
 
   interface TableGroup {
     key: string
@@ -47,16 +48,24 @@ export function useRelationTable() {
   const groupedTableList = computed<TableGroup[]>(() => {
     const groups = new Map<string, TableGroup>()
     for (const t of tableList.value) {
-      const key = t.functionUnitId || UNGROUPED_KEY
-      const label = t.functionUnitId ? (t.functionUnitName || t.functionUnitCode || key) : null
-      if (!groups.has(key)) groups.set(key, { key, label, tables: [] })
-      groups.get(key)!.tables.push(t)
+      const units = t.functionUnits || []
+      if (units.length === 0) {
+        if (!groups.has(COMMON_KEY)) groups.set(COMMON_KEY, { key: COMMON_KEY, label: null, tables: [] })
+        groups.get(COMMON_KEY)!.tables.push(t)
+        continue
+      }
+      for (const fu of units) {
+        const key = fu.id
+        const label = fu.name || fu.code || key
+        if (!groups.has(key)) groups.set(key, { key, label, tables: [] })
+        groups.get(key)!.tables.push(t)
+      }
     }
     const entries = [...groups.values()]
-    const ungrouped = entries.filter(g => g.key === UNGROUPED_KEY)
-    const rest = entries.filter(g => g.key !== UNGROUPED_KEY)
+    const common = entries.filter(g => g.key === COMMON_KEY)
+    const rest = entries.filter(g => g.key !== COMMON_KEY)
       .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
-    return [...ungrouped, ...rest]
+    return [...common, ...rest]
   })
 
   const filteredTableList = computed(() => {

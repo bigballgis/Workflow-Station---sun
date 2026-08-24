@@ -31,8 +31,8 @@ public class CreateRelationTableRequest {
 
     private String description;
 
-    /** Optional Function Unit grouping (sys_function_units.id); null = ungrouped. */
-    private String functionUnitId;
+    /** Function Unit(s) this table belongs to (sys_function_units.id); null/empty = Common (no FU). */
+    private List<String> functionUnitIds;
 
     @NotEmpty(message = "{validation.fieldDefinitions.notEmpty}")
     @Valid

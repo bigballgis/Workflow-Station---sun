@@ -1,21 +1,27 @@
 package com.admin.service.impl;
 
+import com.admin.component.RelationTableFieldMapper;
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.request.CreateRelationTableRequest;
 import com.admin.dto.request.UpdateRelationTableRequest;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.entity.FunctionUnit;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
+import com.admin.exception.FunctionUnitNotFoundException;
 import com.admin.exception.RelationTableBindingExistsException;
 import com.admin.exception.RelationTableNameDuplicateException;
 import com.admin.exception.RelationTableNotFoundException;
+import com.admin.entity.RelationTableFunctionUnit;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.admin.service.RelationComputedFieldValidator;
 import com.admin.service.RelationTableStructureService;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.relationtable.RelationTableStructureDiff;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,7 +46,10 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
     private final RelationTableDefinitionRepository tableDefinitionRepository;
     private final RelationFieldDefinitionRepository fieldDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
+    private final RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
+    private final RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
     private final RelationComputedFieldValidator computedFieldValidator;
+    private final RelationTableFieldMapper relationTableFieldMapper;
     private final JdbcTemplate jdbcTemplate;
 
     @Override
@@ -55,7 +64,6 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                 .tableName(request.getTableName())
                 .displayName(request.getDisplayName())
                 .description(request.getDescription())
-                .functionUnitId(request.getFunctionUnitId())
                 .status(RelationTableStatus.INIT)
                 .enabled(true)
                 .portalVisible(false)
@@ -136,9 +144,10 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         tableDefinition.setFieldDefinitions(fieldDefinitions);
 
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
+        replaceFunctionUnitLinks(saved.getId(), request.getFunctionUnitIds());
         log.info("Created relation table: id={}, tableName={}", saved.getId(), saved.getTableName());
 
-        return withFunctionUnit(RelationTableResponse.fromEntity(saved));
+        return withFunctionUnits(RelationTableResponse.fromEntity(saved));
     }
 
     @Override
@@ -148,6 +157,18 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
 
         RelationTableDefinition tableDefinition = tableDefinitionRepository.findById(id)
                 .orElseThrow(() -> new RelationTableNotFoundException(id));
+
+        // 仅当当前状态为 DEPLOYED，且本次改动确实改变了展示名/描述/字段结构时才转 UPDATED；
+        // 未改变结构的保存（比如只是打开又原样保存）不应把已部署表打上"待重新部署"标记。
+        // 注意：快照必须在下面任何字段被修改之前取——displayName/description 的 setter 和
+        // updateFieldDefinitions 都会就地改写实体（updateFieldDefinitions 还会就地改写已有的
+        // RelationFieldDefinition 实例，而非替换成新对象），晚取快照会让"之前"的值已经被污染。
+        boolean wasDeployed = tableDefinition.getStatus() == RelationTableStatus.DEPLOYED;
+        String beforeDisplayName = tableDefinition.getDisplayName();
+        String beforeDescription = tableDefinition.getDescription();
+        List<Map<String, Object>> currentFieldMaps = wasDeployed
+                ? relationTableFieldMapper.fromEntities(tableDefinition.getFieldDefinitions())
+                : null;
 
         // 如果更新了表名，验证唯一性
         if (request.getTableName() != null && !request.getTableName().equals(tableDefinition.getTableName())) {
@@ -162,25 +183,30 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         if (request.getDescription() != null) {
             tableDefinition.setDescription(request.getDescription());
         }
-        if (request.getFunctionUnitId() != null) {
-            // Empty string clears to ungrouped; a non-empty id sets/reassigns the Function Unit.
-            tableDefinition.setFunctionUnitId(request.getFunctionUnitId().isBlank() ? null : request.getFunctionUnitId());
+        // Function Unit assignment is organizational metadata, not deployable structure — reassigning
+        // it must not participate in the DEPLOYED→UPDATED diff gate below.
+        if (request.getFunctionUnitIds() != null) {
+            replaceFunctionUnitLinks(id, request.getFunctionUnitIds());
         }
 
-        // 更新字段定义
         if (request.getFieldDefinitions() != null) {
             updateFieldDefinitions(tableDefinition, request.getFieldDefinitions());
         }
 
-        // 仅当当前状态为 DEPLOYED 时设为 UPDATED，其他状态保持不变
-        if (tableDefinition.getStatus() == RelationTableStatus.DEPLOYED) {
-            tableDefinition.setStatus(RelationTableStatus.UPDATED);
+        if (wasDeployed) {
+            List<Map<String, Object>> incomingFieldMaps = relationTableFieldMapper.fromEntities(tableDefinition.getFieldDefinitions());
+            boolean unchanged = RelationTableStructureDiff.unchanged(
+                    beforeDisplayName, beforeDescription, currentFieldMaps,
+                    tableDefinition.getDisplayName(), tableDefinition.getDescription(), incomingFieldMaps);
+            if (!unchanged) {
+                tableDefinition.setStatus(RelationTableStatus.UPDATED);
+            }
         }
 
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         log.info("Updated relation table: id={}, tableName={}", saved.getId(), saved.getTableName());
 
-        return withFunctionUnit(RelationTableResponse.fromEntity(saved));
+        return withFunctionUnits(RelationTableResponse.fromEntity(saved));
     }
 
     @Override
@@ -204,10 +230,12 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
     @Transactional(readOnly = true)
     public List<RelationTableResponse> getTableList() {
         List<RelationTableDefinition> tables = tableDefinitionRepository.findAll();
-        Map<String, FunctionUnit> functionUnits = loadFunctionUnits(tables);
+        List<Long> tableIds = tables.stream().map(RelationTableDefinition::getId).toList();
+        Map<Long, List<RelationTableFunctionUnit>> linksByTable = relationTableFunctionUnitResolver.loadLinksByTable(tableIds);
+        Map<String, FunctionUnit> functionUnitsById = relationTableFunctionUnitResolver.loadFunctionUnitsById(linksByTable);
         return tables.stream()
                 .map(RelationTableResponse::fromEntity)
-                .peek(r -> r.applyFunctionUnit(functionUnits.get(r.getFunctionUnitId())))
+                .peek(r -> r.applyFunctionUnits(relationTableFunctionUnitResolver.resolve(linksByTable.get(r.getId()), functionUnitsById)))
                 .collect(Collectors.toList());
     }
 
@@ -216,33 +244,36 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
     public RelationTableResponse getTableById(Long id) {
         RelationTableDefinition tableDefinition = tableDefinitionRepository.findById(id)
                 .orElseThrow(() -> new RelationTableNotFoundException(id));
-        return withFunctionUnit(RelationTableResponse.fromEntity(tableDefinition));
+        return withFunctionUnits(RelationTableResponse.fromEntity(tableDefinition));
     }
 
-    /**
-     * Resolves functionUnitCode/functionUnitName for a single response (one extra lookup by id).
-     */
-    private RelationTableResponse withFunctionUnit(RelationTableResponse response) {
-        if (response.getFunctionUnitId() != null) {
-            functionUnitRepository.findById(response.getFunctionUnitId()).ifPresent(response::applyFunctionUnit);
-        }
+    private RelationTableResponse withFunctionUnits(RelationTableResponse response) {
+        response.applyFunctionUnits(relationTableFunctionUnitResolver.resolveOne(response.getId()));
         return response;
     }
 
     /**
-     * Batch-resolves Function Units referenced by a list of tables, avoiding N+1 lookups.
+     * Replaces the full set of Function Unit links for a table. Empty/null list clears to Common.
      */
-    private Map<String, FunctionUnit> loadFunctionUnits(List<RelationTableDefinition> tables) {
-        List<String> ids = tables.stream()
-                .map(RelationTableDefinition::getFunctionUnitId)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
-        if (ids.isEmpty()) {
-            return new java.util.HashMap<>();
+    private void replaceFunctionUnitLinks(Long tableId, List<String> functionUnitIds) {
+        relationTableFunctionUnitRepository.deleteByRelationTableId(tableId);
+        if (functionUnitIds == null || functionUnitIds.isEmpty()) {
+            return;
         }
-        return functionUnitRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(FunctionUnit::getId, Function.identity()));
+        List<String> distinctIds = functionUnitIds.stream().distinct().toList();
+        for (String fuId : distinctIds) {
+            if (!functionUnitRepository.existsById(fuId)) {
+                throw new FunctionUnitNotFoundException(fuId);
+            }
+        }
+        List<RelationTableFunctionUnit> links = distinctIds.stream()
+                .map(fuId -> RelationTableFunctionUnit.builder()
+                        .id(java.util.UUID.randomUUID().toString())
+                        .relationTableId(tableId)
+                        .functionUnitId(fuId)
+                        .build())
+                .toList();
+        relationTableFunctionUnitRepository.saveAll(links);
     }
 
     @Override
@@ -257,7 +288,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
 
         log.info("Toggled enabled for relation table: id={}, enabled={}", id, enabled);
-        return withFunctionUnit(RelationTableResponse.fromEntity(saved));
+        return withFunctionUnits(RelationTableResponse.fromEntity(saved));
     }
 
     @Override
@@ -272,7 +303,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
 
         log.info("Toggled portal visibility for relation table: id={}, portalVisible={}", id, portalVisible);
-        return withFunctionUnit(RelationTableResponse.fromEntity(saved));
+        return withFunctionUnits(RelationTableResponse.fromEntity(saved));
     }
 
     /**

@@ -30,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -239,6 +240,57 @@ class MainTableViewServiceImplTest {
         service.publishViewsForFunctionUnit(1L);
 
         assertThat(view.getStatus()).isEqualTo(MainTableViewStatus.PUBLISHED);
+    }
+
+    @Test
+    void cloneViewsForFunctionUnit_remapsDetailFormIdThroughFormIdMapping() {
+        FunctionUnit sourceFu = FunctionUnit.builder().id(1L).build();
+        FunctionUnit targetFu = FunctionUnit.builder().id(2L).build();
+        MainTableViewConfig source = MainTableViewConfig.builder()
+                .id(10L)
+                .functionUnit(sourceFu)
+                .mainTableId(100L)
+                .viewName("Custom View")
+                .isDefault(true)
+                .detailFormId(500L)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(source));
+        when(jdbcTemplate.queryForList(anyString(), eq(10L))).thenReturn(List.of());
+        ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
+        when(viewConfigRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        // formIdMapping: source form id 500 -> cloned form id 900 (as built by FunctionUnitCloner).
+        service.cloneViewsForFunctionUnit(1L, targetFu, Map.of(), Map.of(500L, 900L));
+
+        assertThat(captor.getValue().getDetailFormId())
+                .as("cloned view must point its 'Views' detail form at the CLONED form id, not the source's")
+                .isEqualTo(900L);
+    }
+
+    @Test
+    void cloneViewsForFunctionUnit_leavesDetailFormIdNullWhenSourceHasNone() {
+        FunctionUnit sourceFu = FunctionUnit.builder().id(1L).build();
+        FunctionUnit targetFu = FunctionUnit.builder().id(2L).build();
+        MainTableViewConfig source = MainTableViewConfig.builder()
+                .id(11L)
+                .functionUnit(sourceFu)
+                .mainTableId(100L)
+                .viewName("No Detail Form View")
+                .isDefault(true)
+                .detailFormId(null)
+                .status(MainTableViewStatus.DRAFT)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(source));
+        when(jdbcTemplate.queryForList(anyString(), eq(11L))).thenReturn(List.of());
+        ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
+        when(viewConfigRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.cloneViewsForFunctionUnit(1L, targetFu, Map.of(), Map.of());
+
+        assertThat(captor.getValue().getDetailFormId()).isNull();
     }
 
     @Test

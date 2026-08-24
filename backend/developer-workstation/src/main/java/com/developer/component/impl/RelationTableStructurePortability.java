@@ -1,7 +1,9 @@
 package com.developer.component.impl;
 
 import com.developer.exception.DeveloperBusinessException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.relationtable.RelationTableStructureDiff;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,8 +26,10 @@ import java.util.Map;
  *
  * <p>Export: serialize each referenced relation table by {@code table_name} + its fields.
  * Import: upsert by {@code table_name} — absent ⇒ create as {@code INIT} (version 1);
- * present ⇒ replace fields and set {@code UPDATED} with {@code current_version + 1}. Returns a
- * {@code table_name → new rt id} map so the caller can remap RELATED bindings' relationTableId.
+ * present ⇒ replace fields, and only if the incoming structure actually differs from what's
+ * stored, set {@code UPDATED} with {@code current_version + 1} (a no-op re-import leaves status/
+ * version untouched). Returns a {@code table_name → new rt id} map so the caller can remap
+ * RELATED bindings' relationTableId.
  */
 @Component
 @Slf4j
@@ -166,13 +170,145 @@ public class RelationTableStructurePortability {
                             + "VALUES (?, ?, ?, ?, 'INIT', true, false, 1, ?, ?, ?, ?) RETURNING id",
                     Long.class, tableName, displayName, displayName, description, now, operator, now, operator);
         }
-        // Present → replace structure, set UPDATED and bump current_version.
+        // Present → compare against current structure before touching anything; only a real change
+        // should flip status to UPDATED and bump current_version (re-importing identical content
+        // must be a no-op for status/version, otherwise every re-deploy round-trip looks like a change).
         Long id = existing.get(0);
-        jdbcTemplate.update(
-                "UPDATE rt_table_definitions SET display_name = ?, description = ?, status = 'UPDATED', "
-                        + "current_version = COALESCE(current_version, 0) + 1, updated_at = ?, updated_by = ? WHERE id = ?",
-                displayName, description, now, operator, id);
+        Map<String, Object> current = jdbcTemplate.queryForMap(
+                "SELECT display_name, description FROM rt_table_definitions WHERE id = ?", id);
+        boolean unchanged = RelationTableStructureDiff.unchanged(
+                (String) current.get("display_name"), (String) current.get("description"), currentFieldMaps(id),
+                displayName, description, incomingFieldMaps(table));
+
+        if (unchanged) {
+            jdbcTemplate.update(
+                    "UPDATE rt_table_definitions SET display_name = ?, description = ?, updated_at = ?, updated_by = ? WHERE id = ?",
+                    displayName, description, now, operator, id);
+        } else {
+            jdbcTemplate.update(
+                    "UPDATE rt_table_definitions SET display_name = ?, description = ?, status = 'UPDATED', "
+                            + "current_version = COALESCE(current_version, 0) + 1, updated_at = ?, updated_by = ? WHERE id = ?",
+                    displayName, description, now, operator, id);
+        }
         return id;
+    }
+
+    /** Normalizes the currently-stored fields into the shape {@link RelationTableStructureDiff} compares. */
+    private List<Map<String, Object>> currentFieldMaps(Long tableId) {
+        return jdbcTemplate.query(
+                "SELECT f.field_name, f.data_type, f.length, f.precision_value, f.scale, f.nullable, "
+                        + " f.is_primary_key, f.default_value, f.display_name, f.is_foreign_key, "
+                        + " (SELECT table_name FROM rt_table_definitions WHERE id = f.ref_table_id) AS ref_table_name, "
+                        + " f.ref_primary_key_fields, f.pk_generation_json, f.fk_display_mode, "
+                        + " f.is_computed, f.computed_field_json "
+                        + "FROM rt_field_definitions f WHERE f.table_id = ?",
+                (rs, n) -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("fieldName", rs.getString("field_name"));
+                    m.put("dataType", rs.getString("data_type"));
+                    m.put("length", rs.getObject("length", Integer.class));
+                    m.put("precision", rs.getObject("precision_value", Integer.class));
+                    m.put("scale", rs.getObject("scale", Integer.class));
+                    m.put("nullable", rs.getObject("nullable", Boolean.class));
+                    m.put("isPrimaryKey", rs.getObject("is_primary_key", Boolean.class));
+                    m.put("defaultValue", rs.getString("default_value"));
+                    m.put("displayName", rs.getString("display_name"));
+                    m.put("isForeignKey", rs.getObject("is_foreign_key", Boolean.class));
+                    m.put("refTableName", rs.getString("ref_table_name"));
+                    m.put("refPrimaryKeyFields", parseJsonList(rs.getString("ref_primary_key_fields")));
+                    m.put("pkGenerationJson", parseJsonMapText(rs.getString("pk_generation_json")));
+                    m.put("fkDisplayMode", rs.getString("fk_display_mode"));
+                    boolean computed = Boolean.TRUE.equals(rs.getObject("is_computed", Boolean.class));
+                    m.put("isComputed", computed);
+                    m.put("computedField", computed ? parseJsonMapText(rs.getString("computed_field_json")) : null);
+                    return m;
+                }, tableId);
+    }
+
+    /** Normalizes the import payload's field list into the shape {@link RelationTableStructureDiff} compares. */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> incomingFieldMaps(Map<String, Object> table) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        Object fieldsObj = table.get("fields");
+        if (!(fieldsObj instanceof List<?> fields)) {
+            return result;
+        }
+        for (Object fo : fields) {
+            if (!(fo instanceof Map<?, ?> raw)) {
+                continue;
+            }
+            Map<String, Object> f = (Map<String, Object>) raw;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("fieldName", f.get("fieldName"));
+            m.put("dataType", f.get("dataType"));
+            m.put("length", asInt(f.get("length")));
+            m.put("precision", asInt(f.get("precision")));
+            m.put("scale", asInt(f.get("scale")));
+            m.put("nullable", asBool(f.get("nullable"), true));
+            m.put("isPrimaryKey", asBool(f.get("isPrimaryKey"), false));
+            m.put("defaultValue", f.get("defaultValue"));
+            m.put("displayName", f.get("displayName"));
+            m.put("isForeignKey", asBool(f.get("isForeignKey"), false));
+            m.put("refTableName", f.get("refTableName"));
+            m.put("refPrimaryKeyFields", parseJsonListValue(f.get("refPrimaryKeyFields")));
+            m.put("pkGenerationJson", parseJsonMapValue(f.get("pkGenerationJson")));
+            m.put("fkDisplayMode", f.get("fkDisplayMode") != null ? f.get("fkDisplayMode") : "readonly");
+            boolean computed = Boolean.TRUE.equals(f.get("isComputed"));
+            m.put("isComputed", computed);
+            m.put("computedField", computed ? parseJsonMapValue(f.get("computedField")) : null);
+            result.add(m);
+        }
+        return result;
+    }
+
+    private List<String> parseJsonList(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON list '{}': {}", json, e.getMessage());
+            return null;
+        }
+    }
+
+    private Map<String, Object> parseJsonMapText(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON map '{}': {}", json, e.getMessage());
+            return null;
+        }
+    }
+
+    private Object parseJsonListValue(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof List<?>) {
+            return v;
+        }
+        if (v instanceof String s) {
+            return parseJsonList(s);
+        }
+        return v;
+    }
+
+    private Object parseJsonMapValue(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Map<?, ?>) {
+            return v;
+        }
+        if (v instanceof String s) {
+            return parseJsonMapText(s);
+        }
+        return v;
     }
 
     @SuppressWarnings("unchecked")

@@ -1,9 +1,12 @@
 package com.admin.service;
 
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.entity.RelationTableDefinition;
+import com.admin.entity.RelationTableFunctionUnit;
 import com.admin.entity.RelationTableVersion;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.admin.repository.RelationTableVersionRepository;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.config.DatabaseSchemaResolver;
@@ -44,6 +47,8 @@ class RelationTableDataPropertyTest {
     private RelationTableDefinitionRepository tableDefinitionRepository;
     private RelationTableVersionRepository versionRepository;
     private FunctionUnitRepository functionUnitRepository;
+    private RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
+    private RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
     private RelationTableAuditService auditService;
     private JdbcTemplate jdbcTemplate;
     private ObjectMapper objectMapper;
@@ -54,11 +59,14 @@ class RelationTableDataPropertyTest {
         tableDefinitionRepository = mock(RelationTableDefinitionRepository.class);
         versionRepository = mock(RelationTableVersionRepository.class);
         functionUnitRepository = mock(FunctionUnitRepository.class);
+        relationTableFunctionUnitRepository = mock(RelationTableFunctionUnitRepository.class);
+        relationTableFunctionUnitResolver =
+                new RelationTableFunctionUnitResolver(relationTableFunctionUnitRepository, functionUnitRepository);
         auditService = mock(RelationTableAuditService.class);
         jdbcTemplate = mock(JdbcTemplate.class);
         objectMapper = new ObjectMapper();
         service = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, functionUnitRepository, auditService,
+                tableDefinitionRepository, versionRepository, relationTableFunctionUnitResolver, auditService,
                 mock(com.admin.service.RelationTableAccessService.class),
                 mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
                 jdbcTemplate, objectMapper);
@@ -291,7 +299,7 @@ class RelationTableDataPropertyTest {
         return com.admin.entity.FunctionUnit.builder().id(id).code(code).name(name).build();
     }
 
-    private RelationTableDefinition deployedTable(long id, String tableName, String functionUnitId) {
+    private RelationTableDefinition deployedTable(long id, String tableName) {
         return RelationTableDefinition.builder()
                 .id(id)
                 .tableName(tableName)
@@ -300,24 +308,34 @@ class RelationTableDataPropertyTest {
                 .enabled(true)
                 .portalVisible(false)
                 .currentVersion(1)
-                .functionUnitId(functionUnitId)
                 .fieldDefinitions(new ArrayList<>())
                 .versions(new ArrayList<>())
                 .build();
     }
 
+    private RelationTableFunctionUnit link(long relationTableId, String functionUnitId) {
+        return RelationTableFunctionUnit.builder()
+                .id(relationTableId + ":" + functionUnitId)
+                .relationTableId(relationTableId)
+                .functionUnitId(functionUnitId)
+                .build();
+    }
+
     /**
-     * Two tables grouped under the same FU must collapse into one group with tableCount=2;
-     * an ungrouped table (functionUnitId=null) must not produce a group at all.
+     * Two tables grouped under the same FU (via rt_table_function_units, resolved through
+     * RelationTableFunctionUnitResolver) must collapse into one group with tableCount=2; a table
+     * with no link rows (Common) must not produce a group at all.
      */
     @Example
     void getDeployedTableFunctionUnitGroups_groupsAndCountsByFunctionUnit() {
         List<RelationTableDefinition> tables = List.of(
-                deployedTable(1, "rt_a", "fu-1"),
-                deployedTable(2, "rt_b", "fu-1"),
-                deployedTable(3, "rt_c", "fu-2"),
-                deployedTable(4, "rt_d", null));
+                deployedTable(1, "rt_a"),
+                deployedTable(2, "rt_b"),
+                deployedTable(3, "rt_c"),
+                deployedTable(4, "rt_d"));
         when(tableDefinitionRepository.findByStatusInAndEnabledTrue(anyList())).thenReturn(tables);
+        when(relationTableFunctionUnitRepository.findByRelationTableIdIn(anyList())).thenReturn(List.of(
+                link(1, "fu-1"), link(2, "fu-1"), link(3, "fu-2")));
         when(functionUnitRepository.findAllById(anyCollection())).thenReturn(List.of(
                 functionUnit("fu-1", "FU-CODE-1", "Alpha Unit"),
                 functionUnit("fu-2", "FU-CODE-2", "Beta Unit")));
@@ -333,7 +351,7 @@ class RelationTableDataPropertyTest {
         com.admin.dto.response.FunctionUnitTableGroupResponse fu2Group = groups.stream()
                 .filter(g -> "fu-2".equals(g.getFunctionUnitId())).findFirst().orElseThrow();
         assertThat(fu2Group.getTableCount()).isEqualTo(1L);
-        // Ungrouped table must not surface as a group of its own.
+        // Ungrouped (Common) table must not surface as a group of its own.
         assertThat(groups).noneMatch(g -> g.getFunctionUnitId() == null);
     }
 
@@ -341,10 +359,12 @@ class RelationTableDataPropertyTest {
     @Example
     void getDeployedTableFunctionUnitGroups_sortsByNameFallingBackToCode() {
         List<RelationTableDefinition> tables = List.of(
-                deployedTable(1, "rt_a", "fu-zebra"),
-                deployedTable(2, "rt_b", "fu-alpha"),
-                deployedTable(3, "rt_c", "fu-no-name"));
+                deployedTable(1, "rt_a"),
+                deployedTable(2, "rt_b"),
+                deployedTable(3, "rt_c"));
         when(tableDefinitionRepository.findByStatusInAndEnabledTrue(anyList())).thenReturn(tables);
+        when(relationTableFunctionUnitRepository.findByRelationTableIdIn(anyList())).thenReturn(List.of(
+                link(1, "fu-zebra"), link(2, "fu-alpha"), link(3, "fu-no-name")));
         when(functionUnitRepository.findAllById(anyCollection())).thenReturn(List.of(
                 functionUnit("fu-zebra", "Z-CODE", "Zebra Unit"),
                 functionUnit("fu-alpha", "A-CODE", "Alpha Unit"),

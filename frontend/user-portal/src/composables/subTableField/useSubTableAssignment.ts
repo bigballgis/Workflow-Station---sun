@@ -1,7 +1,7 @@
 import { computed, ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { AssignSubTableRowResponse } from '@/api/task'
-import { assignSubTableRow, assignSubTableRowByIdentity, getSubTableData, getTaskDetail } from '@/api/task'
+import { assignSubTableRow } from '@/api/task'
 import {
   pickHttpErrorBodyMessage,
   unwrapPortalApiPayload,
@@ -9,7 +9,6 @@ import {
 } from '@/utils/httpErrorMessage'
 import { extractUserIdFromCellValue, unwrapUserLikeValueToDisplayString } from '@/components/subTableAddDialogHelpers'
 import type { SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
-import { sameValue } from './useSubTableRowKeys'
 
 export function formatAssigneeDisplayLabel(raw: unknown): string {
   if (raw == null || raw === '') return ''
@@ -116,81 +115,6 @@ export function useSubTableAssignment(
     return row
   }
 
-  async function resolveMissingRowIdFromServer(
-    taskId: string,
-    localRow: Record<string, unknown>,
-    rowIndex: number | null
-  ): Promise<number | null> {
-    try {
-      const response = await getSubTableData(taskId)
-      const payload = (response as Record<string, unknown>).data as Record<string, unknown> | undefined
-      const rowsFromServer = Array.isArray(payload?.rows) ? (payload!.rows as Record<string, unknown>[]) : []
-      if (!rowsFromServer.length) return null
-
-      const byEmail = rowsFromServer.find(r => sameValue(r.email, localRow.email))
-      const byNameAndDept = rowsFromServer.find(
-        r => sameValue(r.name, localRow.name) && sameValue(r.department, localRow.department)
-      )
-      const byIndex =
-        rowIndex != null && rowIndex >= 0 && rowIndex < rowsFromServer.length
-          ? rowsFromServer[rowIndex]
-          : null
-      const match = byEmail || byNameAndDept || byIndex || null
-      if (!match) return null
-
-      const pk = resolveSubTableRowPk(match)
-      const rowId = pk != null ? Number(pk) : NaN
-      return Number.isNaN(rowId) ? null : rowId
-    } catch (error: unknown) {
-      return null
-    }
-  }
-
-  async function resolveMissingRowIdFromTaskDetail(
-    taskId: string,
-    localRow: Record<string, unknown>,
-    rowIndex: number | null
-  ): Promise<{
-    rowId: number | null
-    effectiveTaskId?: string
-    meetingHints?: { topic?: string; location?: string; organizerName?: string }
-  }> {
-    try {
-      const detailRes = await getTaskDetail(taskId)
-      const detail = (detailRes as Record<string, unknown>).data as Record<string, unknown> | undefined
-      const effectiveTaskId =
-        detail && typeof detail.taskId === 'string' && detail.taskId.trim().length > 0 ? detail.taskId : taskId
-      const vars = (detail?.variables as Record<string, unknown> | undefined) || {}
-      const subTables = (vars.__subTables__ as Record<string, unknown> | undefined) || {}
-      const allRows: Record<string, unknown>[] = []
-      Object.values(subTables).forEach(v => {
-        if (Array.isArray(v)) {
-          v.forEach(r => {
-            if (r && typeof r === 'object') allRows.push(r as Record<string, unknown>)
-          })
-        }
-      })
-      const meetingHints = {
-        topic: typeof vars.topic === 'string' ? vars.topic : undefined,
-        location: typeof vars.location === 'string' ? vars.location : undefined,
-        organizerName: typeof vars.organizer_name === 'string' ? vars.organizer_name : undefined
-      }
-      if (!allRows.length) return { rowId: null, effectiveTaskId, meetingHints }
-      const byEmail = allRows.find(r => sameValue(r.email, localRow.email))
-      const byNameAndDept = allRows.find(
-        r => sameValue(r.name, localRow.name) && sameValue(r.department, localRow.department)
-      )
-      const byIndex = rowIndex != null && rowIndex >= 0 && rowIndex < allRows.length ? allRows[rowIndex] : null
-      const match = byEmail || byNameAndDept || byIndex || null
-      if (!match) return { rowId: null, effectiveTaskId, meetingHints }
-      const pk = resolveSubTableRowPk(match)
-      const rowId = pk != null ? Number(pk) : NaN
-      return { rowId: Number.isNaN(rowId) ? null : rowId, effectiveTaskId, meetingHints }
-    } catch {
-      return { rowId: null, effectiveTaskId: taskId }
-    }
-  }
-
   function applyAssignmentResultToRow(rowIndex: number, result: AssignSubTableRowResponse) {
     if (!props.assigneeField) return
     const targetRow = rows.value[rowIndex]
@@ -220,27 +144,27 @@ export function useSubTableAssignment(
 
     const rowPk = resolveSubTableRowPk(row)
     const rowKeyRaw = row.rowKey
-    const rowKeyForAssign =
+    let rowKeyForAssign =
       rowKeyRaw && typeof rowKeyRaw === 'object' && !Array.isArray(rowKeyRaw)
         ? (rowKeyRaw as Record<string, unknown>)
         : undefined
 
-    let effectiveTaskId = props.taskId
-    let meetingHints: { topic?: string; location?: string; organizerName?: string } | undefined
-    let rowIdNum = rowPk != null ? Number(rowPk) : NaN
-    if (props.taskId && (rowPk == null || Number.isNaN(rowIdNum))) {
-      let recovered = await resolveMissingRowIdFromServer(props.taskId, row, rowIndex)
-      if (recovered == null) {
-        const fromDetail = await resolveMissingRowIdFromTaskDetail(props.taskId, row, rowIndex)
-        recovered = fromDetail.rowId
-        meetingHints = fromDetail.meetingHints
-        if (fromDetail.effectiveTaskId && fromDetail.effectiveTaskId.trim()) {
-          effectiveTaskId = fromDetail.effectiveTaskId
-        }
+    const rowIdNum = rowPk != null ? Number(rowPk) : NaN
+
+    // Designer single-column PK that isn't numeric (e.g. 'ACQ-DC-PW-TRANS-000018'): the row is
+    // already identified, just not by a bigint path rowId. Send it as a composite rowKey.
+    if (rowKeyForAssign == null && rowPk != null && Number.isNaN(rowIdNum)) {
+      const pks = props.primaryKeyFields
+      if (Array.isArray(pks) && pks.length === 1) {
+        rowKeyForAssign = { [pks[0]!]: rowPk }
       }
-      if (recovered != null) {
-        rowIdNum = recovered
-      }
+    }
+
+    // Assignment requires the row's primary key to target the update. Without it there is no
+    // legacy identity-lookup fallback — surface the gap so the table design / row data is fixed.
+    if (rowKeyForAssign == null && Number.isNaN(rowIdNum)) {
+      ElMessage.error(t('subTable.assignmentMissingRowKey'))
+      return false
     }
 
     assigning.value = true
@@ -248,32 +172,8 @@ export function useSubTableAssignment(
       let response: unknown
       if (rowKeyForAssign != null && Object.keys(rowKeyForAssign).length > 0) {
         response = await assignSubTableRow(props.taskId, 0, assigneeId, rowKeyForAssign)
-        if (effectiveTaskId !== props.taskId) {
-          response = await assignSubTableRow(effectiveTaskId, 0, assigneeId, rowKeyForAssign)
-        }
-      } else if (!Number.isNaN(rowIdNum)) {
-        response = await assignSubTableRow(props.taskId, rowIdNum, assigneeId)
       } else {
-        response = await assignSubTableRowByIdentity(props.taskId, {
-          assigneeId,
-          email: typeof row.email === 'string' ? String(row.email) : undefined,
-          name: typeof row.name === 'string' ? String(row.name) : undefined,
-          department: typeof row.department === 'string' ? String(row.department) : undefined,
-          topic: meetingHints?.topic,
-          location: meetingHints?.location,
-          organizerName: meetingHints?.organizerName,
-        })
-        if (effectiveTaskId !== props.taskId) {
-          response = await assignSubTableRowByIdentity(effectiveTaskId, {
-            assigneeId,
-            email: typeof row.email === 'string' ? String(row.email) : undefined,
-            name: typeof row.name === 'string' ? String(row.name) : undefined,
-            department: typeof row.department === 'string' ? String(row.department) : undefined,
-            topic: meetingHints?.topic,
-            location: meetingHints?.location,
-            organizerName: meetingHints?.organizerName,
-          })
-        }
+        response = await assignSubTableRow(props.taskId, rowIdNum, assigneeId)
       }
 
       const result = unwrapPortalApiPayload<AssignSubTableRowResponse>(response)
@@ -301,13 +201,6 @@ export function useSubTableAssignment(
     } catch (error: unknown) {
       console.error('Failed to assign sub-table row:', error)
       const ax = error as { response?: { status?: number; data?: unknown }; message?: string }
-      try {
-        const probe = await getTaskDetail(effectiveTaskId || props.taskId)
-        const probeData = (probe as Record<string, unknown>).data as Record<string, unknown> | undefined
-        void probeData
-      } catch (probeError: unknown) {
-        void probeError
-      }
       const msg =
         pickHttpErrorBodyMessage(ax.response?.data) ||
         resolveUserFacingHttpMessage(error, t) ||

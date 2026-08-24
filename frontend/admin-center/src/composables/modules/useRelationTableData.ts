@@ -73,7 +73,9 @@ export function useRelationTableData() {
    */
   const filteredTables = computed(() => {
     const fuCode = route.params.functionUnitCode as string | undefined
-    const scoped = fuCode ? tables.value.filter(t => t.functionUnitCode === fuCode) : tables.value
+    const scoped = fuCode
+      ? tables.value.filter(t => (t.functionUnits || []).some(fu => fu.code === fuCode))
+      : tables.value
     const kw = tableSearchKeyword.value.trim().toLowerCase()
     if (!kw) return scoped
     return scoped.filter(t => (t.displayName || '').toLowerCase().includes(kw) || (t.tableName || '').toLowerCase().includes(kw))

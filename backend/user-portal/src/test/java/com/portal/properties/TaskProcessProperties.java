@@ -135,8 +135,6 @@ class TaskProcessProperties {
         );
         SubTableRowAssignmentComponent subTableRowAssignmentComponent = new SubTableRowAssignmentComponent(
             workflowEngineClient,
-            processInstanceRepository,
-            jdbcTemplate,
             taskPermissionEvaluator
         );
         MiOverlayComponent miOverlayComponent = new MiOverlayComponent(

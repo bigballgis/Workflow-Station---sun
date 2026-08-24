@@ -4,7 +4,6 @@ import SubTableField from '../SubTableField.vue'
 
 vi.mock('@/api/task', () => ({
   assignSubTableRow: vi.fn(),
-  assignSubTableRowByIdentity: vi.fn(),
   getSubTableData: vi.fn(),
   getTaskDetail: vi.fn(),
 }))

@@ -271,27 +271,6 @@ export function assignSubTableRow(
   )
 }
 
-export function assignSubTableRowByIdentity(
-  taskId: string,
-  payload: {
-    assigneeId: string
-    email?: string
-    name?: string
-    department?: string
-    topic?: string
-    location?: string
-    organizerName?: string
-  }
-) {
-  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
-    skipGlobalErrorHandler: true
-  }
-  return request.post<AssignSubTableRowResponse | { data: AssignSubTableRowResponse }>(
-    `/tasks/${taskId}/sub-table-rows/assign-by-identity`,
-    payload,
-    config
-  )
-}
 
 // Get main task sub-table data (for real-time sync)
 export interface SubTableRowStatus {

@@ -1,5 +1,7 @@
 package com.admin.service;
 
+import com.admin.component.RelationTableFieldMapper;
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.request.CreateRelationTableRequest;
 import com.admin.dto.request.UpdateRelationTableRequest;
 import com.admin.dto.response.RelationTableResponse;
@@ -8,12 +10,14 @@ import com.admin.entity.RelationTableDefinition;
 import com.admin.exception.RelationTableNameDuplicateException;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.service.impl.RelationTableStructureServiceImpl;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -39,6 +43,7 @@ class RelationTableStructurePropertyTest {
     private RelationTableDefinitionRepository tableDefinitionRepository;
     private RelationFieldDefinitionRepository fieldDefinitionRepository;
     private FunctionUnitRepository functionUnitRepository;
+    private RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
     private JdbcTemplate jdbcTemplate;
     private RelationTableStructureServiceImpl service;
 
@@ -47,12 +52,16 @@ class RelationTableStructurePropertyTest {
         tableDefinitionRepository = Mockito.mock(RelationTableDefinitionRepository.class);
         fieldDefinitionRepository = Mockito.mock(RelationFieldDefinitionRepository.class);
         functionUnitRepository = Mockito.mock(FunctionUnitRepository.class);
+        relationTableFunctionUnitRepository = Mockito.mock(RelationTableFunctionUnitRepository.class);
         jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         service = new RelationTableStructureServiceImpl(
                 tableDefinitionRepository,
                 fieldDefinitionRepository,
                 functionUnitRepository,
+                relationTableFunctionUnitRepository,
+                new RelationTableFunctionUnitResolver(relationTableFunctionUnitRepository, functionUnitRepository),
                 new com.admin.service.RelationComputedFieldValidator(),
+                new RelationTableFieldMapper(tableDefinitionRepository),
                 jdbcTemplate
         );
     }
@@ -245,7 +254,7 @@ class RelationTableStructurePropertyTest {
         }
     }
 
-    private RelationTableDefinition existingTableForFunctionUnitUpdate(Long tableId, String currentFunctionUnitId) {
+    private RelationTableDefinition existingTableForFunctionUnitUpdate(Long tableId) {
         return RelationTableDefinition.builder()
                 .id(tableId)
                 .tableName("existing_table")
@@ -255,20 +264,21 @@ class RelationTableStructurePropertyTest {
                 .enabled(true)
                 .portalVisible(false)
                 .currentVersion(1)
-                .functionUnitId(currentFunctionUnitId)
                 .fieldDefinitions(new ArrayList<>())
                 .versions(new ArrayList<>())
                 .build();
     }
 
     /**
-     * request.functionUnitId == null must leave the existing grouping untouched — the field is
-     * simply absent from the request, not an instruction to clear it.
+     * Function Unit grouping moved from a scalar column to the many-to-many
+     * rt_table_function_units join (see RelationTableFunctionUnitRepository): request.functionUnitIds
+     * == null must leave the existing links untouched — the field is simply absent from the request,
+     * not an instruction to clear it.
      */
     @Example
-    void updateTable_nullFunctionUnitIdLeavesExistingGroupingUnchanged() {
+    void updateTable_nullFunctionUnitIdsLeavesExistingLinksUnchanged() {
         Long tableId = 1L;
-        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId, "fu-1");
+        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId);
         when(tableDefinitionRepository.findById(eq(tableId))).thenReturn(Optional.of(existing));
         when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -277,22 +287,23 @@ class RelationTableStructurePropertyTest {
                 .displayName("Display")
                 .description("Description")
                 .fieldDefinitions(new ArrayList<>())
-                .functionUnitId(null)
+                .functionUnitIds(null)
                 .build();
 
         service.updateTable(tableId, request);
 
-        assertThat(existing.getFunctionUnitId()).as("null functionUnitId must not clear the existing value").isEqualTo("fu-1");
+        verify(relationTableFunctionUnitRepository, never()).deleteByRelationTableId(any());
+        verify(relationTableFunctionUnitRepository, never()).saveAll(any());
     }
 
     /**
-     * request.functionUnitId == "" (empty string) is the explicit "clear to ungrouped" signal —
-     * distinct from null, which leaves the field untouched (see previous test).
+     * request.functionUnitIds == [] (empty list) is the explicit "clear to Common" signal —
+     * distinct from null, which leaves links untouched (see previous test).
      */
     @Example
-    void updateTable_blankFunctionUnitIdClearsToUngrouped() {
+    void updateTable_emptyFunctionUnitIdsClearsToCommon() {
         Long tableId = 2L;
-        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId, "fu-1");
+        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId);
         when(tableDefinitionRepository.findById(eq(tableId))).thenReturn(Optional.of(existing));
         when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -301,34 +312,42 @@ class RelationTableStructurePropertyTest {
                 .displayName("Display")
                 .description("Description")
                 .fieldDefinitions(new ArrayList<>())
-                .functionUnitId("")
+                .functionUnitIds(List.of())
                 .build();
 
         service.updateTable(tableId, request);
 
-        assertThat(existing.getFunctionUnitId()).as("blank functionUnitId must clear to ungrouped (null)").isNull();
+        verify(relationTableFunctionUnitRepository).deleteByRelationTableId(tableId);
+        verify(relationTableFunctionUnitRepository, never()).saveAll(any());
     }
 
     /**
-     * request.functionUnitId == a non-empty id sets/reassigns the grouping.
+     * request.functionUnitIds == [id] sets/reassigns the grouping: existing links are replaced with
+     * the new set (after validating each id exists).
      */
     @Example
-    void updateTable_nonBlankFunctionUnitIdSetsGrouping() {
+    void updateTable_nonEmptyFunctionUnitIdsSetsGrouping() {
         Long tableId = 3L;
-        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId, null);
+        RelationTableDefinition existing = existingTableForFunctionUnitUpdate(tableId);
         when(tableDefinitionRepository.findById(eq(tableId))).thenReturn(Optional.of(existing));
         when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+        when(functionUnitRepository.existsById("fu-2")).thenReturn(true);
 
         UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
                 .displayName("Display")
                 .description("Description")
                 .fieldDefinitions(new ArrayList<>())
-                .functionUnitId("fu-2")
+                .functionUnitIds(List.of("fu-2"))
                 .build();
 
         service.updateTable(tableId, request);
 
-        assertThat(existing.getFunctionUnitId()).isEqualTo("fu-2");
+        verify(relationTableFunctionUnitRepository).deleteByRelationTableId(tableId);
+        ArgumentCaptor<List<com.admin.entity.RelationTableFunctionUnit>> captor = ArgumentCaptor.forClass(List.class);
+        verify(relationTableFunctionUnitRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+                .extracting(com.admin.entity.RelationTableFunctionUnit::getFunctionUnitId)
+                .containsExactly("fu-2");
     }
 }

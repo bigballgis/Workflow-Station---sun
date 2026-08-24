@@ -236,26 +236,6 @@ public class TaskController {
         return ApiResponse.success(data);
     }
 
-    @Operation(summary = "Assign sub-table row handler by business field (no rowId fallback)")
-    @PostMapping("/{taskId}/sub-table-rows/assign-by-identity")
-    public ApiResponse<Map<String, Object>> assignSubTableRowByIdentity(
-            @PathVariable String taskId,
-            @RequestBody @Valid SubTableRowAssignByIdentityRequest request,
-            @CurrentUserId String userId) {
-        Map<String, Object> data = taskProcessComponent.assignSubTableRowByIdentity(
-                taskId,
-                request.getAssigneeId(),
-                userId,
-                SecurityContextUtils.getCurrentUsername().orElse(null),
-                request.getEmail(),
-                request.getName(),
-                request.getDepartment(),
-                request.getTopic(),
-                request.getLocation(),
-                request.getOrganizerName());
-        return ApiResponse.success(data);
-    }
-
     @Operation(summary = "Query main task sub-table data (proxy workflow-engine)")
     @GetMapping("/{taskId}/sub-table-data/all")
     public ApiResponse<Map<String, Object>> getSubTableDataAll(@PathVariable String taskId) {

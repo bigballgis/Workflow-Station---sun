@@ -1,12 +1,13 @@
 package com.admin.service.impl;
 
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.entity.FunctionUnit;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
+import com.admin.entity.RelationTableFunctionUnit;
 import com.admin.entity.RelationTableVersion;
 import com.admin.exception.RelationTableNotFoundException;
-import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
 import com.admin.service.RelationTableAccessService;
@@ -52,7 +53,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
 
     private final RelationTableDefinitionRepository tableDefinitionRepository;
     private final RelationTableVersionRepository versionRepository;
-    private final FunctionUnitRepository functionUnitRepository;
+    private final RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
     private final RelationTableAuditService auditService;
     private final RelationTableAccessService accessService;
     private final com.admin.service.RelationTablePrimaryKeyAllocationService primaryKeyAllocationService;
@@ -92,11 +93,13 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     public List<RelationTableResponse> getDeployedTables() {
         List<RelationTableDefinition> tables = tableDefinitionRepository.findByStatusInAndEnabledTrue(
                 List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK));
-        Map<String, FunctionUnit> functionUnits = loadFunctionUnits(tables);
+        Map<Long, List<RelationTableFunctionUnit>> linksByTable = relationTableFunctionUnitResolver.loadLinksByTable(
+                tables.stream().map(RelationTableDefinition::getId).toList());
+        Map<String, FunctionUnit> functionUnitsById = relationTableFunctionUnitResolver.loadFunctionUnitsById(linksByTable);
         return tables.stream()
                 .map(this::toDeployedTableResponse)
                 .peek(r -> r.setPermissionLevel(resolveCurrentLevel(r.getId())))
-                .peek(r -> r.applyFunctionUnit(functionUnits.get(r.getFunctionUnitId())))
+                .peek(r -> r.applyFunctionUnits(relationTableFunctionUnitResolver.resolve(linksByTable.get(r.getId()), functionUnitsById)))
                 .collect(Collectors.toList());
     }
 
@@ -105,14 +108,16 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     public List<com.admin.dto.response.FunctionUnitTableGroupResponse> getDeployedTableFunctionUnitGroups() {
         List<RelationTableDefinition> tables = tableDefinitionRepository.findByStatusInAndEnabledTrue(
                 List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK));
-        Map<String, FunctionUnit> functionUnits = loadFunctionUnits(tables);
-        Map<String, Long> countByFuId = tables.stream()
-                .map(RelationTableDefinition::getFunctionUnitId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.groupingBy(java.util.function.Function.identity(), Collectors.counting()));
+        Map<Long, List<RelationTableFunctionUnit>> linksByTable = relationTableFunctionUnitResolver.loadLinksByTable(
+                tables.stream().map(RelationTableDefinition::getId).toList());
+        Map<String, FunctionUnit> functionUnitsById = relationTableFunctionUnitResolver.loadFunctionUnitsById(linksByTable);
+        // A table linked to multiple Function Units counts toward each of their groups.
+        Map<String, Long> countByFuId = linksByTable.values().stream()
+                .flatMap(List::stream)
+                .collect(Collectors.groupingBy(RelationTableFunctionUnit::getFunctionUnitId, Collectors.counting()));
         return countByFuId.entrySet().stream()
                 .map(e -> {
-                    FunctionUnit fu = functionUnits.get(e.getKey());
+                    FunctionUnit fu = functionUnitsById.get(e.getKey());
                     return com.admin.dto.response.FunctionUnitTableGroupResponse.builder()
                             .functionUnitId(e.getKey())
                             .functionUnitCode(fu != null ? fu.getCode() : null)
@@ -124,22 +129,6 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         g -> g.getFunctionUnitName() != null ? g.getFunctionUnitName() : g.getFunctionUnitCode(),
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * Batch-resolves Function Units referenced by a list of tables, avoiding N+1 lookups.
-     */
-    private Map<String, FunctionUnit> loadFunctionUnits(List<RelationTableDefinition> tables) {
-        List<String> ids = tables.stream()
-                .map(RelationTableDefinition::getFunctionUnitId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
-        if (ids.isEmpty()) {
-            return new HashMap<>();
-        }
-        return functionUnitRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(FunctionUnit::getId, java.util.function.Function.identity()));
     }
 
     /**
@@ -220,7 +209,6 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 .enabled(entity.getEnabled())
                 .portalVisible(entity.getPortalVisible())
                 .currentVersion(entity.getCurrentVersion())
-                .functionUnitId(entity.getFunctionUnitId())
                 .fieldDefinitions(fields)
                 .createdAt(entity.getCreatedAt())
                 .createdBy(entity.getCreatedBy())

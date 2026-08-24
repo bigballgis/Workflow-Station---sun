@@ -1,5 +1,6 @@
 package com.admin.service;
 
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.request.RollbackRequest;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.dto.response.RelationTableVersionResponse;
@@ -8,7 +9,9 @@ import com.admin.entity.RelationTableDefinition;
 import com.admin.entity.RelationTableVersion;
 import com.admin.exception.RelationTableDeploymentException;
 import com.admin.exception.RelationTableNotFoundException;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.admin.repository.RelationTableVersionRepository;
 import com.admin.config.DatabaseSchemaResolver;
 import com.admin.service.impl.RelationTableDeployServiceImpl;
@@ -19,12 +22,12 @@ import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
 import com.platform.security.util.SecurityContextUtils;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -60,6 +63,12 @@ class RelationTableDeployServiceTest {
     private com.admin.repository.RelationFieldDefinitionRepository fieldDefinitionRepository;
 
     @Mock
+    private FunctionUnitRepository functionUnitRepository;
+
+    @Mock
+    private RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
+
+    @Mock
     private com.platform.common.i18n.I18nService i18nService;
 
     @Mock
@@ -71,8 +80,16 @@ class RelationTableDeployServiceTest {
     @Mock
     private DatabaseSchemaResolver schemaResolver;
 
-    @InjectMocks
     private RelationTableDeployServiceImpl service;
+
+    @BeforeEach
+    void wireService() {
+        RelationTableFunctionUnitResolver relationTableFunctionUnitResolver =
+                new RelationTableFunctionUnitResolver(relationTableFunctionUnitRepository, functionUnitRepository);
+        service = new RelationTableDeployServiceImpl(
+                tableDefinitionRepository, versionRepository, fieldDefinitionRepository,
+                relationTableFunctionUnitResolver, jdbcTemplate, objectMapper, schemaResolver, i18nService);
+    }
 
     // ==================== Helper Methods ====================
 

@@ -93,6 +93,13 @@ export interface FieldDefinitionResponse {
   computedField?: Record<string, unknown>
 }
 
+/** Function Unit 简要信息 */
+export interface FunctionUnitBrief {
+  id: string
+  code: string
+  name: string
+}
+
 /** 表定义响应 */
 export interface RelationTableResponse {
   id: number
@@ -103,10 +110,8 @@ export interface RelationTableResponse {
   enabled: boolean
   portalVisible: boolean
   currentVersion: number
-  /** Optional Function Unit grouping; undefined/null = ungrouped */
-  functionUnitId?: string
-  functionUnitCode?: string
-  functionUnitName?: string
+  /** Function Unit(s) this table belongs to; empty = Common (visible to all Function Units) */
+  functionUnits: FunctionUnitBrief[]
   fieldDefinitions: FieldDefinitionResponse[]
   /** 当前管理员对该表的权限级别：READONLY=只读, READ_WRITE=读写 */
   permissionLevel?: 'READONLY' | 'READ_WRITE'
@@ -191,8 +196,8 @@ export interface CreateRelationTableRequest {
   tableName: string
   displayName?: string
   description?: string
-  /** Optional Function Unit grouping (sys_function_units.id) */
-  functionUnitId?: string
+  /** Function Unit(s) this table belongs to (sys_function_units.id); empty/undefined = Common */
+  functionUnitIds?: string[]
   fieldDefinitions: CreateFieldDefinitionRequest[]
 }
 
@@ -224,8 +229,11 @@ export interface UpdateRelationTableRequest {
   tableName?: string
   displayName?: string
   description?: string
-  /** Optional Function Unit grouping (sys_function_units.id); empty string clears to ungrouped */
-  functionUnitId?: string
+  /**
+   * Function Unit(s) this table belongs to (sys_function_units.id).
+   * undefined = leave unchanged; empty array = clear to Common.
+   */
+  functionUnitIds?: string[]
   fieldDefinitions?: UpdateFieldDefinitionRequest[]
 }
 

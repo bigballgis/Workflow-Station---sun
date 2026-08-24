@@ -56,10 +56,11 @@
       </el-form-item>
       <el-form-item
         :label="t('form.labelFunctionUnit')"
-        prop="functionUnitId"
+        prop="functionUnitIds"
       >
         <el-select
-          v-model="form.functionUnitId"
+          v-model="form.functionUnitIds"
+          multiple
           clearable
           filterable
           :placeholder="t('form.placeholderSelectFunctionUnit')"
@@ -72,6 +73,9 @@
             :value="fu.id"
           />
         </el-select>
+        <div class="form-item-hint">
+          {{ t('form.hintEmptyMeansCommon') }}
+        </div>
       </el-form-item>
     </el-form>
 
