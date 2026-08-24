@@ -17,6 +17,7 @@ import {
 } from '@/utils/subTableRowRuntime'
 import { unwrapPortalApiPayload, resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { processApi } from '@/api/process'
+import { isAssignmentConfigured } from '@/utils/miAssignmentConfig'
 import type { SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
 
 /** Add/Edit row dialog state machine + FK/PK runtime bridge (prepare / finalize on save). */
@@ -206,13 +207,18 @@ export function useSubTableRowDialog(
       emit('update:modelValue', [...rows.value])
 
       const newAssigneeId = af ? extractUserIdFromCellValue(savedRow[af]) : ''
+      // Sub-tables with a BPMN assignmentConfig (JSON-row assignment model, e.g. ACQ Transaction)
+      // persist the assignee via the normal row edit + task form submit — never through the
+      // legacy per-row engine endpoint below, which assumes a physical table + numeric rowId and
+      // 400s ("Task is not configured with sub-table information") on JSON-only sub-tables.
       if (
         props.canAssign &&
         props.showAssignButton &&
         props.taskId &&
         af &&
         newAssigneeId &&
-        newAssigneeId !== prevAssigneeId
+        newAssigneeId !== prevAssigneeId &&
+        !isAssignmentConfigured(props.assignmentConfig)
       ) {
         await performSubTableRowAssignment(idx, newAssigneeId)
       }
