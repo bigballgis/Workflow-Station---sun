@@ -276,6 +276,7 @@ public class AdminAuditAspect {
             case "deleteUser"       -> new AuditMeta(AuditAction.DELETE, "USER", userId);
             case "getUser"          -> AuditMeta.skip();
             case "listUsers"        -> AuditMeta.skip();
+            case "queryUsers"       -> AuditMeta.skip();
             default                 -> AuditMeta.skip();
         };
     }

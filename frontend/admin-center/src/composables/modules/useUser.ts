@@ -7,49 +7,79 @@
  * 所有 notify* / notifyConfirm 调用均在此处处理。
  */
 
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
-import type { User, UserQuery } from '@/api/user'
+import type { User } from '@/api/user'
 import { userApi } from '@/api/user'
-import { useUserStore } from '@/stores/user'
 import { extractErrorDetail } from '@/utils/errorTranslator'
-import { usePagination } from '@/composables/usePagination'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+
+const ACTIONS_COL_WIDTH = 140
+const USER_COL_WIDTHS: Record<string, number> = {
+  username: 120,
+  fullName: 120,
+  email: 180,
+  position: 100,
+  entityManagerName: 120,
+  functionManagerName: 120,
+  status: 90,
+}
 
 export function useUser() {
   const { t } = useI18n()
-  const store = useUserStore()
-
-  // ==================== Permissions ====================
 
   const canWriteUser = hasPermission(PERMISSIONS.USER_WRITE)
   const canDeleteUser = hasPermission(PERMISSIONS.USER_DELETE)
 
-  // ==================== Data Fetching ====================
-  const fetchFn = async (params: UserQuery) => {
-    await store.fetchUsers(params)
-    return { content: store.users, totalElements: store.total }
+  const loading = ref(false)
+  const query = reactive({ keyword: '', status: '' })
+
+  const grid = useAdminListGrid<User>({
+    storageKey: 'admin-list-layout:users',
+    extraWidth: ACTIONS_COL_WIDTH,
+    defaultWidthOf: (field) => USER_COL_WIDTHS[field] ?? 120,
+  })
+
+  const loadUsers = async () => {
+    const seq = grid.beginQuery()
+    loading.value = true
+    try {
+      const page = await userApi.query({
+        ...grid.buildQuery(),
+        keyword: query.keyword || undefined,
+        status: query.status || undefined,
+      })
+      if (!grid.isCurrentQuery(seq)) return
+      grid.applyPage(page, 'users/query response is missing its column declaration')
+    } catch (error: unknown) {
+      if (!grid.isCurrentQuery(seq)) return
+      if (!(error as { response?: unknown })?.response) {
+        notifyError(error instanceof Error ? error.message : t('user.actionFailed', { action: t('common.search') }))
+      }
+    } finally {
+      if (grid.isCurrentQuery(seq)) loading.value = false
+    }
   }
 
-  const { data: users, total, loading, query, handleSearch, handleReset } = usePagination(
-    fetchFn,
-    { keyword: '', status: '' },
-  )
+  const handleSearch = () => {
+    void loadUsers()
+  }
 
-  // ==================== State ====================
+  const handleReset = () => {
+    query.keyword = ''
+    query.status = ''
+    void loadUsers()
+  }
 
-  // Dialog visibility
   const formDialogVisible = ref(false)
   const detailDialogVisible = ref(false)
   const importDialogVisible = ref(false)
 
-  // Current selections
   const currentUser = ref<User | null>(null)
   const currentUserId = ref('')
 
-  // ==================== Dialog Actions (UI helpers) ====================
-  
   const showCreateDialog = () => {
     currentUser.value = null
     formDialogVisible.value = true
@@ -74,8 +104,6 @@ export function useUser() {
     importDialogVisible.value = true
   }
 
-  // ==================== Command Handler ====================
-
   const handleCommand = async (user: User, command: string) => {
     switch (command) {
       case 'enable':
@@ -93,8 +121,6 @@ export function useUser() {
     }
   }
 
-  // ==================== Status Change ====================
-
   const handleStatusChange = async (user: User, status: string, action: string) => {
     try {
       await notifyConfirm(
@@ -111,8 +137,6 @@ export function useUser() {
       }
     }
   }
-
-  // ==================== Delete ====================
 
   const handleDelete = async (user: User) => {
     try {
@@ -135,27 +159,19 @@ export function useUser() {
     }
   }
 
-  // ==================== Return ====================
-
   return {
-    // Permissions
     canWriteUser,
     canDeleteUser,
-    // State
     loading,
-    users,
-    total,
     query,
-    // Dialog visibility
     formDialogVisible,
     detailDialogVisible,
     importDialogVisible,
-    // Current selections
     currentUser,
     currentUserId,
-    // Methods
     handleSearch,
     handleReset,
+    loadUsers,
     showCreateDialog,
     showEditDialog,
     showDetailDialog,
@@ -163,5 +179,7 @@ export function useUser() {
     handleCommand,
     handleStatusChange,
     handleDelete,
+    ACTIONS_COL_WIDTH,
+    ...grid,
   }
 }

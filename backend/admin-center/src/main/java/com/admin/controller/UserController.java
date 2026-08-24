@@ -1,9 +1,12 @@
 package com.admin.controller;
 
 import com.admin.component.RolePermissionManagerComponent;
+import com.admin.component.UserListQueryComponent;
 import com.admin.component.UserManagerComponent;
+import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.StatusUpdateRequest;
 import com.admin.dto.request.UserCreateRequest;
+import com.admin.dto.request.UserListQueryRequest;
 import com.admin.dto.request.UserQueryRequest;
 import com.admin.dto.request.UserUpdateRequest;
 import com.admin.dto.response.BatchImportResult;
@@ -56,6 +59,7 @@ public class UserController {
     private final UserPermissionService userPermissionService;
     private final RoleHelper roleHelper;
     private final UserPortalMembershipService userPortalMembershipService;
+    private final UserListQueryComponent userListQueryComponent;
     
     @PostMapping
     @Operation(summary = "创建用户", description = "创建新用户，立即激活")
@@ -98,6 +102,13 @@ public class UserController {
                 users.getTotalElements());
         
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/query")
+    @Operation(summary = "Query users (true paging; column filters, sort and grouping)")
+    public ResponseEntity<AdminListPage<UserInfo>> queryUsers(
+            @RequestBody UserListQueryRequest request) {
+        return ResponseEntity.ok(userListQueryComponent.query(request));
     }
     
     @GetMapping("/{userId}")
