@@ -32,6 +32,11 @@ import {
 } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { nestAssignmentFieldsIntoContainer, type AssignmentConfig } from '@/utils/miAssignmentConfig'
+import {
+  applyActionFormCanvasToPreview,
+  resolveActionFormCanvasRule,
+  selectPreviewCanvasTableBinding,
+} from '@/utils/actionFormCanvasRule'
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
@@ -102,22 +107,38 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
   // Mixed preview items: alternating form-create rule segments and inline sub-tables
   const previewItems = ref<FormPreviewItem[]>([])
 
+  /** Live Preview may overlay unsaved ACTION canvas; handlePreview writes this. */
+  const previewCanvasTableBindingOverride = ref<TableBinding | null>(null)
+
+  const previewCanvasTableBinding = computed(() => {
+    if (previewCanvasTableBindingOverride.value) return previewCanvasTableBindingOverride.value
+    const form = selectedForm.value
+    const resolved = resolveActionFormCanvasRule({
+      formType: form?.formType,
+      tableBindings: form?.tableBindings,
+      topLevelRule: form?.configJson?.rule,
+      subForms: form?.configJson?.subForms,
+    })
+    return selectPreviewCanvasTableBinding({
+      tableBindings: form?.tableBindings ?? [],
+      usedActionCanvas: resolved.usedActionCanvas,
+      actionBindingId: resolved.actionBindingId,
+    })
+  })
+
   const previewPrimaryTableDisplayName = computed(() => {
-    const primary = selectedForm.value?.tableBindings?.find((b: TableBinding) => b.bindingType === 'PRIMARY')
-    if (!primary) return ''
-    const table = store.tables.find(t => t.id === primary.tableId)
+    const canvas = previewCanvasTableBinding.value
+    if (!canvas) return ''
+    const table = store.tables.find(t => t.id === canvas.tableId)
     return table?.tableDisplayName || table?.tableName || ''
   })
 
-  const previewPrimaryTableId = computed(() => {
-    const primary = selectedForm.value?.tableBindings?.find((b: TableBinding) => b.bindingType === 'PRIMARY')
-    return primary?.tableId ?? null
-  })
+  const previewPrimaryTableId = computed(() => previewCanvasTableBinding.value?.tableId ?? null)
 
   const previewParentTablesById = computed(() => {
     const out: Record<number, { fieldDefinitions: FieldDefinition[] }> = {}
     for (const b of selectedForm.value?.tableBindings ?? []) {
-      if (b.bindingType !== 'PRIMARY' && b.bindingType !== 'SUB') continue
+      if (b.bindingType !== 'PRIMARY' && b.bindingType !== 'SUB' && b.bindingType !== 'ACTION') continue
       const table = store.tables.find(t => t.id === b.tableId)
       if (table?.fieldDefinitions?.length) {
         out[b.tableId] = { fieldDefinitions: table.fieldDefinitions }
@@ -241,8 +262,14 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       let option: any = {}
       try {
         if (subRef) {
-          rule = snapshotRulesForPreview(subRef.getRule() || [])
-          option = subRef.getOption() || {}
+          const liveRule = subRef.getRule?.()
+          if (liveRule == null) {
+            rule = snapshotRulesForPreview(subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || [])
+            option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
+          } else {
+            rule = snapshotRulesForPreview(liveRule)
+            option = subRef.getOption() || {}
+          }
         } else if (subFormCache.value[bindingId]) {
           rule = snapshotRulesForPreview(subFormCache.value[bindingId].rule || [])
           option = subFormCache.value[bindingId].options || {}
@@ -300,6 +327,24 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       })
     }
 
+    // ACTION forms author fields on the ACTION binding canvas (Portal FORM_POPUP parity).
+    const actionCanvas = applyActionFormCanvasToPreview({
+      formType: selectedForm.value.formType,
+      tableBindings: selectedForm.value.tableBindings,
+      topLevelRule: rawRule,
+      savedSubForms: subForms,
+      bindingMap,
+      primaryFieldDefs: getPrimaryBindingFieldDefinitions(),
+      getTableFieldDefinitions,
+    })
+    rawRule = snapshotRulesForPreview(actionCanvas.rule)
+    const canvasFieldDefs = actionCanvas.fieldDefs
+    previewCanvasTableBindingOverride.value = selectPreviewCanvasTableBinding({
+      tableBindings: selectedForm.value.tableBindings ?? [],
+      usedActionCanvas: actionCanvas.usedActionCanvas,
+      actionBindingId: actionCanvas.actionBindingId,
+    })
+
     // ── Normalize custom types for form-create preview ──────────────────────────
     // form-create cannot pass nested options (with children) to custom components
     // correctly, so we convert them to native element-plus tags that form-create
@@ -341,8 +386,7 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
 
     ensureFormCreateRulesValidationDeep(rawRule)
 
-    const tableFieldDefs = getPrimaryBindingFieldDefinitions()
-    applyTableFieldDefaultsToRulesAndModel(rawRule, tableFieldDefs, previewData.value, true, {
+    applyTableFieldDefaultsToRulesAndModel(rawRule, canvasFieldDefs, previewData.value, true, {
       tableOverridesRule: true,
     })
     seedFormDataFromRules(rawRule, previewData.value, true)
@@ -533,7 +577,20 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       console.error('[FormDesigner] Preview build error:', e)
       // Try a simpler preview with just the basic rule
       try {
-        const basicRule = (selectedForm.value?.configJson?.rule || []).filter((r: any) => r.type !== 'subTable')
+        const fallbackCanvas = applyActionFormCanvasToPreview({
+          formType: selectedForm.value?.formType,
+          tableBindings: selectedForm.value?.tableBindings,
+          topLevelRule: selectedForm.value?.configJson?.rule || [],
+          savedSubForms: selectedForm.value?.configJson?.subForms || {},
+          bindingMap: new Map(),
+          primaryFieldDefs: [],
+        })
+        previewCanvasTableBindingOverride.value = selectPreviewCanvasTableBinding({
+          tableBindings: selectedForm.value?.tableBindings ?? [],
+          usedActionCanvas: fallbackCanvas.usedActionCanvas,
+          actionBindingId: fallbackCanvas.actionBindingId,
+        })
+        const basicRule = fallbackCanvas.rule.filter((r: { type?: string }) => r.type !== 'subTable')
         previewItems.value = [{ kind: 'fields', rule: basicRule, modelKey: 'fallback' }]
         previewSubBindings.value = []
         previewFormReady.value = true

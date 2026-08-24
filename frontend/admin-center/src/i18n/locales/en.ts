@@ -158,7 +158,20 @@ export default {
     forceDelete: 'Force Delete',
     deleted: 'Deleted flow {name}',
     loadFailed: 'Failed to load flow list',
-    exportFailed: 'Export failed'
+    exportFailed: 'Export failed',
+    viewStructure: 'View structure',
+    structureTitle: 'Flow structure · {name}',
+    structureDraftHint: 'Showing the draft version (not published yet)',
+    structureEmpty: 'This flow has no steps yet',
+    structureLoadFailed: 'Failed to load flow structure',
+    branchLabel: 'Branch {index}',
+    branchEmpty: '(empty branch)',
+    loopBody: 'Loop body',
+    stepKindTrigger: 'Trigger',
+    stepKindRouter: 'Router',
+    stepKindLoop: 'Loop',
+    stepKindCode: 'Code',
+    stepKindUnknown: 'Unknown type'
   },
   dashboard: {
     totalUsers: 'Total Users',
