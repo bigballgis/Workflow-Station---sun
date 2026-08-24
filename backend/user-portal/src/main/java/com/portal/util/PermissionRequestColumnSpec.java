@@ -1,8 +1,7 @@
 package com.portal.util;
 
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
-
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,24 +22,24 @@ public final class PermissionRequestColumnSpec {
     private PermissionRequestColumnSpec() {
     }
 
-    public static List<PortalListColumnMeta> columns() {
+    public static List<ListColumnMeta> columns() {
         return List.of(
-                PortalListColumnMeta.withOptions("requestType", "permission.requestType",
+                ListColumnMeta.withOptions("requestType", "permission.requestType",
                         Kind.ENUM, typeOptions()),
-                PortalListColumnMeta.of("targetName", "permission.requestTarget", Kind.TEXT),
-                PortalListColumnMeta.of("applicantId", "permission.beneficiaryColumn", Kind.USER),
-                PortalListColumnMeta.of("submittedByUserId", "permission.submittedByColumn", Kind.USER),
-                PortalListColumnMeta.of("reason", "permission.reason", Kind.TEXT),
-                PortalListColumnMeta.withOptions("status", "permission.status", Kind.ENUM, statusOptions()),
-                PortalListColumnMeta.of("approverComment", "permission.approverComment", Kind.TEXT),
-                PortalListColumnMeta.of("createdAt", "permission.applyTime", Kind.DATETIME),
-                PortalListColumnMeta.of("approvedAt", "permission.approvedAt", Kind.DATETIME)
+                ListColumnMeta.of("targetName", "permission.requestTarget", Kind.TEXT),
+                ListColumnMeta.of("applicantId", "permission.beneficiaryColumn", Kind.USER),
+                ListColumnMeta.of("submittedByUserId", "permission.submittedByColumn", Kind.USER),
+                ListColumnMeta.of("reason", "permission.reason", Kind.TEXT),
+                ListColumnMeta.withOptions("status", "permission.status", Kind.ENUM, statusOptions()),
+                ListColumnMeta.of("approverComment", "permission.approverComment", Kind.TEXT),
+                ListColumnMeta.of("createdAt", "permission.applyTime", Kind.DATETIME),
+                ListColumnMeta.of("approvedAt", "permission.approvedAt", Kind.DATETIME)
         );
     }
 
     public static ListFilterSql sql() {
-        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
-        for (PortalListColumnMeta column : columns()) {
+        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
+        for (ListColumnMeta column : columns()) {
             byField.put(column.field(), column);
         }
         return new ListFilterSql(byField, PermissionRequestColumnSpec::sqlFor, "p.id", "p.created_at DESC");
@@ -61,22 +60,22 @@ public final class PermissionRequestColumnSpec {
         };
     }
 
-    private static List<PortalListColumnMeta.Option> typeOptions() {
+    private static List<ListColumnMeta.Option> typeOptions() {
         return List.of(
-                new PortalListColumnMeta.Option("ROLE_ASSIGNMENT", "permission.roleAssignment"),
-                new PortalListColumnMeta.Option("VIRTUAL_GROUP_JOIN", "permission.virtualGroupJoin"),
-                new PortalListColumnMeta.Option("BUSINESS_UNIT_JOIN", "permission.businessUnitJoin"),
-                new PortalListColumnMeta.Option("BUSINESS_UNIT_ROLE_REMOVAL", "permission.businessUnitRoleRemoval"),
-                new PortalListColumnMeta.Option("BUSINESS_UNIT_EXIT", "permission.businessUnitExit")
+                new ListColumnMeta.Option("ROLE_ASSIGNMENT", "permission.roleAssignment"),
+                new ListColumnMeta.Option("VIRTUAL_GROUP_JOIN", "permission.virtualGroupJoin"),
+                new ListColumnMeta.Option("BUSINESS_UNIT_JOIN", "permission.businessUnitJoin"),
+                new ListColumnMeta.Option("BUSINESS_UNIT_ROLE_REMOVAL", "permission.businessUnitRoleRemoval"),
+                new ListColumnMeta.Option("BUSINESS_UNIT_EXIT", "permission.businessUnitExit")
         );
     }
 
-    private static List<PortalListColumnMeta.Option> statusOptions() {
+    private static List<ListColumnMeta.Option> statusOptions() {
         return List.of(
-                new PortalListColumnMeta.Option("PENDING", "permission.pending"),
-                new PortalListColumnMeta.Option("APPROVED", "permission.approved"),
-                new PortalListColumnMeta.Option("REJECTED", "permission.rejected"),
-                new PortalListColumnMeta.Option("CANCELLED", "permission.cancelled")
+                new ListColumnMeta.Option("PENDING", "permission.pending"),
+                new ListColumnMeta.Option("APPROVED", "permission.approved"),
+                new ListColumnMeta.Option("REJECTED", "permission.rejected"),
+                new ListColumnMeta.Option("CANCELLED", "permission.cancelled")
         );
     }
 }

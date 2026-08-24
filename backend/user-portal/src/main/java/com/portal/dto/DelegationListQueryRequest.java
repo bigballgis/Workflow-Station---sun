@@ -1,5 +1,6 @@
 package com.portal.dto;
 
+import com.platform.common.list.ListColumnFilter;
 import java.util.List;
 
 /**

@@ -1,5 +1,6 @@
 package com.portal.dto;
 
+import com.platform.common.list.ListColumnMeta;
 import java.util.List;
 
 /**
@@ -7,7 +8,7 @@ import java.util.List;
  * this page, and — when the caller grouped — counts over the whole matching set.
  */
 public record PortalListPage<T>(
-        List<PortalListColumnMeta> columns,
+        List<ListColumnMeta> columns,
         List<T> content,
         List<PortalListGroup> groups,
         int page,

@@ -1,7 +1,7 @@
 package com.portal.component;
 
+import com.platform.common.list.ListColumnFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portal.dto.ListColumnFilter;
 import com.portal.util.MainTableViewColumnSpec;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.SqlFragment;
@@ -15,12 +15,10 @@ import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.core.ResultSetExtractor;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;

@@ -1,15 +1,13 @@
 package com.portal.util;
 
-import com.portal.dto.ListColumnFilter;
+import com.platform.common.list.ListColumnFilter;
 import com.portal.dto.TaskInfo;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;

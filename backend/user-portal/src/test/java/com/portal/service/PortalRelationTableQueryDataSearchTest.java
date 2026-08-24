@@ -1,10 +1,11 @@
 package com.portal.service;
 
+import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListColumnMeta;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.enums.RelationDataType;
 import com.portal.component.RoleAccessComponent;
-import com.portal.dto.ListColumnFilter;
 import com.portal.dto.RelationTableDataPage;
 import com.portal.dto.RelationTableQueryRequest;
 import org.junit.jupiter.api.DisplayName;
@@ -13,11 +14,9 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.security.access.AccessDeniedException;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
@@ -178,16 +177,16 @@ class PortalRelationTableQueryDataSearchTest {
 
         assertThat(page.columns()).allMatch(c -> !c.groupable());
         var status = page.columns().stream().filter(c -> c.field().equals("status")).findFirst().orElseThrow();
-        assertThat(status.kind()).isEqualTo(com.portal.dto.PortalListColumnMeta.Kind.ENUM);
+        assertThat(status.kind()).isEqualTo(com.platform.common.list.ListColumnMeta.Kind.ENUM);
         assertThat(status.operators()).containsExactly("eq", "ne", "isNull", "isNotNull");
-        assertThat(status.options()).extracting(com.portal.dto.PortalListColumnMeta.Option::value)
+        assertThat(status.options()).extracting(com.platform.common.list.ListColumnMeta.Option::value)
                 .contains("ACTIVE", "INACTIVE", "LOCKED");
         var language = page.columns().stream().filter(c -> c.field().equals("language")).findFirst().orElseThrow();
-        assertThat(language.kind()).isEqualTo(com.portal.dto.PortalListColumnMeta.Kind.ENUM);
-        assertThat(language.options()).extracting(com.portal.dto.PortalListColumnMeta.Option::value)
+        assertThat(language.kind()).isEqualTo(com.platform.common.list.ListColumnMeta.Kind.ENUM);
+        assertThat(language.options()).extracting(com.platform.common.list.ListColumnMeta.Option::value)
                 .contains("en", "zh_CN", "zh-CN");
         var username = page.columns().stream().filter(c -> c.field().equals("username")).findFirst().orElseThrow();
-        assertThat(username.kind()).isEqualTo(com.portal.dto.PortalListColumnMeta.Kind.TEXT);
+        assertThat(username.kind()).isEqualTo(com.platform.common.list.ListColumnMeta.Kind.TEXT);
     }
 
     @Test

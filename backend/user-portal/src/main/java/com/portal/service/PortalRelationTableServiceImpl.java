@@ -1,5 +1,6 @@
 package com.portal.service;
 
+import com.platform.common.list.ListColumnMeta;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
@@ -13,7 +14,6 @@ import com.platform.common.relationtable.RelationTableTemplateService;
 import com.platform.common.relationtable.RowValidationResult;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.component.RoleAccessComponent;
-import com.portal.dto.PortalListColumnMeta;
 import com.portal.dto.RelationTableDataPage;
 import com.portal.dto.RelationTableQueryRequest;
 import com.portal.util.ListFilterSql;
@@ -24,7 +24,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
@@ -46,19 +45,19 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     private static final List<String> DEFAULT_SYSTEM_USER_SEARCH_FIELDS = List.of(
             "username", "display_name", "full_name", "email", "employee_id");
     /** Matches {@code chk_sys_user_status} and common Admin aliases stored as-is. */
-    private static final List<PortalListColumnMeta.Option> SYSTEM_USER_STATUS_OPTIONS = List.of(
-            new PortalListColumnMeta.Option("ACTIVE", "Active"),
-            new PortalListColumnMeta.Option("INACTIVE", "Inactive"),
-            new PortalListColumnMeta.Option("DISABLED", "Disabled"),
-            new PortalListColumnMeta.Option("LOCKED", "Locked"),
-            new PortalListColumnMeta.Option("PENDING", "Pending"));
+    private static final List<ListColumnMeta.Option> SYSTEM_USER_STATUS_OPTIONS = List.of(
+            new ListColumnMeta.Option("ACTIVE", "Active"),
+            new ListColumnMeta.Option("INACTIVE", "Inactive"),
+            new ListColumnMeta.Option("DISABLED", "Disabled"),
+            new ListColumnMeta.Option("LOCKED", "Locked"),
+            new ListColumnMeta.Option("PENDING", "Pending"));
     /** Covers underscore and hyphen locale codes seen in {@code sys_users.language}. */
-    private static final List<PortalListColumnMeta.Option> SYSTEM_USER_LANGUAGE_OPTIONS = List.of(
-            new PortalListColumnMeta.Option("en", "English"),
-            new PortalListColumnMeta.Option("zh_CN", "简体中文 (zh_CN)"),
-            new PortalListColumnMeta.Option("zh-CN", "简体中文 (zh-CN)"),
-            new PortalListColumnMeta.Option("zh_TW", "繁體中文 (zh_TW)"),
-            new PortalListColumnMeta.Option("zh-TW", "繁體中文 (zh-TW)"));
+    private static final List<ListColumnMeta.Option> SYSTEM_USER_LANGUAGE_OPTIONS = List.of(
+            new ListColumnMeta.Option("en", "English"),
+            new ListColumnMeta.Option("zh_CN", "简体中文 (zh_CN)"),
+            new ListColumnMeta.Option("zh-CN", "简体中文 (zh-CN)"),
+            new ListColumnMeta.Option("zh_TW", "繁體中文 (zh_TW)"),
+            new ListColumnMeta.Option("zh-TW", "繁體中文 (zh-TW)"));
 
     private final JdbcTemplate jdbcTemplate;
     private final RoleAccessComponent roleAccessComponent;
@@ -163,9 +162,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         }
 
         List<RelationFieldDTO> fields = loadFields(tableId);
-        List<PortalListColumnMeta> columns = RelationTableColumnSpec.columnsFor(fields);
-        Map<String, PortalListColumnMeta> byField = columns.stream()
-                .collect(Collectors.toMap(PortalListColumnMeta::field, c -> c, (a, b) -> a, LinkedHashMap::new));
+        List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(fields);
+        Map<String, ListColumnMeta> byField = columns.stream()
+                .collect(Collectors.toMap(ListColumnMeta::field, c -> c, (a, b) -> a, LinkedHashMap::new));
         ListFilterSql filterSql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
 
         List<Object> params = new ArrayList<>();
@@ -173,7 +172,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         StringBuilder where = new StringBuilder(" WHERE table_id = ?");
         // Keep the trgm GIN guard so keyword search stays index-friendly (V214).
         where.append(buildJsonDataSearchClause(
-                columns.stream().map(PortalListColumnMeta::field).toList(),
+                columns.stream().map(ListColumnMeta::field).toList(),
                 request.search(),
                 params));
         where.append(filterSql.whereClause(request.filters(), params));
@@ -279,9 +278,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     private RelationTableDataPage querySystemUserTableData(RelationTableQueryRequest request) {
         long startedNanos = System.nanoTime();
         String tableName = sanitizeIdentifier(SYSTEM_USER_TABLE_NAME);
-        List<PortalListColumnMeta> columnMeta = systemUserColumns();
-        Map<String, PortalListColumnMeta> byField = columnMeta.stream()
-                .collect(Collectors.toMap(PortalListColumnMeta::field, c -> c, (a, b) -> a, LinkedHashMap::new));
+        List<ListColumnMeta> columnMeta = systemUserColumns();
+        Map<String, ListColumnMeta> byField = columnMeta.stream()
+                .collect(Collectors.toMap(ListColumnMeta::field, c -> c, (a, b) -> a, LinkedHashMap::new));
         ListFilterSql filterSql = ListFilterSql.orderedById(byField, ListFilterSql.PHYSICAL_COLUMN);
 
         String selectColumns = SYSTEM_USER_FIELD_NAMES.stream()
@@ -327,35 +326,35 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     /** Built-in sys_users columns for the virtual Relation Table User view.
      * Closed codes ({@code status}, {@code language}) are ENUM with options and
      * {@code groupable = false} — see shared-list-components.md §6.5.2.
-     * Free-text columns stay TEXT. Do not use {@link PortalListColumnMeta#withOptions},
+     * Free-text columns stay TEXT. Do not use {@link ListColumnMeta#withOptions},
      * which defaults groupable to true. */
-    private List<PortalListColumnMeta> systemUserColumns() {
-        List<PortalListColumnMeta> columns = new ArrayList<>();
+    private List<ListColumnMeta> systemUserColumns() {
+        List<ListColumnMeta> columns = new ArrayList<>();
         for (String field : SYSTEM_USER_FIELD_NAMES) {
             columns.add(systemUserColumn(field));
         }
         return columns;
     }
 
-    private PortalListColumnMeta systemUserColumn(String field) {
+    private ListColumnMeta systemUserColumn(String field) {
         return switch (field) {
             case "status" -> enumColumn(field, field, SYSTEM_USER_STATUS_OPTIONS);
             case "language" -> enumColumn(field, field, SYSTEM_USER_LANGUAGE_OPTIONS);
-            default -> PortalListColumnMeta.of(field, field, PortalListColumnMeta.Kind.TEXT);
+            default -> ListColumnMeta.of(field, field, ListColumnMeta.Kind.TEXT);
         };
     }
 
     /** ENUM filterable/sortable but never groupable on the RT endpoint. */
-    private static PortalListColumnMeta enumColumn(
-            String field, String label, List<PortalListColumnMeta.Option> options) {
-        return new PortalListColumnMeta(
+    private static ListColumnMeta enumColumn(
+            String field, String label, List<ListColumnMeta.Option> options) {
+        return new ListColumnMeta(
                 field,
                 label,
-                PortalListColumnMeta.Kind.ENUM,
+                ListColumnMeta.Kind.ENUM,
                 true,
                 true,
                 false,
-                PortalListColumnMeta.operatorsFor(PortalListColumnMeta.Kind.ENUM),
+                ListColumnMeta.operatorsFor(ListColumnMeta.Kind.ENUM),
                 options);
     }
 

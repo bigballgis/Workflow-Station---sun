@@ -1,8 +1,7 @@
 package com.portal.util;
 
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
-
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,22 +15,22 @@ public final class DelegationRuleColumnSpec {
     private DelegationRuleColumnSpec() {
     }
 
-    public static List<PortalListColumnMeta> columns() {
+    public static List<ListColumnMeta> columns() {
         return List.of(
-                PortalListColumnMeta.of("delegateId", "delegation.delegateTo", Kind.USER),
-                PortalListColumnMeta.withOptions("delegationType", "delegation.delegationType",
+                ListColumnMeta.of("delegateId", "delegation.delegateTo", Kind.USER),
+                ListColumnMeta.withOptions("delegationType", "delegation.delegationType",
                         Kind.ENUM, typeOptions()),
-                PortalListColumnMeta.of("startTime", "delegation.startTime", Kind.DATETIME),
-                PortalListColumnMeta.of("endTime", "delegation.endTime", Kind.DATETIME),
-                PortalListColumnMeta.withOptions("status", "delegation.status", Kind.ENUM, statusOptions()),
-                PortalListColumnMeta.of("reason", "delegation.reason", Kind.TEXT),
-                PortalListColumnMeta.of("createdAt", "task.createTime", Kind.DATETIME)
+                ListColumnMeta.of("startTime", "delegation.startTime", Kind.DATETIME),
+                ListColumnMeta.of("endTime", "delegation.endTime", Kind.DATETIME),
+                ListColumnMeta.withOptions("status", "delegation.status", Kind.ENUM, statusOptions()),
+                ListColumnMeta.of("reason", "delegation.reason", Kind.TEXT),
+                ListColumnMeta.of("createdAt", "task.createTime", Kind.DATETIME)
         );
     }
 
     public static ListFilterSql sql() {
-        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
-        for (PortalListColumnMeta column : columns()) {
+        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
+        for (ListColumnMeta column : columns()) {
             byField.put(column.field(), column);
         }
         return new ListFilterSql(byField, DelegationRuleColumnSpec::sqlFor, "r.id", "r.created_at DESC");
@@ -50,21 +49,21 @@ public final class DelegationRuleColumnSpec {
         };
     }
 
-    private static List<PortalListColumnMeta.Option> typeOptions() {
+    private static List<ListColumnMeta.Option> typeOptions() {
         return List.of(
-                new PortalListColumnMeta.Option("ALL", "delegation.all"),
-                new PortalListColumnMeta.Option("PARTIAL", "delegation.partial"),
-                new PortalListColumnMeta.Option("TEMPORARY", "delegation.temporary"),
-                new PortalListColumnMeta.Option("URGENT", "delegation.urgent")
+                new ListColumnMeta.Option("ALL", "delegation.all"),
+                new ListColumnMeta.Option("PARTIAL", "delegation.partial"),
+                new ListColumnMeta.Option("TEMPORARY", "delegation.temporary"),
+                new ListColumnMeta.Option("URGENT", "delegation.urgent")
         );
     }
 
-    private static List<PortalListColumnMeta.Option> statusOptions() {
+    private static List<ListColumnMeta.Option> statusOptions() {
         return List.of(
-                new PortalListColumnMeta.Option("ACTIVE", "delegation.active"),
-                new PortalListColumnMeta.Option("INACTIVE", "delegation.inactive"),
-                new PortalListColumnMeta.Option("EXPIRED", "delegation.expired"),
-                new PortalListColumnMeta.Option("SUSPENDED", "delegation.suspended")
+                new ListColumnMeta.Option("ACTIVE", "delegation.active"),
+                new ListColumnMeta.Option("INACTIVE", "delegation.inactive"),
+                new ListColumnMeta.Option("EXPIRED", "delegation.expired"),
+                new ListColumnMeta.Option("SUSPENDED", "delegation.suspended")
         );
     }
 }

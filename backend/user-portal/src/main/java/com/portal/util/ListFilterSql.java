@@ -1,9 +1,8 @@
 package com.portal.util;
 
+import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListColumnMeta;
 import com.platform.common.jdbc.SqlIdentifiers;
-import com.portal.dto.ListColumnFilter;
-import com.portal.dto.PortalListColumnMeta;
-
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -13,7 +12,7 @@ import java.util.regex.Pattern;
 
 /**
  * Compiles shared-list column filters and sort into SQL. Every field and operator is validated
- * against the list's {@link PortalListColumnMeta} declaration before anything reaches SQL — an
+ * against the list's {@link ListColumnMeta} declaration before anything reaches SQL — an
  * undeclared field, a non-filterable column or an operator outside the whitelist is a 400,
  * never a silent no-op.
  *
@@ -64,7 +63,7 @@ public final class ListFilterSql {
     /** Value is a real text column of the queried table. */
     public static final ColumnRef PHYSICAL_COLUMN = ListFilterSql::requireIdentifier;
 
-    private final Map<String, PortalListColumnMeta> columnsByField;
+    private final Map<String, ListColumnMeta> columnsByField;
     private final ColumnRef columnRef;
     private final String tiebreak;
     private final String defaultOrderBy;
@@ -76,12 +75,12 @@ public final class ListFilterSql {
      *                       {@code ORDER BY} keyword and without the tiebreak; null orders by
      *                       the tiebreak alone
      */
-    public ListFilterSql(Map<String, PortalListColumnMeta> columnsByField, ColumnRef columnRef,
+    public ListFilterSql(Map<String, ListColumnMeta> columnsByField, ColumnRef columnRef,
                          String tiebreak, String defaultOrderBy) {
         this(columnsByField, columnRef, tiebreak, defaultOrderBy, Clock.system(ListRelativeDates.ZONE));
     }
 
-    public ListFilterSql(Map<String, PortalListColumnMeta> columnsByField, ColumnRef columnRef,
+    public ListFilterSql(Map<String, ListColumnMeta> columnsByField, ColumnRef columnRef,
                          String tiebreak, String defaultOrderBy, Clock clock) {
         this.columnsByField = Map.copyOf(columnsByField);
         this.columnRef = columnRef;
@@ -95,7 +94,7 @@ public final class ListFilterSql {
     }
 
     /** Rows keep their insertion order when nothing else is asked for. */
-    public static ListFilterSql orderedById(Map<String, PortalListColumnMeta> columnsByField,
+    public static ListFilterSql orderedById(Map<String, ListColumnMeta> columnsByField,
                                             ColumnRef columnRef) {
         return new ListFilterSql(columnsByField, columnRef, "id", null);
     }
@@ -107,7 +106,7 @@ public final class ListFilterSql {
     public String whereClause(List<ListColumnFilter> filters, List<Object> outParams) {
         StringBuilder sql = new StringBuilder();
         for (ListColumnFilter filter : filters) {
-            PortalListColumnMeta column = requireFilterableColumn(filter);
+            ListColumnMeta column = requireFilterableColumn(filter);
             sql.append(" AND ").append(predicate(column, filter, outParams));
         }
         return sql.toString();
@@ -132,7 +131,7 @@ public final class ListFilterSql {
         if (sortField == null) {
             return defaultOrderBy == null ? tiebreak : defaultOrderBy + ", " + tiebreak;
         }
-        PortalListColumnMeta column = columnsByField.get(sortField);
+        ListColumnMeta column = columnsByField.get(sortField);
         if (column == null) {
             throw new IllegalArgumentException("Unknown sort column: " + sortField);
         }
@@ -149,7 +148,7 @@ public final class ListFilterSql {
      * the same group header twice with counts that do not add up.
      */
     public String groupByExpression(String field) {
-        PortalListColumnMeta column = columnsByField.get(field);
+        ListColumnMeta column = columnsByField.get(field);
         if (column == null) {
             throw new IllegalArgumentException("Unknown group column: " + field);
         }
@@ -159,7 +158,7 @@ public final class ListFilterSql {
         String ref = columnRef.sqlFor(column.field());
         // USER groups by the display label resolved from sys_users so headers match cells
         // that also resolve bare ids / user:<id> / legacy name storage through the same table.
-        return column.kind() == PortalListColumnMeta.Kind.USER
+        return column.kind() == ListColumnMeta.Kind.USER
                 ? userDisplayLabelExpression(ref)
                 : ref;
     }
@@ -169,9 +168,9 @@ public final class ListFilterSql {
      * ordering of a JSON value would get wrong; the cast is guarded so a non-numeric stored value
      * sorts as null rather than aborting the query.
      */
-    public static String sortExpression(PortalListColumnMeta column, ColumnRef columnRef) {
+    public static String sortExpression(ListColumnMeta column, ColumnRef columnRef) {
         String ref = columnRef.sqlFor(column.field());
-        return column.kind() == PortalListColumnMeta.Kind.NUMBER
+        return column.kind() == ListColumnMeta.Kind.NUMBER
                 ? "(CASE WHEN " + ref + " ~ " + SQL_NUMERIC_GUARD + " THEN (" + ref + ")::numeric END)"
                 : ref;
     }
@@ -197,8 +196,8 @@ public final class ListFilterSql {
         return sql.append(")").toString();
     }
 
-    private PortalListColumnMeta requireFilterableColumn(ListColumnFilter filter) {
-        PortalListColumnMeta column = columnsByField.get(filter.field());
+    private ListColumnMeta requireFilterableColumn(ListColumnFilter filter) {
+        ListColumnMeta column = columnsByField.get(filter.field());
         if (column == null) {
             throw new IllegalArgumentException("Unknown filter column: " + filter.field());
         }
@@ -212,7 +211,7 @@ public final class ListFilterSql {
         return column;
     }
 
-    private String predicate(PortalListColumnMeta column, ListColumnFilter filter,
+    private String predicate(ListColumnMeta column, ListColumnFilter filter,
                              List<Object> outParams) {
         String op = filter.operator();
         String ref = columnRef.sqlFor(column.field());
@@ -222,7 +221,7 @@ public final class ListFilterSql {
         if ("isNotNull".equals(op)) {
             return "(" + ref + " IS NOT NULL AND " + ref + " <> '')";
         }
-        if (column.kind() == PortalListColumnMeta.Kind.DATETIME && ListRelativeDates.isRelative(op)) {
+        if (column.kind() == ListColumnMeta.Kind.DATETIME && ListRelativeDates.isRelative(op)) {
             return relativeDatePredicate(ref, op, outParams);
         }
         String value = requireValue(filter, filter.value());

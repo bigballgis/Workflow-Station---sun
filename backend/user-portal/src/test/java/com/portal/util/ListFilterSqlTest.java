@@ -1,10 +1,9 @@
 package com.portal.util;
 
-import com.portal.dto.ListColumnFilter;
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
+import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -12,7 +11,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,23 +19,23 @@ class ListFilterSqlTest {
 
     private final List<Object> params = new ArrayList<>();
 
-    private Map<String, PortalListColumnMeta> columns() {
-        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
+    private Map<String, ListColumnMeta> columns() {
+        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
         byField.put("name", filterable("name", Kind.TEXT));
         byField.put("amount", filterable("amount", Kind.NUMBER));
         byField.put("created_at", filterable("created_at", Kind.DATETIME));
         byField.put("created_by", filterable("created_by", Kind.USER));
         byField.put("active", filterable("active", Kind.BOOLEAN));
-        byField.put("payload", PortalListColumnMeta.displayOnly("payload", "Payload", Kind.TEXT));
+        byField.put("payload", ListColumnMeta.displayOnly("payload", "Payload", Kind.TEXT));
         return byField;
     }
 
-    private PortalListColumnMeta filterable(String field, Kind kind) {
+    private ListColumnMeta filterable(String field, Kind kind) {
         if (kind == Kind.BOOLEAN) {
-            return PortalListColumnMeta.of(field, field, kind);
+            return ListColumnMeta.of(field, field, kind);
         }
-        return new PortalListColumnMeta(field, field, kind, true, true, false,
-                PortalListColumnMeta.operatorsFor(kind), List.of());
+        return new ListColumnMeta(field, field, kind, true, true, false,
+                ListColumnMeta.operatorsFor(kind), List.of());
     }
 
     private ListFilterSql jsonRow() {
@@ -102,8 +100,8 @@ class ListFilterSqlTest {
 
     @Test
     void userGroupExpressionResolvesLabelThroughSysUsers() {
-        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
-        byField.put("created_by", PortalListColumnMeta.of(
+        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
+        byField.put("created_by", ListColumnMeta.of(
                 "created_by", "Created by", Kind.USER));
         ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
         String expr = sql.groupByExpression("created_by");
@@ -265,9 +263,9 @@ class ListFilterSqlTest {
 
     @Test
     void groupingLeadsTheOrderSoAGroupsRowsCannotStraddleAPage() {
-        Map<String, PortalListColumnMeta> byField = columns();
-        byField.put("status", PortalListColumnMeta.withOptions("status", "status", Kind.ENUM,
-                List.of(new PortalListColumnMeta.Option("OPEN", "Open"))));
+        Map<String, ListColumnMeta> byField = columns();
+        byField.put("status", ListColumnMeta.withOptions("status", "status", Kind.ENUM,
+                List.of(new ListColumnMeta.Option("OPEN", "Open"))));
         ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
 
         String groupExpression = sql.groupByExpression("status");

@@ -1,10 +1,10 @@
 package com.portal.dto;
 
+import com.platform.common.list.ListColumnFilter;
 import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-
 import java.time.LocalDateTime;
 import java.util.List;
 

@@ -1,8 +1,7 @@
 package com.portal.util;
 
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
-
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import java.util.List;
 
 /**
@@ -10,7 +9,7 @@ import java.util.List;
  * that cannot be pushed into Flowable runs as an exact portal fullScan (see {@link EngineTaskPushdown}).
  *
  * <p>{@code requestId} is computed (enriched before filter/sort). It is ordinary TEXT
- * ({@link PortalListColumnMeta#of}) so the header can search and A→Z sort; grouping stays
+ * ({@link ListColumnMeta#of}) so the header can search and A→Z sort; grouping stays
  * off because TEXT is not a closed-value kind. {@code priority} is stored as Flowable's
  * numeric string ({@code "50"}); ENUM options map to numeric bands in
  * {@link TaskQueryColumnFilters} so chrome labels match the cell renderer.
@@ -20,35 +19,35 @@ public final class TodoTaskColumnSpec {
     private TodoTaskColumnSpec() {
     }
 
-    public static List<PortalListColumnMeta> columns() {
+    public static List<ListColumnMeta> columns() {
         return List.of(
-                PortalListColumnMeta.of("requestId", "task.requestId", Kind.TEXT),
-                PortalListColumnMeta.of("taskName", "task.taskName", Kind.TEXT),
-                PortalListColumnMeta.of("currentStepName", "task.currentStep", Kind.TEXT),
-                PortalListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),
-                PortalListColumnMeta.withOptions("assignmentType", "task.assignmentType", Kind.ENUM, assignmentOptions()),
-                PortalListColumnMeta.of("initiatorName", "task.initiator", Kind.TEXT),
-                PortalListColumnMeta.withOptions("priority", "task.priority", Kind.ENUM, priorityOptions()),
-                PortalListColumnMeta.of("createTime", "task.createTime", Kind.DATETIME),
-                PortalListColumnMeta.of("dueDate", "task.dueDate", Kind.DATETIME)
+                ListColumnMeta.of("requestId", "task.requestId", Kind.TEXT),
+                ListColumnMeta.of("taskName", "task.taskName", Kind.TEXT),
+                ListColumnMeta.of("currentStepName", "task.currentStep", Kind.TEXT),
+                ListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),
+                ListColumnMeta.withOptions("assignmentType", "task.assignmentType", Kind.ENUM, assignmentOptions()),
+                ListColumnMeta.of("initiatorName", "task.initiator", Kind.TEXT),
+                ListColumnMeta.withOptions("priority", "task.priority", Kind.ENUM, priorityOptions()),
+                ListColumnMeta.of("createTime", "task.createTime", Kind.DATETIME),
+                ListColumnMeta.of("dueDate", "task.dueDate", Kind.DATETIME)
         );
     }
 
-    private static List<PortalListColumnMeta.Option> assignmentOptions() {
+    private static List<ListColumnMeta.Option> assignmentOptions() {
         return List.of(
-                new PortalListColumnMeta.Option("USER", "task.user"),
-                new PortalListColumnMeta.Option("CANDIDATE_USERS", "task.candidateUsers"),
-                new PortalListColumnMeta.Option("VIRTUAL_GROUP", "task.virtualGroup"),
-                new PortalListColumnMeta.Option("DEPT_ROLE", "task.deptRole")
+                new ListColumnMeta.Option("USER", "task.user"),
+                new ListColumnMeta.Option("CANDIDATE_USERS", "task.candidateUsers"),
+                new ListColumnMeta.Option("VIRTUAL_GROUP", "task.virtualGroup"),
+                new ListColumnMeta.Option("DEPT_ROLE", "task.deptRole")
         );
     }
 
-    private static List<PortalListColumnMeta.Option> priorityOptions() {
+    private static List<ListColumnMeta.Option> priorityOptions() {
         return List.of(
-                new PortalListColumnMeta.Option("URGENT", "task.urgent"),
-                new PortalListColumnMeta.Option("HIGH", "task.high"),
-                new PortalListColumnMeta.Option("NORMAL", "task.normal"),
-                new PortalListColumnMeta.Option("LOW", "task.low")
+                new ListColumnMeta.Option("URGENT", "task.urgent"),
+                new ListColumnMeta.Option("HIGH", "task.high"),
+                new ListColumnMeta.Option("NORMAL", "task.normal"),
+                new ListColumnMeta.Option("LOW", "task.low")
         );
     }
 }
