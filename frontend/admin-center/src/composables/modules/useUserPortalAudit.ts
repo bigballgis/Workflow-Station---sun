@@ -8,10 +8,11 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
-import { notifySuccess } from '@/utils/notify'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import type { TableInstance } from 'element-plus'
-import { type UserPortalAuditRecord } from '@/api/user-portal-audit'
+import { queryAuditLogList, type UserPortalAuditRecord } from '@/api/user-portal-audit'
 import { useUserPortalAuditStore } from '@/stores/user-portal-audit'
+import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 import * as XLSX from 'xlsx'
 
 // ==================== 纯函数：操作类型 / 时间映射 ====================
@@ -73,13 +74,31 @@ export function useUserPortalAudit() {
   // ==================== Local State ====================
 
   const loading = storeLoading
+  const ACTIONS_COL_WIDTH = 80
+  const UP_AUDIT_COL_WIDTHS: Record<string, number> = {
+    changeType: 160,
+    functionUnitCode: 160,
+    processInstanceId: 180,
+    stageId: 140,
+    subTableName: 130,
+    fieldName: 150,
+    oldValue: 150,
+    newValue: 150,
+    userName: 120,
+    timestamp: 180,
+  }
+  const grid = useAdminListGrid<UserPortalAuditRecord>({
+    storageKey: 'admin-list-layout:up-audit',
+    extraWidth: ACTIONS_COL_WIDTH,
+    defaultWidthOf: (field) => UP_AUDIT_COL_WIDTHS[field] ?? 120,
+  })
   const page = computed({
-    get: () => store.pagination.page,
-    set: (v) => { store.pagination.page = v },
+    get: () => grid.pagination.page,
+    set: (v) => { grid.pagination.page = v },
   })
   const size = computed({
-    get: () => store.pagination.size,
-    set: (v) => { store.pagination.size = v },
+    get: () => grid.pagination.size,
+    set: (v) => { grid.pagination.size = v },
   })
   const sortField = computed({
     get: () => storeSort.value.field,
@@ -148,26 +167,36 @@ export function useUserPortalAudit() {
   // ==================== Actions ====================
 
   const handleSearch = async () => {
+    const seq = grid.beginQuery()
     loading.value = true
     try {
-      await store.fetchLogs()
+      const pageResult = await queryAuditLogList({
+        ...store.buildQueryRequest(),
+        ...grid.buildQuery(),
+      })
+      if (!grid.isCurrentQuery(seq)) return
+      grid.applyPage(pageResult, 'user-portal-audit-logs/list-query response is missing its column declaration')
+      logs.value = pageResult.content
+      total.value = pageResult.totalElements
+      store.sort.field = grid.sort.field || 'timestamp'
+      store.sort.order = grid.sort.direction === 'ASC' ? 'ascending' : 'descending'
+    } catch (error: unknown) {
+      if (!grid.isCurrentQuery(seq)) return
+      if (!(error as { response?: unknown })?.response) {
+        notifyError(error instanceof Error ? error.message : t('upAudit.emptyText'))
+      }
     } finally {
-      loading.value = false
+      if (grid.isCurrentQuery(seq)) loading.value = false
     }
   }
 
   const handleReset = () => {
     store.resetQuery()
-    handleSearch()
-  }
-
-  const handleSizeChange = () => {
-    store.pagination.page = 1
-    handleSearch()
-  }
-
-  const handleSortChange = ({ prop, order }: { prop: string; order: string | null }) => {
-    store.setSort(prop || 'timestamp', order === 'ascending' ? 'ascending' : 'descending')
+    grid.clearSort()
+    grid.applyGroup('', false)
+    for (const field of Object.keys(grid.columnFilters.value)) {
+      grid.clearFilter(field)
+    }
     handleSearch()
   }
 
@@ -287,7 +316,9 @@ export function useUserPortalAudit() {
     // Mapping functions
     changeTypeTag, changeTypeText, formatTimestamp, truncateValue,
     // Actions
-    handleSearch, handleReset, handleSizeChange, handleSortChange,
+    handleSearch, handleReset,
     showDetail,
+    ACTIONS_COL_WIDTH,
+    ...grid,
   }
 }
