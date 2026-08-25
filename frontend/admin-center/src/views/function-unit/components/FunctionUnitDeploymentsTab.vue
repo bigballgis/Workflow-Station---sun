@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Ref } from 'vue'
+import type { ComponentPublicInstance, Ref } from 'vue'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
@@ -106,8 +106,9 @@ import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 import { deployStatusType } from '@/utils/format'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+import type { Deployment } from '@/api/functionUnit'
 
-type ListGrid = ReturnType<typeof useAdminListGrid>
+type ListGrid = ReturnType<typeof useAdminListGrid<Deployment>>
 
 const props = defineProps<{
   grid: ListGrid
@@ -145,8 +146,10 @@ const {
 
 const emit = defineEmits<{ fetch: [] }>()
 
-function bindScrollRef(el: Element | null) {
-  ;(props.grid.gridScrollRef as Ref<Element | null>).value = el
+function bindScrollRef(el: Element | ComponentPublicInstance | null) {
+  const node = el instanceof Element ? el : el?.$el ?? null
+  ;(props.grid.gridScrollRef as Ref<Element | null>).value =
+    node instanceof Element ? node : null
 }
 
 function onSort(field: string, direction: 'ASC' | 'DESC') {

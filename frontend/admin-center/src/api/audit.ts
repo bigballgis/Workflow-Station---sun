@@ -1,4 +1,4 @@
-import request from './request'
+import request, { post } from './request'
 import type { PageResult, AdminListPage } from '@/types/common'
 import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 
@@ -175,7 +175,7 @@ export const queryAuditLogs = async (
 export const queryAuditLogList = async (
   body: AdminAuditListQuery,
 ): Promise<AdminListPage<AuditLog>> => {
-  const page = await request.post<AdminListPage<AuditLog>>('/security/audit-logs/list-query', body)
+  const page = await post<AdminListPage<AuditLog>>('/security/audit-logs/list-query', body)
   page.content = page.content.map((row) => {
     const r = row as AuditLog & { userName?: string }
     return { ...row, username: r.username ?? r.userName ?? row.username }

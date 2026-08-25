@@ -218,7 +218,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { Ref } from 'vue'
+import type { ComponentPublicInstance, Ref } from 'vue'
 import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
@@ -232,7 +232,7 @@ import {
 import type { FunctionUnitRow } from '@/composables/modules/useFunctionUnitLists'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
-type ListGrid = ReturnType<typeof useAdminListGrid>
+type ListGrid = ReturnType<typeof useAdminListGrid<FunctionUnitRow>>
 
 const { t } = useI18n()
 
@@ -269,7 +269,6 @@ const {
   applyGroup,
   applyFilter,
   clearFilter,
-  rowClassName,
   spanMethod,
   groupHeaderLabel,
   isListGroupHeaderRow,
@@ -293,8 +292,10 @@ const emit = defineEmits<{
 
 const searchKeyword = defineModel<string>('searchKeyword', { required: true })
 
-function bindScrollRef(el: Element | null) {
-  ;(props.grid.gridScrollRef as Ref<Element | null>).value = el
+function bindScrollRef(el: Element | ComponentPublicInstance | null) {
+  const node = el instanceof Element ? el : el?.$el ?? null
+  ;(props.grid.gridScrollRef as Ref<Element | null>).value =
+    node instanceof Element ? node : null
 }
 
 function fetchRows() {

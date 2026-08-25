@@ -254,10 +254,6 @@ export function useFunctionUnit() {
 
   // ==================== Batch Operations (current page only) ====================
 
-  const handleSelectionChange = (selection: FunctionUnit[]) => {
-    selectedUnits.value = selection
-  }
-
   const handleBatchEnable = async () => {
     try {
       await store.batchSetEnabled(selectedUnits.value.map(u => u.id), true)
@@ -403,7 +399,6 @@ export function useFunctionUnit() {
     handleEnabledChange,
     handleDeleteClick,
     handleDeleteConfirm,
-    handleSelectionChange,
     handleBatchEnable,
     handleBatchDisable,
     handleBatchDelete,
