@@ -1061,10 +1061,12 @@ exportWithData: '匯出',
   snapshotDiff: {
     snapshotValue: '快照值',
     liveValue: '目前值',
+    status: '變更狀態',
     changed: '已變更',
     unchanged: '未變更',
     fieldName: '欄位',
     noSubTableRows: '暫無列',
+    subTableRow: '第 {n} 列',
   },
   changeHistory: {
     title: '變更歷史',

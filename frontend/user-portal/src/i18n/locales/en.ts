@@ -1068,10 +1068,12 @@ exportWithData: 'Export',
   snapshotDiff: {
     snapshotValue: 'Snapshot Value',
     liveValue: 'Current Value',
+    status: 'Status',
     changed: 'Changed',
     unchanged: 'Unchanged',
     fieldName: 'Field',
     noSubTableRows: 'No rows',
+    subTableRow: 'Row {n}',
   },
   changeHistory: {
     title: 'Change History',

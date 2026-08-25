@@ -102,6 +102,15 @@ function formatStoredText(value: string): string {
   return isStoredFileUrl(value) ? fileDisplayText(value) : value
 }
 
+/** True when the user-visible snapshot text differs from the current live text. */
+export function isSnapshotValueChanged(
+  snapshotValue: unknown,
+  liveValue: unknown,
+  field?: FormField,
+): boolean {
+  return formatSnapshotDisplayValue(snapshotValue, field) !== formatSnapshotDisplayValue(liveValue, field)
+}
+
 /** Human-readable snapshot cell text (never raw JSON for lookup / dictionary rows). */
 export function formatSnapshotDisplayValue(value: unknown, field?: FormField): string {
   if (value === null || value === undefined) return '-'
@@ -135,7 +144,7 @@ export function computeDiffRows(
         label: field.label || field.key,
         snapshotValue: sv,
         liveValue: lv,
-        changed: JSON.stringify(sv) !== JSON.stringify(lv),
+        changed: isSnapshotValueChanged(sv, lv, field),
       }
     })
 }

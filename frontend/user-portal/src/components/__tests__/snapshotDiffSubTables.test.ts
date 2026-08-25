@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FormField } from '../formRendererHelpers'
+import { buildSnapshotSubTableDiffGroups } from '../snapshotDiffSubTableGroups'
 import {
   buildSnapshotSubTableSections,
   collectSnapshotSubTableTargets,
@@ -116,5 +117,71 @@ describe('snapshotDiffSubTables', () => {
     )
     expect(sections.map(s => s.tableLabel)).toEqual(['ATM Correspondence'])
     expect(sections[0].snapshotRows).toHaveLength(2)
+  })
+
+  it('flattens sub-table rows into Field / Snapshot / Current / Status rows like the main form', () => {
+    const groups = buildSnapshotSubTableDiffGroups(
+      [{ key: 'corr', label: '', type: 'subTable', _bindingId: 1141 }],
+      {
+        __subTables__: {
+          1141: [
+            { row_id: 'r1', comment: 'first', type: { dropdown_name: 'Email' } },
+            { row_id: 'r2', comment: 'second', type: { dropdown_name: 'Letter' } },
+          ],
+        },
+      },
+      {
+        __subTables__: {
+          1141: [
+            { row_id: 'r1', comment: 'first-updated', type: { dropdown_name: 'Email' } },
+            { row_id: 'r2', comment: 'second', type: { dropdown_name: 'Letter' } },
+          ],
+        },
+      },
+      [
+        {
+          bindingId: 1141,
+          tableId: 50310,
+          tableName: 'ATM Correspondence',
+          bindingType: 'SUB',
+          columns: [
+            { field: 'comment', label: 'Comment', type: 'input' },
+            { field: 'type', label: 'Type', type: 'lookup' },
+          ],
+        },
+      ],
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0].tableLabel).toBe('ATM Correspondence')
+    expect(groups[0].blocks).toHaveLength(2)
+    expect(groups[0].blocks[0].preview).toBe('first')
+    expect(groups[0].blocks[0].rows.map(r => r.label)).toEqual(['Comment', 'Type'])
+    expect(groups[0].blocks[0].rows.find(r => r.label === 'Comment')?.changed).toBe(true)
+    expect(groups[0].blocks[0].rows.find(r => r.label === 'Type')?.changed).toBe(false)
+    expect(groups[0].blocks[1].rows.every(r => !r.changed)).toBe(true)
+  })
+
+  it('compares live rows from a sibling binding of the same table', () => {
+    const groups = buildSnapshotSubTableDiffGroups(
+      [{ key: 'corr', label: '', type: 'subTable', _bindingId: 1141 }],
+      {
+        __subTables__: {
+          1141: [{ row_id: 'r1', comment: 'first' }],
+        },
+      },
+      {
+        __subTables__: {
+          1128: [{ row_id: 'r1', comment: 'first' }],
+        },
+      },
+      [
+        { bindingId: 1141, tableId: 50310, tableName: 'ATM Correspondence', bindingType: 'SUB',
+          columns: [{ field: 'comment', label: 'Comment', type: 'input' }] },
+        { bindingId: 1128, tableId: 50310, tableName: 'ATM Correspondence', bindingType: 'SUB',
+          columns: [{ field: 'comment', label: 'Comment', type: 'input' }] },
+      ],
+    )
+    expect(groups[0].blocks[0].rows[0]?.changed).toBe(false)
+    expect(groups[0].blocks[0].rows[0]?.liveValue).toBe('first')
   })
 })
