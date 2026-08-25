@@ -31,6 +31,14 @@ public interface RelationTableDefinitionRepository extends JpaRepository<Relatio
     boolean existsByTableNameAndIdNot(String tableName, Long id);
 
     /**
+     * Postgres unquoted DDL identifiers fold to lowercase, and case-only-different {@code table_name}
+     * values are otherwise indistinguishable to designers, so availability checks must be case-insensitive.
+     */
+    boolean existsByTableNameIgnoreCase(String tableName);
+
+    boolean existsByTableNameIgnoreCaseAndIdNot(String tableName, Long id);
+
+    /**
      * 根据状态查找表定义列表
      */
     List<RelationTableDefinition> findByStatus(RelationTableStatus status);

@@ -33,6 +33,14 @@ public interface TableDefinitionRepository extends JpaRepository<TableDefinition
     boolean existsByTableName(String tableName);
 
     boolean existsByTableNameAndIdNot(String tableName, Long id);
+
+    /**
+     * Postgres unquoted DDL identifiers fold to lowercase, and case-only-different {@code table_name}
+     * values are otherwise indistinguishable to designers, so availability checks must be case-insensitive.
+     */
+    boolean existsByTableNameIgnoreCase(String tableName);
+
+    boolean existsByTableNameIgnoreCaseAndIdNot(String tableName, Long id);
     
     /**
      * 获取表定义，同时加载字段定义

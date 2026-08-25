@@ -90,7 +90,7 @@ class RelationTableStructurePropertyTest {
     @Property(tries = 100)
     void duplicateTableNameShouldBeRejected(@ForAll("validTableNames") String tableName) {
         // Simulate that the first table was already created (table name exists)
-        when(tableDefinitionRepository.existsByTableName(tableName)).thenReturn(true);
+        when(tableDefinitionRepository.existsByTableNameIgnoreCase(tableName)).thenReturn(true);
 
         // Build a create request with the same table name
         CreateRelationTableRequest request = CreateRelationTableRequest.builder()
