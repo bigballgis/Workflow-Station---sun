@@ -109,12 +109,10 @@ public class TaskFormSnapshotPropertyTest {
         // (mocked DW REST call returns null), fieldValues MUST be empty — neither top-level form
         // fields NOR __subTables__ are persisted into the snapshot.
         //
-        // Rationale (issue 1397, regression-2): __subTables__ is stored under multiple alias keys
-        // (bindingId, String(bindingId), tableName, normalizedTableName) by the frontend. Capturing
-        // it inside _snapshot_* without a Task Form binding means every task completion copies the
-        // ENTIRE alias-bloated subtable tree into the JSON column, with no UI consumer reading it
-        // back. Stacked over multi-instance subtask completions, this triggers PostgreSQL parameter
-        // encoding OOM (String.encodeUTF8) during Hibernate UPDATE.
+        // Rationale (issue 1397, regression-2): live __subTables__ is stored under multiple alias
+        // keys. Capturing that fan-out without a resolved form copies the whole tree into JSONB
+        // and can OOM. When a form IS resolved, the assembler freezes canonical numeric slices
+        // only — this property still covers the no-form path.
         assertThat(snapshot.getFieldValues())
                 .as("Snapshot fieldValues should not be null")
                 .isNotNull();

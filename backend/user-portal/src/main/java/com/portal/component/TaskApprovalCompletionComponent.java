@@ -528,97 +528,10 @@ public class TaskApprovalCompletionComponent {
         }
     }
 
-    @SuppressWarnings("unchecked")
     static List<SubTableChange> computeSubTableRowChanges(
             List<Map<String, Object>> oldRows,
             List<Map<String, Object>> newRows) {
-        List<SubTableChange> changes = new ArrayList<>();
-        // Build row lookup maps by row id (fallback: row_id, rowId, id_idw, _rowKey, rowKey, first non-internal value)
-        Map<Object, Map<String, Object>> oldRowMap = new HashMap<>();
-        for (Map<String, Object> row : oldRows) {
-            Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
-            if (rowId != null) {
-                oldRowMap.put(rowId, row);
-            }
-        }
-        Map<Object, Map<String, Object>> newRowMap = new HashMap<>();
-        for (Map<String, Object> row : newRows) {
-            Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
-            if (rowId != null) {
-                newRowMap.put(rowId, row);
-            }
-        }
-
-        log.debug("  computeRows: oldIds={}, newIds={}", oldRowMap.keySet(), newRowMap.keySet());
-
-        // Detect ROW_ADD (in new but not in old)
-        for (Map.Entry<Object, Map<String, Object>> entry : newRowMap.entrySet()) {
-            Object rowId = entry.getKey();
-            if (!oldRowMap.containsKey(rowId)) {
-                log.debug("    -> ROW_ADD rowId={}", rowId);
-                changes.add(SubTableChange.builder()
-                        .changeType("ROW_ADD")
-                        .rowIdentifier(String.valueOf(rowId))
-                        .oldValues(null)
-                        .newValues(entry.getValue())
-                        .build());
-            }
-        }
-
-        // Detect ROW_DELETE (in old but not in new)
-        for (Map.Entry<Object, Map<String, Object>> entry : oldRowMap.entrySet()) {
-            Object rowId = entry.getKey();
-            if (!newRowMap.containsKey(rowId)) {
-                changes.add(SubTableChange.builder()
-                        .changeType("ROW_DELETE")
-                        .rowIdentifier(String.valueOf(rowId))
-                        .oldValues(entry.getValue())
-                        .newValues(null)
-                        .build());
-            }
-        }
-
-        // Detect ROW_UPDATE (in both but field values differ)
-        for (Map.Entry<Object, Map<String, Object>> entry : newRowMap.entrySet()) {
-            Object rowId = entry.getKey();
-            Map<String, Object> oldRow = oldRowMap.get(rowId);
-            if (oldRow != null) {
-                log.debug("    -> comparing rowId={}, oldFields={}, newFields={}",
-                        rowId, oldRow.keySet(), entry.getValue().keySet());
-                Map<String, Object> newRow = entry.getValue();
-                Map<String, Object> changedFields = new HashMap<>();
-                Map<String, Object> oldChangedFields = new HashMap<>();
-                boolean hasChanges = false;
-                // Compare business fields only; row identity and audit metadata are noisy for user-visible history.
-                for (Map.Entry<String, Object> field : newRow.entrySet()) {
-                    String fieldKey = field.getKey();
-                    if (ChangeHistoryComponent.isSubTableRowMetadataField(fieldKey)) continue;
-                    Object oldFieldVal = oldRow.get(fieldKey);
-                    if (!java.util.Objects.equals(oldFieldVal, field.getValue())) {
-                        log.debug("      FIELD_DIFF: {}, old={}, new={}",
-                                fieldKey,
-                                oldFieldVal == null ? "null" : "present",
-                                field.getValue() == null ? "null" : "present");
-                        changedFields.put(fieldKey, field.getValue());
-                        oldChangedFields.put(fieldKey, oldFieldVal);
-                        hasChanges = true;
-                    }
-                }
-                if (hasChanges) {
-                    log.debug("    -> ROW_UPDATE rowId={}, fields={}", rowId, changedFields.keySet());
-                }
-                if (hasChanges) {
-                    changes.add(SubTableChange.builder()
-                            .changeType("ROW_UPDATE")
-                            .rowIdentifier(String.valueOf(rowId))
-                            .oldValues(oldChangedFields)
-                            .newValues(changedFields)
-                            .build());
-                }
-            }
-        }
-
-        return changes;
+        return SubTableChangeHistoryDiff.compute(oldRows, newRows);
     }
 
     /**

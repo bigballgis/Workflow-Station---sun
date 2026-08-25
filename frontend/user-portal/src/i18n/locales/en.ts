@@ -1071,6 +1071,7 @@ exportWithData: 'Export',
     changed: 'Changed',
     unchanged: 'Unchanged',
     fieldName: 'Field',
+    noSubTableRows: 'No rows',
   },
   changeHistory: {
     title: 'Change History',

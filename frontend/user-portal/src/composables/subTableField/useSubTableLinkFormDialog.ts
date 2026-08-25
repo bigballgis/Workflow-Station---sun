@@ -2,8 +2,10 @@ import { computed, ref, unref, type Ref } from 'vue'
 import { mergeSubTableRowsByRowId, stripLinkFormDesignerTableLabel } from '@/composables/tasks/shared'
 import type { Column, SubTableBinding, SubTableFieldEmit, SubTableFieldProps, SubTableFieldT } from './subTableFieldTypes'
 import {
+  isLinkFormBoundToHostGrid,
   isMiStyleParentRowForLinkForm,
   linkFormTableMatchKey,
+  mergeSelfBoundLinkFormIntoParentRow,
   normalizeFkIdForMatch,
   subTableBindingMatches
 } from './subTableLinkFormRowMatch'
@@ -269,8 +271,12 @@ export function useSubTableLinkFormDialog(
     }
     linkedSubTableRows.value = [...currentRows]
 
+    const selfBound = isLinkFormBoundToHostGrid(col, props, binding)
     const nextMainRows = rows.value.map((r, idx) => {
       if (idx !== linkRowIndex) return r
+      if (selfBound && r && typeof r === 'object') {
+        return mergeSelfBoundLinkFormIntoParentRow(r, currentRows[0] || {})
+      }
       const base = (r && typeof r === 'object') ? { ...r } : {}
       const sub = { ...((base.__subTables__ && typeof base.__subTables__ === 'object') ? base.__subTables__ : {}) } as Record<string, any>
       if (boundId != null) {

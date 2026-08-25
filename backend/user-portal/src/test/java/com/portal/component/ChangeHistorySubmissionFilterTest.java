@@ -128,6 +128,62 @@ class ChangeHistorySubmissionFilterTest {
     }
 
     @Test
+    void snapshotFieldKeysIncludeReadonlyNestedConfigFieldsWhenPermissionsEmpty() {
+        Map<String, Object> form = Map.of(
+                "fieldPermissions", Map.of(),
+                "configJson", Map.of("rule", List.of(Map.of(
+                        "type", "elCard",
+                        "children", List.of(Map.of(
+                                "field", "case_number",
+                                "readonly", true,
+                                "title", "Case Number"))))),
+                "readOnly", false);
+        assertThat(filter.snapshotFieldKeys(form)).containsExactly("case_number");
+    }
+
+    @Test
+    void snapshotFieldKeysIgnoreCompositePermissionKeys() {
+        Map<String, Object> form = Map.of(
+                "fieldPermissions", Map.of(
+                        "case_status", "EDITABLE",
+                        "1135:assignee_id", "READONLY"),
+                "configJson", Map.of("rule", List.of()),
+                "readOnly", false);
+        assertThat(filter.snapshotFieldKeys(form)).containsExactly("case_status");
+    }
+
+    @Test
+    void bpmnProcessFormIsUsedWhenStageBindingIsMissing() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        ChangeHistorySubmissionFilter bpmnFallbackFilter = new ChangeHistorySubmissionFilter(jdbcTemplate,
+                new ObjectMapper());
+        String xml = """
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                    xmlns:custom="http://workflow.platform/schema/custom">
+                  <bpmn:process id="atm">
+                    <bpmn:userTask id="Activity_092hlui">
+                      <bpmn:extensionElements><custom:properties>
+                        <custom:property name="formId" value="320" />
+                      </custom:properties></bpmn:extensionElements>
+                    </bpmn:userTask>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+        String encoded = Base64.getEncoder().encodeToString(xml.getBytes(StandardCharsets.UTF_8));
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq("process-atm")))
+                .thenReturn(List.of(encoded));
+        when(jdbcTemplate.queryForList(anyString(), eq(320L))).thenReturn(List.of(Map.of(
+                "form_id", "320",
+                "config_json", "{\"rule\":[{\"field\":\"case_number\",\"readonly\":true}]}",
+                "field_permissions", "{}",
+                "read_only", false)));
+        Map<String, Object> form = bpmnFallbackFilter.resolveTaskFormDefinition(
+                "process-atm", "Activity_092hlui");
+        assertThat(form).isNotEmpty();
+        assertThat(bpmnFallbackFilter.snapshotFieldKeys(form)).containsExactly("case_number");
+    }
+
+    @Test
     void resolvesTaskFormIdFromBpmnWhenStageBindingIsMissing() {
         String xml = """
                 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -368,6 +424,83 @@ class ChangeHistorySubmissionFilterTest {
         Map<String, java.util.Set<String>> result = resolverFilter
                 .resolveSubFormFieldPermissionsByBinding("process-9", "participants-stage");
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void aliasSlicesWithDifferentRowIdsKeepOnlyTheHighestPrioritySlice() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        ChangeHistorySubmissionFilter aliasFilter = new ChangeHistorySubmissionFilter(jdbcTemplate, new ObjectMapper());
+        when(jdbcTemplate.queryForList(
+                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(341L)))
+                .thenReturn(List.of(bindingRow(
+                        1301L, "SUB", "EDITABLE", "acq_correspondence", "ACQ Correspondence", 1293L)));
+        Map<String, Object> form = new java.util.LinkedHashMap<>(formDefinition(List.of(), Map.of(
+                "1301", Map.of("rule", List.of(rule("channel", false))))));
+        form.put("formId", "341");
+        Map<String, Object> aliases = new java.util.LinkedHashMap<>();
+        aliases.put("1301", List.of(Map.of("row_id", "uuid-A", "channel", "Email")));
+        aliases.put("ACQ Correspondence", List.of(Map.of("row_id", "uuid-B", "channel", "Email")));
+        aliases.put("acq correspondence", List.of(Map.of("row_id", "uuid-C", "channel", "Email")));
+        Map<String, Object> actual = aliasFilter.retainUserEditableSubmission(
+                Map.of("__subTables__", aliases), Map.of("__subTables__", aliases), form);
+        @SuppressWarnings("unchecked")
+        Map<String, List<Map<String, Object>>> tables =
+                (Map<String, List<Map<String, Object>>>) actual.get("__subTables__");
+        assertThat(tables).containsOnlyKeys("acq_correspondence");
+        assertThat(tables.get("acq_correspondence")).containsExactly(
+                Map.of("row_id", "uuid-A", "channel", "Email"));
+    }
+
+    @Test
+    void processStartAuditUsesTaskSceneFormNotReadonlyMyRequestForm() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        ChangeHistorySubmissionFilter processFilter = new ChangeHistorySubmissionFilter(jdbcTemplate, new ObjectMapper());
+        when(jdbcTemplate.queryForList(
+                argThat(sql -> sql != null
+                        && sql.contains("form_type = 'PROCESS'")
+                        && sql.contains("fd.scene = 'TASK'")),
+                eq("fu-20260422-23tfag")))
+                .thenReturn(List.of(Map.of(
+                        "form_id", "50193",
+                        "config_json", "{\"rule\":["
+                                + "{\"field\":\"I\"},"
+                                + "{\"field\":\"id\",\"readonly\":true},"
+                                + "{\"field\":\"lookup\"}],"
+                                + "\"subForms\":{"
+                                + "\"50627\":{\"rule\":[{\"field\":\"name\"},{\"field\":\"assignee\"}]},"
+                                + "\"50553\":{\"rule\":[{\"field\":\"file\"}]}}}",
+                        "field_permissions", "{}",
+                        "read_only", false)));
+        when(jdbcTemplate.queryForList(
+                argThat(sql -> sql != null && sql.contains("WHERE form.id = ?")), eq(50193L)))
+                .thenReturn(List.of(
+                        bindingRow(50549L, "PRIMARY", "EDITABLE", "main", "Meeting", 50549L),
+                        bindingRow(50627L, "SUB", "EDITABLE", "subtable", "Participants", 50627L),
+                        bindingRow(50553L, "SUB", "EDITABLE", "attachment", "Attachment", 50553L)));
+        Map<String, Object> submitted = new java.util.LinkedHashMap<>();
+        submitted.put("I", "1");
+        submitted.put("id", "Meeting-000004");
+        submitted.put("__request_id", "1_Meeting-000004");
+        submitted.put("lookup", Map.of("username", "admin"));
+        submitted.put("created_by", "system");
+        submitted.put("__subTables__", Map.of(
+                "50627", List.of(Map.of(
+                        "id_idw", "Test-000004",
+                        "name", "1",
+                        "assignee", "liam",
+                        "task_status", "IN_PROGRESS")),
+                "50553", List.of(Map.of("id", "file-1", "file", "/upload/a.jpg"))));
+        Map<String, Object> actual = processFilter.filterProcessSubmission(
+                "fu-20260422-23tfag", submitted, submitted);
+        assertThat(actual).containsEntry("I", "1").containsKey("lookup")
+                .doesNotContainKeys("id", "__request_id", "created_by");
+        @SuppressWarnings("unchecked")
+        Map<String, List<Map<String, Object>>> tables =
+                (Map<String, List<Map<String, Object>>>) actual.get("__subTables__");
+        assertThat(tables).containsOnlyKeys("subtable", "attachment");
+        assertThat(tables.get("subtable")).containsExactly(Map.of(
+                "id_idw", "Test-000004", "name", "1", "assignee", "liam"));
+        assertThat(tables.get("attachment")).containsExactly(Map.of("id", "file-1", "file", "/upload/a.jpg"));
     }
 
     @Test
