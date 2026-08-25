@@ -107,7 +107,7 @@ public class UserController {
     @PostMapping("/query")
     @Operation(summary = "Query users (true paging; column filters, sort and grouping)")
     public ResponseEntity<AdminListPage<UserInfo>> queryUsers(
-            @RequestBody UserListQueryRequest request) {
+            @RequestBody @Valid UserListQueryRequest request) {
         return ResponseEntity.ok(userListQueryComponent.query(request));
     }
     

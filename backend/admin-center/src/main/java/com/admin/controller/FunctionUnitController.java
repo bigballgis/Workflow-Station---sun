@@ -130,7 +130,7 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "Page function units",
             description = "Shared list: latest version per code, then COUNT(*) and the page share one predicate")
     public ResponseEntity<AdminListPage<FunctionUnitInfo>> queryFunctionUnits(
-            @RequestBody FunctionUnitListQueryRequest request) {
+            @RequestBody @Valid FunctionUnitListQueryRequest request) {
         return ResponseEntity.ok(functionUnitListQueryComponent.queryList(request));
     }
 
@@ -170,7 +170,7 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "Page archived function units",
             description = "Shared list: latest archived version per code, then COUNT(*) and the page share one predicate")
     public ResponseEntity<AdminListPage<FunctionUnitInfo>> queryArchivedFunctionUnits(
-            @RequestBody FunctionUnitListQueryRequest request) {
+            @RequestBody @Valid FunctionUnitListQueryRequest request) {
         return ResponseEntity.ok(functionUnitListQueryComponent.queryArchived(request));
     }
 
@@ -390,7 +390,7 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "Page deployment records",
             description = "Shared list: COUNT(*) and the page share one predicate")
     public ResponseEntity<AdminListPage<DeploymentInfo>> queryDeployments(
-            @RequestBody FunctionUnitDeploymentListQueryRequest request) {
+            @RequestBody @Valid FunctionUnitDeploymentListQueryRequest request) {
         return ResponseEntity.ok(functionUnitDeploymentListQueryComponent.query(request));
     }
 

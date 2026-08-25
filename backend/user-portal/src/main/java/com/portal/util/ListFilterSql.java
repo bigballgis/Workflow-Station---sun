@@ -41,7 +41,6 @@ public final class ListFilterSql {
     /** Matches values that can safely be cast to numeric inside SQL. */
     private static final String SQL_NUMERIC_GUARD = "'^-?[0-9]+(\\.[0-9]+)?$'";
     private static final Pattern DATE_VALUE = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
-    private static final Pattern IDENTIFIER = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
     /**
      * Ordering refs may be table-qualified ({@code pi.id}); user-supplied field names may not.
      * A tiebreak may name several columns, because what makes a row unique is not always one
@@ -58,10 +57,11 @@ public final class ListFilterSql {
     }
 
     /** Value lives in the JSON row document of {@code rt_table_data_rows}. */
-    public static final ColumnRef JSON_ROW = field -> "data->>'" + requireIdentifier(field) + "'";
+    public static final ColumnRef JSON_ROW =
+            field -> "data->>'" + SqlIdentifiers.requireIdentifier(field) + "'";
 
     /** Value is a real text column of the queried table. */
-    public static final ColumnRef PHYSICAL_COLUMN = ListFilterSql::requireIdentifier;
+    public static final ColumnRef PHYSICAL_COLUMN = field -> SqlIdentifiers.requireIdentifier(field);
 
     private final Map<String, ListColumnMeta> columnsByField;
     private final ColumnRef columnRef;
@@ -402,13 +402,6 @@ public final class ListFilterSql {
     /** Wildcards a user typed are literal text, not pattern syntax. */
     public static String escapeLike(String value) {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
-    }
-
-    private static String requireIdentifier(String field) {
-        if (field == null || !IDENTIFIER.matcher(field).matches()) {
-            throw new IllegalArgumentException("Invalid field identifier: " + field);
-        }
-        return field;
     }
 
     private static String requireOrderingRef(String ref) {

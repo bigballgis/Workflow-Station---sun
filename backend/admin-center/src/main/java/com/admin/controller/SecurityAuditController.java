@@ -125,7 +125,7 @@ public class SecurityAuditController {
     @PostMapping("/audit-logs/list-query")
     @Operation(summary = "Query audit logs (true paging; column filters, sort and grouping)")
     public ResponseEntity<AdminListPage<AuditLog>> queryAuditLogList(
-            @RequestBody AdminAuditListQueryRequest request) {
+            @RequestBody @Valid AdminAuditListQueryRequest request) {
         return ResponseEntity.ok(adminAuditListQueryComponent.query(request));
     }
     

@@ -63,7 +63,7 @@ public class RelationTableStructureController {
     @PostMapping("/query")
     @Operation(summary = "分页查询表定义", description = "共享列表：COUNT(*) 与页数据共用同一谓词")
     public ResponseEntity<RelationTableStructureListPage> queryTables(
-            @RequestBody RelationTableStructureListQueryRequest request) {
+            @RequestBody @Valid RelationTableStructureListQueryRequest request) {
         return ResponseEntity.ok(structureListQueryComponent.query(request));
     }
 

@@ -63,7 +63,7 @@ public class VirtualGroupController {
     @PostMapping("/query")
     @Operation(summary = "Page virtual groups", description = "Shared list: COUNT(*) and the page share one predicate")
     public ResponseEntity<AdminListPage<VirtualGroupInfo>> queryVirtualGroups(
-            @RequestBody VirtualGroupListQueryRequest request) {
+            @RequestBody @Valid VirtualGroupListQueryRequest request) {
         return ResponseEntity.ok(virtualGroupListQueryComponent.query(request));
     }
 

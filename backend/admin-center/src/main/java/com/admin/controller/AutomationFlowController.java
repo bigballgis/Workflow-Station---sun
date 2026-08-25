@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -68,7 +69,7 @@ public class AutomationFlowController {
 
     @PostMapping("/query")
     public ResponseEntity<ApiResponse<AdminListPage<AutomationFlowSummary>>> queryFlows(
-            @RequestBody AutomationFlowListQueryRequest request) {
+            @RequestBody @Valid AutomationFlowListQueryRequest request) {
         if (!isSystemAdmin()) {
             return forbidden();
         }

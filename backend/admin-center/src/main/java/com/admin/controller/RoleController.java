@@ -83,7 +83,7 @@ public class RoleController {
     @PostMapping("/query")
     @Operation(summary = "Page roles", description = "Shared list: COUNT(*) and the page share one predicate including SYSTEM/CUSTOM tab")
     public ResponseEntity<AdminListPage<RoleListItem>> queryRoles(
-            @RequestBody RoleListQueryRequest request) {
+            @RequestBody @Valid RoleListQueryRequest request) {
         return ResponseEntity.ok(roleListQueryComponent.query(request));
     }
 

@@ -26,6 +26,8 @@ function mountPage() {
   const i18n = createI18n({
     legacy: false,
     locale: 'en',
+    missingWarn: false,
+    fallbackWarn: false,
     messages: {
       en: {
         common: {
@@ -71,8 +73,8 @@ function mountPage() {
     global: {
       plugins: [i18n],
       stubs: {
-        'el-table': true,
-        'el-table-column': true,
+        'el-table': { template: '<div><slot /><slot name="empty" /></div>' },
+        'el-table-column': { template: '<div><slot name="header" /></div>' },
         'el-dialog': true,
         'el-input': {
           props: ['modelValue', 'placeholder'],
@@ -89,7 +91,9 @@ function mountPage() {
         'el-link': true,
         'el-tag': true,
         'el-icon': true,
-        ListColumnHeader: true,
+        'el-dropdown': { template: '<div><slot /><slot name="dropdown" /></div>' },
+        'el-dropdown-menu': { template: '<div><slot /></div>' },
+        'el-dropdown-item': { template: '<div><slot /></div>' },
         ListFilterDialog: true,
         ListPagination: true,
       },
@@ -127,6 +131,9 @@ describe('To Do shared list', () => {
     expect(w.text()).toContain('To Do')
     expect(w.text()).toContain('Type')
     expect(w.text()).toContain('Priority')
+    const headers = w.findAllComponents({ name: 'ListColumnHeader' })
+    expect(headers.length).toBeGreaterThan(0)
+    expect(headers.every((h) => h.find('.list-col-header').exists())).toBe(true)
     expect(w.get('[data-test="todo-reset-btn"]').text()).toContain('Reset')
   })
 

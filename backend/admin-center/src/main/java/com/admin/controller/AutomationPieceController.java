@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,7 +56,7 @@ public class AutomationPieceController {
 
     @PostMapping("/query")
     public ResponseEntity<ApiResponse<AdminListPage<AutomationPieceSummary>>> queryPieces(
-            @RequestBody AutomationPieceListQueryRequest request) {
+            @RequestBody @Valid AutomationPieceListQueryRequest request) {
         if (!isSystemAdmin()) {
             return forbidden();
         }

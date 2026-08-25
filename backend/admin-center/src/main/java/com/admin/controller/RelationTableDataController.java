@@ -124,7 +124,7 @@ public class RelationTableDataController {
     @Operation(summary = "Page table data", description = "Shared list: COUNT(*) and the page share one predicate including toolbar keyword and column filters")
     public ResponseEntity<AdminListPage<RelationTableDataRowDTO>> queryDataPage(
             @Parameter(description = "Table definition ID") @PathVariable Long tableId,
-            @RequestBody RelationTableDataListQueryRequest request) {
+            @RequestBody @Valid RelationTableDataListQueryRequest request) {
         return ResponseEntity.ok(listQueryComponent.query(tableId, request));
     }
 

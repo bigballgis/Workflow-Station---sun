@@ -63,7 +63,7 @@ public class BiRbacMappingController {
     @PostMapping("/mappings/query")
     @Operation(summary = "Query RBAC mappings (true paging; column filters, sort and grouping)")
     public ResponseEntity<AdminListPage<RbacMappingResponse>> queryMappings(
-            @RequestBody BiRbacListQueryRequest request) {
+            @RequestBody @Valid BiRbacListQueryRequest request) {
         return ResponseEntity.ok(rbacListQueryComponent.query(request));
     }
 
