@@ -446,11 +446,9 @@ public class TaskQueryComponent {
                     return pid == null || pid.isBlank() || !withdrawnProcessIds.contains(pid);
                 })
                 .collect(Collectors.toCollection(ArrayList::new));
-        filtered = filtered.stream()
-                .collect(Collectors.toMap(TaskInfo::getTaskId, t -> t, (t1, t2) -> t1))
-                .values()
-                .stream()
-                .collect(Collectors.toList());
+        filtered = new ArrayList<>(filtered.stream()
+                .collect(Collectors.toMap(TaskInfo::getTaskId, t -> t, (t1, t2) -> t1, LinkedHashMap::new))
+                .values());
         String portalUsername = SecurityContextUtils.getCurrentUsername().orElse(null);
         if (taskProcessComponent != null) {
             filtered = filtered.stream()
