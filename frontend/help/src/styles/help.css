@@ -355,6 +355,57 @@ a {
   border-top: 1px solid var(--help-line);
 }
 
+.help-flow {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.help-flow li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--help-panel);
+  border: 1px solid var(--help-line);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.help-flow-n {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--help-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 22px;
+  text-align: center;
+}
+
+.help-related {
+  margin-top: 32px;
+  padding-top: 8px;
+  border-top: 1px solid var(--help-line);
+}
+
+.help-related a {
+  color: var(--help-accent-dark);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (min-width: 720px) {
+  .help-flow {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+
 @media (max-width: 840px) {
   .help-shell {
     flex-direction: column;

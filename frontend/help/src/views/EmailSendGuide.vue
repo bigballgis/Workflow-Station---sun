@@ -4,12 +4,27 @@
     page-title-key="emailSendGuide.pageTitle"
     intro-key="emailSendGuide.intro"
     crumb-key="emailSendGuide.crumb"
+    flow-title-key="emailSendGuide.flowTitle"
+    :flow-keys="flowKeys"
+    :related="related"
     :sections="sections"
   />
 </template>
 
 <script setup lang="ts">
-import GuideArticle, { type GuideSection } from '@/components/GuideArticle.vue'
+import GuideArticle, { type GuideRelated, type GuideSection } from '@/components/GuideArticle.vue'
+
+const flowKeys = [
+  'emailSendGuide.flow1',
+  'emailSendGuide.flow2',
+  'emailSendGuide.flow3',
+  'emailSendGuide.flow4',
+]
+
+const related: GuideRelated[] = [
+  { to: '/email-monitor', titleKey: 'guides.emailMonitor.title' },
+  { to: '/computed-fields', titleKey: 'guides.computedFields.title' },
+]
 
 const sections: GuideSection[] = [
   {
@@ -24,7 +39,10 @@ const sections: GuideSection[] = [
     titleKey: 'emailSendGuide.templateTitle',
     bodyKey: 'emailSendGuide.templateBody',
     figure: { src: 'guides/dw-email-templates.png', captionKey: 'emailSendGuide.templateFigure' },
-    samples: [{ code: 'Insert Variable', hintKey: 'emailSendGuide.templateSample' }],
+    samples: [
+      { code: 'PR Approved Notice', hintKey: 'emailSendGuide.templateNameSample' },
+      { code: 'Insert Variable', hintKey: 'emailSendGuide.templateSample' },
+    ],
   },
   {
     titleKey: 'emailSendGuide.bodyTitle',

@@ -18,11 +18,16 @@ Do not ship the UI without the `?`. Do not invent a second docs site.
 
 ## How to write the article
 
-Follow skill **`extract-help-guideline`**: output the 提取清单, **wait for 确认**,
-then write `frontend/help`. Hang the leaf under the **same menu** as the product
-(DW sidebar / Function Unit tab / Admin / Portal). Capture figures with
+Follow skill **`extract-help-guideline`** (deep-documentation quality inside
+`/help/` only: layered article, exact UI, flow, cross-links, `llms.txt`).
+New articles: output the 提取清单, **wait for 确认**, then write
+`frontend/help`. User already asked to rewrite named pages: skip the清单.
+Hang the leaf under the **same menu** as the product (DW sidebar / Function Unit
+tab / Admin / Portal). Capture figures with
 `frontend/scripts/capture-help-guide-images.mjs` and **redact** emails, names,
-and process ids before they land in `public/guides/`.
+and process ids before they land in `public/guides/`. After replacing PNGs, bump
+`GUIDE_FIGURE_REV` in `GuideArticle.vue`. Keep samples aligned with those
+figures (Purchase Request: `help_pr` / `help_pr_line`).
 
 ## How to add the `?`
 

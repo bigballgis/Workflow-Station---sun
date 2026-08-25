@@ -3,6 +3,22 @@
     <p class="help-kicker">{{ t('app.tagline') }}</p>
     <h1>{{ t('home.title') }}</h1>
     <p class="help-lede">{{ t('home.intro') }}</p>
+    <section class="help-portal-block" data-testid="help-by-need">
+      <h2>{{ t('home.byNeedTitle') }}</h2>
+      <p class="help-portal-hint">{{ t('home.byNeedIntro') }}</p>
+      <ul class="help-cards">
+        <li v-for="guide in GUIDELINES" :key="guide.id">
+          <router-link
+            class="help-card"
+            :to="guide.path"
+            :data-testid="`help-need-${guide.id}`"
+          >
+            <h3>{{ t(guide.titleKey) }}</h3>
+            <p>{{ t(guide.summaryKey) }}</p>
+          </router-link>
+        </li>
+      </ul>
+    </section>
     <section v-for="portal in portals" :key="portal.id" class="help-portal-block">
       <h2>{{ t(portal.titleKey) }}</h2>
       <p class="help-portal-hint">{{ t(portal.hintKey) }}</p>
@@ -37,13 +53,19 @@ const portals = NAV_TREE.filter((n): n is NavGroup => n.kind === 'group').map((g
   leaves: navLeavesWithArticles(group.children),
 }))
 
-function summaryTitleKey(to: string | undefined): string {
-  const guide = GUIDELINES.find((g) => g.path === (to ?? '').split('#')[0])
-  return guide?.titleKey ?? 'home.title'
+function summaryTitleKey(to: string): string {
+  const guide = GUIDELINES.find((g) => g.path === to.split('#')[0])
+  if (!guide) {
+    throw new Error(`No guideline for home card path: ${to}`)
+  }
+  return guide.titleKey
 }
 
-function summaryBodyKey(to: string | undefined): string {
-  const guide = GUIDELINES.find((g) => g.path === (to ?? '').split('#')[0])
-  return guide?.summaryKey ?? 'home.intro'
+function summaryBodyKey(to: string): string {
+  const guide = GUIDELINES.find((g) => g.path === to.split('#')[0])
+  if (!guide) {
+    throw new Error(`No guideline for home card path: ${to}`)
+  }
+  return guide.summaryKey
 }
 </script>

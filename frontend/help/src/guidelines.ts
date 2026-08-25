@@ -16,6 +16,9 @@ export interface NavLeaf {
   to?: string
 }
 
+/** Leaf that already has a guideline `to` (home cards, not grey menus). */
+export type NavLeafWithArticle = NavLeaf & { to: string }
+
 export interface NavGroup {
   kind: 'group'
   id: string
@@ -216,11 +219,11 @@ export function guideByPath(path: string): Guideline | undefined {
   return GUIDELINES.find((g) => g.path === path)
 }
 
-export function navLeavesWithArticles(nodes: NavNode[] = NAV_TREE): NavLeaf[] {
-  const out: NavLeaf[] = []
+export function navLeavesWithArticles(nodes: NavNode[] = NAV_TREE): NavLeafWithArticle[] {
+  const out: NavLeafWithArticle[] = []
   for (const node of nodes) {
     if (node.kind === 'leaf') {
-      if (node.to) out.push(node)
+      if (node.to) out.push({ ...node, to: node.to })
     } else {
       out.push(...navLeavesWithArticles(node.children))
     }

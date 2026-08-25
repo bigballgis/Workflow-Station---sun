@@ -25,6 +25,10 @@ try {
   const home = page.getByTestId('help-home')
   await home.waitFor({ state: 'visible', timeout: 20000 })
   rec('Help catalog is visible without login', await home.isVisible())
+  rec(
+    'Home lists articles by job',
+    await page.getByTestId('help-by-need').isVisible(),
+  )
 
   const homeShot = resolve(DW_SHOTS, `${DATE}_help-portal-home.png`)
   await page.screenshot({ path: homeShot, fullPage: true })
@@ -47,6 +51,14 @@ try {
   await article.waitFor({ state: 'visible', timeout: 15000 })
   rec('Computed-fields guideline is visible', await article.isVisible())
   rec(
+    'Computed-fields samples use help_pr_line',
+    (await article.textContent())?.includes('SUM(help_pr_line.line_total)') === true,
+  )
+  rec(
+    'Computed-fields has order-of-work steps',
+    (await article.locator('.help-flow li').count()) >= 4,
+  )
+  rec(
     'URL is /help/computed-fields',
     page.url().includes('/help/computed-fields'),
     page.url(),
@@ -60,6 +72,10 @@ try {
   const sendArticle = page.getByTestId('email-send-guide-page')
   await sendArticle.waitFor({ state: 'visible', timeout: 15000 })
   rec('Send-email guideline is visible', await sendArticle.isVisible())
+  rec(
+    'Send-email related links include Email Monitor',
+    await sendArticle.locator('.help-related a[href$="/email-monitor"]').count().then((n) => n > 0),
+  )
   rec('URL is /help/email-send', page.url().includes('/help/email-send'), page.url())
   const sendShot = resolve(DW_SHOTS, `${DATE}_help-portal-email-send.png`)
   await page.screenshot({ path: sendShot, fullPage: true })
@@ -70,6 +86,10 @@ try {
   await monitorArticle.waitFor({ state: 'visible', timeout: 15000 })
   rec('Email-monitor guideline is visible', await monitorArticle.isVisible())
   rec(
+    'Email-monitor names Vendor quote to PR',
+    (await monitorArticle.textContent())?.includes('Vendor quote to PR') === true,
+  )
+  rec(
     'URL is /help/email-monitor',
     page.url().includes('/help/email-monitor'),
     page.url(),
@@ -77,6 +97,9 @@ try {
   const monitorShot = resolve(DW_SHOTS, `${DATE}_help-portal-email-monitor.png`)
   await page.screenshot({ path: monitorShot, fullPage: true })
   console.log(`screenshot ${monitorShot}`)
+
+  const llms = await page.goto('http://localhost:3000/help/llms.txt', { waitUntil: 'domcontentloaded' })
+  rec('llms.txt is served', llms?.ok() === true && (await llms.text()).includes('/help/computed-fields'))
 
   await page.goto('http://localhost:3000/dev/help/computed-fields', {
     waitUntil: 'domcontentloaded',
