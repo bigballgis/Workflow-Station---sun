@@ -2559,3 +2559,20 @@
     screenshots 2026-08-25_atm-000011-snapshot-tabs.png,
     2026-08-25_atm-000011-snapshot-subtables.png.
 
+- id: "1553"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: major
+  category: bug
+  summary: "Meeting Doc cannot-download still showed Preview Download on My Request (1_Meeting-000016)"
+  file: "frontend/user-portal/src/utils/applyUploadPropsFromRule.ts"
+  note: |
+    Designer switch lives on PROCESS Main (cannotDownload true); My Request /
+    TASK scene copies omit it, so Portal preview kept Download. Runtime now
+    honors cannotDownload and native canNotDownload, and inherits the flag by
+    field key from any FU form. Vitest applyUploadPropsFromRule + filePreview
+    9 pass; SubTableField 16 pass; pnpm run build; compose rebuild
+    user-portal-frontend. Playwright 1_Meeting-000016 preview header has Close
+    window only (no Download).
+    screenshot 2026-08-25_meeting-000016-preview-no-download.png.
+

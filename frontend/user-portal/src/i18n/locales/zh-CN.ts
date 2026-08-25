@@ -941,6 +941,13 @@ export default {
     success: '上传成功',
     failed: '上传失败'
   },
+  filePreview: {
+    previewFile: '预览文件',
+    download: '下载',
+    closeWindow: '关闭窗口',
+    unsupported: '该文件类型暂不支持预览。',
+    loadFailed: '文件预览加载失败。'
+  },
   login: {
     title: '工作流平台',
     subtitle: '用户门户',

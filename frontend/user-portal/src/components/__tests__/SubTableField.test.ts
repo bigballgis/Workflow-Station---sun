@@ -166,6 +166,15 @@ describe('subListViews FILE column typing', () => {
     expect(isStoredFileUrl('/api/v1/upload/files/ba771856-9d7b-482b-99c4-47e0f234220d.pdf?originalName=doc.pdf')).toBe(true)
     expect(isStoredFileUrl('plain text')).toBe(false)
   })
+
+  it('copies cannotDownload from the sub-form upload rule', () => {
+    const col = mergeListViewFieldColumn(
+      { fieldName: 'file', comment: 'file', dataType: 'FILE' },
+      null,
+      { type: 'upload', props: { cannotDownload: true } },
+    )
+    expect(col.props?.cannotDownload).toBe(true)
+  })
 })
 
 /** Mirrors SubTableField parentChildTaskStatusesMatch (#1441). */

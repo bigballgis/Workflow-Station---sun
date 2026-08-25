@@ -1,6 +1,8 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { SubTableFieldT } from './subTableFieldTypes'
+import { openFilePreview } from '@/composables/filePreview/useFilePreview'
+import { uploadPropsBlockDownload } from '@/utils/filePreview'
 
 /** Extract filename from URL, preferring the original filename recorded in this session */
 export function getFilenameFromUrl(url: string, savedName?: string): string {
@@ -66,5 +68,18 @@ export function useSubTableFileDownload(t: SubTableFieldT) {
     }
   }
 
-  return { uploadNames, downloadingKeys, downloadFile }
+  function previewStoredFile(
+    url: string,
+    savedName: string | undefined,
+    col: { props?: Record<string, unknown> },
+  ) {
+    if (!url) return
+    openFilePreview({
+      url,
+      name: getFilenameFromUrl(url, savedName),
+      cannotDownload: uploadPropsBlockDownload(col.props),
+    })
+  }
+
+  return { uploadNames, downloadingKeys, downloadFile, previewStoredFile }
 }

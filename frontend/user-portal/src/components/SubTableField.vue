@@ -68,14 +68,9 @@
               <span
                 v-if="scope.row[col.field]"
                 class="file-download-link"
-                :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
-                @click="downloadFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
+                @click="previewStoredFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], col)"
               >
-                <el-icon
-                  v-if="downloadingKeys[scope.$index + '_' + col.field]"
-                  class="is-loading"
-                ><Loading /></el-icon>
-                <el-icon v-else><Document /></el-icon>
+                <el-icon><Document /></el-icon>
                 {{ getFilenameFromUrl(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
               </span>
               <span
@@ -540,7 +535,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, withDefaults, onMounted, onBeforeUnmount, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Document, Loading, Search, Close, Download, Upload } from '@element-plus/icons-vue'
+import { Plus, Document, Search, Close, Download, Upload } from '@element-plus/icons-vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import {
   resolveDisplayValue,
@@ -939,7 +934,7 @@ const {
 
 const { handleLinkFormClick } = useSubTableLinkFormOpen(props, linkFormDialog, linkFormScope)
 
-const { uploadNames, downloadingKeys, downloadFile } = useSubTableFileDownload(t)
+const { uploadNames, previewStoredFile } = useSubTableFileDownload(t)
 
 const assignment = useSubTableAssignment(props, rows, emit, t, rowKeys)
 const {
@@ -1125,7 +1120,6 @@ onBeforeUnmount(() => {
     transition: color 0.2s;
 
     &:hover { color: #0e44cc; }
-    &.downloading { color: #909399; cursor: wait; }
   }
 
   .no-file {

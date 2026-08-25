@@ -941,6 +941,13 @@ export default {
     success: '上傳成功',
     failed: '上傳失敗'
   },
+  filePreview: {
+    previewFile: '預覽檔案',
+    download: '下載',
+    closeWindow: '關閉視窗',
+    unsupported: '此檔案類型暫不支援預覽。',
+    loadFailed: '檔案預覽載入失敗。'
+  },
   login: {
     title: '工作流平臺',
     subtitle: '使用者入口',

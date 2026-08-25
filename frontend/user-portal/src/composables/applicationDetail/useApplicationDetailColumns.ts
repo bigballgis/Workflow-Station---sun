@@ -15,6 +15,7 @@ import {
 } from './subTableRowHelpers'
 import type { ApplicationDetailCtx } from './context'
 import { assignSensitiveMaskColumnProps } from '@/utils/applySensitiveMaskFromRule'
+import { stampCannotDownloadProp, cannotDownloadFieldKeysFromForms } from '@/utils/applyUploadPropsFromRule'
 
 type DerivedColumn = {
   field: string
@@ -139,13 +140,19 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
         // Pass through relevant props
         const passProps: Record<string, any> = {}
         const propKeys = [
-          'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+          'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload',
           'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
           'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
         ]
         for (const key of propKeys) {
           if (rProps[key] !== undefined) passProps[key] = rProps[key]
         }
+        stampCannotDownloadProp(
+          passProps,
+          rProps,
+          typeof r.field === 'string' ? r.field : undefined,
+          cannotDownloadFieldKeysFromForms(ctx.cachedContentForms),
+        )
         assignSensitiveMaskColumnProps(passProps, type, rProps)
         if (rProps.data !== undefined) passProps.treeData = rProps.data
         if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey

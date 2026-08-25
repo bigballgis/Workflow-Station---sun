@@ -969,6 +969,13 @@ export default {
     success: 'Upload successful',
     failed: 'Upload failed'
   },
+  filePreview: {
+    previewFile: 'Preview file',
+    download: 'Download',
+    closeWindow: 'Close window',
+    unsupported: 'Preview is not available for this file type.',
+    loadFailed: 'Failed to load file preview.'
+  },
   user: {
     username: 'Username',
     email: 'Email'
