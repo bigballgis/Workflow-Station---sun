@@ -1,10 +1,12 @@
 package com.admin.controller;
 
 import com.admin.component.UserPortalAuditClient;
+import com.admin.dto.request.UserPortalAuditListQueryRequest;
 import com.admin.dto.response.PageResult;
 import com.platform.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -61,7 +63,8 @@ public class UserPortalAuditController {
 
     @PostMapping("/user-portal-audit-logs/list-query")
     @Operation(summary = "Query user portal audit logs (true paging; column filters, sort and grouping)")
-    public ApiResponse<Map<String, Object>> queryAuditLogList(@RequestBody Map<String, Object> queryRequest) {
+    public ApiResponse<Map<String, Object>> queryAuditLogList(
+            @RequestBody @Valid UserPortalAuditListQueryRequest queryRequest) {
         return ApiResponse.success(userPortalAuditClient.queryAuditLogList(queryRequest));
     }
 

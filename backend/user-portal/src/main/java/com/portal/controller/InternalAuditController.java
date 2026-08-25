@@ -9,6 +9,7 @@ import com.portal.dto.UserPortalAuditQueryRequest;
 import com.portal.dto.UserPortalAuditRecord;
 import com.platform.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Hidden;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -53,7 +54,7 @@ public class InternalAuditController {
     @PostMapping("/list-query")
     public ApiResponse<PortalListPage<UserPortalAuditRecord>> queryAuditLogList(
             @RequestHeader(value = "X-Internal-Token", required = false) String token,
-            @RequestBody UserPortalAuditListQueryRequest request) {
+            @RequestBody @Valid UserPortalAuditListQueryRequest request) {
         portalInternalApiProperties.requireValidToken(token);
         return ApiResponse.success(userPortalAuditListQueryComponent.query(request));
     }

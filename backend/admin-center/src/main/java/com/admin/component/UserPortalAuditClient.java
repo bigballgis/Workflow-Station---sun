@@ -1,5 +1,6 @@
 package com.admin.component;
 
+import com.admin.dto.request.UserPortalAuditListQueryRequest;
 import com.admin.exception.AdminBusinessException;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import lombok.RequiredArgsConstructor;
@@ -70,7 +71,7 @@ public class UserPortalAuditClient {
     /**
      * Query user portal audit logs with true paging, column filters, sort and grouping.
      */
-    public Map<String, Object> queryAuditLogList(Map<String, Object> request) {
+    public Map<String, Object> queryAuditLogList(UserPortalAuditListQueryRequest request) {
         requireTokenConfigured();
         String url = stripTrailingSlash(userPortalBaseUrl) + "/internal/audit-logs/list-query";
         HttpHeaders headers = new HttpHeaders();
