@@ -28,6 +28,82 @@ export function subTableBindingMatches(
   return !!targetName && targetName === sourceName
 }
 
+export type LinkFormHostGrid = {
+  bindingId?: number | null
+  title?: string
+  tableId?: number | null
+}
+
+function hostGridBindingIdent(host: LinkFormHostGrid): {
+  bindingId: number
+  tableName: string
+  tableId: number | null
+} {
+  const bindingId = host.bindingId != null ? Number(host.bindingId) : Number.NaN
+  const tableIdRaw = host.tableId != null ? Number(host.tableId) : Number.NaN
+  return {
+    bindingId: Number.isFinite(bindingId) ? bindingId : Number.MIN_SAFE_INTEGER,
+    tableName: String(host.title ?? '').trim(),
+    tableId: Number.isFinite(tableIdRaw) ? tableIdRaw : null,
+  }
+}
+
+/**
+ * Designer Link Form on a sub-table often binds to the same table as the grid
+ * ({@code boundSubTableBindingId === host bindingId}, or a sibling MI binding of
+ * the same physical table). Details must use the clicked row itself — there is
+ * no nested {@code row.__subTables__[boundId]} child slice.
+ */
+export function isLinkFormBoundToHostGrid(
+  col: { props?: { boundSubTableBindingId?: number; boundSubTableName?: string } } | null | undefined,
+  host: LinkFormHostGrid,
+  resolvedLinkBinding?: {
+    bindingId: number
+    tableName: string
+    physicalTableName?: string
+    tableId?: number | null
+  } | null,
+): boolean {
+  const hostIdent = hostGridBindingIdent(host)
+  const boundId = col?.props?.boundSubTableBindingId
+  if (
+    boundId != null
+    && hostIdent.bindingId !== Number.MIN_SAFE_INTEGER
+    && Number(boundId) === hostIdent.bindingId
+  ) {
+    return true
+  }
+  if (resolvedLinkBinding) {
+    return subTableBindingMatches(resolvedLinkBinding, hostIdent)
+  }
+  const boundName = col?.props?.boundSubTableName
+  return !!(
+    boundName
+    && hostIdent.tableName
+    && linkFormTableMatchKey(boundName) === linkFormTableMatchKey(hostIdent.tableName)
+  )
+}
+
+/** Self-bound Details save: merge modal fields into the grid row, keep nested children. */
+export function mergeSelfBoundLinkFormIntoParentRow(
+  parentRow: Record<string, any>,
+  formRow: Record<string, any>,
+): Record<string, any> {
+  const nestedParent =
+    parentRow.__subTables__ && typeof parentRow.__subTables__ === 'object'
+      ? (parentRow.__subTables__ as Record<string, unknown>)
+      : null
+  const nestedForm =
+    formRow.__subTables__ && typeof formRow.__subTables__ === 'object'
+      ? (formRow.__subTables__ as Record<string, unknown>)
+      : null
+  const merged: Record<string, any> = { ...parentRow, ...formRow }
+  if (nestedParent || nestedForm) {
+    merged.__subTables__ = { ...(nestedParent || {}), ...(nestedForm || {}) }
+  }
+  return merged
+}
+
 /** Lowercase trimmed string for FK equality (8778 ↔ "8778"; UUID case-insensitive). */
 export function normalizeFkIdForMatch(v: unknown): string | null {
   if (v == null || v === '') return null

@@ -8,6 +8,7 @@ import {
   collapseMiLinkFormRowsForParent,
   filterLinkedChildRowsByMiTaskStatus,
   filterLinkedChildRowsByParentIdIdw,
+  isLinkFormBoundToHostGrid,
   isMiStyleParentRowForLinkForm,
   isTerminalMiParticipantRow,
   parentChildTaskStatusesMatch
@@ -55,10 +56,53 @@ export function useSubTableLinkFormOpen(
     backfillMiLinkFormModalFieldsFromParent
   } = scope
 
+  function commitLinkFormDialogOpen(
+    col: Column,
+    row: Record<string, any> | undefined,
+    binding: SubTableBinding | undefined,
+    effectiveSavedRows: any[],
+    skipParentBackfill: boolean,
+  ) {
+    linkedSubTableRows.value = [...effectiveSavedRows]
+    linkedFormData.value = buildLinkedFormData(
+      { ...(binding || ({} as SubTableBinding)), data: effectiveSavedRows },
+      { readonly: !props.editable },
+    )
+    if (row && binding?.formFields?.length && !skipParentBackfill) {
+      backfillMiLinkFormModalFieldsFromParent(
+        linkedFormData.value,
+        row as Record<string, unknown>,
+        binding.formFields,
+        effectiveSavedRows[0] as Record<string, unknown> | undefined,
+        !props.editable,
+      )
+    }
+    const bindingForFooter = resolveLinkBindingForColumn(col)
+    const formFieldsLen = bindingForFooter?.formFields?.length ?? 0
+    const useDetailFooter =
+      !!props.showLinkFormDialogFooter &&
+      props.editable &&
+      bindingForFooter?.bindingMode === 'EDITABLE' &&
+      formFieldsLen > 0
+    if (useDetailFooter) {
+      linkFormDialogSnapshot.value = {
+        linkedFormData: JSON.parse(JSON.stringify(linkedFormData.value)) as Record<string, any>,
+        linkedSubTableRows: JSON.parse(JSON.stringify(linkedSubTableRows.value)) as any[]
+      }
+    } else {
+      linkFormDialogSnapshot.value = null
+    }
+    linkFormDialogVisible.value = true
+  }
+
   function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: number) {
     activeLinkColumn.value = col
     activeLinkRowIndex.value = rowIndex
     const binding = resolveLinkBindingForColumn(col)
+    if (row && isLinkFormBoundToHostGrid(col, props, binding)) {
+      commitLinkFormDialogOpen(col, row, binding, [{ ...row }], true)
+      return
+    }
     const boundId = col.props?.boundSubTableBindingId
     const boundName = col.props?.boundSubTableName || binding?.tableName
     const rowSub = row?.__subTables__ && typeof row.__subTables__ === 'object' ? (row.__subTables__ as Record<string, any>) : {}
@@ -493,36 +537,7 @@ export function useSubTableLinkFormOpen(
         }
       }
     }
-    linkedSubTableRows.value = [...effectiveSavedRows]
-    linkedFormData.value = buildLinkedFormData(
-      { ...(binding || ({} as any)), data: effectiveSavedRows },
-      { readonly: !props.editable },
-    )
-    if (row && binding?.formFields?.length && !linkFormNestedOnlyMi) {
-      backfillMiLinkFormModalFieldsFromParent(
-        linkedFormData.value,
-        row as Record<string, unknown>,
-        binding.formFields,
-        effectiveSavedRows[0] as Record<string, unknown> | undefined,
-        !props.editable,
-      )
-    }
-    const bindingForFooter = resolveLinkBindingForColumn(col)
-    const formFieldsLen = bindingForFooter?.formFields?.length ?? 0
-    const useDetailFooter =
-      !!props.showLinkFormDialogFooter &&
-      props.editable &&
-      bindingForFooter?.bindingMode === 'EDITABLE' &&
-      formFieldsLen > 0
-    if (useDetailFooter) {
-      linkFormDialogSnapshot.value = {
-        linkedFormData: JSON.parse(JSON.stringify(linkedFormData.value)) as Record<string, any>,
-        linkedSubTableRows: JSON.parse(JSON.stringify(linkedSubTableRows.value)) as any[]
-      }
-    } else {
-      linkFormDialogSnapshot.value = null
-    }
-    linkFormDialogVisible.value = true
+    commitLinkFormDialogOpen(col, row, binding, effectiveSavedRows, linkFormNestedOnlyMi)
   }
 
   return { handleLinkFormClick }
