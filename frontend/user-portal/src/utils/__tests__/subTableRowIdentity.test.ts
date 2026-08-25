@@ -3,6 +3,7 @@ import {
   ensureRowIdentity,
   ensureSliceRowIdentities,
   ensureSubTableMapIdentities,
+  readRowIdentityToken,
   rowHasIdentity,
 } from '../subTableRowIdentity'
 
@@ -37,5 +38,11 @@ describe('subTableRowIdentity', () => {
     })).toBe(1)
     expect(canonical.row_id).toBeTruthy()
     expect(aliasCopy).not.toHaveProperty('row_id')
+  })
+
+  it('reads the first identity token in field-priority order', () => {
+    expect(readRowIdentityToken({ row_id: 'r1', id: 'pk-9' })).toBe('r1')
+    expect(readRowIdentityToken({ id: 'pk-9' })).toBe('pk-9')
+    expect(readRowIdentityToken({ channel: 'Email' })).toBeNull()
   })
 })

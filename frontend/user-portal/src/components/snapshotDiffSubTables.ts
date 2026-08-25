@@ -29,6 +29,7 @@ export interface SnapshotSubTableTarget {
 export interface SnapshotSubTableColumn {
   field: string
   label: string
+  type?: string
 }
 
 export interface SnapshotSubTableSection {
@@ -100,7 +101,7 @@ export function snapshotSubTableColumns(binding?: SnapshotSubTableBindingSource)
     const label = columnLabel(col, field)
     if (!label || label.startsWith('__')) continue
     seen.add(field)
-    out.push({ field, label })
+    out.push({ field, label, type: columnType(col) || undefined })
   }
   return out
 }
@@ -111,7 +112,7 @@ function columnsFromRowKeys(rows: Record<string, unknown>[]): SnapshotSubTableCo
   return Object.keys(first)
     .filter(key => key && !key.startsWith('__') && key !== 'id')
     .slice(0, 12)
-    .map(field => ({ field, label: field.replace(/_/g, ' ') }))
+    .map(field => ({ field, label: field.replace(/_/g, ' '), type: 'text' }))
 }
 
 function bindingById(
@@ -123,6 +124,29 @@ function bindingById(
 
 function normalizeTableName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** Same physical table may appear as several binding ids (MI sibling / alias). */
+export function snapshotTableSiblingBindingIds(
+  bindingId: number,
+  bindings?: SnapshotSubTableBindingSource[],
+): number[] {
+  const ids = new Set<number>([bindingId])
+  const self = bindingById(bindings, bindingId)
+  if (!self) return [...ids]
+  const tableId = self.tableId != null ? Number(self.tableId) : Number.NaN
+  const name = normalizeTableName(String(self.tableName || ''))
+  for (const item of bindings || []) {
+    const otherId = Number(item.bindingId)
+    if (!Number.isFinite(otherId)) continue
+    const otherTableId = item.tableId != null ? Number(item.tableId) : Number.NaN
+    if (Number.isFinite(tableId) && tableId > 0 && otherTableId === tableId) {
+      ids.add(otherId)
+      continue
+    }
+    if (name && normalizeTableName(String(item.tableName || '')) === name) ids.add(otherId)
+  }
+  return [...ids]
 }
 
 /** Lookup catalogs and main-table bindings are not process sub-tables. */
@@ -214,6 +238,10 @@ export function buildSnapshotSubTableSections(
   return sections
 }
 
-export function formatSnapshotSubTableCell(row: Record<string, unknown>, field: string): string {
-  return formatSnapshotDisplayValue(row[field])
+export function formatSnapshotSubTableCell(
+  row: Record<string, unknown>,
+  field: string,
+  type?: string,
+): string {
+  return formatSnapshotDisplayValue(row[field], type ? { key: field, label: field, type } : undefined)
 }

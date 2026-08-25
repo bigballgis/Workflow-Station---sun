@@ -30,6 +30,15 @@ export function rowHasIdentity(row: Record<string, unknown>): boolean {
   return SUB_TABLE_IDENTITY_FIELDS.some(field => identityValue(row[field]) != null)
 }
 
+/** First non-blank identity value in {@link SUB_TABLE_IDENTITY_FIELDS} order. */
+export function readRowIdentityToken(row: Record<string, unknown>): string | null {
+  for (const field of SUB_TABLE_IDENTITY_FIELDS) {
+    const text = identityValue(row[field])
+    if (text) return text
+  }
+  return null
+}
+
 /** @return true when a {@code row_id} was assigned */
 export function ensureRowIdentity(row: Record<string, unknown>): boolean {
   if (rowHasIdentity(row)) return false

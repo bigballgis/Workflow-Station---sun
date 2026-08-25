@@ -1062,10 +1062,12 @@ exportWithData: '导出',
   snapshotDiff: {
     snapshotValue: '快照值',
     liveValue: '当前值',
+    status: '变更状态',
     changed: '已变更',
     unchanged: '未变更',
     fieldName: '字段',
     noSubTableRows: '暂无行',
+    subTableRow: '第 {n} 行',
   },
   changeHistory: {
     title: '变更历史',

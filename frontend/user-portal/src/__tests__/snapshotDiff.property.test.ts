@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 import type { FormField } from '../components/formRendererHelpers'
-import { computeDiffRows, formatSnapshotDisplayValue } from '../components/snapshotDiffHelpers'
+import { computeDiffRows, formatSnapshotDisplayValue, isSnapshotValueChanged } from '../components/snapshotDiffHelpers'
 
 describe('Property 18: Snapshot diff detection (frontend)', () => {
   // Generator for simple scalar values (string, number, boolean, null)
@@ -55,7 +55,7 @@ describe('Property 18: Snapshot diff detection (frontend)', () => {
 
           // Count expected diffs
           const expectedDiffCount = fieldKeys.filter(key =>
-            JSON.stringify(snapshotValues[key]) !== JSON.stringify(liveValues[key])
+            isSnapshotValueChanged(snapshotValues[key], liveValues[key])
           ).length
 
           const actualDiffCount = rows.filter(r => r.changed).length
@@ -187,5 +187,27 @@ describe('Property 18: Snapshot diff detection (frontend)', () => {
     expect(formatSnapshotDisplayValue(
       '/api/v1/upload/files/336fd6f4.jpg?originalName=lilong.JPG',
     )).toBe('lilong.JPG')
+  })
+
+  it('marks Changed only when the displayed text differs, not extra lookup JSON keys', () => {
+    const field: FormField = { key: 'case_stage', label: 'Case Stage', type: 'lookup' }
+    expect(isSnapshotValueChanged(
+      { id: 'a', stage_name: 'Investigation' },
+      { id: 'a', stage_name: 'Investigation', extra: true },
+      field,
+    )).toBe(false)
+    expect(isSnapshotValueChanged(
+      { stage_name: 'Case Submission' },
+      { stage_name: 'Investigation' },
+      field,
+    )).toBe(true)
+    expect(isSnapshotValueChanged(null, undefined)).toBe(false)
+
+    const rows = computeDiffRows(
+      { case_stage: { id: 's1', stage_name: 'Investigation' } },
+      { case_stage: { id: 's1', stage_name: 'Investigation', extra: 1 } },
+      [field],
+    )
+    expect(rows[0]?.changed).toBe(false)
   })
 })

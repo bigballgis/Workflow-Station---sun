@@ -1,99 +1,36 @@
 <template>
   <div class="snapshot-diff-renderer">
-    <el-table
-      :data="diffRows"
-      border
-      stripe
-    >
-      <el-table-column
-        :label="t('snapshotDiff.fieldName')"
-        prop="label"
-        min-width="150"
-      />
-      <el-table-column
-        :label="t('snapshotDiff.snapshotValue')"
-        min-width="200"
-      >
-        <template #default="{ row }">
-          <span
-            v-if="row.changed"
-            class="snapshot-value changed"
-          >
-            <del>{{ formatValue(row.snapshotValue, row.key) }}</del>
-          </span>
-          <span
-            v-else
-            class="snapshot-value"
-          >{{ formatValue(row.snapshotValue, row.key) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        v-if="showLiveValues"
-        :label="t('snapshotDiff.liveValue')"
-        min-width="200"
-      >
-        <template #default="{ row }">
-          <span
-            v-if="row.changed"
-            class="live-value changed"
-          >{{ formatValue(row.liveValue, row.key) }}</span>
-          <span
-            v-else
-            class="live-value"
-          >{{ formatValue(row.liveValue, row.key) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        v-if="showLiveValues"
-        :label="t('snapshotDiff.changed')"
-        width="100"
-        align="center"
-      >
-        <template #default="{ row }">
-          <el-tag
-            v-if="row.changed"
-            type="warning"
-            size="small"
-          >
-            {{ t('snapshotDiff.changed') }}
-          </el-tag>
-          <el-tag
-            v-else
-            type="info"
-            size="small"
-          >
-            {{ t('snapshotDiff.unchanged') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-    </el-table>
+    <SnapshotDiffTable
+      :rows="diffRows"
+      :show-live-values="showLiveValues"
+      :format-value="formatValue"
+    />
     <div
-      v-for="section in subTableSections"
-      :key="section.bindingId"
+      v-for="group in subTableGroups"
+      :key="group.bindingId"
       class="snapshot-sub-table"
     >
       <div class="snapshot-sub-table-title">
-        {{ t('changeHistory.subTable') }}: {{ section.tableLabel || t('changeHistory.subTable') }}
+        {{ group.tableLabel }}
       </div>
-      <el-table
-        :data="section.snapshotRows"
-        border
-        stripe
-        size="small"
-        :empty-text="t('snapshotDiff.noSubTableRows')"
+      <div
+        v-for="block in group.blocks"
+        :key="`${group.bindingId}:${block.rowIndex}`"
+        class="snapshot-sub-table-block"
       >
-        <el-table-column
-          v-for="col in section.columns"
-          :key="col.field"
-          :label="col.label"
-          min-width="120"
-          show-overflow-tooltip
+        <div
+          v-if="group.blocks.length > 1"
+          class="snapshot-sub-table-row-title"
         >
-          <template #default="{ row }">
-            {{ formatSubTableCell(row, col.field) }}
-          </template>
-        </el-table-column>
-      </el-table>
+          {{ block.preview || t('snapshotDiff.subTableRow', { n: block.rowIndex + 1 }) }}
+        </div>
+        <SnapshotDiffTable
+          :rows="block.rows"
+          :show-live-values="showLiveValues"
+          :format-value="formatValue"
+          :empty-text="t('snapshotDiff.noSubTableRows')"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -102,6 +39,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FormField, FormTab } from './formRendererHelpers'
+import SnapshotDiffTable from './SnapshotDiffTable.vue'
 import {
   collectSnapshotDiffFields,
   computeDiffRows,
@@ -109,10 +47,9 @@ import {
   type DiffRow,
 } from './snapshotDiffHelpers'
 import {
-  buildSnapshotSubTableSections,
-  formatSnapshotSubTableCell,
-  type SnapshotSubTableBindingSource,
-} from './snapshotDiffSubTables'
+  buildSnapshotSubTableDiffGroups,
+} from './snapshotDiffSubTableGroups'
+import type { SnapshotSubTableBindingSource } from './snapshotDiffSubTables'
 import {
   applySensitiveMask,
   isSensitiveMaskActive,
@@ -149,10 +86,11 @@ const diffRows = computed<DiffRow[]>(() =>
   )
 )
 
-const subTableSections = computed(() =>
-  buildSnapshotSubTableSections(
+const subTableGroups = computed(() =>
+  buildSnapshotSubTableDiffGroups(
     props.fields,
     props.snapshotValues,
+    props.liveValues,
     props.subTableBindings,
     props.tabs,
     props.fieldsAfterTabs,
@@ -182,25 +120,11 @@ function formatValue(value: unknown, fieldKey?: string): string {
   if (isSensitiveMaskActive(cfg) && s !== '-') return applySensitiveMask(s, cfg!)
   return s
 }
-
-function formatSubTableCell(row: Record<string, unknown>, field: string): string {
-  return formatSnapshotSubTableCell(row, field)
-}
 </script>
 
 <style scoped lang="scss">
 .snapshot-diff-renderer {
   width: 100%;
-
-  .snapshot-value.changed del {
-    color: #f56c6c;
-    text-decoration: line-through;
-  }
-
-  .live-value.changed {
-    color: #67c23a;
-    font-weight: 500;
-  }
 
   .snapshot-sub-table {
     margin-top: 16px;
@@ -210,6 +134,16 @@ function formatSubTableCell(row: Record<string, unknown>, field: string): string
     margin-bottom: 8px;
     font-weight: 500;
     color: var(--text-primary, #303133);
+  }
+
+  .snapshot-sub-table-block + .snapshot-sub-table-block {
+    margin-top: 12px;
+  }
+
+  .snapshot-sub-table-row-title {
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-secondary, #606266);
   }
 }
 </style>
