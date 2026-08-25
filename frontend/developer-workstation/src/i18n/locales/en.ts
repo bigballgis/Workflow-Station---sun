@@ -823,6 +823,7 @@ export default {
     ownerControlTypeOwner: 'Owner',
     ownerPlaceholder: 'Auto-filled, read-only',
     ownerPlaceholderHint: 'Bind an existing VARCHAR column; filled from Creator or Current Assignee',
+    extendMenuTitle: 'Extend',
     miMenuTitle: 'MI',
     miAssignmentTitle: 'Assignment Mode',
     miAssignmentUnconfigured: 'No matching multi-instance assignment is configured for this Sub Table.',

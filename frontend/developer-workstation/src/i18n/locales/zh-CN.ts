@@ -867,6 +867,7 @@ export default {
     ownerControlTypeOwner: '归属人',
     ownerPlaceholder: '自动填写，只读',
     ownerPlaceholderHint: '绑定已有 VARCHAR 列；按创建人或当前办理人自动赋值',
+    extendMenuTitle: '扩展',
     miMenuTitle: '多实例',
     miAssignmentTitle: '分派方式',
     miAssignmentUnconfigured: '此子表尚未配置匹配的多实例分派节点。',

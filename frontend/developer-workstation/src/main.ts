@@ -5,6 +5,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
 import '@fontsource-variable/inter'
 import FcDesigner from '@form-create/designer'
+import formCreateMenus from '@form-create/designer/src/config/menu'
 import { ensureEmptyRuleComponentEvents } from '@/utils/formCreateDefaultEvents'
 // Import form-create styles
 import '@form-create/designer/src/style/index.css'
@@ -92,6 +93,19 @@ FcDesigner.component('FormControlTypeSelect', FormControlTypeSelect)
 FcDesigner.component('RecordNoteScopeSelect', RecordNoteScopeSelect)
 FcDesigner.component('MiAssignment', MiAssignmentPlaceholderWidget)
 
+// Dedicated "Extend" palette group for our own business components (Sub-Table,
+// Inline Form, Link Form, Lookup, Owner, Record Note) — distinct from form-create's
+// built-in Basic group so custom components aren't mixed in with stock field types.
+// addMenu only supports unshift-to-front / push-to-end, so to land it between the
+// built-in Basic ('main') and Subform ('subform') groups we splice the shared config
+// array directly instead. Registered before any addDragRule call so rules carrying
+// `menu: 'extend'` are filed into it instead of falling back to Basic.
+formCreateMenus.splice(1, 0, {
+  name: 'extend',
+  title: String(i18n.global.t('form.extendMenuTitle')),
+  list: [],
+})
+
 // Dedicated "MI" (multi-instance) palette group, sibling to the built-in
 // Basic/Aide/Layout/Subform groups. Registered before any addDragRule call so
 // rules carrying `menu: 'mi'` are filed into it instead of falling back to Basic.
@@ -111,7 +125,7 @@ FcDesigner.addDragRule({
   name: 'subTable',
   label: 'Sub-Table',
   icon: 'icon-table',
-  menu: 'main',
+  menu: 'extend',
   mask: true,
   input: false,
   drag: false,
@@ -179,7 +193,7 @@ FcDesigner.addDragRule({
   name: 'inlineSubForm',
   label: String(i18n.global.t('form.inlineSubFormLabel')),
   icon: 'icon-form',
-  menu: 'main',
+  menu: 'extend',
   mask: true,
   input: false,
   drag: false,
@@ -291,7 +305,7 @@ FcDesigner.addDragRule({
   name: 'linkForm',
   label: 'Link Form',
   icon: 'icon-link',
-  menu: 'main',
+  menu: 'extend',
   mask: true,
   input: false,
   drag: false,
@@ -467,7 +481,7 @@ FcDesigner.addDragRule({
   name: 'lookup',
   label: 'Lookup',
   icon: 'icon-select',
-  menu: 'main',
+  menu: 'extend',
   mask: false,
   input: true,
   drag: false,
@@ -506,7 +520,7 @@ FcDesigner.addDragRule({
   name: 'owner',
   label: String(i18n.global.t('form.ownerTitle')),
   icon: 'icon-owner',
-  menu: 'main',
+  menu: 'extend',
   mask: false,
   input: true,
   drag: false,
@@ -547,7 +561,7 @@ FcDesigner.addDragRule({
   name: 'recordNote',
   label: 'Record Note',
   icon: 'icon-textarea',
-  menu: 'main',
+  menu: 'extend',
   mask: true,
   input: false,
   drag: false,
