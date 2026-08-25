@@ -33,7 +33,6 @@
             :class="{ 'list-data-grid--fit': gridFits }"
             :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
             :row-class-name="rowClassName"
-            :selectable="(row: object) => !isListGroupHeaderRow(row)"
             @selection-change="handleSelectionChange"
           >
             <template #empty>
@@ -52,6 +51,7 @@
             <el-table-column
               type="selection"
               width="50"
+              :selectable="(row: object) => !isListGroupHeaderRow(row)"
             />
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -335,6 +335,13 @@ function handleReset() {
   filterForm.assignmentTypes = []
   filterForm.priorities = []
   filterForm.keyword = ''
+  for (const field of Object.keys(columnFilters.value)) {
+    clearFilter(field)
+  }
+  clearSort()
+  if (groupBy.value) {
+    applyGroup(groupBy.value, false)
+  }
   handleSearch()
 }
 

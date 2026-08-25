@@ -115,4 +115,14 @@ class EngineTaskPushdownTest {
         assertTrue(EngineTaskPushdown.canFullyPush(request));
         assertEquals("Review", EngineTaskPushdown.from(request).taskNameLike());
     }
+
+    @Test
+    void taskNameAndCurrentStepTogetherForceFullScan() {
+        TaskQueryRequest request = TaskQueryRequest.builder()
+                .filters(List.of(
+                        new ListColumnFilter("taskName", "contains", "Approve", null),
+                        new ListColumnFilter("currentStepName", "contains", "Review", null)))
+                .build();
+        assertFalse(EngineTaskPushdown.canFullyPush(request));
+    }
 }

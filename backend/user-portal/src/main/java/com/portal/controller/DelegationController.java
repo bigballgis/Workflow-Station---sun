@@ -46,7 +46,7 @@ public class DelegationController {
     @PostMapping("/query")
     public ApiResponse<PortalListPage<DelegationRule>> queryDelegationRules(
             @CurrentUserId String userId,
-            @RequestBody DelegationListQueryRequest request) {
+            @RequestBody @Valid DelegationListQueryRequest request) {
         return ApiResponse.success(delegationListQueryComponent.queryRules(userId, request));
     }
 
@@ -137,7 +137,7 @@ public class DelegationController {
     @PostMapping("/audit/query")
     public ApiResponse<PortalListPage<DelegationAudit>> queryDelegationAudit(
             @CurrentUserId String userId,
-            @RequestBody DelegationListQueryRequest request) {
+            @RequestBody @Valid DelegationListQueryRequest request) {
         return ApiResponse.success(delegationListQueryComponent.queryAudit(userId, request));
     }
 }

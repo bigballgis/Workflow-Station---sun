@@ -334,16 +334,20 @@ public class TaskQueryComponent {
             log.info("[PERF] engineWindow vgroups={}ms engineHttp={}ms groupCount={} includeGroups={} push={}",
                     (__twVg - __tw0) / 1_000_000L, (System.nanoTime() - __twVg) / 1_000_000L,
                     groupIds != null ? groupIds.size() : 0, includeGroups, safePush.hasAny());
-            if (result.isPresent()) {
-                Map<String, Object> responseBody = result.get();
-                engineTotal = EngineTaskMapper.extractEngineTotalCount(responseBody);
-                List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
-                if (tasks != null) {
-                    for (Map<String, Object> taskMap : tasks) {
-                        engineTasks.add(EngineTaskMapper.convertMapToTaskInfo(taskMap));
-                    }
+            // Client maps HTTP/unavailable to Optional.empty(); a 2xx empty page is Optional.of.
+            if (result.isEmpty()) {
+                throw new IllegalStateException("Failed to query tasks from Flowable: engine returned no payload");
+            }
+            Map<String, Object> responseBody = result.get();
+            engineTotal = EngineTaskMapper.extractEngineTotalCount(responseBody);
+            List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
+            if (tasks != null) {
+                for (Map<String, Object> taskMap : tasks) {
+                    engineTasks.add(EngineTaskMapper.convertMapToTaskInfo(taskMap));
                 }
             }
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to query tasks from Flowable: {}", e.getMessage(), e);
             throw new IllegalStateException("Failed to query tasks from Flowable: " + e.getMessage(), e);
@@ -359,8 +363,8 @@ public class TaskQueryComponent {
     }
 
     /**
-     * Mine: trust engine {@code page}/{@code size}/{@code total}; do not merge standing-rule proxy tasks.
-     * Hard-cap the page to {@code size} so a malformed engine payload cannot break true pagination.
+     * Mine: trust engine {@code page}/{@code size}/{@code total} only when the window is intact.
+     * If portal post-filter drops rows or the engine over-returns, fall back to fullScan.
      */
     private PageResponse<TaskInfo> queryTasksEngineWindowMine(
             String userId,
@@ -380,10 +384,10 @@ public class TaskQueryComponent {
         long __tQJoin = System.nanoTime();
 
         List<TaskInfo> pageTasks = applyPortalPostEngineFilters(userId, new ArrayList<>(engineTasks));
-        if (pageTasks.size() > size) {
-            log.warn("[PERF] engine window returned {} rows for size={}; truncating to protect true pagination",
-                    pageTasks.size(), size);
-            pageTasks = new ArrayList<>(pageTasks.subList(0, size));
+        if (engineWindowUnreliable(engineTasks, pageTasks, size)) {
+            log.info("[PERF] engine window unusable after post-filter (engine={} filtered={} size={}); fullScan",
+                    engineTasks.size(), pageTasks.size(), size);
+            return queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size, push, null);
         }
         long __tQFilter = System.nanoTime();
         log.info("[PERF] query.window mine engine={}ms postFilter={}ms engineTasks={} total={} push={}",
@@ -396,6 +400,12 @@ public class TaskQueryComponent {
         return PageResponse.of(pageTasks, page, size, totalElements);
     }
 
+    /** Engine OFFSET is wrong if the payload is oversized or portal dropped rows. */
+    private static boolean engineWindowUnreliable(
+            List<TaskInfo> engineTasks, List<TaskInfo> pageTasks, int size) {
+        return pageTasks.size() != engineTasks.size() || engineTasks.size() > size;
+    }
+
     private List<TaskInfo> fetchAllEngineTasksPaged(
             String userId, List<String> assignmentTypes, int pageSize, EngineTaskPushdown.Criteria push) {
         List<String> groupIds = workspaceTaskFilter.getUserVirtualGroups(userId);
@@ -404,8 +414,6 @@ public class TaskQueryComponent {
                 || assignmentTypes.contains("VIRTUAL_GROUP");
         EngineTaskPushdown.Criteria safePush = push != null ? push : EngineTaskPushdown.Criteria.empty();
         List<TaskInfo> out = new ArrayList<>();
-        // Engine getUserAllVisibleTasks uses fetchLimit=(page+1)*size then subList — walking
-        // page=1,2,… re-reads a growing prefix (O(n²)). One large page-0 window loads Mine once.
         final int batch = 500;
         for (int p = 0; ; p++) {
             Optional<Map<String, Object>> result = includeGroups
@@ -414,7 +422,8 @@ public class TaskQueryComponent {
                     : workflowEngineClient.getUserAllVisibleTasks(
                             userId, Collections.emptyList(), Collections.emptyList(), p, batch, safePush);
             if (result.isEmpty()) {
-                break;
+                throw new IllegalStateException(
+                        "Failed to query tasks from Flowable during full scan page " + p);
             }
             List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(result.get());
             if (tasks == null || tasks.isEmpty()) {

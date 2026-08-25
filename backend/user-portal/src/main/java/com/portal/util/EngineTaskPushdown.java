@@ -102,6 +102,9 @@ public final class EngineTaskPushdown {
             return false;
         }
         List<ListColumnFilter> filters = TaskQueryColumnFilters.normalize(request.getFilters());
+        if (hasBothTaskNameAndCurrentStepName(filters)) {
+            return false;
+        }
         for (ListColumnFilter filter : filters) {
             if (!isPushableFilter(filter)) {
                 return false;
@@ -210,6 +213,22 @@ public final class EngineTaskPushdown {
                 createdAfter, createdBefore, dueAfter, dueBefore,
                 processDefinitionNameLike, processDefinitionNameExact,
                 sortBy, sortDirection);
+    }
+
+    private static boolean hasBothTaskNameAndCurrentStepName(List<ListColumnFilter> filters) {
+        boolean taskName = false;
+        boolean step = false;
+        for (ListColumnFilter filter : filters) {
+            if (!isPushableFilter(filter)) {
+                continue;
+            }
+            if ("taskName".equals(filter.field())) {
+                taskName = true;
+            } else if ("currentStepName".equals(filter.field())) {
+                step = true;
+            }
+        }
+        return taskName && step;
     }
 
     private static boolean isPushableFilter(ListColumnFilter filter) {

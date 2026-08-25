@@ -64,7 +64,7 @@ public class TaskController {
     @PostMapping("/todo/query")
     public ApiResponse<PortalListPage<TaskInfo>> queryTodoTasks(
             @CurrentUserId String userId,
-            @RequestBody TodoTaskQueryRequest request) {
+            @RequestBody @Valid TodoTaskQueryRequest request) {
         return ApiResponse.success(taskQueryComponent.queryTodoList(userId, request));
     }
 

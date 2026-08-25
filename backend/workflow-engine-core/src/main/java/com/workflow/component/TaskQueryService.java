@@ -36,6 +36,8 @@ import java.util.Locale;
 @Transactional
 public class TaskQueryService {
 
+    private static final int BU_WORKSPACE_SCAN_CAP = 2_000;
+
     @Autowired
     private TaskService taskService;
 
@@ -191,23 +193,19 @@ public class TaskQueryService {
                         userId, (safePage + 1) * safeSize, repairSink);
             }
 
-            TaskQuery visibility = buildVisibleTaskQuery(userId, groupIds, safe);
-            long totalCount = visibility.count();
-            List<Task> pagedTasks = buildVisibleTaskQuery(userId, groupIds, safe)
-                    .listPage(safePage * safeSize, safeSize);
-            pagedTasks = taskOrphanRepairService.applyActiveWorkspaceBuTaskFilter(
-                    pagedTasks, activeBusinessUnitId, userId);
+            PagedVisibleTasks pageSlice = loadVisiblePage(
+                    userId, groupIds, safe, activeBusinessUnitId, safePage, safeSize);
 
-            Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
-            List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
+            Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pageSlice.tasks());
+            List<TaskListResult.TaskInfo> taskInfos = pageSlice.tasks().stream()
                 .map(t -> taskInfoAssembler.convertFlowableTaskToTaskInfo(t, startUsers))
                 .toList();
 
-            int totalPages = (int) Math.ceil((double) totalCount / safeSize);
+            int totalPages = (int) Math.ceil((double) pageSlice.totalCount() / safeSize);
 
             return TaskListResult.builder()
                 .tasks(taskInfos)
-                .totalCount(totalCount)
+                .totalCount(pageSlice.totalCount())
                 .currentPage(safePage)
                 .pageSize(safeSize)
                 .totalPages(totalPages)
@@ -217,6 +215,39 @@ public class TaskQueryService {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR",
                 "Failed to query user visible tasks: " + e.getMessage(), e);
         }
+    }
+
+    private record PagedVisibleTasks(List<Task> tasks, long totalCount) {
+    }
+
+    /**
+     * FIXED_BU_ROLE visibility is BPMN metadata, not a Flowable predicate. When a workspace BU
+     * is set, scan then filter before OFFSET so page size and totalCount stay consistent.
+     */
+    private PagedVisibleTasks loadVisiblePage(
+            String userId, List<String> groupIds, EngineTaskListCriteria safe,
+            String activeBusinessUnitId, int safePage, int safeSize) {
+        if (!StringUtils.hasText(activeBusinessUnitId)) {
+            long totalCount = buildVisibleTaskQuery(userId, groupIds, safe).count();
+            List<Task> paged = buildVisibleTaskQuery(userId, groupIds, safe)
+                    .listPage(safePage * safeSize, safeSize);
+            return new PagedVisibleTasks(paged, totalCount);
+        }
+        List<Task> fetched = new ArrayList<>(buildVisibleTaskQuery(userId, groupIds, safe)
+                .listPage(0, BU_WORKSPACE_SCAN_CAP));
+        fetched = taskOrphanRepairService.applyActiveWorkspaceBuTaskFilter(
+                fetched, activeBusinessUnitId, userId);
+        if (fetched.size() >= BU_WORKSPACE_SCAN_CAP) {
+            log.warn("BU workspace filter scan hit cap={}; totalCount is a lower bound",
+                    BU_WORKSPACE_SCAN_CAP);
+        }
+        long totalCount = fetched.size();
+        int start = safePage * safeSize;
+        if (start >= fetched.size()) {
+            return new PagedVisibleTasks(Collections.emptyList(), totalCount);
+        }
+        int end = Math.min(start + safeSize, fetched.size());
+        return new PagedVisibleTasks(new ArrayList<>(fetched.subList(start, end)), totalCount);
     }
 
     private TaskQuery buildVisibleTaskQuery(

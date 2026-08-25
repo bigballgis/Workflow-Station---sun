@@ -411,7 +411,7 @@ public class PermissionController {
     @Operation(summary = "Query permission requests / approvals (shared list)")
     public ApiResponse<PortalListPage<PermissionRequestListItem>> queryPermissionRequests(
             @CurrentUserId String userId,
-            @RequestBody PermissionListQueryRequest request) {
+            @RequestBody @Valid PermissionListQueryRequest request) {
         return ApiResponse.success(permissionRequestListQueryComponent.query(userId, request));
     }
 
