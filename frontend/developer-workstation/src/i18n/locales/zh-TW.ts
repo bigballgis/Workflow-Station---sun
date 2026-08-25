@@ -2078,6 +2078,11 @@ export default {
     preview: '預覽',
     showPreview: '顯示預覽',
     hidePreview: '隱藏預覽',
+    bodyModeVisual: '視覺化',
+    bodyModeHtml: 'HTML',
+    emailPreview: '郵件預覽',
+    htmlPlaceholder: '貼上或撰寫郵件 HTML。變數占位符會原樣出現在預覽中。',
+    switchToVisualConfirm: '切回視覺化編輯器可能簡化 HTML 中的表格與內聯樣式。是否繼續？',
     loadFailed: '載入範本失敗',
     deleteConfirm: '確定刪除範本「{name}」嗎？'
   },

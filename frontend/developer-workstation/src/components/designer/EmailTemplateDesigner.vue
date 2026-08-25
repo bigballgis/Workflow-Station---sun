@@ -47,9 +47,10 @@
 
     <el-dialog
       v-model="showFormDialog"
-      width="820px"
+      width="1200px"
+      class="email-template-form-dialog"
       destroy-on-close
-      top="6vh"
+      top="4vh"
     >
       <template #header>
         <div class="designer-help-dialog-title">
@@ -103,21 +104,14 @@
           </div>
         </el-form-item>
         <el-form-item :label="t('emailTemplate.body')">
-          <EmailRichBodyEditor
-            v-model="form.bodyHtml"
+          <EmailBodySplitEditor
+            :model-value="form.bodyHtml || ''"
             :function-unit-id="functionUnitId"
+            @update:model-value="form.bodyHtml = $event"
           />
         </el-form-item>
         <el-form-item :label="t('emailTemplate.enabled')">
           <el-switch v-model="form.enabled" />
-        </el-form-item>
-        <el-form-item>
-          <el-button link type="primary" @click="showPreview = !showPreview">
-            {{ showPreview ? t('emailTemplate.hidePreview') : t('emailTemplate.showPreview') }}
-          </el-button>
-        </el-form-item>
-        <el-form-item v-if="showPreview" :label="t('emailTemplate.preview')">
-          <div class="template-preview" v-html="sanitizedPreview"></div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -134,7 +128,6 @@ import type { ElInput } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import DOMPurify from 'dompurify'
 import { emailTemplateApi, type EmailTemplate, type EmailTemplateRequest } from '@/api/emailTemplate'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
@@ -148,8 +141,8 @@ import {
   type EmailVariableGroup,
 } from '@/composables/email/useEmailTemplateVariables'
 
-const EmailRichBodyEditor = defineAsyncComponent(
-  () => import('@/components/designer/email/EmailRichBodyEditor.vue')
+const EmailBodySplitEditor = defineAsyncComponent(
+  () => import('@/components/designer/email/EmailBodySplitEditor.vue')
 )
 
 const props = defineProps<{ functionUnitId: number }>()
@@ -159,7 +152,6 @@ const templates = ref<EmailTemplate[]>([])
 const loading = ref(false)
 const saving = ref(false)
 const showFormDialog = ref(false)
-const showPreview = ref(false)
 const editingId = ref<number | null>(null)
 const subjectInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 const variableGroups = ref<EmailVariableGroup[]>([])
@@ -174,8 +166,6 @@ const defaultForm = (): EmailTemplateRequest => ({
 })
 
 const form = reactive<EmailTemplateRequest>(defaultForm())
-
-const sanitizedPreview = computed(() => DOMPurify.sanitize(form.bodyHtml || ''))
 
 const listColumns = computed<DesignerListTableColumn<EmailTemplate>[]>(() => [
   {
@@ -227,7 +217,6 @@ function insertSubjectVariable(token: string) {
 function openCreateDialog() {
   editingId.value = null
   Object.assign(form, defaultForm())
-  showPreview.value = false
   showFormDialog.value = true
   void loadTemplateVariables().then(() => {
     variableGroups.value = groups.value
@@ -236,7 +225,6 @@ function openCreateDialog() {
 
 async function openEditDialog(row: EmailTemplate) {
   editingId.value = row.id
-  showPreview.value = false
   try {
     const res = await emailTemplateApi.get(props.functionUnitId, row.id)
     const tpl = res.data
@@ -352,13 +340,13 @@ onMounted(() => {
   flex: 0 1 220px;
   min-width: 160px;
 }
-.template-preview {
-  width: 100%;
-  border: 1px dashed #dcdfe6;
-  border-radius: 4px;
-  padding: 12px;
-  background: #fafafa;
-  max-height: 320px;
-  overflow-y: auto;
+</style>
+
+<style lang="scss">
+.email-template-form-dialog.el-dialog {
+  .el-dialog__body {
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+  }
 }
 </style>

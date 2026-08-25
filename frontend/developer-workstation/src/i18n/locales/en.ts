@@ -2084,6 +2084,12 @@ export default {
     preview: 'Preview',
     showPreview: 'Show preview',
     hidePreview: 'Hide preview',
+    bodyModeVisual: 'Visual',
+    bodyModeHtml: 'HTML',
+    emailPreview: 'Email preview',
+    htmlPlaceholder: 'Paste or write email HTML. Variable tokens stay visible in the preview.',
+    switchToVisualConfirm:
+      'The rich editor may simplify tables and inline styles from HTML source. Continue?',
     loadFailed: 'Failed to load templates',
     deleteConfirm: 'Delete template "{name}"?'
   },

@@ -2077,6 +2077,11 @@ export default {
     preview: '预览',
     showPreview: '显示预览',
     hidePreview: '隐藏预览',
+    bodyModeVisual: '可视化',
+    bodyModeHtml: 'HTML',
+    emailPreview: '邮件预览',
+    htmlPlaceholder: '粘贴或编写邮件 HTML。变量占位符会原样出现在预览中。',
+    switchToVisualConfirm: '切回可视化编辑器可能简化 HTML 中的表格和内联样式。是否继续？',
     loadFailed: '加载模板失败',
     deleteConfirm: '确定删除模板「{name}」吗？'
   },
