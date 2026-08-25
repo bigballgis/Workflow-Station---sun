@@ -472,6 +472,8 @@ class TaskProcessProperties {
                         <bpmn:extensionElements>
                           <custom:properties>
                             <custom:property name="assigneeField" value="assignee" />
+                            <custom:property name="subTableName" value="subtable" />
+                            <custom:property name="subTableId" value="501" />
                           </custom:properties>
                         </bpmn:extensionElements>
                       </bpmn:userTask>
@@ -479,6 +481,12 @@ class TaskProcessProperties {
                   </bpmn:process>
                 </bpmn:definitions>
                 """));
+        when(jdbcTemplate.query(eq("SELECT table_name FROM dw_table_definitions WHERE id = ?"),
+                Mockito.<org.springframework.jdbc.core.RowMapper<String>>any(), eq(501L)))
+                .thenReturn(List.of("subtable"));
+        when(jdbcTemplate.query(Mockito.contains("FROM dw_field_definitions"),
+                Mockito.<org.springframework.jdbc.core.RowMapper<String>>any(), eq(501L)))
+                .thenReturn(List.of("id"));
 
         TaskCompleteRequest request = TaskCompleteRequest.builder()
                 .taskId(taskId)
