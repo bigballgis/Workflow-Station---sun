@@ -78,7 +78,8 @@ if ($Lockfile.Count -eq 0) {
         "frontend/admin-center/pnpm-lock.yaml",
         "frontend/user-portal/pnpm-lock.yaml",
         "frontend/developer-workstation/pnpm-lock.yaml",
-        "frontend/login/pnpm-lock.yaml"
+        "frontend/login/pnpm-lock.yaml",
+        "frontend/help/pnpm-lock.yaml"
     ) | ForEach-Object { Join-Path $ProjectRoot $_ }
 }
 

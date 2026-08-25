@@ -711,11 +711,25 @@ services:
       - platform-dev-network
     restart: unless-stopped
 
+  # Guidelines portal /help/（独立静态站点；无登录；DW/Admin/Portal 共用）
+  platform-help-frontend:
+    build:
+      context: ../../../frontend/help
+      dockerfile: Dockerfile.local
+    image: dev-platform-help-frontend
+    container_name: platform-help-frontend-dev
+    ports:
+      - "${PLATFORM_HELP_FRONTEND_PORT:-3111}:80"
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
   # ==================== Edge (single-origin multi-path) ====================
   # Use this for local testing of production-like routing:
   #   http://localhost:${EDGE_FRONTEND_PORT}/admin/
   #   http://localhost:${EDGE_FRONTEND_PORT}/portal/
   #   http://localhost:${EDGE_FRONTEND_PORT}/login/
+  #   http://localhost:${EDGE_FRONTEND_PORT}/help/
   #   http://localhost:${EDGE_FRONTEND_PORT}/dev/   (DEV only)
   edge-frontend:
     image: nginx:alpine
@@ -726,6 +740,7 @@ services:
       - user-portal-frontend
       - developer-workstation-frontend
       - platform-login-frontend
+      - platform-help-frontend
     ports:
       - "${EDGE_FRONTEND_PORT:-3000}:80"
       # Superset author UI + embed now live under http://localhost:3000/bi (single FQDN

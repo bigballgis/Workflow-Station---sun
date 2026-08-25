@@ -34,6 +34,8 @@
 
 - `/login`
 
+- `/help`
+
 - `/admin`
 
 - `/portal`
@@ -61,6 +63,8 @@
 - `user-portal-frontend.yaml`
 
 - `platform-login-frontend.yaml`
+
+- `platform-help-frontend.yaml`
 
 - `workflow-platform-ingress-gateway.yaml`
 

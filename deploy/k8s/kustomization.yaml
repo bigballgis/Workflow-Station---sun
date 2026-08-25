@@ -13,3 +13,4 @@ resources:
   - admin-center-frontend.yaml
   - user-portal-frontend.yaml
   - platform-login-frontend.yaml
+  - platform-help-frontend.yaml

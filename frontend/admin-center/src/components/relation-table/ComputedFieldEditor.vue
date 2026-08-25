@@ -36,7 +36,6 @@
 
     <el-dialog
       v-model="dialogVisible"
-      :title="t('relationTable.computedField.dialogTitle')"
       width="640px"
       top="8vh"
       class="computed-field-dialog"
@@ -44,6 +43,16 @@
       destroy-on-close
       @open="syncFromProps"
     >
+      <template #header>
+        <div class="cf-dialog-title">
+          <span class="el-dialog__title">{{ t('relationTable.computedField.dialogTitle') }}</span>
+          <DesignerHelpLink
+            path="/computed-fields#relation"
+            :aria-label="t('relationTable.computedField.guideLinkAria')"
+            test-id="computed-field-guide-link"
+          />
+        </div>
+      </template>
       <p class="computed-lede">
         {{ t('relationTable.computedField.dialogHint') }}
       </p>
@@ -161,6 +170,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { EditPen } from '@element-plus/icons-vue'
+import DesignerHelpLink from '@/components/relation-table/DesignerHelpLink.vue'
 import { ElMessage } from 'element-plus'
 import {
   buildComputedFieldDefinition,
@@ -323,6 +333,13 @@ function confirmDialog(): void {
   width: 24px;
   height: 24px;
   padding: 0;
+}
+.cf-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 28px;
 }
 .computed-lede {
   margin: 0 0 18px;

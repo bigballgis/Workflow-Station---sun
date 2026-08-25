@@ -5,6 +5,11 @@
       <el-button @click="loadTemplates" :loading="loading">
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
+      <DesignerHelpLink
+        path="/email-send#template"
+        :aria-label="t('emailTemplate.guideLinkAria')"
+        test-id="email-template-guide-link"
+      />
     </div>
 
     <DesignerListTable
@@ -42,11 +47,20 @@
 
     <el-dialog
       v-model="showFormDialog"
-      :title="editingId ? t('emailTemplate.edit') : t('emailTemplate.create')"
       width="820px"
       destroy-on-close
       top="6vh"
     >
+      <template #header>
+        <div class="designer-help-dialog-title">
+          <span class="el-dialog__title">{{ editingId ? t('emailTemplate.edit') : t('emailTemplate.create') }}</span>
+          <DesignerHelpLink
+            path="/email-send#template"
+            :aria-label="t('emailTemplate.guideLinkAria')"
+            test-id="email-template-dialog-guide-link"
+          />
+        </div>
+      </template>
       <el-form :model="form" label-position="top" class="template-form">
         <el-form-item :label="t('emailTemplate.name')" required>
           <el-input v-model="form.name" :placeholder="t('emailTemplate.namePlaceholder')" />
@@ -124,6 +138,7 @@ import DOMPurify from 'dompurify'
 import { emailTemplateApi, type EmailTemplate, type EmailTemplateRequest } from '@/api/emailTemplate'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 import {
   EMAIL_FIELD_VAR_PATTERN,
@@ -301,7 +316,15 @@ onMounted(() => {
 .designer-toolbar {
   margin-bottom: 16px;
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+.designer-help-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 28px;
 }
 .template-form {
   :deep(.el-form-item) {

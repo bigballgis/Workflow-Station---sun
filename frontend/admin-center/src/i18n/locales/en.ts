@@ -1056,6 +1056,7 @@ export default {
       tryEvaluate: 'Calculate',
       applyFormula: 'Use this formula',
       configure: 'Configure formula',
+      guideLinkAria: 'Open formula rules',
       previewBlank: '(blank)',
       invalidFormula: 'Fix the formula before saving.',
       savedLocally: 'Formula saved. Save the table to apply.',

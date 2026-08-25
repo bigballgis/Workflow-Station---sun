@@ -1,12 +1,25 @@
-/** Shared route id and in-app URL for the computed-field formula guide. */
+/** Same-origin Guidelines portal (`/help/…`). Not tied to DW/Admin/Portal Vite base. */
+
+export const HELP_PORTAL_PREFIX = '/help'
+
+/** Path inside the help app, e.g. `/computed-fields` or `/email-send#connection`. */
+export function helpGuideAbsoluteUrl(guidePath: string): string {
+  const raw = guidePath.trim()
+  const withSlash = raw.startsWith('/') ? raw : `/${raw}`
+  const full = withSlash.startsWith(`${HELP_PORTAL_PREFIX}/`) || withSlash === HELP_PORTAL_PREFIX
+    ? withSlash
+    : `${HELP_PORTAL_PREFIX}${withSlash}`
+  if (typeof window === 'undefined') {
+    return full
+  }
+  return `${window.location.origin}${full}`
+}
 
 export const COMPUTED_FIELD_GUIDE_ROUTE_NAME = 'ComputedFieldGuide'
 
-export const COMPUTED_FIELD_GUIDE_PATH = 'help/computed-fields'
+export const COMPUTED_FIELD_GUIDE_PATH = '/help/computed-fields'
 
-/** Absolute URL shown in the Formula dialog tooltip and opened in a new tab. */
+/** Absolute URL opened from the Formula dialog (new tab). */
 export function computedFieldGuideAbsoluteUrl(): string {
-  const origin = typeof window === 'undefined' ? '' : window.location.origin
-  const base = String(import.meta.env.BASE_URL || '/').replace(/\/?$/, '/')
-  return `${origin}${base}${COMPUTED_FIELD_GUIDE_PATH}`
+  return helpGuideAbsoluteUrl('/computed-fields')
 }

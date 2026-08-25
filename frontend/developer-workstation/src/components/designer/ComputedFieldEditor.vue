@@ -41,23 +41,11 @@
       <template #header>
         <div class="cf-dialog-title">
           <span class="el-dialog__title">{{ t('table.computedField.dialogTitle') }}</span>
-          <el-tooltip
-            :content="guideUrl"
-            placement="bottom"
-            :show-after="200"
-          >
-            <a
-              class="cf-guide-link"
-              data-testid="computed-field-guide-link"
-              :href="guideUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              :aria-label="t('table.computedField.guideLinkAria')"
-              @click.stop
-            >
-              <el-icon><QuestionFilled /></el-icon>
-            </a>
-          </el-tooltip>
+          <DesignerHelpLink
+            path="/computed-fields"
+            :aria-label="t('table.computedField.guideLinkAria')"
+            test-id="computed-field-guide-link"
+          />
         </div>
       </template>
       <p class="computed-lede">
@@ -216,7 +204,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { EditPen, QuestionFilled } from '@element-plus/icons-vue'
+import { EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import {
   buildComputedFieldDefinition,
@@ -227,7 +215,7 @@ import {
   type ComputedFieldScope,
 } from '@/utils/computedFieldConfig'
 import { evaluateAst, toText, type AstNode, type EvaluationContext } from '@platform-shared/computedField'
-import { computedFieldGuideAbsoluteUrl } from '@/utils/computedFieldGuide'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 
 const props = defineProps<{
   isComputed?: boolean
@@ -243,7 +231,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const guideUrl = computedFieldGuideAbsoluteUrl()
 
 const enabled = ref(!!props.isComputed)
 const dialogVisible = ref(false)
@@ -434,17 +421,6 @@ function confirmDialog() {
   gap: 8px;
   min-width: 0;
   padding-right: 28px;
-}
-.cf-guide-link {
-  display: inline-flex;
-  align-items: center;
-  color: var(--el-color-primary);
-  font-size: 16px;
-  line-height: 1;
-}
-.cf-guide-link:hover,
-.cf-guide-link:focus-visible {
-  color: var(--el-color-primary-light-3);
 }
 .computed-lede {
   margin: 0 0 12px;

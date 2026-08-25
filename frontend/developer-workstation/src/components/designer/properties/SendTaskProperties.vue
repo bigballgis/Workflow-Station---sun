@@ -3,6 +3,11 @@
     <div class="send-task-email-section">
       <div class="send-task-email-section__title">
         {{ t('properties.emailConfig') }}
+        <DesignerHelpLink
+          path="/email-send#send-task"
+          :aria-label="t('properties.emailGuideLinkAria')"
+          test-id="send-task-guide-link"
+        />
       </div>
 
       <div class="email-field-block email-to-field-wrap">
@@ -241,6 +246,7 @@
 import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties } from '@/utils/bpmnExtensions'
 import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskPropertiesState'
@@ -463,6 +469,9 @@ onMounted(() => {
   background: #fff;
 
   &__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 13px;
     font-weight: 600;
     color: #303133;

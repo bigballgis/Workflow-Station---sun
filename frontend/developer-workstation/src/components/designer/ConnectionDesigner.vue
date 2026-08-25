@@ -5,6 +5,11 @@
       <el-button @click="loadConnections" :loading="loading">
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
+      <DesignerHelpLink
+        path="/email-send#connection"
+        :aria-label="t('connection.guideLinkAria')"
+        test-id="connection-guide-link"
+      />
     </div>
 
     <DesignerListTable
@@ -59,7 +64,6 @@
 
     <el-dialog
       v-model="showFormDialog"
-      :title="editingId ? t('connection.edit') : t('connection.create')"
       width="520px"
       top="8vh"
       :align-center="false"
@@ -67,6 +71,16 @@
       class="connection-form-dialog"
       @opened="scrollConnectionDialogToTop"
     >
+      <template #header>
+        <div class="designer-help-dialog-title">
+          <span class="el-dialog__title">{{ editingId ? t('connection.edit') : t('connection.create') }}</span>
+          <DesignerHelpLink
+            path="/email-send#connection"
+            :aria-label="t('connection.guideLinkAria')"
+            test-id="connection-dialog-guide-link"
+          />
+        </div>
+      </template>
       <el-form
         ref="formRef"
         :model="form"
@@ -202,6 +216,7 @@ import {
   type EmailProviderType
 } from '@/utils/emailProviderPresets'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const props = defineProps<{ functionUnitId: number }>()
@@ -455,7 +470,16 @@ onMounted(loadConnections)
 .designer-toolbar {
   margin-bottom: 16px;
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.designer-help-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 28px;
 }
 
 .connection-list-table {
