@@ -10,6 +10,7 @@ import { resolve } from 'path'
 
 const MI_REGRESSION_FILES = [
   'src/composables/tasks/__tests__/linkFormMiIsolation.test.ts',
+  'src/composables/subTableField/__tests__/subTableLinkFormSelfBound.test.ts',
   'src/composables/tasks/__tests__/miSubProcessScope.test.ts',
   'src/composables/tasks/__tests__/subTableRowMetaFields.predicates.test.ts',
   'src/composables/tasks/__tests__/subTableRowMetaFields.merge.test.ts',

@@ -182,4 +182,28 @@ class EmailTemplateResolverTest {
         assertThat(EmailTemplateResolver.resolve("${lookupField:user:missing}", vars)).isEqualTo("");
         assertThat(EmailTemplateResolver.resolve("${lookupField:nobody:name}", vars)).isEqualTo("");
     }
+
+    @Test
+    void resolve_missingBareVariableLeavesEmptyNotPlaceholder() {
+        Map<String, Object> vars = Map.of("other", "x");
+        assertThat(EmailTemplateResolver.resolve("${subject}", vars)).isEqualTo("");
+        assertThat(EmailTemplateResolver.resolve("this email ${subject}", vars)).isEqualTo("this email ");
+        assertThat(EmailTemplateResolver.resolve("${subject}", vars)).doesNotContain("${");
+    }
+
+    @Test
+    void resolve_nullBareVariableLeavesEmptyNotPlaceholder() {
+        Map<String, Object> vars = new LinkedHashMap<>();
+        vars.put("subject", null);
+        assertThat(EmailTemplateResolver.resolve("${subject}", vars)).isEqualTo("");
+        assertThat(EmailTemplateResolver.resolve("this email ${subject}", vars)).isEqualTo("this email ");
+    }
+
+    @Test
+    void resolve_presentBareVariableStillSubstitutes() {
+        Map<String, Object> vars = Map.of("subject", "Case 12");
+        assertThat(EmailTemplateResolver.resolve("${subject}", vars)).isEqualTo("Case 12");
+        assertThat(EmailTemplateResolver.resolve("this email ${subject}", vars))
+                .isEqualTo("this email Case 12");
+    }
 }

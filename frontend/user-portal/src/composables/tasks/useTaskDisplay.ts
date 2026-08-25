@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { Check, CircleCheck, CircleClose, Close, Files, Warning, Bell, User } from '@element-plus/icons-vue'
 import type { TaskActionInfo } from '@/api/task'
+import { taskPriorityBand, type TaskPriorityBand } from '@/utils/taskPriority'
 
 export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
   const { t } = useI18n()
@@ -63,23 +64,17 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
   }
 
   function getPriorityLabel(priority?: string) {
-    const map: Record<string, string> = {
-      'URGENT': t('task.urgent'),
-      'HIGH': t('task.high'),
-      'NORMAL': t('task.normal'),
-      'LOW': t('task.low')
-    }
-    return map[priority || ''] || priority || t('task.normal')
+    return t(`task.${taskPriorityBand(priority).toLowerCase()}`)
   }
 
   function getPriorityType(priority?: string): 'danger' | 'warning' | 'info' | 'success' {
-    const map: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
-      'URGENT': 'danger',
-      'HIGH': 'warning',
-      'NORMAL': 'info',
-      'LOW': 'success'
+    const map: Record<TaskPriorityBand, 'danger' | 'warning' | 'info' | 'success'> = {
+      URGENT: 'danger',
+      HIGH: 'warning',
+      NORMAL: 'info',
+      LOW: 'success',
     }
-    return map[priority || ''] || 'info'
+    return map[taskPriorityBand(priority)]
   }
 
   function getButtonType(buttonColor?: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' | '' {

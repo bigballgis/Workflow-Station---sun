@@ -1,5 +1,6 @@
 package com.portal.dto;
 
+import com.platform.common.list.ListColumnMeta;
 import java.util.List;
 import java.util.Map;
 
@@ -9,7 +10,7 @@ import java.util.Map;
  * (row-level {@code status} rides along for Active/Inactive but is not a data column).
  */
 public record RelationTableDataPage(
-        List<PortalListColumnMeta> columns,
+        List<ListColumnMeta> columns,
         List<Map<String, Object>> content,
         int page,
         int size,

@@ -71,6 +71,29 @@ class SubTableRowIdentityEnricherTest {
     }
 
     @Test
+    void aliasCopiesDoNotGetNewUuidsWhenANumericSliceExists() {
+        Map<String, Object> canonical = row("channel", "Email");
+        Map<String, Object> aliasCopy = row("channel", "Email");
+        Map<String, Object> subTables = new LinkedHashMap<>();
+        subTables.put("1301", List.of(canonical));
+        subTables.put("ACQ Correspondence", List.of(aliasCopy));
+        Map<String, Object> variables = variablesWith(subTables);
+
+        assertThat(SubTableRowIdentityEnricher.ensureRowIdentities(variables)).isEqualTo(1);
+        assertThat(String.valueOf(canonical.get("row_id"))).isNotBlank();
+        assertThat(aliasCopy).doesNotContainKey("row_id");
+    }
+
+    @Test
+    void nameOnlySlicesStillReceiveIdentityWhenNoNumericBindingExists() {
+        Map<String, Object> anonymous = row("channel", "Email");
+        Map<String, Object> variables = variablesWith(slices("ACQ Correspondence", List.of(anonymous)));
+
+        assertThat(SubTableRowIdentityEnricher.ensureRowIdentities(variables)).isEqualTo(1);
+        assertThat(String.valueOf(anonymous.get("row_id"))).isNotBlank();
+    }
+
+    @Test
     void payloadsWithoutSubTablesAreUntouched() {
         assertThat(SubTableRowIdentityEnricher.ensureRowIdentities(null)).isZero();
         assertThat(SubTableRowIdentityEnricher.ensureRowIdentities(new LinkedHashMap<>())).isZero();

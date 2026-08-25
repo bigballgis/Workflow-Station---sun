@@ -18,6 +18,7 @@ import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalWorkspaceAuthService;
+import com.portal.util.EngineTaskPushdown;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.RepeatedTest;
@@ -336,11 +337,11 @@ class TaskQueryProperties {
     void sortingShouldWorkCorrectly() {
         String userId = "user_" + random.nextInt(1000);
 
-        // 创建不同时间的任务数据
+        // Oldest first so the mock must honor createTime desc (not insertion order).
         List<Map<String, Object>> tasks = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             Map<String, Object> task = createTaskMap("task_" + i, "USER", userId);
-            task.put("createdTime", LocalDateTime.now().minusDays(i));
+            task.put("createdTime", LocalDateTime.now().minusDays(4 - i));
             tasks.add(task);
         }
         
@@ -554,17 +555,65 @@ class TaskQueryProperties {
     }
 
     /**
-     * Mock Flowable 任务响应
+     * Mock Flowable window: honor page/size/sort like GET /api/v1/tasks.
      */
     private void mockFlowableTasksResponse(List<Map<String, Object>> tasks) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("tasks", tasks);
-        body.put("totalCount", (long) tasks.size());
-
         when(workflowEngineClient.getUserAllVisibleTasks(anyString(), anyList(), anyList(), anyInt(), anyInt()))
-                .thenReturn(Optional.of(body));
+                .thenAnswer(inv -> Optional.of(engineWindowBody(tasks, inv.getArgument(3), inv.getArgument(4), null)));
+        when(workflowEngineClient.getUserAllVisibleTasks(
+                anyString(), anyList(), anyList(), anyInt(), anyInt(), any()))
+                .thenAnswer(inv -> Optional.of(engineWindowBody(
+                        tasks, inv.getArgument(3), inv.getArgument(4), inv.getArgument(5))));
         when(workflowEngineClient.getUserTasks(anyString(), anyInt(), anyInt()))
-                .thenReturn(Optional.of(body));
+                .thenAnswer(inv -> Optional.of(engineWindowBody(tasks, inv.getArgument(1), inv.getArgument(2), null)));
+    }
+
+    private Map<String, Object> engineWindowBody(
+            List<Map<String, Object>> tasks, int page, int size, EngineTaskPushdown.Criteria criteria) {
+        List<Map<String, Object>> ordered = new ArrayList<>(tasks);
+        applyEngineWindowSort(ordered, criteria);
+        int from = Math.max(0, page * size);
+        int to = Math.min(ordered.size(), from + size);
+        List<Map<String, Object>> pageTasks = from >= ordered.size()
+                ? Collections.emptyList()
+                : new ArrayList<>(ordered.subList(from, to));
+        Map<String, Object> body = new HashMap<>();
+        body.put("tasks", pageTasks);
+        body.put("totalCount", (long) tasks.size());
+        return body;
+    }
+
+    private void applyEngineWindowSort(List<Map<String, Object>> tasks, EngineTaskPushdown.Criteria criteria) {
+        if (criteria == null || criteria.sortBy() == null || criteria.sortBy().isBlank()) {
+            return;
+        }
+        boolean desc = criteria.sortDirection() == null || "desc".equalsIgnoreCase(criteria.sortDirection());
+        String field = criteria.sortBy();
+        tasks.sort((a, b) -> {
+            int cmp = compareEngineSortValues(a.get(engineSortKey(field)), b.get(engineSortKey(field)));
+            return desc ? -cmp : cmp;
+        });
+    }
+
+    private static String engineSortKey(String sortBy) {
+        return "createTime".equals(sortBy) ? "createdTime" : sortBy;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static int compareEngineSortValues(Object left, Object right) {
+        if (left == null && right == null) {
+            return 0;
+        }
+        if (left == null) {
+            return -1;
+        }
+        if (right == null) {
+            return 1;
+        }
+        if (left instanceof Comparable<?> && left.getClass().isInstance(right)) {
+            return ((Comparable<Object>) left).compareTo(right);
+        }
+        return String.valueOf(left).compareTo(String.valueOf(right));
     }
 
     /**

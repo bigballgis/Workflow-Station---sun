@@ -1,5 +1,6 @@
 package com.workflow.component;
 
+import com.workflow.dto.request.EngineTaskListCriteria;
 import com.workflow.dto.response.TaskListResult;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.exception.WorkflowBusinessException;
@@ -9,6 +10,7 @@ import com.workflow.repository.ExtendedTaskInfoRepository;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
+import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -33,6 +35,8 @@ import java.util.Locale;
 @Component
 @Transactional
 public class TaskQueryService {
+
+    private static final int BU_WORKSPACE_SCAN_CAP = 2_000;
 
     @Autowired
     private TaskService taskService;
@@ -160,79 +164,50 @@ public class TaskQueryService {
 
     public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds,
                                                  List<String> deptRoles, int page, int size) {
-        return getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size, null);
+        return getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size, null,
+                EngineTaskListCriteria.empty());
     }
 
     public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds,
                                                  List<String> deptRoles, int page, int size,
                                                  String activeBusinessUnitId) {
+        return getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size, activeBusinessUnitId,
+                EngineTaskListCriteria.empty());
+    }
+
+    public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds,
+                                                 List<String> deptRoles, int page, int size,
+                                                 String activeBusinessUnitId,
+                                                 EngineTaskListCriteria criteria) {
         try {
             validateUserId(userId);
+            EngineTaskListCriteria safe = criteria != null ? criteria : EngineTaskListCriteria.empty();
+            int safePage = Math.max(page, 0);
+            int safeSize = Math.max(size, 1);
 
-            int fetchLimit = (page + 1) * size;
-            taskOrphanRepairService.maybeRepairOrphanTasks(fetchLimit);
-
-            List<Task> assignedTasks = taskService.createTaskQuery()
-                .taskAssignee(userId)
-                .orderByTaskCreateTime().desc()
-                .listPage(0, fetchLimit);
-
-            List<Task> candidateTasks = taskService.createTaskQuery()
-                .taskCandidateUser(userId)
-                .orderByTaskCreateTime().desc()
-                .listPage(0, fetchLimit);
-
-            LinkedHashMap<String, Task> taskMap = new LinkedHashMap<>();
-            for (Task t : assignedTasks) taskMap.putIfAbsent(t.getId(), t);
-            for (Task t : candidateTasks) taskMap.putIfAbsent(t.getId(), t);
-
-            if (groupIds != null && !groupIds.isEmpty()) {
-                List<Task> groupTasks = taskService.createTaskQuery()
-                        .taskCandidateGroupIn(groupIds)
-                        .orderByTaskCreateTime().desc()
-                        .listPage(0, fetchLimit);
-                for (Task t : groupTasks) taskMap.putIfAbsent(t.getId(), t);
-            }
-            taskOrphanRepairService.mergeOrphanInitiatorTasksRepair(userId, fetchLimit, taskMap);
-
-            List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
-            uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
-            uniqueTasks = taskOrphanRepairService.applyActiveWorkspaceBuTaskFilter(
-                    uniqueTasks, activeBusinessUnitId, userId);
-
-            long totalCount;
-            if (uniqueTasks.size() < fetchLimit) {
-                totalCount = uniqueTasks.size();
-            } else {
-                long assignedCount = taskService.createTaskQuery()
-                    .taskAssignee(userId).count();
-                long candidateCount = taskService.createTaskQuery()
-                    .taskCandidateUser(userId).count();
-                totalCount = assignedCount + candidateCount;
-                if (groupIds != null && !groupIds.isEmpty()) {
-                    totalCount += taskService.createTaskQuery()
-                        .taskCandidateGroupIn(groupIds).count();
-                }
+            // Repair orphans in place first so the unified OR query can see them as assignee.
+            taskOrphanRepairService.maybeRepairOrphanTasks((safePage + 1) * safeSize);
+            if (!safe.hasFilterFragments()) {
+                LinkedHashMap<String, Task> repairSink = new LinkedHashMap<>();
+                taskOrphanRepairService.mergeOrphanInitiatorTasksRepair(
+                        userId, (safePage + 1) * safeSize, repairSink);
             }
 
-            int start = page * size;
-            int end = Math.min(start + size, uniqueTasks.size());
-            List<Task> pagedTasks = start < uniqueTasks.size()
-                ? uniqueTasks.subList(start, end)
-                : Collections.emptyList();
+            PagedVisibleTasks pageSlice = loadVisiblePage(
+                    userId, groupIds, safe, activeBusinessUnitId, safePage, safeSize);
 
-            Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pagedTasks);
-            List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
+            Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pageSlice.tasks());
+            List<TaskListResult.TaskInfo> taskInfos = pageSlice.tasks().stream()
                 .map(t -> taskInfoAssembler.convertFlowableTaskToTaskInfo(t, startUsers))
                 .toList();
 
-            int totalPages = (int) Math.ceil((double) totalCount / size);
+            int totalPages = (int) Math.ceil((double) pageSlice.totalCount() / safeSize);
 
             return TaskListResult.builder()
                 .tasks(taskInfos)
-                .totalCount(totalCount)
-                .currentPage(page)
-                .pageSize(size)
+                .totalCount(pageSlice.totalCount())
+                .currentPage(safePage)
+                .pageSize(safeSize)
                 .totalPages(totalPages)
                 .build();
 
@@ -240,6 +215,150 @@ public class TaskQueryService {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR",
                 "Failed to query user visible tasks: " + e.getMessage(), e);
         }
+    }
+
+    private record PagedVisibleTasks(List<Task> tasks, long totalCount) {
+    }
+
+    /**
+     * FIXED_BU_ROLE visibility is BPMN metadata, not a Flowable predicate. When a workspace BU
+     * is set, scan then filter before OFFSET so page size and totalCount stay consistent.
+     */
+    private PagedVisibleTasks loadVisiblePage(
+            String userId, List<String> groupIds, EngineTaskListCriteria safe,
+            String activeBusinessUnitId, int safePage, int safeSize) {
+        if (!StringUtils.hasText(activeBusinessUnitId)) {
+            long totalCount = buildVisibleTaskQuery(userId, groupIds, safe).count();
+            List<Task> paged = buildVisibleTaskQuery(userId, groupIds, safe)
+                    .listPage(safePage * safeSize, safeSize);
+            return new PagedVisibleTasks(paged, totalCount);
+        }
+        List<Task> fetched = new ArrayList<>(buildVisibleTaskQuery(userId, groupIds, safe)
+                .listPage(0, BU_WORKSPACE_SCAN_CAP));
+        fetched = taskOrphanRepairService.applyActiveWorkspaceBuTaskFilter(
+                fetched, activeBusinessUnitId, userId);
+        if (fetched.size() >= BU_WORKSPACE_SCAN_CAP) {
+            log.warn("BU workspace filter scan hit cap={}; totalCount is a lower bound",
+                    BU_WORKSPACE_SCAN_CAP);
+        }
+        long totalCount = fetched.size();
+        int start = safePage * safeSize;
+        if (start >= fetched.size()) {
+            return new PagedVisibleTasks(Collections.emptyList(), totalCount);
+        }
+        int end = Math.min(start + safeSize, fetched.size());
+        return new PagedVisibleTasks(new ArrayList<>(fetched.subList(start, end)), totalCount);
+    }
+
+    private TaskQuery buildVisibleTaskQuery(
+            String userId, List<String> groupIds, EngineTaskListCriteria safe) {
+        TaskQuery visibility = taskService.createTaskQuery().active().or()
+                .taskAssignee(userId)
+                .taskCandidateUser(userId);
+        if (groupIds != null && !groupIds.isEmpty()) {
+            visibility = visibility.taskCandidateGroupIn(groupIds);
+        }
+        visibility = visibility.endOr();
+        visibility = applyListFilters(visibility, safe);
+        return applyOrder(visibility, safe.sortBy(), safe.sortDirection());
+    }
+
+    /** Apply pushdown filters only (ordering applied separately). */
+    private static TaskQuery applyListFilters(TaskQuery query, EngineTaskListCriteria criteria) {
+        if (criteria == null) {
+            return query;
+        }
+        if (criteria.taskNameExact() != null && !criteria.taskNameExact().isBlank()) {
+            query = query.taskName(criteria.taskNameExact().trim());
+        } else if (criteria.taskNameLike() != null && !criteria.taskNameLike().isBlank()) {
+            String fragment = criteria.taskNameLike().trim();
+            String mode = criteria.taskNameLikeMode() != null
+                    ? criteria.taskNameLikeMode().trim().toLowerCase(Locale.ROOT)
+                    : "contains";
+            String like = switch (mode) {
+                case "startswith" -> fragment + "%";
+                case "endswith" -> "%" + fragment;
+                default -> "%" + fragment + "%";
+            };
+            query = query.taskNameLikeIgnoreCase(like);
+        }
+        if (criteria.processDefinitionNameExact() != null && !criteria.processDefinitionNameExact().isBlank()) {
+            query = query.processDefinitionName(criteria.processDefinitionNameExact().trim());
+        } else if (criteria.processDefinitionNameLike() != null
+                && !criteria.processDefinitionNameLike().isBlank()) {
+            query = query.processDefinitionNameLike(
+                    "%" + criteria.processDefinitionNameLike().trim() + "%");
+        }
+        if (criteria.priority() != null) {
+            query = query.taskPriority(criteria.priority());
+        }
+        if (criteria.priorityMin() != null) {
+            query = query.taskMinPriority(criteria.priorityMin());
+        }
+        if (criteria.priorityMax() != null) {
+            query = query.taskMaxPriority(criteria.priorityMax());
+        }
+        if (criteria.createdAfter() != null) {
+            query = query.taskCreatedAfter(criteria.createdAfter());
+        }
+        if (criteria.createdBefore() != null) {
+            query = query.taskCreatedBefore(criteria.createdBefore());
+        }
+        if (criteria.dueAfter() != null) {
+            query = query.taskDueAfter(criteria.dueAfter());
+        }
+        if (criteria.dueBefore() != null) {
+            query = query.taskDueBefore(criteria.dueBefore());
+        }
+        return query;
+    }
+
+    /** @deprecated kept for older call sites that expect filter+order together */
+    private static TaskQuery applyListCriteria(TaskQuery query, EngineTaskListCriteria criteria) {
+        if (criteria == null) {
+            return query.orderByTaskCreateTime().desc();
+        }
+        return applyOrder(applyListFilters(query, criteria), criteria.sortBy(), criteria.sortDirection());
+    }
+
+    private static TaskQuery applyOrder(TaskQuery query, String sortBy, String sortDirection) {
+        boolean asc = sortDirection != null && "asc".equalsIgnoreCase(sortDirection.trim());
+        String field = sortBy != null ? sortBy.trim() : "createTime";
+        TaskQuery ordered = switch (field.toLowerCase(Locale.ROOT)) {
+            case "duedate", "due_date" -> query.orderByTaskDueDate();
+            case "priority" -> query.orderByTaskPriority();
+            case "name", "taskname", "task_name" -> query.orderByTaskName();
+            default -> query.orderByTaskCreateTime();
+        };
+        return asc ? ordered.asc() : ordered.desc();
+    }
+
+    private static void sortTasks(List<Task> tasks, EngineTaskListCriteria criteria) {
+        String field = criteria != null && criteria.sortBy() != null ? criteria.sortBy().trim() : "createTime";
+        boolean asc = criteria != null && criteria.sortDirection() != null
+                && "asc".equalsIgnoreCase(criteria.sortDirection().trim());
+        tasks.sort((t1, t2) -> {
+            int cmp = switch (field.toLowerCase(Locale.ROOT)) {
+                case "duedate", "due_date" -> compareNullable(t1.getDueDate(), t2.getDueDate());
+                case "priority" -> Integer.compare(t1.getPriority(), t2.getPriority());
+                case "name", "taskname", "task_name" -> compareNullable(t1.getName(), t2.getName());
+                default -> compareNullable(t1.getCreateTime(), t2.getCreateTime());
+            };
+            return asc ? cmp : -cmp;
+        });
+    }
+
+    private static <T extends Comparable<T>> int compareNullable(T a, T b) {
+        if (a == null && b == null) {
+            return 0;
+        }
+        if (a == null) {
+            return 1;
+        }
+        if (b == null) {
+            return -1;
+        }
+        return a.compareTo(b);
     }
 
     public TaskListResult.TaskInfo getTaskInfo(String taskId) {

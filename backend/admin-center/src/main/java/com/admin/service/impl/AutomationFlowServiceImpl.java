@@ -157,23 +157,52 @@ public class AutomationFlowServiceImpl implements AutomationFlowService {
 
     @Override
     public List<AutomationFlowSummary> listFlows() {
-        return jdbcTemplate.query(LIST_SQL, (rs, rowNum) -> {
-            String first = rs.getString("ownerFirstName");
-            String last = rs.getString("ownerLastName");
-            String owner = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
-            return AutomationFlowSummary.builder()
-                    .id(rs.getString("id"))
-                    .flowKey(rs.getString("flowKey"))
-                    .displayName(rs.getString("displayName"))
-                    .projectId(rs.getString("projectId"))
-                    .projectName(rs.getString("projectName"))
-                    .status(rs.getString("status"))
-                    .published(rs.getBoolean("published"))
-                    .valid(rs.getBoolean("valid"))
-                    .ownerName(owner.isEmpty() ? null : owner)
-                    .updated(rs.getObject("updated", OffsetDateTime.class))
-                    .build();
-        });
+        return jdbcTemplate.query(LIST_SQL, (rs, rowNum) -> mapRow(rs));
+    }
+
+    @Override
+    public List<AutomationFlowSummary> findFlowsByIds(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(",", ids.stream().map(n -> "?").toList());
+        String sql = """
+                SELECT f.id, f.status, f."projectId",
+                       f."publishedVersionId" IS NOT NULL AS published,
+                       f.metadata->>'hermesFlowKey' AS "flowKey",
+                       fv."displayName", fv.valid, fv.updated,
+                       p."displayName" AS "projectName",
+                       ui."firstName" AS "ownerFirstName", ui."lastName" AS "ownerLastName"
+                FROM flow f
+                JOIN LATERAL (SELECT "displayName", valid, updated FROM flow_version v
+                              WHERE v."flowId" = f.id ORDER BY v.created DESC LIMIT 1) fv ON true
+                JOIN project p ON p.id = f."projectId"
+                LEFT JOIN "user" u ON u.id = f."ownerId"
+                LEFT JOIN user_identity ui ON ui.id = u."identityId"
+                WHERE f.id IN (""" + placeholders + ")";
+        return jdbcTemplate.query(sql, (rs, rowNum) -> mapRow(rs), ids.toArray());
+    }
+
+    private AutomationFlowSummary mapRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+        String first = rs.getString("ownerFirstName");
+        String last = rs.getString("ownerLastName");
+        String owner = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+        boolean published = rs.getBoolean("published");
+        String status = rs.getString("status");
+        String readiness = !published ? "DRAFT" : status;
+        return AutomationFlowSummary.builder()
+                .id(rs.getString("id"))
+                .flowKey(rs.getString("flowKey"))
+                .displayName(rs.getString("displayName"))
+                .projectId(rs.getString("projectId"))
+                .projectName(rs.getString("projectName"))
+                .status(status)
+                .published(published)
+                .valid(rs.getBoolean("valid"))
+                .ownerName(owner.isEmpty() ? null : owner)
+                .updated(rs.getObject("updated", OffsetDateTime.class))
+                .readiness(readiness)
+                .build();
     }
 
     @Override

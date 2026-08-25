@@ -619,7 +619,10 @@ export default {
     suspendSuccess: '暂停成功',
     resumeSuccess: '恢复成功',
     deleteConfirm: '确定要删除该委托规则吗？',
-    deleteSuccess: '删除成功'
+    deleteSuccess: '删除成功',
+    noRules: '暂无委托规则',
+    noAudit: '暂无审计记录',
+    loadFailed: '加载委托失败'
   },
   permission: {
     title: '用户档案设置',
@@ -751,7 +754,8 @@ export default {
     beneficiaryColumn: '受益人',
     submittedByColumn: '提交人',
     proxyBadge: '代办',
-    selfBeneficiary: '本人提交'
+    selfBeneficiary: '本人提交',
+    loadFailed: '加载权限申请失败'
   },
   portalSelfService: {
     bannerTitle: '当前为权限自助模式',
@@ -1058,9 +1062,12 @@ exportWithData: '导出',
   snapshotDiff: {
     snapshotValue: '快照值',
     liveValue: '当前值',
+    status: '变更状态',
     changed: '已变更',
     unchanged: '未变更',
     fieldName: '字段',
+    noSubTableRows: '暂无行',
+    subTableRow: '第 {n} 行',
   },
   changeHistory: {
     title: '变更历史',

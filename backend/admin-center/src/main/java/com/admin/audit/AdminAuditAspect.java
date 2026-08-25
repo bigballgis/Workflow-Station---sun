@@ -92,6 +92,7 @@ public class AdminAuditAspect {
     }
 
     @Around("within(com.admin.controller.RoleController) "
+            + "&& !execution(* *.queryRoles(..)) "
             + "&& !execution(* *.getRoleMembers(..)) "
             + "&& !execution(* *.getRoleMembersPaged(..)) "
             + "&& !execution(* *.getMemberCount(..)) "
@@ -103,6 +104,7 @@ public class AdminAuditAspect {
 
     @Around("within(com.admin.controller.VirtualGroupController) "
             + "&& !execution(* *.listVirtualGroups(..)) "
+            + "&& !execution(* *.queryVirtualGroups(..)) "
             + "&& !execution(* *.getVirtualGroup(..)) "
             + "&& !execution(* *.getGroupMembers(..)) "
             + "&& !execution(* *.getGroupTasks(..)) "
@@ -120,6 +122,7 @@ public class AdminAuditAspect {
 
     @Around("within(com.admin.controller.RelationTableStructureController) "
             + "&& !execution(* *.getTableList(..)) "
+            + "&& !execution(* *.queryTables(..)) "
             + "&& !execution(* *.getTableById(..)) "
             + "&& !execution(* *.getVersionHistory(..)) "
             + "&& !execution(* *.getAccessConfig(..))")
@@ -155,6 +158,7 @@ public class AdminAuditAspect {
 
     @Around("within(com.admin.bi.controller.BiDashboardRegistryController) "
             + "&& !execution(* *.listDashboards(..)) "
+            + "&& !execution(* *.queryDashboards(..)) "
             + "&& !execution(* *.getDashboard(..))")
     public Object auditBiDashboardRegistry(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "BI_DASHBOARD");
@@ -162,6 +166,7 @@ public class AdminAuditAspect {
 
     @Around("within(com.admin.bi.controller.BiDashboardAssignmentController) "
             + "&& !execution(* *.listAssignments(..)) "
+            + "&& !execution(* *.queryAssignments(..)) "
             + "&& !execution(* *.getUserDashboards(..))")
     public Object auditBiDashboardAssignment(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "BI_ASSIGNMENT");
@@ -170,6 +175,7 @@ public class AdminAuditAspect {
     @Around("within(com.admin.bi.controller.BiRbacMappingController) "
             + "&& !execution(* *.listSupersetRoles(..)) "
             + "&& !execution(* *.listMappings(..)) "
+            + "&& !execution(* *.queryMappings(..)) "
             + "&& !execution(* *.listUnmappedRoles(..))")
     public Object auditBiRbacMapping(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "BI_RBAC");
@@ -182,6 +188,7 @@ public class AdminAuditAspect {
      */
     @Around("within(com.admin.controller.AutomationFlowController) "
             + "&& !execution(* *.listFlows(..)) "
+            + "&& !execution(* *.queryFlows(..)) "
             + "&& !execution(* *.checkConnections(..)) "
             + "&& !execution(* *.resolveFlowRef(..))")
     public Object auditAutomationFlow(ProceedingJoinPoint pjp) throws Throwable {
@@ -189,7 +196,8 @@ public class AdminAuditAspect {
     }
 
     @Around("within(com.admin.controller.AutomationPieceController) "
-            + "&& !execution(* *.listPieces(..))")
+            + "&& !execution(* *.listPieces(..)) "
+            + "&& !execution(* *.queryPieces(..))")
     public Object auditAutomationPiece(ProceedingJoinPoint pjp) throws Throwable {
         return audit(pjp, "AUTOMATION_PIECE");
     }
@@ -276,6 +284,7 @@ public class AdminAuditAspect {
             case "deleteUser"       -> new AuditMeta(AuditAction.DELETE, "USER", userId);
             case "getUser"          -> AuditMeta.skip();
             case "listUsers"        -> AuditMeta.skip();
+            case "queryUsers"       -> AuditMeta.skip();
             default                 -> AuditMeta.skip();
         };
     }

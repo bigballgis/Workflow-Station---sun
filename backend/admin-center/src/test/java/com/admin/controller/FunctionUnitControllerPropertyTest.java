@@ -64,7 +64,9 @@ class FunctionUnitControllerPropertyTest {
                 mock(com.admin.service.FunctionUnitAccessService.class),
                 mock(com.admin.service.FunctionUnitAuditAccessService.class),
                 mock(com.admin.service.UserReferenceResolver.class),
-                i18n);
+                i18n,
+                mock(com.admin.component.FunctionUnitListQueryComponent.class),
+                mock(com.admin.component.FunctionUnitDeploymentListQueryComponent.class));
     }
 
     // ── Property 4: Admin Center API unified response format ──────────

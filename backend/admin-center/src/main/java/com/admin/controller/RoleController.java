@@ -1,10 +1,14 @@
 package com.admin.controller;
 
+import com.admin.component.RoleListQueryComponent;
 import com.admin.component.RoleMemberManagerComponent;
 import com.admin.component.RolePermissionManagerComponent;
+import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.BatchRoleMemberRequest;
 import com.admin.dto.request.PermissionConfig;
+import com.admin.dto.request.RoleListQueryRequest;
 import com.admin.dto.response.BatchRoleMemberResult;
+import com.admin.dto.response.RoleListItem;
 import com.admin.util.EntityTypeConverter;
 import com.platform.security.entity.Permission;
 import com.admin.entity.PermissionChangeHistory;
@@ -37,6 +41,7 @@ public class RoleController {
     private final RolePermissionManagerComponent rolePermissionManager;
     private final RoleMemberManagerComponent roleMemberManager;
     private final I18nService i18nService;
+    private final RoleListQueryComponent roleListQueryComponent;
     
     // ==================== Role CRUD ====================
     
@@ -73,6 +78,13 @@ public class RoleController {
                 rolePage.getSize(),
                 rolePage.getTotalElements());
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/query")
+    @Operation(summary = "Page roles", description = "Shared list: COUNT(*) and the page share one predicate including SYSTEM/CUSTOM tab")
+    public ResponseEntity<AdminListPage<RoleListItem>> queryRoles(
+            @RequestBody @Valid RoleListQueryRequest request) {
+        return ResponseEntity.ok(roleListQueryComponent.query(request));
     }
 
     @GetMapping("/business")

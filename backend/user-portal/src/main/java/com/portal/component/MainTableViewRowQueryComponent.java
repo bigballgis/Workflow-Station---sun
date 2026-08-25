@@ -1,8 +1,8 @@
 package com.portal.component;
 
+import com.platform.common.list.ListColumnFilter;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portal.dto.ListColumnFilter;
 import com.portal.entity.ProcessInstance;
 import com.portal.util.ListFilterSql;
 import com.portal.util.SqlFragment;
@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.stereotype.Component;
-
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.util.ArrayList;

@@ -1,10 +1,15 @@
 package com.admin.controller;
 
 import com.admin.component.DeploymentManagerComponent;
+import com.admin.component.FunctionUnitDeploymentListQueryComponent;
+import com.admin.component.FunctionUnitListQueryComponent;
 import com.admin.component.FunctionUnitManagerComponent;
 import com.admin.component.ProcessDeploymentComponent;
+import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.FunctionUnitAccessRequest;
+import com.admin.dto.request.FunctionUnitDeploymentListQueryRequest;
 import com.admin.dto.request.FunctionUnitImportRequest;
+import com.admin.dto.request.FunctionUnitListQueryRequest;
 import com.admin.dto.response.DeploymentInfo;
 import com.admin.dto.response.FunctionUnitAccessInfo;
 import com.admin.dto.response.FunctionUnitAuditAccessInfo;
@@ -67,6 +72,8 @@ public class FunctionUnitController extends AbstractBaseController {
     private final FunctionUnitAuditAccessService auditAccessService;
     private final UserReferenceResolver userReferenceResolver;
     private final I18nService i18nService;
+    private final FunctionUnitListQueryComponent functionUnitListQueryComponent;
+    private final FunctionUnitDeploymentListQueryComponent functionUnitDeploymentListQueryComponent;
 
     /**
      * Extends base error handling to also map {@link AdminBusinessException}
@@ -118,7 +125,15 @@ public class FunctionUnitController extends AbstractBaseController {
                 : functionUnitManager.listFunctionUnits(pageable);
         return ResponseEntity.ok(units.map(FunctionUnitInfo::fromEntity));
     }
-    
+
+    @PostMapping("/query")
+    @Operation(summary = "Page function units",
+            description = "Shared list: latest version per code, then COUNT(*) and the page share one predicate")
+    public ResponseEntity<AdminListPage<FunctionUnitInfo>> queryFunctionUnits(
+            @RequestBody @Valid FunctionUnitListQueryRequest request) {
+        return ResponseEntity.ok(functionUnitListQueryComponent.queryList(request));
+    }
+
     @GetMapping("/deployed")
     @Operation(summary = "List deployed function units", description = "All deployed function units (for user portal)")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> getDeployedFunctionUnits() {
@@ -149,6 +164,14 @@ public class FunctionUnitController extends AbstractBaseController {
                 .map(FunctionUnitInfo::fromEntity);
         enrichUpdatedByUsernames(page.getContent());
         return ResponseEntity.ok(page);
+    }
+
+    @PostMapping("/archived/query")
+    @Operation(summary = "Page archived function units",
+            description = "Shared list: latest archived version per code, then COUNT(*) and the page share one predicate")
+    public ResponseEntity<AdminListPage<FunctionUnitInfo>> queryArchivedFunctionUnits(
+            @RequestBody @Valid FunctionUnitListQueryRequest request) {
+        return ResponseEntity.ok(functionUnitListQueryComponent.queryArchived(request));
     }
 
     private void enrichUpdatedByUsernames(List<FunctionUnitInfo> items) {
@@ -362,7 +385,15 @@ public class FunctionUnitController extends AbstractBaseController {
         log.info("Getting all deployments, page: {}", pageable);
         return ResponseEntity.ok(deploymentManager.listAllDeployments(pageable));
     }
-    
+
+    @PostMapping("/deployments/query")
+    @Operation(summary = "Page deployment records",
+            description = "Shared list: COUNT(*) and the page share one predicate")
+    public ResponseEntity<AdminListPage<DeploymentInfo>> queryDeployments(
+            @RequestBody @Valid FunctionUnitDeploymentListQueryRequest request) {
+        return ResponseEntity.ok(functionUnitDeploymentListQueryComponent.query(request));
+    }
+
     @PostMapping("/{id}/deployments")
     @Operation(summary = "Create deployment", description = "Submit a deployment request")
     public ResponseEntity<FunctionUnitDeployment> createDeployment(

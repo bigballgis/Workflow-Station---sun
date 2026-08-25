@@ -619,7 +619,10 @@ export default {
     suspendSuccess: 'Suspended successfully',
     resumeSuccess: 'Resumed successfully',
     deleteConfirm: 'Are you sure to delete this delegation rule?',
-    deleteSuccess: 'Deleted successfully'
+    deleteSuccess: 'Deleted successfully',
+    noRules: 'No delegation rules',
+    noAudit: 'No audit records',
+    loadFailed: 'Failed to load delegations'
   },
   permission: {
     title: 'User Profile Setup',
@@ -753,7 +756,8 @@ export default {
     beneficiaryColumn: 'Beneficiary',
     submittedByColumn: 'Submitted by',
     proxyBadge: 'On behalf',
-    selfBeneficiary: 'Self'
+    selfBeneficiary: 'Self',
+    loadFailed: 'Failed to load permission requests'
   },
   portalSelfService: {
     bannerTitle: 'Permission self-service mode',
@@ -1064,9 +1068,12 @@ exportWithData: 'Export',
   snapshotDiff: {
     snapshotValue: 'Snapshot Value',
     liveValue: 'Current Value',
+    status: 'Status',
     changed: 'Changed',
     unchanged: 'Unchanged',
     fieldName: 'Field',
+    noSubTableRows: 'No rows',
+    subTableRow: 'Row {n}',
   },
   changeHistory: {
     title: 'Change History',

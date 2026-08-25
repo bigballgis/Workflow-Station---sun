@@ -247,6 +247,7 @@ import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskProp
 import { useTaskPropertiesForms } from '@/composables/taskProperties/useTaskPropertiesForms'
 import { useSendTaskEmailAttachments } from '@/composables/taskProperties/useSendTaskEmailAttachments'
 import { useSendTaskAttachmentFieldOptions } from '@/composables/taskProperties/useSendTaskAttachmentFieldOptions'
+import { resolveOwnedSendTaskConnectionUid } from '@/composables/taskProperties/resolveOwnedSendTaskConnectionUid'
 
 const { t } = useI18n()
 
@@ -352,6 +353,20 @@ const {
   updateExtProp
 })
 
+function bindOwnedEmailConnection() {
+  const next = resolveOwnedSendTaskConnectionUid(connectionId.value, emailConnections.value)
+  if (next === connectionId.value) {
+    return
+  }
+  connectionId.value = next
+  onEmailConfigChange('connectionId', next)
+}
+
+async function loadEmailConnectionsAndBind() {
+  await loadEmailConnections()
+  bindOwnedEmailConnection()
+}
+
 function loadSendTaskProperties() {
   loadProperties()
   if (!props.element) return
@@ -361,6 +376,7 @@ function loadSendTaskProperties() {
   if (emailAttachments.value.length > 0) {
     emailAdvancedOpen.value = true
   }
+  bindOwnedEmailConnection()
 }
 
 function onAttachmentFieldChange(index: number, val: unknown) {
@@ -396,7 +412,7 @@ watch(
 )
 
 onMounted(() => {
-  loadEmailConnections()
+  void loadEmailConnectionsAndBind()
 })
 </script>
 

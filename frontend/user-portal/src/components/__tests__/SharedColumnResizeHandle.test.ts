@@ -49,4 +49,24 @@ describe('shared ColumnResizeHandle', () => {
     document.dispatchEvent(mouseEvent('mousemove', 300))
     expect(document.body.classList.contains('is-column-resizing')).toBe(false)
   })
+
+  it('starts a drag from the rendered header width, not the stored floor', async () => {
+    const th = document.createElement('th')
+    Object.defineProperty(th, 'getBoundingClientRect', {
+      value: () => ({ width: 280, height: 24, top: 0, left: 0, right: 280, bottom: 24 }),
+    })
+    document.body.appendChild(th)
+    const wrapper = mount(ColumnResizeHandle, {
+      props: { initialWidth: 160 },
+      attachTo: th,
+    })
+
+    await wrapper.find('.col-resize-handle').trigger('mousedown', { clientX: 280 })
+    document.dispatchEvent(mouseEvent('mousemove', 240))
+    document.dispatchEvent(mouseEvent('mouseup', 240))
+
+    expect(wrapper.emitted('resize')).toEqual([[240]])
+    wrapper.unmount()
+    th.remove()
+  })
 })

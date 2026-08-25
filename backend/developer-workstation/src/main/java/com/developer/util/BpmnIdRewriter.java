@@ -123,18 +123,31 @@ public final class BpmnIdRewriter {
                                  Map<String, String> sourceToNewTableName,
                                  Map<Long, Long> connectionIdMapping,
                                  Map<Long, Long> emailTemplateIdMapping) {
+        return rewrite(bpmnXml, tableIdMapping, formIdMapping, actionIdMapping,
+                clonedTableNameToId, clonedFormNameToId, sourceToNewTableName,
+                connectionIdMapping, emailTemplateIdMapping, Map.of());
+    }
+
+    /**
+     * Full rewrite plus Send Task {@code connectionId} when it stores {@code connectionUid} (UUID).
+     * Clone mints a new uid; numeric {@code connectionId} mapping alone cannot rewrite that value.
+     */
+    public static String rewrite(String bpmnXml,
+                                 Map<Long, Long> tableIdMapping,
+                                 Map<Long, Long> formIdMapping,
+                                 Map<Long, Long> actionIdMapping,
+                                 Map<String, Long> clonedTableNameToId,
+                                 Map<String, Long> clonedFormNameToId,
+                                 Map<String, String> sourceToNewTableName,
+                                 Map<Long, Long> connectionIdMapping,
+                                 Map<Long, Long> emailTemplateIdMapping,
+                                 Map<String, String> connectionUidMapping) {
         if (bpmnXml == null || bpmnXml.isBlank()) {
             return bpmnXml;
         }
-        boolean hasAnyMapping = isNonEmpty(tableIdMapping)
-                || isNonEmpty(formIdMapping)
-                || isNonEmpty(actionIdMapping)
-                || isNonEmpty(clonedTableNameToId)
-                || isNonEmpty(clonedFormNameToId)
-                || isNonEmpty(sourceToNewTableName)
-                || isNonEmpty(connectionIdMapping)
-                || isNonEmpty(emailTemplateIdMapping);
-        if (!hasAnyMapping) {
+        if (!hasRewritableMappings(tableIdMapping, formIdMapping, actionIdMapping,
+                clonedTableNameToId, clonedFormNameToId, sourceToNewTableName,
+                connectionIdMapping, emailTemplateIdMapping, connectionUidMapping)) {
             return bpmnXml;
         }
 
@@ -144,7 +157,7 @@ public final class BpmnIdRewriter {
         String rewritten = rewriteAll(decoded,
                 tableIdMapping, formIdMapping, actionIdMapping,
                 clonedTableNameToId, clonedFormNameToId, sourceToNewTableName,
-                connectionIdMapping, emailTemplateIdMapping);
+                connectionIdMapping, emailTemplateIdMapping, connectionUidMapping);
 
         if (rewritten.equals(decoded)) {
             return bpmnXml;
@@ -168,7 +181,8 @@ public final class BpmnIdRewriter {
                                      Map<String, Long> clonedFormNameToId,
                                      Map<String, String> sourceToNewTableName,
                                      Map<Long, Long> connectionIdMapping,
-                                     Map<Long, Long> emailTemplateIdMapping) {
+                                     Map<Long, Long> emailTemplateIdMapping,
+                                     Map<String, String> connectionUidMapping) {
         Matcher m = PROPERTIES_BLOCK.matcher(xml);
         StringBuilder sb = new StringBuilder();
         int pos = 0;
@@ -177,19 +191,19 @@ public final class BpmnIdRewriter {
             sb.append(rewriteUnwrapped(
                     xml.substring(pos, m.start()),
                     tableIdMapping, formIdMapping, actionIdMapping,
-                    connectionIdMapping, emailTemplateIdMapping));
+                    connectionIdMapping, emailTemplateIdMapping, connectionUidMapping));
             // Inside block: name + ID combined judgment
             sb.append(rewriteBlock(
                     m.group(),
                     tableIdMapping, formIdMapping, actionIdMapping,
                     clonedTableNameToId, clonedFormNameToId, sourceToNewTableName,
-                    connectionIdMapping, emailTemplateIdMapping));
+                    connectionIdMapping, emailTemplateIdMapping, connectionUidMapping));
             pos = m.end();
         }
         sb.append(rewriteUnwrapped(
                 xml.substring(pos),
                 tableIdMapping, formIdMapping, actionIdMapping,
-                connectionIdMapping, emailTemplateIdMapping));
+                connectionIdMapping, emailTemplateIdMapping, connectionUidMapping));
         return sb.toString();
     }
 
@@ -205,7 +219,8 @@ public final class BpmnIdRewriter {
                                        Map<String, Long> clonedFormNameToId,
                                        Map<String, String> sourceToNewTableName,
                                        Map<Long, Long> connectionIdMapping,
-                                       Map<Long, Long> emailTemplateIdMapping) {
+                                       Map<Long, Long> emailTemplateIdMapping,
+                                       Map<String, String> connectionUidMapping) {
         Matcher openM = OPENING_PROPERTIES_TAG.matcher(block);
         if (!openM.find()) {
             return block;
@@ -255,7 +270,7 @@ public final class BpmnIdRewriter {
             }
         }
 
-        applySingularIdRewrite("connectionId", nameToValue, connectionIdMapping, rewrites);
+        applyConnectionIdRewrite(nameToValue, connectionIdMapping, connectionUidMapping, rewrites);
         applySingularIdRewrite("emailTemplateId", nameToValue, emailTemplateIdMapping, rewrites);
 
         // Rename table-name references (subTableName / tableName) to the clone's renamed tables.
@@ -285,7 +300,8 @@ public final class BpmnIdRewriter {
                                            Map<Long, Long> formIdMapping,
                                            Map<Long, Long> actionIdMapping,
                                            Map<Long, Long> connectionIdMapping,
-                                           Map<Long, Long> emailTemplateIdMapping) {
+                                           Map<Long, Long> emailTemplateIdMapping,
+                                           Map<String, String> connectionUidMapping) {
         Map<String, Function<String, String>> remappers = new HashMap<>();
         if (isNonEmpty(tableIdMapping)) {
             Function<String, String> tableRemap = v -> remapSingularLong(v, tableIdMapping);
@@ -298,8 +314,9 @@ public final class BpmnIdRewriter {
         if (isNonEmpty(actionIdMapping)) {
             remappers.put("actionIds", v -> remapArrayLongs(v, actionIdMapping));
         }
-        if (isNonEmpty(connectionIdMapping)) {
-            remappers.put("connectionId", v -> remapSingularLong(v, connectionIdMapping));
+        if (isNonEmpty(connectionIdMapping) || isNonEmpty(connectionUidMapping)) {
+            remappers.put("connectionId",
+                    v -> remapConnectionId(v, connectionIdMapping, connectionUidMapping));
         }
         if (isNonEmpty(emailTemplateIdMapping)) {
             remappers.put("emailTemplateId", v -> remapSingularLong(v, emailTemplateIdMapping));
@@ -342,6 +359,56 @@ public final class BpmnIdRewriter {
         }
         m.appendTail(sb);
         return sb.toString();
+    }
+
+    private static boolean hasRewritableMappings(Map<Long, Long> tableIdMapping,
+                                                 Map<Long, Long> formIdMapping,
+                                                 Map<Long, Long> actionIdMapping,
+                                                 Map<String, Long> clonedTableNameToId,
+                                                 Map<String, Long> clonedFormNameToId,
+                                                 Map<String, String> sourceToNewTableName,
+                                                 Map<Long, Long> connectionIdMapping,
+                                                 Map<Long, Long> emailTemplateIdMapping,
+                                                 Map<String, String> connectionUidMapping) {
+        return isNonEmpty(tableIdMapping)
+                || isNonEmpty(formIdMapping)
+                || isNonEmpty(actionIdMapping)
+                || isNonEmpty(clonedTableNameToId)
+                || isNonEmpty(clonedFormNameToId)
+                || isNonEmpty(sourceToNewTableName)
+                || isNonEmpty(connectionIdMapping)
+                || isNonEmpty(emailTemplateIdMapping)
+                || isNonEmpty(connectionUidMapping);
+    }
+
+    private static void applyConnectionIdRewrite(Map<String, String> nameToValue,
+                                                 Map<Long, Long> connectionIdMapping,
+                                                 Map<String, String> connectionUidMapping,
+                                                 Map<String, String> rewrites) {
+        if (!nameToValue.containsKey("connectionId")) {
+            return;
+        }
+        String oldValue = nameToValue.get("connectionId");
+        String newValue = remapConnectionId(oldValue, connectionIdMapping, connectionUidMapping);
+        if (!Objects.equals(oldValue, newValue)) {
+            rewrites.put("connectionId", newValue);
+        }
+    }
+
+    private static String remapConnectionId(String value,
+                                            Map<Long, Long> connectionIdMapping,
+                                            Map<String, String> connectionUidMapping) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        String trimmed = value.trim();
+        if (isNonEmpty(connectionUidMapping)) {
+            String mappedUid = connectionUidMapping.get(trimmed);
+            if (mappedUid != null) {
+                return mappedUid;
+            }
+        }
+        return remapSingularLong(trimmed, connectionIdMapping);
     }
 
     private static void applySingularIdRewrite(String property,

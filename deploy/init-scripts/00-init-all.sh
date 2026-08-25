@@ -232,6 +232,10 @@ echo "[4f/7] Loading ATM (HASE MCY Debit Card Dispute Workflow)..."
 if [ -f /docker-entrypoint-initdb.d/19-ATM/init.sql ]; then
   echo "  Running init.sql..."
   $PSQL -f /docker-entrypoint-initdb.d/19-ATM/init.sql
+  if [ -f /docker-entrypoint-initdb.d/19-ATM/01-hmdc-relation-tables.sql ]; then
+    echo "  Running 01-hmdc-relation-tables.sql..."
+    $PSQL -f /docker-entrypoint-initdb.d/19-ATM/01-hmdc-relation-tables.sql
+  fi
 else
   echo "  ERROR: ATM init script not found at /docker-entrypoint-initdb.d/19-ATM/init.sql"
   exit 1

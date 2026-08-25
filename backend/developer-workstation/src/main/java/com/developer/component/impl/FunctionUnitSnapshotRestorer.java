@@ -159,12 +159,15 @@ public class FunctionUnitSnapshotRestorer {
         }
 
         Map<Long, Long> connectionIdMapping = new HashMap<>();
+        Map<String, String> connectionUidMapping = new HashMap<>();
         if (snapshot.containsKey("connections")) {
             List<Map<String, Object>> connections = (List<Map<String, Object>>) snapshot.get("connections");
             for (Map<String, Object> connectionData : connections) {
                 var connection = importWriter.importEmailConnection(functionUnit, connectionData);
                 importWriter.recordSourceIdMapping(connectionData.get("connectionId"), connection.getId(),
                         connectionIdMapping);
+                importWriter.recordConnectionUidMapping(connectionData.get("connectionUid"),
+                        connection.getConnectionUid(), connectionUidMapping);
             }
         }
 
@@ -187,7 +190,8 @@ public class FunctionUnitSnapshotRestorer {
         }
 
         restoreProcess(functionUnit, snapshot, tableIdMapping, formIdMapping, actionIdMapping,
-                importedTableNameToId, importedFormNameToId, connectionIdMapping, emailTemplateIdMapping);
+                importedTableNameToId, importedFormNameToId, connectionIdMapping, emailTemplateIdMapping,
+                connectionUidMapping);
 
         formTableBindingRestorer.repairFunctionUnitForms(functionUnit.getId());
 
@@ -258,7 +262,8 @@ public class FunctionUnitSnapshotRestorer {
                                 Map<String, Long> importedTableNameToId,
                                 Map<String, Long> importedFormNameToId,
                                 Map<Long, Long> connectionIdMapping,
-                                Map<Long, Long> emailTemplateIdMapping) {
+                                Map<Long, Long> emailTemplateIdMapping,
+                                Map<String, String> connectionUidMapping) {
         String bpmnXml = resolveProcessXml(snapshot);
         if (bpmnXml == null || bpmnXml.isBlank()) {
             return;
@@ -272,7 +277,8 @@ public class FunctionUnitSnapshotRestorer {
                 importedFormNameToId,
                 Map.of(),
                 connectionIdMapping,
-                emailTemplateIdMapping);
+                emailTemplateIdMapping,
+                connectionUidMapping);
         rewrittenBpmn = staleIdFixer.fixStaleIds(functionUnit.getId(), XmlEncodingUtil.smartDecode(rewrittenBpmn));
         rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, functionUnit.getCode());
         assertLastTaskAssigneeTopologyOrThrow(XmlEncodingUtil.smartDecode(rewrittenBpmn));

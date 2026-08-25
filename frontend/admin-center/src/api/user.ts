@@ -1,7 +1,8 @@
-import { PageResult } from '@/types/common'
+import { PageResult, type AdminListPage } from '@/types/common'
 
-export type { PageResult } from '@/types/common'
+export type { PageResult, AdminListPage } from '@/types/common'
 import { get, post, put, del } from './request'
+import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 
 export interface User {
   id: string
@@ -16,7 +17,7 @@ export interface User {
   entityManagerName?: string
   functionManagerId?: string
   functionManagerName?: string
-  status: 'ACTIVE' | 'DISABLED' | 'LOCKED' | 'PENDING'
+  status: 'ACTIVE' | 'DISABLED' | 'LOCKED' | 'PENDING' | 'INACTIVE'
   lastLoginAt?: string
   createdAt: string
   updatedAt?: string
@@ -56,6 +57,17 @@ export interface UserQuery {
   status?: string
   page?: number
   size?: number
+}
+
+export interface UserListQuery {
+  page: number
+  size: number
+  keyword?: string
+  status?: string
+  filters?: ListColumnFilterRequest[]
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
 }
 
 export interface CreateUserRequest {
@@ -131,6 +143,8 @@ export interface ImportError {
 // 用户管理API - 使用默认baseURL (/api/v1/admin)
 export const userApi = {
   list: (params: UserQuery) => get<PageResult<User>>('/users', { params }),
+
+  query: (body: UserListQuery) => post<AdminListPage<User>>('/users/query', body),
   
   getById: (id: string) => get<UserDetail>(`/users/${id}`),
   

@@ -8,6 +8,8 @@ import {
   getSensitiveMask,
   type SensitiveMaskLookup,
 } from '@/utils/sensitiveMaskLookup'
+import { isStoredFileUrl } from '@/components/subTableAddDialogHelpers/fileColumns'
+import { fileDisplayText } from '@/utils/mainTableViewCsvExport'
 
 type TranslateFn = ReturnType<typeof useI18n>['t']
 
@@ -178,9 +180,8 @@ export function useChangeHistoryFormatting(
   }
 
   function formatFileOrText(value: string, maxLen: number): string {
-    const fileUploadMatch = value.match(/\/api\/v1\/upload\/files\/[^?]+\?originalName=([^&]+)/)
-    if (fileUploadMatch) {
-      return truncateText(decodeURIComponent(fileUploadMatch[1]!), maxLen)
+    if (isStoredFileUrl(value)) {
+      return truncateText(fileDisplayText(value), maxLen)
     }
     return truncateText(value, maxLen)
   }

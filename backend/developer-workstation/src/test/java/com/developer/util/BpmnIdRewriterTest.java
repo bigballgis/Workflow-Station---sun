@@ -354,4 +354,48 @@ class BpmnIdRewriterTest {
         assertThat(firstBlock).contains("name=\"subTableId\" value=\"35\"");
         assertThat(secondBlock).contains("name=\"subTableId\" value=\"36\"");
     }
+
+    @Test
+    void remapsSendTaskConnectionIdWhenValueIsConnectionUid() {
+        String xml = """
+                <bpmn:sendTask id="SendTask_1">
+                  <custom:properties>
+                    <custom:property name="connectionId" value="377e4f9a-4435-4416-b510-448e9dd0a92b" />
+                    <custom:property name="emailTemplateId" value="12" />
+                  </custom:properties>
+                </bpmn:sendTask>
+                """;
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml,
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(5L, 50L),
+                Map.of(12L, 120L),
+                Map.of("377e4f9a-4435-4416-b510-448e9dd0a92b", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
+
+        assertThat(rewritten)
+                .contains("name=\"connectionId\" value=\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"")
+                .contains("name=\"emailTemplateId\" value=\"120\"")
+                .doesNotContain("377e4f9a-4435-4416-b510-448e9dd0a92b");
+    }
+
+    @Test
+    void keepsNumericConnectionIdMappingWhenUidMapMisses() {
+        String xml = """
+                <custom:properties>
+                  <custom:property name="connectionId" value="5" />
+                </custom:properties>
+                """;
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(),
+                Map.of(5L, 50L), Map.of(), Map.of("other-uid", "new-uid"));
+
+        assertThat(rewritten).contains("name=\"connectionId\" value=\"50\"");
+    }
 }

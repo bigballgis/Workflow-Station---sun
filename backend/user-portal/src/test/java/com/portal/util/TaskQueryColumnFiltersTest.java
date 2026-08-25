@@ -1,0 +1,85 @@
+package com.portal.util;
+
+import com.platform.common.list.ListColumnFilter;
+import com.portal.dto.TaskInfo;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class TaskQueryColumnFiltersTest {
+
+    @AfterEach
+    void resetClock() {
+        TaskQueryColumnFilters.setClock(null);
+    }
+
+    @Test
+    void todayFilterMatchesCreateTimeOnSameCalendarDay() {
+        TaskQueryColumnFilters.setClock(Clock.fixed(Instant.parse("2026-08-21T08:00:00Z"), ListRelativeDates.ZONE));
+        TaskInfo hit = TaskInfo.builder()
+                .taskId("1")
+                .createTime(LocalDateTime.of(2026, 8, 21, 10, 0))
+                .build();
+        TaskInfo miss = TaskInfo.builder()
+                .taskId("2")
+                .createTime(LocalDateTime.of(2026, 8, 20, 10, 0))
+                .build();
+        ListColumnFilter today = new ListColumnFilter("createTime", "today", null, null);
+        assertTrue(TaskQueryColumnFilters.matches(hit, List.of(today)));
+        assertFalse(TaskQueryColumnFilters.matches(miss, List.of(today)));
+    }
+
+    @Test
+    void unknownDatetimeOperatorThrows() {
+        TaskInfo task = TaskInfo.builder()
+                .taskId("1")
+                .createTime(LocalDateTime.of(2026, 8, 21, 10, 0))
+                .build();
+        ListColumnFilter bad = new ListColumnFilter("createTime", "contains", "x", null);
+        assertThrows(IllegalArgumentException.class,
+                () -> TaskQueryColumnFilters.matches(task, List.of(bad)));
+    }
+
+    @Test
+    void priorityEnumMatchesNumericBands() {
+        TaskInfo high = TaskInfo.builder().taskId("1").priority("50").build();
+        TaskInfo urgent = TaskInfo.builder().taskId("2").priority("80").build();
+        ListColumnFilter highEq = new ListColumnFilter("priority", "eq", "HIGH", null);
+        assertTrue(TaskQueryColumnFilters.matches(high, List.of(highEq)));
+        assertFalse(TaskQueryColumnFilters.matches(urgent, List.of(highEq)));
+    }
+
+    @Test
+    void toolbarKeywordMatchesVisibleListCells() {
+        TaskInfo task = TaskInfo.builder()
+                .taskId("1")
+                .taskName("Approve")
+                .currentStepName("Case Submission")
+                .requestId("ATM-DC-PW-0002")
+                .processDefinitionName("Leave Flow")
+                .processDefinitionKey("atm-20260623-g")
+                .initiatorName("Developer Test")
+                .description("weekend overtime")
+                .build();
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "ATM-DC"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "Case"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "atm-2026"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "overtime"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "zzz"));
+    }
+
+    @Test
+    void requestIdContainsFilterMatchesEnrichedValue() {
+        TaskInfo hit = TaskInfo.builder().taskId("1").requestId("ATM-DC-PW-000295").build();
+        TaskInfo miss = TaskInfo.builder().taskId("2").requestId("HR-2026-001").build();
+        ListColumnFilter contains = new ListColumnFilter("requestId", "contains", "ATM-DC", null);
+        assertTrue(TaskQueryColumnFilters.matches(hit, List.of(contains)));
+        assertFalse(TaskQueryColumnFilters.matches(miss, List.of(contains)));
+    }
+}

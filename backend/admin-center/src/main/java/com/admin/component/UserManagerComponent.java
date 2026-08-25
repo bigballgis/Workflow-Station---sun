@@ -402,23 +402,36 @@ public class UserManagerComponent {
         if (userList.isEmpty()) {
             return users.map(UserInfo::fromEntity);
         }
-        
+        UserListEnrichment enrichment = loadUserListEnrichment(userList);
+        return users.map(user -> toUserInfo(user, enrichment));
+    }
+
+    /** Directory-row hydrate used by both the legacy GET list and the shared-list query. */
+    public List<UserInfo> toUserInfos(List<User> userList) {
+        if (userList == null || userList.isEmpty()) {
+            return List.of();
+        }
+        UserListEnrichment enrichment = loadUserListEnrichment(userList);
+        return userList.stream().map(user -> toUserInfo(user, enrichment)).toList();
+    }
+
+    private UserListEnrichment loadUserListEnrichment(List<User> userList) {
         List<String> userIds = userList.stream().map(User::getId).toList();
-        
+
         Map<String, UserBusinessUnit> userBuMap = new HashMap<>();
         List<UserBusinessUnit> allUserBus = userBusinessUnitRepository.findByUserIdIn(userIds);
         for (UserBusinessUnit ubu : allUserBus) {
             userBuMap.putIfAbsent(ubu.getUserId(), ubu);
         }
-        
+
         Set<String> buIds = allUserBus.stream()
                 .map(UserBusinessUnit::getBusinessUnitId)
                 .collect(Collectors.toSet());
-        Map<String, com.platform.security.entity.BusinessUnit> buMap = buIds.isEmpty() 
+        Map<String, com.platform.security.entity.BusinessUnit> buMap = buIds.isEmpty()
                 ? Collections.emptyMap()
                 : businessUnitRepository.findAllById(buIds).stream()
                     .collect(Collectors.toMap(com.platform.security.entity.BusinessUnit::getId, Function.identity()));
-        
+
         Set<String> managerIds = new HashSet<>();
         for (User u : userList) {
             if (u.getEntityManagerId() != null) managerIds.add(u.getEntityManagerId());
@@ -428,41 +441,48 @@ public class UserManagerComponent {
                 ? Collections.emptyMap()
                 : userRepository.findAllById(managerIds).stream()
                     .collect(Collectors.toMap(User::getId, Function.identity()));
-        
-        return users.map(user -> {
-            UserInfo info = UserInfo.fromEntity(user);
-            
-            UserBusinessUnit ubu = userBuMap.get(user.getId());
-            if (ubu != null) {
-                info.setBusinessUnitId(ubu.getBusinessUnitId());
-                com.platform.security.entity.BusinessUnit bu = buMap.get(ubu.getBusinessUnitId());
-                if (bu != null) {
-                    info.setBusinessUnitName(bu.getName());
-                }
+        return new UserListEnrichment(userBuMap, buMap, managerMap);
+    }
+
+    private static UserInfo toUserInfo(User user, UserListEnrichment enrichment) {
+        UserInfo info = UserInfo.fromEntity(user);
+
+        UserBusinessUnit ubu = enrichment.userBuMap().get(user.getId());
+        if (ubu != null) {
+            info.setBusinessUnitId(ubu.getBusinessUnitId());
+            com.platform.security.entity.BusinessUnit bu = enrichment.buMap().get(ubu.getBusinessUnitId());
+            if (bu != null) {
+                info.setBusinessUnitName(bu.getName());
             }
-            
-            if (user.getEntityManagerId() != null) {
-                User manager = managerMap.get(user.getEntityManagerId());
-                if (manager != null) {
-                    info.setEntityManagerName(manager.getFullName());
-                } else {
-                    info.setEntityManagerName(user.getEntityManagerId());
-                    info.setEntityManagerId(null);
-                }
+        }
+
+        if (user.getEntityManagerId() != null) {
+            User manager = enrichment.managerMap().get(user.getEntityManagerId());
+            if (manager != null) {
+                info.setEntityManagerName(manager.getFullName());
+            } else {
+                info.setEntityManagerName(user.getEntityManagerId());
+                info.setEntityManagerId(null);
             }
-            
-            if (user.getFunctionManagerId() != null) {
-                User manager = managerMap.get(user.getFunctionManagerId());
-                if (manager != null) {
-                    info.setFunctionManagerName(manager.getFullName());
-                } else {
-                    info.setFunctionManagerName(user.getFunctionManagerId());
-                    info.setFunctionManagerId(null);
-                }
+        }
+
+        if (user.getFunctionManagerId() != null) {
+            User manager = enrichment.managerMap().get(user.getFunctionManagerId());
+            if (manager != null) {
+                info.setFunctionManagerName(manager.getFullName());
+            } else {
+                info.setFunctionManagerName(user.getFunctionManagerId());
+                info.setFunctionManagerId(null);
             }
-            
-            return info;
-        });
+        }
+
+        return info;
+    }
+
+    private record UserListEnrichment(
+            Map<String, UserBusinessUnit> userBuMap,
+            Map<String, com.platform.security.entity.BusinessUnit> buMap,
+            Map<String, User> managerMap) {
     }
     
     /**

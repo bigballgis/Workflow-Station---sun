@@ -12,6 +12,7 @@ import {
   hasMiAssignmentMarker,
   isAssignmentConfigured,
 } from '@/utils/miAssignmentConfig'
+import { ensureSubTableMapIdentities } from '@/utils/subTableRowIdentity'
 function resolveProcessTaskId(source: MaybeRef<string>): string {
   const v = unref(source)
   return typeof v === 'string' ? v.trim() : ''
@@ -22,16 +23,18 @@ function isDigitsKey(key: string): boolean {
 /**
  * Canonicalize __subTables__ slices for persistence:
  * if numeric bindingId keys exist, keep only numeric keys to avoid alias fan-out.
+ * Stamp row identity on the kept slices so deserialized alias copies cannot
+ * receive a second UUID after submit.
  */
 function canonicalizeSubTablesForSubmit(input: Record<string, any>): Record<string, any> {
   const keys = Object.keys(input)
   if (keys.length === 0) return {}
   const hasNumeric = keys.some(isDigitsKey)
-  if (!hasNumeric) return { ...input }
   const out: Record<string, any> = {}
   for (const k of keys) {
-    if (isDigitsKey(k)) out[k] = input[k]
+    if (!hasNumeric || isDigitsKey(k)) out[k] = input[k]
   }
+  ensureSubTableMapIdentities(out)
   return out
 }
 export function useTaskActions(options: {

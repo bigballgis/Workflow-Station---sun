@@ -1,6 +1,7 @@
 import request from './request'
-import type { PageResult } from '@/types/common'
+import type { PageResult, AdminListPage } from '@/types/common'
 import { unwrapApiData } from '@/utils/apiResponse'
+import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 
 // ==================== 类型定义 ====================
 
@@ -41,6 +42,15 @@ export interface UserPortalAuditQueryRequest {
   sortOrder?: 'asc' | 'desc'
 }
 
+export interface UserPortalAuditListQuery extends UserPortalAuditQueryRequest {
+  page: number
+  size: number
+  filters?: ListColumnFilterRequest[]
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 export interface FunctionUnitOption {
   code: string
   name: string
@@ -73,4 +83,15 @@ export const queryAuditLogs = async (
     size: result?.size ?? size,
     number: result?.number ?? page,
   }
+}
+
+export const queryAuditLogList = async (
+  body: UserPortalAuditListQuery,
+): Promise<AdminListPage<UserPortalAuditRecord>> => {
+  const response = await request.post('/security/user-portal-audit-logs/list-query', body)
+  const page = unwrapApiData<AdminListPage<UserPortalAuditRecord>>(response)
+  if (!Array.isArray(page?.content)) {
+    throw new Error('user-portal audit list-query did not return a row array')
+  }
+  return page
 }
