@@ -251,6 +251,7 @@ public class FunctionUnitImporter {
         }
 
         Map<Long, Long> connectionIdMapping = new HashMap<>();
+        Map<String, String> connectionUidMapping = new HashMap<>();
         if (packageData.containsKey("connections")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> connections = (List<Map<String, Object>>) packageData.get("connections");
@@ -258,6 +259,8 @@ public class FunctionUnitImporter {
                 var connection = importWriter.importEmailConnection(functionUnit, connectionData);
                 importWriter.recordSourceIdMapping(connectionData.get("connectionId"), connection.getId(),
                         connectionIdMapping);
+                importWriter.recordConnectionUidMapping(connectionData.get("connectionUid"),
+                        connection.getConnectionUid(), connectionUidMapping);
             }
         }
 
@@ -293,7 +296,8 @@ public class FunctionUnitImporter {
                     importedFormNameToId,
                     Map.of(),
                     connectionIdMapping,
-                    emailTemplateIdMapping);
+                    emailTemplateIdMapping,
+                    connectionUidMapping);
             // Name-based repair pass: actionIds (and formId/subTableId) that were ALREADY stale in the
             // source package miss the id mapping above and would stay dangling — the designer/portal then
             // shows the raw id instead of the action name. Re-resolve them by name against this unit.

@@ -2574,3 +2574,18 @@
     截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-email-to-placeholder.png
     编号说明：rebase 时远程已占用 #1542–#1552，本条为 #1553。
 
+- id: "1554"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: major
+  category: bug
+  summary: "Clone 后 Send Task Connection 显示源 connectionUid GUID，而非本 FU 连接名"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java"
+  note: |
+    根因：面板 value=connectionUid；clone 发新 UUID，BpmnIdRewriter 只按 Long PK 改 connectionId。
+    Import 默认保留包内 connectionUid，BPMN 仍能对上，不是同一症状；importer/rollback 仍传入 uid mapping 以防将来 uid 变更。
+    已 clone FU：设计器在本 FU 仅一条出站连接时把未匹配 uid 绑到该连接。
+    验证：BpmnIdRewriterTest + EmailPortabilityTest + resolveOwnedSendTaskConnectionUid.test.ts；
+    Playwright frontend/scripts/verify-send-task-connection-clone.mjs 2/2 VincentTest2；
+    截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-connection-clone.png
+

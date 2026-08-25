@@ -87,6 +87,17 @@ public class FunctionUnitImportWriter {
         }
     }
 
+    void recordConnectionUidMapping(Object sourceUidObj, String savedUid, Map<String, String> mapping) {
+        if (savedUid == null || savedUid.isBlank() || sourceUidObj == null) {
+            return;
+        }
+        String sourceUid = String.valueOf(sourceUidObj).trim();
+        if (sourceUid.isEmpty()) {
+            return;
+        }
+        mapping.put(sourceUid, savedUid);
+    }
+
     TableDefinition importTable(FunctionUnit functionUnit, Map<String, Object> tableData) {
         TableDefinition table = TableDefinition.builder()
                 .functionUnit(functionUnit)
