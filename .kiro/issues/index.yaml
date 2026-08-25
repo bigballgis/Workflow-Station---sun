@@ -2589,3 +2589,16 @@
     Playwright frontend/scripts/verify-send-task-connection-clone.mjs 2/2 VincentTest2；
     截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-connection-clone.png
 
+- id: "1555"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: minor
+  category: bug
+  summary: "Send Task 邮件模板 ${variable} 无值时发出字面量占位符"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/util/EmailTemplateResolver.java"
+  note: |
+    根因：resolveBareSubTableFields 在变量缺失/null 且无子表回退时保留 matcher.group(0)（如 ${subject}）。
+    未改 BpmnExtensionUtils.resolveExpression（To/Cc/From 仍用）。lookupField 缺失本已空串。
+    主题整段解析后仍空白会触发 email.send_task.missing_subject，未改为允许空主题发信。
+    验证：EmailTemplateResolverTest 18/18；mvn package；workflow-engine healthy。
+
