@@ -10,172 +10,33 @@
         </el-button>
       </template>
     </PageHeader>
-    
+
     <el-tabs v-model="activeTab">
       <el-tab-pane
         :label="t('functionUnit.list')"
         name="list"
       >
-        <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
-          <el-input
-            v-model="searchKeyword"
-            :placeholder="t('functionUnit.searchPlaceholder')"
-            clearable
-            style="width: 300px;"
-          />
-          <template v-if="selectedUnits.length > 0">
-            <span style="color: #909399; font-size: 13px;">{{ t('functionUnit.selected', { count: selectedUnits.length }) }}</span>
-            <el-button
-              type="success"
-              size="small"
-              @click="handleBatchEnable"
-            >
-              {{ t('functionUnit.batchEnable') }}
-            </el-button>
-            <el-button
-              type="warning"
-              size="small"
-              @click="handleBatchDisable"
-            >
-              {{ t('functionUnit.batchDisable') }}
-            </el-button>
-            <el-button
-              type="danger"
-              size="small"
-              @click="handleBatchDelete"
-            >
-              {{ t('functionUnit.batchDelete') }}
-            </el-button>
-          </template>
-        </div>
-        <el-table
-          v-loading="loading"
-          :data="pagedFunctionUnits"
-          stripe
+        <FunctionUnitListTab
+          v-model:search-keyword="searchKeyword"
+          :grid="listGrid"
+          :loading="listLoading"
+          :selected-units="selectedUnits"
+          :selection-width="LIST_SELECTION_WIDTH"
+          :actions-width="LIST_ACTIONS_WIDTH"
+          :validate-loading-id="validateLoadingId"
+          :deploy-loading-id="deployLoadingId"
+          @fetch="fetchFunctionUnits"
           @selection-change="handleSelectionChange"
-        >
-          <el-table-column
-            type="selection"
-            width="50"
-          />
-          <el-table-column
-            prop="name"
-            :label="t('common.name')"
-          />
-          <el-table-column
-            prop="code"
-            :label="t('common.code')"
-          />
-          <el-table-column
-            prop="version"
-            :label="t('functionUnit.version')"
-          />
-          <el-table-column
-            prop="status"
-            :label="t('common.status')"
-          >
-            <template #default="{ row }">
-              <el-tag :type="functionUnitStatusType(row.status)">
-                {{ t(functionUnitStatusKey(row.status)) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            :label="t('common.enable')"
-            width="80"
-          >
-            <template #default="{ row }">
-              <el-switch
-                v-model="row.enabled"
-                :loading="row._enabledLoading"
-                @change="() => handleEnabledChange(row, row.enabled)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="updatedAt"
-            :label="t('common.updateTime')"
-          />
-          <el-table-column
-            :label="t('common.actions')"
-            width="420"
-            fixed="right"
-          >
-            <template #default="{ row }">
-              <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
-                <el-button
-                  link
-                  type="primary"
-                  @click="showAccessDialog(row)"
-                >
-                  {{ t('functionUnit.access') }}
-                </el-button>
-                <el-button
-                  v-if="canValidateFunctionUnit(row.status)"
-                  link
-                  type="primary"
-                  :loading="validateLoadingId === row.id"
-                  @click="handleValidate(row)"
-                >
-                  {{ t('functionUnit.validate') }}
-                </el-button>
-                <el-tooltip
-                  v-if="!canDeployFunctionUnit(row.status)"
-                  :content="t('functionUnit.deployRequiresValidation')"
-                >
-                  <span>
-                    <el-button
-                      link
-                      type="primary"
-                      disabled
-                    >
-                      {{ t('functionUnit.deploy') }}
-                    </el-button>
-                  </span>
-                </el-tooltip>
-                <el-button
-                  v-else
-                  link
-                  type="primary"
-                  :loading="deployLoadingId === row.id"
-                  @click="handleDeploy(row)"
-                >
-                  {{ t('functionUnit.deploy') }}
-                </el-button>
-                <el-button
-                  link
-                  type="primary"
-                  @click="showVersions(row)"
-                >
-                  {{ t('functionUnit.versions') }}
-                </el-button>
-                <el-button
-                  link
-                  type="danger"
-                  @click="handleRollback(row)"
-                >
-                  {{ t('functionUnit.rollback') }}
-                </el-button>
-                <el-button
-                  link
-                  type="danger"
-                  @click="handleDeleteClick(row)"
-                >
-                  {{ t('common.delete') }}
-                </el-button>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination
-          v-model:current-page="listPagination.page"
-          v-model:page-size="listPagination.size"
-          :disabled="loading"
-          :total="listTotal"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          style="margin-top: 16px; justify-content: flex-end;"
-          @size-change="handleListSizeChange"
+          @enabled-change="handleEnabledChange"
+          @show-access="showAccessDialog"
+          @validate="handleValidate"
+          @deploy="handleDeploy"
+          @show-versions="showVersions"
+          @rollback="handleRollback"
+          @delete-click="handleDeleteClick"
+          @batch-enable="handleBatchEnable"
+          @batch-disable="handleBatchDisable"
+          @batch-delete="handleBatchDelete"
         />
       </el-tab-pane>
 
@@ -183,128 +44,29 @@
         :label="t('functionUnit.archiveList')"
         name="archive"
       >
-        <div style="margin-bottom: 16px;">
-          <el-input
-            v-model="archiveSearchKeyword"
-            :placeholder="t('functionUnit.searchPlaceholder')"
-            clearable
-            style="width: 300px;"
-          />
-        </div>
-        <el-table
-          v-loading="archivedLoading"
-          :data="pagedArchivedFunctionUnits"
-          stripe
-        >
-          <el-table-column
-            prop="name"
-            :label="t('common.name')"
-          />
-          <el-table-column
-            prop="code"
-            :label="t('common.code')"
-          />
-          <el-table-column
-            prop="version"
-            :label="t('functionUnit.version')"
-          />
-          <el-table-column
-            prop="status"
-            :label="t('common.status')"
-          >
-            <template #default="{ row }">
-              <el-tag :type="functionUnitStatusType(row.status)">
-                {{ t(functionUnitStatusKey(row.status)) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="updatedAt"
-            :label="t('common.updateTime')"
-          />
-          <el-table-column
-            prop="updatedBy"
-            :label="t('common.updatedBy')"
-          />
-          <el-table-column
-            :label="t('common.actions')"
-            width="120"
-            fixed="right"
-          >
-            <template #default="{ row }">
-              <el-button
-                link
-                type="primary"
-                :loading="restoreLoadingId === row.id"
-                @click="handleRestore(row)"
-              >
-                {{ t('functionUnit.restore') }}
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination
-          v-model:current-page="archivePagination.page"
-          v-model:page-size="archivePagination.size"
-          :disabled="archivedLoading"
-          :total="archiveTotal"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          style="margin-top: 16px; justify-content: flex-end;"
-          @size-change="handleArchiveSizeChange"
+        <FunctionUnitArchiveTab
+          v-model:search-keyword="archiveSearchKeyword"
+          :grid="archiveGrid"
+          :loading="archivedLoading"
+          :actions-width="ARCHIVE_ACTIONS_WIDTH"
+          :restore-loading-id="restoreLoadingId"
+          @fetch="fetchArchivedFunctionUnits"
+          @restore="handleRestore"
         />
       </el-tab-pane>
-      
+
       <el-tab-pane
         :label="t('functionUnit.deploymentRecords')"
         name="deployments"
       >
-        <el-table
-          v-loading="deploymentsLoading"
-          :data="deployments"
-          stripe
-        >
-          <el-table-column
-            prop="functionUnitName"
-            :label="t('menu.functionUnit')"
-          />
-          <el-table-column
-            prop="version"
-            :label="t('functionUnit.version')"
-          />
-          <el-table-column
-            prop="status"
-            :label="t('common.status')"
-          >
-            <template #default="{ row }">
-              <el-tag :type="deployStatusType(row.status)">
-                {{ row.status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="deployedAt"
-            :label="t('functionUnit.deployedAt')"
-          />
-          <el-table-column
-            prop="deployedBy"
-            :label="t('functionUnit.deployedBy')"
-          />
-        </el-table>
-        <el-pagination
-          v-model:current-page="deploymentsPagination.page"
-          v-model:page-size="deploymentsPagination.size"
-          :disabled="deploymentsLoading"
-          :total="deploymentsTotal"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          style="margin-top: 16px; justify-content: flex-end;"
-          @change="handleDeploymentsChange"
+        <FunctionUnitDeploymentsTab
+          :grid="deployGrid"
+          :loading="deploymentsLoading"
+          @fetch="fetchDeployments"
         />
       </el-tab-pane>
     </el-tabs>
-    
-    <!-- Import Dialog (extracted) -->
+
     <FunctionUnitImportDialog
       v-model="showImportDialog"
       :import-loading="importLoading"
@@ -312,15 +74,13 @@
       @file-change="handleImportFileChange"
       @start-import="handleStartImport"
     />
-    
-    <!-- Access Config Dialog -->
+
     <AccessConfigDialog
       v-model="showAccessDialogVisible"
       :function-unit-id="currentUnit?.id"
       :function-unit-name="currentUnit?.name"
     />
-    
-    <!-- Version History Dialog -->
+
     <el-dialog
       v-model="showVersionsDialogVisible"
       :title="t('functionUnit.versions') + ' - ' + (currentUnit?.name || '')"
@@ -389,8 +149,7 @@
         </el-button>
       </template>
     </el-dialog>
-    
-    <!-- Delete Confirm Dialog -->
+
     <DeleteConfirmDialog
       v-model="showDeleteDialogVisible"
       :function-unit="deleteTargetUnit"
@@ -398,7 +157,6 @@
       @confirm="handleDeleteConfirm"
     />
 
-    <!-- Version Compare Dialog -->
     <el-dialog
       v-model="showCompareDialogVisible"
       :title="t('version.compare')"
@@ -442,47 +200,79 @@
 <script setup lang="ts">
 import { onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Upload } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import AccessConfigDialog from './components/AccessConfigDialog.vue'
 import FunctionUnitImportDialog from './components/FunctionUnitImportDialog.vue'
 import ValidateResultDialog from './components/ValidateResultDialog.vue'
-import { functionUnitStatusType, functionUnitStatusKey, deployStatusType, canValidateFunctionUnit, canDeployFunctionUnit } from '@/utils/format'
+import FunctionUnitListTab from './components/FunctionUnitListTab.vue'
+import FunctionUnitArchiveTab from './components/FunctionUnitArchiveTab.vue'
+import FunctionUnitDeploymentsTab from './components/FunctionUnitDeploymentsTab.vue'
+import { functionUnitStatusType, functionUnitStatusKey } from '@/utils/format'
 import { useFunctionUnit } from '@/composables/modules/useFunctionUnit'
 
 const { t } = useI18n()
 
-// All business logic is now in the composable — component is pure template binding
 const {
-  activeTab, loading, archivedLoading, deploymentsLoading, versionsLoading, importLoading, deployLoadingId, validateLoadingId, restoreLoadingId,
-  deployments, deploymentsTotal, versionList, searchKeyword, archiveSearchKeyword,
-  pagedFunctionUnits, pagedArchivedFunctionUnits, listTotal, archiveTotal,
-  listPagination, archivePagination, deploymentsPagination,
-  handleListSizeChange, handleArchiveSizeChange, handleDeploymentsChange,
+  activeTab,
+  listLoading,
+  archivedLoading,
+  deploymentsLoading,
+  versionsLoading,
+  importLoading,
+  deployLoadingId,
+  validateLoadingId,
+  restoreLoadingId,
+  versionList,
+  searchKeyword,
+  archiveSearchKeyword,
   selectedUnits,
-  showImportDialog, showAccessDialogVisible,
-  showDeleteDialogVisible, showVersionsDialogVisible, showCompareDialogVisible,
-  showValidateResultDialog, validateResult,
-  currentUnit, deleteTargetUnit, deletePreview, compareVersion,
+  listGrid,
+  archiveGrid,
+  deployGrid,
+  handleSelectionChange,
+  LIST_ACTIONS_WIDTH,
+  LIST_SELECTION_WIDTH,
+  ARCHIVE_ACTIONS_WIDTH,
+  showImportDialog,
+  showAccessDialogVisible,
+  showDeleteDialogVisible,
+  showVersionsDialogVisible,
+  showCompareDialogVisible,
+  showValidateResultDialog,
+  validateResult,
+  currentUnit,
+  deleteTargetUnit,
+  deletePreview,
+  compareVersion,
   importFile,
-  fetchFunctionUnits, showAccessDialog, showVersions,
-  handleValidate, handleDeploy, handleRestore, handleRollback, handleEnabledChange,
-  handleDeleteClick, handleDeleteConfirm,
-  handleSelectionChange, handleBatchEnable, handleBatchDisable,   handleBatchDelete,
+  fetchFunctionUnits,
+  showAccessDialog,
+  showVersions,
+  handleValidate,
+  handleDeploy,
+  handleRestore,
+  handleRollback,
+  handleEnabledChange,
+  handleDeleteClick,
+  handleDeleteConfirm,
+  handleBatchEnable,
+  handleBatchDisable,
+  handleBatchDelete,
   handleCompareVersion,
   openImportDialog,
-  handleImportFileChange, handleStartImport,
+  handleImportFileChange,
+  handleStartImport,
+  fetchArchivedFunctionUnits,
+  fetchDeployments,
 } = useFunctionUnit()
 
 onMounted(() => {
-  fetchFunctionUnits()
+  void fetchFunctionUnits()
 })
 
-// Re-fetch when navigating back (keep-alive reactivation)
 onActivated(() => {
-  fetchFunctionUnits()
+  void fetchFunctionUnits()
 })
 </script>
-
-<style scoped>
-</style>

@@ -18,6 +18,24 @@ export function clampColumnWidth(width: number): number {
   return Math.min(COLUMN_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, width))
 }
 
+/** Empty width parked at the trailing edge so other columns keep a 1:1 drag. */
+export function leftoverColumnWidth(viewportWidth: number, totalColumnWidth: number): number {
+  if (viewportWidth <= 0 || totalColumnWidth <= 0) return 0
+  return Math.max(0, viewportWidth - totalColumnWidth)
+}
+
+/**
+ * Visual column width at mousedown.
+ * FALLBACK(ux): stored width when the handle is not inside a th (unit tests).
+ */
+export function startWidthFromHandle(handle: HTMLElement, fallback: number): number {
+  const cell = handle.closest('th')
+  if (!cell) return clampColumnWidth(fallback)
+  const width = cell.getBoundingClientRect().width
+  if (!Number.isFinite(width) || width <= 0) return clampColumnWidth(fallback)
+  return clampColumnWidth(width)
+}
+
 export interface ColumnResizeGuide {
   move: (width: number) => void
   detach: () => void

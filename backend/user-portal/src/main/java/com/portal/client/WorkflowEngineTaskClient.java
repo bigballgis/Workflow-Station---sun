@@ -101,6 +101,16 @@ public class WorkflowEngineTaskClient {
      */
     public Optional<Map<String, Object>> getUserAllVisibleTasks(String userId, List<String> groupIds,
                                                                  List<String> deptRoles, int page, int size) {
+        return getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size,
+                com.portal.util.EngineTaskPushdown.Criteria.empty());
+    }
+
+    /**
+     * Same as {@link #getUserAllVisibleTasks(String, List, List, int, int)} with optional engine pushdown criteria.
+     */
+    public Optional<Map<String, Object>> getUserAllVisibleTasks(String userId, List<String> groupIds,
+                                                                 List<String> deptRoles, int page, int size,
+                                                                 com.portal.util.EngineTaskPushdown.Criteria criteria) {
         if (!engine.isAvailable()) {
             return Optional.empty();
         }
@@ -122,6 +132,53 @@ public class WorkflowEngineTaskClient {
             SecurityContextUtils.getCurrentActiveBusinessUnitId()
                     .filter(id -> id != null && !id.isBlank())
                     .ifPresent(bu -> ub.queryParam("activeBusinessUnitId", bu));
+            if (criteria != null) {
+                if (criteria.taskNameLike() != null && !criteria.taskNameLike().isBlank()) {
+                    ub.queryParam("taskNameLike", criteria.taskNameLike());
+                }
+                if (criteria.taskNameLikeMode() != null && !criteria.taskNameLikeMode().isBlank()) {
+                    ub.queryParam("taskNameLikeMode", criteria.taskNameLikeMode());
+                }
+                if (criteria.taskNameExact() != null && !criteria.taskNameExact().isBlank()) {
+                    ub.queryParam("taskNameExact", criteria.taskNameExact());
+                }
+                if (criteria.priority() != null) {
+                    ub.queryParam("priority", criteria.priority());
+                }
+                if (criteria.priorityMin() != null) {
+                    ub.queryParam("priorityMin", criteria.priorityMin());
+                }
+                if (criteria.priorityMax() != null
+                        && criteria.priorityMax() < Integer.MAX_VALUE) {
+                    ub.queryParam("priorityMax", criteria.priorityMax());
+                }
+                if (criteria.createdAfter() != null) {
+                    ub.queryParam("createdAfter", criteria.createdAfter().getTime());
+                }
+                if (criteria.createdBefore() != null) {
+                    ub.queryParam("createdBefore", criteria.createdBefore().getTime());
+                }
+                if (criteria.dueAfter() != null) {
+                    ub.queryParam("dueAfter", criteria.dueAfter().getTime());
+                }
+                if (criteria.dueBefore() != null) {
+                    ub.queryParam("dueBefore", criteria.dueBefore().getTime());
+                }
+                if (criteria.processDefinitionNameLike() != null
+                        && !criteria.processDefinitionNameLike().isBlank()) {
+                    ub.queryParam("processDefinitionNameLike", criteria.processDefinitionNameLike());
+                }
+                if (criteria.processDefinitionNameExact() != null
+                        && !criteria.processDefinitionNameExact().isBlank()) {
+                    ub.queryParam("processDefinitionNameExact", criteria.processDefinitionNameExact());
+                }
+                if (criteria.sortBy() != null && !criteria.sortBy().isBlank()) {
+                    ub.queryParam("sortBy", criteria.sortBy());
+                }
+                if (criteria.sortDirection() != null && !criteria.sortDirection().isBlank()) {
+                    ub.queryParam("sortDirection", criteria.sortDirection());
+                }
+            }
             String url = ub.encode().build().toUriString();
 
             ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(

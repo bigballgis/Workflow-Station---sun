@@ -63,172 +63,171 @@
       </el-form>
     </el-card>
     
-    <el-card class="table-card">
-      <el-table
-        v-loading="loading"
-        :data="users"
-        stripe
-        border
-        table-layout="auto"
-        style="width: 100%"
+    <el-card
+      v-loading="loading"
+      class="table-card"
+    >
+      <div
+        ref="gridScrollRef"
+        class="list-data-grid-scroll"
       >
-        <!-- <el-table-column prop="employeeId" :label="t('user.employeeId')" min-width="100" show-overflow-tooltip /> -->
-        <el-table-column
-          prop="username"
-          :label="t('user.username')"
-          min-width="120"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="fullName"
-          :label="t('user.fullName')"
-          min-width="120"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="email"
-          :label="t('user.email')"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="position"
-          :label="t('user.position')"
-          min-width="100"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          :label="t('user.entityManager')"
-          min-width="120"
-          show-overflow-tooltip
+        <div
+          class="list-data-grid-inner"
+          :style="gridInnerStyle"
         >
-          <template #default="{ row }">
-            <span
-              v-if="row.entityManagerName"
-              class="manager-name"
-            >{{ row.entityManagerName }}</span>
-            <span
-              v-else
-              class="no-manager"
-            >-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('user.functionManager')"
-          min-width="120"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            <span
-              v-if="row.functionManagerName"
-              class="manager-name"
-            >{{ row.functionManagerName }}</span>
-            <span
-              v-else
-              class="no-manager"
-            >-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="status"
-          :label="t('common.status')"
-          width="90"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-tag
-              :type="statusTagType(row.status)"
-              size="small"
+          <el-table
+            :data="displayRows"
+            stripe
+            border
+            :fit="false"
+            table-layout="fixed"
+            style="width: 100%"
+            class="list-data-grid"
+            :class="{ 'list-data-grid--fit': gridFits }"
+            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
+            :row-class-name="rowClassName"
+          >
+            <el-table-column
+              v-for="(col, colIndex) in displayColumns"
+              :key="col.field"
+              :prop="col.field"
+              :width="widthOf(col.field)"
+              show-overflow-tooltip
             >
-              {{ t(userStatusKey(row.status)) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('common.actions')"
-          width="140"
-          fixed="right"
-        >
-          <template #header>
-            {{ t('common.actions') }}
-          </template>
-          <template #default="{ row }">
-            <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
-              <el-button
-                v-if="canWriteUser"
-                link
-                type="primary"
-                size="small"
-                @click="showEditDialog(row)"
-              >
-                {{ t('common.edit') }}
-              </el-button>
-              <el-button
-                link
-                type="primary"
-                size="small"
-                @click="showDetailDialog(row)"
-              >
-                {{ t('common.view') }}
-              </el-button>
-              <el-dropdown
-                v-if="canWriteUser"
-                @command="(cmd: string) => handleCommand(row, cmd)"
-              >
-                <el-button
-                  link
-                  type="primary"
-                  size="small"
-                  :title="t('common.operation')"
-                >
-                  <el-icon><MoreFilled /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item
-                      v-if="row.status !== 'ACTIVE'"
-                      command="enable"
-                    >
-                      <el-icon><CircleCheck /></el-icon>{{ t('common.enable') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      v-if="row.status === 'ACTIVE'"
-                      command="disable"
-                    >
-                      <el-icon><CircleClose /></el-icon>{{ t('common.disable') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      v-if="row.status === 'LOCKED'"
-                      command="unlock"
-                    >
-                      <el-icon><Unlock /></el-icon>{{ t('user.unlock') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      v-if="canDeleteUser"
-                      command="delete"
-                      divided
-                    >
-                      <el-icon><Delete /></el-icon>{{ t('common.delete') }}
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
+              <template #header>
+                <ListColumnHeader
+                  :column="col"
+                  :sort="sort.field === col.field ? sort.direction : null"
+                  :grouped="groupBy === col.field"
+                  :filtered="!!columnFilters[col.field]"
+                  :width="widthOf(col.field)"
+                  :show-move="displayColumns.length > 1"
+                  :can-move-left="colIndex > 0"
+                  :can-move-right="colIndex < displayColumns.length - 1"
+                  @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
+                  @clear-sort="onClearSort"
+                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
+                  @filter-open="openFilter(col.field)"
+                  @clear-filter="onClearFilter(col.field)"
+                  @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
+                  @width-change="(width: number) => setWidth(col.field, width)"
+                  @width-commit="persistWidths"
+                />
+              </template>
+              <template #default="{ row }">
+                <template v-if="isListGroupHeaderRow(row)">
+                  <div class="group-header-cell">
+                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
+                    <span class="group-count">({{ row._groupCount }})</span>
+                  </div>
                 </template>
-              </el-dropdown>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-      
-      <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="query.page"
-          v-model:page-size="query.size"
-          :total="total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSearch"
-          @current-change="handleSearch"
-        />
+                <span
+                  v-else-if="col.field === 'entityManagerName' || col.field === 'functionManagerName'"
+                  :class="row[col.field] ? 'manager-name' : 'no-manager'"
+                >{{ row[col.field] || '-' }}</span>
+                <el-tag
+                  v-else-if="col.field === 'status'"
+                  :type="statusTagType(row.status)"
+                  size="small"
+                >
+                  {{ t(userStatusKey(row.status)) }}
+                </el-tag>
+                <template v-else>
+                  {{ row[col.field] || '-' }}
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="leftoverWidth > 0"
+              :width="leftoverWidth"
+              class-name="list-col-spacer"
+            />
+            <el-table-column
+              :label="t('common.actions')"
+              :width="ACTIONS_COL_WIDTH"
+              fixed="right"
+            >
+              <template #header>
+                {{ t('common.actions') }}
+              </template>
+              <template #default="{ row }">
+                <div
+                  v-if="!isListGroupHeaderRow(row)"
+                  style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;"
+                >
+                  <el-button
+                    v-if="canWriteUser"
+                    link
+                    type="primary"
+                    size="small"
+                    @click="showEditDialog(row)"
+                  >
+                    {{ t('common.edit') }}
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
+                    size="small"
+                    @click="showDetailDialog(row)"
+                  >
+                    {{ t('common.view') }}
+                  </el-button>
+                  <el-dropdown
+                    v-if="canWriteUser"
+                    @command="(cmd: string) => handleCommand(row, cmd)"
+                  >
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      :title="t('common.operation')"
+                    >
+                      <el-icon><MoreFilled /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          v-if="row.status !== 'ACTIVE'"
+                          command="enable"
+                        >
+                          <el-icon><CircleCheck /></el-icon>{{ t('common.enable') }}
+                        </el-dropdown-item>
+                        <el-dropdown-item
+                          v-if="row.status === 'ACTIVE'"
+                          command="disable"
+                        >
+                          <el-icon><CircleClose /></el-icon>{{ t('common.disable') }}
+                        </el-dropdown-item>
+                        <el-dropdown-item
+                          v-if="row.status === 'LOCKED'"
+                          command="unlock"
+                        >
+                          <el-icon><Unlock /></el-icon>{{ t('user.unlock') }}
+                        </el-dropdown-item>
+                        <el-dropdown-item
+                          v-if="canDeleteUser"
+                          command="delete"
+                          divided
+                        >
+                          <el-icon><Delete /></el-icon>{{ t('common.delete') }}
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </div>
+
+      <ListPagination
+        v-model:page="pagination.page"
+        v-model:size="pagination.size"
+        :total="pagination.total"
+        :loading="loading"
+        @change="loadUsers"
+      />
     </el-card>
     
     <!-- User form dialog -->
@@ -249,6 +248,15 @@
       v-model="importDialogVisible"
       @success="handleSearch"
     />
+
+    <ListFilterDialog
+      v-model:visible="filterDialog.visible"
+      :column="activeFilterColumn"
+      :filter="activeFilter"
+      :remote-search="searchListFilterUsers"
+      @apply="onFilterApply"
+      @clear="onFilterClear"
+    />
   </div>
 </template>
 
@@ -261,6 +269,11 @@ import {
 } from '@element-plus/icons-vue'
 import { statusTagType, userStatusKey } from '@/utils/format'
 import { useUser } from '@/composables/modules/useUser'
+import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
+import ListPagination from '@platform-shared/list/ListPagination.vue'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 import UserFormDialog from './components/UserFormDialog.vue'
 import UserDetailDialog from './components/UserDetailDialog.vue'
 import UserImportDialog from './components/UserImportDialog.vue'
@@ -270,8 +283,6 @@ const { t } = useI18n()
 
 const {
   loading,
-  users,
-  total,
   query,
   formDialogVisible,
   detailDialogVisible,
@@ -282,13 +293,71 @@ const {
   canDeleteUser,
   handleSearch,
   handleReset,
+  loadUsers,
   showCreateDialog,
   showEditDialog,
   showDetailDialog,
   handleCommand,
+  ACTIONS_COL_WIDTH,
+  displayColumns,
+  displayRows,
+  groupBy,
+  columnFilters,
+  sort,
+  filterDialog,
+  pagination,
+  activeFilterColumn,
+  activeFilter,
+  gridScrollRef,
+  gridFits,
+  leftoverWidth,
+  gridInnerStyle,
+  widthOf,
+  setWidth,
+  persistWidths,
+  moveColumn,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  applySort,
+  clearSort,
+  applyGroup,
+  rowClassName,
+  spanMethod,
+  groupHeaderLabel,
+  isListGroupHeaderRow,
 } = useUser()
 
+function onSort(field: string, direction: 'ASC' | 'DESC') {
+  applySort(field, direction)
+  void loadUsers()
+}
+
+function onClearSort() {
+  clearSort()
+  void loadUsers()
+}
+
+function onGroup(field: string, grouped: boolean) {
+  applyGroup(field, grouped)
+  void loadUsers()
+}
+
+function onClearFilter(field: string) {
+  clearFilter(field)
+  void loadUsers()
+}
+
+function onFilterApply(filter: ListColumnFilter) {
+  applyFilter(filter)
+  void loadUsers()
+}
+
+function onFilterClear() {
+  onClearFilter(filterDialog.field)
+}
+
 onMounted(() => {
-  handleSearch()
+  void loadUsers()
 })
 </script>

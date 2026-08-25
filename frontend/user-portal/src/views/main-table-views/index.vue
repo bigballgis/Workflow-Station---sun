@@ -15,7 +15,7 @@ const {
   importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
   selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns,
   viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
-  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
+  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, leftoverWidth, gridTableKey,
   pagedRows, displayTotal, toListColumnMeta,
   handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
   isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,
@@ -175,8 +175,8 @@ const {
               :data="pagedRows"
               :row-key="getRowKey"
               stripe
-              :fit="gridFits"
-              :table-layout="gridFits ? 'auto' : 'fixed'"
+              :fit="false"
+              table-layout="fixed"
               style="width: 100%;"
               class="mtv-data-grid"
               :class="{ 'mtv-data-grid--fit': gridFits }"
@@ -196,8 +196,7 @@ const {
             v-for="col in displayColumns"
             :key="col.fieldName"
             :prop="col.fieldName"
-            :width="gridFits ? undefined : columnWidth(col, gridRuntime)"
-            :min-width="gridFits ? columnWidth(col, gridRuntime) : undefined"
+            :width="columnWidth(col, gridRuntime)"
             show-overflow-tooltip
           >
             <template #header>
@@ -259,6 +258,11 @@ const {
               </template>
             </template>
           </el-table-column>
+          <el-table-column
+            v-if="leftoverWidth > 0"
+            :width="leftoverWidth"
+            class-name="list-col-spacer"
+          />
             </el-table>
           </div>
         </div>
@@ -515,6 +519,16 @@ const {
 }
 .mtv-data-grid-inner {
   display: block;
+}
+:deep(.mtv-data-grid th.list-col-spacer),
+:deep(.mtv-data-grid td.list-col-spacer) {
+  padding: 0;
+  border-left: none;
+  background: transparent;
+}
+:deep(.mtv-data-grid th.list-col-spacer .cell),
+:deep(.mtv-data-grid td.list-col-spacer .cell) {
+  display: none;
 }
 :deep(.mtv-data-grid .el-table__body-wrapper),
 :deep(.mtv-data-grid .el-table__header-wrapper) {

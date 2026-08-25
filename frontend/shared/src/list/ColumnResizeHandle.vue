@@ -4,6 +4,7 @@ import {
   attachColumnResizeGuide,
   clampColumnWidth,
   COL_RESIZE_CURSOR,
+  startWidthFromHandle,
   type ColumnResizeGuide,
 } from './columnResizeCursor'
 
@@ -25,7 +26,7 @@ function onMouseDown(event: MouseEvent) {
 
   const handle = event.currentTarget as HTMLElement
   const startX = event.clientX
-  const startWidth = props.initialWidth
+  const startWidth = startWidthFromHandle(handle, props.initialWidth)
   const guide: ColumnResizeGuide = attachColumnResizeGuide(handle, startWidth)
   isResizing.value = true
   document.body.classList.add('is-column-resizing')

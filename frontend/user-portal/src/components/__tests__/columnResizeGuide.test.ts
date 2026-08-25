@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { attachColumnResizeGuide } from '@platform-shared/list/columnResizeCursor'
+import {
+  attachColumnResizeGuide,
+  leftoverColumnWidth,
+  startWidthFromHandle,
+} from '@platform-shared/list/columnResizeCursor'
 
 describe('attachColumnResizeGuide', () => {
   afterEach(() => {
@@ -32,5 +36,30 @@ describe('attachColumnResizeGuide', () => {
     guide.detach()
     expect(document.querySelector('.col-resize-guide')).toBeNull()
     table.remove()
+  })
+})
+
+describe('leftoverColumnWidth', () => {
+  it('returns the empty trailing width only when columns are narrower than the viewport', () => {
+    expect(leftoverColumnWidth(1000, 800)).toBe(200)
+    expect(leftoverColumnWidth(800, 800)).toBe(0)
+    expect(leftoverColumnWidth(800, 900)).toBe(0)
+    expect(leftoverColumnWidth(0, 800)).toBe(0)
+  })
+})
+
+describe('startWidthFromHandle', () => {
+  it('reads the header cell box when the handle sits in a th', () => {
+    const th = document.createElement('th')
+    Object.defineProperty(th, 'getBoundingClientRect', {
+      value: () => ({ width: 280, height: 24, top: 0, left: 0, right: 280, bottom: 24 }),
+    })
+    const handle = document.createElement('span')
+    th.appendChild(handle)
+    expect(startWidthFromHandle(handle, 160)).toBe(280)
+  })
+
+  it('falls back to the stored width when there is no header cell', () => {
+    expect(startWidthFromHandle(document.createElement('span'), 160)).toBe(160)
   })
 })

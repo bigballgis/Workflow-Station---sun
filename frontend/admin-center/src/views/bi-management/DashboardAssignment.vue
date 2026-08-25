@@ -54,118 +54,144 @@
       </el-form>
     </el-card>
 
-    <el-card class="table-card">
-      <el-table
-        v-loading="loading"
-        :data="assignments"
-        stripe
-        border
-        table-layout="auto"
-        style="width: 100%"
+    <el-card
+      v-loading="loading"
+      class="table-card"
+    >
+      <div
+        ref="gridScrollRef"
+        class="list-data-grid-scroll"
       >
-        <el-table-column
-          prop="dashboardTitle"
-          :label="t('bi.assignment.colDashboardTitle')"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          :label="t('bi.assignment.colTargetType')"
-          width="130"
-          align="center"
+        <div
+          class="list-data-grid-inner"
+          :style="gridInnerStyle"
         >
-          <template #default="{ row }">
-            <el-tag
-              :type="assignmentTargetTagType(row.targetType)"
-              size="small"
+          <el-table
+            :data="displayRows"
+            stripe
+            border
+            :fit="false"
+            table-layout="fixed"
+            style="width: 100%"
+            class="list-data-grid"
+            :class="{ 'list-data-grid--fit': gridFits }"
+            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
+            :row-class-name="rowClassName"
+          >
+            <el-table-column
+              v-for="(col, colIndex) in displayColumns"
+              :key="col.field"
+              :prop="col.field"
+              :width="widthOf(col.field)"
+              show-overflow-tooltip
             >
-              {{ t(assignmentTargetTypeKey(row.targetType)) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="targetName"
-          :label="t('bi.assignment.colTargetName')"
-          width="150"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          :label="t('bi.assignment.colLayoutMode')"
-          width="130"
-          align="center"
-        >
-          <template #default="{ row }">
-            {{ t(layoutModeKey(row.layoutMode)) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="displayOrder"
-          :label="t('bi.assignment.colDisplayOrder')"
-          width="120"
-          align="center"
-        />
-        <el-table-column
-          :label="t('bi.assignment.colDefault')"
-          width="80"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-tag
-              v-if="row.isDefault"
-              type="success"
-              size="small"
+              <template #header>
+                <ListColumnHeader
+                  :column="col"
+                  :sort="sort.field === col.field ? sort.direction : null"
+                  :grouped="groupBy === col.field"
+                  :filtered="!!columnFilters[col.field]"
+                  :width="widthOf(col.field)"
+                  :show-move="displayColumns.length > 1"
+                  :can-move-left="colIndex > 0"
+                  :can-move-right="colIndex < displayColumns.length - 1"
+                  @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
+                  @clear-sort="onClearSort"
+                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
+                  @filter-open="openFilter(col.field)"
+                  @clear-filter="onClearFilter(col.field)"
+                  @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
+                  @width-change="(width: number) => setWidth(col.field, width)"
+                  @width-commit="persistWidths"
+                />
+              </template>
+              <template #default="{ row }">
+                <template v-if="isListGroupHeaderRow(row)">
+                  <div class="group-header-cell">
+                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
+                    <span class="group-count">({{ row._groupCount }})</span>
+                  </div>
+                </template>
+                <el-tag
+                  v-else-if="col.field === 'targetType'"
+                  :type="assignmentTargetTagType(row.targetType)"
+                  size="small"
+                >
+                  {{ t(assignmentTargetTypeKey(row.targetType)) }}
+                </el-tag>
+                <template v-else-if="col.field === 'layoutMode'">
+                  {{ t(layoutModeKey(row.layoutMode)) }}
+                </template>
+                <template v-else-if="col.field === 'isDefault'">
+                  <el-tag
+                    v-if="row.isDefault"
+                    type="success"
+                    size="small"
+                  >
+                    {{ t('bi.assignment.defaultYes') }}
+                  </el-tag>
+                  <el-tag
+                    v-else
+                    type="info"
+                    size="small"
+                  >
+                    {{ t('bi.assignment.defaultNo') }}
+                  </el-tag>
+                </template>
+                <template v-else>
+                  {{ row[col.field] ?? '-' }}
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="leftoverWidth > 0"
+              :width="leftoverWidth"
+              class-name="list-col-spacer"
+            />
+            <el-table-column
+              :label="t('bi.assignment.colActions')"
+              :width="ACTIONS_COL_WIDTH"
+              fixed="right"
+              align="center"
             >
-              {{ t('bi.assignment.defaultYes') }}
-            </el-tag>
-            <el-tag
-              v-else
-              type="info"
-              size="small"
-            >
-              {{ t('bi.assignment.defaultNo') }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('bi.assignment.colActions')"
-          width="140"
-          fixed="right"
-          align="center"
-        >
-          <template #default="{ row }">
-            <div class="action-cell">
-              <el-button
-                link
-                type="primary"
-                size="small"
-                @click="showEditDialog(row)"
-              >
-                {{ t('common.edit') }}
-              </el-button>
-              <el-button
-                link
-                type="danger"
-                size="small"
-                @click="handleDelete(row)"
-              >
-                {{ t('common.delete') }}
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="query.page"
-          v-model:page-size="query.size"
-          :total="total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSearch"
-          @current-change="handleSearch"
-        />
+              <template #header>
+                {{ t('bi.assignment.colActions') }}
+              </template>
+              <template #default="{ row }">
+                <div
+                  v-if="!isListGroupHeaderRow(row)"
+                  class="action-cell"
+                >
+                  <el-button
+                    link
+                    type="primary"
+                    size="small"
+                    @click="showEditDialog(row)"
+                  >
+                    {{ t('common.edit') }}
+                  </el-button>
+                  <el-button
+                    link
+                    type="danger"
+                    size="small"
+                    @click="handleDelete(row)"
+                  >
+                    {{ t('common.delete') }}
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </div>
+
+      <ListPagination
+        v-model:page="pagination.page"
+        v-model:size="pagination.size"
+        :total="pagination.total"
+        :loading="loading"
+        @change="loadAssignments"
+      />
     </el-card>
 
     <AssignmentFormDialog
@@ -173,6 +199,14 @@
       :mode="dialogMode"
       :initial-row="editingRow"
       @success="handleSearch"
+    />
+
+    <ListFilterDialog
+      v-model:visible="filterDialog.visible"
+      :column="activeFilterColumn"
+      :filter="activeFilter"
+      @apply="onFilterApply"
+      @clear="onFilterClear"
     />
   </div>
 </template>
@@ -185,13 +219,15 @@ import PageHeader from '@/components/PageHeader.vue'
 import { useBiAssignment } from '@/composables/modules/useBiAssignment'
 import AssignmentFormDialog from './components/AssignmentFormDialog.vue'
 import { assignmentTargetTagType, assignmentTargetTypeKey, layoutModeKey } from '@/utils/format'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
+import ListPagination from '@platform-shared/list/ListPagination.vue'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 const { t } = useI18n()
 
 const {
   loading,
-  assignments,
-  total,
   query,
   dialogVisible,
   dialogMode,
@@ -199,14 +235,70 @@ const {
   targetTypeFilterOptions,
   handleSearch,
   handleReset,
+  loadAssignments,
   showCreateDialog,
   showEditDialog,
-  handleDelete
+  handleDelete,
+  ACTIONS_COL_WIDTH,
+  displayColumns,
+  displayRows,
+  groupBy,
+  columnFilters,
+  sort,
+  filterDialog,
+  pagination,
+  activeFilterColumn,
+  activeFilter,
+  gridScrollRef,
+  gridFits,
+  leftoverWidth,
+  gridInnerStyle,
+  widthOf,
+  setWidth,
+  persistWidths,
+  moveColumn,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  applySort,
+  clearSort,
+  applyGroup,
+  rowClassName,
+  spanMethod,
+  groupHeaderLabel,
+  isListGroupHeaderRow,
 } = useBiAssignment()
 
+function onSort(field: string, direction: 'ASC' | 'DESC') {
+  applySort(field, direction)
+  void loadAssignments()
+}
+
+function onClearSort() {
+  clearSort()
+  void loadAssignments()
+}
+
+function onGroup(field: string, grouped: boolean) {
+  applyGroup(field, grouped)
+  void loadAssignments()
+}
+
+function onClearFilter(field: string) {
+  clearFilter(field)
+  void loadAssignments()
+}
+
+function onFilterApply(filter: ListColumnFilter) {
+  applyFilter(filter)
+  void loadAssignments()
+}
+
+function onFilterClear() {
+  onClearFilter(filterDialog.field)
+}
+
 onMounted(() => {
-  handleSearch()
+  void loadAssignments()
 })
 </script>
-
-

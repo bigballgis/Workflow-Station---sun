@@ -2359,3 +2359,32 @@
     审查跟进：Preview 表身份随 ACTION 画布（PRIMARY 误绑不再抢身份）；脏顶层 rule 回归；
     Process Debug saved preview 同构；live 空数组不 overlay（fc-designer 水合前 getRule 为 []）。
 
+- id: "1542"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: major
+  category: bug
+  summary: "To Do Priority column filter High showed Normal because API sends Flowable numeric string 50 and the cell renderer only mapped named labels / typeof number"
+  file: "frontend/user-portal/src/utils/taskPriority.ts"
+  note: |
+    根因：引擎默认优先级 50（HIGH 档 50–74），API 序列化为字符串 "50"。
+    列筛选按 numeric band 命中这些行；单元格 getPriorityLabel 只认 URGENT/HIGH/NORMAL/LOW
+    或 typeof===number，字符串 "50" 掉进兜底 Normal。
+    修复：taskPriorityBand 与后端 TaskQueryColumnFilters.priorityBand 对齐；
+    To Do / dashboard / task detail 共用。
+    验证：taskPriority.test.ts；Playwright verify-todo-priority-filter.mjs
+    （Filter by High → 19 cells High）；
+    截图 frontend/user-portal/verification-screenshots/2026-08-24_todo-priority-filter-high.png
+
+- id: "1543"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: minor
+  category: quality
+  summary: "To Do shared list lacked Completed/My Requests 500ms SLA and >1s slow-query WARN"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java"
+  note: |
+    根因：queryTodoList 只走引擎分页，未接 ListQuerySupport.logIfSlow / logIfOverSla。
+    修复：listKey=todo-tasks；>500ms WARN（SLA）、>1s WARN（深分页可观测）；不含行内容和筛选值。
+    验证：ListQuerySupportTest（500 不打、501 打；1s 阈值同规格）。
+

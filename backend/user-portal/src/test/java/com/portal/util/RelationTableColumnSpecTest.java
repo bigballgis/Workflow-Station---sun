@@ -1,13 +1,11 @@
 package com.portal.util;
 
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.enums.RelationDataType;
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
 import org.junit.jupiter.api.Test;
-
 import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,7 +23,7 @@ class RelationTableColumnSpecTest {
 
     @Test
     void mapsDataTypesToKinds() {
-        List<PortalListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
+        List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
                 field("name", RelationDataType.VARCHAR, "Name"),
                 field("notes", RelationDataType.TEXT, "Notes"),
                 field("ref_user", RelationDataType.LOOKUP, "User"),
@@ -46,14 +44,14 @@ class RelationTableColumnSpecTest {
 
     @Test
     void payloadTypesAreDisplayOnly() {
-        List<PortalListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
+        List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
                 field("cfg", RelationDataType.JSON, "Config"),
                 field("at", RelationDataType.TIME, "At"),
                 field("blob", RelationDataType.BYTEA, "Blob"),
                 field("doc", RelationDataType.FILE, "Doc"),
                 field("name", RelationDataType.VARCHAR, "Name")));
         for (String f : List.of("cfg", "at", "blob", "doc")) {
-            PortalListColumnMeta col = byField(columns, f);
+            ListColumnMeta col = byField(columns, f);
             assertFalse(col.filterable(), f);
             assertFalse(col.sortable(), f);
             assertTrue(col.operators().isEmpty(), f);
@@ -63,18 +61,18 @@ class RelationTableColumnSpecTest {
 
     @Test
     void statusIsExcludedAndGroupingNeverDeclared() {
-        List<PortalListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
+        List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
                 field("status", RelationDataType.VARCHAR, "Status"),
                 field("active", RelationDataType.BOOLEAN, "Active"),
                 field("name", RelationDataType.VARCHAR, "Name")));
-        assertEquals(List.of("active", "name"), columns.stream().map(PortalListColumnMeta::field).toList());
+        assertEquals(List.of("active", "name"), columns.stream().map(ListColumnMeta::field).toList());
         // The endpoint has no GROUP BY execution — even closed-value kinds must not promise it.
-        assertTrue(columns.stream().noneMatch(PortalListColumnMeta::groupable));
+        assertTrue(columns.stream().noneMatch(ListColumnMeta::groupable));
     }
 
     @Test
     void auditTimestampDeclaredAsVarcharIsStillADateFilter() {
-        PortalListColumnMeta created = byField(RelationTableColumnSpec.columnsFor(List.of(
+        ListColumnMeta created = byField(RelationTableColumnSpec.columnsFor(List.of(
                 field("created_at", RelationDataType.VARCHAR, "Created At"),
                 field("name", RelationDataType.VARCHAR, "Name"))), "created_at");
         assertEquals(Kind.DATETIME, created.kind());
@@ -83,7 +81,7 @@ class RelationTableColumnSpecTest {
 
     @Test
     void auditUserDeclaredAsVarcharIsStillAPeopleFilter() {
-        PortalListColumnMeta createdBy = byField(RelationTableColumnSpec.columnsFor(List.of(
+        ListColumnMeta createdBy = byField(RelationTableColumnSpec.columnsFor(List.of(
                 field("created_by", RelationDataType.VARCHAR, "Created By"),
                 field("name", RelationDataType.VARCHAR, "Name"))), "created_by");
         assertEquals(Kind.USER, createdBy.kind());
@@ -93,15 +91,15 @@ class RelationTableColumnSpecTest {
 
     @Test
     void booleanColumnCarriesTrueFalseOptions() {
-        PortalListColumnMeta active = byField(RelationTableColumnSpec.columnsFor(List.of(
+        ListColumnMeta active = byField(RelationTableColumnSpec.columnsFor(List.of(
                 field("active", RelationDataType.BOOLEAN, "Active"))), "active");
         assertEquals(List.of("true", "false"),
-                active.options().stream().map(PortalListColumnMeta.Option::value).toList());
+                active.options().stream().map(ListColumnMeta.Option::value).toList());
     }
 
     @Test
     void labelFallsBackToFieldNameAndUnknownTypeIsDisplayOnly() {
-        List<PortalListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
+        List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
                 field("raw_code", RelationDataType.VARCHAR, "  "),
                 field("legacy", null, "Legacy")));
         assertEquals("raw_code", byField(columns, "raw_code").label());
@@ -114,7 +112,7 @@ class RelationTableColumnSpecTest {
                 field("status", RelationDataType.VARCHAR, "Status"))));
     }
 
-    private PortalListColumnMeta byField(List<PortalListColumnMeta> columns, String field) {
+    private ListColumnMeta byField(List<ListColumnMeta> columns, String field) {
         return columns.stream().filter(c -> c.field().equals(field)).findFirst().orElseThrow();
     }
 }

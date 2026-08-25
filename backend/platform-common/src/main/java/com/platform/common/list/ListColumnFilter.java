@@ -1,8 +1,8 @@
-package com.portal.dto;
+package com.platform.common.list;
 
 /**
  * One column filter as the shared list header's filter dialog produces it. Which operators
- * a column accepts is declared by {@link PortalListColumnMeta}; this record only carries the
+ * a column accepts is declared by {@link ListColumnMeta}; this record only carries the
  * request, and a filter that names an undeclared field or an operator outside that column's
  * whitelist is rejected when it is compiled, never silently dropped.
  *

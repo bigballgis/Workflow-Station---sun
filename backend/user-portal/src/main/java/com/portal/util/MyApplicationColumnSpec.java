@@ -1,36 +1,35 @@
 package com.portal.util;
 
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
-
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Fixed column declaration for My Requests. Status is the closed process-instance ENUM;
- * current assignee is USER (people picker + groupable). Request ID is computed, so it is
- * display-only.
+ * current assignee is USER (people picker + groupable). Request ID is the persisted
+ * process-variable text {@code __request_id}; filter/sort compile to that JSON path.
  */
 public final class MyApplicationColumnSpec {
 
     private MyApplicationColumnSpec() {
     }
 
-    public static List<PortalListColumnMeta> columns() {
+    public static List<ListColumnMeta> columns() {
         return List.of(
-                PortalListColumnMeta.displayOnly("requestId", "application.requestId", Kind.TEXT),
-                PortalListColumnMeta.of("businessKey", "application.processTitle", Kind.TEXT),
-                PortalListColumnMeta.of("currentStepName", "application.currentStep", Kind.TEXT),
-                PortalListColumnMeta.of("currentAssignee", "application.currentAssignee", Kind.USER),
-                PortalListColumnMeta.of("startTime", "application.startTime", Kind.DATETIME),
-                PortalListColumnMeta.withOptions("status", "application.status", Kind.ENUM, statusOptions())
+                ListColumnMeta.of("requestId", "application.requestId", Kind.TEXT),
+                ListColumnMeta.of("businessKey", "application.processTitle", Kind.TEXT),
+                ListColumnMeta.of("currentStepName", "application.currentStep", Kind.TEXT),
+                ListColumnMeta.of("currentAssignee", "application.currentAssignee", Kind.USER),
+                ListColumnMeta.of("startTime", "application.startTime", Kind.DATETIME),
+                ListColumnMeta.withOptions("status", "application.status", Kind.ENUM, statusOptions())
         );
     }
 
     public static ListFilterSql sql() {
-        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
-        for (PortalListColumnMeta column : columns()) {
+        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
+        for (ListColumnMeta column : columns()) {
             byField.put(column.field(), column);
         }
         return new ListFilterSql(byField, MyApplicationColumnSpec::sqlFor, "pi.id", "pi.start_time DESC");
@@ -38,6 +37,7 @@ public final class MyApplicationColumnSpec {
 
     private static String sqlFor(String field) {
         return switch (field) {
+            case "requestId" -> "pi.variables->>'__request_id'";
             case "businessKey" -> "pi.business_key";
             case "currentStepName" -> "pi.current_node";
             case "currentAssignee" -> "pi.current_assignee";
@@ -47,12 +47,12 @@ public final class MyApplicationColumnSpec {
         };
     }
 
-    private static List<PortalListColumnMeta.Option> statusOptions() {
+    private static List<ListColumnMeta.Option> statusOptions() {
         return List.of(
-                new PortalListColumnMeta.Option("RUNNING", "application.running"),
-                new PortalListColumnMeta.Option("COMPLETED", "application.completed"),
-                new PortalListColumnMeta.Option("WITHDRAWN", "application.withdrawn"),
-                new PortalListColumnMeta.Option("REJECTED", "application.rejected")
+                new ListColumnMeta.Option("RUNNING", "application.running"),
+                new ListColumnMeta.Option("COMPLETED", "application.completed"),
+                new ListColumnMeta.Option("WITHDRAWN", "application.withdrawn"),
+                new ListColumnMeta.Option("REJECTED", "application.rejected")
         );
     }
 }

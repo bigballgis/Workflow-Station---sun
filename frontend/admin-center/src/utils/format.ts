@@ -17,6 +17,7 @@ export const toElTagType = (tag: TagType | ''): TagType | undefined =>
 // ---- 通用状态映射 ----
 const STATUS_TYPE_MAP: Record<string, TagType> = {
   ACTIVE: 'success',
+  INACTIVE: 'info',
   DISABLED: 'info',
   LOCKED: 'danger',
   PENDING: 'warning',
@@ -102,7 +103,13 @@ export const biDashboardStatusTagType = (
 
 /** 用户状态 i18n key */
 export const userStatusKey = (status: string) =>
-  ({ ACTIVE: 'user.active', DISABLED: 'user.disabled', LOCKED: 'user.locked', PENDING: 'user.pending' }[status] || status)
+  ({
+    ACTIVE: 'user.active',
+    INACTIVE: 'user.disabled',
+    DISABLED: 'user.disabled',
+    LOCKED: 'user.locked',
+    PENDING: 'user.pending',
+  }[status] || status)
 
 /** 功能单元状态 i18n key */
 export const functionUnitStatusKey = (status: string) =>

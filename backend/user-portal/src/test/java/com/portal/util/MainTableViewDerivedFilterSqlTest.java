@@ -1,12 +1,10 @@
 package com.portal.util;
 
-import com.portal.dto.ListColumnFilter;
+import com.platform.common.list.ListColumnFilter;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.MainTableViewColumnSpec.SqlSource;
 import org.junit.jupiter.api.Test;
-
 import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

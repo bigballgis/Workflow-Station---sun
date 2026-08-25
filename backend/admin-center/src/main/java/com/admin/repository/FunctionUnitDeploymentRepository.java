@@ -112,6 +112,9 @@ public interface FunctionUnitDeploymentRepository extends JpaRepository<Function
      */
     Page<FunctionUnitDeployment> findByEnvironmentOrderByCreatedAtDesc(
             DeploymentEnvironment environment, Pageable pageable);
+
+    @Query("SELECT d FROM FunctionUnitDeployment d JOIN FETCH d.functionUnit WHERE d.id IN :ids")
+    List<FunctionUnitDeployment> findByIdInWithFunctionUnit(@Param("ids") List<String> ids);
     
     /**
      * Prior SUCCESS deployment before {@code beforeTime} (by startedAt/completedAt order).

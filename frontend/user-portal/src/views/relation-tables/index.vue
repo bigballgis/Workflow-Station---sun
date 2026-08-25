@@ -76,7 +76,10 @@
       </div>
 
       <!-- Right: Data grid -->
-      <div class="data-grid-panel">
+      <div
+        v-loading="dataLoading"
+        class="data-grid-panel"
+      >
         <template v-if="selectedTable">
           <div class="grid-toolbar">
             <el-input
@@ -141,11 +144,10 @@
               :style="gridInnerStyle"
             >
           <el-table
-            v-loading="dataLoading"
             :data="dataRows"
             stripe
-            :fit="gridFits"
-            :table-layout="gridFits ? 'auto' : 'fixed'"
+            :fit="false"
+            table-layout="fixed"
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
@@ -154,8 +156,7 @@
               v-for="(col, colIndex) in displayColumns"
               :key="col.field"
               :prop="col.field"
-              :width="gridFits ? undefined : widthOf(col.field)"
-              :min-width="gridFits ? widthOf(col.field) : undefined"
+              :width="widthOf(col.field)"
               show-overflow-tooltip
             >
               <template #header>
@@ -180,6 +181,11 @@
                 {{ isTimestampColumn(col.field) ? formatHKT(row[col.field]) : formatRelationCellDisplay(row[col.field]) }}
               </template>
             </el-table-column>
+            <el-table-column
+              v-if="leftoverWidth > 0"
+              :width="leftoverWidth"
+              class-name="list-col-spacer"
+            />
             <el-table-column
               v-if="canWrite"
               label="Actions"
@@ -509,7 +515,7 @@ const layoutStorageKey = computed(() =>
 const columnOrderStorageKey = computed(() =>
   selectedTableId.value != null ? `portal-list-column-order:relation-table:${selectedTableId.value}` : '',
 )
-const { gridScrollRef, gridFits, gridInnerStyle, widthOf, setWidth, persistWidths,
+const { gridScrollRef, gridFits, leftoverWidth, gridInnerStyle, widthOf, setWidth, persistWidths,
 } = useListColumnLayout({
   storageKey: layoutStorageKey,
   fields: layoutFields,

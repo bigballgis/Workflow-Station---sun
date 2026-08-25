@@ -1,10 +1,10 @@
 package com.portal.dto;
 
+import com.platform.common.list.ListColumnFilter;
 import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -43,6 +43,12 @@ public class TaskQueryRequest {
 
     /** 搜索关键词 */
     private String keyword;
+
+    /** Shared-list column filters (AND). */
+    private List<ListColumnFilter> filters;
+
+    /** Shared-list group-by field (forces portal fullScan). */
+    private String groupBy;
 
     /** 排序字段 */
     private String sortBy;

@@ -7,24 +7,37 @@
  * 所有 notify* 调用均在此处处理。错误通过 AppErrorCode 标准化。
  */
 
-import { ref, computed } from 'vue'
-import { storeToRefs } from 'pinia'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
 import { useRelationTableStore } from '@/stores/relationTable'
-import type { RelationTableResponse } from '@/api/relationTable'
+import {
+  relationTableStructureApi,
+  type RelationTableFuGroup,
+  type RelationTableResponse,
+} from '@/api/relationTable'
+import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+
+const ACTIONS_COL_WIDTH = 240
+const STRUCTURE_COL_WIDTHS: Record<string, number> = {
+  displayName: 160,
+  currentVersion: 90,
+  status: 110,
+  enabled: 80,
+  portalVisible: 90,
+  createdAt: 160,
+  updatedAt: 160,
+}
 
 export function useRelationTable() {
   const router = useRouter()
   const { t } = useI18n()
   const store = useRelationTableStore()
-  const { tableList, loading } = storeToRefs(store)
 
-  // ==================== State ====================
-
+  const loading = ref(false)
   const enableLoadingMap = ref<Record<number, boolean>>({})
   const portalLoadingMap = ref<Record<number, boolean>>({})
   const currentTable = ref<RelationTableResponse | null>(null)
@@ -32,58 +45,41 @@ export function useRelationTable() {
   const showAccessDialog = ref(false)
   const showCompareDialog = ref(false)
 
-  // Function Unit sidebar grouping (Table Structure page): left panel groups all tables by FU.
-  // A table linked to multiple FUs appears under each of them; Common (no FU) always sorts first;
-  // selecting a group filters the right-side table, '' = show all.
   const selectedGroupKey = ref('')
-  const ALL_TABLES_KEY = ''
   const COMMON_KEY = '__common__'
+  const functionUnitGroups = ref<RelationTableFuGroup[]>([])
 
-  interface TableGroup {
-    key: string
-    label: string | null
-    tables: RelationTableResponse[]
-  }
-
-  const groupedTableList = computed<TableGroup[]>(() => {
-    const groups = new Map<string, TableGroup>()
-    for (const t of tableList.value) {
-      const units = t.functionUnits || []
-      if (units.length === 0) {
-        if (!groups.has(COMMON_KEY)) groups.set(COMMON_KEY, { key: COMMON_KEY, label: null, tables: [] })
-        groups.get(COMMON_KEY)!.tables.push(t)
-        continue
-      }
-      for (const fu of units) {
-        const key = fu.id
-        const label = fu.name || fu.code || key
-        if (!groups.has(key)) groups.set(key, { key, label, tables: [] })
-        groups.get(key)!.tables.push(t)
-      }
-    }
-    const entries = [...groups.values()]
-    const common = entries.filter(g => g.key === COMMON_KEY)
-    const rest = entries.filter(g => g.key !== COMMON_KEY)
-      .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
-    return [...common, ...rest]
+  const grid = useAdminListGrid<RelationTableResponse>({
+    storageKey: 'admin-list-layout:rt-structure',
+    extraWidth: ACTIONS_COL_WIDTH,
+    defaultWidthOf: (field) => STRUCTURE_COL_WIDTHS[field] ?? 120,
   })
-
-  const filteredTableList = computed(() => {
-    if (selectedGroupKey.value === ALL_TABLES_KEY) return tableList.value
-    return groupedTableList.value.find(g => g.key === selectedGroupKey.value)?.tables ?? []
-  })
-
-  // ==================== Helpers ====================
 
   const terr = (code: string) => t(errorTranslator(code))
 
-  // ==================== Data Fetching ====================
-
   const fetchTableList = async () => {
-    await store.fetchTableList()
+    const seq = grid.beginQuery()
+    loading.value = true
+    try {
+      const page = await relationTableStructureApi.query({
+        ...grid.buildQuery(),
+        functionUnitId: selectedGroupKey.value || undefined,
+      })
+      if (!grid.isCurrentQuery(seq)) return
+      grid.applyPage(page, 'relation-tables/structures/query response is missing its column declaration')
+      functionUnitGroups.value = page.functionUnitGroups ?? []
+    } catch {
+      if (!grid.isCurrentQuery(seq)) return
+      notifyError(t('relationTable.structure.queryFailed'))
+    } finally {
+      if (grid.isCurrentQuery(seq)) loading.value = false
+    }
   }
 
-  // ==================== Toggle Actions ====================
+  watch(selectedGroupKey, () => {
+    grid.resetPage()
+    void fetchTableList()
+  })
 
   const handleToggleEnabled = async (row: RelationTableResponse, val: boolean) => {
     enableLoadingMap.value = { ...enableLoadingMap.value, [row.id]: true }
@@ -111,8 +107,6 @@ export function useRelationTable() {
     }
   }
 
-  // ==================== Dialog Openers ====================
-
   const handleAccess = (row: RelationTableResponse) => {
     currentTable.value = row
     showAccessDialog.value = true
@@ -128,24 +122,20 @@ export function useRelationTable() {
     showCompareDialog.value = true
   }
 
-  // ==================== Edit (router push) ====================
-
   const handleEdit = (row: RelationTableResponse) => {
     router.push(`/relation-tables/structure/${row.id}/edit`)
   }
-
-  // ==================== Deploy ====================
 
   const handleDeploy = async (row: RelationTableResponse) => {
     try {
       await notifyConfirm(
         t('relationTable.confirmDeployMsg', { name: row.tableName }),
         t('relationTable.confirmDeploy'),
-        { type: 'warning' }
+        { type: 'warning' },
       )
       await store.deployTable(row.id)
       notifySuccess(t('relationTable.deployedSuccessfully'))
-      store.fetchTableList()
+      await fetchTableList()
     } catch (e) {
       if (e !== 'cancel') {
         notifyError(terr(AppErrorCode.RELATION_TABLE_DEPLOY_FAILED))
@@ -153,18 +143,16 @@ export function useRelationTable() {
     }
   }
 
-  // ==================== Delete ====================
-
   const handleDelete = async (row: RelationTableResponse) => {
     try {
       await notifyConfirm(
         t('relationTable.confirmDeleteMsg', { name: row.tableName }),
         t('relationTable.confirmDelete'),
-        { type: 'warning' }
+        { type: 'warning' },
       )
       await store.deleteTable(row.id)
       notifySuccess(t('relationTable.deletedSuccessfully'))
-      store.fetchTableList()
+      await fetchTableList()
     } catch (e) {
       if (e !== 'cancel') {
         notifyError(terr(AppErrorCode.RELATION_TABLE_DELETE_FAILED))
@@ -172,21 +160,14 @@ export function useRelationTable() {
     }
   }
 
-  // ==================== Rollback ====================
-
   const handleRollback = (row: RelationTableResponse) => {
     currentTable.value = row
     showVersionDialog.value = true
   }
 
-  // ==================== Return ====================
-
   return {
-    // State
     loading,
-    tableList,
-    filteredTableList,
-    groupedTableList,
+    functionUnitGroups,
     selectedGroupKey,
     COMMON_KEY,
     enableLoadingMap,
@@ -195,7 +176,6 @@ export function useRelationTable() {
     showVersionDialog,
     showAccessDialog,
     showCompareDialog,
-    // Methods
     fetchTableList,
     handleToggleEnabled,
     handleTogglePortalVisibility,
@@ -206,5 +186,7 @@ export function useRelationTable() {
     handleEdit,
     handleRollback,
     handleCompare,
+    ACTIONS_COL_WIDTH,
+    ...grid,
   }
 }

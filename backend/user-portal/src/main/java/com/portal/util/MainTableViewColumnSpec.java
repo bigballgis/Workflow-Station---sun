@@ -1,10 +1,9 @@
 package com.portal.util;
 
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Option;
+import com.platform.common.list.ListColumnMeta.Kind;
 import com.platform.common.audit.SystemAuditFields;
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
-import com.portal.dto.PortalListColumnMeta.Option;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,7 +19,7 @@ import java.util.Map;
  * converts the visible label to that key. Without a mapping they stay display-only, so the header
  * cannot compare the label to the raw key. Sort stays off for mapped display columns.
  *
- * <p>Grouping is declared per {@link PortalListColumnMeta#defaultGroupable(Kind)}: it makes sense
+ * <p>Grouping is declared per {@link ListColumnMeta#defaultGroupable(Kind)}: it makes sense
  * where values repeat (status, assignee, booleans) and not on free text or timestamps.
  */
 public final class MainTableViewColumnSpec {
@@ -92,7 +91,7 @@ public final class MainTableViewColumnSpec {
     }
 
     /** @return one declaration per field, in the order given */
-    public static List<PortalListColumnMeta> columnsFor(List<FieldSource> fields) {
+    public static List<ListColumnMeta> columnsFor(List<FieldSource> fields) {
         return columnsFor(fields, SqlSource.INSTANCE);
     }
 
@@ -100,11 +99,11 @@ public final class MainTableViewColumnSpec {
      * Kind follows the field, not the row source: MAIN and SUB share the same declarations.
      * Callers still pass {@code source} so this stays next to {@link #columnRefFor}.
      */
-    public static List<PortalListColumnMeta> columnsFor(List<FieldSource> fields, SqlSource source) {
+    public static List<ListColumnMeta> columnsFor(List<FieldSource> fields, SqlSource source) {
         if (source == null) {
             throw new IllegalArgumentException("SqlSource is required");
         }
-        List<PortalListColumnMeta> columns = new ArrayList<>(fields.size());
+        List<ListColumnMeta> columns = new ArrayList<>(fields.size());
         for (FieldSource field : fields) {
             columns.add(columnFor(field));
         }
@@ -172,17 +171,17 @@ public final class MainTableViewColumnSpec {
      */
     public static ListFilterSql sqlFor(List<FieldSource> fields, List<Map<String, Object>> sortConfig,
                                        SqlSource source, String tiebreak) {
-        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
+        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
         Map<String, FieldSource> sources = new LinkedHashMap<>();
         for (FieldSource field : fields) {
             sources.put(field.fieldName(), field);
         }
-        for (PortalListColumnMeta column : columnsFor(fields, source)) {
+        for (ListColumnMeta column : columnsFor(fields, source)) {
             FieldSource declared = sources.get(column.field());
             // Display-mapped filters compile in MainTableViewDerivedFilterSql. Demoting them here
             // means a leaked label filter is a 400 instead of comparing the label to the stored key.
             byField.put(column.field(), declared != null && isDisplayMapped(declared)
-                    ? PortalListColumnMeta.displayOnly(column.field(), column.label(), column.kind())
+                    ? ListColumnMeta.displayOnly(column.field(), column.label(), column.kind())
                     : column);
         }
         ListFilterSql.ColumnRef columnRef = columnRefFor(fields, source);
@@ -199,7 +198,7 @@ public final class MainTableViewColumnSpec {
      * sort into the database. {@code start_time DESC} closes the expression because it is the
      * order rows arrived in before any view sort was applied.
      */
-    private static String designerOrderBy(Map<String, PortalListColumnMeta> byField,
+    private static String designerOrderBy(Map<String, ListColumnMeta> byField,
                                           ListFilterSql.ColumnRef columnRef,
                                           List<Map<String, Object>> sortConfig) {
         StringBuilder order = new StringBuilder();
@@ -208,7 +207,7 @@ public final class MainTableViewColumnSpec {
             if (rawField == null) {
                 continue;
             }
-            PortalListColumnMeta column = byField.get(String.valueOf(rawField));
+            ListColumnMeta column = byField.get(String.valueOf(rawField));
             if (column == null) {
                 // The view no longer shows this field; its own projection could not sort by it either.
                 continue;
@@ -220,7 +219,7 @@ public final class MainTableViewColumnSpec {
         return order.append("pi.start_time DESC").toString();
     }
 
-    private static PortalListColumnMeta columnFor(FieldSource field) {
+    private static ListColumnMeta columnFor(FieldSource field) {
         String label = field.displayLabel() != null && !field.displayLabel().isBlank()
                 ? field.displayLabel()
                 : field.fieldName();
@@ -230,8 +229,8 @@ public final class MainTableViewColumnSpec {
         }
         if (isDerivedColumn(field.columnType())) {
             return isDisplayMapped(field)
-                    ? PortalListColumnMeta.displayMapped(field.fieldName(), label)
-                    : PortalListColumnMeta.displayOnly(field.fieldName(), label, Kind.TEXT);
+                    ? ListColumnMeta.displayMapped(field.fieldName(), label)
+                    : ListColumnMeta.displayOnly(field.fieldName(), label, Kind.TEXT);
         }
         if (SystemAuditFields.isTimestamp(field.fieldName())) {
             return queryable(field.fieldName(), label, Kind.DATETIME);
@@ -240,26 +239,26 @@ public final class MainTableViewColumnSpec {
             return queryable(field.fieldName(), label, Kind.USER);
         }
         if (field.systemField()) {
-            return PortalListColumnMeta.displayOnly(field.fieldName(), label, Kind.TEXT);
+            return ListColumnMeta.displayOnly(field.fieldName(), label, Kind.TEXT);
         }
         Kind kind = kindOf(field.dataType());
         return kind == null
-                ? PortalListColumnMeta.displayOnly(field.fieldName(), label, Kind.TEXT)
+                ? ListColumnMeta.displayOnly(field.fieldName(), label, Kind.TEXT)
                 : queryable(field.fieldName(), label, kind);
     }
 
-    private static PortalListColumnMeta queryable(String field, String label, Kind kind) {
+    private static ListColumnMeta queryable(String field, String label, Kind kind) {
         if (kind == Kind.BOOLEAN) {
-            return PortalListColumnMeta.withOptions(field, label, kind, PortalListColumnMeta.booleanOptions());
+            return ListColumnMeta.withOptions(field, label, kind, ListColumnMeta.booleanOptions());
         }
         if (kind == Kind.ENUM) {
             if (!"process_status".equals(field)) {
                 throw new IllegalStateException(
                         "ENUM column " + field + " has no closed option list — declare it with withOptions");
             }
-            return PortalListColumnMeta.withOptions(field, label, kind, PROCESS_STATUS_OPTIONS);
+            return ListColumnMeta.withOptions(field, label, kind, PROCESS_STATUS_OPTIONS);
         }
-        return PortalListColumnMeta.of(field, label, kind);
+        return ListColumnMeta.of(field, label, kind);
     }
 
     /**
