@@ -54,16 +54,15 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   }
 
   // Function Unit grouping: selectable options are the deployed FUs (dedup by code, latest version).
-  // The table's currently-assigned FU may point to an older version's id (not in that dedup list) —
-  // that option is added separately so the select still shows its label instead of going blank.
+  // The table's currently-assigned FUs may point to an older version's id of the SAME code (not in
+  // that dedup list) — dedup extras by code too, else the same FU name shows up twice in the select.
   const functionUnitOptions = ref<FunctionUnit[]>([])
-  const currentFunctionUnitOption = ref<FunctionUnit | null>(null)
+  const currentFunctionUnitOptions = ref<FunctionUnit[]>([])
   const allFunctionUnitOptions = computed<FunctionUnit[]>(() => {
-    if (!currentFunctionUnitOption.value) return functionUnitOptions.value
-    if (functionUnitOptions.value.some(fu => fu.id === currentFunctionUnitOption.value!.id)) {
-      return functionUnitOptions.value
-    }
-    return [...functionUnitOptions.value, currentFunctionUnitOption.value]
+    const extra = currentFunctionUnitOptions.value.filter(
+      fu => !functionUnitOptions.value.some(o => (o.code || o.id) === (fu.code || fu.id)),
+    )
+    return [...functionUnitOptions.value, ...extra]
   })
 
   const loadFunctionUnitOptions = async () => {
@@ -74,10 +73,24 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
     }
   }
 
-  const form = reactive({ tableName: '', displayName: '', description: '', functionUnitId: '', fieldDefinitions: [] as FieldRow[] })
+  const form = reactive({ tableName: '', displayName: '', description: '', functionUnitIds: [] as string[], fieldDefinitions: [] as FieldRow[] })
   const rules = {
     displayName: [{ required: true, message: () => t('form.validationDisplayNameRequired'), trigger: 'blur' }],
     tableName: [{ required: true, message: () => t('form.validationTableNameRequired'), trigger: 'blur' }],
+  }
+
+  // A table with no Function Unit links is "Common" (visible to every FU). Modeled in the select as
+  // an explicit, mutually-exclusive option rather than "leave everything blank" so the intent is
+  // discoverable in the UI instead of relying on a hint line under the field.
+  const COMMON_OPTION_VALUE = '__COMMON__'
+  const onFunctionUnitSelectionChange = (values: string[]) => {
+    const commonJustPicked = values.includes(COMMON_OPTION_VALUE)
+    if (commonJustPicked && values.length > 1) {
+      const wasCommonAlreadySelected = form.functionUnitIds.includes(COMMON_OPTION_VALUE)
+      form.functionUnitIds = wasCommonAlreadySelected
+        ? values.filter(v => v !== COMMON_OPTION_VALUE)
+        : [COMMON_OPTION_VALUE]
+    }
   }
 
   const onTableDisplayNameInput = () => {
@@ -183,14 +196,23 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
       form.tableName = data.tableName
       form.displayName = data.displayName || ''
       form.description = data.description || ''
-      form.functionUnitId = data.functionUnitId || ''
-      currentFunctionUnitOption.value = data.functionUnitId
-        ? {
-            id: data.functionUnitId,
-            code: data.functionUnitCode || '',
-            name: data.functionUnitName || data.functionUnitCode || data.functionUnitId,
-          } as FunctionUnit
-        : null
+      // The table's saved link may point at an older FU version's id. Re-point selection to the
+      // latest deployed version's id when the code matches, so the select's value lines up with
+      // the option list it renders (same id space) instead of showing a duplicate/blank label.
+      const latestByCode = new Map(
+        functionUnitOptions.value.filter(fu => fu.code).map(fu => [fu.code, fu] as const),
+      )
+      const assignedFus = data.functionUnits || []
+      form.functionUnitIds = assignedFus.length
+        ? assignedFus.map(fu => latestByCode.get(fu.code || '')?.id ?? fu.id)
+        : [COMMON_OPTION_VALUE]
+      currentFunctionUnitOptions.value = assignedFus
+        .filter(fu => !fu.code || !latestByCode.has(fu.code))
+        .map(fu => ({
+          id: fu.id,
+          code: fu.code || '',
+          name: fu.name || fu.code || fu.id,
+        } as FunctionUnit))
       form.fieldDefinitions = (data.fieldDefinitions || []).map(f => ({
         id: f.id,
         fieldName: f.fieldName,
@@ -233,6 +255,11 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
       if (!await assertTableNameAvailable(form.tableName, tableId.value)) return false
     }
 
+    // "Common" is a UI-only sentinel — the backend contract is an empty list.
+    const functionUnitIdsForSubmit = form.functionUnitIds.includes(COMMON_OPTION_VALUE)
+      ? []
+      : form.functionUnitIds
+
     submitting.value = true
     try {
       if (isEdit.value) {
@@ -258,8 +285,8 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
         await relationTableStructureApi.update(tableId.value, {
           displayName: form.displayName || undefined,
           description: form.description || undefined,
-          // Always send functionUnitId on edit: '' clears to ungrouped, a value (re)assigns.
-          functionUnitId: form.functionUnitId || '',
+          // Always send functionUnitIds on edit: [] clears to Common, a non-empty list (re)assigns.
+          functionUnitIds: functionUnitIdsForSubmit,
           fieldDefinitions: fields,
         })
         notifySuccess('Table updated successfully')
@@ -286,7 +313,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           tableName: form.tableName,
           displayName: form.displayName || undefined,
           description: form.description || undefined,
-          functionUnitId: form.functionUnitId || undefined,
+          functionUnitIds: functionUnitIdsForSubmit,
           fieldDefinitions: fields,
         })
         notifySuccess('Table created successfully')
@@ -307,5 +334,6 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   return {
     form, rules, submitting, dataTypes, fkRefTables, allFunctionUnitOptions, isAuditField, canBeComputed, addField, removeField, loadTableData, submit,
     onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange,
+    COMMON_OPTION_VALUE, onFunctionUnitSelectionChange,
   }
 }

@@ -14,7 +14,7 @@ vi.mock('@/api/task', () => ({
 const api = vi.mocked(queryCompletedTasks)
 
 const COLUMNS: ListColumnMeta[] = [
-  { field: 'requestId', label: 'task.requestId', kind: 'TEXT', filterable: false, sortable: false, groupable: false, operators: [] },
+  { field: 'requestId', label: 'task.requestId', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'] },
   { field: 'taskName', label: 'task.taskName', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'] },
   { field: 'currentStepName', label: 'task.currentStep', kind: 'TEXT', filterable: false, sortable: false, groupable: false, operators: [] },
   { field: 'processDefinitionName', label: 'task.processName', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains'] },
@@ -55,11 +55,11 @@ describe('completed tasks — shared list header', () => {
     const headers = w.findAllComponents({ name: 'ListColumnHeader' })
     expect(headers.map((h) => h.props('column').field)).toEqual(COLUMNS.map((c) => c.field))
     expect(headers.every((h) => h.find('.col-resize-handle').exists())).toBe(true)
-    // Move is on for the whole grid, so even display-only columns get a header menu.
+    // Move is on for the whole grid, so display-only columns still get a header menu.
     expect(headers.every((h) => h.find('.list-col-trigger').exists())).toBe(true)
     const requestId = headers[0].props('column') as ListColumnMeta
-    expect(requestId.filterable).toBe(false)
-    expect(requestId.sortable).toBe(false)
+    expect(requestId.filterable).toBe(true)
+    expect(requestId.sortable).toBe(true)
     expect(requestId.groupable).toBe(false)
   })
 
@@ -78,6 +78,23 @@ describe('completed tasks — shared list header', () => {
     await flushPromises()
     expect(lastRequest().page).toBe(0)
     expect(lastRequest().sortField).toBe('taskName')
+    expect(lastRequest().sortDirection).toBe('ASC')
+  })
+
+  it('requestId filter and sort reset to the first page', async () => {
+    const w = await mountPage()
+    const requestIdHeader = w.findAllComponents({ name: 'ListColumnHeader' })[0]
+    requestIdHeader.vm.$emit('filter-open')
+    await flushPromises()
+    w.findComponent({ name: 'ListFilterDialog' }).vm.$emit('apply', { operator: 'contains', value: 'ATM-DC' })
+    await flushPromises()
+    expect(lastRequest().page).toBe(0)
+    expect(lastRequest().filters).toEqual([{ field: 'requestId', operator: 'contains', value: 'ATM-DC' }])
+
+    requestIdHeader.vm.$emit('sort-change', 'ASC')
+    await flushPromises()
+    expect(lastRequest().page).toBe(0)
+    expect(lastRequest().sortField).toBe('requestId')
     expect(lastRequest().sortDirection).toBe('ASC')
   })
 

@@ -16,6 +16,9 @@ public interface AutomationPieceService {
     /** 列出全部 piece(含同名多版本),按 name、version 倒序。 */
     List<AutomationPieceSummary> listPieces();
 
+    /** All versions of the given package names, same row mapping as {@link #listPieces()}. */
+    List<AutomationPieceSummary> findPiecesByNames(List<String> names);
+
     /**
      * 导入(在线安装)一个自研 piece:上传 build-piece 产出的 tgz,
      * 服务端解析包内 package.json 取 name/version,代理 AP

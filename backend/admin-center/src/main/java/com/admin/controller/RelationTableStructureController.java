@@ -1,6 +1,9 @@
 package com.admin.controller;
 
+import com.admin.component.RelationTableStructureListQueryComponent;
+import com.admin.dto.list.RelationTableStructureListPage;
 import com.admin.dto.request.CreateRelationTableRequest;
+import com.admin.dto.request.RelationTableStructureListQueryRequest;
 import com.admin.dto.request.RollbackRequest;
 import com.admin.dto.request.UpdateRelationTableRequest;
 import com.admin.dto.response.RelationTableResponse;
@@ -36,6 +39,7 @@ public class RelationTableStructureController {
     private final RelationTableStructureService structureService;
     private final RelationTableDeployService deployService;
     private final RelationTableAccessService accessService;
+    private final RelationTableStructureListQueryComponent structureListQueryComponent;
 
     // ==================== 表结构 CRUD ====================
 
@@ -54,6 +58,13 @@ public class RelationTableStructureController {
         log.info("Getting relation table list");
         List<RelationTableResponse> list = structureService.getTableList();
         return ResponseEntity.ok(list);
+    }
+
+    @PostMapping("/query")
+    @Operation(summary = "分页查询表定义", description = "共享列表：COUNT(*) 与页数据共用同一谓词")
+    public ResponseEntity<RelationTableStructureListPage> queryTables(
+            @RequestBody @Valid RelationTableStructureListQueryRequest request) {
+        return ResponseEntity.ok(structureListQueryComponent.query(request));
     }
 
     @GetMapping("/name-available")

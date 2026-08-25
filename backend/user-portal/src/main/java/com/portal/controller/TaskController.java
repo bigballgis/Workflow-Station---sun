@@ -60,6 +60,14 @@ public class TaskController {
         return ApiResponse.success(result);
     }
 
+    @Operation(summary = "Query To Do list (shared list chrome)")
+    @PostMapping("/todo/query")
+    public ApiResponse<PortalListPage<TaskInfo>> queryTodoTasks(
+            @CurrentUserId String userId,
+            @RequestBody @Valid TodoTaskQueryRequest request) {
+        return ApiResponse.success(taskQueryComponent.queryTodoList(userId, request));
+    }
+
     @Operation(summary = "Get task detail")
     @GetMapping("/{taskId}")
     public ApiResponse<TaskInfo> getTaskDetail(
@@ -233,26 +241,6 @@ public class TaskController {
         Map<String, Object> data = taskProcessComponent.assignSubTableRow(taskId, rowId, request.getRowKey(),
                 request.getAssigneeId(), userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
-        return ApiResponse.success(data);
-    }
-
-    @Operation(summary = "Assign sub-table row handler by business field (no rowId fallback)")
-    @PostMapping("/{taskId}/sub-table-rows/assign-by-identity")
-    public ApiResponse<Map<String, Object>> assignSubTableRowByIdentity(
-            @PathVariable String taskId,
-            @RequestBody @Valid SubTableRowAssignByIdentityRequest request,
-            @CurrentUserId String userId) {
-        Map<String, Object> data = taskProcessComponent.assignSubTableRowByIdentity(
-                taskId,
-                request.getAssigneeId(),
-                userId,
-                SecurityContextUtils.getCurrentUsername().orElse(null),
-                request.getEmail(),
-                request.getName(),
-                request.getDepartment(),
-                request.getTopic(),
-                request.getLocation(),
-                request.getOrganizerName());
         return ApiResponse.success(data);
     }
 

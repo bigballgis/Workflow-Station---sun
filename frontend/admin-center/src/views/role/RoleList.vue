@@ -22,7 +22,7 @@
         name="CUSTOM"
       />
     </el-tabs>
-    
+
     <el-form
       :inline="true"
       :model="query"
@@ -70,141 +70,173 @@
     </el-form>
 
     <el-empty
-      v-if="!roleStore.loading && listTotal === 0"
+      v-if="!loading && pagination.total === 0"
       :description="t('role.noRolesInTab')"
     />
-    
-    <el-table
+
+    <el-card
       v-else
-      v-loading="roleStore.loading"
-      :data="pagedRoles"
-      stripe
-      table-layout="auto"
-      style="width: 100%"
+      v-loading="loading"
+      class="table-card"
     >
-      <el-table-column
-        prop="name"
-        :label="t('role.roleName')"
-        min-width="160"
+      <div
+        ref="gridScrollRef"
+        class="list-data-grid-scroll"
       >
-        <template #default="{ row }">
-          <el-tooltip
-            :content="row.displayName || '-'"
-            placement="top-start"
-            :disabled="!row.displayName"
-            popper-class="role-desc-tooltip"
+        <div
+          class="list-data-grid-inner"
+          :style="gridInnerStyle"
+        >
+          <el-table
+            :data="displayRows"
+            stripe
+            border
+            :fit="false"
+            table-layout="fixed"
+            style="width: 100%"
+            class="list-data-grid"
+            :class="{ 'list-data-grid--fit': gridFits }"
+            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
+            :row-class-name="rowClassName"
           >
-            <span style="cursor: default">{{ row.name }}</span>
-          </el-tooltip>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="code"
-        :label="t('role.roleCode')"
-        min-width="140"
+            <el-table-column
+              v-for="(col, colIndex) in displayColumns"
+              :key="col.field"
+              :prop="col.field"
+              :width="widthOf(col.field)"
+              show-overflow-tooltip
+            >
+              <template #header>
+                <ListColumnHeader
+                  :column="col"
+                  :sort="sort.field === col.field ? sort.direction : null"
+                  :grouped="groupBy === col.field"
+                  :filtered="!!columnFilters[col.field]"
+                  :width="widthOf(col.field)"
+                  :show-move="displayColumns.length > 1"
+                  :can-move-left="colIndex > 0"
+                  :can-move-right="colIndex < displayColumns.length - 1"
+                  @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
+                  @clear-sort="onClearSort"
+                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
+                  @filter-open="openFilter(col.field)"
+                  @clear-filter="onClearFilter(col.field)"
+                  @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
+                  @width-change="(width: number) => setWidth(col.field, width)"
+                  @width-commit="persistWidths"
+                />
+              </template>
+              <template #default="{ row }">
+                <template v-if="isListGroupHeaderRow(row)">
+                  <div class="group-header-cell">
+                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
+                    <span class="group-count">({{ row._groupCount }})</span>
+                  </div>
+                </template>
+                <el-tooltip
+                  v-else-if="col.field === 'name'"
+                  :content="row.displayName || '-'"
+                  placement="top-start"
+                  :disabled="!row.displayName"
+                  popper-class="role-desc-tooltip"
+                >
+                  <span style="cursor: default">{{ row.name }}</span>
+                </el-tooltip>
+                <el-tag
+                  v-else-if="col.field === 'type'"
+                  :type="roleTypeTagType(row.type) as any"
+                  size="small"
+                >
+                  {{ t(roleTypeKey(row.type)) }}
+                </el-tag>
+                <el-tag
+                  v-else-if="col.field === 'status'"
+                  :type="row.status === 'ACTIVE' ? 'success' : 'info'"
+                  size="small"
+                >
+                  {{ row.status === 'ACTIVE' ? t('common.enabled') : t('common.disabled') }}
+                </el-tag>
+                <el-icon
+                  v-else-if="col.field === 'isSystem' && row.isSystem"
+                  color="#E6A23C"
+                >
+                  <Lock />
+                </el-icon>
+                <template v-else>
+                  {{ row[col.field as keyof typeof row] ?? '-' }}
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="leftoverWidth > 0"
+              :width="leftoverWidth"
+              class-name="list-col-spacer"
+            />
+            <el-table-column
+              :label="t('common.operation')"
+              :width="ACTIONS_COL_WIDTH"
+              fixed="right"
+              align="center"
+            >
+              <template #header>
+                {{ t('common.operation') }}
+              </template>
+              <template #default="{ row }">
+                <div
+                  v-if="!isListGroupHeaderRow(row)"
+                  class="row-actions"
+                >
+                  <el-button
+                    v-if="!row.isSystem && canWriteRole"
+                    link
+                    type="primary"
+                    @click="showEditDialog(row)"
+                  >
+                    {{ t('common.edit') }}
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
+                    @click="showMembersDialog(row)"
+                  >
+                    {{ t('role.members') }}
+                  </el-button>
+                  <el-button
+                    v-if="!row.isSystem && canWriteRole && canDeleteRole"
+                    link
+                    type="danger"
+                    @click="handleDelete(row)"
+                  >
+                    {{ t('common.delete') }}
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+
+      <ListPagination
+        v-model:page="pagination.page"
+        v-model:size="pagination.size"
+        :total="pagination.total"
+        :loading="loading"
+        @change="fetchRoles"
       />
-      <el-table-column
-        prop="type"
-        :label="t('role.roleType')"
-        width="130"
-        align="center"
-      >
-        <template #default="{ row }">
-          <el-tag
-            :type="roleTypeTagType(row.type) as any"
-            size="small"
-          >
-            {{ t(roleTypeKey(row.type)) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="status"
-        :label="t('common.status')"
-        width="100"
-        align="center"
-        :show-overflow-tooltip="false"
-        class-name="no-wrap-header"
-      >
-        <template #default="{ row }">
-          <el-tag
-            :type="row.status === 'ACTIVE' ? 'success' : 'info'"
-            size="small"
-          >
-            {{ row.status === 'ACTIVE' ? t('common.enabled') : t('common.disabled') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('role.systemRole')"
-        width="110"
-        align="center"
-        :show-overflow-tooltip="false"
-        class-name="no-wrap-header"
-      >
-        <template #default="{ row }">
-          <el-icon
-            v-if="row.isSystem"
-            color="#E6A23C"
-          >
-            <Lock />
-          </el-icon>
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('common.operation')"
-        width="220"
-        fixed="right"
-        align="center"
-      >
-        <template #default="{ row }">
-          <div style="display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; white-space: nowrap; gap: 4px;">
-            <el-button
-              v-if="!row.isSystem && canWriteRole"
-              link
-              type="primary"
-              @click="showEditDialog(row)"
-            >
-              {{ t('common.edit') }}
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="showMembersDialog(row)"
-            >
-              {{ t('role.members') }}
-            </el-button>
-            <el-button
-              v-if="!row.isSystem && canWriteRole && canDeleteRole"
-              link
-              type="danger"
-              @click="handleDelete(row)"
-            >
-              {{ t('common.delete') }}
-            </el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </el-table>
-    
-    <div
-      v-if="listTotal > 0"
-      class="pagination-container"
-    >
-      <el-pagination
-        v-model:current-page="query.page"
-        v-model:page-size="query.size"
-        :total="listTotal"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        @size-change="handlePageSizeChange"
-      />
-    </div>
-    
+    </el-card>
+
+    <ListFilterDialog
+      v-model:visible="filterDialog.visible"
+      :column="activeFilterColumn"
+      :filter="activeFilter"
+      @apply="onFilterApply"
+      @clear="onFilterClear"
+    />
+
     <RoleFormDialog
       v-model="formDialogVisible"
       :role="currentRole"
-      @success="loadRoles"
+      @success="fetchRoles"
     />
     <RoleMembersDialog
       v-model="membersDialogVisible"
@@ -214,101 +246,116 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/PageHeader.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lock, Plus } from '@element-plus/icons-vue'
-import { useRoleStore } from '@/stores/role'
-import { Role, type RoleType } from '@/api/role'
-import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import { roleTypeTagType, roleTypeKey } from '@/utils/format'
-import {
-  filterSortRoles,
-  paginateRoles,
-  type RoleListTab,
-} from '@/utils/roleList'
 import RoleFormDialog from './components/RoleFormDialog.vue'
 import RoleMembersDialog from './components/RoleMembersDialog.vue'
+import { useRole } from '@/composables/modules/useRole'
 import { useTabRefresh } from '@/composables/useTabRefresh'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
+import ListPagination from '@platform-shared/list/ListPagination.vue'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
-const { t, locale } = useI18n()
-const roleStore = useRoleStore()
+const { t } = useI18n()
 
-const canWriteRole = hasPermission(PERMISSIONS.ROLE_WRITE)
-const canDeleteRole = hasPermission(PERMISSIONS.ROLE_DELETE)
+const {
+  loading,
+  canWriteRole,
+  canDeleteRole,
+  activeTab,
+  query,
+  formDialogVisible,
+  membersDialogVisible,
+  currentRole,
+  fetchRoles,
+  handleSearch,
+  handleReset,
+  showCreateDialog,
+  showEditDialog,
+  showMembersDialog,
+  handleDelete,
+  ACTIONS_COL_WIDTH,
+  displayColumns,
+  displayRows,
+  groupBy,
+  columnFilters,
+  sort,
+  filterDialog,
+  pagination,
+  activeFilterColumn,
+  activeFilter,
+  gridScrollRef,
+  gridFits,
+  leftoverWidth,
+  gridInnerStyle,
+  widthOf,
+  setWidth,
+  persistWidths,
+  moveColumn,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  applySort,
+  clearSort,
+  applyGroup,
+  rowClassName,
+  spanMethod,
+  groupHeaderLabel,
+  isListGroupHeaderRow,
+} = useRole()
 
-const activeTab = ref<RoleListTab>('CUSTOM')
-const query = reactive<{ type: RoleType | ''; page: number; size: number }>({
-  type: '',
-  page: 1,
-  size: 20,
-})
-const formDialogVisible = ref(false)
-const membersDialogVisible = ref(false)
-const currentRole = ref<Role | null>(null)
-const typeFilter = ref<RoleType | ''>('')
-
-const filteredRoles = computed(() =>
-  filterSortRoles(roleStore.roles, activeTab.value, typeFilter.value, locale.value)
-)
-const listTotal = computed(() => filteredRoles.value.length)
-const pagedRoles = computed(() =>
-  paginateRoles(filteredRoles.value, query.page, query.size)
-)
-
-watch([activeTab, typeFilter], () => {
-  query.page = 1
-})
-
-const loadRoles = () => roleStore.fetchAllRoles()
-
-const handleSearch = () => {
-  typeFilter.value = query.type
-  query.page = 1
+function onSort(field: string, direction: 'ASC' | 'DESC') {
+  applySort(field, direction)
+  void fetchRoles()
 }
 
-const handleReset = () => {
-  query.type = ''
-  typeFilter.value = ''
-  query.page = 1
+function onClearSort() {
+  clearSort()
+  void fetchRoles()
 }
 
-const handlePageSizeChange = () => {
-  query.page = 1
+function onGroup(field: string, grouped: boolean) {
+  applyGroup(field, grouped)
+  void fetchRoles()
 }
 
-const showCreateDialog = () => {
-  currentRole.value = null
-  formDialogVisible.value = true
-}
-const showEditDialog = (role: Role) => {
-  currentRole.value = role
-  formDialogVisible.value = true
-}
-const showMembersDialog = (role: Role) => {
-  currentRole.value = role
-  membersDialogVisible.value = true
+function onClearFilter(field: string) {
+  clearFilter(field)
+  void fetchRoles()
 }
 
-const handleDelete = async (role: Role) => {
-  await ElMessageBox.confirm(t('role.confirmDeleteRole'), t('user.hint'), { type: 'warning' })
-  await roleStore.deleteRole(role.id)
-  ElMessage.success(t('common.success'))
-  await loadRoles()
+function onFilterApply(filter: ListColumnFilter) {
+  applyFilter(filter)
+  void fetchRoles()
 }
 
-useTabRefresh(loadRoles)
+function onFilterClear() {
+  onClearFilter(filterDialog.field)
+}
+
+useTabRefresh(fetchRoles)
 
 onMounted(() => {
-  loadRoles()
+  void fetchRoles()
 })
 </script>
 
 <style scoped>
-.page-container :deep(.no-wrap-header .cell) {
-  white-space: nowrap !important;
-  overflow: visible !important;
+.search-form {
+  margin-bottom: 16px;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 4px;
 }
 </style>
 

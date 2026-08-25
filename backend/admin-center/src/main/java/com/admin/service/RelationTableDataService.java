@@ -1,6 +1,7 @@
 package com.admin.service;
 
 import com.admin.dto.response.RelationTableResponse;
+import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDataRowDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +30,11 @@ public interface RelationTableDataService {
      * 分页查询表数据（根据已部署的最新表结构动态查询物理表数据，支持搜索过滤）
      */
     Page<RelationTableDataRowDTO> queryData(Long tableId, String search, Pageable pageable);
+
+    /**
+     * Deployed field snapshot used by the shared-list query (same source as {@link #queryData}).
+     */
+    List<RelationFieldDTO> loadDeployedFieldsForQuery(Long tableId);
 
     /**
      * Lookup 搜索：供 LOOKUP 字段下拉 + 派生带出。返回原始行 Map 列表（含全部列）。

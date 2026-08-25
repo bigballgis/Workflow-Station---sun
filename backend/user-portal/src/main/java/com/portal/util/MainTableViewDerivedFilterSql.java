@@ -1,11 +1,10 @@
 package com.portal.util;
 
+import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListColumnMeta;
 import com.platform.common.jdbc.SqlIdentifiers;
-import com.portal.dto.ListColumnFilter;
-import com.portal.dto.PortalListColumnMeta;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.MainTableViewColumnSpec.SqlSource;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,7 +26,7 @@ public final class MainTableViewDerivedFilterSql {
     private static final Set<String> SYSTEM_USER_COLUMNS = Set.of(
             "id", "username", "display_name", "full_name", "email", "employee_id", "status", "language");
     private static final List<String> FK_FALLBACK_PKS = List.of("id", "id_idw");
-    private static final PortalListColumnMeta TEXT_LABEL = PortalListColumnMeta.displayMapped("label", "label");
+    private static final ListColumnMeta TEXT_LABEL = ListColumnMeta.displayMapped("label", "label");
 
     private MainTableViewDerivedFilterSql() {
     }
@@ -76,7 +75,7 @@ public final class MainTableViewDerivedFilterSql {
     }
 
     private static void requireAllowed(FieldSource field, ListColumnFilter filter) {
-        PortalListColumnMeta column = PortalListColumnMeta.displayMapped(field.fieldName(), field.fieldName());
+        ListColumnMeta column = ListColumnMeta.displayMapped(field.fieldName(), field.fieldName());
         if (!column.allowsOperator(filter.operator())) {
             throw new IllegalArgumentException(
                     "Operator " + filter.operator() + " is not allowed on column " + filter.field());

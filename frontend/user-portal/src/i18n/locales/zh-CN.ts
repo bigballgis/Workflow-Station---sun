@@ -619,7 +619,10 @@ export default {
     suspendSuccess: '暂停成功',
     resumeSuccess: '恢复成功',
     deleteConfirm: '确定要删除该委托规则吗？',
-    deleteSuccess: '删除成功'
+    deleteSuccess: '删除成功',
+    noRules: '暂无委托规则',
+    noAudit: '暂无审计记录',
+    loadFailed: '加载委托失败'
   },
   permission: {
     title: '用户档案设置',
@@ -751,7 +754,8 @@ export default {
     beneficiaryColumn: '受益人',
     submittedByColumn: '提交人',
     proxyBadge: '代办',
-    selfBeneficiary: '本人提交'
+    selfBeneficiary: '本人提交',
+    loadFailed: '加载权限申请失败'
   },
   portalSelfService: {
     bannerTitle: '当前为权限自助模式',
@@ -1048,6 +1052,7 @@ exportWithData: '导出',
     pleaseSelectUser: '请选择用户',
     assignmentSuccess: '分配成功',
     assignmentFailed: '分配失败',
+    assignmentMissingRowKey: '无法分配：该行缺少主键，请联系管理员检查表设计的主键配置',
     taskStatus: '状态',
     taskPending: '待处理',
     taskInProgress: '处理中',

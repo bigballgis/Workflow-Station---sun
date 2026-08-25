@@ -34,12 +34,21 @@ public class RelationTableResponse {
     private Integer currentVersion;
 
     /**
-     * Optional Function Unit grouping. functionUnitId references sys_function_units.id;
-     * code/name are resolved by the service layer for display and are null when ungrouped.
+     * Function Unit(s) this table belongs to. Empty = Common (visible/usable across all
+     * Function Units). Resolved by the service layer for display.
      */
-    private String functionUnitId;
-    private String functionUnitCode;
-    private String functionUnitName;
+    @Builder.Default
+    private List<FunctionUnitBrief> functionUnits = Collections.emptyList();
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FunctionUnitBrief {
+        private String id;
+        private String code;
+        private String name;
+    }
 
     private List<FieldDefinitionResponse> fieldDefinitions;
     private Instant createdAt;
@@ -136,7 +145,6 @@ public class RelationTableResponse {
                 .enabled(entity.getEnabled())
                 .portalVisible(entity.getPortalVisible())
                 .currentVersion(entity.getCurrentVersion())
-                .functionUnitId(entity.getFunctionUnitId())
                 .fieldDefinitions(fields)
                 .createdAt(entity.getCreatedAt())
                 .createdBy(entity.getCreatedBy())
@@ -146,13 +154,15 @@ public class RelationTableResponse {
     }
 
     /**
-     * Fills functionUnitCode/functionUnitName for display; pass null to leave both unset (ungrouped).
+     * Fills the resolved Function Unit list for display; pass an empty/null list to leave Common.
      */
-    public void applyFunctionUnit(FunctionUnit functionUnit) {
-        if (functionUnit == null) {
+    public void applyFunctionUnits(List<FunctionUnit> units) {
+        if (units == null || units.isEmpty()) {
+            this.functionUnits = Collections.emptyList();
             return;
         }
-        this.functionUnitCode = functionUnit.getCode();
-        this.functionUnitName = functionUnit.getName();
+        this.functionUnits = units.stream()
+                .map(u -> FunctionUnitBrief.builder().id(u.getId()).code(u.getCode()).name(u.getName()).build())
+                .toList();
     }
 }

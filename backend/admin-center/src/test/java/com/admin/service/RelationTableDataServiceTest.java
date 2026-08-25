@@ -1,11 +1,14 @@
 package com.admin.service;
 
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
 import com.admin.entity.RelationTableVersion;
 import com.admin.exception.RelationTableNotFoundException;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.admin.repository.RelationTableVersionRepository;
 import com.admin.service.impl.RelationTableDataServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -15,12 +18,12 @@ import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDataRowDTO;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -54,6 +57,12 @@ class RelationTableDataServiceTest {
     private RelationTableVersionRepository versionRepository;
 
     @Mock
+    private FunctionUnitRepository functionUnitRepository;
+
+    @Mock
+    private RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
+
+    @Mock
     private RelationTableAuditService auditService;
 
     @Mock
@@ -68,8 +77,20 @@ class RelationTableDataServiceTest {
     @Mock
     private ObjectMapper objectMapper;
 
-    @InjectMocks
+    // Real instance: a thin pass-through collaborator over the two repositories above, resolving
+    // the Relation Table <-> Function Unit many-to-many link for display.
+    private RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
+
     private RelationTableDataServiceImpl service;
+
+    @BeforeEach
+    void wireService() {
+        relationTableFunctionUnitResolver =
+                new RelationTableFunctionUnitResolver(relationTableFunctionUnitRepository, functionUnitRepository);
+        service = new RelationTableDataServiceImpl(
+                tableDefinitionRepository, versionRepository, relationTableFunctionUnitResolver, auditService,
+                accessService, primaryKeyAllocationService, jdbcTemplate, objectMapper);
+    }
 
     // ==================== Helper Methods ====================
 

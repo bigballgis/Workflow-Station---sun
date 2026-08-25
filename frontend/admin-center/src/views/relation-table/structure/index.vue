@@ -17,7 +17,6 @@
     </PageHeader>
 
     <div class="structure-layout">
-      <!-- Left: Function Unit groups -->
       <div class="fu-list-panel">
         <div class="panel-title">
           {{ t('relationTable.functionUnit') }}
@@ -30,183 +29,202 @@
             <span>{{ t('relationTable.allFunctionUnits') }}</span>
           </el-menu-item>
           <el-menu-item
-            v-for="group in groupedTableList"
+            v-for="group in functionUnitGroups"
             :key="group.key"
             :index="group.key"
           >
             <el-tooltip
-              :content="group.label || t('relationTable.ungrouped')"
+              :content="groupLabel(group)"
               placement="top"
               :show-after="400"
             >
-              <span class="group-title">{{ group.label || t('relationTable.ungrouped') }} ({{ group.tables.length }})</span>
+              <span class="group-title">{{ groupLabel(group) }} ({{ group.count }})</span>
             </el-tooltip>
           </el-menu-item>
         </el-menu>
       </div>
 
-      <!-- Right: Table list -->
-      <div class="table-card">
-        <el-table
-          v-loading="loading"
-          :data="filteredTableList"
-          stripe
-          scrollbar-always-on
-          class="table-fixed-actions"
-          style="width: 100%"
+      <div
+        v-loading="loading"
+        class="table-card"
+      >
+        <div
+          ref="gridScrollRef"
+          class="list-data-grid-scroll"
         >
-          <el-table-column
-            prop="displayName"
-            label="Display Name"
-            min-width="120"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            prop="currentVersion"
-            label="Version"
-            width="90"
-            align="center"
+          <div
+            class="list-data-grid-inner"
+            :style="gridInnerStyle"
           >
-            <template #default="{ row }">
-              v{{ row.currentVersion }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="status"
-            label="Status"
-            width="110"
-            align="center"
-          >
-            <template #default="{ row }">
-              <el-tag
-                :type="statusTagType(row.status)"
-                size="small"
+            <el-table
+              :data="displayRows"
+              stripe
+              border
+              :fit="false"
+              table-layout="fixed"
+              scrollbar-always-on
+              class="list-data-grid table-fixed-actions"
+              :class="{ 'list-data-grid--fit': gridFits }"
+              style="width: 100%"
+              :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
+              :row-class-name="rowClassName"
+            >
+              <el-table-column
+                v-for="(col, colIndex) in displayColumns"
+                :key="col.field"
+                :prop="col.field"
+                :width="widthOf(col.field)"
+                show-overflow-tooltip
               >
-                {{ row.status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="Enable"
-            width="80"
-            align="center"
-          >
-            <template #default="{ row }">
-              <el-switch
-                v-model="row.enabled"
-                :loading="enableLoadingMap[row.id]"
-                @change="(val: string | number | boolean) => handleToggleEnabled(row, val as boolean)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="Portal"
-            width="90"
-            align="center"
-          >
-            <template #default="{ row }">
-              <el-switch
-                v-model="row.portalVisible"
-                :loading="portalLoadingMap[row.id]"
-                :disabled="!row.enabled"
-                @change="(val: string | number | boolean) => handleTogglePortalVisibility(row, val as boolean)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="createdAt"
-            label="Created At"
-            width="160"
-            show-overflow-tooltip
-          >
-            <template #default="{ row }">
-              {{ formatDate(row.createdAt) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="updatedAt"
-            label="Updated At"
-            width="160"
-            show-overflow-tooltip
-          >
-            <template #default="{ row }">
-              {{ formatDate(row.updatedAt) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="Actions"
-            width="240"
-            fixed="right"
-            align="center"
-          >
-            <template #default="{ row }">
-              <div class="action-cell">
-                <el-button
-                  link
-                  type="warning"
-                  size="small"
-                  @click="handleEdit(row)"
-                >
-                  Edit
-                </el-button>
-                <el-button
-                  link
-                  type="primary"
-                  size="small"
-                  @click="handleDeploy(row)"
-                >
-                  Deploy
-                </el-button>
-                <el-button
-                  link
-                  type="primary"
-                  size="small"
-                  @click="handleVersions(row)"
-                >
-                  Version
-                </el-button>
-                <el-dropdown
-                  trigger="click"
-                  @command="(cmd: string) => handleActionCommand(cmd, row)"
-                >
-                  <el-button
-                    link
-                    type="primary"
+                <template #header>
+                  <ListColumnHeader
+                    :column="col"
+                    :sort="sort.field === col.field ? sort.direction : null"
+                    :grouped="groupBy === col.field"
+                    :filtered="!!columnFilters[col.field]"
+                    :width="widthOf(col.field)"
+                    :show-move="displayColumns.length > 1"
+                    :can-move-left="colIndex > 0"
+                    :can-move-right="colIndex < displayColumns.length - 1"
+                    @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
+                    @clear-sort="onClearSort"
+                    @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
+                    @filter-open="openFilter(col.field)"
+                    @clear-filter="onClearFilter(col.field)"
+                    @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
+                    @width-change="(width: number) => setWidth(col.field, width)"
+                    @width-commit="persistWidths"
+                  />
+                </template>
+                <template #default="{ row }">
+                  <template v-if="isListGroupHeaderRow(row)">
+                    <div class="group-header-cell">
+                      <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
+                      <span class="group-count">({{ row._groupCount }})</span>
+                    </div>
+                  </template>
+                  <span v-else-if="col.field === 'currentVersion'">v{{ row.currentVersion }}</span>
+                  <el-tag
+                    v-else-if="col.field === 'status'"
+                    :type="statusTagType(row.status)"
                     size="small"
                   >
-                    More<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="erDiagram">
-                        ER Diagram
-                      </el-dropdown-item>
-                      <el-dropdown-item command="compare">
-                        Compare
-                      </el-dropdown-item>
-                      <el-dropdown-item command="rollback">
-                        Rollback
-                      </el-dropdown-item>
-                      <el-dropdown-item command="access">
-                        Access
-                      </el-dropdown-item>
-                      <el-dropdown-item
-                        command="delete"
-                        divided
-                      >
-                        <span class="danger-item">Delete</span>
-                      </el-dropdown-item>
-                    </el-dropdown-menu>
+                    {{ row.status }}
+                  </el-tag>
+                  <el-switch
+                    v-else-if="col.field === 'enabled'"
+                    v-model="row.enabled"
+                    :loading="enableLoadingMap[row.id]"
+                    @change="(val: string | number | boolean) => handleToggleEnabled(row, val as boolean)"
+                  />
+                  <el-switch
+                    v-else-if="col.field === 'portalVisible'"
+                    v-model="row.portalVisible"
+                    :loading="portalLoadingMap[row.id]"
+                    :disabled="!row.enabled"
+                    @change="(val: string | number | boolean) => handleTogglePortalVisibility(row, val as boolean)"
+                  />
+                  <span v-else-if="col.field === 'createdAt'">{{ formatDate(row.createdAt) }}</span>
+                  <span v-else-if="col.field === 'updatedAt'">{{ formatDate(row.updatedAt) }}</span>
+                  <template v-else>
+                    {{ row[col.field as keyof typeof row] ?? '-' }}
                   </template>
-                </el-dropdown>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
+                </template>
+              </el-table-column>
+              <el-table-column
+                v-if="leftoverWidth > 0"
+                :width="leftoverWidth"
+                class-name="list-col-spacer"
+              />
+              <el-table-column
+                label="Actions"
+                :width="ACTIONS_COL_WIDTH"
+                fixed="right"
+                align="center"
+              >
+                <template #header>
+                  Actions
+                </template>
+                <template #default="{ row }">
+                  <div
+                    v-if="!isListGroupHeaderRow(row)"
+                    class="action-cell"
+                  >
+                    <el-button
+                      link
+                      type="warning"
+                      size="small"
+                      @click="handleEdit(row)"
+                    >
+                      Edit
+                    </el-button>
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      @click="handleDeploy(row)"
+                    >
+                      Deploy
+                    </el-button>
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      @click="handleVersions(row)"
+                    >
+                      Version
+                    </el-button>
+                    <el-dropdown
+                      trigger="click"
+                      @command="(cmd: string) => handleActionCommand(cmd, row)"
+                    >
+                      <el-button
+                        link
+                        type="primary"
+                        size="small"
+                      >
+                        More<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                      </el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item command="erDiagram">
+                            ER Diagram
+                          </el-dropdown-item>
+                          <el-dropdown-item command="compare">
+                            Compare
+                          </el-dropdown-item>
+                          <el-dropdown-item command="rollback">
+                            Rollback
+                          </el-dropdown-item>
+                          <el-dropdown-item command="access">
+                            Access
+                          </el-dropdown-item>
+                          <el-dropdown-item
+                            command="delete"
+                            divided
+                          >
+                            <span class="danger-item">Delete</span>
+                          </el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+
+        <ListPagination
+          v-model:page="pagination.page"
+          v-model:size="pagination.size"
+          :total="pagination.total"
+          :loading="loading"
+          @change="fetchTableList"
+        />
       </div>
     </div>
 
-    <!-- Version History Dialog -->
     <VersionDialog
       v-model="showVersionDialog"
       :table-id="currentTable?.id"
@@ -214,18 +232,24 @@
       @rollback-success="fetchTableList"
     />
 
-    <!-- Access Config Dialog -->
     <AccessConfigDialog
       v-model="showAccessDialog"
       :table-id="currentTable?.id"
       :table-name="currentTable?.tableName"
     />
 
-    <!-- Version Compare Dialog -->
     <VersionCompareDialog
       v-model="showCompareDialog"
       :table-id="currentTable?.id"
       :table-name="currentTable?.tableName"
+    />
+
+    <ListFilterDialog
+      v-model:visible="filterDialog.visible"
+      :column="activeFilterColumn"
+      :filter="activeFilter"
+      @apply="onFilterApply"
+      @clear="onFilterClear"
     />
   </div>
 </template>
@@ -241,15 +265,20 @@ import VersionDialog from './components/VersionDialog.vue'
 import AccessConfigDialog from './components/AccessConfigDialog.vue'
 import VersionCompareDialog from './components/VersionCompareDialog.vue'
 import { useRelationTable } from '@/composables/modules/useRelationTable'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
+import ListPagination from '@platform-shared/list/ListPagination.vue'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
+import type { RelationTableResponse } from '@/api/relationTable'
 
 const router = useRouter()
 const { t } = useI18n()
 
 const {
   loading,
-  filteredTableList,
-  groupedTableList,
+  functionUnitGroups,
   selectedGroupKey,
+  COMMON_KEY,
   enableLoadingMap,
   portalLoadingMap,
   currentTable,
@@ -266,9 +295,42 @@ const {
   handleRollback,
   handleCompare,
   handleDelete,
+  ACTIONS_COL_WIDTH,
+  displayColumns,
+  displayRows,
+  groupBy,
+  columnFilters,
+  sort,
+  filterDialog,
+  pagination,
+  activeFilterColumn,
+  activeFilter,
+  gridScrollRef,
+  gridFits,
+  leftoverWidth,
+  gridInnerStyle,
+  widthOf,
+  setWidth,
+  persistWidths,
+  moveColumn,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  applySort,
+  clearSort,
+  applyGroup,
+  rowClassName,
+  spanMethod,
+  groupHeaderLabel,
+  isListGroupHeaderRow,
 } = useRelationTable()
 
-function handleActionCommand(command: string, row: any) {
+function groupLabel(group: { key: string; label: string | null }): string {
+  if (group.key === COMMON_KEY) return t('relationTable.common')
+  return group.label || t('relationTable.ungrouped')
+}
+
+function handleActionCommand(command: string, row: RelationTableResponse) {
   switch (command) {
     case 'erDiagram':
       router.push(`/relation-tables/structure/${row.id}/er-diagram`)
@@ -283,17 +345,46 @@ function handleActionCommand(command: string, row: any) {
       handleAccess(row)
       break
     case 'delete':
-      handleDelete(row)
+      void handleDelete(row)
       break
   }
 }
 
+function onSort(field: string, direction: 'ASC' | 'DESC') {
+  applySort(field, direction)
+  void fetchTableList()
+}
+
+function onClearSort() {
+  clearSort()
+  void fetchTableList()
+}
+
+function onGroup(field: string, grouped: boolean) {
+  applyGroup(field, grouped)
+  void fetchTableList()
+}
+
+function onClearFilter(field: string) {
+  clearFilter(field)
+  void fetchTableList()
+}
+
+function onFilterApply(filter: ListColumnFilter) {
+  applyFilter(filter)
+  void fetchTableList()
+}
+
+function onFilterClear() {
+  onClearFilter(filterDialog.field)
+}
+
 onMounted(() => {
-  fetchTableList()
+  void fetchTableList()
 })
 
 onActivated(() => {
-  fetchTableList()
+  void fetchTableList()
 })
 </script>
 
@@ -338,5 +429,14 @@ onActivated(() => {
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   background: var(--el-bg-color);
+  display: flex;
+  flex-direction: column;
+}
+.action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
 }
 </style>

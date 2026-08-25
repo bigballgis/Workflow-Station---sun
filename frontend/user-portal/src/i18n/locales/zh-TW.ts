@@ -578,7 +578,10 @@ export default {
     suspendSuccess: '暫停成功',
     resumeSuccess: '恢復成功',
     deleteConfirm: '確定要刪除該委託規則嗎？',
-    deleteSuccess: '刪除成功'
+    deleteSuccess: '刪除成功',
+    noRules: '暫無委託規則',
+    noAudit: '暫無稽核記錄',
+    loadFailed: '載入委託失敗'
   },
   permission: {
     title: '用戶檔案設置',
@@ -710,7 +713,8 @@ export default {
     beneficiaryColumn: '受益人',
     submittedByColumn: '提交人',
     proxyBadge: '代辦',
-    selfBeneficiary: '本人提交'
+    selfBeneficiary: '本人提交',
+    loadFailed: '載入權限申請失敗'
   },
   portalSelfService: {
     bannerTitle: '目前為權限自助模式',
@@ -1047,6 +1051,7 @@ exportWithData: '匯出',
     pleaseSelectUser: '請選擇用戶',
     assignmentSuccess: '分配成功',
     assignmentFailed: '分配失敗',
+    assignmentMissingRowKey: '無法分配：該行缺少主鍵，請聯繫管理員檢查表設計的主鍵配置',
     taskStatus: '狀態',
     taskPending: '待處理',
     taskInProgress: '處理中',

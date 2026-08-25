@@ -24,7 +24,7 @@ vi.mock('@/composables/list/searchListFilterUsers', () => ({
 const api = vi.mocked(processApi)
 
 const COLUMNS: ListColumnMeta[] = [
-  { field: 'requestId', label: 'application.requestId', kind: 'TEXT', filterable: false, sortable: false, groupable: false, operators: [] },
+  { field: 'requestId', label: 'application.requestId', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'] },
   { field: 'businessKey', label: 'application.processTitle', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'] },
   { field: 'currentStepName', label: 'application.currentStep', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains'] },
   { field: 'currentAssignee', label: 'application.currentAssignee', kind: 'USER', filterable: true, sortable: true, groupable: true, operators: ['eq', 'ne'] },
@@ -86,6 +86,23 @@ describe('my requests — shared list query state', () => {
     await flushPromises()
     expect(lastRequest().status).toBe('RUNNING')
     expect(lastRequest().filters).toEqual([{ field: 'businessKey', operator: 'contains', value: 'leave' }])
+    expect(lastRequest().page).toBe(0)
+  })
+
+  it('requestId filter and sort reset to the first page', async () => {
+    const w = await mountPage()
+    const requestIdHeader = w.findAllComponents({ name: 'ListColumnHeader' })[0]
+    requestIdHeader.vm.$emit('filter-open')
+    await flushPromises()
+    w.findComponent({ name: 'ListFilterDialog' }).vm.$emit('apply', { operator: 'contains', value: 'ATM-DC' })
+    await flushPromises()
+    expect(lastRequest().page).toBe(0)
+    expect(lastRequest().filters).toEqual([{ field: 'requestId', operator: 'contains', value: 'ATM-DC' }])
+
+    requestIdHeader.vm.$emit('sort-change', 'ASC')
+    await flushPromises()
+    expect(lastRequest().sortField).toBe('requestId')
+    expect(lastRequest().sortDirection).toBe('ASC')
     expect(lastRequest().page).toBe(0)
   })
 

@@ -288,21 +288,6 @@ public class TaskProcessComponent {
         return subTableRowAssignmentComponent.assignSubTableRow(taskId, rowId, rowKey, assigneeId, userId, portalUsername);
     }
 
-    @Transactional
-    public Map<String, Object> assignSubTableRowByIdentity(String taskId,
-                                                            String assigneeId,
-                                                            String userId,
-                                                            String portalUsername,
-                                                            String email,
-                                                            String name,
-                                                            String department,
-                                                            String topic,
-                                                            String location,
-                                                            String organizerName) {
-        return subTableRowAssignmentComponent.assignSubTableRowByIdentity(
-                taskId, assigneeId, userId, portalUsername, email, name, department, topic, location, organizerName);
-    }
-
     /**
      * Whether the user may claim the task
      * Forwards to {@link TaskPermissionEvaluator}.

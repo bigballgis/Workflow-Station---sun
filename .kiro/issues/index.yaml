@@ -2364,6 +2364,35 @@
   fixed_at: "2026-08-24"
   severity: major
   category: bug
+  summary: "To Do Priority column filter High showed Normal because API sends Flowable numeric string 50 and the cell renderer only mapped named labels / typeof number"
+  file: "frontend/user-portal/src/utils/taskPriority.ts"
+  note: |
+    根因：引擎默认优先级 50（HIGH 档 50–74），API 序列化为字符串 "50"。
+    列筛选按 numeric band 命中这些行；单元格 getPriorityLabel 只认 URGENT/HIGH/NORMAL/LOW
+    或 typeof===number，字符串 "50" 掉进兜底 Normal。
+    修复：taskPriorityBand 与后端 TaskQueryColumnFilters.priorityBand 对齐；
+    To Do / dashboard / task detail 共用。
+    验证：taskPriority.test.ts；Playwright verify-todo-priority-filter.mjs
+    （Filter by High → 19 cells High）；
+    截图 frontend/user-portal/verification-screenshots/2026-08-24_todo-priority-filter-high.png
+
+- id: "1543"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: minor
+  category: quality
+  summary: "To Do shared list lacked Completed/My Requests 500ms SLA and >1s slow-query WARN"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java"
+  note: |
+    根因：queryTodoList 只走引擎分页，未接 ListQuerySupport.logIfSlow / logIfOverSla。
+    修复：listKey=todo-tasks；>500ms WARN（SLA）、>1s WARN（深分页可观测）；不含行内容和筛选值。
+    验证：ListQuerySupportTest（500 不打、501 打；1s 阈值同规格）。
+
+- id: "1544"
+  status: fixed
+  fixed_at: "2026-08-24"
+  severity: major
+  category: bug
   summary: "Empty fieldPermissions wrote empty completed-task snapshots; alias-expanded __subTables__ polluted snapshot and Change History ADD/DELETE"
   file: "backend/user-portal/src/main/java/com/portal/component/CompletedTaskSnapshotAssembler.java"
   note: |
@@ -2380,8 +2409,9 @@
     mvn -pl backend/user-portal -am package -DskipTests；portal pnpm build；
     compose rebuild user-portal + user-portal-frontend；Started UserPortalApplication；
     MI unit-only 127 pass. Live ACQ re-run still needed (dev completed-tasks empty, #1522).
+    编号说明：merge common_0731_SELF_AP 已占用 #1542/#1543（To Do Priority / SLA），本条顺延为 #1544。
 
-- id: "1543"
+- id: "1545"
   status: fixed
   fixed_at: "2026-08-24"
   severity: major
@@ -2399,7 +2429,7 @@
     TaskFormSnapshotBpmnFallbackTest; TaskFormSnapshotPropertyTest;
     mvn -pl backend/user-portal -am package -DskipTests.
 
-- id: "1544"
+- id: "1546"
   status: fixed
   fixed_at: "2026-08-24"
   severity: major
@@ -2416,7 +2446,7 @@
     mvn -pl backend/user-portal -am package -DskipTests；compose rebuild user-portal；
     Started UserPortalApplication. Re-run a new MI start to see Meeting Name / attachment / name.
 
-- id: "1545"
+- id: "1547"
   status: fixed
   fixed_at: "2026-08-24"
   severity: minor
@@ -2432,7 +2462,7 @@
     验证：snapshotDiff.property.test.ts 5 pass；pnpm run build；compose rebuild
     user-portal-frontend. Live ATM task screenshot 403 for developer HMDC_Index_Role.
 
-- id: "1546"
+- id: "1548"
   status: fixed
   fixed_at: "2026-08-25"
   severity: major
@@ -2441,7 +2471,7 @@
   file: "backend/user-portal/src/main/java/com/portal/component/CompletedTaskSnapshotAssembler.java"
   note: |
     ATM-DC-PW-000005 Case Submission _snapshot_* had fieldValues={}. ATM forms have
-    fieldPermissions={} so capture skipped __subTables__ even after #1543 resolved
+    fieldPermissions={} so capture skipped __subTables__ even after #1545 resolved
     main-field keys. Assembler now freezes form field subset plus canonical numeric
     binding slices (alias keys dropped, 1397 OOM guard kept). hasSnapshotFieldValues
     treats non-empty __subTables__ as snapshot content. Historical 000005 backfilled
@@ -2452,7 +2482,7 @@
     mvn -pl backend/user-portal -am package -DskipTests；pnpm run build；
     compose rebuild user-portal + user-portal-frontend；Started UserPortalApplication.
 
-- id: "1547"
+- id: "1549"
   status: fixed
   fixed_at: "2026-08-25"
   severity: major
@@ -2473,7 +2503,7 @@
     verify-atm-linkform-details.mjs modal contains ATM-DC-PW-TRANS-000008;
     screenshots 2026-08-25_atm-000008-linkform-details.png.
 
-- id: "1548"
+- id: "1550"
   status: fixed
   fixed_at: "2026-08-25"
   severity: major
@@ -2491,7 +2521,7 @@
     .snapshot-sub-table count=6 on task 2947feec (assignment);
     screenshot 2026-08-25_completed-snapshot-subtables.png.
 
-- id: "1549"
+- id: "1551"
   status: fixed
   fixed_at: "2026-08-25"
   severity: minor
@@ -2509,7 +2539,7 @@
     screenshots 2026-08-25_completed-snapshot-tabs.png,
     2026-08-25_completed-snapshot-filenames.png.
 
-- id: "1550"
+- id: "1552"
   status: fixed
   fixed_at: "2026-08-25"
   severity: minor

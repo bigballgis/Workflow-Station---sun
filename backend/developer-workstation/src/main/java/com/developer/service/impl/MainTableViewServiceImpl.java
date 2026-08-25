@@ -248,12 +248,17 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     @Override
     @Transactional
     public void cloneViewsForFunctionUnit(Long sourceFunctionUnitId, FunctionUnit targetFunctionUnit,
-                                          Map<Long, TableDefinition> tableIdMapping) {
+                                          Map<Long, TableDefinition> tableIdMapping, Map<Long, Long> formIdMapping) {
         List<MainTableViewConfig> sourceViews = viewConfigRepository.findByFunctionUnitIdWithFields(sourceFunctionUnitId);
         for (MainTableViewConfig source : sourceViews) {
             Long clonedMainTableId = tableIdMapping.containsKey(source.getMainTableId())
                     ? tableIdMapping.get(source.getMainTableId()).getId()
                     : source.getMainTableId();
+            // detailFormId (the "Views" DETAIL form bound to this view) must be remapped to the
+            // cloned FormDefinition's id, same as export/import and rollback already do by name.
+            Long clonedDetailFormId = source.getDetailFormId() != null
+                    ? formIdMapping.get(source.getDetailFormId())
+                    : null;
             MainTableViewConfig cloned = MainTableViewConfig.builder()
                     .functionUnit(targetFunctionUnit)
                     .mainTableId(clonedMainTableId)
@@ -262,6 +267,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                     .sortConfig(copySortConfig(source.getSortConfig()))
                     .filterConfig(copyFilterConfig(source.getFilterConfig()))
                     .restrictToInvolvedUsers(Boolean.TRUE.equals(source.getRestrictToInvolvedUsers()))
+                    .detailFormId(clonedDetailFormId)
                     .status(MainTableViewStatus.DRAFT)
                     .viewFields(new ArrayList<>())
                     .accessRules(new ArrayList<>())

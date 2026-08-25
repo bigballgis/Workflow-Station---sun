@@ -137,34 +137,54 @@ public class AutomationPieceServiceImpl implements AutomationPieceService {
     @Override
     public List<AutomationPieceSummary> listPieces() {
         Set<String> disabledNames = fetchDisabledNames();
-        return jdbcTemplate.query(LIST_SQL, (rs, rowNum) -> {
-            List<String> actionNames = jsonKeys(rs.getString("actions"));
-            List<String> triggerNames = jsonKeys(rs.getString("triggers"));
-            return AutomationPieceSummary.builder()
-                    .id(rs.getString("id"))
-                    .name(rs.getString("name"))
-                    .displayName(rs.getString("displayName"))
-                    .description(rs.getString("description"))
-                    .logoUrl(rs.getString("logoUrl"))
-                    .version(rs.getString("version"))
-                    .pieceType(rs.getString("pieceType"))
-                    .packageType(rs.getString("packageType"))
-                    .hasArchive(rs.getString("archiveId") != null)
-                    .disabled(disabledNames.contains(rs.getString("name")))
-                    .platformId(rs.getString("platformId"))
-                    .actionCount(actionNames.size())
-                    .triggerCount(triggerNames.size())
-                    .actionNames(actionNames)
-                    .triggerNames(triggerNames)
-                    .categories(sqlArrayToList(rs, "categories"))
-                    .authors(sqlArrayToList(rs, "authors"))
-                    .minimumSupportedRelease(rs.getString("minimumSupportedRelease"))
-                    .maximumSupportedRelease(rs.getString("maximumSupportedRelease"))
-                    .projectUsage(rs.getInt("projectUsage"))
-                    .created(rs.getObject("created", OffsetDateTime.class))
-                    .updated(rs.getObject("updated", OffsetDateTime.class))
-                    .build();
-        });
+        return jdbcTemplate.query(LIST_SQL, (rs, rowNum) -> mapRow(rs, disabledNames));
+    }
+
+    @Override
+    public List<AutomationPieceSummary> findPiecesByNames(List<String> names) {
+        if (names == null || names.isEmpty()) {
+            return List.of();
+        }
+        Set<String> disabledNames = fetchDisabledNames();
+        String placeholders = String.join(",", names.stream().map(n -> "?").toList());
+        String sql = """
+                SELECT id, name, "displayName", description, "logoUrl", version,
+                       "pieceType", "packageType", "archiveId", "platformId",
+                       actions, triggers, categories, authors,
+                       "minimumSupportedRelease", "maximumSupportedRelease",
+                       "projectUsage", created, updated
+                FROM piece_metadata
+                WHERE name IN (""" + placeholders + ") ORDER BY name ASC, version DESC";
+        return jdbcTemplate.query(sql, (rs, rowNum) -> mapRow(rs, disabledNames), names.toArray());
+    }
+
+    private AutomationPieceSummary mapRow(ResultSet rs, Set<String> disabledNames) throws SQLException {
+        List<String> actionNames = jsonKeys(rs.getString("actions"));
+        List<String> triggerNames = jsonKeys(rs.getString("triggers"));
+        return AutomationPieceSummary.builder()
+                .id(rs.getString("id"))
+                .name(rs.getString("name"))
+                .displayName(rs.getString("displayName"))
+                .description(rs.getString("description"))
+                .logoUrl(rs.getString("logoUrl"))
+                .version(rs.getString("version"))
+                .pieceType(rs.getString("pieceType"))
+                .packageType(rs.getString("packageType"))
+                .hasArchive(rs.getString("archiveId") != null)
+                .disabled(disabledNames.contains(rs.getString("name")))
+                .platformId(rs.getString("platformId"))
+                .actionCount(actionNames.size())
+                .triggerCount(triggerNames.size())
+                .actionNames(actionNames)
+                .triggerNames(triggerNames)
+                .categories(sqlArrayToList(rs, "categories"))
+                .authors(sqlArrayToList(rs, "authors"))
+                .minimumSupportedRelease(rs.getString("minimumSupportedRelease"))
+                .maximumSupportedRelease(rs.getString("maximumSupportedRelease"))
+                .projectUsage(rs.getInt("projectUsage"))
+                .created(rs.getObject("created", OffsetDateTime.class))
+                .updated(rs.getObject("updated", OffsetDateTime.class))
+                .build();
     }
 
     @Override

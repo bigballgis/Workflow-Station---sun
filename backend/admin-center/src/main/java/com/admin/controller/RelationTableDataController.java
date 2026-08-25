@@ -1,9 +1,12 @@
 package com.admin.controller;
 
-import com.admin.entity.RelationTableAuditLog;
+import com.admin.component.RelationTableDataListQueryComponent;
+import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.AllocatePrimaryKeyRequest;
+import com.admin.dto.request.RelationTableDataListQueryRequest;
 import com.admin.dto.response.AllocatePrimaryKeyResponse;
 import com.admin.dto.response.RelationTableResponse;
+import com.admin.entity.RelationTableAuditLog;
 import com.admin.service.RelationTableAuditService;
 import com.admin.service.RelationTableDataService;
 import com.admin.service.RelationTablePrimaryKeyAllocationService;
@@ -38,6 +41,7 @@ import java.util.Set;
 public class RelationTableDataController {
 
     private final RelationTableDataService dataService;
+    private final RelationTableDataListQueryComponent listQueryComponent;
     private final RelationTableAuditService auditService;
     private final RelationTablePrimaryKeyAllocationService primaryKeyAllocationService;
 
@@ -114,6 +118,14 @@ public class RelationTableDataController {
         log.info("Querying data for table: tableId={}, search={}, page={}", tableId, search, pageable);
         Page<RelationTableDataRowDTO> page = dataService.queryData(tableId, search, pageable);
         return ResponseEntity.ok(page);
+    }
+
+    @PostMapping("/{tableId}/query")
+    @Operation(summary = "Page table data", description = "Shared list: COUNT(*) and the page share one predicate including toolbar keyword and column filters")
+    public ResponseEntity<AdminListPage<RelationTableDataRowDTO>> queryDataPage(
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @RequestBody @Valid RelationTableDataListQueryRequest request) {
+        return ResponseEntity.ok(listQueryComponent.query(tableId, request));
     }
 
     @GetMapping("/{tableId}/search")

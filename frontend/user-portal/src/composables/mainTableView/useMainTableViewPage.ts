@@ -18,6 +18,7 @@ import {
   saveGridRuntimeToSession, toListColumnMeta,
   type GridColumnFilter, type GridDisplayRow, type GridRuntimeState, type GridSortDirection,
 } from '@/utils/mainTableViewGridRuntime'
+import { leftoverColumnWidth } from '@platform-shared/list/columnResizeCursor'
 import {
   downloadMainTableViewRowsAsCsv, formatMainTableViewCell, extractFileLinks, type FileLink,
 } from '@/utils/mainTableViewCsvExport'
@@ -168,10 +169,12 @@ const gridScrollRef = ref<HTMLElement | null>(null)
 const gridViewportWidth = ref(0)
 let gridResizeObserver: ResizeObserver | null = null
 
-// When the columns fit within the viewport, let Element Plus stretch them to fill (`fit=true`) so the
-// grid never leaves the panel half-empty. When they overflow, keep fixed widths so the row scrolls.
 const gridFits = computed(() =>
   gridViewportWidth.value > 0 && gridTotalColumnWidth.value <= gridViewportWidth.value,
+)
+
+const leftoverWidth = computed(() =>
+  leftoverColumnWidth(gridViewportWidth.value, gridTotalColumnWidth.value),
 )
 
 const gridInnerStyle = computed(() => (
@@ -754,7 +757,10 @@ function spanMethod({
       return { rowspan: 0, colspan: 0 }
     }
     if (columnIndex === 1) {
-      return { rowspan: 1, colspan: displayColumns.value.length }
+      return {
+        rowspan: 1,
+        colspan: displayColumns.value.length + (leftoverWidth.value > 0 ? 1 : 0),
+      }
     }
     return { rowspan: 0, colspan: 0 }
   }
@@ -810,7 +816,7 @@ onMounted(async () => {
     importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
     selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
     viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
-    MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
+    MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, leftoverWidth, gridTableKey,
     pagedRows, displayTotal, toListColumnMeta,
     handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
     isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,

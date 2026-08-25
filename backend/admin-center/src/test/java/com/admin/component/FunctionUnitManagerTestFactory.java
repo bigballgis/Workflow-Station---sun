@@ -40,8 +40,12 @@ public final class FunctionUnitManagerTestFactory {
         FunctionUnitLookup lookup = new FunctionUnitLookup(functionUnitRepository, i18nService);
         FunctionUnitVersionComponent versionComponent = new FunctionUnitVersionComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, lookup, i18nService);
+        RelationTableDefinitionRepository relationTableDefinitionRepository =
+                Mockito.mock(RelationTableDefinitionRepository.class);
         RelationTableStructureImporter relationTableStructureImporter = new RelationTableStructureImporter(
-                Mockito.mock(RelationTableDefinitionRepository.class), objectMapper);
+                relationTableDefinitionRepository,
+                new RelationTableFieldMapper(relationTableDefinitionRepository),
+                objectMapper);
         FunctionUnitImportComponent importComponent = new FunctionUnitImportComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(FunctionUnitAccessService.class),

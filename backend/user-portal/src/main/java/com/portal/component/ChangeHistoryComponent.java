@@ -56,7 +56,7 @@ public class ChangeHistoryComponent {
      * Stable compatibility quarantine for internal records written before
      * submission filtering.
      */
-    private static final Set<String> INTERNAL_FIELD_BLACKLIST = Set.of(
+    static final Set<String> INTERNAL_FIELD_BLACKLIST = Set.of(
             "__subTables__", "subTableName", "foreignKey", "assigneeField",
             "mainRecordId", "activeBusinessUnitId", "activeRoleId",
             "requestItemsHasHighValue", "totalPrice", "maxItemPrice", "itemCount",

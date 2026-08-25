@@ -29,6 +29,19 @@ export interface CompletedTaskQueryRequest {
   endTime?: string
 }
 
+export interface TodoTaskQueryRequest {
+  page: number
+  size: number
+  filters?: ListColumnFilterRequest[]
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+  /** Toolbar keyword; ANDs with column filters. Matches request id / task / step / process / initiator. */
+  keyword?: string
+  assignmentTypes?: string[]
+  priorities?: string[]
+}
+
 export interface TaskQueryRequest {
   userId?: string
   assignmentTypes?: string[]
@@ -236,6 +249,10 @@ export function queryCompletedTasks(params: CompletedTaskQueryRequest) {
   return request.post<{ data: PortalListPage<TaskInfo> }>('/tasks/completed/query', params)
 }
 
+export function queryTodoTasks(params: TodoTaskQueryRequest) {
+  return request.post<{ data: PortalListPage<TaskInfo> }>('/tasks/todo/query', params)
+}
+
 // Assign a user to a sub-table row
 export interface AssignSubTableRowRequest {
   assigneeId: string
@@ -271,27 +288,6 @@ export function assignSubTableRow(
   )
 }
 
-export function assignSubTableRowByIdentity(
-  taskId: string,
-  payload: {
-    assigneeId: string
-    email?: string
-    name?: string
-    department?: string
-    topic?: string
-    location?: string
-    organizerName?: string
-  }
-) {
-  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
-    skipGlobalErrorHandler: true
-  }
-  return request.post<AssignSubTableRowResponse | { data: AssignSubTableRowResponse }>(
-    `/tasks/${taskId}/sub-table-rows/assign-by-identity`,
-    payload,
-    config
-  )
-}
 
 // Get main task sub-table data (for real-time sync)
 export interface SubTableRowStatus {

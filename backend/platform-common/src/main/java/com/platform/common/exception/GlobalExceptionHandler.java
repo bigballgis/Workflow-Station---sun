@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -241,6 +242,29 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
     }
 
+    /**
+     * Jackson wraps record compact-ctor {@link IllegalArgumentException} in
+     * {@link HttpMessageNotReadableException}. Treat that as 400, not SYS_INTERNAL_ERROR.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<?>> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex, WebRequest request) {
+        IllegalArgumentException illegal = findCause(ex, IllegalArgumentException.class);
+        if (illegal != null) {
+            return handleIllegalArgumentException(illegal, request);
+        }
+        String traceId = generateTraceId();
+        log.warn("Unreadable request body [{}]: {}", traceId, ex.getMostSpecificCause().getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code("VAL_INVALID_INPUT")
+                .message("Invalid request body")
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(getPath(request))
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
+    }
+
     // ==================== Fallback Exceptions ====================
 
     @ExceptionHandler(IllegalStateException.class)
@@ -336,5 +360,16 @@ public class GlobalExceptionHandler {
             current = current.getCause();
         }
         return false;
+    }
+
+    private static <T extends Throwable> T findCause(Throwable ex, Class<T> type) {
+        Throwable current = ex;
+        while (current != null) {
+            if (type.isInstance(current)) {
+                return type.cast(current);
+            }
+            current = current.getCause();
+        }
+        return null;
     }
 }

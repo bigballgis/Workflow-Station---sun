@@ -4,7 +4,7 @@
       <h1>{{ t('application.title') }}</h1>
     </div>
 
-    <div class="portal-card">
+    <div v-loading="loading" class="portal-card">
       <el-tabs
         v-model="activeTab"
         @tab-change="handleTabChange"
@@ -109,7 +109,6 @@
 
       <template v-else>
         <div
-          v-loading="loading"
           ref="gridScrollRef"
           class="list-data-grid-scroll"
         >
@@ -120,12 +119,12 @@
             <el-table
               :data="displayRows"
               stripe
-              :fit="gridFits"
+              :fit="false"
               table-layout="fixed"
               style="width: 100%;"
               class="list-data-grid"
               :class="{ 'list-data-grid--fit': gridFits }"
-              :span-method="spanMethod(1)"
+              :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
               :row-class-name="rowClassName"
             >
               <template #empty>
@@ -144,8 +143,7 @@
                 v-for="(col, colIndex) in displayColumns"
                 :key="col.field"
                 :prop="col.field"
-                :width="gridFits ? undefined : widthOf(col.field)"
-                :min-width="gridFits ? widthOf(col.field) : undefined"
+                :width="widthOf(col.field)"
                 show-overflow-tooltip
               >
                 <template #header>
@@ -205,6 +203,7 @@
                   </template>
                 </template>
               </el-table-column>
+              <el-table-column v-if="leftoverWidth > 0" :width="leftoverWidth" class-name="list-col-spacer" />
               <el-table-column
                 :label="t('common.actions')"
                 :width="ACTIONS_COL_WIDTH"
@@ -325,7 +324,7 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits,
+  gridFits, leftoverWidth,
   gridInnerStyle,
   widthOf,
   setWidth,

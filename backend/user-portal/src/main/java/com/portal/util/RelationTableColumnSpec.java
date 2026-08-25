@@ -1,11 +1,10 @@
 package com.portal.util;
 
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import com.platform.common.audit.SystemAuditFields;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.enums.RelationDataType;
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,8 +23,8 @@ public final class RelationTableColumnSpec {
     private RelationTableColumnSpec() {
     }
 
-    public static List<PortalListColumnMeta> columnsFor(List<RelationFieldDTO> fields) {
-        List<PortalListColumnMeta> columns = new ArrayList<>();
+    public static List<ListColumnMeta> columnsFor(List<RelationFieldDTO> fields) {
+        List<ListColumnMeta> columns = new ArrayList<>();
         for (RelationFieldDTO field : fields) {
             if (field.getFieldName() == null || "status".equals(field.getFieldName())) {
                 continue;
@@ -38,7 +37,7 @@ public final class RelationTableColumnSpec {
         return columns;
     }
 
-    private static PortalListColumnMeta columnFor(RelationFieldDTO field) {
+    private static ListColumnMeta columnFor(RelationFieldDTO field) {
         String label = field.getDisplayName() != null && !field.getDisplayName().isBlank()
                 ? field.getDisplayName()
                 : field.getFieldName();
@@ -50,15 +49,15 @@ public final class RelationTableColumnSpec {
                         : kindFor(dataType);
         if (kind == null) {
             // JSON / TIME / BYTEA / FILE payloads render but have no meaningful SQL predicate.
-            return PortalListColumnMeta.displayOnly(field.getFieldName(), label, Kind.TEXT);
+            return ListColumnMeta.displayOnly(field.getFieldName(), label, Kind.TEXT);
         }
-        List<PortalListColumnMeta.Option> options = kind == Kind.BOOLEAN
-                ? PortalListColumnMeta.booleanOptions()
+        List<ListColumnMeta.Option> options = kind == Kind.BOOLEAN
+                ? ListColumnMeta.booleanOptions()
                 : List.of();
-        return new PortalListColumnMeta(
+        return new ListColumnMeta(
                 field.getFieldName(), label, kind,
                 true, true, false,
-                PortalListColumnMeta.operatorsFor(kind), options);
+                ListColumnMeta.operatorsFor(kind), options);
     }
 
     /** @return the filterable kind for a data type, or null when the type is display-only */

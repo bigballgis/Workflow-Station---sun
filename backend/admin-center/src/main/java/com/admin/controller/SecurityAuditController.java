@@ -1,8 +1,11 @@
 package com.admin.controller;
 
 import com.admin.audit.AuditActorResolver;
+import com.admin.component.AdminAuditListQueryComponent;
 import com.admin.component.SecurityAuditComponent;
 import com.admin.component.SecurityAuditComponent.*;
+import com.admin.dto.list.AdminListPage;
+import com.admin.dto.request.AdminAuditListQueryRequest;
 import com.admin.entity.AuditLog;
 import com.admin.entity.SecurityPolicy;
 import com.admin.enums.AuditAction;
@@ -42,6 +45,7 @@ import com.platform.common.i18n.I18nService;
 public class SecurityAuditController {
     
     private final SecurityAuditComponent securityAuditComponent;
+    private final AdminAuditListQueryComponent adminAuditListQueryComponent;
     private final I18nService i18nService;
     
     // ==================== Security Policy Management ====================
@@ -116,6 +120,13 @@ public class SecurityAuditController {
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                         Sort.by(Sort.Direction.DESC, "timestamp"));
         return ResponseEntity.ok(securityAuditComponent.queryAuditLogs(request, effective));
+    }
+
+    @PostMapping("/audit-logs/list-query")
+    @Operation(summary = "Query audit logs (true paging; column filters, sort and grouping)")
+    public ResponseEntity<AdminListPage<AuditLog>> queryAuditLogList(
+            @RequestBody @Valid AdminAuditListQueryRequest request) {
+        return ResponseEntity.ok(adminAuditListQueryComponent.query(request));
     }
     
     @GetMapping("/audit-logs/resource-types")

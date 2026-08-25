@@ -1,5 +1,6 @@
 package com.admin.service;
 
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.request.RollbackRequest;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.entity.RelationFieldDefinition;
@@ -7,6 +8,7 @@ import com.admin.entity.RelationTableDefinition;
 import com.admin.entity.RelationTableVersion;
 import com.admin.exception.RelationTableDeploymentException;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.admin.repository.RelationTableVersionRepository;
 import com.admin.service.impl.RelationTableDeployServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -47,6 +49,8 @@ class RelationTableDeployPropertyTest {
     private RelationTableVersionRepository versionRepository;
     private com.admin.repository.RelationFieldDefinitionRepository fieldDefinitionRepository;
     private com.admin.repository.FunctionUnitRepository functionUnitRepository;
+    private RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
+    private RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
     private JdbcTemplate jdbcTemplate;
     private ObjectMapper objectMapper;
     private com.admin.config.DatabaseSchemaResolver schemaResolver;
@@ -58,12 +62,15 @@ class RelationTableDeployPropertyTest {
         versionRepository = mock(RelationTableVersionRepository.class);
         fieldDefinitionRepository = mock(com.admin.repository.RelationFieldDefinitionRepository.class);
         functionUnitRepository = mock(com.admin.repository.FunctionUnitRepository.class);
+        relationTableFunctionUnitRepository = mock(RelationTableFunctionUnitRepository.class);
+        relationTableFunctionUnitResolver =
+                new RelationTableFunctionUnitResolver(relationTableFunctionUnitRepository, functionUnitRepository);
         jdbcTemplate = mock(JdbcTemplate.class);
         objectMapper = new ObjectMapper();
         schemaResolver = mock(com.admin.config.DatabaseSchemaResolver.class);
         when(schemaResolver.getSchema()).thenReturn("public");
         service = new RelationTableDeployServiceImpl(
-                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, functionUnitRepository,
+                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, relationTableFunctionUnitResolver,
                 jdbcTemplate, objectMapper, schemaResolver,
                 mock(com.platform.common.i18n.I18nService.class));
     }
@@ -429,7 +436,7 @@ class RelationTableDeployPropertyTest {
             throw new IllegalStateException(e);
         }
         RelationTableDeployServiceImpl failingService = new RelationTableDeployServiceImpl(
-                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, functionUnitRepository,
+                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, relationTableFunctionUnitResolver,
                 jdbcTemplate, failingMapper, schemaResolver,
                 mock(com.platform.common.i18n.I18nService.class));
 

@@ -6,6 +6,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.relationtable.RelationTableStructureDiff;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -23,9 +24,10 @@ import java.util.Map;
  * Imports relation-table (rt_) structures carried in a function-unit package into admin-center.
  *
  * <p>Per requirement: a relation table whose name does not exist is created as {@code INIT}
- * (current_version bumped to 1); an existing one has its structure replaced and is set to
- * {@code UPDATED} with current_version incremented. Returns {@code source rt id → new rt id} so the
- * caller can remap RELATED form-binding references.
+ * (current_version bumped to 1); an existing one has its structure replaced, and only if the
+ * incoming structure actually differs from what's stored is it set to {@code UPDATED} with
+ * current_version incremented (a no-op re-import leaves status/version untouched). Returns
+ * {@code source rt id → new rt id} so the caller can remap RELATED form-binding references.
  */
 @Slf4j
 @Component
@@ -33,6 +35,7 @@ import java.util.Map;
 public class RelationTableStructureImporter {
 
     private final RelationTableDefinitionRepository relationTableDefinitionRepository;
+    private final RelationTableFieldMapper relationTableFieldMapper;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -93,15 +96,61 @@ public class RelationTableStructureImporter {
             return relationTableDefinitionRepository.save(def);
         }
 
-        // Present → replace structure, set UPDATED and bump current_version.
+        // Present → compare against current structure before touching anything; only a real change
+        // should flip status to UPDATED and bump current_version (re-importing identical content
+        // must be a no-op for status/version, otherwise every re-deploy round-trip looks like a change).
+        List<Map<String, Object>> incomingFieldMaps = fieldMapsFromPayload(table);
+        List<Map<String, Object>> currentFieldMaps = relationTableFieldMapper.fromEntities(existing.getFieldDefinitions());
+        boolean unchanged = RelationTableStructureDiff.unchanged(
+                existing.getDisplayName(), existing.getDescription(), currentFieldMaps,
+                displayName, description, incomingFieldMaps);
+
         existing.setDisplayName(displayName);
         existing.setDescription(description);
-        existing.setStatus(RelationTableStatus.UPDATED);
-        existing.setCurrentVersion((existing.getCurrentVersion() == null ? 0 : existing.getCurrentVersion()) + 1);
-        existing.setUpdatedBy(operator);
         existing.getFieldDefinitions().clear(); // orphanRemoval deletes the old field rows
         existing.getFieldDefinitions().addAll(buildFields(existing, table));
+        if (!unchanged) {
+            existing.setStatus(RelationTableStatus.UPDATED);
+            existing.setCurrentVersion((existing.getCurrentVersion() == null ? 0 : existing.getCurrentVersion()) + 1);
+            existing.setUpdatedBy(operator);
+        }
         return relationTableDefinitionRepository.save(existing);
+    }
+
+    /** Normalizes the import payload's field list into the shape {@link RelationTableStructureDiff} compares. */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> fieldMapsFromPayload(Map<String, Object> table) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        Object fieldsObj = table.get("fields");
+        if (!(fieldsObj instanceof List<?> fields)) {
+            return result;
+        }
+        for (Object fo : fields) {
+            if (!(fo instanceof Map<?, ?> raw)) {
+                continue;
+            }
+            Map<String, Object> f = (Map<String, Object>) raw;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("fieldName", f.get("fieldName"));
+            m.put("dataType", f.get("dataType"));
+            m.put("length", asInt(f.get("length")));
+            m.put("precision", asInt(f.get("precision")));
+            m.put("scale", asInt(f.get("scale")));
+            m.put("nullable", asBool(f.get("nullable"), true));
+            m.put("isPrimaryKey", asBool(f.get("isPrimaryKey"), false));
+            m.put("defaultValue", f.get("defaultValue"));
+            m.put("displayName", f.get("displayName"));
+            m.put("isForeignKey", asBool(f.get("isForeignKey"), false));
+            m.put("refTableName", f.get("refTableName"));
+            m.put("refPrimaryKeyFields", parseStringList(f.get("refPrimaryKeyFields")));
+            m.put("pkGenerationJson", parseJsonMap(f.get("pkGenerationJson")));
+            m.put("fkDisplayMode", f.get("fkDisplayMode") != null ? f.get("fkDisplayMode") : "readonly");
+            boolean computed = Boolean.TRUE.equals(f.get("isComputed"));
+            m.put("isComputed", computed);
+            m.put("computedField", computed ? parseJsonMap(f.get("computedField")) : null);
+            result.add(m);
+        }
+        return result;
     }
 
     @SuppressWarnings("unchecked")

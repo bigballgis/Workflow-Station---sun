@@ -175,7 +175,9 @@ class AdminAuditAspectAutomationTest {
         ResponseEntity<?> ok = ResponseEntity.ok(ApiResponse.success(java.util.List.of()));
 
         aspect.auditAutomationPiece(joinPoint("listPieces", ok));
+        aspect.auditAutomationPiece(joinPoint("queryPieces", ok));
         aspect.auditAutomationFlow(joinPoint("listFlows", ok));
+        aspect.auditAutomationFlow(joinPoint("queryFlows", ok));
 
         verifyNoInteractions(securityAuditComponent);
     }

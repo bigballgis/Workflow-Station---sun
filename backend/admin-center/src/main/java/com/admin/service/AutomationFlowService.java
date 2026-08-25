@@ -17,6 +17,9 @@ public interface AutomationFlowService {
     /** 全部 flow 概要（管理面视角，跨 project） */
     List<AutomationFlowSummary> listFlows();
 
+    /** Page-hydrate: same row mapping as {@link #listFlows()}. */
+    List<AutomationFlowSummary> findFlowsByIds(List<String> ids);
+
     /** 导出可携带 JSON（优先已发布版本，无发布则最新草稿） */
     FlowExportFile exportFlow(String flowId);
 

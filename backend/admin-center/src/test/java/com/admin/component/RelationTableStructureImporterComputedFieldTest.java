@@ -38,7 +38,11 @@ class RelationTableStructureImporterComputedFieldTest {
 
     @BeforeEach
     void setUp() {
-        importer = new RelationTableStructureImporter(repository, new ObjectMapper());
+        // Real instance: fromEntities() is a pure mapper over `repository` (only used to resolve FK
+        // display names), and stubbing it as a bare mock would silently return null and NPE inside
+        // RelationTableStructureDiff.unchanged() on the update branch.
+        RelationTableFieldMapper relationTableFieldMapper = new RelationTableFieldMapper(repository);
+        importer = new RelationTableStructureImporter(repository, relationTableFieldMapper, new ObjectMapper());
     }
 
     @Test

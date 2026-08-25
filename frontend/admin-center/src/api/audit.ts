@@ -1,5 +1,6 @@
-import request from './request'
-import type { PageResult } from '@/types/common'
+import request, { post } from './request'
+import type { PageResult, AdminListPage } from '@/types/common'
+import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 
 // ==================== 类型定义 ====================
 
@@ -93,6 +94,14 @@ export interface AuditQueryRequest {
   sortOrder?: 'asc' | 'desc'
 }
 
+export interface AdminAuditListQuery extends AuditQueryRequest {
+  page: number
+  size: number
+  filters?: ListColumnFilterRequest[]
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 export interface AnomalyDetectionResult {
   type: string
   severity: string
@@ -161,6 +170,17 @@ export const queryAuditLogs = async (
     return { ...row, username: r.username ?? r.userName ?? row.username }
   })
   return result
+}
+
+export const queryAuditLogList = async (
+  body: AdminAuditListQuery,
+): Promise<AdminListPage<AuditLog>> => {
+  const page = await post<AdminListPage<AuditLog>>('/security/audit-logs/list-query', body)
+  page.content = page.content.map((row) => {
+    const r = row as AuditLog & { userName?: string }
+    return { ...row, username: r.username ?? r.userName ?? row.username }
+  })
+  return page
 }
 
 export const getAuditLogsByUser = (

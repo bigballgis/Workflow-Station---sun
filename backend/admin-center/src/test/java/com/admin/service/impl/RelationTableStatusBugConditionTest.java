@@ -1,11 +1,14 @@
 package com.admin.service.impl;
 
+import com.admin.component.RelationTableFieldMapper;
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.dto.request.CreateRelationTableRequest;
 import com.admin.dto.request.UpdateRelationTableRequest;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.entity.RelationTableDefinition;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationFieldDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.admin.repository.RelationTableVersionRepository;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.service.RelationTableAuditService;
@@ -46,19 +49,29 @@ class RelationTableStatusBugConditionTest {
     @Mock private RelationFieldDefinitionRepository fieldDefinitionRepository;
     @Mock private RelationTableVersionRepository versionRepository;
     @Mock private FunctionUnitRepository functionUnitRepository;
+    @Mock private RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
     @Mock private RelationTableAuditService auditService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private ObjectMapper objectMapper;
+    private RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
+    private RelationTableFieldMapper relationTableFieldMapper;
     private RelationTableStructureServiceImpl structureService;
     private RelationTableDataServiceImpl dataService;
 
     @BeforeEach
     void setUp() {
+        relationTableFunctionUnitResolver = new RelationTableFunctionUnitResolver(
+                relationTableFunctionUnitRepository, functionUnitRepository);
+        // Real instance rather than a mock: fromEntities() is a pure mapper over
+        // tableDefinitionRepository (only used to resolve FK display names), and stubbing it as a
+        // Mockito mock would silently return null and NPE inside RelationTableStructureDiff.unchanged().
+        relationTableFieldMapper = new RelationTableFieldMapper(tableDefinitionRepository);
         structureService = new RelationTableStructureServiceImpl(
                 tableDefinitionRepository, fieldDefinitionRepository, functionUnitRepository,
-                new com.admin.service.RelationComputedFieldValidator(), jdbcTemplate);
+                relationTableFunctionUnitRepository, relationTableFunctionUnitResolver,
+                new com.admin.service.RelationComputedFieldValidator(), relationTableFieldMapper, jdbcTemplate);
         dataService = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, functionUnitRepository, auditService,
+                tableDefinitionRepository, versionRepository, relationTableFunctionUnitResolver, auditService,
                 org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class),
                 org.mockito.Mockito.mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
                 jdbcTemplate, objectMapper);

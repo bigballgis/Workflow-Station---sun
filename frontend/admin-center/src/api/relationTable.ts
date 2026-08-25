@@ -1,5 +1,6 @@
-import { PageResult } from '@/types/common'
+import { PageResult, type AdminListPage } from '@/types/common'
 import { get, post, put, del } from './request'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 // ==================== 类型定义 ====================
 
@@ -93,6 +94,13 @@ export interface FieldDefinitionResponse {
   computedField?: Record<string, unknown>
 }
 
+/** Function Unit 简要信息 */
+export interface FunctionUnitBrief {
+  id: string
+  code: string
+  name: string
+}
+
 /** 表定义响应 */
 export interface RelationTableResponse {
   id: number
@@ -103,10 +111,8 @@ export interface RelationTableResponse {
   enabled: boolean
   portalVisible: boolean
   currentVersion: number
-  /** Optional Function Unit grouping; undefined/null = ungrouped */
-  functionUnitId?: string
-  functionUnitCode?: string
-  functionUnitName?: string
+  /** Function Unit(s) this table belongs to; empty = Common (visible to all Function Units) */
+  functionUnits: FunctionUnitBrief[]
   fieldDefinitions: FieldDefinitionResponse[]
   /** 当前管理员对该表的权限级别：READONLY=只读, READ_WRITE=读写 */
   permissionLevel?: 'READONLY' | 'READ_WRITE'
@@ -191,8 +197,8 @@ export interface CreateRelationTableRequest {
   tableName: string
   displayName?: string
   description?: string
-  /** Optional Function Unit grouping (sys_function_units.id) */
-  functionUnitId?: string
+  /** Function Unit(s) this table belongs to (sys_function_units.id); empty/undefined = Common */
+  functionUnitIds?: string[]
   fieldDefinitions: CreateFieldDefinitionRequest[]
 }
 
@@ -224,14 +230,37 @@ export interface UpdateRelationTableRequest {
   tableName?: string
   displayName?: string
   description?: string
-  /** Optional Function Unit grouping (sys_function_units.id); empty string clears to ungrouped */
-  functionUnitId?: string
+  /**
+   * Function Unit(s) this table belongs to (sys_function_units.id).
+   * undefined = leave unchanged; empty array = clear to Common.
+   */
+  functionUnitIds?: string[]
   fieldDefinitions?: UpdateFieldDefinitionRequest[]
 }
 
 /** 回滚请求 */
 export interface RollbackRequest {
   targetVersionId: number
+}
+
+export interface RelationTableFuGroup {
+  key: string
+  label: string | null
+  count: number
+}
+
+export interface RelationTableStructureListQuery {
+  page: number
+  size: number
+  functionUnitId?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
+export interface RelationTableStructureListPage extends AdminListPage<RelationTableResponse> {
+  functionUnitGroups: RelationTableFuGroup[]
 }
 
 // ==================== 表结构 API ====================
@@ -244,6 +273,9 @@ export const relationTableStructureApi = {
   /** 获取表定义列表 */
   list: () =>
     get<RelationTableResponse[]>('/relation-tables/structures'),
+
+  query: (body: RelationTableStructureListQuery) =>
+    post<RelationTableStructureListPage>('/relation-tables/structures/query', body),
 
   /** 检查表名是否全平台可用 */
   checkTableNameAvailable: (tableName: string, excludeTableId?: number) =>
@@ -323,9 +355,20 @@ export const relationTableDataApi = {
   getFunctionUnitGroups: () =>
     get<FunctionUnitTableGroup[]>('/relation-tables/data/function-units'),
 
-  /** 分页查询表数据 */
+  /** 分页查询表数据（legacy GET，lookup / 旧调用仍走这里） */
   queryData: (tableId: number, params?: { search?: string; page?: number; size?: number }) =>
     get<PageResult<RelationTableDataRow>>(`/relation-tables/data/${tableId}`, { params }),
+
+  query: (tableId: number, body: {
+    page: number
+    size: number
+    search?: string
+    filters?: Array<ListColumnFilter & { field: string }>
+    sortField?: string
+    sortDirection?: 'ASC' | 'DESC'
+    groupBy?: string
+  }) =>
+    post<AdminListPage<RelationTableDataRow>>(`/relation-tables/data/${tableId}/query`, body),
 
   /** 新增数据 */
   addData: (tableId: number, data: Record<string, unknown>) =>

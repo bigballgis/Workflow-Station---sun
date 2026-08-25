@@ -1,5 +1,8 @@
 package com.admin.controller;
 
+import com.admin.component.AutomationFlowListQueryComponent;
+import com.admin.dto.list.AdminListPage;
+import com.admin.dto.request.AutomationFlowListQueryRequest;
 import com.admin.dto.response.AutomationFlowSummary;
 import com.admin.service.AutomationFlowService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -10,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,6 +53,7 @@ public class AutomationFlowController {
     private static final int MAX_RESTORE_FLOWS = 50;
 
     private final AutomationFlowService automationFlowService;
+    private final AutomationFlowListQueryComponent flowListQueryComponent;
 
     /** C-3 共享密钥（docs/ap-integration/DECISIONS.md#d6）；空 = resolve 端点关闭 */
     @Value("${service.internal-token:}")
@@ -60,6 +65,15 @@ public class AutomationFlowController {
             return forbidden();
         }
         return ResponseEntity.ok(ApiResponse.success(automationFlowService.listFlows()));
+    }
+
+    @PostMapping("/query")
+    public ResponseEntity<ApiResponse<AdminListPage<AutomationFlowSummary>>> queryFlows(
+            @RequestBody @Valid AutomationFlowListQueryRequest request) {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        return ResponseEntity.ok(ApiResponse.success(flowListQueryComponent.query(request)));
     }
 
     @GetMapping("/{flowId}/export")

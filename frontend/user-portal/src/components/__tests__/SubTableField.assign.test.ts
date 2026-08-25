@@ -7,7 +7,6 @@ import { assignSubTableRow } from '@/api/task'
 // Mock API calls
 vi.mock('@/api/task', () => ({
   assignSubTableRow: vi.fn(),
-  assignSubTableRowByIdentity: vi.fn(),
   getSubTableData: vi.fn(),
   getTaskDetail: vi.fn(),
 }))
@@ -431,6 +430,176 @@ describe('SubTableField - Row Assignment', () => {
       expect(wrapper.vm.rows[0].assignee_display_name).toBe('User Two')
       expect(assignSubTableRow).toHaveBeenCalledWith('task-123', 101, 'user-002')
       expect(wrapper.emitted('assignmentChanged')).toBeTruthy()
+    })
+
+    it('assigns via composite rowKey (not identity fallback) for alphanumeric single-column PK (ATM transaction_id)', async () => {
+      const rowsWithAssignee = [{
+        transaction_id: 'ACQ-DC-PW-TRANS-000018',
+        name: 'Wire Transfer',
+        assignee: 'user-001',
+        assignee_display_name: 'User One',
+      }]
+      const columnsWithAssignee = [
+        { field: 'name', label: 'Name', type: 'text' },
+        { field: 'assignee', label: 'assignee', type: 'lookup' },
+      ]
+      vi.mocked(assignSubTableRow).mockResolvedValue({
+        data: {
+          success: true,
+          rowId: 0,
+          assigneeId: 'user-002',
+          assigneeName: 'User Two',
+        },
+      })
+
+      const wrapper = mount(SubTableField, {
+        props: {
+          title: 'ACQ Transactions',
+          columns: columnsWithAssignee,
+          modelValue: [...rowsWithAssignee],
+          primaryKeyFields: ['transaction_id'],
+          showAssignButton: true,
+          assigneeField: 'assignee',
+          canAssign: true,
+          taskId: 'task-123',
+          editable: true,
+        },
+        global: {
+          stubs: globalStubs,
+        },
+      })
+
+      wrapper.vm.dialogMode = 'edit'
+      wrapper.vm.editingRowIndex = 0
+      wrapper.vm.dialogInitialData = { ...rowsWithAssignee[0] }
+
+      await wrapper.vm.handleDialogSave({
+        name: 'Wire Transfer',
+        assignee: {
+          id: 'user-002',
+          display_name: 'User Two',
+          username: 'user2',
+        },
+      })
+
+      await wrapper.vm.$nextTick()
+      expect(wrapper.vm.rows[0].assignee_display_name).toBe('User Two')
+      expect(assignSubTableRow).toHaveBeenCalledWith(
+        'task-123',
+        0,
+        'user-002',
+        { transaction_id: 'ACQ-DC-PW-TRANS-000018' }
+      )
+      expect(ElMessage.error).not.toHaveBeenCalled()
+      expect(wrapper.emitted('assignmentChanged')).toBeTruthy()
+    })
+
+    it('shows an error and sends no request when the row has no resolvable primary key', async () => {
+      const rowsWithoutPk = [{
+        name: 'Wire Transfer',
+        assignee: 'user-001',
+        assignee_display_name: 'User One',
+      }]
+      const columnsWithAssignee = [
+        { field: 'name', label: 'Name', type: 'text' },
+        { field: 'assignee', label: 'assignee', type: 'lookup' },
+      ]
+
+      const wrapper = mount(SubTableField, {
+        props: {
+          title: 'ACQ Transactions',
+          columns: columnsWithAssignee,
+          modelValue: [...rowsWithoutPk],
+          primaryKeyFields: ['transaction_id'],
+          showAssignButton: true,
+          assigneeField: 'assignee',
+          canAssign: true,
+          taskId: 'task-123',
+          editable: true,
+        },
+        global: {
+          stubs: globalStubs,
+        },
+      })
+
+      wrapper.vm.dialogMode = 'edit'
+      wrapper.vm.editingRowIndex = 0
+      wrapper.vm.dialogInitialData = { ...rowsWithoutPk[0] }
+
+      await wrapper.vm.handleDialogSave({
+        name: 'Wire Transfer',
+        assignee: {
+          id: 'user-002',
+          display_name: 'User Two',
+          username: 'user2',
+        },
+      })
+
+      await wrapper.vm.$nextTick()
+      expect(assignSubTableRow).not.toHaveBeenCalled()
+      expect(ElMessage.error).toHaveBeenCalledWith('subTable.assignmentMissingRowKey')
+    })
+
+    /**
+     * A sub-table with a BPMN assignmentConfig (JSON-row assignment model, e.g. ACQ Transaction's
+     * assignee_id/role_code/bu_code) must persist the assignee only via the normal row edit + task
+     * form submit — never through the legacy per-row engine assignment endpoint, which assumes a
+     * physical table + numeric rowId and 400s on JSON-only sub-tables ("Task is not configured
+     * with sub-table information").
+     */
+    it('does not call the legacy assign API when the sub-table has a BPMN assignmentConfig', async () => {
+      const rows = [{
+        transaction_id: 'ACQ-DC-PW-TRANS-000004',
+        name: 'Wire Transfer',
+        assignee_id: 'user-001',
+        assignee_display_name: 'User One',
+      }]
+      const columnsWithAssignee = [
+        { field: 'name', label: 'Name', type: 'text' },
+        { field: 'assignee_id', label: 'Assignee', type: 'lookup' },
+      ]
+
+      const wrapper = mount(SubTableField, {
+        props: {
+          title: 'ACQ Transactions',
+          columns: columnsWithAssignee,
+          modelValue: [...rows],
+          primaryKeyFields: ['transaction_id'],
+          showAssignButton: true,
+          assigneeField: 'assignee_id',
+          canAssign: true,
+          taskId: 'task-123',
+          editable: true,
+          assignmentConfig: {
+            allowUser: true,
+            allowRole: false,
+            assigneeField: 'assignee_id',
+          },
+        },
+        global: {
+          stubs: globalStubs,
+        },
+      })
+
+      wrapper.vm.dialogMode = 'edit'
+      wrapper.vm.editingRowIndex = 0
+      wrapper.vm.dialogInitialData = { ...rows[0] }
+
+      await wrapper.vm.handleDialogSave({
+        name: 'Wire Transfer',
+        assignee_id: {
+          id: 'user-002',
+          display_name: 'User Two',
+          username: 'user2',
+        },
+      })
+
+      await wrapper.vm.$nextTick()
+      expect(assignSubTableRow).not.toHaveBeenCalled()
+      expect(ElMessage.error).not.toHaveBeenCalled()
+      expect(wrapper.vm.rows[0].assignee_id).toBe('user-002')
+      expect(wrapper.emitted('update:modelValue')).toBeTruthy()
+      expect(wrapper.emitted('assignmentChanged')).toBeFalsy()
     })
 
     it('does not call assign API when assignee is unchanged in edit', async () => {

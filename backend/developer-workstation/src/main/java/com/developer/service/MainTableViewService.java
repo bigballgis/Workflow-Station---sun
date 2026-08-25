@@ -47,5 +47,5 @@ public interface MainTableViewService {
     List<Map<String, Object>> snapshotViewsForFunctionUnit(Long functionUnitId);
 
     void cloneViewsForFunctionUnit(Long sourceFunctionUnitId, FunctionUnit targetFunctionUnit,
-                                   Map<Long, TableDefinition> tableIdMapping);
+                                   Map<Long, TableDefinition> tableIdMapping, Map<Long, Long> formIdMapping);
 }

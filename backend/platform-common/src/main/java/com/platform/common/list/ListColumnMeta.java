@@ -1,4 +1,4 @@
-package com.portal.dto;
+package com.platform.common.list;
 
 import java.util.List;
 
@@ -12,7 +12,7 @@ import java.util.List;
  * (ENUM / USER / BOOLEAN) may group; TEXT / NUMBER / DATETIME never do. The canonical
  * constructor enforces this so no endpoint can declare a groupable free-text column.
  */
-public record PortalListColumnMeta(
+public record ListColumnMeta(
         String field,
         String label,
         Kind kind,
@@ -48,7 +48,7 @@ public record PortalListColumnMeta(
     private static final List<String> NUMBER_OPERATORS = List.of(
             "eq", "ne", "gt", "gte", "lt", "lte", "between", "isNull", "isNotNull");
 
-    public PortalListColumnMeta {
+    public ListColumnMeta {
         if (field == null || field.isBlank()) {
             throw new IllegalArgumentException("column field is required");
         }
@@ -101,7 +101,7 @@ public record PortalListColumnMeta(
     }
 
     /** Standard column: filterable + sortable, kind-derived operators and groupable default. */
-    public static PortalListColumnMeta of(String field, String label, Kind kind) {
+    public static ListColumnMeta of(String field, String label, Kind kind) {
         if (kind == Kind.ENUM) {
             throw new IllegalArgumentException(
                     "ENUM column " + field + " must be declared with withOptions — a filterable choice has no free-text fallback");
@@ -109,12 +109,12 @@ public record PortalListColumnMeta(
         if (kind == Kind.BOOLEAN) {
             return withOptions(field, label, kind, booleanOptions());
         }
-        return new PortalListColumnMeta(
+        return new ListColumnMeta(
                 field, label, kind, true, true, defaultGroupable(kind), operatorsFor(kind), List.of());
     }
 
     /** Closed-value column with its option list (ENUM status values, boolean labels, ...). */
-    public static PortalListColumnMeta withOptions(
+    public static ListColumnMeta withOptions(
             String field, String label, Kind kind, List<Option> options) {
         if (!defaultGroupable(kind)) {
             throw new IllegalArgumentException(
@@ -124,13 +124,13 @@ public record PortalListColumnMeta(
             throw new IllegalArgumentException(
                     "closed-value column " + field + " declared without options");
         }
-        return new PortalListColumnMeta(
+        return new ListColumnMeta(
                 field, label, kind, true, true, true, operatorsFor(kind), options);
     }
 
     /** Display-only column: no filter, no sort, no group (e.g. computed/action columns). */
-    public static PortalListColumnMeta displayOnly(String field, String label, Kind kind) {
-        return new PortalListColumnMeta(field, label, kind, false, false, false, List.of(), List.of());
+    public static ListColumnMeta displayOnly(String field, String label, Kind kind) {
+        return new ListColumnMeta(field, label, kind, false, false, false, List.of(), List.of());
     }
 
     /**
@@ -138,8 +138,8 @@ public record PortalListColumnMeta(
      * filter by the visible text; conversion to the stored key happens before SQL. Sort and
      * group stay off because those would still run against the key.
      */
-    public static PortalListColumnMeta displayMapped(String field, String label) {
-        return new PortalListColumnMeta(
+    public static ListColumnMeta displayMapped(String field, String label) {
+        return new ListColumnMeta(
                 field, label, Kind.TEXT, true, false, false, operatorsFor(Kind.TEXT), List.of());
     }
 

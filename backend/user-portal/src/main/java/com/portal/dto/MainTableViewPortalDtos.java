@@ -1,7 +1,7 @@
 package com.portal.dto;
 
+import com.platform.common.list.ListColumnMeta;
 import lombok.Builder;
-
 import java.util.List;
 import java.util.Map;
 
@@ -64,13 +64,13 @@ public final class MainTableViewPortalDtos {
             // What the column header may offer. Declared by the backend because only it knows
             // whether the query can answer that question about this column — see
             // MainTableViewColumnSpec.
-            PortalListColumnMeta.Kind kind,
+            ListColumnMeta.Kind kind,
             Boolean filterable,
             Boolean sortable,
             Boolean groupable,
             List<String> operators,
             /** Closed choices for ENUM / BOOLEAN; empty for open-value kinds. */
-            List<PortalListColumnMeta.Option> options
+            List<ListColumnMeta.Option> options
     ) {
         /**
          * Copies the list-header contract onto a view column. {@code options} must travel:
@@ -78,7 +78,7 @@ public final class MainTableViewPortalDtos {
          * throw (or, if that guard is bypassed, fall through to a text box).
          */
         public static MainTableViewFieldColumnBuilder applyListCapabilities(
-                MainTableViewFieldColumnBuilder builder, PortalListColumnMeta cap) {
+                MainTableViewFieldColumnBuilder builder, ListColumnMeta cap) {
             return builder
                     .kind(cap.kind())
                     .filterable(cap.filterable())

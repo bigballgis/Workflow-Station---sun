@@ -4,13 +4,12 @@ import com.admin.config.DatabaseSchemaResolver;
 import com.admin.dto.request.RollbackRequest;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.dto.response.RelationTableVersionResponse;
-import com.admin.entity.FunctionUnit;
+import com.admin.component.RelationTableFunctionUnitResolver;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
 import com.admin.entity.RelationTableVersion;
 import com.admin.exception.RelationTableDeploymentException;
 import com.admin.exception.RelationTableNotFoundException;
-import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
@@ -49,17 +48,15 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     private final RelationTableDefinitionRepository tableDefinitionRepository;
     private final RelationTableVersionRepository versionRepository;
     private final RelationFieldDefinitionRepository fieldDefinitionRepository;
-    private final FunctionUnitRepository functionUnitRepository;
+    private final RelationTableFunctionUnitResolver relationTableFunctionUnitResolver;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final DatabaseSchemaResolver schemaResolver;
     private final I18nService i18nService;
 
-    /** Resolves functionUnitCode/functionUnitName for display; no-op when the table is ungrouped. */
+    /** Resolves the linked Function Units for display; empty when the table is Common. */
     private RelationTableResponse withFunctionUnit(RelationTableResponse response) {
-        if (response.getFunctionUnitId() != null) {
-            functionUnitRepository.findById(response.getFunctionUnitId()).ifPresent(response::applyFunctionUnit);
-        }
+        response.applyFunctionUnits(relationTableFunctionUnitResolver.resolveOne(response.getId()));
         return response;
     }
 

@@ -110,157 +110,153 @@
       </el-form>
     </div>
 
-    <!-- Table -->
-    <el-table
-      ref="tableRef"
-      v-loading="loading"
-      :data="logs"
-      stripe
-      size="small"
-      highlight-current-row
-      style="width: 100%"
-      :header-cell-style="{ background: '#f5f7fa', whiteSpace: 'nowrap' }"
-      @sort-change="handleSortChange"
-    >
-      <el-table-column
-        prop="changeType"
-        :label="t('upAudit.changeType')"
-        min-width="140"
-        sortable="custom"
-      >
-        <template #default="{ row }">
-          <el-tag :type="changeTypeTag(row.changeType)" size="small">
-            {{ changeTypeText(t, row.changeType) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="functionUnitCode"
-        :label="t('upAudit.functionUnit')"
-        min-width="150"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ row.functionUnitName || row.functionUnitCode || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('upAudit.processInstanceId')"
-        min-width="170"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          <span :title="row.processInstanceId">
-            {{ row.processTitle || row.processInstanceId || '-' }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('upAudit.stage')"
-        min-width="140"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ row.stageName || row.stageId || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('upAudit.subTableName')"
-        min-width="120"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ row.subTableDisplayName || row.subTableName || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('upAudit.fieldName')"
-        min-width="140"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ row.fieldLabel || row.fieldName || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('upAudit.oldValue')"
-        min-width="150"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ truncateValue(row.oldValue, 50) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('upAudit.newValue')"
-        min-width="150"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ truncateValue(row.newValue, 50) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="userName"
-        :label="t('audit.operator')"
-        min-width="120"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          {{ row.userName || row.userId || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="timestamp"
-        :label="t('audit.time')"
-        min-width="170"
-        sortable="custom"
-        show-overflow-tooltip
-      >
-        <template #default="{ row }">
-          <span style="white-space: nowrap">{{ formatTimestamp(row.timestamp) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('common.actions')"
-        width="80"
-        fixed="right"
-      >
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            @click="showDetail(row)"
-          >
-            {{ t('common.view') }}
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
     <div
-      v-if="!loading && logs.length === 0"
-      class="empty-state"
+      v-loading="loading"
+      class="up-audit-grid-shell"
     >
-      <el-empty :description="t('upAudit.emptyText')">
-        <el-button
-          type="primary"
-          @click="handleReset"
+      <div
+        ref="gridScrollRef"
+        class="list-data-grid-scroll"
+      >
+        <div
+          class="list-data-grid-inner"
+          :style="gridInnerStyle"
         >
-          {{ t('audit.resetFilter') }}
-        </el-button>
-      </el-empty>
-    </div>
+          <el-table
+            ref="tableRef"
+            :data="displayRows"
+            stripe
+            size="small"
+            highlight-current-row
+            :fit="false"
+            table-layout="fixed"
+            style="width: 100%"
+            class="list-data-grid"
+            :class="{ 'list-data-grid--fit': gridFits }"
+            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
+            :row-class-name="rowClassName"
+          >
+            <el-table-column
+              v-for="(col, colIndex) in displayColumns"
+              :key="col.field"
+              :prop="col.field"
+              :width="widthOf(col.field)"
+              show-overflow-tooltip
+            >
+              <template #header>
+                <ListColumnHeader
+                  :column="col"
+                  :sort="sort.field === col.field ? sort.direction : null"
+                  :grouped="groupBy === col.field"
+                  :filtered="!!columnFilters[col.field]"
+                  :width="widthOf(col.field)"
+                  :show-move="displayColumns.length > 1"
+                  :can-move-left="colIndex > 0"
+                  :can-move-right="colIndex < displayColumns.length - 1"
+                  @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
+                  @clear-sort="onClearSort"
+                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
+                  @filter-open="openFilter(col.field)"
+                  @clear-filter="onClearFilter(col.field)"
+                  @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
+                  @width-change="(width: number) => setWidth(col.field, width)"
+                  @width-commit="persistWidths"
+                />
+              </template>
+              <template #default="{ row }">
+                <template v-if="isListGroupHeaderRow(row)">
+                  <div class="group-header-cell">
+                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
+                    <span class="group-count">({{ row._groupCount }})</span>
+                  </div>
+                </template>
+                <el-tag
+                  v-else-if="col.field === 'changeType'"
+                  :type="changeTypeTag(row.changeType)"
+                  size="small"
+                >
+                  {{ changeTypeText(t, row.changeType) }}
+                </el-tag>
+                <template v-else-if="col.field === 'functionUnitCode'">
+                  {{ row.functionUnitName || row.functionUnitCode || '-' }}
+                </template>
+                <template v-else-if="col.field === 'processInstanceId'">
+                  <span :title="row.processInstanceId">
+                    {{ row.processTitle || row.processInstanceId || '-' }}
+                  </span>
+                </template>
+                <template v-else-if="col.field === 'stageId'">
+                  {{ row.stageName || row.stageId || '-' }}
+                </template>
+                <template v-else-if="col.field === 'subTableName'">
+                  {{ row.subTableDisplayName || row.subTableName || '-' }}
+                </template>
+                <template v-else-if="col.field === 'fieldName'">
+                  {{ row.fieldLabel || row.fieldName || '-' }}
+                </template>
+                <template v-else-if="col.field === 'oldValue'">
+                  {{ truncateValue(row.oldValue, 50) }}
+                </template>
+                <template v-else-if="col.field === 'newValue'">
+                  {{ truncateValue(row.newValue, 50) }}
+                </template>
+                <template v-else-if="col.field === 'userName'">
+                  {{ row.userName || row.userId || '-' }}
+                </template>
+                <span
+                  v-else-if="col.field === 'timestamp'"
+                  style="white-space: nowrap"
+                >{{ formatTimestamp(row.timestamp) }}</span>
+                <template v-else>
+                  {{ row[col.field] || '-' }}
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="leftoverWidth > 0"
+              :width="leftoverWidth"
+              class-name="list-col-spacer"
+            />
+            <el-table-column
+              :label="t('common.actions')"
+              :width="ACTIONS_COL_WIDTH"
+              fixed="right"
+            >
+              <template #default="{ row }">
+                <el-button
+                  v-if="!isListGroupHeaderRow(row)"
+                  link
+                  type="primary"
+                  @click="showDetail(row)"
+                >
+                  {{ t('common.view') }}
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
 
-    <div class="pagination-container">
-      <el-pagination
-        v-model:current-page="page"
-        v-model:page-size="size"
-        :total="total"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next"
-        @size-change="handleSizeChange"
-        @current-change="handleSearch"
+      <div
+        v-if="!loading && logs.length === 0"
+        class="empty-state"
+      >
+        <el-empty :description="t('upAudit.emptyText')">
+          <el-button
+            type="primary"
+            @click="handleReset"
+          >
+            {{ t('audit.resetFilter') }}
+          </el-button>
+        </el-empty>
+      </div>
+
+      <ListPagination
+        v-model:page="pagination.page"
+        v-model:size="pagination.size"
+        :total="pagination.total"
+        :loading="loading"
+        @change="handleSearch"
       />
     </div>
 
@@ -278,6 +274,14 @@
       :exporting="exporting"
       @export="(format, fields) => doExport(format, fields)"
     />
+    <ListFilterDialog
+      v-model:visible="filterDialog.visible"
+      :column="activeFilterColumn"
+      :filter="activeFilter"
+      :remote-search="searchListFilterUsers"
+      @apply="onFilterApply"
+      @clear="onFilterClear"
+    />
   </div>
 </template>
 
@@ -288,23 +292,80 @@ import PageHeader from '@/components/PageHeader.vue'
 import AuditExportDialog from '@/views/audit/components/AuditExportDialog.vue'
 import UserPortalAuditDetailDialog from './components/UserPortalAuditDetailDialog.vue'
 import { useUserPortalAudit } from '@/composables/modules/useUserPortalAudit'
+import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
+import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
+import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
+import ListPagination from '@platform-shared/list/ListPagination.vue'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 const { t } = useI18n()
 
 const {
   loading, exporting,
-  logs, total, page, size,
+  logs, total,
   detailDialogVisible, currentRecord,
-  dateRange, sortField, sortOrder,
+  dateRange,
   query, functionUnitCodes,
   exportDialogVisible,
   ALL_EXPORT_FIELDS,
   dateShortcuts,
   changeTypeTag, changeTypeText, formatTimestamp, truncateValue,
-  handleSearch, handleReset, handleSizeChange, handleSortChange,
+  handleSearch, handleReset,
   showDetail,
   openExportDialog, doExport,
+  ACTIONS_COL_WIDTH,
+  displayColumns,
+  displayRows,
+  groupBy,
+  columnFilters,
+  sort,
+  filterDialog,
+  pagination,
+  activeFilterColumn,
+  activeFilter,
+  gridScrollRef,
+  gridFits,
+  leftoverWidth,
+  gridInnerStyle,
+  widthOf,
+  setWidth,
+  persistWidths,
+  moveColumn,
+  openFilter,
+  applyFilter,
+  clearFilter,
+  applySort,
+  clearSort,
+  applyGroup,
+  rowClassName,
+  spanMethod,
+  groupHeaderLabel,
+  isListGroupHeaderRow,
 } = useUserPortalAudit()
+
+function onSort(field: string, direction: 'ASC' | 'DESC') {
+  applySort(field, direction)
+  void handleSearch()
+}
+function onClearSort() {
+  clearSort()
+  void handleSearch()
+}
+function onGroup(field: string, grouped: boolean) {
+  applyGroup(field, grouped)
+  void handleSearch()
+}
+function onClearFilter(field: string) {
+  clearFilter(field)
+  void handleSearch()
+}
+function onFilterApply(filter: ListColumnFilter) {
+  applyFilter(filter)
+  void handleSearch()
+}
+function onFilterClear() {
+  onClearFilter(filterDialog.field)
+}
 </script>
 
 <style scoped>

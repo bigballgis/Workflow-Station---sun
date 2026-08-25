@@ -241,7 +241,7 @@ class FunctionUnitCloner {
             processDefinitionRepository.save(clonedProcess);
         }
 
-        mainTableViewService.cloneViewsForFunctionUnit(id, cloned, tableMapping);
+        mainTableViewService.cloneViewsForFunctionUnit(id, cloned, tableMapping, formIdMapping);
         return cloned;
     }
 

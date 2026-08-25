@@ -130,7 +130,13 @@ $migrations = @(
     "00-schema/64-email-monitor-template-binding.sql",
     "00-schema/65-add-dw-field-computed.sql",
     "00-schema/66-add-auditor-role-type.sql",
-    "00-schema/66-add-rt-field-computed.sql"
+    "00-schema/66-add-rt-field-computed.sql",
+    "00-schema/67-backfill-subtable-row-id.sql",
+    "00-schema/68-form-scene-and-fu-audit-access.sql",
+    "00-schema/69-add-action-binding-type.sql",
+    "00-schema/70-add-rt-function-unit.sql",
+    "00-schema/71-list-pagination-indexes.sql",
+    "00-schema/72-add-rt-table-function-units.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

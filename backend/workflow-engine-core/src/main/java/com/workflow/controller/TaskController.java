@@ -84,7 +84,35 @@ public class TaskController {
             @Parameter(description = "Department role list")
             @RequestParam(value = "deptRoles", required = false) List<String> deptRoles,
             @Parameter(description = "Portal current workspace business unit (optional; filters pending tasks where FIXED_BU_ROLE is inconsistent with JWT)")
-            @RequestParam(value = "activeBusinessUnitId", required = false) String activeBusinessUnitId) {
+            @RequestParam(value = "activeBusinessUnitId", required = false) String activeBusinessUnitId,
+            @Parameter(description = "Optional Flowable taskName LIKE fragment (no %; engine wraps)")
+            @RequestParam(value = "taskNameLike", required = false) String taskNameLike,
+            @Parameter(description = "How to wrap taskNameLike: contains|startsWith|endsWith")
+            @RequestParam(value = "taskNameLikeMode", required = false) String taskNameLikeMode,
+            @Parameter(description = "Optional Flowable taskName exact match")
+            @RequestParam(value = "taskNameExact", required = false) String taskNameExact,
+            @Parameter(description = "Optional Flowable priority")
+            @RequestParam(value = "priority", required = false) Integer priority,
+            @Parameter(description = "Optional Flowable priority lower bound (inclusive)")
+            @RequestParam(value = "priorityMin", required = false) Integer priorityMin,
+            @Parameter(description = "Optional Flowable priority upper bound (inclusive)")
+            @RequestParam(value = "priorityMax", required = false) Integer priorityMax,
+            @Parameter(description = "Optional created-after (epoch millis)")
+            @RequestParam(value = "createdAfter", required = false) Long createdAfter,
+            @Parameter(description = "Optional created-before (epoch millis)")
+            @RequestParam(value = "createdBefore", required = false) Long createdBefore,
+            @Parameter(description = "Optional due-after (epoch millis)")
+            @RequestParam(value = "dueAfter", required = false) Long dueAfter,
+            @Parameter(description = "Optional due-before (epoch millis)")
+            @RequestParam(value = "dueBefore", required = false) Long dueBefore,
+            @Parameter(description = "Optional process definition name LIKE fragment (no %)")
+            @RequestParam(value = "processDefinitionNameLike", required = false) String processDefinitionNameLike,
+            @Parameter(description = "Optional process definition name exact")
+            @RequestParam(value = "processDefinitionNameExact", required = false) String processDefinitionNameExact,
+            @Parameter(description = "Optional sort field pushed from portal")
+            @RequestParam(value = "sortBy", required = false) String sortBy,
+            @Parameter(description = "Optional sort direction pushed from portal")
+            @RequestParam(value = "sortDirection", required = false) String sortDirection) {
         
         // Validate and sanitize inputs using security integration service
         if (userId != null) {
@@ -128,8 +156,24 @@ public class TaskController {
             // getUserTasks would skip BU_ROLE orphan-pool repair and todos may be empty.
             List<String> gids = groupIds != null ? groupIds : Collections.emptyList();
             List<String> droles = deptRoles != null ? deptRoles : Collections.emptyList();
+            com.workflow.dto.request.EngineTaskListCriteria criteria =
+                    new com.workflow.dto.request.EngineTaskListCriteria(
+                            taskNameLike,
+                            taskNameExact,
+                            taskNameLikeMode,
+                            priority,
+                            priorityMin,
+                            priorityMax,
+                            createdAfter != null ? new java.util.Date(createdAfter) : null,
+                            createdBefore != null ? new java.util.Date(createdBefore) : null,
+                            dueAfter != null ? new java.util.Date(dueAfter) : null,
+                            dueBefore != null ? new java.util.Date(dueBefore) : null,
+                            processDefinitionNameLike,
+                            processDefinitionNameExact,
+                            sortBy,
+                            sortDirection);
             result = taskManagerComponent.getUserAllVisibleTasks(userId, gids, droles, page, pageSize,
-                    activeBusinessUnitId);
+                    activeBusinessUnitId, criteria);
         }
         
         return ResponseEntity.ok(ApiResponse.success(result));
