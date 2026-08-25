@@ -25,7 +25,11 @@ export function emptyProcessFormRef(processInstanceId: string): ProcessFormData 
 
 export function hasSnapshotFieldValues(fieldValues: Record<string, unknown> | undefined): boolean {
   if (!fieldValues) return false
-  return Object.keys(fieldValues).some(key => key !== '__subTables__')
+  return Object.keys(fieldValues).some(key => {
+    if (key !== '__subTables__') return true
+    const sub = fieldValues[key]
+    return isPlainObject(sub) && Object.keys(sub).length > 0
+  })
 }
 
 /**

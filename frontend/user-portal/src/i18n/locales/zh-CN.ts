@@ -1060,6 +1060,7 @@ exportWithData: '导出',
     changed: '已变更',
     unchanged: '未变更',
     fieldName: '字段',
+    noSubTableRows: '暂无行',
   },
   changeHistory: {
     title: '变更历史',

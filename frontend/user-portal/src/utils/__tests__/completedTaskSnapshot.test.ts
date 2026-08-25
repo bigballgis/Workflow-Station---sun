@@ -37,5 +37,8 @@ describe('extractCompletedFormFromVariables', () => {
     expect(hasSnapshotFieldValues({})).toBe(false)
     expect(hasSnapshotFieldValues({ __subTables__: {} })).toBe(false)
     expect(hasSnapshotFieldValues({ case_stage: { stage_name: 'Open' } })).toBe(true)
+    expect(hasSnapshotFieldValues({
+      __subTables__: { '1135': [{ arn: '1' }] },
+    })).toBe(true)
   })
 })

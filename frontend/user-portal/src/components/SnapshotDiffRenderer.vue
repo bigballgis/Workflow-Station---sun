@@ -67,6 +67,34 @@
         </template>
       </el-table-column>
     </el-table>
+    <div
+      v-for="section in subTableSections"
+      :key="section.bindingId"
+      class="snapshot-sub-table"
+    >
+      <div class="snapshot-sub-table-title">
+        {{ t('changeHistory.subTable') }}: {{ section.tableLabel || t('changeHistory.subTable') }}
+      </div>
+      <el-table
+        :data="section.snapshotRows"
+        border
+        stripe
+        size="small"
+        :empty-text="t('snapshotDiff.noSubTableRows')"
+      >
+        <el-table-column
+          v-for="col in section.columns"
+          :key="col.field"
+          :label="col.label"
+          min-width="120"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ formatSubTableCell(row, col.field) }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
   </div>
 </template>
 
@@ -81,6 +109,11 @@ import {
   type DiffRow,
 } from './snapshotDiffHelpers'
 import {
+  buildSnapshotSubTableSections,
+  formatSnapshotSubTableCell,
+  type SnapshotSubTableBindingSource,
+} from './snapshotDiffSubTables'
+import {
   applySensitiveMask,
   isSensitiveMaskActive,
 } from '@/utils/sensitiveMask'
@@ -93,11 +126,13 @@ interface Props {
   fields: FormField[]
   tabs?: FormTab[]
   fieldsAfterTabs?: FormField[]
+  subTableBindings?: SnapshotSubTableBindingSource[]
   showLiveValues: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showLiveValues: true,
+  subTableBindings: () => [],
 })
 
 const comparableFields = computed(() =>
@@ -109,6 +144,16 @@ const diffRows = computed<DiffRow[]>(() =>
     props.snapshotValues,
     props.liveValues,
     props.fields,
+    props.tabs,
+    props.fieldsAfterTabs,
+  )
+)
+
+const subTableSections = computed(() =>
+  buildSnapshotSubTableSections(
+    props.fields,
+    props.snapshotValues,
+    props.subTableBindings,
     props.tabs,
     props.fieldsAfterTabs,
   )
@@ -137,6 +182,10 @@ function formatValue(value: unknown, fieldKey?: string): string {
   if (isSensitiveMaskActive(cfg) && s !== '-') return applySensitiveMask(s, cfg!)
   return s
 }
+
+function formatSubTableCell(row: Record<string, unknown>, field: string): string {
+  return formatSnapshotSubTableCell(row, field)
+}
 </script>
 
 <style scoped lang="scss">
@@ -151,6 +200,16 @@ function formatValue(value: unknown, fieldKey?: string): string {
   .live-value.changed {
     color: #67c23a;
     font-weight: 500;
+  }
+
+  .snapshot-sub-table {
+    margin-top: 16px;
+  }
+
+  .snapshot-sub-table-title {
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--text-primary, #303133);
   }
 }
 </style>

@@ -783,11 +783,12 @@ public class TaskFormComponent {
      * <li>Form resolution matches Change History: BPMN {@code formId} first
      * (TASK or PROCESS), then {@code dw_form_stage_bindings}. Empty permissions are
      * not treated as “no form” — field names still come from {@code configJson}.</li>
-     * <li>When that resolution finds no form fields, the snapshot stores
+     * <li>When that resolution finds no form, the snapshot stores
      * <strong>empty fieldValues</strong>—no fallback to copying all process
      * variables and no {@code __subTables__}.</li>
-     * <li>When fieldPermissions is non-empty, the snapshot also keeps
-     * {@code __subTables__} so Portal can hydrate completed sub-tables.</li>
+     * <li>When a form is resolved, the snapshot freezes the form field subset
+     * and a canonical {@code __subTables__} (numeric binding-id slices only),
+     * even if {@code fieldPermissions} is empty.</li>
      * </ul>
      *
      * @param processInstanceId process instance owning the task; identifies the function unit that scopes
@@ -804,19 +805,9 @@ public class TaskFormComponent {
         Map<String, Object> formDefinition = changeHistorySubmissionFilter()
                 .resolveTaskFormDefinition(processInstanceId, taskDefinitionKey);
         Set<String> snapshotKeys = changeHistorySubmissionFilter().snapshotFieldKeys(formDefinition);
-        Map<String, String> fieldPermissions = formDefinition != null
-                ? fieldMapper().extractFieldPermissions(formDefinition)
-                : Collections.emptyMap();
-
-        Map<String, Object> fieldValues;
-        if (snapshotKeys.isEmpty()) {
-            fieldValues = new HashMap<>();
-        } else {
-            fieldValues = fieldMapper().extractFieldSubset(mergedVariables, snapshotKeys);
-            if (!fieldPermissions.isEmpty() && mergedVariables.containsKey("__subTables__")) {
-                fieldValues.put("__subTables__", mergedVariables.get("__subTables__"));
-            }
-        }
+        boolean formResolved = formDefinition != null && !formDefinition.isEmpty();
+        Map<String, Object> fieldValues = CompletedTaskSnapshotAssembler.assembleFieldValues(
+                mergedVariables, snapshotKeys, formResolved, fieldMapper(), objectMapper);
 
         TaskFormSnapshot snapshot = TaskFormSnapshot.builder()
                 .taskId(taskId)

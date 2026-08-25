@@ -1059,6 +1059,7 @@ exportWithData: '匯出',
     changed: '已變更',
     unchanged: '未變更',
     fieldName: '欄位',
+    noSubTableRows: '暫無列',
   },
   changeHistory: {
     title: '變更歷史',

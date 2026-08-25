@@ -37,6 +37,7 @@ function parseArgs(argv) {
     wait: 5000,
     fullPage: false,
     expectSelector: '',
+    clickSelector: '',
     skipLogin: false,
     viewport: '1400x1600',
   }
@@ -50,6 +51,7 @@ function parseArgs(argv) {
     else if (a === '--wait') out.wait = Number(next()) || 5000
     else if (a === '--full-page') out.fullPage = true
     else if (a === '--expect-selector') out.expectSelector = next()
+    else if (a === '--click-selector') out.clickSelector = next()
     else if (a === '--skip-login') out.skipLogin = true
     else if (a === '--viewport') out.viewport = next()
     else if (a === '--help' || a === '-h') out.help = true
@@ -69,6 +71,7 @@ Options:
   --full-page               Full scrollable page screenshot
   --wait <ms>               Wait after navigation (default: 5000)
   --expect-selector <css>   Fail if selector count is 0
+  --click-selector <css>    Click an element after navigation (e.g. a tab)
   --skip-login              Do not run SSO login first
   --viewport WxH            Browser size (default: 1400x1600)
 
@@ -147,6 +150,12 @@ async function main() {
     console.log(`[goto] ${args.url}`)
     await page.goto(args.url, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(args.wait)
+
+    if (args.clickSelector) {
+      console.log(`[click] ${args.clickSelector}`)
+      await page.locator(args.clickSelector).first().click()
+      await page.waitForTimeout(800)
+    }
 
     if (args.expectSelector) {
       const count = await page.locator(args.expectSelector).count()

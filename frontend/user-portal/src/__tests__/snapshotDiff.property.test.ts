@@ -179,4 +179,13 @@ describe('Property 18: Snapshot diff detection (frontend)', () => {
       standardizations: 'Customer Notification',
     })).toBe('Customer Notification')
   })
+
+  it('formats upload URLs as the original file name, matching Change History', () => {
+    expect(formatSnapshotDisplayValue(
+      '/api/v1/upload/files/bc7a8506-aeb4-428a-881e-fe6887b65ed7.jpg?originalName=MSI_MEG_GODLIKE.jpg',
+    )).toBe('MSI_MEG_GODLIKE.jpg')
+    expect(formatSnapshotDisplayValue(
+      '/api/v1/upload/files/336fd6f4.jpg?originalName=lilong.JPG',
+    )).toBe('lilong.JPG')
+  })
 })

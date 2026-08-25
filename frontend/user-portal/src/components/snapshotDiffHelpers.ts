@@ -9,6 +9,8 @@ import {
 } from './formRendererHelpers'
 import { resolveLookupCellTagText } from './subTableAddDialogHelpers/lookup'
 import { unwrapUserLikeValueToDisplayString } from './subTableAddDialogHelpers/userDisplay'
+import { isStoredFileUrl } from './subTableAddDialogHelpers/fileColumns'
+import { fileDisplayText } from '@/utils/mainTableViewCsvExport'
 
 export interface DiffRow {
   key: string
@@ -59,7 +61,7 @@ function isSnapshotDiffField(field: FormField): boolean {
 
 /**
  * Main-form data fields only. Layout widgets and {@code __subTable_*} placeholders
- * do not belong in Completed Task Snapshot — sub-table diffs live in Change History.
+ * are omitted here; frozen sub-table rows render as separate labeled grids.
  */
 export function collectSnapshotDiffFields(
   fields: FormField[],
@@ -95,6 +97,11 @@ function formatObjectValue(value: Record<string, unknown>, field?: FormField): s
   return unwrapUserLikeValueToDisplayString(value)
 }
 
+/** Same filename rule as Change History / CSV export: originalName, else last path segment. */
+function formatStoredText(value: string): string {
+  return isStoredFileUrl(value) ? fileDisplayText(value) : value
+}
+
 /** Human-readable snapshot cell text (never raw JSON for lookup / dictionary rows). */
 export function formatSnapshotDisplayValue(value: unknown, field?: FormField): string {
   if (value === null || value === undefined) return '-'
@@ -103,9 +110,9 @@ export function formatSnapshotDisplayValue(value: unknown, field?: FormField): s
       if (value.length === 0) return '-'
       return value.map(item => formatSnapshotDisplayValue(item, field)).join(', ')
     }
-    return formatObjectValue(value as Record<string, unknown>, field)
+    return formatStoredText(formatObjectValue(value as Record<string, unknown>, field))
   }
-  return String(value)
+  return formatStoredText(String(value))
 }
 
 /**

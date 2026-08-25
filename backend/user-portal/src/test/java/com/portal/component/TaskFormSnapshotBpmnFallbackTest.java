@@ -54,18 +54,21 @@ class TaskFormSnapshotBpmnFallbackTest {
 
         Map<String, Object> variables = new HashMap<>();
         variables.put("case_number", "ATM-DC-PW-000001");
-        variables.put("__subTables__", Map.of("ATM Transaction", List.of()));
+        variables.put("__subTables__", Map.of(
+                "1135", List.of(Map.of("arn", "1", "row_id", "ATM-DC-PW-TRANS-000001")),
+                "ATM Transaction", List.of(Map.of("arn", "1", "row_id", "ATM-DC-PW-TRANS-000001"))));
 
         Set<String> captured = component.mergeCompletedTaskSnapshotIntoVariables(
                 "task-1", "user-1", "Activity_092hlui", "process-atm", variables);
 
-        assertThat(captured).containsOnly("case_number");
+        assertThat(captured).containsExactlyInAnyOrder("case_number", "__subTables__");
         @SuppressWarnings("unchecked")
         Map<String, Object> snapshot = (Map<String, Object>) variables.get("_snapshot_task-1");
         @SuppressWarnings("unchecked")
         Map<String, Object> fieldValues = (Map<String, Object>) snapshot.get("fieldValues");
-        assertThat(fieldValues)
-                .containsEntry("case_number", "ATM-DC-PW-000001")
-                .doesNotContainKey("__subTables__");
+        assertThat(fieldValues).containsEntry("case_number", "ATM-DC-PW-000001");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> frozenSub = (Map<String, Object>) fieldValues.get("__subTables__");
+        assertThat(frozenSub).containsOnlyKeys("1135");
     }
 }

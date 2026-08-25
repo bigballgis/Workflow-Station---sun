@@ -359,15 +359,6 @@
           <el-empty :description="t('task.noFormData')" />
         </div>
       </div>
-      <!-- Task 17.3: Completed task snapshot comparison view -->
-      <TaskSnapshotSection
-        v-if="detailUiPhase >= 3"
-        :is-completed-task="isCompletedTask"
-        :completed-form-data="completedFormData"
-        :form-fields="formFields"
-        :form-tabs="formTabs"
-        :form-fields-after-tabs="formFieldsAfterTabs"
-      />
 
         </el-tab-pane>
 
@@ -403,6 +394,23 @@
             :history-records="historyRecords"
             :history-error="historyError"
             :show-header="false"
+          />
+        </el-tab-pane>
+
+        <el-tab-pane
+          v-if="isCompletedTask"
+          :label="t('task.completedSnapshot')"
+          name="completed-snapshot"
+          lazy
+        >
+          <TaskSnapshotSection
+            v-if="detailUiPhase >= 3"
+            :is-completed-task="isCompletedTask"
+            :completed-form-data="completedFormData"
+            :form-fields="formFields"
+            :form-tabs="formTabs"
+            :form-fields-after-tabs="formFieldsAfterTabs"
+            :sub-table-bindings="linkableSubTableBindings"
           />
         </el-tab-pane>
       </el-tabs>

@@ -2431,3 +2431,101 @@
     stage_name / status_name / dropdown_name / lookup display fields.
     验证：snapshotDiff.property.test.ts 5 pass；pnpm run build；compose rebuild
     user-portal-frontend. Live ATM task screenshot 403 for developer HMDC_Index_Role.
+
+- id: "1546"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: major
+  category: bug
+  summary: "Completed-task snapshot omitted __subTables__ when fieldPermissions was empty, so Case Submission froze no sub-table values"
+  file: "backend/user-portal/src/main/java/com/portal/component/CompletedTaskSnapshotAssembler.java"
+  note: |
+    ATM-DC-PW-000005 Case Submission _snapshot_* had fieldValues={}. ATM forms have
+    fieldPermissions={} so capture skipped __subTables__ even after #1543 resolved
+    main-field keys. Assembler now freezes form field subset plus canonical numeric
+    binding slices (alias keys dropped, 1397 OOM guard kept). hasSnapshotFieldValues
+    treats non-empty __subTables__ as snapshot content. Historical 000005 backfilled
+    from live (still at Assignment, no later edits). Other ATM Case Submission
+    empties not rewritten.
+    验证：CompletedTaskSnapshotAssemblerTest + TaskFormSnapshotBpmnFallbackTest
+    + TaskFormSnapshotPropertyTest；portal completedTaskSnapshot.test.ts；
+    mvn -pl backend/user-portal -am package -DskipTests；pnpm run build；
+    compose rebuild user-portal + user-portal-frontend；Started UserPortalApplication.
+
+- id: "1547"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: major
+  category: bug
+  summary: "ATM Investigation Link Form Details was empty because the column binds the same table as the grid"
+  file: "frontend/user-portal/src/composables/subTableField/useSubTableLinkFormOpen.ts"
+  note: |
+    ATM-DC-PW-000008: ATM Transaction grid had values; Details opened an empty form.
+    Form 319 linkForm boundSubTableBindingId=1127 (ATM Transaction), i.e. the host
+    grid itself (or sibling MI binding 1135 of the same table). handleLinkFormClick
+    looked for nested row.__subTables__[1127], which does not exist (nested keys are
+    1141 correspondence / empty 1128). MI isolate then blocked global fallback.
+    Fix: when Link Form targets the host grid (same bindingId / tableId / tableName),
+    seed the modal from the clicked row; save merges back onto that row and keeps
+    nested children. Child tables (e.g. 1141) are unchanged.
+    验证：subTableLinkFormSelfBound.test.ts + test:regression:mi 132 pass;
+    pnpm run build; compose rebuild user-portal-frontend;
+    verify-atm-linkform-details.mjs modal contains ATM-DC-PW-TRANS-000008;
+    screenshots 2026-08-25_atm-000008-linkform-details.png.
+
+- id: "1548"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: major
+  category: bug
+  summary: "Completed-task Snapshot UI listed only main-form fields and skipped frozen __subTables__"
+  file: "frontend/user-portal/src/components/snapshotDiffSubTables.ts"
+  note: |
+    SnapshotDiffRenderer / collectSnapshotDiffFields skipped subTable and
+    inlineSubForm, so Meeting-000008 assignment snapshot looked main-table-only
+    even though _snapshot_* already stored __subTables__. Renderer now walks
+    form widgets plus leftover bag keys, labels grids with designer tableName
+    (never __subTable_* / binding ids), and formats cells like Change History.
+    验证：snapshotDiffSubTables.test.ts 4 pass + snapshotDiff.property.test.ts;
+    pnpm run build; compose rebuild user-portal-frontend; Playwright
+    .snapshot-sub-table count=6 on task 2947feec (assignment);
+    screenshot 2026-08-25_completed-snapshot-subtables.png.
+
+- id: "1549"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: minor
+  category: bug
+  summary: "Completed Task Snapshot showed upload URLs and lived under General instead of a completed-only tab"
+  file: "frontend/user-portal/src/components/snapshotDiffHelpers.ts"
+  note: |
+    File cells printed /api/v1/upload/files/…?originalName=…. Snapshot now uses
+    the same fileDisplayText / isStoredFileUrl path as Change History (filename
+    only). Snapshot moved to a Completed Tasks-only el-tabs pane next to Change
+    History; To-Do detail does not show the tab.
+    验证：snapshotDiff + changeHistory formatting tests 21 pass; pnpm run build;
+    compose rebuild user-portal-frontend; Playwright #tab-completed-snapshot
+    count=1; Attachment FILE = MSI_MEG_GODLIKE.jpg.
+    screenshots 2026-08-25_completed-snapshot-tabs.png,
+    2026-08-25_completed-snapshot-filenames.png.
+
+- id: "1550"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: minor
+  category: bug
+  summary: "Completed Task Snapshot listed empty RELATED catalogs and duplicate ATM Correspondence"
+  file: "frontend/user-portal/src/components/snapshotDiffSubTables.ts"
+  note: |
+    ATM-DC-PW-000011 Investigation snapshot showed empty HMDC Case Stage/Status/
+    Dropdown/Correspondence and Sub-table grids (RELATED lookup catalogs injected
+    onto the form layout) plus two ATM Correspondence sections (same tableId,
+    different binding ids). Snapshot now skips RELATED/RELATION/empty slices and
+    dedupes by tableId then table name. Tab moved to the right of Flow History.
+    验证：snapshotDiffSubTables.test.ts 5 pass; pnpm run build; compose rebuild
+    user-portal-frontend; Playwright Investigation dcf3b4ca — tabs General /
+    Change History / Flow History / Completed Task Snapshot; snapshot shows one
+    ATM Correspondence + ATM Transaction, no HMDC catalogs.
+    screenshots 2026-08-25_atm-000011-snapshot-tabs.png,
+    2026-08-25_atm-000011-snapshot-subtables.png.
+

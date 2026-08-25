@@ -57,6 +57,12 @@ describe('useChangeHistoryFormatting', () => {
     })
     expect(formatDisplayValue(value)).toBe('incoming_channel: Branch; file: lilong.JPG')
   })
+  it('formats a stored upload URL as the original file name', () => {
+    const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs)
+    expect(formatDisplayValue(
+      '/api/v1/upload/files/bc7a8506-aeb4-428a-881e-fe6887b65ed7.jpg?originalName=MSI_MEG_GODLIKE.jpg',
+    )).toBe('MSI_MEG_GODLIKE.jpg')
+  })
   it('keeps id-like payloads readable instead of rendering em dash', () => {
     const { formatDisplayValue } = useChangeHistoryFormatting(t, dayjs)
     const value = JSON.stringify({ id: '8b3f4b67-08b7-4a12-8f3d-6789a1e8ac20' })
