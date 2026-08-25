@@ -1,11 +1,9 @@
 package com.portal.util;
 
-import com.portal.dto.ListColumnFilter;
+import com.platform.common.list.ListColumnFilter;
 import com.portal.dto.TaskQueryRequest;
 import org.junit.jupiter.api.Test;
-
 import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

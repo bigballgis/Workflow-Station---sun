@@ -68,6 +68,36 @@ public class UserPortalAuditClient {
     }
 
     /**
+     * Query user portal audit logs with true paging, column filters, sort and grouping.
+     */
+    public Map<String, Object> queryAuditLogList(Map<String, Object> request) {
+        requireTokenConfigured();
+        String url = stripTrailingSlash(userPortalBaseUrl) + "/internal/audit-logs/list-query";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Internal-Token", userPortalInternalApiToken);
+
+        try {
+            ResponseEntity<Map<String, Object>> resp = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(request, headers),
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+                throw new AdminBusinessException("UP_AUDIT_QUERY_FAILED",
+                        "User portal audit list-query returned error: " + resp.getStatusCode());
+            }
+            return ApiResponseBodyUnwrap.unwrapDataMap(resp.getBody());
+        } catch (AdminBusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to query user portal audit logs: {}", e.getMessage(), e);
+            throw new AdminBusinessException("UP_AUDIT_QUERY_FAILED",
+                    "Failed to query user portal audit logs: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Get distinct function unit codes (with display names) that have audit data.
      */
     public List<Map<String, String>> getFunctionUnitCodes() {

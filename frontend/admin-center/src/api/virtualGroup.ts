@@ -1,4 +1,6 @@
 import { get, post, put, del } from './request'
+import type { AdminListPage } from '@/types/common'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 // ==================== 类型定义 ====================
 
@@ -112,12 +114,26 @@ export interface VirtualGroupResult {
   group?: VirtualGroup
 }
 
+export interface VirtualGroupListQuery {
+  page: number
+  size: number
+  type?: string
+  keyword?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 // ==================== 虚拟组 CRUD API ====================
 
 export const virtualGroupApi = {
   // 获取虚拟组列表
   list: (type?: string, status?: string) =>
     get<VirtualGroup[]>('/virtual-groups', { params: { type, status } }),
+
+  query: (body: VirtualGroupListQuery) =>
+    post<AdminListPage<VirtualGroup>>('/virtual-groups/query', body),
 
   // 根据ID获取虚拟组
   getById: (id: string) =>

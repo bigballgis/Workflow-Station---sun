@@ -5,12 +5,16 @@
  * 组件仅保留 template + 调用此 composable。
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { isFkHidden, isFkReadonly, type FieldFkMeta } from '@platform-shared/tableFkRuntime'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
 import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse, type RelationImportResult, type LookupConfig, type LookupFilterCondition } from '@/api/relationTable'
 import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, type FieldLike } from '@/components/lookup/useLookupBehaviors'
+import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+
+export const RT_DATA_STATUS_COL_WIDTH = 100
+export const RT_DATA_ACTIONS_COL_WIDTH = 240
 
 export function useRelationTableData() {
   const route = useRoute()
@@ -23,10 +27,6 @@ export function useRelationTableData() {
 
   const searchKeyword = ref('')
   const tableSearchKeyword = ref('')
-  const currentPage = ref(1)
-  const pageSize = ref(20)
-  const totalElements = ref(0)
-  const dataRows = ref<RelationTableDataRow[]>([])
   const fetchDataError = ref<string | null>(null)
 
   const dialogVisible = ref(false)
@@ -90,6 +90,32 @@ export function useRelationTableData() {
     return String(status).toUpperCase() === 'DISABLED' || String(status).toUpperCase() === 'INACTIVE'
   }
 
+  const toFkMeta = (f: { fieldName: string; isForeignKey?: boolean; fkDisplayMode?: string | null }): FieldFkMeta => ({
+    fieldName: f.fieldName,
+    isForeignKey: f.isForeignKey,
+    fkDisplayMode: (f.fkDisplayMode ?? undefined) as FieldFkMeta['fkDisplayMode'],
+  })
+
+  const grid = useAdminListGrid<RelationTableDataRow>({
+    storageKey: 'admin-list-layout:rt-data',
+    extraWidth: () => RT_DATA_STATUS_COL_WIDTH + (canWrite.value ? RT_DATA_ACTIONS_COL_WIDTH : 0),
+    defaultWidthOf: (field) => (field.endsWith('_at') ? 170 : 120),
+  })
+
+  const hiddenFkFields = (): Set<string> => new Set(
+    (selectedTable.value?.fieldDefinitions ?? [])
+      .filter(f => isFkHidden(toFkMeta(f)))
+      .map(f => f.fieldName),
+  )
+
+  const resetGridQuery = () => {
+    grid.columnFilters.value = {}
+    grid.sort.field = null
+    grid.sort.direction = null
+    grid.groupBy.value = null
+    grid.resetPage()
+  }
+
   // ---- Fetch ----
   const fetchTables = async () => {
     tableListLoading.value = true
@@ -107,39 +133,52 @@ export function useRelationTableData() {
 
   const fetchData = async () => {
     if (!selectedTableId.value) return
+    const seq = grid.beginQuery()
     dataLoading.value = true
     fetchDataError.value = null
     try {
-      const params: Record<string, unknown> = { page: currentPage.value - 1, size: pageSize.value }
-      if (searchKeyword.value) (params as Record<string, unknown>).search = searchKeyword.value
-      const pageData = await relationTableDataApi.queryData(selectedTableId.value, params)
-      dataRows.value = pageData?.content || []
-      totalElements.value = pageData?.totalElements || 0
+      const page = await relationTableDataApi.query(selectedTableId.value, {
+        ...grid.buildQuery(),
+        search: searchKeyword.value || undefined,
+      })
+      if (!grid.isCurrentQuery(seq)) return
+      const hidden = hiddenFkFields()
+      grid.applyPage({
+        ...page,
+        columns: Array.isArray(page.columns)
+          ? page.columns.filter(c => !hidden.has(c.field))
+          : page.columns,
+      }, 'relation-tables/data/query response is missing its column declaration')
     } catch (e: unknown) {
-      dataRows.value = []; totalElements.value = 0
+      if (!grid.isCurrentQuery(seq)) return
       const err = e as { response?: { data?: { error?: { message?: string; traceId?: string }; message?: string; traceId?: string }; status?: number }; message?: string }
       const apiMsg = err?.response?.data?.error?.message || err?.response?.data?.message
       const traceId = err?.response?.data?.error?.traceId || err?.response?.data?.traceId
       fetchDataError.value = traceId ? `Data load failed: ${apiMsg || err?.message} (traceId: ${traceId})` : `Data load failed: ${apiMsg || err?.message || 'Failed to load data'}`
-    } finally { dataLoading.value = false }
+    } finally {
+      if (grid.isCurrentQuery(seq)) dataLoading.value = false
+    }
   }
+
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+  watch(searchKeyword, () => {
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(() => {
+      grid.resetPage()
+      void fetchData()
+    }, 300)
+  })
+  onBeforeUnmount(() => clearTimeout(searchTimer))
 
   // ---- Navigation ----
   const handleSelectTable = (index: string) => {
-    selectedTableId.value = Number(index); searchKeyword.value = ''; currentPage.value = 1
-    localStatusMap.value = {}; fetchDataError.value = null; fetchData()
+    selectedTableId.value = Number(index)
+    searchKeyword.value = ''
+    localStatusMap.value = {}
+    fetchDataError.value = null
+    resetGridQuery()
+    void fetchData()
   }
-  const handlePageChange = (page: number) => { currentPage.value = page; fetchData() }
-  const handleSizeChange = (size: number) => { pageSize.value = size; currentPage.value = 1; fetchData() }
-
-  // ---- CRUD ----
-  // FK readonly/hidden decision delegates to @platform-shared/tableFkRuntime — the single
-  // implementation shared with portal/DW (previously inlined here and kept in sync by comment).
-  const toFkMeta = (f: { fieldName: string; isForeignKey?: boolean; fkDisplayMode?: string | null }): FieldFkMeta => ({
-    fieldName: f.fieldName,
-    isForeignKey: f.isForeignKey,
-    fkDisplayMode: (f.fkDisplayMode ?? undefined) as FieldFkMeta['fkDisplayMode'],
-  })
 
   const visibleFieldColumns = computed(() =>
     fieldColumns.value.filter(f => !isFkHidden(toFkMeta(f))),
@@ -395,13 +434,16 @@ export function useRelationTableData() {
   return {
     tableListLoading, dataLoading, exporting, saving,
     exportingTemplate, importDialogVisible, importing, importResult,
-    tables, selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
+    tables, selectedTableId, searchKeyword, tableSearchKeyword,
     fetchDataError, dialogVisible, dialogMode, editingRowId, formData,
     selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
     isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
     lookupSelectedData, isLookupField, lookupFilterConditionsFor, onLookupSelect, onLookupClear, lookupViewFieldsFor,
-    fetchTables, fetchData, handleSelectTable, handlePageChange, handleSizeChange,
+    fetchTables, fetchData, handleSelectTable,
     openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
     formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, init, refresh,
+    grid,
+    RT_DATA_STATUS_COL_WIDTH,
+    RT_DATA_ACTIONS_COL_WIDTH,
   }
 }

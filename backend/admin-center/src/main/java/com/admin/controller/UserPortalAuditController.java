@@ -59,6 +59,12 @@ public class UserPortalAuditController {
         return ApiResponse.success(pageResult);
     }
 
+    @PostMapping("/user-portal-audit-logs/list-query")
+    @Operation(summary = "Query user portal audit logs (true paging; column filters, sort and grouping)")
+    public ApiResponse<Map<String, Object>> queryAuditLogList(@RequestBody Map<String, Object> queryRequest) {
+        return ApiResponse.success(userPortalAuditClient.queryAuditLogList(queryRequest));
+    }
+
     @GetMapping("/user-portal-audit-logs/function-units")
     @Operation(summary = "Get distinct function unit codes (with names) that have audit data")
     public ApiResponse<List<Map<String, String>>> getFunctionUnitCodes() {

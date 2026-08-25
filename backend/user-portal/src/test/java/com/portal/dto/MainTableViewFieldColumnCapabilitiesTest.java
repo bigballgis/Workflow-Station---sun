@@ -1,15 +1,15 @@
 package com.portal.dto;
 
+import com.platform.common.list.ListColumnMeta;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewFieldColumn;
 import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MainTableViewFieldColumnCapabilitiesTest {
 
     @Test
     void booleanColumnsCarryTrueFalseOptionsOntoTheViewDto() {
-        PortalListColumnMeta cap = PortalListColumnMeta.of("legal_hold", "Legal Hold", PortalListColumnMeta.Kind.BOOLEAN);
+        ListColumnMeta cap = ListColumnMeta.of("legal_hold", "Legal Hold", ListColumnMeta.Kind.BOOLEAN);
         MainTableViewFieldColumn column = MainTableViewFieldColumn.applyListCapabilities(
                         MainTableViewFieldColumn.builder()
                                 .fieldName("legal_hold")
@@ -17,24 +17,24 @@ class MainTableViewFieldColumnCapabilitiesTest {
                         cap)
                 .build();
 
-        assertThat(column.kind()).isEqualTo(PortalListColumnMeta.Kind.BOOLEAN);
+        assertThat(column.kind()).isEqualTo(ListColumnMeta.Kind.BOOLEAN);
         assertThat(column.filterable()).isTrue();
         assertThat(column.operators()).containsExactly("eq", "ne", "isNull", "isNotNull");
         assertThat(column.options())
-                .extracting(PortalListColumnMeta.Option::value)
+                .extracting(ListColumnMeta.Option::value)
                 .containsExactly("true", "false");
     }
 
     @Test
     void enumColumnsCarryTheClosedChoiceListOntoTheViewDto() {
-        PortalListColumnMeta cap = PortalListColumnMeta.withOptions(
+        ListColumnMeta cap = ListColumnMeta.withOptions(
                 "process_status",
                 "Status",
-                PortalListColumnMeta.Kind.ENUM,
+                ListColumnMeta.Kind.ENUM,
                 java.util.List.of(
-                        new PortalListColumnMeta.Option("RUNNING", "Running"),
-                        new PortalListColumnMeta.Option("COMPLETED", "Completed"),
-                        new PortalListColumnMeta.Option("WITHDRAWN", "Withdrawn")));
+                        new ListColumnMeta.Option("RUNNING", "Running"),
+                        new ListColumnMeta.Option("COMPLETED", "Completed"),
+                        new ListColumnMeta.Option("WITHDRAWN", "Withdrawn")));
         MainTableViewFieldColumn column = MainTableViewFieldColumn.applyListCapabilities(
                         MainTableViewFieldColumn.builder()
                                 .fieldName("process_status")
@@ -43,7 +43,7 @@ class MainTableViewFieldColumnCapabilitiesTest {
                 .build();
 
         assertThat(column.options())
-                .extracting(PortalListColumnMeta.Option::value)
+                .extracting(ListColumnMeta.Option::value)
                 .containsExactly("RUNNING", "COMPLETED", "WITHDRAWN");
     }
 }

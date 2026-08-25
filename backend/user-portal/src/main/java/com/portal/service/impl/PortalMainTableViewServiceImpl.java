@@ -1,5 +1,6 @@
 package com.portal.service.impl;
 
+import com.platform.common.list.ListColumnMeta;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.jdbc.SubTableRowIdentity;
@@ -14,7 +15,6 @@ import com.portal.component.OwnerFieldComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.MainTableViewQueryRequest;
-import com.portal.dto.PortalListColumnMeta;
 import com.portal.util.MainTableViewColumnSpec;
 import com.portal.util.MainTableViewDerivedFilterSql;
 import com.portal.util.MainTableViewDesignerFilterSql;
@@ -39,7 +39,6 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -306,11 +305,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private List<String> searchableFields(List<MainTableViewColumnSpec.FieldSource> fields,
                                           MainTableViewColumnSpec.SqlSource source) {
         return MainTableViewColumnSpec.columnsFor(fields, source).stream()
-                .filter(PortalListColumnMeta::filterable)
+                .filter(ListColumnMeta::filterable)
                 .filter(column -> fields.stream()
                         .noneMatch(f -> f.fieldName().equals(column.field())
                                 && MainTableViewColumnSpec.isDisplayMapped(f)))
-                .map(PortalListColumnMeta::field)
+                .map(ListColumnMeta::field)
                 .toList();
     }
 
@@ -734,7 +733,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         FkSourceMeta fkSrc = fkDisplay ? meta.fkSource().get(sourceField) : null;
         LookupColumnMeta lookup = lookupDisplay || !derived ? meta.lookup().get(sourceField) : null;
         Long lookupTableId = lookup != null ? lookup.tableId() : null;
-        PortalListColumnMeta capability = meta.capabilities().get(f.fieldName());
+        ListColumnMeta capability = meta.capabilities().get(f.fieldName());
         if (capability == null) {
             throw new IllegalStateException("View column was not declared: " + f.fieldName());
         }
@@ -760,10 +759,10 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     }
 
     /** What the header may offer per column, given where this view's rows live. */
-    private Map<String, PortalListColumnMeta> declaredCapabilities(ViewDefinition view) {
+    private Map<String, ListColumnMeta> declaredCapabilities(ViewDefinition view) {
         List<MainTableViewColumnSpec.FieldSource> fields = queryableFieldSources(view);
-        List<PortalListColumnMeta> declared = MainTableViewColumnSpec.columnsFor(fields, sqlSourceOf(view));
-        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
+        List<ListColumnMeta> declared = MainTableViewColumnSpec.columnsFor(fields, sqlSourceOf(view));
+        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
         declared.forEach(column -> byField.put(column.field(), column));
         return byField;
     }
@@ -872,7 +871,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             Map<String, FkColumnMeta> fk,
             Map<String, FkSourceMeta> fkSource,
             Map<String, LookupColumnMeta> lookup,
-            Map<String, PortalListColumnMeta> capabilities) {
+            Map<String, ListColumnMeta> capabilities) {
     }
 
     /**

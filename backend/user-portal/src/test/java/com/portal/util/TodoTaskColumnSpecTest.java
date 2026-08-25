@@ -1,16 +1,15 @@
 package com.portal.util;
 
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TodoTaskColumnSpecTest {
 
     @Test
     void requestIdIsTextSearchableAndSortableWithoutGroup() {
-        PortalListColumnMeta requestId = column("requestId");
+        ListColumnMeta requestId = column("requestId");
         assertThat(requestId.kind()).isEqualTo(Kind.TEXT);
         assertThat(requestId.filterable()).isTrue();
         assertThat(requestId.sortable()).isTrue();
@@ -20,13 +19,13 @@ class TodoTaskColumnSpecTest {
 
     @Test
     void taskNameRemainsOrdinaryText() {
-        PortalListColumnMeta taskName = column("taskName");
+        ListColumnMeta taskName = column("taskName");
         assertThat(taskName.filterable()).isTrue();
         assertThat(taskName.sortable()).isTrue();
         assertThat(taskName.operators()).contains("contains");
     }
 
-    private static PortalListColumnMeta column(String field) {
+    private static ListColumnMeta column(String field) {
         return TodoTaskColumnSpec.columns().stream()
                 .filter(c -> field.equals(c.field()))
                 .findFirst()

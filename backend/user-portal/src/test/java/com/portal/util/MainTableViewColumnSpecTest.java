@@ -1,15 +1,13 @@
 package com.portal.util;
 
-import com.portal.dto.ListColumnFilter;
-import com.portal.dto.PortalListColumnMeta;
+import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListColumnMeta;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.MainTableViewColumnSpec.SqlSource;
 import org.junit.jupiter.api.Test;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -19,7 +17,7 @@ class MainTableViewColumnSpecTest {
         return new FieldSource(name, name, false, "field", dataType);
     }
 
-    private PortalListColumnMeta columnNamed(List<FieldSource> fields, String name) {
+    private ListColumnMeta columnNamed(List<FieldSource> fields, String name) {
         return MainTableViewColumnSpec.columnsFor(fields).stream()
                 .filter(c -> c.field().equals(name))
                 .findFirst()
@@ -34,18 +32,18 @@ class MainTableViewColumnSpecTest {
                 designed("merchant_credit_date", "DATE"),
                 designed("temporary_refund", "BOOLEAN"));
 
-        assertThat(columnNamed(fields, "merchant_name").kind()).isEqualTo(PortalListColumnMeta.Kind.TEXT);
-        assertThat(columnNamed(fields, "billing_amount").kind()).isEqualTo(PortalListColumnMeta.Kind.NUMBER);
-        assertThat(columnNamed(fields, "merchant_credit_date").kind()).isEqualTo(PortalListColumnMeta.Kind.DATETIME);
-        assertThat(columnNamed(fields, "temporary_refund").kind()).isEqualTo(PortalListColumnMeta.Kind.BOOLEAN);
+        assertThat(columnNamed(fields, "merchant_name").kind()).isEqualTo(ListColumnMeta.Kind.TEXT);
+        assertThat(columnNamed(fields, "billing_amount").kind()).isEqualTo(ListColumnMeta.Kind.NUMBER);
+        assertThat(columnNamed(fields, "merchant_credit_date").kind()).isEqualTo(ListColumnMeta.Kind.DATETIME);
+        assertThat(columnNamed(fields, "temporary_refund").kind()).isEqualTo(ListColumnMeta.Kind.BOOLEAN);
         assertThat(columnNamed(fields, "temporary_refund").options())
-                .extracting(PortalListColumnMeta.Option::value)
+                .extracting(ListColumnMeta.Option::value)
                 .containsExactly("true", "false");
         assertThat(columnNamed(fields, "billing_amount").operators()).contains("between", "gt");
         assertThat(columnNamed(fields, "merchant_credit_date").operators().get(0)).isEqualTo("today");
         assertThat(MainTableViewColumnSpec.columnsFor(fields))
-                .allMatch(PortalListColumnMeta::filterable)
-                .allMatch(PortalListColumnMeta::sortable);
+                .allMatch(ListColumnMeta::filterable)
+                .allMatch(ListColumnMeta::sortable);
     }
 
     @Test
@@ -55,14 +53,14 @@ class MainTableViewColumnSpecTest {
                 designed("updated_at", "VARCHAR"),
                 designed("created_by", "VARCHAR"));
 
-        PortalListColumnMeta created = columnNamed(fields, "created_at");
-        assertThat(created.kind()).isEqualTo(PortalListColumnMeta.Kind.DATETIME);
+        ListColumnMeta created = columnNamed(fields, "created_at");
+        assertThat(created.kind()).isEqualTo(ListColumnMeta.Kind.DATETIME);
         assertThat(created.filterable()).isTrue();
         assertThat(created.operators().get(0)).isEqualTo("today");
-        assertThat(columnNamed(fields, "updated_at").kind()).isEqualTo(PortalListColumnMeta.Kind.DATETIME);
+        assertThat(columnNamed(fields, "updated_at").kind()).isEqualTo(ListColumnMeta.Kind.DATETIME);
         assertThat(columnNamed(fields, "created_by").kind())
                 .as("the person audit column is a USER picker, not free text")
-                .isEqualTo(PortalListColumnMeta.Kind.USER);
+                .isEqualTo(ListColumnMeta.Kind.USER);
     }
 
     @Test
@@ -82,7 +80,7 @@ class MainTableViewColumnSpecTest {
         assertThat(columnNamed(fields, "temporary_refund").groupable()).isTrue();
         assertThat(columnNamed(fields, "process_status").groupable()).isTrue();
         assertThat(columnNamed(fields, "process_status").options())
-                .extracting(PortalListColumnMeta.Option::value)
+                .extracting(ListColumnMeta.Option::value)
                 .containsExactly("RUNNING", "COMPLETED", "WITHDRAWN");
     }
 
@@ -95,7 +93,7 @@ class MainTableViewColumnSpecTest {
                 designed("mystery", null));
 
         for (String field : List.of("customer_label", "owner_label", "scan", "mystery")) {
-            PortalListColumnMeta column = columnNamed(fields, field);
+            ListColumnMeta column = columnNamed(fields, field);
             assertThat(column.filterable()).as(field + " filterable").isFalse();
             assertThat(column.sortable()).as(field + " sortable").isFalse();
             assertThat(column.operators()).as(field + " operators").isEmpty();
@@ -110,12 +108,12 @@ class MainTableViewColumnSpecTest {
                 new FieldSource("owner_label", "Owner", false, "fk_display", "VARCHAR",
                         "case_id", "legal_hold", null, List.of("case_number")));
 
-        PortalListColumnMeta lookup = columnNamed(fields, "customer_label");
+        ListColumnMeta lookup = columnNamed(fields, "customer_label");
         assertThat(lookup.filterable()).isTrue();
         assertThat(lookup.sortable()).isFalse();
         assertThat(lookup.operators()).contains("contains", "eq");
 
-        PortalListColumnMeta fk = columnNamed(fields, "owner_label");
+        ListColumnMeta fk = columnNamed(fields, "owner_label");
         assertThat(fk.filterable()).isTrue();
         assertThat(fk.sortable()).isFalse();
     }
@@ -164,17 +162,17 @@ class MainTableViewColumnSpecTest {
                 new FieldSource("initiator", "Initiator", true, "field", null),
                 designed("line_amount", "DECIMAL"),
                 designed("transaction_date", "DATE"));
-        Map<String, PortalListColumnMeta> byField = new java.util.LinkedHashMap<>();
+        Map<String, ListColumnMeta> byField = new java.util.LinkedHashMap<>();
         MainTableViewColumnSpec.columnsFor(fields, SqlSource.EXPANDED_SUB_ROW)
                 .forEach(c -> byField.put(c.field(), c));
 
-        assertThat(byField.get("process_status").kind()).isEqualTo(PortalListColumnMeta.Kind.ENUM);
+        assertThat(byField.get("process_status").kind()).isEqualTo(ListColumnMeta.Kind.ENUM);
         assertThat(byField.get("process_status").filterable()).isTrue();
-        assertThat(byField.get("start_time").kind()).isEqualTo(PortalListColumnMeta.Kind.DATETIME);
+        assertThat(byField.get("start_time").kind()).isEqualTo(ListColumnMeta.Kind.DATETIME);
         assertThat(byField.get("start_time").filterable()).isTrue();
-        assertThat(byField.get("initiator").kind()).isEqualTo(PortalListColumnMeta.Kind.USER);
-        assertThat(byField.get("line_amount").kind()).isEqualTo(PortalListColumnMeta.Kind.NUMBER);
-        assertThat(byField.get("transaction_date").kind()).isEqualTo(PortalListColumnMeta.Kind.DATETIME);
+        assertThat(byField.get("initiator").kind()).isEqualTo(ListColumnMeta.Kind.USER);
+        assertThat(byField.get("line_amount").kind()).isEqualTo(ListColumnMeta.Kind.NUMBER);
+        assertThat(byField.get("transaction_date").kind()).isEqualTo(ListColumnMeta.Kind.DATETIME);
         assertThat(byField.get("transaction_date").operators().get(0)).isEqualTo("today");
     }
 

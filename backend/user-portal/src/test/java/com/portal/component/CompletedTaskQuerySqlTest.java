@@ -1,8 +1,8 @@
 package com.portal.component;
 
+import com.platform.common.list.ListColumnFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.CompletedTaskQueryRequest;
-import com.portal.dto.ListColumnFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,13 +13,11 @@ import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.core.ResultSetExtractor;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;

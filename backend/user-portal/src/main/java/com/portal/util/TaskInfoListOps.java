@@ -1,10 +1,9 @@
 package com.portal.util;
 
-import com.portal.dto.ListColumnFilter;
+import com.platform.common.list.ListColumnFilter;
 import com.portal.dto.PortalListGroup;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;

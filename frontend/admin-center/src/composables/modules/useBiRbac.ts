@@ -11,9 +11,18 @@ import {
   biManagementApi,
   type RbacMappingResponse,
   type SupersetRoleResponse,
-  type RbacMappingListParams,
   type RoleOptionResponse
 } from '@/api/biManagement'
+import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
+
+const ACTIONS_COL_WIDTH = 200
+const RBAC_COL_WIDTHS: Record<string, number> = {
+  sysRoleName: 150,
+  sysRoleCode: 140,
+  sysRoleType: 140,
+  supersetRoles: 220,
+  lastUpdatedAt: 170,
+}
 
 export function useBiRbac() {
   const { t } = useI18n()
@@ -22,10 +31,15 @@ export function useBiRbac() {
   const syncing = ref(false)
   const editLoading = ref(false)
   const supersetRolesLoading = ref(false)
-  const mappings = ref<RbacMappingResponse[]>([])
   const allSupersetRoles = ref<SupersetRoleResponse[]>([])
 
-  const query = reactive<RbacMappingListParams>({ roleName: '', roleType: undefined })
+  const query = reactive({ roleName: '', roleType: undefined as string | undefined })
+
+  const grid = useAdminListGrid<RbacMappingResponse>({
+    storageKey: 'admin-list-layout:bi-rbac',
+    extraWidth: ACTIONS_COL_WIDTH,
+    defaultWidthOf: (field) => RBAC_COL_WIDTHS[field] ?? 140,
+  })
 
   // Edit dialog
   const editDialogVisible = ref(false)
@@ -54,20 +68,34 @@ export function useBiRbac() {
     createAllSupersetRoles.value.filter(r => r.status === 'ACTIVE')
   )
 
-  const handleSearch = async () => {
+  const loadMappings = async () => {
+    const seq = grid.beginQuery()
     loading.value = true
     try {
-      const params: RbacMappingListParams = {
+      const page = await biManagementApi.rbac.queryMappings({
+        ...grid.buildQuery(),
         roleName: query.roleName || undefined,
-        roleType: query.roleType || undefined
-      }
-      mappings.value = await biManagementApi.rbac.listMappings(params)
+        roleType: query.roleType || undefined,
+      })
+      if (!grid.isCurrentQuery(seq)) return
+      grid.applyPage(page, 'bi/rbac/mappings/query response is missing its column declaration')
     } catch {
+      if (!grid.isCurrentQuery(seq)) return
       notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_QUERY_FAILED)))
-    } finally { loading.value = false }
+    } finally {
+      if (grid.isCurrentQuery(seq)) loading.value = false
+    }
   }
 
-  const handleReset = () => { query.roleName = ''; query.roleType = undefined; handleSearch() }
+  const handleSearch = () => {
+    void loadMappings()
+  }
+
+  const handleReset = () => {
+    query.roleName = ''
+    query.roleType = undefined
+    void loadMappings()
+  }
 
   const handleSync = async () => {
     syncing.value = true
@@ -158,12 +186,14 @@ export function useBiRbac() {
   }
 
   return {
-    loading, syncing, editLoading, supersetRolesLoading, mappings, allSupersetRoles,
+    loading, syncing, editLoading, supersetRolesLoading, allSupersetRoles,
     query, editDialogVisible, editForm, activeSupersetRoles,
     createDialogVisible, createLoading, unmappedRolesLoading, createSupersetRolesLoading,
     unmappedRoles, createAllSupersetRoles, createDialogRef, createForm, createFormRules, createActiveSupersetRoles,
-    handleSearch, handleReset, handleSync,
+    handleSearch, handleReset, handleSync, loadMappings,
     loadSupersetRoles, showEditDialog, handleEditSubmit,
     showCreateDialog, handleCreateSubmit, handleDelete,
+    ACTIONS_COL_WIDTH,
+    ...grid,
   }
 }

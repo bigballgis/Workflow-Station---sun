@@ -1,9 +1,8 @@
 package com.portal.util;
 
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PermissionRequestColumnSpecTest {
@@ -11,8 +10,8 @@ class PermissionRequestColumnSpecTest {
     @Test
     void closedValueColumnsAreGroupable() {
         assertThat(PermissionRequestColumnSpec.columns())
-                .filteredOn(PortalListColumnMeta::groupable)
-                .extracting(PortalListColumnMeta::field)
+                .filteredOn(ListColumnMeta::groupable)
+                .extracting(ListColumnMeta::field)
                 .containsExactlyInAnyOrder("requestType", "status", "applicantId", "submittedByUserId");
     }
 
@@ -24,7 +23,7 @@ class PermissionRequestColumnSpecTest {
         assertThat(column("requestType").kind()).isEqualTo(Kind.ENUM);
     }
 
-    private static PortalListColumnMeta column(String field) {
+    private static ListColumnMeta column(String field) {
         return PermissionRequestColumnSpec.columns().stream()
                 .filter(c -> field.equals(c.field()))
                 .findFirst()

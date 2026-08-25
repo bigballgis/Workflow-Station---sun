@@ -1,10 +1,13 @@
 package com.admin.bi.controller;
 
+import com.admin.bi.component.BiAssignmentListQueryComponent;
 import com.admin.bi.dto.request.DashboardAssignmentCreateRequest;
 import com.admin.bi.dto.response.DashboardAssignmentResponse;
 import com.admin.bi.dto.response.UserDashboardResponse;
 import com.admin.bi.enums.AssignmentTargetType;
 import com.admin.bi.service.BiDashboardAssignmentService;
+import com.admin.dto.list.AdminListPage;
+import com.admin.dto.request.BiAssignmentListQueryRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,6 +32,7 @@ import java.util.List;
 public class BiDashboardAssignmentController {
 
     private final BiDashboardAssignmentService assignmentService;
+    private final BiAssignmentListQueryComponent assignmentListQueryComponent;
 
     @PostMapping
     @Operation(summary = "Create assignment record", description = "Assign a Dashboard to a User, Role, or Business Unit")
@@ -47,6 +51,13 @@ public class BiDashboardAssignmentController {
             Pageable pageable) {
         Page<DashboardAssignmentResponse> page = assignmentService.listAssignments(targetType, dashboardTitle, pageable);
         return ResponseEntity.ok(page);
+    }
+
+    @PostMapping("/query")
+    @Operation(summary = "Query assignments (true paging; column filters, sort and grouping)")
+    public ResponseEntity<AdminListPage<DashboardAssignmentResponse>> queryAssignments(
+            @RequestBody BiAssignmentListQueryRequest request) {
+        return ResponseEntity.ok(assignmentListQueryComponent.query(request));
     }
 
     @PutMapping("/{id}")

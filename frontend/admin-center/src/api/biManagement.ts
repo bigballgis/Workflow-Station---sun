@@ -1,4 +1,6 @@
 import { get, post, put, del } from './request'
+import type { AdminListPage } from '@/types/common'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 // ==================== Enums / Type Aliases ====================
 
@@ -138,6 +140,18 @@ export interface DashboardListParams {
   status?: DashboardStatus
 }
 
+export interface DashboardListQuery {
+  page: number
+  size: number
+  title?: string
+  tags?: string
+  status?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 export interface AssignmentListParams {
   page?: number
   size?: number
@@ -145,9 +159,31 @@ export interface AssignmentListParams {
   dashboardTitle?: string
 }
 
+export interface AssignmentListQuery {
+  page: number
+  size: number
+  targetType?: string
+  dashboardTitle?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 export interface RbacMappingListParams {
   roleName?: string
   roleType?: string
+}
+
+export interface RbacMappingListQuery {
+  page: number
+  size: number
+  roleName?: string
+  roleType?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
 }
 
 // ==================== API ====================
@@ -167,6 +203,9 @@ export const biManagementApi = {
     /** Paginated dashboard list */
     list: (params?: DashboardListParams) =>
       get<PageResponse<DashboardRegistryResponse>>(DASHBOARD_BASE, { params }),
+
+    query: (body: DashboardListQuery) =>
+      post<AdminListPage<DashboardRegistryResponse>>(`${DASHBOARD_BASE}/query`, body),
 
     /** Get dashboard details */
     getById: (id: string) =>
@@ -195,6 +234,9 @@ export const biManagementApi = {
     list: (params?: AssignmentListParams) =>
       get<PageResponse<DashboardAssignmentResponse>>(ASSIGNMENT_BASE, { params }),
 
+    query: (body: AssignmentListQuery) =>
+      post<AdminListPage<DashboardAssignmentResponse>>(`${ASSIGNMENT_BASE}/query`, body),
+
     /** Update assignment record */
     update: (id: string, data: DashboardAssignmentCreateRequest) =>
       put<DashboardAssignmentResponse>(`${ASSIGNMENT_BASE}/${id}`, data),
@@ -221,6 +263,9 @@ export const biManagementApi = {
     /** Get RBAC mapping list */
     listMappings: (params?: RbacMappingListParams) =>
       get<RbacMappingResponse[]>(`${RBAC_BASE}/mappings`, { params }),
+
+    queryMappings: (body: RbacMappingListQuery) =>
+      post<AdminListPage<RbacMappingResponse>>(`${RBAC_BASE}/mappings/query`, body),
 
     /** Update Sys_Role to Superset_Role mapping (full replace) */
     updateMapping: (sysRoleId: string, data: RbacMappingUpdateRequest) =>

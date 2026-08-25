@@ -1,7 +1,10 @@
 package com.portal.controller;
 
 import com.portal.component.ChangeHistoryComponent;
+import com.portal.component.UserPortalAuditListQueryComponent;
 import com.portal.config.PortalInternalApiProperties;
+import com.portal.dto.PortalListPage;
+import com.portal.dto.UserPortalAuditListQueryRequest;
 import com.portal.dto.UserPortalAuditQueryRequest;
 import com.portal.dto.UserPortalAuditRecord;
 import com.platform.common.dto.ApiResponse;
@@ -27,6 +30,7 @@ public class InternalAuditController {
 
     private final PortalInternalApiProperties portalInternalApiProperties;
     private final ChangeHistoryComponent changeHistoryComponent;
+    private final UserPortalAuditListQueryComponent userPortalAuditListQueryComponent;
 
     @PostMapping("/query")
     public ApiResponse<Map<String, Object>> queryAuditLogs(
@@ -44,6 +48,14 @@ public class InternalAuditController {
                 "last", page.isLast()
         );
         return ApiResponse.success(result);
+    }
+
+    @PostMapping("/list-query")
+    public ApiResponse<PortalListPage<UserPortalAuditRecord>> queryAuditLogList(
+            @RequestHeader(value = "X-Internal-Token", required = false) String token,
+            @RequestBody UserPortalAuditListQueryRequest request) {
+        portalInternalApiProperties.requireValidToken(token);
+        return ApiResponse.success(userPortalAuditListQueryComponent.query(request));
     }
 
     @GetMapping("/function-units")

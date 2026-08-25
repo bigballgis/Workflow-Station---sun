@@ -1,6 +1,7 @@
-import { PageResult } from '@/types/common'
+import { PageResult, type AdminListPage } from '@/types/common'
 import { unwrapApiData } from '@/utils/apiResponse'
 import { get, post, put, del } from './request'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
 
 // ==================== 类型定义 ====================
 
@@ -29,6 +30,7 @@ export interface Deployment {
   functionUnitName?: string
   functionUnitCode?: string
   functionUnitVersion?: string
+  version?: string
   environment: 'DEVELOPMENT' | 'TESTING' | 'STAGING' | 'PRODUCTION'
   strategy: 'FULL' | 'INCREMENTAL' | 'CANARY' | 'BLUE_GREEN'
   status: 'PENDING' | 'APPROVED' | 'EXECUTING' | 'DEPLOYING' | 'SUCCESS' | 'COMPLETED' | 'FAILED' | 'ROLLED_BACK' | 'CANCELLED'
@@ -189,6 +191,25 @@ export interface EnabledResponse {
   updatedAt: string
 }
 
+export interface FunctionUnitListQuery {
+  page: number
+  size: number
+  keyword?: string
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
+export interface FunctionUnitDeploymentListQuery {
+  page: number
+  size: number
+  filters?: Array<ListColumnFilter & { field: string }>
+  sortField?: string
+  sortDirection?: 'ASC' | 'DESC'
+  groupBy?: string
+}
+
 // ==================== 功能单元 CRUD API ====================
 
 export const functionUnitApi = {
@@ -199,6 +220,15 @@ export const functionUnitApi = {
   // 获取已归档的功能单元列表
   listArchived: (page = 0, size = 20) =>
     get<PageResult<FunctionUnit>>('/function-units/archived', { params: { page, size } }),
+
+  query: (body: FunctionUnitListQuery) =>
+    post<AdminListPage<FunctionUnit>>('/function-units/query', body),
+
+  queryArchived: (body: FunctionUnitListQuery) =>
+    post<AdminListPage<FunctionUnit>>('/function-units/archived/query', body),
+
+  queryDeployments: (body: FunctionUnitDeploymentListQuery) =>
+    post<AdminListPage<Deployment>>('/function-units/deployments/query', body),
 
   // 获取已部署的功能单元列表（按 code 去重取最新版本，供选择下拉使用）
   listDeployedLatest: async () =>

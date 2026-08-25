@@ -1,13 +1,11 @@
 package com.portal.util;
 
-import com.portal.dto.ListColumnFilter;
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
+import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import org.junit.jupiter.api.Test;
-
 import java.util.ArrayList;
 import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CompletedTaskColumnSpecTest {
@@ -15,8 +13,8 @@ class CompletedTaskColumnSpecTest {
     @Test
     void actionIsTheOnlyGroupableColumn() {
         assertThat(CompletedTaskColumnSpec.columns())
-                .filteredOn(PortalListColumnMeta::groupable)
-                .extracting(PortalListColumnMeta::field)
+                .filteredOn(ListColumnMeta::groupable)
+                .extracting(ListColumnMeta::field)
                 .containsExactly("action");
     }
 
@@ -52,7 +50,7 @@ class CompletedTaskColumnSpecTest {
         assertThat(column("action").operators()).containsExactly("eq", "ne", "isNull", "isNotNull");
     }
 
-    private static PortalListColumnMeta column(String field) {
+    private static ListColumnMeta column(String field) {
         return CompletedTaskColumnSpec.columns().stream()
                 .filter(c -> field.equals(c.field()))
                 .findFirst()

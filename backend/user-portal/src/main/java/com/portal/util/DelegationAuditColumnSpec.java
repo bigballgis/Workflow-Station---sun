@@ -1,8 +1,7 @@
 package com.portal.util;
 
-import com.portal.dto.PortalListColumnMeta;
-import com.portal.dto.PortalListColumnMeta.Kind;
-
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,20 +15,20 @@ public final class DelegationAuditColumnSpec {
     private DelegationAuditColumnSpec() {
     }
 
-    public static List<PortalListColumnMeta> columns() {
+    public static List<ListColumnMeta> columns() {
         return List.of(
-                PortalListColumnMeta.of("operationType", "delegation.operationType", Kind.TEXT),
-                PortalListColumnMeta.of("delegatorId", "delegation.delegator", Kind.USER),
-                PortalListColumnMeta.of("delegateId", "delegation.delegate", Kind.USER),
-                PortalListColumnMeta.of("taskId", "delegation.taskId", Kind.TEXT),
-                PortalListColumnMeta.of("operationResult", "delegation.result", Kind.TEXT),
-                PortalListColumnMeta.of("createdAt", "delegation.time", Kind.DATETIME)
+                ListColumnMeta.of("operationType", "delegation.operationType", Kind.TEXT),
+                ListColumnMeta.of("delegatorId", "delegation.delegator", Kind.USER),
+                ListColumnMeta.of("delegateId", "delegation.delegate", Kind.USER),
+                ListColumnMeta.of("taskId", "delegation.taskId", Kind.TEXT),
+                ListColumnMeta.of("operationResult", "delegation.result", Kind.TEXT),
+                ListColumnMeta.of("createdAt", "delegation.time", Kind.DATETIME)
         );
     }
 
     public static ListFilterSql sql() {
-        Map<String, PortalListColumnMeta> byField = new LinkedHashMap<>();
-        for (PortalListColumnMeta column : columns()) {
+        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
+        for (ListColumnMeta column : columns()) {
             byField.put(column.field(), column);
         }
         return new ListFilterSql(byField, DelegationAuditColumnSpec::sqlFor, "a.id", "a.created_at DESC");

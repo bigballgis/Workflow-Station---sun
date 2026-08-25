@@ -1,11 +1,11 @@
 package com.portal.component;
 
+import com.platform.common.list.ListColumnFilter;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.PageResponse;
 import com.portal.dto.PortalListGroup;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.CompletedTaskQueryRequest;
-import com.portal.dto.ListColumnFilter;
 import com.portal.dto.TaskActionInfo;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
@@ -35,7 +35,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.stereotype.Component;
-
 import java.util.*;
 import java.util.stream.Collectors;
 
