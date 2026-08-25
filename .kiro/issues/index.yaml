@@ -2559,3 +2559,18 @@
     screenshots 2026-08-25_atm-000011-snapshot-tabs.png,
     2026-08-25_atm-000011-snapshot-subtables.png.
 
+- id: "1553"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: minor
+  category: bug
+  summary: "DW Send Task To/Cc/Bcc vue-i18n ate braces so UI showed $'assigneeEmail"
+  file: "frontend/developer-workstation/src/i18n/locales/en.ts"
+  note: |
+    根因：vue-i18n 把 {assigneeEmail} 当插值；"$'{assigneeEmail}'" 把引号写在 { 前，
+    界面变成 $'assigneeEmail。改为 "${'{'}assigneeEmail{'}'}" 显示 ${assigneeEmail}。
+    Cc/Bcc 同修。单测 send-task-email-to-i18n.test.ts；
+    Playwright frontend/scripts/verify-send-task-email-to.mjs 4/4；
+    截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-email-to-placeholder.png
+    编号说明：rebase 时远程已占用 #1542–#1552，本条为 #1553。
+
