@@ -17,8 +17,8 @@ import java.util.regex.Pattern;
 /**
  * BPMN 陈旧 ID 修正协作类。
  *
- * <p>从 {@link ProcessDesignComponentImpl} 拆出，落库前按名称在当前 FU 中重查 formId/subTableId/actionIds，
- * 防止自动保存把旧 ID 持久化。正则与 BPMN 属性结构逐字保留，行为零变化。</p>
+ * <p>从 {@link ProcessDesignComponentImpl} 拆出，落库前按名称在当前 FU 中重查 formId/subTableId/actionIds
+ * （含流程级 {@code globalActionIds}），防止自动保存把旧 ID 持久化。正则与 BPMN 属性结构逐字保留，行为零变化。</p>
  */
 @Component
 @Slf4j
@@ -100,27 +100,37 @@ public class ProcessBpmnStaleIdFixer {
             abm.appendReplacement(asb, Matcher.quoteReplacement(block));
         }
         abm.appendTail(asb);
+        result = asb.toString();
 
-        return asb.toString();
+        return remapNamedActionIdArray(result, actionNameToId, "globalActionIds", "globalActionNames");
     }
 
     private String fixActionIdsInBlock(String block, Map<String, String> actionNameToId) {
-        // Extract actionNames and actionIds
-        Pattern namesPattern = Pattern.compile("name=\"actionNames\"\\s+value=\"([^\"]*)\"");
-        Pattern idsPattern = Pattern.compile("name=\"actionIds\"\\s+value=\"([^\"]*)\"");
+        return remapNamedActionIdArray(block, actionNameToId, "actionIds", "actionNames");
+    }
+
+    /**
+     * Remap an id array by the parallel names array (userTask {@code actionIds}/{@code actionNames}
+     * or process {@code globalActionIds}/{@code globalActionNames}). Length mismatch → leave unchanged.
+     */
+    private String remapNamedActionIdArray(String block, Map<String, String> actionNameToId,
+                                           String idsProp, String namesProp) {
+        Pattern namesPattern = Pattern.compile("name=\"" + Pattern.quote(namesProp) + "\"\\s+value=\"([^\"]*)\"");
+        Pattern idsPattern = Pattern.compile("name=\"" + Pattern.quote(idsProp) + "\"\\s+value=\"([^\"]*)\"");
         Matcher nm = namesPattern.matcher(block);
         Matcher im = idsPattern.matcher(block);
-        if (!nm.find() || !im.find()) return block;
+        if (!nm.find() || !im.find()) {
+            return block;
+        }
 
         String actionNamesRaw = nm.group(1);
         String actionIdsRaw = im.group(1);
 
-        // Parse actionNames: ["Approve","reject"] or [&quot;Approve&quot;,...]
         List<String> names = parseBpmnJsonArray(actionNamesRaw);
-        // Parse actionIds: [47,48]
         List<String> ids = parseBpmnJsonArray(actionIdsRaw);
-
-        if (names.size() != ids.size()) return block;
+        if (names.size() != ids.size()) {
+            return block;
+        }
 
         List<String> newIds = new ArrayList<>();
         boolean changed = false;
@@ -135,12 +145,14 @@ public class ProcessBpmnStaleIdFixer {
                 newIds.add(idStr);
             }
         }
-        if (!changed) return block;
+        if (!changed) {
+            return block;
+        }
 
         String newActionIds = "[" + String.join(",", newIds) + "]";
         return block.replace(
-            "name=\"actionIds\" value=\"" + actionIdsRaw + "\"",
-            "name=\"actionIds\" value=\"" + newActionIds + "\"");
+                "name=\"" + idsProp + "\" value=\"" + actionIdsRaw + "\"",
+                "name=\"" + idsProp + "\" value=\"" + newActionIds + "\"");
     }
 
     private List<String> parseBpmnJsonArray(String raw) {
