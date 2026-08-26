@@ -214,6 +214,21 @@ public class WorkspaceTaskFilterComponent {
         return false;
     }
 
+    public boolean workspacePairMatches(String buCode, String roleCode, String userId) {
+        if (buCode == null || buCode.isBlank() || roleCode == null || roleCode.isBlank()) {
+            return false;
+        }
+        String activeBu = SecurityContextUtils.getCurrentActiveBusinessUnitId()
+                .map(WorkspaceTaskFilterComponent::normalizeBuId)
+                .map(this::resolveActiveBusinessUnitCode)
+                .orElse(null);
+        String activeRole = resolveActiveRoleCode(userId);
+        if (activeBu == null || activeRole == null) {
+            return false;
+        }
+        return activeBu.equalsIgnoreCase(buCode.trim()) && activeRole.equalsIgnoreCase(roleCode.trim());
+    }
+
     private static boolean equalsNormalizedBuId(String a, String b) {
         if (a == null || b == null) {
             return false;

@@ -9,7 +9,8 @@ import {
   delegateTask as delegateTaskApi,
   type TaskInfo,
   type TaskQueryRequest,
-  type TaskCompleteRequest
+  type TaskCompleteRequest,
+  type TaskDelegateRequest
 } from '@/api/task'
 
 export const useTaskStore = defineStore('task', () => {
@@ -51,8 +52,8 @@ export const useTaskStore = defineStore('task', () => {
     await transferTaskApi(taskId, toUserId, reason)
   }
 
-  const delegateTask = async (taskId: string, delegateId: string, reason?: string) => {
-    await delegateTaskApi(taskId, delegateId, reason)
+  const delegateTask = async (taskId: string, body: TaskDelegateRequest) => {
+    await delegateTaskApi(taskId, body)
   }
 
   return {

@@ -53,7 +53,14 @@ export function useTaskActions(options: {
   actionDialogVisible: Ref<boolean>
   actionDialogTitle: Ref<string>
   currentAction: Ref<string>
-  actionForm: { targetUserId: string; reason: string }
+  actionForm: {
+    targetUserId: string
+    reason: string
+    targetType?: 'USER' | 'BU_ROLE'
+    delegatedBuId?: string
+    delegatedBuCode?: string
+    delegatedRoleCode?: string
+  }
   userOptions: Ref<UserOption[]>
   userSearchLoading: Ref<boolean>
   loadTaskDetail: () => Promise<void>
@@ -119,6 +126,10 @@ export function useTaskActions(options: {
     options.actionDialogTitle.value = t('task.delegate')
     options.actionForm.targetUserId = ''
     options.actionForm.reason = ''
+    options.actionForm.targetType = 'USER'
+    options.actionForm.delegatedBuId = ''
+    options.actionForm.delegatedBuCode = ''
+    options.actionForm.delegatedRoleCode = ''
     options.userOptions.value = []
     options.actionDialogVisible.value = true
   }
@@ -243,7 +254,18 @@ export function useTaskActions(options: {
     }
   }
   async function submitAction() {
-    if (options.currentAction.value !== 'urge' && !options.actionForm.targetUserId) {
+    if (options.currentAction.value === 'delegate') {
+      const targetType = options.actionForm.targetType || 'USER'
+      if (targetType === 'BU_ROLE') {
+        if (!options.actionForm.delegatedBuCode || !options.actionForm.delegatedRoleCode) {
+          ElMessage.warning(t('task.selectBuAndRole'))
+          return
+        }
+      } else if (!options.actionForm.targetUserId) {
+        ElMessage.warning(t('task.selectUser'))
+        return
+      }
+    } else if (options.currentAction.value !== 'urge' && !options.actionForm.targetUserId) {
       ElMessage.warning(t('task.selectUser'))
       return
     }
@@ -251,7 +273,21 @@ export function useTaskActions(options: {
     try {
       const pid = resolveProcessTaskId(options.taskId)
       if (options.currentAction.value === 'delegate') {
-        await delegateTask(pid, options.actionForm.targetUserId, options.actionForm.reason)
+        const targetType = options.actionForm.targetType || 'USER'
+        if (targetType === 'BU_ROLE') {
+          await delegateTask(pid, {
+            delegatedTargetType: 'BU_ROLE',
+            delegatedBuCode: options.actionForm.delegatedBuCode,
+            delegatedRoleCode: options.actionForm.delegatedRoleCode,
+            reason: options.actionForm.reason
+          })
+        } else {
+          await delegateTask(pid, {
+            delegatedTargetType: 'USER',
+            delegatedTo: String(options.actionForm.targetUserId),
+            reason: options.actionForm.reason
+          })
+        }
         ElMessage.success(t('task.delegateSuccess'))
       } else if (options.currentAction.value === 'transfer') {
         await transferTask(pid, options.actionForm.targetUserId, options.actionForm.reason)

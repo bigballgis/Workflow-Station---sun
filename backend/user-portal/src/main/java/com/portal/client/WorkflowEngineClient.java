@@ -318,6 +318,12 @@ public class WorkflowEngineClient {
         return taskClient.completeTask(taskId, userId, action, variables);
     }
 
+    public Optional<Map<String, Object>> completeTask(String taskId, String userId,
+                                                       String action, Map<String, Object> variables,
+                                                       String onBehalfOfUserId) {
+        return taskClient.completeTask(taskId, userId, action, variables, onBehalfOfUserId);
+    }
+
     /**
      * Claims task
      */
@@ -331,6 +337,14 @@ public class WorkflowEngineClient {
     public Optional<Map<String, Object>> delegateTask(String taskId, String delegatorId,
                                                        String delegateId, String reason) {
         return taskClient.delegateTask(taskId, delegatorId, delegateId, reason);
+    }
+
+    public Optional<Map<String, Object>> delegateTask(String taskId, Map<String, Object> body) {
+        return taskClient.delegateTask(taskId, body);
+    }
+
+    public Optional<Map<String, Object>> getDelegatedRuntimeTasks(String activeBusinessUnitId, String activeRoleId) {
+        return taskClient.getDelegatedRuntimeTasks(activeBusinessUnitId, activeRoleId);
     }
 
     /**

@@ -52,6 +52,16 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findDelegatedTasks(@Param("userId") String userId);
 
     /**
+     * Running tasks delegated to the current workspace BU+Role pair.
+     */
+    @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.delegatedTargetType = 'BU_ROLE' "
+           + "AND t.delegatedBuCode = :buCode AND t.delegatedRoleCode = :roleCode "
+           + "AND t.status != 'COMPLETED' AND t.isDeleted = false")
+    List<ExtendedTaskInfo> findDelegatedTasksByBuRole(
+            @Param("buCode") String buCode,
+            @Param("roleCode") String roleCode);
+
+    /**
      * Query tasks claimed by a user.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.claimedBy = :userId " +

@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import { Check, CircleCheck, CircleClose, Close, Files, Warning, Bell, User } from '@element-plus/icons-vue'
 import type { TaskActionInfo } from '@/api/task'
 import { taskPriorityBand, type TaskPriorityBand } from '@/utils/taskPriority'
+import { useUserStore } from '@/stores/user'
 
 export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
   const { t } = useI18n()
@@ -50,6 +51,42 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
     }
     const d = dayjs(date)
     return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '-'
+  }
+
+  function sameIdentity(left?: string, right?: string): boolean {
+    if (!left || !right) return false
+    return left.trim() === right.trim()
+  }
+
+  function isDelegatedTask(): boolean {
+    const info = taskInfo.value
+    if (info.delegated === true) return true
+    if (info.delegatedTo && String(info.delegatedTo).trim()) return true
+    return !!(info.delegatedBuCode && info.delegatedRoleCode)
+  }
+
+  function getDelegationStatusDisplay(): string {
+    if (!isDelegatedTask()) return ''
+    const info = taskInfo.value
+    const userStore = useUserStore()
+    const me = userStore.userInfo?.id
+    const username = userStore.userInfo?.username
+    const isAssignee = sameIdentity(me, info.assignee) || sameIdentity(username, info.assignee)
+    const isUserDelegatee = sameIdentity(me, info.delegatedTo) || sameIdentity(username, info.delegatedTo)
+    if (isUserDelegatee && !isAssignee) {
+      const name = info.assigneeName || info.assignee || info.delegatorName || info.delegatorId || '-'
+      return t('task.onBehalfOf', { name })
+    }
+    const buRole = String(info.delegatedTargetType || '').toUpperCase() === 'BU_ROLE'
+      || (info.delegatedBuCode && info.delegatedRoleCode)
+    if (buRole) {
+      return t('task.delegatedToBuRole', {
+        bu: info.delegatedBuCode || '-',
+        role: info.delegatedRoleCode || '-',
+      })
+    }
+    const name = info.delegatedTo || '-'
+    return t('task.delegatedToUser', { name })
   }
 
   function getCurrentAssigneeDisplay() {
@@ -113,6 +150,7 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
     getHistoryAction,
     formatDate,
     getCurrentAssigneeDisplay,
+    getDelegationStatusDisplay,
     getPriorityLabel,
     getPriorityType,
     getButtonType,

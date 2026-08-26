@@ -37,4 +37,28 @@ public final class WorkflowActorResolver {
         }
         return Optional.empty();
     }
+
+    public static Optional<String> currentActiveBusinessUnitId() {
+        return currentPrincipal()
+                .map(UserPrincipal::getActiveBusinessUnitId)
+                .filter(id -> id != null && !id.isBlank());
+    }
+
+    public static Optional<String> currentActiveRoleId() {
+        return currentPrincipal()
+                .map(UserPrincipal::getActiveRoleId)
+                .filter(id -> id != null && !id.isBlank());
+    }
+
+    private static Optional<UserPrincipal> currentPrincipal() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return Optional.empty();
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof UserPrincipal up) {
+            return Optional.of(up);
+        }
+        return Optional.empty();
+    }
 }

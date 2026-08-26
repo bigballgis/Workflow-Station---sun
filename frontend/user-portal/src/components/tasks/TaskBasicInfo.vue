@@ -38,6 +38,12 @@
         <el-descriptions-item :label="$t('task.currentAssignee')">
           {{ getCurrentAssigneeDisplay() }}
         </el-descriptions-item>
+        <el-descriptions-item
+          v-if="getDelegationStatusDisplay && getDelegationStatusDisplay()"
+          :label="$t('task.delegationStatus')"
+        >
+          {{ getDelegationStatusDisplay() }}
+        </el-descriptions-item>
       </el-descriptions>
     </div>
   </div>
@@ -52,6 +58,7 @@ const props = defineProps<{
   taskInfo: Record<string, any>
   formatDate: (date?: any) => string
   getCurrentAssigneeDisplay: () => string
+  getDelegationStatusDisplay?: () => string
   /** 已完成任务：Current Step 无「当前」语义，显示 '-'（与申请详情终态一致）。 */
   isCompleted?: boolean
 }>()

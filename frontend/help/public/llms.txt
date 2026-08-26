@@ -10,6 +10,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 - /help/computed-fields — Computed field formulas (Table Design; Admin Relation Tables #relation)
 - /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task)
 - /help/email-monitor — Email Monitor (inbound connection, monitor template, Start Event binding)
+- /help/task-delegate — Delegate a task (User Portal To Do; specified user or BU+Role; does not change Current Assignee)
 
 ## Figures
 

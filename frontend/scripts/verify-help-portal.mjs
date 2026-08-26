@@ -98,8 +98,34 @@ try {
   await page.screenshot({ path: monitorShot, fullPage: true })
   console.log(`screenshot ${monitorShot}`)
 
+  await page.getByRole('button', { name: 'User Portal' }).click()
+  await page.getByRole('button', { name: 'Task' }).click()
+  rec(
+    'Sidebar hangs task-delegate under Portal To Do',
+    await page.getByTestId('help-nav-up-todo').isVisible(),
+  )
+
+  await page.goto('http://localhost:3000/help/task-delegate', { waitUntil: 'domcontentloaded' })
+  const delegateArticle = page.getByTestId('task-delegate-guide-page')
+  await delegateArticle.waitFor({ state: 'visible', timeout: 15000 })
+  rec('Task-delegate guideline is visible', await delegateArticle.isVisible())
+  rec(
+    'Task-delegate names Specified BU and Role',
+    (await delegateArticle.textContent())?.includes('Specified BU and Role') === true,
+  )
+  rec(
+    'URL is /help/task-delegate',
+    page.url().includes('/help/task-delegate'),
+    page.url(),
+  )
+  const delegateShot = resolve(DW_SHOTS, `${DATE}_help-portal-task-delegate.png`)
+  await page.screenshot({ path: delegateShot, fullPage: true })
+  console.log(`screenshot ${delegateShot}`)
+
   const llms = await page.goto('http://localhost:3000/help/llms.txt', { waitUntil: 'domcontentloaded' })
-  rec('llms.txt is served', llms?.ok() === true && (await llms.text()).includes('/help/computed-fields'))
+  const llmsText = llms ? await llms.text() : ''
+  rec('llms.txt is served', llms?.ok() === true && llmsText.includes('/help/computed-fields'))
+  rec('llms.txt lists task-delegate', llmsText.includes('/help/task-delegate'))
 
   await page.goto('http://localhost:3000/dev/help/computed-fields', {
     waitUntil: 'domcontentloaded',

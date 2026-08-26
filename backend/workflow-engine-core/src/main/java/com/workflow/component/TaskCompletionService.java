@@ -99,6 +99,13 @@ public class TaskCompletionService {
     public TaskAssignmentResult completeTask(String taskId, String userId,
                                              java.util.Map<String, Object> variables,
                                              boolean sendNotification) {
+        return completeTask(taskId, userId, variables, sendNotification, null);
+    }
+
+    public TaskAssignmentResult completeTask(String taskId, String userId,
+                                             java.util.Map<String, Object> variables,
+                                             boolean sendNotification,
+                                             String onBehalfOfUserId) {
         try {
             validateUserId(userId);
 
@@ -140,8 +147,10 @@ public class TaskCompletionService {
             if (extendedTaskInfoOpt.isPresent()) {
                 ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
 
-                if (!flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
-                    taskActionService.validateCompletePermission(extendedTaskInfo, userId);
+                if (!isCompleteAuthorized(flowableTask, extendedTaskInfo, userId, onBehalfOfUserId)) {
+                    throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                            "userId", "User does not have permission to complete this task", userId)));
                 }
 
                 if (extendedTaskInfo.isCompleted()) {
@@ -154,7 +163,7 @@ public class TaskCompletionService {
                     log.info("Detected multi-instance sub-task, preparing to write back to sub-table: taskId={}", taskId);
                     taskMultiInstanceService.handleMultiInstanceSubTaskCompletion(taskId, variables, extendedTaskInfo);
                 }
-            } else if (!flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
+            } else if (!isCompleteAuthorized(flowableTask, null, userId, onBehalfOfUserId)) {
                 throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                                 "userId", "User does not have permission to complete this task", userId)));
@@ -195,6 +204,11 @@ public class TaskCompletionService {
                 if (approverComment != null && !approverComment.toString().isBlank()) {
                     taskService.addComment(taskId, processInstanceId, approverComment.toString());
                 }
+            }
+            if (StringUtils.hasText(onBehalfOfUserId)
+                    && !taskActionService.engineActorMatchesPortalUser(onBehalfOfUserId, userId)) {
+                taskService.addComment(taskId, processInstanceId,
+                        "On behalf of " + onBehalfOfUserId.trim());
             }
 
             String previousActor = Authentication.getAuthenticatedUserId();
@@ -513,6 +527,64 @@ public class TaskCompletionService {
         log.warn("Task {} has no assignee and no candidate links; setting assignee to portal user {} (process initiator) before complete",
                 task.getId(), portalUserId.trim());
         taskService.setAssignee(task.getId(), portalUserId.trim());
+    }
+
+    boolean isCompleteAuthorized(Task task, ExtendedTaskInfo extended, String actorUserId,
+                                 String onBehalfOfUserId) {
+        if (flowableRuntimeAuthorizesComplete(task, actorUserId)) {
+            return true;
+        }
+        if (!StringUtils.hasText(onBehalfOfUserId) || task == null) {
+            if (extended != null) {
+                try {
+                    taskActionService.validateCompletePermission(extended, actorUserId);
+                    return true;
+                } catch (WorkflowValidationException e) {
+                    return false;
+                }
+            }
+            return false;
+        }
+        String assignee = task.getAssignee();
+        if (!StringUtils.hasText(assignee)
+                || !taskActionService.engineActorMatchesPortalUser(assignee, onBehalfOfUserId.trim())) {
+            return false;
+        }
+        return actorMatchesSingleTaskDelegatee(extended, actorUserId);
+    }
+
+    boolean actorMatchesSingleTaskDelegatee(ExtendedTaskInfo extended, String actorUserId) {
+        if (extended == null || !StringUtils.hasText(actorUserId) || !extended.isDelegated()) {
+            return false;
+        }
+        if (StringUtils.hasText(extended.getDelegatedTo())
+                && taskActionService.engineActorMatchesPortalUser(extended.getDelegatedTo(), actorUserId)) {
+            return true;
+        }
+        if (!extended.isBuRoleDelegated()) {
+            return false;
+        }
+        String buCode = resolveActiveWorkspaceBuCode();
+        String roleCode = resolveActiveWorkspaceRoleCode();
+        if (!StringUtils.hasText(buCode) || !StringUtils.hasText(roleCode)) {
+            return false;
+        }
+        return buCode.equalsIgnoreCase(extended.getDelegatedBuCode().trim())
+                && roleCode.equalsIgnoreCase(extended.getDelegatedRoleCode().trim());
+    }
+
+    private String resolveActiveWorkspaceBuCode() {
+        return com.workflow.util.WorkflowActorResolver.currentActiveBusinessUnitId()
+                .map(id -> adminCenterClient.getBusinessUnitCodeById(id.trim()))
+                .filter(StringUtils::hasText)
+                .orElse(null);
+    }
+
+    private String resolveActiveWorkspaceRoleCode() {
+        return com.workflow.util.WorkflowActorResolver.currentActiveRoleId()
+                .map(id -> adminCenterClient.getRoleCodeById(id.trim()))
+                .filter(StringUtils::hasText)
+                .orElse(null);
     }
 
     boolean flowableRuntimeAuthorizesComplete(Task task, String portalUserId) {

@@ -90,6 +90,10 @@ export default {
       title: 'Email Monitor',
       summary: 'Inbound mailbox, monitor template, field extraction, and Start Event binding before Deploy.',
     },
+    taskDelegate: {
+      title: 'Delegate a task',
+      summary: 'Hand this one To Do to a person or a BU+Role pair without changing Current Assignee.',
+    },
   },
   computedFieldGuide: {
     pageTitle: 'Computed field formulas',
@@ -219,5 +223,50 @@ export default {
     deleteTitle: 'Deleting a template',
     deleteBody:
       'A template bound to one or more Start Events cannot be deleted. Unbind it in Process Design first, then delete the template.',
+  },
+  taskDelegateGuide: {
+    pageTitle: 'Delegate a task',
+    crumb: 'User Portal · Task · To Do',
+    intro:
+      'You are Current Assignee. Delegate this one open task. You stay the assignee. Someone else can complete it on your behalf. This is not Transfer, and it is not Setup → Delegations standing rules.',
+    flowTitle: 'Order of work',
+    flow1: 'Open the task from To Do',
+    flow2: 'Click Delegate on the action bar',
+    flow3: 'Choose Specified user or Specified BU and Role',
+    flow4: 'Confirm',
+    flow5: 'The other person opens Delegated on To Do (match workspace for BU+Role)',
+    openTitle: 'Open the dialog',
+    openBody:
+      'On task detail, click Delegate. The red question mark next to the dialog title opens this page. If nobody is assigned yet (unclaimed candidate pool), Delegate is hidden. Claim first so there is a Current Assignee.',
+    openSample: 'button on the task action bar',
+    userTitle: 'Specified user',
+    userBody:
+      'Tick Specified user. Pick Target User, then Confirm. You stay Current Assignee. An extra line reads Delegated to that person. They see On behalf of you. You can still complete the task yourself.',
+    userRadioSample: 'first choice under Delegate to',
+    userFieldSample: 'person who will complete on your behalf',
+    buTitle: 'Specified BU and Role',
+    buBody:
+      'Tick Specified BU and Role. Pick Business Unit, then Role. Role stays disabled until a unit is selected. Both are required. People see and complete the task only when the header workspace is that same Business unit and Role pair. Switching workspace hides it. System Administrator does not see every delegated task. There is no Claim step after this kind of delegate.',
+    buRadioSample: 'second choice under Delegate to',
+    buFieldSample: 'first of the required pair',
+    roleFieldSample: 'second of the required pair; disabled until a unit is chosen',
+    afterTitle: 'After you confirm',
+    afterBody:
+      'A success toast says Delegated successfully. Current Assignee is still you. The extra line is Delegated to the person, or Delegated to the unit and role names. Transfer is a different button and still changes the assignee.',
+    assigneeSample: 'still you after Delegate',
+    delegatedToSample: 'extra line on Basic Info',
+    seeTitle: 'Who sees it and can complete',
+    seeBody:
+      'The named user, or anyone whose current workspace matches that BU and Role, finds the task under To Do → Delegated. They complete it as On behalf of you. Anyone else has no permission. Switch workspace from Select workspace identity in the header when you were given a BU+Role target.',
+    todoFilterSample: 'To Do filter for delegated work',
+    onBehalfSample: 'what the other person sees on Basic Info',
+    notTitle: 'What this is not',
+    notBody:
+      'Transfer changes Current Assignee. Setup → Delegations standing rules are a different page and do not use this dialog. Permission self-service requests are also different.',
+    transferSample: 'reassign button on the same action bar',
+    standingSample: 'Setup menu; standing rules, not this one task',
+    failTitle: 'When it fails',
+    failBody:
+      'Confirm without a user shows Please select user. Confirm without both Business Unit and Role shows Please select both business unit and role. Delegating to yourself is rejected. A completed task cannot be delegated. An unclaimed pool task has no Delegate button.',
   },
 }
