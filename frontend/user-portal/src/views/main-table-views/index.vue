@@ -18,7 +18,7 @@ const {
   MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, leftoverWidth, gridTableKey,
   pagedRows, displayTotal, toListColumnMeta,
   handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
-  isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,
+  isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, previewFile,
   handleSortChange, handleClearSort, handleGroupChange, openFilterDialog, openWidthDialog, handleMoveColumn,
   applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
   handleColumnResize, handleColumnResizeEnd,
@@ -234,8 +234,8 @@ const {
                     v-for="(file, fi) in fileLinksOf(col, row)"
                     :key="fi"
                     class="mtv-file-link"
-                    :title="t('mainTableView.downloadFile')"
-                    @click.stop="downloadFile(file)"
+                    :title="t('filePreview.previewFile')"
+                    @click.stop="previewFile(file)"
                   >{{ file.name }}</a>
                 </span>
               </template>

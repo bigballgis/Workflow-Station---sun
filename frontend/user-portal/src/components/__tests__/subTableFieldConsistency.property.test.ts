@@ -69,7 +69,7 @@ function deriveColumnsFromBinding(
 
     const passProps: Record<string, any> = {}
     const propKeys = [
-      'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+      'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload',
       'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
     ]
     for (const key of propKeys) {

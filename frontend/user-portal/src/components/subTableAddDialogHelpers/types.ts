@@ -58,6 +58,7 @@ export interface DialogColumn {
     action?: string
     accept?: string
     fileNameTargetField?: string
+    cannotDownload?: boolean
     options?: Array<{ label: string; value: string | number }>
     multiple?: boolean
     precision?: number

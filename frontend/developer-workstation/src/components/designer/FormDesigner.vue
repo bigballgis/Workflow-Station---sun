@@ -1971,6 +1971,22 @@ const designerConfig = computed(() => ({
         ]
       },
     },
+    // Upload: Can not download (rule.props.cannotDownload). Typed override skips default,
+    // so Readonly is re-appended here to keep the built-in switch.
+    upload: {
+      append: true,
+      rule() {
+        return [
+          {
+            type: 'switch',
+            field: 'cannotDownload',
+            title: t('form.uploadCannotDownload'),
+            value: false,
+          },
+          { type: 'switch', field: 'readonly', title: 'Readonly' },
+        ]
+      },
+    },
     // Input（单行）：敏感信息打码。textarea / password 不展示、运行时也不打码。
     input: {
       append: true,

@@ -2562,17 +2562,19 @@
 - id: "1553"
   status: fixed
   fixed_at: "2026-08-25"
-  severity: minor
+  severity: major
   category: bug
-  summary: "DW Send Task To/Cc/Bcc vue-i18n ate braces so UI showed $'assigneeEmail"
-  file: "frontend/developer-workstation/src/i18n/locales/en.ts"
+  summary: "Meeting Doc cannot-download still showed Preview Download on My Request (1_Meeting-000016)"
+  file: "frontend/user-portal/src/utils/applyUploadPropsFromRule.ts"
   note: |
-    根因：vue-i18n 把 {assigneeEmail} 当插值；"$'{assigneeEmail}'" 把引号写在 { 前，
-    界面变成 $'assigneeEmail。改为 "${'{'}assigneeEmail{'}'}" 显示 ${assigneeEmail}。
-    Cc/Bcc 同修。单测 send-task-email-to-i18n.test.ts；
-    Playwright frontend/scripts/verify-send-task-email-to.mjs 4/4；
-    截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-email-to-placeholder.png
-    编号说明：rebase 时远程已占用 #1542–#1552，本条为 #1553。
+    Designer switch lives on PROCESS Main (cannotDownload true); My Request /
+    TASK scene copies omit it, so Portal preview kept Download. Runtime now
+    honors cannotDownload and native canNotDownload, and inherits the flag by
+    field key from any FU form. Vitest applyUploadPropsFromRule + filePreview
+    9 pass; SubTableField 16 pass; pnpm run build; compose rebuild
+    user-portal-frontend. Playwright 1_Meeting-000016 preview header has Close
+    window only (no Download).
+    screenshot 2026-08-25_meeting-000016-preview-no-download.png.
 
 - id: "1554"
   status: fixed
@@ -2601,4 +2603,19 @@
     未改 BpmnExtensionUtils.resolveExpression（To/Cc/From 仍用）。lookupField 缺失本已空串。
     主题整段解析后仍空白会触发 email.send_task.missing_subject，未改为允许空主题发信。
     验证：EmailTemplateResolverTest 18/18；mvn package；workflow-engine healthy。
+
+- id: "1556"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: minor
+  category: bug
+  summary: "DW Send Task To/Cc/Bcc vue-i18n ate braces so UI showed $'assigneeEmail"
+  file: "frontend/developer-workstation/src/i18n/locales/en.ts"
+  note: |
+    根因：vue-i18n 把 {assigneeEmail} 当插值；"$'{assigneeEmail}'" 把引号写在 { 前，
+    界面变成 $'assigneeEmail。改为 "${'{'}assigneeEmail{'}'}" 显示 ${assigneeEmail}。
+    Cc/Bcc 同修。单测 send-task-email-to-i18n.test.ts；
+    Playwright frontend/scripts/verify-send-task-email-to.mjs 4/4；
+    截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-email-to-placeholder.png
+    编号说明：merge common_0731_SELF_AP 时本分支已占用 #1553（cannot-download），本条从 #1553 改为 #1556。
 

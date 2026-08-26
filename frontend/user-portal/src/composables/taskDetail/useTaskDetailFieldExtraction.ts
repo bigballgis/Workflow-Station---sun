@@ -21,6 +21,7 @@ import {
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import { applyFormCreateValidationToFormField } from '@/utils/formCreateValidateRules'
 import { applySensitiveMaskFromRule } from '@/utils/applySensitiveMaskFromRule'
+import { applyUploadPropsFromRule, cannotDownloadFieldKeysFromForms } from '@/utils/applyUploadPropsFromRule'
 import type { TaskDetailCtx } from './context'
 
 export interface TaskDetailFieldExtractionFns {
@@ -299,12 +300,11 @@ export function createTaskDetailFieldExtraction(ctx: TaskDetailCtx): TaskDetailF
     if (rule.type === 'timePicker' && rule.props?.isRange === true) { field.type = 'timerange' }
     if (rule.type === 'rate') { field.max = rule.props?.max || 5 }
     if (rule.type === 'slider') { field.min = rule.props?.min ?? 0; field.max = rule.props?.max ?? 100; field.step = rule.props?.step || 1 }
-    if (rule.type === 'upload') {
-      const action = rule.props?.action
-      field.uploadUrl = (action && action !== '/') ? action : '/api/v1/upload'
-      field.uploadAccept = rule.props?.accept || ''
-      field.uploadLimit = rule.props?.limit || 1
-    }
+    applyUploadPropsFromRule(
+      field,
+      rule,
+      cannotDownloadFieldKeysFromForms(ctx.cachedContentForms),
+    )
     if (rule.type === 'userSelect' || rule.type === 'user') {
       field.type = 'user'
     }

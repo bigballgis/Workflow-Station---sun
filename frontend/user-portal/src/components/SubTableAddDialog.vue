@@ -329,12 +329,11 @@
                     v-else-if="isUploadColumn(col, formData[col.field]) && isColDisabled(col)"
                     class="ro-value"
                   >
-                    <a
+                    <span
                       v-if="formData[col.field]"
-                      :href="formData[col.field]"
-                      target="_blank"
                       class="upload-download-link"
-                    >{{ getFilenameFromUrl(formData[col.field], uploadNames[col.field]) }}</a>
+                      @click="previewDialogFile(col)"
+                    >{{ getFilenameFromUrl(formData[col.field], uploadNames[col.field]) }}</span>
                     <span v-else>-</span>
                   </div>
                   <!-- upload -->
@@ -360,7 +359,9 @@
                       v-if="uploadNames[col.field]"
                       size="small"
                       type="success"
+                      class="upload-filename-tag"
                       closable
+                      @click="previewDialogFile(col)"
                       @close="clearUpload(col)"
                     >
                       {{ uploadNames[col.field] }}
@@ -664,6 +665,9 @@ import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
 import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
+import { getFilenameFromUrl } from '@/composables/subTableField/useSubTableFileDownload'
+import { openFilePreview } from '@/composables/filePreview/useFilePreview'
+import { uploadPropsBlockDownload } from '@/utils/filePreview'
 import {
   buildDialogLayoutGroups,
   groupAssignmentFieldsUnderMarker,
@@ -938,6 +942,16 @@ const {
   handleUploadError,
   clearUpload,
 } = useSubTableDialogUpload(formData, () => props.columns, t)
+
+function previewDialogFile(col: DialogColumn) {
+  const url = String(formData.value[col.field] || '')
+  if (!url) return
+  openFilePreview({
+    url,
+    name: getFilenameFromUrl(url, uploadNames.value[col.field]),
+    cannotDownload: uploadPropsBlockDownload(col.props),
+  })
+}
 
 // ─── BU→Role 级联（MI 子任务「按角色分派」）+ 与 assignee 行级互斥 ──────────────
 const {
@@ -1470,9 +1484,13 @@ watch(
 .upload-download-link {
   color: #409eff;
   text-decoration: none;
+  cursor: pointer;
 }
 .upload-download-link:hover {
   text-decoration: underline;
+}
+.upload-filename-tag {
+  cursor: pointer;
 }
 .dialog-nested-sub-table {
   margin-top: 8px;

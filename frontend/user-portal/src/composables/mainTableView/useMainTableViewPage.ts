@@ -22,6 +22,7 @@ import { leftoverColumnWidth } from '@platform-shared/list/columnResizeCursor'
 import {
   downloadMainTableViewRowsAsCsv, formatMainTableViewCell, extractFileLinks, type FileLink,
 } from '@/utils/mainTableViewCsvExport'
+import { openFilePreview } from '@/composables/filePreview/useFilePreview'
 import { useMainTableViewLookupHydration } from '@/composables/mainTableView/useMainTableViewLookupHydration'
 import { useMainTableViewFkHydration } from '@/composables/mainTableView/useMainTableViewFkHydration'
 import {
@@ -540,39 +541,9 @@ function openLookupTarget(col: MainTableViewFieldColumn, row: GridDisplayRow) {
   })
 }
 
-// Download an upload file via fetch+Blob (mirrors the sub-table file download) so the browser saves
-// it with the original name instead of navigating away. Cookies auto-send for the same-origin request.
-const downloadingFiles = ref<Record<string, boolean>>({})
-
-async function downloadFile(link: FileLink) {
-  if (!link.url || downloadingFiles.value[link.url]) return
-  downloadingFiles.value = { ...downloadingFiles.value, [link.url]: true }
-  const msg = ElMessage({ message: t('common.downloading'), type: 'info', duration: 0 })
-  try {
-    const response = await fetch(link.url)
-    if (!response.ok) {
-      msg.close()
-      ElMessage.error(response.status === 404 ? t('common.fileNotFound') : t('common.downloadFailed'))
-      return
-    }
-    const blob = await response.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = link.name
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
-    msg.close()
-  } catch {
-    msg.close()
-    ElMessage.error(t('common.downloadFailed'))
-  } finally {
-    const next = { ...downloadingFiles.value }
-    delete next[link.url]
-    downloadingFiles.value = next
-  }
+function previewFile(link: FileLink) {
+  if (!link.url) return
+  openFilePreview({ url: link.url, name: link.name, cannotDownload: false })
 }
 
 function columnIndex(fieldName: string): number {
@@ -819,7 +790,7 @@ onMounted(async () => {
     MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, leftoverWidth, gridTableKey,
     pagedRows, displayTotal, toListColumnMeta,
     handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
-    isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,
+    isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, previewFile,
     handleSortChange, handleClearSort, handleGroupChange, openFilterDialog, openWidthDialog, handleMoveColumn,
     applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
     handleColumnResize, handleColumnResizeEnd,
