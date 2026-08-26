@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
  *   <custom:property name="subTableId" value="13" />
  *   <custom:property name="formId" value="11" />
  *   <custom:property name="actionIds" value="[12,34,56]" />
+ *   <custom:property name="globalActionIds" value="[12]" />
  *   <custom_1:values name="actionIds" value="[12,34]" />
  * }</pre>
  *
@@ -25,12 +26,16 @@ import java.util.regex.Pattern;
  * <ol>
  *   <li><b>Name first</b>: when the same {@code <X:properties>} block contains both {@code subTableName} +
  *       {@code subTableId} (or {@code tableName} + {@code tableId} / {@code formName} +
- *       {@code formId}), look up the corresponding entity ID on the clone side by name and write it back;
- *       this way even if the source data has inconsistent IDs and names (user swapped tables/forms in the designer
- *       causing stale IDs), the cloned BPMN will still point to the correct cloned entities.</li>
+ *       {@code formId} / {@code requestFormName} + {@code requestFormId}), look up the corresponding entity
+ *       ID on the clone side by name and write it back; this way even if the source data has inconsistent
+ *       IDs and names (user swapped tables/forms in the designer causing stale IDs), the cloned BPMN will
+ *       still point to the correct cloned entities. {@code formId} and {@code requestFormId} MUST be
+ *       resolved from their own name properties — a node can bind a To Do form and a My Requests form
+ *       at once, and those names (and ids) are independent.</li>
  *   <li><b>ID fallback</b>: no name attribute, or name not found on the clone side → use old ID → new ID mapping.</li>
- *   <li><b>actionIds array</b>: map each ID individually; keep original for unmatched (actionNames length often
- *       differs from actionIds, making reliable name matching impossible).</li>
+ *   <li><b>actionIds / globalActionIds array</b>: map each ID individually; keep original for unmatched
+ *       ({@code actionNames} / {@code globalActionNames} length often differs from the id array, making
+ *       reliable name matching impossible here — {@code ProcessBpmnStaleIdFixer} does the name pass).</li>
  * </ol>
  *
  * <p>Supports both Base64-encoded and plain-text XML: decodes, rewrites, and re-encodes in the original format.
@@ -90,11 +95,12 @@ public final class BpmnIdRewriter {
      *
      * @param bpmnXml             original BPMN XML (may be Base64 encoded)
      * @param tableIdMapping      old TableDefinition.id → new id (fallback for subTableId / tableId)
-     * @param formIdMapping       old FormDefinition.id → new id (fallback for formId)
-     * @param actionIdMapping     old ActionDefinition.id → new id (array elements mapped individually for actionIds)
+     * @param formIdMapping       old FormDefinition.id → new id (fallback for formId / requestFormId)
+     * @param actionIdMapping     old ActionDefinition.id → new id (array elements mapped individually for
+ *                            actionIds and process-level globalActionIds)
      * @param clonedTableNameToId clone-side table name → clone TableDefinition.id (preferred when subTableName/tableName present in block).
      *                            Keyed by the table name as it appears in the SOURCE BPMN (resolution runs before any name rewrite).
-     * @param clonedFormNameToId  clone-side form name → clone FormDefinition.id (preferred when formName present in block)
+     * @param clonedFormNameToId  clone-side form name → clone FormDefinition.id (preferred when formName / requestFormName present in block)
      * @param sourceToNewTableName source table name → renamed clone table name. When non-empty, {@code subTableName}/{@code tableName}
      *                            property VALUES are rewritten to the new name so the cloned BPMN's runtime table references
      *                            (e.g. MI {@code subTableName} → physical/JSON sub-table) point at the clone's tables, not the source's.
@@ -254,21 +260,13 @@ public final class BpmnIdRewriter {
             rewrites.put("tableId", newTableId);
         }
 
-        String newFormId = resolveSingularId(
-                nameToValue.get("formId"),
-                nameToValue.get("formName"),
-                formIdMapping, clonedFormNameToId);
-        if (newFormId != null && !newFormId.equals(nameToValue.get("formId"))) {
-            rewrites.put("formId", newFormId);
-        }
+        applyNamedIdRewrite("formId", "formName",
+                nameToValue, formIdMapping, clonedFormNameToId, rewrites);
+        applyNamedIdRewrite("requestFormId", "requestFormName",
+                nameToValue, formIdMapping, clonedFormNameToId, rewrites);
 
-        if (nameToValue.containsKey("actionIds") && isNonEmpty(actionIdMapping)) {
-            String oldActionIds = nameToValue.get("actionIds");
-            String newActionIds = remapArrayLongs(oldActionIds, actionIdMapping);
-            if (!Objects.equals(oldActionIds, newActionIds)) {
-                rewrites.put("actionIds", newActionIds);
-            }
-        }
+        applyArrayLongRewrite("actionIds", nameToValue, actionIdMapping, rewrites);
+        applyArrayLongRewrite("globalActionIds", nameToValue, actionIdMapping, rewrites);
 
         applyConnectionIdRewrite(nameToValue, connectionIdMapping, connectionUidMapping, rewrites);
         applySingularIdRewrite("emailTemplateId", nameToValue, emailTemplateIdMapping, rewrites);
@@ -309,10 +307,14 @@ public final class BpmnIdRewriter {
             remappers.put("tableId", tableRemap);
         }
         if (isNonEmpty(formIdMapping)) {
-            remappers.put("formId", v -> remapSingularLong(v, formIdMapping));
+            Function<String, String> formRemap = v -> remapSingularLong(v, formIdMapping);
+            remappers.put("formId", formRemap);
+            remappers.put("requestFormId", formRemap);
         }
         if (isNonEmpty(actionIdMapping)) {
-            remappers.put("actionIds", v -> remapArrayLongs(v, actionIdMapping));
+            Function<String, String> actionRemap = v -> remapArrayLongs(v, actionIdMapping);
+            remappers.put("actionIds", actionRemap);
+            remappers.put("globalActionIds", actionRemap);
         }
         if (isNonEmpty(connectionIdMapping) || isNonEmpty(connectionUidMapping)) {
             remappers.put("connectionId",
@@ -409,6 +411,38 @@ public final class BpmnIdRewriter {
             }
         }
         return remapSingularLong(trimmed, connectionIdMapping);
+    }
+
+    /**
+     * Name-first remap of a paired id/name property (formId+formName, requestFormId+requestFormName).
+     * Each pair is resolved independently so a user-task block can rewrite To Do and My Requests
+     * to different target forms.
+     */
+    private static void applyNamedIdRewrite(String idProperty,
+                                            String nameProperty,
+                                            Map<String, String> nameToValue,
+                                            Map<Long, Long> idMapping,
+                                            Map<String, Long> nameToId,
+                                            Map<String, String> rewrites) {
+        String oldId = nameToValue.get(idProperty);
+        String newId = resolveSingularId(oldId, nameToValue.get(nameProperty), idMapping, nameToId);
+        if (newId != null && !newId.equals(oldId)) {
+            rewrites.put(idProperty, newId);
+        }
+    }
+
+    private static void applyArrayLongRewrite(String property,
+                                              Map<String, String> nameToValue,
+                                              Map<Long, Long> idMapping,
+                                              Map<String, String> rewrites) {
+        if (!isNonEmpty(idMapping) || !nameToValue.containsKey(property)) {
+            return;
+        }
+        String oldValue = nameToValue.get(property);
+        String newValue = remapArrayLongs(oldValue, idMapping);
+        if (!Objects.equals(oldValue, newValue)) {
+            rewrites.put(property, newValue);
+        }
     }
 
     private static void applySingularIdRewrite(String property,

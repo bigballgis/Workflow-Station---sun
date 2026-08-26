@@ -273,6 +273,117 @@ class BpmnIdRewriterTest {
     }
 
     @Test
+    void remapsRequestFormIdIndependentlyOfFormIdByName() {
+        // Cross-env import: same userTask carries To Do (formId) and My Requests (requestFormId).
+        // Source requestFormId=806 is not in the target FU, so the designer would show the raw
+        // number unless we remap by requestFormName — not by the sibling formName.
+        String xml = """
+                <custom:properties>
+                  <custom:property name="formId" value="100" />
+                  <custom:property name="formName" value="ACQ case form" />
+                  <custom:property name="requestFormId" value="806" />
+                  <custom:property name="requestFormName" value="ACQ my request" />
+                </custom:properties>
+                """;
+
+        Map<Long, Long> formIdMapping = Map.of(100L, 501L, 200L, 502L);
+        Map<String, Long> importedFormNameToId = Map.of(
+                "ACQ case form", 501L,
+                "ACQ my request", 502L);
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml,
+                Map.of(),
+                formIdMapping,
+                Map.of(),
+                Map.of(),
+                importedFormNameToId);
+
+        assertThat(rewritten)
+                .as("To Do formId 按 formName 解析")
+                .contains("name=\"formId\" value=\"501\"")
+                .as("My Requests requestFormId 必须按 requestFormName 解析，不能留下源环境 806")
+                .contains("name=\"requestFormId\" value=\"502\"")
+                .doesNotContain("name=\"requestFormId\" value=\"806\"")
+                .as("不能误用 To Do 的 formName 去改 requestFormId")
+                .doesNotContain("name=\"requestFormId\" value=\"501\"");
+    }
+
+    @Test
+    void resolvesRequestFormIdByNameWhenSourceIdMappingWouldPickWrongForm() {
+        String xml = """
+                <custom:properties>
+                  <custom:property name="requestFormId" value="18" />
+                  <custom:property name="requestFormName" value="subform_copy" />
+                </custom:properties>
+                """;
+
+        Map<Long, Long> formIdMapping = Map.of(18L, 31L, 19L, 32L, 20L, 33L);
+        Map<String, Long> clonedFormNameToId = Map.of("y", 31L, "subform", 32L, "subform_copy", 33L);
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml,
+                Map.of(),
+                formIdMapping,
+                Map.of(),
+                Map.of(),
+                clonedFormNameToId);
+
+        assertThat(rewritten)
+                .as("requestFormId 应跟随 requestFormName='subform_copy' 解析到 33，而非按旧 ID 18→31")
+                .contains("name=\"requestFormId\" value=\"33\"")
+                .doesNotContain("name=\"requestFormId\" value=\"31\"")
+                .doesNotContain("name=\"requestFormId\" value=\"18\"");
+    }
+
+    @Test
+    void remapsUnwrappedRequestFormIdByIdMapping() {
+        String xml = "<custom:property name=\"requestFormId\" value=\"806\" />";
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml, Map.of(), Map.of(806L, 502L), Map.of());
+
+        assertThat(rewritten).contains("name=\"requestFormId\" value=\"502\"");
+    }
+
+    @Test
+    void remapsProcessGlobalActionIdsIndependentlyOfNodeActionIds() {
+        String xml = """
+                <bpmn:process id="p1">
+                  <custom:properties>
+                    <custom:property name="globalActionIds" value="[50]" />
+                    <custom:property name="globalActionNames" value="[&quot;Save&quot;]" />
+                  </custom:properties>
+                  <bpmn:userTask id="task1">
+                    <custom:properties>
+                      <custom:property name="actionIds" value="[51]" />
+                    </custom:properties>
+                  </bpmn:userTask>
+                </bpmn:process>
+                """;
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml, Map.of(), Map.of(), Map.of(50L, 1200L, 51L, 1201L));
+
+        assertThat(rewritten)
+                .as("Process Global 写在 globalActionIds，导入必须按动作 id mapping 改写，否则设计器对不上新 id 会显示 Bind to Node")
+                .contains("name=\"globalActionIds\" value=\"[1200]\"")
+                .contains("name=\"actionIds\" value=\"[1201]\"")
+                .doesNotContain("value=\"[50]\"")
+                .doesNotContain("value=\"[51]\"");
+    }
+
+    @Test
+    void remapsUnwrappedGlobalActionIdsByIdMapping() {
+        String xml = "<custom:property name=\"globalActionIds\" value=\"[50,51]\" />";
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml, Map.of(), Map.of(), Map.of(50L, 1200L, 51L, 1201L));
+
+        assertThat(rewritten).contains("name=\"globalActionIds\" value=\"[1200,1201]\"");
+    }
+
+    @Test
     void fallsBackToIdMappingWhenNameNotInClonedSide() {
         String xml = """
                 <custom:properties>

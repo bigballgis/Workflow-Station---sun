@@ -298,9 +298,10 @@ public class FunctionUnitImporter {
                     connectionIdMapping,
                     emailTemplateIdMapping,
                     connectionUidMapping);
-            // Name-based repair pass: actionIds (and formId/subTableId) that were ALREADY stale in the
-            // source package miss the id mapping above and would stay dangling — the designer/portal then
-            // shows the raw id instead of the action name. Re-resolve them by name against this unit.
+            // Name-based repair pass: actionIds / globalActionIds (and formId/subTableId) that were
+            // ALREADY stale in the source package miss the id mapping above and would stay dangling —
+            // the designer then shows Bind to Node with no node (global) or the raw id (node actions).
+            // Re-resolve them by name against this unit.
             rewrittenBpmn = staleIdFixer.fixStaleIds(
                     functionUnit.getId(), XmlEncodingUtil.smartDecode(rewrittenBpmn));
             rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, functionUnit.getCode());
