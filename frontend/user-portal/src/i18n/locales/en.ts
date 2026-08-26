@@ -333,6 +333,8 @@ export default {
     selectBusinessUnit: 'Please select business unit',
     selectRole: 'Please select role',
     selectBuAndRole: 'Please select both business unit and role',
+    delegateBuLoadFailed: 'Failed to load business units. Please try again.',
+    delegateRoleLoadFailed: 'Failed to load roles. Please try again.',
     delegatedToUser: 'Delegated to {name}',
     delegatedToBuRole: 'Delegated to {bu} / {role}',
     onBehalfOf: 'On behalf of {name}',

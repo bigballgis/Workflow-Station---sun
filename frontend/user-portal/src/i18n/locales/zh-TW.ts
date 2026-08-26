@@ -333,6 +333,8 @@ export default {
     selectBusinessUnit: '請選擇業務單元',
     selectRole: '請選擇角色',
     selectBuAndRole: '請同時選擇業務單元和角色',
+    delegateBuLoadFailed: '載入業務單元失敗，請稍後重試',
+    delegateRoleLoadFailed: '載入角色失敗，請稍後重試',
     delegatedToUser: '委託給 {name}',
     delegatedToBuRole: '委託給 {bu} / {role}',
     onBehalfOf: '代 {name} 辦理',

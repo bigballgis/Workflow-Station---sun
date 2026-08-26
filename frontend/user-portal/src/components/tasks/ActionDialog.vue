@@ -60,6 +60,7 @@
       <el-form-item
         v-if="showBuRoleSelect"
         :label="$t('task.delegateBusinessUnit')"
+        :error="buLoadError"
       >
         <el-cascader
           v-model="formData.delegatedBuId"
@@ -72,11 +73,13 @@
           :teleported="true"
           style="width: 100%"
           @change="onBuChange"
+          @visible-change="onBuVisibleChange"
         />
       </el-form-item>
       <el-form-item
         v-if="showBuRoleSelect"
         :label="$t('task.delegateRole')"
+        :error="roleLoadError"
       >
         <el-select
           v-model="formData.delegatedRoleCode"
@@ -125,7 +128,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { CascaderValue } from 'element-plus'
+import { useI18n } from 'vue-i18n'
+import { ElMessage, type CascaderValue } from 'element-plus'
 import { permissionApi, type BusinessUnit, type RoleInfo } from '@/api/permission'
 import DesignerHelpLink from '@/components/DesignerHelpLink.vue'
 
@@ -159,12 +163,16 @@ const emit = defineEmits<{
   (e: 'opened'): void
 }>()
 
+const { t } = useI18n()
 const visible = ref(props.modelValue)
 const buTree = ref<BusinessUnit[]>([])
 const buIdToCode = ref<Record<string, string>>({})
 const roleOptions = ref<Array<{ label: string; value: string }>>([])
 const buLoading = ref(false)
 const roleLoading = ref(false)
+const buLoadError = ref('')
+const roleLoadError = ref('')
+const skipGlobalError = { skipGlobalErrorHandler: true } as const
 const buCascaderProps = {
   value: 'id',
   label: 'name',
@@ -201,8 +209,9 @@ function indexBuTree(list: BusinessUnit[]) {
 async function loadBusinessUnits() {
   if (buTree.value.length > 0) return
   buLoading.value = true
+  buLoadError.value = ''
   try {
-    const resp = await permissionApi.getBusinessUnitsTree() as { data?: BusinessUnit[] } | BusinessUnit[]
+    const resp = await permissionApi.getBusinessUnitsTree(skipGlobalError) as { data?: BusinessUnit[] } | BusinessUnit[]
     const tree = Array.isArray(resp) ? resp : (resp?.data ?? [])
     buTree.value = Array.isArray(tree) ? tree : []
     buIdToCode.value = {}
@@ -210,6 +219,8 @@ async function loadBusinessUnits() {
   } catch {
     buTree.value = []
     buIdToCode.value = {}
+    buLoadError.value = t('task.delegateBuLoadFailed')
+    ElMessage.error(t('task.delegateBuLoadFailed'))
   } finally {
     buLoading.value = false
   }
@@ -217,18 +228,27 @@ async function loadBusinessUnits() {
 
 async function loadRolesForBu(buId: string) {
   roleOptions.value = []
+  roleLoadError.value = ''
   if (!buId) return
   roleLoading.value = true
   try {
-    const roleResp = await permissionApi.getBusinessUnitRoles(buId) as { data?: RoleInfo[] } | RoleInfo[]
+    const roleResp = await permissionApi.getBusinessUnitRoles(buId, skipGlobalError) as { data?: RoleInfo[] } | RoleInfo[]
     const roles = Array.isArray(roleResp) ? roleResp : (roleResp?.data ?? [])
     roleOptions.value = (Array.isArray(roles) ? roles : [])
       .filter(r => r && r.code)
       .map(r => ({ label: r.name || r.code, value: r.code }))
   } catch {
     roleOptions.value = []
+    roleLoadError.value = t('task.delegateRoleLoadFailed')
+    ElMessage.error(t('task.delegateRoleLoadFailed'))
   } finally {
     roleLoading.value = false
+  }
+}
+
+function onBuVisibleChange(open: boolean) {
+  if (open && buTree.value.length === 0) {
+    void loadBusinessUnits()
   }
 }
 
@@ -238,6 +258,7 @@ function onTargetTypeChange() {
   props.formData.delegatedBuCode = ''
   props.formData.delegatedRoleCode = ''
   roleOptions.value = []
+  roleLoadError.value = ''
   if (isDelegateBuRole.value) {
     void loadBusinessUnits()
   }
