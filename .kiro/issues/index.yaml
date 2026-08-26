@@ -2619,3 +2619,33 @@
     截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-email-to-placeholder.png
     编号说明：merge common_0731_SELF_AP 时本分支已占用 #1553（cannot-download），本条从 #1553 改为 #1556。
 
+- id: "1557"
+  status: fixed
+  fixed_at: "2026-08-26"
+  severity: major
+  category: bug
+  summary: "跨环境导入 FU 后 Process Design 的 My Request form 显示源环境数字 id（如 806），To Do form 正常"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java"
+  note: |
+    根因：BPMN userTask 同时带 formId/formName（To Do）与 requestFormId/requestFormName（My Requests）。
+    BpmnIdRewriter 只按 formName 重写 formId，requestFormId 既不走名称匹配也不走 formIdMapping，
+    源环境 id 原样入库；el-select 对不上目标环境表单列表，于是显示裸数字。
+    修复：requestFormId 与 formId 对称——先 requestFormName 再 id mapping；块外仅 id mapping。
+    已导入的 FU 需在本修复部署后重新导入（或手工重选 My Request form）。
+    验证：BpmnIdRewriterTest（含同块独立 remap + 名称优先 + 块外 id 兜底）。
+
+- id: "1558"
+  status: fixed
+  fixed_at: "2026-08-26"
+  severity: major
+  category: bug
+  summary: "跨环境导入 FU 后 Action Design 的 Process Global 变成 Bind to Node 且未选节点"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java"
+  note: |
+    根因：Process Global 写在流程级 globalActionIds；BpmnIdRewriter / ProcessBpmnStaleIdFixer
+    只 remap 节点 actionIds。导入后动作拿到新 id，BPMN 仍是源环境 id，设计器 parse 对不上，
+    loadActionBinding 把空绑定当成 Bind to Node 且 selectedNodeIds=[]。
+    修复：globalActionIds 走同一套 id mapping；staleIdFixer 按 globalActionNames 做名称补修。
+    已导入的 FU 需重新导入（或打开 Process Design 触发落库前 stale-id 修复后再看 Action Design）。
+    验证：BpmnIdRewriterTest + ProcessBpmnStaleIdFixerTest。
+
