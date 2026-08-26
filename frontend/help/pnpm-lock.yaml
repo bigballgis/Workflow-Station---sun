@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  vscode-uri: 3.1.0
+
 importers:
 
   .:
@@ -1033,8 +1036,8 @@ packages:
       terser:
         optional: true
 
-  vscode-uri@3.2.0:
-    resolution: {integrity: sha512-m2gXo3bn0G1kT9InzMf07fTbqMbGtyckj3bH5ktLO+1Ssv+yiATZ4dhwaQv9UZWxJh6E9IFGnQyjgWVDWVBDrg==}
+  vscode-uri@3.1.0:
+    resolution: {integrity: sha512-/BpdSx+yCQGnCvecbyXdxHDkuk55/G3xwnC0GqY4gmQ3j+A+g8kzzgB4Nk/SINjqn6+waqw3EgbVF2QKExkRxQ==}
 
   vue-eslint-parser@10.4.1:
     resolution: {integrity: sha512-Gk6gRDj0n/fkRa3C3l0bBheoBckUq/Rs0F/TvMWIS6nzzx67amAViMe9CkNgsP2tXyQONvGiHQESHwFtZ3aYDA==}
@@ -1452,7 +1455,7 @@ snapshots:
     dependencies:
       '@volar/language-core': 2.4.15
       path-browserify: 1.0.1
-      vscode-uri: 3.2.0
+      vscode-uri: 3.1.0
 
   '@vue/compiler-core@3.5.32':
     dependencies:
@@ -1994,7 +1997,7 @@ snapshots:
       '@types/node': 25.9.3
       fsevents: 2.3.3
 
-  vscode-uri@3.2.0: {}
+  vscode-uri@3.1.0: {}
 
   vue-eslint-parser@10.4.1(eslint@9.39.4):
     dependencies:
