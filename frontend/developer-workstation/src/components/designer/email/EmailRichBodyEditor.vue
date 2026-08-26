@@ -113,8 +113,13 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .email-rich-body-editor {
   width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .erb-toolbar-row {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -137,12 +142,17 @@ onBeforeUnmount(() => {
   line-height: 1.4;
 }
 .erb-editor-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border: 1px solid #dcdfe6;
   border-radius: 0 0 4px 4px;
   overflow: hidden;
   background: #fff;
 }
 .erb-toolbar {
+  flex-shrink: 0;
   border-bottom: 1px solid #e4e7ed;
   :deep(.w-e-toolbar) {
     flex-wrap: wrap;
@@ -165,7 +175,14 @@ onBeforeUnmount(() => {
   }
 }
 .erb-editor {
-  height: 260px;
-  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  height: auto !important;
+  overflow: hidden;
+  :deep(.w-e-text-container),
+  :deep(.w-e-scroll) {
+    min-height: 0;
+    height: 100% !important;
+  }
 }
 </style>

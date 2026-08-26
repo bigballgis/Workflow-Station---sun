@@ -3,6 +3,11 @@
     <div class="send-task-email-section">
       <div class="send-task-email-section__title">
         {{ t('properties.emailConfig') }}
+        <DesignerHelpLink
+          path="/email-send#send-task"
+          :aria-label="t('properties.emailGuideLinkAria')"
+          test-id="send-task-guide-link"
+        />
       </div>
 
       <div class="email-field-block email-to-field-wrap">
@@ -241,12 +246,14 @@
 import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties } from '@/utils/bpmnExtensions'
 import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskPropertiesState'
 import { useTaskPropertiesForms } from '@/composables/taskProperties/useTaskPropertiesForms'
 import { useSendTaskEmailAttachments } from '@/composables/taskProperties/useSendTaskEmailAttachments'
 import { useSendTaskAttachmentFieldOptions } from '@/composables/taskProperties/useSendTaskAttachmentFieldOptions'
+import { resolveOwnedSendTaskConnectionUid } from '@/composables/taskProperties/resolveOwnedSendTaskConnectionUid'
 
 const { t } = useI18n()
 
@@ -352,6 +359,20 @@ const {
   updateExtProp
 })
 
+function bindOwnedEmailConnection() {
+  const next = resolveOwnedSendTaskConnectionUid(connectionId.value, emailConnections.value)
+  if (next === connectionId.value) {
+    return
+  }
+  connectionId.value = next
+  onEmailConfigChange('connectionId', next)
+}
+
+async function loadEmailConnectionsAndBind() {
+  await loadEmailConnections()
+  bindOwnedEmailConnection()
+}
+
 function loadSendTaskProperties() {
   loadProperties()
   if (!props.element) return
@@ -361,6 +382,7 @@ function loadSendTaskProperties() {
   if (emailAttachments.value.length > 0) {
     emailAdvancedOpen.value = true
   }
+  bindOwnedEmailConnection()
 }
 
 function onAttachmentFieldChange(index: number, val: unknown) {
@@ -396,7 +418,7 @@ watch(
 )
 
 onMounted(() => {
-  loadEmailConnections()
+  void loadEmailConnectionsAndBind()
 })
 </script>
 
@@ -447,6 +469,9 @@ onMounted(() => {
   background: #fff;
 
   &__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 13px;
     font-weight: 600;
     color: #303133;

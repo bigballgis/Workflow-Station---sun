@@ -240,4 +240,30 @@ class EmailPortabilityTest {
         assertThat(rewritten).contains("name=\"emailTemplateId\" value=\"120\"");
         assertThat(rewritten).contains("name=\"emailTo\" value=\"user@example.com\"");
     }
+
+    @Test
+    void bpmnRewriter_remapsConnectionUidStoredInConnectionId() {
+        String xml = """
+                <bpmn:sendTask id="SendTask_1">
+                  <custom:properties>
+                    <custom:property name="connectionId" value="uid-source" />
+                  </custom:properties>
+                </bpmn:sendTask>
+                """;
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml,
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Map.of("uid-source", "uid-cloned"));
+
+        assertThat(rewritten).contains("name=\"connectionId\" value=\"uid-cloned\"");
+        assertThat(rewritten).doesNotContain("uid-source");
+    }
 }

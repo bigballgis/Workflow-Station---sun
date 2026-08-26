@@ -1,0 +1,58 @@
+---
+description: >-
+  New user-facing features must add a /help/ guideline under the matching menu
+  and a Formula-style ? icon that opens that article. Use extract-help-guideline.
+alwaysApply: true
+---
+
+# Help guideline + in-product `?` link
+
+When you add or change a **user-visible** capability (designer tab, dialog, Admin
+menu, Portal page — anything a person ticks, types, or saves), ship **both**:
+
+1. A Guidelines article on `frontend/help` (catalog + `NAV_TREE` menu path).
+2. A red **`?`** on that screen (same pattern as Table Design → Formula) that
+   opens the article in a new tab.
+
+Do not ship the UI without the `?`. Do not invent a second docs site.
+
+## How to write the article
+
+Follow skill **`extract-help-guideline`** (deep-documentation quality inside
+`/help/` only: layered article, exact UI, flow, cross-links, `llms.txt`).
+New articles: output the 提取清单, **wait for 确认**, then write
+`frontend/help`. User already asked to rewrite named pages: skip the清单.
+Hang the leaf under the **same menu** as the product (DW sidebar / Function Unit
+tab / Admin / Portal). Capture figures with
+`frontend/scripts/capture-help-guide-images.mjs` and **redact** emails, names,
+and process ids before they land in `public/guides/`. After replacing PNGs, bump
+`GUIDE_FIGURE_REV` in `GuideArticle.vue`. Keep samples aligned with those
+figures (Purchase Request: `help_pr` / `help_pr_line`).
+
+## How to add the `?`
+
+Copy `frontend/developer-workstation/src/components/designer/DesignerHelpLink.vue`
+(or the same markup: `QuestionFilled`, `target="_blank"`, `rel="noopener noreferrer"`).
+
+```vue
+<DesignerHelpLink
+  path="/email-send#connection"
+  :aria-label="t('connection.guideLinkAria')"
+  test-id="connection-guide-link"
+/>
+```
+
+URL helper: `helpGuideAbsoluteUrl()` in
+`frontend/developer-workstation/src/utils/computedFieldGuide.ts`
+→ `${origin}/help/<id>` (not `/dev/help/…`).
+
+Place the icon **next to the feature title** (dialog header, toolbar beside the
+primary action, or properties section heading) — not buried in a tooltip-only
+control.
+
+i18n: `guideLinkAria` in en / zh-CN / zh-TW in the same change.
+
+## When this does not apply
+
+Pure backend/API, schema-only, tests, deploy, or agent rules/skills with no
+designer/admin/portal surface.

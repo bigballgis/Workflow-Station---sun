@@ -28,7 +28,7 @@
 #
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
-#   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend, platform-login-frontend
+#   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend, platform-login-frontend, platform-help-frontend
 #   Edge:     edge-frontend (nginx single-origin — no Maven/pnpm; restarts container from compose)
 
 param(
@@ -121,6 +121,10 @@ $ServiceRegistry = @{
     }
     "platform-login-frontend" = @{
         FrontendDir = "frontend/login"
+        Type        = "frontend"
+    }
+    "platform-help-frontend" = @{
+        FrontendDir = "frontend/help"
         Type        = "frontend"
     }
     "edge-frontend" = @{
@@ -971,7 +975,8 @@ if (-not $SkipFrontend) {
         @{ Name = "admin-center-frontend"; Dir = "frontend/admin-center" },
         @{ Name = "user-portal-frontend"; Dir = "frontend/user-portal" },
         @{ Name = "developer-workstation-frontend"; Dir = "frontend/developer-workstation" },
-        @{ Name = "platform-login-frontend"; Dir = "frontend/login" }
+        @{ Name = "platform-login-frontend"; Dir = "frontend/login" },
+        @{ Name = "platform-help-frontend"; Dir = "frontend/help" }
     )
 
     foreach ($fe in $frontends) {

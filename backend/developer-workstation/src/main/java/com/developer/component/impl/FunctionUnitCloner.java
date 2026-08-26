@@ -231,7 +231,8 @@ class FunctionUnitCloner {
                     clonedFormNameToId,
                     sourceToNewTableName,
                     connectionIdMapping,
-                    emailTemplateIdMapping);
+                    emailTemplateIdMapping,
+                    connectionUidMapping);
             rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, cloned.getCode());
             ProcessDefinition clonedProcess = ProcessDefinition.builder()
                     .functionUnit(cloned)

@@ -327,6 +327,11 @@ final class BpmnMiXmlSupport {
         return findFirstPropertyValue(subProcessElement, "assigneeField");
     }
 
+    /** Designer-assigned {@code dw_table_definitions.id} for the sub-table this MI node targets. */
+    static String extractSubTableIdFromSubProcess(Element subProcessElement) {
+        return findFirstPropertyValue(subProcessElement, "subTableId");
+    }
+
     /**
      * MI 子任务的分派模式：{@code user}（默认，逐行读用户 id）或 {@code role}（逐行读 role/BU code）。
      * 由设计器写在子流程内层 UserTask 的自定义扩展属性上。

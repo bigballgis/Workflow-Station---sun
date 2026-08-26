@@ -2576,3 +2576,46 @@
     window only (no Download).
     screenshot 2026-08-25_meeting-000016-preview-no-download.png.
 
+- id: "1554"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: major
+  category: bug
+  summary: "Clone 后 Send Task Connection 显示源 connectionUid GUID，而非本 FU 连接名"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java"
+  note: |
+    根因：面板 value=connectionUid；clone 发新 UUID，BpmnIdRewriter 只按 Long PK 改 connectionId。
+    Import 默认保留包内 connectionUid，BPMN 仍能对上，不是同一症状；importer/rollback 仍传入 uid mapping 以防将来 uid 变更。
+    已 clone FU：设计器在本 FU 仅一条出站连接时把未匹配 uid 绑到该连接。
+    验证：BpmnIdRewriterTest + EmailPortabilityTest + resolveOwnedSendTaskConnectionUid.test.ts；
+    Playwright frontend/scripts/verify-send-task-connection-clone.mjs 2/2 VincentTest2；
+    截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-connection-clone.png
+
+- id: "1555"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: minor
+  category: bug
+  summary: "Send Task 邮件模板 ${variable} 无值时发出字面量占位符"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/util/EmailTemplateResolver.java"
+  note: |
+    根因：resolveBareSubTableFields 在变量缺失/null 且无子表回退时保留 matcher.group(0)（如 ${subject}）。
+    未改 BpmnExtensionUtils.resolveExpression（To/Cc/From 仍用）。lookupField 缺失本已空串。
+    主题整段解析后仍空白会触发 email.send_task.missing_subject，未改为允许空主题发信。
+    验证：EmailTemplateResolverTest 18/18；mvn package；workflow-engine healthy。
+
+- id: "1556"
+  status: fixed
+  fixed_at: "2026-08-25"
+  severity: minor
+  category: bug
+  summary: "DW Send Task To/Cc/Bcc vue-i18n ate braces so UI showed $'assigneeEmail"
+  file: "frontend/developer-workstation/src/i18n/locales/en.ts"
+  note: |
+    根因：vue-i18n 把 {assigneeEmail} 当插值；"$'{assigneeEmail}'" 把引号写在 { 前，
+    界面变成 $'assigneeEmail。改为 "${'{'}assigneeEmail{'}'}" 显示 ${assigneeEmail}。
+    Cc/Bcc 同修。单测 send-task-email-to-i18n.test.ts；
+    Playwright frontend/scripts/verify-send-task-email-to.mjs 4/4；
+    截图 frontend/developer-workstation/verification-screenshots/2026-08-25_send-task-email-to-placeholder.png
+    编号说明：merge common_0731_SELF_AP 时本分支已占用 #1553（cannot-download），本条从 #1553 改为 #1556。
+

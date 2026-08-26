@@ -15,7 +15,8 @@ import java.util.regex.Pattern;
  *   <li>{@code ${subTableHtml:bindingId:col1=Header 1,col2=Header 2}} — selected columns with custom headers</li>
  *   <li>{@code ${subTableField:bindingId:fieldName}} — scalar from sub-table rows</li>
  *   <li>{@code ${lookupField:sourceField:targetAttr}} — attribute on Lookup/Related embedded RT row</li>
- *   <li>{@code ${variable}} — top-level process variable; sub-table columns fallback when absent</li>
+ *   <li>{@code ${variable}} — top-level process variable; sub-table columns fallback when absent.
+ *       Missing or null values resolve to empty (the placeholder is not left in the output).</li>
  * </ul>
  */
 public final class EmailTemplateResolver {
@@ -117,18 +118,23 @@ public final class EmailTemplateResolver {
                 matcher.appendReplacement(out, Matcher.quoteReplacement(matcher.group(0)));
                 continue;
             }
-            if (variables.containsKey(name) && variables.get(name) != null) {
-                matcher.appendReplacement(out, Matcher.quoteReplacement(variables.get(name).toString()));
+            if (variables.containsKey(name)) {
+                matcher.appendReplacement(out, Matcher.quoteReplacement(displayValue(variables.get(name))));
                 continue;
             }
             String resolved = SubTableFieldResolver.resolveFieldAcrossSubTables(variables, name);
-            if (StringUtils.hasText(resolved)) {
-                matcher.appendReplacement(out, Matcher.quoteReplacement(resolved));
-            } else {
-                matcher.appendReplacement(out, Matcher.quoteReplacement(matcher.group(0)));
-            }
+            matcher.appendReplacement(out, Matcher.quoteReplacement(
+                    StringUtils.hasText(resolved) ? resolved : ""));
         }
         matcher.appendTail(out);
         return out.toString();
+    }
+
+    private static String displayValue(Object value) {
+        if (value == null) {
+            return "";
+        }
+        String text = value.toString();
+        return StringUtils.hasText(text) ? text : "";
     }
 }

@@ -131,7 +131,7 @@ class RelationTableStatusBugConditionTest {
     void createTable_shouldReturnInitStatus() {
         CreateRelationTableRequest request = buildCreateRequest("new_table");
 
-        when(tableDefinitionRepository.existsByTableName("new_table")).thenReturn(false);
+        when(tableDefinitionRepository.existsByTableNameIgnoreCase("new_table")).thenReturn(false);
         when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                 .thenAnswer(inv -> {
                     RelationTableDefinition saved = inv.getArgument(0);

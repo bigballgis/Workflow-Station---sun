@@ -5,6 +5,11 @@
       <el-button @click="loadRules" :loading="loading">
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
+      <DesignerHelpLink
+        path="/email-monitor"
+        :aria-label="t('emailMonitor.guideLinkAria')"
+        test-id="email-monitor-guide-link"
+      />
     </div>
 
     <el-alert
@@ -60,11 +65,20 @@
 
     <el-dialog
       v-model="showFormDialog"
-      :title="editingId ? t('emailMonitor.edit') : t('emailMonitor.create')"
       width="900px"
       destroy-on-close
       top="5vh"
     >
+      <template #header>
+        <div class="designer-help-dialog-title">
+          <span class="el-dialog__title">{{ editingId ? t('emailMonitor.edit') : t('emailMonitor.create') }}</span>
+          <DesignerHelpLink
+            path="/email-monitor"
+            :aria-label="t('emailMonitor.guideLinkAria')"
+            test-id="email-monitor-dialog-guide-link"
+          />
+        </div>
+      </template>
       <el-form :model="form" label-position="top" class="monitor-form">
         <div class="form-grid">
           <el-form-item :label="t('emailMonitor.name')" required>
@@ -121,6 +135,7 @@ import {
 import { connectionApi, type EmailConnection } from '@/api/connection'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
 
 const props = defineProps<{ functionUnitId: number }>()
@@ -291,7 +306,15 @@ onMounted(loadRules)
 .designer-toolbar {
   margin-bottom: 16px;
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+.designer-help-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 28px;
 }
 .monitor-form {
   .form-grid {

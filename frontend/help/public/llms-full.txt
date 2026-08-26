@@ -1,0 +1,50 @@
+# Workflow Station Guidelines (English bundle)
+
+Portal: /help/. Audience: designers. Not source code.
+
+## Computed field formulas (/help/computed-fields)
+
+A computed column fills itself. People cannot type into it on forms. Save uses the server formula engine. Formula dialog Calculate is preview only.
+
+Order: open Table Design and the table → tick Computed → open Formula → save the table.
+
+Screenshot table: Purchase Request, help_pr. Computed: window_days, line_count, grand_total, over_budget. Sub-table help_pr_line has line_total = quantity * unit_price.
+
+Samples:
+- This row: quantity * unit_price
+- Related rows (main table only): SUM(help_pr_line.line_total), COUNT(help_pr_line)
+- Sub-table reads main: help_pr.request_title (column must not itself be computed; do not wrap in SUM)
+- Dates: end_date - start_date ; DATEDIFF(start_date, end_date)
+- Logic: IF(grand_total > 5000, "Y", "N")
+
+Result type must match Data Type. Fail: block save shows #ERR; leave blank saves the rest of the form with this column empty.
+
+Admin Relation Tables are standalone: no MAIN/SUB lookup, no SUM related-row functions. See /help/computed-fields#relation.
+
+## Send email (/help/email-send)
+
+Three pieces: Outbound connection, Email Template, Send Task. Subject and body live on the template, not the node.
+
+Order: Outbound connection → template (enabled) → Send Task → To + Connection + Template → save.
+
+SMTP host/port/TLS come from Admin Center → System Config. Same email cannot have two connections in the same direction.
+
+Template example: PR Approved Notice. Insert Variable for main fields, lookup attributes, or a sub-table (rendered as a table). Visual and HTML panes; preview is design-time only.
+
+Send Task required: To, Connection, Template. From override optional. Failures: missing connection, empty To, missing/disabled template, empty subject after variables, attachment not a FILE field, no global SMTP.
+
+Related: /help/email-monitor , /help/computed-fields
+
+## Email Monitor (/help/email-monitor)
+
+Starts a process when mail arrives.
+
+Order: Inbound connection → monitor template → bind sample text to main-table fields → Inbound Email Trigger on Start event → save binding → Deploy.
+
+Do not set From/Subject filters on the template; those belong only on the Start Event. Do not set Process Key on the template.
+
+Examples: template Vendor quote to PR; folder INBOX; extraction to request_title; Subject Filter Quote on StartEvent_Email.
+
+Every enabled monitor template must be bound before Deploy. Bound templates cannot be deleted until unbound.
+
+Related: /help/email-send#connection , /help/computed-fields

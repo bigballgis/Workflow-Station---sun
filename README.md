@@ -68,6 +68,7 @@ Enterprise low-code workflow platform for HSBC, providing visual process design,
 - `frontend/developer-workstation` - Developer tools UI
 - `frontend/user-portal` - End user portal UI
 - `frontend/login` - Unified login shell（`/login/`，与 K8S `deployment-platform-login-frontend.yaml`、本地 Compose `platform-login-frontend` 对应）
+- `frontend/help` - Guidelines portal（`/help/`，无登录；后续可继续加文章）
 
 ## Quick Start
 
@@ -79,7 +80,7 @@ Enterprise low-code workflow platform for HSBC, providing visual process design,
 
 ### Local Development
 
-**推荐**：使用开发 Compose 一键构建并启动（含 PostgreSQL、Redis、Kafka、Kong、四后端、三业务前端、**platform-login**、**edge-nginx** 单源入口等），见 `BUILD_GUIDE.md` §8。
+**推荐**：使用开发 Compose 一键构建并启动（含 PostgreSQL、Redis、Kafka、Kong、四后端、三业务前端、**platform-login**、**platform-help**、**edge-nginx** 单源入口等），见 `BUILD_GUIDE.md` §8。
 
 ```powershell
 cd deploy/environments/dev

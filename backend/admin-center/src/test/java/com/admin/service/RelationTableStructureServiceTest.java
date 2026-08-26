@@ -142,7 +142,7 @@ class RelationTableStructureServiceTest {
         void shouldCreateTableSuccessfully() {
             CreateRelationTableRequest request = buildCreateRequest("test_table");
 
-            when(tableDefinitionRepository.existsByTableName("test_table")).thenReturn(false);
+            when(tableDefinitionRepository.existsByTableNameIgnoreCase("test_table")).thenReturn(false);
             stubNoDwTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> {
@@ -179,7 +179,7 @@ class RelationTableStructureServiceTest {
         void shouldThrowWhenTableNameDuplicate() {
             CreateRelationTableRequest request = buildCreateRequest("existing_table");
 
-            when(tableDefinitionRepository.existsByTableName("existing_table")).thenReturn(true);
+            when(tableDefinitionRepository.existsByTableNameIgnoreCase("existing_table")).thenReturn(true);
 
             assertThatThrownBy(() -> service.createTable(request))
                     .isInstanceOf(RelationTableNameDuplicateException.class);
@@ -213,7 +213,7 @@ class RelationTableStructureServiceTest {
                     .fieldDefinitions(List.of(field1, field2))
                     .build();
 
-            when(tableDefinitionRepository.existsByTableName("multi_field_table")).thenReturn(false);
+            when(tableDefinitionRepository.existsByTableNameIgnoreCase("multi_field_table")).thenReturn(false);
             stubNoDwTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> {
@@ -280,7 +280,7 @@ class RelationTableStructureServiceTest {
             RelationTableDefinition existing = buildTableDefinition(1L, "old_name");
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
-            when(tableDefinitionRepository.existsByTableNameAndIdNot("new_name", 1L)).thenReturn(false);
+            when(tableDefinitionRepository.existsByTableNameIgnoreCaseAndIdNot("new_name", 1L)).thenReturn(false);
             stubNoDwTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
@@ -300,7 +300,7 @@ class RelationTableStructureServiceTest {
             RelationTableDefinition existing = buildTableDefinition(1L, "old_name");
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
-            when(tableDefinitionRepository.existsByTableNameAndIdNot("taken_name", 1L)).thenReturn(true);
+            when(tableDefinitionRepository.existsByTableNameIgnoreCaseAndIdNot("taken_name", 1L)).thenReturn(true);
 
             UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
                     .tableName("taken_name")

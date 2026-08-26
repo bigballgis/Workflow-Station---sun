@@ -1,8 +1,15 @@
 <template>
-  <el-collapse-item
-    :title="t('emailMonitor.startEvent.panelTitle')"
-    name="emailMonitor"
-  >
+  <el-collapse-item name="emailMonitor">
+    <template #title>
+      <span class="start-email-monitor-title">
+        {{ t('emailMonitor.startEvent.panelTitle') }}
+        <DesignerHelpLink
+          path="/email-monitor"
+          :aria-label="t('emailMonitor.startEvent.guideLinkAria')"
+          test-id="start-event-monitor-guide-link"
+        />
+      </span>
+    </template>
     <div v-loading="loading" class="start-email-monitor">
       <el-alert
         v-if="templates.length === 0"
@@ -85,6 +92,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import DesignerHelpLink from '@/components/designer/DesignerHelpLink.vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { useStartEventEmailMonitor } from '@/composables/eventProperties/useStartEventEmailMonitor'
 
@@ -120,6 +128,11 @@ const {
 </script>
 
 <style lang="scss" scoped>
+.start-email-monitor-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .start-email-monitor {
   .form-tip {
     font-size: 11px;

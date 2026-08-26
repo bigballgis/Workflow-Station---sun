@@ -1,6 +1,5 @@
 package com.portal.component;
 
-import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
@@ -20,7 +19,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -229,8 +227,9 @@ public class MiCollectionVariableBuilder {
                             continue;
                         }
                         String bpmnSubTableName = BpmnMiXmlSupport.findFirstPropertyValue(subProcess, "subTableName");
+                        String bpmnSubTableId = BpmnMiXmlSupport.extractSubTableIdFromSubProcess(subProcess);
                         buildMiCollectionVariable(variables, collectionVariableName, assigneeField, bpmnSubTableName,
-                                roleField, buField);
+                                bpmnSubTableId, roleField, buField);
                         return;
                     }
                     List<String> spOut = BpmnMiXmlSupport.getDirectChildTextValues(subProcess, "outgoing");
@@ -267,8 +266,8 @@ public class MiCollectionVariableBuilder {
 
     /**
      * Builds multi-instance collection variable from __subTables__.
-     * collectionVariableName is often {@code multiInstance_{subTableName}_collection}; PK resolved from PG / designer metadata first.
-     * For JSON-only sub-tables (no physical table), fuzzy-match table name via {@code dw_table_definitions}; else infer single {@code id} from {@code __subTables__}.
+     * PK columns are resolved solely from the BPMN-recorded {@code subTableId} ({@code dw_table_definitions.id});
+     * table names are not used for lookup since they are not guaranteed globally unique (clone / re-import).
      * <p>
      * __subTables__ often has multiple binding lists; naive flattening treats any row with target PK columns and assignee as an MI element
      * (e.g. multiple sub-tables with column {@code id}) creates far more child tasks than expected after the prerequisite task. Each map value list is scored separately,
@@ -276,46 +275,25 @@ public class MiCollectionVariableBuilder {
      */
     @SuppressWarnings("unchecked")
     private void buildMiCollectionVariable(Map<String, Object> variables, String collectionVariableName,
-                                          String assigneeField, String bpmnSubTableName,
+                                          String assigneeField, String bpmnSubTableName, String bpmnSubTableId,
                                           String roleField, String buField) {
         // 逐行分派：一行只要 assigneeField 或 roleField 任一有值即可纳入 MI（场景 C 混用）。
         boolean hasAssigneeField = assigneeField != null && !assigneeField.isBlank();
         boolean hasRoleField = roleField != null && !roleField.isBlank();
         Object subTablesObj = variables.get("__subTables__");
         if (!(subTablesObj instanceof Map)) {
-            log.warn("[MI] No __subTables__ found, setting empty collection for {}", collectionVariableName);
-            variables.put(collectionVariableName, List.of());
-            return;
+            throw new IllegalStateException(
+                    "[MI] No __subTables__ found for collection '" + collectionVariableName + "'");
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
 
-        String tokenFromCollectionVar = parseSubTableNameFromMiCollectionVariable(collectionVariableName);
-        MiSubTablePkResult pkResult = resolveMiSubTablePk(tokenFromCollectionVar);
-        if (pkResult == null && bpmnSubTableName != null && !bpmnSubTableName.isBlank()) {
-            String trimmed = bpmnSubTableName.trim();
-            if (tokenFromCollectionVar == null || !trimmed.equalsIgnoreCase(tokenFromCollectionVar)) {
-                pkResult = resolveMiSubTablePk(trimmed);
-            }
-        }
-        if ((pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty())
-                && tokenFromCollectionVar == null
-                && collectionVariableName != null
-                && collectionVariableName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            pkResult = resolveMiSubTablePk(collectionVariableName.trim());
-        }
-        if ((pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty())) {
-            pkResult = inferMiPkFromJsonSubTables(subTables, assigneeField, roleField, collectionVariableName);
-        }
-
+        MiSubTablePkResult pkResult = resolveMiSubTablePkById(bpmnSubTableId);
         if (pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty()) {
-            log.warn(
-                    "[MI] Cannot resolve primary key for multi-instance collection '{}' (parsed token='{}', bpmnSubTableName='{}'). "
-                            + "No PG table match, designer metadata match, or inferable JSON id column. Setting empty collection.",
-                    collectionVariableName,
-                    tokenFromCollectionVar,
-                    bpmnSubTableName);
-            variables.put(collectionVariableName, List.of());
-            return;
+            throw new IllegalStateException(
+                    "[MI] Cannot resolve primary key for multi-instance collection '" + collectionVariableName
+                            + "' (subTableId='" + bpmnSubTableId + "', bpmnSubTableName='" + bpmnSubTableName
+                            + "'). BPMN MI node has no valid subTableId — re-save the process design so the "
+                            + "designer writes subTableId onto the MI subProcess.");
         }
         List<String> pkCols = pkResult.pkCols();
 
@@ -412,151 +390,58 @@ public class MiCollectionVariableBuilder {
         }
 
         variables.put(collectionVariableName, collection);
-        log.info("[MI] Built collection '{}' with {} items, assigneeField='{}', roleField='{}', collectionVarMiddleToken='{}', resolvedTable='{}'",
-                collectionVariableName, collection.size(), assigneeField, roleField,
-                tokenFromCollectionVar, pkResult.resolvedTable());
+        log.info("[MI] Built collection '{}' with {} items, assigneeField='{}', roleField='{}', resolvedTable='{}'",
+                collectionVariableName, collection.size(), assigneeField, roleField, pkResult.resolvedTable());
     }
 
     /**
-     * Result of resolving MI row identity: Postgres table id, designer table_name, or JSON-inferred sentinel.
+     * Result of resolving MI row identity: the designer's {@code table_name} and its PK columns.
      */
     private record MiSubTablePkResult(String resolvedTable, List<String> pkCols) {
     }
 
     /**
-     * Resolves the logical segment in a BPMN collection variable (e.g. {@code participants}) to primary-key column names.
-     * Order: physical table exact/fuzzy → {@code dw_table_definitions} fuzzy (JSON-only sub-tables often have designer metadata only).
+     * Resolves the MI sub-table's primary key columns from the BPMN-recorded {@code dw_table_definitions.id}
+     * (written by the designer as {@code subTableId} on the MI subProcess). This is the only supported lookup:
+     * table names are not globally unique (clone / re-import can produce duplicates or case variants), so any
+     * name-based match risks silently resolving to the wrong Function Unit's table. Physical-table PK resolution
+     * failures and "no such subTableId" are both reported as errors, not swallowed.
      */
-    private MiSubTablePkResult resolveMiSubTablePk(String middleSegment) {
-        if (middleSegment == null || middleSegment.isBlank()) {
+    private MiSubTablePkResult resolveMiSubTablePkById(String subTableId) {
+        if (subTableId == null || subTableId.isBlank()) {
             return null;
         }
-        String token = middleSegment.trim();
-        if (!token.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            return null;
-        }
-
+        long id;
         try {
-            List<String> pk = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, token);
-            return new MiSubTablePkResult(token, pk);
-        } catch (Exception ignored) {
+            id = Long.parseLong(subTableId.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("[MI] BPMN subTableId is not a valid dw_table_definitions id: '" + subTableId + "'", e);
         }
 
-        try {
-            List<String> names = jdbcTemplate.queryForList(
-                    """
-                            SELECT table_name FROM information_schema.tables
-                            WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
-                              AND lower(table_name) = lower(?)
-                            LIMIT 1
-                            """,
-                    String.class,
-                    token);
-            if (!names.isEmpty()) {
-                String physical = names.get(0);
-                List<String> pk = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, physical);
-                if (!physical.equals(token)) {
-                    log.info("[MI] Resolved MI sub-table token '{}' to physical table '{}' (case variant)", token, physical);
-                }
-                return new MiSubTablePkResult(physical, pk);
-            }
-        } catch (Exception e) {
-            log.debug("[MI] Case-insensitive exact match failed for token={}: {}", token, e.getMessage());
-        }
-
-        if (token.length() < 4) {
-            log.debug("[MI] Skip fuzzy table search for very short token '{}'", token);
-            return null;
-        }
-
-        try {
-            List<String> names = jdbcTemplate.queryForList(
-                    """
-                            SELECT table_name FROM information_schema.tables
-                            WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
-                              AND (
-                                lower(table_name) LIKE '%' || lower(?)
-                                OR lower(table_name) LIKE lower(?) || '%'
-                              )
-                            ORDER BY
-                              CASE WHEN lower(table_name) = lower(?) THEN 0 ELSE 1 END,
-                              length(table_name) ASC
-                            LIMIT 24
-                            """,
-                    String.class,
-                    token,
-                    token,
-                    token);
-            for (String physical : names) {
-                try {
-                    List<String> pk = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, physical);
-                    log.info("[MI] Resolved MI sub-table token '{}' to physical table '{}' (fuzzy schema match)", token, physical);
-                    return new MiSubTablePkResult(physical, pk);
-                } catch (Exception ignored) {
-                }
-            }
-        } catch (Exception e) {
-            log.debug("[MI] Fuzzy table search failed for token={}: {}", token, e.getMessage());
-        }
-
-        if (token.length() >= 4) {
-            try {
-                List<String> designerNames = jdbcTemplate.query(
-                        """
-                                SELECT td.table_name
-                                FROM dw_table_definitions td
-                                WHERE lower(td.table_name) LIKE '%' || lower(?) || '%'
-                                   OR lower(?) LIKE '%' || lower(td.table_name) || '%'
-                                ORDER BY
-                                  CASE WHEN lower(td.table_name) = lower(?) THEN 0 ELSE 1 END,
-                                  length(td.table_name) ASC,
-                                  td.id DESC
-                                LIMIT 24
-                                """,
+        String tableName = jdbcTemplate.query(
+                        "SELECT table_name FROM dw_table_definitions WHERE id = ?",
                         (rs, i) -> rs.getString(1),
-                        token,
-                        token,
-                        token);
-                Set<String> tried = new HashSet<>();
-                for (String designerTable : designerNames) {
-                    if (designerTable == null || !tried.add(designerTable.toLowerCase(Locale.ROOT))) {
-                        continue;
-                    }
-                    try {
-                        List<String> pk = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, designerTable);
-                        log.info("[MI] Resolved MI token '{}' to designer table '{}' (dw_table_definitions / no physical table required)",
-                                token, designerTable);
-                        return new MiSubTablePkResult(designerTable, pk);
-                    } catch (Exception ignored) {
-                    }
-                }
-            } catch (Exception e) {
-                log.debug("[MI] Designer metadata fuzzy match failed for token={}: {}", token, e.getMessage());
-            }
-        }
+                        id)
+                .stream().findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "[MI] BPMN subTableId " + id + " does not match any dw_table_definitions row "
+                                + "(sub-table was renamed/deleted since the process was designed; re-save the process design)"));
 
-        return null;
-    }
-
-    /**
-     * When physical/designer table names do not match: if {@code __subTables__} rows have non-empty {@code id} and assignee, use single-column id as row key (JSON sub-table).
-     */
-    private MiSubTablePkResult inferMiPkFromJsonSubTables(Map<String, Object> subTables, String assigneeField,
-                                                          String roleField, String collectionVariableName) {
-        boolean hasAssignee = assigneeField != null && !assigneeField.isBlank();
-        boolean hasRole = roleField != null && !roleField.isBlank();
-        if (subTables == null || subTables.isEmpty() || (!hasAssignee && !hasRole)) {
-            return null;
+        List<String> pkCols = jdbcTemplate.query(
+                """
+                        SELECT fd.field_name
+                        FROM dw_field_definitions fd
+                        WHERE fd.table_id = ?
+                          AND COALESCE(fd.is_primary_key, false) = true
+                        ORDER BY fd.sort_order ASC, fd.id ASC
+                        """,
+                (rs, i) -> rs.getString(1),
+                id);
+        if (pkCols.isEmpty()) {
+            throw new IllegalStateException(
+                    "[MI] Sub-table '" + tableName + "' (id=" + id + ") has no primary-key field defined in dw_field_definitions");
         }
-        List<String> idPk = List.of("id");
-        // JSON id 推断只依据「行是否含 id + (assignee 或 role) 资格字段」。
-        List<Map<String, Object>> rows = selectRowsForMiCollection(subTables, idPk, assigneeField, roleField);
-        if (rows.isEmpty()) {
-            log.debug("[MI] JSON id inference found no eligible rows for collection '{}'", collectionVariableName);
-            return null;
-        }
-        log.info("[MI] Inferred PK [id] for '{}': {} eligible JSON sub-table row(s)", collectionVariableName, rows.size());
-        return new MiSubTablePkResult("__json_id__", idPk);
+        return new MiSubTablePkResult(tableName, pkCols);
     }
 
     /**
@@ -636,20 +521,6 @@ public class MiCollectionVariableBuilder {
             n++;
         }
         return n;
-    }
-
-    /**
-     * {@code multiInstance_{subTableName}_collection} → physical sub-table name.
-     */
-    private static String parseSubTableNameFromMiCollectionVariable(String collectionVariableName) {
-        if (collectionVariableName == null
-                || !collectionVariableName.startsWith("multiInstance_")
-                || !collectionVariableName.endsWith("_collection")) {
-            return null;
-        }
-        return collectionVariableName.substring(
-                "multiInstance_".length(),
-                collectionVariableName.length() - "_collection".length());
     }
 
     private void enqueueSequenceFlowTargets(Document document, String flowId, Deque<String> frontier) {

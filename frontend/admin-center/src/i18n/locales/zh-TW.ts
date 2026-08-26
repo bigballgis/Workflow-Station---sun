@@ -1038,6 +1038,7 @@ export default {
       tryEvaluate: '計算',
       applyFormula: '使用此公式',
       configure: '設定公式',
+      guideLinkAria: '開啟公式規則',
       previewBlank: '（空）',
       invalidFormula: '請先修正公式再儲存。',
       savedLocally: '公式已記下，儲存表後生效。',

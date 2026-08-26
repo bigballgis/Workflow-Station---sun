@@ -1,0 +1,32 @@
+# Workflow Station Guidelines
+
+Human-facing designer, Admin, and Portal guidelines. No login.
+Canonical site: /help/ (edge: http://localhost:3000/help/).
+
+Do not invent UI labels. Ground answers in these articles and the screenshots under /help/guides/.
+
+## Index by job
+
+- /help/computed-fields — Computed field formulas (Table Design; Admin Relation Tables #relation)
+- /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task)
+- /help/email-monitor — Email Monitor (inbound connection, monitor template, Start Event binding)
+
+## Figures
+
+Screenshots are from a Purchase Request Function Unit.
+Main table: help_pr. Sub-table: help_pr_line.
+Emails in figures are redacted to user@example.com.
+
+- /help/guides/dw-table-design.png
+- /help/guides/dw-connections.png
+- /help/guides/dw-connections-inbound.png
+- /help/guides/dw-email-templates.png
+- /help/guides/dw-email-body.png
+- /help/guides/dw-email-monitors.png
+- /help/guides/dw-send-task.png
+- /help/guides/dw-start-event.png
+
+## Full bundle
+
+See /help/llms-full.txt for a compact English extract of the articles.
+Keep this file in sync with frontend/help/src/guidelines.ts.

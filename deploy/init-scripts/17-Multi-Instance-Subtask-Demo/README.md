@@ -12,8 +12,9 @@ Hand-maintained SQL init for Function Unit `Multi-Instance Subtask Demo` (`fu-20
 | `03-set-main-table-request-id-config.sql` | Patch `dw_table_definitions.request_id_config` on MAIN (`I` + `id`, separator `_`); included in fresh `00-init-kk.sql` |
 | `04-create-meeting-remark-physical-table.sql` | Creates the physical `meeting_remark` table (DDL only) backing the "Add Remark" FORM_POPUP action |
 | `05-add-meeting-remark-inline-form-to-subtask.sql` | Patches form 50192 ("Sub task") to add the "Meeting Remark" Inline Form widget (`_bindingId` 50635) to the top-level rule array, nested after the "Participants" Inline Form — the underlying binding/subForm/subListView definitions were already in `00-init-kk.sql`, only the widget node in the rule array and the corresponding `field_permissions` entries were missing; already folded into `00-init-kk.sql`, kept here for patching an existing DB |
+| `06-add-subtask-inline-form-subtable-lookup-notes-js.sql` | Patches form 50192's `subForms["50544"]` rule (the "Sub task" inline-form itself, bound via `_bindingId` 50544) to add a "Reviewer" lookup field (sys_users, `full_name`), a `subTable` field reusing the existing "People" binding (50547), and a `recordNote` component with `scope: "RECORD"` ("Sub Task Notes"); also adds a component-level `on.change` script (`$FNX:`) to the existing "Assignee" lookup that auto-fills the `name` field from the picked user row; already folded into `00-init-kk.sql`, kept here for patching an existing DB |
 
-Docker first-time init loads `00-init-kk.sql` and `03-set-main-table-request-id-config.sql` automatically via `00-init-all.sh` (Step 4d). `01`, `02`, `04`, and `05` are **not** wired into `00-init-all.sh` — apply them manually (see below) when standing up a DB that needs them.
+Docker first-time init loads `00-init-kk.sql` and `03-set-main-table-request-id-config.sql` automatically via `00-init-all.sh` (Step 4d). `01`, `02`, `04`, `05`, and `06` are **not** wired into `00-init-all.sh` — apply them manually (see below) when standing up a DB that needs them.
 
 ### Apply manually
 
@@ -27,6 +28,7 @@ Or via Docker:
 Get-Content deploy/init-scripts/17-Multi-Instance-Subtask-Demo/00-init-kk.sql | docker exec -i platform-postgres-dev psql -v ON_ERROR_STOP=1 -U platform_dev -d workflow_platform_dev
 Get-Content deploy/init-scripts/17-Multi-Instance-Subtask-Demo/04-create-meeting-remark-physical-table.sql | docker exec -i platform-postgres-dev psql -v ON_ERROR_STOP=1 -U platform_dev -d workflow_platform_dev
 Get-Content deploy/init-scripts/17-Multi-Instance-Subtask-Demo/05-add-meeting-remark-inline-form-to-subtask.sql | docker exec -i platform-postgres-dev psql -v ON_ERROR_STOP=1 -U platform_dev -d workflow_platform_dev
+Get-Content deploy/init-scripts/17-Multi-Instance-Subtask-Demo/06-add-subtask-inline-form-subtable-lookup-notes-js.sql | docker exec -i platform-postgres-dev psql -v ON_ERROR_STOP=1 -U platform_dev -d workflow_platform_dev
 ```
 
-Use `01-*` / `02-*` only when patching an existing database without re-running the full init. `04-*` and `05-*` are additive/idempotent — safe to run after `00-*` on both a fresh install and an already-drifted database (both are already folded into `00-init-kk.sql` for fresh installs, so only needed when patching an existing DB that predates them).
+Use `01-*` / `02-*` only when patching an existing database without re-running the full init. `04-*`, `05-*`, and `06-*` are additive/idempotent — safe to run after `00-*` on both a fresh install and an already-drifted database (all already folded into `00-init-kk.sql` for fresh installs, so only needed when patching an existing DB that predates them).

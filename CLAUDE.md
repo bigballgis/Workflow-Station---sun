@@ -34,6 +34,7 @@
 @.cursor/rules/debug-mode-docker-workflow.mdc
 @.cursor/rules/error-handling-governance.mdc
 @.cursor/rules/frontend-screenshot-verification.mdc
+@.cursor/rules/help-guideline-link.mdc
 @.cursor/rules/issue-radar.mdc
 @.cursor/rules/performance-guardrails.mdc
 @.cursor/rules/security-guard.mdc

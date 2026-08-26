@@ -113,7 +113,7 @@
 
 **不含** `developer-workstation`（设计器仅在本地 Dev Compose 或 `deployment-developer-workstation-optional.yaml` 中启用）。`deployment-frontend.yaml` 内包含 **admin-center-frontend** 与 **user-portal-frontend** 两个 Deployment。
 
-**Istio 路径**（`deploy/k8s`）：服务一一对应为同名风格的清单（如 `admin-center.yaml`、`workflow-engine.yaml`、`kong.yaml`），前端拆分为 `admin-center-frontend.yaml`、`user-portal-frontend.yaml`、`platform-login-frontend.yaml`，入口为 `workflow-platform-ingress-gateway.yaml`；另含 `workflow-station-superset.yaml` 等。`developer-workstation` 相关清单默认不随全套部署，需 `-IncludeDeveloperWorkstation` 或 `-Select`。部署命令见 **§9.3.2**。
+**Istio 路径**（`deploy/k8s`）：服务一一对应为同名风格的清单（如 `admin-center.yaml`、`workflow-engine.yaml`、`kong.yaml`），前端拆分为 `admin-center-frontend.yaml`、`user-portal-frontend.yaml`、`platform-login-frontend.yaml`、`platform-help-frontend.yaml`，入口为 `workflow-platform-ingress-gateway.yaml`；另含 `workflow-station-superset.yaml` 等。`developer-workstation` 相关清单默认不随全套部署，需 `-IncludeDeveloperWorkstation` 或 `-Select`。部署命令见 **§9.3.2**。
 
 | # | 服务 | 类型 | K8S 清单 | 镜像 / 说明 |
 |---|------|------|---------|------------|
@@ -126,6 +126,7 @@
 | 7 | admin-center-frontend | 前端 | `deployment-frontend.yaml` | `Dockerfile.local` 构建 |
 | 8 | user-portal-frontend | 前端 | `deployment-frontend.yaml` | 同上 |
 | 9 | platform-login-frontend | 前端（统一 `/login/`） | `deployment-platform-login-frontend.yaml` | `frontend/login` + `Dockerfile.local` |
+| 10 | platform-help-frontend | 前端（指南 `/help/`） | `platform-help-frontend.yaml` | `frontend/help` + `Dockerfile.local` |
 
 `deploy/scripts/build-and-push-k8s.ps1` 仍会构建 **developer-workstation** 与 **developer-workstation-frontend** 镜像，供本地或实验环境使用。
 
@@ -187,7 +188,8 @@ Workflow-Station---sun/
 │   ├── admin-center/                # 管理后台前端 (Vue 3)
 │   ├── user-portal/                 # 用户门户前端 (Vue 3)
 │   ├── developer-workstation/       # 开发者工作台前端 (Vue 3)
-│   └── login/                       # 统一登录壳（K8S /login/，Dockerfile.local）
+│   ├── login/                       # 统一登录壳（K8S /login/，Dockerfile.local）
+│   └── help/                        # 指南门户（K8S /help/，无登录）
 ├── deploy/
 │   ├── environments/
 │   │   ├── dev/                     # 本地 Docker 开发环境
@@ -331,6 +333,8 @@ Push-Location frontend/developer-workstation; pnpm install --frozen-lockfile; pn
 
 # platform-login-frontend（K8S 统一登录 /login/）
 Push-Location frontend/login; pnpm install --frozen-lockfile; pnpm run build; Pop-Location
+# platform-help-frontend（K8S 指南 /help/）
+Push-Location frontend/help; pnpm install --frozen-lockfile; pnpm run build; Pop-Location
 ```
 
 成功标志：每个前端输出 `✓ built in XXs`，`dist/` 目录生成。
@@ -425,7 +429,7 @@ docker build --build-arg "JAVA_BASE_IMAGE=$javaBase" --pull=false -t "${registry
 
 不传 `JAVA_BASE_IMAGE` 时，Dockerfile 内默认使用 **`eclipse-temurin:17-jre`**（需本机已存在或由 Docker 自行拉取）。生产/内网构建请优先与 **`deploy/scripts/build-and-push-k8s.ps1`** 使用相同的 `-JavaBaseImage` 与 `--pull=false` 策略。
 
-#### 前端镜像（4 个，必须使用 Dockerfile.local）
+#### 前端镜像（5 个，必须使用 Dockerfile.local）
 
 ```powershell
 # ⚠️ 注意 -f 参数指定 Dockerfile.local，不是默认的 Dockerfile
@@ -433,9 +437,10 @@ docker build -f frontend/admin-center/Dockerfile.local -t "${registry}/admin-cen
 docker build -f frontend/user-portal/Dockerfile.local -t "${registry}/user-portal-frontend:${tag}" frontend/user-portal
 docker build -f frontend/developer-workstation/Dockerfile.local -t "${registry}/developer-workstation-frontend:${tag}" frontend/developer-workstation
 docker build -f frontend/login/Dockerfile.local -t "${registry}/platform-login-frontend:${tag}" frontend/login
+docker build -f frontend/help/Dockerfile.local -t "${registry}/platform-help-frontend:${tag}" frontend/help
 ```
 
-验证（自建业务镜像通常 **8** 个：4 后端 + 4 前端）：
+验证（自建业务镜像通常 **9** 个：4 后端 + 5 前端）：
 ```powershell
 docker images "${registry}/*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 ```
@@ -494,6 +499,7 @@ cd deploy/environments/dev
 | 前端 | `user-portal-frontend` | 用户门户 UI | `frontend/user-portal` |
 | 前端 | `developer-workstation-frontend` | 开发者工作台 UI | `frontend/developer-workstation` |
 | 前端 | `platform-login-frontend` | 统一登录 `/login/` | `frontend/login` |
+| 前端 | `platform-help-frontend` | 指南门户 `/help/` | `frontend/help` |
 
 ### 8.2 服务端口映射
 
@@ -513,6 +519,7 @@ cd deploy/environments/dev
 | user-portal-frontend | 80 | `USER_PORTAL_FRONTEND_PORT`（**3101**） | `http://localhost:3101` |
 | developer-workstation-frontend | 80 | `DEVELOPER_WORKSTATION_FRONTEND_PORT`（**3102**） | `http://localhost:3102` |
 | platform-login-frontend | 80 | `PLATFORM_LOGIN_FRONTEND_PORT`（**3110**） | `http://localhost:3110` |
+| platform-help-frontend | 80 | `PLATFORM_HELP_FRONTEND_PORT`（**3111**） | `http://localhost:3111` |
 | edge-frontend（nginx 聚合 `/admin` `/portal` `/login` `/dev`） | 80 | `EDGE_FRONTEND_PORT`（**3000**） | **推荐本地入口**：`http://localhost:3000` |
 
 > **Flyway**：`docker-compose.dev.yml` 对 admin-center / user-portal / developer-workstation 设置了 **`SPRING_FLYWAY_ENABLED=false`**，Dev 容器依赖 Postgres 首次初始化时的 **`deploy/init-scripts/`**；与默认 `application.yml`（Flyway 启用）及 K8S 行为可能不同，见 [docs/schema-and-migration.md](docs/schema-and-migration.md) §2.1。
@@ -766,6 +773,7 @@ kubectl describe pod -l app=workflow-engine -n workflow-platform-{env}
 | `admin-center-frontend-service` | 80 | 管理后台 UI |
 | `user-portal-frontend-service` | 80 | 用户门户 UI |
 | `platform-login-frontend-service` | 80 | 统一登录 `/login/` |
+| `platform-help-frontend-service` | 80 | 指南门户 `/help/` |
 | `developer-workstation-frontend-service` | 80 | 开发者工作台 UI（默认未部署） |
 
 ### 9.7 镜像 Registry
@@ -780,6 +788,7 @@ harbor.company.com/workflow/
 ├── user-portal-frontend:latest       # 前端 (自建)
 ├── developer-workstation-frontend:latest  # 前端 (自建)
 └── platform-login-frontend:latest    # 统一登录 (自建)
+└── platform-help-frontend:latest     # 指南门户 (自建)
 
 # 基础设施使用官方镜像（不推送到 Harbor）
 redis:7.2-alpine                      # Docker Hub
@@ -890,6 +899,7 @@ Push-Location frontend/admin-center; pnpm install; pnpm exec vite build; Pop-Loc
 Push-Location frontend/user-portal; pnpm install; pnpm exec vite build; Pop-Location
 Push-Location frontend/developer-workstation; pnpm install; pnpm exec vite build; Pop-Location
 Push-Location frontend/login; pnpm install; pnpm exec vite build; Pop-Location
+Push-Location frontend/help; pnpm install; pnpm exec vite build; Pop-Location
 
 # 3. Docker 构建后端镜像
 $r = "harbor.company.com/workflow"; $t = "latest"
@@ -903,8 +913,9 @@ docker build -f frontend/admin-center/Dockerfile.local -t "${r}/admin-center-fro
 docker build -f frontend/user-portal/Dockerfile.local -t "${r}/user-portal-frontend:${t}" frontend/user-portal
 docker build -f frontend/developer-workstation/Dockerfile.local -t "${r}/developer-workstation-frontend:${t}" frontend/developer-workstation
 docker build -f frontend/login/Dockerfile.local -t "${r}/platform-login-frontend:${t}" frontend/login
+docker build -f frontend/help/Dockerfile.local -t "${r}/platform-help-frontend:${t}" frontend/help
 
-# 5. 验证（自建镜像通常 8 个：4 后端 + 4 前端）
+# 5. 验证（自建镜像通常 9 个：4 后端 + 5 前端）
 docker images "${r}/*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
 # 6. 推送到 Harbor
@@ -917,6 +928,7 @@ docker push "${r}/admin-center-frontend:${t}"
 docker push "${r}/user-portal-frontend:${t}"
 docker push "${r}/developer-workstation-frontend:${t}"
 docker push "${r}/platform-login-frontend:${t}"
+docker push "${r}/platform-help-frontend:${t}"
 
 # 7. 部署到 K8S（二选一）
 # 7a. Ingress 经典

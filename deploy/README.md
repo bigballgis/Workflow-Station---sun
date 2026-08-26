@@ -63,6 +63,7 @@
 | admin-center-frontend | Frontend | `deployment-frontend.yaml` | `/admin/` |
 | user-portal-frontend | Frontend | `deployment-frontend.yaml` | `/portal/`（以探针为准） |
 | platform-login-frontend | Frontend | `deployment-platform-login-frontend.yaml` | `/login/` |
+| platform-help-frontend | Frontend | `platform-help-frontend.yaml` | `/help/` |
 
 **可选（勿用于生产租户 unless 政策允许）**：`deployment-developer-workstation-optional.yaml`、`ingress-developer-workstation-optional.yaml`。
 

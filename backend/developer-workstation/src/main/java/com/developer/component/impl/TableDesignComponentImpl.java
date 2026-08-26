@@ -609,18 +609,22 @@ public class TableDesignComponentImpl implements TableDesignComponent {
 
     private boolean isTableNameTaken(String tableName, Long excludeTableId) {
         if (excludeTableId != null) {
-            if (tableDefinitionRepository.existsByTableNameAndIdNot(tableName, excludeTableId)) {
+            if (tableDefinitionRepository.existsByTableNameIgnoreCaseAndIdNot(tableName, excludeTableId)) {
                 return true;
             }
-        } else if (tableDefinitionRepository.existsByTableName(tableName)) {
+        } else if (tableDefinitionRepository.existsByTableNameIgnoreCase(tableName)) {
             return true;
         }
         return existsInRelationTables(tableName);
     }
 
+    /**
+     * Case-insensitive: Postgres unquoted DDL folds identifiers to lowercase, so a case-only-different
+     * name here would still collide with an existing Relation Table at the physical layer.
+     */
     private boolean existsInRelationTables(String tableName) {
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM rt_table_definitions WHERE table_name = ?",
+                "SELECT COUNT(*) FROM rt_table_definitions WHERE lower(table_name) = lower(?)",
                 Integer.class,
                 tableName);
         return count != null && count > 0;

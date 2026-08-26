@@ -12,6 +12,7 @@ dist/
 
 # Playwright UI verification screenshots (kept locally; see frontend/*/verification-screenshots/README.md)
 frontend/*/verification-screenshots/*.png
+frontend/*/verification-screenshots/_*.html
 
 *.class
 *.jar
