@@ -37,6 +37,13 @@ BEGIN
     END IF;
 END $$;
 
+-- rt_table_data_rows.id is BIGSERIAL. 17-Multi-Instance-Subtask-Demo's 00-init-kk.sql (which runs
+-- before this package) already inserts explicit-id rows into rt_table_data_rows without advancing
+-- the sequence (see 90-post-seed/00-align-id-sequences.sql, which only runs AFTER every seed
+-- package). The identity INSERTs below would otherwise collide on rt_table_data_rows_pkey.
+SELECT setval(pg_get_serial_sequence('rt_table_data_rows', 'id'),
+              GREATEST(COALESCE((SELECT MAX(id) FROM rt_table_data_rows), 0), 1));
+
 INSERT INTO rt_table_definitions (
     id, table_name, display_name, deployed_display_name, description,
     status, enabled, portal_visible, current_version,
@@ -107,17 +114,22 @@ VALUES
     (136, 30, 'updated_by', 'VARCHAR', 64, true, false, 'Updated By', 6, NULL, 'readonly')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO rt_table_versions (table_id, version_number, snapshot_data, deployed_by, deployed_at, change_log)
-SELECT v.table_id, 1, v.snapshot_data, 'system', CURRENT_TIMESTAMP, 'ATM HMDC lookup seed'
+-- Explicit ids (15-18): rt_table_versions.id is BIGSERIAL, and 17-Multi-Instance-Subtask-Demo's
+-- 00-init-kk.sql (which runs before this package) already inserts rows 1-14 with explicit ids
+-- without advancing the sequence (see 90-post-seed/00-align-id-sequences.sql). An identity/auto
+-- INSERT here would collide on rt_table_versions_pkey before that alignment script ever runs.
+INSERT INTO rt_table_versions (id, table_id, version_number, snapshot_data, deployed_by, deployed_at, change_log)
+SELECT v.id, v.table_id, 1, v.snapshot_data, 'system', CURRENT_TIMESTAMP, 'ATM HMDC lookup seed'
 FROM (VALUES
-    (14, '[{"fieldName":"id","dataType":"VARCHAR","isPrimaryKey":true,"displayName":"Id","sortOrder":0},{"fieldName":"dropdown_category","dataType":"VARCHAR","displayName":"Category","sortOrder":1},{"fieldName":"dropdown_name","dataType":"VARCHAR","displayName":"Name","sortOrder":2},{"fieldName":"enabled","dataType":"BOOLEAN","displayName":"Enabled","sortOrder":3}]'),
-    (28, '[{"fieldName":"id","dataType":"VARCHAR","isPrimaryKey":true,"displayName":"Id","sortOrder":0},{"fieldName":"objectives","dataType":"VARCHAR","displayName":"Objectives","sortOrder":1},{"fieldName":"standardizations","dataType":"VARCHAR","displayName":"Standardizations","sortOrder":2}]'),
-    (29, '[{"fieldName":"id","dataType":"VARCHAR","isPrimaryKey":true,"displayName":"Id","sortOrder":0},{"fieldName":"stage_code","dataType":"VARCHAR","displayName":"Stage Code","sortOrder":1},{"fieldName":"status_name","dataType":"VARCHAR","displayName":"Status Name","sortOrder":2}]'),
-    (30, '[{"fieldName":"id","dataType":"VARCHAR","isPrimaryKey":true,"displayName":"Id","sortOrder":0},{"fieldName":"stage_code","dataType":"VARCHAR","displayName":"Stage Code","sortOrder":1},{"fieldName":"stage_name","dataType":"VARCHAR","displayName":"Stage Name","sortOrder":2}]')
-) AS v(table_id, snapshot_data)
+    (15, 14, '[{"fieldName":"id","dataType":"VARCHAR","isPrimaryKey":true,"displayName":"Id","sortOrder":0},{"fieldName":"dropdown_category","dataType":"VARCHAR","displayName":"Category","sortOrder":1},{"fieldName":"dropdown_name","dataType":"VARCHAR","displayName":"Name","sortOrder":2},{"fieldName":"enabled","dataType":"BOOLEAN","displayName":"Enabled","sortOrder":3}]'),
+    (16, 28, '[{"fieldName":"id","dataType":"VARCHAR","isPrimaryKey":true,"displayName":"Id","sortOrder":0},{"fieldName":"objectives","dataType":"VARCHAR","displayName":"Objectives","sortOrder":1},{"fieldName":"standardizations","dataType":"VARCHAR","displayName":"Standardizations","sortOrder":2}]'),
+    (17, 29, '[{"fieldName":"id","dataType":"VARCHAR","isPrimaryKey":true,"displayName":"Id","sortOrder":0},{"fieldName":"stage_code","dataType":"VARCHAR","displayName":"Stage Code","sortOrder":1},{"fieldName":"status_name","dataType":"VARCHAR","displayName":"Status Name","sortOrder":2}]'),
+    (18, 30, '[{"fieldName":"id","dataType":"VARCHAR","isPrimaryKey":true,"displayName":"Id","sortOrder":0},{"fieldName":"stage_code","dataType":"VARCHAR","displayName":"Stage Code","sortOrder":1},{"fieldName":"stage_name","dataType":"VARCHAR","displayName":"Stage Name","sortOrder":2}]')
+) AS v(id, table_id, snapshot_data)
 WHERE NOT EXISTS (
     SELECT 1 FROM rt_table_versions existing
-    WHERE existing.table_id = v.table_id AND existing.version_number = 1);
+    WHERE existing.table_id = v.table_id AND existing.version_number = 1)
+ON CONFLICT (id) DO NOTHING;
 
 WITH src(row_id, category, name) AS (
     VALUES
