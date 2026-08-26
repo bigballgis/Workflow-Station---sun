@@ -11,6 +11,7 @@ import {
 } from './lookup'
 import type { DialogColumn } from './types'
 import { assignSensitiveMaskColumnProps } from '@/utils/applySensitiveMaskFromRule'
+import { stampCannotDownloadProp } from '@/utils/applyUploadPropsFromRule'
 
 export type SubFormColumnLookupContext = {
   lookupDbConfigs: Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: unknown[] }>
@@ -156,7 +157,7 @@ export function mapSubFormRuleToDialogColumns(
 
     const passProps: Record<string, unknown> = {}
     const propKeys = [
-      'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+      'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload',
       'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
       'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
       'boundSubTableBindingId',
@@ -164,6 +165,7 @@ export function mapSubFormRuleToDialogColumns(
     for (const key of propKeys) {
       if (rProps[key] !== undefined) passProps[key] = rProps[key]
     }
+    stampCannotDownloadProp(passProps, rProps, String(r.field ?? ''))
     assignSensitiveMaskColumnProps(passProps, type, rProps)
     if (rProps.data !== undefined) passProps.treeData = rProps.data
     if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey

@@ -40,6 +40,8 @@ export interface FormField {
   uploadUrl?: string
   uploadAccept?: string
   uploadLimit?: number
+  /** Designer upload prop: hide Portal download when true. Missing/false = download allowed. */
+  cannotDownload?: boolean
   _bindingId?: number  // set when type === 'subTable' | 'inlineSubForm'
   /** RecordNote panel config; only present when type === 'recordNote'. */
   _recordNote?: {

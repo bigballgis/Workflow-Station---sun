@@ -1,4 +1,5 @@
 import type { ColumnType, DialogColumn } from './types'
+import { stampCannotDownloadProp } from '@/utils/applyUploadPropsFromRule'
 
 /** Stored upload path/URL from the platform file service. */
 export function isStoredFileUrl(value: unknown): value is string {
@@ -82,6 +83,7 @@ export function mergeListViewFieldColumn(
     if (fieldRule?.props?.fileNameTargetField != null) {
       props.fileNameTargetField = fieldRule.props.fileNameTargetField
     }
+    stampCannotDownloadProp(props, fieldRule?.props, column.fieldName)
   }
   return {
     ...(baseColumn || {}),

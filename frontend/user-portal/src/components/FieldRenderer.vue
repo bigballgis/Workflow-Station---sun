@@ -442,6 +442,7 @@
         :file-list="fileList"
         :on-success="onUploadSuccess"
         :on-remove="onUploadRemove"
+        :on-preview="previewCurrentFile"
         list-type="text"
       >
         <el-button
@@ -458,13 +459,13 @@
         </template>
       </el-upload>
       <div v-else>
-        <a
+        <span
           v-if="modelValue"
-          :href="modelValue"
-          target="_blank"
+          class="file-preview-link"
+          @click="previewCurrentFile()"
         >
           {{ fileList[0]?.name || modelValue }}
-        </a>
+        </span>
         <span v-else>-</span>
       </div>
     </template>
@@ -789,6 +790,7 @@ const {
   fileList,
   onUploadSuccess,
   onUploadRemove,
+  previewCurrentFile,
 } = useFieldUpload(props, emit)
 
 // Editor — registers onBeforeUnmount first (matches original order).
@@ -902,6 +904,16 @@ onMounted(() => {
 .readonly-text {
   color: #606266;
   line-height: 32px;
+}
+
+.file-preview-link {
+  color: #165DFF;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.file-preview-link:hover {
+  color: #0e44cc;
 }
 
 .form-layout-title {

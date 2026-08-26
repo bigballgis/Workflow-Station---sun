@@ -3,6 +3,7 @@ import { isFormCreateRuleReadonly, applyDesignerHideFlagToFormField } from '@/co
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import { applyFormCreateValidationToFormField } from '@/utils/formCreateValidateRules'
 import { applySensitiveMaskFromRule } from '@/utils/applySensitiveMaskFromRule'
+import { applyUploadPropsFromRule } from '@/utils/applyUploadPropsFromRule'
 
 /**
  * 将单条 form-create 规则转换为 FormRenderer 字段。
@@ -106,14 +107,7 @@ export function convertFormCreateRule(rule: any): FormField | null {
   if (rule.type === 'slider') { field.min = rule.props?.min ?? 0; field.max = rule.props?.max ?? 100; field.step = rule.props?.step || 1 }
 
   applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
-
-  // 处理文件上传
-  if (rule.type === 'upload') {
-    const action = rule.props?.action
-    field.uploadUrl = (action && action !== '/') ? action : '/api/v1/upload'
-    field.uploadAccept = rule.props?.accept || ''
-    field.uploadLimit = rule.props?.limit || 1
-  }
+  applyUploadPropsFromRule(field, rule)
 
   if (rule.type === 'userSelect' || rule.type === 'user') {
     field.type = 'user'

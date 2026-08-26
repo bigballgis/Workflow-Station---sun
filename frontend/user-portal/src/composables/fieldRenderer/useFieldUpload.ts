@@ -5,6 +5,8 @@
 // ---------------------------------------------------------------------------
 import { ref, computed, watch } from 'vue'
 import type { FieldRendererProps, FieldRendererEmit } from './types'
+import { openFilePreview } from '@/composables/filePreview/useFilePreview'
+import { isCannotDownload } from '@/utils/filePreview'
 
 // Priority: props.uploadUrl → field.uploadUrl → default '/api/v1/upload'
 const DEFAULT_UPLOAD_URL = '/api/v1/upload'
@@ -66,10 +68,22 @@ export function useFieldUpload(props: FieldRendererProps, emit: FieldRendererEmi
     emit('upload:remove', file, props.field.key)
   }
 
+  function previewCurrentFile(file?: { name?: string; url?: string }) {
+    const url = file?.url || (typeof props.modelValue === 'string' ? props.modelValue : '')
+    if (!url) return
+    const name = file?.name || extractFileNameFromUrl(url)
+    openFilePreview({
+      url,
+      name,
+      cannotDownload: isCannotDownload(props.field.cannotDownload),
+    })
+  }
+
   return {
     resolvedUploadUrl,
     fileList,
     onUploadSuccess,
     onUploadRemove,
+    previewCurrentFile,
   }
 }

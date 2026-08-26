@@ -843,6 +843,7 @@ export default {
     componentDefaultValue: '默认值',
     componentDefaultValuePlaceholder: '从选项中选择默认值',
     // 子表逐操作权限（右侧属性面板）：独立控制 新增 / 编辑 / 删除
+    uploadCannotDownload: '禁止下载',
     subTablePermission: {
       allowAdd: '允许新增',
       allowEdit: '允许编辑',

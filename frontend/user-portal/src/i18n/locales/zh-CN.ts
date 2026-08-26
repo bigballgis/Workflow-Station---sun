@@ -941,6 +941,19 @@ export default {
     success: '上传成功',
     failed: '上传失败'
   },
+  filePreview: {
+    previewFile: '预览文件',
+    download: '下载',
+    closeWindow: '关闭窗口',
+    unsupported: '该文件类型暂不支持预览。',
+    loadFailed: '文件预览加载失败。',
+    parseFailed: '无法预览该文件。',
+    truncatedText: '仅显示前 {limit} 个字符。',
+    truncatedTable: '仅显示前 {rows} 行、{cols} 列。',
+    prevPage: '上一页',
+    nextPage: '下一页',
+    pageOf: '第 {current} / {total} 页'
+  },
   login: {
     title: '工作流平台',
     subtitle: '用户门户',

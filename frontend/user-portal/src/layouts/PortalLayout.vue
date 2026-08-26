@@ -257,6 +257,7 @@
         </router-view>
       </main>
     </div>
+    <FilePreviewDialog />
   </div>
 </template>
 
@@ -290,6 +291,7 @@ import { mainTableViewApi, type FunctionUnitViewMenuItem } from '@/api/mainTable
 import { processApi, type AuditFunctionUnit } from '@/api/process'
 import { relationTableApi } from '@/api/relationTable'
 import FunctionUnitMenuIcon from '@/components/mainTableView/FunctionUnitMenuIcon.vue'
+import FilePreviewDialog from '@/components/FilePreviewDialog.vue'
 
 const { t } = useI18n()
 const route = useRoute()

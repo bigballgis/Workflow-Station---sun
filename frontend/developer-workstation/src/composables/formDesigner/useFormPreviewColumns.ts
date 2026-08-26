@@ -71,7 +71,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
         const options = rawOptions ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value }))) : undefined
         const passProps: Record<string, any> = {}
         for (const key of [
-          'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+          'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField', 'cannotDownload',
           'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
           'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
         ]) {
@@ -331,6 +331,7 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
               ...(fieldRule?.props?.fileNameTargetField
                 ? { fileNameTargetField: fieldRule.props.fileNameTargetField }
                 : {}),
+              ...(fieldRule?.props?.cannotDownload === true ? { cannotDownload: true } : {}),
             }
           : null
         const passProps: Record<string, unknown> = { ...(uploadProps || {}) }

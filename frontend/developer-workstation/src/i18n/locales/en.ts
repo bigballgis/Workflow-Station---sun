@@ -799,6 +799,7 @@ export default {
     componentDefaultValue: 'Default Value',
     componentDefaultValuePlaceholder: 'Select a default from Options',
     // Sub-Table per-operation permissions (right-side props panel) — gate Add / Edit / Delete independently.
+    uploadCannotDownload: 'Can not download',
     subTablePermission: {
       allowAdd: 'Allow Add',
       allowEdit: 'Allow Edit',
