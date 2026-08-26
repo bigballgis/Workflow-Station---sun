@@ -1,9 +1,9 @@
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import {
+  classifyBlobPreview,
   fetchStoredFileBlob,
-  resolveFilePreviewKind,
   triggerBlobDownload,
   type FilePreviewKind,
 } from '@/utils/filePreview'
@@ -15,18 +15,11 @@ export function useFilePreviewContent() {
   const loading = ref(false)
   const error = ref('')
   const kind = ref<FilePreviewKind>('unsupported')
-  const objectUrl = ref('')
-  const textContent = ref('')
+  const previewBlob = shallowRef<Blob | null>(null)
   const downloading = ref(false)
-  let blob: Blob | null = null
 
   function resetContent() {
-    if (objectUrl.value) {
-      URL.revokeObjectURL(objectUrl.value)
-      objectUrl.value = ''
-    }
-    blob = null
-    textContent.value = ''
+    previewBlob.value = null
     error.value = ''
     kind.value = 'unsupported'
   }
@@ -43,20 +36,13 @@ export function useFilePreviewContent() {
         : t('filePreview.loadFailed')
       return
     }
-    blob = fetched.blob
-    kind.value = resolveFilePreviewKind(state.name, blob.type)
-    if (kind.value === 'text') {
-      textContent.value = await blob.text()
-      return
-    }
-    if (kind.value === 'image' || kind.value === 'pdf') {
-      objectUrl.value = URL.createObjectURL(blob)
-    }
+    previewBlob.value = fetched.blob
+    kind.value = await classifyBlobPreview(state.name, fetched.blob)
   }
 
   async function downloadCurrent() {
     if (state.cannotDownload || downloading.value) return
-    let current = blob
+    let current = previewBlob.value
     if (!current) {
       downloading.value = true
       const fetched = await fetchStoredFileBlob(state.url)
@@ -86,5 +72,5 @@ export function useFilePreviewContent() {
     resetContent()
   })
 
-  return { state, loading, error, kind, objectUrl, textContent, downloading, downloadCurrent, close }
+  return { state, loading, error, kind, previewBlob, downloading, downloadCurrent, close }
 }

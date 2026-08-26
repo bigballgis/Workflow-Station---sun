@@ -40,6 +40,7 @@ export default defineConfig({
   // The define must sit on optimizeDeps.esbuildOptions: sockjs-client is PRE-BUNDLED, and the
   // top-level `define` is only applied to app sources, never to deps in node_modules/.vite/deps.
   optimizeDeps: {
+    include: ['pdfjs-dist', 'xlsx', 'utif', 'docx-preview', 'pptx-preview'],
     esbuildOptions: {
       define: { global: 'globalThis' }
     }

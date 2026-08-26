@@ -974,7 +974,13 @@ export default {
     download: 'Download',
     closeWindow: 'Close window',
     unsupported: 'Preview is not available for this file type.',
-    loadFailed: 'Failed to load file preview.'
+    loadFailed: 'Failed to load file preview.',
+    parseFailed: 'Could not preview this file.',
+    truncatedText: 'Showing the first {limit} characters.',
+    truncatedTable: 'Showing the first {rows} rows and {cols} columns.',
+    prevPage: 'Previous',
+    nextPage: 'Next',
+    pageOf: 'Page {current} of {total}'
   },
   user: {
     username: 'Username',

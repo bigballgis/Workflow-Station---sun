@@ -1,30 +1,42 @@
-export type FilePreviewKind = 'image' | 'pdf' | 'text' | 'unsupported'
+import type { FilePreviewKind } from './filePreviewKinds'
+import { fileExtension, isBlockedPreviewExtension, kindFromExtension, kindFromMime } from './filePreviewKinds'
+import { confirmPreviewKind } from './filePreviewMagic'
+import { isCannotDownload, uploadPropsBlockDownload } from './filePreviewFlags'
 
-const IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp)(?:$|\?)/i
-const PDF_EXT = /\.pdf(?:$|\?)/i
-const TEXT_EXT = /\.(txt|csv|log|md)(?:$|\?)/i
+export type { FilePreviewKind } from './filePreviewKinds'
+export { fileExtension, kindFromExtension } from './filePreviewKinds'
+export { isCannotDownload, uploadPropsBlockDownload } from './filePreviewFlags'
+export { TEXT_CHAR_LIMIT, decodeTextPreview } from './filePreviewText'
+export { extractDocPreviewText } from './filePreviewDoc'
+export {
+  TABLE_MAX_ROWS,
+  TABLE_MAX_COLS,
+  boundSpreadsheetMatrix,
+  parseSpreadsheetPreview,
+} from './filePreviewSpreadsheet'
 
-/** True only when the designer switch is explicitly on; missing/legacy = download allowed. */
-export function isCannotDownload(value: unknown): boolean {
-  return value === true || value === 'true' || value === 1
+const SNIFF_BYTES = 131072
+
+/**
+ * Classify a file for Portal preview. Extension selects a parser; magic bytes
+ * must agree (fail closed). Missing bytes = extension/mime only (tests / fallback).
+ */
+export function resolveFilePreviewKind(
+  name: string,
+  mime?: string,
+  bytes?: Uint8Array,
+): FilePreviewKind {
+  const ext = fileExtension(name)
+  let kind = kindFromExtension(ext)
+  if (kind === 'unsupported' && !isBlockedPreviewExtension(ext)) {
+    kind = kindFromMime(mime || '') ?? 'unsupported'
+  }
+  return confirmPreviewKind(kind, bytes)
 }
 
-/** Designer switch `cannotDownload` and form-create native `canNotDownload`. */
-export function uploadPropsBlockDownload(props: Record<string, unknown> | null | undefined): boolean {
-  if (!props) return false
-  return isCannotDownload(props.cannotDownload) || isCannotDownload(props.canNotDownload)
-}
-
-export function resolveFilePreviewKind(name: string, mime?: string): FilePreviewKind {
-  const type = (mime || '').split(';')[0].trim().toLowerCase()
-  if (type.startsWith('image/') && !type.includes('svg')) return 'image'
-  if (type === 'application/pdf') return 'pdf'
-  if (type === 'text/plain' || type === 'text/csv' || type === 'text/markdown') return 'text'
-  const source = name || ''
-  if (IMAGE_EXT.test(source)) return 'image'
-  if (PDF_EXT.test(source)) return 'pdf'
-  if (TEXT_EXT.test(source)) return 'text'
-  return 'unsupported'
+export async function classifyBlobPreview(name: string, blob: Blob): Promise<FilePreviewKind> {
+  const prefix = new Uint8Array(await blob.slice(0, SNIFF_BYTES).arrayBuffer())
+  return resolveFilePreviewKind(name, blob.type, prefix)
 }
 
 export function triggerBlobDownload(blob: Blob, filename: string): void {
@@ -42,7 +54,7 @@ export type StoredFileDownloadResult = 'ok' | 'not-found' | 'failed'
 
 export async function fetchStoredFileBlob(url: string): Promise<{ ok: true; blob: Blob } | { ok: false; result: StoredFileDownloadResult }> {
   try {
-    const response = await fetch(url)
+    const response = await fetch(url, { credentials: 'include' })
     if (!response.ok) {
       return { ok: false, result: response.status === 404 ? 'not-found' : 'failed' }
     }

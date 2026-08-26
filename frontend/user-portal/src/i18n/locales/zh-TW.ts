@@ -946,7 +946,13 @@ export default {
     download: '下載',
     closeWindow: '關閉視窗',
     unsupported: '此檔案類型暫不支援預覽。',
-    loadFailed: '檔案預覽載入失敗。'
+    loadFailed: '檔案預覽載入失敗。',
+    parseFailed: '無法預覽此檔案。',
+    truncatedText: '僅顯示前 {limit} 個字元。',
+    truncatedTable: '僅顯示前 {rows} 列、{cols} 欄。',
+    prevPage: '上一頁',
+    nextPage: '下一頁',
+    pageOf: '第 {current} / {total} 頁'
   },
   login: {
     title: '工作流平臺',

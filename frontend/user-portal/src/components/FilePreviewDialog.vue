@@ -46,21 +46,39 @@
         :description="error"
       />
       <img
-        v-else-if="kind === 'image' && objectUrl"
+        v-else-if="kind === 'image' && imageUrl"
         class="file-preview-image"
-        :src="objectUrl"
+        :src="imageUrl"
         :alt="state.name"
       >
-      <iframe
-        v-else-if="kind === 'pdf' && objectUrl"
-        class="file-preview-frame"
-        :src="objectUrl"
-        :title="state.name"
+      <FilePreviewPdf
+        v-else-if="kind === 'pdf' && previewBlob"
+        :blob="previewBlob"
+        @error="onParseError"
       />
-      <pre
-        v-else-if="kind === 'text'"
-        class="file-preview-text"
-      >{{ textContent }}</pre>
+      <FilePreviewText
+        v-else-if="(kind === 'text' || kind === 'doc') && previewBlob"
+        :blob="previewBlob"
+        :mode="kind === 'doc' ? 'doc' : 'text'"
+        @error="onParseError"
+      />
+      <FilePreviewTable
+        v-else-if="kind === 'spreadsheet' && previewBlob"
+        :blob="previewBlob"
+        @error="onParseError"
+      />
+      <FilePreviewTiff
+        v-else-if="kind === 'tiff' && previewBlob"
+        :blob="previewBlob"
+        @error="onParseError"
+      />
+      <FilePreviewOfficeFrame
+        v-else-if="(kind === 'docx' || kind === 'pptx') && previewBlob"
+        :blob="previewBlob"
+        :mode="kind === 'docx' ? 'docx' : 'pptx'"
+        :title="state.name"
+        @error="onParseError"
+      />
       <el-empty
         v-else-if="!loading"
         :description="t('filePreview.unsupported')"
@@ -70,9 +88,15 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, Close } from '@element-plus/icons-vue'
 import { useFilePreviewContent } from '@/composables/filePreview/useFilePreviewContent'
+import FilePreviewPdf from '@/components/filePreview/FilePreviewPdf.vue'
+import FilePreviewText from '@/components/filePreview/FilePreviewText.vue'
+import FilePreviewTable from '@/components/filePreview/FilePreviewTable.vue'
+import FilePreviewTiff from '@/components/filePreview/FilePreviewTiff.vue'
+import FilePreviewOfficeFrame from '@/components/filePreview/FilePreviewOfficeFrame.vue'
 
 const { t } = useI18n()
 const {
@@ -80,12 +104,34 @@ const {
   loading,
   error,
   kind,
-  objectUrl,
-  textContent,
+  previewBlob,
   downloading,
   downloadCurrent,
   close,
 } = useFilePreviewContent()
+
+const imageUrl = ref('')
+
+function onParseError() {
+  error.value = t('filePreview.parseFailed')
+}
+
+watch(
+  () => [kind.value, previewBlob.value] as const,
+  () => {
+    if (imageUrl.value) {
+      URL.revokeObjectURL(imageUrl.value)
+      imageUrl.value = ''
+    }
+    if (kind.value === 'image' && previewBlob.value) {
+      imageUrl.value = URL.createObjectURL(previewBlob.value)
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value)
+})
 </script>
 
 <style scoped>
@@ -119,7 +165,7 @@ const {
   min-height: 60vh;
   max-height: 75vh;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   background: var(--el-fill-color-lighter);
   border-radius: 4px;
@@ -130,26 +176,6 @@ const {
   max-width: 100%;
   max-height: 72vh;
   object-fit: contain;
-}
-
-.file-preview-frame {
-  width: 100%;
-  height: 72vh;
-  border: 0;
-  background: #fff;
-}
-
-.file-preview-text {
-  width: 100%;
-  height: 72vh;
-  margin: 0;
-  padding: 16px;
-  overflow: auto;
-  background: #fff;
-  color: var(--el-text-color-regular);
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
+  margin: auto;
 }
 </style>
