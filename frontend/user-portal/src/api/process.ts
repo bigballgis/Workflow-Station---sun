@@ -48,6 +48,8 @@ export interface MyApplicationQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
+  /** Audit toolbar Quick Find; OR across visible columns. Omit when blank. */
+  keyword?: string
 }
 
 export interface ProcessStartRequest {
