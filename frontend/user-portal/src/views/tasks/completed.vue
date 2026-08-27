@@ -24,6 +24,8 @@
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
           >
             <template #empty>
               <div
@@ -63,16 +65,13 @@
                 />
               </template>
               <template #default="{ row }">
-<el-link
+                <el-link
                   v-if="col.field === 'requestId'"
                   type="primary"
                   @click="viewTask(row)"
                 >
                   {{ row.requestId || '-' }}
                 </el-link>
-                <template v-else-if="col.field === 'currentStepName'">
-                  {{ row.currentStepName || row.taskName || '-' }}
-                </template>
                 <el-tag
                   v-else-if="col.field === 'action' && !row.multiInstanceSubTask"
                   :type="getActionTagType(row.action)"
@@ -150,6 +149,7 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
+  gridTableHeight,
   gridInnerStyle,
   widthOf,
   setWidth,

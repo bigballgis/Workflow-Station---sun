@@ -20,7 +20,6 @@ public final class MyApplicationColumnSpec {
         return List.of(
                 ListColumnMeta.of("requestId", "application.requestId", Kind.TEXT),
                 ListColumnMeta.of("businessKey", "application.processTitle", Kind.TEXT),
-                ListColumnMeta.of("currentStepName", "application.currentStep", Kind.TEXT),
                 ListColumnMeta.of("currentAssignee", "application.currentAssignee", Kind.USER),
                 ListColumnMeta.of("startTime", "application.startTime", Kind.DATETIME),
                 ListColumnMeta.withOptions("status", "application.status", Kind.ENUM, statusOptions())
@@ -39,7 +38,6 @@ public final class MyApplicationColumnSpec {
         return switch (field) {
             case "requestId" -> "pi.variables->>'__request_id'";
             case "businessKey" -> "pi.business_key";
-            case "currentStepName" -> "pi.current_node";
             case "currentAssignee" -> "pi.current_assignee";
             case "startTime" -> "pi.start_time::text";
             case "status" -> "pi.status";

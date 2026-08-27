@@ -15,7 +15,7 @@ class CompletedTaskColumnSpecTest {
         assertThat(column("requestId").kind()).isEqualTo(Kind.TEXT);
         assertThat(column("requestId").filterable()).isTrue();
         assertThat(column("requestId").sortable()).isTrue();
-        assertThat(column("currentStepName").filterable()).isFalse();
+        assertThat(CompletedTaskColumnSpec.columns()).noneMatch(c -> "currentStepName".equals(c.field()));
         assertThat(column("durationInMillis").kind()).isEqualTo(Kind.NUMBER);
         assertThat(column("completedTime").kind()).isEqualTo(Kind.DATETIME);
         assertThat(column("taskName").kind()).isEqualTo(Kind.TEXT);

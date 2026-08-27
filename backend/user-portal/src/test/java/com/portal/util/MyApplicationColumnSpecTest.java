@@ -29,6 +29,7 @@ class MyApplicationColumnSpecTest {
         assertThat(column("businessKey").kind()).isEqualTo(Kind.TEXT);
         assertThat(column("status").options()).extracting(ListColumnMeta.Option::value)
                 .containsExactly("RUNNING", "COMPLETED", "WITHDRAWN", "REJECTED");
+        assertThat(MyApplicationColumnSpec.columns()).noneMatch(c -> "currentStepName".equals(c.field()));
     }
 
     private static ListColumnMeta column(String field) {

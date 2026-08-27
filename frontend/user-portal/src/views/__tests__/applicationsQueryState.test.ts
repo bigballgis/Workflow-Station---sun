@@ -26,7 +26,6 @@ const api = vi.mocked(processApi)
 const COLUMNS: ListColumnMeta[] = [
   { field: 'requestId', label: 'application.requestId', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'] },
   { field: 'businessKey', label: 'application.processTitle', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'] },
-  { field: 'currentStepName', label: 'application.currentStep', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains'] },
   { field: 'currentAssignee', label: 'application.currentAssignee', kind: 'USER', filterable: true, sortable: true, operators: ['eq', 'ne'] },
   { field: 'startTime', label: 'application.startTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['on', 'between'] },
   { field: 'status', label: 'application.status', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq', 'ne'], options: [{ value: 'RUNNING', label: 'application.running' }] },

@@ -124,6 +124,8 @@
               style="width: 100%;"
               class="list-data-grid"
               :class="{ 'list-data-grid--fit': gridFits }"
+              scrollbar-always-on
+              :height="gridTableHeight || '100%'"
             >
               <template #empty>
                 <div
@@ -163,7 +165,7 @@
                   />
                 </template>
                 <template #default="{ row }">
-<el-link
+                  <el-link
                     v-if="col.field === 'requestId'"
                     type="primary"
                     @click="viewDetail(row)"
@@ -172,9 +174,6 @@
                   </el-link>
                   <template v-else-if="col.field === 'businessKey'">
                     {{ row.businessKey || row.processDefinitionName }}
-                  </template>
-                  <template v-else-if="col.field === 'currentStepName'">
-                    {{ row.currentStepName || row.currentNode || '-' }}
                   </template>
                   <span
                     v-else-if="col.field === 'startTime'"
@@ -305,6 +304,7 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
+  gridTableHeight,
   gridInnerStyle,
   widthOf,
   setWidth,

@@ -22,7 +22,6 @@ public final class TodoTaskColumnSpec {
         return List.of(
                 ListColumnMeta.of("requestId", "task.requestId", Kind.TEXT),
                 ListColumnMeta.of("taskName", "task.taskName", Kind.TEXT),
-                ListColumnMeta.of("currentStepName", "task.currentStep", Kind.TEXT),
                 ListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),
                 ListColumnMeta.withOptions("assignmentType", "task.assignmentType", Kind.ENUM, assignmentOptions()),
                 ListColumnMeta.of("initiatorName", "task.initiator", Kind.TEXT),

@@ -24,6 +24,11 @@ class TodoTaskColumnSpecTest {
         assertThat(taskName.operators()).contains("contains");
     }
 
+    @Test
+    void currentStepIsNotAVisibleColumn() {
+        assertThat(TodoTaskColumnSpec.columns()).noneMatch(c -> "currentStepName".equals(c.field()));
+    }
+
     private static ListColumnMeta column(String field) {
         return TodoTaskColumnSpec.columns().stream()
                 .filter(c -> field.equals(c.field()))

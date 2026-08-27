@@ -16,7 +16,6 @@ const api = vi.mocked(queryCompletedTasks)
 const COLUMNS: ListColumnMeta[] = [
   { field: 'requestId', label: 'task.requestId', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'] },
   { field: 'taskName', label: 'task.taskName', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'] },
-  { field: 'currentStepName', label: 'task.currentStep', kind: 'TEXT', filterable: false, sortable: false, operators: [] },
   { field: 'processDefinitionName', label: 'task.processName', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains'] },
   { field: 'action', label: 'task.action', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq', 'ne'], options: [{ value: 'approved', label: 'action.approved' }] },
   { field: 'createTime', label: 'task.createTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['on', 'between'] },
@@ -106,7 +105,7 @@ describe('completed tasks — shared list header', () => {
     expect(api.mock.calls.length).toBe(callsBefore)
     const fields = w.findAllComponents({ name: 'ListColumnHeader' }).map((h) => h.props('column').field)
     expect(fields[0]).toBe('requestId')
-    expect(fields[1]).toBe('currentStepName')
+    expect(fields[1]).toBe('processDefinitionName')
     expect(fields[2]).toBe('taskName')
   })
 }, 20_000)
