@@ -92,6 +92,18 @@ export async function listRecordNotes(
   return res?.data ?? null
 }
 
+/**
+ * Whether this user may add a note here. Reading and writing follow different rules — anyone who
+ * can open the request reads its notes, but writing needs participation or an audit grant on the
+ * active role — so the panel asks first instead of letting a composed note fail with a 403.
+ */
+export async function canAddRecordNote(target: RecordNoteTargetParams): Promise<boolean> {
+  const res = (await service.get('/record-notes/can-add', {
+    params: targetQuery(target),
+  })) as ApiEnvelope<boolean>
+  return res?.data === true
+}
+
 export async function getRecordNoteDetail(
   noteId: string,
   processInstanceId?: string | null,

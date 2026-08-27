@@ -40,6 +40,10 @@ import java.util.List;
  *
  * Deliberately NOT a function unit role check: that would deny the very participants
  * working a row (e.g. an MI assignee whose task role was never granted FU access).
+ *
+ * Writing is gated separately and more tightly — see {@link #checkWriteAccess}: adding a
+ * note requires an audit grant on the user's currently selected role (or SYS_ADMIN),
+ * and participation in the request grants nothing.
  */
 @Slf4j
 @Component
@@ -80,6 +84,7 @@ public class RecordNoteComponent {
                                   String processInstanceId) {
         checkTargetShape(target);
         checkAccess(userId, target, processInstanceId);
+        checkWriteAccess(userId, target, processInstanceId);
         NoteItem created = recordNoteService.createComment(target, subject, bodyHtml, files, adoptInlineIds,
                 userId, resolveName(userId));
         audit(userId, target, processInstanceId, ChangeType.RECORD_NOTE_ADD,
@@ -91,7 +96,19 @@ public class RecordNoteComponent {
                                       String processInstanceId) {
         checkTargetShape(target);
         checkAccess(userId, target, processInstanceId);
+        checkWriteAccess(userId, target, processInstanceId);
         return recordNoteService.createAttachment(target, file, true, userId, resolveName(userId));
+    }
+
+    /** Whether this user may add notes to the given target; drives the UI's Add button. */
+    public boolean canAddNote(String userId, NoteTarget target, String processInstanceId) {
+        try {
+            checkAccess(userId, target, processInstanceId);
+            checkWriteAccess(userId, target, processInstanceId);
+            return true;
+        } catch (RecordNoteException e) {
+            return false;
+        }
     }
 
     /**
@@ -181,6 +198,13 @@ public class RecordNoteComponent {
      *
      * <p>Tracks {@code requireParticipant} deliberately: a reviewer who may add the note
      * must also be able to anchor it, otherwise the note lands with no audit trail.
+     *
+     * <p>Stays on the read gate rather than {@code checkWriteAccess}, and must remain at least as
+     * permissive as it: every writer already clears this check (system administrators are exempt
+     * outright, and an active-role audit holder passes {@code canAuditProcessDetail} through
+     * {@code canAuditFunctionUnit}, which spans all of the user's roles and so is implied by a
+     * grant on the active one). Tightening this to the write gate would gain nothing and risk
+     * silently dropping an audit row.
      */
     private String resolveAuditInstanceId(String userId, NoteTarget target, String claimedProcessInstanceId) {
         if (target != null && processComponent.getProcessDetail(target.getTargetId()) != null) {
@@ -248,6 +272,52 @@ public class RecordNoteComponent {
             throw new RecordNoteException("FORBIDDEN", "Cannot resolve the request hosting this row's notes");
         }
         requireParticipant(userId, host);
+    }
+
+    /**
+     * Extra gate for <em>adding</em> a note, on top of the read gate.
+     *
+     * <p>Reading a request and commenting on it are different acts. Anyone who can open the
+     * request may read its notes; writing one is an act of review, so it needs one of:
+     * <ul>
+     *   <li>system administrator;</li>
+     *   <li>an audit grant on the function unit held by the user's <em>currently selected</em>
+     *       role (admin-center → Function Unit → Access Config → Audit).</li>
+     * </ul>
+     *
+     * <p>Participation in the request deliberately grants nothing here. Writing a note is done
+     * <em>as</em> a role, so it is the audit configuration that decides — never who happens to be
+     * working the request. An initiator or assignee whose active role holds no audit grant reads
+     * the notes and may not add one; granting their role audit access in admin-center is the
+     * supported way to let them write.
+     */
+    private void checkWriteAccess(String userId, NoteTarget target, String hostProcessInstanceId) {
+        if (functionUnitAccessComponent.isSystemAdministrator(userId)) {
+            return;
+        }
+        ProcessInstanceInfo detail = processComponent.getProcessDetail(target.getTargetId());
+        if (detail == null) {
+            // New-Request drafts have no instance yet; checkAccess already limited these to the
+            // author's own rows, and the notes are re-anchored once the request starts.
+            if (isDraftTarget(target.getTargetId())) {
+                return;
+            }
+            detail = hostProcessInstanceId == null || hostProcessInstanceId.isBlank()
+                    ? null
+                    : processComponent.getProcessDetail(hostProcessInstanceId);
+        }
+        if (detail == null) {
+            throw new RecordNoteException("FORBIDDEN", "Cannot resolve the request hosting this row's notes");
+        }
+        String functionUnitCode = detail.getFunctionUnitCode();
+        if (functionUnitCode != null && !functionUnitCode.isBlank()
+                && functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(userId, functionUnitCode)) {
+            return;
+        }
+        log.debug("Note write denied for user {} on process {}: active role holds no audit grant "
+                + "on function unit {}", userId, detail.getId(), functionUnitCode);
+        throw new RecordNoteException("FORBIDDEN",
+                "Your current role is not granted audit access to this function unit");
     }
 
     /**
