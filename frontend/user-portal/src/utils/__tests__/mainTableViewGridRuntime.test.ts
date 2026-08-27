@@ -9,6 +9,7 @@ import {
   setColumnWidth,
   toListColumnMeta,
 } from '../mainTableViewGridRuntime'
+import { KIND_CONTENT_FLOOR } from '@platform-shared/list/columnWidthLayout'
 
 describe('mainTableViewGridRuntime', () => {
   it('moveColumn swaps order', () => {
@@ -36,6 +37,23 @@ describe('mainTableViewGridRuntime', () => {
       { value: 'RUNNING', label: 'Running' },
       { value: 'COMPLETED', label: 'Completed' },
     ])
+  })
+
+  it('uses the kind content floor when the header is shorter than typical values', () => {
+    const state = createDefaultGridRuntime()
+    expect(
+      columnWidth(
+        {
+          fieldName: 'request_id',
+          displayLabel: 'ID',
+          kind: 'TEXT',
+          filterable: true,
+          sortable: true,
+          operators: ['eq'],
+        },
+        state,
+      ),
+    ).toBe(KIND_CONTENT_FLOOR.TEXT)
   })
 
   it('uses the designer columnWidth before measuring the header label', () => {

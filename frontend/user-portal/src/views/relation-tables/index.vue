@@ -151,6 +151,8 @@
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
           >
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -510,12 +512,13 @@ const layoutStorageKey = computed(() =>
 const columnOrderStorageKey = computed(() =>
   selectedTableId.value != null ? `portal-list-column-order:relation-table:${selectedTableId.value}` : '',
 )
-const { gridScrollRef, gridFits, gridInnerStyle, widthOf, setWidth, persistWidths,
+const { gridScrollRef, gridFits, gridTableHeight, gridInnerStyle, widthOf, setWidth, persistWidths,
 } = useListColumnLayout({
   storageKey: layoutStorageKey,
   fields: layoutFields,
   extraWidth: computed(() => (canWrite.value ? 200 : 0)),
   labelOf: (field) => displayColumns.value.find(c => c.field === field)?.label ?? field,
+  kindOf: (field) => displayColumns.value.find(c => c.field === field)?.kind,
 })
 
 function readStoredColumnOrder(key: string): string[] {

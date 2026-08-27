@@ -362,6 +362,6 @@ onActivated(refresh)
 }
 .table-list-panel :deep(.el-menu-item.is-active)::before { display: none; }
 .panel-title { padding: 12px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--el-border-color-light); }
-.data-grid-panel { flex: 1; min-width: 0; overflow: auto; }
+.data-grid-panel { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .grid-toolbar { display: flex; align-items: center; margin-bottom: 12px; gap: 8px; }
 </style>

@@ -65,6 +65,7 @@
               scrollbar-always-on
               class="list-data-grid table-fixed-actions"
               :class="{ 'list-data-grid--fit': gridFits }"
+              :height="gridTableHeight || '100%'"
               style="width: 100%"
             >
               <el-table-column
@@ -291,6 +292,8 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
+ 
+  gridTableHeight,
  
   gridInnerStyle,
   widthOf,

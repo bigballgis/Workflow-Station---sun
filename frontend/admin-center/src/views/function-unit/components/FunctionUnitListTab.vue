@@ -54,6 +54,8 @@
             style="width: 100%"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
             @selection-change="handleSelectionChange"
           >
             <el-table-column
@@ -237,6 +239,7 @@ const {
   columnFilters,
  
   gridFits,
+  gridTableHeight,
   gridInnerStyle,
   activeFilterColumn,
   activeFilter,

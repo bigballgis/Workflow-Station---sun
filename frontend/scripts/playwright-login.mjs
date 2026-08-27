@@ -226,6 +226,7 @@ export async function loginViaAdminPassword(page, opts = {}) {
   const u = body.user ?? body.data?.user
   if (!u?.userId) throw new Error('Admin password login failed: response missing user')
 
+  await page.waitForLoadState('domcontentloaded')
   await page.evaluate((userInfo) => {
     localStorage.setItem('ws_ac_user', JSON.stringify(userInfo))
     localStorage.setItem('ws_ac_user_id', String(userInfo.userId))

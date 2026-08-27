@@ -2,7 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import {
   attachColumnResizeGuide,
-  clampColumnWidth,
+  clampDisplayWidth,
   COL_RESIZE_CURSOR,
   startWidthFromHandle,
   type ColumnResizeGuide,
@@ -32,7 +32,7 @@ function onMouseDown(event: MouseEvent) {
   document.body.classList.add('is-column-resizing')
 
   function onMouseMove(ev: MouseEvent) {
-    const width = clampColumnWidth(startWidth + ev.clientX - startX)
+    const width = clampDisplayWidth(startWidth + ev.clientX - startX)
     emit('resize', width)
     guide.move(width)
   }

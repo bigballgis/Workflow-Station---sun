@@ -1,3 +1,4 @@
+import type { ListColumnKind } from './columnMeta'
 import { clampColumnWidth, COLUMN_WIDTH_MAX, COLUMN_WIDTH_MIN } from './columnResizeCursor'
 
 /** Caret + gap + resize handle + `.list-col-header` padding-right. */
@@ -5,6 +6,19 @@ export const HEADER_CHROME_PX = 44
 
 /** Short titles (Status / 状态) still need room for the caret and handle. */
 export const HEADER_FIT_MIN = 100
+
+/**
+ * Typical cell content, not the current page's longest value.
+ * Header-fit still wins when the localized title is wider.
+ */
+export const KIND_CONTENT_FLOOR: Record<ListColumnKind, number> = {
+  TEXT: 168,
+  DATETIME: 180,
+  USER: 120,
+  ENUM: HEADER_FIT_MIN,
+  BOOLEAN: HEADER_FIT_MIN,
+  NUMBER: HEADER_FIT_MIN,
+}
 
 const HEADER_FONT = "14px var(--el-font-family, Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif)"
 
@@ -29,11 +43,14 @@ export function measureHeaderLabelPx(label: string): number {
   return Math.ceil(text.length * 8)
 }
 
-/** Default base width: header text + chrome, clamped. Not cell content. */
-export function headerFitColumnWidth(label: string): number {
-  return clampColumnWidth(
-    Math.max(HEADER_FIT_MIN, Math.round(measureHeaderLabelPx(label) + HEADER_CHROME_PX)),
+/** Default base width: max(header text + chrome, kind content floor), clamped. */
+export function headerFitColumnWidth(label: string, kind?: ListColumnKind): number {
+  const header = Math.max(
+    HEADER_FIT_MIN,
+    Math.round(measureHeaderLabelPx(label) + HEADER_CHROME_PX),
   )
+  const contentFloor = kind ? KIND_CONTENT_FLOOR[kind] : HEADER_FIT_MIN
+  return clampColumnWidth(Math.max(header, contentFloor))
 }
 
 /**

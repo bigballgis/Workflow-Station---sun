@@ -75,6 +75,8 @@
             style="width: 100%"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
           >
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -235,6 +237,8 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
+ 
+  gridTableHeight,
  
   gridInnerStyle,
   widthOf,

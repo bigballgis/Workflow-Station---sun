@@ -1,11 +1,15 @@
-/* Host wrapper for shared ListColumnHeader + column resize. Unscoped: el-table internals. */
+/* Host wrapper for shared ListColumnHeader + column resize. Unscoped: el-table internals.
+ * overflow is hidden so Element Plus owns both axes: frozen header, h-bar at the pane
+ * bottom, and `fixed="right"` (Action) pins to the window. */
 .list-data-grid-scroll {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   min-width: 0;
   min-height: 0;
   max-width: 100%;
   flex: 1 1 auto;
-  overflow: auto;
+  overflow: hidden;
 }
 
 /*
@@ -23,19 +27,22 @@
 }
 
 .list-data-grid-inner {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
 }
 
-.list-data-grid .el-table__body-wrapper,
-.list-data-grid .el-table__header-wrapper {
-  overflow-x: visible !important;
-}
-
-/* Only pin the inner wrapper to the viewport when leftover was already
- * distributed into column widths. Unconditionally forcing 100% squashes
- * overflowing tables and ellipsizes English headers. */
-.list-data-grid--fit .el-table__inner-wrapper {
+/* Table chrome stays viewport-wide so `fixed="right"` pins Action to the window.
+ * The inner <table> may still be wider; el-table owns that horizontal scroll. */
+.list-data-grid.el-table,
+.list-data-grid .el-table__inner-wrapper {
   width: 100% !important;
+  max-width: 100%;
+  height: 100%;
 }
 
 .list-data-grid .el-table__header-wrapper th:has(.list-col-header),
@@ -55,6 +62,9 @@
   text-overflow: clip;
 }
 
+/* When leftover was already distributed into column widths, stretch the
+ * inner tables to fill. Do not apply this while overflowing — it would squash
+ * English headers. */
 .list-data-grid--fit .el-scrollbar__view,
 .list-data-grid--fit .el-table__header-wrapper,
 .list-data-grid--fit .el-table__body-wrapper,
@@ -62,4 +72,115 @@
 .list-data-grid--fit .el-table__body {
   width: 100% !important;
   min-width: 100% !important;
+}
+
+/* Bound the page to the window so the grid has a real height (required for
+ * Element Plus to freeze the header and park the h-bar at the pane bottom). */
+.portal-content:has(.list-data-grid-scroll),
+.portal-content:has(.mtv-data-grid-scroll),
+.admin-main:has(.list-data-grid-scroll) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.page-container:has(.list-data-grid-scroll),
+.page-container:has(.mtv-data-grid-scroll),
+.portal-content > *:has(.list-data-grid-scroll),
+.portal-content > *:has(.mtv-data-grid-scroll) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page-container:has(.list-data-grid-scroll) > .page-header,
+.page-container:has(.list-data-grid-scroll) > .search-card,
+.portal-content > *:has(.list-data-grid-scroll) > .page-header {
+  flex-shrink: 0;
+}
+
+.table-card:has(.list-data-grid-scroll),
+.portal-card:has(.list-data-grid-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-card:has(.list-data-grid-scroll) > .el-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-card:has(.list-data-grid-scroll) .toolbar,
+.table-card:has(.list-data-grid-scroll) .fu-toolbar,
+.portal-card:has(.list-data-grid-scroll) .filter-row {
+  flex-shrink: 0;
+}
+
+.el-tabs:has(.list-data-grid-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.el-tabs:has(.list-data-grid-scroll) > .el-tabs__header {
+  flex-shrink: 0;
+}
+
+.el-tabs:has(.list-data-grid-scroll) > .el-tabs__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.el-tabs:has(.list-data-grid-scroll) .el-tab-pane {
+  height: 100%;
+}
+
+.el-tabs:has(.list-data-grid-scroll) .el-tab-pane > * {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.data-layout:has(.list-data-grid-scroll),
+.data-layout:has(.mtv-data-grid-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.data-grid-panel:has(.list-data-grid-scroll),
+.data-grid-panel:has(.mtv-data-grid-scroll) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.member-shared-list,
+.permission-shared-list,
+.list-data-grid-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.list-pagination {
+  flex-shrink: 0;
 }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { COLUMN_WIDTH_MAX, COLUMN_WIDTH_MIN } from '../columnResizeCursor'
 import {
   HEADER_FIT_MIN,
+  KIND_CONTENT_FLOOR,
   distributeDisplayWidths,
   headerFitColumnWidth,
   invertBaseWidth,
@@ -55,5 +56,15 @@ describe('headerFitColumnWidth', () => {
 
   it('grows with a longer current-locale label', () => {
     expect(headerFitColumnWidth('Current assignee')).toBeGreaterThan(headerFitColumnWidth('Status'))
+  })
+
+  it('raises a short TEXT header to the kind content floor', () => {
+    expect(headerFitColumnWidth('ID', 'TEXT')).toBe(KIND_CONTENT_FLOOR.TEXT)
+    expect(headerFitColumnWidth('At', 'DATETIME')).toBe(KIND_CONTENT_FLOOR.DATETIME)
+  })
+
+  it('keeps a long header when it already exceeds the kind floor', () => {
+    expect(headerFitColumnWidth('Current assignee', 'USER'))
+      .toBeGreaterThan(KIND_CONTENT_FLOOR.USER)
   })
 })

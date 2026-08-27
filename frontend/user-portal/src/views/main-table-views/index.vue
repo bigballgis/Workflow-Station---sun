@@ -16,7 +16,7 @@ const {
   importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
   selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns,
   viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
-  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
+  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableHeight, gridTableKey,
   pagedRows, displayTotal, toListColumnMeta,
   handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
   isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, previewFile,
@@ -190,6 +190,8 @@ const {
               style="width: 100%;"
               class="mtv-data-grid"
               :class="{ 'mtv-data-grid--fit': gridFits }"
+              scrollbar-always-on
+              :height="gridTableHeight || '100%'"
               :header-cell-class-name="mtvHeaderCellClassName"
               @row-click="(row: GridDisplayRow) => openRow(row)"
               @selection-change="onSelectionChange"
@@ -413,12 +415,19 @@ const {
   </div>
 </template>
 
+<style lang="scss">
+@import '@/styles/listDataGrid.scss';
+</style>
+
 <style scoped lang="scss">
 .page-container {
   padding: 16px 20px;
   height: 100%;
   min-width: 0;
   max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .page-header {
   margin-bottom: 16px;
@@ -430,7 +439,9 @@ const {
 .data-layout {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
   min-width: 0;
   max-width: 100%;
 }
@@ -438,7 +449,7 @@ const {
   width: 240px;
   flex-shrink: 0;
   align-self: stretch;
-  min-height: calc(100vh - 160px);
+  min-height: 0;
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   background: var(--el-bg-color);
@@ -478,9 +489,12 @@ const {
 }
 .data-grid-panel {
   flex: 1;
-  min-height: calc(100vh - 160px);
+  min-height: 0;
   min-width: 0;
   max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   padding: 16px;
@@ -492,6 +506,7 @@ const {
   gap: 12px;
   margin-bottom: 16px;
   align-items: center;
+  flex-shrink: 0;
 }
 .grid-hint {
   font-size: 12px;
@@ -508,19 +523,26 @@ const {
 .mtv-data-grid-scroll {
   width: 100%;
   min-width: 0;
+  min-height: 0;
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: visible;
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .mtv-data-grid-inner {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
 }
-:deep(.mtv-data-grid .el-table__body-wrapper),
-:deep(.mtv-data-grid .el-table__header-wrapper) {
-  overflow-x: visible !important;
-}
-:deep(.mtv-data-grid--fit .el-table__inner-wrapper) {
+:deep(.mtv-data-grid.el-table),
+:deep(.mtv-data-grid .el-table__inner-wrapper) {
   width: 100% !important;
+  max-width: 100%;
+  height: 100%;
 }
 /* When the columns underflow the panel, stretch the scrollbar view + the actual <table> elements to
    fill the width so the grid never renders half-empty. Element Plus' fit mode (table-layout:auto) then

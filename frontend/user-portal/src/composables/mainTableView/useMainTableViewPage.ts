@@ -19,6 +19,7 @@ import {
   type GridColumnFilter, type GridDisplayRow, type GridRuntimeState, type GridSortDirection,
 } from '@/utils/mainTableViewGridRuntime'
 import { distributeDisplayWidths, invertBaseWidth } from '@platform-shared/list/columnWidthLayout'
+import { clampDisplayWidth } from '@platform-shared/list/columnResizeCursor'
 import {
   downloadMainTableViewRowsAsCsv, formatMainTableViewCell, extractFileLinks, type FileLink,
 } from '@/utils/mainTableViewCsvExport'
@@ -160,6 +161,8 @@ const MTV_SELECTION_COL_WIDTH = 48
 // Width of the scroll viewport — tracked so leftover can be distributed across data columns.
 const gridScrollRef = ref<HTMLElement | null>(null)
 const gridViewportWidth = ref(0)
+const gridViewportHeight = ref(0)
+const dragPreview = ref<{ fieldName: string; displayWidth: number } | null>(null)
 let gridResizeObserver: ResizeObserver | null = null
 
 function baseWidthOf(col: MainTableViewFieldColumn): number {
@@ -174,6 +177,10 @@ const displayWidthMap = computed(() => {
   cols.forEach((col, index) => {
     map[col.fieldName] = displays[index]
   })
+  const draft = dragPreview.value
+  if (draft) {
+    map[draft.fieldName] = clampDisplayWidth(draft.displayWidth)
+  }
   return map
 })
 
@@ -193,11 +200,15 @@ const gridFits = computed(() =>
   gridViewportWidth.value > 0 && gridTotalColumnWidth.value <= gridViewportWidth.value,
 )
 
-const gridInnerStyle = computed(() => (
-  gridFits.value
-    ? { width: '100%' }
-    : { width: `${gridTotalColumnWidth.value}px`, minWidth: '100%' }
-))
+// Always the viewport width so el-table owns horizontal scroll (Action pin-right,
+// many columns not clipped by overflow:hidden on the scroll host).
+const gridInnerStyle = computed(() => ({
+  width: '100%',
+  minWidth: '100%',
+}))
+const gridTableHeight = computed(() =>
+  gridViewportHeight.value > 0 ? gridViewportHeight.value : undefined,
+)
 
 // Forces el-table to fully rebuild (no stale row/column DOM reuse) whenever the selected view or its
 // columns change — otherwise switching views can briefly render the old rows under the new headers.
@@ -623,19 +634,26 @@ function applyColumnWidth() {
 }
 
 function handleColumnResize(fieldName: string, width: number) {
-  const cols = displayColumns.value
-  const index = cols.findIndex((col) => col.fieldName === fieldName)
-  if (index < 0) return
-  const bases = cols.map((col) => baseWidthOf(col))
-  setColumnWidth(
-    gridRuntime,
-    fieldName,
-    invertBaseWidth(width, index, bases, gridViewportWidth.value, MTV_SELECTION_COL_WIDTH),
-  )
-  nextTick(() => tableRef.value?.doLayout?.())
+  dragPreview.value = { fieldName, displayWidth: clampDisplayWidth(width) }
 }
 
 function handleColumnResizeEnd() {
+  const draft = dragPreview.value
+  if (draft) {
+    const cols = displayColumns.value
+    const index = cols.findIndex((col) => col.fieldName === draft.fieldName)
+    if (index >= 0) {
+      const bases = cols.map((col) => baseWidthOf(col))
+      setColumnWidth(
+        gridRuntime,
+        draft.fieldName,
+        invertBaseWidth(
+          draft.displayWidth, index, bases, gridViewportWidth.value, MTV_SELECTION_COL_WIDTH,
+        ),
+      )
+    }
+    dragPreview.value = null
+  }
   persistRuntime()
   nextTick(() => tableRef.value?.doLayout?.())
 }
@@ -734,9 +752,11 @@ watch(gridScrollRef, (el, prev) => {
   if (prev) gridResizeObserver?.unobserve(prev)
   if (el) {
     gridViewportWidth.value = el.clientWidth
+    gridViewportHeight.value = el.clientHeight
     gridResizeObserver?.observe(el)
   } else {
     gridViewportWidth.value = 0
+    gridViewportHeight.value = 0
   }
 })
 
@@ -749,7 +769,9 @@ onMounted(async () => {
   if (typeof ResizeObserver !== 'undefined') {
     gridResizeObserver = new ResizeObserver(entries => {
       const w = entries[0]?.contentRect.width ?? 0
+      const h = entries[0]?.contentRect.height ?? 0
       if (w > 0) gridViewportWidth.value = w
+      if (h > 0) gridViewportHeight.value = h
     })
   }
   await loadFunctionUnits()
@@ -773,7 +795,7 @@ onMounted(async () => {
     importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
     selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
     viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
-    MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
+    MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableHeight, gridTableKey,
     pagedRows, displayTotal, toListColumnMeta,
     handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
     isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, previewFile,

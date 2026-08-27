@@ -48,12 +48,13 @@ export function usePortalListGrid<T extends object>(opts: {
   const displayRows = computed(() => rows.value)
 
   const layoutFields = computed(() => displayColumns.value.map((col) => col.field))
-  const { gridScrollRef, gridFits, gridInnerStyle, widthOf, setWidth, persistWidths } =
+  const { gridScrollRef, gridFits, gridTableHeight, gridInnerStyle, widthOf, setWidth, persistWidths } =
     useListColumnLayout({
       storageKey: opts.storageKey,
       fields: layoutFields,
       extraWidth: opts.extraWidth,
       labelOf: (field) => displayColumns.value.find((col) => col.field === field)?.label ?? field,
+      kindOf: (field) => displayColumns.value.find((col) => col.field === field)?.kind,
     })
 
   const activeFilterColumn = computed(
@@ -202,6 +203,7 @@ export function usePortalListGrid<T extends object>(opts: {
     activeFilter,
     gridScrollRef,
     gridFits,
+    gridTableHeight,
     gridInnerStyle,
     widthOf,
     setWidth,

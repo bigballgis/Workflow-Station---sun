@@ -19,6 +19,8 @@
           style="width: 100%;"
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
+          scrollbar-always-on
+          :height="gridTableHeight || '100%'"
         >
           <template #empty>
             <div
@@ -232,6 +234,7 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
+  gridTableHeight,
   gridInnerStyle,
   widthOf,
   setWidth,

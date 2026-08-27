@@ -67,7 +67,7 @@ export function columnWidth(
   if (col.columnWidth != null && col.columnWidth > 0) {
     return clampColumnWidth(col.columnWidth)
   }
-  return headerFitColumnWidth(col.displayLabel)
+  return headerFitColumnWidth(col.displayLabel, col.kind)
 }
 
 export function setColumnWidth(
