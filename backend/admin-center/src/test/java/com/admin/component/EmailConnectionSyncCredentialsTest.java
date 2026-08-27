@@ -11,12 +11,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -200,5 +204,31 @@ class EmailConnectionSyncCredentialsTest {
                 IllegalStateException.class,
                 () -> syncComponent.getCredentials("fu-1", "conn-3"));
         assertTrue(ex.getMessage().contains("smtp.host"));
+    }
+
+    @Test
+    void syncConnections_clearsSecretThatCannotBeDecrypted() {
+        FunctionUnit fu = FunctionUnit.builder()
+                .id("fu-1")
+                .code("pr")
+                .name("Purchase Request")
+                .version("1.0.0")
+                .build();
+        when(functionUnitRepository.findById("fu-1")).thenReturn(Optional.of(fu));
+        when(encryptionService.decrypt("ENC:bad")).thenThrow(new RuntimeException("Decryption failed"));
+        when(emailConnectionRepository.save(any(EmailConnection.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        syncComponent.syncConnections("fu-1", List.of(Map.of(
+                "connectionUid", "conn-x",
+                "name", "Mail",
+                "host", "smtp.example.com",
+                "fromEmail", "from@example.com",
+                "passwordEncrypted", "ENC:bad")));
+
+        org.mockito.ArgumentCaptor<EmailConnection> captor =
+                org.mockito.ArgumentCaptor.forClass(EmailConnection.class);
+        verify(emailConnectionRepository).save(captor.capture());
+        assertNull(captor.getValue().getPasswordEncrypted());
+        assertEquals("smtp.example.com", captor.getValue().getHost());
     }
 }

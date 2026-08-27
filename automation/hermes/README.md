@@ -14,9 +14,9 @@
 
 | 文件 | 角色 | 挂载点 |
 |---|---|---|
-| `pieces.json` | **piece 白名单**（`name` + `version`，自研件另加 `tarball`）——手改的唯一入口 | 下面两处共用 |
+| `pieces.json` | **piece 白名单**（`name` + `version` + `tarball`，13 件全带，见下）——手改的唯一入口 | 下面两处共用 |
 | `prewarm-pieces.sh` | 构建期把白名单里的 piece 按 sandbox `piece-installer.ts` 的原样布局（含每件的 `bundle.tgz`）装进 `cache/v13/common` 并写 `ready`，使运行时安装**和 bundle 端点下载**都成为 no-op（气隙必需，X-3 / FR-A09 / FR-A10） | `../Dockerfile` run 阶段最后一步 |
-| `tarballs/*.tgz` | npm 包留档（审计 / 内网发布源）；**声明了 `tarball` 的自研件直接从这里装**——它们不在任何公共 registry 上 | 同上 |
+| `tarballs/*.tgz` | npm 包留档（审计 / 内网发布源）；**声明了 `tarball` 的件直接从这里装**——自研件因为不在任何公共 registry 上，官方件因为 `seed-offline-store.mjs` 要读它们的 `dependencies` 才能把闭包烘进离线 store | 同上 |
 | `check-tsconfig-paths.mjs` | 断言三个 tsconfig 的 `paths` 映射都指向存在的文件（悬空映射会让 import 解析到空，tsc 报错的位置离病因很远）| 不在构建里，CI `vendor-trim-check.yml` 跑 |
 | `pieces.e2e-fixtures.json` | **CI 专用**的第二份清单：`test/integration/ce` 钉住的四个旧版 piece（webhook@0.1.29 / subflows@0.4.11 / data-mapper@0.3.15 / delay@0.3.26），全走 registry、无 `tarball` 字段 | 不在镜像里（已 `.dockerignore`），CI `ap-api-tests.yml` 用同一个 `prewarm-pieces.sh` 跑 |
 
@@ -44,7 +44,8 @@
 白名单条目两种形态：
 
 ```json
-{ "name": "@activepieces/piece-csv", "version": "0.4.15" }
+{ "name": "@activepieces/piece-csv", "version": "0.4.20",
+  "tarball": "activepieces-piece-csv-0.4.20.tgz" }
 { "name": "@activepieces/piece-hash-helper", "version": "1.0.0",
   "tarball": "activepieces-piece-hash-helper-1.0.0.tgz" }
 ```
@@ -52,9 +53,15 @@
 0.88 里两种形态最终落盘完全一致：每件都是 `pieces/<name>-<ver>/bundle.tgz` + 指向它绝对路径的
 `package.json`（运行时 installer 对 REGISTRY / ARCHIVE 一视同仁，都从 API 的
 `/v1/engine/pieces/bundle` 端点下成 tarball 再装）。区别只在构建期 tarball 从哪来：
-前者构建机从 `registry.npmjs.org/<name>/-/<basename>-<ver>.tgz` 下载（即 bundle 端点
-307 重定向的同一来源）；后者从本目录 `tarballs/` 拷贝——自研件不在任何公共 registry 上。
+带 `tarball` 的从本目录 `tarballs/` 拷贝，不带的由构建机从
+`registry.npmjs.org/<name>/-/<basename>-<ver>.tgz` 下载（即 bundle 端点 307 重定向的同一来源）。
 声明了却找不到文件即 fail-loud。
+
+> **HERMES-PATCH-032 起 13 个白名单件全部带 `tarball`**（不只自研件）。原因是
+> `seed-offline-store.mjs` 只能读它手上有的 tarball：过去只有两个自研件带该字段，而自研件
+> 闭包为空，于是烘出来的「离线 store」实际是空的（8 KB），任何 `--offline` 解析必然 miss。
+> 官方件的 `.tgz` 已逐个用 SHA-1 与 registry 的 `dist.shasum` 核对一致，改版本时要重核。
+> 顺带的好处：构建期不再为这 13 个件访问 npmjs。
 
 ## 白名单的两半
 

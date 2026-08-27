@@ -1,10 +1,21 @@
 #!/bin/sh
-# Pre-installs the pieces from pieces.json into the AP sandbox's pnpm workspace
-# (/usr/src/app/cache/v13/common) and writes the `ready` markers, replicating
-# EXACTLY what packages/server/sandbox .../cache/pieces/piece-installer.ts does at
-# runtime. Because pieceCheckIfAlreadyInstalled() sees ready + node_modules, the
-# runtime installer becomes a NO-OP for these pieces — pnpm never runs, no registry
-# and no bundle endpoint is hit (X-3, FR-A09/FR-A10).
+# Pre-installs the pieces from pieces.json into the AP sandbox's piece cache
+# (/usr/src/app/cache/v13/common) and writes the `ready` markers, producing the layout
+# packages/server/sandbox .../cache/pieces/piece-installer.ts probes at runtime. Because
+# pieceCheckIfAlreadyInstalled() sees ready + node_modules/<name>, the runtime installer
+# becomes a NO-OP for these pieces — pnpm never runs, no registry and no bundle endpoint
+# is hit (X-3, FR-A09/FR-A10).
+#
+# HERMES-PATCH-032: the runtime installer no longer installs at this workspace ROOT — it
+# runs one `pnpm install --ignore-workspace` per piece directory, because a filtered install
+# here re-resolves every OTHER member and, in the air-gapped cluster, dies on the
+# fail-closed registry. This script keeps the single workspace install: it runs at BUILD
+# time with a registry in reach, and one install for the whole allowlist is much faster.
+# What must stay identical is the RESULT the runtime probes — pieces/<name>-<ver>/ with
+# bundle.tgz, package.json, node_modules/<name> and `ready` — which the check at the end
+# enforces. Members installed here share the workspace's node_modules/.pnpm; a per-piece
+# runtime install writes only inside its own directory, so the two layouts coexist and
+# neither can prune the other.
 #
 # Runs INSIDE the AP image (last RUN step of ../Dockerfile) on a machine WITH network.
 # The `v13` segment is AP 0.88's LATEST_CACHE_VERSION (see
@@ -62,9 +73,13 @@ EOF
 
 # One folder per piece: pieces/<name>-<version>/{bundle.tgz,package.json}, same as
 # saveBundlesToDiskIfNotCached() + createPiecePackageJson(). A manifest entry with
-# "tarball" is an IN-HOUSE piece: it is not on any public registry, so its bundle.tgz
-# is copied from ./tarballs/ next to the manifest. Everything else is fetched from
-# registry.npmjs.org — `https://registry.npmjs.org/<name>/-/<basename>-<ver>.tgz`,
+# "tarball" is VENDORED: its bytes ship in ./tarballs/ next to the manifest and are copied
+# from there. Since HERMES-PATCH-032 every allowlisted piece is vendored — in-house pieces
+# because they exist on no registry, official ones so that seed-offline-store.mjs can read
+# their pins (it can only read a tarball it has) and so the image build stops depending on
+# npmjs for them. The vendored official .tgz files are byte-identical to the registry's
+# (SHA-1 checked against dist.shasum); re-verify that when bumping a version. An entry
+# WITHOUT "tarball" still works and is fetched from registry.npmjs.org — `https://registry.npmjs.org/<name>/-/<basename>-<ver>.tgz`,
 # where <basename> is the package name without its scope. Either way the dependency
 # value is the absolute bundle.tgz path, exactly as the runtime writes it.
 FILTERS=$(node -e '

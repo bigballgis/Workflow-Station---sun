@@ -37,5 +37,15 @@ public enum ContentType {
     /**
      * 邮件模板 (Send Task HTML templates from DW email-templates/)
      */
-    EMAIL_TEMPLATE
+    EMAIL_TEMPLATE,
+
+    /**
+     * DMN decision (decisions/*.dmn)
+     */
+    DECISION,
+
+    /**
+     * Table relations blob (relations/table_relations.json)
+     */
+    TABLE_RELATION
 }

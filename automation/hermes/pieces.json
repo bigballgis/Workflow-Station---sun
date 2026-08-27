@@ -1,47 +1,58 @@
 [
   {
     "name": "@activepieces/piece-webhook",
-    "version": "0.1.40"
+    "version": "0.1.40",
+    "tarball": "activepieces-piece-webhook-0.1.40.tgz"
   },
   {
     "name": "@activepieces/piece-http",
-    "version": "0.11.18"
+    "version": "0.11.18",
+    "tarball": "activepieces-piece-http-0.11.18.tgz"
   },
   {
     "name": "@activepieces/piece-schedule",
-    "version": "0.1.21"
+    "version": "0.1.21",
+    "tarball": "activepieces-piece-schedule-0.1.21.tgz"
   },
   {
     "name": "@activepieces/piece-csv",
-    "version": "0.4.20"
+    "version": "0.4.20",
+    "tarball": "activepieces-piece-csv-0.4.20.tgz"
   },
   {
     "name": "@activepieces/piece-json",
-    "version": "0.1.11"
+    "version": "0.1.11",
+    "tarball": "activepieces-piece-json-0.1.11.tgz"
   },
   {
     "name": "@activepieces/piece-xml",
-    "version": "0.1.19"
+    "version": "0.1.19",
+    "tarball": "activepieces-piece-xml-0.1.19.tgz"
   },
   {
     "name": "@activepieces/piece-pdf",
-    "version": "0.5.9"
+    "version": "0.5.9",
+    "tarball": "activepieces-piece-pdf-0.5.9.tgz"
   },
   {
     "name": "@activepieces/piece-file-helper",
-    "version": "0.1.28"
+    "version": "0.1.28",
+    "tarball": "activepieces-piece-file-helper-0.1.28.tgz"
   },
   {
     "name": "@activepieces/piece-text-helper",
-    "version": "0.6.4"
+    "version": "0.6.4",
+    "tarball": "activepieces-piece-text-helper-0.6.4.tgz"
   },
   {
     "name": "@activepieces/piece-data-mapper",
-    "version": "0.3.20"
+    "version": "0.3.20",
+    "tarball": "activepieces-piece-data-mapper-0.3.20.tgz"
   },
   {
     "name": "@activepieces/piece-postgres",
-    "version": "0.3.0"
+    "version": "0.3.0",
+    "tarball": "activepieces-piece-postgres-0.3.0.tgz"
   },
   {
     "name": "@activepieces/piece-biz-calendar",

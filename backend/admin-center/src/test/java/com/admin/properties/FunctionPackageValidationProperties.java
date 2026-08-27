@@ -1,6 +1,7 @@
 package com.admin.properties;
 
 import com.admin.component.FunctionUnitManagerComponent;
+import com.admin.component.FunctionUnitPackageParser;
 import com.admin.dto.request.FunctionUnitImportRequest;
 import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
@@ -15,6 +16,7 @@ import net.jqwik.api.constraints.IntRange;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.mockito.Mockito;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,11 +45,27 @@ class FunctionPackageValidationProperties {
         contentRepository = Mockito.mock(FunctionUnitContentRepository.class);
         accessRepository = Mockito.mock(FunctionUnitAccessRepository.class);
         packageParser = Mockito.mock(com.admin.component.FunctionUnitPackageParser.class);
-        // Generated file contents are not real base64 ZIPs: the real parser would throw
-        // IllegalArgumentException, and production then falls back to the legacy parser.
+        // Property tests feed non-ZIP strings; stub a valid empty package so import is not
+        // rejected by fail-closed ZIP parsing.
+        FunctionUnitManagerComponent.FunctionPackageContent content =
+                FunctionUnitManagerComponent.FunctionPackageContent.builder()
+                        .code("test-code")
+                        .name("Test Function")
+                        .version("1.0.0")
+                        .dependencies(List.of())
+                        .contents(List.of())
+                        .build();
+        FunctionUnitPackageParser.ParsedImportPackage parsed =
+                FunctionUnitPackageParser.ParsedImportPackage.builder()
+                        .packageContent(content)
+                        .forms(List.of())
+                        .actions(List.of())
+                        .relationTables(List.of())
+                        .connections(List.of())
+                        .emailMonitors(List.of())
+                        .build();
         try {
-            Mockito.when(packageParser.parseBase64Zip(Mockito.anyString()))
-                    .thenThrow(new IllegalArgumentException("not a base64 zip"));
+            Mockito.when(packageParser.parseBase64Zip(Mockito.anyString())).thenReturn(parsed);
         } catch (java.io.IOException e) {
             throw new IllegalStateException(e);
         }

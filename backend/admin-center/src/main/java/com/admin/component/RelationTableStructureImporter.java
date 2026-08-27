@@ -1,16 +1,20 @@
 package com.admin.component;
 
+import com.admin.entity.FunctionUnit;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
+import com.admin.entity.RelationTableFunctionUnit;
 import com.admin.exception.AdminBusinessException;
+import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.repository.RelationTableFunctionUnitRepository;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
 import com.platform.common.relationtable.RelationTableStructureDiff;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +23,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Imports relation-table (rt_) structures carried in a function-unit package into admin-center.
@@ -31,15 +36,43 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class RelationTableStructureImporter {
 
     private final RelationTableDefinitionRepository relationTableDefinitionRepository;
     private final RelationTableFieldMapper relationTableFieldMapper;
     private final ObjectMapper objectMapper;
+    private final RelationTableFunctionUnitRepository relationTableFunctionUnitRepository;
+    private final FunctionUnitRepository functionUnitRepository;
+
+    /** Test constructor: skip Function Unit binding. */
+    public RelationTableStructureImporter(RelationTableDefinitionRepository relationTableDefinitionRepository,
+                                          RelationTableFieldMapper relationTableFieldMapper,
+                                          ObjectMapper objectMapper) {
+        this(relationTableDefinitionRepository, relationTableFieldMapper, objectMapper, null, null);
+    }
+
+    @Autowired
+    public RelationTableStructureImporter(RelationTableDefinitionRepository relationTableDefinitionRepository,
+                                          RelationTableFieldMapper relationTableFieldMapper,
+                                          ObjectMapper objectMapper,
+                                          RelationTableFunctionUnitRepository relationTableFunctionUnitRepository,
+                                          FunctionUnitRepository functionUnitRepository) {
+        this.relationTableDefinitionRepository = relationTableDefinitionRepository;
+        this.relationTableFieldMapper = relationTableFieldMapper;
+        this.objectMapper = objectMapper;
+        this.relationTableFunctionUnitRepository = relationTableFunctionUnitRepository;
+        this.functionUnitRepository = functionUnitRepository;
+    }
 
     @Transactional
     public Map<Long, Long> importRelationTables(List<Map<String, Object>> relationTables, String operator) {
+        return importRelationTables(relationTables, operator, null);
+    }
+
+    @Transactional
+    public Map<Long, Long> importRelationTables(List<Map<String, Object>> relationTables,
+                                                String operator,
+                                                String functionUnitId) {
         Map<Long, Long> sourceIdToNewId = new LinkedHashMap<>();
         Map<String, Long> nameToId = new LinkedHashMap<>();
         if (relationTables == null || relationTables.isEmpty()) {
@@ -52,12 +85,13 @@ public class RelationTableStructureImporter {
             if (tableName == null || tableName.isBlank()) {
                 continue;
             }
-            RelationTableDefinition saved = upsert(table, operator);
+            RelationTableDefinition saved = upsert(table, operator, functionUnitId);
             nameToId.put(tableName, saved.getId());
             Object srcId = table.get("relationTableId");
             if (srcId instanceof Number num) {
                 sourceIdToNewId.put(num.longValue(), saved.getId());
             }
+            bindFunctionUnit(saved.getId(), functionUnitId);
         }
 
         // Pass 2: resolve each field's refTableName → ref_table_id now that all tables exist.
@@ -72,7 +106,7 @@ public class RelationTableStructureImporter {
         return sourceIdToNewId;
     }
 
-    private RelationTableDefinition upsert(Map<String, Object> table, String operator) {
+    private RelationTableDefinition upsert(Map<String, Object> table, String operator, String functionUnitId) {
         String tableName = (String) table.get("tableName");
         String displayName = (String) table.get("displayName");
         String description = (String) table.get("description");
@@ -95,6 +129,8 @@ public class RelationTableStructureImporter {
             def.setFieldDefinitions(buildFields(def, table));
             return relationTableDefinitionRepository.save(def);
         }
+
+        rejectForeignBinding(existing.getId(), functionUnitId);
 
         // Present → compare against current structure before touching anything; only a real change
         // should flip status to UPDATED and bump current_version (re-importing identical content
@@ -230,8 +266,9 @@ public class RelationTableStructureImporter {
                 fd.setRefTableId(refId);
                 dirty = true;
             } else if (fd != null) {
-                log.warn("Relation field {}.{} references unknown table '{}'; ref_table_id left null",
-                        tableId, f.get("fieldName"), refName);
+                throw new AdminBusinessException("FU_IMPORT_RT_FK_UNRESOLVED",
+                        "Relation field " + tableId + "." + f.get("fieldName")
+                                + " references unknown table '" + refName + "'");
             }
         }
         if (dirty) {
@@ -311,5 +348,51 @@ public class RelationTableStructureImporter {
                     "Field '" + fieldName + "' is marked computed but has no usable formula JSON");
         }
         return definition;
+    }
+
+    private void rejectForeignBinding(Long relationTableId, String functionUnitId) {
+        if (relationTableFunctionUnitRepository == null || functionUnitId == null || functionUnitId.isBlank()) {
+            return;
+        }
+        List<RelationTableFunctionUnit> links =
+                relationTableFunctionUnitRepository.findByRelationTableId(relationTableId);
+        if (links.isEmpty()) {
+            return;
+        }
+        for (RelationTableFunctionUnit link : links) {
+            if (functionUnitId.equals(link.getFunctionUnitId())) {
+                return;
+            }
+        }
+        String importCode = functionUnitRepository == null ? null
+                : functionUnitRepository.findById(functionUnitId).map(FunctionUnit::getCode).orElse(null);
+        for (RelationTableFunctionUnit link : links) {
+            if (importCode == null || importCode.isBlank()) {
+                continue;
+            }
+            String otherCode = functionUnitRepository.findById(link.getFunctionUnitId())
+                    .map(FunctionUnit::getCode).orElse(null);
+            if (importCode.equals(otherCode)) {
+                return;
+            }
+        }
+        throw new AdminBusinessException("FU_IMPORT_RT_BOUND_OTHER_FU",
+                "Relation table is already bound to another Function Unit");
+    }
+
+    private void bindFunctionUnit(Long relationTableId, String functionUnitId) {
+        if (relationTableFunctionUnitRepository == null || functionUnitId == null || functionUnitId.isBlank()) {
+            return;
+        }
+        boolean already = relationTableFunctionUnitRepository.findByRelationTableId(relationTableId).stream()
+                .anyMatch(link -> functionUnitId.equals(link.getFunctionUnitId()));
+        if (already) {
+            return;
+        }
+        relationTableFunctionUnitRepository.save(RelationTableFunctionUnit.builder()
+                .id(UUID.randomUUID().toString())
+                .relationTableId(relationTableId)
+                .functionUnitId(functionUnitId)
+                .build());
     }
 }

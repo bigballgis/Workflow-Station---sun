@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -31,6 +32,18 @@ public class AdminApiExceptionHandler {
         String traceId = shortTraceId();
         log.warn("Conflict [{}] {}: {}", traceId, ex.getErrorCode(), ex.getErrorMessage());
         return respond(HttpStatus.CONFLICT, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        String raw = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+        String message = raw != null && raw.contains("chk_content_type")
+                ? "Function unit content type is not allowed by the database constraint (apply schema script 61/74 for EMAIL_TEMPLATE/DECISION/TABLE_RELATION)"
+                : "Function unit import violated a database constraint";
+        log.warn("Data integrity [{}]: {}", traceId, raw);
+        return respond(HttpStatus.BAD_REQUEST, "FU_IMPORT_CONSTRAINT", message, traceId, request);
     }
 
     @ExceptionHandler(AdminBusinessException.class)

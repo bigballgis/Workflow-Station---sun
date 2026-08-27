@@ -30,10 +30,10 @@ public class FunctionUnitImportRequest {
     private String fileName;
     
     /**
-     * 是否覆盖已存在的版本
+     * Explicit false rejects in-place overwrite of the same code+version.
+     * Null / omitted keeps the historical behaviour (overwrite in place).
      */
-    @Builder.Default
-    private boolean overwrite = false;
+    private Boolean overwrite;
     
     /**
      * 导入备注
