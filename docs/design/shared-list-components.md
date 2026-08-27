@@ -747,7 +747,8 @@ Portal/Admin 改 import 并删拷贝 + 去掉 spacer + Views 同一 hug + 单测
 `frontend/scripts/verify-shared-list-column-layout.mjs` +
 `frontend/scripts/verify-user-filter-operators.mjs`（Current Assignee 六则）+
 两端 `pnpm run build` + 截图：To Do、My Request（有 Action）、一张 Admin 列表、Views；中英各一。
-脚本**必须**打开 Permissions（混合页：`.portal-content` 不得 `overflow: hidden`）和 Delegations
+脚本**必须**打开 Permissions（混合页：`.portal-content` 不得 `overflow: hidden`，**同时**
+嵌套 list 有封顶高度、表体自己可竖向滚）和 Delegations
 （Action 列写死 width，窄屏下 Suspend/Delete 按钮可见）。只测 To Do / My Requests / Admin users
 会漏掉这两处。
 `git diff --stat frontend/developer-workstation` 必须为空。

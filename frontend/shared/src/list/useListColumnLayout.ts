@@ -93,8 +93,10 @@ export function useListColumnLayout(opts: {
   kindOf?: (field: string) => ListColumnKind | undefined
   /**
    * Full-page lists freeze the header inside the leftover viewport.
-   * Mixed card+list pages (`.page-stack`) must pass false so the table
-   * sizes to its rows and the window keeps the vertical scrollbar.
+   * Mixed card+list pages (`.page-stack`) keep page scroll and cap the nested
+   * `.list-data-grid-scroll` in CSS — leave this at default so the table fills
+   * that pane and still has an inner vertical bar. Pass false only to size the
+   * table to its rows (no inner bar).
    */
   fillViewport?: MaybeRefOrGetter<boolean>
 }) {

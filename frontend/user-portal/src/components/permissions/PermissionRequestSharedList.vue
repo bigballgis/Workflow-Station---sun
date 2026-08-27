@@ -20,7 +20,7 @@
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
           scrollbar-always-on
-          :height="gridTableHeight"
+          :height="gridTableHeight || '100%'"
         >
           <template #empty>
             <div
@@ -256,7 +256,6 @@ const {
 } = usePortalListGrid<PermissionRequestRecord>({
   storageKey: props.storageKey,
   extraWidth: actionColWidth,
-  fillViewport: false,
 })
 
 const visibleColumns = computed<ListColumnMeta[]>(() => {

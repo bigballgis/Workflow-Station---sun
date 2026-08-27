@@ -195,35 +195,25 @@
   flex-shrink: 0;
 }
 
-.list-data-grid .el-table__cell:has(.row-actions) .cell,
-.list-data-grid .el-table-fixed-column--right .cell {
+/* Action cells only — do not lift overflow on every right-fixed column. */
+.list-data-grid .el-table__cell:has(.row-actions) .cell {
   overflow: visible !important;
 }
 
-/* Stacked pages: the page owns vertical scroll. Nested grids size to content. */
+/* Mixed card+list: the window/page still scrolls. Each nested list is a capped
+ * pane so el-table keeps a frozen header and its own vertical bar. Do not force
+ * table height:auto — that grows with rows and removes the inner scrollbar. */
 .page-stack .list-data-grid-scroll {
   flex: 0 0 auto;
-  overflow: visible;
-}
-
-.page-stack .list-data-grid.el-table,
-.page-stack .list-data-grid .el-table__inner-wrapper,
-.page-stack .list-data-grid .el-table__body-wrapper,
-.page-stack .list-data-grid .el-scrollbar__wrap,
-.page-stack .list-data-grid .el-scrollbar__view {
-  height: auto !important;
-  max-height: none !important;
+  height: min(520px, calc(100vh - 220px));
+  min-height: 280px;
+  overflow: hidden;
 }
 
 .page-stack .portal-card:has(.list-data-grid-scroll),
 .page-stack .permission-shared-list,
-.page-stack .list-data-grid-host,
-.page-stack .el-tabs:has(.list-data-grid-scroll),
-.page-stack .el-tabs:has(.list-data-grid-scroll) > .el-tabs__content,
-.page-stack .el-tabs:has(.list-data-grid-scroll) .el-tab-pane,
-.page-stack .el-tabs:has(.list-data-grid-scroll) .el-tab-pane > * {
+.page-stack .list-data-grid-host {
   flex: 0 0 auto;
-  height: auto;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 }

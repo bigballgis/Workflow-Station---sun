@@ -122,6 +122,26 @@ async function assertPageVerticalScroll(label) {
   )
 }
 
+async function assertNestedListInnerScroll(label) {
+  const info = await page.locator('.page-stack .list-data-grid-scroll').first().evaluate((el) => {
+    const body = el.querySelector('.el-table__body-wrapper .el-scrollbar__wrap, .el-table__body-wrapper')
+    return {
+      paneH: Math.round(el.getBoundingClientRect().height),
+      bodyH: body ? Math.round(body.getBoundingClientRect().height) : 0,
+    }
+  })
+  check(
+    `${label}: nested list pane is capped`,
+    info.paneH >= 260 && info.paneH <= 540,
+    `paneH=${info.paneH}`,
+  )
+  check(
+    `${label}: nested list body has its own viewport`,
+    info.bodyH >= 180 && info.bodyH <= info.paneH,
+    `bodyH=${info.bodyH} paneH=${info.paneH}`,
+  )
+}
+
 async function assertActionButtonsVisible(label, { minWidth }) {
   const header = page.locator('.el-table__header th').filter({ hasText: /Actions/i }).last()
   const headerBox = await header.boundingBox()
@@ -455,6 +475,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 640 })
   await page.waitForTimeout(400)
   await assertPageVerticalScroll('Permissions')
+  await assertNestedListInnerScroll('Permissions')
   await shot(PORTAL_OUT, 'permissions-page-vertical-scroll')
   await page.setViewportSize({ width: 1440, height: 900 })
 
