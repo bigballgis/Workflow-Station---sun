@@ -88,6 +88,11 @@ export interface TaskInfo {
   assigneeName?: string
   delegatorId?: string
   delegatorName?: string
+  delegatedTargetType?: string
+  delegatedTo?: string
+  delegatedBuCode?: string
+  delegatedRoleCode?: string
+  delegated?: boolean
   initiatorId: string
   initiatorName?: string
   priority: string
@@ -218,11 +223,17 @@ export function completeTask(taskId: string, data: TaskCompleteRequest) {
   return request.post(`/tasks/${taskId}/complete`, data)
 }
 
+export interface TaskDelegateRequest {
+  delegatedTargetType?: 'USER' | 'BU_ROLE'
+  delegatedTo?: string
+  delegatedBuCode?: string
+  delegatedRoleCode?: string
+  reason?: string
+}
+
 // Delegate task
-export function delegateTask(taskId: string, delegateId: string, reason?: string) {
-  return request.post(`/tasks/${taskId}/delegate`, null, {
-    params: { delegateId, reason }
-  })
+export function delegateTask(taskId: string, body: TaskDelegateRequest) {
+  return request.post(`/tasks/${taskId}/delegate`, body)
 }
 
 // Transfer task

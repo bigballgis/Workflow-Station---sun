@@ -210,13 +210,13 @@ export const permissionApi = {
   },
 
   /** 获取业务单元树（保留 children 层级，供级联选择器） */
-  getBusinessUnitsTree() {
-    return request.get<BusinessUnit[]>('/permissions/business-units/tree')
+  getBusinessUnitsTree(config?: { skipGlobalErrorHandler?: boolean }) {
+    return request.get<BusinessUnit[]>('/permissions/business-units/tree', config)
   },
 
   /** 获取业务单元绑定的角色 */
-  getBusinessUnitRoles(businessUnitId: string) {
-    return request.get<RoleInfo[]>(`/permissions/business-units/${businessUnitId}/roles`)
+  getBusinessUnitRoles(businessUnitId: string, config?: { skipGlobalErrorHandler?: boolean }) {
+    return request.get<RoleInfo[]>(`/permissions/business-units/${businessUnitId}/roles`, config)
   },
 
   /** 申请加入虚拟组 */

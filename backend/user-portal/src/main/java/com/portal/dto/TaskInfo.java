@@ -81,6 +81,18 @@ public class TaskInfo {
     /** 委托人名称 */
     private String delegatorName;
 
+    /** USER or BU_ROLE; null = not a single-task delegate overlay */
+    private String delegatedTargetType;
+
+    /** USER delegatee id; null for BU_ROLE */
+    private String delegatedTo;
+
+    private String delegatedBuCode;
+    private String delegatedRoleCode;
+
+    /** Engine flag: wf_extended_task_info is delegated */
+    private Boolean delegated;
+
     /** 发起人ID */
     private String initiatorId;
 

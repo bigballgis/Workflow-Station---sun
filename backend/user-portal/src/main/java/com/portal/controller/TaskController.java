@@ -155,9 +155,14 @@ public class TaskController {
     public ApiResponse<Void> delegateTask(
             @PathVariable String taskId,
             @CurrentUserId String userId,
-            @RequestParam String delegateId,
+            @RequestBody(required = false) TaskDelegateRequest body,
+            @RequestParam(required = false) String delegateId,
             @RequestParam(required = false) String reason) {
-        taskProcessComponent.delegateTask(taskId, userId, delegateId, reason);
+        if (userId == null || userId.isBlank()) {
+            throw new PortalException("401", "Authentication required");
+        }
+        TaskDelegateRequest effective = resolveDelegateBody(body, delegateId, reason);
+        taskProcessComponent.delegateTask(taskId, userId, effective);
         return ApiResponse.success();
     }
 
@@ -250,6 +255,28 @@ public class TaskController {
         return workflowEngineClient.getSubTableDataAll(taskId)
                 .map(ApiResponse::success)
                 .orElseGet(() -> ApiResponse.error("502", "Failed to fetch sub-table data from workflow engine"));
+    }
+
+    private static TaskDelegateRequest resolveDelegateBody(
+            TaskDelegateRequest body, String delegateId, String reason) {
+        if (body != null && !isEmptyDelegateBody(body)) {
+            return body;
+        }
+        if (delegateId == null || delegateId.isBlank()) {
+            throw new PortalException("400", "Delegate request cannot be empty");
+        }
+        return TaskDelegateRequest.builder()
+                .delegatedTargetType("USER")
+                .delegatedTo(delegateId)
+                .reason(reason)
+                .build();
+    }
+
+    private static boolean isEmptyDelegateBody(TaskDelegateRequest body) {
+        boolean noUser = body.getDelegatedTo() == null || body.getDelegatedTo().isBlank();
+        boolean noBu = body.getDelegatedBuCode() == null || body.getDelegatedBuCode().isBlank();
+        boolean noRole = body.getDelegatedRoleCode() == null || body.getDelegatedRoleCode().isBlank();
+        return noUser && (noBu || noRole);
     }
 
     /**

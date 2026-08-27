@@ -162,6 +162,42 @@ public class TaskQueryService {
         }
     }
 
+    /**
+     * Running tasks delegated to this user (USER) or the current workspace BU+Role pair.
+     * Does not change Flowable assignee visibility (Mine).
+     */
+    public TaskListResult getDelegatedRuntimeTasks(String userId, String buCode, String roleCode) {
+        validateUserId(userId);
+        LinkedHashMap<String, ExtendedTaskInfo> byId = new LinkedHashMap<>();
+        for (ExtendedTaskInfo row : extendedTaskInfoRepository.findDelegatedTasks(userId)) {
+            byId.putIfAbsent(row.getTaskId(), row);
+        }
+        if (StringUtils.hasText(buCode) && StringUtils.hasText(roleCode)) {
+            for (ExtendedTaskInfo row : extendedTaskInfoRepository.findDelegatedTasksByBuRole(
+                    buCode.trim(), roleCode.trim())) {
+                byId.putIfAbsent(row.getTaskId(), row);
+            }
+        }
+        List<Task> flowable = new ArrayList<>();
+        for (String taskId : byId.keySet()) {
+            Task t = taskService.createTaskQuery().taskId(taskId).singleResult();
+            if (t != null) {
+                flowable.add(t);
+            }
+        }
+        Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(flowable);
+        List<TaskListResult.TaskInfo> infos = flowable.stream()
+                .map(t -> taskInfoAssembler.convertFlowableTaskToTaskInfo(t, startUsers))
+                .toList();
+        return TaskListResult.builder()
+                .tasks(infos)
+                .totalCount((long) infos.size())
+                .currentPage(0)
+                .pageSize(Math.max(infos.size(), 1))
+                .totalPages(1)
+                .build();
+    }
+
     public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds,
                                                  List<String> deptRoles, int page, int size) {
         return getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size, null,

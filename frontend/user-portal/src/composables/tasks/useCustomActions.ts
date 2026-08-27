@@ -36,6 +36,8 @@ export function useCustomActions(options: {
    * Returning null leaves popup state empty (callers should surface an error).
    */
   preparePopupContext?: (formContent: any, formConfig: Record<string, unknown>) => PreparedFormPopupContext | null
+  /** Open the same Delegate dialog as the default action bar button. */
+  onDelegate?: () => void
 }) {
   const { t } = useI18n()
   const router = useRouter()
@@ -137,6 +139,13 @@ export function useCustomActions(options: {
         break
       case 'WITHDRAW':
         handleWithdrawAction(action)
+        break
+      case 'DELEGATE':
+        if (options.onDelegate) {
+          options.onDelegate()
+        } else {
+          ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
+        }
         break
       default:
         ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))

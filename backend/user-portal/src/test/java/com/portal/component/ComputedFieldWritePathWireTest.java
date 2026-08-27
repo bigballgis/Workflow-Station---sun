@@ -54,7 +54,7 @@ class ComputedFieldWritePathWireTest {
                 .build()));
 
         TaskApprovalCompletionComponent approval = new TaskApprovalCompletionComponent(
-                null, null, repository, null, null, null, null);
+                null, null, repository, null, null, null, null, null);
         ReflectionTestUtils.setField(approval, "computedFieldRecalculator", computedFieldRecalculator);
 
         Map<String, Object> submission = new HashMap<>();

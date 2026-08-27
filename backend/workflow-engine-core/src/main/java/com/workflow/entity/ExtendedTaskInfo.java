@@ -1,6 +1,7 @@
 package com.workflow.entity;
 
 import com.workflow.enums.AssignmentType;
+import com.workflow.enums.DelegatedTargetType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,6 +27,7 @@ import java.time.LocalDateTime;
     // assignment_target: partial index idx_assignment_target_non_candidate_users is managed in
     // deploy/init-scripts (exclude CANDIDATE_USERS long comma-separated pools); not expressible via @Index
     @Index(name = "idx_delegated_to", columnList = "delegatedTo"),
+    @Index(name = "idx_delegated_bu_role", columnList = "delegatedBuCode,delegatedRoleCode"),
     @Index(name = "idx_claimed_by", columnList = "claimedBy"),
     @Index(name = "idx_process_instance", columnList = "processInstanceId"),
     @Index(name = "idx_created_time", columnList = "createdTime"),
@@ -105,11 +107,24 @@ public class ExtendedTaskInfo {
     private String originalAssignee;
 
     /**
-     * Delegated user ID
-     * When the task is delegated, records the delegation target user
+     * Delegated user ID when {@link #delegatedTargetType} is USER.
+     * Null for BU_ROLE targets.
      */
     @Column(name = "delegated_to", length = 64)
     private String delegatedTo;
+
+    /**
+     * USER or BU_ROLE. Null on legacy rows is treated as USER.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delegated_target_type", length = 20)
+    private DelegatedTargetType delegatedTargetType;
+
+    @Column(name = "delegated_bu_code", length = 64)
+    private String delegatedBuCode;
+
+    @Column(name = "delegated_role_code", length = 64)
+    private String delegatedRoleCode;
 
     /**
      * Delegator ID
@@ -247,10 +262,19 @@ public class ExtendedTaskInfo {
     // ==================== Business methods ====================
 
     /**
-     * Check if task has been delegated
+     * Check if task has been delegated (USER target or paired BU+Role).
      */
     public boolean isDelegated() {
-        return delegatedTo != null && !delegatedTo.trim().isEmpty();
+        if (delegatedTo != null && !delegatedTo.trim().isEmpty()) {
+            return true;
+        }
+        return isBuRoleDelegated();
+    }
+
+    public boolean isBuRoleDelegated() {
+        return delegatedTargetType == DelegatedTargetType.BU_ROLE
+                && delegatedBuCode != null && !delegatedBuCode.isBlank()
+                && delegatedRoleCode != null && !delegatedRoleCode.isBlank();
     }
 
     /**
@@ -275,20 +299,17 @@ public class ExtendedTaskInfo {
     }
 
     /**
-     * Get the current effective assignee
-     * Priority: delegator > claimer > original target
+     * Current handler (Flowable assignee identity). Delegation does not change this:
+     * still the claimer or original USER target, never {@code delegatedTo}.
      */
     public String getCurrentAssignee() {
-        if (isDelegated()) {
-            return delegatedTo;
-        }
         if (isClaimed()) {
             return claimedBy;
         }
         if (assignmentType == AssignmentType.USER) {
             return assignmentTarget;
         }
-        return null; // Virtual group and department role tasks have no specific assignee
+        return null;
     }
 
     /**
@@ -308,14 +329,41 @@ public class ExtendedTaskInfo {
     }
 
     /**
-     * Delegate task
+     * Delegate this task to a user. Does not change Flowable assignee.
      */
     public void delegateTask(String delegatedTo, String delegatedBy, String reason) {
+        this.delegatedTargetType = DelegatedTargetType.USER;
         this.delegatedTo = delegatedTo;
+        this.delegatedBuCode = null;
+        this.delegatedRoleCode = null;
         this.delegatedBy = delegatedBy;
         this.delegatedTime = LocalDateTime.now();
         this.delegationReason = reason;
         updateStatus("DELEGATED", delegatedBy);
+    }
+
+    /**
+     * Delegate this task to a paired BU+Role. Does not change Flowable assignee.
+     */
+    public void delegateTaskToBuRole(String buCode, String roleCode, String delegatedBy, String reason) {
+        this.delegatedTargetType = DelegatedTargetType.BU_ROLE;
+        this.delegatedTo = null;
+        this.delegatedBuCode = buCode;
+        this.delegatedRoleCode = roleCode;
+        this.delegatedBy = delegatedBy;
+        this.delegatedTime = LocalDateTime.now();
+        this.delegationReason = reason;
+        updateStatus("DELEGATED", delegatedBy);
+    }
+
+    public void clearDelegation() {
+        this.delegatedTargetType = null;
+        this.delegatedTo = null;
+        this.delegatedBuCode = null;
+        this.delegatedRoleCode = null;
+        this.delegatedBy = null;
+        this.delegatedTime = null;
+        this.delegationReason = null;
     }
 
     /**

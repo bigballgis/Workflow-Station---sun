@@ -157,7 +157,29 @@ final class EngineTaskMapper {
                 .variables(variables)
                 .candidateUserIds(candidateUserIds)
                 .candidateGroupIds(candidateGroupIds)
+                .delegatorId(engineStringField(taskMap.get("delegatedBy")))
+                .delegatedTo(engineStringField(taskMap.get("delegatedTo")))
+                .delegatedTargetType(engineStringField(taskMap.get("delegatedTargetType")))
+                .delegatedBuCode(engineStringField(taskMap.get("delegatedBuCode")))
+                .delegatedRoleCode(engineStringField(taskMap.get("delegatedRoleCode")))
+                .delegated(booleanField(taskMap.get("isDelegated")))
                 .build();
+    }
+
+    static Boolean booleanField(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (value instanceof String s) {
+            if (s.isBlank()) {
+                return null;
+            }
+            return Boolean.parseBoolean(s.trim());
+        }
+        return null;
     }
 
     /**
