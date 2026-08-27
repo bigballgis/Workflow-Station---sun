@@ -2666,3 +2666,37 @@
     验证：admin-center 目标单测 47 pass + DW DeploymentComponentMultiInstanceValidationTest 4 pass；
     package；compose rebuild admin-center + developer-workstation 均 Started；dev 库已执行 74（ALTER TABLE）。
 
+- id: "1560"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Portal/Admin shared-list Action column scrolled away instead of sticking to the window right"
+  file: "frontend/shared/src/list/useListColumnLayout.ts"
+  note: |
+    根因：列溢出时把 .list-data-grid-inner 撑成列宽总和，再由父级 overflow 横滑，
+    并强制 el-table header/body overflow-x:visible。Element Plus fixed="right" 的 sticky
+    参照块变成整张宽表，Action 变成表尾最后一列，窄屏要拉到头才看见按钮。
+    修复：inner 始终 100% 视口；父级 overflow-x:hidden；去掉 overflow-x:visible；
+    横滑交回 el-table。覆盖所有走 list-data-grid 的 UP/AD Action 列表。
+    Views 无 Action 列未改。SubTableField / 草稿表 / 弹窗表本就走原生 el-table，未动。
+    验证：useListColumnLayout 7 pass；UP+AD pnpm build；compose 重建两个 frontend；
+    Playwright My Requests / Admin users 横滑前后 Action 右沿 = 视口右沿。
+
+- id: "1561"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Portal/Admin shared-list header scrolled away; horizontal bar sat at the content bottom"
+  file: "frontend/shared/src/list/useListColumnLayout.ts"
+  note: |
+    根因：el-table 没有 height，表头和横滑条跟着整表内容走；父级 overflow-y:auto
+    让竖滑发生在整页，横条要拉到最后一行才出现。
+    修复：视口高度 ResizeObserver → gridTableHeight 绑到 el-table；CSS 把列表撑满
+    剩余窗口且 overflow:hidden，滚动交回表格。Action 钉右保持不变。
+    Views 同步 inner 100% + table height。
+    验证：useListColumnLayout 9 pass；UP+AD vite build；compose 重建两个 frontend；
+    Playwright To Do / My Requests / Admin users：表头竖滑不动，横条贴在可视区底。
+    Views/Audit/Member 本轮脚本未画出表格（空视图 / audit API 超时），与本次 CSS 无关。
+
