@@ -46,12 +46,19 @@ public final class FunctionUnitManagerTestFactory {
                 relationTableDefinitionRepository,
                 new RelationTableFieldMapper(relationTableDefinitionRepository),
                 objectMapper);
+        ImportViewAccessValidator viewValidator = Mockito.mock(ImportViewAccessValidator.class);
+        Mockito.lenient().when(viewValidator.remapAndValidate(Mockito.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         FunctionUnitImportComponent importComponent = new FunctionUnitImportComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(FunctionUnitAccessService.class),
                 Mockito.mock(com.admin.service.FunctionUnitAuditAccessService.class),
                 packageParser, actionDefinitionRepository, versionComponent, relationTableStructureImporter,
-                objectMapper, i18nService);
+                objectMapper, i18nService,
+                Mockito.mock(EmailConnectionSyncComponent.class),
+                Mockito.mock(EmailMonitorSyncComponent.class),
+                Mockito.mock(ImportBpmnStructureValidator.class),
+                viewValidator);
         FormTableBindingLoader bindingLoader = new FormTableBindingLoader(jdbcTemplate, objectMapper);
         FunctionUnitContentComponent contentComponent = new FunctionUnitContentComponent(
                 contentRepository, jdbcTemplate, lookup, bindingLoader);

@@ -2649,3 +2649,20 @@
     已导入的 FU 需重新导入（或打开 Process Design 触发落库前 stale-id 修复后再看 Action Design）。
     验证：BpmnIdRewriterTest + ProcessBpmnStaleIdFixerTest。
 
+- id: "1559"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Admin Function Unit import: UnexpectedRollback 500, silent ZIP skip, identity/BPMN/view/RT/security gaps"
+  file: "backend/admin-center/src/main/java/com/admin/component/FunctionUnitImportComponent.java"
+  note: |
+    根因：@Transactional import 在约束失败后 catch-return → UnexpectedRollbackException 500；
+    JSON ZIP 与 multipart 解包路径分裂；坏 JSON 被跳过；按名称匹配会撞库；覆盖把 ENABLED 打回 DRAFT；
+    导入不校验 none start / xmlns:custom；View access 不 remap；RT 不绑 FU；ZIP 无 zip-slip/体积上限。
+    修复：失败 rethrow + DataIntegrity→400；单一 parse+persist（含 email sync，跨环境密文 decrypt 失败则清空）；
+    fail-closed JSON；DECISION/TABLE_RELATION + script 74；按 code 匹配并保留 status/enabled；
+    导入期 BPMN 结构检查；View targetCode remap；RT bind/冲突/未解析 FK 失败；ZIP/Base64 限制与 SVG 消毒。
+    验证：admin-center 目标单测 47 pass + DW DeploymentComponentMultiInstanceValidationTest 4 pass；
+    package；compose rebuild admin-center + developer-workstation 均 Started；dev 库已执行 74（ALTER TABLE）。
+

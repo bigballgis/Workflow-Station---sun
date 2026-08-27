@@ -273,11 +273,13 @@ public class DeploymentComponentImpl implements DeploymentComponent {
 
             HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, importHeaders);
 
-            ResponseEntity<Map> importResponse = restTemplate.exchange(
-                    importUrl, HttpMethod.POST, requestEntity, Map.class);
-
-            if (!importResponse.getStatusCode().is2xxSuccessful() || importResponse.getBody() == null) {
-                throw new DeveloperBusinessException("DEPLOY_IMPORT_FAILED", i18nService.getMessage("deploy.import_failed"));
+            ResponseEntity<Map> importResponse;
+            try {
+                importResponse = restTemplate.exchange(
+                        importUrl, HttpMethod.POST, requestEntity, Map.class);
+            } catch (org.springframework.web.client.HttpStatusCodeException e) {
+                throw new DeveloperBusinessException("DEPLOY_IMPORT_FAILED",
+                        i18nService.getMessage("deploy.import_failed") + ": " + extractAdminError(e));
             }
 
             Map<String, Object> importResult = importResponse.getBody();
@@ -297,8 +299,14 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             HttpHeaders validateHeaders = new HttpHeaders();
             applyOutboundAdminHeaders(validateHeaders, authorizationHeader, adminUserId);
             HttpEntity<Void> validateEntity = new HttpEntity<>(validateHeaders);
-            ResponseEntity<Map> validateResponse = restTemplate.exchange(
-                    validateUrl, HttpMethod.POST, validateEntity, Map.class);
+            ResponseEntity<Map> validateResponse;
+            try {
+                validateResponse = restTemplate.exchange(
+                        validateUrl, HttpMethod.POST, validateEntity, Map.class);
+            } catch (org.springframework.web.client.HttpStatusCodeException e) {
+                throw new DeveloperBusinessException("DEPLOY_VALIDATE_FAILED",
+                        i18nService.getMessage("deploy.validate_failed") + ": " + extractAdminError(e));
+            }
             if (!validateResponse.getStatusCode().is2xxSuccessful() || validateResponse.getBody() == null) {
                 throw new DeveloperBusinessException("DEPLOY_VALIDATE_FAILED",
                         i18nService.getMessage("deploy.validate_failed"));
@@ -308,7 +316,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             Object validFlag = validateData.get("valid");
             if (!Boolean.TRUE.equals(validFlag)) {
                 throw new DeveloperBusinessException("DEPLOY_VALIDATE_FAILED",
-                        i18nService.getMessage("deploy.validate_failed"));
+                        formatValidateFailure(validateData));
             }
             updateStep(steps, i18nService.getMessage("deploy.step.validate"), "SUCCESS",
                     i18nService.getMessage("deploy.validate_success"));
@@ -374,6 +382,49 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
             headers.set(PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
         }
+    }
+
+    private String formatValidateFailure(Map<String, Object> validateData) {
+        StringBuilder sb = new StringBuilder(i18nService.getMessage("deploy.validate_failed"));
+        Object errors = validateData.get("errors");
+        if (!(errors instanceof List<?> list) || list.isEmpty()) {
+            return sb.toString();
+        }
+        List<String> parts = new ArrayList<>();
+        for (Object error : list) {
+            if (error instanceof Map<?, ?> map && map.get("message") != null) {
+                parts.add(String.valueOf(map.get("message")));
+            } else if (error != null) {
+                parts.add(String.valueOf(error));
+            }
+        }
+        if (!parts.isEmpty()) {
+            sb.append(": ").append(String.join("; ", parts));
+        }
+        return sb.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractAdminError(org.springframework.web.client.HttpStatusCodeException e) {
+        String body = e.getResponseBodyAsString();
+        if (body == null || body.isBlank()) {
+            return e.getStatusCode() + " " + e.getStatusText();
+        }
+        try {
+            Map<String, Object> parsed = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readValue(body, Map.class);
+            Object message = parsed.get("message");
+            if (message == null && parsed.get("data") instanceof Map<?, ?> data) {
+                message = data.get("message");
+            }
+            if (message != null) {
+                return String.valueOf(message);
+            }
+        } catch (Exception parseFailed) {
+            // FALLBACK(ux): admin error body is not JSON; surface the raw text instead of hiding it
+            return body;
+        }
+        return body;
     }
 
     /**

@@ -1,14 +1,12 @@
 package com.admin.controller;
 
 import com.admin.component.DeploymentManagerComponent;
-import com.admin.component.EmailConnectionSyncComponent;
-import com.admin.component.EmailMonitorSyncComponent;
 import com.admin.component.FunctionUnitManagerComponent;
 import com.admin.component.ProcessDeploymentComponent;
 import com.admin.dto.request.FunctionUnitImportRequest;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.admin.exception.AdminBusinessException;
 import com.platform.common.dto.UserPrincipal;
 import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.AfterEach;
@@ -56,8 +54,6 @@ class FunctionUnitImportControllerMultipartTest {
     @Mock private FunctionUnitManagerComponent functionUnitManager;
     @Mock private DeploymentManagerComponent deploymentManager;
     @Mock private ProcessDeploymentComponent processDeploymentComponent;
-    @Mock private EmailConnectionSyncComponent emailConnectionSyncComponent;
-    @Mock private EmailMonitorSyncComponent emailMonitorSyncComponent;
     @Mock private I18nService i18nService;
 
     private MockMvc mockMvc;
@@ -78,9 +74,6 @@ class FunctionUnitImportControllerMultipartTest {
                 functionUnitManager,
                 deploymentManager,
                 processDeploymentComponent,
-                emailConnectionSyncComponent,
-                emailMonitorSyncComponent,
-                new ObjectMapper(),
                 i18nService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
@@ -135,6 +128,19 @@ class FunctionUnitImportControllerMultipartTest {
                 .contains("isComputed")
                 .contains("computedField");
         assertThat(unzippedEntry(decoded, "process/process.bpmn")).contains("<process");
+    }
+
+    @Test
+    void import_adminBusinessException_returns400() throws Exception {
+        when(functionUnitManager.importFunctionPackage(any(), eq("test-user-id")))
+                .thenThrow(new AdminBusinessException("FU_IMPORT_BPMN_START_EVENTS", "exactly one none start"));
+
+        mockMvc.perform(multipart("/function-units-import/import")
+                        .file(new MockMultipartFile(
+                                "file", "orders.zip", MediaType.APPLICATION_OCTET_STREAM_VALUE, new byte[] {1, 2, 3})))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.message").value("exactly one none start"));
     }
 
     private static String unzippedEntry(byte[] zipBytes, String name) throws Exception {
