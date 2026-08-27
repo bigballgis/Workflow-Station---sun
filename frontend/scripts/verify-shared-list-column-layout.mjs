@@ -1,5 +1,5 @@
 /**
- * Shared list §6.6 leftover + §6.7 Audit / member-management / Views header menus.
+ * Shared list §6.6 hug (display width = base) + §6.7 Audit / member-management / Views header menus.
  * Password login only — do not use unified SSO.
  */
 import { mkdirSync } from 'node:fs'
@@ -25,7 +25,22 @@ function check(label, ok, detail) {
   if (!ok) failures++
 }
 
+async function resetGridScroll() {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.evaluate(() => {
+    const wrap = document.querySelector(
+      '.list-data-grid .el-table__body-wrapper .el-scrollbar__wrap, .mtv-data-grid .el-table__body-wrapper .el-scrollbar__wrap, .list-data-grid .el-table__body-wrapper',
+    )
+    if (wrap) {
+      wrap.scrollLeft = 0
+      wrap.scrollTop = 0
+    }
+  })
+  await page.waitForTimeout(200)
+}
+
 async function shot(dir, name) {
+  await resetGridScroll()
   const path = join(dir, `${DATE}_${name}.png`)
   await page.screenshot({ path, fullPage: false })
   console.log(`[SHOT] ${path}`)
@@ -228,7 +243,12 @@ try {
   await assertNoSpacer('To Do')
   await assertNoCurrentStepColumn('To Do')
   await assertFrozenPane('To Do')
-  await assertHeadersFullyVisible('To Do', [/Request ID/i])
+  await assertHeadersFullyVisible('To Do', [
+    /Request ID/i,
+    /Assignment Type/i,
+    /Priority/i,
+    /Create Time/i,
+  ])
   await shot(PORTAL_OUT, 'shared-list-todo-no-spacer')
 
   await page.goto(`${ORIGIN}/portal/tasks/completed`, { waitUntil: 'domcontentloaded' })
@@ -337,6 +357,7 @@ try {
   await assertActionPinned('Admin users')
   await page.setViewportSize({ width: 1440, height: 900 })
   await assertFrozenPane('Admin users')
+  await assertHeadersFullyVisible('Admin users', [/Entity Manager/i, /Function Manager/i])
   await shot(ADMIN_OUT, 'shared-list-admin-users')
 } finally {
   await browser.close()

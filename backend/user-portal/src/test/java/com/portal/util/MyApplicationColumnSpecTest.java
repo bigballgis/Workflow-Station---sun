@@ -24,6 +24,8 @@ class MyApplicationColumnSpecTest {
     @Test
     void kindsFollowStoredTypes() {
         assertThat(column("currentAssignee").kind()).isEqualTo(Kind.USER);
+        assertThat(column("currentAssignee").operators())
+                .containsExactly("eq", "ne", "contains", "notContains", "isNotNull", "isNull");
         assertThat(column("status").kind()).isEqualTo(Kind.ENUM);
         assertThat(column("startTime").kind()).isEqualTo(Kind.DATETIME);
         assertThat(column("businessKey").kind()).isEqualTo(Kind.TEXT);

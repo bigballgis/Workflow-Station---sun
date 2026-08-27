@@ -62,7 +62,9 @@ export function columnWidth(
   state: GridRuntimeState,
 ): number {
   if (state.columnWidths[col.fieldName] != null) {
-    return clampColumnWidth(state.columnWidths[col.fieldName])
+    return clampColumnWidth(
+      Math.max(state.columnWidths[col.fieldName], headerFitColumnWidth(col.displayLabel, col.kind)),
+    )
   }
   if (col.columnWidth != null && col.columnWidth > 0) {
     return clampColumnWidth(col.columnWidth)

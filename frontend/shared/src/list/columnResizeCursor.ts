@@ -13,7 +13,7 @@ export const COL_RESIZE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
 
 export const COLUMN_WIDTH_MIN = 60
 export const COLUMN_WIDTH_MAX = 600
-/** Visual drag can exceed the persisted base max once leftover is distributed. */
+/** Visual drag can exceed the persisted 600px base while the pointer is down. */
 export const COLUMN_DISPLAY_WIDTH_MAX = 4000
 
 export function clampColumnWidth(width: number): number {

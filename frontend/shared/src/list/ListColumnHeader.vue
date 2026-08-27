@@ -169,13 +169,29 @@ function onCommand(command: ListHeaderCommand) {
   min-height: 23px;
   box-sizing: border-box;
   padding-right: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .list-col-dropdown {
-  display: block;
-  flex: 1 1 0;
-  width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
+  max-width: 100%;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+:deep(.el-tooltip__trigger) {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
 }
 
 .list-col-trigger {

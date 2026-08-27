@@ -54,6 +54,25 @@ function relativeDayRange(operator: string, now: Date): { start: string; end: st
   return null
 }
 
+function csvTokens(raw: unknown): string[] {
+  return textOf(raw)
+    .split(/\s*,\s*/)
+    .map((token) => token.trim())
+    .filter((token) => token !== '')
+}
+
+function matchesUser(raw: unknown, operator: string, value: string): boolean {
+  if (operator === 'isNull') return isEmpty(raw)
+  if (operator === 'isNotNull') return !isEmpty(raw)
+  const cell = textOf(raw)
+  const inCell = cell === value || csvTokens(raw).includes(value)
+  if (operator === 'eq') return cell === value
+  if (operator === 'ne') return isEmpty(raw) || cell !== value
+  if (operator === 'contains') return inCell
+  if (operator === 'notContains') return isEmpty(raw) || !inCell
+  return false
+}
+
 function matchesText(raw: unknown, operator: string, value: string, value2?: string): boolean {
   if (operator === 'isNull') return isEmpty(raw)
   if (operator === 'isNotNull') return !isEmpty(raw)
@@ -120,6 +139,9 @@ export function cellMatchesFilter(
     if (filter.operator === 'eq') return cell === want
     if (filter.operator === 'ne') return cell !== want
     return false
+  }
+  if (kind === 'USER') {
+    return matchesUser(raw, filter.operator, filter.value)
   }
   return matchesText(raw, filter.operator, filter.value, filter.value2)
 }

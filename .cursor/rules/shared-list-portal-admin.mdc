@@ -8,7 +8,7 @@ alwaysApply: false
 
 # Portal / Admin 共享列表（侧栏 list view）
 
-完整契约：[docs/design/shared-list-components.md](../../docs/design/shared-list-components.md) **§6.7**（分类表 + 必接套件）。列宽余量见 **§6.6**。筛选/排序 kind 见 **§6.3**。**不要改 DW。**
+完整契约：[docs/design/shared-list-components.md](../../docs/design/shared-list-components.md) **§6.7**（分类表 + 必接套件）。列宽 hug（显示宽=底宽）见 **§6.6**。筛选/排序 kind 见 **§6.3**。**不要改 DW。**
 
 ## 何时强制
 

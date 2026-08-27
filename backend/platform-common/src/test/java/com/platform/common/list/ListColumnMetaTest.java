@@ -43,6 +43,8 @@ class ListColumnMetaTest {
         assertThat(ListColumnMeta.operatorsFor(Kind.BOOLEAN))
                 .containsExactly("eq", "ne", "isNull", "isNotNull")
                 .isEqualTo(ListColumnMeta.operatorsFor(Kind.ENUM));
+        assertThat(ListColumnMeta.operatorsFor(Kind.USER))
+                .containsExactly("eq", "ne", "contains", "notContains", "isNotNull", "isNull");
     }
 
     @Test

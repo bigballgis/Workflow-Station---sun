@@ -32,9 +32,15 @@ public record ListColumnMeta(
 
     private static final List<String> TEXT_OPERATORS = List.of(
             "contains", "notContains", "eq", "ne", "startsWith", "endsWith", "isNull", "isNotNull");
-    /** ENUM / USER / BOOLEAN share this: a choice filter is eq/ne plus empty/non-empty. */
+    /** ENUM / BOOLEAN: a choice filter is eq/ne plus empty/non-empty. */
     private static final List<String> CLOSED_VALUE_OPERATORS = List.of(
             "eq", "ne", "isNull", "isNotNull");
+    /**
+     * USER keeps the people picker (value is {@code sys_users.id}). contains/notContains mean
+     * the selected person appears as a comma-separated token in the cell, not a typed name fragment.
+     */
+    private static final List<String> USER_OPERATORS = List.of(
+            "eq", "ne", "contains", "notContains", "isNotNull", "isNull");
     /** Relative calendar windows first so the filter dialog opens on Today, not a date picker. */
     private static final List<String> DATETIME_OPERATORS = List.of(
             "today", "yesterday", "last7days", "last30days",
@@ -70,7 +76,8 @@ public record ListColumnMeta(
     public static List<String> operatorsFor(Kind kind) {
         return switch (kind) {
             case TEXT -> TEXT_OPERATORS;
-            case ENUM, USER, BOOLEAN -> CLOSED_VALUE_OPERATORS;
+            case USER -> USER_OPERATORS;
+            case ENUM, BOOLEAN -> CLOSED_VALUE_OPERATORS;
             case DATETIME -> DATETIME_OPERATORS;
             case NUMBER -> NUMBER_OPERATORS;
         };

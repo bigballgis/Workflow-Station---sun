@@ -32,6 +32,22 @@ describe('clientListQuery', () => {
     expect(page.content.map((r) => r.name)).toEqual(['Ada', 'Ann'])
   })
 
+  it('USER operators are equals / not equals / contains / not contains / has value / no value', () => {
+    expect(operatorsFor('USER')).toEqual([
+      'eq', 'ne', 'contains', 'notContains', 'isNotNull', 'isNull',
+    ])
+    expect(operatorsFor('ENUM')).toEqual(['eq', 'ne', 'isNull', 'isNotNull'])
+  })
+
+  it('USER contains matches a comma-separated identity token that equals does not', () => {
+    expect(cellMatchesFilter('u1, u2', 'USER', { operator: 'eq', value: 'u1' })).toBe(false)
+    expect(cellMatchesFilter('u1, u2', 'USER', { operator: 'contains', value: 'u1' })).toBe(true)
+    expect(cellMatchesFilter('u1, u2', 'USER', { operator: 'notContains', value: 'u1' })).toBe(false)
+    expect(cellMatchesFilter('', 'USER', { operator: 'notContains', value: 'u1' })).toBe(true)
+    expect(cellMatchesFilter('', 'USER', { operator: 'isNull', value: '' })).toBe(true)
+    expect(cellMatchesFilter('u1', 'USER', { operator: 'isNotNull', value: '' })).toBe(true)
+  })
+
   it('matches a calendar-day DATETIME filter', () => {
     expect(cellMatchesFilter('2026-08-27T10:00:00', 'DATETIME', { operator: 'on', value: '2026-08-27' })).toBe(true)
     expect(cellMatchesFilter('2026-08-26T10:00:00', 'DATETIME', { operator: 'on', value: '2026-08-27' })).toBe(false)

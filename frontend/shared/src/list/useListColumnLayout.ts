@@ -1,14 +1,18 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type CSSProperties, type MaybeRefOrGetter, type Ref, toValue } from 'vue'
 import type { ListColumnKind } from './columnMeta'
 import { clampColumnWidth, clampDisplayWidth } from './columnResizeCursor'
-import { distributeDisplayWidths, headerFitColumnWidth, invertBaseWidth } from './columnWidthLayout'
+import { headerFitColumnWidth, invalidateHeaderLabelMeasureCache } from './columnWidthLayout'
+
+/** Bump when the default-width formula changes so stale session bases cannot ellipsis headers. */
+const LAYOUT_STORE_VERSION = 2
 
 function readStoredWidths(key: string): Record<string, number> {
   if (!key) return {}
   try {
     const raw = sessionStorage.getItem(key)
     if (!raw) return {}
-    const parsed = JSON.parse(raw) as { columnWidths?: Record<string, number> }
+    const parsed = JSON.parse(raw) as { v?: number; columnWidths?: Record<string, number> }
+    if (parsed.v !== LAYOUT_STORE_VERSION) return {}
     if (parsed.columnWidths && typeof parsed.columnWidths === 'object') {
       return parsed.columnWidths
     }
@@ -22,7 +26,10 @@ function readStoredWidths(key: string): Record<string, number> {
 function writeStoredWidths(key: string, columnWidths: Record<string, number>) {
   if (!key) return
   try {
-    sessionStorage.setItem(key, JSON.stringify({ columnWidths: { ...columnWidths } }))
+    sessionStorage.setItem(key, JSON.stringify({
+      v: LAYOUT_STORE_VERSION,
+      columnWidths: { ...columnWidths },
+    }))
   } catch {
     // FALLBACK(ux): quota errors must not interrupt the resize the user just performed.
   }
@@ -77,8 +84,8 @@ function useGridViewport(gridScrollRef: Ref<HTMLElement | null>) {
 
 /**
  * Host-owned column widths for shared ListColumnHeader's resize handle.
- * Session stores **base** widths; {@link widthOf} is the leftover-distributed
- * display width, except during an in-progress drag (preview of the active column).
+ * Session stores the dragged width. Display width equals that base — leftover
+ * viewport is left to the right of the table (not spread into every column).
  */
 export function useListColumnLayout(opts: {
   storageKey: MaybeRefOrGetter<string>
@@ -98,34 +105,37 @@ export function useListColumnLayout(opts: {
   const gridTableHeight = computed(() =>
     gridViewportHeight.value > 0 ? gridViewportHeight.value : undefined,
   )
+  const measureEpoch = ref(0)
+
+  onMounted(() => {
+    const fonts = document.fonts
+    if (!fonts?.ready) return
+    void fonts.ready.then(() => {
+      invalidateHeaderLabelMeasureCache()
+      measureEpoch.value += 1
+    })
+  })
 
   function defaultBaseOf(field: string): number {
+    void measureEpoch.value
     if (opts.defaultWidthOf) return opts.defaultWidthOf(field)
     return headerFitColumnWidth(opts.labelOf?.(field) ?? field, opts.kindOf?.(field))
   }
 
   function baseWidthOf(field: string): number {
-    return clampColumnWidth(columnWidths[field] ?? defaultBaseOf(field))
+    const auto = defaultBaseOf(field)
+    const remembered = columnWidths[field]
+    if (remembered == null) return clampColumnWidth(auto)
+    return clampColumnWidth(Math.max(remembered, auto))
   }
 
   function extra(): number {
     return toValue(opts.extraWidth) ?? 0
   }
 
-  const displayWidths = computed(() => {
-    const fields = toValue(opts.fields)
-    const bases = fields.map((field) => baseWidthOf(field))
-    const displays = distributeDisplayWidths(bases, gridViewportWidth.value, extra())
-    const map: Record<string, number> = {}
-    fields.forEach((field, index) => {
-      map[field] = displays[index]
-    })
-    return map
-  })
-
   function widthOf(field: string): number {
     if (dragPreview.field === field) return clampDisplayWidth(dragPreview.displayWidth)
-    return displayWidths.value[field] ?? baseWidthOf(field)
+    return baseWidthOf(field)
   }
 
   function setWidth(field: string, displayWidth: number) {
@@ -143,10 +153,7 @@ export function useListColumnLayout(opts: {
     const displayWidth = dragPreview.displayWidth
     dragPreview.field = null
     if (index < 0) return
-    const bases = fields.map((name) => baseWidthOf(name))
-    columnWidths[field] = invertBaseWidth(
-      displayWidth, index, bases, gridViewportWidth.value, extra(),
-    )
+    columnWidths[field] = clampColumnWidth(Math.max(displayWidth, defaultBaseOf(field)))
   }
 
   function persistWidths() {
@@ -161,16 +168,22 @@ export function useListColumnLayout(opts: {
   })
 
   const gridFits = computed(() =>
-    gridViewportWidth.value > 0 && gridTotalColumnWidth.value <= gridViewportWidth.value,
+    gridViewportWidth.value <= 0
+    || gridTotalColumnWidth.value <= gridViewportWidth.value,
   )
 
-  // Always the viewport width. Stretching this to the column-sum makes the
-  // parent the horizontal scroller, so Element Plus `fixed="right"` (Action)
-  // sticks to the table's far edge instead of the window.
-  const gridInnerStyle = computed<CSSProperties>(() => ({
-    width: '100%',
-    minWidth: '100%',
-  }))
+  const gridInnerStyle = computed<CSSProperties>(() => {
+    const total = gridTotalColumnWidth.value
+    if (gridFits.value && total > 0) {
+      return {
+        width: `${total}px`,
+        minWidth: `${total}px`,
+        maxWidth: `${total}px`,
+        alignSelf: 'flex-start',
+      }
+    }
+    return { width: '100%', minWidth: '100%' }
+  })
 
   watch(() => toValue(opts.storageKey), (key) => {
     dragPreview.field = null

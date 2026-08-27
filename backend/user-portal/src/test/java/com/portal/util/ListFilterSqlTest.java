@@ -99,6 +99,23 @@ class ListFilterSqlTest {
     }
 
     @Test
+    void userContainsMatchesACommaSeparatedIdentityToken() {
+        String sql = where("created_by", "contains", "user-dev", null);
+        assertTrue(sql.contains("EXISTS (SELECT 1 FROM sys_users u WHERE u.id = ?"), sql);
+        assertTrue(sql.contains("regexp_split_to_array"), sql);
+        assertTrue(sql.contains("data->>'created_by' = u.display_name"), sql);
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
+    void userNotContainsNegatesTheTokenMatch() {
+        String sql = where("created_by", "notContains", "user-dev", null);
+        assertTrue(sql.startsWith(" AND (NOT EXISTS"), sql);
+        assertTrue(sql.contains("regexp_split_to_array"), sql);
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
     void numberGtGuardsNonNumericStoredValues() {
         String sql = where("amount", "gt", "500", null);
         assertTrue(sql.contains("data->>'amount' ~ '^-?[0-9]+(\\.[0-9]+)?$'"));

@@ -33,9 +33,10 @@ import java.util.regex.Pattern;
  *   <li>BOOLEAN — case-insensitive eq/ne against true/false; {@code ne} also matches
  *       empty cells, so Not equals True is not the same as Equals False.</li>
    *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
-       *       (id, {@code user:}<id>, username, display_name, full_name, employee_id), so a
-       *       people picker can send the user id even when legacy rows stored a prefixed id
-       *       or a display name.</li>
+       *       (id, {@code user:}<id>, username, display_name, full_name, employee_id).
+       *       contains/notContains also hit when that identity appears as a comma-separated
+       *       token (a candidate list {@code id1, id2} contains id1). The picker still sends
+       *       the user id; these operators are not a typed name-fragment search.</li>
  * </ul>
  */
 public final class ListFilterSql {
@@ -216,30 +217,42 @@ public final class ListFilterSql {
     /**
      * The picker sends {@code sys_users.id}. Stored values may be that id, {@code user:}<id>,
      * a username, a display name, or an employee id — match any of them for the selected row.
+     * contains/notContains also match a comma-separated token list.
      */
     private static String userIdentityPredicate(String ref, String operator, String userId,
                                                 List<Object> outParams) {
+        outParams.add(userId);
+        boolean token = "contains".equals(operator) || "notContains".equals(operator);
+        boolean negate = "ne".equals(operator) || "notContains".equals(operator);
+        if (!token && !"eq".equals(operator) && !"ne".equals(operator)) {
+            throw new IllegalArgumentException("Operator " + operator + " is not allowed on a USER column");
+        }
+        String exists = userIdentityExistsSql(ref, token);
+        return negate ? "(NOT " + exists + ")" : exists;
+    }
+
+    private static String userIdentityExistsSql(String ref, boolean tokenContains) {
         String users = SqlIdentifiers.requireQualifiedName("sys_users");
         String id = SqlIdentifiers.requireIdentifier("id");
         String username = SqlIdentifiers.requireIdentifier("username");
         String displayName = SqlIdentifiers.requireIdentifier("display_name");
         String fullName = SqlIdentifiers.requireIdentifier("full_name");
         String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
-        String match = "(" + ref + " = u." + id + "::text"
+        String exact = "(" + ref + " = u." + id + "::text"
                 + " OR " + ref + " = ('user:' || u." + id + "::text)"
                 + " OR " + ref + " = u." + username
                 + " OR " + ref + " = u." + displayName
                 + " OR " + ref + " = u." + fullName
                 + " OR " + ref + " = u." + employeeId + ")";
-        outParams.add(userId);
-        String exists = "EXISTS (SELECT 1 FROM " + users + " u WHERE u." + id + " = ? AND " + match + ")";
-        if ("eq".equals(operator)) {
-            return exists;
+        String identities = "u." + id + "::text, 'user:' || u." + id + "::text, u." + username
+                + ", u." + displayName + ", u." + fullName + ", u." + employeeId;
+        String match = exact;
+        if (tokenContains) {
+            String tokens = "unnest(regexp_split_to_array(btrim(" + ref + "), E'\\\\s*,\\\\s*'))";
+            match = "(" + exact + " OR EXISTS (SELECT 1 FROM " + tokens
+                    + " AS token(v) WHERE token.v IN (" + identities + ")))";
         }
-        if ("ne".equals(operator)) {
-            return "(NOT " + exists + ")";
-        }
-        throw new IllegalArgumentException("Operator " + operator + " is not allowed on a USER column");
+        return "EXISTS (SELECT 1 FROM " + users + " u WHERE u." + id + " = ? AND " + match + ")";
     }
 
 

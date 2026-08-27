@@ -18,7 +18,6 @@ import {
   saveGridRuntimeToSession, toListColumnMeta,
   type GridColumnFilter, type GridDisplayRow, type GridRuntimeState, type GridSortDirection,
 } from '@/utils/mainTableViewGridRuntime'
-import { distributeDisplayWidths, invertBaseWidth } from '@platform-shared/list/columnWidthLayout'
 import { clampDisplayWidth } from '@platform-shared/list/columnResizeCursor'
 import {
   downloadMainTableViewRowsAsCsv, formatMainTableViewCell, extractFileLinks, type FileLink,
@@ -171,11 +170,9 @@ function baseWidthOf(col: MainTableViewFieldColumn): number {
 
 const displayWidthMap = computed(() => {
   const cols = displayColumns.value
-  const bases = cols.map((col) => baseWidthOf(col))
-  const displays = distributeDisplayWidths(bases, gridViewportWidth.value, MTV_SELECTION_COL_WIDTH)
   const map: Record<string, number> = {}
-  cols.forEach((col, index) => {
-    map[col.fieldName] = displays[index]
+  cols.forEach((col) => {
+    map[col.fieldName] = baseWidthOf(col)
   })
   const draft = dragPreview.value
   if (draft) {
@@ -197,15 +194,21 @@ const gridTotalColumnWidth = computed(() => {
 })
 
 const gridFits = computed(() =>
-  gridViewportWidth.value > 0 && gridTotalColumnWidth.value <= gridViewportWidth.value,
+  gridViewportWidth.value <= 0 || gridTotalColumnWidth.value <= gridViewportWidth.value,
 )
 
-// Always the viewport width so el-table owns horizontal scroll (Action pin-right,
-// many columns not clipped by overflow:hidden on the scroll host).
-const gridInnerStyle = computed(() => ({
-  width: '100%',
-  minWidth: '100%',
-}))
+const gridInnerStyle = computed(() => {
+  const total = gridTotalColumnWidth.value
+  if (gridFits.value && total > 0) {
+    return {
+      width: `${total}px`,
+      minWidth: `${total}px`,
+      maxWidth: `${total}px`,
+      alignSelf: 'flex-start',
+    }
+  }
+  return { width: '100%', minWidth: '100%' }
+})
 const gridTableHeight = computed(() =>
   gridViewportHeight.value > 0 ? gridViewportHeight.value : undefined,
 )
@@ -643,14 +646,7 @@ function handleColumnResizeEnd() {
     const cols = displayColumns.value
     const index = cols.findIndex((col) => col.fieldName === draft.fieldName)
     if (index >= 0) {
-      const bases = cols.map((col) => baseWidthOf(col))
-      setColumnWidth(
-        gridRuntime,
-        draft.fieldName,
-        invertBaseWidth(
-          draft.displayWidth, index, bases, gridViewportWidth.value, MTV_SELECTION_COL_WIDTH,
-        ),
-      )
+      setColumnWidth(gridRuntime, draft.fieldName, draft.displayWidth)
     }
     dragPreview.value = null
   }

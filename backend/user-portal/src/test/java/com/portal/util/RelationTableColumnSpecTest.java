@@ -95,7 +95,8 @@ class RelationTableColumnSpecTest {
                 field("created_by", RelationDataType.VARCHAR, "Created By"),
                 field("name", RelationDataType.VARCHAR, "Name"))), "created_by");
         assertEquals(Kind.USER, createdBy.kind());
-        assertEquals(List.of("eq", "ne", "isNull", "isNotNull"), createdBy.operators());
+        assertEquals(List.of("eq", "ne", "contains", "notContains", "isNotNull", "isNull"),
+                createdBy.operators());
     }
 
     @Test

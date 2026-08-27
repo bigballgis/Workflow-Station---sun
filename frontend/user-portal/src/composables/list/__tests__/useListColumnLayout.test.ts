@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useListColumnLayout } from '@platform-shared/list/useListColumnLayout'
-import { KIND_CONTENT_FLOOR } from '@platform-shared/list/columnWidthLayout'
+import { headerFitColumnWidth, KIND_CONTENT_FLOOR } from '@platform-shared/list/columnWidthLayout'
 
 function mountLayout(
   storageKey: string,
@@ -95,6 +95,18 @@ describe('useListColumnLayout', () => {
     w.unmount()
   })
 
+  it('hugs the column sum before the viewport size is known instead of stretching to 100%', () => {
+    const w = mountLayout('portal-list-layout:unknown-viewport', ['name', 'wide'], {
+      extraWidth: 50,
+      defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
+    })
+    expect(w.vm.gridFits).toBe(true)
+    expect(w.vm.gridInnerStyle).toEqual({
+      width: '350px', minWidth: '350px', maxWidth: '350px', alignSelf: 'flex-start',
+    })
+    w.unmount()
+  })
+
   it('keeps the inner wrapper at 100% when columns overflow so Action can stick', async () => {
     const w = mountLayout('portal-list-layout:overflow-inner', ['name', 'wide'], {
       extraWidth: 50,
@@ -106,24 +118,28 @@ describe('useListColumnLayout', () => {
     w.unmount()
   })
 
-  it('spreads leftover across data columns instead of parking a spacer', async () => {
-    const w = mountLayout('portal-list-layout:spread', ['name', 'wide'], {
+  it('does not stretch data columns when the viewport is wider than the bases', async () => {
+    const w = mountLayout('portal-list-layout:hug', ['name', 'wide'], {
       extraWidth: 50,
       defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
     })
     await setViewport(w, 450)
-    expect(w.vm.widthOf('name')).toBe(133)
-    expect(w.vm.widthOf('wide')).toBe(267)
+    expect(w.vm.widthOf('name')).toBe(100)
+    expect(w.vm.widthOf('wide')).toBe(200)
+    expect(w.vm.gridFits).toBe(true)
+    expect(w.vm.gridInnerStyle).toEqual({
+      width: '350px', minWidth: '350px', maxWidth: '350px', alignSelf: 'flex-start',
+    })
     w.unmount()
   })
 
-  it('persists the inverted base, not the leftover share', async () => {
+  it('persists the dragged width as the base', async () => {
     const w = mountLayout('portal-list-layout:invert', ['name', 'wide'], {
       extraWidth: 50,
       defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
     })
     await setViewport(w, 450)
-    w.vm.setWidth('name', 133)
+    w.vm.setWidth('name', 180)
     w.vm.persistWidths()
     w.unmount()
 
@@ -131,21 +147,21 @@ describe('useListColumnLayout', () => {
       extraWidth: 50,
       defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
     })
-    expect(restored.vm.widthOf('name')).toBe(100)
+    expect(restored.vm.widthOf('name')).toBe(180)
     restored.unmount()
   })
 
-  it('does not redistribute leftover onto other columns while a drag is in progress', async () => {
+  it('does not change other columns while a drag is in progress', async () => {
     const w = mountLayout('portal-list-layout:preview', ['name', 'wide'], {
       extraWidth: 50,
       defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
     })
     await setViewport(w, 450)
-    expect(w.vm.widthOf('name')).toBe(133)
-    expect(w.vm.widthOf('wide')).toBe(267)
+    expect(w.vm.widthOf('name')).toBe(100)
+    expect(w.vm.widthOf('wide')).toBe(200)
     w.vm.setWidth('name', 180)
     expect(w.vm.widthOf('name')).toBe(180)
-    expect(w.vm.widthOf('wide')).toBe(267)
+    expect(w.vm.widthOf('wide')).toBe(200)
     w.unmount()
   })
 
@@ -163,6 +179,28 @@ describe('useListColumnLayout', () => {
     })
     const w = mount(Host)
     expect(w.vm.widthOf('id')).toBe(KIND_CONTENT_FLOOR.TEXT)
+    w.unmount()
+  })
+
+  it('does not let a remembered width crop the header', () => {
+    sessionStorage.setItem(
+      'portal-list-layout:stale',
+      JSON.stringify({ v: 2, columnWidths: { name: 60 } }),
+    )
+    const Host = defineComponent({
+      setup() {
+        return useListColumnLayout({
+          storageKey: 'portal-list-layout:stale',
+          fields: ['name'],
+          labelOf: () => 'Current Assignee',
+          kindOf: () => 'USER',
+        })
+      },
+      template: '<div />',
+    })
+    const w = mount(Host)
+    expect(w.vm.widthOf('name')).toBeGreaterThan(KIND_CONTENT_FLOOR.USER)
+    expect(w.vm.widthOf('name')).toBeGreaterThanOrEqual(headerFitColumnWidth('Current Assignee', 'USER'))
     w.unmount()
   })
 })

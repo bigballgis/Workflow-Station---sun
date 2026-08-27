@@ -9,7 +9,7 @@ import {
   setColumnWidth,
   toListColumnMeta,
 } from '../mainTableViewGridRuntime'
-import { KIND_CONTENT_FLOOR } from '@platform-shared/list/columnWidthLayout'
+import { KIND_CONTENT_FLOOR, headerFitColumnWidth } from '@platform-shared/list/columnWidthLayout'
 
 describe('mainTableViewGridRuntime', () => {
   it('moveColumn swaps order', () => {
@@ -72,6 +72,38 @@ describe('mainTableViewGridRuntime', () => {
         state,
       ),
     ).toBe(220)
+  })
+
+  it('does not let a remembered width crop a Views header', () => {
+    const state = createDefaultGridRuntime()
+    state.columnWidths.assignee = 60
+    const col = {
+      fieldName: 'assignee',
+      displayLabel: 'Current Assignee',
+      kind: 'USER' as const,
+      filterable: true,
+      sortable: true,
+      operators: ['eq'],
+    }
+    expect(columnWidth(col, state)).toBe(headerFitColumnWidth('Current Assignee', 'USER'))
+  })
+
+  it('does not raise a designer columnWidth that is narrower than the header', () => {
+    const state = createDefaultGridRuntime()
+    expect(
+      columnWidth(
+        {
+          fieldName: 'status',
+          displayLabel: 'Current Assignee',
+          columnWidth: 80,
+          kind: 'USER',
+          filterable: true,
+          sortable: true,
+          operators: ['eq'],
+        },
+        state,
+      ),
+    ).toBe(80)
   })
 
   it('clampColumnWidth enforces min and max', () => {
