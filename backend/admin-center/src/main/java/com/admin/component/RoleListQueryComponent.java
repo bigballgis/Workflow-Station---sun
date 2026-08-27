@@ -4,7 +4,7 @@ import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.RoleListQueryRequest;
 import com.admin.dto.response.RoleListItem;
 import com.admin.enums.RoleType;
-import com.admin.list.ListFilterSql;
+
 import com.admin.list.ListQuerySupport;
 import com.admin.list.RoleColumnSpec;
 import com.admin.repository.RoleRepository;
@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.util.ArrayList;
 import java.util.List;

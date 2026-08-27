@@ -9,7 +9,7 @@ import com.portal.entity.ChangeHistory;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.ListQuerySupport;
 import com.portal.util.UserPortalAuditColumnSpec;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.sql.Timestamp;
 import java.time.Instant;

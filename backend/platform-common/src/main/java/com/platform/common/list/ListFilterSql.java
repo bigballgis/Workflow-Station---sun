@@ -1,7 +1,5 @@
-package com.portal.util;
+package com.platform.common.list;
 
-import com.platform.common.list.ListColumnFilter;
-import com.platform.common.list.ListColumnMeta;
 import com.platform.common.jdbc.SqlIdentifiers;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -11,10 +9,11 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Compiles shared-list column filters and sort into SQL. Every field and operator is validated
- * against the list's {@link ListColumnMeta} declaration before anything reaches SQL — an
- * undeclared field, a non-filterable column or an operator outside the whitelist is a 400,
- * never a silent no-op.
+ * Compiles shared-list column filters and sort into SQL for Portal and Admin.
+ * Column specs stay in each service; this compiler is the single operator-semantics
+ * implementation. Every field and operator is validated against the list's
+ * {@link ListColumnMeta} declaration before anything reaches SQL — an undeclared field,
+ * a non-filterable column or an operator outside the whitelist is a 400, never a silent no-op.
  *
  * <p>Each list binds one instance describing where its values live and how its rows are ordered,
  * so the operator semantics below are written once and every list that adopts the shared header
@@ -30,11 +29,14 @@ import java.util.regex.Pattern;
  *       take {@code YYYY-MM-DD} from the dialog.</li>
  *   <li>BOOLEAN — case-insensitive eq/ne against true/false; {@code ne} also matches
  *       empty cells, so Not equals True is not the same as Equals False.</li>
-   *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
-       *       (id, {@code user:}<id>, username, display_name, full_name, employee_id).
-       *       contains/notContains also hit when that identity appears as a comma-separated
-       *       token (a candidate list {@code id1, id2} contains id1). The picker still sends
-       *       the user id; these operators are not a typed name-fragment search.</li>
+     *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
+     *       (id, {@code user:}<id>, username, display_name, full_name, employee_id),
+     *       or a stored {@code buCode:roleCode} (also {@code buCode/roleCode} /
+     *       {@code BU_ROLE:buCode/roleCode}) that the selected user holds.
+     *       contains/notContains also hit when that identity or pair appears as a
+     *       comma-separated token (a candidate list {@code id1, id2} contains id1).
+     *       The picker still sends the user id; these operators are not a typed
+     *       name-fragment search.</li>
  * </ul>
  */
 public final class ListFilterSql {
@@ -214,7 +216,7 @@ public final class ListFilterSql {
 
     /**
      * The picker sends {@code sys_users.id}. Stored values may be that id, {@code user:}<id>,
-     * a username, a display name, or an employee id — match any of them for the selected row.
+     * a username, a display name, an employee id, or a BU:Role pair the user holds.
      * contains/notContains also match a comma-separated token list.
      */
     private static String userIdentityPredicate(String ref, String operator, String userId,
@@ -232,25 +234,67 @@ public final class ListFilterSql {
     private static String userIdentityExistsSql(String ref, boolean tokenContains) {
         String users = SqlIdentifiers.requireQualifiedName("sys_users");
         String id = SqlIdentifiers.requireIdentifier("id");
+        String pairs = userBuRolePairSubquery();
+        String exact = "(" + userExactIdentitySql(ref) + " OR " + ref + " IN " + pairs + ")";
+        String match = exact;
+        if (tokenContains) {
+            String tokens = "unnest(regexp_split_to_array(btrim(" + ref + "), E'\\\\s*,\\\\s*'))";
+            match = "(" + exact + " OR EXISTS (SELECT 1 FROM " + tokens
+                    + " AS token(v) WHERE token.v IN (" + userIdentityValuesSql() + ")"
+                    + " OR token.v IN " + pairs + "))";
+        }
+        return "EXISTS (SELECT 1 FROM " + users + " u WHERE u." + id + " = ? AND " + match + ")";
+    }
+
+    private static String userExactIdentitySql(String ref) {
+        String id = SqlIdentifiers.requireIdentifier("id");
         String username = SqlIdentifiers.requireIdentifier("username");
         String displayName = SqlIdentifiers.requireIdentifier("display_name");
         String fullName = SqlIdentifiers.requireIdentifier("full_name");
         String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
-        String exact = "(" + ref + " = u." + id + "::text"
+        return "(" + ref + " = u." + id + "::text"
                 + " OR " + ref + " = ('user:' || u." + id + "::text)"
                 + " OR " + ref + " = u." + username
                 + " OR " + ref + " = u." + displayName
                 + " OR " + ref + " = u." + fullName
                 + " OR " + ref + " = u." + employeeId + ")";
-        String identities = "u." + id + "::text, 'user:' || u." + id + "::text, u." + username
+    }
+
+    private static String userIdentityValuesSql() {
+        String id = SqlIdentifiers.requireIdentifier("id");
+        String username = SqlIdentifiers.requireIdentifier("username");
+        String displayName = SqlIdentifiers.requireIdentifier("display_name");
+        String fullName = SqlIdentifiers.requireIdentifier("full_name");
+        String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
+        return "u." + id + "::text, 'user:' || u." + id + "::text, u." + username
                 + ", u." + displayName + ", u." + fullName + ", u." + employeeId;
-        String match = exact;
-        if (tokenContains) {
-            String tokens = "unnest(regexp_split_to_array(btrim(" + ref + "), E'\\\\s*,\\\\s*'))";
-            match = "(" + exact + " OR EXISTS (SELECT 1 FROM " + tokens
-                    + " AS token(v) WHERE token.v IN (" + identities + ")))";
-        }
-        return "EXISTS (SELECT 1 FROM " + users + " u WHERE u." + id + " = ? AND " + match + ")";
+    }
+
+    /**
+     * Pair strings a selected user holds in {@code sys_user_business_unit_roles},
+     * correlated to the outer {@code u}. Formats match what Current Assignee may store
+     * when the engine has not expanded the pool to user ids.
+     */
+    private static String userBuRolePairSubquery() {
+        String ubr = SqlIdentifiers.requireQualifiedName("sys_user_business_unit_roles");
+        String units = SqlIdentifiers.requireQualifiedName("sys_business_units");
+        String roles = SqlIdentifiers.requireQualifiedName("sys_roles");
+        String userId = SqlIdentifiers.requireIdentifier("user_id");
+        String buId = SqlIdentifiers.requireIdentifier("business_unit_id");
+        String roleId = SqlIdentifiers.requireIdentifier("role_id");
+        String id = SqlIdentifiers.requireIdentifier("id");
+        String code = SqlIdentifiers.requireIdentifier("code");
+        return "(SELECT pair FROM ("
+                + "SELECT bu." + code + " AS bu_code, r." + code + " AS role_code"
+                + " FROM " + ubr + " ubr"
+                + " JOIN " + units + " bu ON bu." + id + " = ubr." + buId
+                + " JOIN " + roles + " r ON r." + id + " = ubr." + roleId
+                + " WHERE ubr." + userId + " = u." + id
+                + ") m CROSS JOIN LATERAL (VALUES"
+                + " (m.bu_code || ':' || m.role_code),"
+                + " (m.bu_code || '/' || m.role_code),"
+                + " ('BU_ROLE:' || m.bu_code || '/' || m.role_code)"
+                + ") AS pairs(pair))";
     }
 
 
@@ -353,7 +397,6 @@ public final class ListFilterSql {
         };
     }
 
-    /** Escapes LIKE wildcards so user input matches literally (PG default escape is backslash). */
     /** Wildcards a user typed are literal text, not pattern syntax. */
     public static String escapeLike(String value) {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");

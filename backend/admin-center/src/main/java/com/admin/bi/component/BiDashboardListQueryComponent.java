@@ -7,13 +7,14 @@ import com.admin.bi.repository.BiDashboardRegistryRepository;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.BiDashboardListQueryRequest;
 import com.admin.list.BiDashboardColumnSpec;
-import com.admin.list.ListFilterSql;
+
 import com.admin.list.ListQuerySupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.util.ArrayList;
 import java.util.List;

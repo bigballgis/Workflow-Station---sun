@@ -4,12 +4,13 @@ import com.portal.dto.MyApplicationQueryRequest;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.util.AuditApplicationColumnSpec;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.ListQuerySupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,8 +41,7 @@ public class AuditApplicationListQueryComponent {
         StringBuilder where = new StringBuilder(
                 " FROM up_process_instance pi WHERE pi.function_unit_code = ?");
         appendStatus(where, params, request.status());
-        where.append(filterSql.searchClause(
-                request.keyword(), AuditApplicationColumnSpec.searchableFields(), params));
+        where.append(AuditApplicationColumnSpec.textSearchClause(request.keyword(), params));
         where.append(filterSql.whereClause(request.filters(), params));
 
         long total = ListQuerySupport.requireCount(

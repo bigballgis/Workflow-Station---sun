@@ -22,6 +22,26 @@ class MyApplicationColumnSpecTest {
     }
 
     @Test
+    void currentAssigneeContainsLooksAtTheClaimedUserAndTheCandidatePool() {
+        List<Object> params = new ArrayList<>();
+        String where = MyApplicationColumnSpec.sql().whereClause(
+                List.of(new ListColumnFilter("currentAssignee", "contains", "id-a", null)), params);
+        assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION);
+        assertThat(where).contains("regexp_split_to_array");
+        assertThat(params).containsExactly("id-a");
+    }
+
+    @Test
+    void currentAssigneeEqualsDoesNotTokenSplitAPool() {
+        List<Object> params = new ArrayList<>();
+        String where = MyApplicationColumnSpec.sql().whereClause(
+                List.of(new ListColumnFilter("currentAssignee", "eq", "id-a", null)), params);
+        assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION);
+        assertThat(where).doesNotContain("regexp_split_to_array");
+        assertThat(params).containsExactly("id-a");
+    }
+
+    @Test
     void kindsFollowStoredTypes() {
         assertThat(column("currentAssignee").kind()).isEqualTo(Kind.USER);
         assertThat(column("currentAssignee").operators())

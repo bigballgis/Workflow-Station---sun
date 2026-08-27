@@ -2700,3 +2700,36 @@
     Playwright To Do / My Requests / Admin users：表头竖滑不动，横条贴在可视区底。
     Views/Audit/Member 本轮脚本未画出表格（空视图 / audit API 超时），与本次 CSS 无关。
 
+- id: "1562"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Audit list toolbar search used MDA Quick Find on stored values, not painted cell text"
+  file: "backend/user-portal/src/main/java/com/portal/util/AuditApplicationColumnSpec.java"
+  note: |
+    根因：keyword 走 ListFilterSql.searchClause，对 USER id、ISO timestamp、
+    隐藏列做 ILIKE，对照的是 MDA Quick Find 而不是格子里看到的字。
+    修复：textSearchClause 只 OR 当前 list 画出的单元格纯文本（request id、
+    标题 COALESCE、发起人姓名、处理人显示名、YYYY-MM-DD HH:mm、status），
+    不搜 function_unit_code / current_node。列头 typed filter 不动。
+    验证：AuditApplicationColumnSpecTest + AuditApplicationQuerySqlTest pass；
+    mvn package user-portal；compose 重建 user-portal（healthy，query 200）；
+    Playwright Request ID 命中 1 行、Developer Tester 命中显示名单元格。
+
+- id: "1563"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "My Requests/Audit Current Assignee contains only queried current_assignee, missing candidate pool and BU:Role"
+  file: "backend/user-portal/src/main/java/com/portal/util/ProcessAssigneeStoredSql.java"
+  note: |
+    根因：列表达式只有 pi.current_assignee。BU/Role 池把身份写在 candidate_users，
+    认领列为空；contains 拆 token 也拆不到池。格子还可能是 buCode:roleCode 拼接。
+    修复：ProcessAssigneeStoredSql concat 两列；ListFilterSql USER 谓词按所选用户
+    身份匹配，contains 拆逗号 token；另 OR 该用户 UBR 的 code:code（及 /、BU_ROLE:）。
+    ListFilterSql 抽到 platform-common。不匹配 uuid:uuid 未展开形态。
+    验证：ListFilterSqlTest / MyApplicationColumnSpecTest / AuditApplicationColumnSpecTest
+    / MyApplicationQuerySqlTest / ProcessAssigneeSnapshotTest。
+

@@ -1,12 +1,13 @@
 package com.portal.component;
 
 import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListFilterSql;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.jdbc.SubTableRowIdentity;
 import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.SqlFragment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,4 +1,4 @@
-package com.admin.list;
+package com.platform.common.list;
 
 import org.junit.jupiter.api.Test;
 

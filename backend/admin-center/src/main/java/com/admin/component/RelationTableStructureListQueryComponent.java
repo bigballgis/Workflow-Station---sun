@@ -7,7 +7,7 @@ import com.admin.dto.response.RelationTableResponse;
 import com.admin.entity.FunctionUnit;
 import com.admin.entity.RelationTableDefinition;
 import com.admin.entity.RelationTableFunctionUnit;
-import com.admin.list.ListFilterSql;
+
 import com.admin.list.ListQuerySupport;
 import com.admin.list.RelationTableStructureColumnSpec;
 import com.admin.repository.RelationTableDefinitionRepository;
@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import com.platform.common.list.ListFilterSql;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -7,7 +7,7 @@ import com.portal.dto.PortalListPage;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.entity.ProcessInstance;
 import com.portal.service.UserDisplayNameResolver;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.ListQuerySupport;
 import com.portal.util.MyApplicationColumnSpec;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;

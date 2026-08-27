@@ -4,7 +4,7 @@ import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.AutomationFlowListQueryRequest;
 import com.admin.dto.response.AutomationFlowSummary;
 import com.admin.list.AutomationFlowColumnSpec;
-import com.admin.list.ListFilterSql;
+
 import com.admin.list.ListQuerySupport;
 import com.admin.service.AutomationFlowService;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.util.ArrayList;
 import java.util.List;

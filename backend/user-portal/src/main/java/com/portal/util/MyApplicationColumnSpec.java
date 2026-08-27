@@ -2,6 +2,7 @@ package com.portal.util;
 
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
+import com.platform.common.list.ListFilterSql;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,7 @@ public final class MyApplicationColumnSpec {
         return switch (field) {
             case "requestId" -> "pi.variables->>'__request_id'";
             case "businessKey" -> "pi.business_key";
-            case "currentAssignee" -> "pi.current_assignee";
+            case "currentAssignee" -> ProcessAssigneeStoredSql.EXPRESSION;
             case "startTime" -> "pi.start_time::text";
             case "status" -> "pi.status";
             default -> throw new IllegalArgumentException("Unknown my-application column: " + field);

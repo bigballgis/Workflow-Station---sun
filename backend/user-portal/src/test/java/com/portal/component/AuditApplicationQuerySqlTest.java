@@ -72,8 +72,12 @@ class AuditApplicationQuerySqlTest {
         component.query("expense", request(null, "  请假  "));
 
         assertThat(preparedSql.get(0)).contains("pi.variables->>'__request_id' ILIKE ?");
-        assertThat(preparedSql.get(0)).contains("pi.business_key ILIKE ?");
+        assertThat(preparedSql.get(0)).contains("COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name)");
+        assertThat(preparedSql.get(0)).contains("to_char(pi.start_time, 'YYYY-MM-DD HH24:MI')");
+        assertThat(preparedSql.get(0)).contains("FROM sys_users u");
         assertThat(preparedSql.get(0)).contains("pi.status ILIKE ?");
+        assertThat(preparedSql.get(0)).doesNotContain("pi.function_unit_code ILIKE");
+        assertThat(preparedSql.get(0)).doesNotContain("pi.start_time::text");
         assertThat(pageSql()).contains("ILIKE ?").contains("pi.function_unit_code = ?");
     }
 

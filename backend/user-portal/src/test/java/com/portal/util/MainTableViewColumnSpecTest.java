@@ -2,6 +2,7 @@ package com.portal.util;
 
 import com.platform.common.list.ListColumnFilter;
 import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListFilterSql;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.MainTableViewColumnSpec.SqlSource;
 import org.junit.jupiter.api.Test;

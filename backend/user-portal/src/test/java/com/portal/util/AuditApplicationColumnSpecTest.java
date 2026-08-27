@@ -30,18 +30,41 @@ class AuditApplicationColumnSpecTest {
     }
 
     @Test
-    void keywordSearchOrsEveryVisibleColumn() {
+    void keywordSearchIsPlainTextOfPaintedCells() {
         List<Object> params = new ArrayList<>();
-        String where = AuditApplicationColumnSpec.sql().searchClause(
-                "请假", AuditApplicationColumnSpec.searchableFields(), params);
+        String where = AuditApplicationColumnSpec.textSearchClause("请假", params);
         assertThat(where).contains("pi.variables->>'__request_id' ILIKE ?");
-        assertThat(where).contains("pi.business_key ILIKE ?");
+        assertThat(where).contains("COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name) ILIKE ?");
         assertThat(where).contains("COALESCE(pi.start_user_name, pi.start_user_id) ILIKE ?");
-        assertThat(where).doesNotContain("pi.current_node");
-        assertThat(where).contains("pi.current_assignee ILIKE ?");
-        assertThat(where).contains("pi.start_time::text ILIKE ?");
+        assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION + " ILIKE ?");
+        assertThat(where).contains("FROM sys_users u");
+        assertThat(where).contains("to_char(pi.start_time, 'YYYY-MM-DD HH24:MI') ILIKE ?");
         assertThat(where).contains("pi.status ILIKE ?");
-        assertThat(params).hasSize(6).allMatch("%请假%"::equals);
+        assertThat(where).doesNotContain("pi.current_node");
+        assertThat(where).doesNotContain("pi.function_unit_code ILIKE");
+        assertThat(where).doesNotContain("pi.start_time::text");
+        assertThat(params).hasSize(7).allMatch("%请假%"::equals);
+    }
+
+    @Test
+    void blankKeywordAddsNoPredicate() {
+        List<Object> params = new ArrayList<>();
+        assertThat(AuditApplicationColumnSpec.textSearchClause("  ", params)).isEmpty();
+        assertThat(params).isEmpty();
+    }
+
+    @Test
+    void currentAssigneeContainsLooksAtTheClaimedUserAndTheCandidatePool() {
+        List<Object> params = new ArrayList<>();
+        String where = AuditApplicationColumnSpec.sql().whereClause(
+                List.of(new com.platform.common.list.ListColumnFilter(
+                        "currentAssignee", "contains", "id-a", null)),
+                params);
+        assertThat(where).contains("pi.current_assignee");
+        assertThat(where).contains("pi.candidate_users");
+        assertThat(where).contains("concat_ws");
+        assertThat(where).contains("regexp_split_to_array");
+        assertThat(params).containsExactly("id-a");
     }
 
     @Test

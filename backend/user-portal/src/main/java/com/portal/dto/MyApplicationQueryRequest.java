@@ -6,8 +6,8 @@ import java.util.List;
 /**
  * One page of My Requests or of a function-unit audit list. {@code status} is the
  * existing tab (RUNNING / COMPLETED / …) and ANDs with the shared-header filters.
- * {@code keyword} is the audit toolbar Quick Find: OR across the visible columns,
- * AND with the tab and column filters. Blank is treated as absent.
+ * {@code keyword} is the audit toolbar text search: OR across the cell text the
+ * list actually paints, AND with the tab and column filters. Blank is treated as absent.
  */
 public record MyApplicationQueryRequest(
         int page,

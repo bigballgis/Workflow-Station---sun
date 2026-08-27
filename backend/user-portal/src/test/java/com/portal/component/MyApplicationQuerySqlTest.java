@@ -90,6 +90,16 @@ class MyApplicationQuerySqlTest {
     }
 
     @Test
+    void currentAssigneeContainsLooksAtCandidatePoolNotOnlyClaimedUser() {
+        component.query("user-1", request(null,
+                List.of(new ListColumnFilter("currentAssignee", "contains", "id-a", null))));
+
+        assertThat(preparedSql.get(0)).contains("pi.candidate_users");
+        assertThat(preparedSql.get(0)).contains("concat_ws");
+        assertThat(pageSql()).contains("pi.candidate_users");
+    }
+
+    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
         assertThatThrownBy(() -> component.query("user-1", request(null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))

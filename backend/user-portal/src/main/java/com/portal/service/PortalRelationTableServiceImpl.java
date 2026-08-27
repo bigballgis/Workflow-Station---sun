@@ -1,6 +1,7 @@
 package com.portal.service;
 
 import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListFilterSql;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
@@ -16,7 +17,7 @@ import com.platform.security.util.SecurityContextUtils;
 import com.portal.component.RoleAccessComponent;
 import com.portal.dto.RelationTableDataPage;
 import com.portal.dto.RelationTableQueryRequest;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.RelationTableColumnSpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

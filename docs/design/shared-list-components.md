@@ -424,7 +424,7 @@ tiebreak 时必须显式 cast，否则 `'10' < '9'`。
 | ------------------------------ | ---------------------------------------------------------------------- |
 | `TEXT`                         | contains, eq, ne, startsWith, endsWith, notContains, isNull, isNotNull |
 | `ENUM`                         | eq, ne, isNull, isNotNull（**必须**下发 `options`，弹窗是封闭下拉）                    |
-| `USER`                         | eq, ne, contains, notContains, isNotNull, isNull（弹窗仍是人员选择器；contains = 选中的人出现在单元格的逗号分隔身份里，不是按姓名片段自由输入） |
+| `USER`                         | eq, ne, contains, notContains, isNotNull, isNull（弹窗仍是人员选择器；contains = 选中的人出现在单元格的逗号分隔身份里，**不是**按姓名片段自由输入。Current Assignee 还要打 `current_assignee` **和** `candidate_users`；存的是 `buCode:roleCode` 拼接时，按该用户是否持有这对 BU+Role 命中） |
 | `DATETIME`                     | today…thisYear（先相对窗口、无日期选择器），再 on / before / after / between，以及 isNull / isNotNull（按日历日、`Asia/Shanghai`） |
 | `NUMBER`**（PR #107 缺失，必须新增）**  | eq, ne, gt, gte, lt, lte, between, isNull, isNotNull                   |
 | `BOOLEAN`                      | eq, ne, isNull, isNotNull（True / False 封闭下拉，与 ENUM 同一套）。**没值（格子里的 `-`）≠ False**；Not equals True 会带上空单元格，不等于选 False |
@@ -551,7 +551,7 @@ Portal「Relation Tables」是共享列表的第二个消费者（Views 之后�
 NUMBER / DATETIME / TEXT…；LOOKUP 按存的主键当 TEXT）。VARCHAR 实为码表若要 ENUM，须在字段定义
 显式带 `options`；本期不扫全库推断。
 
-筛选 SQL：`ListFilterSql` + `JSON_ROW`（`data->>'field'`）。切表必须重置筛选 / 排序 / 搜索 /
+筛选 SQL：`platform-common` 的 `ListFilterSql` + `JSON_ROW`（`data->>'field'`）。切表必须重置筛选 / 排序 / 搜索 /
 页码（§6.2）。
 
 #### 6.5.2 内置 User = `sys_users` 只读投影
@@ -569,7 +569,7 @@ NUMBER / DATETIME / TEXT…；LOOKUP 按存的主键当 TEXT）。VARCHAR 实为
 封闭列筛法为 eq / ne / isNull / isNotNull，**禁止**再当 TEXT 用 contains。
 共享表头没有 Group 项（§6.3.1），User 列表也不另做分组。
 
-筛选 SQL：`ListFilterSql` + `PHYSICAL_COLUMN`；WHERE 须以 `WHERE 1=1`（或等价）起头，再拼
+筛选 SQL：`platform-common` 的 `ListFilterSql` + `PHYSICAL_COLUMN`；WHERE 须以 `WHERE 1=1`（或等价）起头，再拼
 `AND …`，避免 `FROM sys_users AND col …`。
 
 **本轮非目标：** 业务表全量 VARCHAR→ENUM；洗 `zh_CN`/`zh-CN` 存值。

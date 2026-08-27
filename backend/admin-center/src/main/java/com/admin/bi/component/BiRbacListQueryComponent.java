@@ -9,7 +9,7 @@ import com.admin.bi.repository.BiSupersetRoleRepository;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.BiRbacListQueryRequest;
 import com.admin.list.BiRbacColumnSpec;
-import com.admin.list.ListFilterSql;
+
 import com.admin.list.ListQuerySupport;
 import com.admin.repository.RoleRepository;
 import com.platform.security.entity.Role;
@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;

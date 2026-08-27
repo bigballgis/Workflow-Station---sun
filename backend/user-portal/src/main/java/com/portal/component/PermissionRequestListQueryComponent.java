@@ -4,7 +4,7 @@ import com.portal.dto.PermissionListQueryRequest;
 import com.portal.dto.PermissionRequestListItem;
 import com.portal.dto.PortalListPage;
 import com.portal.enums.PermissionRequestType;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.ListQuerySupport;
 import com.portal.util.PermissionRequestColumnSpec;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;

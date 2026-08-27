@@ -1,13 +1,14 @@
 package com.portal.component;
 
 import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListFilterSql;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.CompletedTaskQueryRequest;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.TaskInfo;
 import com.portal.util.CompletedTaskColumnSpec;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.ListQuerySupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

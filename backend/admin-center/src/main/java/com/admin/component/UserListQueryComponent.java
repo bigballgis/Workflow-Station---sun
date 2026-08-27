@@ -3,7 +3,7 @@ package com.admin.component;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.UserListQueryRequest;
 import com.admin.dto.response.UserInfo;
-import com.admin.list.ListFilterSql;
+
 import com.admin.list.ListQuerySupport;
 import com.admin.list.UserColumnSpec;
 import com.admin.repository.UserRepository;
@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.util.ArrayList;
 import java.util.List;

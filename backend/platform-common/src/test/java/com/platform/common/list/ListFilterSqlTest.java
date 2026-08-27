@@ -1,4 +1,4 @@
-package com.admin.list;
+package com.platform.common.list;
 
 import com.platform.common.list.ListColumnFilter;
 import com.platform.common.list.ListColumnMeta;
@@ -104,6 +104,22 @@ class ListFilterSqlTest {
         assertTrue(sql.contains("EXISTS (SELECT 1 FROM sys_users u WHERE u.id = ?"), sql);
         assertTrue(sql.contains("regexp_split_to_array"), sql);
         assertTrue(sql.contains("data->>'created_by' = u.display_name"), sql);
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
+    void userEqMatchesAStoredBuRolePairTheSelectedUserHolds() {
+        String sql = where("created_by", "eq", "user-dev", null);
+        assertTrue(sql.contains("sys_user_business_unit_roles"), sql);
+        assertTrue(sql.contains("m.bu_code || ':' || m.role_code"), sql);
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
+    void userContainsMatchesABuRolePairToken() {
+        String sql = where("created_by", "contains", "user-dev", null);
+        assertTrue(sql.contains("regexp_split_to_array"), sql);
+        assertTrue(sql.contains("sys_user_business_unit_roles"), sql);
         assertEquals(List.of("user-dev"), params);
     }
 

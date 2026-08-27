@@ -48,7 +48,7 @@ export interface MyApplicationQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  /** Audit toolbar Quick Find; OR across visible columns. Omit when blank. */
+  /** Audit toolbar text search; OR across painted cell text. Omit when blank. */
   keyword?: string
 }
 

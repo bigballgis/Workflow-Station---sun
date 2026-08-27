@@ -5,7 +5,7 @@ import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.AdminAuditListQueryRequest;
 import com.admin.entity.AuditLog;
 import com.admin.list.AdminAuditColumnSpec;
-import com.admin.list.ListFilterSql;
+
 import com.admin.list.ListQuerySupport;
 import com.admin.repository.AuditLogRepository;
 import com.admin.repository.UserRepository;
@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.time.Instant;
 import java.sql.Timestamp;
