@@ -67,8 +67,6 @@ export default {
     sortSmallToLarge: '從小到大',
     sortLargeToSmall: '從大到小',
     clearSort: '清除排序',
-    groupBy: '分組依據',
-    ungroup: '取消分組',
     filterBy: '篩選依據',
     clearFilter: '清除篩選',
     loading: '載入中...',

@@ -164,8 +164,6 @@ export default {
     sortSmallToLarge: '从小到大',
     sortLargeToSmall: '从大到小',
     clearSort: '清除排序',
-    groupBy: '分组依据',
-    ungroup: '取消分组',
     filterBy: '筛选依据',
     clearFilter: '清除筛选',
     loading: '加载中...',
@@ -828,7 +826,8 @@ export default {
     removeSuccess: '清退成功',
     removeFailed: '清退失败',
     noMembers: '暂无成员',
-    noPermission: '您没有管理此组织的权限'
+    noPermission: '您没有管理此组织的权限',
+    loadFailed: '加载成员失败'
   },
   exitRole: {
     title: '退出业务单元',

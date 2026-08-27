@@ -9,8 +9,7 @@ import java.util.List;
  * that cannot be pushed into Flowable runs as an exact portal fullScan (see {@link EngineTaskPushdown}).
  *
  * <p>{@code requestId} is computed (enriched before filter/sort). It is ordinary TEXT
- * ({@link ListColumnMeta#of}) so the header can search and A→Z sort; grouping stays
- * off because TEXT is not a closed-value kind. {@code priority} is stored as Flowable's
+ * ({@link ListColumnMeta#of}) so the header can search and A→Z sort. {@code priority} is stored as Flowable's
  * numeric string ({@code "50"}); ENUM options map to numeric bands in
  * {@link TaskQueryColumnFilters} so chrome labels match the cell renderer.
  */

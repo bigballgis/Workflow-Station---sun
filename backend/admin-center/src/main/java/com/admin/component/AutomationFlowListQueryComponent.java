@@ -1,6 +1,5 @@
 package com.admin.component;
 
-import com.admin.dto.list.AdminListGroup;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.AutomationFlowListQueryRequest;
 import com.admin.dto.response.AutomationFlowSummary;
@@ -22,7 +21,7 @@ import java.util.stream.Collectors;
 
 /**
  * Automation Flows list: COUNT(*) and the page share toolbar keyword plus column
- * filters. Readiness grouping uses the same DRAFT/ENABLED/DISABLED CASE as the UI.
+ * filters. Readiness uses the same DRAFT/ENABLED/DISABLED CASE as the UI.
  */
 @Slf4j
 @Component
@@ -57,42 +56,27 @@ public class AutomationFlowListQueryComponent {
                 ListQuerySupport.query(jdbcTemplate, "SELECT COUNT(*)" + where, params, countExtractor),
                 LIST_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<AdminListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        if (groupExpression != null && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty automation-flow list");
-        }
 
-        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request, groupExpression);
+        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request);
         List<AutomationFlowSummary> rows = toRows(pageIds.ids());
-        applyGroupedValues(rows, request.groupBy(), pageIds.groupedValues());
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
-        return new AdminListPage<>(AutomationFlowColumnSpec.columns(), rows, groups,
+        return new AdminListPage<>(AutomationFlowColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
     private PageIds loadPageIds(ListFilterSql filterSql, String where, List<Object> params,
-                                AutomationFlowListQueryRequest request, String groupExpression) {
+                                AutomationFlowListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
-        String sql = "SELECT f.id" + groupedSelect + where + orderBy + " LIMIT ? OFFSET ?";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
+        String sql = "SELECT f.id" + where + orderBy + " LIMIT ? OFFSET ?";
         ResultSetExtractor<PageIds> extractor = rs -> {
             List<String> ids = new ArrayList<>();
-            List<String> grouped = new ArrayList<>();
             while (rs.next()) {
                 ids.add(rs.getString("id"));
-                grouped.add(groupExpression == null ? null : rs.getString("grouped_value"));
             }
-            return new PageIds(ids, grouped);
+            return new PageIds(ids);
         };
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, extractor);
     }
@@ -114,22 +98,6 @@ public class AutomationFlowListQueryComponent {
         return ordered;
     }
 
-    private static void applyGroupedValues(List<AutomationFlowSummary> rows, String groupBy,
-                                           List<String> groupedValues) {
-        if (groupBy == null || groupBy.isBlank()) {
-            return;
-        }
-        if (rows.size() != groupedValues.size()) {
-            throw new IllegalStateException("grouped values and page rows are different lengths");
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            String label = groupedValues.get(i) == null ? "" : groupedValues.get(i);
-            if (!"readiness".equals(groupBy)) {
-                throw new IllegalStateException("grouped field was not selected: " + groupBy);
-            }
-            rows.get(i).setReadiness(label);
-        }
-    }
 
     private static void appendKeyword(StringBuilder where, List<Object> params, String keyword) {
         if (keyword == null || keyword.isBlank()) {
@@ -144,10 +112,7 @@ public class AutomationFlowListQueryComponent {
         params.add(like);
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 
-    private record PageIds(List<String> ids, List<String> groupedValues) {
+    private record PageIds(List<String> ids) {
     }
 }

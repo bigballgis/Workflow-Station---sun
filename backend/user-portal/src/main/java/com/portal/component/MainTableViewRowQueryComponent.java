@@ -49,7 +49,6 @@ public class MainTableViewRowQueryComponent {
             List<ListColumnFilter> filters,
             String sortField,
             String sortDirection,
-            String groupBy,
             String search,
             List<String> searchable,
             MainTableViewInvolvementScope.Predicate involvement,
@@ -57,11 +56,7 @@ public class MainTableViewRowQueryComponent {
             int size) {
     }
 
-    /** One group of the whole result set, not of the page — the count is what the header shows. */
-    public record Group(String label, long count) {
-    }
-
-    public record Page(List<ProcessInstance> instances, long total, List<Group> groups) {
+    public record Page(List<ProcessInstance> instances, long total) {
     }
 
     public Page query(Query query) {
@@ -80,19 +75,10 @@ public class MainTableViewRowQueryComponent {
         Long total = queryOne("SELECT COUNT(*) FROM up_process_instance pi" + where,
                 params, rs -> rs.next() ? rs.getLong(1) : 0L);
 
-        String groupExpression = query.groupBy() == null || query.groupBy().isBlank()
-                ? null
-                : query.sql().groupByExpression(query.groupBy());
-        List<Group> groups = groupExpression == null
-                ? List.of()
-                : groupsOf(groupExpression, where.toString(), params);
-
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(query.size());
         pageParams.add(query.page() * query.size());
-        String orderBy = groupExpression == null
-                ? query.sql().orderBy(query.sortField(), query.sortDirection())
-                : query.sql().orderByGrouped(groupExpression, query.sortField(), query.sortDirection());
+        String orderBy = query.sql().orderBy(query.sortField(), query.sortDirection());
         String sql = "SELECT pi.id, pi.status, pi.start_time, pi.start_user_id, pi.start_user_name,"
                 + " pi.current_node, pi.variables::text AS variables"
                 + " FROM up_process_instance pi" + where
@@ -116,26 +102,7 @@ public class MainTableViewRowQueryComponent {
             return rows;
         });
 
-        return new Page(instances, total != null ? total : 0L, groups);
-    }
-
-    /**
-     * Counts every group of the whole result set. The page only carries the rows of the groups it
-     * happens to cover, so a header count computed from those rows would shrink at page
-     * boundaries; this counts over the same predicate the page is drawn from.
-     */
-    private List<Group> groupsOf(String groupExpression, String where, List<Object> params) {
-        String sql = "SELECT " + groupExpression + " AS group_label, COUNT(*) AS group_count"
-                + " FROM up_process_instance pi" + where
-                + " GROUP BY " + groupExpression
-                + " ORDER BY " + groupExpression + " ASC NULLS LAST";
-        return queryOne(sql, params, rs -> {
-            List<Group> groups = new ArrayList<>();
-            while (rs.next()) {
-                groups.add(new Group(rs.getString("group_label"), rs.getLong("group_count")));
-            }
-            return groups;
-        });
+        return new Page(instances, total != null ? total : 0L);
     }
 
     /**

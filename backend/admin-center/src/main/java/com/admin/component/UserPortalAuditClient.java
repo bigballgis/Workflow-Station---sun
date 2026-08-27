@@ -69,7 +69,7 @@ public class UserPortalAuditClient {
     }
 
     /**
-     * Query user portal audit logs with true paging, column filters, sort and grouping.
+     * Query user portal audit logs with true paging, column filters and sort.
      */
     public Map<String, Object> queryAuditLogList(UserPortalAuditListQueryRequest request) {
         requireTokenConfigured();

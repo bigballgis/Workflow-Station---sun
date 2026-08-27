@@ -72,7 +72,6 @@ public final class MainTableViewPortalDtos {
             ListColumnMeta.Kind kind,
             Boolean filterable,
             Boolean sortable,
-            Boolean groupable,
             List<String> operators,
             /** Closed choices for ENUM / BOOLEAN; empty for open-value kinds. */
             List<ListColumnMeta.Option> options
@@ -88,7 +87,6 @@ public final class MainTableViewPortalDtos {
                     .kind(cap.kind())
                     .filterable(cap.filterable())
                     .sortable(cap.sortable())
-                    .groupable(cap.groupable())
                     .operators(cap.operators())
                     .options(cap.options());
         }
@@ -107,22 +105,12 @@ public final class MainTableViewPortalDtos {
             Map<String, Object> values
     ) {}
 
-    /**
-     * A group of the whole result set. Counted by the database over the same predicate as the
-     * page, so a header still reads the true size of its group on a page that only holds part
-     * of it.
-     */
-    @Builder
-    public record MainTableViewGroup(String label, long count) {}
-
     @Builder
     public record MainTableViewDataPage(
             List<MainTableViewFieldColumn> columns,
             List<MainTableViewDataRow> rows,
             long total,
             int page,
-            int size,
-            /** Empty unless the request grouped by a column. */
-            List<MainTableViewGroup> groups
+            int size
     ) {}
 }

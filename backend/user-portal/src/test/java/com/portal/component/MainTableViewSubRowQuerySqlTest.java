@@ -70,7 +70,7 @@ class MainTableViewSubRowQuerySqlTest {
                 });
     }
 
-    private MainTableViewSubRowQueryComponent.Query query(String groupBy, List<ListColumnFilter> filters,
+    private MainTableViewSubRowQueryComponent.Query query(List<ListColumnFilter> filters,
                                                           MainTableViewInvolvementScope.Predicate involvement) {
         return new MainTableViewSubRowQueryComponent.Query(
                 7L,
@@ -82,7 +82,6 @@ class MainTableViewSubRowQuerySqlTest {
                 filters,
                 null,
                 null,
-                groupBy,
                 null,
                 List.of(),
                 involvement,
@@ -92,7 +91,7 @@ class MainTableViewSubRowQuerySqlTest {
 
     @Test
     void eachBindingContributesItsOwnExpansionAndTheRowIsDeduplicatedAcrossThemAll() {
-        component.query(query(null, List.of(), null));
+        component.query(query(List.of(), null));
 
         String sql = preparedSql.get(0);
         assertThat(sql).contains("jsonb_array_elements(pi.variables->'__subTables__'->?::text)");
@@ -105,7 +104,7 @@ class MainTableViewSubRowQuerySqlTest {
 
     @Test
     void whoMaySeeARowIsSettledBeforeTheRowsAreExpanded() {
-        component.query(query(null, List.of(),
+        component.query(query(List.of(),
                 new MainTableViewInvolvementScope.Predicate(" AND (pi.start_user_id = ?)", List.of("u1"))));
 
         String sql = pageSql();
@@ -119,7 +118,7 @@ class MainTableViewSubRowQuerySqlTest {
 
     @Test
     void theTotalCountsSubTableRowsRatherThanTheInstancesTheyCameFrom() {
-        component.query(query(null, List.of(), null));
+        component.query(query(List.of(), null));
 
         assertThat(preparedSql.get(0))
                 .as("counting instances would report a smaller total than the rows on screen")
@@ -127,21 +126,9 @@ class MainTableViewSubRowQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(query("reconciled", List.of(), null));
-
-        String groupSql = preparedSql.stream()
-                .filter(sql -> sql.contains("GROUP BY"))
-                .findFirst()
-                .orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheViewDoesNotDeclareIsRefused() {
         assertThatThrownBy(() -> component.query(
-                query(null, List.of(new ListColumnFilter("secret", "contains", "x", null)), null)))
+                query(List.of(new ListColumnFilter("secret", "contains", "x", null)), null)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -151,7 +138,7 @@ class MainTableViewSubRowQuerySqlTest {
                 7L, "fu-atm", List.of(),
                 MainTableViewColumnSpec.sqlFor(FIELDS, List.of(), SqlSource.EXPANDED_SUB_ROW,
                         "pi.id, pi.row_identity"),
-                SqlFragment.EMPTY, List.of(), null, null, null, null, List.of(), null, 0, 20);
+                SqlFragment.EMPTY, List.of(), null, null, null, List.of(), null, 0, 20);
 
         assertThatThrownBy(() -> component.query(unbound))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -171,7 +158,7 @@ class MainTableViewSubRowQuerySqlTest {
         when(jdbcTemplate.query(any(PreparedStatementCreator.class), any(ResultSetExtractor.class)))
                 .thenAnswer(call -> call.<ResultSetExtractor<?>>getArgument(1).extractData(rs));
 
-        assertThatThrownBy(() -> component.query(query(null, List.of(), null)))
+        assertThatThrownBy(() -> component.query(query(List.of(), null)))
                 .as("DISTINCT ON treats two missing identities as the same row, so one of them "
                         + "would vanish and the total would be short by one")
                 .hasMessageContaining("proc-1")

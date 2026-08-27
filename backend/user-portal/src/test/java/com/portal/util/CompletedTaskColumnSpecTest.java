@@ -11,19 +11,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CompletedTaskColumnSpecTest {
 
     @Test
-    void actionIsTheOnlyGroupableColumn() {
-        assertThat(CompletedTaskColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("action");
-    }
-
-    @Test
-    void requestIdIsTextSearchableAndSortableWithoutGroup() {
+    void requestIdIsTextSearchableAndSortable() {
         assertThat(column("requestId").kind()).isEqualTo(Kind.TEXT);
         assertThat(column("requestId").filterable()).isTrue();
         assertThat(column("requestId").sortable()).isTrue();
-        assertThat(column("requestId").groupable()).isFalse();
         assertThat(column("currentStepName").filterable()).isFalse();
         assertThat(column("durationInMillis").kind()).isEqualTo(Kind.NUMBER);
         assertThat(column("completedTime").kind()).isEqualTo(Kind.DATETIME);

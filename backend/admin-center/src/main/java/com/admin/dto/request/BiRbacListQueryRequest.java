@@ -14,8 +14,7 @@ public record BiRbacListQueryRequest(
         String roleType,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public BiRbacListQueryRequest {
         if (page < 0) {

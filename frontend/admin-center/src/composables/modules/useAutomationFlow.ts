@@ -14,14 +14,6 @@ import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 import { formatDate } from '@/utils/format'
 
 const ACTIONS_COL_WIDTH = 140
-const FLOW_COL_WIDTHS: Record<string, number> = {
-  displayName: 180,
-  id: 220,
-  readiness: 120,
-  projectName: 140,
-  ownerName: 120,
-  updated: 150,
-}
 
 const COMPACT_FIELDS = new Set(['displayName', 'readiness'])
 
@@ -51,7 +43,6 @@ export function useAutomationFlow() {
   const grid = useAdminListGrid<AutomationFlowSummary>({
     storageKey: 'admin-list-layout:automation-flows',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => FLOW_COL_WIDTHS[field] ?? 140,
   })
 
   const tableColumns = computed(() =>
@@ -60,16 +51,6 @@ export function useAutomationFlow() {
       : grid.displayColumns.value,
   )
 
-  const tableSpanMethod = (args: { row: object; columnIndex: number }) => {
-    if (!grid.isListGroupHeaderRow(args.row)) {
-      return { rowspan: 1, colspan: 1 }
-    }
-    if (args.columnIndex === 0) {
-      const extra = 1 + (!isCompact.value && grid.leftoverWidth.value > 0 ? 1 : 0)
-      return { rowspan: 1, colspan: tableColumns.value.length + extra }
-    }
-    return { rowspan: 0, colspan: 0 }
-  }
 
   const hasMissingConnections = computed(() =>
     connectionChecks.value.some((item) => !item.exists))
@@ -254,7 +235,6 @@ export function useAutomationFlow() {
     hasMissingConnections,
     isCompact,
     tableColumns,
-    tableSpanMethod,
     compactMeta,
     readiness,
     shortPieceName,

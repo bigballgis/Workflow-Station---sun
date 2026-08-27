@@ -164,8 +164,6 @@ export default {
     sortSmallToLarge: '從小到大',
     sortLargeToSmall: '從大到小',
     clearSort: '清除排序',
-    groupBy: '分組依據',
-    ungroup: '取消分組',
     filterBy: '篩選依據',
     clearFilter: '清除篩選',
     loading: '載入中...',
@@ -787,7 +785,8 @@ export default {
     removeSuccess: '清退成功',
     removeFailed: '清退失敗',
     noMembers: '暫無成員',
-    noPermission: '您沒有管理此組織的權限'
+    noPermission: '您沒有管理此組織的權限',
+    loadFailed: '載入成員失敗'
   },
   exitRole: {
     title: '退出業務單元',

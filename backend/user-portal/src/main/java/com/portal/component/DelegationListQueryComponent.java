@@ -1,7 +1,6 @@
 package com.portal.component;
 
 import com.portal.dto.DelegationListQueryRequest;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.PortalListPage;
 import com.portal.entity.DelegationAudit;
 import com.portal.entity.DelegationRule;
@@ -25,8 +24,8 @@ import java.util.List;
 
 /**
  * My Rules and Audit shared lists: visibility is SQL-owned (rules = current user as
- * delegator; audit = current user as either party). Filters, sort and grouping compile
- * through {@link ListFilterSql} so COUNT, page and group counts share one predicate.
+ * delegator; audit = current user as either party). Filters and sort compile
+ * through {@link ListFilterSql} so COUNT and the page share one predicate.
  */
 @Slf4j
 @Component
@@ -56,19 +55,12 @@ public class DelegationListQueryComponent {
                         rs -> rs.next() ? rs.getLong(1) : 0L),
                 RULES_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<PortalListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        requireGroupsWhenRowsExist(request.groupBy(), groups, total, RULES_KEY);
 
-        List<DelegationRule> rows = loadRulesPage(filterSql, where.toString(), params, request, groupExpression);
+        List<DelegationRule> rows = loadRulesPage(filterSql, where.toString(), params, request);
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, RULES_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, RULES_KEY, request.page(), request.size(), total, elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(DelegationRuleColumnSpec.columns(), rows, groups,
+        return new PortalListPage<>(DelegationRuleColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
@@ -87,33 +79,23 @@ public class DelegationListQueryComponent {
                         rs -> rs.next() ? rs.getLong(1) : 0L),
                 AUDIT_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<PortalListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        requireGroupsWhenRowsExist(request.groupBy(), groups, total, AUDIT_KEY);
 
-        List<DelegationAudit> rows = loadAuditPage(filterSql, where.toString(), params, request, groupExpression);
+        List<DelegationAudit> rows = loadAuditPage(filterSql, where.toString(), params, request);
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, AUDIT_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, AUDIT_KEY, request.page(), request.size(), total, elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(DelegationAuditColumnSpec.columns(), rows, groups,
+        return new PortalListPage<>(DelegationAuditColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
     private List<DelegationRule> loadRulesPage(ListFilterSql filterSql, String where, List<Object> params,
-                                               DelegationListQueryRequest request, String groupExpression) {
+                                               DelegationListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
         String sql = "SELECT r.id, r.delegator_id, r.delegate_id, r.delegation_type, r.start_time,"
-                + " r.end_time, r.status, r.reason, r.created_at, r.updated_at" + groupedSelect
+                + " r.end_time, r.status, r.reason, r.created_at, r.updated_at"
                 + where + orderBy + " LIMIT ? OFFSET ?";
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, rs -> {
             List<DelegationRule> page = new ArrayList<>();
@@ -125,17 +107,14 @@ public class DelegationListQueryComponent {
     }
 
     private List<DelegationAudit> loadAuditPage(ListFilterSql filterSql, String where, List<Object> params,
-                                                DelegationListQueryRequest request, String groupExpression) {
+                                                DelegationListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
         String sql = "SELECT a.id, a.delegator_id, a.delegate_id, a.task_id, a.operation_type,"
                 + " a.operation_result, a.operation_detail, a.ip_address, a.user_agent, a.created_at"
-                + groupedSelect + where + orderBy + " LIMIT ? OFFSET ?";
+                + where + orderBy + " LIMIT ? OFFSET ?";
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, rs -> {
             List<DelegationAudit> page = new ArrayList<>();
             while (rs.next()) {
@@ -182,13 +161,6 @@ public class DelegationListQueryComponent {
         return Enum.valueOf(type, raw);
     }
 
-    private static void requireGroupsWhenRowsExist(String groupBy, List<PortalListGroup> groups,
-                                                   long total, String listKey) {
-        if (groupBy != null && !groupBy.isBlank() && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException(
-                    "GROUP BY returned no groups for a non-empty " + listKey + " result");
-        }
-    }
 
     private static void requireUser(String userId) {
         if (userId == null || userId.isBlank()) {
@@ -200,7 +172,4 @@ public class DelegationListQueryComponent {
         return timestamp == null ? null : timestamp.toLocalDateTime();
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 }

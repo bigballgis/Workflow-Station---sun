@@ -7,18 +7,18 @@ import { Search, Download, Refresh, Upload } from '@element-plus/icons-vue'
 import {
   mainTableViewApi,
   type FunctionUnitViewMenuItem, type MainTableViewSummary, type MainTableViewDataPage,
-  type MainTableViewFieldColumn, type MainTableViewDataRow, type MainTableViewGroup,
+  type MainTableViewFieldColumn, type MainTableViewDataRow,
   type MainTableViewImportResult, type ImportProgressPhase,
 } from '@/api/mainTableView'
 import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 import {
   COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, columnWidth, setColumnWidth,
-  createDefaultGridRuntime, initColumnOrder, insertGroupHeaders, isGroupHeaderRow,
+  createDefaultGridRuntime, initColumnOrder,
   loadGridRuntimeFromSession, moveColumn, orderedColumns, pruneRuntimeToColumns,
   saveGridRuntimeToSession, toListColumnMeta,
   type GridColumnFilter, type GridDisplayRow, type GridRuntimeState, type GridSortDirection,
 } from '@/utils/mainTableViewGridRuntime'
-import { leftoverColumnWidth } from '@platform-shared/list/columnResizeCursor'
+import { distributeDisplayWidths, invertBaseWidth } from '@platform-shared/list/columnWidthLayout'
 import {
   downloadMainTableViewRowsAsCsv, formatMainTableViewCell, extractFileLinks, type FileLink,
 } from '@/utils/mainTableViewCsvExport'
@@ -46,7 +46,6 @@ const selectedViewId = ref<number | null>(null)
 const searchKeyword = ref('')
 const gridColumns = ref<MainTableViewFieldColumn[]>([])
 const allRows = ref<MainTableViewDataRow[]>([])
-const dataGroups = ref<MainTableViewGroup[]>([])
 const dataTotal = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -158,25 +157,40 @@ const displayColumns = computed(() => orderedColumns(gridColumns.value, gridRunt
 
 const MTV_SELECTION_COL_WIDTH = 48
 
+// Width of the scroll viewport — tracked so leftover can be distributed across data columns.
+const gridScrollRef = ref<HTMLElement | null>(null)
+const gridViewportWidth = ref(0)
+let gridResizeObserver: ResizeObserver | null = null
+
+function baseWidthOf(col: MainTableViewFieldColumn): number {
+  return columnWidth(col, gridRuntime)
+}
+
+const displayWidthMap = computed(() => {
+  const cols = displayColumns.value
+  const bases = cols.map((col) => baseWidthOf(col))
+  const displays = distributeDisplayWidths(bases, gridViewportWidth.value, MTV_SELECTION_COL_WIDTH)
+  const map: Record<string, number> = {}
+  cols.forEach((col, index) => {
+    map[col.fieldName] = displays[index]
+  })
+  return map
+})
+
+function displayWidthOf(col: MainTableViewFieldColumn): number {
+  return displayWidthMap.value[col.fieldName] ?? baseWidthOf(col)
+}
+
 const gridTotalColumnWidth = computed(() => {
   const colsWidth = displayColumns.value.reduce(
-    (sum, col) => sum + columnWidth(col, gridRuntime),
+    (sum, col) => sum + displayWidthOf(col),
     0,
   )
   return MTV_SELECTION_COL_WIDTH + colsWidth
 })
 
-// Width of the scroll viewport — tracked so we know whether the columns underflow the panel.
-const gridScrollRef = ref<HTMLElement | null>(null)
-const gridViewportWidth = ref(0)
-let gridResizeObserver: ResizeObserver | null = null
-
 const gridFits = computed(() =>
   gridViewportWidth.value > 0 && gridTotalColumnWidth.value <= gridViewportWidth.value,
-)
-
-const leftoverWidth = computed(() =>
-  leftoverColumnWidth(gridViewportWidth.value, gridTotalColumnWidth.value),
 )
 
 const gridInnerStyle = computed(() => (
@@ -185,18 +199,14 @@ const gridInnerStyle = computed(() => (
     : { width: `${gridTotalColumnWidth.value}px`, minWidth: '100%' }
 ))
 
-// Forces el-table to fully rebuild (no stale row/column DOM reuse) whenever the selected view, its
-// columns, or the group-by changes — otherwise switching a grouped view to another view can briefly
-// render the old rows under the new headers.
+// Forces el-table to fully rebuild (no stale row/column DOM reuse) whenever the selected view or its
+// columns change — otherwise switching views can briefly render the old rows under the new headers.
 const gridTableKey = computed(() =>
-  `${selectedViewId.value ?? 'none'}|${gridRuntime.groupBy ?? ''}|${gridColumns.value.map(c => c.fieldName).join(',')}`,
+  `${selectedViewId.value ?? 'none'}|${gridColumns.value.map(c => c.fieldName).join(',')}`,
 )
 
-// The database already applied the filters, the sort and the paging, so the rows in hand ARE the
-// page. All that is left is to slot in the group headers the same query counted.
-const pagedRows = computed<GridDisplayRow[]>(() =>
-  insertGroupHeaders(allRows.value, gridRuntime.groupBy, dataGroups.value),
-)
+// The database already applied the filters, the sort and the paging, so the rows in hand ARE the page.
+const pagedRows = computed<GridDisplayRow[]>(() => allRows.value)
 
 const displayTotal = computed(() => dataTotal.value)
 
@@ -255,7 +265,6 @@ async function loadData() {
   if (!selectedViewId.value) {
     gridColumns.value = []
     allRows.value = []
-    dataGroups.value = []
     dataTotal.value = 0
     return
   }
@@ -270,22 +279,20 @@ async function loadData() {
       filters: activeFilters(),
       sortField: gridRuntime.sort?.fieldName ?? undefined,
       sortDirection: gridRuntime.sort?.direction ?? undefined,
-      groupBy: gridRuntime.groupBy ?? undefined,
     })
     if (queryId !== latestQuery) return
     const page: MainTableViewDataPage = res.data
-    if (!page || !Array.isArray(page.columns) || !Array.isArray(page.rows) || !Array.isArray(page.groups)) {
-      throw new Error('main table view data page is missing columns, rows, or groups')
+    if (!page || !Array.isArray(page.columns) || !Array.isArray(page.rows)) {
+      throw new Error('main table view data page is missing columns or rows')
     }
     if (typeof page.total !== 'number') {
       throw new Error('main table view data page is missing total')
     }
     gridColumns.value = page.columns
     allRows.value = page.rows
-    dataGroups.value = page.groups
     dataTotal.value = page.total
     initColumnOrder(gridColumns.value, gridRuntime)
-    // Drop any groupBy / sort / filter that references a column the new view doesn't have, so runtime
+    // Drop any sort / filter that references a column the new view doesn't have, so runtime
     // state from a previously-selected view can never mis-render against this view's data.
     pruneRuntimeToColumns(gridRuntime, gridColumns.value)
     selectedTableRows.value = []
@@ -299,7 +306,6 @@ async function loadData() {
     ElMessage.error((e instanceof Error ? e.message : undefined) || t('mainTableView.loadDataFailed'))
     gridColumns.value = []
     allRows.value = []
-    dataGroups.value = []
     dataTotal.value = 0
   } finally {
     if (queryId === latestQuery) {
@@ -365,7 +371,6 @@ function formatCell(colOrValue: MainTableViewFieldColumn | unknown, row?: GridDi
   // Backward-compatible: formatCell(value) still works for non-lookup callers.
   if (row && colOrValue && typeof colOrValue === 'object' && 'fieldName' in (colOrValue as object)) {
     const col = colOrValue as MainTableViewFieldColumn
-    if (isGroupHeaderRow(row as GridDisplayRow)) return ''
     if (col.columnType === 'fk_display') {
       return formatFkDisplayCell(col, row as MainTableViewDataRow)
     }
@@ -374,19 +379,16 @@ function formatCell(colOrValue: MainTableViewFieldColumn | unknown, row?: GridDi
   return formatMainTableViewCell(colOrValue)
 }
 
-function isRowSelectable(row: GridDisplayRow) {
-  return !isGroupHeaderRow(row)
+function isRowSelectable(_row: GridDisplayRow) {
+  return true
 }
 
 function getRowKey(row: GridDisplayRow) {
-  if (isGroupHeaderRow(row)) {
-    return `group-${row._groupLabel}`
-  }
   return row.rowKey
 }
 
 function onSelectionChange(rows: GridDisplayRow[]) {
-  selectedTableRows.value = rows.filter(row => !isGroupHeaderRow(row)) as MainTableViewDataRow[]
+  selectedTableRows.value = rows as MainTableViewDataRow[]
 }
 
 async function handleExport() {
@@ -427,7 +429,6 @@ async function handleExport() {
     filters: activeFilters(),
     sortField: gridRuntime.sort?.fieldName ?? undefined,
     sortDirection: gridRuntime.sort?.direction ?? undefined,
-    groupBy: gridRuntime.groupBy ?? undefined,
   })
   const url = window.URL.createObjectURL(new Blob([blob as unknown as BlobPart]))
   const link = document.createElement('a')
@@ -446,8 +447,6 @@ async function handleExport() {
  * the request page. Rows that can do none of these say so rather than appearing inert.
  */
 function openRow(row: GridDisplayRow) {
-  if (isGroupHeaderRow(row)) return
-
   // One process instance is one MAIN row, so the request detail page — with its diagram,
   // history and sub-tables — is the record. A designed form could only be a lesser copy.
   // The id is checked rather than assumed: the backend builds MAIN rows from process instances
@@ -500,7 +499,6 @@ function resolveRowKey(row: GridDisplayRow): string | null {
 
 // A cell renders as downloadable file link(s) when its value is one (or many) upload URLs.
 function fileLinksOf(col: MainTableViewFieldColumn, row: GridDisplayRow): FileLink[] {
-  if (isGroupHeaderRow(row)) return []
   return extractFileLinks(row.values?.[col.fieldName])
 }
 
@@ -511,7 +509,6 @@ function isFileLinkCell(col: MainTableViewFieldColumn, row: GridDisplayRow): boo
 // A cell renders as a FK drill-down link when the column is a resolvable FK and the cell has a value.
 function isFkLinkCell(col: MainTableViewFieldColumn, row: GridDisplayRow): boolean {
   if (isFileLinkCell(col, row)) return false
-  if (isGroupHeaderRow(row)) return false
   if (!col.isForeignKey || !col.refViewId || !col.refFunctionUnitCode) return false
   const value = row.values?.[col.fieldName]
   return value !== null && value !== undefined && String(value) !== ''
@@ -534,7 +531,6 @@ function openFkTarget(col: MainTableViewFieldColumn, row: GridDisplayRow) {
 // A cell renders as a lookup link when the column references a Relation Table and the cell has a value.
 function isLookupLinkCell(col: MainTableViewFieldColumn, row: GridDisplayRow): boolean {
   if (isFileLinkCell(col, row)) return false
-  if (isGroupHeaderRow(row)) return false
   if (!col.isLookup || col.lookupTableId == null) return false
   const value = row.values?.[col.fieldName]
   return value !== null && value !== undefined && String(value) !== ''
@@ -578,11 +574,6 @@ function handleClearSort() {
   loadData()
 }
 
-function handleGroupChange(col: MainTableViewFieldColumn, grouped: boolean) {
-  gridRuntime.groupBy = grouped ? col.fieldName : null
-  currentPage.value = 1
-  loadData()
-}
 
 function openFilterDialog(col: MainTableViewFieldColumn) {
   filterDialogField.value = col
@@ -632,7 +623,15 @@ function applyColumnWidth() {
 }
 
 function handleColumnResize(fieldName: string, width: number) {
-  setColumnWidth(gridRuntime, fieldName, width)
+  const cols = displayColumns.value
+  const index = cols.findIndex((col) => col.fieldName === fieldName)
+  if (index < 0) return
+  const bases = cols.map((col) => baseWidthOf(col))
+  setColumnWidth(
+    gridRuntime,
+    fieldName,
+    invertBaseWidth(width, index, bases, gridViewportWidth.value, MTV_SELECTION_COL_WIDTH),
+  )
   nextTick(() => tableRef.value?.doLayout?.())
 }
 
@@ -725,34 +724,6 @@ function mtvHeaderCellClassName({
   return 'mtv-resizable-col-header'
 }
 
-function rowClassName({ row }: { row: GridDisplayRow }) {
-  return isGroupHeaderRow(row) ? 'group-header-row' : ''
-}
-
-function spanMethod({
-  row,
-  columnIndex,
-}: {
-  row: GridDisplayRow
-  columnIndex: number
-}) {
-  if (isGroupHeaderRow(row)) {
-    // Column 0 is the selection checkbox column (it ignores our #default slot), so hide it and let the
-    // first DATA column (index 1) span the rest — that cell renders the group label via #default.
-    if (columnIndex === 0) {
-      return { rowspan: 0, colspan: 0 }
-    }
-    if (columnIndex === 1) {
-      return {
-        rowspan: 1,
-        colspan: displayColumns.value.length + (leftoverWidth.value > 0 ? 1 : 0),
-      }
-    }
-    return { rowspan: 0, colspan: 0 }
-  }
-  return { rowspan: 1, colspan: 1 }
-}
-
 // Re-run the table's internal layout when the fit mode flips so columns stretch/shrink immediately.
 watch(gridFits, () => {
   nextTick(() => tableRef.value?.doLayout?.())
@@ -802,14 +773,14 @@ onMounted(async () => {
     importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
     selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
     viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
-    MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, leftoverWidth, gridTableKey,
+    MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
     pagedRows, displayTotal, toListColumnMeta,
     handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
     isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, previewFile,
-    handleSortChange, handleClearSort, handleGroupChange, openFilterDialog, openWidthDialog, handleMoveColumn,
+    handleSortChange, handleClearSort, openFilterDialog, openWidthDialog, handleMoveColumn,
     applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
-    handleColumnResize, handleColumnResizeEnd,
-    handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName, rowClassName, spanMethod,
-    loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
+    handleColumnResize, handleColumnResizeEnd, displayWidthOf,
+    handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName,
+    loadData, columnWidth, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
   }
 }

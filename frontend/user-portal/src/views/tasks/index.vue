@@ -31,8 +31,6 @@
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
-            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
-            :row-class-name="rowClassName"
             @selection-change="handleSelectionChange"
           >
             <template #empty>
@@ -51,7 +49,7 @@
             <el-table-column
               type="selection"
               width="50"
-              :selectable="(row: object) => !isListGroupHeaderRow(row)"
+              
             />
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -64,7 +62,6 @@
                 <ListColumnHeader
                   :column="col"
                   :sort="sort.field === col.field ? sort.direction : null"
-                  :grouped="groupBy === col.field"
                   :filtered="!!columnFilters[col.field]"
                   :width="widthOf(col.field)"
                   :show-move="displayColumns.length > 1"
@@ -72,7 +69,6 @@
                   :can-move-right="colIndex < displayColumns.length - 1"
                   @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                   @clear-sort="onClearSort"
-                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                   @filter-open="openFilter(col.field)"
                   @clear-filter="onClearFilter(col.field)"
                   @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -81,14 +77,8 @@
                 />
               </template>
               <template #default="{ row }">
-                <template v-if="isListGroupHeaderRow(row)">
-                  <div class="group-header-cell">
-                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                    <span class="group-count">({{ row._groupCount }})</span>
-                  </div>
-                </template>
-                <el-link
-                  v-else-if="col.field === 'requestId'"
+<el-link
+                  v-if="col.field === 'requestId'"
                   type="primary"
                   @click="viewTask(row)"
                 >
@@ -131,11 +121,6 @@
                 </template>
               </template>
             </el-table-column>
-            <el-table-column
-              v-if="leftoverWidth > 0"
-              :width="leftoverWidth"
-              class-name="list-col-spacer"
-            />
           </el-table>
         </div>
       </div>
@@ -231,17 +216,6 @@ import { formatDate } from '@/utils/dateFormat'
 import { taskPriorityBand, taskPriorityCssClass } from '@/utils/taskPriority'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 
-const TODO_COL_WIDTHS: Record<string, number> = {
-  requestId: 140,
-  taskName: 160,
-  currentStepName: 160,
-  processDefinitionName: 160,
-  assignmentType: 130,
-  initiatorName: 120,
-  priority: 100,
-  createTime: 170,
-  dueDate: 180,
-}
 
 const pendingTaskStore = usePendingTaskStore()
 const { t } = useI18n()
@@ -257,7 +231,6 @@ const filterForm = reactive({
 const {
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -265,7 +238,7 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits, leftoverWidth,
+  gridFits,
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -280,15 +253,9 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = usePortalListGrid<TaskInfo>({
   storageKey: 'portal-list-layout:todo-tasks',
   extraWidth: 50,
-  defaultWidthOf: (field) => TODO_COL_WIDTHS[field] ?? 120,
 })
 
 const actionDialogVisible = ref(false)
@@ -339,9 +306,6 @@ function handleReset() {
     clearFilter(field)
   }
   clearSort()
-  if (groupBy.value) {
-    applyGroup(groupBy.value, false)
-  }
   handleSearch()
 }
 
@@ -355,10 +319,6 @@ function onClearSort() {
   loadTasks()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  loadTasks()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)
@@ -375,7 +335,7 @@ function onFilterClear() {
 }
 
 const handleSelectionChange = (selection: TaskInfo[]) => {
-  selectedTasks.value = selection.filter((row) => !isListGroupHeaderRow(row))
+  selectedTasks.value = selection
 }
 
 const viewTask = (task: TaskInfo) => {

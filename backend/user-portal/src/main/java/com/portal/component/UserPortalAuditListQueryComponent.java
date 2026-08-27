@@ -2,7 +2,6 @@ package com.portal.component;
 
 import com.platform.common.audit.SystemAuditFields;
 import com.platform.common.jdbc.SqlIdentifiers;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.UserPortalAuditListQueryRequest;
 import com.portal.dto.UserPortalAuditRecord;
@@ -32,7 +31,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Admin User Portal audit list: {@code COUNT(*)}, the page and group counts share the
+ * Admin User Portal audit list: {@code COUNT(*)}, the page shares the
  * toolbar predicate plus column filters. Outer alias is {@code ch}.
  */
 @Slf4j
@@ -65,44 +64,29 @@ public class UserPortalAuditListQueryComponent {
                 ListQuerySupport.query(jdbcTemplate, "SELECT COUNT(*)" + where, params, countExtractor),
                 LIST_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<PortalListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        if (groupExpression != null && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty admin-up-audit result");
-        }
 
-        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request, groupExpression);
+        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request);
         List<UserPortalAuditRecord> rows = toRows(pageIds.ids());
-        applyGroupedValues(rows, request.groupBy(), pageIds.groupedValues());
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, LIST_KEY, request.page(), request.size(), total, elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(UserPortalAuditColumnSpec.columns(), rows, groups,
+        return new PortalListPage<>(UserPortalAuditColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
     private PageIds loadPageIds(ListFilterSql filterSql, String where, List<Object> params,
-                                UserPortalAuditListQueryRequest request, String groupExpression) {
+                                UserPortalAuditListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
-        String sql = "SELECT ch.id" + groupedSelect + where + orderBy + " LIMIT ? OFFSET ?";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
+        String sql = "SELECT ch.id" + where + orderBy + " LIMIT ? OFFSET ?";
         ResultSetExtractor<PageIds> extractor = rs -> {
             List<Long> ids = new ArrayList<>();
-            List<String> grouped = new ArrayList<>();
             while (rs.next()) {
                 ids.add(rs.getLong("id"));
-                grouped.add(groupExpression == null ? null : rs.getString("grouped_value"));
             }
-            return new PageIds(ids, grouped);
+            return new PageIds(ids);
         };
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, extractor);
     }
@@ -219,24 +203,6 @@ public class UserPortalAuditListQueryComponent {
         where.append(')');
     }
 
-    private static void applyGroupedValues(List<UserPortalAuditRecord> rows, String groupBy,
-                                           List<String> groupedValues) {
-        if (groupBy == null || groupBy.isBlank()) {
-            return;
-        }
-        if (rows.size() != groupedValues.size()) {
-            throw new IllegalStateException("grouped values and page rows are different lengths");
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            String label = groupedValues.get(i) == null ? "" : groupedValues.get(i);
-            UserPortalAuditRecord row = rows.get(i);
-            switch (groupBy) {
-                case "changeType" -> row.setChangeType(label.isBlank() ? null : label);
-                case "userName" -> row.setUserName(label);
-                default -> throw new IllegalStateException("grouped field was not selected: " + groupBy);
-            }
-        }
-    }
 
     private static Instant parseIsoInstant(String value) {
         if (value == null || value.isBlank()) {
@@ -259,10 +225,7 @@ public class UserPortalAuditListQueryComponent {
         return value != null && !value.isBlank();
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 
-    private record PageIds(List<Long> ids, List<String> groupedValues) {
+    private record PageIds(List<Long> ids) {
     }
 }

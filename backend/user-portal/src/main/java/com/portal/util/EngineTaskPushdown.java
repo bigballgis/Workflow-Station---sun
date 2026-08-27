@@ -15,7 +15,7 @@ import java.util.Set;
  *
  * <p>Pushable: taskName / currentStepName, processDefinitionName, priority ENUM bands,
  * createTime / dueDate (incl. relative day ops), and sorts on createTime/dueDate/priority/name.
- * Memory-only: initiatorName, requestId, assignmentType, keyword / legacy list filters, groupBy.
+ * Memory-only: initiatorName, requestId, assignmentType, keyword / legacy list filters.
  */
 public final class EngineTaskPushdown {
 
@@ -90,9 +90,6 @@ public final class EngineTaskPushdown {
     public static boolean canFullyPush(TaskQueryRequest request) {
         if (request == null) {
             return true;
-        }
-        if (request.getGroupBy() != null && !request.getGroupBy().isBlank()) {
-            return false;
         }
         if (request.getAssignmentTypes() != null && !request.getAssignmentTypes().isEmpty()) {
             return false;

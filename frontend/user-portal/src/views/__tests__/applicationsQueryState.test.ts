@@ -24,12 +24,12 @@ vi.mock('@/composables/list/searchListFilterUsers', () => ({
 const api = vi.mocked(processApi)
 
 const COLUMNS: ListColumnMeta[] = [
-  { field: 'requestId', label: 'application.requestId', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'] },
-  { field: 'businessKey', label: 'application.processTitle', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'] },
-  { field: 'currentStepName', label: 'application.currentStep', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains'] },
-  { field: 'currentAssignee', label: 'application.currentAssignee', kind: 'USER', filterable: true, sortable: true, groupable: true, operators: ['eq', 'ne'] },
-  { field: 'startTime', label: 'application.startTime', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['on', 'between'] },
-  { field: 'status', label: 'application.status', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq', 'ne'], options: [{ value: 'RUNNING', label: 'application.running' }] },
+  { field: 'requestId', label: 'application.requestId', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'] },
+  { field: 'businessKey', label: 'application.processTitle', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'] },
+  { field: 'currentStepName', label: 'application.currentStep', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains'] },
+  { field: 'currentAssignee', label: 'application.currentAssignee', kind: 'USER', filterable: true, sortable: true, operators: ['eq', 'ne'] },
+  { field: 'startTime', label: 'application.startTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['on', 'between'] },
+  { field: 'status', label: 'application.status', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq', 'ne'], options: [{ value: 'RUNNING', label: 'application.running' }] },
 ]
 
 const lastRequest = () => api.queryMyApplications.mock.calls[api.queryMyApplications.mock.calls.length - 1][0]
@@ -106,20 +106,13 @@ describe('my requests — shared list query state', () => {
     expect(lastRequest().page).toBe(0)
   })
 
-  it('applying sort and grouping both reset to the first page', async () => {
+  it('applying sort resets to the first page', async () => {
     const w = await mountPage()
     const header = w.findAllComponents({ name: 'ListColumnHeader' })[1]
     header.vm.$emit('sort-change', 'DESC')
     await flushPromises()
     expect(lastRequest().sortField).toBe('businessKey')
     expect(lastRequest().sortDirection).toBe('DESC')
-    expect(lastRequest().page).toBe(0)
-
-    const statusHeader = w.findAllComponents({ name: 'ListColumnHeader' })
-      .find((h) => h.props('column').field === 'status')
-    statusHeader!.vm.$emit('group-change', true)
-    await flushPromises()
-    expect(lastRequest().groupBy).toBe('status')
     expect(lastRequest().page).toBe(0)
   })
 

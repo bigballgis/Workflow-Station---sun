@@ -32,8 +32,8 @@ import java.util.regex.Pattern;
  *       empty cells, so Not equals True is not the same as Equals False.</li>
    *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
        *       (id, {@code user:}<id>, username, display_name, full_name, employee_id), so a
-       *       people picker can send the user id even when legacy rows stored a prefixed id
-       *       or a display name. Grouping uses the same table to produce a display label.</li>
+ *       people picker can send the user id even when legacy rows stored a prefixed id
+ *       or a display name.</li>
  * </ul>
  */
 public final class ListFilterSql {
@@ -117,16 +117,6 @@ public final class ListFilterSql {
         return " ORDER BY " + orderTerms(sortField, sortDirection);
     }
 
-    /**
-     * Orders by the group expression first, then by whatever the caller sorts on. A group's rows
-     * have to be contiguous for the page to be able to render group headers at all — without this
-     * the same group would reappear on later pages.
-     */
-    public String orderByGrouped(String groupExpression, String sortField, String sortDirection) {
-        return " ORDER BY " + groupExpression + " ASC NULLS LAST, "
-                + orderTerms(sortField, sortDirection);
-    }
-
     private String orderTerms(String sortField, String sortDirection) {
         if (sortField == null) {
             return defaultOrderBy == null ? tiebreak : defaultOrderBy + ", " + tiebreak;
@@ -140,27 +130,6 @@ public final class ListFilterSql {
         }
         String direction = "DESC".equalsIgnoreCase(sortDirection) ? "DESC" : "ASC";
         return sortExpression(column, columnRef) + " " + direction + " NULLS LAST, " + tiebreak;
-    }
-
-    /**
-     * The expression a column groups by. Grouping and its counts have to come from the same
-     * expression as the ordering that makes a group's rows contiguous, otherwise a page can show
-     * the same group header twice with counts that do not add up.
-     */
-    public String groupByExpression(String field) {
-        ListColumnMeta column = columnsByField.get(field);
-        if (column == null) {
-            throw new IllegalArgumentException("Unknown group column: " + field);
-        }
-        if (!column.groupable()) {
-            throw new IllegalArgumentException("Column is not groupable: " + field);
-        }
-        String ref = columnRef.sqlFor(column.field());
-        // USER groups by the display label resolved from sys_users so headers match cells
-        // that also resolve bare ids / user:<id> / legacy name storage through the same table.
-        return column.kind() == ListColumnMeta.Kind.USER
-                ? userDisplayLabelExpression(ref)
-                : ref;
     }
 
     /**
@@ -271,33 +240,6 @@ public final class ListFilterSql {
         throw new IllegalArgumentException("Operator " + operator + " is not allowed on a USER column");
     }
 
-    /**
-     * Display label for a USER cell/group key, resolved through {@code sys_users}. Bare id,
-     * {@code user:}<id>, username, and legacy name storage all map to one label so GROUP BY
-     * headers match what the portal paints after the same resolution.
-     */
-    static String userDisplayLabelExpression(String ref) {
-        String users = SqlIdentifiers.requireQualifiedName("sys_users");
-        String id = SqlIdentifiers.requireIdentifier("id");
-        String username = SqlIdentifiers.requireIdentifier("username");
-        String displayName = SqlIdentifiers.requireIdentifier("display_name");
-        String fullName = SqlIdentifiers.requireIdentifier("full_name");
-        String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
-        String value = "(" + ref + ")";
-        String stripped = "(CASE WHEN left(COALESCE(" + value + ", ''), 5) = 'user:'"
-                + " THEN substring(COALESCE(" + value + ", '') from 6) ELSE " + value + " END)";
-        String label = "COALESCE(NULLIF(TRIM(u." + displayName + "), ''),"
-                + " NULLIF(TRIM(u." + fullName + "), ''), u." + username + ")";
-        return "COALESCE((SELECT " + label
-                + " FROM " + users + " u WHERE u." + id + "::text = " + stripped
-                + " OR u." + id + "::text = " + value
-                + " OR ('user:' || u." + id + "::text) = " + value
-                + " OR u." + username + " = " + value
-                + " OR u." + displayName + " = " + value
-                + " OR u." + fullName + " = " + value
-                + " OR u." + employeeId + " = " + value
-                + " LIMIT 1), " + value + ")";
-    }
 
     private static String textPredicate(String ref, ListColumnFilter filter, String value,
                                         List<Object> outParams) {

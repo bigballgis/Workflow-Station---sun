@@ -20,8 +20,7 @@ public record AdminAuditListQueryRequest(
         String endTime,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public AdminAuditListQueryRequest {
         if (page < 0) {

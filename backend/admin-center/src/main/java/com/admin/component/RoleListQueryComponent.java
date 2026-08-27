@@ -1,6 +1,5 @@
 package com.admin.component;
 
-import com.admin.dto.list.AdminListGroup;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.RoleListQueryRequest;
 import com.admin.dto.response.RoleListItem;
@@ -52,42 +51,27 @@ public class RoleListQueryComponent {
                 ListQuerySupport.query(jdbcTemplate, "SELECT COUNT(*)" + where, params, countExtractor),
                 LIST_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<AdminListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        if (groupExpression != null && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty role list");
-        }
 
-        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request, groupExpression);
+        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request);
         List<RoleListItem> rows = toRows(pageIds.ids());
-        applyGroupedValues(rows, request.groupBy(), pageIds.groupedValues());
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
-        return new AdminListPage<>(RoleColumnSpec.columns(), rows, groups,
+        return new AdminListPage<>(RoleColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
     private PageIds loadPageIds(ListFilterSql filterSql, String where, List<Object> params,
-                                RoleListQueryRequest request, String groupExpression) {
+                                RoleListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
-        String sql = "SELECT r.id" + groupedSelect + where + orderBy + " LIMIT ? OFFSET ?";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
+        String sql = "SELECT r.id" + where + orderBy + " LIMIT ? OFFSET ?";
         ResultSetExtractor<PageIds> extractor = rs -> {
             List<String> ids = new ArrayList<>();
-            List<String> grouped = new ArrayList<>();
             while (rs.next()) {
                 ids.add(rs.getString("id"));
-                grouped.add(groupExpression == null ? null : rs.getString("grouped_value"));
             }
-            return new PageIds(ids, grouped);
+            return new PageIds(ids);
         };
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, extractor);
     }
@@ -109,25 +93,6 @@ public class RoleListQueryComponent {
         return ordered;
     }
 
-    private static void applyGroupedValues(List<RoleListItem> rows, String groupBy,
-                                           List<String> groupedValues) {
-        if (groupBy == null || groupBy.isBlank()) {
-            return;
-        }
-        if (rows.size() != groupedValues.size()) {
-            throw new IllegalStateException("grouped values and page rows are different lengths");
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            String label = groupedValues.get(i) == null ? "" : groupedValues.get(i);
-            RoleListItem row = rows.get(i);
-            switch (groupBy) {
-                case "type" -> row.setType(label);
-                case "status" -> row.setStatus(label);
-                case "isSystem" -> row.setIsSystem("true".equalsIgnoreCase(label));
-                default -> throw new IllegalStateException("grouped field was not selected: " + groupBy);
-            }
-        }
-    }
 
     static void appendTab(StringBuilder where, List<Object> params, String tab) {
         if (tab == null || tab.isBlank()) {
@@ -158,10 +123,7 @@ public class RoleListQueryComponent {
         params.add(type.trim());
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 
-    private record PageIds(List<String> ids, List<String> groupedValues) {
+    private record PageIds(List<String> ids) {
     }
 }

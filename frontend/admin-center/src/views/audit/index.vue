@@ -192,14 +192,12 @@
           style="width: 100%"
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
-          :span-method="spanMethod(2 + (leftoverWidth > 0 ? 1 : 0))"
-          :row-class-name="rowClassName"
           @selection-change="handleSelectionChange"
         >
           <el-table-column
             type="selection"
             :width="SELECTION_COL_WIDTH"
-            :selectable="(row: object) => !isListGroupHeaderRow(row)"
+            
           />
           <el-table-column
             v-for="(col, colIndex) in displayColumns"
@@ -213,7 +211,6 @@
               <ListColumnHeader
                 :column="col"
                 :sort="sort.field === col.field ? sort.direction : null"
-                :grouped="groupBy === col.field"
                 :filtered="!!columnFilters[col.field]"
                 :width="widthOf(col.field)"
                 :show-move="displayColumns.length > 1"
@@ -221,7 +218,6 @@
                 :can-move-right="colIndex < displayColumns.length - 1"
                 @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                 @clear-sort="onClearSort"
-                @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                 @filter-open="openFilter(col.field)"
                 @clear-filter="onClearFilter(col.field)"
                 @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -230,14 +226,8 @@
               />
             </template>
             <template #default="{ row }">
-              <template v-if="isListGroupHeaderRow(row)">
-                <div class="group-header-cell">
-                  <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                  <span class="group-count">({{ row._groupCount }})</span>
-                </div>
-              </template>
-              <el-tag
-                v-else-if="col.field === 'action'"
+<el-tag
+                v-if="col.field === 'action'"
                 size="small"
                 class="action-tag"
               >
@@ -282,18 +272,13 @@
             </template>
           </el-table-column>
           <el-table-column
-            v-if="leftoverWidth > 0"
-            :width="leftoverWidth"
-            class-name="list-col-spacer"
-          />
-          <el-table-column
             :label="t('common.actions')"
             :width="ACTIONS_COL_WIDTH"
             fixed="right"
           >
             <template #default="{ row }">
               <el-tooltip
-                v-if="!isListGroupHeaderRow(row)"
+                
                 :content="getPreviewContent(row)"
                 placement="left"
                 :show-after="300"
@@ -410,7 +395,6 @@ const {
   SELECTION_COL_WIDTH, ACTIONS_COL_WIDTH,
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -419,7 +403,7 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
-  leftoverWidth,
+ 
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -430,11 +414,6 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = useAudit()
 
 function onSort(field: string, direction: 'ASC' | 'DESC') {
@@ -443,10 +422,6 @@ function onSort(field: string, direction: 'ASC' | 'DESC') {
 }
 function onClearSort() {
   clearSort()
-  void handleSearch()
-}
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
   void handleSearch()
 }
 function onClearFilter(field: string) {

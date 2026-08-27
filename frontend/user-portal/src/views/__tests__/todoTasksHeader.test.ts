@@ -107,11 +107,10 @@ describe('To Do shared list', () => {
     api.mockResolvedValue({
       data: {
         columns: [
-          { field: 'requestId', label: 'task.requestId', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true, groupable: true },
-          { field: 'taskName', label: 'task.taskName', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true, groupable: true },
+          { field: 'requestId', label: 'task.requestId', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true },
+          { field: 'taskName', label: 'task.taskName', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true },
         ],
         content: [],
-        groups: [],
         page: 0,
         size: 20,
         totalElements: 0,

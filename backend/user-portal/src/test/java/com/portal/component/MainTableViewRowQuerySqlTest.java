@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Captures the SQL MAIN views send for true pagination — COUNT and page share one predicate,
- * group counts are not limited to the page, and undeclared filters are refused.
+ * and undeclared filters are refused.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -66,7 +66,7 @@ class MainTableViewRowQuerySqlTest {
                 });
     }
 
-    private MainTableViewRowQueryComponent.Query query(String groupBy, List<ListColumnFilter> filters,
+    private MainTableViewRowQueryComponent.Query query(List<ListColumnFilter> filters,
                                                        MainTableViewInvolvementScope.Predicate involvement) {
         return new MainTableViewRowQueryComponent.Query(
                 "fu-atm",
@@ -75,7 +75,6 @@ class MainTableViewRowQuerySqlTest {
                 filters,
                 null,
                 null,
-                groupBy,
                 null,
                 List.of(),
                 involvement,
@@ -85,7 +84,7 @@ class MainTableViewRowQuerySqlTest {
 
     @Test
     void theTotalCountsTheSamePredicateThePageReads() {
-        component.query(query(null, List.of(), null));
+        component.query(query(List.of(), null));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM up_process_instance pi");
         assertThat(pageSql())
@@ -98,7 +97,7 @@ class MainTableViewRowQuerySqlTest {
 
     @Test
     void involvementAndFiltersAreInsideTheSharedPredicate() {
-        component.query(query(null,
+        component.query(query(
                 List.of(new ListColumnFilter("amount", "gt", "10", null)),
                 new MainTableViewInvolvementScope.Predicate(" AND (pi.start_user_id = ?)", List.of("u1"))));
 
@@ -108,21 +107,9 @@ class MainTableViewRowQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(query("active", List.of(), null));
-
-        String groupSql = preparedSql.stream()
-                .filter(sql -> sql.contains("GROUP BY"))
-                .findFirst()
-                .orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheViewDoesNotDeclareIsRefused() {
         assertThatThrownBy(() -> component.query(
-                query(null, List.of(new ListColumnFilter("secret", "contains", "x", null)), null)))
+                query(List.of(new ListColumnFilter("secret", "contains", "x", null)), null)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

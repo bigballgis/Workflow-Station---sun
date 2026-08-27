@@ -3,15 +3,9 @@ import { request } from './request'
 
 import type { ListColumnFilterRequest, ListColumnMeta } from '@platform-shared/list/columnMeta'
 
-export interface PortalListGroup {
-  label: string | null
-  count: number
-}
-
 export interface PortalListPage<T> {
   columns: ListColumnMeta[]
   content: T[]
-  groups?: PortalListGroup[]
   page: number
   size: number
   totalElements: number
@@ -23,7 +17,6 @@ export interface CompletedTaskQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
   keyword?: string
   startTime?: string
   endTime?: string
@@ -35,7 +28,6 @@ export interface TodoTaskQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
   /** Toolbar keyword; ANDs with column filters. Matches request id / task / step / process / initiator. */
   keyword?: string
   assignmentTypes?: string[]

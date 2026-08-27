@@ -149,7 +149,6 @@ export interface DashboardListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export interface AssignmentListParams {
@@ -167,7 +166,6 @@ export interface AssignmentListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export interface RbacMappingListParams {
@@ -183,7 +181,6 @@ export interface RbacMappingListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 // ==================== API ====================

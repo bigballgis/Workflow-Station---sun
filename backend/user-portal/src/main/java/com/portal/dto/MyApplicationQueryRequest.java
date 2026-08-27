@@ -13,8 +13,7 @@ public record MyApplicationQueryRequest(
         String status,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public MyApplicationQueryRequest {
         if (page < 0) {

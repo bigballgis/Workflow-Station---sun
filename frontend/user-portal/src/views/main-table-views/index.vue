@@ -16,15 +16,15 @@ const {
   importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
   selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns,
   viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
-  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, leftoverWidth, gridTableKey,
+  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
   pagedRows, displayTotal, toListColumnMeta,
   handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
   isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, previewFile,
-  handleSortChange, handleClearSort, handleGroupChange, openFilterDialog, openWidthDialog, handleMoveColumn,
+  handleSortChange, handleClearSort, openFilterDialog, openWidthDialog, handleMoveColumn,
   applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
-  handleColumnResize, handleColumnResizeEnd,
-  handleExport, mtvHeaderCellClassName, rowClassName, spanMethod,
-  loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
+  handleColumnResize, handleColumnResizeEnd, displayWidthOf,
+  handleExport, mtvHeaderCellClassName,
+  loadData, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
 } = useMainTableViewPage()
 </script>
 
@@ -191,8 +191,6 @@ const {
               class="mtv-data-grid"
               :class="{ 'mtv-data-grid--fit': gridFits }"
               :header-cell-class-name="mtvHeaderCellClassName"
-              :span-method="spanMethod"
-              :row-class-name="rowClassName"
               @row-click="(row: GridDisplayRow) => openRow(row)"
               @selection-change="onSelectionChange"
             >
@@ -206,23 +204,21 @@ const {
             v-for="col in displayColumns"
             :key="col.fieldName"
             :prop="col.fieldName"
-            :width="columnWidth(col, gridRuntime)"
+            :width="displayWidthOf(col)"
             show-overflow-tooltip
           >
             <template #header>
               <ListColumnHeader
                 :column="toListColumnMeta(col)"
                 :sort="gridRuntime.sort?.fieldName === col.fieldName ? gridRuntime.sort.direction : null"
-                :grouped="gridRuntime.groupBy === col.fieldName"
                 :filtered="!!gridRuntime.filters[col.fieldName]"
-                :width="columnWidth(col, gridRuntime)"
+                :width="displayWidthOf(col)"
                 show-width
                 show-move
                 :can-move-left="columnIndex(col.fieldName) > 0"
                 :can-move-right="columnIndex(col.fieldName) < gridRuntime.columnOrder.length - 1"
                 @sort-change="(direction) => handleSortChange(col, direction)"
                 @clear-sort="handleClearSort"
-                @group-change="(grouped) => handleGroupChange(col, grouped)"
                 @filter-open="openFilterDialog(col)"
                 @clear-filter="clearColumnFilter(col)"
                 @width-open="openWidthDialog(col)"
@@ -232,13 +228,7 @@ const {
               />
             </template>
             <template #default="{ row }">
-              <template v-if="isGroupHeaderRow(row)">
-                <div class="group-header-cell">
-                  <strong>{{ row._groupLabel }}</strong>
-                  <span class="group-count">({{ row._groupCount }})</span>
-                </div>
-              </template>
-              <template v-else-if="isFileLinkCell(col, row)">
+              <template v-if="isFileLinkCell(col, row)">
                 <span class="mtv-file-cell">
                   <a
                     v-for="(file, fi) in fileLinksOf(col, row)"
@@ -268,11 +258,6 @@ const {
               </template>
             </template>
           </el-table-column>
-          <el-table-column
-            v-if="leftoverWidth > 0"
-            :width="leftoverWidth"
-            class-name="list-col-spacer"
-          />
             </el-table>
           </div>
         </div>
@@ -530,21 +515,11 @@ const {
 .mtv-data-grid-inner {
   display: block;
 }
-:deep(.mtv-data-grid th.list-col-spacer),
-:deep(.mtv-data-grid td.list-col-spacer) {
-  padding: 0;
-  border-left: none;
-  background: transparent;
-}
-:deep(.mtv-data-grid th.list-col-spacer .cell),
-:deep(.mtv-data-grid td.list-col-spacer .cell) {
-  display: none;
-}
 :deep(.mtv-data-grid .el-table__body-wrapper),
 :deep(.mtv-data-grid .el-table__header-wrapper) {
   overflow-x: visible !important;
 }
-:deep(.mtv-data-grid .el-table__inner-wrapper) {
+:deep(.mtv-data-grid--fit .el-table__inner-wrapper) {
   width: 100% !important;
 }
 /* When the columns underflow the panel, stretch the scrollbar view + the actual <table> elements to
@@ -586,23 +561,8 @@ const {
 :deep(.mtv-data-grid .el-table__header-wrapper th.mtv-resizable-col-header:has(.col-resize-handle.is-active)) {
   z-index: 12;
 }
-:deep(.el-table__row:not(.group-header-row)) {
+:deep(.el-table__row) {
   cursor: pointer;
-}
-:deep(.group-header-row) {
-  background: var(--el-fill-color-light) !important;
-  cursor: default;
-  font-weight: 600;
-}
-.group-header-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.group-count {
-  color: var(--el-text-color-secondary);
-  font-weight: normal;
-  font-size: 12px;
 }
 
 .mtv-fk-link {

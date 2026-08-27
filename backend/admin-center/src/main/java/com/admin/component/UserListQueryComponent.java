@@ -1,6 +1,5 @@
 package com.admin.component;
 
-import com.admin.dto.list.AdminListGroup;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.UserListQueryRequest;
 import com.admin.dto.response.UserInfo;
@@ -22,7 +21,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * User list: {@code COUNT(*)}, the page and group counts share one predicate (soft-delete,
+ * User list: {@code COUNT(*)}, the page shares one predicate (soft-delete,
  * toolbar keyword/status, column filters). Outer alias is {@code su}.
  */
 @Slf4j
@@ -51,42 +50,27 @@ public class UserListQueryComponent {
                 ListQuerySupport.query(jdbcTemplate, "SELECT COUNT(*)" + where, params, countExtractor),
                 LIST_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<AdminListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        if (groupExpression != null && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty user list");
-        }
 
-        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request, groupExpression);
+        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request);
         List<UserInfo> rows = toRows(pageIds.ids());
-        applyGroupedValues(rows, request.groupBy(), pageIds.groupedValues());
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
-        return new AdminListPage<>(UserColumnSpec.columns(), rows, groups,
+        return new AdminListPage<>(UserColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
     private PageIds loadPageIds(ListFilterSql filterSql, String where, List<Object> params,
-                                UserListQueryRequest request, String groupExpression) {
+                                UserListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
-        String sql = "SELECT su.id" + groupedSelect + where + orderBy + " LIMIT ? OFFSET ?";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
+        String sql = "SELECT su.id" + where + orderBy + " LIMIT ? OFFSET ?";
         ResultSetExtractor<PageIds> extractor = rs -> {
             List<String> ids = new ArrayList<>();
-            List<String> grouped = new ArrayList<>();
             while (rs.next()) {
                 ids.add(rs.getString("id"));
-                grouped.add(groupExpression == null ? null : rs.getString("grouped_value"));
             }
-            return new PageIds(ids, grouped);
+            return new PageIds(ids);
         };
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, extractor);
     }
@@ -108,27 +92,6 @@ public class UserListQueryComponent {
         return userManager.toUserInfos(ordered);
     }
 
-    private static void applyGroupedValues(List<UserInfo> rows, String groupBy,
-                                           List<String> groupedValues) {
-        if (groupBy == null || groupBy.isBlank()) {
-            return;
-        }
-        if (rows.size() != groupedValues.size()) {
-            throw new IllegalStateException("grouped values and page rows are different lengths");
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            String label = groupedValues.get(i) == null ? "" : groupedValues.get(i);
-            UserInfo row = rows.get(i);
-            switch (groupBy) {
-                case "status" -> row.setStatus(label.isBlank()
-                        ? null
-                        : com.platform.security.model.UserStatus.fromString(label));
-                case "entityManagerName" -> row.setEntityManagerName(label);
-                case "functionManagerName" -> row.setFunctionManagerName(label);
-                default -> throw new IllegalStateException("grouped field was not selected: " + groupBy);
-            }
-        }
-    }
 
     private static void appendStatus(StringBuilder where, List<Object> params, String status) {
         if (status == null || status.isBlank()) {
@@ -151,10 +114,7 @@ public class UserListQueryComponent {
         params.add(like);
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 
-    private record PageIds(List<String> ids, List<String> groupedValues) {
+    private record PageIds(List<String> ids) {
     }
 }

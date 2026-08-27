@@ -57,8 +57,6 @@
             style="width: 100%"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits && !isCompact }"
-            :span-method="tableSpanMethod"
-            :row-class-name="rowClassName"
           >
             <el-table-column
               v-for="(col, colIndex) in tableColumns"
@@ -71,7 +69,6 @@
                 <ListColumnHeader
                   :column="col"
                   :sort="sort.field === col.field ? sort.direction : null"
-                  :grouped="groupBy === col.field"
                   :filtered="!!columnFilters[col.field]"
                   :width="widthOf(col.field)"
                   :show-move="tableColumns.length > 1"
@@ -79,7 +76,6 @@
                   :can-move-right="colIndex < tableColumns.length - 1"
                   @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                   @clear-sort="onClearSort"
-                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                   @filter-open="openFilter(col.field)"
                   @clear-filter="onClearFilter(col.field)"
                   @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -88,14 +84,8 @@
                 />
               </template>
               <template #default="{ row }">
-                <template v-if="isListGroupHeaderRow(row)">
-                  <div class="group-header-cell">
-                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                    <span class="group-count">({{ row._groupCount }})</span>
-                  </div>
-                </template>
-                <div
-                  v-else-if="col.field === 'displayName'"
+<div
+                  v-if="col.field === 'displayName'"
                   class="flow-name"
                 >
                   <span class="flow-name__title">{{ row.displayName }}</span>
@@ -132,11 +122,6 @@
               </template>
             </el-table-column>
             <el-table-column
-              v-if="!isCompact && leftoverWidth > 0"
-              :width="leftoverWidth"
-              class-name="list-col-spacer"
-            />
-            <el-table-column
               :label="t('common.operation')"
               :width="ACTIONS_COL_WIDTH"
               fixed="right"
@@ -147,7 +132,7 @@
               </template>
               <template #default="{ row }">
                 <div
-                  v-if="!isListGroupHeaderRow(row)"
+                  
                   class="row-actions"
                 >
                   <el-button
@@ -321,7 +306,6 @@ const {
   hasMissingConnections,
   isCompact,
   tableColumns,
-  tableSpanMethod,
   compactMeta,
   readiness,
   shortPieceName,
@@ -333,7 +317,6 @@ const {
   handleImport,
   ACTIONS_COL_WIDTH,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -342,7 +325,7 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
-  leftoverWidth,
+ 
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -353,10 +336,6 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = useAutomationFlow()
 
 function onSort(field: string, direction: 'ASC' | 'DESC') {
@@ -369,10 +348,6 @@ function onClearSort() {
   void loadFlows()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  void loadFlows()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)

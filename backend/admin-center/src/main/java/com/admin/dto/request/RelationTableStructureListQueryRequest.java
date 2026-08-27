@@ -14,8 +14,7 @@ public record RelationTableStructureListQueryRequest(
         String functionUnitId,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public static final String COMMON_KEY = "__common__";
 

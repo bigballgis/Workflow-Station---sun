@@ -63,7 +63,6 @@ public class MainTableViewSubRowQueryComponent {
             List<ListColumnFilter> filters,
             String sortField,
             String sortDirection,
-            String groupBy,
             String search,
             List<String> searchable,
             MainTableViewInvolvementScope.Predicate involvement,
@@ -75,7 +74,7 @@ public class MainTableViewSubRowQueryComponent {
     public record Row(ProcessInstance instance, Map<String, Object> subRow) {
     }
 
-    public record Page(List<Row> rows, long total, List<MainTableViewRowQueryComponent.Group> groups) {
+    public record Page(List<Row> rows, long total) {
     }
 
     public Page query(Query query) {
@@ -91,25 +90,16 @@ public class MainTableViewSubRowQueryComponent {
         Long total = queryOne("SELECT COUNT(*) FROM " + inner + " pi" + where,
                 params, rs -> rs.next() ? rs.getLong(1) : 0L);
 
-        String groupExpression = query.groupBy() == null || query.groupBy().isBlank()
-                ? null
-                : query.sql().groupByExpression(query.groupBy());
-        List<MainTableViewRowQueryComponent.Group> groups = groupExpression == null
-                ? List.of()
-                : groupsOf(groupExpression, inner, where.toString(), params);
-
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(query.size());
         pageParams.add(query.page() * query.size());
-        String orderBy = groupExpression == null
-                ? query.sql().orderBy(query.sortField(), query.sortDirection())
-                : query.sql().orderByGrouped(groupExpression, query.sortField(), query.sortDirection());
+        String orderBy = query.sql().orderBy(query.sortField(), query.sortDirection());
 
         List<Row> rows = queryOne(
                 "SELECT * FROM " + inner + " pi" + where + orderBy + " LIMIT ? OFFSET ?",
                 pageParams, rs -> readRows(rs, query.viewId()));
 
-        return new Page(rows, total != null ? total : 0L, groups);
+        return new Page(rows, total != null ? total : 0L);
     }
 
     /**
@@ -186,22 +176,6 @@ public class MainTableViewSubRowQueryComponent {
             rows.add(new Row(instance, readJson(rs.getString("sub_elem"))));
         }
         return rows;
-    }
-
-    private List<MainTableViewRowQueryComponent.Group> groupsOf(String groupExpression, String inner,
-                                                                String where, List<Object> params) {
-        String sql = "SELECT " + groupExpression + " AS group_label, COUNT(*) AS group_count"
-                + " FROM " + inner + " pi" + where
-                + " GROUP BY " + groupExpression
-                + " ORDER BY " + groupExpression + " ASC NULLS LAST";
-        return queryOne(sql, params, rs -> {
-            List<MainTableViewRowQueryComponent.Group> groups = new ArrayList<>();
-            while (rs.next()) {
-                groups.add(new MainTableViewRowQueryComponent.Group(
-                        rs.getString("group_label"), rs.getLong("group_count")));
-            }
-            return groups;
-        });
     }
 
     /** Binds a {@code String[]} as a SQL array so the visible-instance list stays one parameter. */

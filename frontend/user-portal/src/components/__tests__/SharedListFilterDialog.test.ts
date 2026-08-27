@@ -16,7 +16,6 @@ function textColumn(overrides: Partial<ListColumnMeta> = {}): ListColumnMeta {
     kind: 'TEXT',
     filterable: true,
     sortable: true,
-    groupable: false,
     operators: ['contains', 'eq', 'isNull', 'between'],
     ...overrides,
   }

@@ -5,24 +5,15 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RelationTableQueryRequestTest {
 
     @Test
-    void rejectsNonBlankGroupBy() {
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> new RelationTableQueryRequest(0, 20, null, List.of(), null, null, "status"));
-        assertTrue(ex.getMessage().contains("groupBy"));
-    }
-
-    @Test
-    void blankOrNullGroupByIsNormalizedAway() {
-        assertNull(new RelationTableQueryRequest(0, 20, null, List.of(), null, null, null).groupBy());
-        assertNull(new RelationTableQueryRequest(0, 20, null, List.of(), null, null, "  ").groupBy());
-        assertDoesNotThrow(() -> RelationTableQueryRequest.of(0, 20, null, List.of(), null, null));
+    void ofDelegatesToCanonicalConstructor() {
+        RelationTableQueryRequest request = RelationTableQueryRequest.of(0, 20, null, List.of(), null, null);
+        assertEquals(0, request.page());
+        assertEquals(20, request.size());
+        assertDoesNotThrow(() -> new RelationTableQueryRequest(1, 10, "q", List.of(), "name", "ASC"));
     }
 }

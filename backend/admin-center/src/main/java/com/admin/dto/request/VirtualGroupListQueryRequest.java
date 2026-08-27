@@ -14,8 +14,7 @@ public record VirtualGroupListQueryRequest(
         String keyword,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public VirtualGroupListQueryRequest {
         if (page < 0) {

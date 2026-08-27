@@ -13,7 +13,6 @@ function column(overrides: Partial<MainTableViewFieldColumn>): MainTableViewFiel
     kind: 'TEXT',
     filterable: false,
     sortable: false,
-    groupable: false,
     operators: [],
     ...overrides,
   }

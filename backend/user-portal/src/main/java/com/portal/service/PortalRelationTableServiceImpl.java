@@ -324,10 +324,8 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     }
 
     /** Built-in sys_users columns for the virtual Relation Table User view.
-     * Closed codes ({@code status}, {@code language}) are ENUM with options and
-     * {@code groupable = false} — see shared-list-components.md §6.5.2.
-     * Free-text columns stay TEXT. Do not use {@link ListColumnMeta#withOptions},
-     * which defaults groupable to true. */
+     * Closed codes ({@code status}, {@code language}) are ENUM with options.
+     * Free-text columns stay TEXT. */
     private List<ListColumnMeta> systemUserColumns() {
         List<ListColumnMeta> columns = new ArrayList<>();
         for (String field : SYSTEM_USER_FIELD_NAMES) {
@@ -344,7 +342,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         };
     }
 
-    /** ENUM filterable/sortable but never groupable on the RT endpoint. */
+    /** ENUM filterable/sortable with a closed option list. */
     private static ListColumnMeta enumColumn(
             String field, String label, List<ListColumnMeta.Option> options) {
         return new ListColumnMeta(
@@ -353,7 +351,6 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 ListColumnMeta.Kind.ENUM,
                 true,
                 true,
-                false,
                 ListColumnMeta.operatorsFor(ListColumnMeta.Kind.ENUM),
                 options);
     }

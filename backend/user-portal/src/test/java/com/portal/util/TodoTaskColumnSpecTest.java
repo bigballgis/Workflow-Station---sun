@@ -8,12 +8,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TodoTaskColumnSpecTest {
 
     @Test
-    void requestIdIsTextSearchableAndSortableWithoutGroup() {
+    void requestIdIsTextSearchableAndSortable() {
         ListColumnMeta requestId = column("requestId");
         assertThat(requestId.kind()).isEqualTo(Kind.TEXT);
         assertThat(requestId.filterable()).isTrue();
         assertThat(requestId.sortable()).isTrue();
-        assertThat(requestId.groupable()).isFalse();
         assertThat(requestId.operators()).contains("contains", "startsWith", "eq");
     }
 

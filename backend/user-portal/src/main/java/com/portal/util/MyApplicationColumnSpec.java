@@ -8,7 +8,7 @@ import java.util.Map;
 
 /**
  * Fixed column declaration for My Requests. Status is the closed process-instance ENUM;
- * current assignee is USER (people picker + groupable). Request ID is the persisted
+ * current assignee is USER (people picker). Request ID is the persisted
  * process-variable text {@code __request_id}; filter/sort compile to that JSON path.
  */
 public final class MyApplicationColumnSpec {

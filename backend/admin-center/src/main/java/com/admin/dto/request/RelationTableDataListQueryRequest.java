@@ -6,8 +6,7 @@ import java.util.List;
 
 /**
  * One page of Relation Table Data: paging, toolbar keyword, column filters and sort.
- * Grouping is rejected — the endpoint never executes GROUP BY, and
- * {@link com.admin.list.RelationTableColumnSpec} declares every column {@code groupable = false}.
+ * {@link com.admin.list.RelationTableColumnSpec} declares the columns this page can filter and sort.
  */
 public record RelationTableDataListQueryRequest(
         int page,
@@ -15,8 +14,7 @@ public record RelationTableDataListQueryRequest(
         String search,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public RelationTableDataListQueryRequest {
         if (page < 0) {
@@ -33,10 +31,5 @@ public record RelationTableDataListQueryRequest(
         if (sortField != null && sortDirection == null) {
             throw new IllegalArgumentException("sortDirection is required when sortField is set");
         }
-        if (groupBy != null && !groupBy.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Relation Tables do not support grouping (groupBy must be omitted)");
-        }
-        groupBy = null;
     }
 }

@@ -28,7 +28,7 @@ const TABLES = [
 ]
 
 const COLUMNS = [
-  { field: 'code', label: 'Code', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'], options: [] },
+  { field: 'code', label: 'Code', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'], options: [] },
 ]
 
 /** Every queryTableData call recorded as [tableId, request]. */

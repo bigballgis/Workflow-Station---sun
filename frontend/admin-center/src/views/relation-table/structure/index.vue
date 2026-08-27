@@ -66,8 +66,6 @@
               class="list-data-grid table-fixed-actions"
               :class="{ 'list-data-grid--fit': gridFits }"
               style="width: 100%"
-              :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
-              :row-class-name="rowClassName"
             >
               <el-table-column
                 v-for="(col, colIndex) in displayColumns"
@@ -80,7 +78,6 @@
                   <ListColumnHeader
                     :column="col"
                     :sort="sort.field === col.field ? sort.direction : null"
-                    :grouped="groupBy === col.field"
                     :filtered="!!columnFilters[col.field]"
                     :width="widthOf(col.field)"
                     :show-move="displayColumns.length > 1"
@@ -88,7 +85,6 @@
                     :can-move-right="colIndex < displayColumns.length - 1"
                     @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                     @clear-sort="onClearSort"
-                    @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                     @filter-open="openFilter(col.field)"
                     @clear-filter="onClearFilter(col.field)"
                     @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -97,13 +93,7 @@
                   />
                 </template>
                 <template #default="{ row }">
-                  <template v-if="isListGroupHeaderRow(row)">
-                    <div class="group-header-cell">
-                      <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                      <span class="group-count">({{ row._groupCount }})</span>
-                    </div>
-                  </template>
-                  <span v-else-if="col.field === 'currentVersion'">v{{ row.currentVersion }}</span>
+<span v-if="col.field === 'currentVersion'">v{{ row.currentVersion }}</span>
                   <el-tag
                     v-else-if="col.field === 'status'"
                     :type="statusTagType(row.status)"
@@ -132,11 +122,6 @@
                 </template>
               </el-table-column>
               <el-table-column
-                v-if="leftoverWidth > 0"
-                :width="leftoverWidth"
-                class-name="list-col-spacer"
-              />
-              <el-table-column
                 label="Actions"
                 :width="ACTIONS_COL_WIDTH"
                 fixed="right"
@@ -147,7 +132,7 @@
                 </template>
                 <template #default="{ row }">
                   <div
-                    v-if="!isListGroupHeaderRow(row)"
+                    
                     class="action-cell"
                   >
                     <el-button
@@ -298,7 +283,6 @@ const {
   ACTIONS_COL_WIDTH,
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -307,7 +291,7 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
-  leftoverWidth,
+ 
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -318,11 +302,6 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = useRelationTable()
 
 function groupLabel(group: { key: string; label: string | null }): string {
@@ -360,10 +339,6 @@ function onClearSort() {
   void fetchTableList()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  void fetchTableList()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)

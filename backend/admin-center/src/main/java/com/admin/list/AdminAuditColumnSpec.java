@@ -38,7 +38,7 @@ public final class AdminAuditColumnSpec {
 
     /**
      * Action SQL matches {@link com.admin.enums.AuditActionConverter}: legacy strings
-     * collapse to CREATE/UPDATE/DELETE/QUERY so header filter, sort and grouping see the
+     * collapse to CREATE/UPDATE/DELETE/QUERY so header filter and sort see the
      * same four values the table cells show.
      */
     static String sqlFor(String field) {

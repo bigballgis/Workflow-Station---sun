@@ -6,7 +6,6 @@ import com.admin.bi.entity.BiRbacMapping;
 import com.admin.bi.entity.BiSupersetRole;
 import com.admin.bi.repository.BiRbacMappingRepository;
 import com.admin.bi.repository.BiSupersetRoleRepository;
-import com.admin.dto.list.AdminListGroup;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.BiRbacListQueryRequest;
 import com.admin.list.BiRbacColumnSpec;
@@ -29,8 +28,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * BI RBAC mapping list: one row per mapped active sys_role. COUNT(*), page and
- * group counts share toolbar roleName/roleType plus column filters.
+ * BI RBAC mapping list: one row per mapped active sys_role. COUNT(*) and the page
+ * share toolbar roleName/roleType plus column filters.
  */
 @Slf4j
 @Component
@@ -60,42 +59,27 @@ public class BiRbacListQueryComponent {
                 ListQuerySupport.query(jdbcTemplate, "SELECT COUNT(*)" + where, params, countExtractor),
                 LIST_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<AdminListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        if (groupExpression != null && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty bi-rbac list");
-        }
 
-        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request, groupExpression);
+        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request);
         List<RbacMappingResponse> rows = toRows(pageIds.ids());
-        applyGroupedValues(rows, request.groupBy(), pageIds.groupedValues());
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
-        return new AdminListPage<>(BiRbacColumnSpec.columns(), rows, groups,
+        return new AdminListPage<>(BiRbacColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
     private PageIds loadPageIds(ListFilterSql filterSql, String where, List<Object> params,
-                                BiRbacListQueryRequest request, String groupExpression) {
+                                BiRbacListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
-        String sql = "SELECT r.id" + groupedSelect + where + orderBy + " LIMIT ? OFFSET ?";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
+        String sql = "SELECT r.id" + where + orderBy + " LIMIT ? OFFSET ?";
         ResultSetExtractor<PageIds> extractor = rs -> {
             List<String> ids = new ArrayList<>();
-            List<String> grouped = new ArrayList<>();
             while (rs.next()) {
                 ids.add(rs.getString("id"));
-                grouped.add(groupExpression == null ? null : rs.getString("grouped_value"));
             }
-            return new PageIds(ids, grouped);
+            return new PageIds(ids);
         };
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, extractor);
     }
@@ -161,22 +145,6 @@ public class BiRbacListQueryComponent {
                 .build();
     }
 
-    private static void applyGroupedValues(List<RbacMappingResponse> rows, String groupBy,
-                                           List<String> groupedValues) {
-        if (groupBy == null || groupBy.isBlank()) {
-            return;
-        }
-        if (rows.size() != groupedValues.size()) {
-            throw new IllegalStateException("grouped values and page rows are different lengths");
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            String label = groupedValues.get(i) == null ? "" : groupedValues.get(i);
-            if (!"sysRoleType".equals(groupBy)) {
-                throw new IllegalStateException("grouped field was not selected: " + groupBy);
-            }
-            rows.get(i).setSysRoleType(label);
-        }
-    }
 
     private static void appendRoleName(StringBuilder where, List<Object> params, String roleName) {
         if (roleName == null || roleName.isBlank()) {
@@ -194,10 +162,7 @@ public class BiRbacListQueryComponent {
         params.add(roleType.trim());
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 
-    private record PageIds(List<String> ids, List<String> groupedValues) {
+    private record PageIds(List<String> ids) {
     }
 }

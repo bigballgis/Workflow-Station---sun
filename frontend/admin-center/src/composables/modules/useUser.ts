@@ -17,15 +17,6 @@ import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const ACTIONS_COL_WIDTH = 140
-const USER_COL_WIDTHS: Record<string, number> = {
-  username: 120,
-  fullName: 120,
-  email: 180,
-  position: 100,
-  entityManagerName: 120,
-  functionManagerName: 120,
-  status: 90,
-}
 
 export function useUser() {
   const { t } = useI18n()
@@ -39,7 +30,6 @@ export function useUser() {
   const grid = useAdminListGrid<User>({
     storageKey: 'admin-list-layout:users',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => USER_COL_WIDTHS[field] ?? 120,
   })
 
   const loadUsers = async () => {

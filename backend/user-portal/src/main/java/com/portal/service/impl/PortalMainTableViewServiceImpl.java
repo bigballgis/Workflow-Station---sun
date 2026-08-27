@@ -25,7 +25,6 @@ import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataPage;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataRow;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewFieldColumn;
-import com.portal.dto.MainTableViewPortalDtos.MainTableViewGroup;
 import com.portal.util.MainTableViewFkDisplaySupport;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewSummary;
 import com.portal.entity.ProcessInstance;
@@ -200,9 +199,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .total(page.total())
                 .page(request.page())
                 .size(request.size())
-                .groups(page.groups().stream()
-                        .map(g -> new MainTableViewGroup(g.label(), g.count()))
-                        .toList())
                 .build();
     }
 
@@ -228,9 +224,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .total(page.total())
                 .page(request.page())
                 .size(request.size())
-                .groups(page.groups().stream()
-                        .map(g -> new MainTableViewGroup(g.label(), g.count()))
-                        .toList())
                 .build();
     }
 
@@ -245,7 +238,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 MainTableViewDerivedFilterSql.plainFilters(request.filters(), fields),
                 request.sortField(),
                 request.sortDirection(),
-                request.groupBy(),
                 request.search(),
                 searchableFields(fields, source),
                 involvementPredicate(userId, view),
@@ -266,7 +258,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 MainTableViewDerivedFilterSql.plainFilters(request.filters(), fields),
                 request.sortField(),
                 request.sortDirection(),
-                request.groupBy(),
                 request.search(),
                 searchableFields(fields, source),
                 involvementPredicate(userId, view),
@@ -834,7 +825,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     /**
      * Types for designed view columns. The bound table wins; other tables in the same Function
      * Unit fill names the bound table does not declare so a SUB view can still type a parent MAIN
-     * column it shows. A name that exists on none of them stays untyped (display-only) — we do
+     * column it shows. A name that exists on none of them is compared as TEXT — we do
      * not invent DATE/USER from the label.
      */
     private Map<String, String> fieldDataTypes(ViewDefinition view) {

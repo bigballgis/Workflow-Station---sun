@@ -12,36 +12,12 @@ import {
   type FunctionUnit,
 } from '@/api/functionUnit'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
-import { isListGroupHeaderRow } from '@platform-shared/list/insertGroupHeaders'
 
 export type FunctionUnitRow = FunctionUnit & { _enabledLoading?: boolean }
 
 const LIST_ACTIONS_WIDTH = 420
 const LIST_SELECTION_WIDTH = 50
 const ARCHIVE_ACTIONS_WIDTH = 120
-const LIST_COL_WIDTHS: Record<string, number> = {
-  name: 160,
-  code: 140,
-  version: 90,
-  status: 110,
-  enabled: 80,
-  updatedAt: 160,
-}
-const ARCHIVE_COL_WIDTHS: Record<string, number> = {
-  name: 160,
-  code: 140,
-  version: 90,
-  status: 110,
-  updatedAt: 160,
-  updatedBy: 140,
-}
-const DEPLOY_COL_WIDTHS: Record<string, number> = {
-  functionUnitName: 180,
-  version: 90,
-  status: 120,
-  deployedAt: 170,
-  deployedBy: 140,
-}
 
 export function useFunctionUnitLists() {
   const { t } = useI18n()
@@ -56,17 +32,14 @@ export function useFunctionUnitLists() {
   const listGrid = useAdminListGrid<FunctionUnitRow>({
     storageKey: 'admin-list-layout:function-units',
     extraWidth: LIST_SELECTION_WIDTH + LIST_ACTIONS_WIDTH,
-    defaultWidthOf: (field) => LIST_COL_WIDTHS[field] ?? 120,
   })
   const archiveGrid = useAdminListGrid<FunctionUnitRow>({
     storageKey: 'admin-list-layout:function-units-archived',
     extraWidth: ARCHIVE_ACTIONS_WIDTH,
-    defaultWidthOf: (field) => ARCHIVE_COL_WIDTHS[field] ?? 120,
   })
   const deployGrid = useAdminListGrid<Deployment>({
     storageKey: 'admin-list-layout:function-unit-deployments',
     extraWidth: 0,
-    defaultWidthOf: (field) => DEPLOY_COL_WIDTHS[field] ?? 120,
   })
 
   const fetchFunctionUnits = async () => {
@@ -155,7 +128,7 @@ export function useFunctionUnitLists() {
   })
 
   const handleSelectionChange = (selection: FunctionUnitRow[]) => {
-    selectedUnits.value = selection.filter((row) => !isListGroupHeaderRow(row))
+    selectedUnits.value = selection
   }
 
   return {

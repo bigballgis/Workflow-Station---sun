@@ -22,15 +22,6 @@ import {
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const ACTIONS_COL_WIDTH = 240
-const STRUCTURE_COL_WIDTHS: Record<string, number> = {
-  displayName: 160,
-  currentVersion: 90,
-  status: 110,
-  enabled: 80,
-  portalVisible: 90,
-  createdAt: 160,
-  updatedAt: 160,
-}
 
 export function useRelationTable() {
   const router = useRouter()
@@ -52,7 +43,6 @@ export function useRelationTable() {
   const grid = useAdminListGrid<RelationTableResponse>({
     storageKey: 'admin-list-layout:rt-structure',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => STRUCTURE_COL_WIDTHS[field] ?? 120,
   })
 
   const terr = (code: string) => t(errorTranslator(code))

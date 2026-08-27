@@ -43,14 +43,12 @@ class RelationTableColumnSpecTest {
     }
 
     @Test
-    void payloadTypesAreDisplayOnly() {
+    void blobTypesAreDisplayOnly() {
         List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
-                field("cfg", RelationDataType.JSON, "Config"),
-                field("at", RelationDataType.TIME, "At"),
                 field("blob", RelationDataType.BYTEA, "Blob"),
                 field("doc", RelationDataType.FILE, "Doc"),
                 field("name", RelationDataType.VARCHAR, "Name")));
-        for (String f : List.of("cfg", "at", "blob", "doc")) {
+        for (String f : List.of("blob", "doc")) {
             ListColumnMeta col = byField(columns, f);
             assertFalse(col.filterable(), f);
             assertFalse(col.sortable(), f);
@@ -60,13 +58,26 @@ class RelationTableColumnSpecTest {
     }
 
     @Test
-    void statusIsExcludedAndGroupingNeverDeclared() {
+    void timeJsonAndUntypedFieldsAreQueryable() {
+        List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
+                field("cfg", RelationDataType.JSON, "Config"),
+                field("at", RelationDataType.TIME, "At"),
+                field("legacy", null, "Legacy")));
+        assertEquals(Kind.TEXT, byField(columns, "cfg").kind());
+        assertTrue(byField(columns, "cfg").filterable());
+        assertEquals(Kind.DATETIME, byField(columns, "at").kind());
+        assertTrue(byField(columns, "at").filterable());
+        assertEquals(Kind.TEXT, byField(columns, "legacy").kind());
+        assertTrue(byField(columns, "legacy").filterable());
+    }
+
+    @Test
+    void statusIsExcludedFromTheDataGrid() {
         List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
                 field("status", RelationDataType.VARCHAR, "Status"),
                 field("active", RelationDataType.BOOLEAN, "Active"),
                 field("name", RelationDataType.VARCHAR, "Name")));
         assertEquals(List.of("active", "name"), columns.stream().map(ListColumnMeta::field).toList());
-        assertTrue(columns.stream().noneMatch(ListColumnMeta::groupable));
     }
 
     @Test
@@ -85,7 +96,6 @@ class RelationTableColumnSpecTest {
                 field("name", RelationDataType.VARCHAR, "Name"))), "created_by");
         assertEquals(Kind.USER, createdBy.kind());
         assertEquals(List.of("eq", "ne", "isNull", "isNotNull"), createdBy.operators());
-        assertFalse(createdBy.groupable());
     }
 
     @Test
@@ -97,12 +107,11 @@ class RelationTableColumnSpecTest {
     }
 
     @Test
-    void labelFallsBackToFieldNameAndUnknownTypeIsDisplayOnly() {
+    void labelFallsBackToFieldName() {
         List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
-                field("raw_code", RelationDataType.VARCHAR, "  "),
-                field("legacy", null, "Legacy")));
+                field("raw_code", RelationDataType.VARCHAR, "  ")));
         assertEquals("raw_code", byField(columns, "raw_code").label());
-        assertFalse(byField(columns, "legacy").filterable());
+        assertTrue(byField(columns, "raw_code").filterable());
     }
 
     @Test

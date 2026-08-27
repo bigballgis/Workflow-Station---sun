@@ -18,9 +18,9 @@ vi.mock('@/composables/list/searchListFilterUsers', () => ({
 const api = vi.mocked(permissionApi.queryPermissionRequests)
 
 const COLUMNS: ListColumnMeta[] = [
-  { field: 'requestType', label: 'permission.requestType', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [{ value: 'ROLE', label: 'ROLE' }] },
-  { field: 'status', label: 'permission.status', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [{ value: 'PENDING', label: 'PENDING' }] },
-  { field: 'createdAt', label: 'common.createdAt', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['between'] },
+  { field: 'requestType', label: 'permission.requestType', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'], options: [{ value: 'ROLE', label: 'ROLE' }] },
+  { field: 'status', label: 'permission.status', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'], options: [{ value: 'PENDING', label: 'PENDING' }] },
+  { field: 'createdAt', label: 'common.createdAt', kind: 'DATETIME', filterable: true, sortable: true, operators: ['between'] },
 ]
 
 let wrapper: VueWrapper | null = null
@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
   api.mockResolvedValue({
-    data: { columns: COLUMNS, content: [], totalElements: 0, page: 0, size: 20, groups: [] },
+    data: { columns: COLUMNS, content: [], totalElements: 0, page: 0, size: 20 },
   } as never)
 })
 

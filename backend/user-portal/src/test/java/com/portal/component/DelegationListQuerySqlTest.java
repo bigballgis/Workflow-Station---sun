@@ -54,7 +54,7 @@ class DelegationListQuerySqlTest {
 
     @Test
     void rulesCountAndPageShareDelegatorPredicate() {
-        component.queryRules("user-1", request(null, List.of()));
+        component.queryRules("user-1", request(List.of()));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM up_delegation_rule r");
         assertThat(preparedSql.get(0)).contains("r.delegator_id = ?");
@@ -64,7 +64,7 @@ class DelegationListQuerySqlTest {
 
     @Test
     void auditVisibilityIsEitherParty() {
-        component.queryAudit("user-1", request(null, List.of()));
+        component.queryAudit("user-1", request(List.of()));
 
         assertThat(preparedSql.get(0)).contains("a.delegator_id = ? OR a.delegate_id = ?");
         assertThat(pageSql()).contains("a.delegator_id = ? OR a.delegate_id = ?");
@@ -72,7 +72,7 @@ class DelegationListQuerySqlTest {
 
     @Test
     void filtersArePushedIntoTheSharedPredicate() {
-        component.queryRules("user-1", request(null,
+        component.queryRules("user-1", request(
                 List.of(new ListColumnFilter("status", "eq", "ACTIVE", null))));
 
         assertThat(pageSql()).contains("r.status");
@@ -80,17 +80,8 @@ class DelegationListQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSet() {
-        component.queryRules("user-1", request("status", List.of()));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void undeclaredFilterIsRefused() {
-        assertThatThrownBy(() -> component.queryRules("user-1", request(null,
+        assertThatThrownBy(() -> component.queryRules("user-1", request(
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -99,7 +90,7 @@ class DelegationListQuerySqlTest {
         return preparedSql.stream().filter(sql -> sql.contains("LIMIT ?")).findFirst().orElseThrow();
     }
 
-    private static DelegationListQueryRequest request(String groupBy, List<ListColumnFilter> filters) {
-        return new DelegationListQueryRequest(0, 20, filters, null, null, groupBy);
+    private static DelegationListQueryRequest request(List<ListColumnFilter> filters) {
+        return new DelegationListQueryRequest(0, 20, filters, null, null);
     }
 }

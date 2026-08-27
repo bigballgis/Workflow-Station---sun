@@ -1,20 +1,16 @@
 package com.portal.util;
 
 import com.platform.common.list.ListColumnFilter;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Shared in-memory filter / sort / page / group helpers for Portal To Do lists.
+ * Shared in-memory filter / sort / page helpers for Portal To Do lists.
  */
 public final class TaskInfoListOps {
 
@@ -78,22 +74,6 @@ public final class TaskInfoListOps {
         return new ArrayList<>(tasks.subList(start, end));
     }
 
-    public static List<PortalListGroup> groupsOf(List<TaskInfo> tasks, String groupBy) {
-        if (groupBy == null || groupBy.isBlank()) {
-            return List.of();
-        }
-        String field = groupBy.trim();
-        Map<String, Long> counts = new LinkedHashMap<>();
-        for (TaskInfo task : tasks) {
-            String label = groupLabel(task, field);
-            counts.merge(label, 1L, Long::sum);
-        }
-        List<PortalListGroup> groups = new ArrayList<>();
-        for (Map.Entry<String, Long> e : counts.entrySet()) {
-            groups.add(new PortalListGroup(e.getKey(), e.getValue()));
-        }
-        return groups;
-    }
 
     private static Integer prioritySortKey(TaskInfo task) {
         String raw = task.getPriority();
@@ -113,21 +93,4 @@ public final class TaskInfoListOps {
         }
     }
 
-    public static String groupLabel(TaskInfo task, String groupBy) {
-        String field = groupBy != null ? groupBy.trim() : "";
-        String value = switch (field) {
-            case "priority" -> TaskQueryColumnFilters.priorityBand(task.getPriority());
-            case "assignmentType" -> task.getAssignmentType();
-            case "taskName", "name" -> task.getTaskName();
-            case "processDefinitionName" -> task.getProcessDefinitionName();
-            case "initiatorName" -> task.getInitiatorName();
-            case "requestId" -> task.getRequestId();
-            case "currentStepName", "currentNode" ->
-                    task.getCurrentStepName() != null ? task.getCurrentStepName() : task.getTaskName();
-            case "createTime" -> task.getCreateTime() != null ? task.getCreateTime().toString() : null;
-            case "dueDate" -> task.getDueDate() != null ? task.getDueDate().toString() : null;
-            default -> throw new IllegalArgumentException("Unknown todo groupBy field: " + groupBy);
-        };
-        return Objects.requireNonNullElse(value, "");
-    }
 }

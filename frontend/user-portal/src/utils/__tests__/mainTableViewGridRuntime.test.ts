@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampColumnWidth,
+  columnWidth,
   createDefaultGridRuntime,
-  insertGroupHeaders,
   loadGridRuntimeFromSession,
   moveColumn,
   saveGridRuntimeToSession,
@@ -11,34 +11,6 @@ import {
 } from '../mainTableViewGridRuntime'
 
 describe('mainTableViewGridRuntime', () => {
-  const rows = [
-    { rowKey: '1', processInstanceId: '1', values: { name: 'Beta', status: 'Open' } },
-    { rowKey: '2', processInstanceId: '2', values: { name: 'Alpha', status: 'Open' } },
-    { rowKey: '3', processInstanceId: '3', values: { name: 'Gamma', status: 'Closed' } },
-  ]
-
-  const groups = [
-    { label: 'Open', count: 7 },
-    { label: 'Closed', count: 4 },
-  ]
-
-  it('heads each run of rows with the count the server reported, not the count on this page', () => {
-    const display = insertGroupHeaders(rows, 'status', groups)
-
-    expect(display[0]).toMatchObject({ _isGroupHeader: true, _groupLabel: 'Open', _groupCount: 7 })
-    expect(display[3]).toMatchObject({ _isGroupHeader: true, _groupLabel: 'Closed', _groupCount: 4 })
-    expect(display).toHaveLength(5)
-  })
-
-  it('leaves rows untouched when nothing is grouped', () => {
-    expect(insertGroupHeaders(rows, null, [])).toBe(rows)
-  })
-
-  it('refuses to render a group the server did not count', () => {
-    expect(() => insertGroupHeaders(rows, 'status', [{ label: 'Open', count: 7 }]))
-      .toThrow(/Closed/)
-  })
-
   it('moveColumn swaps order', () => {
     const state = createDefaultGridRuntime()
     state.columnOrder = ['a', 'b', 'c']
@@ -54,7 +26,6 @@ describe('mainTableViewGridRuntime', () => {
         kind: 'ENUM',
         filterable: true,
         sortable: true,
-        groupable: true,
         operators: ['eq', 'ne'],
         options: [
           { value: 'RUNNING', label: 'Running' },
@@ -65,6 +36,24 @@ describe('mainTableViewGridRuntime', () => {
       { value: 'RUNNING', label: 'Running' },
       { value: 'COMPLETED', label: 'Completed' },
     ])
+  })
+
+  it('uses the designer columnWidth before measuring the header label', () => {
+    const state = createDefaultGridRuntime()
+    expect(
+      columnWidth(
+        {
+          fieldName: 'status',
+          displayLabel: 'A',
+          columnWidth: 220,
+          kind: 'TEXT',
+          filterable: true,
+          sortable: true,
+          operators: ['eq'],
+        },
+        state,
+      ),
+    ).toBe(220)
   })
 
   it('clampColumnWidth enforces min and max', () => {
@@ -83,7 +72,6 @@ describe('mainTableViewGridRuntime', () => {
     state.columnOrder = ['name', 'status']
     state.columnWidths.name = 200
     state.sort = { fieldName: 'name', direction: 'ASC' }
-    state.groupBy = 'status'
     state.filters.status = { operator: 'eq', value: 'Open' }
 
     saveGridRuntimeToSession(9, state)
@@ -92,7 +80,6 @@ describe('mainTableViewGridRuntime', () => {
     expect(restored.columnOrder).toEqual(['name', 'status'])
     expect(restored.columnWidths.name).toBe(200)
     expect(restored.sort).toBeNull()
-    expect(restored.groupBy).toBeNull()
     expect(restored.filters).toEqual({})
   })
 })

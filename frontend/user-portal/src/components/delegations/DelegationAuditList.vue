@@ -19,8 +19,6 @@
           style="width: 100%;"
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
-          :span-method="spanMethod(leftoverWidth > 0 ? 1 : 0)"
-          :row-class-name="rowClassName"
         >
           <template #empty>
             <div
@@ -45,7 +43,6 @@
               <ListColumnHeader
                 :column="col"
                 :sort="sort.field === col.field ? sort.direction : null"
-                :grouped="groupBy === col.field"
                 :filtered="!!columnFilters[col.field]"
                 :width="widthOf(col.field)"
                 :show-move="displayColumns.length > 1"
@@ -53,7 +50,6 @@
                 :can-move-right="colIndex < displayColumns.length - 1"
                 @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                 @clear-sort="onClearSort"
-                @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                 @filter-open="openFilter(col.field)"
                 @clear-filter="onClearFilter(col.field)"
                 @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -62,14 +58,8 @@
               />
             </template>
             <template #default="{ row }">
-              <template v-if="isListGroupHeaderRow(row)">
-                <div class="group-header-cell">
-                  <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                  <span class="group-count">({{ row._groupCount }})</span>
-                </div>
-              </template>
-              <span
-                v-else-if="col.field === 'createdAt'"
+<span
+                v-if="col.field === 'createdAt'"
                 style="white-space: nowrap;"
               >{{ formatDate(row.createdAt) }}</span>
               <template v-else>
@@ -77,11 +67,6 @@
               </template>
             </template>
           </el-table-column>
-          <el-table-column
-            v-if="leftoverWidth > 0"
-            :width="leftoverWidth"
-            class-name="list-col-spacer"
-          />
         </el-table>
       </div>
     </div>
@@ -120,14 +105,6 @@ import { usePortalListGrid } from '@/composables/list/usePortalListGrid'
 import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 import { formatDate } from '@/utils/dateFormat'
 
-const COL_WIDTHS: Record<string, number> = {
-  operationType: 150,
-  delegatorId: 140,
-  delegateId: 140,
-  taskId: 140,
-  operationResult: 120,
-  createdAt: 170,
-}
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -136,7 +113,6 @@ const loaded = ref(false)
 const {
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -144,7 +120,7 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits, leftoverWidth,
+  gridFits,
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -159,14 +135,8 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = usePortalListGrid<DelegationAudit>({
   storageKey: 'portal-list-layout:delegation-audit',
-  defaultWidthOf: (field) => COL_WIDTHS[field] ?? 120,
 })
 
 async function load() {
@@ -203,10 +173,6 @@ function onClearSort() {
   load()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  load()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)

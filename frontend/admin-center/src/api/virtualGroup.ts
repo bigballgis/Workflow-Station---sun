@@ -122,7 +122,6 @@ export interface VirtualGroupListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 // ==================== 虚拟组 CRUD API ====================

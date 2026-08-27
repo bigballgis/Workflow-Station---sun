@@ -164,8 +164,6 @@ export default {
     sortSmallToLarge: 'Small to large',
     sortLargeToSmall: 'Large to small',
     clearSort: 'Clear sort',
-    groupBy: 'Group by',
-    ungroup: 'Ungroup',
     filterBy: 'Filter by',
     clearFilter: 'Clear filter',
     loading: 'Loading...',
@@ -831,7 +829,8 @@ export default {
     removeSuccess: 'Removed successfully',
     removeFailed: 'Remove failed',
     noMembers: 'No members',
-    noPermission: 'You do not have permission to manage this organization'
+    noPermission: 'You do not have permission to manage this organization',
+    loadFailed: 'Failed to load members'
   },
   exitRole: {
     title: 'Leave business unit',

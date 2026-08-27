@@ -19,8 +19,6 @@ import java.util.Map;
  * converts the visible label to that key. Without a mapping they stay display-only, so the header
  * cannot compare the label to the raw key. Sort stays off for mapped display columns.
  *
- * <p>Grouping is declared per {@link ListColumnMeta#defaultGroupable(Kind)}: it makes sense
- * where values repeat (status, assignee, booleans) and not on free text or timestamps.
  */
 public final class MainTableViewColumnSpec {
 
@@ -302,20 +300,21 @@ public final class MainTableViewColumnSpec {
     }
 
     /**
-     * @return the kind a designed field is queried as, or null when it has none the database can
-     *         compare — a field with no type declaration, or a file whose stored value is a
-     *         reference rather than something a user would filter on
+     * @return the kind a designed field is queried as, or null when the stored value is a file /
+     *         blob reference rather than something a user would filter on. Untyped and JSON
+     *         fields compare as TEXT against the JSON member. TIME is a clock-of-day DATETIME.
      */
     private static Kind kindOf(String dataType) {
-        if (dataType == null) {
-            return null;
+        if (dataType == null || dataType.isBlank()) {
+            return Kind.TEXT;
         }
         return switch (dataType.trim().toUpperCase(Locale.ROOT)) {
-            case "VARCHAR", "TEXT" -> Kind.TEXT;
+            case "VARCHAR", "TEXT", "JSON" -> Kind.TEXT;
             case "INTEGER", "BIGINT", "DECIMAL" -> Kind.NUMBER;
-            case "DATE", "TIMESTAMP" -> Kind.DATETIME;
+            case "DATE", "TIMESTAMP", "TIME" -> Kind.DATETIME;
             case "BOOLEAN" -> Kind.BOOLEAN;
-            default -> null;
+            case "FILE", "BYTEA" -> null;
+            default -> Kind.TEXT;
         };
     }
 

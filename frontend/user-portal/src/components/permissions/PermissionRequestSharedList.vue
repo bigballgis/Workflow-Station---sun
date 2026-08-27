@@ -19,8 +19,6 @@
           style="width: 100%;"
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
-          :span-method="spanMethod(actionColumns + (leftoverWidth > 0 ? 1 : 0))"
-          :row-class-name="rowClassName"
         >
           <template #empty>
             <div
@@ -45,7 +43,6 @@
               <ListColumnHeader
                 :column="col"
                 :sort="sort.field === col.field ? sort.direction : null"
-                :grouped="groupBy === col.field"
                 :filtered="!!columnFilters[col.field]"
                 :width="widthOf(col.field)"
                 :show-move="visibleColumns.length > 1"
@@ -53,7 +50,6 @@
                 :can-move-right="colIndex < visibleColumns.length - 1"
                 @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                 @clear-sort="onClearSort"
-                @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                 @filter-open="openFilter(col.field)"
                 @clear-filter="onClearFilter(col.field)"
                 @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -62,14 +58,8 @@
               />
             </template>
             <template #default="{ row }">
-              <template v-if="isListGroupHeaderRow(row)">
-                <div class="group-header-cell">
-                  <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                  <span class="group-count">({{ row._groupCount }})</span>
-                </div>
-              </template>
-              <el-tag
-                v-else-if="col.field === 'requestType'"
+<el-tag
+                v-if="col.field === 'requestType'"
                 :type="getRequestTypeTag(row.requestType)"
                 size="small"
               >
@@ -102,18 +92,13 @@
             </template>
           </el-table-column>
           <el-table-column
-            v-if="leftoverWidth > 0"
-            :width="leftoverWidth"
-            class-name="list-col-spacer"
-          />
-          <el-table-column
             v-if="actionMode !== 'none'"
             :label="t('common.actions')"
             :min-width="actionMode === 'approve' ? 180 : 100"
             fixed="right"
           >
             <template #default="{ row }">
-              <template v-if="!isListGroupHeaderRow(row)">
+              <template >
                 <div class="row-actions">
                   <el-button
                     v-if="actionMode === 'cancel' && canCancelAsBeneficiary(row)"
@@ -202,17 +187,6 @@ const SCOPE_FIELDS: Record<PermissionListScope, string[]> = {
   ],
 }
 
-const COL_WIDTHS: Record<string, number> = {
-  requestType: 160,
-  targetName: 160,
-  applicantId: 140,
-  submittedByUserId: 140,
-  reason: 160,
-  status: 110,
-  approverComment: 150,
-  createdAt: 170,
-  approvedAt: 170,
-}
 
 const props = withDefaults(defineProps<{
   scope: PermissionListScope
@@ -250,7 +224,6 @@ const actionColumns = computed(() => (props.actionMode === 'none' ? 0 : 1))
 const {
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -258,7 +231,7 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits, leftoverWidth,
+  gridFits,
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -273,15 +246,9 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = usePortalListGrid<PermissionRequestRecord>({
   storageKey: props.storageKey,
   extraWidth: props.actionMode === 'approve' ? 180 : props.actionMode === 'cancel' ? 100 : 0,
-  defaultWidthOf: (field) => COL_WIDTHS[field] ?? 120,
 })
 
 const visibleColumns = computed<ListColumnMeta[]>(() => {
@@ -325,10 +292,6 @@ function onClearSort() {
   load()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  load()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)

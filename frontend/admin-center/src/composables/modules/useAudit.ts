@@ -41,19 +41,9 @@ export function useAudit() {
   const loading = storeLoading // alias for template compatibility
   const SELECTION_COL_WIDTH = 40
   const ACTIONS_COL_WIDTH = 80
-  const AUDIT_COL_WIDTHS: Record<string, number> = {
-    action: 110,
-    resourceType: 220,
-    username: 130,
-    ipAddress: 150,
-    result: 100,
-    duration: 100,
-    createdAt: 220,
-  }
   const grid = useAdminListGrid<AuditLog>({
     storageKey: 'admin-list-layout:audit',
     extraWidth: SELECTION_COL_WIDTH + ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => AUDIT_COL_WIDTHS[field] ?? 120,
   })
   const page = computed({
     get: () => grid.pagination.page,
@@ -220,7 +210,6 @@ export function useAudit() {
   const handleReset = () => {
     store.resetQuery()
     grid.clearSort()
-    grid.applyGroup('', false)
     for (const field of Object.keys(grid.columnFilters.value)) {
       grid.clearFilter(field)
     }

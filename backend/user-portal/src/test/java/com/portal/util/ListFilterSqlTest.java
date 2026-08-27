@@ -34,7 +34,7 @@ class ListFilterSqlTest {
         if (kind == Kind.BOOLEAN) {
             return ListColumnMeta.of(field, field, kind);
         }
-        return new ListColumnMeta(field, field, kind, true, true, false,
+        return new ListColumnMeta(field, field, kind, true, true,
                 ListColumnMeta.operatorsFor(kind), List.of());
     }
 
@@ -96,18 +96,6 @@ class ListFilterSqlTest {
         String sql = where("created_by", "eq", "user-dev", null);
         assertTrue(sql.contains("data->>'created_by' = ('user:' || u.id::text)"), sql);
         assertEquals(List.of("user-dev"), params);
-    }
-
-    @Test
-    void userGroupExpressionResolvesLabelThroughSysUsers() {
-        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
-        byField.put("created_by", ListColumnMeta.of(
-                "created_by", "Created by", Kind.USER));
-        ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
-        String expr = sql.groupByExpression("created_by");
-        assertTrue(expr.contains("sys_users"), expr);
-        assertTrue(expr.contains("('user:' || u.id::text)"), expr);
-        assertTrue(expr.contains("data->>'created_by'"), expr);
     }
 
     @Test
@@ -259,28 +247,6 @@ class ListFilterSqlTest {
         assertThrows(IllegalArgumentException.class, () -> sortBy("payload", "ASC"));
     }
 
-    // ---- grouping ----
-
-    @Test
-    void groupingLeadsTheOrderSoAGroupsRowsCannotStraddleAPage() {
-        Map<String, ListColumnMeta> byField = columns();
-        byField.put("status", ListColumnMeta.withOptions("status", "status", Kind.ENUM,
-                List.of(new ListColumnMeta.Option("OPEN", "Open"))));
-        ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
-
-        String groupExpression = sql.groupByExpression("status");
-        assertEquals("data->>'status'", groupExpression);
-        assertEquals(" ORDER BY data->>'status' ASC NULLS LAST, data->>'name' ASC NULLS LAST, id",
-                sql.orderByGrouped(groupExpression, "name", "ASC"));
-    }
-
-    @Test
-    void groupByRejectsUnknownOrNonGroupableColumn() {
-        ListFilterSql sql = jsonRow();
-        assertThrows(IllegalArgumentException.class, () -> sql.groupByExpression("ghost"));
-        // Declared groupable=false: offering it would produce counts the query cannot stand behind.
-        assertThrows(IllegalArgumentException.class, () -> sql.groupByExpression("name"));
-    }
 
     @Test
     void aListWithItsOwnDefaultOrderStillEndsOnTheTiebreak() {

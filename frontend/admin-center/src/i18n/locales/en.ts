@@ -67,8 +67,6 @@ export default {
     sortSmallToLarge: 'Small to large',
     sortLargeToSmall: 'Large to small',
     clearSort: 'Clear sort',
-    groupBy: 'Group by',
-    ungroup: 'Ungroup',
     filterBy: 'Filter by',
     clearFilter: 'Clear filter',
     loading: 'Loading...',

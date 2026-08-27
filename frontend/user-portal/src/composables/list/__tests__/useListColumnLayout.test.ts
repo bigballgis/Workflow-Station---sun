@@ -1,16 +1,20 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
-import { useListColumnLayout } from '../useListColumnLayout'
-import { leftoverColumnWidth } from '@platform-shared/list/columnResizeCursor'
+import { useListColumnLayout } from '@platform-shared/list/useListColumnLayout'
 
-function mountLayout(storageKey: string, fields: string[]) {
+function mountLayout(
+  storageKey: string,
+  fields: string[],
+  opts: { extraWidth?: number; defaultWidthOf?: (field: string) => number } = {},
+) {
   const Host = defineComponent({
     setup() {
       return useListColumnLayout({
         storageKey,
         fields,
-        defaultWidthOf: (field) => (field === 'wide' ? 180 : 120),
+        extraWidth: opts.extraWidth ?? 0,
+        defaultWidthOf: opts.defaultWidthOf ?? ((field) => (field === 'wide' ? 180 : 120)),
       })
     },
     template: '<div />',
@@ -18,12 +22,19 @@ function mountLayout(storageKey: string, fields: string[]) {
   return mount(Host)
 }
 
+async function setViewport(wrapper: ReturnType<typeof mountLayout>, width: number) {
+  const el = document.createElement('div')
+  Object.defineProperty(el, 'clientWidth', { value: width })
+  wrapper.vm.gridScrollRef = el
+  await nextTick()
+}
+
 describe('useListColumnLayout', () => {
   beforeEach(() => {
     sessionStorage.clear()
   })
 
-  it('starts from the per-field default and clamps a drag', async () => {
+  it('starts from the per-field default and clamps a persisted base', async () => {
     const w = mountLayout('portal-list-layout:test', ['name', 'wide'])
     const { widthOf, setWidth } = w.vm
 
@@ -37,7 +48,7 @@ describe('useListColumnLayout', () => {
     w.unmount()
   })
 
-  it('remembers widths for the same storage key and not another', async () => {
+  it('remembers base widths for the same storage key and not another', async () => {
     const first = mountLayout('portal-list-layout:a', ['name'])
     first.vm.setWidth('name', 200)
     first.vm.persistWidths()
@@ -68,10 +79,32 @@ describe('useListColumnLayout', () => {
     w.unmount()
   })
 
-  it('parks leftover width at the trailing edge instead of stretching columns', () => {
-    expect(leftoverColumnWidth(1000, 800)).toBe(200)
-    expect(leftoverColumnWidth(800, 800)).toBe(0)
-    expect(leftoverColumnWidth(800, 900)).toBe(0)
-    expect(leftoverColumnWidth(0, 800)).toBe(0)
+  it('spreads leftover across data columns instead of parking a spacer', async () => {
+    const w = mountLayout('portal-list-layout:spread', ['name', 'wide'], {
+      extraWidth: 50,
+      defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
+    })
+    await setViewport(w, 450)
+    expect(w.vm.widthOf('name')).toBe(133)
+    expect(w.vm.widthOf('wide')).toBe(267)
+    w.unmount()
+  })
+
+  it('persists the inverted base, not the leftover share', async () => {
+    const w = mountLayout('portal-list-layout:invert', ['name', 'wide'], {
+      extraWidth: 50,
+      defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
+    })
+    await setViewport(w, 450)
+    w.vm.setWidth('name', 133)
+    w.vm.persistWidths()
+    w.unmount()
+
+    const restored = mountLayout('portal-list-layout:invert', ['name', 'wide'], {
+      extraWidth: 50,
+      defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
+    })
+    expect(restored.vm.widthOf('name')).toBe(100)
+    restored.unmount()
   })
 })

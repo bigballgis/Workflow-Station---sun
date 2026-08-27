@@ -31,7 +31,10 @@
   overflow-x: visible !important;
 }
 
-.list-data-grid .el-table__inner-wrapper {
+/* Only pin the inner wrapper to the viewport when leftover was already
+ * distributed into column widths. Unconditionally forcing 100% squashes
+ * overflowing tables and ellipsizes English headers. */
+.list-data-grid--fit .el-table__inner-wrapper {
   width: 100% !important;
 }
 
@@ -59,35 +62,4 @@
 .list-data-grid--fit .el-table__body {
   width: 100% !important;
   min-width: 100% !important;
-}
-
-.list-data-grid .group-header-row {
-  background: var(--el-fill-color-light) !important;
-  cursor: default;
-  font-weight: 600;
-}
-
-.list-data-grid .group-header-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.list-data-grid .group-count {
-  color: var(--el-text-color-secondary);
-  font-weight: normal;
-  font-size: 12px;
-}
-
-/* Trailing leftover so drag-narrowed columns do not re-stretch. No handle. */
-.list-data-grid th.list-col-spacer,
-.list-data-grid td.list-col-spacer {
-  padding: 0;
-  border-left: none;
-  background: transparent;
-}
-
-.list-data-grid th.list-col-spacer .cell,
-.list-data-grid td.list-col-spacer .cell {
-  display: none;
 }

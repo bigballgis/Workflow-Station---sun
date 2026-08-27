@@ -3,7 +3,6 @@ package com.portal.component;
 import com.platform.common.list.ListColumnFilter;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.PageResponse;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.CompletedTaskQueryRequest;
 import com.portal.dto.TaskActionInfo;
@@ -102,15 +101,11 @@ public class TaskQueryComponent {
      * Query pending tasks for a user.
      * <p>Default (Mine): engine window page. When chrome is only pushable
      * ({@code taskName} + createTime/dueDate/priority/name sort), criteria are pushed to the engine.
-     * Non-pushable filters / grouping full-scan engine pages for an exact filtered total.
+     * Non-pushable filters full-scan engine pages for an exact filtered total.
      * Standing-rule proxy tasks are <strong>not</strong> merged into Mine — use
      * {@code assignmentTypes=[DELEGATED]} or the Proxy Tasks menu.</p>
      */
     public PageResponse<TaskInfo> queryTasks(TaskQueryRequest request) {
-        return queryTasks(request, null);
-    }
-
-    private PageResponse<TaskInfo> queryTasks(TaskQueryRequest request, List<PortalListGroup> groupsOut) {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
@@ -125,17 +120,16 @@ public class TaskQueryComponent {
         EngineTaskPushdown.Criteria push = EngineTaskPushdown.from(request);
 
         if (isDelegatedOnlyAssignmentFilter(assignmentTypes)) {
-            return queryDelegatedTasksOnlyPage(userId, request, page, size, groupsOut);
+            return queryDelegatedTasksOnlyPage(userId, request, page, size);
         }
 
         return EngineTaskPushdown.canFullyPush(request)
                 ? queryTasksEngineWindowMine(userId, request, assignmentTypes, page, size, push)
-                : queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size, push, groupsOut);
+                : queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size, push);
     }
 
     /**
-     * Shared-list To Do page: same Mine semantics as {@link #queryTasks}, plus column declaration
-     * and in-memory group counts when {@code groupBy} is set.
+     * Shared-list To Do page: same Mine semantics as {@link #queryTasks}, plus column declaration.
      */
     public PortalListPage<TaskInfo> queryTodoList(String userId, TodoTaskQueryRequest request) {
         long started = System.nanoTime();
@@ -150,22 +144,16 @@ public class TaskQueryComponent {
                 .filters(filters)
                 .sortBy(request.sortField())
                 .sortDirection(request.sortDirection())
-                .groupBy(request.groupBy())
                 .keyword(request.keyword())
                 .assignmentTypes(request.assignmentTypes().isEmpty() ? null : request.assignmentTypes())
                 .build();
-        List<PortalListGroup> groups = new ArrayList<>();
-        PageResponse<TaskInfo> page = queryTasks(adapted, groups);
-        if (request.groupBy() != null && !request.groupBy().isBlank()
-                && page.getTotalElements() > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty todo result");
-        }
+        PageResponse<TaskInfo> page = queryTasks(adapted);
         long total = page.getTotalElements();
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, TODO_LIST_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, TODO_LIST_KEY, request.page(), request.size(), total,
                 elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(), List.copyOf(groups),
+        return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(),
                 request.page(), request.size(), total);
     }
 
@@ -176,15 +164,12 @@ public class TaskQueryComponent {
     }
 
     private PageResponse<TaskInfo> queryDelegatedTasksOnlyPage(
-            String userId, TaskQueryRequest request, int page, int size, List<PortalListGroup> groupsOut) {
+            String userId, TaskQueryRequest request, int page, int size) {
         List<TaskInfo> allTasks = new ArrayList<>(queryDelegatedTasks(userId));
         allTasks = applyPortalPostEngineFilters(userId, allTasks);
         maybeEnrichRequestIdsForColumnFilter(allTasks, request);
         allTasks = applyFilters(allTasks, request);
         allTasks = TaskInfoListOps.applySorting(allTasks, request);
-        if (groupsOut != null && request.getGroupBy() != null && !request.getGroupBy().isBlank()) {
-            groupsOut.addAll(TaskInfoListOps.groupsOf(allTasks, request.getGroupBy()));
-        }
         List<TaskInfo> pagedTasks = TaskInfoListOps.pageOf(allTasks, page, size);
         requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
@@ -197,8 +182,7 @@ public class TaskQueryComponent {
             List<String> assignmentTypes,
             int page,
             int size,
-            EngineTaskPushdown.Criteria push,
-            List<PortalListGroup> groupsOut) {
+            EngineTaskPushdown.Criteria push) {
         SecurityContext ctx = SecurityContextHolder.getContext();
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
@@ -235,9 +219,6 @@ public class TaskQueryComponent {
                     push != null ? push.sortDirection() : null);
         }
 
-        if (groupsOut != null && request.getGroupBy() != null && !request.getGroupBy().isBlank()) {
-            groupsOut.addAll(TaskInfoListOps.groupsOf(filteredSorted, request.getGroupBy()));
-        }
         List<TaskInfo> pagedTasks = new ArrayList<>(TaskInfoListOps.pageOf(filteredSorted, page, size));
         requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
@@ -285,7 +266,6 @@ public class TaskQueryComponent {
                 + String.valueOf(request.getFilters()) + '|'
                 + String.valueOf(request.getSortBy()) + '|'
                 + String.valueOf(request.getSortDirection()) + '|'
-                + String.valueOf(request.getGroupBy()) + '|'
                 + String.valueOf(request.getKeyword()) + '|'
                 + String.valueOf(request.getPriorities()) + '|'
                 + String.valueOf(request.getProcessTypes()) + '|'
@@ -386,7 +366,7 @@ public class TaskQueryComponent {
         if (engineWindowUnreliable(engineTasks, pageTasks, size)) {
             log.info("[PERF] engine window unusable after post-filter (engine={} filtered={} size={}); fullScan",
                     engineTasks.size(), pageTasks.size(), size);
-            return queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size, push, null);
+            return queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size, push);
         }
         long __tQFilter = System.nanoTime();
         log.info("[PERF] query.window mine engine={}ms postFilter={}ms engineTasks={} total={} push={}",

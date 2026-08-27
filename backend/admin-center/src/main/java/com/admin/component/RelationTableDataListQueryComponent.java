@@ -88,7 +88,7 @@ public class RelationTableDataListQueryComponent {
         };
         List<RelationTableDataRowDTO> rows = ListQuerySupport.query(jdbcTemplate, sql, pageParams, extractor);
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
-        return new AdminListPage<>(columns, rows, List.of(), request.page(), request.size(), total);
+        return new AdminListPage<>(columns, rows, request.page(), request.size(), total);
     }
 
     /**

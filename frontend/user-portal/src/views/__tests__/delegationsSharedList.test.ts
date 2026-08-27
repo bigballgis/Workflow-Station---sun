@@ -22,17 +22,17 @@ const rulesApi = vi.mocked(queryDelegationRules)
 const auditApi = vi.mocked(queryDelegationAudit)
 
 const RULE_COLUMNS: ListColumnMeta[] = [
-  { field: 'delegateId', label: 'delegation.delegateTo', kind: 'USER', filterable: true, sortable: true, groupable: true, operators: ['eq'] },
-  { field: 'delegationType', label: 'delegation.delegationType', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [{ value: 'FULL', label: 'delegation.full' }] },
-  { field: 'status', label: 'delegation.status', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [{ value: 'ACTIVE', label: 'delegation.active' }] },
-  { field: 'startTime', label: 'delegation.startTime', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['on', 'between'] },
-  { field: 'endTime', label: 'delegation.endTime', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['on', 'between'] },
-  { field: 'reason', label: 'delegation.reason', kind: 'TEXT', filterable: true, sortable: false, groupable: false, operators: ['contains'] },
-  { field: 'createdAt', label: 'common.createdAt', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['between'] },
+  { field: 'delegateId', label: 'delegation.delegateTo', kind: 'USER', filterable: true, sortable: true, operators: ['eq'] },
+  { field: 'delegationType', label: 'delegation.delegationType', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'], options: [{ value: 'FULL', label: 'delegation.full' }] },
+  { field: 'status', label: 'delegation.status', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'], options: [{ value: 'ACTIVE', label: 'delegation.active' }] },
+  { field: 'startTime', label: 'delegation.startTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['on', 'between'] },
+  { field: 'endTime', label: 'delegation.endTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['on', 'between'] },
+  { field: 'reason', label: 'delegation.reason', kind: 'TEXT', filterable: true, sortable: false, operators: ['contains'] },
+  { field: 'createdAt', label: 'common.createdAt', kind: 'DATETIME', filterable: true, sortable: true, operators: ['between'] },
 ]
 
 const emptyPage = (columns: ListColumnMeta[]) => ({
-  data: { columns, content: [], totalElements: 0, page: 0, size: 20, groups: [] },
+  data: { columns, content: [], totalElements: 0, page: 0, size: 20 },
 })
 
 let wrapper: VueWrapper | null = null

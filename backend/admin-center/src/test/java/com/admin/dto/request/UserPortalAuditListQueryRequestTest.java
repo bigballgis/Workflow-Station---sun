@@ -43,6 +43,6 @@ class UserPortalAuditListQueryRequestTest {
             int page, int size, String sortField, String sortDirection) {
         return new UserPortalAuditListQueryRequest(
                 page, size, null, null, null, null, null, null,
-                null, sortField, sortDirection, null);
+                null, sortField, sortDirection);
     }
 }

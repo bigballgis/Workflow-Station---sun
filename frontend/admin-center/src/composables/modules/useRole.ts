@@ -15,13 +15,6 @@ import type { RoleListTab } from '@/utils/roleList'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const ACTIONS_COL_WIDTH = 220
-const ROLE_COL_WIDTHS: Record<string, number> = {
-  name: 160,
-  code: 140,
-  type: 130,
-  status: 100,
-  isSystem: 110,
-}
 
 export function useRole() {
   const { t } = useI18n()
@@ -42,7 +35,6 @@ export function useRole() {
   const grid = useAdminListGrid<Role>({
     storageKey: 'admin-list-layout:roles',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => ROLE_COL_WIDTHS[field] ?? 120,
   })
 
   const fetchRoles = async () => {

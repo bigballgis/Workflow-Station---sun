@@ -59,7 +59,7 @@ class AdminAuditListQuerySqlTest {
 
     @Test
     void countAndPageShareTheAuditTable() {
-        component.query(request(null, null, List.of()));
+        component.query(request(null, List.of()));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM admin_audit_logs al");
         assertThat(pageSql()).contains("LIMIT ?").contains("OFFSET ?");
@@ -67,32 +67,23 @@ class AdminAuditListQuerySqlTest {
 
     @Test
     void toolbarActionIsInsideTheSharedPredicate() {
-        component.query(request("CREATE", null, List.of()));
+        component.query(request("CREATE", List.of()));
 
         assertThat(preparedSql.get(0)).contains("al.action = ?");
         assertThat(pageSql()).contains("al.action = ?");
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(request(null, "action", List.of()));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
-        assertThatThrownBy(() -> component.query(request(null, null,
+        assertThatThrownBy(() -> component.query(request(null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    private static AdminAuditListQueryRequest request(String action, String groupBy,
+    private static AdminAuditListQueryRequest request(String action,
                                                       List<ListColumnFilter> filters) {
         return new AdminAuditListQueryRequest(
-                0, 20, action, null, null, null, null, null, null, null, filters, null, null, groupBy);
+                0, 20, action, null, null, null, null, null, null, null, filters, null, null);
     }
 
     private String pageSql() {

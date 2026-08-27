@@ -63,7 +63,7 @@ class UserPortalAuditListQuerySqlTest {
 
     @Test
     void countAndPageShareTheChangeHistoryTable() {
-        component.query(request(null, null, List.of()));
+        component.query(request(null, List.of()));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM up_change_history ch");
         assertThat(preparedSql.get(0)).contains("LEFT JOIN up_process_instance pi");
@@ -73,32 +73,23 @@ class UserPortalAuditListQuerySqlTest {
 
     @Test
     void toolbarChangeTypeIsInsideTheSharedPredicate() {
-        component.query(request("FIELD_UPDATE", null, List.of()));
+        component.query(request("FIELD_UPDATE", List.of()));
 
         assertThat(preparedSql.get(0)).contains("ch.change_type = ?");
         assertThat(pageSql()).contains("ch.change_type = ?");
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(request(null, "changeType", List.of()));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
-        assertThatThrownBy(() -> component.query(request(null, null,
+        assertThatThrownBy(() -> component.query(request(null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    private static UserPortalAuditListQueryRequest request(String changeType, String groupBy,
+    private static UserPortalAuditListQueryRequest request(String changeType,
                                                            List<ListColumnFilter> filters) {
         return new UserPortalAuditListQueryRequest(
-                0, 20, null, null, changeType, null, null, null, filters, null, null, groupBy);
+                0, 20, null, null, changeType, null, null, null, filters, null, null);
     }
 
     private String pageSql() {

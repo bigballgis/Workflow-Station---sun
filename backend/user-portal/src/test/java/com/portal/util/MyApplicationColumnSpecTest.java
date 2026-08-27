@@ -11,19 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MyApplicationColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(MyApplicationColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("currentAssignee", "status");
-        assertThat(column("businessKey").groupable()).isFalse();
-        assertThat(column("startTime").groupable()).isFalse();
-        assertThat(column("requestId").filterable()).isTrue();
-        assertThat(column("requestId").sortable()).isTrue();
-        assertThat(column("requestId").groupable()).isFalse();
-    }
-
-    @Test
     void requestIdCompilesToPersistedJsonText() {
         List<Object> params = new ArrayList<>();
         String where = MyApplicationColumnSpec.sql().whereClause(
