@@ -16,6 +16,7 @@ export interface PortalListPagePayload<T> {
 export function usePortalListGrid<T extends object>(opts: {
   storageKey: string
   extraWidth?: MaybeRefOrGetter<number>
+  fillViewport?: MaybeRefOrGetter<boolean>
 }) {
   const { t } = useI18n()
   const columns = ref<ListColumnMeta[]>([])
@@ -53,6 +54,7 @@ export function usePortalListGrid<T extends object>(opts: {
       storageKey: opts.storageKey,
       fields: layoutFields,
       extraWidth: opts.extraWidth,
+      fillViewport: opts.fillViewport,
       labelOf: (field) => displayColumns.value.find((col) => col.field === field)?.label ?? field,
       kindOf: (field) => displayColumns.value.find((col) => col.field === field)?.kind,
     })

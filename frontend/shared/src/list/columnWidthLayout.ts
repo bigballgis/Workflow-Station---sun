@@ -1,25 +1,26 @@
 import type { ListColumnKind } from './columnMeta'
 import { clampColumnWidth } from './columnResizeCursor'
 
-/** Bump when the default-width formula changes so stale session bases cannot ellipsis headers. */
-export const LIST_COLUMN_LAYOUT_STORE_VERSION = 2
+/** Bump when the default-width formula changes so stale session bases reset. */
+export const LIST_COLUMN_LAYOUT_STORE_VERSION = 4
 
 /** Matches `.list-col-caret` (el-icon box is ~1em plus padding, not the 12px font-size). */
 export const HEADER_CARET_PX = 16
 export const HEADER_TRIGGER_GAP_PX = 4
-export const HEADER_HANDLE_GUTTER_PX = 12
+/** `.list-col-header` padding-right — keeps the caret just left of the 8px drag hit target. */
+export const HEADER_HANDLE_GUTTER_PX = 4
 
 /**
  * Horizontal padding on `.list-data-grid .cell` (and MTV). Keep the SCSS
  * `padding-left/right` in listDataGrid.scss equal to this number.
  */
-export const CELL_PADDING_X_PX = 8
+export const CELL_PADDING_X_PX = 6
 
 /**
  * Slack for tooltip/dropdown wrappers, subpixel rounding, and Inter vs the
  * fallback face. Must keep `.list-col-label` from ellipsizing English titles.
  */
-export const HEADER_FIT_PAD_PX = 24
+export const HEADER_FIT_PAD_PX = 6
 
 export const HEADER_CHROME_PX =
   HEADER_CARET_PX
@@ -30,15 +31,6 @@ export const HEADER_CHROME_PX =
 
 /** Short titles (Status / 状态) still need room for the caret and handle. */
 export const HEADER_FIT_MIN = 112
-
-/**
- * Portal/Admin table headers are 11px / 600 / uppercase / 0.08em tracking
- * (`ws-theme.scss` thead `.cell`). Measuring 14px mixed-case under-fits
- * "Process Title" / "Current Assignee".
- */
-export const HEADER_LABEL_FONT_SIZE_PX = 11
-export const HEADER_LABEL_FONT_WEIGHT = 600
-export const HEADER_LABEL_LETTER_SPACING_EM = 0.08
 
 /**
  * Typical cell content, not the current page's longest value.
@@ -52,6 +44,15 @@ export const KIND_CONTENT_FLOOR: Record<ListColumnKind, number> = {
   BOOLEAN: HEADER_FIT_MIN,
   NUMBER: HEADER_FIT_MIN,
 }
+
+/**
+ * Portal/Admin table headers are 11px / 600 / uppercase / 0.08em tracking
+ * (`ws-theme.scss` thead `.cell`). Measuring 14px mixed-case under-fits
+ * "Process Title" / "Current Assignee".
+ */
+export const HEADER_LABEL_FONT_SIZE_PX = 11
+export const HEADER_LABEL_FONT_WEIGHT = 600
+export const HEADER_LABEL_LETTER_SPACING_EM = 0.08
 
 const HEADER_FONT =
   `${HEADER_LABEL_FONT_WEIGHT} ${HEADER_LABEL_FONT_SIZE_PX}px Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif`
@@ -137,7 +138,7 @@ export function measureHeaderLabelPx(label: string): number {
   return width
 }
 
-/** Default base width: max(header text + chrome, kind content floor), clamped. */
+/** Default base width: max(header text + compact chrome, kind content floor), clamped. */
 export function headerFitColumnWidth(label: string, kind?: ListColumnKind): number {
   const header = Math.max(
     HEADER_FIT_MIN,

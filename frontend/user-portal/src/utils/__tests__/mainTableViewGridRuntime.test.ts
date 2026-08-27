@@ -10,7 +10,7 @@ import {
   setColumnWidth,
   toListColumnMeta,
 } from '../mainTableViewGridRuntime'
-import { KIND_CONTENT_FLOOR, headerFitColumnWidth } from '@platform-shared/list/columnWidthLayout'
+import { KIND_CONTENT_FLOOR, LIST_COLUMN_LAYOUT_STORE_VERSION } from '@platform-shared/list/columnWidthLayout'
 
 describe('mainTableViewGridRuntime', () => {
   it('moveColumn swaps order', () => {
@@ -40,7 +40,7 @@ describe('mainTableViewGridRuntime', () => {
     ])
   })
 
-  it('uses the kind content floor when the header is shorter than typical values', () => {
+  it('uses the kind content floor when the header is shorter than typical cell values', () => {
     const state = createDefaultGridRuntime()
     expect(
       columnWidth(
@@ -75,7 +75,7 @@ describe('mainTableViewGridRuntime', () => {
     ).toBe(220)
   })
 
-  it('does not let a remembered width crop a Views header', () => {
+  it('keeps a remembered width even when it is narrower than the Views header', () => {
     const state = createDefaultGridRuntime()
     state.columnWidths.assignee = 60
     const col = {
@@ -86,7 +86,7 @@ describe('mainTableViewGridRuntime', () => {
       sortable: true,
       operators: ['eq'],
     }
-    expect(columnWidth(col, state)).toBe(headerFitColumnWidth('Current Assignee', 'USER'))
+    expect(columnWidth(col, state)).toBe(60)
   })
 
   it('does not raise a designer columnWidth that is narrower than the header', () => {
@@ -141,12 +141,12 @@ describe('mainTableViewGridRuntime', () => {
     )
     migrateMtvWidthsToListLayout(11)
     expect(JSON.parse(sessionStorage.getItem('portal-list-layout:mtv:11') ?? '{}')).toEqual({
-      v: 2,
+      v: LIST_COLUMN_LAYOUT_STORE_VERSION,
       columnWidths: { name: 240 },
     })
     sessionStorage.setItem(
       'portal-list-layout:mtv:11',
-      JSON.stringify({ v: 2, columnWidths: { name: 180 } }),
+      JSON.stringify({ v: LIST_COLUMN_LAYOUT_STORE_VERSION, columnWidths: { name: 180 } }),
     )
     sessionStorage.setItem(
       'portal-mtv-layout:11',

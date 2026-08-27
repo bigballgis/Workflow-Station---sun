@@ -76,5 +76,34 @@ describe('Delegations shared list', () => {
     const last = rulesApi.mock.calls[rulesApi.mock.calls.length - 1][0]
     expect(last.page).toBe(0)
     expect(last.filters).toEqual([{ field: 'delegateId', operator: 'eq', value: 'u1' }])
+  }, 15000)
+
+  it('gives Action a fixed width and paints suspend/delete buttons on ACTIVE rows', async () => {
+    rulesApi.mockResolvedValue({
+      data: {
+        columns: RULE_COLUMNS,
+        content: [{
+          id: 41,
+          delegatorId: 'u-me',
+          delegateId: 'u-other',
+          delegationType: 'FULL',
+          status: 'ACTIVE',
+          createdAt: '2026-08-01T00:00:00Z',
+          updatedAt: '2026-08-01T00:00:00Z',
+        }],
+        totalElements: 1,
+        page: 0,
+        size: 20,
+      },
+    } as never)
+    const w = await mountPage()
+    const actionCol = w.findAllComponents({ name: 'ElTableColumn' }).find(
+      (col) => col.props('label') === 'common.actions',
+    )
+    expect(actionCol).toBeTruthy()
+    expect(Number(actionCol!.props('width'))).toBe(200)
+    expect(w.text()).toContain('delegation.suspend')
+    expect(w.text()).toContain('common.delete')
+    expect(w.findAll('.row-actions .el-button').length).toBeGreaterThanOrEqual(2)
   })
 })

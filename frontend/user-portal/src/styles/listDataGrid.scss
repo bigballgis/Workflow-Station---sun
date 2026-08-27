@@ -66,8 +66,8 @@
  * Element Plus' default 12px so leftover slack does not read as empty gutters. */
 .list-data-grid.el-table .el-table__cell .cell,
 .mtv-data-grid.el-table .el-table__cell .cell {
-  padding-left: 8px;
-  padding-right: 8px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 /* When leftover was already distributed into column widths, stretch the
@@ -83,9 +83,11 @@
 }
 
 /* Bound the page to the window so the grid has a real height (required for
- * Element Plus to freeze the header and park the h-bar at the pane bottom). */
-.portal-content:has(.list-data-grid-scroll),
-.portal-content:has(.mtv-data-grid-scroll),
+ * Element Plus to freeze the header and park the h-bar at the pane bottom).
+ * Mixed card+list pages opt out with .page-stack so .portal-content keeps
+ * overflow-y: auto. */
+.portal-content:has(.list-data-grid-scroll):not(:has(.page-stack)),
+.portal-content:has(.mtv-data-grid-scroll):not(:has(.page-stack)),
 .admin-main:has(.list-data-grid-scroll) {
   display: flex;
   flex-direction: column;
@@ -94,8 +96,8 @@
 
 .page-container:has(.list-data-grid-scroll),
 .page-container:has(.mtv-data-grid-scroll),
-.portal-content > *:has(.list-data-grid-scroll),
-.portal-content > *:has(.mtv-data-grid-scroll) {
+.portal-content > *:has(.list-data-grid-scroll):not(.page-stack),
+.portal-content > *:has(.mtv-data-grid-scroll):not(.page-stack) {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -105,7 +107,7 @@
 
 .page-container:has(.list-data-grid-scroll) > .page-header,
 .page-container:has(.list-data-grid-scroll) > .search-card,
-.portal-content > *:has(.list-data-grid-scroll) > .page-header {
+.portal-content > *:has(.list-data-grid-scroll):not(.page-stack) > .page-header {
   flex-shrink: 0;
 }
 
@@ -191,4 +193,40 @@
 
 .list-pagination {
   flex-shrink: 0;
+}
+
+/* Action cells must not inherit el-table's overflow:hidden — that is how
+ * Suspend/Delete (and Approve/Cancel) disappear when the column is tight. */
+.list-data-grid .el-table__cell:has(.row-actions) .cell,
+.list-data-grid .el-table-fixed-column--right .cell {
+  overflow: visible !important;
+}
+
+/* Stacked pages: the page owns vertical scroll. Nested grids size to content
+ * instead of filling the leftover viewport (which would clip the cards above). */
+.page-stack .list-data-grid-scroll {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.page-stack .list-data-grid.el-table,
+.page-stack .list-data-grid .el-table__inner-wrapper,
+.page-stack .list-data-grid .el-table__body-wrapper,
+.page-stack .list-data-grid .el-scrollbar__wrap,
+.page-stack .list-data-grid .el-scrollbar__view {
+  height: auto !important;
+  max-height: none !important;
+}
+
+.page-stack .portal-card:has(.list-data-grid-scroll),
+.page-stack .permission-shared-list,
+.page-stack .list-data-grid-host,
+.page-stack .el-tabs:has(.list-data-grid-scroll),
+.page-stack .el-tabs:has(.list-data-grid-scroll) > .el-tabs__content,
+.page-stack .el-tabs:has(.list-data-grid-scroll) .el-tab-pane,
+.page-stack .el-tabs:has(.list-data-grid-scroll) .el-tab-pane > * {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
 }

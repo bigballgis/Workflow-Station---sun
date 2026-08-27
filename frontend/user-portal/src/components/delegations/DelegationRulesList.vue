@@ -81,12 +81,12 @@
           </el-table-column>
           <el-table-column
             :label="t('common.actions')"
-            min-width="200"
+            :width="ACTIONS_COL_WIDTH"
+            :min-width="ACTIONS_COL_WIDTH"
             fixed="right"
           >
             <template #default="{ row }">
-              <template >
-                <div class="row-actions">
+              <div class="row-actions">
                   <el-button
                     v-if="row.status === 'ACTIVE'"
                     size="small"
@@ -108,8 +108,7 @@
                   >
                     {{ t('common.delete') }}
                   </el-button>
-                </div>
-              </template>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -154,6 +153,8 @@ import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 import { formatDate } from '@/utils/dateFormat'
 
 
+const ACTIONS_COL_WIDTH = 200
+
 const { t } = useI18n()
 const loading = ref(true)
 
@@ -185,7 +186,7 @@ const {
   clearSort,
 } = usePortalListGrid<DelegationRule>({
   storageKey: 'portal-list-layout:delegation-rules',
-  extraWidth: 200,
+  extraWidth: ACTIONS_COL_WIDTH,
 })
 
 function getStatusType(status: string): 'success' | 'info' | 'warning' {

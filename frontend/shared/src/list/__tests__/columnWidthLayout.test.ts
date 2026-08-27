@@ -30,7 +30,10 @@ describe('headerFitColumnWidth', () => {
       .toBeGreaterThan(KIND_CONTENT_FLOOR.USER)
   })
 
-  it('reserves chrome for caret, handle gutter, and cell padding', () => {
+  it('keeps chrome compact so the caret sits next to the drag line', () => {
+    expect(HEADER_HANDLE_GUTTER_PX).toBe(4)
+    expect(CELL_PADDING_X_PX).toBe(6)
+    expect(HEADER_FIT_PAD_PX).toBe(6)
     expect(HEADER_CHROME_PX).toBe(
       HEADER_CARET_PX
         + HEADER_TRIGGER_GAP_PX

@@ -91,6 +91,12 @@ export function useListColumnLayout(opts: {
   defaultWidthOf?: (field: string) => number
   labelOf?: (field: string) => string
   kindOf?: (field: string) => ListColumnKind | undefined
+  /**
+   * Full-page lists freeze the header inside the leftover viewport.
+   * Mixed card+list pages (`.page-stack`) must pass false so the table
+   * sizes to its rows and the window keeps the vertical scrollbar.
+   */
+  fillViewport?: MaybeRefOrGetter<boolean>
 }) {
   const columnWidths = reactive<Record<string, number>>({})
   const dragPreview = reactive<{ field: string | null; displayWidth: number }>({
@@ -99,9 +105,10 @@ export function useListColumnLayout(opts: {
   })
   const gridScrollRef = ref<HTMLElement | null>(null)
   const { gridViewportWidth, gridViewportHeight } = useGridViewport(gridScrollRef)
-  const gridTableHeight = computed(() =>
-    gridViewportHeight.value > 0 ? gridViewportHeight.value : undefined,
-  )
+  const gridTableHeight = computed(() => {
+    if (toValue(opts.fillViewport) === false) return undefined
+    return gridViewportHeight.value > 0 ? gridViewportHeight.value : undefined
+  })
   const measureEpoch = ref(0)
 
   onMounted(() => {
@@ -120,10 +127,9 @@ export function useListColumnLayout(opts: {
   }
 
   function baseWidthOf(field: string): number {
-    const auto = defaultBaseOf(field)
     const remembered = columnWidths[field]
-    if (remembered == null) return clampColumnWidth(auto)
-    return clampColumnWidth(Math.max(remembered, auto))
+    if (remembered == null) return clampColumnWidth(defaultBaseOf(field))
+    return clampColumnWidth(remembered)
   }
 
   function extra(): number {
@@ -150,7 +156,7 @@ export function useListColumnLayout(opts: {
     const displayWidth = dragPreview.displayWidth
     dragPreview.field = null
     if (index < 0) return
-    columnWidths[field] = clampColumnWidth(Math.max(displayWidth, defaultBaseOf(field)))
+    columnWidths[field] = clampColumnWidth(displayWidth)
   }
 
   function persistWidths() {

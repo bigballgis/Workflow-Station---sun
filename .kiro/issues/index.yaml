@@ -2731,3 +2731,19 @@
     验证：ListFilterSqlTest / MyApplicationColumnSpecTest / AuditApplicationColumnSpecTest
     / MyApplicationQuerySqlTest / ProcessAssigneeSnapshotTest。
 
+- id: "1564"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Permissions lost page scrollbar; Delegations Action cells had no visible buttons"
+  file: "frontend/user-portal/src/styles/listDataGrid.scss"
+  note: |
+    根因：a2a5c6055 用 :has(.list-data-grid-scroll) 把整个 .portal-content 锁成
+    overflow:hidden，Permissions 这种卡片+列表混合页被误伤。e3c9460e7 删 Group 时把
+    Action 的 v-if 改成空 <template >，按钮进 DOM 但不画在格子里；Action 又只有
+    min-width，table-layout:fixed 会挤成 0。
+    修复：混合页加 .page-stack 退出视口冻结；Action 写死 width；去掉空 template。
+    验证：delegationsSharedList / PermissionRequestSharedList / listViewportStack；
+    verify-shared-list-column-layout Permissions 可滚、Delegations 按钮 69×24。
+

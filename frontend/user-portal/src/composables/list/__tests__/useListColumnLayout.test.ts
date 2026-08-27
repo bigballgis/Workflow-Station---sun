@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { useListColumnLayout } from '@platform-shared/list/useListColumnLayout'
-import { headerFitColumnWidth, KIND_CONTENT_FLOOR } from '@platform-shared/list/columnWidthLayout'
+import { KIND_CONTENT_FLOOR, LIST_COLUMN_LAYOUT_STORE_VERSION } from '@platform-shared/list/columnWidthLayout'
 
 function mountLayout(
   storageKey: string,
@@ -71,6 +71,16 @@ describe('useListColumnLayout', () => {
     other.unmount()
   })
 
+  it('drops a previous layout store version so compact defaults apply', () => {
+    sessionStorage.setItem(
+      'portal-list-layout:old-version',
+      JSON.stringify({ v: 2, columnWidths: { name: 400 } }),
+    )
+    const w = mountLayout('portal-list-layout:old-version', ['name'])
+    expect(w.vm.widthOf('name')).toBe(120)
+    w.unmount()
+  })
+
   it('drops a corrupt session entry instead of crashing the list', async () => {
     sessionStorage.setItem('portal-list-layout:bad', '{not-json')
     const w = mountLayout('portal-list-layout:bad', ['name'])
@@ -92,6 +102,23 @@ describe('useListColumnLayout', () => {
     expect(w.vm.gridTableHeight).toBeUndefined()
     await setViewport(w, 800, 420)
     expect(w.vm.gridTableHeight).toBe(420)
+    w.unmount()
+  })
+
+  it('does not freeze table height when fillViewport is false', async () => {
+    const Host = defineComponent({
+      setup() {
+        return useListColumnLayout({
+          storageKey: 'portal-list-layout:stack',
+          fields: ['name'],
+          fillViewport: false,
+        })
+      },
+      template: '<div />',
+    })
+    const w = mount(Host)
+    await setViewport(w, 800, 420)
+    expect(w.vm.gridTableHeight).toBeUndefined()
     w.unmount()
   })
 
@@ -182,25 +209,38 @@ describe('useListColumnLayout', () => {
     w.unmount()
   })
 
-  it('does not let a remembered width crop the header', () => {
+  it('keeps a remembered width even when it is narrower than the header', () => {
     sessionStorage.setItem(
-      'portal-list-layout:stale',
-      JSON.stringify({ v: 2, columnWidths: { name: 60 } }),
+      'portal-list-layout:narrow',
+      JSON.stringify({ v: LIST_COLUMN_LAYOUT_STORE_VERSION, columnWidths: { name: 60 } }),
     )
     const Host = defineComponent({
       setup() {
         return useListColumnLayout({
-          storageKey: 'portal-list-layout:stale',
+          storageKey: 'portal-list-layout:narrow',
           fields: ['name'],
           labelOf: () => 'Current Assignee',
-          kindOf: () => 'USER',
         })
       },
       template: '<div />',
     })
     const w = mount(Host)
-    expect(w.vm.widthOf('name')).toBeGreaterThan(KIND_CONTENT_FLOOR.USER)
-    expect(w.vm.widthOf('name')).toBeGreaterThanOrEqual(headerFitColumnWidth('Current Assignee', 'USER'))
+    expect(w.vm.widthOf('name')).toBe(60)
     w.unmount()
+  })
+
+  it('persists a drag that is narrower than the default header-fit', async () => {
+    const w = mountLayout('portal-list-layout:drag-narrow', ['name'], {
+      defaultWidthOf: () => 120,
+    })
+    w.vm.setWidth('name', 80)
+    w.vm.persistWidths()
+    w.unmount()
+
+    const restored = mountLayout('portal-list-layout:drag-narrow', ['name'], {
+      defaultWidthOf: () => 120,
+    })
+    expect(restored.vm.widthOf('name')).toBe(80)
+    restored.unmount()
   })
 })

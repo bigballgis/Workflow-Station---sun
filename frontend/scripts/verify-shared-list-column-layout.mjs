@@ -1,5 +1,6 @@
 /**
  * Shared list §6.6 hug (display width = base) + §6.7 Audit / member-management / Views header menus.
+ * Also gates Permissions page-scroll (mixed card+list) and Delegations Action buttons.
  * Password login only — do not use unified SSO.
  */
 import { mkdirSync } from 'node:fs'
@@ -16,7 +17,7 @@ const ADMIN_OUT = join(dirname(fileURLToPath(import.meta.url)), '../admin-center
 mkdirSync(PORTAL_OUT, { recursive: true })
 mkdirSync(ADMIN_OUT, { recursive: true })
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 let failures = 0
 
@@ -83,6 +84,64 @@ async function scrollGridX(delta) {
     )
     if (wrap) wrap.scrollLeft = dx
   }, delta)
+}
+
+async function assertPageVerticalScroll(label) {
+  const info = await page.locator('.portal-content').evaluate((el) => {
+    const cs = getComputedStyle(el)
+    const can = el.scrollHeight > el.clientHeight + 8
+    el.scrollTop = Math.min(240, Math.max(0, el.scrollHeight - el.clientHeight))
+    return {
+      overflowY: cs.overflowY,
+      stacked: el.querySelector('.page-stack') != null,
+      can,
+      scrolled: el.scrollTop,
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    }
+  })
+  check(
+    `${label}: page is marked .page-stack`,
+    info.stacked,
+    info.stacked ? 'page-stack present' : 'missing .page-stack',
+  )
+  check(
+    `${label}: portal-content overflow-y is not hidden`,
+    info.overflowY === 'auto' || info.overflowY === 'scroll',
+    `overflowY=${info.overflowY}`,
+  )
+  check(
+    `${label}: page content is taller than the pane`,
+    info.can,
+    `scrollHeight=${info.scrollHeight} clientHeight=${info.clientHeight}`,
+  )
+  check(
+    `${label}: scrolling the pane moves`,
+    info.scrolled > 0,
+    `scrollTop=${info.scrolled}`,
+  )
+}
+
+async function assertActionButtonsVisible(label, { minWidth }) {
+  const header = page.locator('.el-table__header th').filter({ hasText: /Actions/i }).last()
+  const headerBox = await header.boundingBox()
+  check(
+    `${label}: Action column width`,
+    !!headerBox && headerBox.width >= minWidth - 8,
+    headerBox ? `w=${headerBox.width.toFixed(0)}` : 'no Actions header',
+  )
+  const buttons = page.locator('.row-actions .el-button').locator('visible=true')
+  const n = await buttons.count()
+  if (n === 0) {
+    check(`${label}: Action buttons are visible`, false, 'no visible .row-actions .el-button')
+    return
+  }
+  const box = await buttons.first().boundingBox()
+  check(
+    `${label}: Action button is painted`,
+    !!box && box.width >= 8 && box.height >= 8,
+    box ? `w=${box.width.toFixed(0)} h=${box.height.toFixed(0)}` : 'no box',
+  )
 }
 
 async function assertFrozenPane(label) {
@@ -161,6 +220,28 @@ async function assertActionPinned(label) {
   )
 }
 
+async function assertCaretNearHandle(label) {
+  const header = page.locator('.list-col-header').filter({ has: page.locator('.list-col-caret') }).first()
+  const caret = header.locator('.list-col-caret')
+  const handle = header.locator('.col-resize-handle')
+  if ((await caret.count()) === 0 || (await handle.count()) === 0) {
+    check(`${label}: caret and drag handle present`, false)
+    return
+  }
+  const caretBox = await caret.boundingBox()
+  const handleBox = await handle.boundingBox()
+  if (!caretBox || !handleBox) {
+    check(`${label}: caret/handle boxes`, false)
+    return
+  }
+  const gap = handleBox.x - (caretBox.x + caretBox.width)
+  check(
+    `${label}: caret sits next to the drag line`,
+    gap >= -2 && gap <= 10,
+    `gap=${gap.toFixed(1)}px caretRight=${(caretBox.x + caretBox.width).toFixed(0)} handleLeft=${handleBox.x.toFixed(0)}`,
+  )
+}
+
 async function assertRequestIdDrag(label) {
   const header = page.locator('.list-col-header', { hasText: /Request ID/i }).first()
   const handle = header.locator('.col-resize-handle')
@@ -206,6 +287,24 @@ async function assertRequestIdDrag(label) {
   )
   await shot(PORTAL_OUT, 'shared-list-my-requests-resize-drag')
   await page.mouse.up()
+  await page.waitForTimeout(200)
+  const afterWide = await th.boundingBox()
+  const wideHandle = await handle.boundingBox()
+  if (wideHandle) {
+    await page.mouse.move(wideHandle.x + wideHandle.width / 2, wideHandle.y + wideHandle.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(wideHandle.x + wideHandle.width / 2 - 100, wideHandle.y + wideHandle.height / 2, { steps: 6 })
+    await page.mouse.up()
+    await page.waitForTimeout(200)
+  }
+  const afterNarrow = await th.boundingBox()
+  check(
+    `${label}: Request ID stays narrower after release`,
+    !!afterWide && !!afterNarrow && afterNarrow.width <= afterWide.width - 40 && afterNarrow.width < before.width,
+    afterNarrow && afterWide
+      ? `start=${before.width.toFixed(0)} wide=${afterWide.width.toFixed(0)} narrow=${afterNarrow.width.toFixed(0)}`
+      : 'no box',
+  )
 }
 
 async function assertHeaderMenu(label) {
@@ -224,7 +323,7 @@ async function assertHeaderMenu(label) {
 }
 
 try {
-  await loginViaPortalPassword(page)
+  await loginViaPortalPassword(page, { buCode: 'hase-hmdc', roleCode: 'HMDC_Index_Role' })
 
   async function portalData(path) {
     try {
@@ -249,6 +348,7 @@ try {
     /Priority/i,
     /Create Time/i,
   ])
+  await assertCaretNearHandle('To Do')
   await shot(PORTAL_OUT, 'shared-list-todo-no-spacer')
 
   await page.goto(`${ORIGIN}/portal/tasks/completed`, { waitUntil: 'domcontentloaded' })
@@ -265,6 +365,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 })
   await assertFrozenPane('My Requests')
   await assertHeadersFullyVisible('My Requests', [/Request ID/i, /Process Title/i, /Current Assignee/i])
+  await assertCaretNearHandle('My Requests')
   await shot(PORTAL_OUT, 'shared-list-my-requests-action')
   await assertRequestIdDrag('My Requests')
 
@@ -348,6 +449,28 @@ try {
     )
   }
   await shot(PORTAL_OUT, 'shared-list-member-management')
+
+  await page.goto(`${ORIGIN}/portal/permissions`, { waitUntil: 'domcontentloaded' })
+  await waitGrid()
+  await page.setViewportSize({ width: 1440, height: 640 })
+  await page.waitForTimeout(400)
+  await assertPageVerticalScroll('Permissions')
+  await shot(PORTAL_OUT, 'permissions-page-vertical-scroll')
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  await page.goto(`${ORIGIN}/portal/delegations`, { waitUntil: 'domcontentloaded' })
+  await waitGrid()
+  await page.setViewportSize({ width: 1100, height: 900 })
+  await page.waitForTimeout(400)
+  await assertActionButtonsVisible('Delegations', { minWidth: 200 })
+  const actionText = (await page.locator('.row-actions').first().innerText().catch(() => '')).toLowerCase()
+  check(
+    'Delegations: row actions include suspend or delete',
+    /suspend|delete|resume|暂停|删除|恢复/.test(actionText),
+    actionText || 'empty .row-actions',
+  )
+  await shot(PORTAL_OUT, 'delegations-action-buttons')
+  await page.setViewportSize({ width: 1440, height: 900 })
 
   await loginViaAdminPassword(page, { user: 'admin', pass: 'admin123' })
   await page.goto(`${ORIGIN}/admin/user/list`, { waitUntil: 'domcontentloaded' })

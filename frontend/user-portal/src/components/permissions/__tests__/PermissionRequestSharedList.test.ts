@@ -54,4 +54,23 @@ describe('PermissionRequestSharedList', () => {
     expect(api.mock.calls[0][0].scope).toBe('MY_PENDING')
     expect(wrapper!.findAllComponents({ name: 'ListColumnHeader' }).length).toBeGreaterThan(0)
   })
+
+  it('pins the Action column to a pixel width so approve/cancel buttons are not squeezed', async () => {
+    wrapper = mount(PermissionRequestSharedList, {
+      props: {
+        scope: 'APPROVALS_PENDING',
+        storageKey: 'test-perm-approve',
+        emptyText: 'empty',
+        actionMode: 'approve',
+        enabled: true,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    const actionCol = wrapper!.findAllComponents({ name: 'ElTableColumn' }).find(
+      (col) => col.props('label') === 'common.actions',
+    )
+    expect(actionCol).toBeTruthy()
+    expect(Number(actionCol!.props('width'))).toBe(180)
+  }, 15000)
 })

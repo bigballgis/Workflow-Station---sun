@@ -20,7 +20,7 @@
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
           scrollbar-always-on
-          :height="gridTableHeight || '100%'"
+          :height="gridTableHeight"
         >
           <template #empty>
             <div
@@ -96,12 +96,12 @@
           <el-table-column
             v-if="actionMode !== 'none'"
             :label="t('common.actions')"
-            :min-width="actionMode === 'approve' ? 180 : 100"
+            :width="actionColWidth"
+            :min-width="actionColWidth"
             fixed="right"
           >
             <template #default="{ row }">
-              <template >
-                <div class="row-actions">
+              <div class="row-actions">
                   <el-button
                     v-if="actionMode === 'cancel' && canCancelAsBeneficiary(row)"
                     type="danger"
@@ -109,7 +109,7 @@
                     link
                     @click="emit('cancel', row)"
                   >
-                    {{ t('permission.cancel') }}
+                    {{ t('permission.cancelRequest') }}
                   </el-button>
                   <template v-if="actionMode === 'approve'">
                     <el-button
@@ -127,8 +127,7 @@
                       {{ t('permission.reject') }}
                     </el-button>
                   </template>
-                </div>
-              </template>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -222,6 +221,11 @@ const {
 } = usePermissionFormatters(t)
 
 const actionColumns = computed(() => (props.actionMode === 'none' ? 0 : 1))
+const actionColWidth = computed(() => {
+  if (props.actionMode === 'approve') return 180
+  if (props.actionMode === 'cancel') return 100
+  return 0
+})
 
 const {
   displayColumns,
@@ -251,7 +255,8 @@ const {
   clearSort,
 } = usePortalListGrid<PermissionRequestRecord>({
   storageKey: props.storageKey,
-  extraWidth: props.actionMode === 'approve' ? 180 : props.actionMode === 'cancel' ? 100 : 0,
+  extraWidth: actionColWidth,
+  fillViewport: false,
 })
 
 const visibleColumns = computed<ListColumnMeta[]>(() => {

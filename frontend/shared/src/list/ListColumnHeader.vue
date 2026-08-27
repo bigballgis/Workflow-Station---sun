@@ -159,7 +159,7 @@ function onCommand(command: ListHeaderCommand) {
 </template>
 
 <style scoped lang="scss">
-/* Compact header metrics — same as PR #107 / DW designer-list, not an inflated cell. */
+/* Compact header metrics. padding-right matches HEADER_HANDLE_GUTTER_PX. */
 .list-col-header {
   position: static;
   display: flex;
@@ -168,7 +168,7 @@ function onCommand(command: ListHeaderCommand) {
   min-width: 0;
   min-height: 23px;
   box-sizing: border-box;
-  padding-right: 12px;
+  padding-right: 4px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
