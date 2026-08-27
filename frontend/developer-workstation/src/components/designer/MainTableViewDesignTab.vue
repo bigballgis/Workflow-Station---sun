@@ -244,6 +244,15 @@ onMounted(async () => {
               >
                 <div class="view-group-header">
                   <span class="view-group-title">{{ tableLabel(group.table) }}</span>
+                  <!-- Marks the category: this table's views open the request detail page
+                       in the portal, so they bind no detail form of their own. -->
+                  <el-tag
+                    v-if="group.table.tableType === 'MAIN'"
+                    size="small"
+                    type="info"
+                  >
+                    {{ t('table.mainTable') }}
+                  </el-tag>
                   <el-button
                     type="primary"
                     size="small"
@@ -354,13 +363,25 @@ onMounted(async () => {
 }
 .view-group-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
   padding: 6px 8px 6px 12px;
   font-size: 12px;
   font-weight: 600;
   color: var(--el-text-color-secondary);
   background: var(--el-fill-color-light);
+}
+/* Title takes the slack so the tag sits beside the name and the + button stays right-aligned,
+   which `justify-content: space-between` could not do once a third child appeared. */
+.view-group-header .view-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.view-group-header .el-tag {
+  flex-shrink: 0;
 }
 .view-menu-row {
   display: flex;

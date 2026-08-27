@@ -1,8 +1,18 @@
-export type NavView = { id: number; viewName?: string; isDefault?: boolean; tableId?: number | null; tableLabel?: string | null }
+export type NavView = {
+  id: number
+  viewName?: string
+  isDefault?: boolean
+  tableId?: number | null
+  tableLabel?: string | null
+  /** Owning table type; 'MAIN' means rows open the request detail page. */
+  tableType?: string | null
+}
 
 export type TableViewGroup = {
   tableId: number | null
   label: string
+  /** Table type of the group's views — they all share one table, so it is single-valued. */
+  tableType?: string | null
   views: NavView[]
 }
 
@@ -18,7 +28,7 @@ export function groupViewsByTable(views: NavView[]): TableViewGroup[] {
     const key = String(v.tableId ?? label)
     let g = byTable.get(key)
     if (!g) {
-      g = { tableId: v.tableId ?? null, label, views: [] }
+      g = { tableId: v.tableId ?? null, label, tableType: v.tableType ?? null, views: [] }
       byTable.set(key, g)
       groups.push(g)
     }
@@ -36,6 +46,14 @@ export function sortViewsByName(views: NavView[], locale?: string): NavView[] {
 export function pickDefaultView(views: NavView[], locale?: string): NavView | undefined {
   const sorted = sortViewsByName(views, locale)
   return sorted.find(v => v.isDefault) ?? sorted[0]
+}
+
+/**
+ * Whether a view's rows are requests. A MAIN-table view has one row per process instance, so its
+ * rows open the request detail page rather than a form designed for the view.
+ */
+export function isMainTableView(view: { tableType?: string | null } | null | undefined): boolean {
+  return String(view?.tableType ?? '').toUpperCase() === 'MAIN'
 }
 
 export function filterTableGroups(groups: TableViewGroup[], keyword: string): TableViewGroup[] {

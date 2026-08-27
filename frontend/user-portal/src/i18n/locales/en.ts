@@ -119,6 +119,7 @@ export default {
     openLookupTable: 'Open in relation table',
     downloadFile: 'Download file',
     availableViews: 'Available tables',
+    requestTableTag: 'Request',
     searchViews: 'Search tables...',
     noViews: 'No tables available',
     selectView: 'Select view',

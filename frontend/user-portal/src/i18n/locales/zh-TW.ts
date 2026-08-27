@@ -119,6 +119,7 @@ export default {
     openLookupTable: '在關聯表中查看',
     downloadFile: '下載檔案',
     availableViews: '可用表',
+    requestTableTag: '申請',
     searchViews: '搜尋表...',
     noViews: '暫無可用表',
     selectView: '選擇視圖',

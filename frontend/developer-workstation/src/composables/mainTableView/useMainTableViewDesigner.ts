@@ -72,6 +72,11 @@ const selectedCatalogFields = ref<Set<string>>(new Set())
 const selectedLookupCatalogFields = ref<Set<string>>(new Set())
 const selectedFkCatalogFields = ref<Set<string>>(new Set())
 const mainTableName = ref('')
+/**
+ * Whether this view's owning table is the MAIN table. Such views open the request detail
+ * page in the portal, so they offer no detail form to bind.
+ */
+const isMainTableView = ref(false)
 const filterDialogVisible = ref(false)
 const addColumnPopoverVisible = ref(false)
 const thenSortField = ref<string>('')
@@ -189,6 +194,7 @@ async function loadCatalog() {
     // Catalog is scoped to THIS view's owning table (not always MAIN).
     const table = tables.find(tbl => tbl.id === props.view.mainTableId)
     mainTableName.value = table?.tableDisplayName || table?.tableName || ''
+    isMainTableView.value = table?.tableType === 'MAIN'
     // Remember FK/PK metadata per field so newly-added columns render as links immediately
     // (before a save round-trip refreshes the backend-derived flags).
     fieldMetaMap.value = {}
@@ -239,10 +245,15 @@ async function loadCatalog() {
     // values onto form fields by name and never checks the table, so a mismatched pick renders a
     // blank page instead of failing. The currently saved form is always kept so opening the panel
     // cannot silently drop a pre-existing cross-table selection.
-    const detailOptions = detailFormsForTable
-      .map(f => ({ id: f.id as number, formName: f.formName }))
+    // MAIN-table views never bind a detail form — the backend rejects one — so the picker is
+    // hidden and offers nothing rather than listing choices that cannot be saved.
+    const detailOptions = isMainTableView.value
+      ? []
+      : detailFormsForTable.map(f => ({ id: f.id as number, formName: f.formName }))
     const savedDetailFormId = detailFormId.value
-    if (savedDetailFormId != null && !detailOptions.some(o => o.id === savedDetailFormId)) {
+    if (!isMainTableView.value
+        && savedDetailFormId != null
+        && !detailOptions.some(o => o.id === savedDetailFormId)) {
       const saved = allForms.find(f => f.id === savedDetailFormId)
       if (saved) detailOptions.unshift({ id: saved.id as number, formName: saved.formName })
     }
@@ -663,7 +674,9 @@ async function handleSave() {
     const res = await mainTableViewApi.update(props.functionUnitId, props.view.id, {
       viewName: viewName.value.trim() || props.view.viewName,
       restrictToInvolvedUsers: restrictToInvolvedUsers.value,
-      detailFormId: detailFormId.value,
+      // A MAIN view can still carry a detailFormId saved before the rule existed; the backend
+      // rejects it now, so clear it here instead of failing every save of an untouched view.
+      detailFormId: isMainTableView.value ? null : detailFormId.value,
       accessRules: buildAccessRulesPayload(),
       sortConfig: sortConfig.value,
       filterConfig: {
@@ -767,7 +780,7 @@ const previewRowCount = 3
     columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig, filterEditorRoot,
     enableExport, enableImport, restrictToInvolvedUsers, detailFormId, detailFormOptions, selectedBusinessUnitIds, selectedRoleIds,
     businessUnitOptions, roleOptions, accessOptionsLoading,
-    catalogFields, lookupCatalogGroups, fkCatalogGroups, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
+    catalogFields, lookupCatalogGroups, fkCatalogGroups, mainTableName, isMainTableView, filterDialogVisible, addColumnPopoverVisible, thenSortField,
     dragColIndex, dragOverIndex, isDraggingFromPanel, dragSourceField, visibleColumns, displayFilterConditions,
     sortFieldOptions, filteredCatalog, filteredLookupCatalog, filteredLookupCatalogGroups,
     filteredFkCatalog, filteredFkCatalogGroups, previewRowCount,

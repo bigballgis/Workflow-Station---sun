@@ -20,6 +20,8 @@ export interface MainTableViewSummary {
   isDefault?: boolean
   tableId?: number | null
   tableLabel?: string | null
+  /** Owning table type; 'MAIN' means a row is a request and opens the request detail page. */
+  tableType?: string | null
   enableExport?: boolean
   enableImport?: boolean
   /** DETAIL form opened when a row is clicked; null = rows are not clickable. */

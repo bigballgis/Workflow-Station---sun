@@ -5,6 +5,7 @@ import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { GridDisplayRow } from '@/utils/mainTableViewGridRuntime'
 import { useMainTableViewPage } from '@/composables/mainTableView/useMainTableViewPage'
+import { isMainTableView } from '@/composables/mainTableView/mainTableViewNav'
 import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 
 const {
@@ -97,6 +98,15 @@ const {
             :index="String(group.tableId ?? group.label)"
           >
             <span class="mtv-view-option-name">{{ group.label }}</span>
+            <!-- Signals the click behaviour, which is what differs here: these rows open the
+                 request detail page rather than a form designed for the view. -->
+            <el-tag
+              v-if="isMainTableView(group)"
+              size="small"
+              type="info"
+            >
+              {{ t('mainTableView.requestTableTag') }}
+            </el-tag>
           </el-menu-item>
         </el-menu>
         <el-empty
@@ -703,5 +713,13 @@ const {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Takes the slack so a long table name truncates instead of squeezing the tag beside it. */
+  flex: 1;
+  min-width: 0;
+}
+/* el-menu-item is flex by default; the margin keeps the tag off the truncated name. */
+.view-list-panel .el-menu-item .el-tag {
+  flex-shrink: 0;
+  margin-left: 6px;
 }
 </style>

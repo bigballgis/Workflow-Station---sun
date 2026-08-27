@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.developer.entity.FunctionUnit;
@@ -19,6 +20,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -101,6 +103,56 @@ class MainTableViewPortabilityTest {
                 .isInstanceOf(DeveloperBusinessException.class)
                 .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
                 .isEqualTo(MainTableViewAccessRulesValidator.IMPORT_UNRESOLVED_CODE);
+    }
+
+    /**
+     * Packages exported before MAIN views lost their detail form still name one. Dropping it keeps
+     * the invariant the service enforces; doing so with a warning rather than an exception keeps a
+     * legacy package — and the version rollback that replays it — importable.
+     */
+    @Test
+    void import_dropsDetailFormOnAMainTableViewWithoutFailing() {
+        FunctionUnit fu = FunctionUnit.builder().id(99L).build();
+        Map<String, Object> viewPayload = new LinkedHashMap<>();
+        viewPayload.put("mainTableName", "HMDC_Case");
+        viewPayload.put("viewName", "HMDC Case");
+        viewPayload.put("isDefault", true);
+        viewPayload.put("status", "PUBLISHED");
+        viewPayload.put("fields", List.of());
+        viewPayload.put("detailFormName", "Case Detail");
+
+        when(jdbcTemplate.queryForList(
+                anyString(), eq(String.class), eq(20L))).thenReturn(List.of("MAIN"));
+
+        portability.importAll(List.of(viewPayload), fu, Map.of("HMDC_Case", 20L),
+                Map.of("Case Detail", 700L));
+
+        ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
+        verify(mainTableViewConfigRepository).save(captor.capture());
+        assertThat(captor.getValue().getDetailFormId()).isNull();
+    }
+
+    /** SUB views are where a detail form belongs, so import must still resolve it by name. */
+    @Test
+    void import_keepsDetailFormOnASubTableView() {
+        FunctionUnit fu = FunctionUnit.builder().id(99L).build();
+        Map<String, Object> viewPayload = new LinkedHashMap<>();
+        viewPayload.put("mainTableName", "HMDC_Stage");
+        viewPayload.put("viewName", "Stages");
+        viewPayload.put("isDefault", true);
+        viewPayload.put("status", "PUBLISHED");
+        viewPayload.put("fields", List.of());
+        viewPayload.put("detailFormName", "Stage Detail");
+
+        when(jdbcTemplate.queryForList(
+                anyString(), eq(String.class), eq(30L))).thenReturn(List.of("SUB"));
+
+        portability.importAll(List.of(viewPayload), fu, Map.of("HMDC_Stage", 30L),
+                Map.of("Stage Detail", 800L));
+
+        ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
+        verify(mainTableViewConfigRepository).save(captor.capture());
+        assertThat(captor.getValue().getDetailFormId()).isEqualTo(800L);
     }
 
     @Test

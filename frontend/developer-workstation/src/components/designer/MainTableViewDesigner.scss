@@ -457,6 +457,14 @@
   gap: 8px;
 }
 
+/* Stands in for the detail-form picker on MAIN-table views; matches .access-hint. */
+.detail-form-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--el-text-color-secondary);
+}
+
 .access-control-section {
   .access-hint {
     margin: 0 0 10px;

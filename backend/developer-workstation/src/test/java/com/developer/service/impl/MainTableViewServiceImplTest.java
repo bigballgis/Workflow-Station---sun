@@ -225,6 +225,99 @@ class MainTableViewServiceImplTest {
         assertThat(view.getStatus()).isEqualTo(MainTableViewStatus.PUBLISHED);
     }
 
+    /**
+     * A MAIN-table row is a request, so the portal opens the request detail page for it and a
+     * bound form would never be reached. Refused outright rather than nulled behind the caller's
+     * back: the designer already hides the picker, so a value arriving here means a stale client
+     * or a direct API call, and silently dropping it would leave them believing it took.
+     */
+    @Test
+    void updateViewDetailForm_rejectsADetailFormOnAMainTableView() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig view = MainTableViewConfig.builder()
+                .id(5L)
+                .functionUnit(fu)
+                .mainTableId(10L)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(5L)).thenReturn(Optional.of(view));
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq(10L)))
+                .thenReturn(List.of("MAIN"));
+
+        assertThatThrownBy(() -> service.updateViewDetailForm(1L, 5L, 99L))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .hasMessageContaining("cannot bind a detail form");
+
+        verify(viewConfigRepository, never()).save(any(MainTableViewConfig.class));
+    }
+
+    /** Clearing stays legal on a MAIN view — that is how a legacy binding is removed. */
+    @Test
+    void updateViewDetailForm_allowsNullOnAMainTableView() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig view = MainTableViewConfig.builder()
+                .id(5L)
+                .functionUnit(fu)
+                .mainTableId(10L)
+                .detailFormId(99L)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(5L)).thenReturn(Optional.of(view));
+        when(viewConfigRepository.save(any(MainTableViewConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateViewDetailForm(1L, 5L, null);
+
+        assertThat(view.getDetailFormId()).isNull();
+    }
+
+    /** SUB views are the ones that legitimately bind a form; they must be untouched. */
+    @Test
+    void updateViewDetailForm_stillAcceptsAFormOnASubTableView() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig view = MainTableViewConfig.builder()
+                .id(5L)
+                .functionUnit(fu)
+                .mainTableId(20L)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(5L)).thenReturn(Optional.of(view));
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq(20L)))
+                .thenReturn(List.of("SUB"));
+        when(viewConfigRepository.save(any(MainTableViewConfig.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateViewDetailForm(1L, 5L, 99L);
+
+        assertThat(view.getDetailFormId()).isEqualTo(99L);
+    }
+
+    /** The whole-design save path carries detailFormId too, so it needs the same guard. */
+    @Test
+    void updateView_rejectsADetailFormOnAMainTableView() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        MainTableViewConfig view = MainTableViewConfig.builder()
+                .id(5L)
+                .functionUnit(fu)
+                .mainTableId(10L)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        when(viewConfigRepository.findByIdWithFields(5L)).thenReturn(Optional.of(view));
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), eq(10L)))
+                .thenReturn(List.of("MAIN"));
+
+        UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                "Any name", null, 99L, null, null, null, null);
+
+        assertThatThrownBy(() -> service.updateView(1L, 5L, request))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .hasMessageContaining("cannot bind a detail form");
+
+        verify(viewConfigRepository, never()).save(any(MainTableViewConfig.class));
+    }
+
     @Test
     void publishViewsForFunctionUnit_setsPublishedStatus() {
         FunctionUnit fu = FunctionUnit.builder().id(1L).build();
@@ -289,6 +382,37 @@ class MainTableViewServiceImplTest {
         when(viewConfigRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
 
         service.cloneViewsForFunctionUnit(1L, targetFu, Map.of(), Map.of());
+
+        assertThat(captor.getValue().getDetailFormId()).isNull();
+    }
+
+    /**
+     * Cloning must not recreate a binding the service would now reject: a legacy MAIN view can
+     * still carry a detailFormId, and carrying it into the clone would reintroduce the very data
+     * the cleanup removes.
+     */
+    @Test
+    void cloneViewsForFunctionUnit_dropsDetailFormIdForAMainTableView() {
+        FunctionUnit sourceFu = FunctionUnit.builder().id(1L).build();
+        FunctionUnit targetFu = FunctionUnit.builder().id(2L).build();
+        MainTableViewConfig source = MainTableViewConfig.builder()
+                .id(12L)
+                .functionUnit(sourceFu)
+                .mainTableId(100L)
+                .viewName("Legacy Main View")
+                .isDefault(true)
+                .detailFormId(500L)
+                .status(MainTableViewStatus.PUBLISHED)
+                .viewFields(new ArrayList<>())
+                .build();
+        TableDefinition clonedMain = TableDefinition.builder().id(200L).tableType(TableType.MAIN).build();
+        when(viewConfigRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of(source));
+        when(jdbcTemplate.queryForList(anyString(), eq(12L))).thenReturn(List.of());
+        ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
+        when(viewConfigRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.cloneViewsForFunctionUnit(
+                1L, targetFu, Map.of(100L, clonedMain), Map.of(500L, 900L));
 
         assertThat(captor.getValue().getDetailFormId()).isNull();
     }

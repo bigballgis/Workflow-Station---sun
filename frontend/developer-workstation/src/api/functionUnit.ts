@@ -28,6 +28,11 @@ export const functionUnitAxios = axios.create({
 })
 
 functionUnitAxios.interceptors.request.use(config => {
+  // Tell the backend which language this UI speaks. Without it its locale resolver falls back to
+  // the browser's own Accept-Language, so a Chinese browser got Chinese server strings (deploy
+  // step labels, error text) inside this English-only designer.
+  config.headers['Accept-Language'] = i18n.global.locale.value
+
   // Add X-User-Id request header for backend permission check
   const user = getUser()
   if (user && user.userId) {

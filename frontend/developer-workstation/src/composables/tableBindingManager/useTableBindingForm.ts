@@ -7,6 +7,11 @@ interface UseTableBindingFormOptions {
   getTables: () => TableDefinition[]
   bindings: Ref<TableBinding[]>
   restrictPrimarySubOnly: ComputedRef<boolean>
+  /**
+   * DETAIL forms render one row of a sub-table, so their primary table is a SUB table rather than
+   * the MAIN one — the MAIN table's rows open the request detail page instead.
+   */
+  primaryTableIsSubTable?: ComputedRef<boolean>
   tableTypeLabel: (type: string) => string
   t: (key: string, params?: Record<string, unknown>) => string
 }
@@ -16,7 +21,9 @@ interface UseTableBindingFormOptions {
  * 表单字段、校验规则、可选表过滤、外键/链接模式联动、编辑/重置。
  */
 export function useTableBindingForm(options: UseTableBindingFormOptions) {
-  const { getTables, bindings, restrictPrimarySubOnly, tableTypeLabel, t } = options
+  const {
+    getTables, bindings, restrictPrimarySubOnly, primaryTableIsSubTable, tableTypeLabel, t,
+  } = options
 
   const submitting = ref(false)
   const showAddDialog = ref(false)
@@ -78,8 +85,12 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
   const filteredAvailableTables = computed(() => {
     const bt = bindingForm.value.bindingType
     if (bt === 'PRIMARY') {
+      // A DETAIL form renders one row of a sub-table, so its primary table is that SUB table —
+      // offering only MAIN here would leave no valid choice, and picking MAIN would build a form
+      // that is never opened (MAIN rows go to the request detail page).
+      const primaryType = primaryTableIsSubTable?.value ? 'SUB' : 'MAIN'
       return getTables()
-        .filter(t => t.tableType === 'MAIN')
+        .filter(t => t.tableType === primaryType)
         .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
     }
     if (bt === 'SUB') {

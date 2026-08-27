@@ -27,6 +27,11 @@ public final class MainTableViewPortalDtos {
             // Owning table — lets the portal group the view selector by table (parity with View Design).
             Long tableId,
             String tableLabel,
+            /**
+             * Owning table's type (MAIN / SUB). MAIN means a row is a request, so the portal opens
+             * the request detail page for it instead of {@code detailFormId}.
+             */
+            String tableType,
             Boolean enableExport,
             Boolean enableImport,
             /** DETAIL form opened when a row is clicked; null means rows are not clickable. */

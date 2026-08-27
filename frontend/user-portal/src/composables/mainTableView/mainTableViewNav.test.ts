@@ -40,4 +40,16 @@ describe('mainTableViewNav', () => {
     expect(tableGroupKey({ tableId: 10, label: 'ATM Attachment' })).toBe('10')
     expect(tableGroupKey({ tableId: null, label: 'Orphan' })).toBe('Orphan')
   })
+
+  // The "Request" tag is rendered per group, so the group has to carry the table type.
+  it('groupViewsByTable carries tableType onto the group', () => {
+    const mainView = { id: 4, viewName: 'All cases', tableId: 11, tableLabel: 'ATM Case', tableType: 'MAIN' }
+    const subView = { id: 5, viewName: 'Files', tableId: 10, tableLabel: 'ATM Attachment', tableType: 'SUB' }
+    const groups = groupViewsByTable([mainView, subView])
+    expect(groups.map(g => g.tableType)).toEqual(['MAIN', 'SUB'])
+  })
+
+  it('groupViewsByTable leaves tableType null when views do not carry one', () => {
+    expect(groupViewsByTable([attachment])[0].tableType).toBeNull()
+  })
 })
