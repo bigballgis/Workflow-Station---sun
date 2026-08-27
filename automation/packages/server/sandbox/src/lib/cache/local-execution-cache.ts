@@ -54,7 +54,6 @@ export const localExecutionCache = (log: ApLogger, basePath: string, getSettings
                         fn: async () => {
                             await pieceInstaller(log, basePath, getSettings).install({
                                 pieces: uniquePieces,
-                                includeFilters: true,
                                 publicApiUrl,
                                 engineToken,
                             })

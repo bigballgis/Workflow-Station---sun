@@ -14,10 +14,10 @@ const relativePiecePath = (piece: PiecePackage) => join('./', 'pieces', `${piece
 const piecePath = (rootWorkspace: string, piece: PiecePackage) => join(rootWorkspace, 'pieces', `${piece.pieceName}-${piece.pieceVersion}`)
 
 export const pieceInstaller = (log: ApLogger, basePath: string, getSettings: () => SandboxSettings) => ({
-    async install({ pieces, includeFilters, publicApiUrl, engineToken }: InstallParams): Promise<void> {
+    async install({ pieces, publicApiUrl, engineToken }: InstallParams): Promise<void> {
         const groupedPieces = groupPiecesByPackagePath(pieces, basePath, getSettings)
         const installPromises = Object.entries(groupedPieces).map(async ([packagePath, piecesInGroup]) => {
-            await installPieces(packagePath, piecesInGroup, includeFilters, log, { publicApiUrl, engineToken }, getSettings)
+            await installPieces(packagePath, piecesInGroup, log, { publicApiUrl, engineToken }, getSettings)
         })
         await Promise.all(installPromises)
     },
@@ -41,7 +41,7 @@ function getCustomPiecesPath(basePath: string, platformId: string, getSettings: 
     }
 }
 
-async function installPieces(rootWorkspace: string, pieces: PiecePackage[], includeFilters: boolean, log: ApLogger, bundleSource: BundleSource, getSettings: () => SandboxSettings): Promise<void> {
+async function installPieces(rootWorkspace: string, pieces: PiecePackage[], log: ApLogger, bundleSource: BundleSource, getSettings: () => SandboxSettings): Promise<void> {
     const devPieces = getSettings().DEV_PIECES
     const nonDevPieces = pieces.filter(piece => !devPieces.includes(getPieceNameFromAlias(piece.pieceName)))
     const { validPieces, invalidPieces } = partitionValidPieceNames(nonDevPieces)
@@ -89,43 +89,26 @@ async function installPieces(rootWorkspace: string, pieces: PiecePackage[], incl
             await wideEvent.timed({
                 name: 'pkgInstall',
                 fn: async () => {
-                    const { error: batchError } = await tryCatch(async () => pkgRunner(log).install({
-                        path: rootWorkspace,
-                        filtersPath: includeFilters ? piecesToInstall.map(relativePiecePath) : [],
-                    }))
+                    const failures = await installPiecesIndividually(rootWorkspace, piecesToInstall, log)
 
-                    if (isNil(batchError)) {
-                        await markPiecesAsUsed(rootWorkspace, piecesToInstall)
-                        log.info({
-                            rootWorkspace,
-                            piecesCount: piecesToInstall.length,
-                        }, '[pieceInstaller] Installed registry pieces using pnpm')
-                        return
-                    }
-
-                    if (piecesToInstall.length === 1) {
-                        log.error({ rootWorkspace, error: batchError }, '[pieceInstaller] Piece installation failed, rolling back')
-                        await rollbackInstallation(rootWorkspace, piecesToInstall)
-                        throw batchError
-                    }
-
-                    log.warn({
-                        rootWorkspace,
-                        pieces: piecesToInstall.map(piece => `${piece.pieceName}-${piece.pieceVersion}`),
-                        error: batchError,
-                    }, '[pieceInstaller] Batch install failed, retrying pieces individually')
-
-                    const failedPieces = await tryInstallPiecesIndividually(rootWorkspace, piecesToInstall, log)
-
-                    if (failedPieces.length > 0) {
-                        const names = failedPieces.map(p => `${p.pieceName}@${p.pieceVersion}`).join(', ')
-                        throw new Error(`[pieceInstaller] Failed to install: ${names}`)
+                    if (!isEmpty(failures)) {
+                        const names = failures.map(({ piece }) => `${piece.pieceName}@${piece.pieceVersion}`).join(', ')
+                        // Carry pnpm's own message: this Error becomes the API's
+                        // ENGINE_OPERATION_FAILURE body, which is all an admin importing a
+                        // piece from Admin Center ever sees. Without it the real cause
+                        // (offline-store miss, unreachable registry, bad tarball) is lost and
+                        // the UI can only say "import failed".
+                        const [{ error: firstError }] = failures
+                        throw new Error(
+                            `[pieceInstaller] Failed to install: ${names}: ${firstError.message}`,
+                            { cause: firstError },
+                        )
                     }
 
                     log.info({
                         rootWorkspace,
                         piecesCount: piecesToInstall.length,
-                    }, '[pieceInstaller] Installed registry pieces using pnpm (individual fallback)')
+                    }, '[pieceInstaller] Installed pieces using pnpm')
                 },
             })
         },
@@ -161,26 +144,49 @@ async function rollbackInstallation(rootWorkspace: string, pieces: PiecePackage[
     })))
 }
 
-async function tryInstallPiecesIndividually(
+// HERMES-PATCH-032: every piece installs INSIDE ITS OWN DIRECTORY with `--ignore-workspace`,
+// one pnpm run each. Upstream ran a single `pnpm install --filter ./pieces/<new>` at the
+// SHARED workspace root, which is where UAT's "Import Piece (.tgz)" died:
+//
+//   `--filter` narrows what gets LINKED, not what gets RESOLVED. Adding one member makes pnpm
+//   re-resolve the whole workspace, and every member here depends on a local `bundle.tgz`
+//   (createPiecePackageJson) whose transitive deps are re-read on each install. So importing a
+//   zero-dependency in-house piece pulled the dependencies of pieces prewarmed long before it
+//   (@zip.js/zip.js, unpdf, jsdom, pg-format — the deps of piece-file-helper/-pdf/-text-helper/
+//   -postgres) and dialled the fail-closed NPM_CONFIG_REGISTRY. 71s of pnpm retries, then
+//   ERR_PNPM_META_FETCH_FAIL -> ENGINE_OPERATION_FAILURE -> "上传失败" in Admin Center.
+//   Reproduced locally on pnpm 9.15.9 (the image's version), where the same install takes
+//   691ms once it runs in the piece's own directory. See hermes/TRIM_LOG.md 2026-08-27.
+//
+// Installing per directory means a new piece can only ever need ITS OWN closure — the air-gap
+// requirement (X-3) becomes checkable per piece instead of "every piece ever installed must
+// stay resolvable forever". It also removes the sibling-pruning hazard documented on
+// pieceCheckIfAlreadyInstalled: a workspace-level install could empty another member's
+// node_modules, and no workspace-level install runs at runtime any more.
+//
+// Sequential, not Promise.all: concurrent pnpm processes contend on the shared store, and a
+// runtime install is the rare path (prewarmed pieces never get here).
+async function installPiecesIndividually(
     rootWorkspace: string,
     pieces: PiecePackage[],
     log: ApLogger,
-): Promise<PiecePackage[]> {
-    const failures: PiecePackage[] = []
+): Promise<PieceInstallFailure[]> {
+    const failures: PieceInstallFailure[] = []
     for (const piece of pieces) {
         const { error } = await tryCatch(async () =>
             pkgRunner(log).install({
-                path: rootWorkspace,
-                filtersPath: [relativePiecePath(piece)],
+                path: piecePath(rootWorkspace, piece),
+                filtersPath: [],
+                ignoreWorkspace: true,
             }),
         )
         if (error) {
             log.error({
                 piece: `${piece.pieceName}@${piece.pieceVersion}`,
                 error,
-            }, '[pieceInstaller] Individual piece installation failed, rolling back')
+            }, '[pieceInstaller] Piece installation failed, rolling back')
             await rollbackInstallation(rootWorkspace, [piece])
-            failures.push(piece)
+            failures.push({ piece, error })
         }
         else {
             await markPiecesAsUsed(rootWorkspace, [piece])
@@ -221,6 +227,12 @@ async function createRootPackageJson({ path }: { path: string }): Promise<void> 
     // does not read the package.json `workspaces` field) and must use the isolated linker
     // so each piece's dependency lands in `pieces/<name>-<ver>/node_modules/<name>` — the
     // layout the engine's piece loader resolves. See pkg-runner.ts.
+    //
+    // HERMES-PATCH-032: the runtime install no longer runs HERE — it runs per piece directory
+    // with --ignore-workspace (installPiecesIndividually). These three files stay because the
+    // build-time prewarm (hermes/prewarm-pieces.sh) does install at this root, and because they
+    // fence the cache directory off: without a pnpm-workspace.yaml of its own, a pnpm run in
+    // this directory walks up and adopts the AP monorepo's workspace at /usr/src/app.
     await writeFileAtomic(join(path, 'pnpm-workspace.yaml'), 'packages:\n  - "pieces/**"\n', 'utf8')
     await writeFileAtomic(join(path, '.npmrc'), 'node-linker=isolated\nignore-workspace-root-check=true\n', 'utf8')
 }
@@ -365,9 +377,13 @@ async function markPiecesAsUsed(rootWorkspace: string, pieces: PiecePackage[]): 
 
 type InstallParams = {
     pieces: PiecePackage[]
-    includeFilters: boolean
     publicApiUrl: string
     engineToken: string
+}
+
+type PieceInstallFailure = {
+    piece: PiecePackage
+    error: Error
 }
 
 type BundleSource = {

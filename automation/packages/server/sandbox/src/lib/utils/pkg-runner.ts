@@ -13,10 +13,16 @@ import { CommandOutput, spawnWithKill } from './exec'
 // alongside the root package.json — see piece-installer.ts#createRootPackageJson.
 // The `build` step already uses esbuild.
 export const pkgRunner = (log: ApLogger) => ({
-    async install({ path, filtersPath }: InstallParams): Promise<CommandOutput> {
+    async install({ path, filtersPath, ignoreWorkspace = false }: InstallParams): Promise<CommandOutput> {
         const filterArgs: string[] = filtersPath
             .map(sanitizeFilterPath)
             .flatMap((p) => ['--filter', `./${p}`])
+        // HERMES-PATCH-032: `--ignore-workspace` makes this install stand alone — `path` is
+        // resolved as the ONLY package, and no pnpm-workspace.yaml above it is consulted.
+        // The piece installer needs that (see piece-installer.ts#installPiecesIndividually):
+        // a filtered install at a shared workspace root still re-resolves every OTHER member,
+        // and in an air-gapped cluster that reaches the fail-closed registry and fails.
+        const workspaceArgs = ignoreWorkspace ? ['--ignore-workspace'] : []
         // HERMES-PATCH-005 (piece-admin P3): air-gapped runtime install. When
         // AP_PIECES_OFFLINE_INSTALL=true, resolve exclusively from the pnpm store
         // baked into the image (Dockerfile seeds it with the pieces-framework/-common/
@@ -41,6 +47,7 @@ export const pkgRunner = (log: ApLogger) => ({
             '--ignore-scripts',
             '--config.node-linker=isolated',
             '--config.confirmModulesPurge=false',
+            ...workspaceArgs,
             ...offlineArgs,
             ...filterArgs,
         ]
@@ -91,6 +98,8 @@ function sanitizeFilterPath(filterPath: string): string {
 type InstallParams = {
     path: string
     filtersPath: string[]
+    /** Install `path` on its own, ignoring any pnpm workspace it sits in. Default false. */
+    ignoreWorkspace?: boolean
 }
 
 type BuildParams = {
