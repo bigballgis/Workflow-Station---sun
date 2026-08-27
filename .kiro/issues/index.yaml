@@ -2708,14 +2708,12 @@
   summary: "Audit list toolbar search used MDA Quick Find on stored values, not painted cell text"
   file: "backend/user-portal/src/main/java/com/portal/util/AuditApplicationColumnSpec.java"
   note: |
-    根因：keyword 走 ListFilterSql.searchClause，对 USER id、ISO timestamp、
-    隐藏列做 ILIKE，对照的是 MDA Quick Find 而不是格子里看到的字。
-    修复：textSearchClause 只 OR 当前 list 画出的单元格纯文本（request id、
-    标题 COALESCE、发起人姓名、处理人显示名、YYYY-MM-DD HH:mm、status），
-    不搜 function_unit_code / current_node。列头 typed filter 不动。
-    验证：AuditApplicationColumnSpecTest + AuditApplicationQuerySqlTest pass；
-    mvn package user-portal；compose 重建 user-portal（healthy，query 200）；
-    Playwright Request ID 命中 1 行、Developer Tester 命中显示名单元格。
+    根因：keyword 拿画面上的字直接 ILIKE 存储码（Running vs RUNNING），
+    中文标签对不上。
+    修复：输入先对应到后台值再查——状态标签→RUNNING/COMPLETED/…；
+    显示名→sys_users id；日期按 YYYY-MM-DD HH:mm。不搜隐藏列。
+    验证：ColumnSpec + QuerySql 11 pass；package + compose user-portal healthy；
+    Playwright Request ID / Developer Tester / Running→RUNNING 行。
 
 - id: "1563"
   status: fixed

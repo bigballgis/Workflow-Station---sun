@@ -4,8 +4,10 @@ import com.platform.common.jdbc.SqlIdentifiers;
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
 import com.platform.common.list.ListFilterSql;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -38,16 +40,16 @@ public final class AuditApplicationColumnSpec {
     }
 
     /**
-     * Plain ILIKE on the text each cell shows. USER matches the resolved name;
-     * DATETIME matches {@code YYYY-MM-DD HH:mm}; title matches the business key
-     * or the process name the renderer falls back to.
+     * Typed text is resolved to the stored value each cell was painted from, then
+     * matched: labels → status codes, names → sys_users ids, dates as YYYY-MM-DD HH:mm.
      */
     public static String textSearchClause(String keyword, List<Object> params) {
         if (keyword == null || keyword.isBlank()) {
             return "";
         }
-        String like = "%" + ListFilterSql.escapeLike(keyword.trim()) + "%";
-        for (int i = 0; i < 7; i++) {
+        String trimmed = keyword.trim();
+        String like = "%" + ListFilterSql.escapeLike(trimmed) + "%";
+        for (int i = 0; i < 6; i++) {
             params.add(like);
         }
         return " AND ("
@@ -55,9 +57,9 @@ public final class AuditApplicationColumnSpec {
                 + " OR COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name) ILIKE ?"
                 + " OR COALESCE(pi.start_user_name, pi.start_user_id) ILIKE ?"
                 + " OR " + ProcessAssigneeStoredSql.EXPRESSION + " ILIKE ?"
-                + " OR " + assigneeDisplayNameExistsSql()
+                + " OR " + paintedUserNameExistsSql()
                 + " OR to_char(pi.start_time, 'YYYY-MM-DD HH24:MI') ILIKE ?"
-                + " OR pi.status ILIKE ?"
+                + storedStatusCodesClause(trimmed, params)
                 + ")";
     }
 
@@ -82,10 +84,10 @@ public final class AuditApplicationColumnSpec {
     }
 
     /**
-     * Display-name match for the assignee cell. Identifiers are allowlisted at the
-     * concatenation site so a catalog-sourced name cannot reach SQL.
+     * Name on screen → sys_users row → stored start_user_id / assignee ids.
+     * Identifiers are allowlisted at the concatenation site.
      */
-    private static String assigneeDisplayNameExistsSql() {
+    private static String paintedUserNameExistsSql() {
         String users = SqlIdentifiers.requireQualifiedName("sys_users");
         String id = SqlIdentifiers.requireIdentifier("id");
         String username = SqlIdentifiers.requireIdentifier("username");
@@ -96,10 +98,63 @@ public final class AuditApplicationColumnSpec {
                 + " NULLIF(BTRIM(u." + displayName + "), ''), u." + username + ")";
         String identities = "u." + id + "::text, u." + username + ", u." + employeeId;
         return "EXISTS (SELECT 1 FROM " + users + " u WHERE " + name + " ILIKE ?"
-                + " AND (pi.current_assignee IN (" + identities + ")"
+                + " AND (pi.start_user_id IN (" + identities + ")"
+                + " OR pi.current_assignee IN (" + identities + ")"
                 + " OR EXISTS (SELECT 1 FROM unnest(regexp_split_to_array("
                 + "btrim(pi.candidate_users), E'\\\\s*,\\\\s*')) AS token(v)"
                 + " WHERE token.v IN (" + identities + "))))";
+    }
+
+    /**
+     * Labels must stay aligned with {@code application.running} / completed / withdrawn /
+     * rejected in en, zh-CN, zh-TW. The grid paints those strings; the row stores the code.
+     */
+    private static final List<StatusSynonym> STATUS_SYNONYMS = List.of(
+            new StatusSynonym("RUNNING", "Running", "进行中", "進行中"),
+            new StatusSynonym("COMPLETED", "Completed", "已完成", "已完成"),
+            new StatusSynonym("WITHDRAWN", "Withdrawn", "已撤回", "已撤回"),
+            new StatusSynonym("REJECTED", "Rejected", "已拒绝", "已拒絕")
+    );
+
+    static List<String> storedStatusCodesForKeyword(String keyword) {
+        String needle = keyword.trim().toLowerCase(Locale.ROOT);
+        List<String> codes = new ArrayList<>();
+        for (StatusSynonym row : STATUS_SYNONYMS) {
+            if (row.matches(needle) && !codes.contains(row.code)) {
+                codes.add(row.code);
+            }
+        }
+        return codes;
+    }
+
+    private static String storedStatusCodesClause(String keyword, List<Object> params) {
+        List<String> codes = storedStatusCodesForKeyword(keyword);
+        if (codes.isEmpty()) {
+            return "";
+        }
+        StringBuilder sql = new StringBuilder(" OR pi.status IN (");
+        for (int i = 0; i < codes.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            sql.append("?");
+            params.add(codes.get(i));
+        }
+        return sql.append(")").toString();
+    }
+
+    private record StatusSynonym(String code, String... labels) {
+        boolean matches(String needle) {
+            if (code.toLowerCase(Locale.ROOT).contains(needle)) {
+                return true;
+            }
+            for (String label : labels) {
+                if (label.toLowerCase(Locale.ROOT).contains(needle)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     private static List<ListColumnMeta.Option> statusOptions() {

@@ -150,6 +150,15 @@ try {
   check('display-name search keeps the typed keyword', (await search.inputValue()) === 'Developer Tester')
   const nameHit = page.locator('.list-data-grid').getByText('Developer Tester')
   check('display-name search hits a painted cell', await nameHit.count().then((n) => n > 0))
+
+  await search.fill('Running')
+  await search.press('Enter')
+  await page.waitForTimeout(1500)
+  await page.locator('.el-loading-mask').waitFor({ state: 'hidden', timeout: 20000 }).catch(() => {})
+  await shot(page, 'audit-list-search-status-label')
+  check('status-label search keeps the typed keyword', (await search.inputValue()) === 'Running')
+  const runningHit = page.locator('.list-data-grid').getByText('Running')
+  check('typed Running maps to stored RUNNING rows', await runningHit.count().then((n) => n > 0))
 } catch (err) {
   failures++
   console.error(err)

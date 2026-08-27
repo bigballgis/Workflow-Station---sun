@@ -39,11 +39,26 @@ class AuditApplicationColumnSpecTest {
         assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION + " ILIKE ?");
         assertThat(where).contains("FROM sys_users u");
         assertThat(where).contains("to_char(pi.start_time, 'YYYY-MM-DD HH24:MI') ILIKE ?");
-        assertThat(where).contains("pi.status ILIKE ?");
+        assertThat(where).doesNotContain("pi.status ILIKE");
+        assertThat(where).doesNotContain("pi.status IN");
         assertThat(where).doesNotContain("pi.current_node");
         assertThat(where).doesNotContain("pi.function_unit_code ILIKE");
         assertThat(where).doesNotContain("pi.start_time::text");
-        assertThat(params).hasSize(7).allMatch("%请假%"::equals);
+        assertThat(params).hasSize(6).allMatch("%请假%"::equals);
+    }
+
+    @Test
+    void typedStatusLabelMapsToStoredCode() {
+        assertThat(AuditApplicationColumnSpec.storedStatusCodesForKeyword("Running"))
+                .containsExactly("RUNNING");
+        assertThat(AuditApplicationColumnSpec.storedStatusCodesForKeyword("进行中"))
+                .containsExactly("RUNNING");
+        assertThat(AuditApplicationColumnSpec.storedStatusCodesForKeyword("已完成"))
+                .containsExactly("COMPLETED");
+        List<Object> params = new ArrayList<>();
+        String where = AuditApplicationColumnSpec.textSearchClause("进行中", params);
+        assertThat(where).contains("pi.status IN (?)");
+        assertThat(params).contains("RUNNING");
     }
 
     @Test
