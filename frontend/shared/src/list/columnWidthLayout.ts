@@ -1,11 +1,42 @@
 import type { ListColumnKind } from './columnMeta'
 import { clampColumnWidth, COLUMN_WIDTH_MAX, COLUMN_WIDTH_MIN } from './columnResizeCursor'
 
-/** Caret + gap + resize handle + `.list-col-header` padding-right. */
-export const HEADER_CHROME_PX = 44
+/** Matches `.list-col-caret` / `.list-col-trigger` gap / `.list-col-header` padding-right. */
+export const HEADER_CARET_PX = 12
+export const HEADER_TRIGGER_GAP_PX = 4
+export const HEADER_HANDLE_GUTTER_PX = 12
+
+/**
+ * Horizontal padding on `.list-data-grid .cell` (and MTV). Keep the SCSS
+ * `padding-left/right` in listDataGrid.scss equal to this number.
+ */
+export const CELL_PADDING_X_PX = 8
+
+/**
+ * Non-label pixels inside a column: cell pad + caret + gap + resize gutter.
+ * Must match the space `.list-col-label` actually has, or English headers ellipsis
+ * while neighbouring TEXT columns still look empty.
+ */
+export const HEADER_CHROME_PX =
+  HEADER_CARET_PX + HEADER_TRIGGER_GAP_PX + HEADER_HANDLE_GUTTER_PX + CELL_PADDING_X_PX * 2
+
+/**
+ * Canvas measures Arial; thead paints Inter. A few extra pixels keep
+ * "Current Assignee" from ellipsizing after chrome is subtracted.
+ */
+export const HEADER_FIT_SLACK_PX = 24
 
 /** Short titles (Status / 状态) still need room for the caret and handle. */
 export const HEADER_FIT_MIN = 100
+
+/**
+ * Portal/Admin table headers are 11px / 600 / uppercase / 0.08em tracking
+ * (`ws-theme.scss` thead `.cell`). Measuring 14px mixed-case under-fits
+ * "Process Title" / "Current Assignee".
+ */
+export const HEADER_LABEL_FONT_SIZE_PX = 11
+export const HEADER_LABEL_FONT_WEIGHT = 600
+export const HEADER_LABEL_LETTER_SPACING_EM = 0.08
 
 /**
  * Typical cell content, not the current page's longest value.
@@ -20,15 +51,19 @@ export const KIND_CONTENT_FLOOR: Record<ListColumnKind, number> = {
   NUMBER: HEADER_FIT_MIN,
 }
 
-const HEADER_FONT = "14px var(--el-font-family, Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif)"
+const HEADER_FONT =
+  `${HEADER_LABEL_FONT_WEIGHT} ${HEADER_LABEL_FONT_SIZE_PX}px Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif`
 
 /**
- * Measure the current-locale header label with the same 14px face the table uses.
+ * Measure the current-locale header label with the same face the table paints:
+ * 11px, weight 600, uppercase, 0.08em letter-spacing.
  * FALLBACK(ux): jsdom's canvas often returns 0 — approximate so unit tests can still
  * assert clamp/min without a real glyph rasterizer. Live browsers measure.
  */
 export function measureHeaderLabelPx(label: string): number {
-  const text = label ?? ''
+  const text = (label ?? '').toLocaleUpperCase()
+  const tracking =
+    HEADER_LABEL_LETTER_SPACING_EM * HEADER_LABEL_FONT_SIZE_PX * Math.max(0, text.length - 1)
   if (typeof document !== 'undefined') {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
@@ -36,18 +71,18 @@ export function measureHeaderLabelPx(label: string): number {
       ctx.font = HEADER_FONT
       const width = ctx.measureText(text).width
       if (Number.isFinite(width) && width > 0) {
-        return width
+        return width + tracking
       }
     }
   }
-  return Math.ceil(text.length * 8)
+  return Math.ceil(text.length * 8 + tracking)
 }
 
 /** Default base width: max(header text + chrome, kind content floor), clamped. */
 export function headerFitColumnWidth(label: string, kind?: ListColumnKind): number {
   const header = Math.max(
     HEADER_FIT_MIN,
-    Math.round(measureHeaderLabelPx(label) + HEADER_CHROME_PX),
+    Math.round(measureHeaderLabelPx(label) + HEADER_CHROME_PX + HEADER_FIT_SLACK_PX),
   )
   const contentFloor = kind ? KIND_CONTENT_FLOOR[kind] : HEADER_FIT_MIN
   return clampColumnWidth(Math.max(header, contentFloor))

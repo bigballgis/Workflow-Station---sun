@@ -649,10 +649,11 @@ Action，空白贴在表最右边。空地就是 1:1 策略的视觉成本。
 2. 否则，Views：设计器存了 `columnWidth` → 用设计值当底宽（**不被**标题自动宽盖掉）。
 3. 否则 → `clamp(max(标题实测 + chrome, kind 内容下限), 100, 600)`。
 
-**标题实测**必须用与 `.list-col-label` 相同的字体，测**当前语言**的 `column.label` 字符串。
-禁止再为中文手调一版 `COL_WIDTHS`（英文仍会裁）。chrome ≈ 下拉 caret + 间隙 + 拖拽条 +
-`padding-right: 12px`，合计约 **+40–48px**，以共享层常量收口，三端同一数字。下限 100 避免
-「状态」这类短标题列过窄。
+**标题实测**必须用表头**实际渲染面**：Portal/Admin `thead .cell` 是 **11px / 600 / uppercase /
+letter-spacing 0.08em**（`ws-theme.scss`），测**当前语言**的 `column.label`（先转大写再加字距）。
+禁止按 14px 混排测，否则英文 `Process Title` / `Current Assignee` 会被裁，旁边 TEXT 列却空一截。
+禁止再为中文手调一版 `COL_WIDTHS`。chrome = caret + trigger gap + 拖拽 gutter + **两侧 cell padding**
+（`CELL_PADDING_X_PX`，list grid 为 8px），以共享层常量收口。下限 100 避免「状态」这类短标题列过窄。
 
 **kind 内容下限**（与表头取 `max`，仍走同一 `clamp`；数字收口在 `KIND_CONTENT_FLOOR`）：
 

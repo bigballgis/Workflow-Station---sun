@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { COLUMN_WIDTH_MAX, COLUMN_WIDTH_MIN } from '../columnResizeCursor'
 import {
+  CELL_PADDING_X_PX,
+  HEADER_CARET_PX,
+  HEADER_CHROME_PX,
   HEADER_FIT_MIN,
+  HEADER_HANDLE_GUTTER_PX,
+  HEADER_TRIGGER_GAP_PX,
   KIND_CONTENT_FLOOR,
   distributeDisplayWidths,
   headerFitColumnWidth,
@@ -66,5 +71,16 @@ describe('headerFitColumnWidth', () => {
   it('keeps a long header when it already exceeds the kind floor', () => {
     expect(headerFitColumnWidth('Current assignee', 'USER'))
       .toBeGreaterThan(KIND_CONTENT_FLOOR.USER)
+  })
+
+  it('reserves chrome for caret, handle gutter, and cell padding', () => {
+    expect(HEADER_CHROME_PX).toBe(
+      HEADER_CARET_PX + HEADER_TRIGGER_GAP_PX + HEADER_HANDLE_GUTTER_PX + CELL_PADDING_X_PX * 2,
+    )
+  })
+
+  it('gives Current Assignee more than the USER content floor so the header is not ellipsized', () => {
+    expect(headerFitColumnWidth('Current Assignee', 'USER')).toBeGreaterThan(KIND_CONTENT_FLOOR.USER)
+    expect(headerFitColumnWidth('Process Title', 'TEXT')).toBeGreaterThanOrEqual(KIND_CONTENT_FLOOR.TEXT)
   })
 })
