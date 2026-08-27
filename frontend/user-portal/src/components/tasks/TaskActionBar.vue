@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="!isCompletedTask"
+    v-if="!isCompletedTask && !claimLocked"
     class="section action-section"
   >
     <div class="action-buttons">
@@ -72,6 +72,8 @@ import type { TaskActionInfo } from '@/api/task'
 
 defineProps<{
   isCompletedTask: boolean
+  /** BU Role pool task the signed-in user does not hold: view only until they claim it. */
+  claimLocked?: boolean
   showImplicitSaveAction: boolean
   savingTaskForm: boolean
   actions: TaskActionInfo[] | undefined | null

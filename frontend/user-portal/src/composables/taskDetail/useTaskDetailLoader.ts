@@ -80,6 +80,9 @@ export function createTaskDetailLoader(
     previousForms.value = []
     subTableBindings.value = []
     taskError.value = null
+    // Re-derived below from completion, BPMN readOnly and claim state; without the reset an
+    // in-place reload after claiming would keep the read-only flag the previous pass set.
+    formReadOnly.value = false
     try {
       const res = await getTaskDetail(taskId)
       const data = res.data || res
@@ -89,6 +92,11 @@ export function createTaskDetailLoader(
         if (isCompletedTask.value) {
           formReadOnly.value = true
           currentNodeId.value = ''
+        }
+        // A BU Role request the signed-in user does not hold stays viewable but not editable:
+        // only the member who claimed it may change the form.
+        if (data.claimPoolTask && !data.claimedByCurrentUser) {
+          formReadOnly.value = true
         }
         // Set before any hydration runs (loadFunctionUnitContent / loadProcessAndTaskFormData /
         // rehydrateSharedProcessSubTableBindings below): those calls gate cross-binding sibling-slice

@@ -1,8 +1,17 @@
 <template>
   <div class="tasks-page">
     <div class="page-header">
-      <h1>{{ t('task.title') }}</h1>
-      <p class="page-subtitle">{{ t('task.todoHint') }}</p>
+      <h1 class="page-title-row">
+        <span>{{ t('task.toClaimTitle') }}</span>
+        <PortalHelpLink
+          path="/up-tasks-to-claim"
+          :aria-label="t('task.toClaimGuideLinkAria')"
+          test-id="to-claim-guide-link"
+        />
+      </h1>
+      <p class="page-subtitle">
+        {{ t('task.toClaimHint') }}
+      </p>
     </div>
 
     <div
@@ -13,6 +22,7 @@
         v-model:assignment-types="filterForm.assignmentTypes"
         v-model:priorities="filterForm.priorities"
         v-model:keyword="filterForm.keyword"
+        :show-assignment-types="false"
         @search="handleSearch"
         @reset="handleReset"
       />
@@ -34,7 +44,6 @@
             :class="{ 'list-data-grid--fit': gridFits }"
             :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
             :row-class-name="rowClassName"
-            @selection-change="handleSelectionChange"
           >
             <template #empty>
               <div
@@ -46,14 +55,8 @@
                 </el-icon>
                 <span>{{ t('common.loading') }}</span>
               </div>
-              <span v-else>{{ t('task.noTasks') }}</span>
+              <span v-else>{{ t('task.noTasksToClaim') }}</span>
             </template>
-            <!-- Do not set `fixed`: EP's left overlay fills the viewport and hides the data columns. -->
-            <el-table-column
-              type="selection"
-              width="50"
-              :selectable="(row: object) => !isListGroupHeaderRow(row)"
-            />
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
               :key="col.field"
@@ -98,13 +101,17 @@
                 <template v-else-if="col.field === 'currentStepName'">
                   {{ row.currentStepName || row.taskName || '-' }}
                 </template>
-                <span
-                  v-else-if="col.field === 'assignmentType'"
-                  class="assignment-type"
-                  :class="getAssignmentClass(row)"
-                >
-                  {{ t(`task.${getAssignmentKey(row)}`) }}
-                </span>
+                <template v-else-if="col.field === 'assigneeName'">
+                  <el-tag
+                    v-if="row.assignee"
+                    :type="row.claimedByCurrentUser ? 'success' : 'info'"
+                    size="small"
+                    data-test="to-claim-claimed-by"
+                  >
+                    {{ row.claimedByCurrentUser ? t('task.claimedByMe') : (row.assigneeName || row.assignee) }}
+                  </el-tag>
+                  <span v-else>-</span>
+                </template>
                 <span
                   v-else-if="col.field === 'priority'"
                   class="priority"
@@ -133,26 +140,48 @@
               </template>
             </el-table-column>
             <el-table-column
+              :width="CLAIM_ACTION_WIDTH"
+              class-name="to-claim-action-col"
+            >
+              <template #header>
+                <span class="to-claim-action-header">{{ t('task.action') }}</span>
+              </template>
+              <template #default="{ row }">
+                <template v-if="!isListGroupHeaderRow(row)">
+                  <el-button
+                    v-if="row.claimable"
+                    type="primary"
+                    size="small"
+                    :loading="actingTaskId === row.taskId"
+                    data-test="to-claim-claim-btn"
+                    @click="handleClaim(row)"
+                  >
+                    {{ t('task.claim') }}
+                  </el-button>
+                  <el-button
+                    v-else-if="row.claimedByCurrentUser"
+                    size="small"
+                    :loading="actingTaskId === row.taskId"
+                    data-test="to-claim-unclaim-btn"
+                    @click="handleUnclaim(row)"
+                  >
+                    {{ t('task.unclaim') }}
+                  </el-button>
+                  <span
+                    v-else
+                    class="to-claim-locked"
+                    data-test="to-claim-locked"
+                  >{{ t('task.heldByOther') }}</span>
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column
               v-if="leftoverWidth > 0"
               :width="leftoverWidth"
               class-name="list-col-spacer"
             />
           </el-table>
         </div>
-      </div>
-
-      <div
-        v-if="selectedTasks.length > 0"
-        class="batch-actions"
-      >
-        <span>{{ t('task.selected', { count: selectedTasks.length }) }}</span>
-        <el-button
-          type="warning"
-          size="small"
-          @click="handleBatchUrge"
-        >
-          {{ t('task.batchUrge') }}
-        </el-button>
       </div>
 
       <ListPagination
@@ -171,47 +200,6 @@
       @apply="onFilterApply"
       @clear="onFilterClear"
     />
-
-    <el-dialog
-      v-model="actionDialogVisible"
-      :title="actionDialogTitle"
-      width="500px"
-      class="task-action-form"
-    >
-      <el-form
-        :model="actionForm"
-        label-width="100px"
-      >
-        <el-form-item
-          v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'"
-          :label="t('task.targetUser')"
-          required
-        >
-          <el-input
-            v-model="actionForm.targetUserId"
-            :placeholder="t('task.enterUserId')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('common.reason')">
-          <el-input
-            v-model="actionForm.reason"
-            type="textarea"
-            :rows="3"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="actionDialogVisible = false">
-          {{ t('common.cancel') }}
-        </el-button>
-        <el-button
-          type="primary"
-          @click="submitAction"
-        >
-          {{ t('common.confirm') }}
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -226,19 +214,23 @@ import ListColumnHeader from '@platform-shared/list/ListColumnHeader.vue'
 import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
-import { queryTodoTasks, batchUrgeTasks, type TaskInfo, type TodoTaskQueryRequest } from '@/api/task'
+import { queryToClaimTasks, type TaskInfo, type TodoTaskQueryRequest } from '@/api/task'
 import { usePortalListGrid } from '@/composables/list/usePortalListGrid'
+import { useTaskClaimActions } from '@/composables/tasks/useTaskClaimActions'
 import { formatDate } from '@/utils/dateFormat'
 import { taskPriorityBand, taskPriorityCssClass } from '@/utils/taskPriority'
 import { usePendingTaskStore } from '@/stores/pendingTask'
+import PortalHelpLink from '@/components/PortalHelpLink.vue'
 
-const TODO_COL_WIDTHS: Record<string, number> = {
+const CLAIM_ACTION_WIDTH = 120
+
+const TO_CLAIM_COL_WIDTHS: Record<string, number> = {
   requestId: 140,
   taskName: 160,
   currentStepName: 160,
   processDefinitionName: 160,
-  assignmentType: 130,
   initiatorName: 120,
+  assigneeName: 140,
   priority: 100,
   createTime: 170,
   dueDate: 180,
@@ -248,7 +240,7 @@ const pendingTaskStore = usePendingTaskStore()
 const { t } = useI18n()
 const router = useRouter()
 const loading = ref(true)
-const selectedTasks = ref<TaskInfo[]>([])
+const actingTaskId = ref<string | null>(null)
 const filterForm = reactive({
   assignmentTypes: [] as string[],
   priorities: [] as string[],
@@ -287,27 +279,18 @@ const {
   groupHeaderLabel,
   isListGroupHeaderRow,
 } = usePortalListGrid<TaskInfo>({
-  storageKey: 'portal-list-layout:todo-tasks',
-  extraWidth: 50,
-  defaultWidthOf: (field) => TODO_COL_WIDTHS[field] ?? 120,
-})
-
-const actionDialogVisible = ref(false)
-const actionDialogTitle = ref('')
-const currentAction = ref('')
-const actionForm = reactive({
-  targetUserId: '',
-  reason: '',
+  storageKey: 'portal-list-layout:to-claim-tasks',
+  extraWidth: CLAIM_ACTION_WIDTH,
+  defaultWidthOf: (field) => TO_CLAIM_COL_WIDTHS[field] ?? 120,
 })
 
 const loadTasks = async () => {
   const seq = beginQuery()
   loading.value = true
   try {
-    const res = await queryTodoTasks(todoQueryBody())
+    const res = await queryToClaimTasks(toClaimQueryBody())
     if (!isCurrentQuery(seq)) return
-    applyPage(res.data, 'todo/query response is missing its column declaration')
-    pendingTaskStore.syncCountFromListTotal(res.data.totalElements)
+    applyPage(res.data, 'to-claim/query response is missing its column declaration')
   } catch (error) {
     if (!isCurrentQuery(seq)) return
     if (!(error as { response?: unknown })?.response) {
@@ -318,11 +301,17 @@ const loadTasks = async () => {
   }
 }
 
-function todoQueryBody(): TodoTaskQueryRequest {
+const { claim, unclaim } = useTaskClaimActions({
+  reload: async () => {
+    await Promise.all([loadTasks(), pendingTaskStore.fetchPendingCount()])
+  },
+  actingTaskId,
+})
+
+function toClaimQueryBody(): TodoTaskQueryRequest {
   const body: TodoTaskQueryRequest = { ...buildQuery() }
   const keyword = filterForm.keyword.trim()
   if (keyword) body.keyword = keyword
-  if (filterForm.assignmentTypes.length > 0) body.assignmentTypes = filterForm.assignmentTypes
   if (filterForm.priorities.length > 0) body.priorities = filterForm.priorities
   return body
 }
@@ -333,7 +322,6 @@ function handleSearch() {
 }
 
 function handleReset() {
-  filterForm.assignmentTypes = []
   filterForm.priorities = []
   filterForm.keyword = ''
   for (const field of Object.keys(columnFilters.value)) {
@@ -375,74 +363,16 @@ function onFilterClear() {
   onClearFilter(filterDialog.field)
 }
 
-const handleSelectionChange = (selection: TaskInfo[]) => {
-  selectedTasks.value = selection.filter((row) => !isListGroupHeaderRow(row))
-}
-
 const viewTask = (task: TaskInfo) => {
   router.push(`/tasks/${task.taskId}`)
 }
 
-const handleBatchUrge = () => {
-  currentAction.value = 'batchUrge'
-  actionDialogTitle.value = t('task.batchUrge')
-  actionForm.reason = ''
-  actionDialogVisible.value = true
+function handleClaim(task: TaskInfo) {
+  return claim(task.taskId)
 }
 
-const submitAction = async () => {
-  try {
-    if (currentAction.value === 'batchUrge') {
-      const taskIds = selectedTasks.value.map((task) => task.taskId)
-      await batchUrgeTasks(taskIds, actionForm.reason)
-      ElMessage.success(t('common.success'))
-    }
-    actionDialogVisible.value = false
-    loadTasks()
-  } catch (error) {
-    const msg =
-      (error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
-      ?? (error as { message?: string })?.message
-      ?? t('common.error')
-    ElMessage.error(msg)
-  }
-}
-
-const getAssignmentKey = (task: TaskInfo) => {
-  const bpmn = task.bpmnAssigneeType?.trim().toUpperCase()
-  if (bpmn === 'INITIATOR' || bpmn === 'PROCESS_INITIATOR') {
-    return 'processInitiator'
-  }
-  if (bpmn === 'FIXED_BU_ROLE') {
-    return 'fixedBuRole'
-  }
-  if (bpmn === 'BU_ROLE') {
-    return 'buRole'
-  }
-  const type = task.assignmentType
-  const map: Record<string, string> = {
-    USER: 'user',
-    VIRTUAL_GROUP: 'virtualGroup',
-    DEPT_ROLE: 'deptRole',
-    DELEGATED: 'delegated',
-    CANDIDATE_USERS: 'candidateUsers',
-  }
-  return map[type] || 'user'
-}
-
-const getAssignmentClass = (task: TaskInfo) => {
-  const key = getAssignmentKey(task)
-  const map: Record<string, string> = {
-    user: 'user',
-    processInitiator: 'user',
-    virtualGroup: 'virtual-group',
-    deptRole: 'dept-role',
-    delegated: 'delegated',
-    candidateUsers: 'virtual-group',
-    fixedBuRole: 'virtual-group',
-    buRole: 'virtual-group',
-  }
-  return map[key] || 'user'
+function handleUnclaim(task: TaskInfo) {
+  return unclaim(task.taskId, task.assignmentType, task.assignee)
 }
 
 const getPriorityLabel = (priority: string | number | undefined): string => {
@@ -500,6 +430,12 @@ onMounted(() => {
       margin: 0;
     }
 
+    .page-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .page-subtitle {
       margin: 6px 0 0;
       font-size: 13px;
@@ -507,29 +443,17 @@ onMounted(() => {
     }
   }
 
-  .batch-actions {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-top: 12px;
-    padding: 12px 16px;
-    background: #f5f7fa;
-    border-radius: 4px;
-    flex-shrink: 0;
+  .to-claim-action-header {
+    font-weight: 500;
+  }
 
-    span {
-      color: var(--text-secondary);
-    }
+  .to-claim-locked {
+    color: var(--text-secondary);
+    font-size: 12px;
   }
 
   .overdue {
     color: var(--error-red);
   }
-}
-</style>
-
-<style lang="scss">
-.task-action-form .el-form-item__label {
-  white-space: nowrap;
 }
 </style>

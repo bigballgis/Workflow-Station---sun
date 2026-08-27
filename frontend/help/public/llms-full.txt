@@ -48,3 +48,14 @@ Examples: template Vendor quote to PR; folder INBOX; extraction to request_title
 Every enabled monitor template must be bound before Deploy. Bound templates cannot be deleted until unbound.
 
 Related: /help/email-send#connection , /help/computed-fields
+
+## Tasks to Claim (/help/up-tasks-to-claim)
+
+Shared queue for user tasks assigned to a business unit role. Every member of that role sees the same list. Claim before edit or submit. Direct-user, hierarchy, and virtual-group tasks stay on My To Do Tasks.
+
+Order: open Tasks to Claim → open a row with empty Claimed By → Claim → edit and submit. Unclaim lets another role member take it.
+
+After this version: deploy does not rewrite running tasks. Unheld BU-role requests leave My To Do and appear on Tasks to Claim (must Claim). Already-assigned BU-role requests stay on the holder’s My To Do (complete without reclaiming). Other members still see the held row on Tasks to Claim.
+
+Claim fails if another member already holds it, you left the role written at task create, or the engine is down.
+

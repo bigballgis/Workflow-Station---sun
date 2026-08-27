@@ -51,6 +51,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.tasks', icon: 'List' }
       },
       {
+        path: 'tasks/to-claim',
+        name: 'TasksToClaim',
+        component: () => import('@/views/tasks/to-claim.vue'),
+        meta: { titleKey: 'menu.tasksToClaim', icon: 'Pointer' }
+      },
+      {
         path: 'tasks/completed',
         name: 'CompletedTasks',
         component: () => import('@/views/tasks/completed.vue'),

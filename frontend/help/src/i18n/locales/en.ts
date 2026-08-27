@@ -63,7 +63,8 @@ export default {
     portal: 'User Portal',
     upHome: 'Home',
     upSectionTask: 'Task',
-    upTodo: 'To Do',
+    upTodo: 'My To Do Tasks',
+    upTasksToClaim: 'Tasks to Claim',
     upCompleted: 'Completed Tasks',
     upSectionRequest: 'Request',
     upNewRequests: 'New Requests',
@@ -89,6 +90,10 @@ export default {
     emailMonitor: {
       title: 'Email Monitor',
       summary: 'Inbound mailbox, monitor template, field extraction, and Start Event binding before Deploy.',
+    },
+    upTasksToClaim: {
+      title: 'Tasks to Claim',
+      summary: 'Claim a business-unit role request before you edit it, and what happens to existing To Do after this version.',
     },
   },
   computedFieldGuide: {
@@ -219,5 +224,34 @@ export default {
     deleteTitle: 'Deleting a template',
     deleteBody:
       'A template bound to one or more Start Events cannot be deleted. Unbind it in Process Design first, then delete the template.',
+  },
+  upTasksToClaimGuide: {
+    pageTitle: 'Tasks to Claim',
+    crumb: 'User Portal · Task · Tasks to Claim',
+    intro:
+      'Tasks to Claim is the shared queue for user tasks assigned to a business unit role. Every member of that role sees the same list. You must Claim a request before you can edit or submit it. Direct-user, hierarchy, and virtual-group tasks stay on My To Do Tasks and do not appear here.',
+    flowTitle: 'Order of work',
+    flow1: 'Open Tasks to Claim',
+    flow2: 'Open a request that has no Claimed By name',
+    flow3: 'Click Claim, then edit and submit',
+    flow4: 'Use Unclaim if you need to let another role member take it',
+    listTitle: 'What the list shows',
+    listBody:
+      'Open User Portal → Task → Tasks to Claim. Claimed By is empty until someone holds the request. After a claim, the column shows You for your own hold, or the other person’s name. A Held row is still on this list so the whole role can see who took it. Click the Request ID to open the form.',
+    claimTitle: 'Claim and Unclaim',
+    claimBody:
+      'Claim locks the request to you. It then appears on My To Do Tasks for you, and other members can only view it. Unclaim clears the holder so any remaining member of the same role can Claim it again. Completing the task does not need a second Claim if you already hold it.',
+    claimSample: 'button on the list and on the task banner',
+    unclaimSample: 'releases the hold; the row stays on Tasks to Claim with Claimed By empty',
+    claimedBySample: 'column on Tasks to Claim',
+    detailTitle: 'On the task page',
+    detailBody:
+      'If nobody holds the request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit.',
+    upgradeTitle: 'After this version: existing To Do',
+    upgradeBody:
+      'Deploy does not rewrite running tasks. A business-unit role request that had no holder moves off My To Do Tasks onto Tasks to Claim — Claim it before you edit. A role request that already had your name as the assignee stays on your My To Do Tasks; finish it as before, without claiming again. Other role members still see that held row on Tasks to Claim as Held. Tasks that are not business-unit role stay on My To Do Tasks as they did before.',
+    failTitle: 'When Claim fails',
+    failBody:
+      'Claim fails if another member already holds the request, you are no longer in the role that was written when the task was created, or the engine is unavailable. Refresh the list: the Claimed By column shows the current holder. Unclaim fails if you are not the holder.',
   },
 }

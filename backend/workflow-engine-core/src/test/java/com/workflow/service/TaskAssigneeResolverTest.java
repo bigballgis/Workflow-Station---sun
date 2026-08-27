@@ -184,6 +184,25 @@ class TaskAssigneeResolverTest {
             assertThat(result.isRequiresClaim()).isTrue();
         }
 
+        /**
+         * Unlike HIERARCHY_ROLE, a one-person BU role is still a claim pool: the portal shows it under
+         * "Tasks to Claim" and the member must Hold it, so a second member added to the role later cannot
+         * walk into a form someone is already editing.
+         */
+        @Test
+        void singleCandidateStillRequiresClaim() {
+            when(adminCenterClient.isEligibleRole(BU_ID, ROLE_ID)).thenReturn(true);
+            when(adminCenterClient.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID))
+                    .thenReturn(List.of("only-one"));
+
+            TaskAssigneeResolver.ResolveResult result = resolver.resolve(
+                    AssigneeType.BU_ROLE, ROLE_ID, BU_ID, INITIATOR_ID, null);
+
+            assertThat(result.getAssignee()).isNull();
+            assertThat(result.getCandidateUsers()).containsExactly("only-one");
+            assertThat(result.isRequiresClaim()).isTrue();
+        }
+
         @Test
         void notEligible() {
             when(adminCenterClient.isEligibleRole(BU_ID, ROLE_ID)).thenReturn(false);
@@ -208,7 +227,8 @@ class TaskAssigneeResolverTest {
             TaskAssigneeResolver.ResolveResult result = resolver.resolve(
                     "FIXED_BU_ROLE", ROLE_ID, BU_ID, INITIATOR_ID, null);
 
-            assertThat(result.getAssignee()).isEqualTo("x");
+            assertThat(result.getCandidateUsers()).containsExactly("x");
+            assertThat(result.isRequiresClaim()).isTrue();
         }
 
         @Test

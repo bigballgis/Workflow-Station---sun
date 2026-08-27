@@ -91,7 +91,8 @@ class TaskQueryProperties {
                 workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository),
             new MiParticipantEnrichmentComponent(jdbcTemplate),
             new TaskHistoryComponent(workflowEngineClient, processHistoryRepository),
-            requestIdEnricher
+            requestIdEnricher,
+            new com.portal.component.TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient)
         );
         ReflectionTestUtils.setField(taskQueryComponent, "taskQueryExecutor", (java.util.concurrent.Executor) Runnable::run);
         random = new Random();

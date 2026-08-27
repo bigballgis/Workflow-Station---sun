@@ -68,6 +68,14 @@ public class TaskController {
         return ApiResponse.success(taskQueryComponent.queryTodoList(userId, request));
     }
 
+    @Operation(summary = "Query Tasks to Claim list (BU Role pool, shared list chrome)")
+    @PostMapping("/to-claim/query")
+    public ApiResponse<PortalListPage<TaskInfo>> queryToClaimTasks(
+            @CurrentUserId String userId,
+            @RequestBody @Valid TodoTaskQueryRequest request) {
+        return ApiResponse.success(taskQueryComponent.queryToClaimList(userId, request));
+    }
+
     @Operation(summary = "Get task detail")
     @GetMapping("/{taskId}")
     public ApiResponse<TaskInfo> getTaskDetail(
@@ -75,6 +83,8 @@ public class TaskController {
             @PathVariable String taskId) {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        taskProcessComponent.annotateClaimState(task, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null));
         // Consistent with TaskFormController: canView = canViewTaskForm (initiator + assignee), not just canProcessTask
         if (userId != null && !taskProcessComponent.canViewTaskForm(task, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null))) {

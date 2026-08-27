@@ -4,6 +4,7 @@ import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationRule;
 import com.portal.repository.DelegationRuleRepository;
+import com.portal.util.BuRolePoolTasks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -148,6 +149,12 @@ public class TaskPermissionEvaluator {
         String assignmentType = task.getAssignmentType();
         String assignee = task.getAssignee();
 
+        // A held BU Role request stays held until its claimer releases it; a second claim would
+        // hand two members the same editable form.
+        if (BuRolePoolTasks.isClaimPoolTask(task) && BuRolePoolTasks.isHeld(task)) {
+            return false;
+        }
+
         return switch (assignmentType != null ? assignmentType : "") {
             case "CANDIDATE_USERS" ->
                     candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername);
@@ -169,6 +176,42 @@ public class TaskPermissionEvaluator {
     }
 
     /**
+     * Fills the claim flags the portal UI needs to decide between "Claim", "Unclaim" and read-only
+     * for BU Role pool rows. Kept next to the permission rules so list, detail and claim endpoints
+     * cannot drift apart on who holds a request.
+     */
+    public void annotateClaimState(TaskInfo task, String userId, String portalUsername) {
+        if (task == null) {
+            return;
+        }
+        boolean pool = BuRolePoolTasks.isClaimPoolTask(task);
+        task.setClaimPoolTask(pool);
+        if (!pool) {
+            task.setClaimedByCurrentUser(false);
+            task.setClaimable(false);
+            return;
+        }
+        task.setClaimedByCurrentUser(isHeldByUser(task, userId, portalUsername));
+        task.setClaimable(!BuRolePoolTasks.isHeld(task)
+                && candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername));
+    }
+
+    public void annotateClaimState(List<TaskInfo> tasks, String userId, String portalUsername) {
+        if (tasks == null) {
+            return;
+        }
+        for (TaskInfo task : tasks) {
+            annotateClaimState(task, userId, portalUsername);
+        }
+    }
+
+    public boolean isHeldByUser(TaskInfo task, String userId, String portalUsername) {
+        return task != null
+                && task.getAssignee() != null
+                && matchesPortalIdentity(task.getAssignee(), userId, portalUsername);
+    }
+
+    /**
      * Whether the user may process the task
      */
     public boolean canProcessTask(TaskInfo task, String userId) {
@@ -182,6 +225,13 @@ public class TaskPermissionEvaluator {
         // Allow when assignee matches current user (including after claim)
         if (assignee != null && matchesPortalIdentity(assignee, userId, portalUsername)) {
             return true;
+        }
+
+        // BU Role claim pool: processing rights belong to the claimer only. The assignee match
+        // above already let the holder through; everyone else in the role stays read-only whether
+        // the request is free (must claim first) or held by a colleague.
+        if (BuRolePoolTasks.isClaimPoolTask(task)) {
+            return false;
         }
 
         // Direct user assignment
@@ -287,6 +337,12 @@ public class TaskPermissionEvaluator {
             return true;
         }
         if (task.getAssignee() != null && matchesPortalIdentity(task.getAssignee(), userId, portalUsername)) {
+            return true;
+        }
+        // Claim pool members keep read access to the whole role's queue: they need to open a held
+        // request to see its content and who is holding it, even though they cannot edit it.
+        if (BuRolePoolTasks.isClaimPoolTask(task)
+                && candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername)) {
             return true;
         }
         return false;

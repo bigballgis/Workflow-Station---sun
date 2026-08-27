@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import java.util.function.Supplier;
 
 /**
  * Task query, orphan repair, and task-info building.
@@ -194,7 +195,8 @@ public class TaskQueryService {
             }
 
             PagedVisibleTasks pageSlice = loadVisiblePage(
-                    userId, groupIds, safe, activeBusinessUnitId, safePage, safeSize);
+                    () -> buildVisibleTaskQuery(userId, groupIds, safe),
+                    userId, activeBusinessUnitId, safePage, safeSize);
 
             Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pageSlice.tasks());
             List<TaskListResult.TaskInfo> taskInfos = pageSlice.tasks().stream()
@@ -221,19 +223,66 @@ public class TaskQueryService {
     }
 
     /**
+     * Claim-pool page ("Tasks to Claim"): tasks where the user is a Flowable candidate, including
+     * ones another member already claimed. {@code taskCandidateUser} alone hides claimed tasks, so
+     * the pool would silently lose rows the moment somebody holds them and the rest of the role
+     * could no longer see who took the task.
+     */
+    public TaskListResult getUserClaimPoolTasks(String userId, int page, int size,
+                                                String activeBusinessUnitId,
+                                                EngineTaskListCriteria criteria) {
+        try {
+            validateUserId(userId);
+            EngineTaskListCriteria safe = criteria != null ? criteria : EngineTaskListCriteria.empty();
+            int safePage = Math.max(page, 0);
+            int safeSize = Math.max(size, 1);
+
+            PagedVisibleTasks pageSlice = loadVisiblePage(
+                    () -> buildClaimPoolTaskQuery(userId, safe),
+                    userId, activeBusinessUnitId, safePage, safeSize);
+
+            Map<String, String> startUsers = taskInfoAssembler.prewarmUserDisplayNames(pageSlice.tasks());
+            List<TaskListResult.TaskInfo> taskInfos = pageSlice.tasks().stream()
+                    .map(t -> taskInfoAssembler.convertFlowableTaskToTaskInfo(t, startUsers))
+                    .toList();
+
+            int totalPages = (int) Math.ceil((double) pageSlice.totalCount() / safeSize);
+
+            return TaskListResult.builder()
+                    .tasks(taskInfos)
+                    .totalCount(pageSlice.totalCount())
+                    .currentPage(safePage)
+                    .pageSize(safeSize)
+                    .totalPages(totalPages)
+                    .build();
+
+        } catch (Exception e) {
+            throw new WorkflowBusinessException("TASK_QUERY_ERROR",
+                    "Failed to query user claim pool tasks: " + e.getMessage(), e);
+        }
+    }
+
+    private TaskQuery buildClaimPoolTaskQuery(String userId, EngineTaskListCriteria safe) {
+        TaskQuery visibility = ClaimPoolTaskQueries.visibleIncludingClaimed(
+                taskService.createTaskQuery(), userId);
+        visibility = applyListFilters(visibility, safe);
+        return applyOrder(visibility, safe.sortBy(), safe.sortDirection());
+    }
+
+    /**
      * FIXED_BU_ROLE visibility is BPMN metadata, not a Flowable predicate. When a workspace BU
      * is set, scan then filter before OFFSET so page size and totalCount stay consistent.
      */
     private PagedVisibleTasks loadVisiblePage(
-            String userId, List<String> groupIds, EngineTaskListCriteria safe,
-            String activeBusinessUnitId, int safePage, int safeSize) {
+            Supplier<TaskQuery> queryFactory,
+            String userId, String activeBusinessUnitId, int safePage, int safeSize) {
         if (!StringUtils.hasText(activeBusinessUnitId)) {
-            long totalCount = buildVisibleTaskQuery(userId, groupIds, safe).count();
-            List<Task> paged = buildVisibleTaskQuery(userId, groupIds, safe)
+            long totalCount = queryFactory.get().count();
+            List<Task> paged = queryFactory.get()
                     .listPage(safePage * safeSize, safeSize);
             return new PagedVisibleTasks(paged, totalCount);
         }
-        List<Task> fetched = new ArrayList<>(buildVisibleTaskQuery(userId, groupIds, safe)
+        List<Task> fetched = new ArrayList<>(queryFactory.get()
                 .listPage(0, BU_WORKSPACE_SCAN_CAP));
         fetched = taskOrphanRepairService.applyActiveWorkspaceBuTaskFilter(
                 fetched, activeBusinessUnitId, userId);

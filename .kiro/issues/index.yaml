@@ -2649,3 +2649,44 @@
     已导入的 FU 需重新导入（或打开 Process Design 触发落库前 stale-id 修复后再看 Action Design）。
     验证：BpmnIdRewriterTest + ProcessBpmnStaleIdFixerTest。
 
+- id: "1559"
+  status: fixed
+  fixed_at: "2026-08-26"
+  severity: major
+  category: bug
+  summary: "BU Role 候选池任务同角色多人可同时编辑提交，后提交者覆盖先提交者"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskPermissionEvaluator.java"
+  note: |
+    根因：BU Role 候选池任务任何候选人都能直接打开表单并 complete（completeTask 还会隐式 auto-claim），
+    没有独占锁；单人角色更是被 TaskAssigneeResolver 直接 assign，连 Claim 动作都不存在。
+    修复（MVP1，仅限 BU Role 池；VIRTUAL_GROUP / 手工候选池 / HIERARCHY_ROLE 不在范围内）：
+    - engine TaskAssigneeResolver：BU_ROLE 一律进认领池（单人也要 Claim）；
+      新增 /api/v1/tasks/claim-pool（taskCandidateUser + ignoreAssigneeValue，含已被他人认领的行）。
+    - portal BuRolePoolTasks 判定池任务；TaskPermissionEvaluator 收口 claim/process/view +
+      annotateClaimState；claim/unclaim 加持有人校验；complete 不再对池任务 auto-claim。
+    - 前端新增 Tasks to Claim 页（Claim / Unclaim / Claimed By），详情页 TaskClaimBanner +
+      非持有人只读闸（隐藏 TaskActionBar、formReadOnly）。
+    验证：TaskAssigneeResolverTest、ClaimPoolTaskQueriesTest、BuRolePoolTasksTest（含 staysOnTodoList /
+    requireEnginePage）、TaskPermissionEvaluatorClaimPoolTest、ToClaimTaskColumnSpecTest、
+    TaskClaimBanner / TaskActionBarClaimLock / useTaskClaimActions vitest。
+    Playwright（developer / hase-hmdc / HMDC_Index_Role，密码登录）：
+    frontend/user-portal/verification-screenshots/2026-08-27_to-claim-list.png、
+    2026-08-27_todo-list.png、2026-08-27_help-up-tasks-to-claim.png。
+    升级：不改写在途 Flowable 行。未持有的 BU Role 从 My To Do 进 Tasks to Claim（须 Claim）；
+    已有 assignee 的留在持有人 My To Do，办结不必再认领。Help：/help/up-tasks-to-claim，页内 ?。
+    未做（MVP2）：Leader 角色、强制 unclaim、Apply Permission 选 Member/Leader、Admin Center 展示。
+
+- id: "1560"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: minor
+  category: bug
+  summary: "Completed Tasks 中 MI 节点 Current Assignee 显示用户 UUID 而非姓名"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/TaskInfoAssembler.java"
+  note: |
+    根因：已办 MI 子任务仍有 wf_extended_task_info（is_deleted=false），getTaskInfo 优先走
+    convertToTaskInfo，该路径不解析 currentAssigneeName；门户把空名字回退成 UUID。
+    普通 BU Role 已办没有扩展表行，走 historic 路径会 resolveUserDisplayName → fullName。
+    修复：convertToTaskInfo 与 historic 一样解析 currentAssigneeName。
+    验证：TaskInfoAssemblerConvertToTaskInfoTest；workflow-engine 已重建且 healthy。
+

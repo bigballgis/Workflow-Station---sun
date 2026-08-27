@@ -271,6 +271,13 @@ public class WorkflowEngineClient {
     }
 
     /**
+     * Queries the claim pool visible to the user (candidate tasks, including claimed ones)
+     */
+    public Optional<Map<String, Object>> getUserClaimPoolTasks(String userId, int page, int size) {
+        return taskClient.getUserClaimPoolTasks(userId, page, size);
+    }
+
+    /**
      * Queries all tasks visible to user (virtual groups and department roles)
      */
     public Optional<Map<String, Object>> getUserAllVisibleTasks(String userId, List<String> groupIds,

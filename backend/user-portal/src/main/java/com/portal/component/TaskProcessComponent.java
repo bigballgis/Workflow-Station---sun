@@ -7,6 +7,7 @@ import com.portal.entity.DelegationAudit;
 import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.service.ProcessAssigneeSnapshot;
+import com.portal.util.BuRolePoolTasks;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +62,13 @@ public class TaskProcessComponent {
         }
 
         TaskInfo taskBefore = getTaskOrThrow(taskId);
+        // Hold is enforced portal-side for the BU Role pool: Flowable's claim overwrites the assignee,
+        // so without this a second member would silently take a request a colleague is editing.
+        // Other pool types keep the engine as the sole authority, as before.
+        if (BuRolePoolTasks.isClaimPoolTask(taskBefore)
+                && !taskPermissionEvaluator.canClaimTask(taskBefore, userId, portalUsername)) {
+            throw new PortalException("403", "You are not allowed to claim this task");
+        }
         String enginePrincipal = TaskPermissionEvaluator.resolveEnginePrincipalForWorkflow(taskBefore, userId, portalUsername);
 
         log.info("Using Flowable engine to claim task: {} by engine principal: {} (portal userId: {})", taskId, enginePrincipal, userId);
@@ -103,6 +111,12 @@ public class TaskProcessComponent {
         }
 
         TaskInfo taskBefore = getTaskOrThrow(taskId);
+        // Releasing someone else's Hold is a Leader/approver power and is not part of this phase;
+        // without the check any role member could bounce a colleague off a request mid-edit.
+        if (BuRolePoolTasks.isClaimPoolTask(taskBefore)
+                && !taskPermissionEvaluator.isHeldByUser(taskBefore, userId, portalUsername)) {
+            throw new PortalException("403", "Only the user holding this task can unclaim it");
+        }
         String enginePrincipal = TaskPermissionEvaluator.resolveEnginePrincipalForWorkflow(taskBefore, userId, portalUsername);
 
         log.info("Using Flowable engine to unclaim task: {} by engine principal: {} (portal userId: {})", taskId, enginePrincipal, userId);
@@ -155,9 +169,12 @@ public class TaskProcessComponent {
             throw new PortalException("403", "You do not have permission to process this task");
         }
 
-        // Auto-claim: virtual group or candidate pool without assignee (skip empty pool; claim fails without identity links)
-        boolean poolStyle = "VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType())
-                || "DEPT_ROLE".equals(task.getAssignmentType());
+        // Auto-claim: virtual group or candidate pool without assignee (skip empty pool; claim fails without identity links).
+        // BU Role pools are excluded on purpose: claiming there is an explicit user action, and
+        // auto-claiming on submit would let a second member overwrite the holder's work.
+        boolean poolStyle = !BuRolePoolTasks.isClaimPoolTask(task)
+                && ("VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType())
+                || "DEPT_ROLE".equals(task.getAssignmentType()));
         boolean noAssignee = task.getAssignee() == null || task.getAssignee().isEmpty();
         boolean poolAutoClaimed = false;
         if (poolStyle && noAssignee && !TaskPermissionEvaluator.isEmptyAssignmentPool(task)) {
@@ -330,6 +347,14 @@ public class TaskProcessComponent {
 
     public boolean canViewTaskForm(TaskInfo task, String userId, String portalUsername) {
         return taskPermissionEvaluator.canViewTaskForm(task, userId, portalUsername);
+    }
+
+    /**
+     * Fills the BU Role claim flags on a task.
+     * Forwards to {@link TaskPermissionEvaluator#annotateClaimState(TaskInfo, String, String)}.
+     */
+    public void annotateClaimState(TaskInfo task, String userId, String portalUsername) {
+        taskPermissionEvaluator.annotateClaimState(task, userId, portalUsername);
     }
 
     /**

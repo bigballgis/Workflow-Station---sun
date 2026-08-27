@@ -157,6 +157,8 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/08-fu-public-group-migration.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/09-remove-fu-viewer-role.sql
 # Independent AUDITOR role type + DW view-only permission clamp.
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/10-add-auditor-role-type.sql
+# Fix HASE HMDC operator role code typo from 06-hase-organization-seed.sql.
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/11-rename-hmdc-operator-role.sql
 
 # Step 4 used to run 99-maintenance/00-wipe-all-function-units.sql here. Removed: this script
 # only runs when the data directory is empty, and Steps 1-3 create no function units, so the

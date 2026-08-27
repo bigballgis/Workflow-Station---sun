@@ -12,11 +12,13 @@ import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TaskStatistics;
 import com.portal.dto.TaskHistoryInfo;
 import com.portal.dto.TodoTaskQueryRequest;
+import com.portal.util.BuRolePoolTasks;
 import com.portal.util.EngineTaskPushdown;
 import com.portal.util.ListQuerySupport;
 import com.portal.util.RequestContextInheritanceUtils;
 import com.portal.util.TaskInfoListOps;
 import com.portal.util.TaskQueryColumnFilters;
+import com.portal.util.ToClaimTaskColumnSpec;
 import com.portal.util.TodoTaskColumnSpec;
 import com.portal.util.WorkflowEnginePayloadHelper;
 import com.platform.security.util.SecurityContextUtils;
@@ -61,6 +63,7 @@ import java.util.stream.Collectors;
 public class TaskQueryComponent {
 
     static final String TODO_LIST_KEY = "todo-tasks";
+    static final String TO_CLAIM_LIST_KEY = "to-claim-tasks";
 
     private final ProcessInstanceRepository processInstanceRepository;
     private final WorkflowEngineClient workflowEngineClient;
@@ -71,6 +74,7 @@ public class TaskQueryComponent {
     private final MiParticipantEnrichmentComponent miParticipantEnricher;
     private final TaskHistoryComponent taskHistoryComponent;
     private final RequestIdEnricher requestIdEnricher;
+    private final TaskPermissionEvaluator taskPermissionEvaluator;
 
     /** Lazy: breaks cycle with {@link TaskProcessComponent} which depends on this component. */
     @Lazy
@@ -167,6 +171,91 @@ public class TaskQueryComponent {
                 elapsedMs, elapsedMs, 0L);
         return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(), List.copyOf(groups),
                 request.page(), request.size(), total);
+    }
+
+    /**
+     * Shared-list Tasks to Claim page: the BU Role pools the user belongs to, including requests a
+     * colleague already holds (shown read-only with the holder's name) so the whole role sees the
+     * same queue. Rows are filtered and paged in the portal — the pool is bounded by the user's
+     * role membership, and Flowable cannot express the BU Role predicate.
+     */
+    public PortalListPage<TaskInfo> queryToClaimList(String userId, TodoTaskQueryRequest request) {
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
+        }
+        if (userId == null || userId.isBlank()) {
+            throw new PortalException("401", "Authenticated user id is required for task query");
+        }
+        long started = System.nanoTime();
+
+        List<ListColumnFilter> filters = new ArrayList<>(request.filters());
+        if (!request.priorities().isEmpty()) {
+            filters.add(new ListColumnFilter("priority", "in", String.join(",", request.priorities()), null));
+        }
+        TaskQueryRequest adapted = TaskQueryRequest.builder()
+                .userId(userId)
+                .page(request.page())
+                .size(request.size())
+                .filters(filters)
+                .sortBy(request.sortField())
+                .sortDirection(request.sortDirection())
+                .groupBy(request.groupBy())
+                .keyword(request.keyword())
+                .build();
+
+        List<TaskInfo> poolTasks = fetchAllClaimPoolTasksPaged(userId);
+        maybeEnrichRequestIdsForColumnFilter(poolTasks, adapted);
+        List<TaskInfo> filtered = applyFilters(poolTasks, adapted);
+        filtered = TaskInfoListOps.applySorting(filtered, adapted);
+
+        List<PortalListGroup> groups = new ArrayList<>();
+        if (request.groupBy() != null && !request.groupBy().isBlank()) {
+            groups.addAll(TaskInfoListOps.groupsOf(filtered, request.groupBy()));
+        }
+        List<TaskInfo> paged = new ArrayList<>(
+                TaskInfoListOps.pageOf(filtered, request.page(), request.size()));
+        requestIdEnricher.enrichTaskRequestIds(paged);
+        EngineTaskMapper.clearTaskVariablesForList(paged);
+
+        ListQuerySupport.logIfSlow(log, TO_CLAIM_LIST_KEY, request.page(), request.size(), filtered.size(), started);
+        return new PortalListPage<>(ToClaimTaskColumnSpec.columns(), paged, List.copyOf(groups),
+                request.page(), request.size(), filtered.size());
+    }
+
+    /**
+     * Engine claim-pool pages, narrowed to BU Role pools and to the active workspace, with the
+     * per-row claim flags the UI needs to pick between Claim, Unclaim and read-only.
+     */
+    private List<TaskInfo> fetchAllClaimPoolTasksPaged(String userId) {
+        String portalUsername = SecurityContextUtils.getCurrentUsername().orElse(null);
+        List<TaskInfo> out = new ArrayList<>();
+        final int batch = 500;
+        for (int p = 0; ; p++) {
+            Map<String, Object> page = BuRolePoolTasks.requireEnginePage(
+                    workflowEngineClient.getUserClaimPoolTasks(userId, p, batch), p);
+            List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(page);
+            if (tasks == null || tasks.isEmpty()) {
+                break;
+            }
+            List<TaskInfo> converted = new ArrayList<>(tasks.size());
+            for (Map<String, Object> taskMap : tasks) {
+                converted.add(EngineTaskMapper.convertMapToTaskInfo(taskMap));
+            }
+            out.addAll(BuRolePoolTasks.retainClaimPoolTasks(converted));
+            if (tasks.size() < batch) {
+                break;
+            }
+        }
+        Set<String> withdrawn = findWithdrawnProcessInstanceIds(out.stream()
+                .map(TaskInfo::getProcessInstanceId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet()));
+        List<TaskInfo> visible = out.stream()
+                .filter(t -> t.getProcessInstanceId() == null || !withdrawn.contains(t.getProcessInstanceId()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        visible = workspaceTaskFilter.filterFixedBuRoleTasksForActiveWorkspace(visible, userId);
+        taskPermissionEvaluator.annotateClaimState(visible, userId, portalUsername);
+        return visible;
     }
 
     private static boolean isDelegatedOnlyAssignmentFilter(List<String> assignmentTypes) {
@@ -463,6 +552,11 @@ public class TaskQueryComponent {
                     .filter(t -> !taskProcessComponent.shouldHideTaskInTodoList(t, userId, portalUsername))
                     .collect(Collectors.toList());
         }
+        // Deploy does not rewrite Flowable rows: unheld BU Role tasks leave My To Do (see staysOnTodoList).
+        filtered = filtered.stream()
+                .filter(BuRolePoolTasks::staysOnTodoList)
+                .collect(Collectors.toList());
+        taskPermissionEvaluator.annotateClaimState(filtered, userId, portalUsername);
         return workspaceTaskFilter.filterFixedBuRoleTasksForActiveWorkspace(filtered, userId);
     }
 

@@ -52,6 +52,13 @@ export const GUIDELINES: Guideline[] = [
     summaryKey: 'guides.emailMonitor.summary',
     load: () => import('@/views/EmailMonitorGuide.vue'),
   },
+  {
+    id: 'up-tasks-to-claim',
+    path: '/up-tasks-to-claim',
+    titleKey: 'guides.upTasksToClaim.title',
+    summaryKey: 'guides.upTasksToClaim.summary',
+    load: () => import('@/views/UpTasksToClaimGuide.vue'),
+  },
 ]
 
 /**
@@ -175,6 +182,12 @@ export const NAV_TREE: NavNode[] = [
         titleKey: 'nav.upSectionTask',
         children: [
           { kind: 'leaf', id: 'up-todo', titleKey: 'nav.upTodo' },
+          {
+            kind: 'leaf',
+            id: 'up-to-claim',
+            titleKey: 'nav.upTasksToClaim',
+            to: '/up-tasks-to-claim',
+          },
           { kind: 'leaf', id: 'up-done', titleKey: 'nav.upCompleted' },
         ],
       },

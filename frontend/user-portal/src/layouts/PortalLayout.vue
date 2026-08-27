@@ -38,13 +38,23 @@
               BI Dashboard
             </template>
           </el-menu-item>
-          <!-- Task 区：待办 + 已处理任务 -->
+          <!-- Task 区：认领池 + 待办 + 已处理任务 -->
           <li
             v-if="showFullPortal"
             class="menu-section-label"
           >
             {{ t('menu.sectionTask') }}
           </li>
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/tasks/to-claim"
+            class="menu-item-tasks-to-claim"
+          >
+            <el-icon class="nav-anim nav-anim--wobble"><Pointer /></el-icon>
+            <template #title>
+              {{ t('menu.tasksToClaim') }}
+            </template>
+          </el-menu-item>
           <el-menu-item
             v-if="showFullPortal"
             index="/tasks"
@@ -269,7 +279,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import {
   HomeFilled, List, Document, Share,
-  Fold, Expand, DataAnalysis, Grid
+  Fold, Expand, DataAnalysis, Grid, Pointer
 } from '@element-plus/icons-vue'
 import SelfServiceBanner from '@/components/SelfServiceBanner.vue'
 import WorkspaceContextBar from '@/components/WorkspaceContextBar.vue'

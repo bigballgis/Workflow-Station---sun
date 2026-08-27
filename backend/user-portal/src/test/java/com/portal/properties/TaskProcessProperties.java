@@ -105,6 +105,8 @@ class TaskProcessProperties {
             org.mockito.Mockito.mock(com.portal.component.RequestIdEnricher.class);
         com.portal.component.EngineSubTableHydrator engineSubTableHydrator =
             new com.portal.component.EngineSubTableHydrator(workflowEngineClient);
+        TaskPermissionEvaluator taskPermissionEvaluator =
+            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient);
         taskQueryComponent = new TaskQueryComponent(
             processInstanceRepository,
             workflowEngineClient,
@@ -115,10 +117,9 @@ class TaskProcessProperties {
                 workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository),
             new MiParticipantEnrichmentComponent(jdbcTemplate),
             new TaskHistoryComponent(workflowEngineClient, processHistoryRepository),
-            requestIdEnricher
+            requestIdEnricher,
+            taskPermissionEvaluator
         );
-        TaskPermissionEvaluator taskPermissionEvaluator =
-            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient);
         ProcessInstanceSyncComponent processInstanceSyncComponent =
             new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository,
                     Mockito.mock(com.portal.component.OwnerFieldComponent.class));

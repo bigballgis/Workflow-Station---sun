@@ -281,7 +281,7 @@ public class TaskAssigneeResolver {
             }
         }
         String roleSummary = String.join(", ", roleIds);
-        return toPoolResult(AssigneeType.BU_ROLE, new ArrayList<>(allCandidates),
+        return toClaimPoolResult(AssigneeType.BU_ROLE, new ArrayList<>(allCandidates),
                 "No users with roles [" + roleSummary + "] in business unit " + businessUnitId);
     }
 
@@ -289,6 +289,25 @@ public class TaskAssigneeResolver {
         return ResolveResult.builder()
                 .assigneeType(type)
                 .errorMessage(msg)
+                .build();
+    }
+
+    /**
+     * BU Role is the only pool the portal exposes as a claim pool ("Tasks to Claim"): a single
+     * eligible member must still claim before editing, otherwise the task would be pre-assigned
+     * and skip the Hold that keeps two members from overwriting each other.
+     */
+    private static ResolveResult toClaimPoolResult(AssigneeType type, List<String> candidates, String emptyMsg) {
+        if (candidates == null || candidates.isEmpty()) {
+            return ResolveResult.builder()
+                    .assigneeType(type)
+                    .errorMessage(emptyMsg)
+                    .build();
+        }
+        return ResolveResult.builder()
+                .candidateUsers(new ArrayList<>(candidates))
+                .assigneeType(type)
+                .requiresClaim(true)
                 .build();
     }
 
