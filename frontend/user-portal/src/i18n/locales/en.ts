@@ -1,3 +1,5 @@
+import applicationStatusLabels from '../application-status-labels.json'
+
 export default {
   app: {
     name: 'User Portal',
@@ -564,10 +566,10 @@ export default {
     currentStep: 'Current Step',
     startTime: 'Start Time',
     status: 'Status',
-    running: 'Running',
-    completed: 'Completed',
-    withdrawn: 'Withdrawn',
-    rejected: 'Rejected',
+    running: applicationStatusLabels.RUNNING.en,
+    completed: applicationStatusLabels.COMPLETED.en,
+    withdrawn: applicationStatusLabels.WITHDRAWN.en,
+    rejected: applicationStatusLabels.REJECTED.en,
     draft: 'Draft',
     draftBox: 'Drafts',
     withdraw: 'Withdraw',

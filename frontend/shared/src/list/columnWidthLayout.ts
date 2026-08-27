@@ -1,6 +1,9 @@
 import type { ListColumnKind } from './columnMeta'
 import { clampColumnWidth } from './columnResizeCursor'
 
+/** Bump when the default-width formula changes so stale session bases cannot ellipsis headers. */
+export const LIST_COLUMN_LAYOUT_STORE_VERSION = 2
+
 /** Matches `.list-col-caret` (el-icon box is ~1em plus padding, not the 12px font-size). */
 export const HEADER_CARET_PX = 16
 export const HEADER_TRIGGER_GAP_PX = 4
@@ -112,6 +115,7 @@ function measureByCanvas(text: string): number {
     if (!Number.isFinite(width) || width <= 0) return 0
     return width + trackingPx(text)
   } catch {
+    // FALLBACK(ux): canvas is unavailable or throws in jsdom; DOM measure / glyph estimate still run.
     return 0
   }
 }

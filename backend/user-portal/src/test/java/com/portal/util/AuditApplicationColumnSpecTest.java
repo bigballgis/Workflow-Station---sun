@@ -55,6 +55,8 @@ class AuditApplicationColumnSpecTest {
                 .containsExactly("RUNNING");
         assertThat(AuditApplicationColumnSpec.storedStatusCodesForKeyword("已完成"))
                 .containsExactly("COMPLETED");
+        assertThat(ApplicationStatusPaintedLabels.class.getResource("/list/application-status-labels.json"))
+                .isNotNull();
         List<Object> params = new ArrayList<>();
         String where = AuditApplicationColumnSpec.textSearchClause("进行中", params);
         assertThat(where).contains("pi.status IN (?)");

@@ -1,3 +1,5 @@
+import applicationStatusLabels from '../application-status-labels.json'
+
 export default {
   app: {
     name: '用户门户',
@@ -564,10 +566,10 @@ export default {
     currentStep: '当前步骤',
     startTime: '发起时间',
     status: '状态',
-    running: '进行中',
-    completed: '已完成',
-    withdrawn: '已撤回',
-    rejected: '已拒绝',
+    running: applicationStatusLabels.RUNNING['zh-CN'],
+    completed: applicationStatusLabels.COMPLETED['zh-CN'],
+    withdrawn: applicationStatusLabels.WITHDRAWN['zh-CN'],
+    rejected: applicationStatusLabels.REJECTED['zh-CN'],
     draft: '草稿',
     draftBox: '草稿箱',
     withdraw: '撤回',

@@ -4,6 +4,7 @@ import {
   columnWidth,
   createDefaultGridRuntime,
   loadGridRuntimeFromSession,
+  migrateMtvWidthsToListLayout,
   moveColumn,
   saveGridRuntimeToSession,
   setColumnWidth,
@@ -131,5 +132,27 @@ describe('mainTableViewGridRuntime', () => {
     expect(restored.columnWidths.name).toBe(200)
     expect(restored.sort).toBeNull()
     expect(restored.filters).toEqual({})
+  })
+
+  it('copies legacy mtv-layout widths into the shared list-layout session once', () => {
+    sessionStorage.setItem(
+      'portal-mtv-layout:11',
+      JSON.stringify({ columnOrder: ['name'], columnWidths: { name: 240 } }),
+    )
+    migrateMtvWidthsToListLayout(11)
+    expect(JSON.parse(sessionStorage.getItem('portal-list-layout:mtv:11') ?? '{}')).toEqual({
+      v: 2,
+      columnWidths: { name: 240 },
+    })
+    sessionStorage.setItem(
+      'portal-list-layout:mtv:11',
+      JSON.stringify({ v: 2, columnWidths: { name: 180 } }),
+    )
+    sessionStorage.setItem(
+      'portal-mtv-layout:11',
+      JSON.stringify({ columnWidths: { name: 999 } }),
+    )
+    migrateMtvWidthsToListLayout(11)
+    expect(JSON.parse(sessionStorage.getItem('portal-list-layout:mtv:11') ?? '{}').columnWidths.name).toBe(180)
   })
 })

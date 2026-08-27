@@ -1,0 +1,6 @@
+{
+  "RUNNING": { "en": "Running", "zh-CN": "进行中", "zh-TW": "進行中" },
+  "COMPLETED": { "en": "Completed", "zh-CN": "已完成", "zh-TW": "已完成" },
+  "WITHDRAWN": { "en": "Withdrawn", "zh-CN": "已撤回", "zh-TW": "已撤回" },
+  "REJECTED": { "en": "Rejected", "zh-CN": "已拒绝", "zh-TW": "已拒絕" }
+}

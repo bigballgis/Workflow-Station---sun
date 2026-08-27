@@ -1,10 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type CSSProperties, type MaybeRefOrGetter, type Ref, toValue } from 'vue'
 import type { ListColumnKind } from './columnMeta'
 import { clampColumnWidth, clampDisplayWidth } from './columnResizeCursor'
-import { headerFitColumnWidth, invalidateHeaderLabelMeasureCache } from './columnWidthLayout'
-
-/** Bump when the default-width formula changes so stale session bases cannot ellipsis headers. */
-const LAYOUT_STORE_VERSION = 2
+import { headerFitColumnWidth, invalidateHeaderLabelMeasureCache, LIST_COLUMN_LAYOUT_STORE_VERSION } from './columnWidthLayout'
 
 function readStoredWidths(key: string): Record<string, number> {
   if (!key) return {}
@@ -12,7 +9,7 @@ function readStoredWidths(key: string): Record<string, number> {
     const raw = sessionStorage.getItem(key)
     if (!raw) return {}
     const parsed = JSON.parse(raw) as { v?: number; columnWidths?: Record<string, number> }
-    if (parsed.v !== LAYOUT_STORE_VERSION) return {}
+    if (parsed.v !== LIST_COLUMN_LAYOUT_STORE_VERSION) return {}
     if (parsed.columnWidths && typeof parsed.columnWidths === 'object') {
       return parsed.columnWidths
     }
@@ -27,7 +24,7 @@ function writeStoredWidths(key: string, columnWidths: Record<string, number>) {
   if (!key) return
   try {
     sessionStorage.setItem(key, JSON.stringify({
-      v: LAYOUT_STORE_VERSION,
+      v: LIST_COLUMN_LAYOUT_STORE_VERSION,
       columnWidths: { ...columnWidths },
     }))
   } catch {

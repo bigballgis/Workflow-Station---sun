@@ -12,13 +12,14 @@ import {
 } from '@/api/mainTableView'
 import type { ListColumnFilterRequest } from '@platform-shared/list/columnMeta'
 import {
-  COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, columnWidth, setColumnWidth,
+  COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, designedColumnWidth, setColumnWidth,
   createDefaultGridRuntime, initColumnOrder,
-  loadGridRuntimeFromSession, moveColumn, orderedColumns, pruneRuntimeToColumns,
+  loadGridRuntimeFromSession, listLayoutStorageKey, migrateMtvWidthsToListLayout, moveColumn, orderedColumns, pruneRuntimeToColumns,
   saveGridRuntimeToSession, toListColumnMeta,
   type GridColumnFilter, type GridDisplayRow, type GridRuntimeState, type GridSortDirection,
 } from '@/utils/mainTableViewGridRuntime'
-import { clampDisplayWidth } from '@platform-shared/list/columnResizeCursor'
+import { useListColumnLayout } from '@platform-shared/list/useListColumnLayout'
+import { headerFitColumnWidth } from '@platform-shared/list/columnWidthLayout'
 import {
   downloadMainTableViewRowsAsCsv, formatMainTableViewCell, extractFileLinks, type FileLink,
 } from '@/utils/mainTableViewCsvExport'
@@ -157,61 +158,37 @@ const displayColumns = computed(() => orderedColumns(gridColumns.value, gridRunt
 
 const MTV_SELECTION_COL_WIDTH = 48
 
-// Width of the scroll viewport — tracked so leftover can be distributed across data columns.
-const gridScrollRef = ref<HTMLElement | null>(null)
-const gridViewportWidth = ref(0)
-const gridViewportHeight = ref(0)
-const dragPreview = ref<{ fieldName: string; displayWidth: number } | null>(null)
-let gridResizeObserver: ResizeObserver | null = null
+const layoutStorageKey = computed(() =>
+  selectedViewId.value != null ? listLayoutStorageKey(selectedViewId.value) : '',
+)
 
-function baseWidthOf(col: MainTableViewFieldColumn): number {
-  return columnWidth(col, gridRuntime)
-}
+watch(
+  selectedViewId,
+  (id) => {
+    if (id != null) migrateMtvWidthsToListLayout(id)
+  },
+  { flush: 'sync', immediate: true },
+)
 
-const displayWidthMap = computed(() => {
-  const cols = displayColumns.value
-  const map: Record<string, number> = {}
-  cols.forEach((col) => {
-    map[col.fieldName] = baseWidthOf(col)
-  })
-  const draft = dragPreview.value
-  if (draft) {
-    map[draft.fieldName] = clampDisplayWidth(draft.displayWidth)
-  }
-  return map
+const layoutFields = computed(() => displayColumns.value.map((col) => col.fieldName))
+const {
+  gridScrollRef, gridFits, gridTableHeight, gridInnerStyle, widthOf, setWidth, persistWidths,
+} = useListColumnLayout({
+  storageKey: layoutStorageKey,
+  fields: layoutFields,
+  extraWidth: MTV_SELECTION_COL_WIDTH,
+  defaultWidthOf: (field) => {
+    const col = displayColumns.value.find((c) => c.fieldName === field)
+    if (!col) return headerFitColumnWidth(field)
+    return designedColumnWidth(col)
+  },
+  labelOf: (field) => displayColumns.value.find((c) => c.fieldName === field)?.displayLabel ?? field,
+  kindOf: (field) => displayColumns.value.find((c) => c.fieldName === field)?.kind,
 })
 
 function displayWidthOf(col: MainTableViewFieldColumn): number {
-  return displayWidthMap.value[col.fieldName] ?? baseWidthOf(col)
+  return widthOf(col.fieldName)
 }
-
-const gridTotalColumnWidth = computed(() => {
-  const colsWidth = displayColumns.value.reduce(
-    (sum, col) => sum + displayWidthOf(col),
-    0,
-  )
-  return MTV_SELECTION_COL_WIDTH + colsWidth
-})
-
-const gridFits = computed(() =>
-  gridViewportWidth.value <= 0 || gridTotalColumnWidth.value <= gridViewportWidth.value,
-)
-
-const gridInnerStyle = computed(() => {
-  const total = gridTotalColumnWidth.value
-  if (gridFits.value && total > 0) {
-    return {
-      width: `${total}px`,
-      minWidth: `${total}px`,
-      maxWidth: `${total}px`,
-      alignSelf: 'flex-start',
-    }
-  }
-  return { width: '100%', minWidth: '100%' }
-})
-const gridTableHeight = computed(() =>
-  gridViewportHeight.value > 0 ? gridViewportHeight.value : undefined,
-)
 
 // Forces el-table to fully rebuild (no stale row/column DOM reuse) whenever the selected view or its
 // columns change — otherwise switching views can briefly render the old rows under the new headers.
@@ -225,9 +202,11 @@ const pagedRows = computed<GridDisplayRow[]>(() => allRows.value)
 const displayTotal = computed(() => dataTotal.value)
 
 function persistRuntime() {
-  if (selectedViewId.value) {
-    saveGridRuntimeToSession(selectedViewId.value, gridRuntime)
+  if (!selectedViewId.value) return
+  for (const col of displayColumns.value) {
+    setColumnWidth(gridRuntime, col.fieldName, widthOf(col.fieldName))
   }
+  saveGridRuntimeToSession(selectedViewId.value, gridRuntime)
 }
 
 function resetRuntimeForView(viewId: number) {
@@ -599,7 +578,7 @@ function openFilterDialog(col: MainTableViewFieldColumn) {
 
 function openWidthDialog(col: MainTableViewFieldColumn) {
   widthDialogField.value = col
-  widthDraft.value = columnWidth(col, gridRuntime)
+  widthDraft.value = widthOf(col.fieldName)
   widthDialogVisible.value = true
 }
 
@@ -631,25 +610,18 @@ function clearFilterFromDialog() {
 
 function applyColumnWidth() {
   if (!widthDialogField.value) return
-  setColumnWidth(gridRuntime, widthDialogField.value.fieldName, widthDraft.value)
+  setWidth(widthDialogField.value.fieldName, widthDraft.value)
+  persistWidths()
   persistRuntime()
   widthDialogVisible.value = false
 }
 
 function handleColumnResize(fieldName: string, width: number) {
-  dragPreview.value = { fieldName, displayWidth: clampDisplayWidth(width) }
+  setWidth(fieldName, width)
 }
 
 function handleColumnResizeEnd() {
-  const draft = dragPreview.value
-  if (draft) {
-    const cols = displayColumns.value
-    const index = cols.findIndex((col) => col.fieldName === draft.fieldName)
-    if (index >= 0) {
-      setColumnWidth(gridRuntime, draft.fieldName, draft.displayWidth)
-    }
-    dragPreview.value = null
-  }
+  persistWidths()
   persistRuntime()
   nextTick(() => tableRef.value?.doLayout?.())
 }
@@ -743,33 +715,11 @@ watch(gridFits, () => {
   nextTick(() => tableRef.value?.doLayout?.())
 })
 
-// Observe the scroll viewport (behind v-if) — (dis)connect as it mounts/unmounts.
-watch(gridScrollRef, (el, prev) => {
-  if (prev) gridResizeObserver?.unobserve(prev)
-  if (el) {
-    gridViewportWidth.value = el.clientWidth
-    gridViewportHeight.value = el.clientHeight
-    gridResizeObserver?.observe(el)
-  } else {
-    gridViewportWidth.value = 0
-    gridViewportHeight.value = 0
-  }
-})
-
 onBeforeUnmount(() => {
-  gridResizeObserver?.disconnect()
-  gridResizeObserver = null
+  stopImportProcessProgress()
 })
 
 onMounted(async () => {
-  if (typeof ResizeObserver !== 'undefined') {
-    gridResizeObserver = new ResizeObserver(entries => {
-      const w = entries[0]?.contentRect.width ?? 0
-      const h = entries[0]?.contentRect.height ?? 0
-      if (w > 0) gridViewportWidth.value = w
-      if (h > 0) gridViewportHeight.value = h
-    })
-  }
   await loadFunctionUnits()
   if (selectedFuCode.value) {
     // Honor a FK drill-down landing directly on this route (viewId + fk query params).
@@ -791,7 +741,7 @@ onMounted(async () => {
     importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
     selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
     viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
-    MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableHeight, gridTableKey,
+    MTV_SELECTION_COL_WIDTH, gridInnerStyle, gridScrollRef, gridFits, gridTableHeight, gridTableKey,
     pagedRows, displayTotal, toListColumnMeta,
     handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
     isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, previewFile,
@@ -799,6 +749,6 @@ onMounted(async () => {
     applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
     handleColumnResize, handleColumnResizeEnd, displayWidthOf,
     handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName,
-    loadData, columnWidth, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
+    loadData, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
   }
 }

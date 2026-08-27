@@ -7,7 +7,6 @@ import com.platform.common.list.ListFilterSql;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -105,26 +104,8 @@ public final class AuditApplicationColumnSpec {
                 + " WHERE token.v IN (" + identities + "))))";
     }
 
-    /**
-     * Labels must stay aligned with {@code application.running} / completed / withdrawn /
-     * rejected in en, zh-CN, zh-TW. The grid paints those strings; the row stores the code.
-     */
-    private static final List<StatusSynonym> STATUS_SYNONYMS = List.of(
-            new StatusSynonym("RUNNING", "Running", "进行中", "進行中"),
-            new StatusSynonym("COMPLETED", "Completed", "已完成", "已完成"),
-            new StatusSynonym("WITHDRAWN", "Withdrawn", "已撤回", "已撤回"),
-            new StatusSynonym("REJECTED", "Rejected", "已拒绝", "已拒絕")
-    );
-
     static List<String> storedStatusCodesForKeyword(String keyword) {
-        String needle = keyword.trim().toLowerCase(Locale.ROOT);
-        List<String> codes = new ArrayList<>();
-        for (StatusSynonym row : STATUS_SYNONYMS) {
-            if (row.matches(needle) && !codes.contains(row.code)) {
-                codes.add(row.code);
-            }
-        }
-        return codes;
+        return ApplicationStatusPaintedLabels.storedCodesForKeyword(keyword);
     }
 
     private static String storedStatusCodesClause(String keyword, List<Object> params) {
@@ -141,20 +122,6 @@ public final class AuditApplicationColumnSpec {
             params.add(codes.get(i));
         }
         return sql.append(")").toString();
-    }
-
-    private record StatusSynonym(String code, String... labels) {
-        boolean matches(String needle) {
-            if (code.toLowerCase(Locale.ROOT).contains(needle)) {
-                return true;
-            }
-            for (String label : labels) {
-                if (label.toLowerCase(Locale.ROOT).contains(needle)) {
-                    return true;
-                }
-            }
-            return false;
-        }
     }
 
     private static List<ListColumnMeta.Option> statusOptions() {

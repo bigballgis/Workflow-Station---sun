@@ -2,7 +2,7 @@ import type {
   MainTableViewDataRow, MainTableViewFieldColumn,
 } from '@/api/mainTableView'
 import { clampColumnWidth } from '@platform-shared/list/columnResizeCursor'
-import { headerFitColumnWidth } from '@platform-shared/list/columnWidthLayout'
+import { headerFitColumnWidth, LIST_COLUMN_LAYOUT_STORE_VERSION } from '@platform-shared/list/columnWidthLayout'
 import type { ListColumnFilter, ListColumnMeta } from '@platform-shared/list/columnMeta'
 import { formatMainTableViewCell } from '@/utils/mainTableViewCsvExport'
 
@@ -56,6 +56,14 @@ export function orderedColumns(
     .filter((c): c is MainTableViewFieldColumn => !!c)
 }
 
+/** Designer columnWidth, else header-fit. Session bases live in useListColumnLayout. */
+export function designedColumnWidth(col: MainTableViewFieldColumn): number {
+  if (col.columnWidth != null && col.columnWidth > 0) {
+    return clampColumnWidth(col.columnWidth)
+  }
+  return headerFitColumnWidth(col.displayLabel, col.kind)
+}
+
 /** Session drag → designer columnWidth → header-fit. This is the persisted **base**, not the leftover share. */
 export function columnWidth(
   col: MainTableViewFieldColumn,
@@ -66,10 +74,7 @@ export function columnWidth(
       Math.max(state.columnWidths[col.fieldName], headerFitColumnWidth(col.displayLabel, col.kind)),
     )
   }
-  if (col.columnWidth != null && col.columnWidth > 0) {
-    return clampColumnWidth(col.columnWidth)
-  }
-  return headerFitColumnWidth(col.displayLabel, col.kind)
+  return designedColumnWidth(col)
 }
 
 export function setColumnWidth(
@@ -147,6 +152,32 @@ export function moveColumn(
  * They are built fresh from the columns the backend just declared instead.
  */
 type PersistedGridLayout = Pick<GridRuntimeState, 'columnOrder' | 'columnWidths'>
+
+export function listLayoutStorageKey(viewId: number): string {
+  return `portal-list-layout:mtv:${viewId}`
+}
+
+/**
+ * Views used to persist widths inside {@code portal-mtv-layout:*}. Copy them once into
+ * the shared list-layout session so hug display still remembers the user's drag.
+ */
+export function migrateMtvWidthsToListLayout(viewId: number): void {
+  const listKey = listLayoutStorageKey(viewId)
+  try {
+    if (sessionStorage.getItem(listKey)) return
+    const raw = sessionStorage.getItem(`portal-mtv-layout:${viewId}`)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as PersistedGridLayout
+    const widths = parsed.columnWidths
+    if (!widths || Object.keys(widths).length === 0) return
+    sessionStorage.setItem(
+      listKey,
+      JSON.stringify({ v: LIST_COLUMN_LAYOUT_STORE_VERSION, columnWidths: widths }),
+    )
+  } catch {
+    // FALLBACK(ux): a corrupt legacy entry costs remembered widths, not the row data.
+  }
+}
 
 export function loadGridRuntimeFromSession(viewId: number): GridRuntimeState {
   try {
