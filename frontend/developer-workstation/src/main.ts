@@ -35,6 +35,7 @@ import RecordNoteScopeSelect from './components/designer/RecordNoteScopeSelect.v
 import SensitiveMaskPropsEditor from './components/designer/SensitiveMaskPropsEditor.vue'
 import SensitiveMaskedInput from './components/designer/SensitiveMaskedInput.vue'
 import MiAssignmentPlaceholderWidget from './components/designer/MiAssignmentPlaceholderWidget.vue'
+import HermesValidate from './components/designer/HermesValidate.vue'
 import { registerFormCreateReadonlyParser } from './utils/registerFormCreateReadonlyParser'
 import formCreateFactory from '@form-create/element-ui'
 
@@ -60,6 +61,13 @@ const formCreateWithParser =
   (formCreateFactory as { default?: { parser?: (name: string, config: unknown) => void } }).default ??
   formCreateFactory
 registerFormCreateReadonlyParser(formCreateWithParser as { parser: (name: string, config: unknown) => void })
+
+// Validation+ must emit as soon as a rule is added (Error is optional). Upstream
+// Validate.handleCommand does not emit, so empty Error blocked auto-save and Save.
+// Register on designerForm only — same surface as upstream Validate (not the canvas formCreate).
+;(FcDesigner as typeof FcDesigner & {
+  designerForm: { component: (name: string, component: unknown) => void }
+}).designerForm.component('Validate', HermesValidate)
 
 // Register SubTableBindingSelect into both designerForm (props panel) and formCreate (canvas)
 // FcDesigner.component() calls addComponent() which registers to both instances

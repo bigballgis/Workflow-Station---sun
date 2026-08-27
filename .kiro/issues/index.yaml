@@ -2690,3 +2690,18 @@
     修复：convertToTaskInfo 与 historic 一样解析 currentAssigneeName。
     验证：TaskInfoAssemblerConvertToTaskInfoTest；workflow-engine 已重建且 healthy。
 
+- id: "1561"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Form Design Validation+ 不填 Error 时自动保存和手动保存都不生效"
+  file: "frontend/developer-workstation/src/components/designer/HermesValidate.vue"
+  note: |
+    根因：@form-create/designer Validate.handleCommand 只往本地数组 push 新规则，不 emit。
+    Error 为空时其它 @change 也不会触发，getRule()/formData() 都看不到新行。
+    修复：覆盖 Validate（仅注册到 designerForm），加规则后立刻 onInput；自动保存对比快照前
+    flush 校验面板，并按当前 tab 的 designer getRule 做快照（含子表 Form Design）。
+    验证：HermesValidate.test.ts、useFormAutoSave.test.ts、formDesignerPreviewValidation.test.ts；
+    pnpm run build；developer-workstation-frontend 已重建。
+

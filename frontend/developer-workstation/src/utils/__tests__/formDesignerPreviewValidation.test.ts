@@ -78,6 +78,26 @@ describe('formDesignerPreviewValidation', () => {
     expect((activeRule.props as Record<string, unknown>).disabled).toBeUndefined()
   })
 
+  it('flushDesignerValidatePanelToActiveRule keeps Validation+ rows that omit Error', () => {
+    const activeRule: Record<string, unknown> = { field: 'name', type: 'input' }
+    const ref = {
+      activeRule,
+      validateForm: {
+        api: {
+          formData: () => ({
+            validate: [{ mode: 'email', email: true, trigger: 'blur', adapter: true }],
+            $required: false,
+          }),
+        },
+      },
+    }
+    const result = flushDesignerValidatePanelToActiveRule(ref)
+    expect(result.flushed).toBe(true)
+    expect(activeRule.validate).toEqual([
+      { mode: 'email', email: true, trigger: 'blur', adapter: true },
+    ])
+  })
+
   it('flushDesignerValidatePanelToActiveRule copies pending validate panel data onto activeRule', () => {
     const activeRule: Record<string, unknown> = { field: 'name', type: 'input' }
     const ref = {
