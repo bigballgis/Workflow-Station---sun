@@ -397,46 +397,33 @@ class TaskQueryProperties {
 
         PageResponse<TaskInfo> result = taskQueryComponent.queryTasks(request);
 
-        assertEquals(2, result.getTotalElements());
+        assertEquals(1, result.getTotalElements());
         assertTrue(result.getContent().stream()
-                .allMatch(t -> (t.getTaskName() != null && t.getTaskName().contains(keyword)) ||
-                              (t.getDescription() != null && t.getDescription().contains(keyword))));
+                .allMatch(t -> t.getTaskName() != null && t.getTaskName().contains(keyword)));
     }
 
     /**
-     * 属性8.1: 关键词搜索应该包含发起人名称匹配
-     * 验证通过发起人名称可以搜索到对应的任务
+     * 属性8.1: 工具栏 keyword 不搜已隐藏的 Initiator 列
      */
     @RepeatedTest(20)
-    void keywordSearchShouldMatchInitiatorName() {
+    void keywordSearchDoesNotMatchHiddenInitiatorName() {
         String userId = "user_" + random.nextInt(1000);
         String initiatorName = "张三";
 
-        // 创建包含发起人信息的任务数据
         List<Map<String, Object>> tasks = new ArrayList<>();
-        
-        // 任务1: 发起人名称包含关键词
+
         Map<String, Object> task1 = createTaskMap("task_1", "USER", userId);
         task1.put("taskName", "报销申请审批");
         task1.put("initiatorId", "initiator_1");
         task1.put("initiatorName", "张三");
         tasks.add(task1);
 
-        // 任务2: 发起人名称不包含关键词
         Map<String, Object> task2 = createTaskMap("task_2", "USER", userId);
         task2.put("taskName", "采购申请审批");
         task2.put("initiatorId", "initiator_2");
         task2.put("initiatorName", "李四");
         tasks.add(task2);
 
-        // 任务3: 发起人名称包含关键词
-        Map<String, Object> task3 = createTaskMap("task_3", "USER", userId);
-        task3.put("taskName", "出差申请审批");
-        task3.put("initiatorId", "initiator_3");
-        task3.put("initiatorName", "张三丰");
-        tasks.add(task3);
-        
-        // Mock Flowable 返回
         mockFlowableTasksResponse(tasks);
 
         TaskQueryRequest request = TaskQueryRequest.builder()
@@ -446,10 +433,7 @@ class TaskQueryProperties {
 
         PageResponse<TaskInfo> result = taskQueryComponent.queryTasks(request);
 
-        // 应该返回2个任务（发起人名称包含"张三"的任务）
-        assertEquals(2, result.getTotalElements());
-        assertTrue(result.getContent().stream()
-                .allMatch(t -> t.getInitiatorName() != null && t.getInitiatorName().contains(initiatorName)));
+        assertEquals(0, result.getTotalElements());
     }
 
     /**

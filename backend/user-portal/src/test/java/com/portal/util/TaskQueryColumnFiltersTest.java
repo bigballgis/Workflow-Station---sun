@@ -3,6 +3,7 @@ package com.portal.util;
 import com.platform.common.list.ListColumnFilter;
 import com.platform.common.list.ListRelativeDates;
 import com.portal.dto.TaskInfo;
+import com.portal.dto.TaskQueryRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import java.time.Clock;
@@ -67,11 +68,22 @@ class TaskQueryColumnFiltersTest {
                 .processDefinitionKey("atm-20260623-g")
                 .initiatorName("Developer Test")
                 .description("weekend overtime")
+                .assignmentType("USER")
+                .createTime(LocalDateTime.of(2026, 8, 21, 10, 0))
+                .dueDate(LocalDateTime.of(2026, 9, 1, 18, 30))
                 .build();
         assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "ATM-DC"));
-        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "Case"));
-        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "atm-2026"));
-        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "overtime"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "Approve"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "2026-08-21"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "10:00"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(task, "USER"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "2026-09-01"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "18:30"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "Case"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "Leave"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "Developer"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "atm-2026"));
+        assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "overtime"));
         assertFalse(TaskQueryColumnFilters.toolbarKeywordMatches(task, "zzz"));
     }
 
@@ -100,5 +112,22 @@ class TaskQueryColumnFiltersTest {
                 new ListColumnFilter("functionUnitCode", "contains", "Purchase", null))));
         assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(named, "help_pr"));
         assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(named, "Purchase"));
+    }
+
+    @Test
+    void derivedColumnsNeededForKeywordFilterAndSort() {
+        assertTrue(TaskQueryColumnFilters.needsPortalDerivedTaskColumns(
+                TaskQueryRequest.builder().keyword("ATM").build()));
+        assertTrue(TaskQueryColumnFilters.needsPortalDerivedTaskColumns(
+                TaskQueryRequest.builder()
+                        .filters(List.of(new ListColumnFilter("functionUnitCode", "contains", "help", null)))
+                        .build()));
+        assertTrue(TaskQueryColumnFilters.needsPortalDerivedTaskColumns(
+                TaskQueryRequest.builder().sortBy("requestId").build()));
+        assertFalse(TaskQueryColumnFilters.needsPortalDerivedTaskColumns(
+                TaskQueryRequest.builder()
+                        .filters(List.of(new ListColumnFilter("taskName", "contains", "Approve", null)))
+                        .sortBy("createTime")
+                        .build()));
     }
 }

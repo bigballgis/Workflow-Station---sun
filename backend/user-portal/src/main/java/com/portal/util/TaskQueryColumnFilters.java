@@ -4,9 +4,11 @@ import com.platform.common.list.ListColumnFilter;
 import com.platform.common.list.ListFilterSql;
 import com.platform.common.list.ListRelativeDates;
 import com.portal.dto.TaskInfo;
+import com.portal.dto.TaskQueryRequest;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +38,8 @@ public final class TaskQueryColumnFilters {
             "dueDate");
 
     private static final Set<String> DATETIME_FIELDS = Set.of("createTime", "dueDate");
+    /** Same paint as Portal {@code formatDate} default: {@code YYYY-MM-DD HH:mm}. */
+    private static final DateTimeFormatter KEYWORD_CREATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private static Clock clock = Clock.system(ListRelativeDates.ZONE);
 
@@ -52,23 +56,41 @@ public final class TaskQueryColumnFilters {
     }
 
     /**
-     * Toolbar keyword: OR across cells the To Do list actually shows (requestId is filled
-     * before this runs). Description is included for parity with the pre-shared-list search.
+     * Toolbar keyword: OR across {@link TodoTaskColumnSpec#VISIBLE_FIELDS} painted cells
+     * (requestId / function unit filled before this runs). Create Time uses {@code yyyy-MM-dd HH:mm}.
+     * Hidden columns and description / process key are not searched.
      */
     public static boolean toolbarKeywordMatches(TaskInfo task, String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return true;
         }
         String expected = keyword.trim();
-        for (String field : List.of(
-                "requestId", "taskName", "currentStepName", "functionUnitCode", "functionUnitName",
-                "processDefinitionName", "initiatorName")) {
-            if (textMatches(resolveFieldValue(task, field), "contains", expected)) {
+        for (String field : TodoTaskColumnSpec.VISIBLE_FIELDS) {
+            if (keywordFieldMatches(task, field, expected)) {
                 return true;
             }
         }
-        return textMatches(task.getDescription(), "contains", expected)
-                || textMatches(task.getProcessDefinitionKey(), "contains", expected);
+        return false;
+    }
+
+    /**
+     * Request ID and Function Unit are filled in portal memory. Enrich before keyword,
+     * those column filters, or A→Z sort on either field.
+     */
+    public static boolean needsPortalDerivedTaskColumns(TaskQueryRequest request) {
+        List<ListColumnFilter> filters = normalize(request.getFilters());
+        if (filters.stream().anyMatch(f -> "requestId".equals(f.field()) || "functionUnitCode".equals(f.field()))) {
+            return true;
+        }
+        if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
+            return true;
+        }
+        String sortBy = request.getSortBy();
+        if (sortBy == null || sortBy.isBlank()) {
+            return false;
+        }
+        String field = sortBy.trim();
+        return "requestId".equalsIgnoreCase(field) || "functionUnitCode".equalsIgnoreCase(field);
     }
 
     public static List<ListColumnFilter> normalize(List<ListColumnFilter> raw) {
@@ -275,6 +297,21 @@ public final class TaskQueryColumnFilters {
         } catch (Exception e) {
             throw new IllegalArgumentException("invalid date for column " + field + ": " + raw, e);
         }
+    }
+
+    private static boolean keywordFieldMatches(TaskInfo task, String field, String expected) {
+        if (DATETIME_FIELDS.contains(field)) {
+            return textMatches(formatDateTimeForKeyword(resolveDateTime(task, field)), "contains", expected);
+        }
+        if ("functionUnitCode".equals(field)) {
+            return textMatches(resolveFieldValue(task, "functionUnitCode"), "contains", expected)
+                    || textMatches(resolveFieldValue(task, "functionUnitName"), "contains", expected);
+        }
+        return textMatches(resolveFieldValue(task, field), "contains", expected);
+    }
+
+    private static String formatDateTimeForKeyword(LocalDateTime value) {
+        return value == null ? "" : value.format(KEYWORD_CREATE_TIME);
     }
 
     private static String resolveFieldValue(TaskInfo task, String field) {

@@ -52,6 +52,12 @@ class TodoTaskColumnSpecTest {
                         "initiatorName",
                         "priority",
                         "dueDate");
+        assertThat(TodoTaskColumnSpec.VISIBLE_FIELDS).containsExactly(
+                "requestId",
+                "functionUnitCode",
+                "taskName",
+                "assignmentType",
+                "createTime");
     }
 
     private static ListColumnMeta column(String field) {

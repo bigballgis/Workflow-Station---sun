@@ -28,7 +28,7 @@ export interface TodoTaskQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  /** Toolbar keyword; ANDs with column filters. Matches request id / task / step / function unit / process / initiator. */
+  /** Toolbar keyword; ANDs with column filters. Matches visible cells: request id, function unit, task name, assignment type, create time. */
   keyword?: string
   assignmentTypes?: string[]
   priorities?: string[]

@@ -19,6 +19,19 @@ import java.util.List;
  */
 public final class TodoTaskColumnSpec {
 
+    /**
+     * Columns Portal renders on To Do. Keep in sync with {@code TODO_VISIBLE_FIELDS} in
+     * {@code frontend/user-portal/src/views/tasks/index.vue}. Toolbar keyword searches these
+     * painted cells (Create Time as {@code yyyy-MM-dd HH:mm}, plus {@code functionUnitName}
+     * for the Function Unit cell).
+     */
+    public static final List<String> VISIBLE_FIELDS = List.of(
+            "requestId",
+            "functionUnitCode",
+            "taskName",
+            "assignmentType",
+            "createTime");
+
     private TodoTaskColumnSpec() {
     }
 

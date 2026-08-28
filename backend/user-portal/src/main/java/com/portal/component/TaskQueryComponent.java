@@ -277,26 +277,9 @@ public class TaskQueryComponent {
 
     /** Fill requestId / function unit before filter, keyword, or A→Z sort so chrome matches the visible cell. */
     private void maybeEnrichRequestIdsForColumnFilter(List<TaskInfo> tasks, TaskQueryRequest request) {
-        var filters = TaskQueryColumnFilters.normalize(request.getFilters());
-        if (needsPortalDerivedTaskColumns(request, filters)) {
+        if (TaskQueryColumnFilters.needsPortalDerivedTaskColumns(request)) {
             requestIdEnricher.enrichTaskRequestIds(tasks);
         }
-    }
-
-    private static boolean needsPortalDerivedTaskColumns(
-            TaskQueryRequest request, List<ListColumnFilter> filters) {
-        if (filters.stream().anyMatch(f -> "requestId".equals(f.field()) || "functionUnitCode".equals(f.field()))) {
-            return true;
-        }
-        if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
-            return true;
-        }
-        String sortBy = request.getSortBy();
-        if (sortBy == null || sortBy.isBlank()) {
-            return false;
-        }
-        String field = sortBy.trim();
-        return "requestId".equalsIgnoreCase(field) || "functionUnitCode".equalsIgnoreCase(field);
     }
 
     /**
@@ -702,7 +685,7 @@ public class TaskQueryComponent {
                             return false;
                         }
                     }
-                    // Keyword search (visible To Do cells + description).
+                    // Keyword search (visible To Do cells including painted createTime).
                     if (!TaskQueryColumnFilters.toolbarKeywordMatches(t, request.getKeyword())) {
                         return false;
                     }

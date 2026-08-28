@@ -230,7 +230,7 @@ const filterForm = reactive({
   keyword: '',
 })
 
-/** Temporarily hide Process Name / Initiator / Priority / Due Date. Restore by dropping this allow-list. */
+/** Temporarily hide Process Name / Initiator / Priority / Due Date. Keep in sync with TodoTaskColumnSpec.VISIBLE_FIELDS. */
 const TODO_VISIBLE_FIELDS = [
   'requestId',
   'functionUnitCode',
