@@ -56,6 +56,39 @@ export function isMainTableView(view: { tableType?: string | null } | null | und
   return String(view?.tableType ?? '').toUpperCase() === 'MAIN'
 }
 
+/**
+ * Where a row click lands, decided from the view's metadata and the row's identifiers alone.
+ *
+ * `request` opens the process instance — only MAIN views, whose rows *are* requests. `detail` opens
+ * the form the designer bound to the view. The rest are refusals, each naming what is missing:
+ * a MAIN row with no instance (`noDetailPage`), a view with no bound form (`noDetailForm`), or a
+ * row with no usable key (`rowNotAddressable`). A non-MAIN view without a bound form deliberately
+ * does *not* fall back to the owning request — that is a different record (the whole application,
+ * not this row), so the click is refused with the reason instead of silently changing subject.
+ */
+export type RowOpenTarget =
+  | { kind: 'request'; processInstanceId: string }
+  | { kind: 'detail'; viewId: number; rowKey: string }
+  | { kind: 'refuse'; messageKey: 'noDetailPage' | 'noDetailForm' | 'rowNotAddressable' }
+
+export function resolveRowOpenTarget(
+  view: { tableType?: string | null; detailFormId?: number | null } | null | undefined,
+  viewId: number | null | undefined,
+  row: { processInstanceId?: string | null },
+  rowKey: string | null,
+): RowOpenTarget {
+  if (isMainTableView(view)) {
+    // Checked rather than assumed: MAIN rows are built from process instances today, but routing
+    // to /applications/undefined on a future row shape would strand the user on a broken page.
+    return row.processInstanceId
+      ? { kind: 'request', processInstanceId: String(row.processInstanceId) }
+      : { kind: 'refuse', messageKey: 'noDetailPage' }
+  }
+  if (!view?.detailFormId || !viewId) return { kind: 'refuse', messageKey: 'noDetailForm' }
+  if (!rowKey) return { kind: 'refuse', messageKey: 'rowNotAddressable' }
+  return { kind: 'detail', viewId, rowKey }
+}
+
 export function filterTableGroups(groups: TableViewGroup[], keyword: string): TableViewGroup[] {
   const kw = keyword.trim().toLowerCase()
   if (!kw) return groups

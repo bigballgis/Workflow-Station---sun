@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMainTableView } from '../mainTableViewNav'
+import { isMainTableView, resolveRowOpenTarget } from '../mainTableViewNav'
 
 /**
  * `isMainTableView` is the branch that decides where a row click lands: MAIN views open the
@@ -32,5 +32,51 @@ describe('isMainTableView', () => {
     expect(isMainTableView({ tableType: '' })).toBe(false)
     expect(isMainTableView(undefined)).toBe(false)
     expect(isMainTableView(null)).toBe(false)
+  })
+})
+
+describe('resolveRowOpenTarget', () => {
+  const MAIN = { tableType: 'MAIN' as const, detailFormId: null }
+  const SUB_BOUND = { tableType: 'SUB' as const, detailFormId: 77 }
+  const SUB_UNBOUND = { tableType: 'SUB' as const, detailFormId: null }
+
+  it('opens the request page for a MAIN row', () => {
+    expect(resolveRowOpenTarget(MAIN, 9, { processInstanceId: 'pi-1' }, 'row-1'))
+      .toEqual({ kind: 'request', processInstanceId: 'pi-1' })
+  })
+
+  it('refuses a MAIN row that carries no process instance', () => {
+    expect(resolveRowOpenTarget(MAIN, 9, { processInstanceId: null }, 'row-1'))
+      .toEqual({ kind: 'refuse', messageKey: 'noDetailPage' })
+  })
+
+  it('opens the bound detail form for a non-MAIN row', () => {
+    expect(resolveRowOpenTarget(SUB_BOUND, 9, { processInstanceId: 'pi-1' }, 'row-1'))
+      .toEqual({ kind: 'detail', viewId: 9, rowKey: 'row-1' })
+  })
+
+  /**
+   * The regression this function exists for: a view with no detail form bound in Developer
+   * Workstation used to fall through to `/applications/{processInstanceId}`, so clicking an
+   * Attachment row landed on the whole request — a different record than the one clicked. The
+   * missing binding must be reported, and reported even though the row *could* address a request.
+   */
+  it('refuses a non-MAIN row when no detail form is bound, instead of opening the request', () => {
+    expect(resolveRowOpenTarget(SUB_UNBOUND, 9, { processInstanceId: 'pi-1' }, 'row-1'))
+      .toEqual({ kind: 'refuse', messageKey: 'noDetailForm' })
+    expect(resolveRowOpenTarget(SUB_UNBOUND, 9, { processInstanceId: null }, 'row-1'))
+      .toEqual({ kind: 'refuse', messageKey: 'noDetailForm' })
+  })
+
+  // An unresolved active view id cannot build the detail route, and is the same missing binding.
+  it('refuses when the view id is not resolved', () => {
+    expect(resolveRowOpenTarget(SUB_BOUND, null, { processInstanceId: 'pi-1' }, 'row-1'))
+      .toEqual({ kind: 'refuse', messageKey: 'noDetailForm' })
+  })
+
+  // Bound form, but nothing to address the row by — a distinct failure, so a distinct message.
+  it('refuses a bound view when the row has no key', () => {
+    expect(resolveRowOpenTarget(SUB_BOUND, 9, { processInstanceId: 'pi-1' }, null))
+      .toEqual({ kind: 'refuse', messageKey: 'rowNotAddressable' })
   })
 })

@@ -29,8 +29,8 @@ import { useMainTableViewFkHydration } from '@/composables/mainTableView/useMain
 import {
   filterTableGroups,
   groupViewsByTable,
-  isMainTableView,
   pickDefaultView,
+  resolveRowOpenTarget,
   sortViewsByName,
   tableGroupKey,
 } from '@/composables/mainTableView/mainTableViewNav'
@@ -435,45 +435,31 @@ async function handleExport() {
 }
 
 /**
- * Row click. A MAIN-table row is a request and opens the request detail page. Otherwise a view
- * with its own detail form opens that, and a row that merely belongs to a request falls back to
- * the request page. Rows that can do none of these say so rather than appearing inert.
+ * Row click. A MAIN-table row is a request and opens the request detail page. Any other view opens
+ * the detail form bound to it in Developer Workstation. Rows that can do neither say so rather than
+ * appearing inert or landing the user on an unrelated page.
  */
 function openRow(row: GridDisplayRow) {
-  // One process instance is one MAIN row, so the request detail page — with its diagram,
-  // history and sub-tables — is the record. A designed form could only be a lesser copy.
-  // The id is checked rather than assumed: the backend builds MAIN rows from process instances
-  // so it is always present today, but routing to /applications/undefined on a future row shape
-  // would strand the user on a broken page instead of saying what happened.
-  if (isMainTableView(selectedViewMeta.value)) {
-    if (!row.processInstanceId) {
-      ElMessage.info(t('mainTableView.noDetailPage'))
-      return
-    }
-    router.push(`/applications/${row.processInstanceId}?from=views`)
+  const target = resolveRowOpenTarget(
+    selectedViewMeta.value,
+    selectedViewId.value,
+    row,
+    resolveRowKey(row),
+  )
+  if (target.kind === 'request') {
+    // One process instance is one MAIN row, so the request detail page — with its diagram,
+    // history and sub-tables — is the record. A designed form could only be a lesser copy.
+    router.push(`/applications/${target.processInstanceId}?from=views`)
     return
   }
-
-  const detailFormId = selectedViewMeta.value?.detailFormId
-  if (detailFormId && selectedViewId.value) {
-    const rowKey = resolveRowKey(row)
-    if (!rowKey) {
-      ElMessage.info(t('mainTableView.rowNotAddressable'))
-      return
-    }
+  if (target.kind === 'detail') {
     router.push({
       path: `/views/${selectedFuCode.value}/detail`,
-      query: { viewId: String(selectedViewId.value), rowKey },
+      query: { viewId: String(target.viewId), rowKey: target.rowKey },
     })
     return
   }
-
-  if (row.processInstanceId) {
-    router.push(`/applications/${row.processInstanceId}`)
-    return
-  }
-
-  ElMessage.info(t('mainTableView.noDetailPage'))
+  ElMessage.info(t(`mainTableView.${target.messageKey}`))
 }
 
 /**
