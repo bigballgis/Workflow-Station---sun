@@ -19,6 +19,14 @@ const FIELD: FormField = {
   _bindingId: 66,
 }
 
+/** Inline Form pointing at the People link-child binding (FU 50005). */
+const FIELD_PEOPLE: FormField = {
+  key: '__inlineSubForm_50547',
+  label: '',
+  type: 'inlineSubForm',
+  _bindingId: 50547,
+}
+
 function makeBinding(over: Partial<SubTableBinding> = {}): SubTableBinding {
   return {
     bindingId: 66,
@@ -131,6 +139,70 @@ describe('useInlineSubFormComponent — MI row targeting (regression: editing on
     expect(rows.find((r: any) => r.id_idw === 'Test-000009').name).toBe('444')
     expect(rows.find((r: any) => r.id_idw === 'Test-000010').name).toBe('renamed')
     expect(rows.find((r: any) => r.id_idw === 'Test-000011').name).toBe('33444')
+  })
+})
+
+/**
+ * An Inline Form bound to a participant-scoped CHILD table (People-style: structural FK
+ * `sub_task_id` → the MI participant row) sees the cross-participant pool. Index 0 is then very
+ * likely a sibling's row, so there is no safe default: falling back to it showed another sub-task's
+ * data AND merged the edit into that same row, overwriting it.
+ */
+describe('useInlineSubFormComponent — link-child binding has no index-0 fallback (cross-participant overwrite)', () => {
+  const peopleBinding = (data: unknown[]) =>
+    makeBinding({
+      bindingId: 50547,
+      tableId: 50333,
+      tableName: 'people',
+      foreignKeyField: 'id',
+      data,
+    } as Partial<SubTableBinding>)
+
+  const ALICE = { id: 101, sub_task_id: '1', age: '30' }
+
+  it('renders blank rather than a sibling participant\'s row when this participant owns none', () => {
+    const { api } = setup(peopleBinding([ALICE]), { currentMiRowId: () => '2' })
+    expect(api.resolveInlineSubFormRow(FIELD_PEOPLE)).toBeNull()
+  })
+
+  it('appends this participant\'s own row instead of overwriting the sibling\'s', () => {
+    const { api, handleSubTableUpdate } = setup(peopleBinding([ALICE]), {
+      currentMiRowId: () => '2',
+    })
+    api.handleInlineSubFormUpdate(FIELD_PEOPLE, { age: 'BOB_EDIT' })
+    const [, rows] = handleSubTableUpdate.mock.calls[0]
+    // Alice's row survives untouched…
+    expect(rows).toContainEqual(ALICE)
+    // …and Bob's edit lands on a new row of its own.
+    expect(rows).toHaveLength(2)
+    expect(rows[1]).toEqual({ age: 'BOB_EDIT' })
+  })
+
+  it('still edits this participant\'s own row in place when it IS present', () => {
+    const bobRow = { id: 202, sub_task_id: '2', age: '41' }
+    const { api, handleSubTableUpdate } = setup(peopleBinding([ALICE, bobRow]), {
+      currentMiRowId: () => '2',
+    })
+    api.handleInlineSubFormUpdate(FIELD_PEOPLE, { age: '42' })
+    const [, rows] = handleSubTableUpdate.mock.calls[0]
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toEqual(ALICE)
+    expect(rows[1]).toEqual({ id: 202, sub_task_id: '2', age: '42' })
+  })
+
+  it('keeps the index-0 fallback for a NON-participant-scoped table (shared attachment, main_id)', () => {
+    const attachment = makeBinding({
+      bindingId: 50548,
+      tableName: 'attachment',
+      foreignKeyField: 'main_id',
+      data: [{ id: 1, main_id: 'M1', file: 'a.pdf' }],
+    } as Partial<SubTableBinding>)
+    const { api } = setup(attachment, { currentMiRowId: () => '2' })
+    expect(api.resolveInlineSubFormRow({ ...FIELD_PEOPLE, _bindingId: 50548 })).toEqual({
+      id: 1,
+      main_id: 'M1',
+      file: 'a.pdf',
+    })
   })
 })
 
