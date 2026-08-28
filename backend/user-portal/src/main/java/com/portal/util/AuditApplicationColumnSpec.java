@@ -48,16 +48,16 @@ public final class AuditApplicationColumnSpec {
         }
         String trimmed = keyword.trim();
         String like = "%" + ListFilterSql.escapeLike(trimmed) + "%";
-        for (int i = 0; i < 6; i++) {
-            params.add(like);
-        }
+        List<String> likeTerms = List.of(
+                "pi.variables->>'__request_id'" + ListFilterSql.ILIKE,
+                "COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name)" + ListFilterSql.ILIKE,
+                "COALESCE(pi.start_user_name, pi.start_user_id)" + ListFilterSql.ILIKE,
+                ProcessAssigneeStoredSql.EXPRESSION + ListFilterSql.ILIKE,
+                paintedUserNameExistsSql(),
+                "to_char(pi.start_time, 'YYYY-MM-DD HH24:MI')" + ListFilterSql.ILIKE);
+        likeTerms.forEach(ignored -> params.add(like));
         return " AND ("
-                + "pi.variables->>'__request_id' ILIKE ?"
-                + " OR COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name) ILIKE ?"
-                + " OR COALESCE(pi.start_user_name, pi.start_user_id) ILIKE ?"
-                + " OR " + ProcessAssigneeStoredSql.EXPRESSION + " ILIKE ?"
-                + " OR " + paintedUserNameExistsSql()
-                + " OR to_char(pi.start_time, 'YYYY-MM-DD HH24:MI') ILIKE ?"
+                + String.join(" OR ", likeTerms)
                 + storedStatusCodesClause(trimmed, params)
                 + ")";
     }
@@ -96,7 +96,7 @@ public final class AuditApplicationColumnSpec {
         String name = "COALESCE(NULLIF(BTRIM(u." + fullName + "), ''),"
                 + " NULLIF(BTRIM(u." + displayName + "), ''), u." + username + ")";
         String identities = "u." + id + "::text, u." + username + ", u." + employeeId;
-        return "EXISTS (SELECT 1 FROM " + users + " u WHERE " + name + " ILIKE ?"
+        return "EXISTS (SELECT 1 FROM " + users + " u WHERE " + name + ListFilterSql.ILIKE
                 + " AND (pi.start_user_id IN (" + identities + ")"
                 + " OR pi.current_assignee IN (" + identities + ")"
                 + " OR EXISTS (SELECT 1 FROM unnest(regexp_split_to_array("

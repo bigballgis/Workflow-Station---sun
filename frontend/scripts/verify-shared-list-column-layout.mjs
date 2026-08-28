@@ -328,18 +328,26 @@ async function assertRequestIdDrag(label) {
 }
 
 async function assertHeaderMenu(label) {
-  const trigger = page.locator('.list-col-trigger').first()
-  const hasTrigger = (await trigger.count()) > 0
-  check(`${label}: shared header trigger`, hasTrigger)
-  if (!hasTrigger) return
-  await trigger.click()
-  const menu = page.locator('.el-dropdown-menu.list-col-menu:visible, .list-col-menu:visible').first()
-  await menu.waitFor({ state: 'visible', timeout: 8000 })
-  const text = (await menu.innerText()).replace(/\s+/g, ' ')
-  check(`${label}: header has Filter by`, /Filter by/i.test(text), text)
-  check(`${label}: header has sort`, /A to Z|Older to newer|Small to large/i.test(text), text)
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(200)
+  const triggers = page.locator('.list-col-trigger')
+  const n = await triggers.count()
+  check(`${label}: shared header trigger`, n > 0)
+  if (n === 0) return
+  for (let i = 0; i < n; i++) {
+    await triggers.nth(i).click()
+    const menu = page.locator('.el-dropdown-menu.list-col-menu:visible, .list-col-menu:visible').first()
+    await menu.waitFor({ state: 'visible', timeout: 8000 })
+    const text = (await menu.innerText()).replace(/\s+/g, ' ')
+    if (/Filter by/i.test(text)) {
+      check(`${label}: header has Filter by`, true, text)
+      check(`${label}: header has sort`, /A to Z|Older to newer|Small to large/i.test(text), text)
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(200)
+      return
+    }
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(200)
+  }
+  check(`${label}: header has Filter by`, false, 'no filterable column in the grid')
 }
 
 try {

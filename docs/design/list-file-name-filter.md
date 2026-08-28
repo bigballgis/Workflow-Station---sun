@@ -1,14 +1,14 @@
 # 列表 FILE 列：按文件名筛选（设计）
 
-> **状态：方案评审中，未实现（2026-08-20）。** 确认前不要改产品代码。确认后按 playbook 执行。
+> **状态：已实现（2026-08-28）。** 方案 A：查询时 SQL 抽文件名；`Kind.FILE`，禁止当 TEXT 对裸 URL `ILIKE`。
 >
 > **与** [shared-list-components.md](./shared-list-components.md) **§6.3.2 的关系：**
-> shared-list **基线**仍是 `FILE` → display-only。本文是**下一期**能力；合入后更新
-> §6.3.2 一句指向「已实现」，并删掉「禁止当 TEXT」之外的「本期不做」表述。
+> FILE 列按抽出的文件名筛选/排序；BYTEA 仍 display-only。抽名权威在
+> `frontend/shared/src/list/fileNames.ts` 与 `ListFileNameSql`。
 >
 > **给后续 agent：**
 > - **禁止**把 `FILE` 降成 `Kind.TEXT` 再对裸 JSON 做 `ILIKE`——用户看到的是文件名，库里是 URL。
-> - 筛选用的「文件名」必须与 Portal 格子 / CSV 同一套抽取规则（见 §3），前后端不得各猜一套。
+> - 筛选用的「文件名」必须与 Portal 格子 / CSV 同一套抽取规则（见 §3）。
 > - **本期一行 DW 不改**（与 shared-list 同约束），除非分期明确要改上传落库格式。
 
 ---
@@ -16,7 +16,7 @@
 ## 1. 背景与目标
 
 Main Table View / Relation Table 列表格子上，`FILE` 列显示的是**文件名**（如 `invoice.pdf`），
-来自前端 `extractFileLinks` / `fileDisplayText`（`mainTableViewCsvExport.ts`）。存储值常见是：
+来自前端 `extractFileLinks` / `fileDisplayText`（`frontend/shared/src/list/fileNames.ts`）。存储值常见是：
 
 | 形态 | 示例 |
 |------|------|
@@ -25,7 +25,7 @@ Main Table View / Relation Table 列表格子上，`FILE` 列显示的是**文�
 | 多文件数组 | `[{url,name}, …]` 或 URL 字符串数组 |
 | 空 | `null` / `""` / `[]` → 格子 `-` |
 
-当前 `MainTableViewColumnSpec.kindOf` 对 `FILE` 返回不可比 → 无 Filter by。产品希望：**按看到的文件名筛**（包含 / 等于等），结果与格子一致。
+当前 `MainTableViewColumnSpec.kindOf` 对 `FILE` 返回 `Kind.FILE`，列头 Filter by 按抽出的文件名筛。
 
 **成功标准：**
 
@@ -196,3 +196,6 @@ Relation Table 若也有 `FILE` 类型字段，**同一套** kind / 算子 / 抽
 3. 范围是否包含 **Relation Tables** 与已接入 shared-list 的其它菜单，还是先 **Main Table Views only**？
 
 确认本文后回复 **确认** / **按 playbook 执行**（并附上待确认项选择）再改代码。
+
+MVP 已按方案 A 落地：筛选 + 按抽出文件名排序；Relation Tables 与 Views 同一套 `Kind.FILE`。
+`%` / `_` 在列表 ILIKE 中为字面量（`ESCAPE '\'`）。

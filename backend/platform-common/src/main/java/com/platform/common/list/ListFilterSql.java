@@ -37,9 +37,18 @@ import java.util.regex.Pattern;
      *       comma-separated token (a candidate list {@code id1, id2} contains id1).
      *       The picker still sends the user id; these operators are not a typed
      *       name-fragment search.</li>
+ *   <li>FILE — compares extracted filenames (same rules as the grid / CSV), never the
+     *       raw URL; contains/startsWith/endsWith use ILIKE with escaped wildcards.</li>
  * </ul>
  */
 public final class ListFilterSql {
+
+    /**
+     * PostgreSQL LIKE escape so a user-typed {@code %} or {@code _} is literal text.
+     * Bind values must go through {@link #escapeLike(String)}.
+     */
+    public static final String ILIKE = " ILIKE ? ESCAPE '\\'";
+    public static final String NOT_ILIKE = " NOT ILIKE ? ESCAPE '\\'";
 
     /** Matches values that can safely be cast to numeric inside SQL. */
     private static final String SQL_NUMERIC_GUARD = "'^-?[0-9]+(\\.[0-9]+)?$'";
@@ -142,9 +151,13 @@ public final class ListFilterSql {
      */
     public static String sortExpression(ListColumnMeta column, ColumnRef columnRef) {
         String ref = columnRef.sqlFor(column.field());
-        return column.kind() == ListColumnMeta.Kind.NUMBER
-                ? "(CASE WHEN " + ref + " ~ " + SQL_NUMERIC_GUARD + " THEN (" + ref + ")::numeric END)"
-                : ref;
+        if (column.kind() == ListColumnMeta.Kind.NUMBER) {
+            return "(CASE WHEN " + ref + " ~ " + SQL_NUMERIC_GUARD + " THEN (" + ref + ")::numeric END)";
+        }
+        if (column.kind() == ListColumnMeta.Kind.FILE) {
+            return ListFileNameSql.sortExpression(ref);
+        }
+        return ref;
     }
 
     /**
@@ -158,12 +171,20 @@ public final class ListFilterSql {
             return "";
         }
         StringBuilder sql = new StringBuilder(" AND (");
+        String like = "%" + escapeLike(keyword.trim()) + "%";
         for (int i = 0; i < fields.size(); i++) {
             if (i > 0) {
                 sql.append(" OR ");
             }
-            sql.append(columnRef.sqlFor(fields.get(i))).append(" ILIKE ?");
-            outParams.add("%" + escapeLike(keyword.trim()) + "%");
+            String field = fields.get(i);
+            String ref = columnRef.sqlFor(field);
+            ListColumnMeta column = columnsByField.get(field);
+            if (column != null && column.kind() == ListColumnMeta.Kind.FILE) {
+                sql.append(ListFileNameSql.anyNameIlike(ref));
+            } else {
+                sql.append(ref).append(ILIKE);
+            }
+            outParams.add(like);
         }
         return sql.append(")").toString();
     }
@@ -187,10 +208,13 @@ public final class ListFilterSql {
                              List<Object> outParams) {
         String op = filter.operator();
         String ref = columnRef.sqlFor(column.field());
-        if ("isNull".equals(op)) {
-            return "(" + ref + " IS NULL OR " + ref + " = '')";
-        }
-        if ("isNotNull".equals(op)) {
+        if ("isNull".equals(op) || "isNotNull".equals(op)) {
+            if (column.kind() == ListColumnMeta.Kind.FILE) {
+                return ListFileNameSql.emptinessPredicate(ref, "isNull".equals(op));
+            }
+            if ("isNull".equals(op)) {
+                return "(" + ref + " IS NULL OR " + ref + " = '')";
+            }
             return "(" + ref + " IS NOT NULL AND " + ref + " <> '')";
         }
         if (column.kind() == ListColumnMeta.Kind.DATETIME && ListRelativeDates.isRelative(op)) {
@@ -199,6 +223,7 @@ public final class ListFilterSql {
         String value = requireValue(filter, filter.value());
         return switch (column.kind()) {
             case TEXT, ENUM -> textPredicate(ref, filter, value, outParams);
+            case FILE -> ListFileNameSql.namePredicate(ref, filter.operator(), value, outParams);
             case USER -> userIdentityPredicate(ref, filter.operator(), value, outParams);
             case NUMBER -> numberPredicate(ref, filter, value, outParams);
             case DATETIME -> datePredicate(ref, filter, value, outParams);
@@ -303,19 +328,19 @@ public final class ListFilterSql {
         switch (filter.operator()) {
             case "contains" -> {
                 outParams.add("%" + escapeLike(value) + "%");
-                return ref + " ILIKE ?";
+                return ref + ILIKE;
             }
             case "notContains" -> {
                 outParams.add("%" + escapeLike(value) + "%");
-                return "(" + ref + " IS NULL OR " + ref + " NOT ILIKE ?)";
+                return "(" + ref + " IS NULL OR " + ref + NOT_ILIKE + ")";
             }
             case "startsWith" -> {
                 outParams.add(escapeLike(value) + "%");
-                return ref + " ILIKE ?";
+                return ref + ILIKE;
             }
             case "endsWith" -> {
                 outParams.add("%" + escapeLike(value));
-                return ref + " ILIKE ?";
+                return ref + ILIKE;
             }
             case "eq" -> {
                 outParams.add(value);

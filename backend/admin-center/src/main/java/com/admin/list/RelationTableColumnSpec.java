@@ -44,7 +44,7 @@ public final class RelationTableColumnSpec {
                         ? Kind.USER
                         : kindFor(dataType);
         if (kind == null) {
-            // FILE / BYTEA are blob references, not a value a user would filter on.
+            // BYTEA is a blob reference, not a value a user would filter on.
             return ListColumnMeta.displayOnly(field.getFieldName(), label, Kind.TEXT);
         }
         List<ListColumnMeta.Option> options = kind == Kind.BOOLEAN
@@ -69,7 +69,8 @@ public final class RelationTableColumnSpec {
             case INTEGER, BIGINT, DECIMAL -> Kind.NUMBER;
             case BOOLEAN -> Kind.BOOLEAN;
             case DATE, TIMESTAMP, TIME -> Kind.DATETIME;
-            case BYTEA, FILE -> null;
+            case FILE -> Kind.FILE;
+            case BYTEA -> null;
         };
     }
 }

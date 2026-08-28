@@ -301,9 +301,10 @@ public final class MainTableViewColumnSpec {
     }
 
     /**
-     * @return the kind a designed field is queried as, or null when the stored value is a file /
-     *         blob reference rather than something a user would filter on. Untyped and JSON
-     *         fields compare as TEXT against the JSON member. TIME is a clock-of-day DATETIME.
+     * @return the kind a designed field is queried as, or null when the stored value is a blob
+     *         reference rather than something a user would filter on. FILE compares extracted
+     *         filenames (not the URL). Untyped and JSON fields compare as TEXT against the JSON
+     *         member. TIME is a clock-of-day DATETIME.
      */
     private static Kind kindOf(String dataType) {
         if (dataType == null || dataType.isBlank()) {
@@ -314,7 +315,8 @@ public final class MainTableViewColumnSpec {
             case "INTEGER", "BIGINT", "DECIMAL" -> Kind.NUMBER;
             case "DATE", "TIMESTAMP", "TIME" -> Kind.DATETIME;
             case "BOOLEAN" -> Kind.BOOLEAN;
-            case "FILE", "BYTEA" -> null;
+            case "FILE" -> Kind.FILE;
+            case "BYTEA" -> null;
             default -> Kind.TEXT;
         };
     }

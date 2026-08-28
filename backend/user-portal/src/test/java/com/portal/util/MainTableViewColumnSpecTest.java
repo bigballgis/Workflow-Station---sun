@@ -79,18 +79,37 @@ class MainTableViewColumnSpecTest {
     }
 
     @Test
-    void columnsWhoseValueIsResolvedInJavaAreDeclaredDisplayOnlyUntilMapped() {
+    void lookupAndFkDisplayColumnsStayDisplayOnlyUntilMappedAndFileIsFilterableByName() {
         List<FieldSource> fields = List.of(
                 new FieldSource("customer_label", "Customer", false, "lookup_display", "VARCHAR"),
                 new FieldSource("owner_label", "Owner", false, "fk_display", "VARCHAR"),
                 designed("scan", "FILE"));
 
-        for (String field : List.of("customer_label", "owner_label", "scan")) {
+        for (String field : List.of("customer_label", "owner_label")) {
             ListColumnMeta column = columnNamed(fields, field);
             assertThat(column.filterable()).as(field + " filterable").isFalse();
             assertThat(column.sortable()).as(field + " sortable").isFalse();
             assertThat(column.operators()).as(field + " operators").isEmpty();
         }
+        ListColumnMeta file = columnNamed(fields, "scan");
+        assertThat(file.kind()).isEqualTo(ListColumnMeta.Kind.FILE);
+        assertThat(file.filterable()).isTrue();
+        assertThat(file.sortable()).isTrue();
+        assertThat(file.operators()).contains("contains", "eq", "isNull");
+    }
+
+    @Test
+    void aFileColumnFilterComparesExtractedNamesNotTheStoredUrl() {
+        ListFilterSql sql = MainTableViewColumnSpec.sqlFor(
+                List.of(designed("scan", "FILE")), List.of());
+        List<Object> params = new ArrayList<>();
+        String where = sql.whereClause(
+                List.of(new ListColumnFilter("scan", "contains", "report", null)), params);
+        assertThat(where)
+                .contains("pi.variables->'scan'")
+                .contains("originalName")
+                .doesNotContain("pi.variables->>'scan' ILIKE");
+        assertThat(params).containsExactly("%report%");
     }
 
     @Test

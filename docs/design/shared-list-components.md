@@ -10,8 +10,7 @@
 > 投影表仍暂缓。
 > 关键决策：§6.1（行可见范围两级过滤）、§6.1.1（SUB 行身份取 `row_id` 优先，写入侧→MAIN→SUB
 > 三步走）、§6.2（深分页不设上限，改慢查询日志）、§6.3.1（共享表头**不再提供 Group 菜单**）、
-> **§6.3.2（筛选 kind 的权威是表 `data_type` / 视图系统列，不是 Form 组件；`FILE` 本期
-> display-only，禁止当 TEXT 按文件名凑合筛）**、
+> **§6.3.2（筛选 kind 的权威是表 `data_type` / 视图系统列，不是 Form 组件；`FILE` 按抽出的文件名筛，禁止当 TEXT 比 URL）**、
 > **§6.3.3（排序按 kind：字母 / 数值大小 / 新旧，数字不得按文本排）**、
 > **§6.5（Relation Tables：业务表 JSON 行；内置 User=`sys_users`；类型化筛选；列头无 Group）**、
 > **§6.6（列宽：默认 = 表头实测与 kind 内容下限取大；chrome 紧凑；显示宽=底宽；用户可拖窄到 60px；溢出时 Action `fixed="right"` 钉窗口右沿；2026-08-27 定稿）**、
@@ -64,7 +63,7 @@
 - View 行可见性管控：skill `view-access-control`（本文的 §6.1 不得与之冲突）
 - 门户身份来源：[portal-bu-rbac.md](./portal-bu-rbac.md)（BU + Role 决定可见范围）
 - 长度 / 分层 / UX / 性能红线：`.cursor/rules/code-quality-standards.mdc`
-- FILE 列按文件名筛（未合入基线）：[list-file-name-filter.md](./list-file-name-filter.md)
+- FILE 列按文件名筛（已实现）：[list-file-name-filter.md](./list-file-name-filter.md)
 - Relation Tables / 内置 User：**正文 §6.5**（不再单开文档）
 - 列宽默认值与视口余量：**正文 §6.6**（不再单开文档）
 - 左侧菜单必须接共享列表：**正文 §6.7**（不再单开文档）；规则 `.cursor/rules/shared-list-portal-admin.mdc`
@@ -487,7 +486,7 @@ PR #107 系列曾经默认「每列都能分组」，lookup 列还会出现分�
    DATE → 日期，BOOLEAN → True/False，TIME → DATETIME（时分秒），JSON / 未声明类型 → TEXT。
    **列集合跟设计走。** 绑定表优先；SUB 视图若展示本 FU 其它表（通常是 MAIN）同名字段，用那张
    表的类型补上。名字在本 FU 任何表上都没有 → 仍按 TEXT 筛存值，**禁止**按列名 `date` / `user`
-   猜 DATETIME / USER。FILE / BYTEA 仍 display-only。
+   猜 DATETIME / USER。BYTEA 仍 display-only。FILE 按抽出的文件名筛（§6.3.2 下段）。
 
 **禁止**用「该字段在某张表单里用了什么组件」来定筛选类型。同一字段可绑多张表单、控件可以不同，
 Views 展示的是表列（可以完全不出现在任何表单上）。
@@ -501,10 +500,10 @@ Function Unit 的 Table Design **没有 LOOKUP / CHOICE 类型**。`select` / `r
 
 扫表单 JSON 里的 `type:"lookup"` 只用于显示列 hydrate / 反查存储键，**不是**筛选 kind 的来源。
 
-**`FILE` 列（当前 shared-list 基线）：只展示，不筛选、不排序。** Table Design
-`data_type = FILE` → `displayOnly`。禁止把 FILE 当普通 `TEXT` 打开 Contains（会比到 URL，
-与格子文件名不一致）。按文件名筛的产品方案见专文
-[list-file-name-filter.md](./list-file-name-filter.md)；**未合入前**列头行为维持本段。
+**`FILE` 列：按格子上看到的文件名筛选、排序（A–Z），不算子。** Table Design
+`data_type = FILE` → `Kind.FILE`。禁止把 FILE 当普通 `TEXT` 打开 Contains（会比到 URL，
+与格子文件名不一致）。抽名规则与实现见
+[list-file-name-filter.md](./list-file-name-filter.md)。BYTEA 仍 display-only。
 
 #### 6.3.3 排序：按 kind 比大小，不是一律按字母
 

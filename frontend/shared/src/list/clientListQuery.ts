@@ -1,4 +1,5 @@
 import type { ListColumnFilter, ListColumnKind, ListColumnMeta } from './columnMeta'
+import { extractFileNames } from './fileNames'
 
 function textOf(raw: unknown): string {
   if (raw == null) return ''
@@ -73,6 +74,21 @@ function matchesUser(raw: unknown, operator: string, value: string): boolean {
   return false
 }
 
+function matchesFile(raw: unknown, operator: string, value: string): boolean {
+  const names = extractFileNames(raw)
+  if (operator === 'isNull') return names.length === 0
+  if (operator === 'isNotNull') return names.length > 0
+  const lowerNeedle = value.toLowerCase()
+  const any = (pred: (name: string) => boolean): boolean => names.some(pred)
+  if (operator === 'contains') return any((name) => name.toLowerCase().includes(lowerNeedle))
+  if (operator === 'notContains') return names.length === 0 || !any((name) => name.toLowerCase().includes(lowerNeedle))
+  if (operator === 'eq') return any((name) => name === value)
+  if (operator === 'ne') return names.length === 0 || !any((name) => name === value)
+  if (operator === 'startsWith') return any((name) => name.toLowerCase().startsWith(lowerNeedle))
+  if (operator === 'endsWith') return any((name) => name.toLowerCase().endsWith(lowerNeedle))
+  return false
+}
+
 function matchesText(raw: unknown, operator: string, value: string, value2?: string): boolean {
   if (operator === 'isNull') return isEmpty(raw)
   if (operator === 'isNotNull') return !isEmpty(raw)
@@ -143,7 +159,16 @@ export function cellMatchesFilter(
   if (kind === 'USER') {
     return matchesUser(raw, filter.operator, filter.value)
   }
+  if (kind === 'FILE') {
+    return matchesFile(raw, filter.operator, filter.value)
+  }
   return matchesText(raw, filter.operator, filter.value, filter.value2)
+}
+
+function fileSortKey(raw: unknown): string | null {
+  const names = extractFileNames(raw)
+  if (names.length === 0) return null
+  return names.reduce((min, name) => (name < min ? name : min))
 }
 
 export function compareCells(
@@ -152,8 +177,8 @@ export function compareCells(
   kind: ListColumnKind,
   direction: 'ASC' | 'DESC',
 ): number {
-  const emptyA = isEmpty(a)
-  const emptyB = isEmpty(b)
+  const emptyA = kind === 'FILE' ? fileSortKey(a) == null : isEmpty(a)
+  const emptyB = kind === 'FILE' ? fileSortKey(b) == null : isEmpty(b)
   if (emptyA && emptyB) return 0
   if (emptyA) return direction === 'ASC' ? -1 : 1
   if (emptyB) return direction === 'ASC' ? 1 : -1
@@ -162,6 +187,8 @@ export function compareCells(
     cmp = Number(textOf(a)) - Number(textOf(b))
   } else if (kind === 'DATETIME') {
     cmp = (dayStamp(a) ?? '').localeCompare(dayStamp(b) ?? '')
+  } else if (kind === 'FILE') {
+    cmp = (fileSortKey(a) ?? '').localeCompare(fileSortKey(b) ?? '', undefined, { sensitivity: 'base' })
   } else {
     cmp = textOf(a).localeCompare(textOf(b), undefined, { sensitivity: 'base' })
   }

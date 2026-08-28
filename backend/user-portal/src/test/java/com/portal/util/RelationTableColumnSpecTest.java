@@ -43,17 +43,19 @@ class RelationTableColumnSpecTest {
     }
 
     @Test
-    void blobTypesAreDisplayOnly() {
+    void byteaStaysDisplayOnlyAndFileIsFilterableByName() {
         List<ListColumnMeta> columns = RelationTableColumnSpec.columnsFor(List.of(
                 field("blob", RelationDataType.BYTEA, "Blob"),
                 field("doc", RelationDataType.FILE, "Doc"),
                 field("name", RelationDataType.VARCHAR, "Name")));
-        for (String f : List.of("blob", "doc")) {
-            ListColumnMeta col = byField(columns, f);
-            assertFalse(col.filterable(), f);
-            assertFalse(col.sortable(), f);
-            assertTrue(col.operators().isEmpty(), f);
-        }
+        ListColumnMeta blob = byField(columns, "blob");
+        assertFalse(blob.filterable());
+        assertTrue(blob.operators().isEmpty());
+        ListColumnMeta doc = byField(columns, "doc");
+        assertEquals(Kind.FILE, doc.kind());
+        assertTrue(doc.filterable());
+        assertTrue(doc.sortable());
+        assertTrue(doc.operators().contains("contains"));
         assertTrue(byField(columns, "name").filterable());
     }
 

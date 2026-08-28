@@ -1,6 +1,7 @@
 package com.portal.service;
 
 import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListFileNameSql;
 import com.platform.common.list.ListFilterSql;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -172,10 +173,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         params.add(tableId);
         StringBuilder where = new StringBuilder(" WHERE table_id = ?");
         // Keep the trgm GIN guard so keyword search stays index-friendly (V214).
-        where.append(buildJsonDataSearchClause(
-                columns.stream().map(ListColumnMeta::field).toList(),
-                request.search(),
-                params));
+        where.append(buildJsonDataSearchClause(columns, request.search(), params));
         where.append(filterSql.whereClause(request.filters(), params));
 
         Long total = jdbcTemplate.queryForObject(
@@ -1120,30 +1118,30 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     }
 
     /**
-     * @return SQL fragment like {@code  AND data::text ILIKE ? AND (data->>'f1' ILIKE ? OR ...)}
-     *         or empty when search is blank
+     * @return SQL fragment like {@code  AND data::text ILIKE ? ESCAPE '\' AND (data->>'f1' ILIKE ? ESCAPE '\' OR ...)}
+     *         or empty when search is blank. FILE columns match extracted filenames, not the raw URL.
      *
-     * <p>The leading {@code data::text ILIKE ?} guard lets the pg_trgm GIN index
+     * <p>The leading {@code data::text ILIKE} guard lets the pg_trgm GIN index
      * {@code idx_rt_data_rows_data_trgm} serve the leading-wildcard search; the per-field clause
      * then filters whole-row false positives, keeping the result identical. See migration V214.
      */
-    private String buildJsonDataSearchClause(List<String> fieldNames, String search, List<Object> outParams) {
-        if (search == null || search.isBlank() || fieldNames == null || fieldNames.isEmpty()) {
+    private String buildJsonDataSearchClause(List<ListColumnMeta> columns, String search, List<Object> outParams) {
+        if (search == null || search.isBlank() || columns == null || columns.isEmpty()) {
             return "";
         }
-        List<String> sanitizedFields = fieldNames.stream()
-                .map(this::sanitizeIdentifier)
-                .toList();
-        if (sanitizedFields.isEmpty()) {
-            return "";
+        String likePattern = "%" + ListFilterSql.escapeLike(search.trim()) + "%";
+        List<String> parts = new ArrayList<>();
+        for (ListColumnMeta column : columns) {
+            String field = sanitizeIdentifier(column.field());
+            if (column.kind() == ListColumnMeta.Kind.FILE) {
+                parts.add(ListFileNameSql.anyNameIlike(ListFilterSql.JSON_ROW.sqlFor(field)));
+            } else {
+                parts.add("data->>'" + field + "'" + ListFilterSql.ILIKE);
+            }
         }
-        String keywordClause = sanitizedFields.stream()
-                .map(f -> "data->>'" + f + "' ILIKE ?")
-                .collect(Collectors.joining(" OR "));
-        String likePattern = "%" + search + "%";
-        outParams.add(likePattern); // index-accelerated broad guard (trgm GIN)
-        sanitizedFields.forEach(ignored -> outParams.add(likePattern));
-        return " AND data::text ILIKE ? AND (" + keywordClause + ")";
+        outParams.add(likePattern);
+        parts.forEach(ignored -> outParams.add(likePattern));
+        return " AND data::text" + ListFilterSql.ILIKE + " AND (" + String.join(" OR ", parts) + ")";
     }
 
     private String buildSystemUserSearchClause(String search, List<Object> outParams) {
@@ -1158,9 +1156,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 .map(this::sanitizeIdentifier)
                 .toList();
         String keywordClause = sanitizedFields.stream()
-                .map(f -> f + " ILIKE ?")
+                .map(f -> f + ListFilterSql.ILIKE)
                 .collect(Collectors.joining(" OR "));
-        String likePattern = "%" + search + "%";
+        String likePattern = "%" + ListFilterSql.escapeLike(search.trim()) + "%";
         sanitizedFields.forEach(ignored -> outParams.add(likePattern));
         return " AND (" + keywordClause + ")";
     }

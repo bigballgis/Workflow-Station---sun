@@ -40,6 +40,8 @@ class ListColumnMetaTest {
         assertThat(ListColumnMeta.operatorsFor(Kind.TEXT))
                 .contains("contains", "startsWith", "endsWith")
                 .doesNotContain("gt", "between");
+        assertThat(ListColumnMeta.operatorsFor(Kind.FILE))
+                .isEqualTo(ListColumnMeta.operatorsFor(Kind.TEXT));
         assertThat(ListColumnMeta.operatorsFor(Kind.BOOLEAN))
                 .containsExactly("eq", "ne", "isNull", "isNotNull")
                 .isEqualTo(ListColumnMeta.operatorsFor(Kind.ENUM));

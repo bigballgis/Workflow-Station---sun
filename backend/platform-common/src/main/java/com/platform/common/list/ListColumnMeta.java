@@ -17,7 +17,7 @@ public record ListColumnMeta(
         List<String> operators,
         List<Option> options) {
 
-    public enum Kind { TEXT, ENUM, USER, DATETIME, NUMBER, BOOLEAN }
+    public enum Kind { TEXT, ENUM, USER, DATETIME, NUMBER, BOOLEAN, FILE }
 
     public record Option(String value, String label) {
         public Option {
@@ -75,7 +75,7 @@ public record ListColumnMeta(
     /** The one place the kind→operator matrix is defined. */
     public static List<String> operatorsFor(Kind kind) {
         return switch (kind) {
-            case TEXT -> TEXT_OPERATORS;
+            case TEXT, FILE -> TEXT_OPERATORS;
             case USER -> USER_OPERATORS;
             case ENUM, BOOLEAN -> CLOSED_VALUE_OPERATORS;
             case DATETIME -> DATETIME_OPERATORS;

@@ -6,7 +6,7 @@
  * never invents operators the backend would reject.
  */
 
-export type ListColumnKind = 'TEXT' | 'ENUM' | 'USER' | 'DATETIME' | 'NUMBER' | 'BOOLEAN'
+export type ListColumnKind = 'TEXT' | 'ENUM' | 'USER' | 'DATETIME' | 'NUMBER' | 'BOOLEAN' | 'FILE'
 
 export interface ListColumnOption {
   value: string
@@ -105,7 +105,7 @@ const NUMBER_OPERATORS = [
 
 /** Kind → operator whitelist. Must stay in lockstep with `ListColumnMeta.operatorsFor` on the backend. */
 export function operatorsFor(kind: ListColumnKind): string[] {
-  if (kind === 'TEXT') return [...TEXT_OPERATORS]
+  if (kind === 'TEXT' || kind === 'FILE') return [...TEXT_OPERATORS]
   if (kind === 'USER') return [...USER_OPERATORS]
   if (kind === 'ENUM' || kind === 'BOOLEAN') return [...CLOSED_VALUE_OPERATORS]
   if (kind === 'DATETIME') return [...DATETIME_OPERATORS]

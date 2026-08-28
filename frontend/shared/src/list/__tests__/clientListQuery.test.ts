@@ -37,6 +37,28 @@ describe('clientListQuery', () => {
       'eq', 'ne', 'contains', 'notContains', 'isNotNull', 'isNull',
     ])
     expect(operatorsFor('ENUM')).toEqual(['eq', 'ne', 'isNull', 'isNotNull'])
+    expect(operatorsFor('FILE')).toEqual(operatorsFor('TEXT'))
+  })
+
+  it('FILE filters by displayed filename, not the uuid path', () => {
+    const stored = '/api/v1/upload/files/abc123?originalName=report.pdf'
+    expect(cellMatchesFilter(stored, 'FILE', { operator: 'contains', value: 'report' })).toBe(true)
+    expect(cellMatchesFilter(stored, 'FILE', { operator: 'contains', value: 'abc123' })).toBe(false)
+    expect(cellMatchesFilter({ url: '/api/v1/upload/files/x', name: '合同.pdf' }, 'FILE', {
+      operator: 'contains', value: '合同',
+    })).toBe(true)
+    expect(cellMatchesFilter(
+      ['/api/v1/upload/files/a?originalName=a.pdf', '/api/v1/upload/files/b?originalName=b.pdf'],
+      'FILE',
+      { operator: 'contains', value: 'b' },
+    )).toBe(true)
+    expect(cellMatchesFilter(null, 'FILE', { operator: 'isNull', value: '' })).toBe(true)
+    expect(cellMatchesFilter(stored, 'FILE', { operator: 'contains', value: '50%' })).toBe(false)
+    expect(cellMatchesFilter(
+      '/api/v1/upload/files/x?originalName=50%25off.pdf',
+      'FILE',
+      { operator: 'contains', value: '50%' },
+    )).toBe(true)
   })
 
   it('USER contains matches a comma-separated identity token that equals does not', () => {

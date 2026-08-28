@@ -70,9 +70,9 @@
   padding-right: 6px;
 }
 
-/* When leftover was already distributed into column widths, stretch the
- * inner tables to fill. Do not apply this while overflowing — it would squash
- * English headers. */
+/* When the grid fits (display width = base, leftover stays on the right),
+ * stretch the inner tables to fill. Do not apply this while overflowing —
+ * it would squash English headers. */
 .list-data-grid--fit .el-scrollbar__view,
 .list-data-grid--fit .el-table__header-wrapper,
 .list-data-grid--fit .el-table__body-wrapper,

@@ -22,6 +22,7 @@ class ListFilterSqlTest {
     private Map<String, ListColumnMeta> columns() {
         Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
         byField.put("name", filterable("name", Kind.TEXT));
+        byField.put("file", filterable("file", Kind.FILE));
         byField.put("amount", filterable("amount", Kind.NUMBER));
         byField.put("created_at", filterable("created_at", Kind.DATETIME));
         byField.put("created_by", filterable("created_by", Kind.USER));
@@ -55,7 +56,7 @@ class ListFilterSqlTest {
 
     @Test
     void textContainsCompilesToIlikeWithEscapedWildcards() {
-        assertEquals(" AND data->>'name' ILIKE ?", where("name", "contains", "50%_a", null));
+        assertEquals(" AND data->>'name'" + ListFilterSql.ILIKE, where("name", "contains", "50%_a", null));
         assertEquals(List.of("%50\\%\\_a%"), params);
     }
 
@@ -219,7 +220,7 @@ class ListFilterSqlTest {
         String sql = jsonRow().whereClause(List.of(
                 new ListColumnFilter("name", "contains", "a", null),
                 new ListColumnFilter("amount", "lte", "9", null)), params);
-        assertTrue(sql.startsWith(" AND data->>'name' ILIKE ?"));
+        assertTrue(sql.startsWith(" AND data->>'name'" + ListFilterSql.ILIKE));
         assertTrue(sql.contains(" AND (data->>'amount'"));
         assertEquals(2, params.size());
     }
@@ -242,7 +243,7 @@ class ListFilterSqlTest {
     @Test
     void physicalColumnRefTargetsTheColumnItselfNotTheJsonDocument() {
         ListFilterSql physical = ListFilterSql.orderedById(columns(), ListFilterSql.PHYSICAL_COLUMN);
-        assertEquals(" AND name ILIKE ?",
+        assertEquals(" AND name" + ListFilterSql.ILIKE,
                 physical.whereClause(List.of(new ListColumnFilter("name", "contains", "ann", null)), params));
         assertEquals(" ORDER BY name ASC NULLS LAST, id", physical.orderBy("name", "ASC"));
     }
@@ -294,13 +295,15 @@ class ListFilterSqlTest {
     @Test
     void searchOrsOneIlikePerSearchableField() {
         String sql = jsonRow().searchClause("ann", List.of("name", "created_at"), params);
-        assertEquals(" AND (data->>'name' ILIKE ? OR data->>'created_at' ILIKE ?)", sql);
+        assertEquals(" AND (data->>'name'" + ListFilterSql.ILIKE
+                + " OR data->>'created_at'" + ListFilterSql.ILIKE + ")", sql);
         assertEquals(List.of("%ann%", "%ann%"), params);
     }
 
     @Test
     void searchEscapesWildcardsSoTypedPercentMatchesLiterally() {
-        jsonRow().searchClause("50%", List.of("name"), params);
+        String sql = jsonRow().searchClause("50%", List.of("name"), params);
+        assertTrue(sql.contains("ESCAPE"));
         assertEquals(List.of("%50\\%%"), params);
     }
 

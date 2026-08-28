@@ -38,6 +38,7 @@ export const HEADER_FIT_MIN = 112
  */
 export const KIND_CONTENT_FLOOR: Record<ListColumnKind, number> = {
   TEXT: 168,
+  FILE: 168,
   DATETIME: 180,
   USER: 120,
   ENUM: HEADER_FIT_MIN,

@@ -2,6 +2,7 @@ package com.portal.util;
 
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
+import com.platform.common.list.ListFilterSql;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,18 +34,29 @@ class AuditApplicationColumnSpecTest {
     void keywordSearchIsPlainTextOfPaintedCells() {
         List<Object> params = new ArrayList<>();
         String where = AuditApplicationColumnSpec.textSearchClause("请假", params);
-        assertThat(where).contains("pi.variables->>'__request_id' ILIKE ?");
-        assertThat(where).contains("COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name) ILIKE ?");
-        assertThat(where).contains("COALESCE(pi.start_user_name, pi.start_user_id) ILIKE ?");
-        assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION + " ILIKE ?");
+        assertThat(where).contains("pi.variables->>'__request_id'" + ListFilterSql.ILIKE);
+        assertThat(where).contains("COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name)"
+                + ListFilterSql.ILIKE);
+        assertThat(where).contains("COALESCE(pi.start_user_name, pi.start_user_id)"
+                + ListFilterSql.ILIKE);
+        assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION + ListFilterSql.ILIKE);
         assertThat(where).contains("FROM sys_users u");
-        assertThat(where).contains("to_char(pi.start_time, 'YYYY-MM-DD HH24:MI') ILIKE ?");
+        assertThat(where).contains("to_char(pi.start_time, 'YYYY-MM-DD HH24:MI')"
+                + ListFilterSql.ILIKE);
         assertThat(where).doesNotContain("pi.status ILIKE");
         assertThat(where).doesNotContain("pi.status IN");
         assertThat(where).doesNotContain("pi.current_node");
         assertThat(where).doesNotContain("pi.function_unit_code ILIKE");
         assertThat(where).doesNotContain("pi.start_time::text");
         assertThat(params).hasSize(6).allMatch("%请假%"::equals);
+    }
+
+    @Test
+    void keywordPercentAndUnderscoreAreLiteral() {
+        List<Object> params = new ArrayList<>();
+        String where = AuditApplicationColumnSpec.textSearchClause("50%_a", params);
+        assertThat(where).contains("ESCAPE");
+        assertThat(params).hasSize(6).allMatch("%50\\%\\_a%"::equals);
     }
 
     @Test
