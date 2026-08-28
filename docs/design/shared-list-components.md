@@ -636,7 +636,7 @@ Action，空白贴在表最右边。空地就是 1:1 策略的视觉成本。
 - 不改后端、schema、i18n key / 文案本身（测宽吃**当前 locale 已经渲染出来的 label**）。
 - 不抽 `usePortalListGrid` / `useAdminListGrid`（列声明、筛选仍是各 app 的事）。
 - **列头 Group 已在本工作区下线**（菜单无 group 项，`insertGroupHeaders` / `groupBy` 请求已拆）。
-  §6.6 **不再包含**分组删除；也不要把分组改动和列宽 hug 揉成同一套实现叙事。
+  §6.6 **不再包含**分组删除；也不要把分组改动和列宽 fill 揉成同一套实现叙事。
 
 ### 6.6.3 定稿：底宽记住拖拽；显示宽在宽屏 fill
 

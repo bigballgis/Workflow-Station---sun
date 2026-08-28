@@ -378,12 +378,13 @@ try {
     /Create Time/i,
   ])
   await assertCaretNearHandle('To Do')
-  await shot(PORTAL_OUT, 'shared-list-todo-no-spacer')
+  await shot(PORTAL_OUT, 'todo-tasks-column-fill')
 
   await page.goto(`${ORIGIN}/portal/tasks/completed`, { waitUntil: 'domcontentloaded' })
   await waitGrid()
   await assertNoSpacer('Completed Tasks')
   await assertNoCurrentStepColumn('Completed Tasks')
+  await shot(PORTAL_OUT, 'completed-tasks-column-fill')
   await shot(PORTAL_OUT, 'shared-list-completed-no-current-step')
 
   await page.goto(`${ORIGIN}/portal/my-applications`, { waitUntil: 'domcontentloaded' })

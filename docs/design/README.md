@@ -78,7 +78,7 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner（**主表、�
 |------|------|
 | [feature-blueprint.md](./feature-blueprint.md) | 1.0 功能总蓝图（三应用 = 三层楼的整体视图，2.0 规划树） |
 | [user-profile-information-architecture.md](./user-profile-information-architecture.md) | 三端「个人中心 / 顶栏用户菜单」的信息边界与术语 |
-| [shared-list-components.md](./shared-list-components.md) | **列表共享组件 + 服务端分页接入规范**（状态：**方案已定稿**）：列头 / 按 kind 筛选排序 / 可调列宽 / 分页；**§6.5 RT**；**§6.6 列宽 hug（显示宽=底宽）**；**§6.7 Portal/Admin 侧栏 list view 必须接全套**；本期不含 DW |
+| [shared-list-components.md](./shared-list-components.md) | **列表共享组件 + 服务端分页接入规范**（状态：**方案已定稿**）：列头 / 按 kind 筛选排序 / 可调列宽 / 分页；**§6.5 RT**；**§6.6 列宽 fill（宽屏按底宽比例摊余量）**；**§6.7 Portal/Admin 侧栏 list view 必须接全套**；本期不含 DW |
 | [list-file-name-filter.md](./list-file-name-filter.md) | **列表 FILE 列按文件名筛选**（状态：**已实现**）：`Kind.FILE`；与格子同一套抽名；禁止当 TEXT 比 URL |
 
 > 列表改造是**增量**的：共享组件纯新增，一个菜单一个提交，未接入的菜单行为不变。
