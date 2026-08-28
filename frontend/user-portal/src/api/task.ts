@@ -28,7 +28,7 @@ export interface TodoTaskQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  /** Toolbar keyword; ANDs with column filters. Matches request id / task / step / process / initiator. */
+  /** Toolbar keyword; ANDs with column filters. Matches request id / task / step / function unit / process / initiator. */
   keyword?: string
   assignmentTypes?: string[]
   priorities?: string[]
@@ -95,6 +95,10 @@ export interface TaskInfo {
   formKey?: string
   /** Request ID: main-table configured human-readable identifier (e.g. HR-2026-001); null when unconfigured. */
   requestId?: string | null
+  /** Function Unit code pinned at process start. */
+  functionUnitCode?: string | null
+  /** Catalog display name; cell shows name || code. */
+  functionUnitName?: string | null
   variables?: Record<string, any>
   claimed?: boolean
   originalAssignmentType?: string

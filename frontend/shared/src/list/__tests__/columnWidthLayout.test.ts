@@ -8,6 +8,7 @@ import {
   HEADER_HANDLE_GUTTER_PX,
   HEADER_TRIGGER_GAP_PX,
   KIND_CONTENT_FLOOR,
+  allocateFilledDisplayWidths,
   headerFitColumnWidth,
 } from '../columnWidthLayout'
 
@@ -52,5 +53,21 @@ describe('headerFitColumnWidth', () => {
     expect(headerFitColumnWidth('Entity Manager', 'USER')).toBeGreaterThan(KIND_CONTENT_FLOOR.USER)
     expect(headerFitColumnWidth('Function Manager', 'USER')).toBeGreaterThan(KIND_CONTENT_FLOOR.USER)
     expect(headerFitColumnWidth('Assignment Type', 'ENUM')).toBeGreaterThan(KIND_CONTENT_FLOOR.ENUM)
+  })
+})
+
+describe('allocateFilledDisplayWidths', () => {
+  it('returns bases when they already fill or overflow the available width', () => {
+    expect(allocateFilledDisplayWidths([100, 200], 300)).toEqual([100, 200])
+    expect(allocateFilledDisplayWidths([100, 200], 250)).toEqual([100, 200])
+    expect(allocateFilledDisplayWidths([100, 200], 0)).toEqual([100, 200])
+  })
+
+  it('spreads leftover by base proportion and puts remainder on the last grown column', () => {
+    expect(allocateFilledDisplayWidths([100, 200], 400)).toEqual([133, 267])
+  })
+
+  it('grows only unlocked columns when some widths are remembered', () => {
+    expect(allocateFilledDisplayWidths([180, 200], 400, [true, false])).toEqual([180, 220])
   })
 })

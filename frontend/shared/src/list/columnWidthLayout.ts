@@ -148,3 +148,34 @@ export function headerFitColumnWidth(label: string, kind?: ListColumnKind): numb
   const contentFloor = kind ? KIND_CONTENT_FLOOR[kind] : HEADER_FIT_MIN
   return clampColumnWidth(Math.max(header, contentFloor))
 }
+
+/**
+ * Spread leftover viewport across data-column bases so the table fills the card.
+ * Locked columns keep their base; if every column is locked (or none are), all grow.
+ * Overflow / unknown available width → bases unchanged.
+ */
+export function allocateFilledDisplayWidths(
+  bases: number[],
+  available: number,
+  locked?: boolean[],
+): number[] {
+  const n = bases.length
+  if (n === 0) return []
+  const safe = bases.map((b) => Math.max(0, b))
+  const sum = safe.reduce((a, b) => a + b, 0)
+  if (available <= 0 || sum <= 0 || sum >= available) return safe
+  const slack = available - sum
+  const unlocked = locked?.some((isLocked) => !isLocked)
+    ? safe.map((_, i) => !locked?.[i])
+    : safe.map(() => true)
+  const growSum = safe.reduce((total, b, i) => total + (unlocked[i] ? b : 0), 0)
+  if (growSum <= 0) return safe
+  const out = safe.map((b, i) => (unlocked[i] ? b + Math.floor((slack * b) / growSum) : b))
+  let rest = available - out.reduce((a, b) => a + b, 0)
+  for (let i = n - 1; i >= 0 && rest !== 0; i--) {
+    if (!unlocked[i]) continue
+    out[i] += rest
+    rest = 0
+  }
+  return out
+}

@@ -83,4 +83,22 @@ class TaskQueryColumnFiltersTest {
         assertTrue(TaskQueryColumnFilters.matches(hit, List.of(contains)));
         assertFalse(TaskQueryColumnFilters.matches(miss, List.of(contains)));
     }
+
+    @Test
+    void functionUnitFilterMatchesNameOrCode() {
+        TaskInfo named = TaskInfo.builder()
+                .taskId("1")
+                .functionUnitCode("help_pr")
+                .functionUnitName("Purchase Request")
+                .build();
+        TaskInfo codeOnly = TaskInfo.builder().taskId("2").functionUnitCode("expense").build();
+        assertTrue(TaskQueryColumnFilters.matches(named, List.of(
+                new ListColumnFilter("functionUnitCode", "contains", "Purchase", null))));
+        assertTrue(TaskQueryColumnFilters.matches(named, List.of(
+                new ListColumnFilter("functionUnitCode", "eq", "help_pr", null))));
+        assertFalse(TaskQueryColumnFilters.matches(codeOnly, List.of(
+                new ListColumnFilter("functionUnitCode", "contains", "Purchase", null))));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(named, "help_pr"));
+        assertTrue(TaskQueryColumnFilters.toolbarKeywordMatches(named, "Purchase"));
+    }
 }

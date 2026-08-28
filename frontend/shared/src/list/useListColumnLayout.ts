@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type CSSProperties, type MaybeRefOrGetter, type Ref, toValue } from 'vue'
 import type { ListColumnKind } from './columnMeta'
 import { clampColumnWidth, clampDisplayWidth } from './columnResizeCursor'
-import { headerFitColumnWidth, invalidateHeaderLabelMeasureCache, LIST_COLUMN_LAYOUT_STORE_VERSION } from './columnWidthLayout'
+import { headerFitColumnWidth, invalidateHeaderLabelMeasureCache, LIST_COLUMN_LAYOUT_STORE_VERSION, allocateFilledDisplayWidths } from './columnWidthLayout'
 
 function readStoredWidths(key: string): Record<string, number> {
   if (!key) return {}
@@ -81,8 +81,8 @@ function useGridViewport(gridScrollRef: Ref<HTMLElement | null>) {
 
 /**
  * Host-owned column widths for shared ListColumnHeader's resize handle.
- * Session stores the dragged width. Display width equals that base — leftover
- * viewport is left to the right of the table (not spread into every column).
+ * Session stores the dragged **base**. When bases fit the viewport, leftover is
+ * spread into unlocked columns so the table fills the card; overflow still scrolls.
  */
 export function useListColumnLayout(opts: {
   storageKey: MaybeRefOrGetter<string>
@@ -105,6 +105,7 @@ export function useListColumnLayout(opts: {
     field: null,
     displayWidth: 0,
   })
+  const dragFrozen = reactive<Record<string, number>>({})
   const gridScrollRef = ref<HTMLElement | null>(null)
   const { gridViewportWidth, gridViewportHeight } = useGridViewport(gridScrollRef)
   const gridTableHeight = computed(() => {
@@ -138,16 +139,42 @@ export function useListColumnLayout(opts: {
     return toValue(opts.extraWidth) ?? 0
   }
 
+  const displayByField = computed<Record<string, number>>(() => {
+    const fields = toValue(opts.fields)
+    const bases = fields.map((field) => baseWidthOf(field))
+    const locked = fields.map((field) => columnWidths[field] != null)
+    const allocated = allocateFilledDisplayWidths(bases, gridViewportWidth.value - extra(), locked)
+    const next: Record<string, number> = {}
+    fields.forEach((field, i) => {
+      next[field] = allocated[i] ?? bases[i]
+    })
+    return next
+  })
+
   function widthOf(field: string): number {
     if (dragPreview.field === field) return clampDisplayWidth(dragPreview.displayWidth)
-    return baseWidthOf(field)
+    if (dragPreview.field != null && dragFrozen[field] != null) return dragFrozen[field]
+    return displayByField.value[field] ?? baseWidthOf(field)
+  }
+
+  function freezeDisplayForDrag() {
+    for (const key of Object.keys(dragFrozen)) delete dragFrozen[key]
+    const fields = toValue(opts.fields)
+    for (const field of fields) {
+      dragFrozen[field] = displayByField.value[field] ?? baseWidthOf(field)
+    }
   }
 
   function setWidth(field: string, displayWidth: number) {
     const fields = toValue(opts.fields)
     if (!fields.includes(field)) return
+    if (dragPreview.field == null) freezeDisplayForDrag()
     dragPreview.field = field
     dragPreview.displayWidth = clampDisplayWidth(displayWidth)
+  }
+
+  function clearDragFrozen() {
+    for (const key of Object.keys(dragFrozen)) delete dragFrozen[key]
   }
 
   function commitPreview() {
@@ -157,6 +184,7 @@ export function useListColumnLayout(opts: {
     const index = fields.indexOf(field)
     const displayWidth = dragPreview.displayWidth
     dragPreview.field = null
+    clearDragFrozen()
     if (index < 0) return
     columnWidths[field] = clampColumnWidth(displayWidth)
   }
@@ -166,25 +194,23 @@ export function useListColumnLayout(opts: {
     writeStoredWidths(toValue(opts.storageKey), columnWidths)
   }
 
-  const gridTotalColumnWidth = computed(() => {
+  const gridFits = computed(() => {
     const fields = toValue(opts.fields)
-    const data = fields.reduce((sum, field) => sum + widthOf(field), 0)
-    return data + extra()
+    const bases = fields.reduce((sum, field) => sum + baseWidthOf(field), 0) + extra()
+    return gridViewportWidth.value <= 0 || bases <= gridViewportWidth.value
   })
 
-  const gridFits = computed(() =>
-    gridViewportWidth.value <= 0
-    || gridTotalColumnWidth.value <= gridViewportWidth.value,
-  )
-
   const gridInnerStyle = computed<CSSProperties>(() => {
-    const total = gridTotalColumnWidth.value
-    if (gridFits.value && total > 0) {
-      return {
-        width: `${total}px`,
-        minWidth: `${total}px`,
-        maxWidth: `${total}px`,
-        alignSelf: 'flex-start',
+    if (gridViewportWidth.value <= 0) {
+      const fields = toValue(opts.fields)
+      const total = fields.reduce((sum, field) => sum + baseWidthOf(field), 0) + extra()
+      if (total > 0) {
+        return {
+          width: `${total}px`,
+          minWidth: `${total}px`,
+          maxWidth: `${total}px`,
+          alignSelf: 'flex-start',
+        }
       }
     }
     return { width: '100%', minWidth: '100%' }
@@ -192,6 +218,7 @@ export function useListColumnLayout(opts: {
 
   watch(() => toValue(opts.storageKey), (key) => {
     dragPreview.field = null
+    clearDragFrozen()
     replaceWidths(columnWidths, readStoredWidths(key))
   }, { immediate: true })
 

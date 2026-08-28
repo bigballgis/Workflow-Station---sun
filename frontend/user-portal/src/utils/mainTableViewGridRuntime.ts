@@ -157,7 +157,7 @@ export function listLayoutStorageKey(viewId: number): string {
 
 /**
  * Views used to persist widths inside {@code portal-mtv-layout:*}. Copy them once into
- * the shared list-layout session so hug display still remembers the user's drag.
+ * the shared list-layout session so fill display still remembers the user's drag.
  */
 export function migrateMtvWidthsToListLayout(viewId: number): void {
   const listKey = listLayoutStorageKey(viewId)

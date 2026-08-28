@@ -51,4 +51,22 @@ class TaskInfoListOpsTest {
         assertEquals("ATM-DC-PW-000100", sorted.get(0).getRequestId());
         assertEquals("ATM-DC-PW-000295", sorted.get(1).getRequestId());
     }
+
+    @Test
+    void applySortingByFunctionUnitUsesNameThenCode() {
+        TaskInfo later = TaskInfo.builder()
+                .taskId("1")
+                .functionUnitCode("z-code")
+                .functionUnitName("Zeta")
+                .build();
+        TaskInfo earlier = TaskInfo.builder()
+                .taskId("2")
+                .functionUnitCode("a-code")
+                .build();
+        List<TaskInfo> sorted = TaskInfoListOps.applySorting(
+                List.of(later, earlier),
+                TaskQueryRequest.builder().sortBy("functionUnitCode").sortDirection("ASC").build());
+        assertEquals("2", sorted.get(0).getTaskId());
+        assertEquals("1", sorted.get(1).getTaskId());
+    }
 }

@@ -1,4 +1,4 @@
-import { computed, reactive, ref, type MaybeRefOrGetter } from 'vue'
+import { computed, reactive, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ListColumnFilter, ListColumnMeta } from '@platform-shared/list/columnMeta'
 import { useListColumnLayout } from '@platform-shared/list/useListColumnLayout'
@@ -17,6 +17,8 @@ export function usePortalListGrid<T extends object>(opts: {
   storageKey: string
   extraWidth?: MaybeRefOrGetter<number>
   fillViewport?: MaybeRefOrGetter<boolean>
+  /** When set, only these fields render / persist order. Other declared columns stay on the payload. */
+  visibleFields?: MaybeRefOrGetter<readonly string[] | undefined>
 }) {
   const { t } = useI18n()
   const columns = ref<ListColumnMeta[]>([])
@@ -32,7 +34,7 @@ export function usePortalListGrid<T extends object>(opts: {
   let querySeq = 0
 
   const displayColumns = computed<ListColumnMeta[]>(() => {
-    const localized = columns.value.map((col) => localizeColumn(col, t))
+    const localized = visibleDeclaredColumns().map((col) => localizeColumn(col, t))
     if (columnOrder.value.length === 0) return localized
     const byField = new Map(localized.map((col) => [col.field, col]))
     const ordered: ListColumnMeta[] = []
@@ -134,8 +136,23 @@ export function usePortalListGrid<T extends object>(opts: {
     }
   }
 
+  function declaredFieldsForLayout(declared: ListColumnMeta[]): string[] {
+    const all = declared.map((c) => c.field)
+    const visible = toValue(opts.visibleFields)
+    if (visible == null) return all
+    const allow = new Set(visible)
+    return all.filter((field) => allow.has(field))
+  }
+
+  function visibleDeclaredColumns(): ListColumnMeta[] {
+    const visible = toValue(opts.visibleFields)
+    if (visible == null) return columns.value
+    const allow = new Set(visible)
+    return columns.value.filter((col) => allow.has(col.field))
+  }
+
   function syncColumnOrderFromServer(declared: ListColumnMeta[]): void {
-    const declaredFields = declared.map((c) => c.field)
+    const declaredFields = declaredFieldsForLayout(declared)
     const stored = readStoredColumnOrder()
     const next: string[] = []
     for (const field of stored) {

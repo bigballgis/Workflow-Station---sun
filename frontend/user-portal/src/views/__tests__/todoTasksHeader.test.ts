@@ -57,6 +57,7 @@ function mountPage() {
           deptRole: 'Dept Role',
           delegated: 'Delegated',
           requestId: 'Request ID',
+          functionUnit: 'Function Unit',
           taskName: 'Task Name',
           currentStep: 'Step',
           processName: 'Process',
@@ -108,7 +109,14 @@ describe('To Do shared list', () => {
       data: {
         columns: [
           { field: 'requestId', label: 'task.requestId', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true },
+          { field: 'functionUnitCode', label: 'task.functionUnit', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true },
           { field: 'taskName', label: 'task.taskName', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true },
+          { field: 'assignmentType', label: 'task.assignmentType', kind: 'ENUM', operators: ['eq'], filterable: true, sortable: true },
+          { field: 'createTime', label: 'task.createTime', kind: 'DATETIME', operators: ['on'], filterable: true, sortable: true },
+          { field: 'processDefinitionName', label: 'task.processName', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true },
+          { field: 'initiatorName', label: 'task.initiator', kind: 'TEXT', operators: ['contains'], filterable: true, sortable: true },
+          { field: 'priority', label: 'task.priority', kind: 'ENUM', operators: ['eq'], filterable: true, sortable: true },
+          { field: 'dueDate', label: 'task.dueDate', kind: 'DATETIME', operators: ['on'], filterable: true, sortable: true },
         ],
         content: [],
         page: 0,
@@ -129,9 +137,11 @@ describe('To Do shared list', () => {
     expect(body).not.toHaveProperty('priorities')
     expect(w.text()).toContain('To Do')
     expect(w.text()).toContain('Type')
-    expect(w.text()).toContain('Priority')
+    expect(w.text()).not.toContain('Priority')
+    expect(w.text()).toContain('Function Unit')
+    expect(w.text()).not.toContain('Initiator')
     const headers = w.findAllComponents({ name: 'ListColumnHeader' })
-    expect(headers.length).toBeGreaterThan(0)
+    expect(headers).toHaveLength(5)
     expect(headers.every((h) => h.find('.list-col-header').exists())).toBe(true)
     expect(w.get('[data-test="todo-reset-btn"]').text()).toContain('Reset')
   })
@@ -148,21 +158,21 @@ describe('To Do shared list', () => {
     expect(api.mock.calls[0][0]).toMatchObject({ page: 0, size: 20, keyword: '请假' })
   })
 
-  it('sends assignmentTypes and priorities on search', async () => {
+  it('sends assignmentTypes on search without a Priority toolbar filter', async () => {
     const w = mountPage()
     await flushPromises()
     api.mockClear()
     const toolbar = w.getComponent(TodoListToolbar)
     await toolbar.vm.$emit('update:assignmentTypes', ['USER', 'DELEGATED'])
-    await toolbar.vm.$emit('update:priorities', ['HIGH'])
     await toolbar.vm.$emit('search')
     await flushPromises()
     expect(api.mock.calls[0][0]).toMatchObject({
       page: 0,
       size: 20,
       assignmentTypes: ['USER', 'DELEGATED'],
-      priorities: ['HIGH'],
     })
+    expect(api.mock.calls[0][0]).not.toHaveProperty('priorities')
+    expect(w.find('[data-test="todo-priorities"]').exists()).toBe(false)
   })
 
   it('reset clears toolbar fields and omits them from the next query', async () => {
@@ -170,7 +180,6 @@ describe('To Do shared list', () => {
     await flushPromises()
     const toolbar = w.getComponent(TodoListToolbar)
     await toolbar.vm.$emit('update:assignmentTypes', ['USER'])
-    await toolbar.vm.$emit('update:priorities', ['URGENT'])
     await toolbar.vm.$emit('update:keyword', '请假')
     await toolbar.vm.$emit('search')
     await flushPromises()

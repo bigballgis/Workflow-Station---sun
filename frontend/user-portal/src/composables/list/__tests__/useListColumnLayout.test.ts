@@ -145,18 +145,16 @@ describe('useListColumnLayout', () => {
     w.unmount()
   })
 
-  it('does not stretch data columns when the viewport is wider than the bases', async () => {
-    const w = mountLayout('portal-list-layout:hug', ['name', 'wide'], {
+  it('spreads leftover across data columns when the viewport is wider than the bases', async () => {
+    const w = mountLayout('portal-list-layout:fill', ['name', 'wide'], {
       extraWidth: 50,
       defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
     })
     await setViewport(w, 450)
-    expect(w.vm.widthOf('name')).toBe(100)
-    expect(w.vm.widthOf('wide')).toBe(200)
+    expect(w.vm.widthOf('name')).toBe(133)
+    expect(w.vm.widthOf('wide')).toBe(267)
     expect(w.vm.gridFits).toBe(true)
-    expect(w.vm.gridInnerStyle).toEqual({
-      width: '350px', minWidth: '350px', maxWidth: '350px', alignSelf: 'flex-start',
-    })
+    expect(w.vm.gridInnerStyle).toEqual({ width: '100%', minWidth: '100%' })
     w.unmount()
   })
 
@@ -174,7 +172,9 @@ describe('useListColumnLayout', () => {
       extraWidth: 50,
       defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
     })
+    await setViewport(restored, 450)
     expect(restored.vm.widthOf('name')).toBe(180)
+    expect(restored.vm.widthOf('wide')).toBe(220)
     restored.unmount()
   })
 
@@ -184,11 +184,11 @@ describe('useListColumnLayout', () => {
       defaultWidthOf: (field) => (field === 'wide' ? 200 : 100),
     })
     await setViewport(w, 450)
-    expect(w.vm.widthOf('name')).toBe(100)
-    expect(w.vm.widthOf('wide')).toBe(200)
+    expect(w.vm.widthOf('name')).toBe(133)
+    expect(w.vm.widthOf('wide')).toBe(267)
     w.vm.setWidth('name', 180)
     expect(w.vm.widthOf('name')).toBe(180)
-    expect(w.vm.widthOf('wide')).toBe(200)
+    expect(w.vm.widthOf('wide')).toBe(267)
     w.unmount()
   })
 

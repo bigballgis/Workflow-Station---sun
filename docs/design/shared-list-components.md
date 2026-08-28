@@ -1,7 +1,7 @@
 # 跨端列表共享组件与服务端分页接入规范
 
 > **状态：方案已定稿；Views / Relation Tables / 已办任务 / My Requests / To Do / Delegations（规则+审计）/ Permissions（申请+审批）/ Portal Audit / 成员管理已接入。**
-> §12 原 6 项待确认**全部关闭**；第 7 项（列宽 hug，§6.6）与第 8 项（侧栏 list 必须接共享套件，§6.7）2026-08-27 追加。§6.6 **已落地**（共享 `useListColumnLayout` + 显示宽=底宽；DW 仍不改）。
+> §12 原 6 项待确认**全部关闭**；第 7 项（列宽 fill，§6.6）与第 8 项（侧栏 list 必须接共享套件，§6.7）2026-08-27 追加、2026-08-28 fill 修订。§6.6 **已落地**（共享 `useListColumnLayout` + 宽屏 fill；DW 仍不改）。
 > To Do：引擎 `or()` 真分页 + 去重 COUNT；可 push 列（taskName/步骤名、流程名、priority 档、
 > createTime/dueDate）走 window；initiatorName / assignmentType 仍 portal fullScan
 > （fullScan 已改为引擎真 OFFSET，不再 `(page+1)*size` 前缀重扫）。
@@ -13,7 +13,7 @@
 > **§6.3.2（筛选 kind 的权威是表 `data_type` / 视图系统列，不是 Form 组件；`FILE` 按抽出的文件名筛，禁止当 TEXT 比 URL）**、
 > **§6.3.3（排序按 kind：字母 / 数值大小 / 新旧，数字不得按文本排）**、
 > **§6.5（Relation Tables：业务表 JSON 行；内置 User=`sys_users`；类型化筛选；列头无 Group）**、
-> **§6.6（列宽：默认 = 表头实测与 kind 内容下限取大；chrome 紧凑；显示宽=底宽；用户可拖窄到 60px；溢出时 Action `fixed="right"` 钉窗口右沿；2026-08-27 定稿）**、
+> **§6.6（列宽：默认 = 表头实测与 kind 内容下限取大；chrome 紧凑；宽屏按底宽比例 fill；用户可拖窄到 60px；溢出时 Action `fixed="right"` 钉窗口右沿；2026-08-28 fill 修订）**、
 > **§6.7（Portal/Admin 左侧菜单 list view 必须接共享列表套件：表头 + 按 kind 筛选排序 + 可调列宽 + 共享分页；2026-08-27 定稿）**、
 > **范围排除 developer-workstation**、**全程零兜底**。
 > 可以按 §8 分期 + playbook 逐提交执行。
@@ -49,8 +49,8 @@
 > **DW 侧任何文件都不删、不改**。
 > - 组件层**不发请求、不持久化、不认识业务字段**，见 §5 职责边界。
 > - **列宽 / 视口余量只按 §6.6：** 禁止再手调各页 `COL_WIDTHS` 当默认宽；禁止 Action 前
-> `list-col-spacer`；禁止把余量摊进数据列或只塞进最后一列；禁止靠解开 Action 的 `fixed="right"` 消溢出横滑时的按钮。
-> 测宽与 hug 落在 `frontend/shared/src/list/`，宿主 composable 只持有底宽并 persist session。
+> `list-col-spacer`；禁止只把余量塞进最后一列；禁止靠解开 Action 的 `fixed="right"` 消溢出横滑时的按钮。
+> 测宽与 fill 落在 `frontend/shared/src/list/`，宿主 composable 只持有底宽并 persist session。
 > - **Portal / Admin 新左侧菜单若是记录列表，必须接 §6.7 全套**，禁止自建 `el-table` 表头 +
 > 裸 `el-pagination`。侧栏是 Layout 手写的，加菜单 ≠ 自动用上共享件。DW 仍除外。
 >
@@ -588,18 +588,16 @@ NUMBER / DATETIME / TEXT…；LOOKUP 按存的主键当 TEXT）。VARCHAR 实为
 - `frontend/user-portal/verification-screenshots/2026-08-20_list-relation-user-status-enum-filter.png`
 
 
-## 6.6 列宽默认值与视口余量（2026-08-27 定稿；同日 hug 修订）
+## 6.6 列宽默认值与视口余量（2026-08-27 定稿；2026-08-28 fill 修订）
 
-> **状态：已落地（2026-08-27）。** 范围 = 已接入共享列表的 **user-portal + admin-center**；
-> **一行 DW 都不改**（与本文头部硬约束一致）。对照物：Power Apps model-driven 网格把余量按
-> 列设计宽比例摊进各数据列、铺满视口，且**没有**行内钉死 Action。我们保留行内 Action，
-> **不**学它的余量分摊——分摊会把 Request ID / 短标题列撑出一截空格，长英文表头却仍 ellipsis。
-> 定稿是 **hug**：显示宽钉死成底宽；列合计小于视口时表格收拢，空白留在表右侧卡片区；
-> 列合计超出视口时横向滚动，Action `fixed="right"` 钉窗口右沿。
+> **状态：已落地（2026-08-28 fill）。** 范围 = 已接入共享列表的 **user-portal + admin-center**；
+> **一行 DW 都不改**（与本文头部硬约束一致）。底宽仍按表头实测与 kind 下限；**显示宽**在列合计
+> 小于视口时按底宽比例摊进未拖过的数据列，表格铺满卡片。拖过的列锁定底宽。列合计超出视口时
+> 横向滚动，Action `fixed="right"` 钉窗口右沿。2026-08-27 的 hug（空白留在表右侧）已由产品确认改为 fill。
 
 接入共享列表之后，宽屏上 Action 前曾出现 spacer 空列，表头标题（尤其英文）经常被裁。
-默认宽按标题实测抬高之后，若再把视口余量摊进数据列，短列会被撑空。两条必须一起改，
-且余量策略必须是 hug，不是分摊。
+默认宽按标题实测抬高之后，2026-08-27 曾用 hug 避免短列被撑空；2026-08-28 产品确认宽屏
+整条留白更差，改为 fill（拖过的列不参与分摊）。
 
 ### 6.6.1 现状（As-Is）
 
@@ -623,12 +621,12 @@ Action，空白贴在表最右边。空地就是 1:1 策略的视觉成本。
 **目标**
 
 1. **没拖过时表头完整可见，且按 kind 给够「大部分单元格」的底宽**（当前 locale 的标题文字 + 下拉箭头 + 紧凑拖拽槽 + 内边距，与 DATETIME/TEXT/USER 等内容下限取大）。特别长的单元格仍 ellipsis + tooltip；**不按当前页行数据实测**。列头 caret 贴着拖拽线，两列之间的 cell padding 收紧；**不**靠砍默认列宽来消空 gutter。
-2. **Action 前不再有 spacer。** 列宽总和小于视口时，表格按列合计 hug，空白留在**整张表右侧**的卡片区（含 Action 之后）；勾选列与 Action 不参与列宽。列合计超出视口时 Action 继续 `fixed="right"` 钉窗口右沿（固定像素宽）。宽屏不要求 Action 贴窗口右沿——那会把余量灌回数据列。
+2. **Action 前不再有 spacer。** 列宽总和小于视口时，余量按底宽比例摊进未拖过的数据列，表格铺满卡片；勾选列与 Action 不参与分摊。列合计超出视口时 Action 继续 `fixed="right"` 钉窗口右沿（固定像素宽）。
 3. 用户拖过的宽度写入 session，**可以窄于标题自动宽 / kind 下限**（表头允许 ellipsis）。下限仍是 `COLUMN_WIDTH_MIN=60`。Views 设计器 `columnWidth` 仍优先于自动宽。
 4. 拖拽时当前列 1:1 跟手；松手后写入该列底宽（`clamp(拖到的宽, 60, 600)`），**不再弹回自动宽**。
-5. **一份** `useListColumnLayout`：测宽、hug 内层宽度、session 底宽与这份 composable 一起进
+5. **一份** `useListColumnLayout`：测宽、fill 显示宽、session 底宽与这份 composable 一起进
    `frontend/shared/src/list/`。两端 `import { useListColumnLayout } from '@platform-shared/list/useListColumnLayout'`，
-   删除 app 内拷贝。禁止再引入 `distributeDisplayWidths` / `invertBaseWidth`。
+   删除 app 内拷贝。分摊只走 `allocateFilledDisplayWidths`。
 
 **非目标（本项明确不做）**
 
@@ -640,7 +638,7 @@ Action，空白贴在表最右边。空地就是 1:1 策略的视觉成本。
 - **列头 Group 已在本工作区下线**（菜单无 group 项，`insertGroupHeaders` / `groupBy` 请求已拆）。
   §6.6 **不再包含**分组删除；也不要把分组改动和列宽 hug 揉成同一套实现叙事。
 
-### 6.6.3 定稿：显示宽 = 底宽（hug）
+### 6.6.3 定稿：底宽记住拖拽；显示宽在宽屏 fill
 
 **底宽**（写入 session 的值，也是拖拽在改的值）按优先级：
 
@@ -667,18 +665,17 @@ letter-spacing 0.08em**（`ws-theme.scss`），用离屏 DOM 按该 CSS 测当�
 | USER | 120 | 中文名、常见英文显示名 |
 | ENUM / BOOLEAN / NUMBER | 112 | 与 `HEADER_FIT_MIN` 相同；更长的枚举 label 仍由表头实测抬高 |
 
-**显示宽** = 底宽。禁止把视口余量摊进每一列。禁止 `distributeDisplayWidths` / `invertBaseWidth`。
+**显示宽**：列合计小于视口时按底宽比例摊进未锁定列（`allocateFilledDisplayWidths`）；已拖过的列锁定底宽。禁止再引入 `distributeDisplayWidths` / `invertBaseWidth`。
 
 ```
 fixed = 勾选列宽 + Action 列宽（没有就不计）
 slack  = viewport − fixed − Σ(数据列底宽)
 slack ≤ 0 → 显示宽 = 底宽；内层 100%；表格横向滚动；Action `fixed="right"` 钉窗口右沿
-slack > 0 → 显示宽 = 底宽；内层宽度钉在列合计（hug），空白留在表右侧卡片区
-            （Action 在表尾，不贴窗口右沿）
+slack > 0 → 未拖过的数据列按底宽比例吃掉 slack；内层 100%；表格铺满卡片
 ```
 
 勾选列、Action **不吃**数据列宽。去掉所有 `list-col-spacer` / `leftoverWidth` 空列。
-分页条仍铺满卡片、靠右，**不**跟着表 hug 变窄。
+分页条仍铺满卡片、靠右。
 
 **拖拽：** mousemove **只改当前列的显示宽**（1:1 跟手，其它列保持按下时的宽度）。
 `mouseup` / `width-commit` persist `clamp(拖到的宽, 60, 600)`。
@@ -688,13 +685,13 @@ slack > 0 → 显示宽 = 底宽；内层宽度钉在列合计（hug），空白
 **职责边界（对齐 §5）：** `ListColumnHeader` / `ColumnResizeHandle` 仍然不测宽、不 persist。
 测宽以及 **`useListColumnLayout` 本身**都放 `frontend/shared/src/list/`。
 组件仍不碰 session。Views 的 `mainTableViewGridRuntime` 继续管自己的底宽优先级
-（session → 设计器 `columnWidth` → 表头实测与 kind 下限），显示宽同样 = 底宽，不要再写 slack 分摊。
+（session → 设计器 `columnWidth` → 表头实测与 kind 下限），显示宽与 Portal/Admin 同一套 fill。
 
 ### 6.6.4 Views 特例
 
 运行时底宽：`session.columnWidths[field]` → `col.columnWidth`（设计器）→ 表头实测与 kind 下限取大。
 设计器宽度是 maker 意图，对应 MDA 的 `visualSizeFactor`，**不要**用标题自动宽覆盖它。
-无论底宽从哪来，显示宽 = 底宽（与 Portal/Admin 同一 hug），Views 也不能再出现 spacer。
+无论底宽从哪来，显示宽走同一套 fill（与 Portal/Admin 相同），Views 也不能再出现 spacer。
 无设计器宽度时，自动宽 = 表头实测与 `col.kind` 内容下限取大（与 Portal/Admin 同一函数）。
 记住的宽可以窄于标题自动宽。
 
@@ -711,7 +708,7 @@ slack > 0 → 显示宽 = 底宽；内层宽度钉在列合计（hug），空白
 | Action 不 `fixed`，spacer 放到 Action 后面 | **否决。** 横滑时按钮离开视口。hug 宽屏留白是「表收拢后卡片右侧空着」，溢出时 Action 仍 `fixed="right"`。 |
 | 按当前页单元格实测默认宽 | **否决。** 翻页最长值会变，列宽跟着跳；一条超长备注会撑飞整列。kind 下限覆盖「大部分」即可。 |
 | 学 MDA 拆掉行内 Action，改 Command Bar | **否决（本项）。** 那是交互改版，不是列宽问题。 |
-| 视口余量按底宽比例摊进数据列 | **否决（2026-08-27 hug 修订）。** Request ID 等短列被撑出空格，长英文表头仍 ellipsis。 |
+| 视口余量按底宽比例摊进数据列 | **2026-08-28 采纳（fill）。** hug 在宽屏留下整条卡片空白；短列略空可接受。拖过的列不参与分摊。 |
 
 没有「既严格把显示宽钉死成底宽、宽屏 Action 又永远贴窗口右沿、又永远没有表右侧空地」的免费方案。
 现网 spacer 把空地单独占一格来换 1:1。本项改为：**显示宽 = 底宽；空地在表外面。溢出时才钉 Action。**
@@ -731,16 +728,16 @@ slack > 0 → 显示宽 = 底宽；内层宽度钉在列合计（hug），空白
 **正例**
 
 1. zh-CN / en，未拖过 → 表头完整可见；单元格过长仍 ellipsis + tooltip。
-2. 宽屏无 Action **前** spacer；表格 hug，空白在表右侧卡片区；Action 在表尾（不要求贴窗口右沿）。
+2. 宽屏无 Action **前** spacer；列合计小于视口时表格铺满卡片；Action 在表尾。
 3. 拖一列的过程中其它列宽度不变、红线贴在当前列右缘且不超过可见表体；松手后该列就是拖到的宽度（可窄于表头，下限 60）。默认宽仍按 kind 内容下限；下拉箭头贴着拖拽线，两列之间没有大段空 padding。
 4. 列总和超出视口 → 横向滚动，Action 钉窗口右沿。
-5. To Do（无 Action）同样 hug，右侧可以有卡片空带。
+5. To Do（无 Action）同样 fill，右侧不再留卡片空带。
 6. `frontend/user-portal/src/composables/list/useListColumnLayout.ts` 与
    `frontend/admin-center/src/composables/list/useListColumnLayout.ts` **不再存在**；
-   测宽 / hug / 布局只在 `@platform-shared/list` 有一份实现。没有 `distributeDisplayWidths`。
+   测宽 / fill / 布局只在 `@platform-shared/list` 有一份实现。分摊只走 `allocateFilledDisplayWidths`。
 
-**落地范围（一次做完，不再拆「后续去重」）：** shared 测宽 + hug `useListColumnLayout` +
-Portal/Admin 改 import 并删拷贝 + 去掉 spacer + Views 同一 hug + 单测 + 截图。
+**落地范围（一次做完，不再拆「后续去重」）：** shared 测宽 + fill `useListColumnLayout` +
+Portal/Admin 改 import 并删拷贝 + 去掉 spacer + Views 同一 fill + 单测 + 截图。
 
 **验证（落地时）：** 共享布局单测（测宽可走 DOM / canvas fallback；Views 底宽优先级有纯函数测试）+
 `frontend/scripts/verify-shared-list-column-layout.mjs` +
@@ -781,7 +778,7 @@ Portal/Admin 改 import 并删拷贝 + 去掉 spacer + Views 同一 hug + 单测
 | **共享表头** | `@platform-shared/list/ListColumnHeader.vue`（菜单、筛选入口、拖拽柄都在这里） | 只用 `el-table-column` 的 `label` 当表头；再写一套 Portal/Admin 私有列头 |
 | **按字段类型筛选** | 列 `kind` + 算子矩阵 §6.3 / §6.3.2；弹窗 `ListFilterDialog`（由列头打开） | 视图里猜算子；ENUM/BOOLEAN 退化成文本框；FILE 当 TEXT 用 contains |
 | **按字段类型排序** | 同一套 `kind` + §6.3.3；菜单文案走 `sortLabelKeys(kind)` | 数字按字符串排；DATETIME 菜单写 A→Z |
-| **列宽可调** | 共享 `ColumnResizeHandle` + 列布局（§6.6：显示宽 = 底宽 / hug） | 不可拖的死宽表；再手写一页 `COL_WIDTHS` 当默认宽；Action 前 spacer |
+| **列宽可调** | 共享 `ColumnResizeHandle` + 列布局（§6.6：宽屏 fill） | 不可拖的死宽表；再手写一页 `COL_WIDTHS` 当默认宽；Action 前 spacer |
 | **共享分页** | `@platform-shared/list/ListPagination.vue` | 主列表用裸 `el-pagination`；页长变化不把 page 归 1 |
 | **真分页查询** | §6.2：`COUNT` + `page`/`size`/`sort`/`filters` 下推 | 拉全量再 `.length`；筛选只在前端切当前页 |
 
@@ -1027,7 +1024,7 @@ UI 截图存 `frontend/<app>/verification-screenshots/`，提交与 PR 描述里
 > 写入侧 → MAIN → SUB 三步走**（§6.1.1）；**共享表头不再提供 Group 菜单**（§6.3.1）；
 > **本期不改 DW 任何文件**，共享组件只由 UP + AD 消费，列宽拖拽从 UP 搬、列头与筛选弹窗新写（§3、§8）；
 > **全程零兜底**，所有"取不到"一律显式失败（头部硬约束）；
-> **列宽 hug 按 §6.6**（2026-08-27）：默认宽 = 表头实测与 kind 内容下限取大；chrome 紧凑（caret 贴拖拽线）；显示宽 = 底宽；用户可拖窄到 60px；宽屏空白留在表右侧；溢出时 Action `fixed="right"` 钉窗口右沿；
+> **列宽 fill 按 §6.6**（2026-08-28）：默认宽 = 表头实测与 kind 内容下限取大；chrome 紧凑（caret 贴拖拽线）；宽屏按底宽比例摊余量；用户可拖窄到 60px；溢出时 Action `fixed="right"` 钉窗口右沿；
 > **侧栏 list view 按 §6.7**：共享表头 + 按 kind 筛选排序 + 可调列宽 + 共享分页，路径必须分类。
 
 **6 项全部关闭（2026-08-17）**：1 定为不设上限 + 慢查询日志、2 被 §6.3.1 取代、3 沿用既有
@@ -1094,15 +1091,14 @@ UI 截图存 `frontend/<app>/verification-screenshots/`，提交与 PR 描述里
   `dw_form_table_bindings` 里 `table_id=5` 有 5 个 binding，多 binding 是常态；实测
    `pid=875491e6…` / `table=50326` 的 3 个 slice 装的是同一个 `row_id`，所以去重键**不含**
    slice key，否则该行会显示 3 次（§6.1.1）。
-7. **默认列宽与视口余量** → **已定（2026-08-27 hug；随后改为可拖窄 + 紧凑 padding）：底宽 = 表头实测与 kind 内容下限取大（Views 设计器 `columnWidth` 优先）；显示宽 = 底宽，不摊余量；用户拖窄后记住，不再弹回；caret 贴拖拽线；去掉 spacer；溢出时 Action 维持 `fixed="right"` 钉窗口右沿，宽屏 hug 时 Action 在表尾。** 落地要求见 §6.6。
+7. **默认列宽与视口余量** → **已定（2026-08-28 fill）：底宽 = 表头实测与 kind 内容下限取大（Views 设计器 `columnWidth` 优先）；宽屏按底宽比例摊余量，拖过的列锁定；用户拖窄后记住，不再弹回；caret 贴拖拽线；去掉 spacer；溢出时 Action 维持 `fixed="right"` 钉窗口右沿。** 落地要求见 §6.6。
 
    决策依据：Power Apps model-driven 网格在列总和小于视口时按设计宽比例把余量分给各数据列、
-   铺满 100%，但它没有行内钉死 Action。现网 spacer 是为了 1:1 拖拽故意留下的空地。
-   按标题抬默认宽之后若再分摊，Request ID 会被撑空、长英文表头仍 ellipsis，故否决余量分摊，
-   改为 hug。仍否决「只撑最后一列」「解开 Action 换 spacer」「照抄 DW `:min-width`」。
+   铺满 100%。2026-08-27 hug 避免短列被撑空，但宽屏整条卡片留白观感更差，2026-08-28 改为 fill。
+   仍否决「只撑最后一列」「解开 Action 换 spacer」「照抄 DW `:min-width`」。
    单元格不按当前页实测（翻页会跳）；TEXT/DATETIME/USER 用稳定 kind 下限。
    Portal/Admin 两份 `useListColumnLayout` 已抽进 shared。已落地：
-   `frontend/shared/src/list/useListColumnLayout.ts` + `columnWidthLayout.ts`（无分摊函数）。
+   `frontend/shared/src/list/useListColumnLayout.ts` + `columnWidthLayout.ts`（`allocateFilledDisplayWidths`）。
 8. **Portal / Admin 左侧菜单 list view** → **已定（2026-08-27）：必须一次接齐共享表头、按 kind
    筛选与排序、可调列宽、共享分页；侧栏路径必须登记 required / exempt / gap。** 见 §6.7。
 

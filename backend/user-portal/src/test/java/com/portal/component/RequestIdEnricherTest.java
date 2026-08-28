@@ -2,19 +2,25 @@ package com.portal.component;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portal.dto.TaskInfo;
+import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
+import java.sql.ResultSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
 
 /**
@@ -100,5 +106,37 @@ class RequestIdEnricherTest {
         assertThat(enricher.buildRequestId("FU1", vars("dept", "IT"))).isEqualTo("IT");
 
         verify(jdbc, times(1)).query(any(String.class), any(RowMapper.class), eq("FU1"));
+    }
+
+    @Test
+    void enrichTaskRequestIdsSetsFunctionUnitNameAndCode() throws Exception {
+        ProcessInstance instance = ProcessInstance.builder()
+                .id("pi-1")
+                .processDefinitionKey("Process_1")
+                .functionUnitCode("help_pr")
+                .variables(vars("dept", "HR"))
+                .build();
+        ProcessInstanceRepository repo = mock(ProcessInstanceRepository.class);
+        when(repo.findAllById(any())).thenReturn(List.of(instance));
+
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.query(any(String.class), any(RowMapper.class), eq("help_pr")))
+                .thenReturn(List.of("{\"fieldNames\":[\"dept\"],\"separator\":\"-\"}"));
+        doAnswer(invocation -> {
+            RowCallbackHandler handler = invocation.getArgument(1);
+            ResultSet rs = mock(ResultSet.class);
+            when(rs.getString("code")).thenReturn("help_pr");
+            when(rs.getString("name")).thenReturn("Purchase Request");
+            handler.processRow(rs);
+            return null;
+        }).when(jdbc).query(contains("sys_function_units"), any(RowCallbackHandler.class), any(Object[].class));
+
+        RequestIdEnricher enricher = new RequestIdEnricher(jdbc, objectMapper, repo);
+        TaskInfo task = TaskInfo.builder().taskId("t1").processInstanceId("pi-1").build();
+        enricher.enrichTaskRequestIds(List.of(task));
+
+        assertThat(task.getRequestId()).isEqualTo("HR");
+        assertThat(task.getFunctionUnitCode()).isEqualTo("help_pr");
+        assertThat(task.getFunctionUnitName()).isEqualTo("Purchase Request");
     }
 }

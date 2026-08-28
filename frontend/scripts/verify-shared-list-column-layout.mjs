@@ -1,5 +1,5 @@
 /**
- * Shared list §6.6 hug (display width = base) + §6.7 Audit / member-management / Views header menus.
+ * Shared list column fill (bases hug content; leftover spreads into columns) + §6.7 Audit / member-management / Views header menus.
  * Also gates Permissions page-scroll (mixed card+list) and Delegations Action buttons.
  * Password login only — do not use unified SSO.
  */
@@ -372,8 +372,9 @@ try {
   await assertFrozenPane('To Do')
   await assertHeadersFullyVisible('To Do', [
     /Request ID/i,
+    /Function Unit/i,
+    /Task Name/i,
     /Assignment Type/i,
-    /Priority/i,
     /Create Time/i,
   ])
   await assertCaretNearHandle('To Do')

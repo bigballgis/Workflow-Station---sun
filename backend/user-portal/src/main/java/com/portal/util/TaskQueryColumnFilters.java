@@ -16,7 +16,7 @@ import java.util.function.Function;
 /**
  * In-memory column filters for Portal To Do lists ({@link ListColumnFilter}).
  *
- * <p>Whitelist fields: taskName, requestId, processDefinitionName, initiatorName, priority,
+ * <p>Whitelist fields: taskName, requestId, functionUnitCode, processDefinitionName, initiatorName, priority,
  * assignmentType, currentStepName (alias currentNode), createTime, dueDate.
  * DATETIME operators mirror {@link ListFilterSql} / {@link ListRelativeDates}.
  */
@@ -25,6 +25,7 @@ public final class TaskQueryColumnFilters {
     public static final Set<String> FILTER_FIELDS = Set.of(
             "taskName",
             "requestId",
+            "functionUnitCode",
             "processDefinitionName",
             "initiatorName",
             "priority",
@@ -60,7 +61,8 @@ public final class TaskQueryColumnFilters {
         }
         String expected = keyword.trim();
         for (String field : List.of(
-                "requestId", "taskName", "currentStepName", "processDefinitionName", "initiatorName")) {
+                "requestId", "taskName", "currentStepName", "functionUnitCode", "functionUnitName",
+                "processDefinitionName", "initiatorName")) {
             if (textMatches(resolveFieldValue(task, field), "contains", expected)) {
                 return true;
             }
@@ -125,8 +127,48 @@ public final class TaskQueryColumnFilters {
         if ("priority".equals(filter.field())) {
             return priorityMatches(task.getPriority(), filter);
         }
+        if ("functionUnitCode".equals(filter.field())) {
+            return functionUnitMatches(task, filter);
+        }
         String actual = resolveFieldValue(task, filter.field());
         return textMatches(actual, filter.operator(), filter.value() != null ? filter.value() : "");
+    }
+
+    /**
+     * Cell shows {@code functionUnitName || functionUnitCode}; filter matches either value.
+     * Negative operators require neither side to match.
+     */
+    static boolean functionUnitMatches(TaskInfo task, ListColumnFilter filter) {
+        String op = filter.operator() != null ? filter.operator().trim() : "";
+        String expected = filter.value() != null ? filter.value() : "";
+        String code = task.getFunctionUnitCode();
+        String name = task.getFunctionUnitName();
+        if ("isNull".equals(op)) {
+            return isBlank(code) && isBlank(name);
+        }
+        if ("isNotNull".equals(op)) {
+            return !isBlank(code) || !isBlank(name);
+        }
+        boolean codeHit = textMatches(code, positiveTextOp(op), expected);
+        boolean nameHit = textMatches(name, positiveTextOp(op), expected);
+        return switch (op) {
+            case "eq", "contains", "startsWith", "endsWith" -> codeHit || nameHit;
+            case "ne", "notContains" -> !codeHit && !nameHit;
+            default -> throw new IllegalArgumentException(
+                    "Operator " + op + " is not allowed on TEXT column functionUnitCode");
+        };
+    }
+
+    private static String positiveTextOp(String op) {
+        return switch (op) {
+            case "ne" -> "eq";
+            case "notContains" -> "contains";
+            default -> op;
+        };
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
@@ -239,6 +281,8 @@ public final class TaskQueryColumnFilters {
         Function<TaskInfo, String> getter = switch (field) {
             case "taskName" -> TaskInfo::getTaskName;
             case "requestId" -> TaskInfo::getRequestId;
+            case "functionUnitCode" -> TaskInfo::getFunctionUnitCode;
+            case "functionUnitName" -> TaskInfo::getFunctionUnitName;
             case "processDefinitionName" -> TaskInfo::getProcessDefinitionName;
             case "initiatorName" -> TaskInfo::getInitiatorName;
             case "priority" -> TaskInfo::getPriority;

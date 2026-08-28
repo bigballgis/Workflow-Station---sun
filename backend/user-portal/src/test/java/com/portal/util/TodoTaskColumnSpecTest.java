@@ -29,6 +29,31 @@ class TodoTaskColumnSpecTest {
         assertThat(TodoTaskColumnSpec.columns()).noneMatch(c -> "currentStepName".equals(c.field()));
     }
 
+    @Test
+    void functionUnitIsTextSearchableAndSortable() {
+        ListColumnMeta functionUnit = column("functionUnitCode");
+        assertThat(functionUnit.kind()).isEqualTo(Kind.TEXT);
+        assertThat(functionUnit.filterable()).isTrue();
+        assertThat(functionUnit.sortable()).isTrue();
+        assertThat(functionUnit.operators()).contains("contains", "startsWith", "eq");
+    }
+
+    @Test
+    void hiddenColumnsStayDeclaredForRestore() {
+        assertThat(TodoTaskColumnSpec.columns())
+                .extracting(ListColumnMeta::field)
+                .containsExactly(
+                        "requestId",
+                        "functionUnitCode",
+                        "taskName",
+                        "assignmentType",
+                        "createTime",
+                        "processDefinitionName",
+                        "initiatorName",
+                        "priority",
+                        "dueDate");
+    }
+
     private static ListColumnMeta column(String field) {
         return TodoTaskColumnSpec.columns().stream()
                 .filter(c -> field.equals(c.field()))

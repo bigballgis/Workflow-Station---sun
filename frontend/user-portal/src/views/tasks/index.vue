@@ -10,7 +10,6 @@
     >
       <TodoListToolbar
         v-model:assignment-types="filterForm.assignmentTypes"
-        v-model:priorities="filterForm.priorities"
         v-model:keyword="filterForm.keyword"
         @search="handleSearch"
         @reset="handleReset"
@@ -86,6 +85,11 @@
                 >
                   {{ row.requestId || '-' }}
                 </el-link>
+                <span
+                  v-else-if="col.field === 'functionUnitCode'"
+                >
+                  {{ row.functionUnitName || row.functionUnitCode || '-' }}
+                </span>
                 <span
                   v-else-if="col.field === 'assignmentType'"
                   class="assignment-type"
@@ -223,9 +227,17 @@ const loading = ref(true)
 const selectedTasks = ref<TaskInfo[]>([])
 const filterForm = reactive({
   assignmentTypes: [] as string[],
-  priorities: [] as string[],
   keyword: '',
 })
+
+/** Temporarily hide Process Name / Initiator / Priority / Due Date. Restore by dropping this allow-list. */
+const TODO_VISIBLE_FIELDS = [
+  'requestId',
+  'functionUnitCode',
+  'taskName',
+  'assignmentType',
+  'createTime',
+] as const
 
 const {
   displayColumns,
@@ -254,8 +266,9 @@ const {
   applySort,
   clearSort,
 } = usePortalListGrid<TaskInfo>({
-  storageKey: 'portal-list-layout:todo-tasks',
+  storageKey: 'portal-list-layout:todo-tasks-v2',
   extraWidth: 50,
+  visibleFields: TODO_VISIBLE_FIELDS,
 })
 
 const actionDialogVisible = ref(false)
@@ -289,7 +302,6 @@ function todoQueryBody(): TodoTaskQueryRequest {
   const keyword = filterForm.keyword.trim()
   if (keyword) body.keyword = keyword
   if (filterForm.assignmentTypes.length > 0) body.assignmentTypes = filterForm.assignmentTypes
-  if (filterForm.priorities.length > 0) body.priorities = filterForm.priorities
   return body
 }
 
@@ -300,7 +312,6 @@ function handleSearch() {
 
 function handleReset() {
   filterForm.assignmentTypes = []
-  filterForm.priorities = []
   filterForm.keyword = ''
   for (const field of Object.keys(columnFilters.value)) {
     clearFilter(field)

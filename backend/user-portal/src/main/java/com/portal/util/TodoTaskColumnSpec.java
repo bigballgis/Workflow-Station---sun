@@ -9,9 +9,13 @@ import java.util.List;
  * that cannot be pushed into Flowable runs as an exact portal fullScan (see {@link EngineTaskPushdown}).
  *
  * <p>{@code requestId} is computed (enriched before filter/sort). It is ordinary TEXT
- * ({@link ListColumnMeta#of}) so the header can search and A→Z sort. {@code priority} is stored as Flowable's
+ * ({@link ListColumnMeta#of}) so the header can search and A→Z sort. {@code functionUnitCode}
+ * is filled from {@code up_process_instance} in the same enrich pass. {@code priority} is stored as Flowable's
  * numeric string ({@code "50"}); ENUM options map to numeric bands in
  * {@link TaskQueryColumnFilters} so chrome labels match the cell renderer.
+ *
+ * <p>Process Name / Initiator / Priority / Due Date stay declared (after Create Time) so they can be
+ * restored without a spec rewrite; Portal currently hides them via {@code visibleFields}.
  */
 public final class TodoTaskColumnSpec {
 
@@ -21,12 +25,13 @@ public final class TodoTaskColumnSpec {
     public static List<ListColumnMeta> columns() {
         return List.of(
                 ListColumnMeta.of("requestId", "task.requestId", Kind.TEXT),
+                ListColumnMeta.of("functionUnitCode", "task.functionUnit", Kind.TEXT),
                 ListColumnMeta.of("taskName", "task.taskName", Kind.TEXT),
-                ListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),
                 ListColumnMeta.withOptions("assignmentType", "task.assignmentType", Kind.ENUM, assignmentOptions()),
+                ListColumnMeta.of("createTime", "task.createTime", Kind.DATETIME),
+                ListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),
                 ListColumnMeta.of("initiatorName", "task.initiator", Kind.TEXT),
                 ListColumnMeta.withOptions("priority", "task.priority", Kind.ENUM, priorityOptions()),
-                ListColumnMeta.of("createTime", "task.createTime", Kind.DATETIME),
                 ListColumnMeta.of("dueDate", "task.dueDate", Kind.DATETIME)
         );
     }

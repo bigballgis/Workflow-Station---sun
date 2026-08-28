@@ -47,6 +47,8 @@ public final class TaskInfoListOps {
                     TaskInfo::getCreateTime, Comparator.nullsLast(Comparator.naturalOrder()));
             case "requestId" -> Comparator.comparing(
                     TaskInfo::getRequestId, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+            case "functionUnitCode" -> Comparator.comparing(
+                    TaskInfoListOps::functionUnitSortKey, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
             case "initiatorName" -> Comparator.comparing(
                     TaskInfo::getInitiatorName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
             case "assignmentType" -> Comparator.comparing(
@@ -74,6 +76,14 @@ public final class TaskInfoListOps {
         return new ArrayList<>(tasks.subList(start, end));
     }
 
+
+    private static String functionUnitSortKey(TaskInfo task) {
+        String name = task.getFunctionUnitName();
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        return task.getFunctionUnitCode();
+    }
 
     private static Integer prioritySortKey(TaskInfo task) {
         String raw = task.getPriority();

@@ -264,6 +264,7 @@ export default {
     taskName: 'Task Name',
     currentStep: 'Current Step',
     requestId: 'Request ID',
+    functionUnit: 'Function Unit',
     processName: 'Process Name',
     initiator: 'Initiator',
     assignee: 'Assignee',

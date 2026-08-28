@@ -264,6 +264,7 @@ export default {
     taskName: '任务名称',
     currentStep: '当前步骤',
     requestId: 'Request ID',
+    functionUnit: '功能单元',
     processName: '流程名称',
     initiator: '发起人',
     assignee: '处理人',

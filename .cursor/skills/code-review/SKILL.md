@@ -82,7 +82,7 @@ IDE 无红线或「理论上能编译」不能代替命令输出。
 | FU version/rollback | skill `function-unit-version-rollback` |
 | View access | skill `view-access-control` |
 | Portal MI | `portal-mi-subtable-my-request` + `performance-change-safety` |
-| Portal/Admin 侧栏或记录列表（`el-table` 主列表、Layout 菜单、`ListColumnHeader` / `ListPagination`） | `shared-list-portal-admin` + [shared-list-components.md](../../../docs/design/shared-list-components.md) §6.7（表头 / kind 筛选排序 / 列宽 / 分页）；列宽 hug 再加 §6.6 |
+| Portal/Admin 侧栏或记录列表（`el-table` 主列表、Layout 菜单、`ListColumnHeader` / `ListPagination`） | `shared-list-portal-admin` + [shared-list-components.md](../../../docs/design/shared-list-components.md) §6.7（表头 / kind 筛选排序 / 列宽 / 分页）；列宽 fill 再加 §6.6 |
 
 ## 3. 通用门禁（摘要）
 

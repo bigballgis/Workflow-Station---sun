@@ -275,15 +275,28 @@ public class TaskQueryComponent {
                 + String.valueOf(request.getIncludeOverdue());
     }
 
-    /** Fill requestId before filter, keyword, or A→Z sort so chrome matches the visible cell. */
+    /** Fill requestId / function unit before filter, keyword, or A→Z sort so chrome matches the visible cell. */
     private void maybeEnrichRequestIdsForColumnFilter(List<TaskInfo> tasks, TaskQueryRequest request) {
         var filters = TaskQueryColumnFilters.normalize(request.getFilters());
-        boolean needsRequestId = filters.stream().anyMatch(f -> "requestId".equals(f.field()))
-                || (request.getKeyword() != null && !request.getKeyword().isBlank())
-                || (request.getSortBy() != null && "requestId".equalsIgnoreCase(request.getSortBy().trim()));
-        if (needsRequestId) {
+        if (needsPortalDerivedTaskColumns(request, filters)) {
             requestIdEnricher.enrichTaskRequestIds(tasks);
         }
+    }
+
+    private static boolean needsPortalDerivedTaskColumns(
+            TaskQueryRequest request, List<ListColumnFilter> filters) {
+        if (filters.stream().anyMatch(f -> "requestId".equals(f.field()) || "functionUnitCode".equals(f.field()))) {
+            return true;
+        }
+        if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
+            return true;
+        }
+        String sortBy = request.getSortBy();
+        if (sortBy == null || sortBy.isBlank()) {
+            return false;
+        }
+        String field = sortBy.trim();
+        return "requestId".equalsIgnoreCase(field) || "functionUnitCode".equalsIgnoreCase(field);
     }
 
     /**

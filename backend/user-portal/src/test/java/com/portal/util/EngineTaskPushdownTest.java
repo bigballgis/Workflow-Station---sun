@@ -62,6 +62,17 @@ class EngineTaskPushdownTest {
     }
 
     @Test
+    void functionUnitFilterAndSortForceFullScan() {
+        assertFalse(EngineTaskPushdown.canFullyPush(TaskQueryRequest.builder()
+                .filters(List.of(new ListColumnFilter("functionUnitCode", "contains", "help", null)))
+                .build()));
+        assertFalse(EngineTaskPushdown.canFullyPush(TaskQueryRequest.builder()
+                .sortBy("functionUnitCode")
+                .sortDirection("ASC")
+                .build()));
+    }
+
+    @Test
     void toolbarPriorityInFilterForcesFullScan() {
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .filters(List.of(new ListColumnFilter("priority", "in", "HIGH,URGENT", null)))
