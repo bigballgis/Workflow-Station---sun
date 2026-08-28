@@ -8,12 +8,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TodoTaskColumnSpecTest {
 
     @Test
-    void requestIdIsTextSearchableAndSortableWithoutGroup() {
+    void requestIdIsTextSearchableAndSortable() {
         ListColumnMeta requestId = column("requestId");
         assertThat(requestId.kind()).isEqualTo(Kind.TEXT);
         assertThat(requestId.filterable()).isTrue();
         assertThat(requestId.sortable()).isTrue();
-        assertThat(requestId.groupable()).isFalse();
         assertThat(requestId.operators()).contains("contains", "startsWith", "eq");
     }
 
@@ -23,6 +22,42 @@ class TodoTaskColumnSpecTest {
         assertThat(taskName.filterable()).isTrue();
         assertThat(taskName.sortable()).isTrue();
         assertThat(taskName.operators()).contains("contains");
+    }
+
+    @Test
+    void currentStepIsNotAVisibleColumn() {
+        assertThat(TodoTaskColumnSpec.columns()).noneMatch(c -> "currentStepName".equals(c.field()));
+    }
+
+    @Test
+    void functionUnitIsTextSearchableAndSortable() {
+        ListColumnMeta functionUnit = column("functionUnitCode");
+        assertThat(functionUnit.kind()).isEqualTo(Kind.TEXT);
+        assertThat(functionUnit.filterable()).isTrue();
+        assertThat(functionUnit.sortable()).isTrue();
+        assertThat(functionUnit.operators()).contains("contains", "startsWith", "eq");
+    }
+
+    @Test
+    void hiddenColumnsStayDeclaredForRestore() {
+        assertThat(TodoTaskColumnSpec.columns())
+                .extracting(ListColumnMeta::field)
+                .containsExactly(
+                        "requestId",
+                        "functionUnitCode",
+                        "taskName",
+                        "assignmentType",
+                        "createTime",
+                        "processDefinitionName",
+                        "initiatorName",
+                        "priority",
+                        "dueDate");
+        assertThat(TodoTaskColumnSpec.VISIBLE_FIELDS).containsExactly(
+                "requestId",
+                "functionUnitCode",
+                "taskName",
+                "assignmentType",
+                "createTime");
     }
 
     private static ListColumnMeta column(String field) {

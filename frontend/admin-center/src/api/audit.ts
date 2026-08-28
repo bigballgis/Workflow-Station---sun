@@ -99,7 +99,6 @@ export interface AdminAuditListQuery extends AuditQueryRequest {
   size: number
   filters?: ListColumnFilterRequest[]
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export interface AnomalyDetectionResult {

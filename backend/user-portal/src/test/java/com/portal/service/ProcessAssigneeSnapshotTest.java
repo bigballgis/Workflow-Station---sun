@@ -36,6 +36,18 @@ class ProcessAssigneeSnapshotTest {
     }
 
     @Test
+    void fromEngineTask_storesBuRoleAssignmentTargetOnTheCandidatePool() {
+        Map<String, Object> task = Map.of(
+                "assignmentTarget", "hase-hmdc:HMDC_Index_Role",
+                "assignmentType", "BU_ROLE");
+
+        ProcessAssigneeSnapshot snapshot = ProcessAssigneeSnapshot.fromEngineTask(task);
+
+        assertThat(snapshot.getAssigneeUserId()).isNull();
+        assertThat(snapshot.getCandidateUserIds()).isEqualTo("hase-hmdc:HMDC_Index_Role");
+    }
+
+    @Test
     void fromEngineTask_singleAssignee() {
         Map<String, Object> task = Map.of("currentAssignee", "uuid-solo");
 

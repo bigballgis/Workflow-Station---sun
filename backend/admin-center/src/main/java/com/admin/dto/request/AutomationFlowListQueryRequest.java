@@ -13,8 +13,7 @@ public record AutomationFlowListQueryRequest(
         String keyword,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public AutomationFlowListQueryRequest {
         if (page < 0) {

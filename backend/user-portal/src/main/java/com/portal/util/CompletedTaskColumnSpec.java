@@ -2,6 +2,7 @@ package com.portal.util;
 
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
+import com.platform.common.list.ListFilterSql;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,6 @@ public final class CompletedTaskColumnSpec {
         return List.of(
                 ListColumnMeta.of("requestId", "task.requestId", Kind.TEXT),
                 ListColumnMeta.of("taskName", "task.taskName", Kind.TEXT),
-                ListColumnMeta.displayOnly("currentStepName", "task.currentStep", Kind.TEXT),
                 ListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),
                 ListColumnMeta.withOptions("action", "task.action", Kind.ENUM, actionOptions()),
                 ListColumnMeta.of("createTime", "task.createTime", Kind.DATETIME),

@@ -94,7 +94,7 @@ class RelationTableStructureListQuerySqlTest {
     private static RelationTableStructureListQueryRequest request(
             String functionUnitId, List<ListColumnFilter> filters) {
         return new RelationTableStructureListQueryRequest(
-                0, 20, functionUnitId, filters, null, null, null);
+                0, 20, functionUnitId, filters, null, null);
     }
 
     private String pageSql() {

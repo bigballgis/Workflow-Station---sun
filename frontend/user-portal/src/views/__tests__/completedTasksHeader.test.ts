@@ -14,14 +14,13 @@ vi.mock('@/api/task', () => ({
 const api = vi.mocked(queryCompletedTasks)
 
 const COLUMNS: ListColumnMeta[] = [
-  { field: 'requestId', label: 'task.requestId', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'] },
-  { field: 'taskName', label: 'task.taskName', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'] },
-  { field: 'currentStepName', label: 'task.currentStep', kind: 'TEXT', filterable: false, sortable: false, groupable: false, operators: [] },
-  { field: 'processDefinitionName', label: 'task.processName', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains'] },
-  { field: 'action', label: 'task.action', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq', 'ne'], options: [{ value: 'approved', label: 'action.approved' }] },
-  { field: 'createTime', label: 'task.createTime', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['on', 'between'] },
-  { field: 'completedTime', label: 'task.completedTime', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['between'] },
-  { field: 'durationInMillis', label: 'task.duration', kind: 'NUMBER', filterable: true, sortable: true, groupable: false, operators: ['gt', 'between'] },
+  { field: 'requestId', label: 'task.requestId', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'] },
+  { field: 'taskName', label: 'task.taskName', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'] },
+  { field: 'processDefinitionName', label: 'task.processName', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains'] },
+  { field: 'action', label: 'task.action', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq', 'ne'], options: [{ value: 'approved', label: 'action.approved' }] },
+  { field: 'createTime', label: 'task.createTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['on', 'between'] },
+  { field: 'completedTime', label: 'task.completedTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['between'] },
+  { field: 'durationInMillis', label: 'task.duration', kind: 'NUMBER', filterable: true, sortable: true, operators: ['gt', 'between'] },
 ]
 
 const lastRequest = () => api.mock.calls[api.mock.calls.length - 1][0]
@@ -60,7 +59,6 @@ describe('completed tasks — shared list header', () => {
     const requestId = headers[0].props('column') as ListColumnMeta
     expect(requestId.filterable).toBe(true)
     expect(requestId.sortable).toBe(true)
-    expect(requestId.groupable).toBe(false)
   })
 
   it('applying a filter and changing sort both reset to the first page', async () => {
@@ -98,17 +96,6 @@ describe('completed tasks — shared list header', () => {
     expect(lastRequest().sortDirection).toBe('ASC')
   })
 
-  it('grouping sends groupBy from the declared ENUM column', async () => {
-    const w = await mountPage()
-    const actionHeader = w.findAllComponents({ name: 'ListColumnHeader' })
-      .find((h) => h.props('column').field === 'action')
-    expect(actionHeader).toBeTruthy()
-    actionHeader!.vm.$emit('group-change', true)
-    await flushPromises()
-    expect(lastRequest().groupBy).toBe('action')
-    expect(lastRequest().page).toBe(0)
-  })
-
   it('moving a column does not refetch', async () => {
     const w = await mountPage()
     const callsBefore = api.mock.calls.length
@@ -118,7 +105,7 @@ describe('completed tasks — shared list header', () => {
     expect(api.mock.calls.length).toBe(callsBefore)
     const fields = w.findAllComponents({ name: 'ListColumnHeader' }).map((h) => h.props('column').field)
     expect(fields[0]).toBe('requestId')
-    expect(fields[1]).toBe('currentStepName')
+    expect(fields[1]).toBe('processDefinitionName')
     expect(fields[2]).toBe('taskName')
   })
 }, 20_000)

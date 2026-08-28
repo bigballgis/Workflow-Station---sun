@@ -1,7 +1,6 @@
 package com.portal.util;
 
 import com.platform.common.list.ListColumnFilter;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import org.junit.jupiter.api.Test;
@@ -11,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class TaskInfoListOpsTest {
 
     @Test
-    void pageOfSlicesAndGroupsByPriority() {
+    void pageOfSlicesAcrossPages() {
         TaskInfo a = TaskInfo.builder().taskId("1").priority("HIGH").taskName("A").build();
         TaskInfo b = TaskInfo.builder().taskId("2").priority("LOW").taskName("B").build();
         TaskInfo c = TaskInfo.builder().taskId("3").priority("HIGH").taskName("C").build();
@@ -19,11 +18,6 @@ class TaskInfoListOpsTest {
 
         assertEquals(List.of(a, b), TaskInfoListOps.pageOf(all, 0, 2));
         assertEquals(List.of(c), TaskInfoListOps.pageOf(all, 1, 2));
-
-        List<PortalListGroup> groups = TaskInfoListOps.groupsOf(all, "priority");
-        assertEquals(2, groups.size());
-        assertEquals("HIGH", groups.get(0).label());
-        assertEquals(2L, groups.get(0).count());
     }
 
     @Test
@@ -56,5 +50,23 @@ class TaskInfoListOpsTest {
                 TaskQueryRequest.builder().sortBy("requestId").sortDirection("ASC").build());
         assertEquals("ATM-DC-PW-000100", sorted.get(0).getRequestId());
         assertEquals("ATM-DC-PW-000295", sorted.get(1).getRequestId());
+    }
+
+    @Test
+    void applySortingByFunctionUnitUsesNameThenCode() {
+        TaskInfo later = TaskInfo.builder()
+                .taskId("1")
+                .functionUnitCode("z-code")
+                .functionUnitName("Zeta")
+                .build();
+        TaskInfo earlier = TaskInfo.builder()
+                .taskId("2")
+                .functionUnitCode("a-code")
+                .build();
+        List<TaskInfo> sorted = TaskInfoListOps.applySorting(
+                List.of(later, earlier),
+                TaskQueryRequest.builder().sortBy("functionUnitCode").sortDirection("ASC").build());
+        assertEquals("2", sorted.get(0).getTaskId());
+        assertEquals("1", sorted.get(1).getTaskId());
     }
 }

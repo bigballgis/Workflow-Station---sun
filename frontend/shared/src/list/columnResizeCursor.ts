@@ -13,15 +13,15 @@ export const COL_RESIZE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
 
 export const COLUMN_WIDTH_MIN = 60
 export const COLUMN_WIDTH_MAX = 600
+/** Visual drag can exceed the persisted 600px base while the pointer is down. */
+export const COLUMN_DISPLAY_WIDTH_MAX = 4000
 
 export function clampColumnWidth(width: number): number {
   return Math.min(COLUMN_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, width))
 }
 
-/** Empty width parked at the trailing edge so other columns keep a 1:1 drag. */
-export function leftoverColumnWidth(viewportWidth: number, totalColumnWidth: number): number {
-  if (viewportWidth <= 0 || totalColumnWidth <= 0) return 0
-  return Math.max(0, viewportWidth - totalColumnWidth)
+export function clampDisplayWidth(width: number): number {
+  return Math.min(COLUMN_DISPLAY_WIDTH_MAX, Math.max(COLUMN_WIDTH_MIN, width))
 }
 
 /**
@@ -30,10 +30,10 @@ export function leftoverColumnWidth(viewportWidth: number, totalColumnWidth: num
  */
 export function startWidthFromHandle(handle: HTMLElement, fallback: number): number {
   const cell = handle.closest('th')
-  if (!cell) return clampColumnWidth(fallback)
+  if (!cell) return clampDisplayWidth(fallback)
   const width = cell.getBoundingClientRect().width
-  if (!Number.isFinite(width) || width <= 0) return clampColumnWidth(fallback)
-  return clampColumnWidth(width)
+  if (!Number.isFinite(width) || width <= 0) return clampDisplayWidth(fallback)
+  return clampDisplayWidth(width)
 }
 
 export interface ColumnResizeGuide {
@@ -41,16 +41,44 @@ export interface ColumnResizeGuide {
   detach: () => void
 }
 
+function nearestScrollport(el: HTMLElement): HTMLElement | null {
+  let parent = el.parentElement
+  while (parent) {
+    const style = getComputedStyle(parent)
+    if (
+      style.overflowX === 'auto' || style.overflowX === 'scroll'
+      || style.overflowY === 'auto' || style.overflowY === 'scroll'
+    ) {
+      return parent
+    }
+    parent = parent.parentElement
+  }
+  return null
+}
+
+function intersectVertical(
+  tableRect: DOMRect,
+  clipRect: DOMRect,
+): { top: number; height: number } | null {
+  const top = Math.max(tableRect.top, clipRect.top)
+  const bottom = Math.min(tableRect.bottom, clipRect.bottom)
+  const height = bottom - top
+  if (height <= 0) return null
+  return { top, height }
+}
+
 /**
  * Full-height column guide drawn on `document.body` while a drag is in progress.
  * Position is computed from the handle's starting right edge plus the width delta,
- * so it does not wait for the table DOM to reflow.
+ * so it does not wait for the table DOM to reflow. Height is clipped to the
+ * table's visible intersection with its scrollport so the line does not paint
+ * through pagination sitting below the grid.
  */
 export function attachColumnResizeGuide(
   handle: HTMLElement,
   startWidth: number,
 ): ColumnResizeGuide {
-  const table = handle.closest('.el-table')
+  const table = handle.closest('.el-table') as HTMLElement | null
   const line = document.createElement('div')
   line.className = 'col-resize-guide'
   line.setAttribute('aria-hidden', 'true')
@@ -59,12 +87,18 @@ export function attachColumnResizeGuide(
   const startRight = handle.getBoundingClientRect().right
 
   function move(width: number) {
-    const tableRect = table?.getBoundingClientRect()
     line.style.left = `${startRight + (width - startWidth) - 1}px`
-    if (tableRect && tableRect.height > 0) {
-      line.style.top = `${tableRect.top}px`
-      line.style.height = `${tableRect.height}px`
-      return
+    const tableRect = table?.getBoundingClientRect()
+    if (table && tableRect && tableRect.height > 0) {
+      const scroll = nearestScrollport(table)
+      const box = scroll
+        ? intersectVertical(tableRect, scroll.getBoundingClientRect())
+        : { top: tableRect.top, height: tableRect.height }
+      if (box) {
+        line.style.top = `${box.top}px`
+        line.style.height = `${box.height}px`
+        return
+      }
     }
     // FALLBACK(ux): unit tests mount the handle without el-table; live grids always have one.
     const handleRect = handle.getBoundingClientRect()

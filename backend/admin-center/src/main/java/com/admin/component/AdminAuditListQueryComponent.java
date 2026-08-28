@@ -1,12 +1,11 @@
 package com.admin.component;
 
 import com.admin.audit.AuditActorResolver;
-import com.admin.dto.list.AdminListGroup;
 import com.admin.dto.list.AdminListPage;
 import com.admin.dto.request.AdminAuditListQueryRequest;
 import com.admin.entity.AuditLog;
 import com.admin.list.AdminAuditColumnSpec;
-import com.admin.list.ListFilterSql;
+
 import com.admin.list.ListQuerySupport;
 import com.admin.repository.AuditLogRepository;
 import com.admin.repository.UserRepository;
@@ -15,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.time.Instant;
 import java.sql.Timestamp;
@@ -25,7 +25,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Admin Center audit list: COUNT(*), page and group counts share the toolbar predicate
+ * Admin Center audit list: COUNT(*) and the page share the toolbar predicate
  * plus column filters. Outer alias is {@code al}.
  */
 @Slf4j
@@ -52,41 +52,27 @@ public class AdminAuditListQueryComponent {
                 ListQuerySupport.query(jdbcTemplate, "SELECT COUNT(*)" + where, params, countExtractor),
                 LIST_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<AdminListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        if (groupExpression != null && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty admin-audit result");
-        }
 
-        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request, groupExpression);
+        PageIds pageIds = loadPageIds(filterSql, where.toString(), params, request);
         List<AuditLog> rows = toRows(pageIds.ids());
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
-        return new AdminListPage<>(AdminAuditColumnSpec.columns(), rows, groups,
+        return new AdminListPage<>(AdminAuditColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
     private PageIds loadPageIds(ListFilterSql filterSql, String where, List<Object> params,
-                                AdminAuditListQueryRequest request, String groupExpression) {
+                                AdminAuditListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
-        String sql = "SELECT al.id" + groupedSelect + where + orderBy + " LIMIT ? OFFSET ?";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
+        String sql = "SELECT al.id" + where + orderBy + " LIMIT ? OFFSET ?";
         ResultSetExtractor<PageIds> extractor = rs -> {
             List<String> ids = new ArrayList<>();
-            List<String> grouped = new ArrayList<>();
             while (rs.next()) {
                 ids.add(rs.getString("id"));
-                grouped.add(groupExpression == null ? null : rs.getString("grouped_value"));
             }
-            return new PageIds(ids, grouped);
+            return new PageIds(ids);
         };
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, extractor);
     }
@@ -149,10 +135,7 @@ public class AdminAuditListQueryComponent {
         return value != null && !value.isBlank();
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 
-    private record PageIds(List<String> ids, List<String> groupedValues) {
+    private record PageIds(List<String> ids) {
     }
 }

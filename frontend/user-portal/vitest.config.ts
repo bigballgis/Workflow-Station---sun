@@ -7,7 +7,13 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['src/**/*.{test,spec}.{js,ts}'],
+    include: [
+      'src/**/*.{test,spec}.{js,ts}',
+      '../shared/src/**/*.{test,spec}.{js,ts}',
+    ],
+  },
+  server: {
+    fs: { allow: [resolve(__dirname, '..')] },
   },
   resolve: {
     alias: {

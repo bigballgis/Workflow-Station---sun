@@ -1,3 +1,5 @@
+import applicationStatusLabels from '../application-status-labels.json'
+
 export default {
   app: {
     name: '使用者入口',
@@ -164,8 +166,6 @@ export default {
     sortSmallToLarge: '從小到大',
     sortLargeToSmall: '從大到小',
     clearSort: '清除排序',
-    groupBy: '分組依據',
-    ungroup: '取消分組',
     filterBy: '篩選依據',
     clearFilter: '清除篩選',
     loading: '載入中...',
@@ -184,8 +184,8 @@ export default {
     opNotEquals: '不等於',
     opStartsWith: '開頭是',
     opEndsWith: '結尾是',
-    opNoData: '無資料',
-    opHasData: '有資料',
+    opNoData: '沒值',
+    opHasData: '有值',
     opToday: '今天',
     opYesterday: '昨天',
     opLast7days: '最近 7 天',
@@ -264,6 +264,7 @@ export default {
     taskName: '任務名稱',
     currentStep: '目前步驟',
     requestId: 'Request ID',
+    functionUnit: '功能單元',
     processName: '流程名稱',
     initiator: '發起人',
     assignee: '處理人',
@@ -525,10 +526,10 @@ export default {
     currentStep: '目前步驟',
     startTime: '發起時間',
     status: '狀態',
-    running: '進行中',
-    completed: '已完成',
-    withdrawn: '已撤回',
-    rejected: '已拒絕',
+    running: applicationStatusLabels.RUNNING['zh-TW'],
+    completed: applicationStatusLabels.COMPLETED['zh-TW'],
+    withdrawn: applicationStatusLabels.WITHDRAWN['zh-TW'],
+    rejected: applicationStatusLabels.REJECTED['zh-TW'],
     draft: '草稿',
     draftBox: '草稿箱',
     withdraw: '撤回',
@@ -787,7 +788,8 @@ export default {
     removeSuccess: '清退成功',
     removeFailed: '清退失敗',
     noMembers: '暫無成員',
-    noPermission: '您沒有管理此組織的權限'
+    noPermission: '您沒有管理此組織的權限',
+    loadFailed: '載入成員失敗'
   },
   exitRole: {
     title: '退出業務單元',

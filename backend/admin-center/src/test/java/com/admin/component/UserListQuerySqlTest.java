@@ -29,7 +29,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * User list pages in SQL: COUNT and the page share soft-delete + toolbar filters,
- * group counts are not limited to the page, and undeclared filters are refused.
+ * and undeclared filters are refused.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -62,7 +62,7 @@ class UserListQuerySqlTest {
 
     @Test
     void countAndPageShareTheSoftDeletePredicate() {
-        component.query(request(null, null, List.of()));
+        component.query(request(null, List.of()));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM sys_users su");
         assertThat(preparedSql.get(0)).contains("su.deleted = false");
@@ -71,7 +71,7 @@ class UserListQuerySqlTest {
 
     @Test
     void toolbarStatusIsInsideTheSharedPredicateAsStoredEnum() {
-        component.query(request("DISABLED", null, List.of()));
+        component.query(request("DISABLED", List.of()));
 
         assertThat(preparedSql.get(0)).contains("su.status = ?");
         assertThat(pageSql()).contains("su.status = ?");
@@ -80,7 +80,7 @@ class UserListQuerySqlTest {
     @Test
     void toolbarKeywordSearchesTheSameFieldsAsTheLegacyList() {
         component.query(new UserListQueryRequest(
-                0, 20, "ann", null, List.of(), null, null, null));
+                0, 20, "ann", null, List.of(), null, null));
 
         assertThat(preparedSql.get(0)).contains("su.username ILIKE ?");
         assertThat(preparedSql.get(0)).contains("su.full_name ILIKE ?");
@@ -89,40 +89,24 @@ class UserListQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(request(null, "status", List.of()));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
-        assertThatThrownBy(() -> component.query(request(null, null,
+        assertThatThrownBy(() -> component.query(request(null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> component.query(request(null, "username", List.of())))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not groupable");
-    }
-
-    @Test
     void outerAliasIsNotUSoUserFiltersDoNotShadowSysUsers() {
-        component.query(request(null, null,
+        component.query(request(null,
                 List.of(new ListColumnFilter("entityManagerName", "eq", "user-1", null))));
         assertThat(preparedSql.get(0)).contains("su.entity_manager_id");
         assertThat(preparedSql.get(0)).contains("FROM sys_users u");
         assertThat(preparedSql.get(0)).contains("FROM sys_users su");
     }
 
-    private static UserListQueryRequest request(String status, String groupBy,
+    private static UserListQueryRequest request(String status,
                                                 List<ListColumnFilter> filters) {
-        return new UserListQueryRequest(0, 20, null, status, filters, null, null, groupBy);
+        return new UserListQueryRequest(0, 20, null, status, filters, null, null);
     }
 
     private String pageSql() {

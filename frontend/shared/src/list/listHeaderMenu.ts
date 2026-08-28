@@ -4,7 +4,6 @@ export type ListHeaderCommand =
   | 'sortAsc'
   | 'sortDesc'
   | 'clearSort'
-  | 'group'
   | 'filter'
   | 'clearFilter'
   | 'moveLeft'
@@ -12,7 +11,6 @@ export type ListHeaderCommand =
 
 export interface ListHeaderState {
   sort?: 'ASC' | 'DESC' | null
-  grouped?: boolean
   filtered?: boolean
   showMove?: boolean
   canMoveLeft?: boolean
@@ -30,9 +28,7 @@ export interface ListHeaderMenuItem {
 
 /**
  * Menu entries are driven by the column declaration: a non-sortable column gets no
- * sort entries and a groupable:false column gets NO group entry at all (not a
- * disabled one) — grouping is a per-field semantic capability, not generic list
- * chrome. DATETIME columns label their sort directions older/newer, NUMBER
+ * sort entries. DATETIME columns label their sort directions older/newer, NUMBER
  * small-to-large, and everything else A→Z — the SQL already sorts that way
  * (`ListFilterSql.sortExpression`); the menu must not say A→Z on a numeric column.
  */
@@ -67,19 +63,11 @@ export function listHeaderMenuItems(
     }
   }
 
-  if (column.groupable) {
-    items.push({
-      command: 'group',
-      labelKey: state.grouped ? 'sharedList.ungroup' : 'sharedList.groupBy',
-      divided: items.length > 0,
-    })
-  }
-
   if (column.filterable) {
     items.push({
       command: 'filter',
       labelKey: 'sharedList.filterBy',
-      divided: items.length > 0 && !column.groupable,
+      divided: items.length > 0,
       activeDot: state.filtered === true,
     })
     if (state.filtered) {

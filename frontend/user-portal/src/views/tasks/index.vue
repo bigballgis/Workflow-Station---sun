@@ -10,7 +10,6 @@
     >
       <TodoListToolbar
         v-model:assignment-types="filterForm.assignmentTypes"
-        v-model:priorities="filterForm.priorities"
         v-model:keyword="filterForm.keyword"
         @search="handleSearch"
         @reset="handleReset"
@@ -31,8 +30,8 @@
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
-            :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
-            :row-class-name="rowClassName"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
             @selection-change="handleSelectionChange"
           >
             <template #empty>
@@ -51,7 +50,7 @@
             <el-table-column
               type="selection"
               width="50"
-              :selectable="(row: object) => !isListGroupHeaderRow(row)"
+              
             />
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -64,7 +63,6 @@
                 <ListColumnHeader
                   :column="col"
                   :sort="sort.field === col.field ? sort.direction : null"
-                  :grouped="groupBy === col.field"
                   :filtered="!!columnFilters[col.field]"
                   :width="widthOf(col.field)"
                   :show-move="displayColumns.length > 1"
@@ -72,7 +70,6 @@
                   :can-move-right="colIndex < displayColumns.length - 1"
                   @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                   @clear-sort="onClearSort"
-                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                   @filter-open="openFilter(col.field)"
                   @clear-filter="onClearFilter(col.field)"
                   @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -81,22 +78,18 @@
                 />
               </template>
               <template #default="{ row }">
-                <template v-if="isListGroupHeaderRow(row)">
-                  <div class="group-header-cell">
-                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                    <span class="group-count">({{ row._groupCount }})</span>
-                  </div>
-                </template>
                 <el-link
-                  v-else-if="col.field === 'requestId'"
+                  v-if="col.field === 'requestId'"
                   type="primary"
                   @click="viewTask(row)"
                 >
                   {{ row.requestId || '-' }}
                 </el-link>
-                <template v-else-if="col.field === 'currentStepName'">
-                  {{ row.currentStepName || row.taskName || '-' }}
-                </template>
+                <span
+                  v-else-if="col.field === 'functionUnitCode'"
+                >
+                  {{ row.functionUnitName || row.functionUnitCode || '-' }}
+                </span>
                 <span
                   v-else-if="col.field === 'assignmentType'"
                   class="assignment-type"
@@ -131,11 +124,6 @@
                 </template>
               </template>
             </el-table-column>
-            <el-table-column
-              v-if="leftoverWidth > 0"
-              :width="leftoverWidth"
-              class-name="list-col-spacer"
-            />
           </el-table>
         </div>
       </div>
@@ -231,17 +219,6 @@ import { formatDate } from '@/utils/dateFormat'
 import { taskPriorityBand, taskPriorityCssClass } from '@/utils/taskPriority'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 
-const TODO_COL_WIDTHS: Record<string, number> = {
-  requestId: 140,
-  taskName: 160,
-  currentStepName: 160,
-  processDefinitionName: 160,
-  assignmentType: 130,
-  initiatorName: 120,
-  priority: 100,
-  createTime: 170,
-  dueDate: 180,
-}
 
 const pendingTaskStore = usePendingTaskStore()
 const { t } = useI18n()
@@ -250,14 +227,21 @@ const loading = ref(true)
 const selectedTasks = ref<TaskInfo[]>([])
 const filterForm = reactive({
   assignmentTypes: [] as string[],
-  priorities: [] as string[],
   keyword: '',
 })
+
+/** Temporarily hide Process Name / Initiator / Priority / Due Date. Keep in sync with TodoTaskColumnSpec.VISIBLE_FIELDS. */
+const TODO_VISIBLE_FIELDS = [
+  'requestId',
+  'functionUnitCode',
+  'taskName',
+  'assignmentType',
+  'createTime',
+] as const
 
 const {
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -265,7 +249,8 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits, leftoverWidth,
+  gridFits,
+  gridTableHeight,
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -280,15 +265,10 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = usePortalListGrid<TaskInfo>({
-  storageKey: 'portal-list-layout:todo-tasks',
+  storageKey: 'portal-list-layout:todo-tasks-v2',
   extraWidth: 50,
-  defaultWidthOf: (field) => TODO_COL_WIDTHS[field] ?? 120,
+  visibleFields: TODO_VISIBLE_FIELDS,
 })
 
 const actionDialogVisible = ref(false)
@@ -322,7 +302,6 @@ function todoQueryBody(): TodoTaskQueryRequest {
   const keyword = filterForm.keyword.trim()
   if (keyword) body.keyword = keyword
   if (filterForm.assignmentTypes.length > 0) body.assignmentTypes = filterForm.assignmentTypes
-  if (filterForm.priorities.length > 0) body.priorities = filterForm.priorities
   return body
 }
 
@@ -333,15 +312,11 @@ function handleSearch() {
 
 function handleReset() {
   filterForm.assignmentTypes = []
-  filterForm.priorities = []
   filterForm.keyword = ''
   for (const field of Object.keys(columnFilters.value)) {
     clearFilter(field)
   }
   clearSort()
-  if (groupBy.value) {
-    applyGroup(groupBy.value, false)
-  }
   handleSearch()
 }
 
@@ -355,10 +330,6 @@ function onClearSort() {
   loadTasks()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  loadTasks()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)
@@ -375,7 +346,7 @@ function onFilterClear() {
 }
 
 const handleSelectionChange = (selection: TaskInfo[]) => {
-  selectedTasks.value = selection.filter((row) => !isListGroupHeaderRow(row))
+  selectedTasks.value = selection
 }
 
 const viewTask = (task: TaskInfo) => {

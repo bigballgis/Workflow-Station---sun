@@ -41,6 +41,7 @@ public class ProcessController {
     private final com.portal.component.PortalPrimaryKeyAllocationComponent portalPrimaryKeyAllocationComponent;
     private final TaskQueryComponent taskQueryComponent;
     private final com.portal.component.MyApplicationListQueryComponent myApplicationListQueryComponent;
+    private final com.portal.component.AuditApplicationListQueryComponent auditApplicationListQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
 
     @GetMapping("/definitions")
@@ -302,10 +303,10 @@ public class ProcessController {
     }
 
     @PostMapping("/my-applications/query")
-    @Operation(summary = "Query my applications (true paging; column filters, sort and grouping)")
+    @Operation(summary = "Query my applications (true paging; column filters and sort)")
     public ApiResponse<PortalListPage<ProcessInstanceInfo>> queryMyApplications(
             @CurrentUserId String userId,
-            @RequestBody MyApplicationQueryRequest request) {
+            @RequestBody @Valid MyApplicationQueryRequest request) {
         if (userId == null || userId.isBlank()) {
             throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
                     "Please login first before viewing your applications");
@@ -349,6 +350,26 @@ public class ProcessController {
         Page<ProcessInstanceInfo> result = processComponent.getFunctionUnitApplications(
                 functionUnitCode, status, PageRequest.of(safePage, safeSize));
         return ApiResponse.success(PageResponse.of(result));
+    }
+
+    @PostMapping("/fu-applications/query")
+    @Operation(summary = "Query a function unit's applications (audit grant; true paging; keyword, column filters and sort)")
+    public ApiResponse<PortalListPage<ProcessInstanceInfo>> queryFunctionUnitApplications(
+            @CurrentUserId String userId,
+            @RequestParam String functionUnitCode,
+            @RequestBody @Valid MyApplicationQueryRequest request) {
+        if (userId == null || userId.isBlank()) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
+                    "Please login first before reviewing requests");
+        }
+        if (functionUnitCode == null || functionUnitCode.isBlank()) {
+            return ApiResponse.error("400", "functionUnitCode is required");
+        }
+        if (!functionUnitAuditScopeComponent.canAudit(userId, functionUnitCode)) {
+            log.warn("User {} attempted to review function unit {} without an audit grant", userId, functionUnitCode);
+            return ApiResponse.error("403", i18nService.getMessage("portal.process_detail_access_denied"));
+        }
+        return ApiResponse.success(auditApplicationListQueryComponent.query(functionUnitCode, request));
     }
 
     @GetMapping("/{processId}")

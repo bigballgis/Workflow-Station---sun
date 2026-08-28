@@ -98,7 +98,7 @@ class RelationTableDataListQuerySqlTest {
     }
 
     private static RelationTableDataListQueryRequest request(String search, List<ListColumnFilter> filters) {
-        return new RelationTableDataListQueryRequest(0, 20, search, filters, null, null, null);
+        return new RelationTableDataListQueryRequest(0, 20, search, filters, null, null);
     }
 
     private static RelationFieldDTO field(String name, RelationDataType type) {

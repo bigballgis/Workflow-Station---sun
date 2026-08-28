@@ -14,22 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RelationTableStructureColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(RelationTableStructureColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("status", "enabled", "portalVisible");
-        assertThat(column("displayName").kind()).isEqualTo(Kind.TEXT);
-        assertThat(column("currentVersion").kind()).isEqualTo(Kind.NUMBER);
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> RelationTableStructureColumnSpec.sql().groupByExpression("displayName"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void booleanFilterCastsThePhysicalColumnToText() {
         List<Object> params = new ArrayList<>();
         String where = RelationTableStructureColumnSpec.sql().whereClause(

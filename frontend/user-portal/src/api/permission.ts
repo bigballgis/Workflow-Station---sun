@@ -425,7 +425,6 @@ export const permissionApi = {
     filters?: Array<{ field: string; operator: string; value?: string; valueTo?: string }>
     sortField?: string
     sortDirection?: 'ASC' | 'DESC'
-    groupBy?: string
     scope: 'MY_PENDING' | 'MY_COMPLETED' | 'APPROVALS_PENDING' | 'APPROVALS_HISTORY'
   }) {
     return request.post<{ data: import('./task').PortalListPage<PermissionRequestRecord> }>(

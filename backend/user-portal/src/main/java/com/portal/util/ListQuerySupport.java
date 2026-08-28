@@ -1,6 +1,5 @@
 package com.portal.util;
 
-import com.portal.dto.PortalListGroup;
 import org.slf4j.Logger;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -11,8 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Shared mechanics for list queries that page in SQL: parameter binding, group counts over the
- * whole predicate, and the slow-query log required by the shared-list spec (&gt;1s WARN, no row
+ * Shared mechanics for list queries that page in SQL: parameter binding, slow-query log required by the shared-list spec (&gt;1s WARN, no row
  * content, no filter values).
  */
 public final class ListQuerySupport {
@@ -42,20 +40,6 @@ public final class ListQuerySupport {
         return total;
     }
 
-    public static List<PortalListGroup> groupsOf(JdbcTemplate jdbcTemplate, String groupExpression,
-                                                 String fromAndWhere, List<Object> params) {
-        String sql = "SELECT " + groupExpression + " AS group_label, COUNT(*) AS group_count"
-                + fromAndWhere
-                + " GROUP BY " + groupExpression
-                + " ORDER BY " + groupExpression + " ASC NULLS LAST";
-        return query(jdbcTemplate, sql, params, rs -> {
-            List<PortalListGroup> groups = new ArrayList<>();
-            while (rs.next()) {
-                groups.add(new PortalListGroup(rs.getString("group_label"), rs.getLong("group_count")));
-            }
-            return groups;
-        });
-    }
 
     public static void logIfSlow(Logger log, String listKey, int page, int size, long total,
                                  long startedNanos) {

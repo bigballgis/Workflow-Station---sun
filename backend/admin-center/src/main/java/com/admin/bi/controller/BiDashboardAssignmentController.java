@@ -54,7 +54,7 @@ public class BiDashboardAssignmentController {
     }
 
     @PostMapping("/query")
-    @Operation(summary = "Query assignments (true paging; column filters, sort and grouping)")
+    @Operation(summary = "Query assignments (true paging; column filters and sort)")
     public ResponseEntity<AdminListPage<DashboardAssignmentResponse>> queryAssignments(
             @RequestBody @Valid BiAssignmentListQueryRequest request) {
         return ResponseEntity.ok(assignmentListQueryComponent.query(request));

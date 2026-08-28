@@ -21,14 +21,6 @@ import { assignmentTargetTypeKey } from '@/utils/format'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const ACTIONS_COL_WIDTH = 140
-const ASSIGNMENT_COL_WIDTHS: Record<string, number> = {
-  dashboardTitle: 180,
-  targetType: 130,
-  targetName: 150,
-  layoutMode: 130,
-  displayOrder: 120,
-  isDefault: 80,
-}
 
 export function useBiAssignment() {
   const { t } = useI18n()
@@ -45,7 +37,6 @@ export function useBiAssignment() {
   const grid = useAdminListGrid<DashboardAssignmentResponse>({
     storageKey: 'admin-list-layout:bi-assignments',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => ASSIGNMENT_COL_WIDTHS[field] ?? 120,
   })
 
   const dialogVisible = ref(false)

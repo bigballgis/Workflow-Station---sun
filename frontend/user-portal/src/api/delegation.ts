@@ -46,7 +46,6 @@ export interface DelegationListQueryRequest {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export function getDelegationRules() {

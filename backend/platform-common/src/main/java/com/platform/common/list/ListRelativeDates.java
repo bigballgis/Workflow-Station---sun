@@ -1,4 +1,4 @@
-package com.portal.util;
+package com.platform.common.list;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;

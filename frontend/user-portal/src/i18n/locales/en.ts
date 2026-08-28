@@ -1,3 +1,5 @@
+import applicationStatusLabels from '../application-status-labels.json'
+
 export default {
   app: {
     name: 'User Portal',
@@ -164,8 +166,6 @@ export default {
     sortSmallToLarge: 'Small to large',
     sortLargeToSmall: 'Large to small',
     clearSort: 'Clear sort',
-    groupBy: 'Group by',
-    ungroup: 'Ungroup',
     filterBy: 'Filter by',
     clearFilter: 'Clear filter',
     loading: 'Loading...',
@@ -184,8 +184,8 @@ export default {
     opNotEquals: 'Not equals',
     opStartsWith: 'Starts with',
     opEndsWith: 'Ends with',
-    opNoData: 'No data',
-    opHasData: 'Has data',
+    opNoData: 'No value',
+    opHasData: 'Has value',
     opToday: 'Today',
     opYesterday: 'Yesterday',
     opLast7days: 'Last 7 days',
@@ -264,6 +264,7 @@ export default {
     taskName: 'Task Name',
     currentStep: 'Current Step',
     requestId: 'Request ID',
+    functionUnit: 'Function Unit',
     processName: 'Process Name',
     initiator: 'Initiator',
     assignee: 'Assignee',
@@ -566,10 +567,10 @@ export default {
     currentStep: 'Current Step',
     startTime: 'Start Time',
     status: 'Status',
-    running: 'Running',
-    completed: 'Completed',
-    withdrawn: 'Withdrawn',
-    rejected: 'Rejected',
+    running: applicationStatusLabels.RUNNING.en,
+    completed: applicationStatusLabels.COMPLETED.en,
+    withdrawn: applicationStatusLabels.WITHDRAWN.en,
+    rejected: applicationStatusLabels.REJECTED.en,
     draft: 'Draft',
     draftBox: 'Drafts',
     withdraw: 'Withdraw',
@@ -831,7 +832,8 @@ export default {
     removeSuccess: 'Removed successfully',
     removeFailed: 'Remove failed',
     noMembers: 'No members',
-    noPermission: 'You do not have permission to manage this organization'
+    noPermission: 'You do not have permission to manage this organization',
+    loadFailed: 'Failed to load members'
   },
   exitRole: {
     title: 'Leave business unit',

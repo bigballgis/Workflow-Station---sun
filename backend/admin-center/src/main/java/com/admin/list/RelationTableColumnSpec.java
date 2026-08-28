@@ -13,10 +13,6 @@ import java.util.List;
  * definitions. Copied from portal {@code com.portal.util.RelationTableColumnSpec}
  * — not extracted to platform-common. The row-level {@code status} column is a
  * toggle, not a data column, and is excluded here like in the grid.
- *
- * <p>Grouping is declared {@code false} for every column: the relation-table query
- * endpoint does not execute GROUP BY, and the declaration must never promise a
- * capability the endpoint cannot deliver.
  */
 public final class RelationTableColumnSpec {
 
@@ -48,7 +44,7 @@ public final class RelationTableColumnSpec {
                         ? Kind.USER
                         : kindFor(dataType);
         if (kind == null) {
-            // JSON / TIME / BYTEA / FILE payloads render but have no meaningful SQL predicate.
+            // BYTEA is a blob reference, not a value a user would filter on.
             return ListColumnMeta.displayOnly(field.getFieldName(), label, Kind.TEXT);
         }
         List<ListColumnMeta.Option> options = kind == Kind.BOOLEAN
@@ -56,24 +52,25 @@ public final class RelationTableColumnSpec {
                 : List.of();
         return new ListColumnMeta(
                 field.getFieldName(), label, kind,
-                true, true, false,
+                true, true,
                 ListColumnMeta.operatorsFor(kind), options);
     }
 
     /** @return the filterable kind for a data type, or null when the type is display-only */
     private static Kind kindFor(RelationDataType dataType) {
         if (dataType == null) {
-            return null;
+            return Kind.TEXT;
         }
         return switch (dataType) {
-            case VARCHAR, TEXT -> Kind.TEXT;
+            case VARCHAR, TEXT, JSON -> Kind.TEXT;
             // A LOOKUP stores the referenced row's PK as text (or a JSON array when multiple),
             // so text operators over the stored value are the honest capability.
             case LOOKUP -> Kind.TEXT;
             case INTEGER, BIGINT, DECIMAL -> Kind.NUMBER;
             case BOOLEAN -> Kind.BOOLEAN;
-            case DATE, TIMESTAMP -> Kind.DATETIME;
-            case JSON, TIME, BYTEA, FILE -> null;
+            case DATE, TIMESTAMP, TIME -> Kind.DATETIME;
+            case FILE -> Kind.FILE;
+            case BYTEA -> null;
         };
     }
 }

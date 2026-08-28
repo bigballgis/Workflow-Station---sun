@@ -24,8 +24,8 @@
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
-            :span-method="spanMethod(leftoverWidth > 0 ? 1 : 0)"
-            :row-class-name="rowClassName"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
           >
             <template #empty>
               <div
@@ -50,7 +50,6 @@
                 <ListColumnHeader
                   :column="col"
                   :sort="sort.field === col.field ? sort.direction : null"
-                  :grouped="groupBy === col.field"
                   :filtered="!!columnFilters[col.field]"
                   :width="widthOf(col.field)"
                   :show-move="displayColumns.length > 1"
@@ -58,7 +57,6 @@
                   :can-move-right="colIndex < displayColumns.length - 1"
                   @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                   @clear-sort="onClearSort"
-                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                   @filter-open="openFilter(col.field)"
                   @clear-filter="onClearFilter(col.field)"
                   @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -67,22 +65,13 @@
                 />
               </template>
               <template #default="{ row }">
-                <template v-if="isListGroupHeaderRow(row)">
-                  <div class="group-header-cell">
-                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                    <span class="group-count">({{ row._groupCount }})</span>
-                  </div>
-                </template>
                 <el-link
-                  v-else-if="col.field === 'requestId'"
+                  v-if="col.field === 'requestId'"
                   type="primary"
                   @click="viewTask(row)"
                 >
                   {{ row.requestId || '-' }}
                 </el-link>
-                <template v-else-if="col.field === 'currentStepName'">
-                  {{ row.currentStepName || row.taskName || '-' }}
-                </template>
                 <el-tag
                   v-else-if="col.field === 'action' && !row.multiInstanceSubTask"
                   :type="getActionTagType(row.action)"
@@ -107,11 +96,6 @@
                 </template>
               </template>
             </el-table-column>
-            <el-table-column
-              v-if="leftoverWidth > 0"
-              :width="leftoverWidth"
-              class-name="list-col-spacer"
-            />
           </el-table>
         </div>
       </div>
@@ -149,16 +133,6 @@ import { queryCompletedTasks, type TaskInfo } from '@/api/task'
 import { usePortalListGrid } from '@/composables/list/usePortalListGrid'
 import { formatDate } from '@/utils/dateFormat'
 
-const COMPLETED_COL_WIDTHS: Record<string, number> = {
-  requestId: 160,
-  taskName: 170,
-  currentStepName: 170,
-  processDefinitionName: 170,
-  action: 130,
-  createTime: 170,
-  completedTime: 180,
-  durationInMillis: 120,
-}
 
 const { t } = useI18n()
 const router = useRouter()
@@ -167,7 +141,6 @@ const loading = ref(true)
 const {
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -175,7 +148,8 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits, leftoverWidth,
+  gridFits,
+  gridTableHeight,
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -190,14 +164,8 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = usePortalListGrid<TaskInfo>({
   storageKey: 'portal-list-layout:completed-tasks',
-  defaultWidthOf: (field) => COMPLETED_COL_WIDTHS[field] ?? 120,
 })
 
 const loadTasks = async () => {
@@ -227,10 +195,6 @@ function onClearSort() {
   loadTasks()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  loadTasks()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)

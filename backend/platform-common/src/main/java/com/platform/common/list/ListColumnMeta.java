@@ -7,10 +7,6 @@ import java.util.List;
  * header menus and filter dialogs render strictly from it. Operator names are a shared
  * contract with {@code frontend/shared/src/list/columnMeta.ts}; the kind→operator matrix
  * lives ONLY here — the frontend never derives operators on its own.
- *
- * <p>Grouping is a per-field semantic capability: only closed-value kinds
- * (ENUM / USER / BOOLEAN) may group; TEXT / NUMBER / DATETIME never do. The canonical
- * constructor enforces this so no endpoint can declare a groupable free-text column.
  */
 public record ListColumnMeta(
         String field,
@@ -18,11 +14,10 @@ public record ListColumnMeta(
         Kind kind,
         boolean filterable,
         boolean sortable,
-        boolean groupable,
         List<String> operators,
         List<Option> options) {
 
-    public enum Kind { TEXT, ENUM, USER, DATETIME, NUMBER, BOOLEAN }
+    public enum Kind { TEXT, ENUM, USER, DATETIME, NUMBER, BOOLEAN, FILE }
 
     public record Option(String value, String label) {
         public Option {
@@ -37,9 +32,15 @@ public record ListColumnMeta(
 
     private static final List<String> TEXT_OPERATORS = List.of(
             "contains", "notContains", "eq", "ne", "startsWith", "endsWith", "isNull", "isNotNull");
-    /** ENUM / USER / BOOLEAN share this: a choice filter is eq/ne plus empty/non-empty. */
+    /** ENUM / BOOLEAN: a choice filter is eq/ne plus empty/non-empty. */
     private static final List<String> CLOSED_VALUE_OPERATORS = List.of(
             "eq", "ne", "isNull", "isNotNull");
+    /**
+     * USER keeps the people picker (value is {@code sys_users.id}). contains/notContains mean
+     * the selected person appears as a comma-separated token in the cell, not a typed name fragment.
+     */
+    private static final List<String> USER_OPERATORS = List.of(
+            "eq", "ne", "contains", "notContains", "isNotNull", "isNull");
     /** Relative calendar windows first so the filter dialog opens on Today, not a date picker. */
     private static final List<String> DATETIME_OPERATORS = List.of(
             "today", "yesterday", "last7days", "last30days",
@@ -69,25 +70,21 @@ public record ListColumnMeta(
                     "filterable " + kind + " column " + field
                             + " declared without options — a choice filter has no free-text fallback");
         }
-        if (groupable && !defaultGroupable(kind)) {
-            throw new IllegalArgumentException(
-                    "column " + field + " of kind " + kind
-                            + " cannot be groupable — only closed-value kinds (ENUM/USER/BOOLEAN) group");
-        }
     }
 
     /** The one place the kind→operator matrix is defined. */
     public static List<String> operatorsFor(Kind kind) {
         return switch (kind) {
-            case TEXT -> TEXT_OPERATORS;
-            case ENUM, USER, BOOLEAN -> CLOSED_VALUE_OPERATORS;
+            case TEXT, FILE -> TEXT_OPERATORS;
+            case USER -> USER_OPERATORS;
+            case ENUM, BOOLEAN -> CLOSED_VALUE_OPERATORS;
             case DATETIME -> DATETIME_OPERATORS;
             case NUMBER -> NUMBER_OPERATORS;
         };
     }
 
-    /** Grouping default by field semantics — closed value sets group, open ones don't. */
-    public static boolean defaultGroupable(Kind kind) {
+    /** Closed value sets take an option list (ENUM / USER / BOOLEAN). */
+    public static boolean isClosedValueKind(Kind kind) {
         return kind == Kind.ENUM || kind == Kind.USER || kind == Kind.BOOLEAN;
     }
 
@@ -100,7 +97,7 @@ public record ListColumnMeta(
         return kind == Kind.ENUM || kind == Kind.BOOLEAN;
     }
 
-    /** Standard column: filterable + sortable, kind-derived operators and groupable default. */
+    /** Standard column: filterable + sortable, kind-derived operators. */
     public static ListColumnMeta of(String field, String label, Kind kind) {
         if (kind == Kind.ENUM) {
             throw new IllegalArgumentException(
@@ -110,13 +107,13 @@ public record ListColumnMeta(
             return withOptions(field, label, kind, booleanOptions());
         }
         return new ListColumnMeta(
-                field, label, kind, true, true, defaultGroupable(kind), operatorsFor(kind), List.of());
+                field, label, kind, true, true, operatorsFor(kind), List.of());
     }
 
     /** Closed-value column with its option list (ENUM status values, boolean labels, ...). */
     public static ListColumnMeta withOptions(
             String field, String label, Kind kind, List<Option> options) {
-        if (!defaultGroupable(kind)) {
+        if (!isClosedValueKind(kind)) {
             throw new IllegalArgumentException(
                     "column " + field + " of kind " + kind + " does not take a closed option list");
         }
@@ -125,22 +122,22 @@ public record ListColumnMeta(
                     "closed-value column " + field + " declared without options");
         }
         return new ListColumnMeta(
-                field, label, kind, true, true, true, operatorsFor(kind), options);
+                field, label, kind, true, true, operatorsFor(kind), options);
     }
 
-    /** Display-only column: no filter, no sort, no group (e.g. computed/action columns). */
+    /** Display-only column: no filter, no sort (e.g. computed/action columns). */
     public static ListColumnMeta displayOnly(String field, String label, Kind kind) {
-        return new ListColumnMeta(field, label, kind, false, false, false, List.of(), List.of());
+        return new ListColumnMeta(field, label, kind, false, false, List.of(), List.of());
     }
 
     /**
      * A label column whose stored key lives elsewhere (lookup / FK display). The header may
-     * filter by the visible text; conversion to the stored key happens before SQL. Sort and
-     * group stay off because those would still run against the key.
+     * filter by the visible text; conversion to the stored key happens before SQL. Sort stays
+     * off because that would still run against the key.
      */
     public static ListColumnMeta displayMapped(String field, String label) {
         return new ListColumnMeta(
-                field, label, Kind.TEXT, true, false, false, operatorsFor(Kind.TEXT), List.of());
+                field, label, Kind.TEXT, true, false, operatorsFor(Kind.TEXT), List.of());
     }
 
     public boolean allowsOperator(String operator) {

@@ -94,7 +94,7 @@ class RoleListQuerySqlTest {
     }
 
     private static RoleListQueryRequest request(String tab, String type, List<ListColumnFilter> filters) {
-        return new RoleListQueryRequest(0, 20, tab, type, filters, null, null, null);
+        return new RoleListQueryRequest(0, 20, tab, type, filters, null, null);
     }
 
     private String pageSql() {

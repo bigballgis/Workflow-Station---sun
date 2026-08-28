@@ -1,0 +1,39 @@
+---
+description: >-
+  Portal/Admin 左侧菜单若是记录列表，必须接共享表头、按 kind 筛选排序、可调列宽、共享分页。
+  对照 docs/design/shared-list-components.md §6.7。
+globs: frontend/{user-portal,admin-center}/**/*.{vue,ts,scss}
+alwaysApply: false
+---
+
+# Portal / Admin 共享列表（侧栏 list view）
+
+完整契约：[docs/design/shared-list-components.md](../../docs/design/shared-list-components.md) **§6.7**（分类表 + 必接套件）。列宽 fill（宽屏按底宽比例摊余量）见 **§6.6**。筛选/排序 kind 见 **§6.3**。**不要改 DW。**
+
+## 何时强制
+
+左侧菜单点进去后，主内容是「多行业务记录 + 列 + 筛选/排序 + 分页」（含该页主 Tab）。  
+卡片目录、仪表盘、树、消息流、表单、详情、弹窗小表、Lookup、表单子表 **不是** 本规则对象。
+
+侧栏在 `PortalLayout.vue` / `AdminLayout.vue` **手写**。加 `el-menu-item` ≠ 自动用上共享件。
+
+## 必接套件（缺一不可）
+
+| 能力 | 用这个 | 不要 |
+|------|--------|------|
+| 表头 | `@platform-shared/list/ListColumnHeader.vue` | 只用 `el-table-column` 的 `label`；再写私有列头 |
+| 按类型筛选 | 列 `kind` + `ListFilterDialog`（§6.3） | 页面里猜算子；ENUM 变文本框 |
+| 按类型排序 | 同一 `kind` + `sortLabelKeys`（§6.3.3） | 数字当字符串排 |
+| 可调列宽 | 共享拖拽 + §6.6 布局 | 死宽表；手写 `COL_WIDTHS` 当默认宽；Action 前 spacer |
+| 分页 | `@platform-shared/list/ListPagination.vue` + §6.2 真分页 | 主列表裸 `el-pagination`；拉全量再切页 |
+
+同一提交接齐。禁止「先上裸表，稍后换共享组件」。
+
+## 加 / 改左侧菜单
+
+1. 改 Layout **之前**把该 `index` 写入 §6.7.3 的 `required` 或 `exempt`（未分类不允许合并）。
+2. `required` → 接齐上表，回答 §6 四问，截图。
+3. **禁止新增 gap。** 已列 gap（目前只剩 Delegations Proxy stub）只能消、不能加。
+4. 不要给所有 `el-table` 一刀切。
+
+漏接共享套件 = review **Major**；自建列头+分页冒充已接入 = **Blocker**。

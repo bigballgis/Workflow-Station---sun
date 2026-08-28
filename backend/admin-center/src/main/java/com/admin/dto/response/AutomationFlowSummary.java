@@ -41,7 +41,7 @@ public class AutomationFlowSummary {
     private OffsetDateTime updated;
 
     /**
-     * List grouping value: DRAFT when unpublished, otherwise ENABLED / DISABLED.
+     * Display/filter value: DRAFT when unpublished, otherwise ENABLED / DISABLED.
      * Same CASE as the catalog page's readiness ladder.
      */
     private String readiness;

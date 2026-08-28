@@ -198,7 +198,6 @@ export interface FunctionUnitListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export interface FunctionUnitDeploymentListQuery {
@@ -207,7 +206,6 @@ export interface FunctionUnitDeploymentListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 // ==================== 功能单元 CRUD API ====================

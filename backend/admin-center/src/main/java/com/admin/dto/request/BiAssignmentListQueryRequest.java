@@ -14,8 +14,7 @@ public record BiAssignmentListQueryRequest(
         String dashboardTitle,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public BiAssignmentListQueryRequest {
         if (page < 0) {

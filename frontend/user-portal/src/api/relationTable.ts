@@ -84,7 +84,7 @@ export interface PageResponse<T> {
   hasPrevious: boolean
 }
 
-/** Mirrors RelationTableQueryRequest — paging plus shared-header filters/sort (no groupBy). */
+/** Mirrors RelationTableQueryRequest — paging plus shared-header filters/sort. */
 export interface RelationTableQueryRequest {
   page: number
   size: number
@@ -100,7 +100,6 @@ export interface RelationTableColumnMeta {
   kind: string
   filterable: boolean
   sortable: boolean
-  groupable: boolean
   operators: string[]
   options?: { value: string; label: string }[]
 }

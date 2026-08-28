@@ -14,22 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AutomationPieceColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(AutomationPieceColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("pieceType", "disabled");
-        assertThat(column("displayName").groupable()).isFalse();
-        assertThat(column("actionCount").kind()).isEqualTo(Kind.NUMBER);
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> AutomationPieceColumnSpec.sql().groupByExpression("name"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void displayNameFilterUsesQuotedCamelCaseColumn() {
         List<Object> params = new ArrayList<>();
         String where = AutomationPieceColumnSpec.sql().whereClause(

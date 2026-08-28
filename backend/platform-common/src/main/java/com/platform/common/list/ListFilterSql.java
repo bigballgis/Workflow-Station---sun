@@ -1,7 +1,5 @@
-package com.admin.list;
+package com.platform.common.list;
 
-import com.platform.common.list.ListColumnFilter;
-import com.platform.common.list.ListColumnMeta;
 import com.platform.common.jdbc.SqlIdentifiers;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -11,12 +9,11 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Host copy of the portal SQL compiler; operator semantics must stay identical.
- *
- * Compiles shared-list column filters and sort into SQL. Every field and operator is validated
- * against the list's {@link ListColumnMeta} declaration before anything reaches SQL — an
- * undeclared field, a non-filterable column or an operator outside the whitelist is a 400,
- * never a silent no-op.
+ * Compiles shared-list column filters and sort into SQL for Portal and Admin.
+ * Column specs stay in each service; this compiler is the single operator-semantics
+ * implementation. Every field and operator is validated against the list's
+ * {@link ListColumnMeta} declaration before anything reaches SQL — an undeclared field,
+ * a non-filterable column or an operator outside the whitelist is a 400, never a silent no-op.
  *
  * <p>Each list binds one instance describing where its values live and how its rows are ordered,
  * so the operator semantics below are written once and every list that adopts the shared header
@@ -32,13 +29,26 @@ import java.util.regex.Pattern;
  *       take {@code YYYY-MM-DD} from the dialog.</li>
  *   <li>BOOLEAN — case-insensitive eq/ne against true/false; {@code ne} also matches
  *       empty cells, so Not equals True is not the same as Equals False.</li>
-   *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
-       *       (id, {@code user:}<id>, username, display_name, full_name, employee_id), so a
-       *       people picker can send the user id even when legacy rows stored a prefixed id
-       *       or a display name. Grouping uses the same table to produce a display label.</li>
+     *   <li>USER — eq/ne match any stored identity of the selected {@code sys_users} row
+     *       (id, {@code user:}<id>, username, display_name, full_name, employee_id),
+     *       or a stored {@code buCode:roleCode} (also {@code buCode/roleCode} /
+     *       {@code BU_ROLE:buCode/roleCode}) that the selected user holds.
+     *       contains/notContains also hit when that identity or pair appears as a
+     *       comma-separated token (a candidate list {@code id1, id2} contains id1).
+     *       The picker still sends the user id; these operators are not a typed
+     *       name-fragment search.</li>
+ *   <li>FILE — compares extracted filenames (same rules as the grid / CSV), never the
+     *       raw URL; contains/startsWith/endsWith use ILIKE with escaped wildcards.</li>
  * </ul>
  */
 public final class ListFilterSql {
+
+    /**
+     * PostgreSQL LIKE escape so a user-typed {@code %} or {@code _} is literal text.
+     * Bind values must go through {@link #escapeLike(String)}.
+     */
+    public static final String ILIKE = " ILIKE ? ESCAPE '\\'";
+    public static final String NOT_ILIKE = " NOT ILIKE ? ESCAPE '\\'";
 
     /** Matches values that can safely be cast to numeric inside SQL. */
     private static final String SQL_NUMERIC_GUARD = "'^-?[0-9]+(\\.[0-9]+)?$'";
@@ -119,16 +129,6 @@ public final class ListFilterSql {
         return " ORDER BY " + orderTerms(sortField, sortDirection);
     }
 
-    /**
-     * Orders by the group expression first, then by whatever the caller sorts on. A group's rows
-     * have to be contiguous for the page to be able to render group headers at all — without this
-     * the same group would reappear on later pages.
-     */
-    public String orderByGrouped(String groupExpression, String sortField, String sortDirection) {
-        return " ORDER BY " + groupExpression + " ASC NULLS LAST, "
-                + orderTerms(sortField, sortDirection);
-    }
-
     private String orderTerms(String sortField, String sortDirection) {
         if (sortField == null) {
             return defaultOrderBy == null ? tiebreak : defaultOrderBy + ", " + tiebreak;
@@ -145,36 +145,19 @@ public final class ListFilterSql {
     }
 
     /**
-     * The expression a column groups by. Grouping and its counts have to come from the same
-     * expression as the ordering that makes a group's rows contiguous, otherwise a page can show
-     * the same group header twice with counts that do not add up.
-     */
-    public String groupByExpression(String field) {
-        ListColumnMeta column = columnsByField.get(field);
-        if (column == null) {
-            throw new IllegalArgumentException("Unknown group column: " + field);
-        }
-        if (!column.groupable()) {
-            throw new IllegalArgumentException("Column is not groupable: " + field);
-        }
-        String ref = columnRef.sqlFor(column.field());
-        // USER groups by the display label resolved from sys_users so headers match cells
-        // that also resolve bare ids / user:<id> / legacy name storage through the same table.
-        return column.kind() == ListColumnMeta.Kind.USER
-                ? userDisplayLabelExpression(ref)
-                : ref;
-    }
-
-    /**
      * The value expression a column sorts by. Numbers are cast so 9 sorts before 10, which text
      * ordering of a JSON value would get wrong; the cast is guarded so a non-numeric stored value
      * sorts as null rather than aborting the query.
      */
     public static String sortExpression(ListColumnMeta column, ColumnRef columnRef) {
         String ref = columnRef.sqlFor(column.field());
-        return column.kind() == ListColumnMeta.Kind.NUMBER
-                ? "(CASE WHEN " + ref + " ~ " + SQL_NUMERIC_GUARD + " THEN (" + ref + ")::numeric END)"
-                : ref;
+        if (column.kind() == ListColumnMeta.Kind.NUMBER) {
+            return "(CASE WHEN " + ref + " ~ " + SQL_NUMERIC_GUARD + " THEN (" + ref + ")::numeric END)";
+        }
+        if (column.kind() == ListColumnMeta.Kind.FILE) {
+            return ListFileNameSql.sortExpression(ref);
+        }
+        return ref;
     }
 
     /**
@@ -188,12 +171,20 @@ public final class ListFilterSql {
             return "";
         }
         StringBuilder sql = new StringBuilder(" AND (");
+        String like = "%" + escapeLike(keyword.trim()) + "%";
         for (int i = 0; i < fields.size(); i++) {
             if (i > 0) {
                 sql.append(" OR ");
             }
-            sql.append(columnRef.sqlFor(fields.get(i))).append(" ILIKE ?");
-            outParams.add("%" + escapeLike(keyword.trim()) + "%");
+            String field = fields.get(i);
+            String ref = columnRef.sqlFor(field);
+            ListColumnMeta column = columnsByField.get(field);
+            if (column != null && column.kind() == ListColumnMeta.Kind.FILE) {
+                sql.append(ListFileNameSql.anyNameIlike(ref));
+            } else {
+                sql.append(ref).append(ILIKE);
+            }
+            outParams.add(like);
         }
         return sql.append(")").toString();
     }
@@ -217,10 +208,13 @@ public final class ListFilterSql {
                              List<Object> outParams) {
         String op = filter.operator();
         String ref = columnRef.sqlFor(column.field());
-        if ("isNull".equals(op)) {
-            return "(" + ref + " IS NULL OR " + ref + " = '')";
-        }
-        if ("isNotNull".equals(op)) {
+        if ("isNull".equals(op) || "isNotNull".equals(op)) {
+            if (column.kind() == ListColumnMeta.Kind.FILE) {
+                return ListFileNameSql.emptinessPredicate(ref, "isNull".equals(op));
+            }
+            if ("isNull".equals(op)) {
+                return "(" + ref + " IS NULL OR " + ref + " = '')";
+            }
             return "(" + ref + " IS NOT NULL AND " + ref + " <> '')";
         }
         if (column.kind() == ListColumnMeta.Kind.DATETIME && ListRelativeDates.isRelative(op)) {
@@ -229,6 +223,7 @@ public final class ListFilterSql {
         String value = requireValue(filter, filter.value());
         return switch (column.kind()) {
             case TEXT, ENUM -> textPredicate(ref, filter, value, outParams);
+            case FILE -> ListFileNameSql.namePredicate(ref, filter.operator(), value, outParams);
             case USER -> userIdentityPredicate(ref, filter.operator(), value, outParams);
             case NUMBER -> numberPredicate(ref, filter, value, outParams);
             case DATETIME -> datePredicate(ref, filter, value, outParams);
@@ -246,79 +241,106 @@ public final class ListFilterSql {
 
     /**
      * The picker sends {@code sys_users.id}. Stored values may be that id, {@code user:}<id>,
-     * a username, a display name, or an employee id — match any of them for the selected row.
+     * a username, a display name, an employee id, or a BU:Role pair the user holds.
+     * contains/notContains also match a comma-separated token list.
      */
     private static String userIdentityPredicate(String ref, String operator, String userId,
                                                 List<Object> outParams) {
+        outParams.add(userId);
+        boolean token = "contains".equals(operator) || "notContains".equals(operator);
+        boolean negate = "ne".equals(operator) || "notContains".equals(operator);
+        if (!token && !"eq".equals(operator) && !"ne".equals(operator)) {
+            throw new IllegalArgumentException("Operator " + operator + " is not allowed on a USER column");
+        }
+        String exists = userIdentityExistsSql(ref, token);
+        return negate ? "(NOT " + exists + ")" : exists;
+    }
+
+    private static String userIdentityExistsSql(String ref, boolean tokenContains) {
         String users = SqlIdentifiers.requireQualifiedName("sys_users");
+        String id = SqlIdentifiers.requireIdentifier("id");
+        String pairs = userBuRolePairSubquery();
+        String exact = "(" + userExactIdentitySql(ref) + " OR " + ref + " IN " + pairs + ")";
+        String match = exact;
+        if (tokenContains) {
+            String tokens = "unnest(regexp_split_to_array(btrim(" + ref + "), E'\\\\s*,\\\\s*'))";
+            match = "(" + exact + " OR EXISTS (SELECT 1 FROM " + tokens
+                    + " AS token(v) WHERE token.v IN (" + userIdentityValuesSql() + ")"
+                    + " OR token.v IN " + pairs + "))";
+        }
+        return "EXISTS (SELECT 1 FROM " + users + " u WHERE u." + id + " = ? AND " + match + ")";
+    }
+
+    private static String userExactIdentitySql(String ref) {
         String id = SqlIdentifiers.requireIdentifier("id");
         String username = SqlIdentifiers.requireIdentifier("username");
         String displayName = SqlIdentifiers.requireIdentifier("display_name");
         String fullName = SqlIdentifiers.requireIdentifier("full_name");
         String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
-        String match = "(" + ref + " = u." + id + "::text"
+        return "(" + ref + " = u." + id + "::text"
                 + " OR " + ref + " = ('user:' || u." + id + "::text)"
                 + " OR " + ref + " = u." + username
                 + " OR " + ref + " = u." + displayName
                 + " OR " + ref + " = u." + fullName
                 + " OR " + ref + " = u." + employeeId + ")";
-        outParams.add(userId);
-        String exists = "EXISTS (SELECT 1 FROM " + users + " u WHERE u." + id + " = ? AND " + match + ")";
-        if ("eq".equals(operator)) {
-            return exists;
-        }
-        if ("ne".equals(operator)) {
-            return "(NOT " + exists + ")";
-        }
-        throw new IllegalArgumentException("Operator " + operator + " is not allowed on a USER column");
     }
 
-    /**
-     * Display label for a USER cell/group key, resolved through {@code sys_users}. Bare id,
-     * {@code user:}<id>, username, and legacy name storage all map to one label so GROUP BY
-     * headers match what the portal paints after the same resolution.
-     */
-    static String userDisplayLabelExpression(String ref) {
-        String users = SqlIdentifiers.requireQualifiedName("sys_users");
+    private static String userIdentityValuesSql() {
         String id = SqlIdentifiers.requireIdentifier("id");
         String username = SqlIdentifiers.requireIdentifier("username");
         String displayName = SqlIdentifiers.requireIdentifier("display_name");
         String fullName = SqlIdentifiers.requireIdentifier("full_name");
         String employeeId = SqlIdentifiers.requireIdentifier("employee_id");
-        String value = "(" + ref + ")";
-        String stripped = "(CASE WHEN left(COALESCE(" + value + ", ''), 5) = 'user:'"
-                + " THEN substring(COALESCE(" + value + ", '') from 6) ELSE " + value + " END)";
-        String label = "COALESCE(NULLIF(TRIM(u." + displayName + "), ''),"
-                + " NULLIF(TRIM(u." + fullName + "), ''), u." + username + ")";
-        return "COALESCE((SELECT " + label
-                + " FROM " + users + " u WHERE u." + id + "::text = " + stripped
-                + " OR u." + id + "::text = " + value
-                + " OR ('user:' || u." + id + "::text) = " + value
-                + " OR u." + username + " = " + value
-                + " OR u." + displayName + " = " + value
-                + " OR u." + fullName + " = " + value
-                + " OR u." + employeeId + " = " + value
-                + " LIMIT 1), " + value + ")";
+        return "u." + id + "::text, 'user:' || u." + id + "::text, u." + username
+                + ", u." + displayName + ", u." + fullName + ", u." + employeeId;
     }
+
+    /**
+     * Pair strings a selected user holds in {@code sys_user_business_unit_roles},
+     * correlated to the outer {@code u}. Formats match what Current Assignee may store
+     * when the engine has not expanded the pool to user ids.
+     */
+    private static String userBuRolePairSubquery() {
+        String ubr = SqlIdentifiers.requireQualifiedName("sys_user_business_unit_roles");
+        String units = SqlIdentifiers.requireQualifiedName("sys_business_units");
+        String roles = SqlIdentifiers.requireQualifiedName("sys_roles");
+        String userId = SqlIdentifiers.requireIdentifier("user_id");
+        String buId = SqlIdentifiers.requireIdentifier("business_unit_id");
+        String roleId = SqlIdentifiers.requireIdentifier("role_id");
+        String id = SqlIdentifiers.requireIdentifier("id");
+        String code = SqlIdentifiers.requireIdentifier("code");
+        return "(SELECT pair FROM ("
+                + "SELECT bu." + code + " AS bu_code, r." + code + " AS role_code"
+                + " FROM " + ubr + " ubr"
+                + " JOIN " + units + " bu ON bu." + id + " = ubr." + buId
+                + " JOIN " + roles + " r ON r." + id + " = ubr." + roleId
+                + " WHERE ubr." + userId + " = u." + id
+                + ") m CROSS JOIN LATERAL (VALUES"
+                + " (m.bu_code || ':' || m.role_code),"
+                + " (m.bu_code || '/' || m.role_code),"
+                + " ('BU_ROLE:' || m.bu_code || '/' || m.role_code)"
+                + ") AS pairs(pair))";
+    }
+
 
     private static String textPredicate(String ref, ListColumnFilter filter, String value,
                                         List<Object> outParams) {
         switch (filter.operator()) {
             case "contains" -> {
                 outParams.add("%" + escapeLike(value) + "%");
-                return ref + " ILIKE ?";
+                return ref + ILIKE;
             }
             case "notContains" -> {
                 outParams.add("%" + escapeLike(value) + "%");
-                return "(" + ref + " IS NULL OR " + ref + " NOT ILIKE ?)";
+                return "(" + ref + " IS NULL OR " + ref + NOT_ILIKE + ")";
             }
             case "startsWith" -> {
                 outParams.add(escapeLike(value) + "%");
-                return ref + " ILIKE ?";
+                return ref + ILIKE;
             }
             case "endsWith" -> {
                 outParams.add("%" + escapeLike(value));
-                return ref + " ILIKE ?";
+                return ref + ILIKE;
             }
             case "eq" -> {
                 outParams.add(value);
@@ -400,7 +422,6 @@ public final class ListFilterSql {
         };
     }
 
-    /** Escapes LIKE wildcards so user input matches literally (PG default escape is backslash). */
     /** Wildcards a user typed are literal text, not pattern syntax. */
     public static String escapeLike(String value) {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");

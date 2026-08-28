@@ -77,7 +77,6 @@ class PortalRelationTableQueryDataSearchTest {
 
         assertThat(result.totalElements()).isEqualTo(1L);
         assertThat(result.columns()).extracting(c -> c.field()).containsExactly("name", "code");
-        assertThat(result.columns()).allMatch(c -> !c.groupable());
 
         ArgumentCaptor<String> countSql = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate, times(2)).queryForObject(countSql.capture(), eq(Long.class), any(Object[].class));
@@ -157,7 +156,7 @@ class PortalRelationTableQueryDataSearchTest {
     }
 
     @Test
-    void queryTableData_systemUserDeclaresStatusAndLanguageAsEnumNotGroupable() {
+    void queryTableData_systemUserDeclaresStatusAndLanguageAsEnum() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         RoleAccessComponent roleAccess = mock(RoleAccessComponent.class);
         Long systemUserTableId = -1_000_000_001L;
@@ -174,8 +173,6 @@ class PortalRelationTableQueryDataSearchTest {
                 systemUserTableId,
                 "user1",
                 RelationTableQueryRequest.of(0, 20, null, List.of(), null, null));
-
-        assertThat(page.columns()).allMatch(c -> !c.groupable());
         var status = page.columns().stream().filter(c -> c.field().equals("status")).findFirst().orElseThrow();
         assertThat(status.kind()).isEqualTo(com.platform.common.list.ListColumnMeta.Kind.ENUM);
         assertThat(status.operators()).containsExactly("eq", "ne", "isNull", "isNotNull");

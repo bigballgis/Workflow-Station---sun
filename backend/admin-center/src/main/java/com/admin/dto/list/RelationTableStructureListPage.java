@@ -12,7 +12,6 @@ import java.util.List;
 public record RelationTableStructureListPage(
         List<ListColumnMeta> columns,
         List<RelationTableResponse> content,
-        List<AdminListGroup> groups,
         int page,
         int size,
         long totalElements,
@@ -24,7 +23,6 @@ public record RelationTableStructureListPage(
         }
         columns = List.copyOf(columns);
         content = content == null ? List.of() : List.copyOf(content);
-        groups = groups == null ? List.of() : List.copyOf(groups);
         functionUnitGroups = functionUnitGroups == null ? List.of() : List.copyOf(functionUnitGroups);
     }
 }

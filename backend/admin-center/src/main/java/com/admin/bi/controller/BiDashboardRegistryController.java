@@ -55,7 +55,7 @@ public class BiDashboardRegistryController {
     }
 
     @PostMapping("/query")
-    @Operation(summary = "Query Dashboards (true paging; column filters, sort and grouping)")
+    @Operation(summary = "Query Dashboards (true paging; column filters and sort)")
     public ResponseEntity<AdminListPage<DashboardRegistryResponse>> queryDashboards(
             @RequestBody @Valid BiDashboardListQueryRequest request) {
         return ResponseEntity.ok(dashboardListQueryComponent.query(request));

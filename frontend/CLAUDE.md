@@ -15,6 +15,7 @@
 @../.cursor/rules/portal-design-parity.mdc
 @../.cursor/rules/portal-dialog-form-labels.mdc
 @../.cursor/rules/portal-mi-subtable-my-request.mdc
+@../.cursor/rules/shared-list-portal-admin.mdc
 @../.cursor/rules/testing.mdc
 @../.cursor/rules/vue-frontend.mdc
 <!-- END cursor-rules:auto -->

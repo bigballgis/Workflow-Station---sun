@@ -14,23 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class BiDashboardColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(BiDashboardColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("isDefaultLanding", "status");
-        assertThat(column("dashboardTitle").groupable()).isFalse();
-        assertThat(column("lastSyncedAt").kind()).isEqualTo(Kind.DATETIME);
-        assertThat(column("isDefaultLanding").kind()).isEqualTo(Kind.BOOLEAN);
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> BiDashboardColumnSpec.sql().groupByExpression("dashboardTitle"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void titleFilterCompilesAgainstThePhysicalTable() {
         List<Object> params = new ArrayList<>();
         String where = BiDashboardColumnSpec.sql().whereClause(

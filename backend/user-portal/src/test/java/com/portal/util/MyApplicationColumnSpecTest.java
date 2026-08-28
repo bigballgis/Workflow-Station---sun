@@ -11,19 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MyApplicationColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(MyApplicationColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("currentAssignee", "status");
-        assertThat(column("businessKey").groupable()).isFalse();
-        assertThat(column("startTime").groupable()).isFalse();
-        assertThat(column("requestId").filterable()).isTrue();
-        assertThat(column("requestId").sortable()).isTrue();
-        assertThat(column("requestId").groupable()).isFalse();
-    }
-
-    @Test
     void requestIdCompilesToPersistedJsonText() {
         List<Object> params = new ArrayList<>();
         String where = MyApplicationColumnSpec.sql().whereClause(
@@ -35,13 +22,36 @@ class MyApplicationColumnSpecTest {
     }
 
     @Test
+    void currentAssigneeContainsLooksAtTheClaimedUserAndTheCandidatePool() {
+        List<Object> params = new ArrayList<>();
+        String where = MyApplicationColumnSpec.sql().whereClause(
+                List.of(new ListColumnFilter("currentAssignee", "contains", "id-a", null)), params);
+        assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION);
+        assertThat(where).contains("regexp_split_to_array");
+        assertThat(params).containsExactly("id-a");
+    }
+
+    @Test
+    void currentAssigneeEqualsDoesNotTokenSplitAPool() {
+        List<Object> params = new ArrayList<>();
+        String where = MyApplicationColumnSpec.sql().whereClause(
+                List.of(new ListColumnFilter("currentAssignee", "eq", "id-a", null)), params);
+        assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION);
+        assertThat(where).doesNotContain("regexp_split_to_array");
+        assertThat(params).containsExactly("id-a");
+    }
+
+    @Test
     void kindsFollowStoredTypes() {
         assertThat(column("currentAssignee").kind()).isEqualTo(Kind.USER);
+        assertThat(column("currentAssignee").operators())
+                .containsExactly("eq", "ne", "contains", "notContains", "isNotNull", "isNull");
         assertThat(column("status").kind()).isEqualTo(Kind.ENUM);
         assertThat(column("startTime").kind()).isEqualTo(Kind.DATETIME);
         assertThat(column("businessKey").kind()).isEqualTo(Kind.TEXT);
         assertThat(column("status").options()).extracting(ListColumnMeta.Option::value)
                 .containsExactly("RUNNING", "COMPLETED", "WITHDRAWN", "REJECTED");
+        assertThat(MyApplicationColumnSpec.columns()).noneMatch(c -> "currentStepName".equals(c.field()));
     }
 
     private static ListColumnMeta column(String field) {

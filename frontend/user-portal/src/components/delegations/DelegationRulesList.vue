@@ -19,8 +19,8 @@
           style="width: 100%;"
           class="list-data-grid"
           :class="{ 'list-data-grid--fit': gridFits }"
-          :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
-          :row-class-name="rowClassName"
+          scrollbar-always-on
+          :height="gridTableHeight || '100%'"
         >
           <template #empty>
             <div
@@ -45,7 +45,6 @@
               <ListColumnHeader
                 :column="col"
                 :sort="sort.field === col.field ? sort.direction : null"
-                :grouped="groupBy === col.field"
                 :filtered="!!columnFilters[col.field]"
                 :width="widthOf(col.field)"
                 :show-move="displayColumns.length > 1"
@@ -53,7 +52,6 @@
                 :can-move-right="colIndex < displayColumns.length - 1"
                 @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                 @clear-sort="onClearSort"
-                @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                 @filter-open="openFilter(col.field)"
                 @clear-filter="onClearFilter(col.field)"
                 @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -62,14 +60,8 @@
               />
             </template>
             <template #default="{ row }">
-              <template v-if="isListGroupHeaderRow(row)">
-                <div class="group-header-cell">
-                  <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                  <span class="group-count">({{ row._groupCount }})</span>
-                </div>
-              </template>
-              <el-tag
-                v-else-if="col.field === 'status'"
+<el-tag
+                v-if="col.field === 'status'"
                 :type="getStatusType(row.status)"
                 size="small"
               >
@@ -88,18 +80,13 @@
             </template>
           </el-table-column>
           <el-table-column
-            v-if="leftoverWidth > 0"
-            :width="leftoverWidth"
-            class-name="list-col-spacer"
-          />
-          <el-table-column
             :label="t('common.actions')"
-            min-width="200"
+            :width="ACTIONS_COL_WIDTH"
+            :min-width="ACTIONS_COL_WIDTH"
             fixed="right"
           >
             <template #default="{ row }">
-              <template v-if="!isListGroupHeaderRow(row)">
-                <div class="row-actions">
+              <div class="row-actions">
                   <el-button
                     v-if="row.status === 'ACTIVE'"
                     size="small"
@@ -121,8 +108,7 @@
                   >
                     {{ t('common.delete') }}
                   </el-button>
-                </div>
-              </template>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -166,15 +152,8 @@ import { usePortalListGrid } from '@/composables/list/usePortalListGrid'
 import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 import { formatDate } from '@/utils/dateFormat'
 
-const COL_WIDTHS: Record<string, number> = {
-  delegateId: 140,
-  delegationType: 140,
-  startTime: 170,
-  endTime: 170,
-  status: 110,
-  reason: 180,
-  createdAt: 170,
-}
+
+const ACTIONS_COL_WIDTH = 200
 
 const { t } = useI18n()
 const loading = ref(true)
@@ -182,7 +161,6 @@ const loading = ref(true)
 const {
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -190,7 +168,8 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits, leftoverWidth,
+  gridFits,
+  gridTableHeight,
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -205,15 +184,9 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = usePortalListGrid<DelegationRule>({
   storageKey: 'portal-list-layout:delegation-rules',
-  extraWidth: 200,
-  defaultWidthOf: (field) => COL_WIDTHS[field] ?? 120,
+  extraWidth: ACTIONS_COL_WIDTH,
 })
 
 function getStatusType(status: string): 'success' | 'info' | 'warning' {
@@ -267,10 +240,6 @@ function onClearSort() {
   load()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  load()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)

@@ -14,23 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class BiAssignmentColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(BiAssignmentColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("targetType", "layoutMode", "isDefault");
-        assertThat(column("dashboardTitle").groupable()).isFalse();
-        assertThat(column("targetName").kind()).isEqualTo(Kind.TEXT);
-        assertThat(column("displayOrder").kind()).isEqualTo(Kind.NUMBER);
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> BiAssignmentColumnSpec.sql().groupByExpression("dashboardTitle"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void targetNameFilterResolvesFromTheTargetTables() {
         List<Object> params = new ArrayList<>();
         String where = BiAssignmentColumnSpec.sql().whereClause(

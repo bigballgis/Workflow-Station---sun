@@ -48,7 +48,6 @@ export interface UserPortalAuditListQuery extends UserPortalAuditQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export interface FunctionUnitOption {

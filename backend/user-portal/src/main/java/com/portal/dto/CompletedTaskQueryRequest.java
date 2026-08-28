@@ -4,7 +4,7 @@ import com.platform.common.list.ListColumnFilter;
 import java.util.List;
 
 /**
- * One page of Completed Tasks: paging plus the shared-header filters, sort and grouping.
+ * One page of Completed Tasks: paging plus the shared-header filters, sort.
  * {@code keyword} / {@code startTime} / {@code endTime} remain so older clients keep working;
  * they AND with {@code filters} and compile to the same SQL predicate.
  */
@@ -14,7 +14,6 @@ public record CompletedTaskQueryRequest(
         List<ListColumnFilter> filters,
         String sortField,
         String sortDirection,
-        String groupBy,
         String keyword,
         String startTime,
         String endTime) {

@@ -1,35 +1,29 @@
-import { computed, reactive, ref, type MaybeRefOrGetter } from 'vue'
+import { computed, reactive, ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ListColumnFilter, ListColumnMeta } from '@platform-shared/list/columnMeta'
-import {
-  insertListGroupHeaders,
-  isListGroupHeaderRow,
-  type ListGroupCount,
-} from '@platform-shared/list/insertGroupHeaders'
-import { useListColumnLayout } from '@/composables/list/useListColumnLayout'
+import { useListColumnLayout } from '@platform-shared/list/useListColumnLayout'
 
 export interface PortalListPagePayload<T> {
   columns: ListColumnMeta[]
   content: T[]
-  groups?: ListGroupCount[]
   totalElements: number
 }
 
 /**
- * Host-owned grid state for a shared-list page: column order, filters, sort, grouping,
+ * Host-owned grid state for a shared-list page: column order, filters, sort,
  * session widths, and stale-response protection. The composable does not fetch.
  */
 export function usePortalListGrid<T extends object>(opts: {
   storageKey: string
   extraWidth?: MaybeRefOrGetter<number>
-  defaultWidthOf?: (field: string) => number
+  fillViewport?: MaybeRefOrGetter<boolean>
+  /** When set, only these fields render / persist order. Other declared columns stay on the payload. */
+  visibleFields?: MaybeRefOrGetter<readonly string[] | undefined>
 }) {
   const { t } = useI18n()
   const columns = ref<ListColumnMeta[]>([])
   const columnOrder = ref<string[]>([])
   const rows = ref<T[]>([]) as { value: T[] }
-  const groups = ref<ListGroupCount[]>([])
-  const groupBy = ref<string | null>(null)
   const columnFilters = ref<Record<string, ListColumnFilter>>({})
   const sort = reactive<{ field: string | null; direction: 'ASC' | 'DESC' | null }>({
     field: null,
@@ -40,7 +34,7 @@ export function usePortalListGrid<T extends object>(opts: {
   let querySeq = 0
 
   const displayColumns = computed<ListColumnMeta[]>(() => {
-    const localized = columns.value.map((col) => localizeColumn(col, t))
+    const localized = visibleDeclaredColumns().map((col) => localizeColumn(col, t))
     if (columnOrder.value.length === 0) return localized
     const byField = new Map(localized.map((col) => [col.field, col]))
     const ordered: ListColumnMeta[] = []
@@ -54,17 +48,17 @@ export function usePortalListGrid<T extends object>(opts: {
     return ordered
   })
 
-  const displayRows = computed(() =>
-    insertListGroupHeaders(rows.value, groupBy.value, groups.value),
-  )
+  const displayRows = computed(() => rows.value)
 
   const layoutFields = computed(() => displayColumns.value.map((col) => col.field))
-  const { gridScrollRef, gridFits, leftoverWidth, gridInnerStyle, widthOf, setWidth, persistWidths } =
+  const { gridScrollRef, gridFits, gridTableHeight, gridInnerStyle, widthOf, setWidth, persistWidths } =
     useListColumnLayout({
       storageKey: opts.storageKey,
       fields: layoutFields,
       extraWidth: opts.extraWidth,
-      defaultWidthOf: opts.defaultWidthOf,
+      fillViewport: opts.fillViewport,
+      labelOf: (field) => displayColumns.value.find((col) => col.field === field)?.label ?? field,
+      kindOf: (field) => displayColumns.value.find((col) => col.field === field)?.kind,
     })
 
   const activeFilterColumn = computed(
@@ -88,16 +82,9 @@ export function usePortalListGrid<T extends object>(opts: {
     if (!Array.isArray(page.content)) {
       throw new Error('list page is missing its row array')
     }
-    const pageGroups = page.groups ?? []
-    for (const group of pageGroups) {
-      if (typeof group.count !== 'number') {
-        throw new Error('list group is missing count — the page and its group counts came from different queries')
-      }
-    }
     columns.value = page.columns
     syncColumnOrderFromServer(page.columns)
     rows.value = page.content
-    groups.value = pageGroups
     pagination.total = page.totalElements
   }
 
@@ -107,7 +94,6 @@ export function usePortalListGrid<T extends object>(opts: {
     filters?: Array<ListColumnFilter & { field: string }>
     sortField?: string
     sortDirection?: 'ASC' | 'DESC'
-    groupBy?: string
   } {
     const body: {
       page: number
@@ -115,7 +101,6 @@ export function usePortalListGrid<T extends object>(opts: {
       filters?: Array<ListColumnFilter & { field: string }>
       sortField?: string
       sortDirection?: 'ASC' | 'DESC'
-      groupBy?: string
     } = { page: pagination.page - 1, size: pagination.size }
     const filters = Object.entries(columnFilters.value).map(([field, filter]) => ({ field, ...filter }))
     if (filters.length > 0) body.filters = filters
@@ -123,7 +108,6 @@ export function usePortalListGrid<T extends object>(opts: {
       body.sortField = sort.field
       body.sortDirection = sort.direction
     }
-    if (groupBy.value) body.groupBy = groupBy.value
     return body
   }
 
@@ -152,8 +136,23 @@ export function usePortalListGrid<T extends object>(opts: {
     }
   }
 
+  function declaredFieldsForLayout(declared: ListColumnMeta[]): string[] {
+    const all = declared.map((c) => c.field)
+    const visible = toValue(opts.visibleFields)
+    if (visible == null) return all
+    const allow = new Set(visible)
+    return all.filter((field) => allow.has(field))
+  }
+
+  function visibleDeclaredColumns(): ListColumnMeta[] {
+    const visible = toValue(opts.visibleFields)
+    if (visible == null) return columns.value
+    const allow = new Set(visible)
+    return columns.value.filter((col) => allow.has(col.field))
+  }
+
   function syncColumnOrderFromServer(declared: ListColumnMeta[]): void {
-    const declaredFields = declared.map((c) => c.field)
+    const declaredFields = declaredFieldsForLayout(declared)
     const stored = readStoredColumnOrder()
     const next: string[] = []
     for (const field of stored) {
@@ -211,40 +210,10 @@ export function usePortalListGrid<T extends object>(opts: {
     resetPage()
   }
 
-  function applyGroup(field: string, grouped: boolean): void {
-    groupBy.value = grouped ? field : null
-    resetPage()
-  }
-
-  function rowClassName({ row }: { row: object }): string {
-    return isListGroupHeaderRow(row) ? 'group-header-row' : ''
-  }
-
-  function spanMethod(
-    extraColumns: number,
-  ): (args: { row: object; columnIndex: number }) => { rowspan: number; colspan: number } {
-    return ({ row, columnIndex }) => {
-      if (!isListGroupHeaderRow(row)) {
-        return { rowspan: 1, colspan: 1 }
-      }
-      if (columnIndex === 0) {
-        return { rowspan: 1, colspan: displayColumns.value.length + extraColumns }
-      }
-      return { rowspan: 0, colspan: 0 }
-    }
-  }
-
-  function groupHeaderLabel(raw: string): string {
-    const col = displayColumns.value.find((c) => c.field === groupBy.value)
-    const option = col?.options?.find((o) => o.value === raw)
-    return option?.label ?? raw
-  }
-
   return {
     columns,
     displayColumns,
     displayRows,
-    groupBy,
     columnFilters,
     sort,
     filterDialog,
@@ -253,7 +222,7 @@ export function usePortalListGrid<T extends object>(opts: {
     activeFilter,
     gridScrollRef,
     gridFits,
-    leftoverWidth,
+    gridTableHeight,
     gridInnerStyle,
     widthOf,
     setWidth,
@@ -269,11 +238,6 @@ export function usePortalListGrid<T extends object>(opts: {
     clearFilter,
     applySort,
     clearSort,
-    applyGroup,
-    rowClassName,
-    spanMethod,
-    groupHeaderLabel,
-    isListGroupHeaderRow,
   }
 }
 

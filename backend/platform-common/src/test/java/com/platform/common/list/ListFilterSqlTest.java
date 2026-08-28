@@ -1,4 +1,4 @@
-package com.admin.list;
+package com.platform.common.list;
 
 import com.platform.common.list.ListColumnFilter;
 import com.platform.common.list.ListColumnMeta;
@@ -22,6 +22,7 @@ class ListFilterSqlTest {
     private Map<String, ListColumnMeta> columns() {
         Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
         byField.put("name", filterable("name", Kind.TEXT));
+        byField.put("file", filterable("file", Kind.FILE));
         byField.put("amount", filterable("amount", Kind.NUMBER));
         byField.put("created_at", filterable("created_at", Kind.DATETIME));
         byField.put("created_by", filterable("created_by", Kind.USER));
@@ -34,7 +35,7 @@ class ListFilterSqlTest {
         if (kind == Kind.BOOLEAN) {
             return ListColumnMeta.of(field, field, kind);
         }
-        return new ListColumnMeta(field, field, kind, true, true, false,
+        return new ListColumnMeta(field, field, kind, true, true,
                 ListColumnMeta.operatorsFor(kind), List.of());
     }
 
@@ -55,7 +56,7 @@ class ListFilterSqlTest {
 
     @Test
     void textContainsCompilesToIlikeWithEscapedWildcards() {
-        assertEquals(" AND data->>'name' ILIKE ?", where("name", "contains", "50%_a", null));
+        assertEquals(" AND data->>'name'" + ListFilterSql.ILIKE, where("name", "contains", "50%_a", null));
         assertEquals(List.of("%50\\%\\_a%"), params);
     }
 
@@ -99,15 +100,36 @@ class ListFilterSqlTest {
     }
 
     @Test
-    void userGroupExpressionResolvesLabelThroughSysUsers() {
-        Map<String, ListColumnMeta> byField = new LinkedHashMap<>();
-        byField.put("created_by", ListColumnMeta.of(
-                "created_by", "Created by", Kind.USER));
-        ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
-        String expr = sql.groupByExpression("created_by");
-        assertTrue(expr.contains("sys_users"), expr);
-        assertTrue(expr.contains("('user:' || u.id::text)"), expr);
-        assertTrue(expr.contains("data->>'created_by'"), expr);
+    void userContainsMatchesACommaSeparatedIdentityToken() {
+        String sql = where("created_by", "contains", "user-dev", null);
+        assertTrue(sql.contains("EXISTS (SELECT 1 FROM sys_users u WHERE u.id = ?"), sql);
+        assertTrue(sql.contains("regexp_split_to_array"), sql);
+        assertTrue(sql.contains("data->>'created_by' = u.display_name"), sql);
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
+    void userEqMatchesAStoredBuRolePairTheSelectedUserHolds() {
+        String sql = where("created_by", "eq", "user-dev", null);
+        assertTrue(sql.contains("sys_user_business_unit_roles"), sql);
+        assertTrue(sql.contains("m.bu_code || ':' || m.role_code"), sql);
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
+    void userContainsMatchesABuRolePairToken() {
+        String sql = where("created_by", "contains", "user-dev", null);
+        assertTrue(sql.contains("regexp_split_to_array"), sql);
+        assertTrue(sql.contains("sys_user_business_unit_roles"), sql);
+        assertEquals(List.of("user-dev"), params);
+    }
+
+    @Test
+    void userNotContainsNegatesTheTokenMatch() {
+        String sql = where("created_by", "notContains", "user-dev", null);
+        assertTrue(sql.startsWith(" AND (NOT EXISTS"), sql);
+        assertTrue(sql.contains("regexp_split_to_array"), sql);
+        assertEquals(List.of("user-dev"), params);
     }
 
     @Test
@@ -198,7 +220,7 @@ class ListFilterSqlTest {
         String sql = jsonRow().whereClause(List.of(
                 new ListColumnFilter("name", "contains", "a", null),
                 new ListColumnFilter("amount", "lte", "9", null)), params);
-        assertTrue(sql.startsWith(" AND data->>'name' ILIKE ?"));
+        assertTrue(sql.startsWith(" AND data->>'name'" + ListFilterSql.ILIKE));
         assertTrue(sql.contains(" AND (data->>'amount'"));
         assertEquals(2, params.size());
     }
@@ -221,7 +243,7 @@ class ListFilterSqlTest {
     @Test
     void physicalColumnRefTargetsTheColumnItselfNotTheJsonDocument() {
         ListFilterSql physical = ListFilterSql.orderedById(columns(), ListFilterSql.PHYSICAL_COLUMN);
-        assertEquals(" AND name ILIKE ?",
+        assertEquals(" AND name" + ListFilterSql.ILIKE,
                 physical.whereClause(List.of(new ListColumnFilter("name", "contains", "ann", null)), params));
         assertEquals(" ORDER BY name ASC NULLS LAST, id", physical.orderBy("name", "ASC"));
     }
@@ -259,28 +281,6 @@ class ListFilterSqlTest {
         assertThrows(IllegalArgumentException.class, () -> sortBy("payload", "ASC"));
     }
 
-    // ---- grouping ----
-
-    @Test
-    void groupingLeadsTheOrderSoAGroupsRowsCannotStraddleAPage() {
-        Map<String, ListColumnMeta> byField = columns();
-        byField.put("status", ListColumnMeta.withOptions("status", "status", Kind.ENUM,
-                List.of(new ListColumnMeta.Option("OPEN", "Open"))));
-        ListFilterSql sql = ListFilterSql.orderedById(byField, ListFilterSql.JSON_ROW);
-
-        String groupExpression = sql.groupByExpression("status");
-        assertEquals("data->>'status'", groupExpression);
-        assertEquals(" ORDER BY data->>'status' ASC NULLS LAST, data->>'name' ASC NULLS LAST, id",
-                sql.orderByGrouped(groupExpression, "name", "ASC"));
-    }
-
-    @Test
-    void groupByRejectsUnknownOrNonGroupableColumn() {
-        ListFilterSql sql = jsonRow();
-        assertThrows(IllegalArgumentException.class, () -> sql.groupByExpression("ghost"));
-        // Declared groupable=false: offering it would produce counts the query cannot stand behind.
-        assertThrows(IllegalArgumentException.class, () -> sql.groupByExpression("name"));
-    }
 
     @Test
     void aListWithItsOwnDefaultOrderStillEndsOnTheTiebreak() {
@@ -295,13 +295,15 @@ class ListFilterSqlTest {
     @Test
     void searchOrsOneIlikePerSearchableField() {
         String sql = jsonRow().searchClause("ann", List.of("name", "created_at"), params);
-        assertEquals(" AND (data->>'name' ILIKE ? OR data->>'created_at' ILIKE ?)", sql);
+        assertEquals(" AND (data->>'name'" + ListFilterSql.ILIKE
+                + " OR data->>'created_at'" + ListFilterSql.ILIKE + ")", sql);
         assertEquals(List.of("%ann%", "%ann%"), params);
     }
 
     @Test
     void searchEscapesWildcardsSoTypedPercentMatchesLiterally() {
-        jsonRow().searchClause("50%", List.of("name"), params);
+        String sql = jsonRow().searchClause("50%", List.of("name"), params);
+        assertTrue(sql.contains("ESCAPE"));
         assertEquals(List.of("%50\\%%"), params);
     }
 
