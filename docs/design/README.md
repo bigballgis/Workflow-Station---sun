@@ -47,9 +47,10 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner（**主表、�
 |------|------|
 | [portal-bu-rbac.md](./portal-bu-rbac.md) | **身份从哪来**：BU + 角色（UBR）模型、工作台上下文、JWT 硬约束 |
 | [portal-permission-self-service.md](./portal-permission-self-service.md) | **门户能做什么**：UBR 自助申请/代办/退出、无 UBR（`C` 为空集）时的访问模式 |
-| [portal-task-delegation.md](./portal-task-delegation.md) | **任务委托（本期）**：仅站立规则 act-as；单任务 DELEGATE/TRANSFER 本期不理；与 UBR「代办」分域 |
+| [portal-task-delegation.md](./portal-task-delegation.md) | **站立任务委托**：时间窗规则；目标为指定用户 **或** BU+Role；不改 `assignee`；须切工作台；与 UBR「代办申请」分域 |
+| [portal-task-single-delegate.md](./portal-task-single-delegate.md) | **单任务委托按钮**（已定稿）：不改 `assignee`；目标为指定用户 **或** BU+Role；不认领；须切到该工作台才可见 |
 
-> 身份两篇互补且已互链：前者是硬约束，后者是产品规则。任务委托是第三条线——**不要**与 UBR「代办申请」混称。
+> 身份两篇互补且已互链：前者是硬约束，后者是产品规则。任务委托有两条线（站立规则 / 单任务按钮），都是不改办理人、别人代 A 办——**不要**与 UBR「代办申请」混称，也**不要**把委托做成转办。用户可见用「委托 / 委托任务」；不用 Acting For。
 
 ## Developer Workstation
 
@@ -77,8 +78,8 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner（**主表、�
 |------|------|
 | [feature-blueprint.md](./feature-blueprint.md) | 1.0 功能总蓝图（三应用 = 三层楼的整体视图，2.0 规划树） |
 | [user-profile-information-architecture.md](./user-profile-information-architecture.md) | 三端「个人中心 / 顶栏用户菜单」的信息边界与术语 |
-| [shared-list-components.md](./shared-list-components.md) | **列表共享组件 + 服务端分页接入规范**（状态：**方案已定稿；Views / RT 已在接**）：列头 / 列宽 / 筛选弹窗 / 分页；**§6.5 Relation Tables**（业务 JSON 行 + 内置 User=`sys_users`；类型化筛选；一律不分组）；本期不含 DW |
-| [list-file-name-filter.md](./list-file-name-filter.md) | **列表 FILE 列按文件名筛选**（状态：**方案评审中，未实现**）：基线仍是 display-only；下一期用与格子同一套抽名规则筛，禁止当 TEXT 比 URL；推荐查询侧 SQL 抽名（MVP），落库结构化为后续 |
+| [shared-list-components.md](./shared-list-components.md) | **列表共享组件 + 服务端分页接入规范**（状态：**方案已定稿**）：列头 / 按 kind 筛选排序 / 可调列宽 / 分页；**§6.5 RT**；**§6.6 列宽 fill（宽屏按底宽比例摊余量）**；**§6.7 Portal/Admin 侧栏 list view 必须接全套**；本期不含 DW |
+| [list-file-name-filter.md](./list-file-name-filter.md) | **列表 FILE 列按文件名筛选**（状态：**已实现**）：`Kind.FILE`；与格子同一套抽名；禁止当 TEXT 比 URL |
 
 > 列表改造是**增量**的：共享组件纯新增，一个菜单一个提交，未接入的菜单行为不变。
 > 行可见范围沿用现有权限语义，子串匹配只能做**候选粗筛**、必须接精确复核（§6.1）。
@@ -87,9 +88,11 @@ Table Design 先建 VARCHAR 列，表单上把控件改成 Owner（**主表、�
 > 分组能力**按字段语义逐列声明**，不是每个列头都挂分组入口（§6.3.1）。
 > 筛选 kind 的权威是表 `data_type` / 视图系统列，**不是** Form 组件；`current_step` 是 TEXT。
 > SUB 的四列系统字段同样筛 `pi.*`（和 MAIN 同一套 kind），不是 display-only（§6.3.2）。
-> `FILE` 列基线只展示；按文件名筛见 [list-file-name-filter.md](./list-file-name-filter.md)，禁止当 TEXT 凑合（§6.3.2）。
-> 封闭选项列（Status / Legal Hold / 人员）筛选一律 Equals / Not equals / No data / Has data（§6.3）。
+> `FILE` 列按抽出的文件名筛；禁止当 TEXT 凑合（§6.3.2）。
+> 封闭选项列（Status / Legal Hold）筛选一律 Equals / Not equals / 没值 / 有值；人员列另加 Contains / Does not contain（§6.3）。
 > 排序按 kind：文本字母、数字大小、时间新旧（§6.3.3）。
+> Portal / Admin **左侧菜单记录列表**必须接共享表头 + 按 kind 筛选排序 + 可调列宽 + 共享分页（§6.7）；
+> 侧栏是手写的，加菜单必须先登记 required / exempt。
 > 翻页 loading：网格 `v-loading` 一只转圈；`ListPagination` 只禁用，不在页码左边再画一只。
 > 深分页**不设页数上限**，改为 >1s 记 WARN 慢查询日志，按生产真实分布再决定（§6.2）。
 

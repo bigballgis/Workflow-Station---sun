@@ -1313,3 +1313,125 @@ dev 实测：修复前 500；修复后上传 243,572 字节的自研件，`file`
 > ⚠️ uat/preprod 的 `ACTIVEPIECES_FRONTEND_URL` 是 `http://hermes-workflow-activepieces.<域>/`，
 > **能否从 Pod 内解析回自己未实测**。若不能，那两个环境的 Import 会以完全相同的方式失败——
 > 新增的 `ACTIVEPIECES_SELF_INTERNAL_URL` 正是为此。
+
+## 2026-08-27　HERMES-PATCH-032：运行时 piece 安装脱离共享 workspace + 离线 store 真正装满
+
+UAT `https://hermes-uat.hk.hsbc/admin/automation-pieces` 上传自研件 `alphabet-sorter@1.0.0`
+失败（UI 显示为"超时"，实为 71 秒后 `ERR_PNPM_META_FETCH_FAIL` → `ENGINE_OPERATION_FAILURE`
+→ HTTP 400）。两个独立缺陷叠在一起，任何一个单独修都不够。
+
+### 缺陷一：`--filter` 只窄化"装什么"，不窄化"解析什么"
+
+`EXECUTION_MODE=UNSANDBOXED`（`system.ts` 的默认值）下 `getCustomPiecesPath()` 返回
+`getGlobalCacheCommonPath()`——**ARCHIVE 件和全部预热官方件共用 `cache/v13/common` 一个
+workspace**。`piece-installer.ts` 过去在这个 workspace 根跑
+`pnpm install --filter ./pieces/<新件>`，而每个成员的依赖值都是本地 `bundle.tgz` 绝对路径
+（`createPiecePackageJson`），pnpm 每次都会重新解析这些本地 tarball 的传递依赖。于是装一个
+**零依赖**的自研件，会去拉 `@zip.js/zip.js` / `unpdf` / `jsdom` / `pg-format`——正是
+file-helper / pdf / text-helper / postgres 这四个白名单件的依赖，撞上刻意 fail-closed 的
+`NPM_CONFIG_REGISTRY=…invalid/`，重试 10s + 1min 后失败。
+
+**改法**：每个件在**自己的目录**里跑 `pnpm install --ignore-workspace`
+（`pkg-runner.ts` 新增 `ignoreWorkspace` 参数；`piece-installer.ts` 的批量+个别回退两段
+合并为 `installPiecesIndividually()`，逐件安装、逐件回滚）。新件从此只可能需要**它自己的
+闭包**，气隙要求变成可以按件核对。附带解决 `pieceCheckIfAlreadyInstalled` 注释里记的
+sibling-pruning 隐患：运行时不再有任何 workspace 级安装，也就不可能清空兄弟件的
+`node_modules`。仓库内早有先例——`seed-offline-store.mjs` 自己就用 `--ignore-workspace`，
+`PIECE_DEVELOPMENT_HOWTO.md` §2 的 dev 手工预装也是。
+
+失败信息现在带上 pnpm 原文（`Failed to install: <name>@<ver>: <pnpm message>`），
+否则管理员在 Admin Center 只看得到"导入失败"。
+
+### 缺陷二：离线 store 一直是空的（8 KB）
+
+`seed-offline-store.mjs` 只读 `pieces.json` 里带 `tarball` 字段的条目，而该字段过去只有两个
+自研件带，且两个都零依赖 —— 烘出来的"离线 store"实际是空的。所以补
+`AP_PIECES_OFFLINE_INSTALL=true` 不但不够，还会让同一次上传更快地以
+`ERR_PNPM_NO_OFFLINE_META` 失败。
+
+**改法**：13 个白名单件**全部**补上 `tarball`（`.tgz` 本就在 `hermes/tarballs/` 里且已 git
+跟踪；11 个官方件的 SHA-1 与 registry 的 `dist.shasum` 逐个核对一致）。store 随之含四个真实
+外部依赖的完整闭包。脚本对无 `tarball` 的条目改为打 WARNING（此前静默）。
+顺带：构建期这 13 个件不再访问 npmjs。
+
+### 验证（本地，pnpm 9.15.9 —— 与镜像同版本）
+
+| 场景 | 结果 |
+|---|---|
+| 复现：workspace 根 `--filter` 装零依赖件，registry 指向 `.invalid` | 失败，`ERR_PNPM_META_FETCH_FAIL GET …/@zip.js%2Fzip.js`，重试 10s+1min（= 线上 71s） |
+| 改后：件自己目录 `--ignore-workspace`，同一个 `.invalid` registry | **成功，691ms**，`node_modules/@activepieces/piece-hash-helper` 符号链接就位、`require()` 通过 |
+| 预热的兄弟件（file-helper）在上面两次运行之后 | 仍可 `require()`，未被 prune —— 两种布局可共存 |
+| P1 后烘 store | 21 MB / 66 包（此前 0 B）|
+| 气隙离线装**有依赖**的件（file-helper，`--offline` + 该 store + `.invalid` env） | **成功，353ms**，`@zip.js+zip.js@2.8.15` 从 store 解析 |
+| 对照：同一次离线安装换用**改动前**的 store | 失败，`ERR_PNPM_NO_OFFLINE_META Failed to resolve @zip.js/zip.js@2.8.15` |
+
+`packages/server/sandbox` 全量测试 226 passed（`piece-installer.test.ts` 36 个，含新增的
+"never installs at the shared workspace root" 回归用例）、`tsc --noEmit` 与 `eslint` 无 error。
+
+### 仍未做（不在本次范围）
+
+- **UAT 配置漂移**：线上 Pod 的 `AP_PIECES_OFFLINE_INSTALL` / `AP_INTERNAL_API_URL` 为空，
+  但 `deploy/k8s/activepieces.yaml` 里两者都已接线 —— UAT 跑的不是当前清单/镜像，需重新部署。
+- `prewarm-pieces.sh` 仍在 workspace 根做一次性安装（构建期、可联网、快），只更新了注释说明
+  它与运行时布局的关系；两种布局互不影响已实测。
+- `code-builder.ts` 的 CODE 步安装没有传 `ignoreWorkspace`，维持原行为。注意
+  `cache/v13/codes/<hash>` 之上没有自己的 `pnpm-workspace.yaml`，pnpm 会一路上溯到
+  `/usr/src/app/pnpm-workspace.yaml`（AP monorepo）——**未验证其影响**，独立排查。
+  → 已排查：确有缺陷，见下条 HERMES-PATCH-033。
+
+## 2026-08-28　HERMES-PATCH-033：CODE 步依赖安装误入 AP monorepo workspace
+
+承接 PATCH-032 遗留的"未验证"项。结论：**该疑点成立，且比预想严重** —— 不是变慢，是 CODE 步的
+依赖**一个都没装**，同时把镜像刻意裁剪掉的 monorepo 依赖装了回来。
+
+### 机制
+
+`AP_CACHE_BASE_PATH` 从未被覆盖（`configs.ts` 默认 `'cache'`，`deploy/` 全仓无此变量），相对
+`WORKDIR /usr/src/app` 解析 ⇒ 代码步目录是 `/usr/src/app/cache/v13/codes/<flowVersionId>/<stepName>`，
+正好落在 `Dockerfile` 拷进运行镜像的 `/usr/src/app/pnpm-workspace.yaml` 之下。该目录既没有自己的
+workspace 文件（`piece-installer.ts` 给 `cache/v13/common` 写了一个来"围栏"，`codes/` 没有），
+又不是 AP monorepo 的成员。
+
+pnpm 9.15.9 在这种"位于 workspace 根之下、但不是任何成员"的 cwd 上**不报错、不按单包安装**，
+而是直接退化成一次全量 workspace 安装（输出 `Scope: all N workspace projects`）。
+
+### 三重影响（全部本地实测，pnpm 9.15.9 = 镜像同版本）
+
+| 现象 | 实测 |
+|---|---|
+| 代码步自身依赖 | **完全没装**，`codes/<fv>/<step>/node_modules` 不存在 |
+| 随后的 esbuild `--bundle` | `Could not resolve "is-number"` ⇒ `compile-failed` |
+| 该失败是否自愈 | **否**。`skipSave` 只豁免 `install-failed`；编译失败按"确定性失败"缓存，源码不变就一直返回抛错桩 |
+| monorepo 副作用 | 装上了 `packages/web` 依赖与各成员 devDependencies —— 正是 Dockerfile 用 `--filter=api…/worker…/engine…` + `--prod` 特意排除的那 ~一半 983MB |
+| 根 lockfile | 非 frozen 安装，`/usr/src/app/pnpm-lock.yaml` 被改写 |
+| 气隙 prod（`AP_PIECES_OFFLINE_INSTALL=true`，k8s 已接线） | **硬失败**：`ERR_PNPM_NO_OFFLINE_TARBALL`，且缺的是 *monorepo* 的依赖，不是代码步自己的（离线 store 只烘了 piece 闭包；`/root/.local/share/pnpm/store` 是 `--mount=type=cache`，根本没进镜像） |
+
+用户可见症状因此是：**任何带 npm 依赖的 CODE 步都构建不出来**，而且报的是误导性的
+"Compilation Error"（安装那步 exit 0，看上去成功）。
+
+### 改法
+
+`code-builder.ts#installDependencies` 补 `ignoreWorkspace: true`（`pkg-runner.ts` 的参数
+PATCH-032 已就位，无需改动）。与 piece 侧同一处方：每次安装只认它自己的目录。
+
+### 验证（同一最小复现：仿 monorepo 根 + `--prod --filter` 装好的 node_modules + `codes/<fv>/<step>`）
+
+| 场景 | 结果 |
+|---|---|
+| 改前 | `Scope: all 3 workspace projects`；代码步无 `node_modules`；`packages/web` 与 devDeps 被装上；根 lockfile 被改写 |
+| 改前 + esbuild bundle | `Could not resolve "is-number"` |
+| 改前 + 气隙（`--offline` + piece store） | `ERR_PNPM_NO_OFFLINE_TARBALL`（缺的是 monorepo 的 `is-number`）|
+| **改后** | 只装自己：`node_modules/{@types,is-number}` 就位，`require.resolve` 通过；`packages/web/node_modules` 保持不存在；根 lockfile 未动 |
+| 改后 + esbuild bundle | 成功，`index.js 2.7kb` |
+| 改后 + 气隙（store 缺该依赖） | 仍失败，但报的是**代码步自己的**直接依赖（`This error happened while installing a direct dependency of …/codes/fv1/step_1`）—— 气隙下带外部依赖的 CODE 步本就该响亮失败，且现在可按步核对 |
+
+`packages/server/sandbox` 全量 **228 passed**（16 文件；PATCH-032 的 226 + 本次新增 2 个回归用例，
+已验证去掉修复后这 2 个会红）、`tsc --noEmit` 干净、`eslint` 无新增问题（test 文件的
+`parserOptions.project` 报错与 `code-builder.ts:44` 的返回类型 warning 在未改动文件上同样存在，
+属既有状态）。
+
+### 仍未做
+
+- `prewarm-pieces.sh` 构建期仍在 `cache/v13/common` 的 workspace 根安装 —— 那里有 installer 写的
+  `pnpm-workspace.yaml` 围栏，不会上溯到 monorepo，维持原状。
+- 气隙环境要支持"带外部依赖的 CODE 步"，需要另外的 store 烘焙策略（本次不涉及；现状是按步响亮失败）。

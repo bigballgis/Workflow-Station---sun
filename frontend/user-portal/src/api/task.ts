@@ -3,15 +3,9 @@ import { request } from './request'
 
 import type { ListColumnFilterRequest, ListColumnMeta } from '@platform-shared/list/columnMeta'
 
-export interface PortalListGroup {
-  label: string | null
-  count: number
-}
-
 export interface PortalListPage<T> {
   columns: ListColumnMeta[]
   content: T[]
-  groups?: PortalListGroup[]
   page: number
   size: number
   totalElements: number
@@ -23,7 +17,6 @@ export interface CompletedTaskQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
   keyword?: string
   startTime?: string
   endTime?: string
@@ -35,8 +28,7 @@ export interface TodoTaskQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
-  /** Toolbar keyword; ANDs with column filters. Matches request id / task / step / process / initiator. */
+  /** Toolbar keyword; ANDs with column filters. Matches visible cells: request id, function unit, task name, assignment type, create time. */
   keyword?: string
   assignmentTypes?: string[]
   priorities?: string[]
@@ -88,6 +80,11 @@ export interface TaskInfo {
   assigneeName?: string
   delegatorId?: string
   delegatorName?: string
+  delegatedTargetType?: string
+  delegatedTo?: string
+  delegatedBuCode?: string
+  delegatedRoleCode?: string
+  delegated?: boolean
   initiatorId: string
   initiatorName?: string
   priority: string
@@ -98,6 +95,10 @@ export interface TaskInfo {
   formKey?: string
   /** Request ID: main-table configured human-readable identifier (e.g. HR-2026-001); null when unconfigured. */
   requestId?: string | null
+  /** Function Unit code pinned at process start. */
+  functionUnitCode?: string | null
+  /** Catalog display name; cell shows name || code. */
+  functionUnitName?: string | null
   variables?: Record<string, any>
   claimed?: boolean
   originalAssignmentType?: string
@@ -260,11 +261,17 @@ export function completeTask(taskId: string, data: TaskCompleteRequest) {
   return request.post(`/tasks/${taskId}/complete`, data)
 }
 
+export interface TaskDelegateRequest {
+  delegatedTargetType?: 'USER' | 'BU_ROLE'
+  delegatedTo?: string
+  delegatedBuCode?: string
+  delegatedRoleCode?: string
+  reason?: string
+}
+
 // Delegate task
-export function delegateTask(taskId: string, delegateId: string, reason?: string) {
-  return request.post(`/tasks/${taskId}/delegate`, null, {
-    params: { delegateId, reason }
-  })
+export function delegateTask(taskId: string, body: TaskDelegateRequest) {
+  return request.post(`/tasks/${taskId}/delegate`, body)
 }
 
 // Transfer task

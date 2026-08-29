@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.platform.security.util.SecurityContextUtils;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationRule;
@@ -17,6 +18,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,41 +27,66 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
- * Queries tasks delegated to a user: active delegation rules come from the local database,
- * the delegators' pending tasks from the workflow engine (in parallel per delegator).
- * Extracted from {@link TaskQueryComponent}.
+ * Queries tasks delegated to a user: standing rules plus engine single-task overlay
+ * (USER {@code delegated_to} or current workspace BU+Role). Does not rewrite assignee.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DelegatedTaskQueryComponent {
 
-    /** Page size for a single delegator task fetch (avoid oversized responses) */
     private static final int DELEGATOR_ENGINE_PAGE_SIZE = 200;
 
     private final WorkflowEngineClient workflowEngineClient;
     private final DelegationRuleRepository delegationRuleRepository;
 
-    /**
-     * Query tasks delegated to a user.
-     *
-     * Delegation info is stored in the local database and combined with Flowable task info.
-     */
     public List<TaskInfo> queryDelegatedTasks(String userId) {
-        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
 
-        // Get active delegation rules where the current user is the delegate
+        LinkedHashMap<String, TaskInfo> byId = new LinkedHashMap<>();
+        for (TaskInfo overlay : loadEngineRuntimeOverlay(userId)) {
+            if (overlay.getTaskId() != null) {
+                byId.putIfAbsent(overlay.getTaskId(), overlay);
+            }
+        }
+        for (TaskInfo standing : loadStandingRuleDelegatedTasks(userId)) {
+            if (standing.getTaskId() != null) {
+                byId.putIfAbsent(standing.getTaskId(), standing);
+            }
+        }
+        return new ArrayList<>(byId.values());
+    }
+
+    private List<TaskInfo> loadEngineRuntimeOverlay(String userId) {
+        String buId = SecurityContextUtils.getCurrentActiveBusinessUnitId().orElse(null);
+        String roleId = SecurityContextUtils.getCurrentActiveRoleId().orElse(null);
+        Optional<Map<String, Object>> result = workflowEngineClient.getDelegatedRuntimeTasks(buId, roleId);
+        if (result.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(result.get());
+        if (tasks == null || tasks.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<TaskInfo> out = new ArrayList<>();
+        for (Map<String, Object> taskMap : tasks) {
+            TaskInfo mapped = EngineTaskMapper.convertMapToTaskInfo(taskMap);
+            mapped.setAssignmentType("DELEGATED");
+            mapped.setDelegatorId(mapped.getDelegatorId() != null ? mapped.getDelegatorId() : mapped.getAssignee());
+            mapped.setDelegatorName(mapped.getDelegatorName() != null ? mapped.getDelegatorName() : mapped.getAssigneeName());
+            out.add(mapped);
+        }
+        return out;
+    }
+
+    private List<TaskInfo> loadStandingRuleDelegatedTasks(String userId) {
         List<DelegationRule> delegations = delegationRuleRepository
                 .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
-
         if (delegations.isEmpty()) {
             return Collections.emptyList();
         }
-
-        // Get list of delegators
         Set<String> delegatorIds = delegations.stream()
                 .map(DelegationRule::getDelegatorId)
                 .collect(Collectors.toSet());
@@ -67,9 +94,6 @@ public class DelegatedTaskQueryComponent {
         SecurityContext ctx = SecurityContextHolder.getContext();
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
-        // 说明：每个 delegator 的叶子任务只做 workflow-engine HTTP（不碰 DB），不参与连接放大，
-        // 因此保留 commonPool；也避免“运行在有界池上的 delegatedFuture 又向同一有界池提交子任务并 join”
-        // 造成的有界池自等待死锁（父占满线程等子、子在队列无线程可跑）。
         List<CompletableFuture<List<TaskInfo>>> futures = delegatorIds.stream()
                 .map(delegatorId -> CompletableFuture.supplyAsync(() -> RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(
                         ctx, attrs, () -> loadDelegatedTasksForDelegator(userId, delegatorId))))
@@ -83,14 +107,9 @@ public class DelegatedTaskQueryComponent {
                 log.warn("Failed to join delegated task future: {}", e.getMessage());
             }
         }
-
         return delegatedTasks;
     }
 
-    /**
-     * Convert one delegator's pending tasks into a list with the delegate as assignee
-     * (single delegator; can query multiple delegators in parallel).
-     */
     private List<TaskInfo> loadDelegatedTasksForDelegator(String delegateUserId, String delegatorId) {
         List<TaskInfo> delegatedTasks = new ArrayList<>();
         try {
@@ -118,7 +137,8 @@ public class DelegatedTaskQueryComponent {
                             .bpmnBusinessUnitId(taskInfo.getBpmnBusinessUnitId())
                             .bpmnRoleIds(taskInfo.getBpmnRoleIds())
                             .assignmentType("DELEGATED")
-                            .assignee(delegateUserId)
+                            .assignee(taskInfo.getAssignee())
+                            .assigneeName(taskInfo.getAssigneeName())
                             .delegatorId(delegatorId)
                             .delegatorName(delegatorId)
                             .initiatorId(taskInfo.getInitiatorId())

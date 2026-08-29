@@ -77,18 +77,6 @@ class AutomationFlowListQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(new AutomationFlowListQueryRequest(
-                0, 20, null, List.of(), null, null, "readiness"));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT ?");
-        assertThat(groupSql).doesNotContain("OFFSET");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-        assertThat(groupSql).contains("WHEN f.\"publishedVersionId\" IS NULL THEN 'DRAFT'");
-    }
-
-    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
         assertThatThrownBy(() -> component.query(request(null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
@@ -96,7 +84,7 @@ class AutomationFlowListQuerySqlTest {
     }
 
     private static AutomationFlowListQueryRequest request(String keyword, List<ListColumnFilter> filters) {
-        return new AutomationFlowListQueryRequest(0, 20, keyword, filters, null, null, null);
+        return new AutomationFlowListQueryRequest(0, 20, keyword, filters, null, null);
     }
 
     private String pageSql() {

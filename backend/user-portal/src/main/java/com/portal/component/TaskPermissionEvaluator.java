@@ -27,6 +27,7 @@ public class TaskPermissionEvaluator {
 
     private final DelegationRuleRepository delegationRuleRepository;
     private final WorkflowEngineClient workflowEngineClient;
+    private final WorkspaceTaskFilterComponent workspaceTaskFilterComponent;
 
     /**
      * Runtime empty pool: no assignee, candidates, groups, or assignmentTarget (matches Flowable identity links); do not tighten by assignmentType.
@@ -227,6 +228,10 @@ public class TaskPermissionEvaluator {
             return true;
         }
 
+        if (isSingleTaskDelegatee(task, userId, portalUsername)) {
+            return true;
+        }
+
         // BU Role claim pool: processing rights belong to the claimer only. The assignee match
         // above already let the holder through; everyone else in the role stays read-only whether
         // the request is free (must claim first) or held by a colleague.
@@ -293,6 +298,31 @@ public class TaskPermissionEvaluator {
         }
 
         return false;
+    }
+
+    /**
+     * Single-task USER or current-workspace BU+Role delegatee (not standing rules).
+     */
+    public boolean isSingleTaskDelegatee(TaskInfo task, String userId, String portalUsername) {
+        if (task == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        if (task.getDelegatedTo() != null && matchesPortalIdentity(task.getDelegatedTo(), userId, portalUsername)) {
+            return true;
+        }
+        boolean buRole = "BU_ROLE".equalsIgnoreCase(blankToNull(task.getDelegatedTargetType()))
+                || (task.getDelegatedTo() == null
+                        && task.getDelegatedBuCode() != null && !task.getDelegatedBuCode().isBlank()
+                        && task.getDelegatedRoleCode() != null && !task.getDelegatedRoleCode().isBlank());
+        return buRole && workspaceTaskFilterComponent.workspacePairMatches(
+                task.getDelegatedBuCode(), task.getDelegatedRoleCode(), userId);
+    }
+
+    private static String blankToNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return raw.trim();
     }
 
     /**

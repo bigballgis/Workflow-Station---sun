@@ -16,10 +16,7 @@ public final class TaskInfoQueryFilters {
     }
 
     public static boolean needsRequestIdEnrichment(TaskQueryRequest request) {
-        var filters = TaskQueryColumnFilters.normalize(request.getFilters());
-        return filters.stream().anyMatch(f -> "requestId".equals(f.field()))
-                || (request.getKeyword() != null && !request.getKeyword().isBlank())
-                || (request.getSortBy() != null && "requestId".equalsIgnoreCase(request.getSortBy().trim()));
+        return TaskQueryColumnFilters.needsPortalDerivedTaskColumns(request);
     }
 
     public static List<TaskInfo> apply(List<TaskInfo> tasks, TaskQueryRequest request) {

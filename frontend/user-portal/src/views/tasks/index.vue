@@ -36,8 +36,8 @@
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
-            :span-method="spanMethod(2 + (leftoverWidth > 0 ? 1 : 0))"
-            :row-class-name="rowClassName"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
             @selection-change="handleSelectionChange"
           >
             <template #empty>
@@ -56,7 +56,6 @@
             <el-table-column
               type="selection"
               width="50"
-              :selectable="(row: object) => !isListGroupHeaderRow(row)"
             />
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -69,7 +68,6 @@
                 <ListColumnHeader
                   :column="col"
                   :sort="sort.field === col.field ? sort.direction : null"
-                  :grouped="groupBy === col.field"
                   :filtered="!!columnFilters[col.field]"
                   :width="widthOf(col.field)"
                   :show-move="displayColumns.length > 1"
@@ -77,7 +75,6 @@
                   :can-move-right="colIndex < displayColumns.length - 1"
                   @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                   @clear-sort="onClearSort"
-                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                   @filter-open="openFilter(col.field)"
                   @clear-filter="onClearFilter(col.field)"
                   @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -86,22 +83,18 @@
                 />
               </template>
               <template #default="{ row }">
-                <template v-if="isListGroupHeaderRow(row)">
-                  <div class="group-header-cell">
-                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                    <span class="group-count">({{ row._groupCount }})</span>
-                  </div>
-                </template>
                 <el-link
-                  v-else-if="col.field === 'requestId'"
+                  v-if="col.field === 'requestId'"
                   type="primary"
                   @click="viewTask(row)"
                 >
                   {{ row.requestId || '-' }}
                 </el-link>
-                <template v-else-if="col.field === 'currentStepName'">
-                  {{ row.currentStepName || row.taskName || '-' }}
-                </template>
+                <span
+                  v-else-if="col.field === 'functionUnitCode'"
+                >
+                  {{ row.functionUnitName || row.functionUnitCode || '-' }}
+                </span>
                 <el-tag
                   v-else-if="col.field === 'assignmentType'"
                   size="small"
@@ -157,7 +150,6 @@
               </template>
               <template #default="{ row }">
                 <TodoClaimRowActions
-                  v-if="!isListGroupHeaderRow(row)"
                   :task="row"
                   :loading="actingTaskId === row.taskId"
                   @claim="handleClaim"
@@ -166,11 +158,6 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column
-              v-if="leftoverWidth > 0"
-              :width="leftoverWidth"
-              class-name="list-col-spacer"
-            />
           </el-table>
         </div>
       </div>
@@ -272,7 +259,6 @@ const {
   filterForm,
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -281,17 +267,13 @@ const {
   activeFilter,
   gridScrollRef,
   gridFits,
-  leftoverWidth,
+  gridTableHeight,
   gridInnerStyle,
   widthOf,
   setWidth,
   persistWidths,
   moveColumn,
   openFilter,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
   actionDialogVisible,
   actionDialogTitle,
   actionForm,
@@ -302,7 +284,6 @@ const {
   handleReset,
   onSort,
   onClearSort,
-  onGroup,
   onClearFilter,
   onFilterApply,
   onFilterClear,

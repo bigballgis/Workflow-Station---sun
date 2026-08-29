@@ -28,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -219,6 +220,32 @@ public class TaskController {
         TaskListResult result = taskManagerComponent.getUserClaimPoolTasks(
                 resolvedUserId, page, pageSize, activeBusinessUnitId,
                 com.workflow.dto.request.EngineTaskListCriteria.empty());
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /**
+     * Running tasks delegated to the caller (USER) or the current workspace BU+Role pair.
+     */
+    @GetMapping("/delegated-runtime")
+    @Operation(summary = "Delegated runtime tasks",
+            description = "Single-task delegate overlay: delegated_to = caller, or BU+Role matching workspace codes")
+    public ResponseEntity<ApiResponse<TaskListResult>> getDelegatedRuntimeTasks(
+            @RequestParam(value = "activeBusinessUnitId", required = false) String activeBusinessUnitId,
+            @RequestParam(value = "activeRoleId", required = false) String activeRoleId) {
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        String buId = StringUtils.hasText(activeBusinessUnitId)
+                ? activeBusinessUnitId
+                : WorkflowActorResolver.currentActiveBusinessUnitId().orElse(null);
+        String roleId = StringUtils.hasText(activeRoleId)
+                ? activeRoleId
+                : WorkflowActorResolver.currentActiveRoleId().orElse(null);
+        String buCode = StringUtils.hasText(buId) ? adminCenterClient.getBusinessUnitCodeById(buId.trim()) : null;
+        String roleCode = StringUtils.hasText(roleId) ? adminCenterClient.getRoleCodeById(roleId.trim()) : null;
+        TaskListResult result = taskManagerComponent.getDelegatedRuntimeTasks(actor.get(), buCode, roleCode);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
@@ -430,12 +457,17 @@ public class TaskController {
         if (request.containsKey("sendNotification") && request.get("sendNotification") instanceof Boolean b) {
             sendNotification = b;
         }
-        
+        String onBehalfOfUserId = null;
+        if (request.get("onBehalfOfUserId") instanceof String raw && !raw.isBlank()) {
+            onBehalfOfUserId = raw.trim();
+        }
+
         log.info("Completing task: {} by user: {}", taskId, userId);
         log.debug("Variables received (keys only): {}",
                 variables != null ? variables.keySet() : null);
-        
-        TaskAssignmentResult result = taskManagerComponent.completeTask(taskId, userId, variables, sendNotification);
+
+        TaskAssignmentResult result = taskManagerComponent.completeTask(
+                taskId, userId, variables, sendNotification, onBehalfOfUserId);
         
         if (result.isSuccess()) {
             return ResponseEntity.ok(ApiResponse.success(result));

@@ -3,7 +3,6 @@ package com.portal.component;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.CompletedTaskQueryRequest;
 import com.portal.dto.PageResponse;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.TaskHistoryInfo;
 import com.portal.dto.TaskInfo;
@@ -35,6 +34,7 @@ import java.util.Optional;
 public class TaskQueryComponent {
 
     static final String TODO_LIST_KEY = "todo-tasks";
+    static final String TO_CLAIM_LIST_KEY = "to-claim-tasks";
 
     private final WorkflowEngineClient workflowEngineClient;
     private final DelegatedTaskQueryComponent delegatedTaskQueryComponent;
@@ -53,10 +53,6 @@ public class TaskQueryComponent {
     }
 
     public PageResponse<TaskInfo> queryTasks(TaskQueryRequest request) {
-        return queryTasks(request, null);
-    }
-
-    PageResponse<TaskInfo> queryTasks(TaskQueryRequest request, List<PortalListGroup> groupsOut) {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException(
                     "Flowable engine unavailable, please check if workflow-engine-core service is running");
@@ -70,11 +66,11 @@ public class TaskQueryComponent {
         int size = request.getSize() != null ? request.getSize() : 20;
         EngineTaskPushdown.Criteria push = EngineTaskPushdown.from(request);
         if (isDelegatedOnlyAssignmentFilter(assignmentTypes)) {
-            return queryDelegatedTasksOnlyPage(userId, request, page, size, groupsOut);
+            return queryDelegatedTasksOnlyPage(userId, request, page, size);
         }
         return EngineTaskPushdown.canFullyPush(request)
                 ? queryTasksEngineWindowMine(userId, request, assignmentTypes, page, size, push)
-                : queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size, groupsOut);
+                : queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size);
     }
 
     public PortalListPage<TaskInfo> queryTodoList(String userId, TodoTaskQueryRequest request) {
@@ -83,15 +79,13 @@ public class TaskQueryComponent {
         if (!isDelegatedOnlyAssignmentFilter(adapted.getAssignmentTypes())) {
             return todoListQueryComponent.queryTodoList(userId, request);
         }
-        List<PortalListGroup> groups = new ArrayList<>();
-        PageResponse<TaskInfo> page = queryTasks(adapted, groups);
-        requireGroupsWhenGrouped(request, page, groups);
+        PageResponse<TaskInfo> page = queryTasks(adapted);
         long total = page.getTotalElements();
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, TODO_LIST_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, TODO_LIST_KEY, request.page(), request.size(), total,
                 elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(), List.copyOf(groups),
+        return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(),
                 request.page(), request.size(), total);
     }
 
@@ -141,16 +135,8 @@ public class TaskQueryComponent {
                 && "DELEGATED".equalsIgnoreCase(assignmentTypes.get(0));
     }
 
-    private static void requireGroupsWhenGrouped(
-            TodoTaskQueryRequest request, PageResponse<TaskInfo> page, List<PortalListGroup> groups) {
-        if (request.groupBy() != null && !request.groupBy().isBlank()
-                && page.getTotalElements() > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty todo result");
-        }
-    }
-
     private PageResponse<TaskInfo> queryDelegatedTasksOnlyPage(
-            String userId, TaskQueryRequest request, int page, int size, List<PortalListGroup> groupsOut) {
+            String userId, TaskQueryRequest request, int page, int size) {
         List<TaskInfo> allTasks = new ArrayList<>(queryDelegatedTasks(userId));
         allTasks = mineTaskScanner.applyPortalPostEngineFilters(userId, allTasks);
         if (TaskInfoQueryFilters.needsRequestIdEnrichment(request)) {
@@ -158,9 +144,6 @@ public class TaskQueryComponent {
         }
         allTasks = TaskInfoQueryFilters.apply(allTasks, request);
         allTasks = TaskInfoListOps.applySorting(allTasks, request);
-        if (groupsOut != null && request.getGroupBy() != null && !request.getGroupBy().isBlank()) {
-            groupsOut.addAll(TaskInfoListOps.groupsOf(allTasks, request.getGroupBy()));
-        }
         List<TaskInfo> pagedTasks = TaskInfoListOps.pageOf(allTasks, page, size);
         requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
@@ -168,12 +151,8 @@ public class TaskQueryComponent {
     }
 
     private PageResponse<TaskInfo> queryTasksFullEnginePagesMine(
-            String userId, TaskQueryRequest request, List<String> assignmentTypes, int page, int size,
-            List<PortalListGroup> groupsOut) {
+            String userId, TaskQueryRequest request, List<String> assignmentTypes, int page, int size) {
         List<TaskInfo> filteredSorted = mineTaskScanner.scanMineTasks(userId, request, assignmentTypes, size);
-        if (groupsOut != null && request.getGroupBy() != null && !request.getGroupBy().isBlank()) {
-            groupsOut.addAll(TaskInfoListOps.groupsOf(filteredSorted, request.getGroupBy()));
-        }
         List<TaskInfo> pagedTasks = new ArrayList<>(TaskInfoListOps.pageOf(filteredSorted, page, size));
         requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
@@ -193,7 +172,7 @@ public class TaskQueryComponent {
         if (pageTasks.size() != engineTasks.size() || engineTasks.size() > size) {
             log.info("[PERF] engine window unusable after post-filter (engine={} filtered={} size={}); fullScan",
                     engineTasks.size(), pageTasks.size(), size);
-            return queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size, null);
+            return queryTasksFullEnginePagesMine(userId, request, assignmentTypes, page, size);
         }
         log.info("[PERF] query.window mine engine={}ms postFilter={}ms engineTasks={} total={} push={}",
                 (tJoin - t0) / 1_000_000L, (System.nanoTime() - tJoin) / 1_000_000L,

@@ -7,6 +7,9 @@ import {
   type ListColumnMeta,
 } from '@platform-shared/list/columnMeta'
 import { listHeaderMenuItems } from '@platform-shared/list/listHeaderMenu'
+import en from '@/i18n/locales/en'
+import zhCN from '@/i18n/locales/zh-CN'
+import zhTW from '@/i18n/locales/zh-TW'
 
 function column(overrides: Partial<ListColumnMeta> = {}): ListColumnMeta {
   return {
@@ -15,35 +18,52 @@ function column(overrides: Partial<ListColumnMeta> = {}): ListColumnMeta {
     kind: 'ENUM',
     filterable: true,
     sortable: true,
-    groupable: true,
     operators: ['eq', 'ne', 'isNull', 'isNotNull'],
     ...overrides,
   }
 }
 
 describe('listHeaderMenuItems — declaration-driven menu', () => {
-  it('groupable:false column has NO group entry at all', () => {
-    const items = listHeaderMenuItems(column({ kind: 'TEXT', groupable: false }), {})
+  it('TEXT column has sort and filter, never a group entry', () => {
+    const items = listHeaderMenuItems(column({ kind: 'TEXT' }), {})
     expect(items.map((i) => i.command)).toEqual(['sortAsc', 'sortDesc', 'filter'])
+    expect(items.some((i) => i.command === 'group')).toBe(false)
   })
 
-  it('groupable column toggles between groupBy and ungroup labels', () => {
-    const grouped = listHeaderMenuItems(column(), { grouped: true })
-    expect(grouped.find((i) => i.command === 'group')?.labelKey).toBe('sharedList.ungroup')
-    const ungrouped = listHeaderMenuItems(column(), { grouped: false })
-    expect(ungrouped.find((i) => i.command === 'group')?.labelKey).toBe('sharedList.groupBy')
-  })
+  it.each(['ENUM', 'USER', 'BOOLEAN', 'NUMBER', 'DATETIME'] as const)(
+    '%s column never emits a group command',
+    (kind) => {
+      const items = listHeaderMenuItems(column({ kind }), {
+        sort: 'ASC',
+        filtered: true,
+        showMove: true,
+        canMoveLeft: true,
+        canMoveRight: true,
+      })
+      const commands = items.map((i) => i.command)
+      expect(commands).not.toContain('group')
+      expect(commands).toEqual([
+        'sortAsc',
+        'sortDesc',
+        'clearSort',
+        'filter',
+        'clearFilter',
+        'moveLeft',
+        'moveRight',
+      ])
+    },
+  )
 
   it('sortable:false column has no sort entries; DATETIME uses older/newer labels', () => {
     expect(
       listHeaderMenuItems(column({ sortable: false }), {}).map((i) => i.command),
-    ).toEqual(['group', 'filter'])
+    ).toEqual(['filter'])
 
-    const dateItems = listHeaderMenuItems(column({ kind: 'DATETIME', groupable: false }), {})
+    const dateItems = listHeaderMenuItems(column({ kind: 'DATETIME' }), {})
     expect(dateItems.find((i) => i.command === 'sortAsc')?.labelKey).toBe('sharedList.sortOlder')
     expect(dateItems.find((i) => i.command === 'sortDesc')?.labelKey).toBe('sharedList.sortNewer')
 
-    const numberItems = listHeaderMenuItems(column({ kind: 'NUMBER', groupable: false }), {})
+    const numberItems = listHeaderMenuItems(column({ kind: 'NUMBER' }), {})
     expect(numberItems.find((i) => i.command === 'sortAsc')?.labelKey).toBe('sharedList.sortSmallToLarge')
     expect(numberItems.find((i) => i.command === 'sortDesc')?.labelKey).toBe('sharedList.sortLargeToSmall')
   })
@@ -72,10 +92,10 @@ describe('listHeaderMenuItems — declaration-driven menu', () => {
     expect(items.find((i) => i.command === 'moveRight')?.disabled).toBe(false)
   })
 
-  it('non-filterable, non-sortable, non-groupable column yields an empty menu', () => {
+  it('non-filterable, non-sortable column yields an empty menu', () => {
     expect(
       listHeaderMenuItems(
-        column({ filterable: false, sortable: false, groupable: false }),
+        column({ filterable: false, sortable: false }),
         {},
       ),
     ).toEqual([])
@@ -100,5 +120,16 @@ describe('columnMeta operator helpers', () => {
     expect(operatorLabelKey('gte')).toBe('sharedList.opGte')
     expect(operatorLabelKey('today')).toBe('sharedList.opToday')
     expect(() => operatorLabelKey('regexMatch')).toThrow(/out of sync/)
+  })
+})
+
+describe('sharedList i18n — no header Group copy', () => {
+  it.each([
+    ['en', en.sharedList],
+    ['zh-CN', zhCN.sharedList],
+    ['zh-TW', zhTW.sharedList],
+  ] as const)('%s has no groupBy / ungroup keys', (_locale, sharedList) => {
+    expect(sharedList).not.toHaveProperty('groupBy')
+    expect(sharedList).not.toHaveProperty('ungroup')
   })
 })

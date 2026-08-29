@@ -21,8 +21,8 @@
             style="width: 100%"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
-            :span-method="spanMethod(leftoverWidth > 0 ? 1 : 0)"
-            :row-class-name="rowClassName"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
           >
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -35,7 +35,6 @@
                 <ListColumnHeader
                   :column="col"
                   :sort="sort.field === col.field ? sort.direction : null"
-                  :grouped="groupBy === col.field"
                   :filtered="!!columnFilters[col.field]"
                   :width="widthOf(col.field)"
                   :show-move="displayColumns.length > 1"
@@ -43,7 +42,6 @@
                   :can-move-right="colIndex < displayColumns.length - 1"
                   @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                   @clear-sort="onClearSort"
-                  @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                   @filter-open="openFilter(col.field)"
                   @clear-filter="onClearFilter(col.field)"
                   @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -52,14 +50,8 @@
                 />
               </template>
               <template #default="{ row }">
-                <template v-if="isListGroupHeaderRow(row)">
-                  <div class="group-header-cell">
-                    <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                    <span class="group-count">({{ row._groupCount }})</span>
-                  </div>
-                </template>
-                <el-tag
-                  v-else-if="col.field === 'status'"
+<el-tag
+                  v-if="col.field === 'status'"
                   :type="deployStatusType(row.status)"
                 >
                   {{ row.status }}
@@ -69,11 +61,6 @@
                 </template>
               </template>
             </el-table-column>
-            <el-table-column
-              v-if="leftoverWidth > 0"
-              :width="leftoverWidth"
-              class-name="list-col-spacer"
-            />
           </el-table>
         </div>
       </div>
@@ -118,10 +105,10 @@ const props = defineProps<{
 const {
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
-  leftoverWidth,
+ 
   gridFits,
+  gridTableHeight,
   gridInnerStyle,
   activeFilterColumn,
   activeFilter,
@@ -135,13 +122,8 @@ const {
   openFilter,
   applySort,
   clearSort,
-  applyGroup,
   applyFilter,
   clearFilter,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = props.grid
 
 const emit = defineEmits<{ fetch: [] }>()
@@ -158,10 +140,6 @@ function onSort(field: string, direction: 'ASC' | 'DESC') {
 }
 function onClearSort() {
   clearSort()
-  emit('fetch')
-}
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
   emit('fetch')
 }
 function onClearFilter(field: string) {

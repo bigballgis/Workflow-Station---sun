@@ -192,14 +192,13 @@ export function createTaskDetailMiLinkChild(ctx: TaskDetailCtx): TaskDetailMiLin
       if (bindingMatchesMiSubTableName(b, scopeName) || isMiDashboardSubTableBinding(b)) {
         continue
       }
+      // An empty link-child binding means the user added no rows — never fabricate one. Save used to
+      // insert `[{}]` here so the inline form-below-table strip had a row to bind its fields to, but
+      // that strip is gone (rows are added/edited through the Link Form modal), so the placeholder had
+      // no editor to fill it: seeding stamped it with the participant FK and allocation gave it a real
+      // UUID, so every Save on an empty People table persisted one blank phantom row (#1531).
       const rowCount = Array.isArray(b.data) ? b.data.length : 0
-      if (rowCount === 0) {
-        if (shouldAllocate) {
-          b.data = [{}]
-        } else {
-          continue
-        }
-      }
+      if (rowCount === 0) continue
       // Sibling participants' placeholder rows live in this same binding. Seeding/allocating them with the
       // CURRENT participant FK makes them falsely claim this participant; collapse then merges all into one
       // corrupt row (cross-participant id_idw leak). Only seed rows that belong to (or are fresh for) the

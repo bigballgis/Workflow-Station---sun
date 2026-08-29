@@ -283,7 +283,7 @@ import { useI18n } from 'vue-i18n'
 import { Plus, Refresh, Connection, ArrowDown } from '@element-plus/icons-vue'
 import DesignerListTable from '@/components/designer-list/DesignerListTable.vue'
 import type { DesignerListTableColumn } from '@/composables/useDesignerListGrid'
-import { resolveFormTableId } from '@/utils/formDesigner'
+import { buildViewsFormGroups } from '@/utils/formDesigner'
 
 const props = withDefaults(
   defineProps<{
@@ -344,9 +344,17 @@ function sceneOf(row: any): SceneTab {
 
 const activeScene = ref<SceneTab>(props.initialScene)
 
+// DETAIL is counted from the groups rather than from `forms`: a form bound to the MAIN table or to
+// no table is not rendered, so counting it here would label the tab with rows it never shows.
 const sceneCounts = computed(() => {
   const counts: Record<SceneTab, number> = { TASK: 0, REQUEST: 0, DETAIL: 0 }
-  for (const f of props.forms) counts[sceneOf(f)]++
+  for (const f of props.forms) {
+    const scene = sceneOf(f)
+    if (scene !== 'DETAIL') counts[scene]++
+  }
+  // Derived from the rendered groups rather than recomputed: the badge must match the rows the
+  // tab actually draws, and reusing the computed keeps one grouping pass per render instead of two.
+  counts.DETAIL = viewsFormGroups.value.reduce((total, group) => total + group.forms.length, 0)
   return counts
 })
 
@@ -357,59 +365,9 @@ function viewsUsingForm(formId: number): any[] {
   return props.mainTableViews.filter(v => Number(v?.detailFormId) === Number(formId))
 }
 
-/**
- * Views Form content, grouped by table: the detail forms bound to each table alongside that
- * table's views, so a view's detail form is chosen next to the forms that can serve it.
- *
- * <p>Unlike View Design's grouping, empty groups are kept — a table whose views have no detail
- * form yet is exactly where a developer needs to make a selection. Forms with no resolvable
- * table get a trailing bucket instead of disappearing.
- */
-const viewsFormGroups = computed(() => {
-  const detailForms = props.forms.filter(f => f?.formType === 'DETAIL')
-  const formsByTable = new Map<number, any[]>()
-  const unbound: any[] = []
-  for (const form of detailForms) {
-    const tableId = resolveFormTableId(form)
-    if (tableId == null) {
-      unbound.push(form)
-      continue
-    }
-    const list = formsByTable.get(tableId) || []
-    list.push(form)
-    formsByTable.set(tableId, list)
-  }
-
-  const viewsByTable = new Map<number, any[]>()
-  for (const view of props.mainTableViews) {
-    const tableId = Number(view?.mainTableId)
-    if (!Number.isFinite(tableId)) continue
-    const list = viewsByTable.get(tableId) || []
-    list.push(view)
-    viewsByTable.set(tableId, list)
-  }
-
-  const groups = props.tables.map(table => ({
-    key: `table-${table.id}`,
-    label: table.tableDisplayName || table.tableName,
-    forms: formsByTable.get(table.id) || [],
-    views: (viewsByTable.get(table.id) || [])
-      .slice()
-      .sort((a, b) => String(a.viewName || '').localeCompare(String(b.viewName || ''))),
-  }))
-  // Only tables that can hold a form or a view are worth a heading.
-  const meaningful = groups.filter(g => g.forms.length > 0 || g.views.length > 0)
-
-  if (unbound.length > 0) {
-    meaningful.push({
-      key: 'unbound',
-      label: t('form.unboundTableGroup'),
-      forms: unbound,
-      views: [],
-    })
-  }
-  return meaningful
-})
+const viewsFormGroups = computed(() =>
+  buildViewsFormGroups(props.forms, props.tables, props.mainTableViews),
+)
 
 function boundTableText(row: any): string {
   const primary = props.getPrimaryBinding(row)

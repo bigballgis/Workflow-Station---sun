@@ -75,6 +75,25 @@ public class RecordNoteController {
                 recordNoteComponent.list(userId, target, Math.max(page, 0), safeSize, processInstanceId));
     }
 
+    /**
+     * Separate from the list so the panel can hide its Add button up front. Reading and writing
+     * notes follow different rules (see {@code RecordNoteComponent#checkWriteAccess}), and letting
+     * the user compose a note only to have the POST rejected is the worst way to convey that.
+     */
+    @Operation(summary = "Whether the caller may add a note to this target")
+    @GetMapping("/can-add")
+    public ApiResponse<Boolean> canAdd(
+            @CurrentUserId String userId,
+            @RequestParam String targetType,
+            @RequestParam String targetId,
+            @RequestParam(required = false) String tableKind,
+            @RequestParam String tableId,
+            @RequestParam(required = false) String functionUnitId,
+            @RequestParam(required = false) String processInstanceId) {
+        NoteTarget target = target(targetType, targetId, tableKind, tableId, functionUnitId);
+        return ApiResponse.success(recordNoteComponent.canAddNote(userId, target, processInstanceId));
+    }
+
     @Operation(summary = "Note detail including sanitized rich-text body")
     @GetMapping("/{noteId}")
     public ApiResponse<NoteDetail> detail(@CurrentUserId String userId, @PathVariable String noteId,

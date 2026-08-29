@@ -300,6 +300,12 @@ public class WorkflowEngineTaskClient {
      */
     public Optional<Map<String, Object>> completeTask(String taskId, String userId,
                                                        String action, Map<String, Object> variables) {
+        return completeTask(taskId, userId, action, variables, null);
+    }
+
+    public Optional<Map<String, Object>> completeTask(String taskId, String userId,
+                                                       String action, Map<String, Object> variables,
+                                                       String onBehalfOfUserId) {
         if (!engine.isAvailable()) {
             return Optional.empty();
         }
@@ -310,6 +316,9 @@ public class WorkflowEngineTaskClient {
             request.put("userId", userId);
             request.put("action", action);
             request.put("variables", variables);
+            if (onBehalfOfUserId != null && !onBehalfOfUserId.isBlank()) {
+                request.put("onBehalfOfUserId", onBehalfOfUserId.trim());
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -372,16 +381,24 @@ public class WorkflowEngineTaskClient {
      */
     public Optional<Map<String, Object>> delegateTask(String taskId, String delegatorId,
                                                        String delegateId, String reason) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("delegatedBy", delegatorId);
+        body.put("delegatedTo", delegateId);
+        body.put("delegatedTargetType", "USER");
+        body.put("delegationReason", reason);
+        body.put("reason", reason);
+        return delegateTask(taskId, body);
+    }
+
+    public Optional<Map<String, Object>> delegateTask(String taskId, Map<String, Object> body) {
         if (!engine.isAvailable()) {
             return Optional.empty();
         }
         try {
             String url = engine.engineUrl() + "/api/v1/tasks/" + SafeUrlInput.requirePathToken(taskId) + "/delegate";
 
-            Map<String, Object> request = new HashMap<>();
-            request.put("delegatedBy", delegatorId);
-            request.put("delegatedTo", delegateId);
-            request.put("reason", reason);
+            Map<String, Object> request = body != null ? new HashMap<>(body) : new HashMap<>();
+            request.put("taskId", taskId);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -397,6 +414,33 @@ public class WorkflowEngineTaskClient {
             }
         } catch (Exception e) {
             log.warn("Failed to delegate task in workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    public Optional<Map<String, Object>> getDelegatedRuntimeTasks(String activeBusinessUnitId, String activeRoleId) {
+        if (!engine.isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            UriComponentsBuilder ub = UriComponentsBuilder
+                    .fromHttpUrl(engine.engineUrl() + "/api/v1/tasks/delegated-runtime");
+            if (activeBusinessUnitId != null && !activeBusinessUnitId.isBlank()) {
+                ub.queryParam("activeBusinessUnitId", activeBusinessUnitId);
+            }
+            if (activeRoleId != null && !activeRoleId.isBlank()) {
+                ub.queryParam("activeRoleId", activeRoleId);
+            }
+            ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
+                    ub.encode().build().toUriString(),
+                    HttpMethod.GET,
+                    engine.authorizedGetEntity(),
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get delegated runtime tasks: {}", e.getMessage());
         }
         return Optional.empty();
     }

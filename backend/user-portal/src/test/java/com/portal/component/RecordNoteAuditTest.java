@@ -10,6 +10,7 @@ import com.portal.enums.ChangeType;
 import com.portal.service.RecordNoteService;
 import com.portal.service.UserDisplayNameResolver;
 import com.portal.util.RecordNoteAuditSummary;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -61,6 +62,14 @@ class RecordNoteAuditTest {
 
     private final ProcessInstanceInfo instance = new ProcessInstanceInfo();
 
+    @BeforeEach
+    void setUp() {
+        instance.setId(INSTANCE_ID);
+        // The write gate resolves the audit grant by function unit code, so the fixture must carry
+        // one for any test that actually creates a note.
+        instance.setFunctionUnitCode("FU_DEMO");
+    }
+
     private NoteTarget tableTarget() {
         return NoteTarget.builder()
                 .targetType(RecordNote.TARGET_TABLE)
@@ -100,6 +109,9 @@ class RecordNoteAuditTest {
     void tableScopeCreateAuditsAgainstTheTargetInstance() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
+        // Writing a note needs an audit grant on the active role; these tests are about where the
+        // audit row is anchored, so the writer simply holds one.
+        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(eq("u1"), any())).thenReturn(true);
         when(recordNoteService.createComment(any(), any(), any(), any(), any(), anyString(), any()))
                 .thenReturn(NoteItem.builder().id("n1").noteType(RecordNote.TYPE_COMMENT)
                         .bodyText("Hello reviewer").build());
@@ -116,6 +128,7 @@ class RecordNoteAuditTest {
         when(processComponent.getProcessDetail(ROW_ID)).thenReturn(null);
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
+        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(eq("u1"), any())).thenReturn(true);
         // Row-id targets carry no resolvable instance, so note access adds no gate of its own.
         MockMultipartFile file = new MockMultipartFile(
                 "files", "report.pdf", "application/pdf", "x".getBytes(StandardCharsets.UTF_8));
@@ -303,6 +316,7 @@ class RecordNoteAuditTest {
     void inlineImageUploadsAreNotAuditedSeparately() {
         when(processComponent.getProcessDetail(INSTANCE_ID)).thenReturn(instance);
         when(processComponent.canAuditProcessDetail(eq("u1"), any())).thenReturn(true);
+        when(functionUnitAccessComponent.canAuditFunctionUnitAsActiveRole(eq("u1"), any())).thenReturn(true);
         MockMultipartFile img = new MockMultipartFile(
                 "file", "shot.png", "image/png", "x".getBytes(StandardCharsets.UTF_8));
         when(recordNoteService.createAttachment(any(), any(), anyBoolean(), anyString(), any()))

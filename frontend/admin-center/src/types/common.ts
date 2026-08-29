@@ -15,16 +15,10 @@ export interface PageResult<T> {
   number: number
 }
 
-/** Shared-list page: column declaration + this page's rows + whole-set group counts. */
-export interface AdminListGroup {
-  label: string | null
-  count: number
-}
-
+/** Shared-list page: column declaration + this page's rows. */
 export interface AdminListPage<T> {
   columns: ListColumnMeta[]
   content: T[]
-  groups?: AdminListGroup[]
   page: number
   size: number
   totalElements: number

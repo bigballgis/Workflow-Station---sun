@@ -178,7 +178,11 @@ export function createTaskDetailState(options: { taskId: string }) {
   const currentAction = ref('')
   const actionForm = reactive({
     targetUserId: '',
-    reason: ''
+    reason: '',
+    targetType: 'USER' as 'USER' | 'BU_ROLE',
+    delegatedBuId: '',
+    delegatedBuCode: '',
+    delegatedRoleCode: ''
   })
 
   // User search

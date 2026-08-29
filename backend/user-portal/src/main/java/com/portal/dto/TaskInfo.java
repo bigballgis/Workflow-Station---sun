@@ -86,6 +86,18 @@ public class TaskInfo {
     /** 委托人名称 */
     private String delegatorName;
 
+    /** USER or BU_ROLE; null = not a single-task delegate overlay */
+    private String delegatedTargetType;
+
+    /** USER delegatee id; null for BU_ROLE */
+    private String delegatedTo;
+
+    private String delegatedBuCode;
+    private String delegatedRoleCode;
+
+    /** Engine flag: wf_extended_task_info is delegated */
+    private Boolean delegated;
+
     /** 发起人ID */
     private String initiatorId;
 
@@ -121,6 +133,17 @@ public class TaskInfo {
      * 由后端 RequestIdEnricher 填充;主表未配置时为 null(前端列表渲染 '-')。
      */
     private String requestId;
+
+    /**
+     * Function Unit code pinned at process start ({@code up_process_instance.function_unit_code}).
+     */
+    private String functionUnitCode;
+
+    /**
+     * Catalog display name from {@code sys_function_units.name}. Null when lookup misses;
+     * the To Do cell shows {@code functionUnitName || functionUnitCode}.
+     */
+    private String functionUnitName;
 
     /** 完成时间（已处理任务） */
     private LocalDateTime completedTime;

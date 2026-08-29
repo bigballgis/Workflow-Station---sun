@@ -2,10 +2,21 @@
   <el-dialog
     v-model="visible"
     :title="title"
-    width="500px"
+    width="560px"
     class="task-action-dialog"
-    @opened="$emit('opened')"
+    @opened="onOpened"
   >
+    <template #header>
+      <div class="task-action-dialog-title">
+        <span class="el-dialog__title">{{ title }}</span>
+        <DesignerHelpLink
+          v-if="currentAction === 'delegate'"
+          path="/task-delegate"
+          :ariaLabel="$t('task.guideLinkAria')"
+          test-id="task-delegate-guide-link"
+        />
+      </div>
+    </template>
     <el-form
       :model="formData"
       label-width="auto"
@@ -13,7 +24,23 @@
       class="task-action-form"
     >
       <el-form-item
-        v-show="currentAction !== 'urge'"
+        v-if="currentAction === 'delegate'"
+        :label="$t('task.delegateTargetType')"
+      >
+        <el-radio-group
+          v-model="formData.targetType"
+          @change="onTargetTypeChange"
+        >
+          <el-radio value="USER">
+            {{ $t('task.delegateSpecifyUser') }}
+          </el-radio>
+          <el-radio value="BU_ROLE">
+            {{ $t('task.delegateSpecifyBuRole') }}
+          </el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item
+        v-show="showUserSelect"
         :label="$t('task.targetUser')"
       >
         <el-select
@@ -27,6 +54,48 @@
             :key="user.id"
             :label="$t('task.userOptionFormat', { name: user.name, username: user.username })"
             :value="user.id"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item
+        v-if="showBuRoleSelect"
+        :label="$t('task.delegateBusinessUnit')"
+        :error="buLoadError"
+      >
+        <el-cascader
+          v-model="formData.delegatedBuId"
+          :options="buTree"
+          :props="buCascaderProps"
+          :placeholder="$t('task.selectBusinessUnit')"
+          :loading="buLoading"
+          filterable
+          clearable
+          :teleported="true"
+          style="width: 100%"
+          @change="onBuChange"
+          @visible-change="onBuVisibleChange"
+        />
+      </el-form-item>
+      <el-form-item
+        v-if="showBuRoleSelect"
+        :label="$t('task.delegateRole')"
+        :error="roleLoadError"
+      >
+        <el-select
+          v-model="formData.delegatedRoleCode"
+          :placeholder="$t('task.selectRole')"
+          :loading="roleLoading"
+          :disabled="!formData.delegatedBuId"
+          filterable
+          clearable
+          :teleported="true"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="role in roleOptions"
+            :key="role.value"
+            :label="role.label"
+            :value="role.value"
           />
         </el-select>
       </el-form-item>
@@ -58,7 +127,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ElMessage, type CascaderValue } from 'element-plus'
+import { permissionApi, type BusinessUnit, type RoleInfo } from '@/api/permission'
+import DesignerHelpLink from '@/components/DesignerHelpLink.vue'
 
 interface UserOption {
   id: string | number
@@ -66,11 +139,20 @@ interface UserOption {
   username: string
 }
 
+export interface TaskActionForm {
+  targetUserId: string
+  reason: string
+  targetType?: 'USER' | 'BU_ROLE'
+  delegatedBuId?: string
+  delegatedBuCode?: string
+  delegatedRoleCode?: string
+}
+
 const props = defineProps<{
   modelValue: boolean
   title: string
   currentAction: string
-  formData: { targetUserId: string; reason: string }
+  formData: TaskActionForm
   userOptions: UserOption[]
   submitting: boolean
 }>()
@@ -81,7 +163,32 @@ const emit = defineEmits<{
   (e: 'opened'): void
 }>()
 
+const { t } = useI18n()
 const visible = ref(props.modelValue)
+const buTree = ref<BusinessUnit[]>([])
+const buIdToCode = ref<Record<string, string>>({})
+const roleOptions = ref<Array<{ label: string; value: string }>>([])
+const buLoading = ref(false)
+const roleLoading = ref(false)
+const buLoadError = ref('')
+const roleLoadError = ref('')
+const skipGlobalError = { skipGlobalErrorHandler: true } as const
+const buCascaderProps = {
+  value: 'id',
+  label: 'name',
+  children: 'children',
+  checkStrictly: true,
+  emitPath: false,
+}
+
+const isDelegateBuRole = computed(() =>
+  props.currentAction === 'delegate' && (props.formData.targetType || 'USER') === 'BU_ROLE')
+const showUserSelect = computed(() => {
+  if (props.currentAction === 'urge') return false
+  if (props.currentAction === 'delegate') return !isDelegateBuRole.value
+  return true
+})
+const showBuRoleSelect = computed(() => isDelegateBuRole.value)
 
 watch(() => props.modelValue, (val) => {
   visible.value = val
@@ -90,10 +197,99 @@ watch(() => props.modelValue, (val) => {
 watch(visible, (val) => {
   emit('update:modelValue', val)
 })
+
+function indexBuTree(list: BusinessUnit[]) {
+  for (const bu of list || []) {
+    const id = String(bu.id)
+    buIdToCode.value[id] = (bu.code && bu.code.trim()) ? bu.code.trim() : id
+    if (bu.children && bu.children.length) indexBuTree(bu.children)
+  }
+}
+
+async function loadBusinessUnits() {
+  if (buTree.value.length > 0) return
+  buLoading.value = true
+  buLoadError.value = ''
+  try {
+    const resp = await permissionApi.getBusinessUnitsTree(skipGlobalError) as { data?: BusinessUnit[] } | BusinessUnit[]
+    const tree = Array.isArray(resp) ? resp : (resp?.data ?? [])
+    buTree.value = Array.isArray(tree) ? tree : []
+    buIdToCode.value = {}
+    indexBuTree(buTree.value)
+  } catch {
+    buTree.value = []
+    buIdToCode.value = {}
+    buLoadError.value = t('task.delegateBuLoadFailed')
+    ElMessage.error(t('task.delegateBuLoadFailed'))
+  } finally {
+    buLoading.value = false
+  }
+}
+
+async function loadRolesForBu(buId: string) {
+  roleOptions.value = []
+  roleLoadError.value = ''
+  if (!buId) return
+  roleLoading.value = true
+  try {
+    const roleResp = await permissionApi.getBusinessUnitRoles(buId, skipGlobalError) as { data?: RoleInfo[] } | RoleInfo[]
+    const roles = Array.isArray(roleResp) ? roleResp : (roleResp?.data ?? [])
+    roleOptions.value = (Array.isArray(roles) ? roles : [])
+      .filter(r => r && r.code)
+      .map(r => ({ label: r.name || r.code, value: r.code }))
+  } catch {
+    roleOptions.value = []
+    roleLoadError.value = t('task.delegateRoleLoadFailed')
+    ElMessage.error(t('task.delegateRoleLoadFailed'))
+  } finally {
+    roleLoading.value = false
+  }
+}
+
+function onBuVisibleChange(open: boolean) {
+  if (open && buTree.value.length === 0) {
+    void loadBusinessUnits()
+  }
+}
+
+function onTargetTypeChange() {
+  props.formData.targetUserId = ''
+  props.formData.delegatedBuId = ''
+  props.formData.delegatedBuCode = ''
+  props.formData.delegatedRoleCode = ''
+  roleOptions.value = []
+  roleLoadError.value = ''
+  if (isDelegateBuRole.value) {
+    void loadBusinessUnits()
+  }
+}
+
+async function onBuChange(value: CascaderValue | null | undefined) {
+  const raw = Array.isArray(value) ? value[value.length - 1] : value
+  const id = raw == null || raw === '' ? '' : String(raw)
+  props.formData.delegatedBuId = id
+  props.formData.delegatedBuCode = id ? (buIdToCode.value[id] || id) : ''
+  props.formData.delegatedRoleCode = ''
+  await loadRolesForBu(id)
+}
+
+function onOpened() {
+  emit('opened')
+  if (isDelegateBuRole.value) {
+    void loadBusinessUnits()
+  }
+}
 </script>
 
 <style lang="scss" scoped>
-/* Styles previously in global unscoped block — now scoped to this component */
+.task-action-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 28px;
+}
+
 :deep(.task-action-form) {
   .el-form-item__label {
     white-space: nowrap;

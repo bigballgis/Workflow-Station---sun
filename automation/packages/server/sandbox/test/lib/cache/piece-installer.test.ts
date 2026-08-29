@@ -109,69 +109,88 @@ afterEach(async () => {
 })
 
 describe('pieceInstaller', () => {
-    it('batch install succeeds — all pieces marked ready', async () => {
+    it('installs each piece in its own directory — all pieces marked ready', async () => {
         const piece1 = makePiece('@activepieces/piece-a')
         const piece2 = makePiece('@activepieces/piece-b')
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
 
-        mockInstall.mockResolvedValueOnce({ output: '' })
+        mockInstall.mockResolvedValueOnce({ output: '' }).mockResolvedValueOnce({ output: '' })
 
-        await installer.install({ pieces: [piece1, piece2], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [piece1, piece2], ...bundleSource })
 
-        expect(mockInstall).toHaveBeenCalledOnce()
+        expect(mockInstall).toHaveBeenCalledTimes(2)
         expect(await pathExists(readyFilePath(piece1))).toBe(true)
         expect(await pathExists(readyFilePath(piece2))).toBe(true)
     })
 
-    it('batch fails with good and bad piece — good piece marked ready, bad piece rolled back', async () => {
+    // HERMES-PATCH-032 regression: a filtered install at the SHARED workspace root re-resolves
+    // every other member, so importing a zero-dependency piece pulled the dependencies of pieces
+    // installed long before it and hit the fail-closed registry (UAT, 71s, ERR_PNPM_META_FETCH_FAIL).
+    // The cwd must be the piece's own directory and the workspace must be ignored — never the root.
+    it('never installs at the shared workspace root — own directory, --ignore-workspace, no filters', async () => {
+        const piece1 = makePiece('@activepieces/piece-a')
+        const piece2 = makePiece('piece-b-unscoped')
+        const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
+
+        mockInstall.mockResolvedValueOnce({ output: '' }).mockResolvedValueOnce({ output: '' })
+
+        await installer.install({ pieces: [piece1, piece2], ...bundleSource })
+
+        expect(mockInstall.mock.calls.map(([params]) => params)).toEqual([
+            { path: pieceDirPath(piece1), filtersPath: [], ignoreWorkspace: true },
+            { path: pieceDirPath(piece2), filtersPath: [], ignoreWorkspace: true },
+        ])
+    })
+
+    it('one piece fails — the other is still marked ready, the failed one is rolled back', async () => {
         const good = makePiece('@activepieces/piece-good')
         const bad = makePiece('@activepieces/piece-bad')
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
 
         mockInstall
-            .mockRejectedValueOnce(new Error('workspace:* resolve error'))  // batch attempt
-            .mockResolvedValueOnce({ output: '' })                           // good individual
-            .mockRejectedValueOnce(new Error('workspace:* resolve error'))  // bad individual
+            .mockResolvedValueOnce({ output: '' })
+            .mockRejectedValueOnce(new Error('ERR_PNPM_NO_OFFLINE_META'))
 
-        const error = await installer.install({ pieces: [good, bad], includeFilters: false, ...bundleSource }).catch(e => e as Error)
+        const error = await installer.install({ pieces: [good, bad], ...bundleSource }).catch(e => e as Error)
 
         expect(error).toBeInstanceOf(Error)
         expect(error.message).toContain('@activepieces/piece-bad@1.0.0')
         expect(error.message).not.toContain('@activepieces/piece-good@1.0.0')
-        expect(mockInstall).toHaveBeenCalledTimes(3)
+        // pnpm's own message must survive: it is the only cause Admin Center can show.
+        expect(error.message).toContain('ERR_PNPM_NO_OFFLINE_META')
+        expect(mockInstall).toHaveBeenCalledTimes(2)
 
         expect(await pathExists(readyFilePath(good))).toBe(true)
         expect(await pathExists(pieceDirPath(bad))).toBe(false)
     })
 
-    it('batch fails with both pieces bad — both rolled back, error names both', async () => {
+    it('both pieces fail — both rolled back, error names both', async () => {
         const piece1 = makePiece('@activepieces/piece-x')
         const piece2 = makePiece('@activepieces/piece-y')
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
 
         mockInstall
-            .mockRejectedValueOnce(new Error('workspace:* resolve error'))  // batch
-            .mockRejectedValueOnce(new Error('workspace:* resolve error'))  // piece-x individual
-            .mockRejectedValueOnce(new Error('workspace:* resolve error'))  // piece-y individual
+            .mockRejectedValueOnce(new Error('resolve error'))
+            .mockRejectedValueOnce(new Error('resolve error'))
 
-        const error = await installer.install({ pieces: [piece1, piece2], includeFilters: false, ...bundleSource }).catch(e => e as Error)
+        const error = await installer.install({ pieces: [piece1, piece2], ...bundleSource }).catch(e => e as Error)
 
         expect(error).toBeInstanceOf(Error)
         expect(error.message).toContain('@activepieces/piece-x@1.0.0')
         expect(error.message).toContain('@activepieces/piece-y@1.0.0')
-        expect(mockInstall).toHaveBeenCalledTimes(3)
+        expect(mockInstall).toHaveBeenCalledTimes(2)
 
         expect(await pathExists(pieceDirPath(piece1))).toBe(false)
         expect(await pathExists(pieceDirPath(piece2))).toBe(false)
     })
 
-    it('single piece fails — rolled back immediately, no individual retry', async () => {
+    it('single piece fails — rolled back immediately, no retry', async () => {
         const piece = makePiece('@activepieces/piece-solo')
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
 
         mockInstall.mockRejectedValueOnce(new Error('install failure'))
 
-        await expect(installer.install({ pieces: [piece], includeFilters: true, ...bundleSource })).rejects.toThrow('install failure')
+        await expect(installer.install({ pieces: [piece], ...bundleSource })).rejects.toThrow('install failure')
 
         expect(mockInstall).toHaveBeenCalledOnce()
         expect(await pathExists(pieceDirPath(piece))).toBe(false)
@@ -185,7 +204,7 @@ describe('pieceInstaller', () => {
         await writeFile(join(pieceDir, 'ready'), 'true')
 
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
-        await installer.install({ pieces: [piece], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [piece], ...bundleSource })
 
         expect(mockInstall).not.toHaveBeenCalled()
     })
@@ -206,7 +225,7 @@ describe('pieceInstaller', () => {
         mockInstall.mockResolvedValueOnce({ output: '' })
 
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
-        await installer.install({ pieces: [piece], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [piece], ...bundleSource })
 
         expect(mockInstall).toHaveBeenCalledOnce()
         expect(await pathExists(readyFilePath(piece))).toBe(true)
@@ -223,17 +242,17 @@ describe('pieceInstaller', () => {
         // Once per expected install — a persistent mockResolvedValue would leak into the tests
         // that run after this one, since clearAllMocks() keeps implementations.
         mockInstall.mockResolvedValueOnce({ output: '' }).mockResolvedValueOnce({ output: '' })
-        await installer.install({ pieces: [piece], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [piece], ...bundleSource })
         expect(mockInstall).toHaveBeenCalledOnce()
 
         // pnpm reports success without creating node_modules here (install is mocked), so stand
         // the installed layout up by hand, then take it away the way a sibling install would.
         await mkdir(join(pieceDirPath(piece), 'node_modules', piece.pieceName), { recursive: true })
-        await installer.install({ pieces: [piece], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [piece], ...bundleSource })
         expect(mockInstall).toHaveBeenCalledOnce()
 
         await rm(join(pieceDirPath(piece), 'node_modules', piece.pieceName), { recursive: true, force: true })
-        await installer.install({ pieces: [piece], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [piece], ...bundleSource })
         expect(mockInstall).toHaveBeenCalledTimes(2)
     })
 
@@ -251,7 +270,7 @@ describe('pieceInstaller', () => {
         mockInstall.mockResolvedValueOnce({ output: '' })
 
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
-        await installer.install({ pieces: [piece], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [piece], ...bundleSource })
 
         expect(mockInstall).toHaveBeenCalledOnce()
     })
@@ -262,7 +281,7 @@ describe('pieceInstaller', () => {
 
         mockInstall.mockResolvedValueOnce({ output: '' })
 
-        await installer.install({ pieces: [piece], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [piece], ...bundleSource })
 
         expect(mockInstall).toHaveBeenCalledOnce()
         expect(await pathExists(readyFilePath(piece))).toBe(true)
@@ -285,12 +304,10 @@ describe('pieceInstaller', () => {
 
         mockInstall.mockResolvedValueOnce({ output: '' })
 
-        await installer.install({ pieces: [good, poison], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [good, poison], ...bundleSource })
 
         expect(mockInstall).toHaveBeenCalledOnce()
-        expect(mockInstall.mock.calls[0]?.[0].filtersPath).toEqual([
-            expect.stringContaining('@activepieces/piece-good-1.0.0'),
-        ])
+        expect(mockInstall.mock.calls[0]?.[0].path).toContain('@activepieces/piece-good-1.0.0')
         expect(await pathExists(readyFilePath(good))).toBe(true)
     })
 
@@ -298,7 +315,7 @@ describe('pieceInstaller', () => {
         const poison = makePiece('../../../common/pieces/@activepieces/piece-algolia', '0.0.3')
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
 
-        await installer.install({ pieces: [poison], includeFilters: true, ...bundleSource })
+        await installer.install({ pieces: [poison], ...bundleSource })
 
         expect(mockInstall).not.toHaveBeenCalled()
     })
@@ -312,42 +329,37 @@ describe('pieceInstaller', () => {
 
         mockInstall.mockResolvedValueOnce({ output: '' })
 
-        await installer.install({ pieces: [goodA, poison1, goodB, poison2], includeFilters: true, ...bundleSource })
+        mockInstall.mockResolvedValueOnce({ output: '' })
+        await installer.install({ pieces: [goodA, poison1, goodB, poison2], ...bundleSource })
 
-        expect(mockInstall).toHaveBeenCalledOnce()
-        const filtersPath = mockInstall.mock.calls[0]?.[0].filtersPath as string[]
-        expect(filtersPath).toHaveLength(2)
-        expect(filtersPath.some(f => f.includes('@activepieces/piece-a-1.0.0'))).toBe(true)
-        expect(filtersPath.some(f => f.includes('piece-b-unscoped-1.0.0'))).toBe(true)
-        expect(filtersPath.some(f => f.includes('piece-x'))).toBe(false)
-        expect(filtersPath.some(f => f.includes('piece-y'))).toBe(false)
+        expect(mockInstall).toHaveBeenCalledTimes(2)
+        const installedPaths = mockInstall.mock.calls.map(([params]) => params.path as string)
+        expect(installedPaths.some(p => p.includes('@activepieces/piece-a-1.0.0'))).toBe(true)
+        expect(installedPaths.some(p => p.includes('piece-b-unscoped-1.0.0'))).toBe(true)
+        expect(installedPaths.some(p => p.includes('piece-x'))).toBe(false)
+        expect(installedPaths.some(p => p.includes('piece-y'))).toBe(false)
     })
 
-    it('individual fallback always passes --filter path regardless of includeFilters', async () => {
-        const piece1 = makePiece('@activepieces/piece-filter-a')
-        const piece2 = makePiece('@activepieces/piece-filter-b')
+    // A failing piece must not stop the pieces after it from being attempted: a flow provision
+    // installs several at once, and one bad tarball used to be enough to leave the rest missing.
+    it('keeps installing after a failure — every piece is attempted', async () => {
+        const piece1 = makePiece('@activepieces/piece-first')
+        const piece2 = makePiece('@activepieces/piece-second')
+        const piece3 = makePiece('@activepieces/piece-third')
         const installer = pieceInstaller(fakeLog, testWorkspace, fakeGetSettings)
 
         mockInstall
-            .mockRejectedValueOnce(new Error('batch error'))
+            .mockRejectedValueOnce(new Error('bad tarball'))
             .mockResolvedValueOnce({ output: '' })
             .mockResolvedValueOnce({ output: '' })
 
-        // Use includeFilters: false so the batch call has no filters
-        await installer.install({ pieces: [piece1, piece2], includeFilters: false, ...bundleSource })
+        const error = await installer.install({ pieces: [piece1, piece2, piece3], ...bundleSource }).catch(e => e as Error)
 
+        expect(error.message).toContain('@activepieces/piece-first@1.0.0')
         expect(mockInstall).toHaveBeenCalledTimes(3)
-
-        // Batch call uses empty filtersPath because includeFilters is false
-        expect(mockInstall.mock.calls[0]?.[0]).toMatchObject({ filtersPath: [] })
-
-        // Individual calls must always include the --filter path (sequential order)
-        expect(mockInstall.mock.calls[1]?.[0]).toMatchObject({
-            filtersPath: [expect.stringContaining(`${piece1.pieceName}-${piece1.pieceVersion}`)],
-        })
-        expect(mockInstall.mock.calls[2]?.[0]).toMatchObject({
-            filtersPath: [expect.stringContaining(`${piece2.pieceName}-${piece2.pieceVersion}`)],
-        })
+        expect(await pathExists(pieceDirPath(piece1))).toBe(false)
+        expect(await pathExists(readyFilePath(piece2))).toBe(true)
+        expect(await pathExists(readyFilePath(piece3))).toBe(true)
     })
 })
 

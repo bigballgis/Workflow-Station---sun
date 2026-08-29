@@ -13,8 +13,7 @@ public record AutomationPieceListQueryRequest(
         String keyword,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public AutomationPieceListQueryRequest {
         if (page < 0) {

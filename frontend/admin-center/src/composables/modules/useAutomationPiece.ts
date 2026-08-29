@@ -13,16 +13,6 @@ import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const EXPAND_COL_WIDTH = 48
 const ACTIONS_COL_WIDTH = 140
-const PIECE_COL_WIDTHS: Record<string, number> = {
-  displayName: 110,
-  name: 140,
-  version: 130,
-  pieceType: 105,
-  disabled: 85,
-  actionCount: 90,
-  triggerCount: 90,
-  updated: 150,
-}
 
 export function useAutomationPiece() {
   const { t } = useI18n()
@@ -37,7 +27,6 @@ export function useAutomationPiece() {
   const grid = useAdminListGrid<AutomationPieceSummary>({
     storageKey: 'admin-list-layout:automation-pieces',
     extraWidth: EXPAND_COL_WIDTH + ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => PIECE_COL_WIDTHS[field] ?? 120,
   })
 
   const rowKey = (row: AutomationPieceSummary) => `${row.name}@${row.version}`

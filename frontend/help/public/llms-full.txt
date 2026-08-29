@@ -57,3 +57,19 @@ Order: open To Do → Claim, Claim all, or Unclaim all → edit and submit.
 
 Leader of that role, the business-unit Approver, and SYS_ADMIN can Force Unclaim someone else’s hold (confirm first). Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role.
 
+## Delegate a task (/help/task-delegate)
+
+You are Current Assignee. Delegate this one open task. You stay the assignee. Someone else can complete it on your behalf.
+
+This is not Transfer (that button still changes the assignee). This is not Setup → Delegations standing rules.
+
+Order: open the task from To Do → click Delegate → choose Specified user or Specified BU and Role → Confirm → the other person opens Delegated on To Do.
+
+Specified user: pick Target User. Extra line Delegated to that person. They see On behalf of you. You can still complete it yourself.
+
+Specified BU and Role: pick Business Unit then Role (both required; Role disabled until a unit is chosen). Visible and completable only when the header workspace is that same pair. Switching workspace hides it. System Administrator does not see every delegated task. No Claim after this kind of delegate.
+
+Unclaimed pool: Delegate is hidden until someone is assigned.
+
+Failures: Please select user; Please select both business unit and role; cannot delegate to yourself; completed tasks cannot be delegated.
+

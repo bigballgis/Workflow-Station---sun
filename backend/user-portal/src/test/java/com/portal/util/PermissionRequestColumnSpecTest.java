@@ -8,14 +8,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PermissionRequestColumnSpecTest {
 
     @Test
-    void closedValueColumnsAreGroupable() {
-        assertThat(PermissionRequestColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactlyInAnyOrder("requestType", "status", "applicantId", "submittedByUserId", "membershipType");
-    }
-
-    @Test
     void targetNameIsFilterableText() {
         assertThat(column("targetName").kind()).isEqualTo(Kind.TEXT);
         assertThat(column("targetName").filterable()).isTrue();

@@ -14,7 +14,7 @@ const {
   columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig,
   enableExport, restrictToInvolvedUsers, detailFormId, detailFormOptions, selectedBusinessUnitIds, selectedRoleIds,
   businessUnitOptions, roleOptions, accessOptionsLoading,
-  mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
+  mainTableName, isMainTableView, filterDialogVisible, addColumnPopoverVisible, thenSortField,
   dragOverIndex, dragSourceField, visibleColumns, displayFilterConditions,
   sortFieldOptions, filteredCatalog, filteredLookupCatalog, filteredLookupCatalogGroups,
   filteredFkCatalog, filteredFkCatalogGroups, previewRowCount,
@@ -610,7 +610,17 @@ const {
 
           <label class="section-label">{{ t('mainTableView.detailForm') }}</label>
 
+          <!-- A MAIN-table row is a request, so it opens the request detail page directly
+               instead of a designed form. No form to pick here. -->
+          <div
+            v-if="isMainTableView"
+            class="detail-form-hint"
+          >
+            {{ t('mainTableView.detailFormMainTableHint') }}
+          </div>
+
           <el-select
+            v-else
             v-model="detailFormId"
             clearable
             filterable

@@ -55,7 +55,6 @@ public class MineTaskListCache {
                 + String.valueOf(request.getFilters()) + '|'
                 + String.valueOf(request.getSortBy()) + '|'
                 + String.valueOf(request.getSortDirection()) + '|'
-                + String.valueOf(request.getGroupBy()) + '|'
                 + String.valueOf(request.getKeyword()) + '|'
                 + String.valueOf(request.getPriorities()) + '|'
                 + String.valueOf(request.getProcessTypes()) + '|'

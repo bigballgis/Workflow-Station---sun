@@ -83,15 +83,6 @@ class BiAssignmentListQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(request(null, null, List.of(), "targetType"));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
         assertThatThrownBy(() -> component.query(request(null, null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
@@ -100,12 +91,7 @@ class BiAssignmentListQuerySqlTest {
 
     private static BiAssignmentListQueryRequest request(String targetType, String title,
                                                         List<ListColumnFilter> filters) {
-        return request(targetType, title, filters, null);
-    }
-
-    private static BiAssignmentListQueryRequest request(String targetType, String title,
-                                                        List<ListColumnFilter> filters, String groupBy) {
-        return new BiAssignmentListQueryRequest(0, 20, targetType, title, filters, null, null, groupBy);
+        return new BiAssignmentListQueryRequest(0, 20, targetType, title, filters, null, null);
     }
 
     private String pageSql() {

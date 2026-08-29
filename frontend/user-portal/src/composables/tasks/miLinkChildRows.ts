@@ -13,6 +13,7 @@ import { isMiParticipantScopedSubTableBinding } from './subTableBindingKinds'
 import { getSavedSubTableRows } from './subTableSliceResolve'
 import {
   linkChildRowIsForeignParticipantPlaceholder,
+  miLinkChildRowBelongsToParticipant,
   miLinkChildRowBusinessFieldRank,
   miParentRowAlignsWithChildRow,
   resolveMiChildStructuralParentFk,
@@ -227,4 +228,68 @@ export function scopeMiLinkChildRowsForParentRow(
       typeof r === 'object' &&
       miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>),
   )
+}
+
+/** Participant-identity keys an MI host row (a collection/participant row) can carry. */
+const MI_HOST_ROW_PARTICIPANT_KEYS = [
+  'id_idw',
+  'rowId',
+  'participant_id',
+  'participantId',
+] as const
+
+/**
+ * True when a host row identifies ONE MI participant, i.e. scoping its nested child rows is meaningful.
+ *
+ * <p>Deliberately does NOT accept a bare {@code id}: plain (non-MI) link-form and nested-dialog hosts
+ * carry one too, and treating that as a participant key would start filtering sub-tables on forms that
+ * have no MI sub-process at all.
+ *
+ * <p>Also gates whether the cross-participant {@code binding.data} fallback may be used at all — for
+ * an MI participant host it must not be, since that pool holds every sibling sub-task's rows.
+ */
+export function hostRowIsMiParticipant(row: Record<string, unknown> | null | undefined): boolean {
+  if (!row || typeof row !== 'object') return false
+  for (const k of MI_HOST_ROW_PARTICIPANT_KEYS) {
+    if (normalizeMiLinkMatchId(row[k])) return true
+  }
+  return false
+}
+
+/**
+ * Scope a link-child slice (People, subtable2, …) to the MI participant row that hosts it.
+ *
+ * <p>Used by the render path for a sub-table nested inside an <b>Inline Form</b>: that form edits
+ * exactly one participant row, so its nested grid must show only that participant's child rows.
+ * Both slice sources need this — the nested {@code parentRow.__subTables__} map (which a stale BPMN
+ * copy or an older save can leave pooled across participants) and, critically, the flat top-level
+ * {@code binding.data} fallback, which is cross-participant by construction. Without it a participant
+ * who had added no rows of their own was shown — and could edit — a sibling sub-task's rows.
+ *
+ * <p>Rows carrying no participant identity at all are KEPT: those are freshly added rows whose
+ * structural FK has not been seeded yet (seeding happens at save, not on input), and dropping them
+ * would make a row vanish the moment the user typed it.
+ *
+ * <p>No-ops (returns the input unchanged) when the host row is not an MI participant row, so plain
+ * link-form / nested-dialog hosts and shared process-level tables keep today's behavior.
+ */
+export function scopeLinkChildRowsToMiHostRow(
+  hostRow: Record<string, unknown> | null | undefined,
+  candidateRows: unknown[],
+): unknown[] {
+  if (!Array.isArray(candidateRows) || candidateRows.length === 0) return candidateRows
+  if (!hostRowIsMiParticipant(hostRow)) return candidateRows
+
+  const pid = MI_HOST_ROW_PARTICIPANT_KEYS
+    .map(k => normalizeMiLinkMatchId(hostRow![k]))
+    .find(v => v != null)
+  if (!pid) return candidateRows
+
+  return candidateRows.filter(raw => {
+    if (!raw || typeof raw !== 'object') return true
+    const rec = raw as Record<string, unknown>
+    // No participant identity yet — a fresh row the user just added. Keep it.
+    if (!resolveMiChildStructuralParentFk(rec) && !normalizeMiLinkMatchId(rec.id_idw)) return true
+    return miLinkChildRowBelongsToParticipant(rec, pid)
+  })
 }

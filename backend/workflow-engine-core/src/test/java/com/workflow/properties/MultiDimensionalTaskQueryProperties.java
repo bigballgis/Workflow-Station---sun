@@ -126,7 +126,7 @@ public class MultiDimensionalTaskQueryProperties {
         for (ExtendedTaskInfo task : filteredTasks) {
             assertThat(task.getAssignmentType()).isEqualTo(AssignmentType.USER);
             assertThat(task.getAssignmentTarget()).isEqualTo(originalAssignee);
-            assertThat(task.getCurrentAssignee()).isEqualTo(userId);
+            assertThat(task.getCurrentAssignee()).isEqualTo(originalAssignee);
             assertThat(task.isDelegated()).isTrue();
         }
     }

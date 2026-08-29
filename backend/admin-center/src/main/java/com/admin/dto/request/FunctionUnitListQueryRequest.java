@@ -14,8 +14,7 @@ public record FunctionUnitListQueryRequest(
         String keyword,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public FunctionUnitListQueryRequest {
         if (page < 0) {

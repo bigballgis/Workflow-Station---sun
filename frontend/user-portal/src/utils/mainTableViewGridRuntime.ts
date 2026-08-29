@@ -1,7 +1,8 @@
 import type {
-  MainTableViewDataRow, MainTableViewFieldColumn, MainTableViewGroup,
+  MainTableViewDataRow, MainTableViewFieldColumn,
 } from '@/api/mainTableView'
 import { clampColumnWidth } from '@platform-shared/list/columnResizeCursor'
+import { headerFitColumnWidth, LIST_COLUMN_LAYOUT_STORE_VERSION } from '@platform-shared/list/columnWidthLayout'
 import type { ListColumnFilter, ListColumnMeta } from '@platform-shared/list/columnMeta'
 import { formatMainTableViewCell } from '@/utils/mainTableViewCsvExport'
 
@@ -17,18 +18,9 @@ export interface GridRuntimeState {
   columnWidths: Record<string, number>
   sort: { fieldName: string; direction: GridSortDirection } | null
   filters: Record<string, GridColumnFilter>
-  groupBy: string | null
 }
 
-export type GridDisplayRow =
-  | (MainTableViewDataRow & { _isGroupHeader?: false })
-  | {
-      _isGroupHeader: true
-      _groupLabel: string
-      _groupCount: number
-      processInstanceId?: string
-      values?: Record<string, unknown>
-    }
+export type GridDisplayRow = MainTableViewDataRow
 
 export function createDefaultGridRuntime(): GridRuntimeState {
   return {
@@ -36,7 +28,6 @@ export function createDefaultGridRuntime(): GridRuntimeState {
     columnWidths: {},
     sort: null,
     filters: {},
-    groupBy: null,
   }
 }
 
@@ -65,11 +56,23 @@ export function orderedColumns(
     .filter((c): c is MainTableViewFieldColumn => !!c)
 }
 
+/** Designer columnWidth, else header-fit. Session bases live in useListColumnLayout. */
+export function designedColumnWidth(col: MainTableViewFieldColumn): number {
+  if (col.columnWidth != null && col.columnWidth > 0) {
+    return clampColumnWidth(col.columnWidth)
+  }
+  return headerFitColumnWidth(col.displayLabel, col.kind)
+}
+
+/** Session drag → designer columnWidth → header-fit. This is the persisted **base**, not the leftover share. */
 export function columnWidth(
   col: MainTableViewFieldColumn,
   state: GridRuntimeState,
 ): number {
-  return clampColumnWidth(state.columnWidths[col.fieldName] ?? col.columnWidth ?? 120)
+  if (state.columnWidths[col.fieldName] != null) {
+    return clampColumnWidth(state.columnWidths[col.fieldName])
+  }
+  return designedColumnWidth(col)
 }
 
 export function setColumnWidth(
@@ -90,46 +93,6 @@ function cellText(row: MainTableViewDataRow, fieldName: string): string {
 }
 
 /**
- * Slot a header in front of each run of rows sharing a group value.
- *
- * The page only holds part of the result set, so the count on a header cannot be derived from the
- * rows in hand — it comes from the backend's GROUP BY over the same predicate the page was drawn
- * from. A label the backend did not count means the two disagree about the grouping expression,
- * which would silently understate a group; that is an error, not something to paper over.
- */
-export function insertGroupHeaders(
-  rows: MainTableViewDataRow[],
-  groupByField: string | null,
-  groups: MainTableViewGroup[],
-): GridDisplayRow[] {
-  if (!groupByField) return rows
-
-  const countByLabel = new Map(groups.map(g => [g.label ?? '', g.count]))
-  const out: GridDisplayRow[] = []
-  let currentLabel: string | null = null
-
-  for (const row of rows) {
-    const label = cellText(row, groupByField)
-    if (label !== currentLabel) {
-      const count = countByLabel.get(label)
-      if (count === undefined) {
-        throw new Error(
-          `Group "${label}" on ${groupByField} was not counted by the server — the page and its group counts came from different queries`,
-        )
-      }
-      out.push({
-        _isGroupHeader: true,
-        _groupLabel: label || '—',
-        _groupCount: count,
-      })
-      currentLabel = label
-    }
-    out.push(row)
-  }
-  return out
-}
-
-/**
  * The shared list header reads a column declaration, not this app's column DTO. The capability
  * flags are the backend's answer about what the query can do, so they are passed through as-is.
  */
@@ -140,24 +103,20 @@ export function toListColumnMeta(col: MainTableViewFieldColumn): ListColumnMeta 
     kind: col.kind,
     filterable: col.filterable,
     sortable: col.sortable,
-    groupable: col.groupable,
     operators: col.operators,
     options: col.options,
   }
 }
 
 /**
- * Remove any runtime state (groupBy, sort, filters) that references a field not present in the given
- * columns. Prevents a prior view's grouping/sort/filter from mis-rendering against another view's data.
+ * Remove any runtime state (sort, filters) that references a field not present in the given
+ * columns. Prevents a prior view's sort/filter from mis-rendering against another view's data.
  */
 export function pruneRuntimeToColumns(
   state: GridRuntimeState,
   columns: MainTableViewFieldColumn[],
 ): void {
   const valid = new Set(columns.map(c => c.fieldName))
-  if (state.groupBy && !valid.has(state.groupBy)) {
-    state.groupBy = null
-  }
   if (state.sort && !valid.has(state.sort.fieldName)) {
     state.sort = null
   }
@@ -182,19 +141,41 @@ export function moveColumn(
   state.columnOrder = next
 }
 
-export function isGroupHeaderRow(row: GridDisplayRow): row is Extract<GridDisplayRow, { _isGroupHeader: true }> {
-  return !!(row as { _isGroupHeader?: boolean })._isGroupHeader
-}
-
 /**
  * Only layout survives a reload — column order and widths.
  *
- * Filters, sort and grouping are questions the database answers, and it rejects a column the
+ * Filters and sort are questions the database answers, and it rejects a column the
  * current view no longer declares. Restoring them from an earlier session would therefore make
  * every load of a redesigned view fail with no way for the user to clear the offending state.
  * They are built fresh from the columns the backend just declared instead.
  */
 type PersistedGridLayout = Pick<GridRuntimeState, 'columnOrder' | 'columnWidths'>
+
+export function listLayoutStorageKey(viewId: number): string {
+  return `portal-list-layout:mtv:${viewId}`
+}
+
+/**
+ * Views used to persist widths inside {@code portal-mtv-layout:*}. Copy them once into
+ * the shared list-layout session so fill display still remembers the user's drag.
+ */
+export function migrateMtvWidthsToListLayout(viewId: number): void {
+  const listKey = listLayoutStorageKey(viewId)
+  try {
+    if (sessionStorage.getItem(listKey)) return
+    const raw = sessionStorage.getItem(`portal-mtv-layout:${viewId}`)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as PersistedGridLayout
+    const widths = parsed.columnWidths
+    if (!widths || Object.keys(widths).length === 0) return
+    sessionStorage.setItem(
+      listKey,
+      JSON.stringify({ v: LIST_COLUMN_LAYOUT_STORE_VERSION, columnWidths: widths }),
+    )
+  } catch {
+    // FALLBACK(ux): a corrupt legacy entry costs remembered widths, not the row data.
+  }
+}
 
 export function loadGridRuntimeFromSession(viewId: number): GridRuntimeState {
   try {

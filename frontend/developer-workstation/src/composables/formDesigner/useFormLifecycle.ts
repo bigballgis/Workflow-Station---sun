@@ -457,7 +457,12 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
       createFormStageIds.value = []
       loadForms()
     } catch (e: any) {
-      ElMessage.error(e.response?.data?.message || t('form.createFailed'))
+      // The envelope nests the reason under error.message, which the axios interceptor already
+      // lifts onto e.message. Reading data.message found nothing, so every failure — a duplicate
+      // form name most of all — surfaced as a bare "Create failed".
+      ElMessage.error(
+        e?.response?.data?.error?.message || e?.message || t('form.createFailed'),
+      )
     }
   }
 
@@ -488,6 +493,14 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
     // so they are pinned to To Do as well (the dialog also disables the My Requests option).
     if (type === 'DETAIL' || type === 'ACTION') {
       createForm.scene = 'TASK'
+    }
+    // The MAIN table drops out of the picker for DETAIL forms (its rows open the request
+    // detail page). Clear a selection made before the switch, or it would survive unseen.
+    if (type === 'DETAIL' && createForm.boundTableId != null) {
+      const selected = store.tables.find((table: any) => table.id === createForm.boundTableId)
+      if (String(selected?.tableType ?? '').toUpperCase() === 'MAIN') {
+        createForm.boundTableId = null
+      }
     }
   }
 

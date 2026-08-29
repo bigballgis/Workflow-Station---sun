@@ -62,7 +62,7 @@ public class UserPortalAuditController {
     }
 
     @PostMapping("/user-portal-audit-logs/list-query")
-    @Operation(summary = "Query user portal audit logs (true paging; column filters, sort and grouping)")
+    @Operation(summary = "Query user portal audit logs (true paging; column filters and sort)")
     public ApiResponse<Map<String, Object>> queryAuditLogList(
             @RequestBody @Valid UserPortalAuditListQueryRequest queryRequest) {
         return ApiResponse.success(userPortalAuditClient.queryAuditLogList(queryRequest));

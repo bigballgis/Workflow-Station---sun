@@ -16,7 +16,6 @@ function textColumn(overrides: Partial<ListColumnMeta> = {}): ListColumnMeta {
     kind: 'TEXT',
     filterable: true,
     sortable: true,
-    groupable: false,
     operators: ['contains', 'eq', 'isNull', 'between'],
     ...overrides,
   }
@@ -239,5 +238,21 @@ describe('shared ListFilterDialog', () => {
     confirmButton().click()
     await w.vm.$nextTick()
     expect(w.emitted('apply')).toEqual([[{ operator: 'eq', value: 'e26-id' }]])
+  })
+
+  it('USER contains still uses the people picker, not a free-text box', async () => {
+    const remoteSearch = vi.fn().mockResolvedValue([
+      { value: 'user-dev', label: 'Developer Tester (developer)' },
+    ])
+    await mountDialog(
+      textColumn({
+        kind: 'USER',
+        operators: ['eq', 'ne', 'contains', 'notContains', 'isNotNull', 'isNull'],
+      }),
+      { operator: 'contains', value: '' },
+      remoteSearch,
+    )
+    expect(document.querySelector('.list-filter-user')).toBeTruthy()
+    expect(document.querySelector('.list-filter-value:not(.list-filter-user)')).toBeNull()
   })
 })

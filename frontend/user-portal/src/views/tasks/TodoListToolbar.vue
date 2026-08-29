@@ -30,32 +30,6 @@
         :label="t('task.delegated')"
       />
     </el-select>
-    <span class="toolbar-label">{{ t('task.priority') }}</span>
-    <el-select
-      v-model="priorities"
-      multiple
-      clearable
-      data-test="todo-priorities"
-      :placeholder="t('common.all')"
-      style="width: 160px;"
-    >
-      <el-option
-        value="URGENT"
-        :label="t('task.urgent')"
-      />
-      <el-option
-        value="HIGH"
-        :label="t('task.high')"
-      />
-      <el-option
-        value="NORMAL"
-        :label="t('task.normal')"
-      />
-      <el-option
-        value="LOW"
-        :label="t('task.low')"
-      />
-    </el-select>
     <el-input
       v-model="keyword"
       :placeholder="t('common.search')"
@@ -91,7 +65,6 @@ import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(defineProps<{
   assignmentTypes: string[]
-  priorities: string[]
   keyword: string
   /** Tasks to Claim is a single BU Role pool, so the assignment-type filter has nothing to choose. */
   showAssignmentTypes?: boolean
@@ -101,7 +74,6 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'update:assignmentTypes': [value: string[]]
-  'update:priorities': [value: string[]]
   'update:keyword': [value: string]
   search: []
   reset: []
@@ -110,10 +82,6 @@ const emit = defineEmits<{
 const assignmentTypes = computed({
   get: () => props.assignmentTypes,
   set: (value: string[] | null) => emit('update:assignmentTypes', value ?? []),
-})
-const priorities = computed({
-  get: () => props.priorities,
-  set: (value: string[] | null) => emit('update:priorities', value ?? []),
 })
 const keyword = computed({
   get: () => props.keyword,

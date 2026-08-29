@@ -4,8 +4,10 @@ import com.platform.common.list.ListColumnFilter;
 import java.util.List;
 
 /**
- * One page of My Requests. {@code status} is the existing tab (RUNNING / COMPLETED / …);
- * it ANDs with the shared-header filters so a tab and a column filter never disagree.
+ * One page of My Requests or of a function-unit audit list. {@code status} is the
+ * existing tab (RUNNING / COMPLETED / …) and ANDs with the shared-header filters.
+ * {@code keyword} is the audit toolbar text search: OR across the cell text the
+ * list actually paints, AND with the tab and column filters. Blank is treated as absent.
  */
 public record MyApplicationQueryRequest(
         int page,
@@ -14,7 +16,7 @@ public record MyApplicationQueryRequest(
         List<ListColumnFilter> filters,
         String sortField,
         String sortDirection,
-        String groupBy) {
+        String keyword) {
 
     public MyApplicationQueryRequest {
         if (page < 0) {
@@ -30,6 +32,12 @@ public record MyApplicationQueryRequest(
         }
         if (sortField != null && sortDirection == null) {
             throw new IllegalArgumentException("sortDirection is required when sortField is set");
+        }
+        if (keyword != null) {
+            keyword = keyword.trim();
+            if (keyword.isEmpty()) {
+                keyword = null;
+            }
         }
     }
 }

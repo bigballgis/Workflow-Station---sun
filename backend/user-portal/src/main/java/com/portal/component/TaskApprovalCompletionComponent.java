@@ -47,6 +47,7 @@ public class TaskApprovalCompletionComponent {
     private final TaskFormComponent taskFormComponent;
     private final MiCollectionVariableBuilder miCollectionVariableBuilder;
     private final ProcessInstanceSyncComponent processInstanceSyncComponent;
+    private final TaskPermissionEvaluator taskPermissionEvaluator;
 
     /** Lazy: server-side formula columns; null in {@code new}-constructed tests skips recalculation. */
     @Lazy
@@ -57,7 +58,7 @@ public class TaskApprovalCompletionComponent {
      * Handles approval completion
      * Via WorkflowEngineClient calling Flowable engine
      */
-    void handleApproval(TaskInfo task, TaskCompleteRequest request, String userId) {
+    void handleApproval(TaskInfo task, TaskCompleteRequest request, String userId, String portalUsername) {
         String taskId = task.getTaskId();
         String action = request.getAction();
 
@@ -135,8 +136,14 @@ public class TaskApprovalCompletionComponent {
 
         log.info("Variables before calling workflowEngineClient: {}", variablesForEngine);
 
+        String onBehalfOfUserId = null;
+        if (taskPermissionEvaluator.isSingleTaskDelegatee(task, userId, portalUsername)
+                && task.getAssignee() != null && !task.getAssignee().isBlank()) {
+            onBehalfOfUserId = task.getAssignee();
+        }
+
         Optional<Map<String, Object>> result = workflowEngineClient.completeTask(
-                taskId, userId, action, variablesForEngine);
+                taskId, userId, action, variablesForEngine, onBehalfOfUserId);
 
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to complete task: " + taskId);

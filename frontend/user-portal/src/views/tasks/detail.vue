@@ -83,6 +83,7 @@
         :task-info="taskInfo"
         :format-date="formatDate"
         :get-current-assignee-display="getCurrentAssigneeDisplay"
+        :get-delegation-status-display="getDelegationStatusDisplay"
         :is-completed="isCompletedTask"
       />
 
@@ -432,13 +433,17 @@
         :show-implicit-save-action="showImplicitSaveAction"
         :saving-task-form="savingTaskForm"
         :actions="taskInfo.actions"
+        :can-delegate="!!String(taskInfo.assignee || '').trim()"
         :get-button-type="getButtonType"
         :get-icon-component="getIconComponent"
         :get-action-label="getActionLabel"
         @save="saveCurrentTaskFormWithMiPersist"
         @custom-action="handleCustomAction"
         @approve="handleApprove"
-@reject="handleReject" @delegate="handleDelegate" @transfer="handleTransfer" @urge="handleUrge"
+        @reject="handleReject"
+        @delegate="handleDelegate"
+        @transfer="handleTransfer"
+        @urge="handleUrge"
       />
     </div>
 
@@ -667,6 +672,7 @@ const taskDisplay = useTaskDisplay(taskInfo as any)
 const {
   formatDate,
   getCurrentAssigneeDisplay,
+  getDelegationStatusDisplay,
   getPriorityLabel,
   getPriorityType,
   getButtonType,
@@ -846,6 +852,7 @@ const customActions = useCustomActions({
   loadTaskDetail,
   resolveFormPopupContent: popupHelpers.resolveFormPopupContent,
   preparePopupContext: popupHelpers.preparePopupContext,
+  onDelegate: handleDelegate,
 })
 const {
   formPopupVisible,

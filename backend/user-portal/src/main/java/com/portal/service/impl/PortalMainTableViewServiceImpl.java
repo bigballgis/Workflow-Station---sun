@@ -25,7 +25,6 @@ import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataPage;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataRow;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewFieldColumn;
-import com.portal.dto.MainTableViewPortalDtos.MainTableViewGroup;
 import com.portal.util.MainTableViewFkDisplaySupport;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewSummary;
 import com.portal.entity.ProcessInstance;
@@ -129,7 +128,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         try {
             List<MainTableViewSummary> summaries = jdbcTemplate.query("""
                             SELECT v.id, v.view_name, v.is_default, v.filter_config::text AS filter_config,
-                                   v.main_table_id, v.detail_form_id,
+                                   v.main_table_id, v.detail_form_id, td.table_type,
                                    COALESCE(td.table_display_name, td.table_name) AS table_label
                             FROM dw_main_table_view_configs v
                             INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
@@ -146,6 +145,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                                 .isDefault(rs.getBoolean("is_default"))
                                 .tableId(rs.getObject("main_table_id") != null ? rs.getLong("main_table_id") : null)
                                 .tableLabel(rs.getString("table_label"))
+                                .tableType(rs.getString("table_type"))
                                 .enableExport(toolbarEnable(toolbar, "enableExport", true))
                                 .enableImport(toolbarEnable(toolbar, "enableImport", true))
                                 .detailFormId(rs.getObject("detail_form_id") != null
@@ -199,9 +199,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .total(page.total())
                 .page(request.page())
                 .size(request.size())
-                .groups(page.groups().stream()
-                        .map(g -> new MainTableViewGroup(g.label(), g.count()))
-                        .toList())
                 .build();
     }
 
@@ -227,9 +224,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 .total(page.total())
                 .page(request.page())
                 .size(request.size())
-                .groups(page.groups().stream()
-                        .map(g -> new MainTableViewGroup(g.label(), g.count()))
-                        .toList())
                 .build();
     }
 
@@ -244,7 +238,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 MainTableViewDerivedFilterSql.plainFilters(request.filters(), fields),
                 request.sortField(),
                 request.sortDirection(),
-                request.groupBy(),
                 request.search(),
                 searchableFields(fields, source),
                 involvementPredicate(userId, view),
@@ -265,7 +258,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 MainTableViewDerivedFilterSql.plainFilters(request.filters(), fields),
                 request.sortField(),
                 request.sortDirection(),
-                request.groupBy(),
                 request.search(),
                 searchableFields(fields, source),
                 involvementPredicate(userId, view),
@@ -833,7 +825,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     /**
      * Types for designed view columns. The bound table wins; other tables in the same Function
      * Unit fill names the bound table does not declare so a SUB view can still type a parent MAIN
-     * column it shows. A name that exists on none of them stays untyped (display-only) — we do
+     * column it shows. A name that exists on none of them is compared as TEXT — we do
      * not invent DATE/USER from the label.
      */
     private Map<String, String> fieldDataTypes(ViewDefinition view) {

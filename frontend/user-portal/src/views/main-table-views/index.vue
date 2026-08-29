@@ -5,6 +5,7 @@ import ListFilterDialog from '@platform-shared/list/ListFilterDialog.vue'
 import ListPagination from '@platform-shared/list/ListPagination.vue'
 import type { GridDisplayRow } from '@/utils/mainTableViewGridRuntime'
 import { useMainTableViewPage } from '@/composables/mainTableView/useMainTableViewPage'
+import { isMainTableView } from '@/composables/mainTableView/mainTableViewNav'
 import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 
 const {
@@ -15,15 +16,15 @@ const {
   importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
   selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns,
   viewListCollapsed, viewSearchKeyword, filteredGroupedViews, selectedTableKey, currentTableViewsSorted, handleSelectTable,
-  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, leftoverWidth, gridTableKey,
+  MTV_SELECTION_COL_WIDTH, gridInnerStyle, gridScrollRef, gridFits, gridTableHeight, gridTableKey,
   pagedRows, displayTotal, toListColumnMeta,
   handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
   isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, previewFile,
-  handleSortChange, handleClearSort, handleGroupChange, openFilterDialog, openWidthDialog, handleMoveColumn,
+  handleSortChange, handleClearSort, openFilterDialog, openWidthDialog, handleMoveColumn,
   applyColumnFilter, clearColumnFilter, clearFilterFromDialog, applyColumnWidth,
-  handleColumnResize, handleColumnResizeEnd,
-  handleExport, mtvHeaderCellClassName, rowClassName, spanMethod,
-  loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
+  handleColumnResize, handleColumnResizeEnd, displayWidthOf,
+  handleExport, mtvHeaderCellClassName,
+  loadData, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
 } = useMainTableViewPage()
 </script>
 
@@ -97,6 +98,15 @@ const {
             :index="String(group.tableId ?? group.label)"
           >
             <span class="mtv-view-option-name">{{ group.label }}</span>
+            <!-- Signals the click behaviour, which is what differs here: these rows open the
+                 request detail page rather than a form designed for the view. -->
+            <el-tag
+              v-if="isMainTableView(group)"
+              size="small"
+              type="info"
+            >
+              {{ t('mainTableView.requestTableTag') }}
+            </el-tag>
           </el-menu-item>
         </el-menu>
         <el-empty
@@ -180,9 +190,9 @@ const {
               style="width: 100%;"
               class="mtv-data-grid"
               :class="{ 'mtv-data-grid--fit': gridFits }"
+              scrollbar-always-on
+              :height="gridTableHeight || '100%'"
               :header-cell-class-name="mtvHeaderCellClassName"
-              :span-method="spanMethod"
-              :row-class-name="rowClassName"
               @row-click="(row: GridDisplayRow) => openRow(row)"
               @selection-change="onSelectionChange"
             >
@@ -196,23 +206,21 @@ const {
             v-for="col in displayColumns"
             :key="col.fieldName"
             :prop="col.fieldName"
-            :width="columnWidth(col, gridRuntime)"
+            :width="displayWidthOf(col)"
             show-overflow-tooltip
           >
             <template #header>
               <ListColumnHeader
                 :column="toListColumnMeta(col)"
                 :sort="gridRuntime.sort?.fieldName === col.fieldName ? gridRuntime.sort.direction : null"
-                :grouped="gridRuntime.groupBy === col.fieldName"
                 :filtered="!!gridRuntime.filters[col.fieldName]"
-                :width="columnWidth(col, gridRuntime)"
+                :width="displayWidthOf(col)"
                 show-width
                 show-move
                 :can-move-left="columnIndex(col.fieldName) > 0"
                 :can-move-right="columnIndex(col.fieldName) < gridRuntime.columnOrder.length - 1"
                 @sort-change="(direction) => handleSortChange(col, direction)"
                 @clear-sort="handleClearSort"
-                @group-change="(grouped) => handleGroupChange(col, grouped)"
                 @filter-open="openFilterDialog(col)"
                 @clear-filter="clearColumnFilter(col)"
                 @width-open="openWidthDialog(col)"
@@ -222,13 +230,7 @@ const {
               />
             </template>
             <template #default="{ row }">
-              <template v-if="isGroupHeaderRow(row)">
-                <div class="group-header-cell">
-                  <strong>{{ row._groupLabel }}</strong>
-                  <span class="group-count">({{ row._groupCount }})</span>
-                </div>
-              </template>
-              <template v-else-if="isFileLinkCell(col, row)">
+              <template v-if="isFileLinkCell(col, row)">
                 <span class="mtv-file-cell">
                   <a
                     v-for="(file, fi) in fileLinksOf(col, row)"
@@ -258,11 +260,6 @@ const {
               </template>
             </template>
           </el-table-column>
-          <el-table-column
-            v-if="leftoverWidth > 0"
-            :width="leftoverWidth"
-            class-name="list-col-spacer"
-          />
             </el-table>
           </div>
         </div>
@@ -418,12 +415,19 @@ const {
   </div>
 </template>
 
+<style lang="scss">
+@import '@/styles/listDataGrid.scss';
+</style>
+
 <style scoped lang="scss">
 .page-container {
   padding: 16px 20px;
   height: 100%;
   min-width: 0;
   max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .page-header {
   margin-bottom: 16px;
@@ -435,7 +439,9 @@ const {
 .data-layout {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
   min-width: 0;
   max-width: 100%;
 }
@@ -443,7 +449,7 @@ const {
   width: 240px;
   flex-shrink: 0;
   align-self: stretch;
-  min-height: calc(100vh - 160px);
+  min-height: 0;
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   background: var(--el-bg-color);
@@ -483,9 +489,12 @@ const {
 }
 .data-grid-panel {
   flex: 1;
-  min-height: calc(100vh - 160px);
+  min-height: 0;
   min-width: 0;
   max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   padding: 16px;
@@ -497,6 +506,7 @@ const {
   gap: 12px;
   margin-bottom: 16px;
   align-items: center;
+  flex-shrink: 0;
 }
 .grid-hint {
   font-size: 12px;
@@ -513,29 +523,26 @@ const {
 .mtv-data-grid-scroll {
   width: 100%;
   min-width: 0;
+  min-height: 0;
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: visible;
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .mtv-data-grid-inner {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
 }
-:deep(.mtv-data-grid th.list-col-spacer),
-:deep(.mtv-data-grid td.list-col-spacer) {
-  padding: 0;
-  border-left: none;
-  background: transparent;
-}
-:deep(.mtv-data-grid th.list-col-spacer .cell),
-:deep(.mtv-data-grid td.list-col-spacer .cell) {
-  display: none;
-}
-:deep(.mtv-data-grid .el-table__body-wrapper),
-:deep(.mtv-data-grid .el-table__header-wrapper) {
-  overflow-x: visible !important;
-}
+:deep(.mtv-data-grid.el-table),
 :deep(.mtv-data-grid .el-table__inner-wrapper) {
   width: 100% !important;
+  max-width: 100%;
+  height: 100%;
 }
 /* When the columns underflow the panel, stretch the scrollbar view + the actual <table> elements to
    fill the width so the grid never renders half-empty. Element Plus' fit mode (table-layout:auto) then
@@ -576,23 +583,8 @@ const {
 :deep(.mtv-data-grid .el-table__header-wrapper th.mtv-resizable-col-header:has(.col-resize-handle.is-active)) {
   z-index: 12;
 }
-:deep(.el-table__row:not(.group-header-row)) {
+:deep(.el-table__row) {
   cursor: pointer;
-}
-:deep(.group-header-row) {
-  background: var(--el-fill-color-light) !important;
-  cursor: default;
-  font-weight: 600;
-}
-.group-header-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.group-count {
-  color: var(--el-text-color-secondary);
-  font-weight: normal;
-  font-size: 12px;
 }
 
 .mtv-fk-link {
@@ -703,5 +695,13 @@ const {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Takes the slack so a long table name truncates instead of squeezing the tag beside it. */
+  flex: 1;
+  min-width: 0;
+}
+/* el-menu-item is flex by default; the margin keeps the tag off the truncated name. */
+.view-list-panel .el-menu-item .el-tag {
+  flex-shrink: 0;
+  margin-left: 6px;
 }
 </style>

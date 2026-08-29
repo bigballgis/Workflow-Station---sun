@@ -54,6 +54,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -103,6 +104,7 @@ class TaskProcessProperties {
 
     private TaskQueryComponent taskQueryComponent;
     private TaskProcessComponent taskProcessComponent;
+    private ProcessInstanceSyncComponent processInstanceSyncComponent;
     private Random random;
 
     @BeforeEach
@@ -112,10 +114,10 @@ class TaskProcessProperties {
             org.mockito.Mockito.mock(com.portal.component.RequestIdEnricher.class);
         com.portal.component.EngineSubTableHydrator engineSubTableHydrator =
             new com.portal.component.EngineSubTableHydrator(workflowEngineClient);
-        TaskPermissionEvaluator taskPermissionEvaluator =
-            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient);
         WorkspaceTaskFilterComponent workspaceFilter = new WorkspaceTaskFilterComponent(
                 workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository);
+        TaskPermissionEvaluator taskPermissionEvaluator =
+            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter);
         EngineVisibleTaskFetcher engineFetcher = new EngineVisibleTaskFetcher(
                 workflowEngineClient, processInstanceRepository, workspaceFilter);
         MineTaskListCache mineCache = new MineTaskListCache();
@@ -149,7 +151,8 @@ class TaskProcessProperties {
             changeHistoryComponent,
             taskFormComponent,
             miCollectionVariableBuilder,
-            processInstanceSyncComponent
+            processInstanceSyncComponent,
+            taskPermissionEvaluator
         );
         SubTableRowAssignmentComponent subTableRowAssignmentComponent = new SubTableRowAssignmentComponent(
             workflowEngineClient,
@@ -193,12 +196,16 @@ class TaskProcessProperties {
         when(workflowEngineClient.unclaimTask(any(), any()))
                 .thenReturn(Optional.of(Map.of("success", true)));
         
-        // Mock 委托任务成功
+        // Mock 委托任务成功（4-arg USER 与 2-arg body）
         when(workflowEngineClient.delegateTask(any(), any(), any(), any()))
                 .thenReturn(Optional.of(Map.of("success", true)));
-        
+        when(workflowEngineClient.delegateTask(anyString(), any()))
+                .thenReturn(Optional.of(Map.of("success", true)));
+
         // Mock 完成任务成功
         when(workflowEngineClient.completeTask(any(), any(), any(), any()))
+                .thenReturn(Optional.of(Map.of("success", true)));
+        when(workflowEngineClient.completeTask(any(), any(), any(), any(), any()))
                 .thenReturn(Optional.of(Map.of("success", true)));
         
         // Mock 用户权限查询 - 返回包含虚拟组的权限信息
@@ -343,8 +350,9 @@ class TaskProcessProperties {
         mockFlowableTaskResponse(taskId, taskMap);
 
         // 委托任务应该成功
-        assertDoesNotThrow(() -> 
+        assertDoesNotThrow(() ->
             taskProcessComponent.delegateTask(taskId, delegatorId, delegateId, "出差委托"));
+        verify(workflowEngineClient).delegateTask(eq(taskId), any());
     }
 
     /**
@@ -522,7 +530,7 @@ class TaskProcessProperties {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> variablesCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(workflowEngineClient).completeTask(eq(taskId), eq(userId), eq("APPROVE"), variablesCaptor.capture());
+        verify(workflowEngineClient).completeTask(eq(taskId), eq(userId), eq("APPROVE"), variablesCaptor.capture(), isNull());
         Object collectionObj = variablesCaptor.getValue().get("multiInstance_subtable_collection");
         assertInstanceOf(List.class, collectionObj);
 

@@ -158,12 +158,13 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
         RelationTableDefinition tableDefinition = tableDefinitionRepository.findById(id)
                 .orElseThrow(() -> new RelationTableNotFoundException(id));
 
-        // 仅当当前状态为 DEPLOYED，且本次改动确实改变了展示名/描述/字段结构时才转 UPDATED；
+        // 仅当当前状态为 DEPLOYED，且本次改动确实改变了表名/展示名/描述/字段结构时才转 UPDATED；
         // 未改变结构的保存（比如只是打开又原样保存）不应把已部署表打上"待重新部署"标记。
         // 注意：快照必须在下面任何字段被修改之前取——displayName/description 的 setter 和
         // updateFieldDefinitions 都会就地改写实体（updateFieldDefinitions 还会就地改写已有的
         // RelationFieldDefinition 实例，而非替换成新对象），晚取快照会让"之前"的值已经被污染。
         boolean wasDeployed = tableDefinition.getStatus() == RelationTableStatus.DEPLOYED;
+        String beforeTableName = tableDefinition.getTableName();
         String beforeDisplayName = tableDefinition.getDisplayName();
         String beforeDescription = tableDefinition.getDescription();
         List<Map<String, Object>> currentFieldMaps = wasDeployed
@@ -195,7 +196,10 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
 
         if (wasDeployed) {
             List<Map<String, Object>> incomingFieldMaps = relationTableFieldMapper.fromEntities(tableDefinition.getFieldDefinitions());
-            boolean unchanged = RelationTableStructureDiff.unchanged(
+            // Renaming the physical table is a structural change in its own right, and it is not part
+            // of the field/display diff — check it separately or a pure rename stays "Deployed".
+            boolean renamed = !java.util.Objects.equals(beforeTableName, tableDefinition.getTableName());
+            boolean unchanged = !renamed && RelationTableStructureDiff.unchanged(
                     beforeDisplayName, beforeDescription, currentFieldMaps,
                     tableDefinition.getDisplayName(), tableDefinition.getDescription(), incomingFieldMaps);
             if (!unchanged) {

@@ -94,6 +94,8 @@ export {
   findSubTableRowByMiExpansionId,
   findMiIsolatedParentRow,
   scopeMiLinkChildRowsForParentRow,
+  scopeLinkChildRowsToMiHostRow,
+  hostRowIsMiParticipant,
 } from './miLinkChildRows'
 
 export {

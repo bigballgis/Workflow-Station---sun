@@ -724,6 +724,50 @@ public class FunctionUnitAccessComponent {
     }
 
     /**
+     * Whether the user's <em>currently selected</em> workspace role is granted audit access to this
+     * function unit.
+     *
+     * <p>Deliberately separate from {@link #canAuditFunctionUnit}, which intersects <em>all</em> of
+     * the user's business roles: that is the right rule for what the All Requests menu lists and
+     * which requests may be opened, but writing a note is an act performed <em>as</em> a role, so it
+     * must follow the role the user actually switched to. Mirrors
+     * {@link #resolveNewRequestRoleKeys}: without a workspace role (no UBR context) there is no
+     * selection to honour, so it falls back to all portal roles.
+     *
+     * <p>Resolves roles through the uncached {@code fetchUserPortalRolePayloads} rather than
+     * {@code getUserBusinessRoleCodes}, whose cache is keyed by user alone and would answer for the
+     * previously selected role right after a switch.
+     *
+     * @param functionUnitIdOrCode function unit id or code
+     */
+    public boolean canAuditFunctionUnitAsActiveRole(String userId, String functionUnitIdOrCode) {
+        if (userId == null || userId.isBlank() || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+            return false;
+        }
+        String resolvedId = resolveFunctionUnitId(functionUnitIdOrCode);
+        if (resolvedId == null) {
+            log.warn("Audit check denied: cannot resolve function unit '{}'", functionUnitIdOrCode);
+            return false;
+        }
+        Set<String> auditRoleCodes = getFunctionUnitAuditRoleCodes(resolvedId);
+        if (auditRoleCodes.isEmpty()) {
+            log.debug("Active-role audit check denied for user {}: function unit {} has no audit grants",
+                    userId, functionUnitIdOrCode);
+            return false;
+        }
+        String activeRoleId = PortalUserSecurityUtils.getCurrentActiveRoleId().orElse(null);
+        Set<String> roleKeys = resolveNewRequestRoleKeys(userId, activeRoleId);
+        for (String roleKey : roleKeys) {
+            if (auditRoleCodes.contains(roleKey)) {
+                return true;
+            }
+        }
+        log.debug("Active-role audit check denied for user {}: active role keys {} do not intersect "
+                + "audit grants {} of unit {}", userId, roleKeys, auditRoleCodes, functionUnitIdOrCode);
+        return false;
+    }
+
+    /**
      * Clear user role cache
      */
     public void clearUserRolesCache(String userId) {

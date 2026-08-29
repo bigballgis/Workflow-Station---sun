@@ -81,6 +81,10 @@ class RelationTableStructurePortabilityDiffGateTest {
                     m.put("refPrimaryKeyFields", null);
                     m.put("pkGenerationJson", null);
                     m.put("fkDisplayMode", "readonly");
+                    // lookupConfig/sortOrder participate in the diff gate: a LOOKUP reconfiguration or
+                    // a field reorder is a real design change and must flip the table to UPDATED.
+                    m.put("lookupConfig", null);
+                    m.put("sortOrder", 0);
                     m.put("isComputed", false);
                     m.put("computedField", null);
                     return List.of(m);

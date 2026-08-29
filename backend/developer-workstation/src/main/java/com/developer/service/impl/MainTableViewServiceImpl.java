@@ -103,6 +103,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         }
         // Null clears the detail form, which is how a view is set back to
         // "rows are not clickable".
+        requireDetailFormAllowed(config, request.detailFormId());
         config.setDetailFormId(request.detailFormId());
         if (request.accessRules() != null) {
             validateAccessRules(request.accessRules());
@@ -125,6 +126,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         MainTableViewConfig config = loadView(functionUnitId, viewId);
         // Deliberately does not touch status: choosing a detail form is not a design change that
         // should withdraw a published view from the portal (the portal serves PUBLISHED views only).
+        requireDetailFormAllowed(config, detailFormId);
         config.setDetailFormId(detailFormId);
         return toDto(viewConfigRepository.save(config));
     }
@@ -256,7 +258,13 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                     : source.getMainTableId();
             // detailFormId (the "Views" DETAIL form bound to this view) must be remapped to the
             // cloned FormDefinition's id, same as export/import and rollback already do by name.
-            Long clonedDetailFormId = source.getDetailFormId() != null
+            // A MAIN-table view never carries one forward: its rows open the request detail page,
+            // so cloning a legacy binding would recreate data the service now refuses. The cloner
+            // always maps every source table, so an absent entry means there is no cloned table to
+            // judge — leave the existing remap behaviour alone rather than guess.
+            TableDefinition clonedTable = tableIdMapping.get(source.getMainTableId());
+            boolean clonedTableIsMain = clonedTable != null && clonedTable.getTableType() == TableType.MAIN;
+            Long clonedDetailFormId = source.getDetailFormId() != null && !clonedTableIsMain
                     ? formIdMapping.get(source.getDetailFormId())
                     : null;
             MainTableViewConfig cloned = MainTableViewConfig.builder()
@@ -468,6 +476,35 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                     "Views can only be created for MAIN or SUB tables");
         }
         return table;
+    }
+
+    /**
+     * A MAIN-table row is a request, so the portal opens the request detail page for it rather
+     * than a designed form. Binding one here would produce a page that is never reached, so the
+     * combination is refused outright instead of being silently dropped — a caller that sent a
+     * form id deserves to know it had no effect. Null stays legal: that is how a binding is cleared.
+     */
+    private void requireDetailFormAllowed(MainTableViewConfig config, Long detailFormId) {
+        if (detailFormId == null) {
+            return;
+        }
+        if (isMainTable(config.getMainTableId())) {
+            throw new DeveloperBusinessException("BIZ_VIEW_MAIN_NO_DETAIL_FORM",
+                    "MAIN table views open the request detail page and cannot bind a detail form");
+        }
+    }
+
+    /**
+     * Single-column read rather than {@code findByIdWithFields}: this runs on the designer's
+     * save path, which has no use for the table's field definitions.
+     */
+    private boolean isMainTable(Long tableId) {
+        if (tableId == null) {
+            return false;
+        }
+        List<String> types = jdbcTemplate.queryForList(
+                "SELECT table_type FROM dw_table_definitions WHERE id = ?", String.class, tableId);
+        return !types.isEmpty() && TableType.MAIN.name().equalsIgnoreCase(types.get(0));
     }
 
     private MainTableViewConfig loadView(Long functionUnitId, Long viewId) {

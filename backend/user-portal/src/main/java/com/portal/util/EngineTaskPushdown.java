@@ -1,6 +1,7 @@
 package com.portal.util;
 
 import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListRelativeDates;
 import com.portal.dto.TaskQueryRequest;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -15,7 +16,7 @@ import java.util.Set;
  *
  * <p>Pushable: taskName / currentStepName, processDefinitionName, priority ENUM bands,
  * createTime / dueDate (incl. relative day ops), and sorts on createTime/dueDate/priority/name.
- * Memory-only: initiatorName, requestId, assignmentType, keyword / legacy list filters, groupBy.
+ * Memory-only: initiatorName, requestId, functionUnitCode, assignmentType, keyword / legacy list filters.
  */
 public final class EngineTaskPushdown {
 
@@ -90,9 +91,6 @@ public final class EngineTaskPushdown {
     public static boolean canFullyPush(TaskQueryRequest request) {
         if (request == null) {
             return true;
-        }
-        if (request.getGroupBy() != null && !request.getGroupBy().isBlank()) {
-            return false;
         }
         if (request.getAssignmentTypes() != null && !request.getAssignmentTypes().isEmpty()) {
             return false;

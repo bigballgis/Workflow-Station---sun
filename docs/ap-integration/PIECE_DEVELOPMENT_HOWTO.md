@@ -316,10 +316,15 @@ node -e 'console.log(Object.keys(require("./'"$P"'/dist/src/index.js")))'
 > 若你的件确有外部依赖（比如 `jsdom`），把它写进 `dependencies` 并**从 bundle 里 external 掉**
 > （`--external:jsdom`），此时 `seed-offline-store.mjs` 会把它烘进离线 store，构建机需联网一次。
 
-`hermes/tarballs/` 既是**审计留档**，也是自研件的**安装源**：在 §4 的白名单条目里加一个
+`hermes/tarballs/` 既是**审计留档**，也是件的**安装源**：在 §4 的白名单条目里加一个
 `"tarball": "activepieces-piece-<name>-<ver>.tgz"` 字段，`prewarm-pieces.sh` 就把它拷进
 `pieces/<name>-<ver>/` 并以本地路径依赖安装（与 installer 的 ARCHIVE 分支同构），
 构建机**不需要**能解析这个包名。声明了却找不到文件即 fail-loud。
+
+> HERMES-PATCH-032 起，**白名单里 13 个件全部带 `tarball`**，官方件也不例外：
+> `seed-offline-store.mjs` 只能读它手上有的 tarball，而在此之前只有两个零依赖的自研件带该
+> 字段，烘出来的离线 store 是空的（8 KB），气隙下任何 `--offline` 解析都是必然 miss。
+> 补一个不带 `tarball` 的件不会报错，但它的依赖进不了离线 store —— 脚本会打 WARNING。
 
 若公司内网有 Nexus npm registry，也可以把 tarball `npm publish` 上去、白名单条目不写
 `tarball` 字段，让构建机按版本号解析——两条路都只在**构建机**联网。
@@ -330,7 +335,7 @@ node -e 'console.log(Object.keys(require("./'"$P"'/dist/src/index.js")))'
 >
 > | 需要 | 不需要 |
 > |---|---|
-> | 13 个白名单件的 tarball（`prewarm-pieces.sh` 按 `registry.npmjs.org/<name>/-/<basename>-<ver>.tgz` 取） | ❌ **`@activepieces/pieces-framework`** |
+> | ~~13 个白名单件的 tarball~~ —— HERMES-PATCH-032 起全部 vendored 在 `hermes/tarballs/`，构建期只拷贝不下载（未带 `tarball` 字段的新件仍按 `registry.npmjs.org/<name>/-/<basename>-<ver>.tgz` 取） | ❌ **`@activepieces/pieces-framework`** |
 > | 上游件的 4 个真实外部依赖：`@zip.js/zip.js`(file-helper)、`unpdf`(pdf)、`pg-format`(postgres)、`jsdom`(text-helper) | ❌ 任何 `@activepieces/*` 包 |
 > | 根 `pnpm install --frozen-lockfile` 解析的全部第三方依赖 | ❌ 自研件的依赖（自包含，闭包为空） |
 >

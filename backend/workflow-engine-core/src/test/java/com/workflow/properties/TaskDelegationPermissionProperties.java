@@ -67,7 +67,7 @@ public class TaskDelegationPermissionProperties {
         assertThat(task.isDelegated()).isTrue();
         assertThat(task.getDelegatedTo()).isEqualTo(delegatedTo);
         assertThat(task.getDelegatedBy()).isEqualTo(originalAssignee);
-        assertThat(task.getCurrentAssignee()).isEqualTo(delegatedTo);
+        assertThat(task.getCurrentAssignee()).isEqualTo(originalAssignee);
         assertThat(task.getStatus()).isEqualTo("DELEGATED");
         
         // 验证原始分配信息保持不变
@@ -118,7 +118,7 @@ public class TaskDelegationPermissionProperties {
         assertThat(task.isDelegated()).isTrue();
         assertThat(task.getDelegatedTo()).isEqualTo(delegatedTo);
         assertThat(task.getDelegatedBy()).isEqualTo(groupMember);
-        assertThat(task.getCurrentAssignee()).isEqualTo(delegatedTo);
+        assertThat(task.getCurrentAssignee()).isNull();
         assertThat(task.getStatus()).isEqualTo("DELEGATED");
         
         // 验证原始分配信息保持不变
@@ -128,7 +128,7 @@ public class TaskDelegationPermissionProperties {
     
     /**
      * 属性测试：已委托任务的再次委托权限验证
-     * 验证已委托的任务只能由当前委托接收人进行再次委托
+     * 验证已委托的任务只能由原办理人再次委托，被委托人不能再委托
      */
     @Property(tries = 100)
     @Label("已委托任务的再次委托权限验证")
@@ -155,26 +155,26 @@ public class TaskDelegationPermissionProperties {
         ExtendedTaskInfo task = createTestTask(taskId, AssignmentType.USER, originalAssignee, 50);
         task.delegateTask(firstDelegatee, originalAssignee, "第一次委托");
         
-        // 验证当前委托接收人有再次委托权限
+        // 被委托人不能再委托
         boolean currentDelegateeHasPermission = validateDelegationPermission(task, firstDelegatee);
-        assertThat(currentDelegateeHasPermission).isTrue();
+        assertThat(currentDelegateeHasPermission).isFalse();
         
-        // 验证原始分配人没有再次委托权限（任务已被委托）
+        // 原办理人仍可再次委托
         boolean originalAssigneePermission = validateDelegationPermission(task, originalAssignee);
-        assertThat(originalAssigneePermission).isFalse();
+        assertThat(originalAssigneePermission).isTrue();
         
         // 验证未授权用户没有委托权限
         boolean unauthorizedPermission = validateDelegationPermission(task, unauthorizedUser);
         assertThat(unauthorizedPermission).isFalse();
         
-        // 执行有权限的再次委托
-        task.delegateTask(secondDelegatee, firstDelegatee, "第二次委托");
+        // 由原办理人再次委托
+        task.delegateTask(secondDelegatee, originalAssignee, "第二次委托");
         
-        // 验证再次委托后的任务状态
+        // 验证再次委托后的任务状态：办理人仍是 A
         assertThat(task.isDelegated()).isTrue();
         assertThat(task.getDelegatedTo()).isEqualTo(secondDelegatee);
-        assertThat(task.getDelegatedBy()).isEqualTo(firstDelegatee);
-        assertThat(task.getCurrentAssignee()).isEqualTo(secondDelegatee);
+        assertThat(task.getDelegatedBy()).isEqualTo(originalAssignee);
+        assertThat(task.getCurrentAssignee()).isEqualTo(originalAssignee);
         assertThat(task.getStatus()).isEqualTo("DELEGATED");
     }
     
@@ -222,7 +222,7 @@ public class TaskDelegationPermissionProperties {
         assertThat(task.isDelegated()).isTrue();
         assertThat(task.getDelegatedTo()).isEqualTo(delegatedTo);
         assertThat(task.getDelegatedBy()).isEqualTo(claimedBy);
-        assertThat(task.getCurrentAssignee()).isEqualTo(delegatedTo);
+        assertThat(task.getCurrentAssignee()).isEqualTo(claimedBy);
         assertThat(task.getStatus()).isEqualTo("DELEGATED");
         
         // 验证认领信息仍然保留
@@ -264,7 +264,7 @@ public class TaskDelegationPermissionProperties {
     
     /**
      * 属性测试：委托权限传递一致性验证
-     * 验证委托权限的传递逻辑保持一致性
+     * 验证只有原办理人可以再次委托，被委托人不能再委托；办理人始终是原 assignee
      */
     @Property(tries = 100)
     @Label("委托权限传递一致性验证")
@@ -273,50 +273,33 @@ public class TaskDelegationPermissionProperties {
             @ForAll @NotBlank String taskId,
             @ForAll @NotBlank String delegationReason) {
         
-        // 过滤掉空白字符串和重复用户
         Assume.that(userChain.stream().allMatch(user -> user != null && !user.trim().isEmpty()));
         Assume.that(taskId != null && !taskId.trim().isEmpty());
         Assume.that(delegationReason != null && !delegationReason.trim().isEmpty());
         
-        // 确保用户链中没有重复用户
         Set<String> uniqueUsers = new HashSet<>(userChain);
         Assume.that(uniqueUsers.size() == userChain.size());
         
-        // 创建任务
-        ExtendedTaskInfo task = createTestTask(taskId, AssignmentType.USER, userChain.get(0), 50);
+        String originalAssignee = userChain.get(0);
+        ExtendedTaskInfo task = createTestTask(taskId, AssignmentType.USER, originalAssignee, 50);
         
-        // 逐步委托给链中的下一个用户
-        for (int i = 0; i < userChain.size() - 1; i++) {
-            String currentUser = userChain.get(i);
-            String nextUser = userChain.get(i + 1);
+        for (int i = 1; i < userChain.size(); i++) {
+            String nextUser = userChain.get(i);
             
-            // 验证当前用户有委托权限
-            boolean hasPermission = validateDelegationPermission(task, currentUser);
-            assertThat(hasPermission).isTrue();
+            assertThat(validateDelegationPermission(task, originalAssignee)).isTrue();
+            assertThat(validateDelegationPermission(task, nextUser)).isFalse();
             
-            // 执行委托
-            task.delegateTask(nextUser, currentUser, delegationReason + "-" + (i + 1));
+            task.delegateTask(nextUser, originalAssignee, delegationReason + "-" + i);
             
-            // 验证委托后状态
-            assertThat(task.getCurrentAssignee()).isEqualTo(nextUser);
-            assertThat(task.getDelegatedBy()).isEqualTo(currentUser);
+            assertThat(task.getCurrentAssignee()).isEqualTo(originalAssignee);
+            assertThat(task.getDelegatedBy()).isEqualTo(originalAssignee);
+            assertThat(task.getDelegatedTo()).isEqualTo(nextUser);
             assertThat(task.isDelegated()).isTrue();
-            
-            // 验证之前的用户失去委托权限
-            if (i > 0) {
-                String previousUser = userChain.get(i - 1);
-                boolean previousUserPermission = validateDelegationPermission(task, previousUser);
-                assertThat(previousUserPermission).isFalse();
-            }
         }
         
-        // 验证最终状态
-        String finalAssignee = userChain.get(userChain.size() - 1);
-        assertThat(task.getCurrentAssignee()).isEqualTo(finalAssignee);
-        
-        // 验证只有最终接收人有委托权限
-        boolean finalAssigneePermission = validateDelegationPermission(task, finalAssignee);
-        assertThat(finalAssigneePermission).isTrue();
+        assertThat(task.getCurrentAssignee()).isEqualTo(originalAssignee);
+        assertThat(validateDelegationPermission(task, originalAssignee)).isTrue();
+        assertThat(validateDelegationPermission(task, userChain.get(userChain.size() - 1))).isFalse();
     }
     
     // ==================== 辅助方法 ====================
@@ -330,9 +313,9 @@ public class TaskDelegationPermissionProperties {
             return false;
         }
         
-        // 如果任务已被委托，只有当前委托接收人可以再次委托
+        // 如果任务已被委托，只有原办理人（current assignee）可以再次委托；被委托人不能再委托
         if (task.isDelegated()) {
-            return task.getDelegatedTo().equals(userId);
+            return userId.equals(task.getCurrentAssignee());
         }
         
         // 如果任务已被认领，只有认领人可以委托

@@ -48,7 +48,8 @@ export interface MyApplicationQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
+  /** Audit toolbar text search; OR across painted cell text. Omit when blank. */
+  keyword?: string
 }
 
 export interface ProcessStartRequest {
@@ -144,6 +145,14 @@ export const processApi = {
     return request.post<PortalListPage<ProcessInstance>>(
       '/processes/my-applications/query',
       body,
+    )
+  },
+
+  queryFunctionUnitApplications(functionUnitCode: string, body: MyApplicationQueryRequest) {
+    return request.post<PortalListPage<ProcessInstance>>(
+      '/processes/fu-applications/query',
+      body,
+      { params: { functionUnitCode } },
     )
   },
 

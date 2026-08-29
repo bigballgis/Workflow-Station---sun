@@ -139,6 +139,8 @@ $migrations = @(
     "00-schema/72-add-rt-table-function-units.sql",
     "00-schema/73-unique-table-name-case-insensitive.sql",
     "00-schema/74-ubr-membership-type.sql",
+    "00-schema/74-widen-chk-content-type-decision-relation.sql",
+    "00-schema/74-wf-extended-task-delegate-target.sql",
     "00-schema/75-up-user-preference-auto-claim.sql"
 )
 foreach ($m in $migrations) {

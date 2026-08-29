@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskCompleteRequest;
+import com.portal.dto.TaskDelegateRequest;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationAudit;
 import com.portal.exception.PortalException;
@@ -194,7 +195,8 @@ public class TaskProcessComponent {
 
         String action = request.getAction();
         switch (action) {
-            case "APPROVE", "REJECT" -> taskApprovalCompletionComponent.handleApproval(task, request, userId);
+            case "APPROVE", "REJECT" ->
+                    taskApprovalCompletionComponent.handleApproval(task, request, userId, portalUsername);
             case "TRANSFER" -> handleTransfer(task, request, userId);
             case "DELEGATE" -> handleDelegate(task, request, userId);
             case "RETURN" -> handleReturn(task, request, userId, "RETURN");
@@ -214,12 +216,47 @@ public class TaskProcessComponent {
      */
     @Transactional
     public void delegateTask(String taskId, String delegatorId, String delegateId, String reason) {
+        TaskDelegateRequest body = TaskDelegateRequest.builder()
+                .delegatedTargetType("USER")
+                .delegatedTo(delegateId)
+                .reason(reason)
+                .build();
+        delegateTask(taskId, delegatorId, body);
+    }
+
+    @Transactional
+    public void delegateTask(String taskId, String delegatorId, TaskDelegateRequest body) {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
+        if (body == null) {
+            throw new PortalException("400", "Delegate request cannot be empty");
+        }
+        Map<String, Object> engineBody = new java.util.HashMap<>();
+        engineBody.put("delegatedBy", delegatorId);
+        engineBody.put("taskId", taskId);
+        engineBody.put("delegationReason", body.getReason());
+        String type = body.getDelegatedTargetType() != null ? body.getDelegatedTargetType().trim() : "USER";
+        engineBody.put("delegatedTargetType", type);
+        if ("BU_ROLE".equalsIgnoreCase(type)) {
+            if (body.getDelegatedBuCode() == null || body.getDelegatedBuCode().isBlank()
+                    || body.getDelegatedRoleCode() == null || body.getDelegatedRoleCode().isBlank()) {
+                throw new PortalException("400", "Business unit and role are both required");
+            }
+            engineBody.put("delegatedBuCode", body.getDelegatedBuCode().trim());
+            engineBody.put("delegatedRoleCode", body.getDelegatedRoleCode().trim());
+        } else {
+            if (body.getDelegatedTo() == null || body.getDelegatedTo().isBlank()) {
+                throw new PortalException("400", "Delegate target user cannot be empty");
+            }
+            if (body.getDelegatedTo().trim().equals(delegatorId)) {
+                throw new PortalException("400", "Cannot delegate to yourself");
+            }
+            engineBody.put("delegatedTo", body.getDelegatedTo().trim());
+        }
 
-        log.info("Using Flowable engine to delegate task: {} from {} to {}", taskId, delegatorId, delegateId);
-        Optional<Map<String, Object>> result = workflowEngineClient.delegateTask(taskId, delegatorId, delegateId, reason);
+        log.info("Using Flowable engine to delegate task: {} by {}", taskId, delegatorId);
+        Optional<Map<String, Object>> result = workflowEngineClient.delegateTask(taskId, engineBody);
 
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to delegate task: " + taskId);
@@ -231,22 +268,19 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
 
-        // Update process instance current assignee
-        TaskInfo task = getTaskOrThrow(taskId);
-        processInstanceSyncComponent.updateProcessInstanceAssignee(task.getProcessInstanceId(), delegateId, null, task.getTaskName());
-
-        // Record audit log
         DelegationAudit audit = DelegationAudit.builder()
                 .delegatorId(delegatorId)
-                .delegateId(delegateId)
+                .delegateId("BU_ROLE".equalsIgnoreCase(type)
+                        ? type + ":" + body.getDelegatedBuCode() + "/" + body.getDelegatedRoleCode()
+                        : body.getDelegatedTo())
                 .taskId(taskId)
                 .operationType("DELEGATE_TASK")
                 .operationResult("SUCCESS")
-                .operationDetail(reason)
+                .operationDetail(body.getReason())
                 .build();
         delegationAuditRepository.save(audit);
 
-        log.info("Task {} delegated via Flowable from {} to {}", taskId, delegatorId, delegateId);
+        log.info("Task {} delegated via Flowable by {} (type={})", taskId, delegatorId, type);
     }
 
     /**

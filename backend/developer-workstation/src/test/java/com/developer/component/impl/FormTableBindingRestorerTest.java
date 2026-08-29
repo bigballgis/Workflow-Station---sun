@@ -26,6 +26,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -104,6 +105,83 @@ class FormTableBindingRestorerTest {
                 .filter(n -> "subTable".equals(n.get("type")))
                 .map(n -> ((Number) n.get("_bindingId")).longValue())
                 .toList()).containsExactlyInAnyOrder(9002L, 9003L);
+    }
+
+    /**
+     * A DETAIL form renders one row of a sub-table, because MAIN rows open the request detail page
+     * instead. This repair runs on every form load, so binding one to the MAIN table would keep
+     * silently overwriting the developer's own choice of sub-table.
+     */
+    @Test
+    void repairFormIfMissingBindings_bindsADetailFormToItsSubTableNotTheMainTable() {
+        TableDefinition mainTable = table("meeting_main", TableType.MAIN, "title", "meeting_date");
+        TableDefinition participants = table("participants", TableType.SUB,
+                "row_id", "name", "assignee", "task_status");
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", List.of(
+                Map.of("type", "input", "field", "name"),
+                Map.of("type", "input", "field", "assignee"),
+                Map.of("type", "subTable", "_bindingId", 900)
+        ));
+        config.put("subForms", Map.of("900", Map.of("rule", List.of(Map.of("field", "task_status")))));
+
+        FormDefinition form = FormDefinition.builder()
+                .id(50616L)
+                .formName("Participants Detail")
+                .formType(FormType.DETAIL)
+                .configJson(config)
+                .build();
+
+        when(formTableBindingRepository.countByFormId(50616L)).thenReturn(0L);
+        when(formTableBindingRepository.save(any(FormTableBinding.class)))
+                .thenAnswer(inv -> {
+                    FormTableBinding b = inv.getArgument(0);
+                    if (b.getId() == null) {
+                        b.setId(7001L);
+                    }
+                    return b;
+                });
+
+        restorer.repairFormIfMissingBindings(form, List.of(mainTable, participants));
+
+        ArgumentCaptor<FormTableBinding> captor = ArgumentCaptor.forClass(FormTableBinding.class);
+        verify(formTableBindingRepository, atLeastOnce()).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .filteredOn(b -> b.getBindingType() == BindingType.PRIMARY)
+                .allMatch(b -> b.getTable() == participants);
+        assertThat(captor.getAllValues())
+                .noneMatch(b -> b.getBindingType() == BindingType.PRIMARY && b.getTable() == mainTable);
+    }
+
+    /**
+     * Inventing a wrong primary binding is worse than leaving it unset: the developer can still
+     * pick the right sub-table, but a silent MAIN binding hides the form from its own group.
+     */
+    @Test
+    void repairFormIfMissingBindings_leavesADetailFormUnboundWhenNoSubTableMatches() {
+        TableDefinition mainTable = table("meeting_main", TableType.MAIN, "title");
+        TableDefinition unrelatedSub = table("attachment", TableType.SUB, "row_id", "file");
+
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("rule", List.of(
+                Map.of("type", "input", "field", "nothing_matches_here"),
+                Map.of("type", "subTable", "_bindingId", 901)
+        ));
+
+        FormDefinition form = FormDefinition.builder()
+                .id(50617L)
+                .formName("Orphan Detail")
+                .formType(FormType.DETAIL)
+                .configJson(config)
+                .build();
+
+        when(formTableBindingRepository.countByFormId(50617L)).thenReturn(0L);
+
+        restorer.repairFormIfMissingBindings(form, List.of(mainTable, unrelatedSub));
+
+        // Nothing is written at all: no sub-table matches, and the MAIN table is not a substitute.
+        verify(formTableBindingRepository, never()).save(any(FormTableBinding.class));
     }
 
     private static TableDefinition table(String name, TableType type, String... fields) {

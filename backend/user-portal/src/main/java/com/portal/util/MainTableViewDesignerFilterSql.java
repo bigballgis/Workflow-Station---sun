@@ -1,5 +1,7 @@
 package com.portal.util;
 
+import com.platform.common.list.ListFilterSql;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;

@@ -1,0 +1,116 @@
+package com.portal.util;
+
+import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListColumnMeta.Kind;
+import com.platform.common.list.ListFilterSql;
+import org.junit.jupiter.api.Test;
+import java.util.ArrayList;
+import java.util.List;
+import static org.assertj.core.api.Assertions.assertThat;
+
+class AuditApplicationColumnSpecTest {
+
+    @Test
+    void initiatorIsAUserColumnBetweenTitleAndAssignee() {
+        assertThat(AuditApplicationColumnSpec.columns())
+                .extracting(ListColumnMeta::field)
+                .containsExactly(
+                        "requestId", "businessKey", "startUserName",
+                        "currentAssignee", "startTime", "status");
+        assertThat(column("startUserName").kind()).isEqualTo(Kind.USER);
+        assertThat(column("startUserName").filterable()).isTrue();
+        assertThat(column("startUserName").sortable()).isTrue();
+    }
+
+    @Test
+    void searchableFieldsAreTheVisibleColumns() {
+        assertThat(AuditApplicationColumnSpec.searchableFields())
+                .containsExactly(
+                        "requestId", "businessKey", "startUserName",
+                        "currentAssignee", "startTime", "status");
+    }
+
+    @Test
+    void keywordSearchIsPlainTextOfPaintedCells() {
+        List<Object> params = new ArrayList<>();
+        String where = AuditApplicationColumnSpec.textSearchClause("请假", params);
+        assertThat(where).contains("pi.variables->>'__request_id'" + ListFilterSql.ILIKE);
+        assertThat(where).contains("COALESCE(NULLIF(BTRIM(pi.business_key), ''), pi.process_definition_name)"
+                + ListFilterSql.ILIKE);
+        assertThat(where).contains("COALESCE(pi.start_user_name, pi.start_user_id)"
+                + ListFilterSql.ILIKE);
+        assertThat(where).contains(ProcessAssigneeStoredSql.EXPRESSION + ListFilterSql.ILIKE);
+        assertThat(where).contains("FROM sys_users u");
+        assertThat(where).contains("to_char(pi.start_time, 'YYYY-MM-DD HH24:MI')"
+                + ListFilterSql.ILIKE);
+        assertThat(where).doesNotContain("pi.status ILIKE");
+        assertThat(where).doesNotContain("pi.status IN");
+        assertThat(where).doesNotContain("pi.current_node");
+        assertThat(where).doesNotContain("pi.function_unit_code ILIKE");
+        assertThat(where).doesNotContain("pi.start_time::text");
+        assertThat(params).hasSize(6).allMatch("%请假%"::equals);
+    }
+
+    @Test
+    void keywordPercentAndUnderscoreAreLiteral() {
+        List<Object> params = new ArrayList<>();
+        String where = AuditApplicationColumnSpec.textSearchClause("50%_a", params);
+        assertThat(where).contains("ESCAPE");
+        assertThat(params).hasSize(6).allMatch("%50\\%\\_a%"::equals);
+    }
+
+    @Test
+    void typedStatusLabelMapsToStoredCode() {
+        assertThat(AuditApplicationColumnSpec.storedStatusCodesForKeyword("Running"))
+                .containsExactly("RUNNING");
+        assertThat(AuditApplicationColumnSpec.storedStatusCodesForKeyword("进行中"))
+                .containsExactly("RUNNING");
+        assertThat(AuditApplicationColumnSpec.storedStatusCodesForKeyword("已完成"))
+                .containsExactly("COMPLETED");
+        assertThat(ApplicationStatusPaintedLabels.class.getResource("/list/application-status-labels.json"))
+                .isNotNull();
+        List<Object> params = new ArrayList<>();
+        String where = AuditApplicationColumnSpec.textSearchClause("进行中", params);
+        assertThat(where).contains("pi.status IN (?)");
+        assertThat(params).contains("RUNNING");
+    }
+
+    @Test
+    void blankKeywordAddsNoPredicate() {
+        List<Object> params = new ArrayList<>();
+        assertThat(AuditApplicationColumnSpec.textSearchClause("  ", params)).isEmpty();
+        assertThat(params).isEmpty();
+    }
+
+    @Test
+    void currentAssigneeContainsLooksAtTheClaimedUserAndTheCandidatePool() {
+        List<Object> params = new ArrayList<>();
+        String where = AuditApplicationColumnSpec.sql().whereClause(
+                List.of(new com.platform.common.list.ListColumnFilter(
+                        "currentAssignee", "contains", "id-a", null)),
+                params);
+        assertThat(where).contains("pi.current_assignee");
+        assertThat(where).contains("pi.candidate_users");
+        assertThat(where).contains("concat_ws");
+        assertThat(where).contains("regexp_split_to_array");
+        assertThat(params).containsExactly("id-a");
+    }
+
+    @Test
+    void initiatorFilterLooksAtDisplayNameAndId() {
+        List<Object> params = new ArrayList<>();
+        String where = AuditApplicationColumnSpec.sql().whereClause(
+                List.of(new com.platform.common.list.ListColumnFilter(
+                        "startUserName", "eq", "u1", null)),
+                params);
+        assertThat(where).contains("COALESCE(pi.start_user_name, pi.start_user_id)");
+        assertThat(params).containsExactly("u1");
+    }
+
+    private static ListColumnMeta column(String field) {
+        return AuditApplicationColumnSpec.columns().stream()
+                .filter(c -> field.equals(c.field()))
+                .findFirst()
+                .orElseThrow();
+    }
+}

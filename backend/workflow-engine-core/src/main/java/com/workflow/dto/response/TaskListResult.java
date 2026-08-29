@@ -167,6 +167,12 @@ public class TaskListResult {
          * Whether delegated
          */
         private Boolean isDelegated;
+
+        private String delegatedTo;
+        private String delegatedBy;
+        private String delegatedTargetType;
+        private String delegatedBuCode;
+        private String delegatedRoleCode;
         
         /**
          * Whether claimed

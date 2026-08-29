@@ -2,11 +2,20 @@
  * HERMES-PATCH(piece-admin P3): seed the baked pnpm offline store.
  *
  * The store exists for ONE job: let the runtime installer (0.88: pkg-runner in
- * packages/server/sandbox, called from piece-installer.ts) install an ARCHIVE piece
- * tarball with `--offline` (`AP_PIECES_OFFLINE_INSTALL=true`), no registry reachable
- * (X-3, FR-A09). So the closure it must hold is defined by **what the in-house piece
- * tarballs actually pin**, which is what this script reads — the tarball-bearing entries
- * of `hermes/pieces.json`, then each tarball's own `package/package.json` dependencies.
+ * packages/server/sandbox, called from piece-installer.ts) install a piece tarball with
+ * `--offline` (`AP_PIECES_OFFLINE_INSTALL=true`), no registry reachable (X-3, FR-A09).
+ * So the closure it must hold is defined by **what the piece tarballs actually pin**,
+ * which is what this script reads — the tarball-bearing entries of `hermes/pieces.json`,
+ * then each tarball's own `package/package.json` dependencies.
+ *
+ * HERMES-PATCH-032: every allowlisted piece now carries a `tarball` (its bytes are
+ * vendored in ./tarballs/ — verified byte-identical to the registry's for the official
+ * ones), so this seeds the pins of ALL of them, not just the two in-house pieces. Before
+ * that the field marked in-house pieces only, and both of those pin nothing — so the
+ * "offline store" shipped EMPTY (8 KB) and every offline resolution was a guaranteed miss.
+ * Nobody noticed because prewarm-pieces.sh had already installed the allowlist at build
+ * time with a registry in reach; the miss only surfaces when a piece with real dependencies
+ * has to be resolved again inside the cluster, where nothing can serve it.
  *
  * 0.88 note: REGISTRY pieces are now ALSO delivered as tarballs (bundle.tgz via the
  * API's bundle endpoint), but their transitive deps still resolve from a registry —
@@ -50,21 +59,29 @@ if (!storeDir) {
 }
 
 const allowlist = JSON.parse(readFileSync(join(hermesDir, 'pieces.json'), 'utf-8'))
-const inHousePieces = allowlist.filter((piece) => piece.tarball)
-if (inHousePieces.length === 0) {
+const vendoredPieces = allowlist.filter((piece) => piece.tarball)
+// A piece with no vendored tarball cannot be read here, so its pins never reach the store and
+// an offline install of it in the cluster WILL miss. Say so at build time — this was silent
+// before, which is how an empty store shipped unnoticed.
+const unvendoredPieces = allowlist.filter((piece) => !piece.tarball)
+if (unvendoredPieces.length > 0) {
+    const names = unvendoredPieces.map((piece) => `${piece.name}@${piece.version}`).join(', ')
+    console.warn(`[seed-offline-store] WARNING: no "tarball" in pieces.json for ${names} — their dependencies are NOT in the offline store, and an offline install of them fails with ERR_PNPM_NO_OFFLINE_META. Vendor the .tgz into hermes/tarballs/ and add the field.`)
+}
+if (vendoredPieces.length === 0) {
     console.log('[seed-offline-store] no tarball-bearing pieces in pieces.json — nothing to seed')
     process.exit(0)
 }
 
 const dependencies = {}
-for (const piece of inHousePieces) {
+for (const piece of vendoredPieces) {
     const tarballPath = join(hermesDir, 'tarballs', piece.tarball)
     const manifest = JSON.parse(execFileSync('tar', ['-xzOf', tarballPath, 'package/package.json'], {
         encoding: 'utf-8',
         maxBuffer: 16 * 1024 * 1024,
     }))
     for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
-        // Every pin goes in under an alias (`npm:` protocol). Two in-house pieces built
+        // Every pin goes in under an alias (`npm:` protocol). Two pieces built
         // against different baselines pin different versions of the same package, and one
         // package.json cannot depend on both under its real name; the store itself is
         // content-addressed per package@version, so aliasing costs nothing and keeps

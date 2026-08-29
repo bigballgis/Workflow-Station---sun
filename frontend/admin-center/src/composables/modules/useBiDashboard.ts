@@ -14,15 +14,6 @@ import {
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const ACTIONS_COL_WIDTH = 220
-const DASHBOARD_COL_WIDTHS: Record<string, number> = {
-  dashboardTitle: 180,
-  embedId: 160,
-  supersetDashboardUuid: 160,
-  tags: 120,
-  isDefaultLanding: 150,
-  status: 110,
-  lastSyncedAt: 170,
-}
 
 export function useBiDashboard() {
   const { t } = useI18n()
@@ -35,7 +26,6 @@ export function useBiDashboard() {
   const grid = useAdminListGrid<DashboardRegistryResponse>({
     storageKey: 'admin-list-layout:bi-dashboards',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => DASHBOARD_COL_WIDTHS[field] ?? 140,
   })
 
   const editDialogVisible = ref(false)

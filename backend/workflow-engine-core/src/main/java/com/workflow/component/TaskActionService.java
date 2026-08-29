@@ -103,6 +103,20 @@ public class TaskActionService {
         try {
             validateTaskDelegationRequest(request);
 
+            Task flowableTask = taskService.createTaskQuery()
+                    .taskId(taskId)
+                    .singleResult();
+            if (flowableTask == null) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                                "taskId", "Task not found", taskId)));
+            }
+            if (!StringUtils.hasText(flowableTask.getAssignee())) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                                "taskId", "Unclaimed pool tasks cannot be delegated", taskId)));
+            }
+
             ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId)
                 .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
@@ -117,27 +131,17 @@ public class TaskActionService {
                         "taskId", "Task already completed, cannot delegate", taskId)));
             }
 
-            extendedTaskInfo.delegateTask(
-                request.getDelegatedTo(),
-                request.getDelegatedBy(),
-                request.getEffectiveDelegationReason());
-
-            String previousActor = Authentication.getAuthenticatedUserId();
-            try {
-                Authentication.setAuthenticatedUserId(request.getDelegatedBy());
-                taskService.setAssignee(taskId, request.getDelegatedTo());
-            } finally {
-                Authentication.setAuthenticatedUserId(previousActor);
-            }
-
+            applyDelegateTarget(extendedTaskInfo, request);
             extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
-
             publishTaskDelegationEvent(extendedTaskInfo, request);
 
+            String targetLabel = request.isBuRoleTarget()
+                    ? request.getDelegatedBuCode() + "/" + request.getDelegatedRoleCode()
+                    : request.getDelegatedTo();
             return TaskAssignmentResult.success(
                 taskId,
                 AssignmentType.USER,
-                request.getDelegatedTo(),
+                targetLabel,
                 request.getDelegatedBy(),
                 "Task delegated successfully");
 
@@ -147,6 +151,22 @@ public class TaskActionService {
             throw new WorkflowBusinessException("TASK_DELEGATION_ERROR",
                 "Task delegation failed: " + e.getMessage(), e);
         }
+    }
+
+    private void applyDelegateTarget(ExtendedTaskInfo extendedTaskInfo, TaskDelegationRequest request) {
+        String reason = request.getEffectiveDelegationReason();
+        if (request.isBuRoleTarget()) {
+            extendedTaskInfo.delegateTaskToBuRole(
+                    request.getDelegatedBuCode().trim(),
+                    request.getDelegatedRoleCode().trim(),
+                    request.getDelegatedBy(),
+                    reason);
+            return;
+        }
+        extendedTaskInfo.delegateTask(
+                request.getDelegatedTo(),
+                request.getDelegatedBy(),
+                reason);
     }
 
     public TaskAssignmentResult claimTask(String taskId, TaskClaimRequest request) {
@@ -192,10 +212,7 @@ public class TaskActionService {
                 extendedTaskInfo.setAssignmentTarget(toUserId);
                 extendedTaskInfo.setClaimedBy(null);
                 extendedTaskInfo.setClaimedTime(null);
-                extendedTaskInfo.setDelegatedTo(null);
-                extendedTaskInfo.setDelegatedBy(null);
-                extendedTaskInfo.setDelegatedTime(null);
-                extendedTaskInfo.setDelegationReason(null);
+                extendedTaskInfo.clearDelegation();
                 extendedTaskInfo.updateStatus("ASSIGNED", fromUserId);
                 extendedTaskInfoRepository.save(extendedTaskInfo);
             }
@@ -269,11 +286,7 @@ public class TaskActionService {
         extendedTaskInfo.setPriority(request.getEffectivePriority());
         extendedTaskInfo.setDueDate(request.getDueDate());
         extendedTaskInfo.updateStatus("ASSIGNED", request.getOperatorUserId());
-
-        extendedTaskInfo.setDelegatedTo(null);
-        extendedTaskInfo.setDelegatedBy(null);
-        extendedTaskInfo.setDelegatedTime(null);
-        extendedTaskInfo.setDelegationReason(null);
+        extendedTaskInfo.clearDelegation();
         extendedTaskInfo.setClaimedBy(null);
         extendedTaskInfo.setClaimedTime(null);
     }

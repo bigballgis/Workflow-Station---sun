@@ -18,8 +18,7 @@ public record UserPortalAuditListQueryRequest(
         String endTime,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public UserPortalAuditListQueryRequest {
         if (page < 0) {

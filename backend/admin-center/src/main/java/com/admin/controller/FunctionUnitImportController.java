@@ -1,8 +1,6 @@
 package com.admin.controller;
 
 import com.admin.component.DeploymentManagerComponent;
-import com.admin.component.EmailConnectionSyncComponent;
-import com.admin.component.EmailMonitorSyncComponent;
 import com.admin.component.FunctionUnitManagerComponent;
 import com.admin.component.ProcessDeploymentComponent;
 import com.admin.dto.request.FunctionUnitImportRequest;
@@ -13,7 +11,6 @@ import com.admin.entity.FunctionUnitDeployment;
 import com.admin.enums.DeploymentEnvironment;
 import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,15 +22,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.Base64;
 
 import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.i18n.I18nService;
@@ -51,9 +43,6 @@ public class FunctionUnitImportController {
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
     private final ProcessDeploymentComponent processDeploymentComponent;
-    private final EmailConnectionSyncComponent emailConnectionSyncComponent;
-    private final EmailMonitorSyncComponent emailMonitorSyncComponent;
-    private final ObjectMapper objectMapper;
     private final I18nService i18nService;
     
     /**
@@ -72,69 +61,14 @@ public class FunctionUnitImportController {
         
         try {
             byte[] zipBytes = file.getBytes();
-            Map<String, Object> packageData = parseZipFile(zipBytes);
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Object> manifest = (Map<String, Object>) packageData.get("manifest");
-            if (manifest == null) {
-                manifest = (Map<String, Object>) packageData.get("metadata");
-            }
-            
-            if (manifest == null) {
-                result.put("status", "FAILED");
-                result.put("message", i18nService.getMessage("admin.fu.import_invalid_package_manifest"));
-                return ResponseEntity.badRequest().body(result);
-            }
-            
-            // FR-B12: FU packages no longer carry Automation (Activepieces) flows — flows migrate
-            // through the dedicated Automation migration channel, not inside FU ZIPs. Legacy
-            // packages that still contain automation-flows/ entries are accepted; the entries are
-            // ignored (detected and logged in parseZipFile).
-
-            String name = trimToNull((String) manifest.get("name"));
-            String code = trimToNull((String) manifest.get("code"));
-            String version = trimToNull((String) manifest.get("version"));
-            String description = trimToNull((String) manifest.get("description"));
-            
-            // Pass the ZIP bytes (Base64), not the BPMN text. importFunctionPackage then uses
-            // FunctionUnitPackageParser — tables/*.json, views, forms, actions, email-templates,
-            // and relation-tables (including computed fields) land in one place. Sending BPMN
-            // while the fileName still ends in .zip made parseBase64Zip fail and fall back to
-            // an empty relationTables list.
             FunctionUnitImportRequest importRequest = FunctionUnitImportRequest.builder()
                     .fileName(file.getOriginalFilename())
-                    .name(name)
-                    .code(code)
-                    .version(version != null ? version : "1.0.0")
-                    .description(description)
                     .fileContent(Base64.getEncoder().encodeToString(zipBytes))
-                    .iconSvg(extractIconSvg(manifest))
                     .build();
-            
+
             ImportResult importResult = functionUnitManager.importFunctionPackage(importRequest, userId);
-            
+
             if (importResult.isSuccess()) {
-                // Forms / actions / email templates / relation tables are already persisted by
-                // importFunctionPackage. Connections and monitors are not in PackageParser.
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> connections = (List<Map<String, Object>>) packageData.get("connections");
-                if (connections != null && !connections.isEmpty()) {
-                    emailConnectionSyncComponent.syncConnections(
-                            importResult.getFunctionUnit().getId(), connections);
-                    log.info("Synced {} email connections for function unit {}",
-                            connections.size(), importResult.getFunctionUnit().getId());
-                }
-
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> emailMonitors =
-                        (List<Map<String, Object>>) packageData.get("emailMonitors");
-                if (emailMonitors != null && !emailMonitors.isEmpty()) {
-                    emailMonitorSyncComponent.syncMonitorRules(
-                            importResult.getFunctionUnit().getId(), emailMonitors);
-                    log.info("Synced {} email monitor rules for function unit {}",
-                            emailMonitors.size(), importResult.getFunctionUnit().getId());
-                }
-
                 result.put("status", "SUCCESS");
                 result.put("functionUnitId", importResult.getFunctionUnit().getId());
                 result.put("name", importResult.getFunctionUnit().getName());
@@ -147,7 +81,11 @@ public class FunctionUnitImportController {
                 result.put("message", importResult.getErrorMessage());
                 return ResponseEntity.badRequest().body(result);
             }
-            
+        } catch (com.admin.exception.AdminBusinessException e) {
+            log.warn("Function unit import rejected: {} {}", e.getErrorCode(), e.getErrorMessage());
+            result.put("status", "FAILED");
+            result.put("message", e.getErrorMessage());
+            return ResponseEntity.badRequest().body(result);
         } catch (Exception e) {
             log.error("Failed to import function unit", e);
             result.put("status", "FAILED");
@@ -446,90 +384,6 @@ public class FunctionUnitImportController {
     }
     
     /**
-     * Reads only what this controller still applies after {@code importFunctionPackage}:
-     * manifest (name/code), email connections, and email monitors. Forms, actions, BPMN,
-     * relation tables and email templates are persisted by {@link FunctionUnitPackageParser}.
-     */
-    private Map<String, Object> parseZipFile(byte[] zipBytes) throws IOException {
-        Map<String, Object> result = new HashMap<>();
-        Map<String, byte[]> rawFiles = new HashMap<>();
-        
-        try (ZipInputStream zis = new ZipInputStream(new java.io.ByteArrayInputStream(zipBytes))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] buffer = new byte[1024];
-                int len;
-                while ((len = zis.read(buffer)) > 0) {
-                    baos.write(buffer, 0, len);
-                }
-                rawFiles.put(entry.getName(), baos.toByteArray());
-            }
-        }
-        
-        if (rawFiles.containsKey("manifest.json")) {
-            result.put("manifest", objectMapper.readValue(rawFiles.get("manifest.json"), Map.class));
-        } else if (rawFiles.containsKey("metadata.json")) {
-            result.put("metadata", objectMapper.readValue(rawFiles.get("metadata.json"), Map.class));
-        }
-
-        // FR-B12: FU packages no longer carry Automation (Activepieces) flows. Legacy packages
-        // exported before the decoupling may still contain automation-flows/ entries — ignore
-        // them (flows migrate via the dedicated Automation migration channel), but say so.
-        List<String> legacyAutomationFlowFiles = rawFiles.keySet().stream()
-                .filter(name -> name.startsWith("automation-flows/") && name.endsWith(".json"))
-                .sorted()
-                .toList();
-        if (!legacyAutomationFlowFiles.isEmpty()) {
-            log.info("Function unit package carries legacy automation flow entries {}; ignored — "
-                    + "flows migrate via the Automation migration channel, not inside FU packages "
-                    + "(FR-B12)", legacyAutomationFlowFiles);
-        }
-
-        List<Map<String, Object>> connections = new ArrayList<>();
-        for (String fileName : rawFiles.keySet()) {
-            if (fileName.startsWith("connections/") && fileName.endsWith(".json")) {
-                try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> connectionData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
-                    connections.add(connectionData);
-                } catch (Exception e) {
-                    log.warn("Failed to parse connection file: {}", fileName, e);
-                }
-            }
-        }
-        if (!connections.isEmpty()) {
-            result.put("connections", connections);
-        }
-
-        List<Map<String, Object>> emailMonitors = new ArrayList<>();
-        for (String fileName : rawFiles.keySet()) {
-            if (fileName.startsWith("email-monitors/") && fileName.endsWith(".json")) {
-                try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> monitorData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
-                    emailMonitors.add(monitorData);
-                } catch (Exception e) {
-                    log.warn("Failed to parse email monitor file: {}", fileName, e);
-                }
-            }
-        }
-        if (!emailMonitors.isEmpty()) {
-            result.put("emailMonitors", emailMonitors);
-        }
-
-        return result;
-    }
-    
-    @SuppressWarnings("unchecked")
-    private String extractIconSvg(Map<String, Object> manifest) {
-        if (manifest == null) return null;
-        Map<String, Object> icon = (Map<String, Object>) manifest.get("icon");
-        if (icon == null) return null;
-        return (String) icon.get("svgContent");
-    }
-    
-    /**
      * Hot-switches which semantic version stays enabled for launcher consumers (constraints enforced in manager).
      */
     @PostMapping("/{code}/activate/{version}")
@@ -625,14 +479,5 @@ public class FunctionUnitImportController {
             return Boolean.parseBoolean(t);
         }
         return defaultIfAbsentOrNull;
-    }
-
-    /** Trims inbound manifest primitives so semantic version predicates stay stable. */
-    private static String trimToNull(String s) {
-        if (s == null) {
-            return null;
-        }
-        String t = s.trim();
-        return t.isEmpty() ? null : t;
     }
 }

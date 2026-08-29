@@ -89,6 +89,10 @@ public class TaskManagerComponent {
         return taskQueryService.getTaskInfo(taskId);
     }
 
+    public TaskListResult getDelegatedRuntimeTasks(String userId, String buCode, String roleCode) {
+        return taskQueryService.getDelegatedRuntimeTasks(userId, buCode, roleCode);
+    }
+
     // ==================== Task Assignment, Delegation, Claim ====================
 
     @Auditable(
@@ -129,6 +133,13 @@ public class TaskManagerComponent {
                                              Map<String, Object> variables,
                                              boolean sendNotification) {
         return taskCompletionService.completeTask(taskId, userId, variables, sendNotification);
+    }
+
+    public TaskAssignmentResult completeTask(String taskId, String userId,
+                                             Map<String, Object> variables,
+                                             boolean sendNotification,
+                                             String onBehalfOfUserId) {
+        return taskCompletionService.completeTask(taskId, userId, variables, sendNotification, onBehalfOfUserId);
     }
 
     @Auditable(

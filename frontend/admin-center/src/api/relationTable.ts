@@ -256,7 +256,6 @@ export interface RelationTableStructureListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export interface RelationTableStructureListPage extends AdminListPage<RelationTableResponse> {
@@ -366,7 +365,6 @@ export const relationTableDataApi = {
     filters?: Array<ListColumnFilter & { field: string }>
     sortField?: string
     sortDirection?: 'ASC' | 'DESC'
-    groupBy?: string
   }) =>
     post<AdminListPage<RelationTableDataRow>>(`/relation-tables/data/${tableId}/query`, body),
 

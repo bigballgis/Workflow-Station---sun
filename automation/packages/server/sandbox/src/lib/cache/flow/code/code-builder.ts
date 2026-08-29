@@ -159,7 +159,17 @@ async function installDependencies({ path, packageJson }: InstallDependenciesPar
     await fs.writeFile(`${path}/package.json`, packageJson, 'utf8')
     const deps = Object.entries(JSON.parse(packageJson).dependencies ?? {})
     if (deps.length > 0) {
-        await pkgRunner(log).install({ path, filtersPath: [] })
+        // HERMES-PATCH-033: --ignore-workspace is mandatory here. `path` is
+        // cache/v13/codes/<flowVersionId>/<stepName>, which has no pnpm-workspace.yaml of its
+        // own, so pnpm walks up to /usr/src/app/pnpm-workspace.yaml and adopts the AP monorepo.
+        // The step dir is not a member of it, so pnpm 9.15.9 silently runs a full
+        // "Scope: all N workspace projects" install instead: the step's OWN dependencies are
+        // never installed (esbuild then fails with "Could not resolve", cached as a
+        // compile-failed stub), the monorepo's devDeps + packages/web are installed on top of
+        // the image's deliberately filtered --prod tree, the root pnpm-lock.yaml is rewritten,
+        // and under AP_PIECES_OFFLINE_INSTALL the whole thing dies on
+        // ERR_PNPM_NO_OFFLINE_TARBALL for a monorepo dependency. See TRIM_LOG 2026-08-28.
+        await pkgRunner(log).install({ path, filtersPath: [], ignoreWorkspace: true })
     }
 }
 

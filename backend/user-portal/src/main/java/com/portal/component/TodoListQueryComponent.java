@@ -3,7 +3,6 @@ package com.portal.component;
 import com.platform.common.list.ListColumnFilter;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.PageResponse;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
@@ -49,18 +48,13 @@ public class TodoListQueryComponent {
     public PortalListPage<TaskInfo> queryTodoList(String userId, TodoTaskQueryRequest request) {
         long started = System.nanoTime();
         TaskQueryRequest adapted = toTaskQuery(userId, request);
-        List<PortalListGroup> groups = new ArrayList<>();
-        PageResponse<TaskInfo> page = queryMergedTodoPage(userId, adapted, request.page(), request.size(), groups);
-        if (request.groupBy() != null && !request.groupBy().isBlank()
-                && page.getTotalElements() > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty todo result");
-        }
+        PageResponse<TaskInfo> page = queryMergedTodoPage(userId, adapted, request.page(), request.size());
         long total = page.getTotalElements();
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, TaskQueryComponent.TODO_LIST_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, TaskQueryComponent.TODO_LIST_KEY, request.page(), request.size(), total,
                 elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(), List.copyOf(groups),
+        return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(),
                 request.page(), request.size(), total);
     }
 
@@ -107,7 +101,6 @@ public class TodoListQueryComponent {
                 .filters(filters)
                 .sortBy(request.sortField())
                 .sortDirection(request.sortDirection())
-                .groupBy(request.groupBy())
                 .keyword(request.keyword())
                 .build();
 
@@ -116,10 +109,6 @@ public class TodoListQueryComponent {
         List<TaskInfo> filtered = TaskInfoQueryFilters.apply(poolTasks, adapted);
         filtered = TaskInfoListOps.applySorting(filtered, adapted);
 
-        List<PortalListGroup> groups = new ArrayList<>();
-        if (request.groupBy() != null && !request.groupBy().isBlank()) {
-            groups.addAll(TaskInfoListOps.groupsOf(filtered, request.groupBy()));
-        }
         List<TaskInfo> paged = new ArrayList<>(
                 TaskInfoListOps.pageOf(filtered, request.page(), request.size()));
         requestIdEnricher.enrichTaskRequestIds(paged);
@@ -127,7 +116,7 @@ public class TodoListQueryComponent {
 
         ListQuerySupport.logIfSlow(log, TaskQueryComponent.TO_CLAIM_LIST_KEY, request.page(), request.size(),
                 filtered.size(), started);
-        return new PortalListPage<>(ToClaimTaskColumnSpec.columns(), paged, List.copyOf(groups),
+        return new PortalListPage<>(ToClaimTaskColumnSpec.columns(), paged,
                 request.page(), request.size(), filtered.size());
     }
 
@@ -143,14 +132,13 @@ public class TodoListQueryComponent {
                 .filters(filters)
                 .sortBy(request.sortField())
                 .sortDirection(request.sortDirection())
-                .groupBy(request.groupBy())
                 .keyword(request.keyword())
                 .assignmentTypes(request.assignmentTypes().isEmpty() ? null : request.assignmentTypes())
                 .build();
     }
 
     private PageResponse<TaskInfo> queryMergedTodoPage(
-            String userId, TaskQueryRequest adapted, int page, int size, List<PortalListGroup> groupsOut) {
+            String userId, TaskQueryRequest adapted, int page, int size) {
         TaskQueryRequest mineFetch = TaskQueryRequest.builder()
                 .userId(userId)
                 .page(0)
@@ -161,9 +149,6 @@ public class TodoListQueryComponent {
         maybeEnrichRequestIds(merged, adapted);
         List<TaskInfo> filtered = TaskInfoQueryFilters.apply(merged, adapted);
         filtered = TaskInfoListOps.applySorting(filtered, adapted);
-        if (groupsOut != null && adapted.getGroupBy() != null && !adapted.getGroupBy().isBlank()) {
-            groupsOut.addAll(TaskInfoListOps.groupsOf(filtered, adapted.getGroupBy()));
-        }
         List<TaskInfo> paged = new ArrayList<>(TaskInfoListOps.pageOf(filtered, page, size));
         requestIdEnricher.enrichTaskRequestIds(paged);
         EngineTaskMapper.clearTaskVariablesForList(paged);

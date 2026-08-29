@@ -2,10 +2,9 @@ package com.portal.component;
 
 import com.portal.dto.PermissionListQueryRequest;
 import com.portal.dto.PermissionRequestListItem;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.PortalListPage;
 import com.portal.enums.PermissionRequestType;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.ListQuerySupport;
 import com.portal.util.PermissionRequestColumnSpec;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.stereotype.Component;
+import com.platform.common.list.ListFilterSql;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -60,22 +60,13 @@ public class PermissionRequestListQueryComponent {
                         rs -> rs.next() ? rs.getLong(1) : 0L),
                 LIST_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<PortalListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, fromWhere.toString(), params);
-        if (groupExpression != null && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty permission-requests result");
-        }
 
-        List<PermissionRequestListItem> rows = loadPage(filterSql, fromWhere.toString(), params, request, groupExpression);
+        List<PermissionRequestListItem> rows = loadPage(filterSql, fromWhere.toString(), params, request);
         enrichmentComponent.enrichListItemUsernames(rows);
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, LIST_KEY, request.page(), request.size(), total, elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(PermissionRequestColumnSpec.columns(), rows, groups,
+        return new PortalListPage<>(PermissionRequestColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
@@ -151,20 +142,16 @@ public class PermissionRequestListQueryComponent {
 
     private List<PermissionRequestListItem> loadPage(ListFilterSql filterSql, String fromWhere,
                                                      List<Object> params,
-                                                     PermissionListQueryRequest request,
-                                                     String groupExpression) {
+                                                     PermissionListQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
         String sql = "SELECT p.id, p.applicant_id, p.submitted_by_user_id, p.request_type, p.role_id, p.role_name,"
                 + " p.membership_type,"
                 + " p.organization_unit_id, p.organization_unit_name, p.virtual_group_id, p.virtual_group_name,"
                 + " p.business_unit_id, p.business_unit_name, p.status, p.reason, p.approver_id,"
-                + " p.approve_time, p.approve_comment, p.created_at, p.updated_at" + groupedSelect
+                + " p.approve_time, p.approve_comment, p.created_at, p.updated_at"
                 + fromWhere + orderBy + " LIMIT ? OFFSET ?";
         return ListQuerySupport.query(jdbcTemplate, sql, pageParams, rs -> {
             List<PermissionRequestListItem> page = new ArrayList<>();
@@ -224,7 +211,4 @@ public class PermissionRequestListQueryComponent {
         return ts.toInstant().atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 }

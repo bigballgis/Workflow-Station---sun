@@ -49,15 +49,17 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
                     .host((String) conn.get("host"))
                     .port(conn.get("port") != null ? ((Number) conn.get("port")).intValue() : 587)
                     .username((String) conn.get("username"))
-                    .passwordEncrypted((String) conn.get("passwordEncrypted"))
+                    .passwordEncrypted(usableSecret((String) conn.get("passwordEncrypted"), connectionUid, "password"))
                     .fromEmail((String) conn.get("fromEmail"))
                     .fromName((String) conn.get("fromName"))
                     .useTls(conn.get("useTls") != null ? (Boolean) conn.get("useTls") : true)
                     .enabled(conn.get("enabled") != null ? (Boolean) conn.get("enabled") : true)
                     .direction(conn.get("direction") != null ? conn.get("direction").toString() : "OUTBOUND")
                     .oauthProvider((String) conn.get("oauthProvider"))
-                    .oauthRefreshTokenEncrypted((String) conn.get("oauthRefreshTokenEncrypted"))
-                    .oauthAccessTokenEncrypted((String) conn.get("oauthAccessTokenEncrypted"))
+                    .oauthRefreshTokenEncrypted(usableSecret(
+                            (String) conn.get("oauthRefreshTokenEncrypted"), connectionUid, "oauth refresh token"))
+                    .oauthAccessTokenEncrypted(usableSecret(
+                            (String) conn.get("oauthAccessTokenEncrypted"), connectionUid, "oauth access token"))
                     .tokenExpiresAt(parseInstant(conn.get("tokenExpiresAt")))
                     .mailboxAddress((String) conn.get("mailboxAddress"))
                     .imapHost((String) conn.get("imapHost"))
@@ -70,6 +72,24 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
         }
 
         log.info("Synced {} email connections for function unit {}", connections.size(), functionUnitId);
+    }
+
+    /**
+     * Ciphertext from another environment cannot be decrypted here. Keep the connection row
+     * but drop the secret so operators re-enter it instead of storing a useless blob.
+     */
+    private String usableSecret(String encrypted, String connectionUid, String kind) {
+        if (encrypted == null || encrypted.isBlank()) {
+            return encrypted;
+        }
+        try {
+            encryptionService.decrypt(encrypted);
+            return encrypted;
+        } catch (RuntimeException e) {
+            log.warn("Imported email connection {} {} cannot be decrypted in this environment; cleared",
+                    connectionUid, kind);
+            return null;
+        }
     }
 
     private Instant parseInstant(Object value) {

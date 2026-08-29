@@ -14,22 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class VirtualGroupColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(VirtualGroupColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("type", "boundRoleType", "status");
-        assertThat(column("name").kind()).isEqualTo(Kind.TEXT);
-        assertThat(column("memberCount").kind()).isEqualTo(Kind.NUMBER);
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> VirtualGroupColumnSpec.sql().groupByExpression("name"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void boundRoleNameFilterJoinsTheRoleTable() {
         List<Object> params = new ArrayList<>();
         String where = VirtualGroupColumnSpec.sql().whereClause(

@@ -148,6 +148,47 @@ describe('codeBuilder.processCodeStep', () => {
         expect(buildMock).toHaveBeenCalledTimes(1)
     })
 
+    // HERMES-PATCH-033 regression: cache/v13/codes/<flowVersionId>/<stepName> has no
+    // pnpm-workspace.yaml, so pnpm walks up to the AP monorepo's at /usr/src/app and — because
+    // the step dir is not one of its members — runs a full "Scope: all N workspace projects"
+    // install that never installs the step's own dependencies. Verified on pnpm 9.15.9, the
+    // image's exact version. The step must be installed as a standalone package.
+    it('installs the step in its own directory with --ignore-workspace, never adopting the AP monorepo workspace', async () => {
+        const codesFolderPath = uniqueFolder()
+        const artifact = buildArtifact('{"dependencies":{"is-number":"6.0.0"}}')
+        installMock.mockResolvedValue({ stdout: '', stderr: '' })
+        buildMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+        await expect(
+            codeBuilder(noopLog, getSettings).processCodeStep({ artifact, codesFolderPath }),
+        ).resolves.toBe('success')
+
+        const stepDir = codeCache(codesFolderPath).stepDir({
+            flowVersionId: artifact.flowVersionId,
+            stepName: artifact.name,
+        })
+        expect(installMock.mock.calls.map(([params]) => params)).toEqual([
+            { path: stepDir, filtersPath: [], ignoreWorkspace: true },
+        ])
+    })
+
+    // The `@types/node` default is injected for every step, so the packageJson handed to pnpm is
+    // never empty in practice — but a step whose own dependencies are empty must still not fall
+    // back to a workspace-scoped install.
+    it('keeps --ignore-workspace for a step carrying only the injected @types/node dependency', async () => {
+        const codesFolderPath = uniqueFolder()
+        const artifact = buildArtifact('{}')
+        installMock.mockResolvedValue({ stdout: '', stderr: '' })
+        buildMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+        await expect(
+            codeBuilder(noopLog, getSettings).processCodeStep({ artifact, codesFolderPath }),
+        ).resolves.toBe('success')
+
+        expect(installMock).toHaveBeenCalledTimes(1)
+        expect(installMock.mock.calls[0][0]).toMatchObject({ ignoreWorkspace: true })
+    })
+
     it('does not cache a transient install failure — the next build re-runs install and self-heals (GIT-1608)', async () => {
         const codesFolderPath = uniqueFolder()
         const artifact = buildArtifact('{"dependencies":{"pkg":"1.0.0"}}')

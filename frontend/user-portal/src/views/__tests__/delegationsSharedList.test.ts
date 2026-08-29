@@ -22,17 +22,17 @@ const rulesApi = vi.mocked(queryDelegationRules)
 const auditApi = vi.mocked(queryDelegationAudit)
 
 const RULE_COLUMNS: ListColumnMeta[] = [
-  { field: 'delegateId', label: 'delegation.delegateTo', kind: 'USER', filterable: true, sortable: true, groupable: true, operators: ['eq'] },
-  { field: 'delegationType', label: 'delegation.delegationType', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [{ value: 'FULL', label: 'delegation.full' }] },
-  { field: 'status', label: 'delegation.status', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [{ value: 'ACTIVE', label: 'delegation.active' }] },
-  { field: 'startTime', label: 'delegation.startTime', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['on', 'between'] },
-  { field: 'endTime', label: 'delegation.endTime', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['on', 'between'] },
-  { field: 'reason', label: 'delegation.reason', kind: 'TEXT', filterable: true, sortable: false, groupable: false, operators: ['contains'] },
-  { field: 'createdAt', label: 'common.createdAt', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['between'] },
+  { field: 'delegateId', label: 'delegation.delegateTo', kind: 'USER', filterable: true, sortable: true, operators: ['eq'] },
+  { field: 'delegationType', label: 'delegation.delegationType', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'], options: [{ value: 'FULL', label: 'delegation.full' }] },
+  { field: 'status', label: 'delegation.status', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'], options: [{ value: 'ACTIVE', label: 'delegation.active' }] },
+  { field: 'startTime', label: 'delegation.startTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['on', 'between'] },
+  { field: 'endTime', label: 'delegation.endTime', kind: 'DATETIME', filterable: true, sortable: true, operators: ['on', 'between'] },
+  { field: 'reason', label: 'delegation.reason', kind: 'TEXT', filterable: true, sortable: false, operators: ['contains'] },
+  { field: 'createdAt', label: 'common.createdAt', kind: 'DATETIME', filterable: true, sortable: true, operators: ['between'] },
 ]
 
 const emptyPage = (columns: ListColumnMeta[]) => ({
-  data: { columns, content: [], totalElements: 0, page: 0, size: 20, groups: [] },
+  data: { columns, content: [], totalElements: 0, page: 0, size: 20 },
 })
 
 let wrapper: VueWrapper | null = null
@@ -76,5 +76,34 @@ describe('Delegations shared list', () => {
     const last = rulesApi.mock.calls[rulesApi.mock.calls.length - 1][0]
     expect(last.page).toBe(0)
     expect(last.filters).toEqual([{ field: 'delegateId', operator: 'eq', value: 'u1' }])
+  }, 15000)
+
+  it('gives Action a fixed width and paints suspend/delete buttons on ACTIVE rows', async () => {
+    rulesApi.mockResolvedValue({
+      data: {
+        columns: RULE_COLUMNS,
+        content: [{
+          id: 41,
+          delegatorId: 'u-me',
+          delegateId: 'u-other',
+          delegationType: 'FULL',
+          status: 'ACTIVE',
+          createdAt: '2026-08-01T00:00:00Z',
+          updatedAt: '2026-08-01T00:00:00Z',
+        }],
+        totalElements: 1,
+        page: 0,
+        size: 20,
+      },
+    } as never)
+    const w = await mountPage()
+    const actionCol = w.findAllComponents({ name: 'ElTableColumn' }).find(
+      (col) => col.props('label') === 'common.actions',
+    )
+    expect(actionCol).toBeTruthy()
+    expect(Number(actionCol!.props('width'))).toBe(200)
+    expect(w.text()).toContain('delegation.suspend')
+    expect(w.text()).toContain('common.delete')
+    expect(w.findAll('.row-actions .el-button').length).toBeGreaterThanOrEqual(2)
   })
 })

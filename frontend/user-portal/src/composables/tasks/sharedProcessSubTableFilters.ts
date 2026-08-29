@@ -12,6 +12,7 @@ import {
   isSubTableRowMetaField,
   stripSubTableRowMetaFields,
 } from './subTableBindingKinds'
+import { resolveMiChildStructuralParentFk } from './miLinkChildIdentity'
 import { dropSubsumedSubTableRows } from './subTableRowNormalize'
 
 function sharedBindingRowHasNonIdColumnData(
@@ -60,6 +61,23 @@ function isLeakedForeignRowOnSharedAttachment(
           )
     if (foreign.has(rowId)) return true
   }
+
+  /**
+   * A structural FK to an MI participant ({@code sub_task_id} etc.) marks the row as a link-child of
+   * some other table — an attachment row is keyed to the main record, never to a participant. This
+   * catches leaks the {@code foreignSubTableRowIds} registry misses: that registry only walks slices
+   * whose KEY looks participant-ish ({@code subtable}/{@code participants}, or table id 20/21), so a
+   * Function Unit whose participant table has different ids (FU 50005 uses 50331, keyed numerically
+   * as {@code 50544}) contributes no ids at all and every id-only ghost slipped through.
+   */
+  if (resolveMiChildStructuralParentFk(rec)) return true
+
+  /**
+   * An "attachment" row with no file AND no value in any of its own non-id columns carries nothing
+   * this table can display — the grid renders it as a row of "-". Whatever produced it (a foreign
+   * row projected down to its id, a stale placeholder), it is not an attachment.
+   */
+  if (!sharedBindingRowHasNonIdColumnData(rec, colFields)) return true
 
   // Backend MI overlay may stamp id_idw on persisted attachment rows — not a subtable leak.
   if (rec.id_idw != null && String(rec.id_idw).trim() !== '' && !colFields.has('id_idw')) {

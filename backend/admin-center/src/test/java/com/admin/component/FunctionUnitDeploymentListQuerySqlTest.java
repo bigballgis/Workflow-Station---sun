@@ -76,7 +76,7 @@ class FunctionUnitDeploymentListQuerySqlTest {
     }
 
     private static FunctionUnitDeploymentListQueryRequest request(List<ListColumnFilter> filters) {
-        return new FunctionUnitDeploymentListQueryRequest(0, 20, filters, null, null, null);
+        return new FunctionUnitDeploymentListQueryRequest(0, 20, filters, null, null);
     }
 
     private String pageSql() {

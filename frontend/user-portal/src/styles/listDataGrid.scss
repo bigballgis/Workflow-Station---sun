@@ -1,11 +1,15 @@
-/* Host wrapper for shared ListColumnHeader + column resize. Unscoped: el-table internals. */
+/* Host wrapper for shared ListColumnHeader + column resize. Unscoped: el-table internals.
+ * overflow is hidden so Element Plus owns both axes: frozen header, h-bar at the pane
+ * bottom, and `fixed="right"` (Action) pins to the window. */
 .list-data-grid-scroll {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   min-width: 0;
   min-height: 0;
   max-width: 100%;
   flex: 1 1 auto;
-  overflow: auto;
+  overflow: hidden;
 }
 
 /*
@@ -23,16 +27,22 @@
 }
 
 .list-data-grid-inner {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
 }
 
-.list-data-grid .el-table__body-wrapper,
-.list-data-grid .el-table__header-wrapper {
-  overflow-x: visible !important;
-}
-
+/* Table chrome stays viewport-wide so `fixed="right"` pins Action to the window.
+ * The inner <table> may still be wider; el-table owns that horizontal scroll. */
+.list-data-grid.el-table,
 .list-data-grid .el-table__inner-wrapper {
   width: 100% !important;
+  max-width: 100%;
+  height: 100%;
 }
 
 .list-data-grid .el-table__header-wrapper th:has(.list-col-header),
@@ -52,6 +62,17 @@
   text-overflow: clip;
 }
 
+/* Keep in sync with CELL_PADDING_X_PX in columnWidthLayout.ts. Tighter than
+ * Element Plus' default 12px so leftover slack does not read as empty gutters. */
+.list-data-grid.el-table .el-table__cell .cell,
+.mtv-data-grid.el-table .el-table__cell .cell {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+/* When bases fit the viewport, leftover is spread into columns and the table
+ * is 100% of the pane. Do not apply this while overflowing — it would squash
+ * English headers. */
 .list-data-grid--fit .el-scrollbar__view,
 .list-data-grid--fit .el-table__header-wrapper,
 .list-data-grid--fit .el-table__body-wrapper,
@@ -61,33 +82,140 @@
   min-width: 100% !important;
 }
 
-.list-data-grid .group-header-row {
-  background: var(--el-fill-color-light) !important;
-  cursor: default;
-  font-weight: 600;
-}
-
-.list-data-grid .group-header-cell {
+/* Bound the page to the window so the grid has a real height (required for
+ * Element Plus to freeze the header and park the h-bar at the pane bottom).
+ * Mixed card+list pages opt out with .page-stack so .portal-content keeps
+ * overflow-y: auto. */
+.portal-content:has(.list-data-grid-scroll):not(:has(.page-stack)),
+.portal-content:has(.mtv-data-grid-scroll):not(:has(.page-stack)),
+.admin-main:has(.list-data-grid-scroll) {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.list-data-grid .group-count {
-  color: var(--el-text-color-secondary);
-  font-weight: normal;
-  font-size: 12px;
+.page-container:has(.list-data-grid-scroll),
+.page-container:has(.mtv-data-grid-scroll),
+.portal-content > *:has(.list-data-grid-scroll):not(.page-stack),
+.portal-content > *:has(.mtv-data-grid-scroll):not(.page-stack) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* Trailing leftover so drag-narrowed columns do not re-stretch. No handle. */
-.list-data-grid th.list-col-spacer,
-.list-data-grid td.list-col-spacer {
-  padding: 0;
-  border-left: none;
-  background: transparent;
+.page-container:has(.list-data-grid-scroll) > .page-header,
+.page-container:has(.list-data-grid-scroll) > .search-card,
+.portal-content > *:has(.list-data-grid-scroll):not(.page-stack) > .page-header {
+  flex-shrink: 0;
 }
 
-.list-data-grid th.list-col-spacer .cell,
-.list-data-grid td.list-col-spacer .cell {
-  display: none;
+.table-card:has(.list-data-grid-scroll),
+.portal-card:has(.list-data-grid-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-card:has(.list-data-grid-scroll) > .el-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-card:has(.list-data-grid-scroll) .toolbar,
+.table-card:has(.list-data-grid-scroll) .fu-toolbar,
+.portal-card:has(.list-data-grid-scroll) .filter-row {
+  flex-shrink: 0;
+}
+
+.el-tabs:has(.list-data-grid-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.el-tabs:has(.list-data-grid-scroll) > .el-tabs__header {
+  flex-shrink: 0;
+}
+
+.el-tabs:has(.list-data-grid-scroll) > .el-tabs__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.el-tabs:has(.list-data-grid-scroll) .el-tab-pane {
+  height: 100%;
+}
+
+.el-tabs:has(.list-data-grid-scroll) .el-tab-pane > * {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.data-layout:has(.list-data-grid-scroll),
+.data-layout:has(.mtv-data-grid-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.data-grid-panel:has(.list-data-grid-scroll),
+.data-grid-panel:has(.mtv-data-grid-scroll) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.member-shared-list,
+.permission-shared-list,
+.list-data-grid-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.list-pagination {
+  flex-shrink: 0;
+}
+
+/* Action cells must not inherit el-table's overflow:hidden — that is how
+ * Suspend/Delete (and Approve/Cancel) disappear when the column is tight.
+ * Scope is :has(.row-actions) only so a right-fixed data column still ellipsizes. */
+.list-data-grid .el-table__cell:has(.row-actions) .cell {
+  overflow: visible !important;
+}
+
+/* Mixed card+list: the window/page still scrolls. Each nested list is a capped
+ * pane so el-table keeps a frozen header and its own vertical bar. Do not force
+ * table height:auto — that grows with rows and removes the inner scrollbar. */
+.page-stack .list-data-grid-scroll {
+  flex: 0 0 auto;
+  height: min(520px, calc(100vh - 220px));
+  min-height: 280px;
+  overflow: hidden;
+}
+
+.page-stack .portal-card:has(.list-data-grid-scroll),
+.page-stack .permission-shared-list,
+.page-stack .list-data-grid-host {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: hidden;
 }

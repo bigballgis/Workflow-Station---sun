@@ -5,7 +5,6 @@
     </div>
 
     <el-tabs v-model="activeTab">
-      <!-- 虚拟组成员 -->
       <el-tab-pane
         :label="t('memberManagement.virtualGroupMembers')"
         name="virtualGroup"
@@ -14,7 +13,7 @@
           <div class="filter-row">
             <el-select
               v-model="selectedVirtualGroup"
-              :placeholder="t('memberManagement.selectVirtualGroup')" 
+              :placeholder="t('memberManagement.selectVirtualGroup')"
               style="width: 300px"
               filterable
               @change="loadVirtualGroupMembers"
@@ -27,65 +26,51 @@
               />
             </el-select>
           </div>
-          
+
           <el-empty
             v-if="!selectedVirtualGroup"
             :description="t('memberManagement.selectVirtualGroup')"
           />
-          <el-empty
-            v-else-if="!loadingVG && virtualGroupMembers.length === 0"
-            :description="t('memberManagement.noMembers')"
-          />
-          
-          <el-table
+          <MemberSharedList
             v-else
-            v-loading="loadingVG"
-            :data="virtualGroupMembers"
-            stripe
+            :columns="vgColumns"
+            :rows="virtualGroupMembers"
+            :loading="loadingVG"
+            storage-key="portal-list-layout:member-vg"
+            :extra-width="VG_ACTIONS_WIDTH"
+            :empty-text="t('memberManagement.noMembers')"
+            :get-value="vgValue"
           >
-            <el-table-column
-              prop="fullName"
-              :label="t('memberManagement.memberName')"
-              width="150"
-            >
-              <template #default="{ row }">
-                {{ row.fullName || row.username }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="username"
-              :label="t('memberManagement.username')"
-              width="150"
-            />
-            <el-table-column
-              prop="joinedAt"
-              :label="t('memberManagement.joinTime')"
-              width="160"
-            >
-              <template #default="{ row }">
+            <template #cell="{ column, row }">
+              <template v-if="column.field === 'joinedAt'">
                 {{ formatDate(row.joinedAt) }}
               </template>
-            </el-table-column>
-            <el-table-column
-              :label="t('common.actions')"
-              width="100"
-            >
-              <template #default="{ row }">
-                <el-button
-                  type="danger"
-                  link
-                  size="small"
-                  @click="removeVGMember(row)"
-                >
-                  {{ t('memberManagement.remove') }}
-                </el-button>
+              <template v-else>
+                {{ vgValue(row, column.field) || '-' }}
               </template>
-            </el-table-column>
-          </el-table>
+            </template>
+            <template #action-column>
+              <el-table-column
+                :label="t('common.actions')"
+                :width="VG_ACTIONS_WIDTH"
+                fixed="right"
+              >
+                <template #default="{ row }">
+                  <el-button
+                    type="danger"
+                    link
+                    size="small"
+                    @click="removeVGMember(row)"
+                  >
+                    {{ t('memberManagement.remove') }}
+                  </el-button>
+                </template>
+              </el-table-column>
+            </template>
+          </MemberSharedList>
         </div>
       </el-tab-pane>
 
-      <!-- 业务单元成员 -->
       <el-tab-pane
         :label="t('memberManagement.businessUnitMembers')"
         name="businessUnit"
@@ -94,7 +79,7 @@
           <div class="filter-row">
             <el-select
               v-model="selectedBusinessUnit"
-              :placeholder="t('memberManagement.selectBusinessUnit')" 
+              :placeholder="t('memberManagement.selectBusinessUnit')"
               style="width: 300px"
               filterable
               @change="loadBusinessUnitMembers"
@@ -107,42 +92,22 @@
               />
             </el-select>
           </div>
-          
+
           <el-empty
             v-if="!selectedBusinessUnit"
             :description="t('memberManagement.selectBusinessUnit')"
           />
-          <el-empty
-            v-else-if="!loadingBU && businessUnitMembers.length === 0"
-            :description="t('memberManagement.noMembers')"
-          />
-          
-          <el-table
+          <MemberSharedList
             v-else
-            v-loading="loadingBU"
-            :data="businessUnitMembers"
-            stripe
+            :columns="buColumns"
+            :rows="businessUnitMembers"
+            :loading="loadingBU"
+            storage-key="portal-list-layout:member-bu"
+            :empty-text="t('memberManagement.noMembers')"
+            :get-value="buValue"
           >
-            <el-table-column
-              prop="fullName"
-              :label="t('memberManagement.memberName')"
-              width="150"
-            >
-              <template #default="{ row }">
-                {{ row.fullName || row.username }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="username"
-              :label="t('memberManagement.username')"
-              width="150"
-            />
-            <el-table-column
-              prop="roles"
-              :label="t('memberManagement.roles')"
-              min-width="200"
-            >
-              <template #default="{ row }">
+            <template #cell="{ column, row }">
+              <template v-if="column.field === 'roles'">
                 <el-tag
                   v-for="role in row.roles"
                   :key="role.id"
@@ -158,17 +123,14 @@
                   </el-icon>
                 </el-tag>
               </template>
-            </el-table-column>
-            <el-table-column
-              prop="joinedAt"
-              :label="t('memberManagement.joinTime')"
-              width="160"
-            >
-              <template #default="{ row }">
+              <template v-else-if="column.field === 'joinedAt'">
                 {{ formatDate(row.joinedAt) }}
               </template>
-            </el-table-column>
-          </el-table>
+              <template v-else>
+                {{ buValue(row, column.field) || '-' }}
+              </template>
+            </template>
+          </MemberSharedList>
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -180,8 +142,13 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
+import type { ListColumnMeta } from '@platform-shared/list/columnMeta'
+import { operatorsFor } from '@platform-shared/list/columnMeta'
+import MemberSharedList from '@/components/permissions/MemberSharedList.vue'
 import { permissionApi, type MemberInfo, type VirtualGroupInfo, type BusinessUnit, type RoleInfo } from '@/api/permission'
+import { formatDate } from '@/utils/dateFormat'
 
+const VG_ACTIONS_WIDTH = 100
 const { t } = useI18n()
 
 const activeTab = ref('virtualGroup')
@@ -195,30 +162,49 @@ const selectedBusinessUnit = ref('')
 const virtualGroupMembers = ref<MemberInfo[]>([])
 const businessUnitMembers = ref<MemberInfo[]>([])
 
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-  })
+const vgColumns: ListColumnMeta[] = [
+  { field: 'fullName', label: 'memberManagement.memberName', kind: 'TEXT', filterable: true, sortable: true, operators: operatorsFor('TEXT') },
+  { field: 'username', label: 'memberManagement.username', kind: 'TEXT', filterable: true, sortable: true, operators: operatorsFor('TEXT') },
+  { field: 'joinedAt', label: 'memberManagement.joinTime', kind: 'DATETIME', filterable: true, sortable: true, operators: operatorsFor('DATETIME') },
+]
+
+const buColumns: ListColumnMeta[] = [
+  { field: 'fullName', label: 'memberManagement.memberName', kind: 'TEXT', filterable: true, sortable: true, operators: operatorsFor('TEXT') },
+  { field: 'username', label: 'memberManagement.username', kind: 'TEXT', filterable: true, sortable: true, operators: operatorsFor('TEXT') },
+  { field: 'roles', label: 'memberManagement.roles', kind: 'TEXT', filterable: true, sortable: true, operators: operatorsFor('TEXT') },
+  { field: 'joinedAt', label: 'memberManagement.joinTime', kind: 'DATETIME', filterable: true, sortable: true, operators: operatorsFor('DATETIME') },
+]
+
+function vgValue(row: MemberInfo, field: string): unknown {
+  if (field === 'fullName') return row.fullName || row.username
+  if (field === 'username') return row.username
+  if (field === 'joinedAt') return row.joinedAt
+  return ''
+}
+
+function buValue(row: MemberInfo, field: string): unknown {
+  if (field === 'roles') return (row.roles ?? []).map((role) => role.name).join(', ')
+  return vgValue(row, field)
+}
+
+function unwrapList<T>(res: unknown): T[] {
+  const body = res as { data?: { data?: T[] } | T[] } | T[]
+  if (Array.isArray(body)) return body
+  if (Array.isArray(body.data)) return body.data
+  if (body.data && Array.isArray((body.data as { data?: T[] }).data)) {
+    return (body.data as { data: T[] }).data
+  }
+  throw new Error('member list did not return an array')
 }
 
 const loadManagedGroups = async () => {
-  try {
-    // 获取当前用户作为审批人管理的虚拟组
-    const res = await permissionApi.getAvailableVirtualGroups()
-    managedVirtualGroups.value = res.data?.data || res.data || res || []
-  } catch (e) {
-    console.error('Failed to load managed virtual groups:', e)
-  }
+  const res = await permissionApi.getAvailableVirtualGroups()
+  managedVirtualGroups.value = unwrapList<VirtualGroupInfo>(res)
 }
 
 const loadManagedBusinessUnits = async () => {
-  try {
-    const res = await permissionApi.getBusinessUnits()
-    managedBusinessUnits.value = res.data?.data || res.data || res || []
-  } catch (e) {
-    console.error('Failed to load managed business units:', e)
-  }
+  const res = await permissionApi.getBusinessUnits()
+  managedBusinessUnits.value = unwrapList<BusinessUnit>(res)
 }
 
 const loadVirtualGroupMembers = async () => {
@@ -226,10 +212,12 @@ const loadVirtualGroupMembers = async () => {
   loadingVG.value = true
   try {
     const res = await permissionApi.getVirtualGroupMembers(selectedVirtualGroup.value)
-    virtualGroupMembers.value = res.data?.data || res.data || res || []
-  } catch (e) {
-    console.error('Failed to load virtual group members:', e)
+    virtualGroupMembers.value = unwrapList<MemberInfo>(res)
+  } catch (e: unknown) {
     virtualGroupMembers.value = []
+    if (!(e as { response?: unknown })?.response) {
+      ElMessage.error(e instanceof Error ? e.message : t('memberManagement.loadFailed'))
+    }
   } finally {
     loadingVG.value = false
   }
@@ -240,10 +228,12 @@ const loadBusinessUnitMembers = async () => {
   loadingBU.value = true
   try {
     const res = await permissionApi.getBusinessUnitMembers(selectedBusinessUnit.value)
-    businessUnitMembers.value = res.data?.data || res.data || res || []
-  } catch (e) {
-    console.error('Failed to load business unit members:', e)
+    businessUnitMembers.value = unwrapList<MemberInfo>(res)
+  } catch (e: unknown) {
     businessUnitMembers.value = []
+    if (!(e as { response?: unknown })?.response) {
+      ElMessage.error(e instanceof Error ? e.message : t('memberManagement.loadFailed'))
+    }
   } finally {
     loadingBU.value = false
   }
@@ -254,10 +244,10 @@ const removeVGMember = async (member: MemberInfo) => {
     await ElMessageBox.confirm(t('memberManagement.removeConfirm'), t('common.confirm'))
     await permissionApi.removeVirtualGroupMember(selectedVirtualGroup.value, member.userId)
     ElMessage.success(t('memberManagement.removeSuccess'))
-    loadVirtualGroupMembers()
-  } catch (e: any) {
+    await loadVirtualGroupMembers()
+  } catch (e: unknown) {
     if (e !== 'cancel') {
-      ElMessage.error(e.message || t('memberManagement.removeFailed'))
+      ElMessage.error(e instanceof Error ? e.message : t('memberManagement.removeFailed'))
     }
   }
 }
@@ -267,17 +257,25 @@ const removeBURole = async (member: MemberInfo, role: RoleInfo) => {
     await ElMessageBox.confirm(t('memberManagement.removeConfirm'), t('common.confirm'))
     await permissionApi.removeBusinessUnitRole(selectedBusinessUnit.value, member.userId, role.id)
     ElMessage.success(t('memberManagement.removeSuccess'))
-    loadBusinessUnitMembers()
-  } catch (e: any) {
+    await loadBusinessUnitMembers()
+  } catch (e: unknown) {
     if (e !== 'cancel') {
-      ElMessage.error(e.message || t('memberManagement.removeFailed'))
+      ElMessage.error(e instanceof Error ? e.message : t('memberManagement.removeFailed'))
     }
   }
 }
 
 onMounted(() => {
-  loadManagedGroups()
-  loadManagedBusinessUnits()
+  void loadManagedGroups().catch((e: unknown) => {
+    if (!(e as { response?: unknown })?.response) {
+      ElMessage.error(e instanceof Error ? e.message : t('memberManagement.loadFailed'))
+    }
+  })
+  void loadManagedBusinessUnits().catch((e: unknown) => {
+    if (!(e as { response?: unknown })?.response) {
+      ElMessage.error(e instanceof Error ? e.message : t('memberManagement.loadFailed'))
+    }
+  })
 })
 </script>
 

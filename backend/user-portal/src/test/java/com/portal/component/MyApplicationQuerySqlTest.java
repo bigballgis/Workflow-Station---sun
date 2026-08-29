@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * My Requests pages in SQL: COUNT and the page share start_user_id (+ optional status tab),
- * group counts are not limited to the page, and undeclared filters are refused.
+ * and undeclared filters are refused.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -63,7 +63,7 @@ class MyApplicationQuerySqlTest {
 
     @Test
     void countAndPageShareTheInitiatorPredicate() {
-        component.query("user-1", request(null, null, List.of()));
+        component.query("user-1", request(null, List.of()));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM up_process_instance pi");
         assertThat(preparedSql.get(0)).contains("pi.start_user_id = ?");
@@ -72,19 +72,10 @@ class MyApplicationQuerySqlTest {
 
     @Test
     void statusTabIsInsideTheSharedPredicate() {
-        component.query("user-1", request("RUNNING", null, List.of()));
+        component.query("user-1", request("RUNNING", List.of()));
 
         assertThat(preparedSql.get(0)).contains("pi.status = ?");
         assertThat(pageSql()).contains("pi.status = ?");
-    }
-
-    @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query("user-1", request(null, "status", List.of()));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
     }
 
     @Test
@@ -99,17 +90,20 @@ class MyApplicationQuerySqlTest {
     }
 
     @Test
-    void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
-        assertThatThrownBy(() -> component.query("user-1", request(null, null,
-                List.of(new ListColumnFilter("secret", "contains", "x", null)))))
-                .isInstanceOf(IllegalArgumentException.class);
+    void currentAssigneeContainsLooksAtCandidatePoolNotOnlyClaimedUser() {
+        component.query("user-1", request(null,
+                List.of(new ListColumnFilter("currentAssignee", "contains", "id-a", null))));
+
+        assertThat(preparedSql.get(0)).contains("pi.candidate_users");
+        assertThat(preparedSql.get(0)).contains("concat_ws");
+        assertThat(pageSql()).contains("pi.candidate_users");
     }
 
     @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> component.query("user-1", request(null, "businessKey", List.of())))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not groupable");
+    void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
+        assertThatThrownBy(() -> component.query("user-1", request(null,
+                List.of(new ListColumnFilter("secret", "contains", "x", null)))))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -118,8 +112,8 @@ class MyApplicationQuerySqlTest {
                 .contains("(pi.variables - '__subTables__')");
     }
 
-    private MyApplicationQueryRequest request(String status, String groupBy, List<ListColumnFilter> filters) {
-        return new MyApplicationQueryRequest(0, 20, status, filters, null, null, groupBy);
+    private MyApplicationQueryRequest request(String status, List<ListColumnFilter> filters) {
+        return new MyApplicationQueryRequest(0, 20, status, filters, null, null, null);
     }
 
     private String pageSql() {

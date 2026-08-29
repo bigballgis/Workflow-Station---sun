@@ -3,10 +3,10 @@
  *
  * The backend list endpoint declares each column once (field, kind, capabilities,
  * operator whitelist, options); the UI renders strictly from that declaration and
- * never invents operators or grouping entries the backend would reject.
+ * never invents operators the backend would reject.
  */
 
-export type ListColumnKind = 'TEXT' | 'ENUM' | 'USER' | 'DATETIME' | 'NUMBER' | 'BOOLEAN'
+export type ListColumnKind = 'TEXT' | 'ENUM' | 'USER' | 'DATETIME' | 'NUMBER' | 'BOOLEAN' | 'FILE'
 
 export interface ListColumnOption {
   value: string
@@ -19,7 +19,6 @@ export interface ListColumnMeta {
   kind: ListColumnKind
   filterable: boolean
   sortable: boolean
-  groupable: boolean
   /** Operator whitelist for this column, in the order the filter dialog lists them. */
   operators: string[]
   /** Closed value list for ENUM / USER / BOOLEAN columns. */
@@ -89,6 +88,30 @@ export function operatorNeedsRange(operator: string): boolean {
  * Unknown operators mean the column declaration and this map are out of sync —
  * surface loudly instead of rendering a blank menu entry.
  */
+const TEXT_OPERATORS = [
+  'contains', 'notContains', 'eq', 'ne', 'startsWith', 'endsWith', 'isNull', 'isNotNull',
+]
+const CLOSED_VALUE_OPERATORS = ['eq', 'ne', 'isNull', 'isNotNull']
+/** People picker; contains = selected person appears as a comma-separated token in the cell. */
+const USER_OPERATORS = ['eq', 'ne', 'contains', 'notContains', 'isNotNull', 'isNull']
+const DATETIME_OPERATORS = [
+  'today', 'yesterday', 'last7days', 'last30days',
+  'thisWeek', 'thisMonth', 'thisYear',
+  'on', 'before', 'after', 'between', 'isNull', 'isNotNull',
+]
+const NUMBER_OPERATORS = [
+  'eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'between', 'isNull', 'isNotNull',
+]
+
+/** Kind → operator whitelist. Must stay in lockstep with `ListColumnMeta.operatorsFor` on the backend. */
+export function operatorsFor(kind: ListColumnKind): string[] {
+  if (kind === 'TEXT' || kind === 'FILE') return [...TEXT_OPERATORS]
+  if (kind === 'USER') return [...USER_OPERATORS]
+  if (kind === 'ENUM' || kind === 'BOOLEAN') return [...CLOSED_VALUE_OPERATORS]
+  if (kind === 'DATETIME') return [...DATETIME_OPERATORS]
+  return [...NUMBER_OPERATORS]
+}
+
 export function operatorLabelKey(operator: string): string {
   const key = OPERATOR_LABEL_KEYS[operator]
   if (!key) {

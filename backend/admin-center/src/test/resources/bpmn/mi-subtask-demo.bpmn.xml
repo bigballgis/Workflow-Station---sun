@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:custom="http://workflow.platform/schema/custom" xmlns:flowable="http://flowable.org/bpmn" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="fu-20260422-23tfag" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:endEvent id="EndEvent_1" name="End">
+      <bpmn:incoming>Flow_04w59ze</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_0z1px4l" />
+    <bpmn:userTask id="Activity_0z1px4l" name="submit">
+      <bpmn:extensionElements>
+        <custom:properties>
+          <custom:property name="formId" value="50193" />
+          <custom:property name="formName" value="Main" />
+          <custom:property name="actionIds" value="[50380,50381]" />
+          <custom:property name="actionNames" value="[&#34;Approve&#34;,&#34;reject&#34;]" />
+          <custom:property name="assigneeType" value="INITIATOR" />
+          <custom:property name="assigneeAnchor" value="" />
+          <custom:property name="roleId" value="" />
+          <custom:property name="businessUnitId" value="" />
+          <custom:property name="assigneeLabel" value="Process Initiator" />
+          <custom:property name="candidateUsers" value="" />
+          <custom:property name="candidateGroups" value="" />
+          <custom:property name="requestFormId" value="50603" />
+          <custom:property name="requestFormName" value="Main (My Request)" />
+        </custom:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_0eji6op</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:subProcess id="Activity_1m8yirt" name="multi">
+      <bpmn:extensionElements>
+        <custom:properties>
+          <custom:property name="multiInstance" value="true" />
+        </custom:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0jlp4p7</bpmn:incoming>
+      <bpmn:outgoing>Flow_04w59ze</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics flowable:collection="multiInstance_subtable_collection" flowable:elementVariable="currentItem" />
+      <bpmn:startEvent id="Event_03ygley">
+        <bpmn:outgoing>Flow_1dsyr04</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:userTask id="Activity_0j8mz1c" name="sub form1">
+        <bpmn:extensionElements>
+          <custom:properties>
+            <custom:property name="assigneeType" value="ELEMENT_VARIABLE" />
+            <custom:property name="assigneeAnchor" value="" />
+            <custom:property name="roleId" value="" />
+            <custom:property name="businessUnitId" value="" />
+            <custom:property name="assigneeLabel" value="" />
+            <custom:property name="candidateUsers" value="" />
+            <custom:property name="candidateGroups" value="" />
+            <custom:property name="subTableName" value="subtable" />
+            <custom:property name="subTableId" value="50331" />
+            <custom:property name="assigneeField" value="assignee" />
+            <custom:property name="assigneeMode" value="both" />
+            <custom:property name="roleField" value="role_code" />
+            <custom:property name="rowIdVariable" value="currentItem.rowId" />
+            <custom:property name="actionIds" value="[50378,50381,50380]" />
+            <custom:property name="actionNames" value="[&#34;Save&#34;,&#34;reject&#34;,&#34;Approve&#34;]" />
+            <custom:property name="formId" value="50192" />
+            <custom:property name="formName" value="Sub task" />
+            <custom:property name="buField" value="bu_code" />
+            <custom:property name="requestFormId" value="50602" />
+            <custom:property name="requestFormName" value="Sub task (My Request)" />
+          </custom:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_1dsyr04</bpmn:incoming>
+        <bpmn:outgoing>Flow_1m1auu0</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:sequenceFlow id="Flow_1dsyr04" sourceRef="Event_03ygley" targetRef="Activity_0j8mz1c" />
+      <bpmn:endEvent id="Event_0baw3ob">
+        <bpmn:incoming>Flow_0j9ngkk</bpmn:incoming>
+        <bpmn:incoming>Flow_1mzurdx</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_1m1auu0" sourceRef="Activity_0j8mz1c" targetRef="Gateway_kk_subtask_route" />
+      <bpmn:exclusiveGateway id="Gateway_kk_subtask_route" name="Route">
+        <bpmn:incoming>Flow_1m1auu0</bpmn:incoming>
+        <bpmn:outgoing>Flow_kk_gateway_to_subform2</bpmn:outgoing>
+        <bpmn:outgoing>Flow_1mzurdx</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+      <bpmn:sequenceFlow id="Flow_kk_gateway_to_subform2" name="yes" sourceRef="Gateway_kk_subtask_route" targetRef="Activity_134mqyl">
+        <bpmn:extensionElements>
+          <custom:properties>
+            <custom:property name="conditionType" value="script" />
+          </custom:properties>
+        </bpmn:extensionElements>
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${decision == 'yes'}</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+      <bpmn:userTask id="Activity_134mqyl" name="sub form2">
+        <bpmn:extensionElements>
+          <custom:properties>
+            <custom:property name="assigneeType" value="FIXED_BU_ROLE" />
+            <custom:property name="assigneeLabel" value="Fixed BU Role: Department Manager" />
+            <custom:property name="formId" value="50192" />
+            <custom:property name="formName" value="Sub task" />
+            <custom:property name="assigneeAnchor" value="" />
+            <custom:property name="roleId" value="MANAGER" />
+            <custom:property name="businessUnitId" value="E2E_FINANCE" />
+            <custom:property name="candidateUsers" value="" />
+            <custom:property name="candidateGroups" value="" />
+            <custom:property name="actionIds" value="[50381,50380]" />
+            <custom:property name="actionNames" value="[&#34;reject&#34;,&#34;Approve&#34;]" />
+            <custom:property name="roleIds" value="MANAGER" />
+            <custom:property name="requestFormId" value="50602" />
+            <custom:property name="requestFormName" value="Sub task (My Request)" />
+          </custom:properties>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_kk_gateway_to_subform2</bpmn:incoming>
+        <bpmn:outgoing>Flow_0j9ngkk</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:sequenceFlow id="Flow_0j9ngkk" sourceRef="Activity_134mqyl" targetRef="Event_0baw3ob" />
+      <bpmn:sequenceFlow id="Flow_1mzurdx" name="no" sourceRef="Gateway_kk_subtask_route" targetRef="Event_0baw3ob">
+        <bpmn:extensionElements>
+          <custom:properties>
+            <custom:property name="conditionType" value="script" />
+          </custom:properties>
+        </bpmn:extensionElements>
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${decision != 'yes'}</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="Flow_0eji6op" sourceRef="Activity_0z1px4l" targetRef="Activity_0hwtl8v" />
+    <bpmn:sequenceFlow id="Flow_04w59ze" sourceRef="Activity_1m8yirt" targetRef="EndEvent_1" />
+    <bpmn:userTask id="Activity_0hwtl8v" name="assignment">
+      <bpmn:extensionElements>
+        <custom:properties>
+          <custom:property name="actionIds" value="[50380,50381,50384]" />
+          <custom:property name="actionNames" value="[&#34;Approve&#34;,&#34;reject&#34;,&#34;Add Remark&#34;]" />
+          <custom:property name="formId" value="50191" />
+          <custom:property name="formName" value="Assign Task" />
+          <custom:property name="assigneeType" value="INITIATOR" />
+          <custom:property name="assigneeAnchor" value="" />
+          <custom:property name="roleId" value="" />
+          <custom:property name="businessUnitId" value="" />
+          <custom:property name="assigneeLabel" value="Process Initiator" />
+          <custom:property name="candidateUsers" value="" />
+          <custom:property name="candidateGroups" value="" />
+          <custom:property name="roleIds" value="" />
+          <custom:property name="requestFormId" value="50601" />
+          <custom:property name="requestFormName" value="Assign Task (My Request)" />
+        </custom:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0eji6op</bpmn:incoming>
+      <bpmn:outgoing>Flow_0jlp4p7</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_0jlp4p7" sourceRef="Activity_0hwtl8v" targetRef="Activity_1m8yirt" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="fu-20260422-23tfag">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="180" y="160" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="187" y="203" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="1202" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1210" y="225" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1xlf3py_di" bpmnElement="Activity_0z1px4l">
+        <dc:Bounds x="260" y="138" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0vysedw_di" bpmnElement="Activity_1m8yirt" isExpanded="true">
+        <dc:Bounds x="560" y="110" width="590" height="260" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_03ygley_di" bpmnElement="Event_03ygley">
+        <dc:Bounds x="600" y="192" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0fjydyt_di" bpmnElement="Activity_0j8mz1c">
+        <dc:Bounds x="690" y="170" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0baw3ob_di" bpmnElement="Event_0baw3ob">
+        <dc:Bounds x="1092" y="192" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_kk_subtask_route_di" bpmnElement="Gateway_kk_subtask_route" isMarkerVisible="true">
+        <dc:Bounds x="845" y="185" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="855" y="161" width="30" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0t6cbe9_di" bpmnElement="Activity_134mqyl">
+        <dc:Bounds x="940" y="170" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1dsyr04_di" bpmnElement="Flow_1dsyr04">
+        <di:waypoint x="636" y="210" />
+        <di:waypoint x="690" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1m1auu0_di" bpmnElement="Flow_1m1auu0">
+        <di:waypoint x="790" y="210" />
+        <di:waypoint x="845" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_kk_gateway_to_subform2_di" bpmnElement="Flow_kk_gateway_to_subform2">
+        <di:waypoint x="895" y="210" />
+        <di:waypoint x="940" y="210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="909" y="192" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0j9ngkk_di" bpmnElement="Flow_0j9ngkk">
+        <di:waypoint x="1040" y="210" />
+        <di:waypoint x="1092" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1mzurdx_di" bpmnElement="Flow_1mzurdx">
+        <di:waypoint x="870" y="235" />
+        <di:waypoint x="870" y="300" />
+        <di:waypoint x="1110" y="300" />
+        <di:waypoint x="1110" y="228" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="984" y="282" width="13" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_0arnk7n" bpmnElement="Activity_0hwtl8v">
+        <dc:Bounds x="390" y="138" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="216" y="178" />
+        <di:waypoint x="260" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0eji6op_di" bpmnElement="Flow_0eji6op">
+        <di:waypoint x="360" y="178" />
+        <di:waypoint x="390" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_04w59ze_di" bpmnElement="Flow_04w59ze">
+        <di:waypoint x="1150" y="200" />
+        <di:waypoint x="1202" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0jlp4p7_di" bpmnElement="Flow_0jlp4p7">
+        <di:waypoint x="490" y="178" />
+        <di:waypoint x="560" y="178" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

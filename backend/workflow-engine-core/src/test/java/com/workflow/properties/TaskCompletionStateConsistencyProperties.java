@@ -125,8 +125,8 @@ public class TaskCompletionStateConsistencyProperties {
         assertThat(task.getAssignmentType()).isEqualTo(AssignmentType.USER);
         assertThat(task.getAssignmentTarget()).isEqualTo(originalAssignee);
         
-        // 验证当前处理人仍然是委托接收人
-        assertThat(task.getCurrentAssignee()).isEqualTo(delegatedTo);
+        // 验证当前处理人仍是原办理人（委托不改 assignee）
+        assertThat(task.getCurrentAssignee()).isEqualTo(originalAssignee);
     }
     
     /**
@@ -360,9 +360,9 @@ public class TaskCompletionStateConsistencyProperties {
         task.delegateTask(delegatedTo, originalAssignee, delegationReason);
         LocalDateTime delegationTime = task.getDelegatedTime();
         
-        // 可能再次委托
+        // 可能由原办理人再次委托
         if (!delegatedTo.equals(finalCompletedBy)) {
-            task.delegateTask(finalCompletedBy, delegatedTo, "再次委托");
+            task.delegateTask(finalCompletedBy, originalAssignee, "再次委托");
         }
         
         LocalDateTime beforeCompletion = LocalDateTime.now();
@@ -394,8 +394,8 @@ public class TaskCompletionStateConsistencyProperties {
             assertThat(task.getCompletedTime()).isAfterOrEqualTo(delegationTime);
         }
         
-        // 验证当前处理人是完成人
-        assertThat(task.getCurrentAssignee()).isEqualTo(finalCompletedBy);
+        // 验证当前处理人仍是原办理人（委托不改 assignee）
+        assertThat(task.getCurrentAssignee()).isEqualTo(originalAssignee);
     }
     
     // ==================== 辅助方法 ====================

@@ -99,7 +99,6 @@ export function useRelationTableData() {
   const grid = useAdminListGrid<RelationTableDataRow>({
     storageKey: 'admin-list-layout:rt-data',
     extraWidth: () => RT_DATA_STATUS_COL_WIDTH + (canWrite.value ? RT_DATA_ACTIONS_COL_WIDTH : 0),
-    defaultWidthOf: (field) => (field.endsWith('_at') ? 170 : 120),
   })
 
   const hiddenFkFields = (): Set<string> => new Set(
@@ -112,7 +111,6 @@ export function useRelationTableData() {
     grid.columnFilters.value = {}
     grid.sort.field = null
     grid.sort.direction = null
-    grid.groupBy.value = null
     grid.resetPage()
   }
 

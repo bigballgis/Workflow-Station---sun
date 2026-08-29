@@ -14,8 +14,7 @@ public record RoleListQueryRequest(
         String type,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public RoleListQueryRequest {
         if (page < 0) {

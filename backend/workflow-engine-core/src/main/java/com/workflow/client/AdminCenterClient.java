@@ -401,6 +401,46 @@ public class AdminCenterClient {
     }
 
     /**
+     * Role id → code for workspace pair-match on single-task BU_ROLE delegate.
+     */
+    public String getRoleCodeById(String roleId) {
+        if (roleId == null || roleId.isBlank()) {
+            return null;
+        }
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/roles/" + SafeUrlInput.requirePathToken(roleId.trim());
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            Map<String, Object> result = response.getBody();
+            if (result == null) {
+                return null;
+            }
+            Object nested = result.get("data");
+            if (nested instanceof Map<?, ?> dataMap) {
+                Object nestedCode = dataMap.get("code");
+                if (nestedCode != null && !nestedCode.toString().isBlank()) {
+                    return nestedCode.toString().trim();
+                }
+            }
+            Object code = result.get("code");
+            if (code != null && !code.toString().isBlank()) {
+                return code.toString().trim();
+            }
+            return null;
+        } catch (HttpClientErrorException.NotFound e) {
+            return null;
+        } catch (RestClientException e) {
+            log.error("admin-center unavailable getting role code for id {}: {}", roleId, e.getMessage());
+            throw new AdminCenterUnavailableException(
+                    "Failed to get role code for id " + roleId, e);
+        }
+    }
+
+    /**
      * 获取业务单元的父业务单元ID
      * @param businessUnitId 业务单元ID
      * @return 父业务单元ID，如果没有父级则返回null

@@ -16,18 +16,13 @@ import { usePendingTaskStore } from '@/stores/pendingTask'
 
 export const CLAIM_ACTION_WIDTH = 180
 
-const TODO_COL_WIDTHS: Record<string, number> = {
-  requestId: 140,
-  taskName: 160,
-  currentStepName: 160,
-  processDefinitionName: 160,
-  assignmentType: 140,
-  initiatorName: 120,
-  assigneeName: 140,
-  priority: 100,
-  createTime: 170,
-  dueDate: 180,
-}
+const TODO_VISIBLE_FIELDS = [
+  'requestId',
+  'functionUnitCode',
+  'taskName',
+  'assignmentType',
+  'createTime',
+] as const
 
 export function useTodoTasksPage() {
   const pendingTaskStore = usePendingTaskStore()
@@ -44,9 +39,9 @@ export function useTodoTasksPage() {
   })
 
   const grid = usePortalListGrid<TaskInfo>({
-    storageKey: 'portal-list-layout:todo-tasks',
+    storageKey: 'portal-list-layout:todo-tasks-v2',
     extraWidth: 50 + CLAIM_ACTION_WIDTH,
-    defaultWidthOf: (field) => TODO_COL_WIDTHS[field] ?? 120,
+    visibleFields: TODO_VISIBLE_FIELDS,
   })
 
   const actionDialogVisible = ref(false)
@@ -114,9 +109,6 @@ export function useTodoTasksPage() {
       grid.clearFilter(field)
     }
     grid.clearSort()
-    if (grid.groupBy.value) {
-      grid.applyGroup(grid.groupBy.value, false)
-    }
     handleSearch()
   }
 
@@ -127,11 +119,6 @@ export function useTodoTasksPage() {
 
   function onClearSort() {
     grid.clearSort()
-    loadTasks()
-  }
-
-  function onGroup(field: string, grouped: boolean) {
-    grid.applyGroup(field, grouped)
     loadTasks()
   }
 
@@ -150,7 +137,7 @@ export function useTodoTasksPage() {
   }
 
   const handleSelectionChange = (selection: TaskInfo[]) => {
-    selectedTasks.value = selection.filter((row) => !grid.isListGroupHeaderRow(row))
+    selectedTasks.value = selection
   }
 
   const viewTask = async (task: TaskInfo) => {
@@ -243,7 +230,6 @@ export function useTodoTasksPage() {
     handleReset,
     onSort,
     onClearSort,
-    onGroup,
     onClearFilter,
     onFilterApply,
     onFilterClear,

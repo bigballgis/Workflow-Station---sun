@@ -59,6 +59,13 @@ export const GUIDELINES: Guideline[] = [
     summaryKey: 'guides.upTasksToClaim.summary',
     load: () => import('@/views/UpTasksToClaimGuide.vue'),
   },
+  {
+    id: 'task-delegate',
+    path: '/task-delegate',
+    titleKey: 'guides.taskDelegate.title',
+    summaryKey: 'guides.taskDelegate.summary',
+    load: () => import('@/views/TaskDelegateGuide.vue'),
+  },
 ]
 
 /**
@@ -182,6 +189,7 @@ export const NAV_TREE: NavNode[] = [
         titleKey: 'nav.upSectionTask',
         children: [
           { kind: 'leaf', id: 'up-todo', titleKey: 'nav.upTodo', to: '/up-tasks-to-claim' },
+          { kind: 'leaf', id: 'up-delegate', titleKey: 'guides.taskDelegate.title', to: '/task-delegate' },
           { kind: 'leaf', id: 'up-done', titleKey: 'nav.upCompleted' },
         ],
       },

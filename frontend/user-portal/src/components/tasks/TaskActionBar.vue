@@ -47,8 +47,10 @@
             <el-icon><Close /></el-icon> {{ $t('task.reject') }}
           </el-button>
         </template>
-        <!-- Transfer, delegate, urge always shown -->
-        <el-button @click="$emit('delegate')">
+        <el-button
+          v-if="canDelegate"
+          @click="$emit('delegate')"
+        >
           <el-icon><User /></el-icon> {{ $t('task.delegate') }}
         </el-button>
         <el-button @click="$emit('transfer')">
@@ -77,6 +79,7 @@ defineProps<{
   showImplicitSaveAction: boolean
   savingTaskForm: boolean
   actions: TaskActionInfo[] | undefined | null
+  canDelegate: boolean
   getButtonType: (color?: string) => string
   getIconComponent: (iconName?: string) => Component
   getActionLabel: (action: TaskActionInfo) => string

@@ -16,13 +16,6 @@ import {
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const ACTIONS_COL_WIDTH = 200
-const RBAC_COL_WIDTHS: Record<string, number> = {
-  sysRoleName: 150,
-  sysRoleCode: 140,
-  sysRoleType: 140,
-  supersetRoles: 220,
-  lastUpdatedAt: 170,
-}
 
 export function useBiRbac() {
   const { t } = useI18n()
@@ -38,7 +31,6 @@ export function useBiRbac() {
   const grid = useAdminListGrid<RbacMappingResponse>({
     storageKey: 'admin-list-layout:bi-rbac',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => RBAC_COL_WIDTHS[field] ?? 140,
   })
 
   // Edit dialog

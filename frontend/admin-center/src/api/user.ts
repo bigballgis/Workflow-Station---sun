@@ -67,7 +67,6 @@ export interface UserListQuery {
   filters?: ListColumnFilterRequest[]
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export interface CreateUserRequest {

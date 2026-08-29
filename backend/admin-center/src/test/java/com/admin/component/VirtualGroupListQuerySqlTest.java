@@ -96,7 +96,7 @@ class VirtualGroupListQuerySqlTest {
 
     private static VirtualGroupListQueryRequest request(
             String type, String keyword, List<ListColumnFilter> filters) {
-        return new VirtualGroupListQueryRequest(0, 20, type, keyword, filters, null, null, null);
+        return new VirtualGroupListQueryRequest(0, 20, type, keyword, filters, null, null);
     }
 
     private String pageSql() {
