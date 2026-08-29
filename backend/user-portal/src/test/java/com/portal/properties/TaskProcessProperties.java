@@ -2,7 +2,12 @@ package com.portal.properties;
 
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
+import com.portal.component.ClaimForceUnclaimAnnotator;
+import com.portal.component.CompletedTaskListQueryComponent;
 import com.portal.component.DelegatedTaskQueryComponent;
+import com.portal.component.EngineVisibleTaskFetcher;
+import com.portal.component.MineTaskListCache;
+import com.portal.component.MineTaskScanner;
 import com.portal.component.MiCollectionVariableBuilder;
 import com.portal.component.MiOverlayComponent;
 import com.portal.component.MiParticipantEnrichmentComponent;
@@ -10,11 +15,13 @@ import com.portal.component.SubTablePhysicalMetadataCache;
 import com.portal.component.ProcessInstanceSyncComponent;
 import com.portal.component.SubTableRowAssignmentComponent;
 import com.portal.component.TaskApprovalCompletionComponent;
+import com.portal.component.TaskDetailQueryComponent;
 import com.portal.component.TaskFormComponent;
 import com.portal.component.TaskHistoryComponent;
 import com.portal.component.TaskPermissionEvaluator;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
+import com.portal.component.TodoListQueryComponent;
 import com.portal.component.VirtualGroupAccessComponent;
 import com.portal.component.WorkspaceTaskFilterComponent;
 import com.portal.dto.TaskCompleteRequest;
@@ -107,19 +114,28 @@ class TaskProcessProperties {
             new com.portal.component.EngineSubTableHydrator(workflowEngineClient);
         TaskPermissionEvaluator taskPermissionEvaluator =
             new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient);
+        WorkspaceTaskFilterComponent workspaceFilter = new WorkspaceTaskFilterComponent(
+                workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository);
+        EngineVisibleTaskFetcher engineFetcher = new EngineVisibleTaskFetcher(
+                workflowEngineClient, processInstanceRepository, workspaceFilter);
+        MineTaskListCache mineCache = new MineTaskListCache();
+        MineTaskScanner mineScanner = new MineTaskScanner(
+                mineCache, engineFetcher, requestIdEnricher, taskPermissionEvaluator,
+                Mockito.mock(ClaimForceUnclaimAnnotator.class), workspaceFilter, processInstanceRepository);
+        TaskDetailQueryComponent taskDetail = new TaskDetailQueryComponent(
+                processInstanceRepository, workflowEngineClient, engineSubTableHydrator, taskActionService,
+                new MiParticipantEnrichmentComponent(jdbcTemplate), requestIdEnricher);
         taskQueryComponent = new TaskQueryComponent(
-            processInstanceRepository,
             workflowEngineClient,
-            engineSubTableHydrator,
-            taskActionService,
             new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
-            new WorkspaceTaskFilterComponent(
-                workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository),
-            new MiParticipantEnrichmentComponent(jdbcTemplate),
             new TaskHistoryComponent(workflowEngineClient, processHistoryRepository),
             requestIdEnricher,
-            taskPermissionEvaluator,
-            Mockito.mock(com.portal.component.ClaimForceUnclaimAnnotator.class)
+            Mockito.mock(CompletedTaskListQueryComponent.class),
+            mineScanner,
+            engineFetcher,
+            taskDetail,
+            Mockito.mock(TodoListQueryComponent.class),
+            mineCache
         );
         ProcessInstanceSyncComponent processInstanceSyncComponent =
             new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository,

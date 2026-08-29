@@ -91,6 +91,7 @@ public class TaskProcessComponent {
         // Update process instance current assignee (portal stores JWT userId)
         processInstanceSyncComponent.updateProcessInstanceAssignee(task.getProcessInstanceId(), userId, null, task.getTaskName());
 
+        taskQueryComponent.invalidateMineTaskListCache();
         log.info("Task {} claimed via Flowable by user {}", taskId, userId);
         return task;
     }
@@ -147,6 +148,7 @@ public class TaskProcessComponent {
                 snapshot.getCandidateUserIds(),
                 task.getTaskName());
 
+        taskQueryComponent.invalidateMineTaskListCache();
         log.info("Task {} unclaimed via Flowable by user {}", taskId, userId);
         return task;
     }

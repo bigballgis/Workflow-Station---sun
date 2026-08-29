@@ -3,6 +3,9 @@ package com.portal.util;
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TodoTaskColumnSpecTest {
@@ -23,6 +26,19 @@ class TodoTaskColumnSpecTest {
         assertThat(taskName.filterable()).isTrue();
         assertThat(taskName.sortable()).isTrue();
         assertThat(taskName.operators()).contains("contains");
+    }
+
+    @Test
+    void assignmentTypeOptionsDropVirtualGroupAndAddBuRole() {
+        List<String> values = column("assignmentType").options().stream()
+                .map(ListColumnMeta.Option::value)
+                .toList();
+        assertThat(values).contains("USER", "BU_ROLE", "DEPT_ROLE").doesNotContain("VIRTUAL_GROUP");
+    }
+
+    @Test
+    void claimedByColumnIsPresent() {
+        assertThat(column("assigneeName").label()).isEqualTo("task.claimedBy");
     }
 
     private static ListColumnMeta column(String field) {

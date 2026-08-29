@@ -50,9 +50,8 @@ public final class BuRolePoolTasks {
     }
 
     /**
-     * My To Do after this version: non-pool tasks stay; pool tasks stay only when already held
-     * (claimed, or the previous single-person auto-assign). Unheld pool rows move to Tasks to Claim
-     * with no Flowable rewrite.
+     * Mine engine query: non-pool tasks stay; pool tasks stay only when already held.
+     * Unheld and colleague-held pool rows join To Do via {@code TodoListUnion}, not this predicate.
      */
     public static boolean staysOnTodoList(TaskInfo task) {
         return !isClaimPoolTask(task) || isHeld(task);

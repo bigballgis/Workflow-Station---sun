@@ -123,8 +123,38 @@ public final class TaskQueryColumnFilters {
         if ("priority".equals(filter.field())) {
             return priorityMatches(task.getPriority(), filter);
         }
+        if ("assignmentType".equals(filter.field())) {
+            return assignmentTypeMatches(task, filter);
+        }
         String actual = resolveFieldValue(task, filter.field());
         return textMatches(actual, filter.operator(), filter.value() != null ? filter.value() : "");
+    }
+
+    static boolean assignmentTypeMatches(TaskInfo task, ListColumnFilter filter) {
+        String op = filter.operator() != null ? filter.operator().trim() : "";
+        String expected = filter.value() != null ? filter.value().trim() : "";
+        if ("isNull".equals(op)) {
+            return task.getAssignmentType() == null || task.getAssignmentType().isBlank();
+        }
+        if ("isNotNull".equals(op)) {
+            return task.getAssignmentType() != null && !task.getAssignmentType().isBlank();
+        }
+        if ("eq".equals(op)) {
+            return TodoAssignmentTypes.matchesOne(task, expected);
+        }
+        if ("ne".equals(op)) {
+            return !TodoAssignmentTypes.matchesOne(task, expected);
+        }
+        if ("in".equals(op)) {
+            for (String part : expected.split(",")) {
+                if (TodoAssignmentTypes.matchesOne(task, part.trim())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        String actual = TodoAssignmentTypes.displayToken(task);
+        return textMatches(actual, op, expected);
     }
 
     /**
