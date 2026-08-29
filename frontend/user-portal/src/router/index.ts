@@ -52,9 +52,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'tasks/to-claim',
-        name: 'TasksToClaim',
-        component: () => import('@/views/tasks/to-claim.vue'),
-        meta: { titleKey: 'menu.tasksToClaim', icon: 'Pointer' }
+        redirect: '/tasks',
       },
       {
         path: 'tasks/completed',

@@ -18,8 +18,8 @@
         :label="t('task.user')"
       />
       <el-option
-        value="VIRTUAL_GROUP"
-        :label="t('task.virtualGroup')"
+        value="BU_ROLE"
+        :label="t('task.buRole')"
       />
       <el-option
         value="DEPT_ROLE"

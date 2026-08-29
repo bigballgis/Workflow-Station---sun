@@ -2,9 +2,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-const { claimTask, unclaimTask } = vi.hoisted(() => ({
+const { claimTask, unclaimTask, claimBatch, unclaimBatch } = vi.hoisted(() => ({
   claimTask: vi.fn(),
   unclaimTask: vi.fn(),
+  claimBatch: vi.fn(),
+  unclaimBatch: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -19,6 +21,8 @@ vi.mock('element-plus', () => ({
 vi.mock('@/api/task', () => ({
   claimTask: (...args: unknown[]) => claimTask(...args),
   unclaimTask: (...args: unknown[]) => unclaimTask(...args),
+  claimBatch: (...args: unknown[]) => claimBatch(...args),
+  unclaimBatch: (...args: unknown[]) => unclaimBatch(...args),
 }))
 
 import { useTaskClaimActions } from '../useTaskClaimActions'
@@ -29,6 +33,9 @@ describe('useTaskClaimActions', () => {
     vi.mocked(ElMessage.error).mockReset()
     claimTask.mockReset()
     unclaimTask.mockReset()
+    claimBatch.mockReset()
+    unclaimBatch.mockReset()
+    vi.mocked(ElMessageBox.confirm).mockReset()
   })
 
   it('reloads after a successful claim', async () => {
@@ -93,5 +100,92 @@ describe('useTaskClaimActions', () => {
     expect(unclaimTask).toHaveBeenCalledWith('task-1', 'BU_ROLE', 'alice')
     expect(ElMessage.success).toHaveBeenCalledWith('task.forceUnclaimSuccess')
     expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('claimAll confirms once then loops batches until remaining is 0', async () => {
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    claimBatch
+      .mockResolvedValueOnce({
+        data: { claimed: 100, skipped: 0, failed: 0, remaining: 20, attemptedTaskIds: ['a'] },
+      })
+      .mockResolvedValueOnce({
+        data: { claimed: 20, skipped: 1, failed: 0, remaining: 0, attemptedTaskIds: ['b'] },
+      })
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { claimAll } = useTaskClaimActions({ reload })
+
+    await claimAll()
+
+    expect(claimBatch).toHaveBeenCalledTimes(2)
+    expect(claimBatch.mock.calls[1][0]).toEqual(['a'])
+    expect(ElMessage.success).toHaveBeenCalledWith('task.claimAllDone')
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('claimAll stops when the user cancels confirm', async () => {
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { claimAll } = useTaskClaimActions({ reload })
+
+    await claimAll()
+
+    expect(claimBatch).not.toHaveBeenCalled()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('unclaimAll confirms once then loops batches until remaining is 0', async () => {
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    unclaimBatch
+      .mockResolvedValueOnce({
+        data: { claimed: 100, skipped: 0, failed: 0, remaining: 5, attemptedTaskIds: ['h1'] },
+      })
+      .mockResolvedValueOnce({
+        data: { claimed: 5, skipped: 0, failed: 0, remaining: 0, attemptedTaskIds: ['h2'] },
+      })
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { unclaimAll } = useTaskClaimActions({ reload })
+
+    await unclaimAll()
+
+    expect(unclaimBatch).toHaveBeenCalledTimes(2)
+    expect(unclaimBatch.mock.calls[1][0]).toEqual(['h1'])
+    expect(ElMessage.success).toHaveBeenCalledWith('task.unclaimAllDone')
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('prepareTodoOpen claims without success toast or reload when auto-claim is on', async () => {
+    claimTask.mockResolvedValue({})
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { prepareTodoOpen } = useTaskClaimActions({ reload })
+
+    await prepareTodoOpen({ taskId: 't1', claimable: true }, true)
+
+    expect(claimTask).toHaveBeenCalledWith('t1')
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('prepareTodoOpen skips claim when auto-claim is off or row is not claimable', async () => {
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { prepareTodoOpen } = useTaskClaimActions({ reload })
+
+    await prepareTodoOpen({ taskId: 't1', claimable: true }, false)
+    await prepareTodoOpen({ taskId: 't2', claimable: false }, true)
+
+    expect(claimTask).not.toHaveBeenCalled()
+  })
+
+  it('prepareTodoOpen toasts on claim error and rethrows so navigation stops', async () => {
+    claimTask.mockRejectedValue({
+      response: { status: 409, data: { message: 'Already claimed' } },
+      message: 'Request failed with status code 409',
+    })
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { prepareTodoOpen } = useTaskClaimActions({ reload })
+
+    await expect(prepareTodoOpen({ taskId: 't1', claimable: true }, true)).rejects.toBeTruthy()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('Already claimed')
+    expect(reload).not.toHaveBeenCalled()
   })
 })

@@ -1,0 +1,263 @@
+import { ref, reactive, onMounted, onActivated } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
+import type { ListColumnFilter } from '@platform-shared/list/columnMeta'
+import { queryTodoTasks, batchUrgeTasks, type TaskInfo, type TodoTaskQueryRequest } from '@/api/task'
+import { usePortalListGrid } from '@/composables/list/usePortalListGrid'
+import { useTaskClaimActions } from '@/composables/tasks/useTaskClaimActions'
+import {
+  readTodoToolbarQuery,
+  writeTodoToolbarQuery,
+} from '@/composables/tasks/todoToolbarQuery'
+import { useUserPreferenceStore } from '@/stores/userPreference'
+import { taskPriorityBand, taskPriorityCssClass } from '@/utils/taskPriority'
+import { usePendingTaskStore } from '@/stores/pendingTask'
+
+export const CLAIM_ACTION_WIDTH = 180
+
+const TODO_COL_WIDTHS: Record<string, number> = {
+  requestId: 140,
+  taskName: 160,
+  currentStepName: 160,
+  processDefinitionName: 160,
+  assignmentType: 140,
+  initiatorName: 120,
+  assigneeName: 140,
+  priority: 100,
+  createTime: 170,
+  dueDate: 180,
+}
+
+export function useTodoTasksPage() {
+  const pendingTaskStore = usePendingTaskStore()
+  const preferenceStore = useUserPreferenceStore()
+  const { t } = useI18n()
+  const router = useRouter()
+  const loading = ref(true)
+  const selectedTasks = ref<TaskInfo[]>([])
+  const storedToolbarQuery = readTodoToolbarQuery()
+  const filterForm = reactive({
+    assignmentTypes: storedToolbarQuery.assignmentTypes,
+    priorities: storedToolbarQuery.priorities,
+    keyword: storedToolbarQuery.keyword,
+  })
+
+  const grid = usePortalListGrid<TaskInfo>({
+    storageKey: 'portal-list-layout:todo-tasks',
+    extraWidth: 50 + CLAIM_ACTION_WIDTH,
+    defaultWidthOf: (field) => TODO_COL_WIDTHS[field] ?? 120,
+  })
+
+  const actionDialogVisible = ref(false)
+  const actionDialogTitle = ref('')
+  const currentAction = ref('')
+  const actionForm = reactive({
+    targetUserId: '',
+    reason: '',
+  })
+  const actingTaskId = ref<string | null>(null)
+  const claimAllBusy = ref(false)
+
+  const loadTasks = async () => {
+    const seq = grid.beginQuery()
+    loading.value = true
+    try {
+      const res = await queryTodoTasks(todoQueryBody())
+      if (!grid.isCurrentQuery(seq)) return
+      grid.applyPage(res.data, 'todo/query response is missing its column declaration')
+      pendingTaskStore.syncCountFromListTotal(res.data.totalElements)
+    } catch (error) {
+      if (!grid.isCurrentQuery(seq)) return
+      if (!(error as { response?: unknown })?.response) {
+        ElMessage.error(error instanceof Error ? error.message : t('task.loadFailed'))
+      }
+    } finally {
+      if (grid.isCurrentQuery(seq)) loading.value = false
+    }
+  }
+
+  const { claim, unclaim, forceUnclaim, claimAll, unclaimAll, prepareTodoOpen } = useTaskClaimActions({
+    reload: loadTasks,
+    actingTaskId,
+    submitting: claimAllBusy,
+  })
+
+  function todoQueryBody(): TodoTaskQueryRequest {
+    const body: TodoTaskQueryRequest = { ...grid.buildQuery() }
+    const keyword = filterForm.keyword.trim()
+    if (keyword) body.keyword = keyword
+    if (filterForm.assignmentTypes.length > 0) body.assignmentTypes = filterForm.assignmentTypes
+    if (filterForm.priorities.length > 0) body.priorities = filterForm.priorities
+    return body
+  }
+
+  function persistToolbarQuery() {
+    writeTodoToolbarQuery({
+      keyword: filterForm.keyword,
+      assignmentTypes: filterForm.assignmentTypes,
+      priorities: filterForm.priorities,
+    })
+  }
+
+  function handleSearch() {
+    grid.pagination.page = 1
+    persistToolbarQuery()
+    loadTasks()
+  }
+
+  function handleReset() {
+    filterForm.assignmentTypes = []
+    filterForm.priorities = []
+    filterForm.keyword = ''
+    for (const field of Object.keys(grid.columnFilters.value)) {
+      grid.clearFilter(field)
+    }
+    grid.clearSort()
+    if (grid.groupBy.value) {
+      grid.applyGroup(grid.groupBy.value, false)
+    }
+    handleSearch()
+  }
+
+  function onSort(field: string, direction: 'ASC' | 'DESC') {
+    grid.applySort(field, direction)
+    loadTasks()
+  }
+
+  function onClearSort() {
+    grid.clearSort()
+    loadTasks()
+  }
+
+  function onGroup(field: string, grouped: boolean) {
+    grid.applyGroup(field, grouped)
+    loadTasks()
+  }
+
+  function onClearFilter(field: string) {
+    grid.clearFilter(field)
+    loadTasks()
+  }
+
+  function onFilterApply(filter: ListColumnFilter) {
+    grid.applyFilter(filter)
+    loadTasks()
+  }
+
+  function onFilterClear() {
+    onClearFilter(grid.filterDialog.field)
+  }
+
+  const handleSelectionChange = (selection: TaskInfo[]) => {
+    selectedTasks.value = selection.filter((row) => !grid.isListGroupHeaderRow(row))
+  }
+
+  const viewTask = async (task: TaskInfo) => {
+    persistToolbarQuery()
+    await preferenceStore.load()
+    try {
+      await prepareTodoOpen(task, preferenceStore.autoClaimOnOpen)
+    } catch {
+      return
+    }
+    router.push(`/tasks/${task.taskId}`)
+  }
+
+  function handleClaim(task: TaskInfo) {
+    return claim(task.taskId)
+  }
+
+  function handleUnclaim(task: TaskInfo) {
+    return unclaim(task.taskId, task.assignmentType, task.assignee)
+  }
+
+  function handleForceUnclaim(task: TaskInfo) {
+    return forceUnclaim(task.taskId, task.assignmentType, task.assignee, task.assigneeName)
+  }
+
+  function onAutoClaimChange(value: string | number | boolean) {
+    return preferenceStore.setAutoClaimOnOpen(value === true)
+  }
+
+  const handleBatchUrge = () => {
+    currentAction.value = 'batchUrge'
+    actionDialogTitle.value = t('task.batchUrge')
+    actionForm.reason = ''
+    actionDialogVisible.value = true
+  }
+
+  const submitAction = async () => {
+    try {
+      if (currentAction.value === 'batchUrge') {
+        const taskIds = selectedTasks.value.map((task) => task.taskId)
+        await batchUrgeTasks(taskIds, actionForm.reason)
+        ElMessage.success(t('common.success'))
+      }
+      actionDialogVisible.value = false
+      loadTasks()
+    } catch (error) {
+      const msg =
+        (error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
+        ?? (error as { message?: string })?.message
+        ?? t('common.error')
+      ElMessage.error(msg)
+    }
+  }
+
+  const getPriorityLabel = (priority: string | number | undefined): string => {
+    return t(`task.${taskPriorityBand(priority).toLowerCase()}`)
+  }
+
+  const getPriorityClass = (priority: string | number | undefined): string => {
+    return taskPriorityCssClass(priority)
+  }
+
+  let skipActivateReload = true
+  onMounted(() => {
+    void preferenceStore.load()
+    loadTasks()
+  })
+  onActivated(() => {
+    if (skipActivateReload) {
+      skipActivateReload = false
+      return
+    }
+    loadTasks()
+  })
+
+  return {
+    t,
+    preferenceStore,
+    loading,
+    selectedTasks,
+    filterForm,
+    ...grid,
+    actionDialogVisible,
+    actionDialogTitle,
+    actionForm,
+    actingTaskId,
+    claimAllBusy,
+    loadTasks,
+    handleSearch,
+    handleReset,
+    onSort,
+    onClearSort,
+    onGroup,
+    onClearFilter,
+    onFilterApply,
+    onFilterClear,
+    handleSelectionChange,
+    viewTask,
+    handleClaim,
+    handleUnclaim,
+    handleForceUnclaim,
+    handleClaimAll: claimAll,
+    handleUnclaimAll: unclaimAll,
+    onAutoClaimChange,
+    handleBatchUrge,
+    submitAction,
+    getPriorityLabel,
+    getPriorityClass,
+  }
+}

@@ -156,6 +156,18 @@ body {
     --el-tag-border-color: #722ed1;
     --el-tag-text-color: #722ed1;
   }
+
+  &.bu-role {
+    --el-tag-bg-color: rgba(19, 194, 194, 0.12);
+    --el-tag-border-color: #13c2c2;
+    --el-tag-text-color: #08979c;
+  }
+
+  &.candidate-users {
+    --el-tag-bg-color: rgba(47, 84, 235, 0.1);
+    --el-tag-border-color: #2f54eb;
+    --el-tag-text-color: #2f54eb;
+  }
 }
 
 // 页面过渡动画

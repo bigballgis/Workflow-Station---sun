@@ -209,7 +209,36 @@ export function getTaskStatistics() {
   return request.get<{ data: TaskStatistics }>('/tasks/statistics')
 }
 
-// Claim task
+export interface ClaimBatchResponse {
+  claimed: number
+  skipped: number
+  failed: number
+  remaining: number
+  attemptedTaskIds: string[]
+}
+
+export function claimBatch(excludeTaskIds: string[]) {
+  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
+    skipGlobalErrorHandler: true,
+  }
+  return request.post<{ data: ClaimBatchResponse }>(
+    '/tasks/claim-batch',
+    { excludeTaskIds },
+    config,
+  )
+}
+
+export function unclaimBatch(excludeTaskIds: string[]) {
+  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
+    skipGlobalErrorHandler: true,
+  }
+  return request.post<{ data: ClaimBatchResponse }>(
+    '/tasks/unclaim-batch',
+    { excludeTaskIds },
+    config,
+  )
+}
+
 export function claimTask(taskId: string) {
   const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
     skipGlobalErrorHandler: true,
