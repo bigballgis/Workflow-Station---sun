@@ -32,8 +32,18 @@ const sections: GuideSection[] = [
     bodyKey: 'upTasksToClaimGuide.claimBody',
     samples: [
       { code: 'Claim', hintKey: 'upTasksToClaimGuide.claimSample' },
+      { code: 'Claim all', hintKey: 'upTasksToClaimGuide.claimAllSample' },
       { code: 'Unclaim', hintKey: 'upTasksToClaimGuide.unclaimSample' },
+      { code: 'Unclaim all', hintKey: 'upTasksToClaimGuide.unclaimAllSample' },
       { code: 'Claimed By', hintKey: 'upTasksToClaimGuide.claimedBySample' },
+    ],
+  },
+  {
+    anchor: 'auto-claim',
+    titleKey: 'upTasksToClaimGuide.autoClaimTitle',
+    bodyKey: 'upTasksToClaimGuide.autoClaimBody',
+    samples: [
+      { code: 'Auto-claim on open', hintKey: 'upTasksToClaimGuide.autoClaimSample' },
     ],
   },
   {

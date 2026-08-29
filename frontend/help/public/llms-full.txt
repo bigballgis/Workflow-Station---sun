@@ -49,15 +49,11 @@ Every enabled monitor template must be bound before Deploy. Bound templates cann
 
 Related: /help/email-send#connection , /help/computed-fields
 
-## Tasks to Claim (/help/up-tasks-to-claim)
+## To Do — claim pool (/help/up-tasks-to-claim)
 
-Shared queue for user tasks assigned to a business unit role. Every member of that role sees the same list. Claim before edit or submit. Direct-user, hierarchy, and virtual-group tasks stay on My To Do Tasks.
+To Do lists direct assignments and business-unit role requests (free, held by you, held by a colleague) on one page. Claim before edit. Claim all (top right) confirms once then claims every free request in batches of 100. Unclaim all releases only your holds; it never force-unclaims a colleague. Auto-claim on open (To Do and User Profile, stored with the account, default off) claims a free role request when you click its Request ID on To Do only — not Home, notifications, or Completed Tasks. Assignment Type uses a distinct colour per category; the filter no longer includes Virtual Group (use BU + role). /tasks/to-claim redirects here.
 
-Order: open Tasks to Claim → open a row with empty Claimed By → Claim → edit and submit. Unclaim lets another role member take it.
+Order: open To Do → Claim, Claim all, or Unclaim all → edit and submit.
 
-After this version: deploy does not rewrite running tasks. Unheld BU-role requests leave My To Do and appear on Tasks to Claim (must Claim). Already-assigned BU-role requests stay on the holder’s My To Do (complete without reclaiming). Other members still see the held row on Tasks to Claim.
-
-Claim fails if another member already holds it, you left the role written at task create, or the engine is down.
-
-Leader of that role, the business-unit Approver, and SYS_ADMIN can Force Unclaim someone else’s hold (confirm first). Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role. The approver’s Approve Request dialog shows that choice and the role. Admin User Management shows the tier; Organization Eligible Roles lists Leaders of each role.
+Leader of that role, the business-unit Approver, and SYS_ADMIN can Force Unclaim someone else’s hold (confirm first). Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role.
 

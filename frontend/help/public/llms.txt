@@ -10,7 +10,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 - /help/computed-fields — Computed field formulas (Table Design; Admin Relation Tables #relation)
 - /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task)
 - /help/email-monitor — Email Monitor (inbound connection, monitor template, Start Event binding)
-- /help/up-tasks-to-claim — Tasks to Claim (User Portal Task; claim before edit; Leader / Approver / SYS_ADMIN force unclaim)
+- /help/up-tasks-to-claim — To Do: claim pool on the same list; Claim all; Unclaim all (own holds); auto-claim on open (default off); Leader / Approver / SYS_ADMIN force unclaim
 
 ## Figures
 

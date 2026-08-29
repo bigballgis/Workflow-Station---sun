@@ -181,13 +181,7 @@ export const NAV_TREE: NavNode[] = [
         id: 'up-task',
         titleKey: 'nav.upSectionTask',
         children: [
-          { kind: 'leaf', id: 'up-todo', titleKey: 'nav.upTodo' },
-          {
-            kind: 'leaf',
-            id: 'up-to-claim',
-            titleKey: 'nav.upTasksToClaim',
-            to: '/up-tasks-to-claim',
-          },
+          { kind: 'leaf', id: 'up-todo', titleKey: 'nav.upTodo', to: '/up-tasks-to-claim' },
           { kind: 'leaf', id: 'up-done', titleKey: 'nav.upCompleted' },
         ],
       },

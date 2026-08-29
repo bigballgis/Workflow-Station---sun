@@ -63,7 +63,7 @@ export default {
     portal: 'User Portal',
     upHome: 'Home',
     upSectionTask: 'Task',
-    upTodo: 'My To Do Tasks',
+    upTodo: 'To Do',
     upTasksToClaim: 'Tasks to Claim',
     upCompleted: 'Completed Tasks',
     upSectionRequest: 'Request',
@@ -92,9 +92,9 @@ export default {
       summary: 'Inbound mailbox, monitor template, field extraction, and Start Event binding before Deploy.',
     },
     upTasksToClaim: {
-      title: 'Tasks to Claim',
+      title: 'To Do — claim pool',
       summary:
-        'Claim a business-unit role request before you edit it; Leaders, BU Approvers, and System Administrators can force-release someone else’s hold.',
+        'Business-unit role requests live on To Do. Claim before you edit; Claim all takes every free request in batches; Unclaim all releases only your holds. Optional auto-claim on open is off by default. Leaders, BU Approvers, and System Administrators can force-release someone else’s hold.',
     },
   },
   computedFieldGuide: {
@@ -227,38 +227,44 @@ export default {
       'A template bound to one or more Start Events cannot be deleted. Unbind it in Process Design first, then delete the template.',
   },
   upTasksToClaimGuide: {
-    pageTitle: 'Tasks to Claim',
-    crumb: 'User Portal · Task · Tasks to Claim',
+    pageTitle: 'To Do — claiming role requests',
+    crumb: 'User Portal · Task · To Do',
     intro:
-      'Tasks to Claim is the shared queue for user tasks assigned to a business unit role. Every member of that role sees the same list. You must Claim a request before you can edit or submit it. Direct-user, hierarchy, and virtual-group tasks stay on My To Do Tasks and do not appear here.',
+      'To Do lists requests assigned to you and business-unit role requests for your role. Role requests that nobody holds yet, that you hold, and that a colleague holds all stay on this one list. You must Claim a free role request before you can edit or submit it. Assignment Type uses a different colour for each category. Claim all claims every request that is free for you. Unclaim all releases only the role requests you hold. Auto-claim on open, off by default, claims a free role request when you open it from this list.',
     flowTitle: 'Order of work',
-    flow1: 'Open Tasks to Claim',
-    flow2: 'Open a request that has no Claimed By name',
-    flow3: 'Click Claim, then edit and submit',
-    flow4: 'Use Unclaim if you need to let another role member take it',
+    flow1: 'Open To Do',
+    flow2: 'Find a role request with an empty Claimed By cell, or click Claim all',
+    flow3: 'Click Claim (or wait for Claim all), then edit and submit',
+    flow4: 'Use Unclaim or Unclaim all if you need to let another role member take it',
     listTitle: 'What the list shows',
     listBody:
-      'Open User Portal → Task → Tasks to Claim. Claimed By is empty until someone holds the request. After a claim, the column shows You for your own hold, or the other person’s name. A Held row is still on this list so the whole role can see who took it. Click the Request ID to open the form.',
-    claimTitle: 'Claim and Unclaim',
+      'Open User Portal → Task → To Do. Direct-user, department-role, and delegated requests appear with their Assignment Type colour. Role-pool requests use the BU + role colour. Claimed By is empty until someone holds a role request. After a claim, the column shows You for your own hold, or the other person’s name (Held). Click the Request ID to open the form.',
+    claimTitle: 'Claim, Unclaim, Claim all, and Unclaim all',
     claimBody:
-      'Claim locks the request to you. It then appears on My To Do Tasks for you, and other members can only view it. Unclaim clears the holder so any remaining member of the same role can Claim it again. Completing the task does not need a second Claim if you already hold it.',
-    claimSample: 'button on the list and on the task banner',
-    unclaimSample: 'releases the hold; the row stays on Tasks to Claim with Claimed By empty',
-    claimedBySample: 'column on Tasks to Claim',
+      'Claim locks the request to you. Other members of the role can only view it until you Unclaim or complete it. Completing the task does not need a second Claim if you already hold it. Claim all confirms once, then claims every free request in batches of 100 until none remain. Unclaim all confirms once, then releases every role request you hold, in the same batch size. It never force-releases a colleague’s hold. If some rows fail, the toast shows claimed / skipped / failed counts.',
+    claimSample: 'Claim on the row, or Claim all at the top right',
+    unclaimSample: 'releases the hold; Claimed By becomes empty and another member can Claim it',
+    claimedBySample: 'column on To Do for role-pool rows',
+    claimAllSample: 'top-right button; one confirm, then automatic batches',
+    unclaimAllSample: 'next to Claim all; releases only your holds, never a colleague’s',
+    autoClaimTitle: 'Auto-claim on open',
+    autoClaimBody:
+      'The Auto-claim on open switch sits on the To Do top bar and on User Profile. It is stored with your account and defaults to off. When it is on, clicking a Request ID on To Do claims that row first if it is still free, then opens the form. There is no success toast. If the claim fails (for example someone else just took it), you still open the form and see an error. Home, notifications, email links, bookmarks, and Completed Tasks do not auto-claim.',
+    autoClaimSample: 'switch on To Do and User Profile; default off',
     detailTitle: 'On the task page',
     detailBody:
-      'If nobody holds the request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit. If you are a Leader of this role, a BU Approver of this business unit, or a System Administrator, the banner and the Tasks to Claim list also show Force Unclaim.',
+      'If nobody holds the role request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit. If you are a Leader of this role, a BU Approver of this business unit, or a System Administrator, the banner and the list also show Force Unclaim.',
     leaderTitle: 'Leader, Approver, and Admin',
     leaderBody:
-      'Member and Leader are per business unit and role, not a platform-wide flag. A Member Claims and Unclaims only their own hold. A Leader of that same role can Force Unclaim a hold taken by someone else. The business unit Approver and a System Administrator (SYS_ADMIN) have the same Force Unclaim right. An Auditor cannot. Confirm before Force Unclaim: the request returns to Tasks to Claim with Claimed By empty, and another Member can Claim it. Admin Center → User Management shows Member or Leader on each business unit role. Organization → Eligible Roles lists the Leaders of each role so you can find who can release a stuck hold.',
+      'Member and Leader are per business unit and role, not a platform-wide flag. A Member Claims and Unclaims only their own hold. A Leader of that same role can Force Unclaim a hold taken by someone else. The business unit Approver and a System Administrator (SYS_ADMIN) have the same Force Unclaim right. An Auditor cannot. Confirm before Force Unclaim: Claimed By becomes empty, and another Member can Claim it. Admin Center → User Management shows Member or Leader on each business unit role. Organization → Eligible Roles lists the Leaders of each role so you can find who can release a stuck hold.',
     applyTitle: 'Apply as Member or Leader',
     applyBody:
       'Open User Profile Setup → Apply Permission. Choose the business unit and role, then Member or Leader. The approver’s Approve Request dialog shows that Member or Leader choice and the role. If you already have that role as a Member, you can apply to become Leader. After approval, the User Profile Setup card and Admin user page show Leader on that role.',
-    upgradeTitle: 'After this version: existing To Do',
+    upgradeTitle: 'After this version: one To Do list',
     upgradeBody:
-      'Deploy does not rewrite running tasks. A business-unit role request that had no holder moves off My To Do Tasks onto Tasks to Claim — Claim it before you edit. A role request that already had your name as the assignee stays on your My To Do Tasks; finish it as before, without claiming again. Other role members still see that held row on Tasks to Claim as Held. Tasks that are not business-unit role stay on My To Do Tasks as they did before.',
+      'Tasks to Claim is no longer a separate menu. Free role requests, your holds, and colleague holds all appear on To Do. Assignment Type no longer offers Virtual Group as a filter; use BU + role for the claim pool. Older bookmarks to /tasks/to-claim open To Do.',
     failTitle: 'When Claim fails',
     failBody:
-      'Claim fails if another member already holds the request, you are no longer in the role that was written when the task was created, or the engine is unavailable. Refresh the list: the Claimed By column shows the current holder. Unclaim fails if you are not the holder. Force Unclaim fails if you are not a Leader of that role, a BU Approver of that business unit, or a System Administrator.',
+      'Claim fails if another member already holds the request, you are no longer in the role that was written when the task was created, or the engine is unavailable. Refresh the list: the Claimed By column shows the current holder. Unclaim fails if you are not the holder. Unclaim all skips colleague holds and reports skipped or failed counts. Force Unclaim fails if you are not a Leader of that role, a BU Approver of that business unit, or a System Administrator. Claim all continues after a failed row and reports the failed count at the end.',
   },
 }
