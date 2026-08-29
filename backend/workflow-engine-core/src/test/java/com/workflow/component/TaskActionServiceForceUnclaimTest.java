@@ -6,6 +6,7 @@ import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.workflow.service.UserPermissionService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
@@ -59,9 +60,13 @@ class TaskActionServiceForceUnclaimTest {
     private BpmnActionParser bpmnActionParser;
     @Mock
     private RuntimeService runtimeService;
+    @Mock
+    private TaskOrphanRepairService taskOrphanRepairService;
+    @Mock
+    private UserPermissionService userPermissionService;
 
     @InjectMocks
-    private TaskActionService taskActionService;
+    private TaskClaimSupport taskClaimSupport;
 
     @BeforeEach
     void setUp() {
@@ -101,10 +106,11 @@ class TaskActionServiceForceUnclaimTest {
         when(adminCenterClient.canForceUnclaim(ACTOR_ID, TASK_ID, BUSINESS_UNIT_ID, List.of(ROLE_ID)))
                 .thenReturn(true);
 
-        TaskAssignmentResult result = taskActionService.unclaimTask(TASK_ID, ACTOR_ID);
+        TaskAssignmentResult result = taskClaimSupport.unclaimTask(TASK_ID, ACTOR_ID);
 
         assertThat(result.isSuccess()).isTrue();
         verify(taskService).unclaim(TASK_ID);
+        verify(taskOrphanRepairService).restoreBuRoleClaimPool(any());
         verify(extendedTaskInfoRepository).save(any(ExtendedTaskInfo.class));
     }
 
@@ -134,11 +140,42 @@ class TaskActionServiceForceUnclaimTest {
     @Test
     @DisplayName("Holder can still self-unclaim without Force Unclaim evaluate")
     void holderSelfUnclaimDoesNotCallForceUnclaim() {
-        TaskAssignmentResult result = taskActionService.unclaimTask(TASK_ID, HOLDER_ID);
+        TaskAssignmentResult result = taskClaimSupport.unclaimTask(TASK_ID, HOLDER_ID);
 
         assertThat(result.isSuccess()).isTrue();
         verify(taskService).unclaim(TASK_ID);
+        verify(taskOrphanRepairService).restoreBuRoleClaimPool(any());
         verify(adminCenterClient, never()).canForceUnclaim(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Unclaim rewrites a stale USER extended row to CANDIDATE_USERS from Flowable links")
+    void unclaimSyncsStaleUserRowToCandidatePool() {
+        org.flowable.identitylink.api.IdentityLink link =
+                mock(org.flowable.identitylink.api.IdentityLink.class);
+        when(link.getType()).thenReturn("candidate");
+        when(link.getUserId()).thenReturn(HOLDER_ID);
+        when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(List.of(link));
+
+        ExtendedTaskInfo staleUser = ExtendedTaskInfo.builder()
+                .taskId(TASK_ID)
+                .processInstanceId(PROCESS_INSTANCE_ID)
+                .processDefinitionId(PROCESS_DEFINITION_ID)
+                .assignmentType(AssignmentType.USER)
+                .assignmentTarget(HOLDER_ID)
+                .claimedBy(HOLDER_ID)
+                .status("CLAIMED")
+                .isDeleted(false)
+                .build();
+        when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
+                .thenReturn(Optional.of(staleUser));
+
+        TaskAssignmentResult result = taskClaimSupport.unclaimTask(TASK_ID, HOLDER_ID);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAssignmentType()).isEqualTo(AssignmentType.CANDIDATE_USERS);
+        assertThat(staleUser.getAssignmentType()).isEqualTo(AssignmentType.CANDIDATE_USERS);
+        assertThat(staleUser.getAssignmentTarget()).isEqualTo(HOLDER_ID);
     }
 
     @Test
@@ -155,7 +192,7 @@ class TaskActionServiceForceUnclaimTest {
         when(adminCenterClient.canForceUnclaim(ACTOR_ID, TASK_ID, "bu-from-var", List.of(ROLE_ID)))
                 .thenReturn(true);
 
-        assertThat(taskActionService.unclaimTask(TASK_ID, ACTOR_ID).isSuccess()).isTrue();
+        assertThat(taskClaimSupport.unclaimTask(TASK_ID, ACTOR_ID).isSuccess()).isTrue();
         verify(adminCenterClient).canForceUnclaim(ACTOR_ID, TASK_ID, "bu-from-var", List.of(ROLE_ID));
     }
 
@@ -169,7 +206,7 @@ class TaskActionServiceForceUnclaimTest {
     }
 
     private void assertRejectedAsAssigneeOnly() {
-        assertThatThrownBy(() -> taskActionService.unclaimTask(TASK_ID, ACTOR_ID))
+        assertThatThrownBy(() -> taskClaimSupport.unclaimTask(TASK_ID, ACTOR_ID))
                 .isInstanceOf(WorkflowValidationException.class)
                 .hasMessageContaining("Only assignee can unclaim");
     }
