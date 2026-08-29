@@ -227,6 +227,14 @@ public class TaskQueryComponent {
 
     private static final int FULL_SCAN_CACHE_TTL_MS = 15_000;
     private static final int FULL_SCAN_CACHE_MAX = 64;
+
+    /**
+     * Upper bound on the orphaned-task fallback in
+     * {@code mergeTasksFromRunningProcessInstancesForUser}, which costs one engine HTTP call per
+     * RUNNING instance. Well above a normal user's open-request count, so ordinary behaviour is
+     * unchanged; it only stops pathological accounts from stalling the To Do list.
+     */
+    private static final int MAX_ORPHAN_MERGE_INSTANCES = 50;
     private final Map<String, FullScanCacheEntry> fullScanCache = Collections.synchronizedMap(
             new LinkedHashMap<>(32, 0.75f, true) {
                 @Override
@@ -455,13 +463,28 @@ public class TaskQueryComponent {
         if (running.isEmpty()) {
             return;
         }
+        // Safety net for orphaned tasks: one engine call per RUNNING instance. Bounded so a user with
+        // many open requests cannot turn an empty task list into thousands of sequential HTTP calls.
+        // Instances are newest-first, so the cap keeps the rows a user is most likely to be working on.
+        List<ProcessInstance> scanned = running;
+        if (running.size() > MAX_ORPHAN_MERGE_INSTANCES) {
+            scanned = running.stream()
+                    .sorted(Comparator.comparing(
+                            ProcessInstance::getStartTime,
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .limit(MAX_ORPHAN_MERGE_INSTANCES)
+                    .toList();
+            log.warn("Orphan task merge capped at {} of {} RUNNING instance(s) for user {}; "
+                    + "older instances skipped to protect list latency",
+                    MAX_ORPHAN_MERGE_INSTANCES, running.size(), userId);
+        }
         log.info("Flowable user-task query was empty; merging from {} RUNNING process instance(s) for user {}",
-                running.size(), userId);
+                scanned.size(), userId);
         Set<String> seen = allTasks.stream()
                 .map(TaskInfo::getTaskId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(HashSet::new));
-        for (ProcessInstance pi : running) {
+        for (ProcessInstance pi : scanned) {
             String pid = pi.getId();
             if (pid == null || pid.isBlank()) {
                 continue;
