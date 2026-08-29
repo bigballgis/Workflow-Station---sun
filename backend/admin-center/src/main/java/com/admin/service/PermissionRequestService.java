@@ -161,20 +161,13 @@ public class PermissionRequestService {
     }
     
     /**
-     * 获取用户可申请的业务单元列表
-     * 只返回用户尚未加入且有审批人的业务单元
+     * Business units a user may apply to: those with an approver, including ones already joined
+     * (extra eligible role or MEMBER → LEADER). Same-tier duplicate UBR is rejected on submit.
      */
     public List<com.platform.security.entity.BusinessUnit> getApplicableBusinessUnits(String userId) {
-        // 获取用户已加入的业务单元ID
-        List<String> joinedBusinessUnitIds = memberManagementService.getUserBusinessUnitIds(userId);
-        
-        // 获取所有有审批人的业务单元
+        log.debug("Applicable business units for user {}", userId);
         List<String> businessUnitIdsWithApprover = approverService.getBusinessUnitIdsWithApprover();
-        
-        // 返回用户未加入且有审批人的业务单元
-        return businessUnitRepository.findAllById(businessUnitIdsWithApprover).stream()
-                .filter(bu -> !joinedBusinessUnitIds.contains(bu.getId()))
-                .toList();
+        return businessUnitRepository.findAllById(businessUnitIdsWithApprover);
     }
     
     /**

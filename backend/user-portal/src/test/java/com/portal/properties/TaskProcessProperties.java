@@ -118,7 +118,8 @@ class TaskProcessProperties {
             new MiParticipantEnrichmentComponent(jdbcTemplate),
             new TaskHistoryComponent(workflowEngineClient, processHistoryRepository),
             requestIdEnricher,
-            taskPermissionEvaluator
+            taskPermissionEvaluator,
+            Mockito.mock(com.portal.component.ClaimForceUnclaimAnnotator.class)
         );
         ProcessInstanceSyncComponent processInstanceSyncComponent =
             new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository,
@@ -150,7 +151,8 @@ class TaskProcessProperties {
             subTableRowAssignmentComponent,
             taskApprovalCompletionComponent,
             processInstanceSyncComponent,
-            miOverlayComponent
+            miOverlayComponent,
+            Mockito.mock(com.portal.component.ClaimForceUnclaimAnnotator.class)
         );
         random = new Random();
 

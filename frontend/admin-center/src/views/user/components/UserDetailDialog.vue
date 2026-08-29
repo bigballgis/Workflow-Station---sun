@@ -139,8 +139,13 @@
               {{ t('user.portalVirtualGroupHint') }}
             </div>
 
-            <div class="section-title">
+            <div class="section-title section-title--with-help">
               {{ t('user.buRoleAssignments') }}
+              <DesignerHelpLink
+                path="/up-tasks-to-claim#leader"
+                :aria-label="t('user.ubrLeaderGuideLinkAria')"
+                test-id="user-ubr-leader-guide-link"
+              />
             </div>
             <div class="ubr-toolbar">
               <el-button
@@ -175,11 +180,42 @@
                     width="160"
                   />
                   <el-table-column
+                    :label="t('user.membershipType')"
+                    width="110"
+                  >
+                    <template #default="{ row }">
+                      <el-tag
+                        size="small"
+                        :type="row.membershipType === 'LEADER' ? 'warning' : 'info'"
+                      >
+                        {{ row.membershipType === 'LEADER' ? t('user.leader') : t('user.member') }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
                     :label="t('common.operation')"
-                    width="100"
+                    width="220"
                     align="center"
                   >
                     <template #default="{ row }">
+                      <el-button
+                        v-if="row.membershipType !== 'LEADER'"
+                        type="primary"
+                        link
+                        size="small"
+                        @click="setBuRoleMembership(row, 'LEADER')"
+                      >
+                        {{ t('user.makeLeader') }}
+                      </el-button>
+                      <el-button
+                        v-else
+                        type="primary"
+                        link
+                        size="small"
+                        @click="setBuRoleMembership(row, 'MEMBER')"
+                      >
+                        {{ t('user.makeMember') }}
+                      </el-button>
                       <el-button
                         type="danger"
                         link
@@ -389,6 +425,16 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item :label="t('user.membershipType')">
+          <el-radio-group v-model="assignForm.membershipType">
+            <el-radio value="MEMBER">
+              {{ t('user.member') }}
+            </el-radio>
+            <el-radio value="LEADER">
+              {{ t('user.leader') }}
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
       </el-form>
       <p
         v-if="assignRoleLoaded && !assignRoleOptions.length"
@@ -416,6 +462,7 @@
 import { watch, toRef, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserDetail } from '@/composables/modules/useUserDetail'
+import DesignerHelpLink from '@/components/relation-table/DesignerHelpLink.vue'
 
 const props = defineProps<{ modelValue: boolean; userId: string }>()
 defineEmits(['update:modelValue'])
@@ -436,6 +483,7 @@ const { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, plat
   assignRoleOptions, assignRoleLoaded, assignForm,
   getPlatformRoleTagType, statusType, statusText, formatDate,
   loadDetail, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole,
+  setBuRoleMembership,
 } = useUserDetail(toRef(props, 'userId'))
 
 const successfulLoginHistory = computed(() =>
@@ -472,6 +520,11 @@ watch(() => props.modelValue, async (val) => {
     margin: 20px 0 12px;
     padding-left: 8px;
     border-left: 3px solid #DB0011;
+  }
+  .section-title--with-help {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .section-hint {
     font-size: 12px;

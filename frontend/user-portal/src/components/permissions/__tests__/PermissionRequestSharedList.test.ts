@@ -54,4 +54,51 @@ describe('PermissionRequestSharedList', () => {
     expect(api.mock.calls[0][0].scope).toBe('MY_PENDING')
     expect(wrapper!.findAllComponents({ name: 'ListColumnHeader' }).length).toBeGreaterThan(0)
   })
+
+  it('renders Member / Leader on pending approval rows', async () => {
+    api.mockResolvedValue({
+      data: {
+        columns: [
+          { field: 'applicantId', label: 'permission.beneficiaryColumn', kind: 'USER', filterable: true, sortable: true, groupable: true, operators: ['eq'] },
+          { field: 'submittedByUserId', label: 'permission.submittedByColumn', kind: 'USER', filterable: true, sortable: true, groupable: true, operators: ['eq'] },
+          { field: 'requestType', label: 'permission.requestType', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [] },
+          { field: 'targetName', label: 'permission.requestTarget', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains'] },
+          { field: 'membershipType', label: 'permission.membershipType', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [] },
+          { field: 'reason', label: 'permission.reason', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains'] },
+          { field: 'createdAt', label: 'permission.applyTime', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['between'] },
+        ],
+        content: [{
+          id: '4',
+          applicantId: 'u-12345',
+          applicantUsername: '12345',
+          requestType: 'BUSINESS_UNIT_JOIN',
+          targetId: 'bu-hmdc',
+          targetName: 'hase-hmdc',
+          membershipType: 'MEMBER',
+          roleNames: ['HMDC_Approver_Role'],
+          reason: 'test',
+          status: 'PENDING',
+          createdAt: '2026-08-29T00:00:00Z',
+        }],
+        totalElements: 1,
+        page: 0,
+        size: 20,
+        groups: [],
+      },
+    } as never)
+
+    wrapper = mount(PermissionRequestSharedList, {
+      props: {
+        scope: 'APPROVALS_PENDING',
+        storageKey: 'test-perm-approvals-pending',
+        emptyText: 'empty',
+        actionMode: 'approve',
+        enabled: true,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    expect(wrapper!.text()).toContain('permission.member')
+    expect(wrapper!.text()).not.toContain('permission.leader')
+  })
 })

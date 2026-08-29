@@ -12,7 +12,7 @@ class PermissionRequestColumnSpecTest {
         assertThat(PermissionRequestColumnSpec.columns())
                 .filteredOn(ListColumnMeta::groupable)
                 .extracting(ListColumnMeta::field)
-                .containsExactlyInAnyOrder("requestType", "status", "applicantId", "submittedByUserId");
+                .containsExactlyInAnyOrder("requestType", "status", "applicantId", "submittedByUserId", "membershipType");
     }
 
     @Test

@@ -116,6 +116,7 @@ public class DelegatedTaskQueryComponent {
                             .processDefinitionName(taskInfo.getProcessDefinitionName())
                             .bpmnAssigneeType(taskInfo.getBpmnAssigneeType())
                             .bpmnBusinessUnitId(taskInfo.getBpmnBusinessUnitId())
+                            .bpmnRoleIds(taskInfo.getBpmnRoleIds())
                             .assignmentType("DELEGATED")
                             .assignee(delegateUserId)
                             .delegatorId(delegatorId)

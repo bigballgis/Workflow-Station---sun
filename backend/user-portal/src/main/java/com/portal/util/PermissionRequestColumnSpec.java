@@ -27,6 +27,8 @@ public final class PermissionRequestColumnSpec {
                 ListColumnMeta.withOptions("requestType", "permission.requestType",
                         Kind.ENUM, typeOptions()),
                 ListColumnMeta.of("targetName", "permission.requestTarget", Kind.TEXT),
+                ListColumnMeta.withOptions("membershipType", "permission.membershipType",
+                        Kind.ENUM, membershipOptions()),
                 ListColumnMeta.of("applicantId", "permission.beneficiaryColumn", Kind.USER),
                 ListColumnMeta.of("submittedByUserId", "permission.submittedByColumn", Kind.USER),
                 ListColumnMeta.of("reason", "permission.reason", Kind.TEXT),
@@ -49,6 +51,7 @@ public final class PermissionRequestColumnSpec {
         return switch (field) {
             case "requestType" -> "p.request_type";
             case "targetName" -> TARGET_SQL;
+            case "membershipType" -> "p.membership_type";
             case "applicantId" -> "p.applicant_id";
             case "submittedByUserId" -> "p.submitted_by_user_id";
             case "reason" -> "p.reason";
@@ -67,6 +70,13 @@ public final class PermissionRequestColumnSpec {
                 new ListColumnMeta.Option("BUSINESS_UNIT_JOIN", "permission.businessUnitJoin"),
                 new ListColumnMeta.Option("BUSINESS_UNIT_ROLE_REMOVAL", "permission.businessUnitRoleRemoval"),
                 new ListColumnMeta.Option("BUSINESS_UNIT_EXIT", "permission.businessUnitExit")
+        );
+    }
+
+    private static List<ListColumnMeta.Option> membershipOptions() {
+        return List.of(
+                new ListColumnMeta.Option("MEMBER", "permission.member"),
+                new ListColumnMeta.Option("LEADER", "permission.leader")
         );
     }
 

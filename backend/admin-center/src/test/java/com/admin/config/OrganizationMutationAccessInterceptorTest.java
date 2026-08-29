@@ -24,13 +24,15 @@ import static org.mockito.Mockito.when;
 class OrganizationMutationAccessInterceptorTest {
 
     private OrganizationMutationAccessInterceptor interceptor;
+    private I18nService i18nService;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
-        I18nService i18nService = mock(I18nService.class);
+        i18nService = mock(I18nService.class);
         when(i18nService.getMessage("auth.no_permission")).thenReturn("No permission");
-        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        interceptor = new OrganizationMutationAccessInterceptor(i18nService, objectMapper);
+        objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        interceptor = new OrganizationMutationAccessInterceptor(i18nService, objectMapper, "");
     }
 
     @AfterEach
@@ -78,6 +80,26 @@ class OrganizationMutationAccessInterceptorTest {
     void claimPathIsExcluded() throws Exception {
         authenticate(List.of("AUDITOR"), List.of());
         assertTrue(preHandle("POST", "/virtual-groups/vg-1/tasks/t-1/claim"));
+    }
+
+    @Test
+    void trustedServiceTokenAllowsOrgMutationWithoutAdminRoles() throws Exception {
+        interceptor = new OrganizationMutationAccessInterceptor(i18nService, objectMapper, "svc-secret");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/business-units/bu-1/members");
+        request.setServletPath("/business-units/bu-1/members");
+        request.addHeader(com.platform.common.constant.PlatformConstants.HEADER_SERVICE_TOKEN, "svc-secret");
+        assertTrue(interceptor.preHandle(request, new MockHttpServletResponse(), new Object()));
+    }
+
+    @Test
+    void wrongServiceTokenDoesNotBypassGuard() throws Exception {
+        interceptor = new OrganizationMutationAccessInterceptor(i18nService, objectMapper, "svc-secret");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/business-units/bu-1/members");
+        request.setServletPath("/business-units/bu-1/members");
+        request.addHeader(com.platform.common.constant.PlatformConstants.HEADER_SERVICE_TOKEN, "wrong");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertFalse(interceptor.preHandle(request, response, new Object()));
+        assertEquals(HttpServletResponse.SC_FORBIDDEN, response.getStatus());
     }
 
     private boolean preHandle(String method, String path) throws Exception {

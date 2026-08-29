@@ -83,6 +83,16 @@
                 {{ getStatusLabel(row.status) }}
               </el-tag>
               <span v-else-if="col.field === 'targetName'">{{ getTargetName(row) }}</span>
+              <template v-else-if="col.field === 'membershipType'">
+                <el-tag
+                  v-if="isBuJoinMembershipRequest(row)"
+                  size="small"
+                  :type="row.membershipType === 'LEADER' ? 'warning' : 'info'"
+                >
+                  {{ getMembershipTypeLabel(row) }}
+                </el-tag>
+                <span v-else>-</span>
+              </template>
               <span v-else-if="col.field === 'applicantId'">
                 {{ row.applicantUsername || row.applicantId || '-' }}
               </span>
@@ -188,16 +198,16 @@ export type PermissionListScope =
   | 'APPROVALS_HISTORY'
 
 const SCOPE_FIELDS: Record<PermissionListScope, string[]> = {
-  MY_PENDING: ['requestType', 'targetName', 'applicantId', 'submittedByUserId', 'reason', 'createdAt'],
+  MY_PENDING: ['requestType', 'targetName', 'membershipType', 'applicantId', 'submittedByUserId', 'reason', 'createdAt'],
   MY_COMPLETED: [
-    'requestType', 'targetName', 'applicantId', 'submittedByUserId', 'reason',
+    'requestType', 'targetName', 'membershipType', 'applicantId', 'submittedByUserId', 'reason',
     'status', 'approverComment', 'createdAt', 'approvedAt',
   ],
   APPROVALS_PENDING: [
-    'applicantId', 'submittedByUserId', 'requestType', 'targetName', 'reason', 'createdAt',
+    'applicantId', 'submittedByUserId', 'requestType', 'targetName', 'membershipType', 'reason', 'createdAt',
   ],
   APPROVALS_HISTORY: [
-    'applicantId', 'submittedByUserId', 'requestType', 'targetName', 'status',
+    'applicantId', 'submittedByUserId', 'requestType', 'targetName', 'membershipType', 'status',
     'approverComment', 'approvedAt',
   ],
 }
@@ -205,6 +215,7 @@ const SCOPE_FIELDS: Record<PermissionListScope, string[]> = {
 const COL_WIDTHS: Record<string, number> = {
   requestType: 160,
   targetName: 160,
+  membershipType: 130,
   applicantId: 140,
   submittedByUserId: 140,
   reason: 160,
@@ -241,6 +252,8 @@ const {
   getRequestTypeTag,
   getRequestTypeLabel,
   getTargetName,
+  isBuJoinMembershipRequest,
+  getMembershipTypeLabel,
   formatDateTime,
   canCancelAsBeneficiary,
 } = usePermissionFormatters(t)

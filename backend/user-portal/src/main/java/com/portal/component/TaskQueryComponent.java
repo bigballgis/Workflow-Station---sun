@@ -75,6 +75,7 @@ public class TaskQueryComponent {
     private final TaskHistoryComponent taskHistoryComponent;
     private final RequestIdEnricher requestIdEnricher;
     private final TaskPermissionEvaluator taskPermissionEvaluator;
+    private final ClaimForceUnclaimAnnotator claimForceUnclaimAnnotator;
 
     /** Lazy: breaks cycle with {@link TaskProcessComponent} which depends on this component. */
     @Lazy
@@ -255,6 +256,7 @@ public class TaskQueryComponent {
                 .collect(Collectors.toCollection(ArrayList::new));
         visible = workspaceTaskFilter.filterFixedBuRoleTasksForActiveWorkspace(visible, userId);
         taskPermissionEvaluator.annotateClaimState(visible, userId, portalUsername);
+        claimForceUnclaimAnnotator.annotate(visible, userId);
         return visible;
     }
 
@@ -557,6 +559,7 @@ public class TaskQueryComponent {
                 .filter(BuRolePoolTasks::staysOnTodoList)
                 .collect(Collectors.toList());
         taskPermissionEvaluator.annotateClaimState(filtered, userId, portalUsername);
+        claimForceUnclaimAnnotator.annotate(filtered, userId);
         return workspaceTaskFilter.filterFixedBuRoleTasksForActiveWorkspace(filtered, userId);
     }
 

@@ -2,11 +2,16 @@
   <el-dialog
     v-model="visible"
     :title="t('organization.eligibleRoles') + ' - ' + (businessUnit?.name || '')"
-    width="600px"
+    width="720px"
     @open="fetchRoles"
   >
     <div class="hint-text">
-      {{ t('organization.eligibleRolesDesc') }}
+      <span>{{ t('organization.eligibleRolesDesc') }}</span>
+      <DesignerHelpLink
+        path="/up-tasks-to-claim#leader"
+        :aria-label="t('organization.roleLeadersGuideLinkAria')"
+        test-id="org-role-leaders-guide-link"
+      />
     </div>
     <div
       v-if="!readOnly"
@@ -49,6 +54,14 @@
         :label="t('role.roleCode')"
       />
       <el-table-column
+        :label="t('organization.leaders')"
+        min-width="180"
+      >
+        <template #default="{ row }">
+          {{ roleLeaders[row.id] || t('organization.noLeaders') }}
+        </template>
+      </el-table-column>
+      <el-table-column
         v-if="!readOnly"
         :label="t('common.operation')"
         width="100"
@@ -71,13 +84,14 @@
 import { toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBusinessUnitRoles } from '@/composables/modules/useBusinessUnitRoles'
+import DesignerHelpLink from '@/components/relation-table/DesignerHelpLink.vue'
 import type { BusinessUnit } from '@/api/businessUnit'
 
 const props = defineProps<{ businessUnit: BusinessUnit | null; readOnly?: boolean }>()
 const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
 
-const { loading, boundRoles, availableRoles, selectedRoleId, fetchRoles, bindRole, unbindRole }
+const { loading, boundRoles, availableRoles, selectedRoleId, roleLeaders, fetchRoles, bindRole, unbindRole }
   = useBusinessUnitRoles(toRef(props, 'businessUnit'))
 </script>
 
@@ -86,6 +100,9 @@ const { loading, boundRoles, availableRoles, selectedRoleId, fetchRoles, bindRol
   color: #909399;
   font-size: 13px;
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .roles-header {
   display: flex;

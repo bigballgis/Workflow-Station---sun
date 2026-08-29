@@ -90,7 +90,7 @@ public class PermissionComponent {
     }
 
     /**
-     * 获取用户可加入的业务单元（排除已加入的）
+     * 用户可申请的业务单元（含已加入：额外 Eligible Role 或 MEMBER→LEADER）
      */
     public List<Map<String, Object>> getAvailableBusinessUnits(String userId) {
         return catalogComponent.getAvailableBusinessUnits(userId);
@@ -148,6 +148,13 @@ public class PermissionComponent {
     public PermissionRequest requestBusinessUnitJoinWithRole(String submittedByUserId, String beneficiaryUserId,
                                                              String businessUnitId, String roleId, String reason) {
         return submissionComponent.requestBusinessUnitJoinWithRole(submittedByUserId, beneficiaryUserId, businessUnitId, roleId, reason);
+    }
+
+    public PermissionRequest requestBusinessUnitJoinWithRole(String submittedByUserId, String beneficiaryUserId,
+                                                             String businessUnitId, String roleId, String reason,
+                                                             String membershipType) {
+        return submissionComponent.requestBusinessUnitJoinWithRole(
+                submittedByUserId, beneficiaryUserId, businessUnitId, roleId, reason, membershipType);
     }
 
     /**

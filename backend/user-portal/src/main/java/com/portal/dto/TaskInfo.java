@@ -50,6 +50,11 @@ public class TaskInfo {
     private String bpmnBusinessUnitId;
 
     /**
+     * BPMN extension roleIds / roleId (claim-pool Leader matching).
+     */
+    private List<String> bpmnRoleIds;
+
+    /**
      * MI 按角色分派信号（引擎从 ExtendedTaskInfo.extendedProperties 透出）：
      * miAssigneeMode=role 表示该 MI 子任务按角色分派（共享认领池），据此做 workspace 可见性收敛
      * （role 分派仅在用户切到该 role 的 workspace 才可见）；miRoleCode/miBusinessUnitCode 为分派角色/BU code。
@@ -153,4 +158,11 @@ public class TaskInfo {
     /** 当前用户可以认领（认领池任务 + 本人在候选池 + 尚未被任何人 Claim）。 */
     @Builder.Default
     private boolean claimable = false;
+
+    /**
+     * Leader / BU Approver / SYS_ADMIN may force-unclaim a hold that is not theirs.
+     * Filled by {@code ClaimForceUnclaimAnnotator} after claim flags.
+     */
+    @Builder.Default
+    private boolean canForceUnclaim = false;
 }

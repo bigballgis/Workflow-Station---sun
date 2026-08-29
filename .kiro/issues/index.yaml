@@ -2674,7 +2674,7 @@
     2026-08-27_todo-list.png、2026-08-27_help-up-tasks-to-claim.png。
     升级：不改写在途 Flowable 行。未持有的 BU Role 从 My To Do 进 Tasks to Claim（须 Claim）；
     已有 assignee 的留在持有人 My To Do，办结不必再认领。Help：/help/up-tasks-to-claim，页内 ?。
-    未做（MVP2）：Leader 角色、强制 unclaim、Apply Permission 选 Member/Leader、Admin Center 展示。
+    MVP2 见 #1562。
 
 - id: "1560"
   status: fixed
@@ -2704,4 +2704,114 @@
     flush 校验面板，并按当前 tab 的 designer getRule 做快照（含子表 Form Design）。
     验证：HermesValidate.test.ts、useFormAutoSave.test.ts、formDesignerPreviewValidation.test.ts；
     pnpm run build；developer-workstation-frontend 已重建。
+
+- id: "1562"
+  status: fixed
+  fixed_at: "2026-08-27"
+  severity: major
+  category: bug
+  summary: "Claim Hold MVP2：UBR Member/Leader、强制 Unclaim、Apply Permission 与 Admin 展示"
+  file: "backend/admin-center/src/main/java/com/admin/component/ForceUnclaimAuthorizationComponent.java"
+  note: |
+    MVP1（#1559）只锁「同一时刻一个 Maker」。MVP2：Leader 标记落在 UBR（user+BU+role），
+    不是全局旗标。强制 Unclaim 白名单：该 Role 的 Leader、该 BU Approver、SYS_ADMIN（不含 AUDITOR）。
+    鉴权在 admin-center evaluate；门户列表一次批量调用；引擎 unclaim 再校验，admin-center 不可用则 fail-closed。
+    数据：sys_user_business_unit_roles.membership_type、up_permission_request.membership_type（74-ubr-membership-type.sql）。
+    Apply Permission 可选 Member/Leader；已是该 UBR Member 可申请升 Leader；审批写回 membership_type，
+    Leader 升级失败不得把原 BU 成员退出。Admin 用户页显示/升降级；组织准入角色列出各 Role 的 Leader。
+    列表复用 Tasks to Claim + Force Unclaim（确认后释放）。Help：/help/up-tasks-to-claim#leader。
+    验证：ForceUnclaimAuthorizationComponentTest、ClaimForceUnclaimAnnotatorTest、ClaimPoolTaskIdentityTest、
+    PermissionRequestColumnSpecTest、TaskClaimBanner / useTaskClaimActions vitest；后端 package；
+    门户/管理端/help build；postgres 已执行 74 SQL；admin-center / user-portal / workflow-engine 及对应 frontend healthy。
+    Playwright：frontend/user-portal/verification-screenshots/2026-08-27_apply-permission-member-leader.png、
+    2026-08-27_profile-membership.png、2026-08-27_to-claim-mvp2.png、
+    2026-08-27_help-up-tasks-to-claim-leader.png。
+
+- id: "1563"
+  status: fixed
+  fixed_at: "2026-08-28"
+  severity: major
+  category: bug
+  summary: "Portal 审批 Leader/加入 BU：add-member 403 后申请被写成 REJECTED，Admin 看不到 Leader"
+  file: "backend/admin-center/src/main/java/com/admin/config/OrganizationMutationAccessInterceptor.java"
+  note: |
+    现象：12345 申请 Leader，123456 点 Approve 两次都像成功，申请人看到 Reject；Admin user list 无 Leader。
+    根因：审批写路径 POST /business-units/{id}/members 未带 X-Service-Token；拦截器要求 SYS_ADMIN/user:write；
+    服务间 fallback 主体无角色 → 403 PERM_ACCESS_DENIED。随后 approve 把 PENDING 改成 REJECTED
+    （comment: Failed to add user to business unit），审批端 HTTP 仍 200 故 toast 成功。
+    修复：拦截器对合法 X-Service-Token 放行；portal 组织写调用统一带 C-3 token + 操作人头；
+    执行失败抛 IllegalStateException 并保持 PENDING，审批人看到错误可重试。
+    验证：OrganizationMutationAccessInterceptorTest、PermissionApprovalComponentTest；
+    admin-center / user-portal package + compose rebuild，两服务 healthy。
+    已 REJECTED 的申请不会自动翻盘，需申请人重新提交后再批。
+
+- id: "1564"
+  status: fixed
+  fixed_at: "2026-08-28"
+  severity: major
+  category: bug
+  summary: "任务详情 Claim 把 taskId 传成 undefined，报 Task not found: undefined"
+  file: "frontend/user-portal/src/views/tasks/detail.vue"
+  note: |
+    Tasks to Claim 列表传入 row.taskId，详情页 TaskClaimBanner emit('claim') 无参数，
+    却把 useTaskClaimActions.claim 直接绑到 @claim，请求变成 POST /tasks/undefined/claim。
+    修复：详情页与 Unclaim 一样包一层，传入 effectiveTaskId；claim() 拒绝空 id。
+    验证：useTaskClaimActions.test.ts；user-portal frontend build + compose rebuild。
+
+- id: "1565"
+  status: fixed
+  fixed_at: "2026-08-28"
+  severity: major
+  category: bug
+  summary: "Admin Center 刷新报 Internal server error（rt_table_function_units 表缺失）"
+  file: "deploy/init-scripts/00-schema/72-add-rt-table-function-units.sql"
+  note: |
+    SYS_ADMIN 布局 onMounted 调 GET /relation-tables/data/function-units，JPA 查
+    rt_table_function_units。dev 卷在 72 脚本加入前已存在，Invoke-SchemaMigrations
+    对已有卷跳过全部 schema，表从未创建 → Hibernate 500，axios 弹出 Internal server error。
+    修复：对运行中 postgres 执行 72（及幂等 73）。接口现返回 200。
+    已有库仍须手工跑新 00-schema 脚本（init-scripts-append-only）。
+
+- id: "1566"
+  status: fixed
+  fixed_at: "2026-08-28"
+  severity: major
+  category: bug
+  summary: "Apply Permission 把已加入的 BU 从树里滤掉，无法展开选中 hase-hmdc"
+  file: "backend/user-portal/src/main/java/com/portal/component/PermissionCatalogComponent.java"
+  note: |
+    12345 已是 hase-hmdc 成员（无 UBR 行）。available-business-units 排除已加入节点，
+    树只剩父级 HASE，无法展开 HMDC，HASE 无 eligible role。
+    修复：申请列表保留已加入 BU（额外角色 / MEMBER→LEADER）；已在 BU 但没有该 UBR 时允许提交。
+    验证：PermissionCatalogAndJoinApplyTest；user-portal / admin-center rebuild healthy。
+    后续澄清：12345 留在 hase-hmdc 成员表是因为 123456 在 Admin 用户详情 Remove UBR
+    只删了角色行、未退出 BU（见 #1567）。申请树保留已加入节点仍正确（额外角色 / Leader 升级）。
+
+- id: "1567"
+  status: fixed
+  fixed_at: "2026-08-28"
+  severity: major
+  category: bug
+  summary: "Admin Center Remove 最后一个 UBR 后用户仍留在业务单元成员表"
+  file: "backend/admin-center/src/main/java/com/admin/component/UserBusinessUnitRoleManagerComponent.java"
+  note: |
+    123456 在用户详情 Remove 12345 的 hase-hmdc 权限：DELETE .../business-unit-roles/{bu}/{role}
+    只删 sys_user_business_unit_roles，不删 sys_user_business_units。Portal 审批
+    BUSINESS_UNIT_ROLE_REMOVAL 在该 BU 无剩余 UBR 时会 exitBusinessUnit。
+    修复：Admin remove 最后一个 UBR 后同步删除 BU 成员关系。已清 12345 残留成员行。
+
+- id: "1568"
+  status: fixed
+  fixed_at: "2026-08-29"
+  severity: major
+  category: bug
+  summary: "审批 Approve Request 弹窗不显示申请的 Member / Leader"
+  file: "frontend/user-portal/src/views/permissions/index.vue"
+  note: |
+    12345 申请 hase-hmdc MEMBER；123456 打开批准弹窗只有 Applicant / Type / Target / Reason。
+    列表接口已返回 membershipType 与 roleNames，弹窗与 APPROVALS_PENDING 列未展示。
+    修复：Join BU 弹窗与待审列表显示角色和 Member/Leader。验证截图
+    frontend/user-portal/verification-screenshots/2026-08-29_permission-approve-membership-type.png
+
+
 

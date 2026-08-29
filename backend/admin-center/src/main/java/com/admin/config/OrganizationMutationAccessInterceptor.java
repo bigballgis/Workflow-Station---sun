@@ -1,29 +1,33 @@
 package com.admin.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.constant.PlatformConstants;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.i18n.I18nService;
 import com.platform.security.util.SecurityContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
  * Backend read-only guard for organization / virtual-group / approver / membership-exit writes.
  * Pure AUDITOR callers are rejected; SYS_ADMIN / SUPER_ADMIN bypass; other writers need
- * {@code user:write} or {@code system:admin}.
+ * {@code user:write} or {@code system:admin}. First-party service calls that carry a valid
+ * {@code X-Service-Token} (portal approval writes) are allowed — the minted principal has
+ * empty roles and would otherwise always be denied.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class OrganizationMutationAccessInterceptor implements HandlerInterceptor {
 
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
@@ -34,6 +38,16 @@ public class OrganizationMutationAccessInterceptor implements HandlerInterceptor
 
     private final I18nService i18nService;
     private final ObjectMapper objectMapper;
+    private final String serviceInternalToken;
+
+    public OrganizationMutationAccessInterceptor(
+            I18nService i18nService,
+            ObjectMapper objectMapper,
+            @Value("${service.internal-token:}") String serviceInternalToken) {
+        this.i18nService = i18nService;
+        this.objectMapper = objectMapper;
+        this.serviceInternalToken = serviceInternalToken;
+    }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
@@ -46,6 +60,9 @@ public class OrganizationMutationAccessInterceptor implements HandlerInterceptor
             path = "";
         }
         if (CLAIM_PATH.matcher(path).matches() || DELEGATE_PATH.matcher(path).matches()) {
+            return true;
+        }
+        if (isTrustedServiceCall(request)) {
             return true;
         }
 
@@ -69,6 +86,19 @@ public class OrganizationMutationAccessInterceptor implements HandlerInterceptor
             return true;
         }
         return reject(response, request);
+    }
+
+    private boolean isTrustedServiceCall(HttpServletRequest request) {
+        if (serviceInternalToken == null || serviceInternalToken.isBlank()) {
+            return false;
+        }
+        String provided = request.getHeader(PlatformConstants.HEADER_SERVICE_TOKEN);
+        if (provided == null || provided.isEmpty()) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                provided.getBytes(StandardCharsets.UTF_8),
+                serviceInternalToken.getBytes(StandardCharsets.UTF_8));
     }
 
     private static boolean isElevatedAdmin() {

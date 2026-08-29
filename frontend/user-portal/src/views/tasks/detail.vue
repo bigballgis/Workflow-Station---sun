@@ -93,6 +93,7 @@
         :submitting="claimSubmitting"
         @claim="handleClaimTask"
         @unclaim="handleUnclaimTask"
+        @force-unclaim="handleForceUnclaimTask"
       />
 
       <div
@@ -870,14 +871,28 @@ const claimLocked = computed(
   () => !!taskInfo.value?.claimPoolTask && !taskInfo.value?.claimedByCurrentUser,
 )
 const claimSubmitting = ref(false)
-const { claim: handleClaimTask, unclaim: unclaimHeld } = useTaskClaimActions({
+const { claim: claimHeld, unclaim: unclaimHeld, forceUnclaim: forceUnclaimHeld } = useTaskClaimActions({
   reload: loadTaskDetail,
   submitting: claimSubmitting,
 })
 
+function handleClaimTask() {
+  return claimHeld(effectiveTaskId.value)
+}
+
 function handleUnclaimTask() {
   const task = taskInfo.value
   return unclaimHeld(effectiveTaskId.value, task?.assignmentType ?? '', task?.assignee ?? '')
+}
+
+function handleForceUnclaimTask() {
+  const task = taskInfo.value
+  return forceUnclaimHeld(
+    effectiveTaskId.value,
+    task?.assignmentType ?? '',
+    task?.assignee ?? '',
+    task?.assigneeName,
+  )
 }
 
 // display helpers moved to useTaskDisplay composable

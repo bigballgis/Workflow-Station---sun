@@ -1,6 +1,6 @@
 import { type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { claimTask, unclaimTask } from '@/api/task'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
@@ -40,6 +40,10 @@ export function useTaskClaimActions(options: {
   }
 
   function claim(taskId: string): Promise<void> {
+    if (typeof taskId !== 'string' || !taskId.trim()) {
+      ElMessage.error(t('task.notFound'))
+      return Promise.resolve()
+    }
     return run(taskId, () => claimTask(taskId), 'task.claimSuccess')
   }
 
@@ -51,5 +55,27 @@ export function useTaskClaimActions(options: {
     )
   }
 
-  return { claim, unclaim }
+  async function forceUnclaim(
+    taskId: string,
+    assignmentType: string,
+    assignee: string,
+    holderName?: string,
+  ): Promise<void> {
+    try {
+      await ElMessageBox.confirm(
+        t('task.forceUnclaimConfirm', { user: holderName || assignee || '-' }),
+        t('task.forceUnclaim'),
+        { type: 'warning' },
+      )
+    } catch {
+      return
+    }
+    return run(
+      taskId,
+      () => unclaimTask(taskId, assignmentType, assignee),
+      'task.forceUnclaimSuccess',
+    )
+  }
+
+  return { claim, unclaim, forceUnclaim }
 }

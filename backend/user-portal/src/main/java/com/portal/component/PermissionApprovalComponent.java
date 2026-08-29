@@ -139,28 +139,37 @@ public class PermissionApprovalComponent {
                     errorMessage = "Failed to add user to virtual group";
                 }
             } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
-                success = virtualGroupAccessComponent.addUserToBusinessUnit(
-                        request.getApplicantId(),
-                        request.getBusinessUnitId(),
-                        "Approved: " + (comment != null ? comment : "")
-                );
+                boolean alreadyInBu = virtualGroupAccessComponent.isUserInBusinessUnit(
+                        request.getApplicantId(), request.getBusinessUnitId());
+                if (alreadyInBu) {
+                    success = true;
+                } else {
+                    success = virtualGroupAccessComponent.addUserToBusinessUnit(
+                            request.getApplicantId(),
+                            request.getBusinessUnitId(),
+                            "Approved: " + (comment != null ? comment : "")
+                    );
+                }
                 if (!success) {
                     errorMessage = "Failed to add user to business unit";
                 } else if (request.getRoleId() != null && !request.getRoleId().isBlank()) {
                     boolean roleOk = virtualGroupAccessComponent.assignUserBusinessUnitRole(
                             request.getApplicantId(),
                             request.getBusinessUnitId(),
-                            request.getRoleId());
+                            request.getRoleId(),
+                            request.getMembershipType());
                     if (!roleOk) {
                         success = false;
                         errorMessage = "User joined business unit, but failed to assign business unit role";
-                        try {
-                            virtualGroupAccessComponent.exitBusinessUnit(
-                                    request.getApplicantId(), request.getBusinessUnitId());
-                        } catch (Exception rollbackEx) {
-                            log.error("Failed to roll back BU membership after role assignment failure for request {}: {}",
-                                    requestId, rollbackEx.getMessage());
-                            errorMessage = errorMessage + " (and automatic membership revocation failed, please contact administrator)";
+                        if (!alreadyInBu) {
+                            try {
+                                virtualGroupAccessComponent.exitBusinessUnit(
+                                        request.getApplicantId(), request.getBusinessUnitId());
+                            } catch (Exception rollbackEx) {
+                                log.error("Failed to roll back BU membership after role assignment failure for request {}: {}",
+                                        requestId, rollbackEx.getMessage());
+                                errorMessage = errorMessage + " (and automatic membership revocation failed, please contact administrator)";
+                            }
                         }
                     } else {
                         // Role Members page在 admin-center 里是按“角色绑定的虚拟组成员”展示。
@@ -230,22 +239,17 @@ public class PermissionApprovalComponent {
             errorMessage = "Approval execution failed: " + e.getMessage();
         }
 
-        if (success) {
-            request.setStatus(PermissionRequestStatus.APPROVED);
-            request.setApproverId(approverId);
-            request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment(comment != null ? comment : "Approved");
-            log.info("Request {} approved by {}", requestId, approverId);
-        } else {
+        if (!success) {
             String detail = errorMessage != null ? errorMessage : "Unknown error";
-            request.setStatus(PermissionRequestStatus.REJECTED);
-            request.setApproverId(approverId);
-            request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment((comment != null ? comment + " — " : "")
-                    + "Approval attempted but execution failed: " + detail);
-            log.warn("Request {} marked REJECTED after failed post-approval execution: {}", requestId, detail);
+            log.warn("Request {} approval execution failed, leaving PENDING: {}", requestId, detail);
+            throw new IllegalStateException(detail);
         }
 
+        request.setStatus(PermissionRequestStatus.APPROVED);
+        request.setApproverId(approverId);
+        request.setApproveTime(LocalDateTime.now());
+        request.setApproveComment(comment != null ? comment : "Approved");
+        log.info("Request {} approved by {}", requestId, approverId);
         return permissionRequestRepository.save(request);
     }
 

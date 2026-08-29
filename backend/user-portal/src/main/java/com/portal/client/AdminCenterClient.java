@@ -152,6 +152,34 @@ public class AdminCenterClient {
         return getList("/api/v1/admin/permission-requests/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/activatable-roles?userId=" + SafeUrlInput.encodeQueryValue(userId));
     }
 
+    /**
+     * FAIL-CLOSED(security): missing/failed admin-center response means no force-unclaim flags.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Boolean> evaluateForceUnclaim(String userId, List<Map<String, Object>> items) {
+        if (userId == null || userId.isBlank() || items == null || items.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("userId", userId);
+        body.put("items", items);
+        Optional<Map<String, Object>> data = post("/api/v1/admin/force-unclaim/evaluate", body);
+        if (data.isEmpty()) {
+            return Map.of();
+        }
+        Object flagsObj = data.get().get("flags");
+        if (!(flagsObj instanceof Map<?, ?> rawFlags)) {
+            return Map.of();
+        }
+        Map<String, Boolean> flags = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawFlags.entrySet()) {
+            if (entry.getKey() != null) {
+                flags.put(entry.getKey().toString(), Boolean.TRUE.equals(entry.getValue()));
+            }
+        }
+        return flags;
+    }
+
     // ==================== Internal HTTP helpers ====================
 
     private Optional<Map<String, Object>> get(String path) {

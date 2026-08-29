@@ -65,6 +65,7 @@ export interface UserBusinessUnitRole {
   businessUnitName: string
   roleId: string
   roleName: string
+  membershipType?: string
   assignedAt?: string
 }
 
@@ -108,6 +109,8 @@ export interface PermissionRequestRecord {
   targetName?: string
   roleIds?: string
   roleNames?: string[]
+  /** MEMBER or LEADER for BUSINESS_UNIT_JOIN / BUSINESS_UNIT_ROLE. */
+  membershipType?: string
   reason?: string
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
   approverId?: string

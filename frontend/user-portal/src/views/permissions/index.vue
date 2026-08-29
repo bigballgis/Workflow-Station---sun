@@ -1,7 +1,14 @@
 <template>
   <div class="permissions-page">
     <div class="page-header">
-      <h1>{{ t('permission.title') }}</h1>
+      <h1>
+        {{ t('permission.title') }}
+        <PortalHelpLink
+          path="/up-tasks-to-claim#leader"
+          :aria-label="t('permission.applyLeaderGuideLinkAria')"
+          test-id="profile-leader-guide-link"
+        />
+      </h1>
       <div class="page-header-actions">
         <el-button
           type="primary"
@@ -149,6 +156,18 @@
         <p><strong>{{ t('approval.applicant') }}:</strong> {{ getApplicantDisplay(currentApproverRequest) }}</p>
         <p><strong>{{ t('permission.requestType') }}:</strong> {{ getRequestTypeLabel(currentApproverRequest?.requestType) }}</p>
         <p><strong>{{ t('permission.requestTarget') }}:</strong> {{ getTargetName(currentApproverRequest) }}</p>
+        <p
+          v-if="getRequestedRoleName(currentApproverRequest) !== '-'"
+          data-testid="approval-dialog-role"
+        >
+          <strong>{{ t('permission.role') }}:</strong> {{ getRequestedRoleName(currentApproverRequest) }}
+        </p>
+        <p
+          v-if="isBuJoinMembershipRequest(currentApproverRequest)"
+          data-testid="approval-dialog-membership-type"
+        >
+          <strong>{{ t('permission.membershipType') }}:</strong> {{ getMembershipTypeLabel(currentApproverRequest) }}
+        </p>
         <p><strong>{{ t('permission.reason') }}:</strong> {{ currentApproverRequest?.reason }}</p>
       </div>
       <el-form-item :label="t('approval.comment')">
@@ -182,6 +201,18 @@
         <p><strong>{{ t('approval.applicant') }}:</strong> {{ getApplicantDisplay(currentApproverRequest) }}</p>
         <p><strong>{{ t('permission.requestType') }}:</strong> {{ getRequestTypeLabel(currentApproverRequest?.requestType) }}</p>
         <p><strong>{{ t('permission.requestTarget') }}:</strong> {{ getTargetName(currentApproverRequest) }}</p>
+        <p
+          v-if="getRequestedRoleName(currentApproverRequest) !== '-'"
+          data-testid="reject-dialog-role"
+        >
+          <strong>{{ t('permission.role') }}:</strong> {{ getRequestedRoleName(currentApproverRequest) }}
+        </p>
+        <p
+          v-if="isBuJoinMembershipRequest(currentApproverRequest)"
+          data-testid="reject-dialog-membership-type"
+        >
+          <strong>{{ t('permission.membershipType') }}:</strong> {{ getMembershipTypeLabel(currentApproverRequest) }}
+        </p>
         <p><strong>{{ t('permission.reason') }}:</strong> {{ currentApproverRequest?.reason }}</p>
       </div>
       <el-form-item
@@ -231,6 +262,7 @@ import PermissionMyBuRolesCard from '@/components/permissions/PermissionMyBuRole
 import PermissionExitBuSection from '@/components/permissions/PermissionExitBuSection.vue'
 import PermissionApplyDialog from '@/components/permissions/PermissionApplyDialog.vue'
 import PermissionRemoveDialog from '@/components/permissions/PermissionRemoveDialog.vue'
+import PortalHelpLink from '@/components/PortalHelpLink.vue'
 import { usePermissionFormatters } from '@/composables/permissions/usePermissionFormatters'
 import { useMyRequests } from '@/composables/permissions/useMyRequests'
 import { useApprovals } from '@/composables/permissions/useApprovals'
@@ -274,6 +306,9 @@ const {
   getApplicantDisplay,
   getRequestTypeLabel,
   getTargetName,
+  isBuJoinMembershipRequest,
+  getRequestedRoleName,
+  getMembershipTypeLabel,
 } = usePermissionFormatters(t)
 
 const { myRequestTab, cancelRequest } = useMyRequests(t, { reloadMyLists })

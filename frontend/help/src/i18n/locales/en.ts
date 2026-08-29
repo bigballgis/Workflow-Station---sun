@@ -93,7 +93,8 @@ export default {
     },
     upTasksToClaim: {
       title: 'Tasks to Claim',
-      summary: 'Claim a business-unit role request before you edit it, and what happens to existing To Do after this version.',
+      summary:
+        'Claim a business-unit role request before you edit it; Leaders, BU Approvers, and System Administrators can force-release someone else’s hold.',
     },
   },
   computedFieldGuide: {
@@ -246,12 +247,18 @@ export default {
     claimedBySample: 'column on Tasks to Claim',
     detailTitle: 'On the task page',
     detailBody:
-      'If nobody holds the request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit.',
+      'If nobody holds the request, or someone else holds it, the form is view-only and the action bar is hidden. The banner at the top says the request is not claimed yet, that you are holding it, or that another person claimed it. Only the holder sees Claimed by You and can Unclaim, edit, and submit. If you are a Leader of this role, a BU Approver of this business unit, or a System Administrator, the banner and the Tasks to Claim list also show Force Unclaim.',
+    leaderTitle: 'Leader, Approver, and Admin',
+    leaderBody:
+      'Member and Leader are per business unit and role, not a platform-wide flag. A Member Claims and Unclaims only their own hold. A Leader of that same role can Force Unclaim a hold taken by someone else. The business unit Approver and a System Administrator (SYS_ADMIN) have the same Force Unclaim right. An Auditor cannot. Confirm before Force Unclaim: the request returns to Tasks to Claim with Claimed By empty, and another Member can Claim it. Admin Center → User Management shows Member or Leader on each business unit role. Organization → Eligible Roles lists the Leaders of each role so you can find who can release a stuck hold.',
+    applyTitle: 'Apply as Member or Leader',
+    applyBody:
+      'Open User Profile Setup → Apply Permission. Choose the business unit and role, then Member or Leader. The approver’s Approve Request dialog shows that Member or Leader choice and the role. If you already have that role as a Member, you can apply to become Leader. After approval, the User Profile Setup card and Admin user page show Leader on that role.',
     upgradeTitle: 'After this version: existing To Do',
     upgradeBody:
       'Deploy does not rewrite running tasks. A business-unit role request that had no holder moves off My To Do Tasks onto Tasks to Claim — Claim it before you edit. A role request that already had your name as the assignee stays on your My To Do Tasks; finish it as before, without claiming again. Other role members still see that held row on Tasks to Claim as Held. Tasks that are not business-unit role stay on My To Do Tasks as they did before.',
     failTitle: 'When Claim fails',
     failBody:
-      'Claim fails if another member already holds the request, you are no longer in the role that was written when the task was created, or the engine is unavailable. Refresh the list: the Claimed By column shows the current holder. Unclaim fails if you are not the holder.',
+      'Claim fails if another member already holds the request, you are no longer in the role that was written when the task was created, or the engine is unavailable. Refresh the list: the Claimed By column shows the current holder. Unclaim fails if you are not the holder. Force Unclaim fails if you are not a Leader of that role, a BU Approver of that business unit, or a System Administrator.',
   },
 }

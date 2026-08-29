@@ -27,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -56,6 +57,12 @@ public class TaskActionService {
 
     @Autowired
     private I18nService i18nService;
+
+    @Autowired
+    private BpmnActionParser bpmnActionParser;
+
+    @Autowired
+    private org.flowable.engine.RuntimeService runtimeService;
 
     // ==================== Public Action Methods ====================
 
@@ -226,7 +233,8 @@ public class TaskActionService {
                     new WorkflowValidationException.ValidationError(
                         "taskId", "Task not claimed", taskId)));
             }
-            if (!engineActorMatchesPortalUser(assignee, userId)) {
+            boolean matchesAssignee = engineActorMatchesPortalUser(assignee, userId);
+            if (!matchesAssignee && !actorMayForceUnclaim(flowableTask, userId)) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "userId", "Only assignee can unclaim", userId)));
@@ -246,7 +254,9 @@ public class TaskActionService {
                             "taskId", "Task already completed, cannot unclaim", taskId)));
                 }
                 if (extendedTaskInfo.isClaimed() && extendedTaskInfo.getClaimedBy() != null
-                        && !engineActorMatchesPortalUser(extendedTaskInfo.getClaimedBy(), userId)) {
+                        && !engineActorMatchesPortalUser(extendedTaskInfo.getClaimedBy(), userId)
+                        && matchesAssignee
+                        && !actorMayForceUnclaim(flowableTask, userId)) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                             "userId", "Only the claimer can unclaim", userId)));
@@ -498,6 +508,38 @@ public class TaskActionService {
             log.debug("engineActorMatchesPortalUser: {}", e.getMessage());
         }
         return false;
+    }
+
+    private boolean actorMayForceUnclaim(Task flowableTask, String userId) {
+        String businessUnitId = null;
+        List<String> roleIds = List.of();
+        try {
+            String pdId = flowableTask.getProcessDefinitionId();
+            String defKey = flowableTask.getTaskDefinitionKey();
+            if (pdId != null && defKey != null) {
+                String rawBu = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "businessUnitId");
+                if (StringUtils.hasText(rawBu)) {
+                    businessUnitId = rawBu.trim();
+                }
+                roleIds = com.workflow.util.AssigneeRoleIdsSupport.parseRoleIds(
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleIds"),
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleId"));
+            }
+            if (!StringUtils.hasText(businessUnitId) && flowableTask.getProcessInstanceId() != null) {
+                Map<String, Object> vars = runtimeService.getVariables(flowableTask.getProcessInstanceId());
+                Object bu = vars.get("businessUnitId");
+                if (bu == null) {
+                    bu = vars.get("activeBusinessUnitId");
+                }
+                if (bu != null && StringUtils.hasText(bu.toString())) {
+                    businessUnitId = bu.toString().trim();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve claim-pool identity for force unclaim {}: {}",
+                    flowableTask.getId(), e.getMessage());
+        }
+        return adminCenterClient.canForceUnclaim(userId, flowableTask.getId(), businessUnitId, roleIds);
     }
 
     private void validateTaskAssignmentRequest(TaskAssignmentRequest request) {

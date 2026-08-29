@@ -37,6 +37,13 @@ public class UserBusinessUnitRole {
     
     @Column(name = "role_id", nullable = false, length = 64)
     private String roleId;
+
+    /**
+     * MEMBER (default) or LEADER. Leader may force-unclaim holds in this BU+Role.
+     */
+    @Column(name = "membership_type", nullable = false, length = 16)
+    @Builder.Default
+    private String membershipType = "MEMBER";
     
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

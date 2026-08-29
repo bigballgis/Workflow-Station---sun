@@ -127,36 +127,25 @@ public class PermissionRequestSubmissionComponent {
      */
     public PermissionRequest requestBusinessUnitJoinWithRole(String submittedByUserId, String beneficiaryUserId,
                                                              String businessUnitId, String roleId, String reason) {
+        return requestBusinessUnitJoinWithRole(submittedByUserId, beneficiaryUserId, businessUnitId, roleId, reason, null);
+    }
+
+    public PermissionRequest requestBusinessUnitJoinWithRole(String submittedByUserId, String beneficiaryUserId,
+                                                             String businessUnitId, String roleId, String reason,
+                                                             String membershipType) {
         Objects.requireNonNull(submittedByUserId, "submittedByUserId");
         String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
         assertActiveBeneficiary(beneficiary);
+        String tier = com.platform.security.ubr.UbrMembershipType.normalize(membershipType);
 
-        // 获取业务单元信息
         Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
         if (businessUnit == null) {
             throw new IllegalArgumentException("Business unit does not exist: " + businessUnitId);
         }
 
-        // 检查是否已是成员
-        if (virtualGroupAccessComponent.isUserInBusinessUnit(beneficiary, businessUnitId)) {
-            throw new IllegalArgumentException("This user is already a member of this business unit");
-        }
+        String roleName = resolveEligibleRoleName(businessUnitId, roleId);
+        assertJoinOrLeaderUpgradeAllowed(beneficiary, businessUnitId, roleId, tier);
 
-        String roleName = null;
-        if (roleId != null && !roleId.isBlank()) {
-            List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
-            boolean eligible = bound.stream().anyMatch(r -> roleId.equals(String.valueOf(r.get("id"))));
-            if (!eligible) {
-                throw new IllegalArgumentException("Selected role is not in the available roles list for this business unit");
-            }
-            roleName = bound.stream()
-                    .filter(r -> roleId.equals(String.valueOf(r.get("id"))))
-                    .map(r -> Objects.toString(r.get("name"), null))
-                    .findFirst()
-                    .orElse(null);
-        }
-
-        // 创建申请记录 - 状态为 PENDING，等待审批
         PermissionRequest request = PermissionRequest.builder()
                 .applicantId(beneficiary)
                 .submittedByUserId(submittedByUserId)
@@ -165,17 +154,58 @@ public class PermissionRequestSubmissionComponent {
                 .businessUnitName((String) businessUnit.get("name"))
                 .roleId(roleId != null && !roleId.isBlank() ? roleId : null)
                 .roleName(roleName)
+                .membershipType(tier)
                 .reason(reason)
                 .status(PermissionRequestStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        // 保存申请记录
         request = permissionRequestRepository.save(request);
-        log.info("Business unit join request created: beneficiary={}, submittedBy={}, businessUnit={}, roleId={}, requestId={}",
-                beneficiary, submittedByUserId, businessUnitId, roleId, request.getId());
-
+        log.info("Business unit join request created: beneficiary={}, submittedBy={}, businessUnit={}, roleId={}, membershipType={}, requestId={}",
+                beneficiary, submittedByUserId, businessUnitId, roleId, tier, request.getId());
         return request;
+    }
+
+    private String resolveEligibleRoleName(String businessUnitId, String roleId) {
+        if (roleId == null || roleId.isBlank()) {
+            return null;
+        }
+        List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
+        boolean eligible = bound.stream().anyMatch(r -> roleId.equals(String.valueOf(r.get("id"))));
+        if (!eligible) {
+            throw new IllegalArgumentException("Selected role is not in the available roles list for this business unit");
+        }
+        return bound.stream()
+                .filter(r -> roleId.equals(String.valueOf(r.get("id"))))
+                .map(r -> Objects.toString(r.get("name"), null))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void assertJoinOrLeaderUpgradeAllowed(String beneficiary, String businessUnitId, String roleId, String tier) {
+        if (!virtualGroupAccessComponent.isUserInBusinessUnit(beneficiary, businessUnitId)) {
+            return;
+        }
+        if (roleId == null || roleId.isBlank()) {
+            throw new IllegalArgumentException("This user is already a member of this business unit");
+        }
+        String current = currentMembershipType(beneficiary, businessUnitId, roleId);
+        if (current == null) {
+            return;
+        }
+        if (com.platform.security.ubr.UbrMembershipType.LEADER.equals(tier)
+                && com.platform.security.ubr.UbrMembershipType.MEMBER.equals(current)) {
+            return;
+        }
+        throw new IllegalArgumentException("This user already has this role in the business unit");
+    }
+
+    private String currentMembershipType(String userId, String businessUnitId, String roleId) {
+        return virtualGroupAccessComponent.listUserBusinessUnitRolesInBusinessUnit(userId, businessUnitId).stream()
+                .filter(r -> roleId != null && roleId.equals(String.valueOf(r.get("roleId"))))
+                .map(r -> Objects.toString(r.get("membershipType"), com.platform.security.ubr.UbrMembershipType.MEMBER))
+                .findFirst()
+                .orElse(null);
     }
 
     /**

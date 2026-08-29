@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const { claimTask, unclaimTask } = vi.hoisted(() => ({
   claimTask: vi.fn(),
@@ -13,6 +13,7 @@ vi.mock('vue-i18n', () => ({
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn() },
+  ElMessageBox: { confirm: vi.fn() },
 }))
 
 vi.mock('@/api/task', () => ({
@@ -44,6 +45,17 @@ describe('useTaskClaimActions', () => {
     expect(submitting.value).toBe(false)
   })
 
+  it('does not call the API when claim is invoked without a task id (detail banner emit)', async () => {
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { claim } = useTaskClaimActions({ reload })
+
+    await claim(undefined as unknown as string)
+
+    expect(claimTask).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalledWith('task.notFound')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
   it('toasts the body message and still reloads on 403', async () => {
     claimTask.mockRejectedValue({
       response: { status: 403, data: { message: 'Already claimed' } },
@@ -56,6 +68,30 @@ describe('useTaskClaimActions', () => {
 
     expect(ElMessage.error).toHaveBeenCalledWith('Already claimed')
     expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks for confirmation before force-unclaim and skips the API when cancelled', async () => {
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { forceUnclaim } = useTaskClaimActions({ reload })
+
+    await forceUnclaim('task-1', 'BU_ROLE', 'alice', 'Alice Chen')
+
+    expect(unclaimTask).not.toHaveBeenCalled()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('force-unclaims after confirm', async () => {
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    unclaimTask.mockResolvedValue({})
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { forceUnclaim } = useTaskClaimActions({ reload })
+
+    await forceUnclaim('task-1', 'BU_ROLE', 'alice', 'Alice Chen')
+
+    expect(unclaimTask).toHaveBeenCalledWith('task-1', 'BU_ROLE', 'alice')
+    expect(ElMessage.success).toHaveBeenCalledWith('task.forceUnclaimSuccess')
     expect(reload).toHaveBeenCalledTimes(1)
   })
 })

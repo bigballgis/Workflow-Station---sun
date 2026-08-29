@@ -138,6 +138,7 @@ final class EngineTaskMapper {
                 .assignmentType(assignmentType)
                 .bpmnAssigneeType(engineStringField(taskMap.get("bpmnAssigneeType")))
                 .bpmnBusinessUnitId(engineStringField(taskMap.get("bpmnBusinessUnitId")))
+                .bpmnRoleIds(parseStringIdList(taskMap.get("bpmnRoleIds")))
                 .miAssigneeMode(engineStringField(taskMap.get("miAssigneeMode")))
                 .miRoleCode(engineStringField(taskMap.get("miRoleCode")))
                 .miBusinessUnitCode(engineStringField(taskMap.get("miBusinessUnitCode")))

@@ -102,6 +102,7 @@ export interface UserBusinessUnitRole {
   roleId: string
   roleName?: string
   roleCode?: string
+  membershipType?: string
   createdAt: string
 }
 
@@ -189,8 +190,8 @@ export const userApi = {
   getBusinessUnitRoles: (userId: string) =>
     get<UserBusinessUnitRole[]>(`/users/${userId}/business-unit-roles`),
 
-  assignBusinessUnitRole: (userId: string, businessUnitId: string, roleId: string) =>
-    post<void>(`/users/${userId}/business-unit-roles`, { businessUnitId, roleId }),
+  assignBusinessUnitRole: (userId: string, businessUnitId: string, roleId: string, membershipType?: string) =>
+    post<void>(`/users/${userId}/business-unit-roles`, { businessUnitId, roleId, membershipType }),
 
   removeBusinessUnitRole: (userId: string, businessUnitId: string, roleId: string) =>
     del<void>(`/users/${userId}/business-unit-roles/${businessUnitId}/${roleId}`)

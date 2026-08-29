@@ -68,7 +68,8 @@ public class PermissionController {
     }
 
     @GetMapping("/available-business-units")
-    @Operation(summary = "Get available business units", description = "Get the list of business units the user can join (excluding already joined)")
+    @Operation(summary = "Get available business units",
+            description = "Get business units the user can apply to (including already joined, for extra roles or Leader upgrade)")
     public ApiResponse<List<Map<String, Object>>> getAvailableBusinessUnits(
             @CurrentUserId String userId) {
         List<Map<String, Object>> businessUnits = permissionComponent.getAvailableBusinessUnits(userId);
@@ -188,9 +189,11 @@ public class PermissionController {
         if (roleId == null || roleId.isBlank()) {
             return ApiResponse.error("500", i18nService.getMessage("validation.role_id_required"));
         }
+        String membershipType = body.get("membershipType") != null ? body.get("membershipType").toString() : null;
 
         try {
-            PermissionRequest request = permissionComponent.requestBusinessUnitJoinWithRole(userId, beneficiaryUserId, businessUnitId, roleId, reason);
+            PermissionRequest request = permissionComponent.requestBusinessUnitJoinWithRole(
+                    userId, beneficiaryUserId, businessUnitId, roleId, reason, membershipType);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error("500", e.getMessage());
@@ -315,7 +318,7 @@ public class PermissionController {
         try {
             PermissionRequest request = permissionComponent.approveRequest(requestId, userId, comment);
             return ApiResponse.success(request);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return ApiResponse.error("500", e.getMessage());
         }
     }

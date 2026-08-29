@@ -59,3 +59,5 @@ After this version: deploy does not rewrite running tasks. Unheld BU-role reques
 
 Claim fails if another member already holds it, you left the role written at task create, or the engine is down.
 
+Leader of that role, the business-unit Approver, and SYS_ADMIN can Force Unclaim someone else’s hold (confirm first). Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role. The approver’s Approve Request dialog shows that choice and the role. Admin User Management shows the tier; Organization Eligible Roles lists Leaders of each role.
+

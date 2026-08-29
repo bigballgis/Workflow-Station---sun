@@ -161,6 +161,7 @@ public class PermissionRequestListQueryComponent {
                 : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
         String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
         String sql = "SELECT p.id, p.applicant_id, p.submitted_by_user_id, p.request_type, p.role_id, p.role_name,"
+                + " p.membership_type,"
                 + " p.organization_unit_id, p.organization_unit_name, p.virtual_group_id, p.virtual_group_name,"
                 + " p.business_unit_id, p.business_unit_name, p.status, p.reason, p.approver_id,"
                 + " p.approve_time, p.approve_comment, p.created_at, p.updated_at" + groupedSelect
@@ -205,6 +206,7 @@ public class PermissionRequestListQueryComponent {
                 .targetId(targetId)
                 .targetName(targetName)
                 .roleNames(roleNames)
+                .membershipType(enrichmentComponent.nonBlankString(rs.getString("membership_type")))
                 .reason(enrichmentComponent.nonBlankString(rs.getString("reason")))
                 .status(enrichmentComponent.nonBlankString(rs.getString("status")))
                 .approverId(enrichmentComponent.nonBlankString(rs.getString("approver_id")))

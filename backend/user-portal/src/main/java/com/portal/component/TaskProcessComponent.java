@@ -42,6 +42,7 @@ public class TaskProcessComponent {
     private final TaskApprovalCompletionComponent taskApprovalCompletionComponent;
     private final ProcessInstanceSyncComponent processInstanceSyncComponent;
     private final MiOverlayComponent miOverlayComponent;
+    private final ClaimForceUnclaimAnnotator claimForceUnclaimAnnotator;
 
     /**
      * Claims task
@@ -111,11 +112,14 @@ public class TaskProcessComponent {
         }
 
         TaskInfo taskBefore = getTaskOrThrow(taskId);
-        // Releasing someone else's Hold is a Leader/approver power and is not part of this phase;
-        // without the check any role member could bounce a colleague off a request mid-edit.
-        if (BuRolePoolTasks.isClaimPoolTask(taskBefore)
-                && !taskPermissionEvaluator.isHeldByUser(taskBefore, userId, portalUsername)) {
+        boolean holder = taskPermissionEvaluator.isHeldByUser(taskBefore, userId, portalUsername);
+        if (BuRolePoolTasks.isClaimPoolTask(taskBefore) && !holder
+                && !claimForceUnclaimAnnotator.canForceUnclaim(taskBefore, userId)) {
             throw new PortalException("403", "Only the user holding this task can unclaim it");
+        }
+        if (BuRolePoolTasks.isClaimPoolTask(taskBefore) && !holder) {
+            log.info("Force unclaim of task {} by {} (holder was {})",
+                    taskId, userId, taskBefore.getAssignee());
         }
         String enginePrincipal = TaskPermissionEvaluator.resolveEnginePrincipalForWorkflow(taskBefore, userId, portalUsername);
 
@@ -355,6 +359,7 @@ public class TaskProcessComponent {
      */
     public void annotateClaimState(TaskInfo task, String userId, String portalUsername) {
         taskPermissionEvaluator.annotateClaimState(task, userId, portalUsername);
+        claimForceUnclaimAnnotator.annotate(task, userId);
     }
 
     /**

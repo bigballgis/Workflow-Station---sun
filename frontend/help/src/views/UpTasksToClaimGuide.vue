@@ -42,6 +42,16 @@ const sections: GuideSection[] = [
     bodyKey: 'upTasksToClaimGuide.detailBody',
   },
   {
+    anchor: 'leader',
+    titleKey: 'upTasksToClaimGuide.leaderTitle',
+    bodyKey: 'upTasksToClaimGuide.leaderBody',
+  },
+  {
+    anchor: 'apply',
+    titleKey: 'upTasksToClaimGuide.applyTitle',
+    bodyKey: 'upTasksToClaimGuide.applyBody',
+  },
+  {
     anchor: 'upgrade',
     titleKey: 'upTasksToClaimGuide.upgradeTitle',
     bodyKey: 'upTasksToClaimGuide.upgradeBody',

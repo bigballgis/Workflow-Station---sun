@@ -129,6 +129,25 @@ export function usePermissionFormatters(t: TFn) {
     return listTid || '-'
   }
 
+  const isBuJoinMembershipRequest = (row: PermissionRequestRecord | null | undefined) => {
+    const type = row?.requestType
+    return type === 'BUSINESS_UNIT_JOIN' || type === 'BUSINESS_UNIT_ROLE'
+  }
+
+  const getRequestedRoleName = (row: PermissionRequestRecord | null | undefined) => {
+    if (!row) return '-'
+    const fromList = Array.isArray(row.roleNames)
+      ? row.roleNames.find((name) => name != null && String(name).trim() !== '')
+      : undefined
+    const name = fromList != null ? String(fromList).trim() : ''
+    return name || '-'
+  }
+
+  const getMembershipTypeLabel = (row: PermissionRequestRecord | null | undefined) => {
+    if (!isBuJoinMembershipRequest(row)) return '-'
+    return row?.membershipType === 'LEADER' ? t('permission.leader') : t('permission.member')
+  }
+
   const formatDateTime = (dateStr: string) => {
     if (!dateStr) return '-'
     try {
@@ -157,6 +176,9 @@ export function usePermissionFormatters(t: TFn) {
     getRequestTypeTag,
     getRequestTypeLabel,
     getTargetName,
+    isBuJoinMembershipRequest,
+    getRequestedRoleName,
+    getMembershipTypeLabel,
     formatDateTime
   }
 }

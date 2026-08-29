@@ -34,6 +34,16 @@
           >
             {{ t('task.unclaim') }}
           </el-button>
+          <el-button
+            v-else-if="task.canForceUnclaim"
+            type="warning"
+            size="small"
+            :loading="submitting"
+            data-test="task-force-unclaim-btn"
+            @click="emit('force-unclaim')"
+          >
+            {{ t('task.forceUnclaim') }}
+          </el-button>
         </div>
       </template>
     </el-alert>
@@ -48,6 +58,7 @@ interface ClaimBannerTask {
   claimPoolTask?: boolean
   claimable?: boolean
   claimedByCurrentUser?: boolean
+  canForceUnclaim?: boolean
   assignee?: string
   assigneeName?: string
 }
@@ -60,6 +71,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'claim'): void
   (e: 'unclaim'): void
+  (e: 'force-unclaim'): void
 }>()
 
 const { t } = useI18n()
@@ -78,6 +90,7 @@ const title = computed(() => {
 const hint = computed(() => {
   if (props.task.claimedByCurrentUser) return t('task.claimHeldByYouHint')
   if (props.task.claimable) return t('task.claimAvailableHint')
+  if (props.task.canForceUnclaim) return t('task.forceUnclaimHint')
   return t('task.claimHeldByOtherHint')
 })
 </script>

@@ -120,6 +120,8 @@ export interface TaskInfo {
   claimedByCurrentUser?: boolean
   /** Claim pool row free to claim by the signed-in user. */
   claimable?: boolean
+  /** Leader / BU Approver / SYS_ADMIN may release someone else's hold. */
+  canForceUnclaim?: boolean
 }
 
 export interface PageResponse<T> {

@@ -167,6 +167,16 @@
                   >
                     {{ t('task.unclaim') }}
                   </el-button>
+                  <el-button
+                    v-else-if="row.canForceUnclaim"
+                    type="warning"
+                    size="small"
+                    :loading="actingTaskId === row.taskId"
+                    data-test="to-claim-force-unclaim-btn"
+                    @click="handleForceUnclaim(row)"
+                  >
+                    {{ t('task.forceUnclaim') }}
+                  </el-button>
                   <span
                     v-else
                     class="to-claim-locked"
@@ -222,7 +232,7 @@ import { taskPriorityBand, taskPriorityCssClass } from '@/utils/taskPriority'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 import PortalHelpLink from '@/components/PortalHelpLink.vue'
 
-const CLAIM_ACTION_WIDTH = 120
+const CLAIM_ACTION_WIDTH = 180
 
 const TO_CLAIM_COL_WIDTHS: Record<string, number> = {
   requestId: 140,
@@ -301,7 +311,7 @@ const loadTasks = async () => {
   }
 }
 
-const { claim, unclaim } = useTaskClaimActions({
+const { claim, unclaim, forceUnclaim } = useTaskClaimActions({
   reload: async () => {
     await Promise.all([loadTasks(), pendingTaskStore.fetchPendingCount()])
   },
@@ -373,6 +383,10 @@ function handleClaim(task: TaskInfo) {
 
 function handleUnclaim(task: TaskInfo) {
   return unclaim(task.taskId, task.assignmentType, task.assignee)
+}
+
+function handleForceUnclaim(task: TaskInfo) {
+  return forceUnclaim(task.taskId, task.assignmentType, task.assignee, task.assigneeName)
 }
 
 const getPriorityLabel = (priority: string | number | undefined): string => {

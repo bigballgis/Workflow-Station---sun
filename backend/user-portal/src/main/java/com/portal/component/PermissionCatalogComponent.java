@@ -9,7 +9,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -66,27 +65,13 @@ public class PermissionCatalogComponent {
     }
 
     /**
-     * 获取用户可加入的业务单元（排除已加入的）
+     * Business units shown in Apply Permission, including ones the user already joined.
+     * Joined units must stay selectable so the user can apply for another eligible role
+     * or upgrade MEMBER → LEADER. Duplicate same-tier UBR is rejected on submit.
      */
     public List<Map<String, Object>> getAvailableBusinessUnits(String userId) {
-        // 获取所有业务单元
-        List<Map<String, Object>> allBusinessUnits = virtualGroupAccessComponent.getBusinessUnits();
-
-        // 获取用户已加入的业务单元ID
-        List<Map<String, Object>> userBusinessUnits = virtualGroupAccessComponent.getUserBusinessUnits(userId);
-        Set<String> userBuIds = userBusinessUnits.stream()
-                .map(bu -> {
-                    Object id = bu.get("id");
-                    if (id == null) id = bu.get("businessUnitId");
-                    return id != null ? id.toString() : null;
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        // 过滤掉已加入的业务单元
-        return allBusinessUnits.stream()
-                .filter(bu -> !userBuIds.contains(bu.get("id")))
-                .collect(Collectors.toList());
+        log.debug("Available business units for apply, user {}", userId);
+        return virtualGroupAccessComponent.getBusinessUnits();
     }
 
     /**

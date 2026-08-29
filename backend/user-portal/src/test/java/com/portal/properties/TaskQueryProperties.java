@@ -92,7 +92,8 @@ class TaskQueryProperties {
             new MiParticipantEnrichmentComponent(jdbcTemplate),
             new TaskHistoryComponent(workflowEngineClient, processHistoryRepository),
             requestIdEnricher,
-            new com.portal.component.TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient)
+            new com.portal.component.TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient),
+            org.mockito.Mockito.mock(com.portal.component.ClaimForceUnclaimAnnotator.class)
         );
         ReflectionTestUtils.setField(taskQueryComponent, "taskQueryExecutor", (java.util.concurrent.Executor) Runnable::run);
         random = new Random();

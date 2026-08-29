@@ -14,6 +14,7 @@ type BannerTask = {
   claimPoolTask?: boolean
   claimable?: boolean
   claimedByCurrentUser?: boolean
+  canForceUnclaim?: boolean
   assignee?: string
   assigneeName?: string
 }
@@ -63,6 +64,18 @@ describe('TaskClaimBanner', () => {
     )
     expect(w.find('[data-test="task-claim-btn"]').exists()).toBe(false)
     expect(w.find('[data-test="task-unclaim-btn"]').exists()).toBe(false)
+  })
+
+  it('offers Force Unclaim when the current user may release someone else hold', () => {
+    const w = mountBanner({
+      claimPoolTask: true,
+      assignee: 'alice',
+      assigneeName: 'Alice Chen',
+      canForceUnclaim: true,
+    })
+
+    expect(w.find('[data-test="task-force-unclaim-btn"]').exists()).toBe(true)
+    expect(w.find('[data-test="task-claim-banner"]').text()).toContain('task.forceUnclaimHint')
   })
 
   it('emits claim and unclaim so the page owns the API call', async () => {
