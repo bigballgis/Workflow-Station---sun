@@ -942,6 +942,7 @@ export default {
     reject: '拒絕',
     transfer: '轉辦',
     delegate: '委託',
+    urge: '催辦',
     rollback: '回退',
     withdraw: '撤回',
     draft: '退回起草',

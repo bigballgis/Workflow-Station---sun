@@ -941,6 +941,7 @@ export default {
     reject: '拒绝',
     transfer: '转办',
     delegate: '委托',
+    urge: '催办',
     rollback: '回退',
     withdraw: '撤回',
     draft: '退回起草',

@@ -299,7 +299,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     
     private boolean isDefaultActionType(com.developer.enums.ActionType actionType) {
         return switch (actionType) {
-            case APPROVE, REJECT, TRANSFER, DELEGATE, ROLLBACK, WITHDRAW, DRAFT, SAVE -> true;
+            case APPROVE, REJECT, TRANSFER, DELEGATE, URGE, ROLLBACK, WITHDRAW, DRAFT, SAVE -> true;
             default -> false;
         };
     }
