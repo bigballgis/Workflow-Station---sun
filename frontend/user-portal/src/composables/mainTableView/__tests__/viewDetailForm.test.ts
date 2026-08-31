@@ -13,6 +13,18 @@ describe('toViewDetailFields', () => {
     expect(fields.map(f => f.key)).toEqual(['merchant', '__subTable_200'])
     expect(fields[1]._bindingId).toBe(200)
   })
+
+  it('keeps remaining fields when lookupConfig JSON is malformed', () => {
+    const fields = toViewDetailFields(
+      [
+        { type: 'lookup', field: 'owner', title: 'Owner', props: { lookupConfig: '{not-json' } },
+        { type: 'input', field: 'merchant', title: 'Merchant' },
+      ],
+      {},
+    )
+    expect(fields.map(f => f.key)).toEqual(['owner', 'merchant'])
+    expect(fields[0].type).toBe('lookup')
+  })
 })
 
 describe('buildViewDetailSubTableBindings', () => {

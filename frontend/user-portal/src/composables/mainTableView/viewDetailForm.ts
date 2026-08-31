@@ -9,29 +9,33 @@ export type ViewDetailLookupDbConfig = {
   viewFields: unknown[]
 }
 
-function columnsFromBinding(
+type ViewDetailColumn = { field: string; label: string; type?: string }
+
+function columnsFromListView(
   binding: Record<string, unknown>,
   subListViews: Record<string, { columns?: Array<Record<string, unknown>> }> | undefined,
-): Array<{ field: string; label: string; type?: string }> {
+): ViewDetailColumn[] | null {
   const id = Number(binding.bindingId)
   const lv = subListViews?.[id] ?? subListViews?.[String(id)]
-  if (Array.isArray(lv?.columns) && lv.columns.length > 0) {
-    return lv.columns
-      .map(c => {
-        const field = String(c.fieldName ?? c.field ?? '')
-        if (!field) return null
-        return {
-          field,
-          label: String(c.displayName ?? c.label ?? field),
-          ...(typeof c.columnType === 'string' || typeof c.type === 'string'
-            ? { type: String(c.columnType ?? c.type) }
-            : {}),
-        }
-      })
-      .filter((c): c is { field: string; label: string; type?: string } => c != null)
-  }
+  if (!Array.isArray(lv?.columns) || lv.columns.length === 0) return null
+  return lv.columns
+    .map(c => {
+      const field = String(c.fieldName ?? c.field ?? '')
+      if (!field) return null
+      return {
+        field,
+        label: String(c.displayName ?? c.label ?? field),
+        ...(typeof c.columnType === 'string' || typeof c.type === 'string'
+          ? { type: String(c.columnType ?? c.type) }
+          : {}),
+      }
+    })
+    .filter((c): c is ViewDetailColumn => c != null)
+}
+
+function columnsFromFieldDefinitions(binding: Record<string, unknown>): ViewDetailColumn[] {
   const defs = (binding.fieldDefinitions as Array<Record<string, unknown>> | undefined) ?? []
-  const out: Array<{ field: string; label: string }> = []
+  const out: ViewDetailColumn[] = []
   const seen = new Set<string>()
   for (const fd of defs) {
     const field = String(fd.fieldName ?? fd.field_name ?? '').trim()
@@ -40,6 +44,13 @@ function columnsFromBinding(
     out.push({ field, label: String(fd.displayName ?? fd.display_name ?? field) })
   }
   return out
+}
+
+function columnsFromBinding(
+  binding: Record<string, unknown>,
+  subListViews: Record<string, { columns?: Array<Record<string, unknown>> }> | undefined,
+): ViewDetailColumn[] {
+  return columnsFromListView(binding, subListViews) ?? columnsFromFieldDefinitions(binding)
 }
 
 export function nestedRowsFromViewValues(
@@ -52,6 +63,50 @@ export function nestedRowsFromViewValues(
   const map = sto as Record<string, unknown>
   const hit = map[bindingId] ?? map[String(bindingId)] ?? (tableName ? map[tableName] : undefined)
   return Array.isArray(hit) ? hit : []
+}
+
+function parseLookupConfig(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>
+  }
+  if (typeof raw !== 'string' || raw.trim() === '') return {}
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+    return {}
+  } catch {
+    // FALLBACK(ux): malformed designer lookupConfig must not blank the rest of the Views detail form.
+    return {}
+  }
+}
+
+function toViewDetailLookupField(
+  item: Record<string, unknown>,
+  field: string,
+  lookupDbConfigs: Record<string, ViewDetailLookupDbConfig>,
+): FormField {
+  const props = (item.props || {}) as Record<string, unknown>
+  const lookupCfg = parseLookupConfig(props.lookupConfig)
+  const dbCfg = lookupDbConfigs[field]
+  const searchFields = lookupCfg.searchFields
+  const displayFields = lookupCfg.displayFields
+  return {
+    key: field,
+    label: String(item.title ?? field),
+    type: 'lookup',
+    span: 12,
+    _lookupTableId: lookupCfg.tableId || dbCfg?.tableId || 0,
+    _lookupSearchFields: (Array.isArray(searchFields) && searchFields.length ? searchFields : null) || dbCfg?.searchFields || [],
+    _lookupDisplayField: (Array.isArray(displayFields) ? displayFields[0] : undefined) || dbCfg?.displayField || '',
+    _lookupDisplayFields: displayFields || [],
+    _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
+    _lookupMultiple: lookupCfg.multiple === true,
+    _lookupConfig: typeof props.lookupConfig === 'string' ? props.lookupConfig : JSON.stringify(lookupCfg || {}),
+    _lookupViewFields: lookupCfg.showBackfillView === false ? [] : (dbCfg?.viewFields || []),
+    _lookupShowBackfillView: lookupCfg.showBackfillView !== false,
+  } as unknown as FormField
 }
 
 /**
@@ -67,34 +122,8 @@ export function toViewDetailFields(
   return extractFieldsRecursive(items, (item) => {
     const field = item.field as string | undefined
     if (!field) return null
+    if (item.type === 'lookup') return toViewDetailLookupField(item, field, lookupDbConfigs)
     const props = (item.props || {}) as Record<string, unknown>
-    if (item.type === 'lookup') {
-      let lookupCfg: Record<string, unknown> = {}
-      try {
-        const raw = props.lookupConfig
-        lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : ((raw || {}) as Record<string, unknown>)
-      } catch {
-        lookupCfg = {}
-      }
-      const dbCfg = lookupDbConfigs[field]
-      const searchFields = lookupCfg.searchFields
-      const displayFields = lookupCfg.displayFields
-      return {
-        key: field,
-        label: String(item.title ?? field),
-        type: 'lookup',
-        span: 12,
-        _lookupTableId: lookupCfg.tableId || dbCfg?.tableId || 0,
-        _lookupSearchFields: (Array.isArray(searchFields) && searchFields.length ? searchFields : null) || dbCfg?.searchFields || [],
-        _lookupDisplayField: (Array.isArray(displayFields) ? displayFields[0] : undefined) || dbCfg?.displayField || '',
-        _lookupDisplayFields: displayFields || [],
-        _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
-        _lookupMultiple: lookupCfg.multiple === true,
-        _lookupConfig: typeof props.lookupConfig === 'string' ? props.lookupConfig : JSON.stringify(lookupCfg || {}),
-        _lookupViewFields: lookupCfg.showBackfillView === false ? [] : (dbCfg?.viewFields || []),
-        _lookupShowBackfillView: lookupCfg.showBackfillView !== false,
-      } as unknown as FormField
-    }
     return {
       key: field,
       label: String(item.title ?? field),
