@@ -337,6 +337,7 @@ export default {
     signature: '签名',
     transferTo: '转办给',
     selectUser: '请选择用户',
+    clickToSearchUser: '点击搜索用户',
     selectUserRequired: '请选择转办用户',
     searchUserFailed: '搜索用户失败',
     reason: '原因',

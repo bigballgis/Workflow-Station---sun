@@ -43,19 +43,24 @@
         v-show="showUserSelect"
         :label="$t('task.targetUser')"
       >
-        <el-select
-          v-model="formData.targetUserId"
-          :placeholder="$t('task.selectUser')"
-          :teleported="false"
-          style="width: 100%;"
+        <div
+          class="task-action-user-lookup"
+          data-testid="task-action-user-lookup"
         >
-          <el-option
-            v-for="user in userOptions"
-            :key="user.id"
-            :label="$t('task.userOptionFormat', { name: user.name, username: user.username })"
-            :value="user.id"
+          <LookupField
+            :model-value="formData.targetUserId || null"
+            :table-id="SYSTEM_USER_LOOKUP_TABLE_ID"
+            :search-fields="SYSTEM_USER_SEARCH_FIELDS"
+            display-field="display_name"
+            :display-fields="SYSTEM_USER_DISPLAY_FIELDS"
+            :view-fields="SYSTEM_USER_VIEW_FIELDS"
+            selected-display-field="display_name"
+            :placeholder="$t('task.clickToSearchUser')"
+            @update:model-value="onUserLookupModelUpdate"
+            @select="onUserLookupSelect"
+            @clear="onUserLookupClear"
           />
-        </el-select>
+        </div>
       </el-form-item>
       <el-form-item
         v-if="showBuRoleSelect"
@@ -132,6 +137,31 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, type CascaderValue } from 'element-plus'
 import { permissionApi, type BusinessUnit, type RoleInfo } from '@/api/permission'
 import DesignerHelpLink from '@/components/DesignerHelpLink.vue'
+import LookupField from '@/components/lookup/LookupField.vue'
+import { extractLookupPrimaryKey } from '@/utils/mainTableViewLookupDisplay'
+
+/** Platform sys_users virtual relation table — same source as module-driven user lookup. */
+const SYSTEM_USER_LOOKUP_TABLE_ID = -1_000_000_001
+const SYSTEM_USER_SEARCH_FIELDS = [
+  'id',
+  'username',
+  'display_name',
+  'full_name',
+  'email',
+  'employee_id',
+]
+const SYSTEM_USER_DISPLAY_FIELDS = [
+  'username',
+  'display_name',
+  'full_name',
+  'employee_id',
+]
+const SYSTEM_USER_VIEW_FIELDS = SYSTEM_USER_DISPLAY_FIELDS.map((fieldName, sortOrder) => ({
+  fieldName,
+  displayLabel: fieldName,
+  sortOrder,
+  visible: true,
+}))
 
 interface UserOption {
   id: string | number
@@ -273,6 +303,22 @@ async function onBuChange(value: CascaderValue | null | undefined) {
   await loadRolesForBu(id)
 }
 
+function applyUserLookupValue(val: unknown) {
+  props.formData.targetUserId = extractLookupPrimaryKey(val) ?? ''
+}
+
+function onUserLookupSelect(row: Record<string, unknown>) {
+  applyUserLookupValue(row)
+}
+
+function onUserLookupModelUpdate(val: unknown) {
+  applyUserLookupValue(val)
+}
+
+function onUserLookupClear() {
+  props.formData.targetUserId = ''
+}
+
 function onOpened() {
   emit('opened')
   if (isDelegateBuRole.value) {
@@ -288,6 +334,10 @@ function onOpened() {
   gap: 8px;
   min-width: 0;
   padding-right: 28px;
+}
+
+.task-action-user-lookup {
+  width: 100%;
 }
 
 :deep(.task-action-form) {

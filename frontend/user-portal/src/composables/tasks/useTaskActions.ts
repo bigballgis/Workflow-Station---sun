@@ -106,7 +106,7 @@ export function useTaskActions(options: {
     }
   }
   function onActionDialogOpened() {
-    searchUsers('')
+    // User picker is LookupField on sys_users and loads on click.
   }
   function handleApprove() {
     if (!validateSubTableAssigneesForComplete()) return

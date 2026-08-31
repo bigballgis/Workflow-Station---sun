@@ -337,6 +337,7 @@ export default {
     signature: 'Signature',
     transferTo: 'Transfer To',
     selectUser: 'Please select user',
+    clickToSearchUser: 'Click to search',
     selectUserRequired: 'Please select user',
     searchUserFailed: 'Failed to search users',
     reason: 'Reason',

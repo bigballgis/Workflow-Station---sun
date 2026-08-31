@@ -1,0 +1,89 @@
+import { describe, expect, it, vi } from 'vitest'
+import { nextTick, reactive } from 'vue'
+import { mount } from '@vue/test-utils'
+import ElementPlus from 'element-plus'
+import ActionDialog from '@/components/tasks/ActionDialog.vue'
+
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+  createI18n: () => ({
+    global: { t: (key: string) => key, locale: { value: 'en' } },
+    install: () => {},
+  }),
+}))
+
+vi.mock('@/api/permission', () => ({
+  permissionApi: {
+    getBusinessUnitsTree: vi.fn(),
+    getBusinessUnitRoles: vi.fn(),
+  },
+}))
+
+const LookupFieldStub = {
+  name: 'LookupField',
+  props: ['tableId', 'searchFields', 'displayField', 'displayFields', 'selectedDisplayField', 'viewFields', 'modelValue'],
+  emits: ['update:modelValue', 'select', 'clear'],
+  template: '<button class="stub-lookup" type="button" @click="pick">lookup</button>',
+  methods: {
+    pick() {
+      this.$emit('select', { id: 'user-b', display_name: 'Li Si', username: 'lisi' })
+    },
+  },
+}
+
+describe('ActionDialog USER lookup picker', () => {
+  it('binds sys_users lookup and writes the selected row id', async () => {
+    const formData = reactive({
+      targetUserId: '',
+      reason: '',
+      targetType: 'USER' as const,
+      delegatedBuId: '',
+      delegatedBuCode: '',
+      delegatedRoleCode: '',
+    })
+    const wrapper = mount(ActionDialog, {
+      props: {
+        modelValue: true,
+        title: 'Delegate',
+        currentAction: 'delegate',
+        formData,
+        userOptions: [],
+        submitting: false,
+      },
+      attachTo: document.body,
+      global: {
+        plugins: [ElementPlus],
+        mocks: { $t: (key: string) => key },
+        stubs: {
+          LookupField: LookupFieldStub,
+          DesignerHelpLink: true,
+          ElDialog: {
+            template: '<div class="el-dialog"><slot name="header" /><slot /><slot name="footer" /></div>',
+          },
+          teleport: true,
+          transition: false,
+        },
+      },
+    })
+    await nextTick()
+    await nextTick()
+
+    const lookupHost = wrapper.find('[data-testid="task-action-user-lookup"]')
+    expect(lookupHost.exists()).toBe(true)
+    const lookup = wrapper.getComponent({ name: 'LookupField' })
+    expect(lookup.props('tableId')).toBe(-1_000_000_001)
+    expect(lookup.props('searchFields')).toEqual(
+      expect.arrayContaining(['id', 'username', 'display_name']),
+    )
+    expect(lookup.props('displayFields')).toEqual(
+      expect.arrayContaining(['username', 'display_name']),
+    )
+    expect(lookup.props('viewFields')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ fieldName: 'display_name', visible: true })]),
+    )
+
+    await lookupHost.find('.stub-lookup').trigger('click')
+    expect(formData.targetUserId).toBe('user-b')
+    wrapper.unmount()
+  })
+})
