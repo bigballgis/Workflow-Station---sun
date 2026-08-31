@@ -13,6 +13,8 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Cheap import-time BPMN checks: exactly one none start event; designer custom xmlns.
@@ -115,18 +117,56 @@ public class ImportBpmnStructureValidator {
         return false;
     }
 
+    /**
+     * None start events belonging to the process itself — i.e. DIRECT children of {@code <process>}.
+     *
+     * <p>Deliberately not a document-wide scan. An embedded sub-process carries its own start event
+     * by BPMN definition, so counting descendants rejected every valid multi-instance Function Unit
+     * (the MI subtask demo's {@code multiInstance} sub-process has one) with "found 2". The rule
+     * being enforced is "exactly one entry point into the process", which is a statement about the
+     * process's own children; a sub-process's start event is an entry point into that sub-process,
+     * not into the process.
+     */
     private int countNoneStartEvents(Document doc) {
-        NodeList starts = doc.getElementsByTagNameNS("*", "startEvent");
-        if (starts.getLength() == 0) {
-            starts = doc.getElementsByTagName("startEvent");
-        }
         int none = 0;
-        for (int i = 0; i < starts.getLength(); i++) {
-            if (isNoneStart((Element) starts.item(i))) {
-                none++;
+        for (Element process : findProcessElements(doc)) {
+            for (Element start : directChildElements(process, "startEvent")) {
+                if (isNoneStart(start)) {
+                    none++;
+                }
             }
         }
         return none;
+    }
+
+    private List<Element> findProcessElements(Document doc) {
+        NodeList processes = doc.getElementsByTagNameNS("*", "process");
+        if (processes.getLength() == 0) {
+            processes = doc.getElementsByTagName("process");
+        }
+        List<Element> out = new ArrayList<>();
+        for (int i = 0; i < processes.getLength(); i++) {
+            if (processes.item(i) instanceof Element element) {
+                out.add(element);
+            }
+        }
+        return out;
+    }
+
+    private List<Element> directChildElements(Element parent, String localName) {
+        List<Element> out = new ArrayList<>();
+        NodeList children = parent.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child.getNodeType() != Node.ELEMENT_NODE) {
+                continue;
+            }
+            String local = child.getLocalName() != null ? child.getLocalName() : child.getNodeName();
+            if (local != null && (local.equals(localName) || local.endsWith(":" + localName))) {
+                out.add((Element) child);
+            }
+        }
+        return out;
     }
 
     private boolean isNoneStart(Element start) {

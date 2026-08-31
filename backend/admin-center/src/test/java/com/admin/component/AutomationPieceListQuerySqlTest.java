@@ -76,16 +76,6 @@ class AutomationPieceListQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(new AutomationPieceListQueryRequest(
-                0, 20, null, List.of(), null, null, "pieceType"));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
         assertThatThrownBy(() -> component.query(request(null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
@@ -93,7 +83,7 @@ class AutomationPieceListQuerySqlTest {
     }
 
     private static AutomationPieceListQueryRequest request(String keyword, List<ListColumnFilter> filters) {
-        return new AutomationPieceListQueryRequest(0, 20, keyword, filters, null, null, null);
+        return new AutomationPieceListQueryRequest(0, 20, keyword, filters, null, null);
     }
 
     private String pageSql() {

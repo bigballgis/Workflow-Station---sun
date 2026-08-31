@@ -11,8 +11,7 @@ public record DelegationListQueryRequest(
         int size,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public DelegationListQueryRequest {
         if (page < 0) {

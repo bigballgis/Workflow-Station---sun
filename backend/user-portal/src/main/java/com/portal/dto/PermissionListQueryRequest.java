@@ -13,7 +13,6 @@ public record PermissionListQueryRequest(
         List<ListColumnFilter> filters,
         String sortField,
         String sortDirection,
-        String groupBy,
         String scope) {
 
     public enum Scope {

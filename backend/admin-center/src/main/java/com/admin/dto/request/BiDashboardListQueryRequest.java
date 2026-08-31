@@ -15,8 +15,7 @@ public record BiDashboardListQueryRequest(
         String status,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public BiDashboardListQueryRequest {
         if (page < 0) {

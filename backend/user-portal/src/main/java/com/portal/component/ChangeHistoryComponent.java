@@ -61,6 +61,31 @@ public class ChangeHistoryComponent {
             "mainRecordId", "activeBusinessUnitId", "activeRoleId",
             "requestItemsHasHighValue", "totalPrice", "maxItemPrice", "itemCount",
             "initiator", "participant_assigner_user_id", "id", "currentUserId");
+    /**
+     * Form {@code config_json} for one function unit, already parsed.
+     *
+     * <p>{@code resolveEditableFormFields} / {@code resolveFieldLabels} / {@code resolveFieldOrders}
+     * each ran the same query and the same Jackson parse, three times per change-history request
+     * (and again for the sibling sensitive-masks request). Design-time data, so a short TTL is safe:
+     * a form edit shows up within {@link #FORM_CONFIG_TTL_MS}.
+     */
+    private static final long FORM_CONFIG_TTL_MS = java.util.concurrent.TimeUnit.SECONDS.toMillis(60);
+    private static final int FORM_CONFIG_CACHE_MAX = 128;
+
+    private record CachedFormConfigs(List<Map<String, Object>> configs, long timestamp) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - timestamp > FORM_CONFIG_TTL_MS;
+        }
+    }
+
+    private final Map<String, CachedFormConfigs> formConfigCache = java.util.Collections.synchronizedMap(
+            new LinkedHashMap<String, CachedFormConfigs>(32, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedFormConfigs> eldest) {
+                    return size() > FORM_CONFIG_CACHE_MAX;
+                }
+            });
+
     private final ChangeHistoryRepository changeHistoryRepository;
     private final ProcessInstanceRepository processInstanceRepository;
     private final UserRepository userRepository;
@@ -977,6 +1002,40 @@ public class ChangeHistoryComponent {
     }
 
     /**
+     * Parsed form configs for a function unit code, memoised for {@link #FORM_CONFIG_TTL_MS}.
+     * Returns the same content the callers previously parsed inline.
+     */
+    private List<Map<String, Object>> loadFormConfigs(String functionUnitCode) {
+        String key = functionUnitCode.trim();
+        CachedFormConfigs cached = formConfigCache.get(key);
+        if (cached != null && !cached.isExpired()) {
+            return cached.configs();
+        }
+        List<String> configJsonStrings = jdbcTemplate.query(
+                """
+                        SELECT fd.config_json::text AS config_json
+                        FROM dw_form_definitions fd
+                        INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
+                        WHERE fu.code = ?
+                        """,
+                (rs, rowNum) -> rs.getString("config_json"),
+                key);
+        List<Map<String, Object>> parsed = new ArrayList<>();
+        for (String raw : configJsonStrings) {
+            if (raw == null || raw.isBlank())
+                continue;
+            try {
+                parsed.add(objectMapper.readValue(raw, new TypeReference<>() {
+                }));
+            } catch (Exception e) {
+                log.debug("Could not parse configJson: {}", e.getMessage());
+            }
+        }
+        formConfigCache.put(key, new CachedFormConfigs(parsed, System.currentTimeMillis()));
+        return parsed;
+    }
+
+    /**
      * Resolve field labels from the PROCESS form configJson.
      * Extracts field → title mappings from the form designer rule array,
      * including sub-form fields.
@@ -988,25 +1047,11 @@ public class ChangeHistoryComponent {
             if (pi == null || pi.getProcessDefinitionKey() == null) {
                 return labels;
             }
-            String processDefKey = pi.getProcessDefinitionKey();
-            List<String> configJsonStrings = jdbcTemplate.query(
-                    """
-                            SELECT fd.config_json::text AS config_json
-                            FROM dw_form_definitions fd
-                            INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                            WHERE fu.code = ?
-                            """,
-                    (rs, rowNum) -> rs.getString("config_json"),
-                    processDefKey.trim());
-            for (String raw : configJsonStrings) {
-                if (raw == null || raw.isBlank())
-                    continue;
+            for (Map<String, Object> config : loadFormConfigs(pi.getProcessDefinitionKey())) {
                 try {
-                    Map<String, Object> config = objectMapper.readValue(raw, new TypeReference<>() {
-                    });
                     extractFieldLabelsFromConfig(config, labels, null);
                 } catch (Exception e) {
-                    log.debug("Could not parse configJson for field labels: {}", e.getMessage());
+                    log.debug("Could not read configJson for field labels: {}", e.getMessage());
                 }
             }
         } catch (Exception e) {
@@ -1022,26 +1067,12 @@ public class ChangeHistoryComponent {
             if (pi == null || pi.getProcessDefinitionKey() == null) {
                 return orders;
             }
-            String processDefKey = pi.getProcessDefinitionKey();
-            List<String> configJsonStrings = jdbcTemplate.query(
-                    """
-                            SELECT fd.config_json::text AS config_json
-                            FROM dw_form_definitions fd
-                            INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
-                            WHERE fu.code = ?
-                            """,
-                    (rs, rowNum) -> rs.getString("config_json"),
-                    processDefKey.trim());
             int[] counter = { 0 };
-            for (String raw : configJsonStrings) {
-                if (raw == null || raw.isBlank())
-                    continue;
+            for (Map<String, Object> config : loadFormConfigs(pi.getProcessDefinitionKey())) {
                 try {
-                    Map<String, Object> config = objectMapper.readValue(raw, new TypeReference<>() {
-                    });
                     extractFieldLabelsFromConfig(config, null, new FieldMetaCollector(orders, counter));
                 } catch (Exception e) {
-                    log.debug("Could not parse configJson for field orders: {}", e.getMessage());
+                    log.debug("Could not read configJson for field orders: {}", e.getMessage());
                 }
             }
         } catch (Exception e) {

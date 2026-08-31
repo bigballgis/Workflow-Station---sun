@@ -75,22 +75,9 @@ export function useUserPortalAudit() {
 
   const loading = storeLoading
   const ACTIONS_COL_WIDTH = 80
-  const UP_AUDIT_COL_WIDTHS: Record<string, number> = {
-    changeType: 160,
-    functionUnitCode: 160,
-    processInstanceId: 180,
-    stageId: 140,
-    subTableName: 130,
-    fieldName: 150,
-    oldValue: 150,
-    newValue: 150,
-    userName: 120,
-    timestamp: 180,
-  }
   const grid = useAdminListGrid<UserPortalAuditRecord>({
     storageKey: 'admin-list-layout:up-audit',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => UP_AUDIT_COL_WIDTHS[field] ?? 120,
   })
   const page = computed({
     get: () => grid.pagination.page,
@@ -193,7 +180,6 @@ export function useUserPortalAudit() {
   const handleReset = () => {
     store.resetQuery()
     grid.clearSort()
-    grid.applyGroup('', false)
     for (const field of Object.keys(grid.columnFilters.value)) {
       grid.clearFilter(field)
     }

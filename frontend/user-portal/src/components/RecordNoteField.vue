@@ -198,6 +198,7 @@ import '@wangeditor/editor/dist/css/style.css'
 // wangeditor ships with a Chinese UI by default; the platform is English-first.
 i18nChangeLanguage('en')
 import {
+  canAddRecordNote,
   createRecordNote,
   downloadRecordNoteAttachment,
   fetchRecordNoteBlobUrl,
@@ -268,7 +269,12 @@ const target = computed<RecordNoteTargetParams | null>(() => {
 })
 
 const unavailable = computed(() => target.value == null)
-const canWrite = computed(() => !props.readonly && target.value != null)
+/**
+ * Server's answer to "may this user add a note here". Starts false so the Add button cannot flash
+ * into view before the check resolves and then disappear.
+ */
+const serverAllowsWrite = ref(false)
+const canWrite = computed(() => !props.readonly && target.value != null && serverAllowsWrite.value)
 
 // ---- list state ----
 const notes = ref<RecordNoteItem[]>([])
@@ -300,12 +306,28 @@ function loadMore() {
   void load(false)
 }
 
+/** Resolves whether the Add button belongs on this target; a failed check hides it. */
+async function loadWritePermission() {
+  if (!target.value) {
+    serverAllowsWrite.value = false
+    return
+  }
+  try {
+    serverAllowsWrite.value = await canAddRecordNote(target.value)
+  } catch {
+    serverAllowsWrite.value = false
+  }
+}
+
 // Load as soon as the target resolves — the compact (collapsed) card must show
 // the real note count, and the list query is summary-only so it stays cheap.
 watch(
   () => [target.value?.targetType, target.value?.targetId],
   () => {
-    if (target.value) void load(true)
+    if (target.value) {
+      void load(true)
+      void loadWritePermission()
+    }
   },
   { immediate: true },
 )

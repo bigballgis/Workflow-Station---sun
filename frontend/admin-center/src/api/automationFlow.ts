@@ -56,7 +56,6 @@ export interface AutomationFlowListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 export const automationFlowApi = {

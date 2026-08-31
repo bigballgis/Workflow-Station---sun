@@ -124,8 +124,8 @@
               style="width: 100%;"
               class="list-data-grid"
               :class="{ 'list-data-grid--fit': gridFits }"
-              :span-method="spanMethod(1 + (leftoverWidth > 0 ? 1 : 0))"
-              :row-class-name="rowClassName"
+              scrollbar-always-on
+              :height="gridTableHeight || '100%'"
             >
               <template #empty>
                 <div
@@ -150,7 +150,6 @@
                   <ListColumnHeader
                     :column="col"
                     :sort="sort.field === col.field ? sort.direction : null"
-                    :grouped="groupBy === col.field"
                     :filtered="!!columnFilters[col.field]"
                     :width="widthOf(col.field)"
                     :show-move="displayColumns.length > 1"
@@ -158,7 +157,6 @@
                     :can-move-right="colIndex < displayColumns.length - 1"
                     @sort-change="(direction: 'ASC' | 'DESC') => onSort(col.field, direction)"
                     @clear-sort="onClearSort"
-                    @group-change="(grouped: boolean) => onGroup(col.field, grouped)"
                     @filter-open="openFilter(col.field)"
                     @clear-filter="onClearFilter(col.field)"
                     @move="(direction: 'left' | 'right') => moveColumn(col.field, direction)"
@@ -167,14 +165,8 @@
                   />
                 </template>
                 <template #default="{ row }">
-                  <template v-if="isListGroupHeaderRow(row)">
-                    <div class="group-header-cell">
-                      <strong>{{ groupHeaderLabel(row._groupLabel) }}</strong>
-                      <span class="group-count">({{ row._groupCount }})</span>
-                    </div>
-                  </template>
                   <el-link
-                    v-else-if="col.field === 'requestId'"
+                    v-if="col.field === 'requestId'"
                     type="primary"
                     @click="viewDetail(row)"
                   >
@@ -182,9 +174,6 @@
                   </el-link>
                   <template v-else-if="col.field === 'businessKey'">
                     {{ row.businessKey || row.processDefinitionName }}
-                  </template>
-                  <template v-else-if="col.field === 'currentStepName'">
-                    {{ row.currentStepName || row.currentNode || '-' }}
                   </template>
                   <span
                     v-else-if="col.field === 'startTime'"
@@ -203,7 +192,6 @@
                   </template>
                 </template>
               </el-table-column>
-              <el-table-column v-if="leftoverWidth > 0" :width="leftoverWidth" class-name="list-col-spacer" />
               <el-table-column
                 :label="t('common.actions')"
                 :width="ACTIONS_COL_WIDTH"
@@ -212,7 +200,7 @@
               >
                 <template #default="{ row }">
                   <div
-                    v-if="!isListGroupHeaderRow(row) && row.status === 'RUNNING'"
+                    v-if="row.status === 'RUNNING'"
                     class="action-buttons"
                   >
                     <el-button
@@ -243,7 +231,7 @@
                     </el-button>
                   </div>
                   <span
-                    v-else-if="!isListGroupHeaderRow(row)"
+                    v-else
                     class="no-action"
                   >-</span>
                 </template>
@@ -289,14 +277,6 @@ import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 import { formatDate } from '@/utils/dateFormat'
 
 const ACTIONS_COL_WIDTH = 200
-const APPLICATION_COL_WIDTHS: Record<string, number> = {
-  requestId: 160,
-  businessKey: 200,
-  currentStepName: 170,
-  currentAssignee: 240,
-  startTime: 170,
-  status: 120,
-}
 
 interface DraftRow {
   id: number
@@ -326,7 +306,6 @@ const draftCount = ref(0)
 const {
   displayColumns,
   displayRows,
-  groupBy,
   columnFilters,
   sort,
   filterDialog,
@@ -334,7 +313,8 @@ const {
   activeFilterColumn,
   activeFilter,
   gridScrollRef,
-  gridFits, leftoverWidth,
+  gridFits,
+  gridTableHeight,
   gridInnerStyle,
   widthOf,
   setWidth,
@@ -350,15 +330,9 @@ const {
   clearFilter,
   applySort,
   clearSort,
-  applyGroup,
-  rowClassName,
-  spanMethod,
-  groupHeaderLabel,
-  isListGroupHeaderRow,
 } = usePortalListGrid<ProcessInstance>({
   storageKey: 'portal-list-layout:my-applications',
   extraWidth: ACTIONS_COL_WIDTH,
-  defaultWidthOf: (field) => APPLICATION_COL_WIDTHS[field] ?? 120,
 })
 
 const getStatusType = (status: string): 'success' | 'warning' | 'info' | 'danger' | 'primary' => {
@@ -435,10 +409,6 @@ function onClearSort() {
   loadApplications()
 }
 
-function onGroup(field: string, grouped: boolean) {
-  applyGroup(field, grouped)
-  loadApplications()
-}
 
 function onClearFilter(field: string) {
   clearFilter(field)

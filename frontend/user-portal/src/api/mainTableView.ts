@@ -20,6 +20,8 @@ export interface MainTableViewSummary {
   isDefault?: boolean
   tableId?: number | null
   tableLabel?: string | null
+  /** Owning table type; 'MAIN' means a row is a request and opens the request detail page. */
+  tableType?: string | null
   enableExport?: boolean
   enableImport?: boolean
   /** DETAIL form opened when a row is clicked; null = rows are not clickable. */
@@ -53,7 +55,6 @@ export interface MainTableViewFieldColumn {
   kind: ListColumnKind
   filterable: boolean
   sortable: boolean
-  groupable: boolean
   operators: string[]
   /** Closed choices for ENUM / BOOLEAN; omitted or empty for open-value kinds. */
   options?: { value: string; label: string }[]
@@ -67,8 +68,6 @@ export interface MainTableViewQueryRequest {
   filters?: ListColumnFilterRequest[]
   sortField?: string | null
   sortDirection?: 'ASC' | 'DESC' | null
-  /** Field to group by; the response then carries a count per group. */
-  groupBy?: string | null
 }
 
 export interface MainTableViewDataRow {
@@ -82,24 +81,12 @@ export interface MainTableViewDataRow {
   values: Record<string, unknown>
 }
 
-/**
- * A group of the whole result set. The count comes from the server's GROUP BY over the same
- * predicate as the page, so a header still reads the true size of its group when the page holds
- * only part of it.
- */
-export interface MainTableViewGroup {
-  label: string
-  count: number
-}
-
 export interface MainTableViewDataPage {
   columns: MainTableViewFieldColumn[]
   rows: MainTableViewDataRow[]
   total: number
   page: number
   size: number
-  /** Empty unless the request grouped by a column. */
-  groups: MainTableViewGroup[]
 }
 
 export interface MainTableViewImportResult {

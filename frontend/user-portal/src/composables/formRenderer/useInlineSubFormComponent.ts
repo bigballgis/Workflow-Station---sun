@@ -1,5 +1,14 @@
 import { applyFieldDefinitionsToFormFields } from '../../utils/subTableRowRuntime'
 import { findMiIsolatedParentRow } from '../tasks/miLinkChildRows'
+import {
+  isMiDashboardSubTableBinding,
+  isMiParticipantScopedSubTableBinding,
+} from '../tasks/subTableBindingKinds'
+import {
+  miLinkChildRowBelongsToParticipant,
+  resolveMiChildStructuralParentFk,
+} from '../tasks/miLinkChildIdentity'
+import { normalizeMiLinkMatchId } from '../tasks/internal'
 import type { FormField } from '../../components/formRendererHelpers'
 import type { SubTableBinding } from './useSubTableBindings'
 
@@ -8,9 +17,12 @@ import type { SubTableBinding } from './useSubTableBindings'
  * IN PLACE on the host form — no grid above it, no dialog, no save button of its own.
  *
  * <p>Exactly one row of the target binding is edited — the current MI sub-task's own row when
- * {@code currentMiRowId} identifies one (matched via {@link findMiIsolatedParentRow}, the same
- * PK-based matcher `useSubTableBindings`/`useInlineSubTableForm` already use elsewhere), else
- * `rows[0]` for the plain non-MI single-row case. Multi-row bindings are common even outside MI
+ * {@code currentMiRowId} identifies one, else `rows[0]` for the plain non-MI single-row case.
+ * Which matcher finds "its own row" depends on how the bound table is keyed: an MI collection row
+ * carries the participant key itself (matched via {@link findMiIsolatedParentRow}, the same PK-based
+ * matcher `useSubTableBindings`/`useInlineSubTableForm` use), whereas a participant-scoped CHILD
+ * table (People-style) is keyed by a structural FK and is matched by participant ownership with no
+ * index-0 fallback — see {@link resolveTargetRowIndex}. Multi-row bindings are common even outside MI
  * (e.g. an MI collection sub-table simply has one row per participant) — always reading `rows[0]`
  * silently showed and overwrote whichever row happened to be first, corrupting a DIFFERENT
  * participant's data on every edit (see #1524-class regression: editing "Name" on one task
@@ -161,11 +173,37 @@ export function useInlineSubFormComponent(deps: InlineSubFormDeps) {
    * `currentMiRowId` identifies one, else index 0 (the plain non-MI single-row case — also the
    * safe fallback when MI matching finds nothing, since {@link findMiIsolatedParentRow} itself
    * degrades to "the only row" when there is exactly one and it doesn't contradict `miRowId`).
+   *
+   * <p><b>Exception — participant-scoped child tables.</b> When the bound table is a link-child
+   * whose rows belong to individual MI participants (People-style, structural FK to the participant
+   * row), `rows` is the cross-participant pool and index 0 is very likely SOMEONE ELSE's row.
+   * Falling back to it does not merely display the wrong data: {@link handleInlineSubFormUpdate}
+   * merges the edit into that same index, so typing here overwrites another sub-task's row. There
+   * is no safe default in that case — return -1 so the form renders blank and a first edit creates
+   * this participant's own row instead. The index-0 fallback is kept for every other binding, where
+   * a single-row table genuinely is "the" row (and MI collection rows still match by PK above).
    */
-  function resolveTargetRowIndex(rows: SubTableRow[]): number {
+  function resolveTargetRowIndex(rows: SubTableRow[], binding: SubTableBinding): number {
     if (rows.length === 0) return -1
     const miRowId = deps.currentMiRowId?.()
     if (miRowId != null && String(miRowId).trim() !== '') {
+      /**
+       * Link-child rows are keyed to their participant by a structural FK (`sub_task_id`), NOT by
+       * `id_idw`/`id` — those are the row's OWN pk. {@link findMiIsolatedParentRow} matches on the
+       * latter and additionally degrades to "the only row" when there is exactly one, so on a
+       * link-child pool it both fails to find this participant's real row AND happily returns a
+       * sibling's. Match on participant ownership instead, and accept no substitute.
+       */
+      if (bindingIsMiLinkChild(binding)) {
+        const idx = rows.findIndex(r => miLinkChildRowBelongsToParticipant(r, miRowId))
+        if (idx >= 0) return idx
+        // A row with no participant identity yet is this participant's own in-progress row
+        // (the FK is only seeded at save), so it is writable — but a FOREIGN row never is.
+        const fresh = rows.findIndex(
+          r => !resolveMiChildStructuralParentFk(r) && !normalizeMiLinkMatchId(r.id_idw),
+        )
+        return fresh
+      }
       const matched = findMiIsolatedParentRow(rows, miRowId)
       if (matched) {
         const idx = rows.indexOf(matched)
@@ -173,6 +211,18 @@ export function useInlineSubFormComponent(deps: InlineSubFormDeps) {
       }
     }
     return 0
+  }
+
+  /**
+   * A participant-scoped child table (People, subtable2, …) as opposed to the MI collection itself
+   * or a shared process-level table. The collection's own rows are matched by PK above, so only
+   * child bindings need participant-ownership matching.
+   */
+  function bindingIsMiLinkChild(binding: SubTableBinding): boolean {
+    return (
+      isMiParticipantScopedSubTableBinding(binding)
+      && !isMiDashboardSubTableBinding(binding)
+    )
   }
 
   /**
@@ -184,7 +234,7 @@ export function useInlineSubFormComponent(deps: InlineSubFormDeps) {
     const binding = resolveBinding(field._bindingId)
     if (!binding) return null
     const rows = currentRows(binding)
-    const idx = resolveTargetRowIndex(rows)
+    const idx = resolveTargetRowIndex(rows, binding)
     const target = idx >= 0 ? rows[idx] : undefined
     return target && typeof target === 'object' ? { ...target } : null
   }
@@ -217,16 +267,18 @@ export function useInlineSubFormComponent(deps: InlineSubFormDeps) {
    * creating that row on first input when the binding has no rows at all yet. No PK is allocated
    * and no FK is written here — see the PK/FK timing note above.
    *
-   * <p>A multi-row binding with no MI row match at all (shouldn't happen in practice — see
-   * {@link resolveTargetRowIndex}'s fallback) still merges into index 0 rather than silently
-   * dropping the edit; that mirrors the pre-fix behavior for the cases this fix does not change.
+   * <p>When {@link resolveTargetRowIndex} finds no row this participant may write to, the edit
+   * APPENDS a new row rather than being coerced into index 0. Clamping a "no match" to 0 meant an
+   * MI participant whose own row was absent from a participant-scoped child binding silently
+   * overwrote whichever sibling's row happened to sort first — a cross-sub-task data loss, not just
+   * a display glitch.
    */
   function handleInlineSubFormUpdate(field: FormField, mergedRow: SubTableRow): void {
     const binding = resolveBinding(field._bindingId)
     if (!binding) return
     const rows = [...currentRows(binding)]
-    if (rows.length > 0) {
-      const idx = Math.max(resolveTargetRowIndex(rows), 0)
+    const idx = rows.length > 0 ? resolveTargetRowIndex(rows, binding) : -1
+    if (idx >= 0) {
       rows[idx] = { ...rows[idx], ...mergedRow }
     } else {
       rows.push({ ...mergedRow })

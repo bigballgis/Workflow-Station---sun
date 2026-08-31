@@ -2,6 +2,7 @@ package com.admin.list;
 
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
+import com.platform.common.list.ListFilterSql;
 
 import java.util.LinkedHashMap;
 import java.util.List;

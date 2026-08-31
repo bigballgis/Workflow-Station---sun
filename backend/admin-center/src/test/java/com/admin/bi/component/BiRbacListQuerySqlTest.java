@@ -79,15 +79,6 @@ class BiRbacListQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(new BiRbacListQueryRequest(0, 20, null, null, List.of(), null, null, "sysRoleType"));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
         assertThatThrownBy(() -> component.query(request(null, null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
@@ -96,7 +87,7 @@ class BiRbacListQuerySqlTest {
 
     private static BiRbacListQueryRequest request(String roleName, String roleType,
                                                   List<ListColumnFilter> filters) {
-        return new BiRbacListQueryRequest(0, 20, roleName, roleType, filters, null, null, null);
+        return new BiRbacListQueryRequest(0, 20, roleName, roleType, filters, null, null);
     }
 
     private String pageSql() {

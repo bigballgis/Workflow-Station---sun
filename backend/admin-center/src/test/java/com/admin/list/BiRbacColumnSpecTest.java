@@ -14,23 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class BiRbacColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(BiRbacColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("sysRoleType");
-        assertThat(column("sysRoleName").groupable()).isFalse();
-        assertThat(column("supersetRoles").kind()).isEqualTo(Kind.TEXT);
-        assertThat(column("lastUpdatedAt").kind()).isEqualTo(Kind.DATETIME);
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> BiRbacColumnSpec.sql().groupByExpression("sysRoleName"))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void supersetRoleFilterAggregatesMappedNames() {
         List<Object> params = new ArrayList<>();
         String where = BiRbacColumnSpec.sql().whereClause(

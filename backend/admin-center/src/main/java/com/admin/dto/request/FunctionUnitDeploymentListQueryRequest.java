@@ -12,8 +12,7 @@ public record FunctionUnitDeploymentListQueryRequest(
         int size,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public FunctionUnitDeploymentListQueryRequest {
         if (page < 0) {

@@ -116,11 +116,11 @@
           style="width: 100%"
           clearable
         >
-          <el-option 
-            v-for="table in tables" 
-            :key="table.id" 
+          <el-option
+            v-for="table in bindableTables"
+            :key="table.id"
             :label="`${table.tableDisplayName || table.tableName} (${tableTypeLabel(table.tableType)})`"
-            :value="table.id" 
+            :value="table.id"
           />
         </el-select>
         <div class="form-item-tip">
@@ -175,6 +175,18 @@ const REQUEST_SCENE_SUFFIX = ' (My Request)'
 const createsBothScenes = computed(
   () => props.createForm.formType === 'PROCESS' || props.createForm.formType === 'TASK',
 )
+
+/**
+ * DETAIL forms are opened from a view row, and MAIN-table rows open the request detail page
+ * instead — so a DETAIL form bound to the MAIN table could never be reached. Offering the
+ * table here would create exactly that dead form.
+ */
+const bindableTables = computed(() => {
+  if (props.createForm.formType !== 'DETAIL') return props.tables
+  return props.tables.filter(
+    (table: any) => String(table?.tableType ?? '').toUpperCase() !== 'MAIN',
+  )
+})
 
 /**
  * One start form per scene, not per function unit: the New Request form and the

@@ -74,7 +74,8 @@ public class RelationTableStructurePortability {
         table.put("fields", jdbcTemplate.query(
                 "SELECT field_name, data_type, length, precision_value, scale, nullable, is_primary_key, "
                         + "default_value, display_name, is_foreign_key, ref_table_id, ref_primary_key_fields, "
-                        + "pk_generation_json, fk_display_mode, sort_order, is_computed, computed_field_json "
+                        + "pk_generation_json, fk_display_mode, lookup_config, sort_order, is_computed, "
+                        + "computed_field_json "
                         + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC, id ASC",
                 (rs, n) -> {
                     Map<String, Object> f = new LinkedHashMap<>();
@@ -93,6 +94,7 @@ public class RelationTableStructurePortability {
                     f.put("refPrimaryKeyFields", rs.getString("ref_primary_key_fields"));
                     f.put("pkGenerationJson", rs.getString("pk_generation_json"));
                     f.put("fkDisplayMode", rs.getString("fk_display_mode"));
+                    f.put("lookupConfig", rs.getString("lookup_config"));
                     f.put("sortOrder", rs.getObject("sort_order", Integer.class));
                     boolean computed = Boolean.TRUE.equals(rs.getObject("is_computed", Boolean.class));
                     String formulaJson = rs.getString("computed_field_json");
@@ -200,7 +202,7 @@ public class RelationTableStructurePortability {
                         + " f.is_primary_key, f.default_value, f.display_name, f.is_foreign_key, "
                         + " (SELECT table_name FROM rt_table_definitions WHERE id = f.ref_table_id) AS ref_table_name, "
                         + " f.ref_primary_key_fields, f.pk_generation_json, f.fk_display_mode, "
-                        + " f.is_computed, f.computed_field_json "
+                        + " f.lookup_config, f.sort_order, f.is_computed, f.computed_field_json "
                         + "FROM rt_field_definitions f WHERE f.table_id = ?",
                 (rs, n) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
@@ -218,6 +220,9 @@ public class RelationTableStructurePortability {
                     m.put("refPrimaryKeyFields", parseJsonList(rs.getString("ref_primary_key_fields")));
                     m.put("pkGenerationJson", parseJsonMapText(rs.getString("pk_generation_json")));
                     m.put("fkDisplayMode", rs.getString("fk_display_mode"));
+                    m.put("lookupConfig", isLookup(rs.getString("data_type"))
+                            ? parseJsonMapText(rs.getString("lookup_config")) : null);
+                    m.put("sortOrder", rs.getObject("sort_order", Integer.class));
                     boolean computed = Boolean.TRUE.equals(rs.getObject("is_computed", Boolean.class));
                     m.put("isComputed", computed);
                     m.put("computedField", computed ? parseJsonMapText(rs.getString("computed_field_json")) : null);
@@ -233,6 +238,7 @@ public class RelationTableStructurePortability {
         if (!(fieldsObj instanceof List<?> fields)) {
             return result;
         }
+        int order = 0;
         for (Object fo : fields) {
             if (!(fo instanceof Map<?, ?> raw)) {
                 continue;
@@ -253,12 +259,22 @@ public class RelationTableStructurePortability {
             m.put("refPrimaryKeyFields", parseJsonListValue(f.get("refPrimaryKeyFields")));
             m.put("pkGenerationJson", parseJsonMapValue(f.get("pkGenerationJson")));
             m.put("fkDisplayMode", f.get("fkDisplayMode") != null ? f.get("fkDisplayMode") : "readonly");
+            m.put("lookupConfig", isLookup(f.get("dataType")) ? parseJsonMapValue(f.get("lookupConfig")) : null);
+            // Same positional fallback replaceFields() uses, so a payload that omits sortOrder does
+            // not read as a change against the value that would actually be persisted.
+            m.put("sortOrder", f.get("sortOrder") instanceof Number num ? num.intValue() : order);
             boolean computed = Boolean.TRUE.equals(f.get("isComputed"));
             m.put("isComputed", computed);
             m.put("computedField", computed ? parseJsonMapValue(f.get("computedField")) : null);
             result.add(m);
+            order++;
         }
         return result;
+    }
+
+    /** LOOKUP config is only meaningful on a LOOKUP column; anywhere else it must normalize to null. */
+    private boolean isLookup(Object dataType) {
+        return dataType instanceof String s && "LOOKUP".equals(s);
     }
 
     private List<String> parseJsonList(String json) {
@@ -330,9 +346,9 @@ public class RelationTableStructurePortability {
                     "INSERT INTO rt_field_definitions "
                             + "(table_id, field_name, data_type, length, precision_value, scale, nullable, "
                             + " is_primary_key, default_value, display_name, is_foreign_key, ref_table_id, "
-                            + " ref_primary_key_fields, pk_generation_json, fk_display_mode, sort_order, "
-                            + " is_computed, computed_field_json) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?::jsonb, ?::jsonb, ?, ?, ?, ?::jsonb)",
+                            + " ref_primary_key_fields, pk_generation_json, fk_display_mode, lookup_config, "
+                            + " sort_order, is_computed, computed_field_json) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?, ?::jsonb)",
                     tableId,
                     f.get("fieldName"),
                     f.get("dataType"),
@@ -347,6 +363,7 @@ public class RelationTableStructurePortability {
                     asJsonText(f.get("refPrimaryKeyFields")),
                     asJsonText(f.get("pkGenerationJson")),
                     f.get("fkDisplayMode") != null ? f.get("fkDisplayMode") : "readonly",
+                    isLookup(f.get("dataType")) ? asJsonText(f.get("lookupConfig")) : null,
                     sortOrder,
                     computed,
                     computed ? requireJsonText(f.get("computedField"), tableId, f.get("fieldName")) : null);

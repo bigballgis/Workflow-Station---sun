@@ -390,6 +390,9 @@ const restrictPrimarySubOnly = computed(
   () => props.formType === 'PROCESS' || props.formType === 'TASK'
 )
 
+/** DETAIL 表单渲染的是子表的一行，所以它的主表是 SUB 表；MAIN 表的行走申请详情页，不用详情表单。 */
+const primaryTableIsSubTable = computed(() => props.formType === 'DETAIL')
+
 const emit = defineEmits<{
   (e: 'update'): void
   (e: 'add', payload: { tableId: number; bindingType: string; bindingId: number }): void
@@ -446,6 +449,7 @@ const {
   getTables: () => props.tables,
   bindings,
   restrictPrimarySubOnly,
+  primaryTableIsSubTable,
   tableTypeLabel,
   t,
 })

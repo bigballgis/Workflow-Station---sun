@@ -129,6 +129,17 @@ public class TaskInfo {
      */
     private String requestId;
 
+    /**
+     * Function Unit code pinned at process start ({@code up_process_instance.function_unit_code}).
+     */
+    private String functionUnitCode;
+
+    /**
+     * Catalog display name from {@code sys_function_units.name}. Null when lookup misses;
+     * the To Do cell shows {@code functionUnitName || functionUnitCode}.
+     */
+    private String functionUnitName;
+
     /** 完成时间（已处理任务） */
     private LocalDateTime completedTime;
     

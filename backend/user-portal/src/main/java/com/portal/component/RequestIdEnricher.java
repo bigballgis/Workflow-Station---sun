@@ -8,8 +8,10 @@ import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -113,39 +115,90 @@ public class RequestIdEnricher {
     }
 
     /**
-     * 为一页任务(To-Do / 已完成)填充 {@link TaskInfo#getRequestId()}。
+     * 为一页任务(To-Do / 已完成)填充 {@link TaskInfo#getRequestId()} 与 Function Unit。
      *
      * <p>引擎任务负载不含主表字段值,故按 {@code processInstanceId} 单次批量取关联流程实例的
      * variables(已完成流程的 variables 冻结在 {@code up_process_instance}),再按主表表级配置
-     * (每个功能单元只解析一次)拼出 Request ID。无 N+1。
+     * (每个功能单元只解析一次)拼出 Request ID,并带上发起时钉死的 function unit code/name。无 N+1。
      */
     public void enrichTaskRequestIds(List<TaskInfo> tasks) {
         if (tasks == null || tasks.isEmpty()) {
             return;
         }
+        Map<String, ProcessInstance> instancesById = loadInstancesByTask(tasks);
+        if (instancesById.isEmpty()) {
+            return;
+        }
+        Set<String> functionUnitCodes = instancesById.values().stream()
+                .map(ProcessInstance::getFunctionUnitCode)
+                .filter(code -> code != null && !code.isBlank())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        SpecCache specs = resolveSpecs(functionUnitCodes);
+        Map<String, String> names = loadFunctionUnitNames(functionUnitCodes);
+        applyRequestIdAndFunctionUnit(tasks, instancesById, specs, names);
+    }
+
+    private Map<String, ProcessInstance> loadInstancesByTask(List<TaskInfo> tasks) {
         Set<String> processInstanceIds = tasks.stream()
                 .map(TaskInfo::getProcessInstanceId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         if (processInstanceIds.isEmpty()) {
-            return;
+            return Map.of();
         }
-        Map<String, ProcessInstance> instancesById = processInstanceRepository.findAllById(processInstanceIds).stream()
+        return processInstanceRepository.findAllById(processInstanceIds).stream()
                 .filter(pi -> pi.getId() != null)
                 .collect(Collectors.toMap(ProcessInstance::getId, pi -> pi, (a, b) -> a));
+    }
 
-        Set<String> functionUnitCodes = instancesById.values().stream()
-                .map(ProcessInstance::getFunctionUnitCode)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        SpecCache specs = resolveSpecs(functionUnitCodes);
-
+    private void applyRequestIdAndFunctionUnit(
+            List<TaskInfo> tasks,
+            Map<String, ProcessInstance> instancesById,
+            SpecCache specs,
+            Map<String, String> names) {
         for (TaskInfo task : tasks) {
             ProcessInstance pi = instancesById.get(task.getProcessInstanceId());
-            if (pi != null) {
-                task.setRequestId(buildRequestId(specs, pi.getFunctionUnitCode(), pi.getVariables()));
+            if (pi == null) {
+                continue;
             }
+            String code = pi.getFunctionUnitCode();
+            task.setFunctionUnitCode(code);
+            if (code != null && !code.isBlank()) {
+                String name = names.get(code);
+                task.setFunctionUnitName(name != null && !name.isBlank() ? name : null);
+            }
+            task.setRequestId(buildRequestId(specs, code, pi.getVariables()));
         }
+    }
+
+    /**
+     * Batch catalog names for the page's function unit codes. Missing names leave the cell
+     * on {@code functionUnitCode}.
+     */
+    private Map<String, String> loadFunctionUnitNames(Set<String> codes) {
+        if (codes == null || codes.isEmpty()) {
+            return Map.of();
+        }
+        List<String> args = new ArrayList<>(codes);
+        String placeholders = args.stream().map(c -> "?").collect(Collectors.joining(","));
+        Map<String, String> map = new LinkedHashMap<>();
+        try {
+            RowCallbackHandler handler = rs -> {
+                String code = rs.getString("code");
+                String name = rs.getString("name");
+                if (code != null && name != null && !name.isBlank()) {
+                    map.putIfAbsent(code, name.trim());
+                }
+            };
+            jdbcTemplate.query(
+                    "SELECT code, name FROM sys_function_units WHERE code IN (" + placeholders + ")",
+                    handler,
+                    args.toArray());
+        } catch (Exception e) {
+            // FALLBACK(ux): show functionUnitCode when catalog name lookup fails
+            log.debug("Could not resolve function unit names: {}", e.getMessage());
+        }
+        return map;
     }
 
     /** 用预解析的缓存拼接(零查库)。 */

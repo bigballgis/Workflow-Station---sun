@@ -62,7 +62,6 @@ export interface RoleListQuery {
   filters?: Array<ListColumnFilter & { field: string }>
   sortField?: string
   sortDirection?: 'ASC' | 'DESC'
-  groupBy?: string
 }
 
 // 角色管理API

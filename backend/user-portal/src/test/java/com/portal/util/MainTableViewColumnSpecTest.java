@@ -2,6 +2,7 @@ package com.portal.util;
 
 import com.platform.common.list.ListColumnFilter;
 import com.platform.common.list.ListColumnMeta;
+import com.platform.common.list.ListFilterSql;
 import com.portal.util.MainTableViewColumnSpec.FieldSource;
 import com.portal.util.MainTableViewColumnSpec.SqlSource;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,20 @@ class MainTableViewColumnSpecTest {
     }
 
     @Test
+    void timeJsonAndUntypedDesignedFieldsAreQueryable() {
+        List<FieldSource> fields = List.of(
+                designed("shift_start", "TIME"),
+                designed("payload", "JSON"),
+                designed("notes", null));
+        assertThat(columnNamed(fields, "shift_start").kind()).isEqualTo(ListColumnMeta.Kind.DATETIME);
+        assertThat(columnNamed(fields, "payload").kind()).isEqualTo(ListColumnMeta.Kind.TEXT);
+        assertThat(columnNamed(fields, "notes").kind()).isEqualTo(ListColumnMeta.Kind.TEXT);
+        assertThat(MainTableViewColumnSpec.columnsFor(fields))
+                .allMatch(ListColumnMeta::filterable)
+                .allMatch(ListColumnMeta::sortable);
+    }
+
+    @Test
     void auditTimestampColumnsAreDatesEvenWhenTheTableDeclaredThemAsText() {
         List<FieldSource> fields = List.of(
                 designed("created_at", "VARCHAR"),
@@ -64,40 +79,37 @@ class MainTableViewColumnSpecTest {
     }
 
     @Test
-    void groupingFollowsTheFieldsMeaningRatherThanBeingOfferedEverywhere() {
-        List<FieldSource> fields = List.of(
-                designed("merchant_name", "VARCHAR"),
-                designed("temporary_refund", "BOOLEAN"),
-                designed("merchant_credit_date", "DATE"),
-                new FieldSource("process_status", "Status", true, "field", null));
-
-        assertThat(columnNamed(fields, "merchant_name").groupable())
-                .as("free text repeats too rarely to group by")
-                .isFalse();
-        assertThat(columnNamed(fields, "merchant_credit_date").groupable())
-                .as("a timestamp is unique per row")
-                .isFalse();
-        assertThat(columnNamed(fields, "temporary_refund").groupable()).isTrue();
-        assertThat(columnNamed(fields, "process_status").groupable()).isTrue();
-        assertThat(columnNamed(fields, "process_status").options())
-                .extracting(ListColumnMeta.Option::value)
-                .containsExactly("RUNNING", "COMPLETED", "WITHDRAWN");
-    }
-
-    @Test
-    void columnsWhoseValueIsResolvedInJavaAreDeclaredDisplayOnlyUntilMapped() {
+    void lookupAndFkDisplayColumnsStayDisplayOnlyUntilMappedAndFileIsFilterableByName() {
         List<FieldSource> fields = List.of(
                 new FieldSource("customer_label", "Customer", false, "lookup_display", "VARCHAR"),
                 new FieldSource("owner_label", "Owner", false, "fk_display", "VARCHAR"),
-                designed("scan", "FILE"),
-                designed("mystery", null));
+                designed("scan", "FILE"));
 
-        for (String field : List.of("customer_label", "owner_label", "scan", "mystery")) {
+        for (String field : List.of("customer_label", "owner_label")) {
             ListColumnMeta column = columnNamed(fields, field);
             assertThat(column.filterable()).as(field + " filterable").isFalse();
             assertThat(column.sortable()).as(field + " sortable").isFalse();
             assertThat(column.operators()).as(field + " operators").isEmpty();
         }
+        ListColumnMeta file = columnNamed(fields, "scan");
+        assertThat(file.kind()).isEqualTo(ListColumnMeta.Kind.FILE);
+        assertThat(file.filterable()).isTrue();
+        assertThat(file.sortable()).isTrue();
+        assertThat(file.operators()).contains("contains", "eq", "isNull");
+    }
+
+    @Test
+    void aFileColumnFilterComparesExtractedNamesNotTheStoredUrl() {
+        ListFilterSql sql = MainTableViewColumnSpec.sqlFor(
+                List.of(designed("scan", "FILE")), List.of());
+        List<Object> params = new ArrayList<>();
+        String where = sql.whereClause(
+                List.of(new ListColumnFilter("scan", "contains", "report", null)), params);
+        assertThat(where)
+                .contains("pi.variables->'scan'")
+                .contains("originalName")
+                .doesNotContain("pi.variables->>'scan' ILIKE");
+        assertThat(params).containsExactly("%report%");
     }
 
     @Test

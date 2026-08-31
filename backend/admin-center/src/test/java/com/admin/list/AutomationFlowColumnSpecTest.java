@@ -14,19 +14,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AutomationFlowColumnSpecTest {
 
     @Test
-    void onlyReadinessGroups() {
-        assertThat(AutomationFlowColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("readiness");
+    void displayNameAndUpdatedKinds() {
         assertThat(column("displayName").kind()).isEqualTo(Kind.TEXT);
         assertThat(column("updated").kind()).isEqualTo(Kind.DATETIME);
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> AutomationFlowColumnSpec.sql().groupByExpression("displayName"))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

@@ -13,7 +13,12 @@ import {
   isDisplayOnlyLayoutField,
   mergeNestedSubTableRowsIntoSto,
 } from './formRendererHelpers'
-import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shared'
+import {
+  pullNestedRowsForBindingFromParentRows,
+  scopeLinkChildRowsToMiHostRow,
+  hostRowIsMiParticipant,
+  isMiParticipantScopedSubTableBinding,
+} from '@/composables/tasks/shared'
 import { createLookupCascadeHandlers } from '@/composables/formRenderer/useFormLookupCascade'
 import { INLINE_LOOKUP_CASCADE_CTX } from '@/composables/formRenderer/inlineFormLookupCascadeContext'
 import { useInlineSubFormComponent } from '@/composables/formRenderer/useInlineSubFormComponent'
@@ -47,6 +52,12 @@ export interface PortalSubTableBindingLite {
   bindingType?: string | null
   /** EDITABLE / READONLY, from Table Design — gates whether the inline form can be edited at all. */
   bindingMode?: string | null
+  /**
+   * FK column linking a row back to its parent. Distinguishes a participant-scoped child table
+   * (People.sub_task_id / FK `id` → the MI participant row) from a shared process-level one
+   * (attachment.main_id → the main record), which decides whether rows get scoped to the host row.
+   */
+  foreignKeyField?: string | null
 }
 
 const props = withDefaults(
@@ -139,7 +150,33 @@ function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefin
   return pools.find(b => Number(b.bindingId) === Number(bindingId))
 }
 
+/**
+ * Rows for a sub-table rendered inside this form.
+ *
+ * <p>Rows nested under the row this form edits (`__subTables__`) are authoritative. Failing that,
+ * the binding's own flat `data` is used — but ONLY when this form is not editing a single MI
+ * participant row.
+ *
+ * <p><b>Why the flat fallback is cut off for an MI participant host.</b> `binding.data` is the
+ * cross-participant pool: it holds every sub-task's rows for that table. For a sub-table nested
+ * inside an Inline Form bound to an MI collection (FU 50005's Sub task form: Inline Form on
+ * `subtable` containing a nested `People` grid), the form edits exactly ONE participant, so
+ * "this participant has no rows of their own" must render an empty grid — never the pool. Falling
+ * through showed, and allowed editing of, a sibling sub-task's rows.
+ *
+ * <p>The fallback is kept for every other host, where it is the only row source and removing it
+ * renders those grids empty: plain link-form / nested-dialog hosts (nothing is nested under them —
+ * see {@code useSubTableLinkFormDialog}'s own `binding.data`-based resolution) and shared
+ * process-level tables whose rows belong to the main record rather than a participant
+ * (e.g. `attachment.main_id`), which every sub-task is supposed to see.
+ */
 function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
+  const hostRow = (props.model && typeof props.model === 'object' ? props.model : props.parentRow) ?? null
+  const participantScoped =
+    isMiParticipantScopedSubTableBinding(binding) && hostRowIsMiParticipant(hostRow)
+  const scope = (rows: unknown[]) =>
+    participantScoped ? scopeLinkChildRowsToMiHostRow(hostRow, rows) : rows
+
   // Model first: it carries local __subTables__ edits before the host round-trips them
   // into parentRow (SubTableInlineForm rowModel vs. currentRow).
   for (const parent of [props.model, props.parentRow]) {
@@ -153,8 +190,15 @@ function resolveSubTableRows(binding: PortalSubTableBindingLite): unknown[] {
       },
       [parent],
     )
-    if (nested.length > 0) return nested
+    if (nested.length > 0) {
+      const scoped = scope(nested)
+      // A nested slice that scopes to nothing held only sibling rows — keep looking rather than
+      // reporting "this participant has rows" falsely.
+      if (scoped.length > 0) return scoped
+    }
   }
+  // MI participant host: no fallback. Nothing nested means this participant owns no rows.
+  if (participantScoped) return []
   return Array.isArray(binding.data) ? binding.data : []
 }
 

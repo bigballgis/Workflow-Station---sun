@@ -93,7 +93,7 @@ class FunctionUnitListQuerySqlTest {
     }
 
     private static FunctionUnitListQueryRequest request(String keyword, List<ListColumnFilter> filters) {
-        return new FunctionUnitListQueryRequest(0, 20, keyword, filters, null, null, null);
+        return new FunctionUnitListQueryRequest(0, 20, keyword, filters, null, null);
     }
 
     private String pageSql() {

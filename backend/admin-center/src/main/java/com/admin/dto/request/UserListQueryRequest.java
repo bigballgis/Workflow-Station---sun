@@ -15,8 +15,7 @@ public record UserListQueryRequest(
         String status,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public UserListQueryRequest {
         if (page < 0) {

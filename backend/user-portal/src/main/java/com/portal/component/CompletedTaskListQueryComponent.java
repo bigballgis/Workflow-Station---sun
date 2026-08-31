@@ -1,14 +1,14 @@
 package com.portal.component;
 
 import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListFilterSql;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.CompletedTaskQueryRequest;
-import com.portal.dto.PortalListGroup;
 import com.portal.dto.PortalListPage;
 import com.portal.dto.TaskInfo;
 import com.portal.util.CompletedTaskColumnSpec;
-import com.portal.util.ListFilterSql;
+
 import com.portal.util.ListQuerySupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +28,7 @@ import java.util.Set;
 /**
  * Completed Tasks list: one historic user-task is one row. Visibility is exact
  * ({@code ASSIGNEE_ = current user} and {@code END_TIME_ IS NOT NULL}); filters, sort and
- * grouping compile through {@link ListFilterSql} so {@code COUNT(*)}, the page and group
- * counts share one predicate.
+ * sort compile through {@link ListFilterSql} so {@code COUNT(*)} and the page share one predicate.
  */
 @Slf4j
 @Component
@@ -62,46 +61,35 @@ public class CompletedTaskListQueryComponent {
                         rs -> rs.next() ? rs.getLong(1) : 0L),
                 LIST_KEY);
 
-        String groupExpression = blankToNull(request.groupBy()) == null
-                ? null
-                : filterSql.groupByExpression(request.groupBy());
-        List<PortalListGroup> groups = groupExpression == null
-                ? List.of()
-                : ListQuerySupport.groupsOf(jdbcTemplate, groupExpression, where.toString(), params);
-        requireGroupsWhenRowsExist(request.groupBy(), groups, total);
 
-        List<TaskInfo> rows = loadPage(filterSql, where.toString(), params, request, groupExpression);
+        List<TaskInfo> rows = loadPage(filterSql, where.toString(), params, request);
         tagMultiInstanceTasks(rows);
         long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         ListQuerySupport.logIfSlow(log, LIST_KEY, request.page(), request.size(), total, started);
         ListQuerySupport.logIfOverSla(log, LIST_KEY, request.page(), request.size(), total, elapsedMs, elapsedMs, 0L);
-        return new PortalListPage<>(CompletedTaskColumnSpec.columns(), rows, groups,
+        return new PortalListPage<>(CompletedTaskColumnSpec.columns(), rows,
                 request.page(), request.size(), total);
     }
 
     private List<TaskInfo> loadPage(ListFilterSql filterSql, String where, List<Object> params,
-                                    CompletedTaskQueryRequest request, String groupExpression) {
+                                    CompletedTaskQueryRequest request) {
         List<Object> pageParams = new ArrayList<>(params);
         pageParams.add(request.size());
         pageParams.add(request.page() * request.size());
-        String orderBy = groupExpression == null
-                ? filterSql.orderBy(request.sortField(), request.sortDirection())
-                : filterSql.orderByGrouped(groupExpression, request.sortField(), request.sortDirection());
-        String groupedSelect = groupExpression == null ? "" : ", " + groupExpression + " AS grouped_value";
+        String orderBy = filterSql.orderBy(request.sortField(), request.sortDirection());
         String sql = "SELECT ht.ID_ AS task_id, ht.NAME_ AS task_name, ht.PROC_INST_ID_ AS process_instance_id,"
                 + " ht.PROC_DEF_ID_ AS process_definition_id, ht.TASK_DEF_KEY_ AS task_definition_key,"
                 + " ht.ASSIGNEE_ AS assignee, ht.START_TIME_ AS start_time, ht.END_TIME_ AS end_time,"
                 + " ht.DURATION_ AS duration, " + CompletedTaskColumnSpec.ACTION_SQL + " AS action,"
                 + " pi.process_definition_key, pi.process_definition_name, pi.function_unit_code,"
-                + " (pi.variables - '__subTables__')::text AS variables" + groupedSelect
+                + " (pi.variables - '__subTables__')::text AS variables"
                 + where + orderBy + " LIMIT ? OFFSET ?";
-        String groupBy = request.groupBy();
         List<TaskInfo> tasks = ListQuerySupport.query(jdbcTemplate, sql, pageParams, rs -> {
             List<TaskInfo> page = new ArrayList<>();
             List<String> fuCodes = new ArrayList<>();
             List<Map<String, Object>> variables = new ArrayList<>();
             while (rs.next()) {
-                page.add(mapRow(rs, groupBy));
+                page.add(mapRow(rs));
                 fuCodes.add(rs.getString("function_unit_code"));
                 variables.add(readVariables(rs.getString("variables")));
             }
@@ -111,7 +99,7 @@ public class CompletedTaskListQueryComponent {
         return tasks;
     }
 
-    private TaskInfo mapRow(ResultSet rs, String groupBy) throws SQLException {
+    private TaskInfo mapRow(ResultSet rs) throws SQLException {
         String taskName = rs.getString("task_name");
         String processDefKey = rs.getString("process_definition_key");
         if (processDefKey == null || processDefKey.isBlank()) {
@@ -136,9 +124,6 @@ public class CompletedTaskListQueryComponent {
                 .durationInMillis(longOrNull(rs, "duration"))
                 .action(rs.getString("action"))
                 .build();
-        if (groupBy != null && !groupBy.isBlank()) {
-            writeGroupedValue(task, groupBy, rs.getString("grouped_value"));
-        }
         return task;
     }
 
@@ -198,20 +183,6 @@ public class CompletedTaskListQueryComponent {
         }
     }
 
-    private static void writeGroupedValue(TaskInfo task, String groupBy, String value) {
-        String label = value == null ? "" : value;
-        if ("action".equals(groupBy)) {
-            task.setAction(label);
-            return;
-        }
-        throw new IllegalStateException("grouped field was not selected: " + groupBy);
-    }
-
-    private static void requireGroupsWhenRowsExist(String groupBy, List<PortalListGroup> groups, long total) {
-        if (groupBy != null && !groupBy.isBlank() && total > 0 && groups.isEmpty()) {
-            throw new IllegalStateException("GROUP BY returned no groups for a non-empty completed-tasks result");
-        }
-    }
 
     private static String processKeyFromDefinitionId(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isBlank()) {
@@ -237,7 +208,4 @@ public class CompletedTaskListQueryComponent {
         return iso.substring(0, 10);
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
-    }
 }

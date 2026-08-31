@@ -14,17 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AdminAuditColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(AdminAuditColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("action", "resourceType", "result");
-        assertThat(column("username").groupable()).isFalse();
-        assertThat(column("duration").kind()).isEqualTo(Kind.NUMBER);
-        assertThat(column("createdAt").kind()).isEqualTo(Kind.DATETIME);
-    }
-
-    @Test
     void resultCompilesToTheStoredSuccessFlag() {
         List<Object> params = new ArrayList<>();
         String where = AdminAuditColumnSpec.sql().whereClause(
@@ -41,12 +30,6 @@ class AdminAuditColumnSpecTest {
         assertThat(where).contains("DATA_QUERIED");
         assertThat(where).contains("ELSE al.action END");
         assertThat(params).containsExactly("QUERY");
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> AdminAuditColumnSpec.sql().groupByExpression("username"))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static ListColumnMeta column(String field) {

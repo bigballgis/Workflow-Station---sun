@@ -10,11 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class FunctionUnitColumnSpecTest {
 
     @Test
-    void listOnlyClosedValueColumnsGroup() {
-        assertThat(FunctionUnitColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("status", "enabled");
+    void listDeclaresNameAndEnabledKinds() {
         assertThat(column(FunctionUnitColumnSpec.columns(), "name").kind()).isEqualTo(Kind.TEXT);
         assertThat(column(FunctionUnitColumnSpec.columns(), "enabled").kind()).isEqualTo(Kind.BOOLEAN);
     }
@@ -26,15 +22,6 @@ class FunctionUnitColumnSpecTest {
                 .contains("updatedBy")
                 .doesNotContain("enabled");
         assertThat(column(FunctionUnitColumnSpec.archiveColumns(), "updatedBy").kind()).isEqualTo(Kind.USER);
-        assertThat(column(FunctionUnitColumnSpec.archiveColumns(), "updatedBy").groupable()).isTrue();
-    }
-
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> FunctionUnitColumnSpec.sql().groupByExpression("name"))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> FunctionUnitColumnSpec.archiveSql().groupByExpression("version"))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

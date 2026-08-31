@@ -1,10 +1,14 @@
 package com.portal.util;
 
 import com.platform.common.list.ListColumnFilter;
+import com.platform.common.list.ListFilterSql;
+import com.platform.common.list.ListRelativeDates;
 import com.portal.dto.TaskInfo;
+import com.portal.dto.TaskQueryRequest;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -14,7 +18,7 @@ import java.util.function.Function;
 /**
  * In-memory column filters for Portal To Do lists ({@link ListColumnFilter}).
  *
- * <p>Whitelist fields: taskName, requestId, processDefinitionName, initiatorName, priority,
+ * <p>Whitelist fields: taskName, requestId, functionUnitCode, processDefinitionName, initiatorName, priority,
  * assignmentType, currentStepName (alias currentNode), createTime, dueDate.
  * DATETIME operators mirror {@link ListFilterSql} / {@link ListRelativeDates}.
  */
@@ -23,6 +27,7 @@ public final class TaskQueryColumnFilters {
     public static final Set<String> FILTER_FIELDS = Set.of(
             "taskName",
             "requestId",
+            "functionUnitCode",
             "processDefinitionName",
             "initiatorName",
             "priority",
@@ -33,6 +38,8 @@ public final class TaskQueryColumnFilters {
             "dueDate");
 
     private static final Set<String> DATETIME_FIELDS = Set.of("createTime", "dueDate");
+    /** Same paint as Portal {@code formatDate} default: {@code YYYY-MM-DD HH:mm}. */
+    private static final DateTimeFormatter KEYWORD_CREATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private static Clock clock = Clock.system(ListRelativeDates.ZONE);
 
@@ -49,22 +56,41 @@ public final class TaskQueryColumnFilters {
     }
 
     /**
-     * Toolbar keyword: OR across cells the To Do list actually shows (requestId is filled
-     * before this runs). Description is included for parity with the pre-shared-list search.
+     * Toolbar keyword: OR across {@link TodoTaskColumnSpec#VISIBLE_FIELDS} painted cells
+     * (requestId / function unit filled before this runs). Create Time uses {@code yyyy-MM-dd HH:mm}.
+     * Hidden columns and description / process key are not searched.
      */
     public static boolean toolbarKeywordMatches(TaskInfo task, String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return true;
         }
         String expected = keyword.trim();
-        for (String field : List.of(
-                "requestId", "taskName", "currentStepName", "processDefinitionName", "initiatorName")) {
-            if (textMatches(resolveFieldValue(task, field), "contains", expected)) {
+        for (String field : TodoTaskColumnSpec.VISIBLE_FIELDS) {
+            if (keywordFieldMatches(task, field, expected)) {
                 return true;
             }
         }
-        return textMatches(task.getDescription(), "contains", expected)
-                || textMatches(task.getProcessDefinitionKey(), "contains", expected);
+        return false;
+    }
+
+    /**
+     * Request ID and Function Unit are filled in portal memory. Enrich before keyword,
+     * those column filters, or A→Z sort on either field.
+     */
+    public static boolean needsPortalDerivedTaskColumns(TaskQueryRequest request) {
+        List<ListColumnFilter> filters = normalize(request.getFilters());
+        if (filters.stream().anyMatch(f -> "requestId".equals(f.field()) || "functionUnitCode".equals(f.field()))) {
+            return true;
+        }
+        if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
+            return true;
+        }
+        String sortBy = request.getSortBy();
+        if (sortBy == null || sortBy.isBlank()) {
+            return false;
+        }
+        String field = sortBy.trim();
+        return "requestId".equalsIgnoreCase(field) || "functionUnitCode".equalsIgnoreCase(field);
     }
 
     public static List<ListColumnFilter> normalize(List<ListColumnFilter> raw) {
@@ -123,8 +149,48 @@ public final class TaskQueryColumnFilters {
         if ("priority".equals(filter.field())) {
             return priorityMatches(task.getPriority(), filter);
         }
+        if ("functionUnitCode".equals(filter.field())) {
+            return functionUnitMatches(task, filter);
+        }
         String actual = resolveFieldValue(task, filter.field());
         return textMatches(actual, filter.operator(), filter.value() != null ? filter.value() : "");
+    }
+
+    /**
+     * Cell shows {@code functionUnitName || functionUnitCode}; filter matches either value.
+     * Negative operators require neither side to match.
+     */
+    static boolean functionUnitMatches(TaskInfo task, ListColumnFilter filter) {
+        String op = filter.operator() != null ? filter.operator().trim() : "";
+        String expected = filter.value() != null ? filter.value() : "";
+        String code = task.getFunctionUnitCode();
+        String name = task.getFunctionUnitName();
+        if ("isNull".equals(op)) {
+            return isBlank(code) && isBlank(name);
+        }
+        if ("isNotNull".equals(op)) {
+            return !isBlank(code) || !isBlank(name);
+        }
+        boolean codeHit = textMatches(code, positiveTextOp(op), expected);
+        boolean nameHit = textMatches(name, positiveTextOp(op), expected);
+        return switch (op) {
+            case "eq", "contains", "startsWith", "endsWith" -> codeHit || nameHit;
+            case "ne", "notContains" -> !codeHit && !nameHit;
+            default -> throw new IllegalArgumentException(
+                    "Operator " + op + " is not allowed on TEXT column functionUnitCode");
+        };
+    }
+
+    private static String positiveTextOp(String op) {
+        return switch (op) {
+            case "ne" -> "eq";
+            case "notContains" -> "contains";
+            default -> op;
+        };
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
@@ -233,10 +299,27 @@ public final class TaskQueryColumnFilters {
         }
     }
 
+    private static boolean keywordFieldMatches(TaskInfo task, String field, String expected) {
+        if (DATETIME_FIELDS.contains(field)) {
+            return textMatches(formatDateTimeForKeyword(resolveDateTime(task, field)), "contains", expected);
+        }
+        if ("functionUnitCode".equals(field)) {
+            return textMatches(resolveFieldValue(task, "functionUnitCode"), "contains", expected)
+                    || textMatches(resolveFieldValue(task, "functionUnitName"), "contains", expected);
+        }
+        return textMatches(resolveFieldValue(task, field), "contains", expected);
+    }
+
+    private static String formatDateTimeForKeyword(LocalDateTime value) {
+        return value == null ? "" : value.format(KEYWORD_CREATE_TIME);
+    }
+
     private static String resolveFieldValue(TaskInfo task, String field) {
         Function<TaskInfo, String> getter = switch (field) {
             case "taskName" -> TaskInfo::getTaskName;
             case "requestId" -> TaskInfo::getRequestId;
+            case "functionUnitCode" -> TaskInfo::getFunctionUnitCode;
+            case "functionUnitName" -> TaskInfo::getFunctionUnitName;
             case "processDefinitionName" -> TaskInfo::getProcessDefinitionName;
             case "initiatorName" -> TaskInfo::getInitiatorName;
             case "priority" -> TaskInfo::getPriority;

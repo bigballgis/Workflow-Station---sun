@@ -2,6 +2,7 @@ package com.portal.util;
 
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
+import com.platform.common.list.ListFilterSql;
 import com.portal.enums.ChangeType;
 
 import java.util.Arrays;

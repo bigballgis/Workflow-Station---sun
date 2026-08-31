@@ -53,6 +53,15 @@ public class FunctionUnitAccessComponent {
                 }
             });
 
+    /** Keyed by {@code profileContext|userId} — backs {@link #isSystemAdministrator} on every permission check. */
+    private final Map<String, CachedData<Set<String>>> roleCodesByProfileCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedData<Set<String>>> eldest) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
+
     private final Map<String, CachedData<String>> processKeyCache = Collections.synchronizedMap(
             new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
@@ -62,6 +71,12 @@ public class FunctionUnitAccessComponent {
             });
     
     private static final long CACHE_TTL = TimeUnit.MINUTES.toMillis(5);
+
+    /**
+     * Short TTL for "could not resolve" results. Keeps repeated list/detail requests from re-running
+     * the same failing admin-center lookups, while still picking up a newly deployed function unit quickly.
+     */
+    private static final long UNRESOLVED_CACHE_TTL = TimeUnit.SECONDS.toMillis(30);
 
     /** Platform role code for System Administrator — bypasses FU and View access restrictions. */
     public static final String SYS_ADMIN_ROLE_CODE = "SYS_ADMIN";
@@ -227,6 +242,7 @@ public class FunctionUnitAccessComponent {
                     Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
                     String id = (String) payload.get("id");
                     log.info("Resolved function unit code {} to ID {}", functionUnitIdOrCode, id);
+                    processKeyCache.put(functionUnitIdOrCode, new CachedData<>(id));
                     return id;
                 }
             } catch (Exception e) {
@@ -253,6 +269,7 @@ public class FunctionUnitAccessComponent {
                         if (functionUnitIdOrCode.equals(name)) {
                             String id = (String) unit.get("id");
                             log.info("Resolved function unit name {} to ID {}", functionUnitIdOrCode, id);
+                            processKeyCache.put(functionUnitIdOrCode, new CachedData<>(id));
                             return id;
                         }
                     }
@@ -262,8 +279,12 @@ public class FunctionUnitAccessComponent {
             }
             
             log.warn("Could not resolve function unit ID for: {}", functionUnitIdOrCode);
+            // Negative result is cached (short TTL) so repeated list/detail requests do not re-run the
+            // same 3 failing admin-center lookups on every call. Same return value as before.
+            processKeyCache.put(functionUnitIdOrCode,
+                    new CachedData<>(functionUnitIdOrCode, UNRESOLVED_CACHE_TTL));
             return functionUnitIdOrCode;
-            
+
         } catch (Exception e) {
             log.error("Failed to resolve function unit ID for {}: {}", functionUnitIdOrCode, e.getMessage(), e);
             return functionUnitIdOrCode;
@@ -491,6 +512,14 @@ public class FunctionUnitAccessComponent {
      * PORTAL = business roles only; ADMIN = includes {@link #SYS_ADMIN_ROLE_CODE}.
      */
     private Set<String> getUserRoleCodesForProfile(String userId, String profileContext) {
+        // isSystemAdministrator() runs this several times per request on every menu/detail path;
+        // cached with the same TTL/semantics as getUserBusinessRoleCodes below.
+        String cacheKey = profileContext + '|' + userId;
+        CachedData<Set<String>> cached = roleCodesByProfileCache.get(cacheKey);
+        if (cached != null && !cached.isExpired()) {
+            return cached.data;
+        }
+
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/roles?profileContext="
                     + profileContext;
@@ -513,10 +542,15 @@ public class FunctionUnitAccessComponent {
                     }
                 }
             }
+            roleCodesByProfileCache.put(cacheKey, new CachedData<>(roleCodes));
             return roleCodes;
         } catch (Exception e) {
             log.error("Failed to get user role codes (profile={}) for user {}: {}",
                     profileContext, userId, e.getMessage(), e);
+            // Same failure semantics as before (empty set); a stale-but-valid entry is preferred if present.
+            if (cached != null) {
+                return cached.data;
+            }
             return Collections.emptySet();
         }
     }
@@ -724,6 +758,50 @@ public class FunctionUnitAccessComponent {
     }
 
     /**
+     * Whether the user's <em>currently selected</em> workspace role is granted audit access to this
+     * function unit.
+     *
+     * <p>Deliberately separate from {@link #canAuditFunctionUnit}, which intersects <em>all</em> of
+     * the user's business roles: that is the right rule for what the All Requests menu lists and
+     * which requests may be opened, but writing a note is an act performed <em>as</em> a role, so it
+     * must follow the role the user actually switched to. Mirrors
+     * {@link #resolveNewRequestRoleKeys}: without a workspace role (no UBR context) there is no
+     * selection to honour, so it falls back to all portal roles.
+     *
+     * <p>Resolves roles through the uncached {@code fetchUserPortalRolePayloads} rather than
+     * {@code getUserBusinessRoleCodes}, whose cache is keyed by user alone and would answer for the
+     * previously selected role right after a switch.
+     *
+     * @param functionUnitIdOrCode function unit id or code
+     */
+    public boolean canAuditFunctionUnitAsActiveRole(String userId, String functionUnitIdOrCode) {
+        if (userId == null || userId.isBlank() || functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+            return false;
+        }
+        String resolvedId = resolveFunctionUnitId(functionUnitIdOrCode);
+        if (resolvedId == null) {
+            log.warn("Audit check denied: cannot resolve function unit '{}'", functionUnitIdOrCode);
+            return false;
+        }
+        Set<String> auditRoleCodes = getFunctionUnitAuditRoleCodes(resolvedId);
+        if (auditRoleCodes.isEmpty()) {
+            log.debug("Active-role audit check denied for user {}: function unit {} has no audit grants",
+                    userId, functionUnitIdOrCode);
+            return false;
+        }
+        String activeRoleId = PortalUserSecurityUtils.getCurrentActiveRoleId().orElse(null);
+        Set<String> roleKeys = resolveNewRequestRoleKeys(userId, activeRoleId);
+        for (String roleKey : roleKeys) {
+            if (auditRoleCodes.contains(roleKey)) {
+                return true;
+            }
+        }
+        log.debug("Active-role audit check denied for user {}: active role keys {} do not intersect "
+                + "audit grants {} of unit {}", userId, roleKeys, auditRoleCodes, functionUnitIdOrCode);
+        return false;
+    }
+
+    /**
      * Clear user role cache
      */
     public void clearUserRolesCache(String userId) {
@@ -821,14 +899,21 @@ public class FunctionUnitAccessComponent {
     private static class CachedData<T> {
         final T data;
         final long timestamp;
-        
+        /** Per-entry TTL; defaults to {@link #CACHE_TTL} so existing call sites are unchanged. */
+        final long ttl;
+
         CachedData(T data) {
+            this(data, CACHE_TTL);
+        }
+
+        CachedData(T data, long ttl) {
             this.data = data;
             this.timestamp = System.currentTimeMillis();
+            this.ttl = ttl;
         }
-        
+
         boolean isExpired() {
-            return System.currentTimeMillis() - timestamp > CACHE_TTL;
+            return System.currentTimeMillis() - timestamp > ttl;
         }
     }
 }

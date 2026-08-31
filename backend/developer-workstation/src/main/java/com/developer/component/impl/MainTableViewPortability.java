@@ -136,10 +136,18 @@ public class MainTableViewPortability {
             String detailFormName = (String) v.get("detailFormName");
             Long detailFormId = null;
             if (detailFormName != null && !detailFormName.isBlank()) {
-                detailFormId = importedFormNameToId.get(detailFormName);
-                if (detailFormId == null) {
-                    log.warn("Main-table view '{}' references detail form '{}', which is not in the "
-                            + "imported forms; the view will have no detail page", viewName, detailFormName);
+                // MAIN-table rows open the request detail page, so they bind no detail form.
+                // Packages exported before that rule still carry one; drop it with a warning
+                // rather than throwing — a legacy package must remain importable.
+                if (isMainTable(mainTableId)) {
+                    log.warn("Main-table view '{}' is on a MAIN table and cannot bind detail form "
+                            + "'{}'; its rows open the request detail page", viewName, detailFormName);
+                } else {
+                    detailFormId = importedFormNameToId.get(detailFormName);
+                    if (detailFormId == null) {
+                        log.warn("Main-table view '{}' references detail form '{}', which is not in the "
+                                + "imported forms; the view will have no detail page", viewName, detailFormName);
+                    }
                 }
             }
 
@@ -256,6 +264,26 @@ public class MainTableViewPortability {
             out.add(m);
         }
         return out;
+    }
+
+    /**
+     * Whether the imported table is the function unit's MAIN table. Such views open the request
+     * detail page in the portal and must not carry a detail form across an import.
+     */
+    private boolean isMainTable(Long tableId) {
+        if (tableId == null) {
+            return false;
+        }
+        try {
+            List<String> types = jdbcTemplate.queryForList(
+                    "SELECT table_type FROM dw_table_definitions WHERE id = ?", String.class, tableId);
+            return !types.isEmpty() && "MAIN".equalsIgnoreCase(types.get(0));
+        } catch (Exception e) {
+            // FALLBACK(import): unknown table type — keep the legacy behaviour of importing the
+            // binding rather than dropping design data on a transient lookup failure.
+            log.warn("Could not resolve table type for table {}: {}", tableId, e.getMessage());
+            return false;
+        }
     }
 
     private String resolveTargetCode(MainTableViewAccessTargetType type, String targetId) {

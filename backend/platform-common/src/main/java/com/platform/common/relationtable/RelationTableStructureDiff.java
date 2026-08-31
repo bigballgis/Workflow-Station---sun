@@ -15,15 +15,24 @@ import java.util.Objects;
  * {@code Map<String, Object>} shape (one map per field, keyed the same way the export/import
  * payload already uses: fieldName, dataType, length, precision, scale, nullable, isPrimaryKey,
  * defaultValue, displayName, isForeignKey, refTableName, refPrimaryKeyFields, pkGenerationJson,
- * fkDisplayMode, sortOrder, isComputed, computedField) so a single comparison rule applies to both.
+ * fkDisplayMode, lookupConfig, sortOrder, isComputed, computedField) so a single comparison rule
+ * applies to both.
+ *
+ * <p><b>This key list is the gate that decides whether an edit is "real".</b> Any designer-editable
+ * column on {@code rt_field_definitions} that is missing here is silently invisible to the gate: a
+ * user changes it, the save succeeds, and the table stays {@code DEPLOYED} with no "needs
+ * re-deploy" signal. {@code RelationTableStructureDiffCoverageTest} pins the list against the
+ * entity's persisted columns so adding a column without deciding its diff semantics fails the
+ * build rather than silently regressing the gate.
  */
 public final class RelationTableStructureDiff {
 
     /** Field metadata keys that participate in the equality check, compared via Object#equals. */
-    private static final List<String> FIELD_KEYS = List.of(
+    public static final List<String> FIELD_KEYS = List.of(
             "fieldName", "dataType", "length", "precision", "scale", "nullable", "isPrimaryKey",
             "defaultValue", "displayName", "isForeignKey", "refTableName", "refPrimaryKeyFields",
-            "pkGenerationJson", "fkDisplayMode", "isComputed", "computedField");
+            "pkGenerationJson", "fkDisplayMode", "lookupConfig", "sortOrder", "isComputed",
+            "computedField");
 
     private RelationTableStructureDiff() {
     }
@@ -72,6 +81,11 @@ public final class RelationTableStructureDiff {
         return true;
     }
 
+    /**
+     * Aligns the two lists by field name so a pure reorder does not pair unrelated fields against
+     * each other. Reordering is still detected: {@code sortOrder} is one of the compared
+     * {@link #FIELD_KEYS}, so a field that moved carries a different value at its own position.
+     */
     private static List<Map<String, Object>> sortedByFieldName(List<Map<String, Object>> fields) {
         return fields.stream()
                 .sorted(Comparator.comparing(f -> String.valueOf(f.get("fieldName"))))

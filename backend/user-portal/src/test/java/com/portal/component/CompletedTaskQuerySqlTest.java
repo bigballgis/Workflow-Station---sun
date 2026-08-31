@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Completed Tasks pages in SQL: COUNT and the page share the assignee+finished predicate,
- * group counts are not limited to the page, and undeclared filters are refused.
+ * and undeclared filters are refused.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -61,7 +61,7 @@ class CompletedTaskQuerySqlTest {
 
     @Test
     void countAndPageShareTheAssigneeFinishedPredicate() {
-        component.query("user-1", request(null, List.of()));
+        component.query("user-1", request(List.of()));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM ACT_HI_TASKINST ht");
         assertThat(preparedSql.get(0)).contains("ht.ASSIGNEE_ = ?").contains("ht.END_TIME_ IS NOT NULL");
@@ -72,7 +72,7 @@ class CompletedTaskQuerySqlTest {
 
     @Test
     void filtersArePushedIntoTheSharedPredicate() {
-        component.query("user-1", request(null,
+        component.query("user-1", request(
                 List.of(new ListColumnFilter("durationInMillis", "gt", "10", null))));
 
         assertThat(pageSql()).contains("ht.DURATION_::text");
@@ -80,20 +80,10 @@ class CompletedTaskQuerySqlTest {
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query("user-1", request("action", List.of()));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-        assertThat(pageSql()).contains("ORDER BY").contains(CompletedTaskColumnSpecAction());
-    }
-
-    @Test
     void requestIdFilterAndSortShareTheJsonTextPredicate() {
         component.query("user-1", new CompletedTaskQueryRequest(
                 0, 20, List.of(new ListColumnFilter("requestId", "contains", "ATM-DC", null)),
-                "requestId", "ASC", null, null, null, null));
+                "requestId", "ASC", null, null, null));
 
         assertThat(preparedSql.get(0)).contains("pi.variables->>'__request_id'");
         assertThat(pageSql()).contains("pi.variables->>'__request_id'");
@@ -102,20 +92,13 @@ class CompletedTaskQuerySqlTest {
 
     @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
-        assertThatThrownBy(() -> component.query("user-1", request(null,
+        assertThatThrownBy(() -> component.query("user-1", request(
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test
-    void groupingATextColumnIsRefused() {
-        assertThatThrownBy(() -> component.query("user-1", request("taskName", List.of())))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not groupable");
-    }
-
-    private CompletedTaskQueryRequest request(String groupBy, List<ListColumnFilter> filters) {
-        return new CompletedTaskQueryRequest(0, 20, filters, null, null, groupBy, null, null, null);
+    private CompletedTaskQueryRequest request(List<ListColumnFilter> filters) {
+        return new CompletedTaskQueryRequest(0, 20, filters, null, null, null, null, null);
     }
 
     private String pageSql() {

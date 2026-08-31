@@ -8,11 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DelegationAuditColumnSpecTest {
 
     @Test
-    void onlyUserColumnsAreGroupable() {
-        assertThat(DelegationAuditColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactlyInAnyOrder("delegatorId", "delegateId");
+    void operationTypeAndCreatedAtKinds() {
         assertThat(column("operationType").kind()).isEqualTo(Kind.TEXT);
         assertThat(column("createdAt").kind()).isEqualTo(Kind.DATETIME);
     }

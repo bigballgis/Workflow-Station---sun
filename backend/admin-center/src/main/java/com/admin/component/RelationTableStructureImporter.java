@@ -161,6 +161,7 @@ public class RelationTableStructureImporter {
         if (!(fieldsObj instanceof List<?> fields)) {
             return result;
         }
+        int order = 0;
         for (Object fo : fields) {
             if (!(fo instanceof Map<?, ?> raw)) {
                 continue;
@@ -181,6 +182,12 @@ public class RelationTableStructureImporter {
             m.put("refPrimaryKeyFields", parseStringList(f.get("refPrimaryKeyFields")));
             m.put("pkGenerationJson", parseJsonMap(f.get("pkGenerationJson")));
             m.put("fkDisplayMode", f.get("fkDisplayMode") != null ? f.get("fkDisplayMode") : "readonly");
+            m.put("lookupConfig", RelationDataType.LOOKUP.name().equals(f.get("dataType"))
+                    ? parseJsonMap(f.get("lookupConfig")) : null);
+            // Same positional fallback buildFields() uses, so a payload that omits sortOrder does not
+            // read as a change against the value that would actually be persisted.
+            m.put("sortOrder", f.get("sortOrder") instanceof Number num ? num.intValue() : order);
+            order++;
             boolean computed = Boolean.TRUE.equals(f.get("isComputed"));
             m.put("isComputed", computed);
             m.put("computedField", computed ? parseJsonMap(f.get("computedField")) : null);
@@ -220,6 +227,11 @@ public class RelationTableStructureImporter {
                     .refPrimaryKeyFields(parseStringList(f.get("refPrimaryKeyFields")))
                     .pkGenerationJson(parseJsonMap(f.get("pkGenerationJson")))
                     .fkDisplayMode(f.get("fkDisplayMode") != null ? (String) f.get("fkDisplayMode") : "readonly")
+                    // LOOKUP columns carry their whole behaviour (ref table, search/display columns,
+                    // fixed filters, multi-select, derived autofill) in this JSON; dropping it on
+                    // import would silently degrade the column to an unconfigured lookup.
+                    .lookupConfig(RelationDataType.LOOKUP.equals(parseDataType(f.get("dataType")))
+                            ? parseJsonMap(f.get("lookupConfig")) : null)
                     .isComputed(computed)
                     .computedFieldJson(computed
                             ? requireComputedDefinition(f.get("fieldName"), f.get("computedField"))

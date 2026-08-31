@@ -93,6 +93,6 @@ class PermissionRequestListQuerySqlTest {
     }
 
     private static PermissionListQueryRequest request(String scope, List<ListColumnFilter> filters) {
-        return new PermissionListQueryRequest(0, 20, filters, null, null, null, scope);
+        return new PermissionListQueryRequest(0, 20, filters, null, null, scope);
     }
 }

@@ -151,6 +151,8 @@
             style="width: 100%;"
             class="list-data-grid"
             :class="{ 'list-data-grid--fit': gridFits }"
+            scrollbar-always-on
+            :height="gridTableHeight || '100%'"
           >
             <el-table-column
               v-for="(col, colIndex) in displayColumns"
@@ -181,11 +183,6 @@
                 {{ isTimestampColumn(col.field) ? formatHKT(row[col.field]) : formatRelationCellDisplay(row[col.field]) }}
               </template>
             </el-table-column>
-            <el-table-column
-              v-if="leftoverWidth > 0"
-              :width="leftoverWidth"
-              class-name="list-col-spacer"
-            />
             <el-table-column
               v-if="canWrite"
               label="Actions"
@@ -447,7 +444,7 @@ import LookupField from '@/components/lookup/LookupField.vue'
 import LookupViewDisplay from '@/components/lookup/LookupViewDisplay.vue'
 import { buildDerivedFilterConditions, resolveDerivedLookup, normalizeLookupValueForSave, formatRelationCellDisplay, type FieldLike } from '@/components/lookup/useLookupBehaviors'
 import { collectComputedColumns, previewComputedRow } from '@/utils/computedFieldRuntime'
-import { useListColumnLayout } from '@/composables/list/useListColumnLayout'
+import { useListColumnLayout } from '@platform-shared/list/useListColumnLayout'
 import { searchListFilterUsers } from '@/composables/list/searchListFilterUsers'
 
 const SYSTEM_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
@@ -515,12 +512,13 @@ const layoutStorageKey = computed(() =>
 const columnOrderStorageKey = computed(() =>
   selectedTableId.value != null ? `portal-list-column-order:relation-table:${selectedTableId.value}` : '',
 )
-const { gridScrollRef, gridFits, leftoverWidth, gridInnerStyle, widthOf, setWidth, persistWidths,
+const { gridScrollRef, gridFits, gridTableHeight, gridInnerStyle, widthOf, setWidth, persistWidths,
 } = useListColumnLayout({
   storageKey: layoutStorageKey,
   fields: layoutFields,
   extraWidth: computed(() => (canWrite.value ? 200 : 0)),
-  defaultWidthOf: (field) => (TIMESTAMP_COLUMNS.has(field) ? 180 : 120),
+  labelOf: (field) => displayColumns.value.find(c => c.field === field)?.label ?? field,
+  kindOf: (field) => displayColumns.value.find(c => c.field === field)?.kind,
 })
 
 function readStoredColumnOrder(key: string): string[] {

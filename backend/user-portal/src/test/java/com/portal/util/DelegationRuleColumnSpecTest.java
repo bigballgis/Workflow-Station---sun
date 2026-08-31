@@ -8,11 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DelegationRuleColumnSpecTest {
 
     @Test
-    void statusAndTypeAreGroupableEnums() {
-        assertThat(DelegationRuleColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactlyInAnyOrder("delegationType", "status", "delegateId");
+    void statusAndTypeAreEnums() {
         assertThat(column("status").kind()).isEqualTo(Kind.ENUM);
         assertThat(column("delegationType").kind()).isEqualTo(Kind.ENUM);
         assertThat(column("delegateId").kind()).isEqualTo(Kind.USER);

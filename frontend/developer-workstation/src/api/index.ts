@@ -27,6 +27,9 @@ const api = axios.create({
 
 api.interceptors.request.use(
   config => {
+    // This UI is English-only; without the header the backend answers in the browser's language.
+    config.headers['Accept-Language'] = i18n.global.locale.value
+
     // Add X-User-Id request header for backend permission check
     const user = getUser()
     if (user && user.userId) {

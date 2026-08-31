@@ -2,13 +2,14 @@ package com.portal.util;
 
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
+import com.platform.common.list.ListFilterSql;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Fixed column declaration for My Requests. Status is the closed process-instance ENUM;
- * current assignee is USER (people picker + groupable). Request ID is the persisted
+ * current assignee is USER (people picker). Request ID is the persisted
  * process-variable text {@code __request_id}; filter/sort compile to that JSON path.
  */
 public final class MyApplicationColumnSpec {
@@ -20,7 +21,6 @@ public final class MyApplicationColumnSpec {
         return List.of(
                 ListColumnMeta.of("requestId", "application.requestId", Kind.TEXT),
                 ListColumnMeta.of("businessKey", "application.processTitle", Kind.TEXT),
-                ListColumnMeta.of("currentStepName", "application.currentStep", Kind.TEXT),
                 ListColumnMeta.of("currentAssignee", "application.currentAssignee", Kind.USER),
                 ListColumnMeta.of("startTime", "application.startTime", Kind.DATETIME),
                 ListColumnMeta.withOptions("status", "application.status", Kind.ENUM, statusOptions())
@@ -39,8 +39,7 @@ public final class MyApplicationColumnSpec {
         return switch (field) {
             case "requestId" -> "pi.variables->>'__request_id'";
             case "businessKey" -> "pi.business_key";
-            case "currentStepName" -> "pi.current_node";
-            case "currentAssignee" -> "pi.current_assignee";
+            case "currentAssignee" -> ProcessAssigneeStoredSql.EXPRESSION;
             case "startTime" -> "pi.start_time::text";
             case "status" -> "pi.status";
             default -> throw new IllegalArgumentException("Unknown my-application column: " + field);

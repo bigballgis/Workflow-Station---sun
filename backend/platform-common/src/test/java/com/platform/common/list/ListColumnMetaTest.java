@@ -12,24 +12,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ListColumnMetaTest {
 
     @Test
-    void openValueKindsAreNeverGroupableByDefault() {
-        assertThat(ListColumnMeta.of("title", "Title", Kind.TEXT).groupable()).isFalse();
-        assertThat(ListColumnMeta.of("amount", "Amount", Kind.NUMBER).groupable()).isFalse();
-        assertThat(ListColumnMeta.of("createdAt", "Created", Kind.DATETIME).groupable()).isFalse();
-    }
-
-    @Test
-    void closedValueKindsGroupByDefault() {
-        assertThat(ListColumnMeta.withOptions("status", "Status", Kind.ENUM,
-                List.of(new Option("OPEN", "Open"))).groupable()).isTrue();
-        assertThat(ListColumnMeta.of("assignee", "Assignee", Kind.USER).groupable()).isTrue();
-        assertThat(ListColumnMeta.of("urgent", "Urgent", Kind.BOOLEAN).groupable()).isTrue();
-        assertThat(ListColumnMeta.of("urgent", "Urgent", Kind.BOOLEAN).options())
-                .extracting(Option::value)
-                .containsExactly("true", "false");
-    }
-
-    @Test
     void enumMustBeDeclaredWithOptions() {
         assertThatThrownBy(() -> ListColumnMeta.of("status", "Status", Kind.ENUM))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -39,7 +21,7 @@ class ListColumnMetaTest {
     @Test
     void filterableClosedKindWithoutOptionsIsRejected() {
         assertThatThrownBy(() -> new ListColumnMeta(
-                "status", "Status", Kind.ENUM, true, true, true,
+                "status", "Status", Kind.ENUM, true, true,
                 ListColumnMeta.operatorsFor(Kind.ENUM), List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("without options");
@@ -58,24 +40,19 @@ class ListColumnMetaTest {
         assertThat(ListColumnMeta.operatorsFor(Kind.TEXT))
                 .contains("contains", "startsWith", "endsWith")
                 .doesNotContain("gt", "between");
+        assertThat(ListColumnMeta.operatorsFor(Kind.FILE))
+                .isEqualTo(ListColumnMeta.operatorsFor(Kind.TEXT));
         assertThat(ListColumnMeta.operatorsFor(Kind.BOOLEAN))
                 .containsExactly("eq", "ne", "isNull", "isNotNull")
                 .isEqualTo(ListColumnMeta.operatorsFor(Kind.ENUM));
-    }
-
-    @Test
-    void groupableFreeTextColumnIsRejectedAtConstruction() {
-        assertThatThrownBy(() -> new ListColumnMeta(
-                "title", "Title", Kind.TEXT, true, true, true,
-                ListColumnMeta.operatorsFor(Kind.TEXT), List.of()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("cannot be groupable");
+        assertThat(ListColumnMeta.operatorsFor(Kind.USER))
+                .containsExactly("eq", "ne", "contains", "notContains", "isNotNull", "isNull");
     }
 
     @Test
     void filterableColumnWithoutOperatorsIsRejected() {
         assertThatThrownBy(() -> new ListColumnMeta(
-                "title", "Title", Kind.TEXT, true, true, false, List.of(), List.of()))
+                "title", "Title", Kind.TEXT, true, true, List.of(), List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("operator whitelist");
     }
@@ -88,6 +65,8 @@ class ListColumnMetaTest {
         assertThat(status.options()).hasSize(2);
         assertThat(status.allowsOperator("eq")).isTrue();
         assertThat(status.allowsOperator("contains")).isFalse();
+        assertThat(status.filterable()).isTrue();
+        assertThat(status.sortable()).isTrue();
 
         assertThatThrownBy(() -> ListColumnMeta.withOptions("title", "Title", Kind.TEXT,
                 List.of(new Option("A", "A"))))
@@ -104,7 +83,6 @@ class ListColumnMetaTest {
         ListColumnMeta col = ListColumnMeta.displayOnly("actions", "Actions", Kind.TEXT);
         assertThat(col.filterable()).isFalse();
         assertThat(col.sortable()).isFalse();
-        assertThat(col.groupable()).isFalse();
         assertThat(col.operators()).isEmpty();
     }
 
@@ -113,7 +91,23 @@ class ListColumnMetaTest {
         ListColumnMeta col = ListColumnMeta.displayMapped("customer_label", "Customer");
         assertThat(col.filterable()).isTrue();
         assertThat(col.sortable()).isFalse();
-        assertThat(col.groupable()).isFalse();
         assertThat(col.operators()).contains("contains", "eq", "isNull");
+    }
+
+    @Test
+    void recordDeclaresNoGroupableCapability() {
+        assertThat(ListColumnMeta.class.getRecordComponents())
+                .extracting(java.lang.reflect.RecordComponent::getName)
+                .containsExactly(
+                        "field", "label", "kind", "filterable", "sortable", "operators", "options");
+    }
+
+    @Test
+    void booleanFactorySuppliesTrueFalseOptions() {
+        assertThat(ListColumnMeta.of("urgent", "Urgent", Kind.BOOLEAN).options())
+                .extracting(Option::value)
+                .containsExactly("true", "false");
+        assertThat(ListColumnMeta.isClosedValueKind(Kind.USER)).isTrue();
+        assertThat(ListColumnMeta.isClosedValueKind(Kind.TEXT)).isFalse();
     }
 }

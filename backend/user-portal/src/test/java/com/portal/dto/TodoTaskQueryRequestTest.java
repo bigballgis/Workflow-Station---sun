@@ -11,7 +11,7 @@ class TodoTaskQueryRequestTest {
     @Test
     void blankKeywordBecomesNull() {
         TodoTaskQueryRequest request = new TodoTaskQueryRequest(
-                0, 20, null, null, null, null, "  ", null, null);
+                0, 20, null, null, null, "  ", null, null);
         assertNull(request.keyword());
         assertTrue(request.assignmentTypes().isEmpty());
         assertTrue(request.priorities().isEmpty());
@@ -20,7 +20,7 @@ class TodoTaskQueryRequestTest {
     @Test
     void keywordIsTrimmed() {
         TodoTaskQueryRequest request = new TodoTaskQueryRequest(
-                0, 20, null, null, null, null, "  请假  ", null, null);
+                0, 20, null, null, null, "  请假  ", null, null);
         assertEquals("请假", request.keyword());
     }
 }

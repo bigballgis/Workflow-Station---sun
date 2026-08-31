@@ -14,18 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class UserColumnSpecTest {
 
     @Test
-    void onlyClosedValueColumnsGroup() {
-        assertThat(UserColumnSpec.columns())
-                .filteredOn(ListColumnMeta::groupable)
-                .extracting(ListColumnMeta::field)
-                .containsExactly("entityManagerName", "functionManagerName", "status");
-        assertThat(column("username").groupable()).isFalse();
-        assertThat(column("fullName").kind()).isEqualTo(Kind.TEXT);
-        assertThat(column("status").kind()).isEqualTo(Kind.ENUM);
-        assertThat(column("entityManagerName").kind()).isEqualTo(Kind.USER);
-    }
-
-    @Test
     void statusOptionsAreStoredEnumValues() {
         assertThat(column("status").options()).extracting(ListColumnMeta.Option::value)
                 .containsExactly("ACTIVE", "INACTIVE", "LOCKED");

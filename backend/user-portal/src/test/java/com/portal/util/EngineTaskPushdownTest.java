@@ -29,14 +29,6 @@ class EngineTaskPushdownTest {
     }
 
     @Test
-    void groupByForcesFullScan() {
-        TaskQueryRequest request = TaskQueryRequest.builder()
-                .groupBy("priority")
-                .build();
-        assertFalse(EngineTaskPushdown.canFullyPush(request));
-    }
-
-    @Test
     void assignmentTypesForceFullScan() {
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .assignmentTypes(List.of("USER"))
@@ -67,6 +59,17 @@ class EngineTaskPushdownTest {
                 .sortDirection("ASC")
                 .build();
         assertFalse(EngineTaskPushdown.canFullyPush(request));
+    }
+
+    @Test
+    void functionUnitFilterAndSortForceFullScan() {
+        assertFalse(EngineTaskPushdown.canFullyPush(TaskQueryRequest.builder()
+                .filters(List.of(new ListColumnFilter("functionUnitCode", "contains", "help", null)))
+                .build()));
+        assertFalse(EngineTaskPushdown.canFullyPush(TaskQueryRequest.builder()
+                .sortBy("functionUnitCode")
+                .sortDirection("ASC")
+                .build()));
     }
 
     @Test

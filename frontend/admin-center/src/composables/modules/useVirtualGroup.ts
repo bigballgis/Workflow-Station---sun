@@ -18,16 +18,6 @@ import type { VirtualGroupTab } from '@/utils/virtualGroupList'
 import { useAdminListGrid } from '@/composables/list/useAdminListGrid'
 
 const ACTIONS_COL_WIDTH = 400
-const VG_COL_WIDTHS: Record<string, number> = {
-  name: 160,
-  code: 160,
-  type: 120,
-  boundRoleName: 160,
-  boundRoleType: 120,
-  adGroup: 140,
-  memberCount: 100,
-  status: 100,
-}
 
 export function useVirtualGroup() {
   const { t } = useI18n()
@@ -46,7 +36,6 @@ export function useVirtualGroup() {
   const grid = useAdminListGrid<VirtualGroup>({
     storageKey: 'admin-list-layout:virtual-groups',
     extraWidth: ACTIONS_COL_WIDTH,
-    defaultWidthOf: (field) => VG_COL_WIDTHS[field] ?? 120,
   })
 
   const fetchGroups = async () => {

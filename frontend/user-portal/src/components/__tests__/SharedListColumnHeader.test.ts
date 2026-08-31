@@ -15,7 +15,6 @@ function column(overrides: Partial<ListColumnMeta> = {}): ListColumnMeta {
     kind: 'TEXT',
     filterable: true,
     sortable: true,
-    groupable: false,
     operators: ['contains', 'eq'],
     ...overrides,
   }
@@ -39,7 +38,7 @@ afterEach(() => {
 describe('shared ListColumnHeader', () => {
   it('renders a plain label (no dropdown) for a column that declares no capability', () => {
     const w = mountHeader(
-      column({ filterable: false, sortable: false, groupable: false, operators: [] }),
+      column({ filterable: false, sortable: false, operators: [] }),
     )
     expect(w.find('.el-dropdown').exists()).toBe(false)
     expect(w.find('.list-col-plain').text()).toBe('Title')
@@ -63,24 +62,29 @@ describe('shared ListColumnHeader', () => {
     expect(wrapper.find('.col-resize-handle').exists()).toBe(true)
   })
 
-  it('shows sort / group / filter icons on the trigger when those states are on', () => {
+  it('shows sort / filter icons on the trigger when those states are on', () => {
     wrapper = mount(ListColumnHeader, {
       props: {
-        column: column({ groupable: true }),
+        column: column(),
         sort: 'ASC',
-        grouped: true,
         filtered: true,
       },
       global: { plugins: [ElementPlus] },
     })
     expect(wrapper.find('.list-col-trigger').classes()).toContain('is-active-state')
     expect(wrapper.find('.list-col-state').exists()).toBe(true)
-    expect(wrapper.findAll('.state-icon')).toHaveLength(3)
+    expect(wrapper.findAll('.state-icon')).toHaveLength(2)
   })
 
-  it('keeps the trigger idle when nothing is sorted, grouped or filtered', () => {
+  it('keeps the trigger idle when nothing is sorted or filtered', () => {
     const w = mountHeader(column())
     expect(w.find('.list-col-trigger').classes()).not.toContain('is-active-state')
     expect(w.find('.list-col-state').exists()).toBe(false)
+  })
+
+  it('does not expose grouped state or a group-change emit', () => {
+    const w = mountHeader(column({ kind: 'ENUM', operators: ['eq', 'ne'] }))
+    expect(Object.keys(w.props())).not.toContain('grouped')
+    expect(w.emitted()).not.toHaveProperty('group-change')
   })
 })

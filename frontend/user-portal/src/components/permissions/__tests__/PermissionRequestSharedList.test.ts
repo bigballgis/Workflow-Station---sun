@@ -18,9 +18,9 @@ vi.mock('@/composables/list/searchListFilterUsers', () => ({
 const api = vi.mocked(permissionApi.queryPermissionRequests)
 
 const COLUMNS: ListColumnMeta[] = [
-  { field: 'requestType', label: 'permission.requestType', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [{ value: 'ROLE', label: 'ROLE' }] },
-  { field: 'status', label: 'permission.status', kind: 'ENUM', filterable: true, sortable: true, groupable: true, operators: ['eq'], options: [{ value: 'PENDING', label: 'PENDING' }] },
-  { field: 'createdAt', label: 'common.createdAt', kind: 'DATETIME', filterable: true, sortable: true, groupable: false, operators: ['between'] },
+  { field: 'requestType', label: 'permission.requestType', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'], options: [{ value: 'ROLE', label: 'ROLE' }] },
+  { field: 'status', label: 'permission.status', kind: 'ENUM', filterable: true, sortable: true, operators: ['eq'], options: [{ value: 'PENDING', label: 'PENDING' }] },
+  { field: 'createdAt', label: 'common.createdAt', kind: 'DATETIME', filterable: true, sortable: true, operators: ['between'] },
 ]
 
 let wrapper: VueWrapper | null = null
@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
   api.mockResolvedValue({
-    data: { columns: COLUMNS, content: [], totalElements: 0, page: 0, size: 20, groups: [] },
+    data: { columns: COLUMNS, content: [], totalElements: 0, page: 0, size: 20 },
   } as never)
 })
 
@@ -54,4 +54,23 @@ describe('PermissionRequestSharedList', () => {
     expect(api.mock.calls[0][0].scope).toBe('MY_PENDING')
     expect(wrapper!.findAllComponents({ name: 'ListColumnHeader' }).length).toBeGreaterThan(0)
   })
+
+  it('pins the Action column to a pixel width so approve/cancel buttons are not squeezed', async () => {
+    wrapper = mount(PermissionRequestSharedList, {
+      props: {
+        scope: 'APPROVALS_PENDING',
+        storageKey: 'test-perm-approve',
+        emptyText: 'empty',
+        actionMode: 'approve',
+        enabled: true,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    const actionCol = wrapper!.findAllComponents({ name: 'ElTableColumn' }).find(
+      (col) => col.props('label') === 'common.actions',
+    )
+    expect(actionCol).toBeTruthy()
+    expect(Number(actionCol!.props('width'))).toBe(180)
+  }, 15000)
 })

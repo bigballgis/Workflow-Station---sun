@@ -46,6 +46,87 @@ export function resolveFormTableId(form: {
 }
 
 /**
+ * A MAIN-table row is a request, so the portal opens the request detail page for it rather than a
+ * designed form. MAIN tables therefore get no Views Form group and bind no detail form.
+ */
+export function isMainTableDefinition(table: { tableType?: string | null } | null | undefined): boolean {
+  return String(table?.tableType ?? '').toUpperCase() === 'MAIN'
+}
+
+export interface ViewsFormGroup {
+  key: string
+  label: string
+  forms: any[]
+  views: any[]
+}
+
+/**
+ * Views Form content, grouped by table: the detail forms bound to each table alongside that
+ * table's views, so a view's detail form is chosen next to the forms that can serve it.
+ *
+ * <p>Unlike View Design's grouping, empty groups are kept — a table whose views have no detail
+ * form yet is exactly where a developer needs to make a selection.
+ *
+ * <p>The MAIN table is left out entirely, and so is any form it would have held: a DETAIL form
+ * bound to the MAIN table can never be opened at runtime, because a MAIN row shows the request
+ * detail page instead. Forms with no resolvable table are dropped for the same reason — they are
+ * not reachable either. Only forms that a real table group claims are listed; use
+ * {@link countGroupedViewsForms} for any badge that must agree with what is rendered.
+ */
+export function buildViewsFormGroups(
+  forms: any[],
+  tables: any[],
+  mainTableViews: any[],
+): ViewsFormGroup[] {
+  const detailForms = (forms || []).filter(f => f?.formType === 'DETAIL')
+  const formsByTable = new Map<number, any[]>()
+  for (const form of detailForms) {
+    const tableId = resolveFormTableId(form)
+    if (tableId == null) continue
+    const list = formsByTable.get(tableId) || []
+    list.push(form)
+    formsByTable.set(tableId, list)
+  }
+
+  const viewsByTable = new Map<number, any[]>()
+  for (const view of mainTableViews || []) {
+    const tableId = Number(view?.mainTableId)
+    if (!Number.isFinite(tableId)) continue
+    const list = viewsByTable.get(tableId) || []
+    list.push(view)
+    viewsByTable.set(tableId, list)
+  }
+
+  const groupedTables = (tables || []).filter(table => !isMainTableDefinition(table))
+  const groups = groupedTables.map(table => ({
+    key: `table-${table.id}`,
+    label: table.tableDisplayName || table.tableName,
+    forms: formsByTable.get(table.id) || [],
+    views: (viewsByTable.get(table.id) || [])
+      .slice()
+      .sort((a, b) => String(a.viewName || '').localeCompare(String(b.viewName || ''))),
+  }))
+  // Only tables that can hold a form or a view are worth a heading.
+  return groups.filter(g => g.forms.length > 0 || g.views.length > 0)
+}
+
+/**
+ * How many DETAIL forms {@link buildViewsFormGroups} actually renders.
+ *
+ * <p>The Views tab badge cannot simply count DETAIL forms: one bound to the MAIN table, or to no
+ * table at all, is deliberately not listed, and counting it would promise a row the tab never
+ * draws.
+ */
+export function countGroupedViewsForms(
+  forms: any[],
+  tables: any[],
+  mainTableViews: any[],
+): number {
+  return buildViewsFormGroups(forms, tables, mainTableViews)
+    .reduce((total, group) => total + group.forms.length, 0)
+}
+
+/**
  * Deep-clone form rules via JSON round-trip. Falls back to shallow copy on failure.
  */
 export function cloneFormRules(rules: any[]): any[] {

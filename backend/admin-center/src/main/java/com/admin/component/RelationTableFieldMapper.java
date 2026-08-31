@@ -3,6 +3,7 @@ package com.admin.component;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.platform.common.enums.RelationDataType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -43,6 +44,10 @@ public class RelationTableFieldMapper {
             m.put("refPrimaryKeyFields", fd.getRefPrimaryKeyFields());
             m.put("pkGenerationJson", fd.getPkGenerationJson());
             m.put("fkDisplayMode", fd.getFkDisplayMode());
+            // Only meaningful for LOOKUP columns, and cleared on the way out of LOOKUP by the CRUD
+            // service — mirror that here so a type switch reads as a change exactly once.
+            m.put("lookupConfig", RelationDataType.LOOKUP.equals(fd.getDataType()) ? fd.getLookupConfig() : null);
+            m.put("sortOrder", fd.getSortOrder());
             m.put("isComputed", fd.getIsComputed());
             m.put("computedField", Boolean.TRUE.equals(fd.getIsComputed()) ? fd.getComputedFieldJson() : null);
             result.add(m);

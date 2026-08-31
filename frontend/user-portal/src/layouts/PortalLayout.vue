@@ -434,7 +434,10 @@ const rootCrumbTo = computed(() => {
 // ApplicationDetail 被 My Requests 和 All Requests(Audit) 共用同一路由，
 // 靠 ?from=audit 区分入口，否则永远显示「My Requests」。
 const currentTitle = computed(() => {
-  if (route.name === 'ApplicationDetail' && route.query.from === 'audit') {
+  // Views 主表行也复用这个路由，打开的同样是「别人的申请」这一视角，
+  // 所以和 audit 入口一样显示 All Requests——不加区分会说成「My Requests」。
+  if (route.name === 'ApplicationDetail'
+      && (route.query.from === 'audit' || route.query.from === 'views')) {
     return t('menu.audit')
   }
   const key = route.meta.titleKey as string | undefined

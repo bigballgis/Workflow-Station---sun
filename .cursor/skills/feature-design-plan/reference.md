@@ -23,6 +23,7 @@
 | 性能 / 缓存 / 热路径 | `performance-guardrails` |
 | 可见 UI | skill `verify-ui-fix-with-screenshot` · `frontend-screenshot-verification` |
 | 弹窗表单布局 | skill `portal-dialog-form-labels` |
+| Portal/Admin 新列表菜单 | `shared-list-portal-admin` + `docs/design/shared-list-components.md` §6.7 |
 
 ---
 

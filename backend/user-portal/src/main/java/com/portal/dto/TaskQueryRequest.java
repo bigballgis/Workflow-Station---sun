@@ -47,9 +47,6 @@ public class TaskQueryRequest {
     /** Shared-list column filters (AND). */
     private List<ListColumnFilter> filters;
 
-    /** Shared-list group-by field (forces portal fullScan). */
-    private String groupBy;
-
     /** 排序字段 */
     private String sortBy;
 

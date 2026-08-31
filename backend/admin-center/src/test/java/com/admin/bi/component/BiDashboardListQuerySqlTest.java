@@ -57,7 +57,7 @@ class BiDashboardListQuerySqlTest {
 
     @Test
     void countAndPageShareTheRegistryTable() {
-        component.query(request(null, null, List.of()));
+        component.query(request(null, List.of()));
 
         assertThat(preparedSql.get(0)).startsWith("SELECT COUNT(*) FROM bi_dashboard_registry d");
         assertThat(pageSql()).contains("LIMIT ?").contains("OFFSET ?");
@@ -65,31 +65,22 @@ class BiDashboardListQuerySqlTest {
 
     @Test
     void toolbarTitleIsInsideTheSharedPredicate() {
-        component.query(request("sales", null, List.of()));
+        component.query(request("sales", List.of()));
 
         assertThat(preparedSql.get(0)).contains("d.dashboard_title ILIKE ?");
         assertThat(pageSql()).contains("d.dashboard_title ILIKE ?");
     }
 
     @Test
-    void groupCountsAreTakenOverTheWholeResultSetNotOverThePage() {
-        component.query(request(null, "status", List.of()));
-
-        String groupSql = preparedSql.stream().filter(sql -> sql.contains("GROUP BY")).findFirst().orElseThrow();
-        assertThat(groupSql).doesNotContain("LIMIT");
-        assertThat(groupSql).contains("COUNT(*) AS group_count");
-    }
-
-    @Test
     void aFilterOnAColumnTheListDoesNotDeclareIsRefused() {
-        assertThatThrownBy(() -> component.query(request(null, null,
+        assertThatThrownBy(() -> component.query(request(null,
                 List.of(new ListColumnFilter("secret", "contains", "x", null)))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    private static BiDashboardListQueryRequest request(String title, String groupBy,
+    private static BiDashboardListQueryRequest request(String title,
                                                        List<ListColumnFilter> filters) {
-        return new BiDashboardListQueryRequest(0, 20, title, null, null, filters, null, null, groupBy);
+        return new BiDashboardListQueryRequest(0, 20, title, null, null, filters, null, null);
     }
 
     private String pageSql() {

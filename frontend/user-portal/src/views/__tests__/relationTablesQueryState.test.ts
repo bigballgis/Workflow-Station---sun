@@ -3,6 +3,7 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import RelationTables from '../relation-tables/index.vue'
 import { relationTableApi, type RelationTableQueryRequest } from '@/api/relationTable'
+import { KIND_CONTENT_FLOOR } from '@platform-shared/list/columnWidthLayout'
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
@@ -28,7 +29,7 @@ const TABLES = [
 ]
 
 const COLUMNS = [
-  { field: 'code', label: 'Code', kind: 'TEXT', filterable: true, sortable: true, groupable: false, operators: ['contains', 'eq'], options: [] },
+  { field: 'code', label: 'Code', kind: 'TEXT', filterable: true, sortable: true, operators: ['contains', 'eq'], options: [] },
 ]
 
 /** Every queryTableData call recorded as [tableId, request]. */
@@ -70,7 +71,7 @@ describe('relation tables — query state is per table', () => {
     const w = await mountPage()
     const headers = w.findAllComponents({ name: 'ListColumnHeader' })
     expect(headers).toHaveLength(1)
-    expect(headers[0].props('width')).toBe(120)
+    expect(headers[0].props('width')).toBe(KIND_CONTENT_FLOOR.TEXT)
     expect(headers[0].find('.col-resize-handle').exists()).toBe(true)
   })
 

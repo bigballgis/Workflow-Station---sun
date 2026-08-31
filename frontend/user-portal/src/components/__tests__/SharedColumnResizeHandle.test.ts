@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ColumnResizeHandle from '@platform-shared/list/ColumnResizeHandle.vue'
 import {
-  COLUMN_WIDTH_MAX,
+  COLUMN_DISPLAY_WIDTH_MAX,
   COLUMN_WIDTH_MIN,
 } from '@platform-shared/list/columnResizeCursor'
 
@@ -20,11 +20,11 @@ describe('shared ColumnResizeHandle', () => {
 
     document.dispatchEvent(mouseEvent('mousemove', 150))
     document.dispatchEvent(mouseEvent('mousemove', 100 - 500))
-    document.dispatchEvent(mouseEvent('mousemove', 100 + 900))
+    document.dispatchEvent(mouseEvent('mousemove', 100 + 9000))
     document.dispatchEvent(mouseEvent('mouseup', 150))
 
     const resizes = wrapper.emitted('resize')
-    expect(resizes).toEqual([[250], [COLUMN_WIDTH_MIN], [COLUMN_WIDTH_MAX]])
+    expect(resizes).toEqual([[250], [COLUMN_WIDTH_MIN], [COLUMN_DISPLAY_WIDTH_MAX]])
     expect(wrapper.emitted('resizeEnd')).toHaveLength(1)
     expect(document.body.classList.contains('is-column-resizing')).toBe(false)
     expect(document.body.style.cursor).toBe('')

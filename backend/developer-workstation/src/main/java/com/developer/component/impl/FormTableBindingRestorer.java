@@ -82,9 +82,9 @@ public class FormTableBindingRestorer {
 
         Map<Long, Long> bindingIdMapping = new HashMap<>();
         int sortOrder = 0;
-        TableDefinition mainTable = resolveMainTable(tables, configJson);
-        if (mainTable != null) {
-            saveBinding(form, mainTable, null, BindingType.PRIMARY,
+        TableDefinition primaryTable = resolvePrimaryTable(form, tables, configJson);
+        if (primaryTable != null) {
+            saveBinding(form, primaryTable, null, BindingType.PRIMARY,
                     primaryMode(form), null, BindingLinkMode.structuralFk, null, sortOrder++);
         }
 
@@ -119,8 +119,8 @@ public class FormTableBindingRestorer {
 
         FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, bindingIdMapping);
         form.setConfigJson(configJson);
-        if (mainTable != null && form.getBoundTable() == null) {
-            form.setBoundTable(mainTable);
+        if (primaryTable != null && form.getBoundTable() == null) {
+            form.setBoundTable(primaryTable);
         }
         formDefinitionRepository.save(form);
         log.info("Rebuilt {} form table binding(s) for form {} ({})",
@@ -264,12 +264,38 @@ public class FormTableBindingRestorer {
         }
     }
 
-    private static TableDefinition resolveMainTable(List<TableDefinition> tables, Map<String, Object> configJson) {
+    /**
+     * The table this form's primary binding should target.
+     *
+     * <p>Normally the MAIN table, which hosts the request payload. A DETAIL form is the exception:
+     * it renders one row of a sub-table, because MAIN rows open the request detail page instead of
+     * a designed form. Binding a DETAIL form to MAIN would build a form no view can open — and,
+     * since this repair runs on every form load, it would silently undo the developer's own
+     * choice of sub-table.
+     *
+     * <p>Returns null rather than falling back to MAIN when a DETAIL form matches no sub-table:
+     * leaving the primary binding for the developer to make is better than inventing a wrong one.
+     */
+    private static TableDefinition resolvePrimaryTable(
+            FormDefinition form, List<TableDefinition> tables, Map<String, Object> configJson) {
         Set<String> canvasFields = collectCanvasFieldNames(configJson.get("rule"));
-        return tables.stream()
-                .filter(t -> t.getTableType() == TableType.MAIN)
+        TableType primaryType = form != null && form.getFormType() == FormType.DETAIL
+                ? TableType.SUB
+                : TableType.MAIN;
+        List<TableDefinition> candidates = tables.stream()
+                .filter(t -> t.getTableType() == primaryType)
+                .toList();
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        TableDefinition best = candidates.stream()
                 .max((a, b) -> Integer.compare(scoreTable(a, canvasFields), scoreTable(b, canvasFields)))
-                .orElse(tables.stream().filter(t -> t.getTableType() == TableType.MAIN).findFirst().orElse(null));
+                .orElse(null);
+        if (primaryType == TableType.SUB
+                && (best == null || scoreTable(best, canvasFields) <= 0)) {
+            return null;
+        }
+        return best != null ? best : candidates.get(0);
     }
 
     @SuppressWarnings("unchecked")

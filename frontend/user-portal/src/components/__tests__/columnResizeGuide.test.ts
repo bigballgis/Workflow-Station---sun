@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   attachColumnResizeGuide,
-  leftoverColumnWidth,
   startWidthFromHandle,
 } from '@platform-shared/list/columnResizeCursor'
 
@@ -37,14 +36,42 @@ describe('attachColumnResizeGuide', () => {
     expect(document.querySelector('.col-resize-guide')).toBeNull()
     table.remove()
   })
-})
 
-describe('leftoverColumnWidth', () => {
-  it('returns the empty trailing width only when columns are narrower than the viewport', () => {
-    expect(leftoverColumnWidth(1000, 800)).toBe(200)
-    expect(leftoverColumnWidth(800, 800)).toBe(0)
-    expect(leftoverColumnWidth(800, 900)).toBe(0)
-    expect(leftoverColumnWidth(0, 800)).toBe(0)
+  it('clips the guide to the scrollport so it does not paint through pagination', () => {
+    const scroll = document.createElement('div')
+    Object.defineProperty(scroll, 'getBoundingClientRect', {
+      value: () => ({ top: 80, left: 0, right: 800, bottom: 400, width: 800, height: 320 }),
+    })
+    const table = document.createElement('div')
+    table.className = 'el-table'
+    Object.defineProperty(table, 'getBoundingClientRect', {
+      value: () => ({ top: 80, left: 0, right: 800, bottom: 900, width: 800, height: 820 }),
+    })
+    const handle = document.createElement('span')
+    Object.defineProperty(handle, 'getBoundingClientRect', {
+      value: () => ({ top: 80, left: 180, right: 200, bottom: 104, width: 12, height: 24 }),
+    })
+    scroll.appendChild(table)
+    table.appendChild(handle)
+    document.body.appendChild(scroll)
+    const originalComputed = window.getComputedStyle.bind(window)
+    try {
+      window.getComputedStyle = ((el: Element) => {
+        if (el === scroll) {
+          return { overflowX: 'auto', overflowY: 'auto' } as CSSStyleDeclaration
+        }
+        return originalComputed(el)
+      }) as typeof window.getComputedStyle
+
+      const guide = attachColumnResizeGuide(handle, 200)
+      const line = document.querySelector('.col-resize-guide') as HTMLElement
+      expect(line.style.top).toBe('80px')
+      expect(line.style.height).toBe('320px')
+      guide.detach()
+    } finally {
+      window.getComputedStyle = originalComputed
+      scroll.remove()
+    }
   })
 })
 

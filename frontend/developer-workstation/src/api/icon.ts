@@ -1,4 +1,5 @@
 import axios from 'axios'
+import i18n from '@/i18n'
 import { getUser } from './auth'
 
 const iconAxios = axios.create({
@@ -9,6 +10,8 @@ const iconAxios = axios.create({
 
 iconAxios.interceptors.request.use(config => {
   // Add X-User-Id request header for backend permission check
+  // This UI is English-only; without the header the backend answers in the browser's language.
+  config.headers['Accept-Language'] = i18n.global.locale.value
   const user = getUser()
   if (user && user.userId) {
     config.headers['X-User-Id'] = user.userId

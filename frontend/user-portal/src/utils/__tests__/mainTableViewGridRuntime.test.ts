@@ -1,44 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampColumnWidth,
+  columnWidth,
   createDefaultGridRuntime,
-  insertGroupHeaders,
   loadGridRuntimeFromSession,
+  migrateMtvWidthsToListLayout,
   moveColumn,
   saveGridRuntimeToSession,
   setColumnWidth,
   toListColumnMeta,
 } from '../mainTableViewGridRuntime'
+import { KIND_CONTENT_FLOOR, LIST_COLUMN_LAYOUT_STORE_VERSION } from '@platform-shared/list/columnWidthLayout'
 
 describe('mainTableViewGridRuntime', () => {
-  const rows = [
-    { rowKey: '1', processInstanceId: '1', values: { name: 'Beta', status: 'Open' } },
-    { rowKey: '2', processInstanceId: '2', values: { name: 'Alpha', status: 'Open' } },
-    { rowKey: '3', processInstanceId: '3', values: { name: 'Gamma', status: 'Closed' } },
-  ]
-
-  const groups = [
-    { label: 'Open', count: 7 },
-    { label: 'Closed', count: 4 },
-  ]
-
-  it('heads each run of rows with the count the server reported, not the count on this page', () => {
-    const display = insertGroupHeaders(rows, 'status', groups)
-
-    expect(display[0]).toMatchObject({ _isGroupHeader: true, _groupLabel: 'Open', _groupCount: 7 })
-    expect(display[3]).toMatchObject({ _isGroupHeader: true, _groupLabel: 'Closed', _groupCount: 4 })
-    expect(display).toHaveLength(5)
-  })
-
-  it('leaves rows untouched when nothing is grouped', () => {
-    expect(insertGroupHeaders(rows, null, [])).toBe(rows)
-  })
-
-  it('refuses to render a group the server did not count', () => {
-    expect(() => insertGroupHeaders(rows, 'status', [{ label: 'Open', count: 7 }]))
-      .toThrow(/Closed/)
-  })
-
   it('moveColumn swaps order', () => {
     const state = createDefaultGridRuntime()
     state.columnOrder = ['a', 'b', 'c']
@@ -54,7 +28,6 @@ describe('mainTableViewGridRuntime', () => {
         kind: 'ENUM',
         filterable: true,
         sortable: true,
-        groupable: true,
         operators: ['eq', 'ne'],
         options: [
           { value: 'RUNNING', label: 'Running' },
@@ -65,6 +38,73 @@ describe('mainTableViewGridRuntime', () => {
       { value: 'RUNNING', label: 'Running' },
       { value: 'COMPLETED', label: 'Completed' },
     ])
+  })
+
+  it('uses the kind content floor when the header is shorter than typical cell values', () => {
+    const state = createDefaultGridRuntime()
+    expect(
+      columnWidth(
+        {
+          fieldName: 'request_id',
+          displayLabel: 'ID',
+          kind: 'TEXT',
+          filterable: true,
+          sortable: true,
+          operators: ['eq'],
+        },
+        state,
+      ),
+    ).toBe(KIND_CONTENT_FLOOR.TEXT)
+  })
+
+  it('uses the designer columnWidth before measuring the header label', () => {
+    const state = createDefaultGridRuntime()
+    expect(
+      columnWidth(
+        {
+          fieldName: 'status',
+          displayLabel: 'A',
+          columnWidth: 220,
+          kind: 'TEXT',
+          filterable: true,
+          sortable: true,
+          operators: ['eq'],
+        },
+        state,
+      ),
+    ).toBe(220)
+  })
+
+  it('keeps a remembered width even when it is narrower than the Views header', () => {
+    const state = createDefaultGridRuntime()
+    state.columnWidths.assignee = 60
+    const col = {
+      fieldName: 'assignee',
+      displayLabel: 'Current Assignee',
+      kind: 'USER' as const,
+      filterable: true,
+      sortable: true,
+      operators: ['eq'],
+    }
+    expect(columnWidth(col, state)).toBe(60)
+  })
+
+  it('does not raise a designer columnWidth that is narrower than the header', () => {
+    const state = createDefaultGridRuntime()
+    expect(
+      columnWidth(
+        {
+          fieldName: 'status',
+          displayLabel: 'Current Assignee',
+          columnWidth: 80,
+          kind: 'USER',
+          filterable: true,
+          sortable: true,
+          operators: ['eq'],
+        },
+        state,
+      ),
+    ).toBe(80)
   })
 
   it('clampColumnWidth enforces min and max', () => {
@@ -83,7 +123,6 @@ describe('mainTableViewGridRuntime', () => {
     state.columnOrder = ['name', 'status']
     state.columnWidths.name = 200
     state.sort = { fieldName: 'name', direction: 'ASC' }
-    state.groupBy = 'status'
     state.filters.status = { operator: 'eq', value: 'Open' }
 
     saveGridRuntimeToSession(9, state)
@@ -92,7 +131,28 @@ describe('mainTableViewGridRuntime', () => {
     expect(restored.columnOrder).toEqual(['name', 'status'])
     expect(restored.columnWidths.name).toBe(200)
     expect(restored.sort).toBeNull()
-    expect(restored.groupBy).toBeNull()
     expect(restored.filters).toEqual({})
+  })
+
+  it('copies legacy mtv-layout widths into the shared list-layout session once', () => {
+    sessionStorage.setItem(
+      'portal-mtv-layout:11',
+      JSON.stringify({ columnOrder: ['name'], columnWidths: { name: 240 } }),
+    )
+    migrateMtvWidthsToListLayout(11)
+    expect(JSON.parse(sessionStorage.getItem('portal-list-layout:mtv:11') ?? '{}')).toEqual({
+      v: LIST_COLUMN_LAYOUT_STORE_VERSION,
+      columnWidths: { name: 240 },
+    })
+    sessionStorage.setItem(
+      'portal-list-layout:mtv:11',
+      JSON.stringify({ v: LIST_COLUMN_LAYOUT_STORE_VERSION, columnWidths: { name: 180 } }),
+    )
+    sessionStorage.setItem(
+      'portal-mtv-layout:11',
+      JSON.stringify({ columnWidths: { name: 999 } }),
+    )
+    migrateMtvWidthsToListLayout(11)
+    expect(JSON.parse(sessionStorage.getItem('portal-list-layout:mtv:11') ?? '{}').columnWidths.name).toBe(180)
   })
 })

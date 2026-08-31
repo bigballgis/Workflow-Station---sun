@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * One page request for a Main Table View: paging, the toolbar keyword, and the column filters,
- * sort and grouping the shared list header produces. All of it is answered by the database, so
+ * sort the shared list header produces. All of it is answered by the database, so
  * the page the caller receives and the total it is told about describe the same set of rows.
  */
 public record MainTableViewQueryRequest(
@@ -14,8 +14,7 @@ public record MainTableViewQueryRequest(
         String search,
         List<ListColumnFilter> filters,
         String sortField,
-        String sortDirection,
-        String groupBy) {
+        String sortDirection) {
 
     public MainTableViewQueryRequest {
         if (page < 0) {

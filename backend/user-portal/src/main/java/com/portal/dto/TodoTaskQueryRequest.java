@@ -4,7 +4,7 @@ import com.platform.common.list.ListColumnFilter;
 import java.util.List;
 
 /**
- * One page of To Do: paging plus shared-header filters, sort and grouping.
+ * One page of To Do: paging plus shared-header filters, sort.
  * {@code keyword} is the toolbar search (request id / task name / current step / process name /
  * initiator / description) and ANDs with {@code filters}. Toolbar {@code priorities} compile to the same ENUM bands
  * as column chrome. A non-blank keyword, assignmentTypes, or priorities forces portal fullScan.
@@ -17,7 +17,6 @@ public record TodoTaskQueryRequest(
         List<ListColumnFilter> filters,
         String sortField,
         String sortDirection,
-        String groupBy,
         String keyword,
         List<String> assignmentTypes,
         List<String> priorities) {

@@ -1,5 +1,5 @@
 <template>
-  <div class="permissions-page">
+  <div class="permissions-page page-stack">
     <div class="page-header">
       <h1>{{ t('permission.title') }}</h1>
       <div class="page-header-actions">

@@ -2,6 +2,7 @@ package com.admin.list;
 
 import com.platform.common.list.ListColumnMeta;
 import com.platform.common.list.ListColumnMeta.Kind;
+import com.platform.common.list.ListFilterSql;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,7 +39,7 @@ public final class AdminAuditColumnSpec {
 
     /**
      * Action SQL matches {@link com.admin.enums.AuditActionConverter}: legacy strings
-     * collapse to CREATE/UPDATE/DELETE/QUERY so header filter, sort and grouping see the
+     * collapse to CREATE/UPDATE/DELETE/QUERY so header filter and sort see the
      * same four values the table cells show.
      */
     static String sqlFor(String field) {
