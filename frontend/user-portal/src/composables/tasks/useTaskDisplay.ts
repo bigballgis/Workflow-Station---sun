@@ -1,7 +1,7 @@
 import { markRaw, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
-import { Check, CircleCheck, CircleClose, Close, Files, Warning, Bell, User } from '@element-plus/icons-vue'
+import { Check, CircleCheck, CircleClose, Close, Files, Warning, Bell, User, Switch } from '@element-plus/icons-vue'
 import type { TaskActionInfo } from '@/api/task'
 import { taskPriorityBand, type TaskPriorityBand } from '@/utils/taskPriority'
 import { useUserStore } from '@/stores/user'
@@ -140,7 +140,8 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
       'files': markRaw(Files),
       'warning': markRaw(Warning),
       'bell': markRaw(Bell),
-      'user': markRaw(User)
+      'user': markRaw(User),
+      'switch': markRaw(Switch)
     }
     return iconMap[iconName] || markRaw(Check)
   }

@@ -19,15 +19,15 @@
           {{ $t('common.save') }}
         </el-button>
         <!-- Show custom buttons when custom Actions are configured -->
-        <template v-if="actions && actions.length > 0">
+        <template v-if="visibleActions.length > 0">
           <el-button
-            v-for="action in actions"
+            v-for="action in visibleActions"
             :key="action.actionId"
-            :type="getButtonType(action.buttonColor)"
+            :type="resolveButtonType(action)"
             @click="$emit('customAction', action)"
           >
-            <el-icon v-if="action.icon">
-              <component :is="getIconComponent(action.icon)" />
+            <el-icon v-if="resolveIconName(action)">
+              <component :is="getIconComponent(resolveIconName(action))" />
             </el-icon>
             {{ getActionLabel(action) }}
           </el-button>
@@ -47,38 +47,44 @@
             <el-icon><Close /></el-icon> {{ $t('task.reject') }}
           </el-button>
         </template>
-        <el-button
-          v-if="canDelegate"
-          @click="$emit('delegate')"
-        >
-          <el-icon><User /></el-icon> {{ $t('task.delegate') }}
-        </el-button>
-        <el-button @click="$emit('transfer')">
-          <el-icon><Switch /></el-icon> {{ $t('task.transfer') }}
-        </el-button>
-        <el-button
-          type="warning"
-          @click="$emit('urge')"
-        >
-          <el-icon><Bell /></el-icon> {{ $t('task.urge') }}
-        </el-button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Check, Close, User, Switch, Bell } from '@element-plus/icons-vue'
+import { computed } from 'vue'
+import { Check, Close } from '@element-plus/icons-vue'
 import type { Component } from 'vue'
 import type { TaskActionInfo } from '@/api/task'
 
-defineProps<{
+/**
+ * Delegate / Transfer / Urge are no longer hardcoded here: they are Action
+ * definitions configured in the Developer Workstation Action Designer and bound
+ * to the user task node in Process Design, exactly like every other Action.
+ * These maps only supply the look the built-in buttons used to have, because the
+ * Action Designer does not expose icon / buttonColor yet.
+ */
+const BUILT_IN_ICONS: Record<string, string> = {
+  DELEGATE: 'user',
+  TRANSFER: 'switch',
+  URGE: 'bell'
+}
+type ElButtonType = '' | 'default' | 'text' | 'primary' | 'success' | 'warning' | 'info' | 'danger'
+
+const BUILT_IN_BUTTON_TYPES: Record<string, ElButtonType> = {
+  DELEGATE: '',
+  TRANSFER: '',
+  URGE: 'warning'
+}
+
+const props = defineProps<{
   isCompletedTask: boolean
   showImplicitSaveAction: boolean
   savingTaskForm: boolean
   actions: TaskActionInfo[] | undefined | null
   canDelegate: boolean
-  getButtonType: (color?: string) => string
+  getButtonType: (color?: string) => ElButtonType
   getIconComponent: (iconName?: string) => Component
   getActionLabel: (action: TaskActionInfo) => string
 }>()
@@ -88,10 +94,28 @@ defineEmits<{
   (e: 'customAction', action: TaskActionInfo): void
   (e: 'approve'): void
   (e: 'reject'): void
-  (e: 'delegate'): void
-  (e: 'transfer'): void
-  (e: 'urge'): void
 }>()
+
+function actionTypeOf(action: TaskActionInfo): string {
+  return (action.actionType || '').trim().toUpperCase()
+}
+
+/** A DELEGATE action stays hidden while the task has no assignee to delegate from. */
+const visibleActions = computed<TaskActionInfo[]>(() =>
+  (props.actions || []).filter(
+    action => actionTypeOf(action) !== 'DELEGATE' || props.canDelegate
+  )
+)
+
+function resolveIconName(action: TaskActionInfo): string | undefined {
+  return action.icon || BUILT_IN_ICONS[actionTypeOf(action)]
+}
+
+function resolveButtonType(action: TaskActionInfo): ElButtonType {
+  if (action.buttonColor) return props.getButtonType(action.buttonColor)
+  const builtIn = BUILT_IN_BUTTON_TYPES[actionTypeOf(action)]
+  return builtIn === undefined ? props.getButtonType(undefined) : builtIn
+}
 </script>
 
 <style lang="scss" scoped>

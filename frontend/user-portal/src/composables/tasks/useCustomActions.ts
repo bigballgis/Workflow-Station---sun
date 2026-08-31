@@ -36,8 +36,12 @@ export function useCustomActions(options: {
    * Returning null leaves popup state empty (callers should surface an error).
    */
   preparePopupContext?: (formContent: any, formConfig: Record<string, unknown>) => PreparedFormPopupContext | null
-  /** Open the same Delegate dialog as the default action bar button. */
+  /** Open the Delegate dialog for a DELEGATE Action bound to this task node. */
   onDelegate?: () => void
+  /** Open the Transfer dialog for a TRANSFER Action bound to this task node. */
+  onTransfer?: () => void
+  /** Open the Urge dialog for an URGE Action bound to this task node. */
+  onUrge?: () => void
 }) {
   const { t } = useI18n()
   const router = useRouter()
@@ -143,6 +147,20 @@ export function useCustomActions(options: {
       case 'DELEGATE':
         if (options.onDelegate) {
           options.onDelegate()
+        } else {
+          ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
+        }
+        break
+      case 'TRANSFER':
+        if (options.onTransfer) {
+          options.onTransfer()
+        } else {
+          ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
+        }
+        break
+      case 'URGE':
+        if (options.onUrge) {
+          options.onUrge()
         } else {
           ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
         }
