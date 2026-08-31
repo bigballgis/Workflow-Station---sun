@@ -198,6 +198,11 @@ const SCOPE_FIELDS: Record<PermissionListScope, string[]> = {
   ],
 }
 
+// 目前没有引用点：usePortalListGrid 没有「每列默认宽度」这个入口（to-claim.vue 里
+// 那个 defaultWidthOf 选项同样不存在，见 issue）。这份宽度表是随 PR #127 一起进来的、
+// 等待接线的配置，不是写错的死代码 —— 故保留并显式标注，不删。
+// 待 usePortalListGrid 支持默认宽度后，把它接到 widthOf 的回退上。
+// @ts-expect-error -- 有意保留的未接线配置，见上方说明
 const COL_WIDTHS: Record<string, number> = {
   requestType: 160,
   targetName: 160,

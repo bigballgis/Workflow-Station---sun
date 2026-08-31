@@ -51,7 +51,7 @@
           <span>{{ t('profile.sectionTodo') }}</span>
           <PortalHelpLink
             path="/up-tasks-to-claim#auto-claim"
-            :aria-label="t('profile.todoGuideLinkAria')"
+            :ariaLabel="t('profile.todoGuideLinkAria')"
             test-id="profile-todo-guide-link"
           />
         </h4>

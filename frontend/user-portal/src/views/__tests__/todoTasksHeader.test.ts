@@ -175,7 +175,10 @@ describe('To Do shared list', () => {
     expect(w.get('[data-test="todo-reset-btn"]').text()).toContain('Reset')
     expect(w.get('[data-test="todo-claim-all-btn"]').text()).toContain('Claim all')
     expect(w.get('[data-test="todo-unclaim-all-btn"]').text()).toContain('Unclaim all')
-    expect(w.get('[data-test="todo-auto-claim-switch"]').exists()).toBe(true)
+    // 用 find().exists() 而不是 get().exists()：get() 找不到时自己就抛了，
+    // 在它返回值上再断言 exists 恒为 true（vue-test-utils 正是因此把该方法从
+    // get() 的返回类型里 Omit 掉）。find() 才是「可能不存在」的那个查询。
+    expect(w.find('[data-test="todo-auto-claim-switch"]').exists()).toBe(true)
     expect(preferenceMocks.load).toHaveBeenCalled()
   })
 

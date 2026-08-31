@@ -281,7 +281,7 @@
                     :node-key="col.props?.nodeKey || 'id'"
                     :show-checkbox="col.props?.showCheckbox !== false && !isColDisabled(col)"
                     :class="{ 'tree-readonly': isColDisabled(col) }"
-                    @check="(node: any, state: any) => {
+                    @check="(_node: any, state: any) => {
                       if (isColDisabled(col)) return
                       formData[col.field] = state.checkedKeys
                       onDialogFieldChange(col.field, state.checkedKeys)

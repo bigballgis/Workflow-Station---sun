@@ -5,7 +5,7 @@
         <span>{{ t('task.toClaimTitle') }}</span>
         <PortalHelpLink
           path="/up-tasks-to-claim"
-          :aria-label="t('task.toClaimGuideLinkAria')"
+          :ariaLabel="t('task.toClaimGuideLinkAria')"
           test-id="to-claim-guide-link"
         />
       </h1>
