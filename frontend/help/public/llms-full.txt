@@ -51,7 +51,7 @@ Related: /help/email-send#connection , /help/computed-fields
 
 ## To Do — claim pool (/help/up-tasks-to-claim)
 
-To Do lists direct assignments and business-unit role requests (free, held by you, held by a colleague) on one page. Claim before edit. Claim all (top right) confirms once then claims every free request in batches of 100. Unclaim all releases only your holds; it never force-unclaims a colleague. Auto-claim on open (To Do and User Profile, stored with the account, default off) claims a free role request when you click its Request ID on To Do only — not Home, notifications, or Completed Tasks. Assignment Type uses a distinct colour per category; the filter no longer includes Virtual Group (use BU + role). /tasks/to-claim redirects here.
+To Do lists direct assignments and business-unit role requests (free, held by you, held by a colleague) on one page. Claim before edit. Claim all (top right) confirms once then claims every free request in batches of 100. After a search, tick rows: Claim and Unclaim sit between “N selected” and Batch Urge, stay visible, and disable when none of the ticks can be claimed or released; confirm shows “N of M selected”. Unclaim all releases only your holds; it never force-unclaims a colleague. Auto-claim on open (To Do and User Profile, stored with the account, default off) claims a free role request when you click its Request ID on To Do only — not Home, notifications, or Completed Tasks. Assignment Type uses a distinct colour per category; the filter no longer includes Virtual Group (use BU + role). /tasks/to-claim redirects here.
 
 Order: open To Do → Claim, Claim all, or Unclaim all → edit and submit.
 

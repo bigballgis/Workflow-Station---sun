@@ -10,8 +10,11 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Claim All: one HTTP slice of at most {@link #BATCH_LIMIT} currently claimable pool tasks.
@@ -32,13 +35,10 @@ public class ClaimBatchComponent {
         if (userId == null || userId.isBlank()) {
             throw new PortalException("401", "Authenticated user id is required");
         }
-        Set<String> exclude = boundedExclude(request);
-        List<TaskInfo> claimable = new ArrayList<>();
-        for (TaskInfo task : taskQueryComponent.listClaimPoolTasks(userId)) {
-            if (task != null && task.isClaimable() && task.getTaskId() != null && !exclude.contains(task.getTaskId())) {
-                claimable.add(task);
-            }
-        }
+        List<TaskInfo> claimable = filterEligible(
+                taskQueryComponent.listClaimPoolTasks(userId),
+                task -> task.isClaimable(),
+                request);
         int take = Math.min(BATCH_LIMIT, claimable.size());
         int claimed = 0;
         int skipped = 0;
@@ -61,12 +61,64 @@ public class ClaimBatchComponent {
     }
 
     static Set<String> boundedExclude(ClaimBatchRequest request) {
-        List<String> raw = request == null || request.excludeTaskIds() == null
-                ? List.of() : request.excludeTaskIds();
-        if (raw.size() > ClaimBatchRequest.MAX_EXCLUDE_IDS) {
-            throw new PortalException("400", "excludeTaskIds exceeds " + ClaimBatchRequest.MAX_EXCLUDE_IDS);
+        return boundedIds(
+                request == null ? null : request.excludeTaskIds(),
+                ClaimBatchRequest.MAX_EXCLUDE_IDS,
+                "excludeTaskIds");
+    }
+
+    static Set<String> boundedInclude(ClaimBatchRequest request) {
+        return boundedIds(
+                request == null ? null : request.includeTaskIds(),
+                ClaimBatchRequest.MAX_INCLUDE_IDS,
+                "includeTaskIds");
+    }
+
+    static List<TaskInfo> filterEligible(
+            List<TaskInfo> source, Predicate<TaskInfo> keep, ClaimBatchRequest request) {
+        Set<String> exclude = boundedExclude(request);
+        Set<String> include = boundedInclude(request);
+        Map<String, TaskInfo> byId = new LinkedHashMap<>();
+        List<TaskInfo> rows = source == null ? List.of() : source;
+        for (TaskInfo task : rows) {
+            if (task == null || task.getTaskId() == null || !keep.test(task)) {
+                continue;
+            }
+            if (exclude.contains(task.getTaskId())) {
+                continue;
+            }
+            if (!include.isEmpty() && !include.contains(task.getTaskId())) {
+                continue;
+            }
+            byId.putIfAbsent(task.getTaskId(), task);
         }
-        return new HashSet<>(raw);
+        if (include.isEmpty()) {
+            return new ArrayList<>(byId.values());
+        }
+        return orderByInclude(byId, request.includeTaskIds());
+    }
+
+    private static List<TaskInfo> orderByInclude(Map<String, TaskInfo> byId, List<String> includeOrder) {
+        List<TaskInfo> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String id : includeOrder) {
+            if (id == null || !seen.add(id)) {
+                continue;
+            }
+            TaskInfo task = byId.get(id);
+            if (task != null) {
+                out.add(task);
+            }
+        }
+        return out;
+    }
+
+    private static Set<String> boundedIds(List<String> raw, int max, String fieldName) {
+        List<String> list = raw == null ? List.of() : raw;
+        if (list.size() > max) {
+            throw new PortalException("400", fieldName + " exceeds " + max);
+        }
+        return new HashSet<>(list);
     }
 
     /** 1 claimed, 0 skipped (not allowed / already held), -1 failed. */

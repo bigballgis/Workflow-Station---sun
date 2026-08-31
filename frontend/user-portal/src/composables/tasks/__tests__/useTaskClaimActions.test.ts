@@ -117,7 +117,7 @@ describe('useTaskClaimActions', () => {
     await claimAll()
 
     expect(claimBatch).toHaveBeenCalledTimes(2)
-    expect(claimBatch.mock.calls[1][0]).toEqual(['a'])
+    expect(claimBatch.mock.calls[1][0]).toEqual({ excludeTaskIds: ['a'] })
     expect(ElMessage.success).toHaveBeenCalledWith('task.claimAllDone')
     expect(reload).toHaveBeenCalledTimes(1)
   })
@@ -148,9 +148,59 @@ describe('useTaskClaimActions', () => {
     await unclaimAll()
 
     expect(unclaimBatch).toHaveBeenCalledTimes(2)
-    expect(unclaimBatch.mock.calls[1][0]).toEqual(['h1'])
+    expect(unclaimBatch.mock.calls[1][0]).toEqual({ excludeTaskIds: ['h1'] })
     expect(ElMessage.success).toHaveBeenCalledWith('task.unclaimAllDone')
     expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('claimSelected confirms with counts and sends includeTaskIds', async () => {
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    claimBatch.mockResolvedValueOnce({
+      data: { claimed: 2, skipped: 0, failed: 0, remaining: 0, attemptedTaskIds: ['a', 'b'] },
+    })
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { claimSelected } = useTaskClaimActions({ reload })
+
+    await claimSelected(['a', 'b'], 17)
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      'task.claimSelectedConfirm',
+      'task.claim',
+      expect.objectContaining({ type: 'warning' }),
+    )
+    expect(claimBatch).toHaveBeenCalledWith({
+      excludeTaskIds: [],
+      includeTaskIds: ['a', 'b'],
+    })
+    expect(ElMessage.success).toHaveBeenCalledWith('task.claimAllDone')
+  })
+
+  it('claimSelected does not call the API when there are no eligible ids', async () => {
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { claimSelected } = useTaskClaimActions({ reload })
+
+    await claimSelected([], 17)
+
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(claimBatch).not.toHaveBeenCalled()
+    expect(ElMessage.success).toHaveBeenCalledWith('task.claimSelectedEmpty')
+  })
+
+  it('unclaimSelected sends includeTaskIds for held rows only', async () => {
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    unclaimBatch.mockResolvedValueOnce({
+      data: { claimed: 1, skipped: 0, failed: 0, remaining: 0, attemptedTaskIds: ['mine'] },
+    })
+    const reload = vi.fn().mockResolvedValue(undefined)
+    const { unclaimSelected } = useTaskClaimActions({ reload })
+
+    await unclaimSelected(['mine'], 17)
+
+    expect(unclaimBatch).toHaveBeenCalledWith({
+      excludeTaskIds: [],
+      includeTaskIds: ['mine'],
+    })
+    expect(ElMessage.success).toHaveBeenCalledWith('task.unclaimAllDone')
   })
 
   it('prepareTodoOpen claims without success toast or reload when auto-claim is on', async () => {

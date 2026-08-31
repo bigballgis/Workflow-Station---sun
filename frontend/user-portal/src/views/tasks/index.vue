@@ -168,6 +168,27 @@
       >
         <span>{{ t('task.selected', { count: selectedTasks.length }) }}</span>
         <el-button
+          type="primary"
+          size="small"
+          data-test="todo-claim-selected-btn"
+          :disabled="selectedClaimableIds.length === 0"
+          :loading="claimAllBusy"
+          :title="selectedClaimableIds.length === 0 ? t('task.claimSelectedEmpty') : undefined"
+          @click="handleClaimSelected"
+        >
+          {{ t('task.claim') }}
+        </el-button>
+        <el-button
+          size="small"
+          data-test="todo-unclaim-selected-btn"
+          :disabled="selectedHeldIds.length === 0"
+          :loading="claimAllBusy"
+          :title="selectedHeldIds.length === 0 ? t('task.unclaimSelectedEmpty') : undefined"
+          @click="handleUnclaimSelected"
+        >
+          {{ t('task.unclaim') }}
+        </el-button>
+        <el-button
           type="warning"
           size="small"
           @click="handleBatchUrge"
@@ -256,6 +277,8 @@ const {
   preferenceStore,
   loading,
   selectedTasks,
+  selectedClaimableIds,
+  selectedHeldIds,
   filterForm,
   displayColumns,
   displayRows,
@@ -294,6 +317,8 @@ const {
   handleForceUnclaim,
   handleClaimAll,
   handleUnclaimAll,
+  handleClaimSelected,
+  handleUnclaimSelected,
   onAutoClaimChange,
   handleBatchUrge,
   submitAction,

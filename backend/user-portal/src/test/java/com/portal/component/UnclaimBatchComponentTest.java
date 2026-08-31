@@ -116,6 +116,25 @@ class UnclaimBatchComponentTest {
     }
 
     @Test
+    void includeTaskIdsUnclaimsOnlyThoseHolds() {
+        when(taskQueryComponent.listMergedTodoTasks("u1")).thenReturn(List.of(
+                mine("mine-1"),
+                colleague("other"),
+                mine("mine-2")));
+        when(taskProcessComponent.unclaimTask(any(), eq("u1"), any(), any(), eq("alice")))
+                .thenReturn(TaskInfo.builder().build());
+
+        ClaimBatchResponse result = component.unclaimNextBatch(
+                "u1", "alice", new ClaimBatchRequest(List.of(), List.of("other", "mine-2")));
+
+        assertThat(result.claimed()).isEqualTo(1);
+        assertThat(result.attemptedTaskIds()).containsExactly("mine-2");
+        verify(taskProcessComponent).unclaimTask("mine-2", "u1", "VIRTUAL_GROUP", "u1", "alice");
+        verify(taskProcessComponent, never()).unclaimTask(eq("mine-1"), any(), any(), any(), any());
+        verify(taskProcessComponent, never()).unclaimTask(eq("other"), any(), any(), any(), any());
+    }
+
+    @Test
     void unclaimsMineOnlyBuRoleHoldNotInClaimPool() {
         TaskInfo mineOnly = TaskInfo.builder()
                 .taskId("sole-hold")

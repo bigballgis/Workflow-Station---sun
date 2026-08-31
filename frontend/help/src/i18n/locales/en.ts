@@ -94,7 +94,7 @@ export default {
     upTasksToClaim: {
       title: 'To Do — claim pool',
       summary:
-        'Business-unit role requests live on To Do. Claim before you edit; Claim all takes every free request in batches; Unclaim all releases only your holds. Optional auto-claim on open is off by default. Leaders, BU Approvers, and System Administrators can force-release someone else’s hold.',
+        'Business-unit role requests live on To Do. Claim before you edit; Claim all takes every free request in batches; the selection bar Claims or Unclaims only checked rows. Unclaim all releases only your holds. Optional auto-claim on open is off by default. Leaders, BU Approvers, and System Administrators can force-release someone else’s hold.',
     },
     taskDelegate: {
       title: 'Delegate a task',
@@ -245,12 +245,14 @@ export default {
       'Open User Portal → Task → To Do. Direct-user, department-role, and delegated requests appear with their Assignment Type colour. Role-pool requests use the BU + role colour. Claimed By is empty until someone holds a role request. After a claim, the column shows You for your own hold, or the other person’s name (Held). Click the Request ID to open the form.',
     claimTitle: 'Claim, Unclaim, Claim all, and Unclaim all',
     claimBody:
-      'Claim locks the request to you. Other members of the role can only view it until you Unclaim or complete it. Completing the task does not need a second Claim if you already hold it. Claim all confirms once, then claims every free request in batches of 100 until none remain. Unclaim all confirms once, then releases every role request you hold, in the same batch size. It never force-releases a colleague’s hold. If some rows fail, the toast shows claimed / skipped / failed counts.',
+      'Claim locks the request to you. Other members of the role can only view it until you Unclaim or complete it. Completing the task does not need a second Claim if you already hold it. Claim all (top right) confirms once, then claims every free request in batches of 100 until none remain. After a search, tick rows and use Claim or Unclaim on the bar between “N selected” and Batch Urge: those buttons always show; they are disabled when none of the ticked rows can be claimed or released. The confirm dialog shows how many of the selection will be processed. Unclaim all confirms once, then releases every role request you hold, in the same batch size. Selection Unclaim and Unclaim all never force-release a colleague’s hold. If some rows fail, the toast shows claimed / skipped / failed counts.',
     claimSample: 'Claim on the row, or Claim all at the top right',
     unclaimSample: 'releases the hold; Claimed By becomes empty and another member can Claim it',
     claimedBySample: 'column on To Do for role-pool rows',
     claimAllSample: 'top-right button; one confirm, then automatic batches',
     unclaimAllSample: 'next to Claim all; releases only your holds, never a colleague’s',
+    claimSelectedSample: 'on the selection bar after you tick rows; confirms “Claim N of M selected”',
+    unclaimSelectedSample: 'next to selection Claim; only your holds in the ticks, never Force Unclaim',
     autoClaimTitle: 'Auto-claim on open',
     autoClaimBody:
       'The Auto-claim on open switch sits on the To Do top bar and on User Profile. It is stored with your account and defaults to off. When it is on, clicking a Request ID on To Do claims that row first if it is still free, then opens the form. There is no success toast. If the claim fails (for example someone else just took it), you still open the form and see an error. Home, notifications, email links, bookmarks, and Completed Tasks do not auto-claim.',

@@ -218,24 +218,35 @@ export interface ClaimBatchResponse {
   attemptedTaskIds: string[]
 }
 
-export function claimBatch(excludeTaskIds: string[]) {
+export interface ClaimBatchRequest {
+  excludeTaskIds?: string[]
+  includeTaskIds?: string[]
+}
+
+export function claimBatch(body: ClaimBatchRequest = {}) {
   const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
     skipGlobalErrorHandler: true,
   }
   return request.post<{ data: ClaimBatchResponse }>(
     '/tasks/claim-batch',
-    { excludeTaskIds },
+    {
+      excludeTaskIds: body.excludeTaskIds ?? [],
+      includeTaskIds: body.includeTaskIds ?? [],
+    },
     config,
   )
 }
 
-export function unclaimBatch(excludeTaskIds: string[]) {
+export function unclaimBatch(body: ClaimBatchRequest = {}) {
   const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
     skipGlobalErrorHandler: true,
   }
   return request.post<{ data: ClaimBatchResponse }>(
     '/tasks/unclaim-batch',
-    { excludeTaskIds },
+    {
+      excludeTaskIds: body.excludeTaskIds ?? [],
+      includeTaskIds: body.includeTaskIds ?? [],
+    },
     config,
   )
 }

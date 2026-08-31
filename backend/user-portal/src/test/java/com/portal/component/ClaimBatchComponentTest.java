@@ -100,6 +100,38 @@ class ClaimBatchComponentTest {
         verify(taskProcessComponent, never()).claimTask(any(), any(), any());
     }
 
+    @Test
+    void includeTaskIdsClaimsOnlyThoseAndKeepsRequestOrder() {
+        when(taskQueryComponent.listClaimPoolTasks("u1")).thenReturn(List.of(
+                pool("free-1", true),
+                pool("held", false),
+                pool("free-2", true),
+                pool("free-3", true)));
+        when(taskProcessComponent.claimTask(any(), eq("u1"), eq("alice")))
+                .thenReturn(TaskInfo.builder().build());
+
+        ClaimBatchResponse result = component.claimNextBatch(
+                "u1", "alice", new ClaimBatchRequest(List.of(), List.of("free-3", "held", "free-1")));
+
+        assertThat(result.claimed()).isEqualTo(2);
+        assertThat(result.attemptedTaskIds()).containsExactly("free-3", "free-1");
+        verify(taskProcessComponent).claimTask("free-3", "u1", "alice");
+        verify(taskProcessComponent).claimTask("free-1", "u1", "alice");
+        verify(taskProcessComponent, never()).claimTask(eq("free-2"), any(), any());
+        verify(taskProcessComponent, never()).claimTask(eq("held"), any(), any());
+    }
+
+    @Test
+    void rejectsIncludeListOverMax() {
+        List<String> tooMany = new ArrayList<>();
+        for (int i = 0; i < ClaimBatchRequest.MAX_INCLUDE_IDS + 1; i++) {
+            tooMany.add("t-" + i);
+        }
+        org.junit.jupiter.api.Assertions.assertThrows(PortalException.class,
+                () -> component.claimNextBatch("u1", "n", new ClaimBatchRequest(List.of(), tooMany)));
+        verify(taskProcessComponent, never()).claimTask(any(), any(), any());
+    }
+
     private static TaskInfo pool(String id, boolean claimable) {
         return TaskInfo.builder().taskId(id).claimable(claimable).claimPoolTask(true).build();
     }
