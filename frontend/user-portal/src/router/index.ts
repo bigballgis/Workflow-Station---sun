@@ -51,6 +51,7 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.tasks', icon: 'List' }
       },
       {
+        // Old Tasks to Claim bookmark — pool rows now live on To Do.
         path: 'tasks/to-claim',
         redirect: '/tasks',
       },

@@ -94,7 +94,6 @@ export default {
   menu: {
     dashboard: 'Home',
     tasks: 'To Do',
-    tasksToClaim: 'Tasks to Claim',
     completedTasks: 'Completed Tasks',
     processes: 'New Requests',
     myApplications: 'My Requests',
@@ -264,10 +263,6 @@ export default {
     title: 'To Do',
     todoHint: 'Requests assigned to you, plus business-unit role requests you can claim or that a colleague already holds.',
     todoGuideLinkAria: 'Open To Do guideline',
-    toClaimTitle: 'Tasks to Claim',
-    toClaimHint: 'Requests assigned to your business unit role. Claim one to hold it — only the person holding a request can edit and submit it.',
-    toClaimGuideLinkAria: 'Open Tasks to Claim guideline',
-    noTasksToClaim: 'No tasks to claim',
     claimedBy: 'Claimed By',
     claimedByMe: 'You',
     heldByOther: 'Held',

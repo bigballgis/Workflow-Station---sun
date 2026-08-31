@@ -94,7 +94,6 @@ export default {
   menu: {
     dashboard: '首頁',
     tasks: '待辦',
-    tasksToClaim: '待認領任務',
     completedTasks: '已處理任務',
     processes: '新建申請',
     myApplications: '我的請求',
@@ -264,10 +263,6 @@ export default {
     title: '待辦',
     todoHint: '指派給你的請求，以及你可以認領或同事已認領的業務單元角色請求。',
     todoGuideLinkAria: '開啟待辦指南',
-    toClaimTitle: '待認領任務',
-    toClaimHint: '分派給你所屬 BU 角色的請求。認領後即鎖定在你名下，只有認領人才能編輯與提交。',
-    toClaimGuideLinkAria: '開啟待認領任務指南',
-    noTasksToClaim: '暫無待認領任務',
     claimedBy: '認領人',
     claimedByMe: '我',
     heldByOther: '已被認領',

@@ -94,7 +94,6 @@ export default {
   menu: {
     dashboard: '首页',
     tasks: '待办',
-    tasksToClaim: '待认领任务',
     completedTasks: '已处理任务',
     processes: '新建申请',
     myApplications: '我的请求',
@@ -264,10 +263,6 @@ export default {
     title: '待办',
     todoHint: '派给你的请求，以及你可以认领或同事已认领的业务单元角色请求。',
     todoGuideLinkAria: '打开待办指南',
-    toClaimTitle: '待认领任务',
-    toClaimHint: '分派给你所在 BU 角色的请求。认领后即锁定到你名下，只有认领人才能编辑和提交。',
-    toClaimGuideLinkAria: '打开待认领任务指南',
-    noTasksToClaim: '暂无待认领任务',
     claimedBy: '认领人',
     claimedByMe: '我',
     heldByOther: '已被认领',
