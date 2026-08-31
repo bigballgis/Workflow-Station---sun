@@ -1,0 +1,38 @@
+// Teleported to body — must stay unscoped. z-index above form cards / dialogs;
+// position is set inline on the dropdown node.
+.lookup-dropdown--floating {
+  z-index: 3000;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #909399 #ebeef5;
+
+  &::-webkit-scrollbar {
+    -webkit-appearance: none;
+    height: 10px;
+    background: #ebeef5;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #909399;
+    border-radius: 4px;
+  }
+
+  .el-table {
+    min-width: 100%;
+  }
+
+  // Override ws-theme uppercase so labels stay "Display Name" / 显示名.
+  thead th.el-table__cell .cell {
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .lookup-check {
+    color: var(--el-color-primary, #409eff);
+  }
+}

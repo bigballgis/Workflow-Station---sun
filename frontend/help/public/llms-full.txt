@@ -65,7 +65,7 @@ This is not Transfer (that button still changes the assignee). This is not Setup
 
 Order: open the task from To Do → click Delegate → choose Specified user or Specified BU and Role → Confirm → the other person opens Delegated on To Do.
 
-Specified user: pick Target User. Extra line Delegated to that person. They see On behalf of you. You can still complete it yourself.
+Specified user: click Target User (Click to search). Table columns Username, Display Name, Full Name, Email, Employee ID; type to search on the server; pick a row. Extra line Delegated to that person. They see On behalf of you. You can still complete it yourself.
 
 Specified BU and Role: pick Business Unit then Role (both required; Role disabled until a unit is chosen). Visible and completable only when the header workspace is that same pair. Switching workspace hides it. System Administrator does not see every delegated task. No Claim after this kind of delegate.
 

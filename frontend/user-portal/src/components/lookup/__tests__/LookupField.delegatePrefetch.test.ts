@@ -8,7 +8,7 @@ import { relationTableApi } from '@/api/relationTable'
 vi.mock('@/api/relationTable', () => ({
   relationTableApi: {
     searchForLookup: vi.fn().mockResolvedValue({ data: [] }),
-    getViewFields: vi.fn().mockResolvedValue([]),
+    getViewFields: vi.fn().mockResolvedValue({ data: [] }),
   },
 }))
 
@@ -54,7 +54,7 @@ describe('LookupField delegate prefetch / remote search', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(relationTableApi.searchForLookup).mockResolvedValue({ data: pageOf(200) })
-    vi.mocked(relationTableApi.getViewFields).mockResolvedValue([])
+    vi.mocked(relationTableApi.getViewFields).mockResolvedValue({ data: [] })
   })
 
   it('loads one page on first open when prefetchLimit is set', async () => {

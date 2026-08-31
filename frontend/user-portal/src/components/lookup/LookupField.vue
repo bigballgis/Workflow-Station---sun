@@ -123,19 +123,18 @@ import { relationTableApi } from '@/api/relationTable'
 import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
 import { useLookupFieldRows } from './useLookupFieldRows'
 import {
+  buildVisibleColumns,
+  lookupTableContentWidth,
+  type LookupViewField,
+} from './lookupFieldColumns'
+import {
   getLookupSelectedDisplayFieldFromProps,
   resolveLookupCellTagText,
   unwrapSingleLookupModelValue,
 } from '../subTableAddDialogHelpers'
 import type { LookupFilterCondition } from '@/utils/lookupFilterConditions'
 
-export interface LookupViewField {
-  fieldName: string
-  displayLabel?: string
-  columnWidth?: number
-  sortOrder: number
-  visible: boolean
-}
+export type { LookupViewField }
 
 const props = defineProps<{
   modelValue?: any
@@ -193,47 +192,18 @@ const effectiveViewFields = computed(() =>
   props.viewFields?.length ? props.viewFields : loadedViewFields.value
 )
 
-function labelForField(fieldName: string): string {
-  const vf = effectiveViewFields.value.find(v => v.fieldName === fieldName)
-  const label = vf?.displayLabel?.trim()
-  return label || fieldName
-}
+const visibleColumns = computed(() =>
+  buildVisibleColumns({
+    displayFields: props.displayFields,
+    searchFields: props.searchFields || [],
+    displayField: props.displayField || '',
+    viewFields: effectiveViewFields.value,
+  }),
+)
 
-function widthForField(fieldName: string): number | undefined {
-  return effectiveViewFields.value.find(v => v.fieldName === fieldName)?.columnWidth
-}
-
-const visibleColumns = computed(() => {
-  // 1. Use displayFields (from lookup config "Display Fields") — matches developer-workstation LookupPreview
-  if (props.displayFields && props.displayFields.length > 0) {
-    return props.displayFields.map(f => ({
-      prop: f,
-      label: labelForField(f),
-      width: widthForField(f),
-    }))
-  }
-  // 2. Fallback: searchFields
-  if (props.searchFields?.length > 0) {
-    return props.searchFields.map(f => ({
-      prop: f,
-      label: labelForField(f),
-      width: widthForField(f),
-    }))
-  }
-  // 3. Fallback: displayField
-  const cols = new Set<string>()
-  if (props.displayField) cols.add(props.displayField)
-  return Array.from(cols).map(f => ({
-    prop: f,
-    label: labelForField(f),
-    width: widthForField(f),
-  }))
-})
-
-const tableContentWidth = computed(() => {
-  const cols = visibleColumns.value.reduce((sum, col) => sum + (col.width || 120), 0)
-  return cols + (props.multiple ? 40 : 0)
-})
+const tableContentWidth = computed(() =>
+  lookupTableContentWidth(visibleColumns.value, !!props.multiple),
+)
 
 // Client-side filtering on the loaded data (form lookup). Delegate uses remoteFilter.
 const filteredResults = computed(() => {
@@ -257,6 +227,7 @@ async function loadAllData() {
     : Promise.resolve({ data: [] as LookupViewField[] })
   const [, vfRes] = await Promise.all([
     loadInitial(),
+    // FALLBACK(ux): column headers optional; lookup rows still load if view-fields fail
     vfPromise.catch(() => ({ data: [] as LookupViewField[] })),
   ])
   if (vfRes.data?.length) {
@@ -730,43 +701,5 @@ defineExpose({ effectiveViewFields, handleFocus, visibleColumns })
 }
 </style>
 
-<!-- Floating dropdown is teleported to <body>, so its styles must be global (scoped styles
-     would not reach it). z-index above form cards / dialogs; position is set inline. -->
-<style lang="scss">
-.lookup-dropdown--floating {
-  z-index: 3000;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
-  overflow-x: scroll;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: #909399 #ebeef5;
-
-  &::-webkit-scrollbar {
-    -webkit-appearance: none;
-    height: 10px;
-    background: #ebeef5;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: #909399;
-    border-radius: 4px;
-  }
-
-  .el-table {
-    min-width: 100%;
-  }
-
-  // Override ws-theme uppercase so labels stay "Display Name" / 显示名.
-  thead th.el-table__cell .cell {
-    text-transform: none;
-    letter-spacing: normal;
-  }
-
-  .lookup-check {
-    color: var(--el-color-primary, #409eff);
-  }
-}
-</style>
+<!-- Floating dropdown is teleported to <body>, so its styles must be global. -->
+<style lang="scss" src="./LookupField.dropdown.scss"></style>

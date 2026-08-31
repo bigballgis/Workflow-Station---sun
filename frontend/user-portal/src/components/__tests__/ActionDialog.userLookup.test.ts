@@ -33,12 +33,8 @@ const LookupFieldStub = {
     'remoteFilter',
   ],
   emits: ['update:modelValue', 'select', 'clear'],
-  template: '<button class="stub-lookup" type="button" @click="pick">lookup</button>',
-  methods: {
-    pick() {
-      this.$emit('select', { id: 'user-b', display_name: 'Li Si', username: 'lisi' })
-    },
-  },
+  template:
+    '<button class="stub-lookup" type="button" @click="$emit(\'select\', { id: \'user-b\', display_name: \'Li Si\', username: \'lisi\' })">lookup</button>',
 }
 
 describe('ActionDialog USER lookup picker', () => {
