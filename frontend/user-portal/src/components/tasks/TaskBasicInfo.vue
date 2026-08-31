@@ -30,11 +30,6 @@
         <el-descriptions-item :label="$t('task.createTime')">
           {{ formatDate(taskInfo.createTime) }}
         </el-descriptions-item>
-        <el-descriptions-item :label="$t('task.dueDate')">
-          <span :class="{ 'overdue': taskInfo.isOverdue }">
-            {{ taskInfo.dueDate ? formatDate(taskInfo.dueDate) : $t('common.empty') }}
-          </span>
-        </el-descriptions-item>
         <el-descriptions-item :label="$t('task.currentAssignee')">
           {{ getCurrentAssigneeDisplay() }}
         </el-descriptions-item>
@@ -95,9 +90,5 @@ const currentStepDisplay = computed(() => {
   .section-content {
     padding: 20px;
   }
-}
-
-.overdue {
-  color: var(--error-red, #f56c6c);
 }
 </style>

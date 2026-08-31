@@ -15,13 +15,6 @@
       >
         {{ getPriorityLabel(taskInfo.priority) }}
       </el-tag>
-      <el-tag
-        v-if="taskInfo.isOverdue"
-        type="danger"
-        size="small"
-      >
-        {{ t('task.overdue') }}
-      </el-tag>
     </div>
 
     <!-- Loading state -->
@@ -1009,10 +1002,6 @@ onBeforeUnmount(() => {
         gap: 12px;
       }
     }
-  }
-  
-  .overdue {
-    color: var(--error-red, #f56c6c);
   }
 }
 </style>

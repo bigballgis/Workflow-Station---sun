@@ -112,19 +112,10 @@
                   {{ getPriorityLabel(row.priority) }}
                 </span>
                 <span
-                  v-else-if="col.field === 'createTime' || col.field === 'dueDate'"
+                  v-else-if="col.field === 'createTime'"
                   style="white-space: nowrap;"
-                  :class="{ overdue: col.field === 'dueDate' && row.isOverdue }"
                 >
                   {{ formatDate(row[col.field]) }}
-                  <el-tag
-                    v-if="col.field === 'dueDate' && row.isOverdue"
-                    type="danger"
-                    size="small"
-                    style="margin-left: 4px;"
-                  >
-                    {{ t('task.overdue') }}
-                  </el-tag>
                 </span>
                 <template v-else>
                   {{ row[col.field as keyof TaskInfo] || '-' }}
@@ -240,7 +231,6 @@ const TODO_COL_WIDTHS: Record<string, number> = {
   initiatorName: 120,
   priority: 100,
   createTime: 170,
-  dueDate: 180,
 }
 
 const pendingTaskStore = usePendingTaskStore()
@@ -513,10 +503,6 @@ onMounted(() => {
     span {
       color: var(--text-secondary);
     }
-  }
-
-  .overdue {
-    color: var(--error-red);
   }
 }
 </style>
