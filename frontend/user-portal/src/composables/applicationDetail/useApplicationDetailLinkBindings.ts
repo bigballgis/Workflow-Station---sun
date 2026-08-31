@@ -1,6 +1,8 @@
 import type { FormField } from '@/components/FormRenderer.vue'
 import {
   collectLinkFormTargetBindingIdsFromSubListViews,
+  collectPlacedSubTableBindingIds,
+  collectRuleBindingIds,
   filterLinkOnlyStandaloneSubTableFields,
 } from '@/components/formRendererHelpers'
 import { resolveSubTablePrimaryKeyFields } from '@/composables/tasks/shared'
@@ -139,10 +141,22 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
       const design = (subForms?.[b.bindingId] ?? subForms?.[String(b.bindingId)] ?? {}) as {
         rule?: unknown[]
       }
-      const rule = Array.isArray(design.rule) && design.rule.length > 0
-        ? design.rule
+      const ownRule = Array.isArray(design.rule) && design.rule.length > 0 ? design.rule : []
+      const placedOnThisForm = new Set<number>([
+        ...collectRuleBindingIds(ownRule),
+        ...collectPlacedSubTableBindingIds(b.formFields),
+      ])
+      const rule = ownRule.length > 0
+        ? ownRule
         : (Array.isArray(mainFormRule) ? mainFormRule : [])
-      b.formFields = filterLinkOnlyStandaloneSubTableFields(b.formFields, bindings, rule, undefined, formConfig)
+      b.formFields = filterLinkOnlyStandaloneSubTableFields(
+        b.formFields,
+        bindings,
+        rule,
+        undefined,
+        formConfig,
+        placedOnThisForm.size > 0 ? placedOnThisForm : undefined,
+      )
     }
   }
 
@@ -214,6 +228,9 @@ export function createApplicationDetailLinkBindings(ctx: ApplicationDetailCtx): 
             const nm = (col as { props?: { boundSubTableName?: string } }).props?.boundSubTableName
             targetNameHint.set(n, nm != null && String(nm).trim() !== '' ? String(nm) : undefined)
           }
+        }
+        for (const nestedId of collectPlacedSubTableBindingIds(b.formFields || [])) {
+          targetIds.add(nestedId)
         }
       }
       for (const tid of collectLinkFormTargetBindingIdsFromSubListViews(localFormConfig)) {
