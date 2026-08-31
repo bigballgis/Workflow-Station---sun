@@ -801,4 +801,40 @@ public class AdminCenterClient {
         }
     }
 
+    /**
+     * FAIL-CLOSED(security): admin-center down or non-success means the actor cannot force-unclaim.
+     */
+    public boolean canForceUnclaim(String userId, String taskId, String businessUnitId, List<String> roleIds) {
+        if (userId == null || userId.isBlank() || taskId == null || taskId.isBlank()) {
+            return false;
+        }
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/force-unclaim/evaluate";
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("taskId", taskId);
+            item.put("businessUnitId", businessUnitId);
+            item.put("roleIds", roleIds != null ? roleIds : List.of());
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("userId", userId);
+            body.put("items", List.of(item));
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            Map<String, Object> data = com.platform.common.util.ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+            Object flagsObj = data.get("flags");
+            if (!(flagsObj instanceof Map<?, ?> flags)) {
+                return false;
+            }
+            return Boolean.TRUE.equals(flags.get(taskId));
+        } catch (Exception e) {
+            log.warn("FAIL-CLOSED: force-unclaim evaluate failed for user {} task {}: {}",
+                    userId, taskId, e.getMessage());
+            return false;
+        }
+    }
+
 }

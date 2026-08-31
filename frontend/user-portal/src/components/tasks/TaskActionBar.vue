@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="!isCompletedTask"
+    v-if="!isCompletedTask && !claimLocked"
     class="section action-section"
   >
     <div class="action-buttons">
@@ -80,6 +80,8 @@ const BUILT_IN_BUTTON_TYPES: Record<string, ElButtonType> = {
 
 const props = defineProps<{
   isCompletedTask: boolean
+  /** BU Role pool task the signed-in user does not hold: view only until they claim it. */
+  claimLocked?: boolean
   showImplicitSaveAction: boolean
   savingTaskForm: boolean
   actions: TaskActionInfo[] | undefined | null

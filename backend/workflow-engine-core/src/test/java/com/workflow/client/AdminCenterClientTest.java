@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -561,6 +562,66 @@ class AdminCenterClientTest {
             assertThat(result).hasSize(1);
             verify(restTemplate, times(1)).exchange(
                     anyString(), eq(HttpMethod.GET), isNull(), any(ParameterizedTypeReference.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("canForceUnclaim Tests")
+    class CanForceUnclaimTests {
+
+        private static final String TASK_ID = "task-force-unclaim";
+
+        @Test
+        @DisplayName("Should return true when flags map marks the task allowed")
+        void shouldReturnTrueWhenFlagTrue() {
+            Map<String, Object> body = Map.of(
+                    "success", true,
+                    "data", Map.of("flags", Map.of(TASK_ID, Boolean.TRUE)));
+            stubForceUnclaimExchange(new ResponseEntity<>(body, HttpStatus.OK));
+
+            assertThat(client.canForceUnclaim(USER_ID, TASK_ID, BU_ID, List.of(ROLE_ID))).isTrue();
+        }
+
+        @Test
+        @DisplayName("Should return false when flags omit the task")
+        void shouldReturnFalseWhenFlagMissing() {
+            Map<String, Object> body = Map.of(
+                    "success", true,
+                    "data", Map.of("flags", Map.of("other-task", Boolean.TRUE)));
+            stubForceUnclaimExchange(new ResponseEntity<>(body, HttpStatus.OK));
+
+            assertThat(client.canForceUnclaim(USER_ID, TASK_ID, BU_ID, List.of(ROLE_ID))).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should fail-closed (false) when admin-center transport fails")
+        void shouldFailClosedOnTransportFailure() {
+            when(restTemplate.exchange(
+                    eq(ADMIN_CENTER_URL + "/api/v1/admin/force-unclaim/evaluate"),
+                    eq(HttpMethod.POST),
+                    any(HttpEntity.class),
+                    any(ParameterizedTypeReference.class)
+            )).thenThrow(new RestClientException("Connection refused"));
+
+            assertThat(client.canForceUnclaim(USER_ID, TASK_ID, BU_ID, List.of(ROLE_ID))).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should fail-closed (false) when userId or taskId is blank")
+        void shouldFailClosedOnBlankIds() {
+            assertThat(client.canForceUnclaim(" ", TASK_ID, BU_ID, List.of())).isFalse();
+            assertThat(client.canForceUnclaim(USER_ID, "", BU_ID, List.of())).isFalse();
+            verifyNoInteractions(restTemplate);
+        }
+
+        @SuppressWarnings("unchecked")
+        private void stubForceUnclaimExchange(ResponseEntity<Map<String, Object>> response) {
+            when(restTemplate.exchange(
+                    eq(ADMIN_CENTER_URL + "/api/v1/admin/force-unclaim/evaluate"),
+                    eq(HttpMethod.POST),
+                    any(HttpEntity.class),
+                    any(ParameterizedTypeReference.class)
+            )).thenReturn(response);
         }
     }
 }

@@ -115,4 +115,8 @@ public interface UserBusinessUnitRoleRepository extends JpaRepository<UserBusine
      * 根据角色ID查找所有用户角色分配
      */
     List<UserBusinessUnitRole> findByRoleId(String roleId);
+
+    List<UserBusinessUnitRole> findByUserIdAndMembershipType(String userId, String membershipType);
+
+    List<UserBusinessUnitRole> findByBusinessUnitIdAndMembershipType(String businessUnitId, String membershipType);
 }

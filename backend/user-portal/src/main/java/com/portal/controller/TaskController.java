@@ -1,5 +1,7 @@
 package com.portal.controller;
 
+import com.portal.component.ClaimBatchComponent;
+import com.portal.component.UnclaimBatchComponent;
 import com.portal.component.TaskProcessComponent;
 import com.portal.client.WorkflowEngineClient;
 import com.platform.common.util.ApiResponseBodyUnwrap;
@@ -42,6 +44,8 @@ import jakarta.servlet.http.HttpServletResponse;
 public class TaskController {
     private final TaskQueryComponent taskQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
+    private final ClaimBatchComponent claimBatchComponent;
+    private final UnclaimBatchComponent unclaimBatchComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final I18nService i18nService;
     private final RestTemplate restTemplate;
@@ -68,6 +72,14 @@ public class TaskController {
         return ApiResponse.success(taskQueryComponent.queryTodoList(userId, request));
     }
 
+    @Operation(summary = "Query Tasks to Claim list (BU Role pool, shared list chrome)")
+    @PostMapping("/to-claim/query")
+    public ApiResponse<PortalListPage<TaskInfo>> queryToClaimTasks(
+            @CurrentUserId String userId,
+            @RequestBody @Valid TodoTaskQueryRequest request) {
+        return ApiResponse.success(taskQueryComponent.queryToClaimList(userId, request));
+    }
+
     @Operation(summary = "Get task detail")
     @GetMapping("/{taskId}")
     public ApiResponse<TaskInfo> getTaskDetail(
@@ -75,6 +87,8 @@ public class TaskController {
             @PathVariable String taskId) {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        taskProcessComponent.annotateClaimState(task, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null));
         // Consistent with TaskFormController: canView = canViewTaskForm (initiator + assignee), not just canProcessTask
         if (userId != null && !taskProcessComponent.canViewTaskForm(task, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null))) {
@@ -92,6 +106,28 @@ public class TaskController {
             @RequestParam(value = "processInstanceId", required = false) String processInstanceId) {
         List<TaskHistoryInfo> history = taskQueryComponent.getTaskHistory(taskId, processInstanceId);
         return ApiResponse.success(history);
+    }
+
+    @Operation(summary = "Claim next batch of claimable pool tasks (Claim All)")
+    @PostMapping("/claim-batch")
+    public ApiResponse<ClaimBatchResponse> claimBatch(
+            @CurrentUserId String userId,
+            @RequestBody(required = false) @Valid ClaimBatchRequest request) {
+        return ApiResponse.success(claimBatchComponent.claimNextBatch(
+                userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null),
+                request == null ? new ClaimBatchRequest(List.of()) : request));
+    }
+
+    @Operation(summary = "Unclaim next batch of pool tasks held by the current user (Unclaim All)")
+    @PostMapping("/unclaim-batch")
+    public ApiResponse<ClaimBatchResponse> unclaimBatch(
+            @CurrentUserId String userId,
+            @RequestBody(required = false) @Valid ClaimBatchRequest request) {
+        return ApiResponse.success(unclaimBatchComponent.unclaimNextBatch(
+                userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null),
+                request == null ? new ClaimBatchRequest(List.of()) : request));
     }
 
     @Operation(summary = "Claim task")

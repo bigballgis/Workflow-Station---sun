@@ -100,6 +100,27 @@
           </div>
         </el-form-item>
 
+        <el-form-item :label="t('permission.membershipType')" required>
+          <div class="membership-row">
+            <el-radio-group v-model="applyForm.membershipType">
+              <el-radio value="MEMBER">
+                {{ t('permission.member') }}
+              </el-radio>
+              <el-radio value="LEADER">
+                {{ t('permission.leader') }}
+              </el-radio>
+            </el-radio-group>
+            <PortalHelpLink
+              path="/up-tasks-to-claim#leader"
+              :aria-label="t('permission.applyLeaderGuideLinkAria')"
+              test-id="apply-leader-guide-link"
+            />
+          </div>
+          <div class="form-hint">
+            {{ t('permission.membershipHint') }}
+          </div>
+        </el-form-item>
+
         <el-form-item
           :label="t('permission.reason')"
           required
@@ -131,6 +152,7 @@
 import { useI18n } from 'vue-i18n'
 import { useApplyPermission } from '@/composables/permissions/useApplyPermission'
 import { usePermissionFormatters } from '@/composables/permissions/usePermissionFormatters'
+import PortalHelpLink from '@/components/PortalHelpLink.vue'
 
 const emit = defineEmits<{
   success: []
@@ -171,6 +193,12 @@ defineExpose({ open: showApplyDialog })
     font-size: 12px;
     color: var(--el-text-color-secondary);
     line-height: 1.4;
+  }
+
+  .membership-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 }
 </style>

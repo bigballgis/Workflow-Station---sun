@@ -36,7 +36,7 @@ export function useUserDetail(userId: Ref<string>) {
   const assignSubmitting = ref(false)
   const assignRoleOptions = ref<BuBoundedRole[]>([])
   const assignRoleLoaded = ref(false)
-  const assignForm = reactive({ businessUnitId: '', roleId: '' })
+  const assignForm = reactive({ businessUnitId: '', roleId: '', membershipType: 'MEMBER' })
 
   const buRoleGroups = computed(() => {
     const map = new Map<string, { businessUnitId: string; businessUnitName: string; rows: UserBusinessUnitRole[] }>()
@@ -75,7 +75,7 @@ export function useUserDetail(userId: Ref<string>) {
 
   const reloadBuRoles = async () => { if (userId.value) buRoles.value = await userApi.getBusinessUnitRoles(userId.value) }
 
-  const resetAssignDialog = () => { assignForm.businessUnitId = ''; assignForm.roleId = ''; assignRoleOptions.value = []; assignRoleLoaded.value = false }
+  const resetAssignDialog = () => { assignForm.businessUnitId = ''; assignForm.roleId = ''; assignForm.membershipType = 'MEMBER'; assignRoleOptions.value = []; assignRoleLoaded.value = false }
 
   const onAssignBuChange = async () => {
     const buId = assignForm.businessUnitId; assignForm.roleId = ''; assignRoleOptions.value = []; assignRoleLoaded.value = false
@@ -102,7 +102,7 @@ export function useUserDetail(userId: Ref<string>) {
     if (!user.value || !assignForm.businessUnitId || !assignForm.roleId) { notifyWarning(t('user.selectRoleForBu')); return }
     assignSubmitting.value = true
     try {
-      await userApi.assignBusinessUnitRole(user.value.id, assignForm.businessUnitId, assignForm.roleId)
+      await userApi.assignBusinessUnitRole(user.value.id, assignForm.businessUnitId, assignForm.roleId, assignForm.membershipType)
       notifySuccess(t('common.success')); assignDialogVisible.value = false; await reloadBuRoles()
     } catch (e: unknown) { const msg = e instanceof Error ? e.message : undefined; notifyError(msg || terr(AppErrorCode.USER_ACTION_FAILED)) }
     finally { assignSubmitting.value = false }
@@ -116,10 +116,20 @@ export function useUserDetail(userId: Ref<string>) {
     catch (e: unknown) { const msg = e instanceof Error ? e.message : undefined; notifyError(msg || terr(AppErrorCode.USER_ACTION_FAILED)) }
   }
 
+  const setBuRoleMembership = async (row: UserBusinessUnitRole, membershipType: string) => {
+    if (!user.value) return
+    try {
+      await userApi.assignBusinessUnitRole(user.value.id, row.businessUnitId, row.roleId, membershipType)
+      notifySuccess(t('common.success'))
+      await reloadBuRoles()
+    } catch (e: unknown) { const msg = e instanceof Error ? e.message : undefined; notifyError(msg || terr(AppErrorCode.USER_ACTION_FAILED)) }
+  }
+
   return { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, platformVirtualGroups,
     platformRoles, buRoles, buRoleGroups, assignDialogVisible, assignRoleLoading, assignSubmitting,
     assignRoleOptions, assignRoleLoaded, assignForm,
     getPlatformRoleTagType, statusType, statusText, formatDate,
     loadDetail, reloadBuRoles, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole,
+    setBuRoleMembership,
   }
 }

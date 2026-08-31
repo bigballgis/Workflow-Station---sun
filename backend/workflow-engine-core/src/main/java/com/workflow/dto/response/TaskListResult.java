@@ -115,6 +115,11 @@ public class TaskListResult {
         private String bpmnBusinessUnitId;
 
         /**
+         * BPMN extension roleIds / roleId, used for Claim Hold Leader matching.
+         */
+        private List<String> bpmnRoleIds;
+
+        /**
          * MI 按角色分派信号（来自 ExtendedTaskInfo.extendedProperties）：
          * assigneeMode=role 表示该 MI 子任务是按角色分派（共享认领池），portal 据此做 workspace 可见性收敛
          * （role 分派只在用户切到该 role 的 workspace 时可见）；roleCode/businessUnitCode 是分派的角色/BU code。

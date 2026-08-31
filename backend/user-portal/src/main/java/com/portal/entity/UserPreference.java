@@ -60,6 +60,11 @@ public class UserPreference {
     @Builder.Default
     private Integer pageSize = 20;
 
+    /** Claim a free pool task when opening it from the To Do list. Default off. */
+    @Column(name = "auto_claim_on_open", nullable = false)
+    @Builder.Default
+    private Boolean autoClaimOnOpen = Boolean.FALSE;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

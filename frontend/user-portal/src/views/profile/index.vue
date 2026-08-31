@@ -48,8 +48,26 @@
         <el-divider />
 
         <h4 class="subsection-title">
-          {{ t('profile.sectionWorkspace') }}
+          <span>{{ t('profile.sectionTodo') }}</span>
+          <PortalHelpLink
+            path="/up-tasks-to-claim#auto-claim"
+            :aria-label="t('profile.todoGuideLinkAria')"
+            test-id="profile-todo-guide-link"
+          />
         </h4>
+        <div class="todo-pref-row">
+          <span class="todo-pref-label">{{ t('task.autoClaimOnOpen') }}</span>
+          <el-switch
+            data-test="profile-auto-claim-switch"
+            :model-value="preferenceStore.autoClaimOnOpen"
+            :loading="preferenceStore.saving"
+            :disabled="preferenceStore.saving"
+            @change="onAutoClaimChange"
+          />
+        </div>
+        <p class="desc-hint">{{ t('task.autoClaimOnOpenHint') }}</p>
+
+        <el-divider />
         <el-alert
           type="info"
           :closable="false"
@@ -123,8 +141,11 @@ import { getCurrentUser, getUser, saveUser, type UserInfo, AUTH_BASE_URL } from 
 import { permissionApi } from '@/api/permission'
 import { parseMyPermissionViewPayload, type PortalBuBoundedRow } from '@/utils/myPermissionView'
 import { languageLabelFor } from '@/utils/languageLabel'
+import PortalHelpLink from '@/components/PortalHelpLink.vue'
+import { useUserPreferenceStore } from '@/stores/userPreference'
 
 const { t, locale } = useI18n()
+const preferenceStore = useUserPreferenceStore()
 
 const loading = ref(false)
 const userInfo = ref<UserInfo | null>(null)
@@ -147,6 +168,10 @@ const workspaceContextText = computed(() => {
 })
 
 const workspaceLine = computed(() => workspaceContextText.value || t('profile.noWorkspaceSelected'))
+
+function onAutoClaimChange(value: string | number | boolean) {
+  return preferenceStore.setAutoClaimOnOpen(value === true)
+}
 
 const loadUserInfo = async () => {
   loading.value = true
@@ -173,6 +198,7 @@ const loadUserInfo = async () => {
 }
 
 onMounted(() => {
+  void preferenceStore.load()
   loadUserInfo()
 })
 </script>
@@ -219,6 +245,23 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.todo-pref-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.todo-pref-label {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
 }
 
 .subsection-block {

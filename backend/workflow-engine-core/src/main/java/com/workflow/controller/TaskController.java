@@ -181,6 +181,49 @@ public class TaskController {
     }
 
     /**
+     * Query the claim pool visible to a user (candidate tasks, including ones already claimed
+     * by another member so the rest of the role still sees who is holding them).
+     */
+    @GetMapping("/claim-pool")
+    @Operation(summary = "Query Claim Pool", description = "Query candidate tasks visible to the user, including claimed ones")
+    public ResponseEntity<ApiResponse<TaskListResult>> getClaimPoolTasks(
+            @Parameter(description = "User ID")
+            @RequestParam(value = "userId", required = false) String userId,
+            @Parameter(description = "Page number")
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @Parameter(description = "Page size")
+            @RequestParam(value = "size", required = false) Integer size,
+            @Parameter(description = "Portal current workspace business unit")
+            @RequestParam(value = "activeBusinessUnitId", required = false) String activeBusinessUnitId) {
+
+        if (userId != null) {
+            securityIntegrationService.validateAndAuditInput("userId", userId, "task_claim_pool_query");
+        }
+
+        WorkflowConfig workflowConfig = configurationManager.getConfiguration(WorkflowConfig.class);
+        int pageSize = size != null ? size : workflowConfig.getDefaultPageSize();
+        if (pageSize > workflowConfig.getMaxPageSize()) {
+            pageSize = workflowConfig.getMaxPageSize();
+        }
+
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        if (userId != null && !userId.isEmpty() && !actor.get().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("FORBIDDEN", "userId must match the authenticated user"));
+        }
+        String resolvedUserId = userId != null && !userId.isEmpty() ? userId : actor.get();
+
+        TaskListResult result = taskManagerComponent.getUserClaimPoolTasks(
+                resolvedUserId, page, pageSize, activeBusinessUnitId,
+                com.workflow.dto.request.EngineTaskListCriteria.empty());
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /**
      * Running tasks delegated to the caller (USER) or the current workspace BU+Role pair.
      */
     @GetMapping("/delegated-runtime")

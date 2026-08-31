@@ -1,7 +1,11 @@
 <template>
   <div class="list-toolbar">
-    <span class="toolbar-label">{{ t('task.assignmentType') }}</span>
+    <span
+      v-if="showAssignmentTypes"
+      class="toolbar-label"
+    >{{ t('task.assignmentType') }}</span>
     <el-select
+      v-if="showAssignmentTypes"
       v-model="assignmentTypes"
       multiple
       clearable
@@ -14,8 +18,8 @@
         :label="t('task.user')"
       />
       <el-option
-        value="VIRTUAL_GROUP"
-        :label="t('task.virtualGroup')"
+        value="BU_ROLE"
+        :label="t('task.buRole')"
       />
       <el-option
         value="DEPT_ROLE"
@@ -59,10 +63,14 @@ import { computed } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   assignmentTypes: string[]
   keyword: string
-}>()
+  /** Tasks to Claim is a single BU Role pool, so the assignment-type filter has nothing to choose. */
+  showAssignmentTypes?: boolean
+}>(), {
+  showAssignmentTypes: true,
+})
 
 const emit = defineEmits<{
   'update:assignmentTypes': [value: string[]]

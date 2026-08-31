@@ -20,6 +20,13 @@ export interface BusinessUnit {
   children?: BusinessUnit[]
 }
 
+export interface RoleLeaderGroup {
+  roleId: string
+  roleName?: string
+  roleCode?: string
+  leaders: { userId: string; userName?: string; userFullName?: string }[]
+}
+
 export interface CreateBusinessUnitRequest {
   name: string
   code: string
@@ -106,6 +113,8 @@ export const businessUnitApi = {
   
   // 解绑角色
   unbindRole: (id: string, roleId: string) => del<void>(`/business-units/${id}/roles/${roleId}`),
+
+  getRoleLeaders: (id: string) => get<RoleLeaderGroup[]>(`/business-units/${id}/role-leaders`),
 
   // 审批人相关
   // 获取业务单元审批人

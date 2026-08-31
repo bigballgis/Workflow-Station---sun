@@ -97,69 +97,7 @@ public class TaskOrphanRepairService {
                 .listPage(0, fetchLimit);
         for (Task t : unassigned) {
             try {
-                List<IdentityLink> links = taskService.getIdentityLinksForTask(t.getId());
-                boolean hasCandidate = false;
-                for (IdentityLink l : links) {
-                    if ("candidate".equals(l.getType())
-                            && ((l.getUserId() != null && !l.getUserId().isBlank())
-                            || (l.getGroupId() != null && !l.getGroupId().isBlank()))) {
-                        hasCandidate = true;
-                        break;
-                    }
-                }
-                if (hasCandidate) {
-                    continue;
-                }
-                String pdId = t.getProcessDefinitionId();
-                String defKey = t.getTaskDefinitionKey();
-                String at = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeType");
-                if (at == null || at.isBlank()) {
-                    continue;
-                }
-                String u = at.trim().toUpperCase(Locale.ROOT);
-                if (!"BU_ROLE".equals(u) && !"FIXED_BU_ROLE".equals(u)) {
-                    continue;
-                }
-                String roleId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleId");
-                String roleIdsRaw = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleIds");
-                String buId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "businessUnitId");
-                List<String> roleIds = AssigneeRoleIdsSupport.parseRoleIds(roleIdsRaw, roleId);
-                if (roleIds.isEmpty() || buId == null || buId.isBlank()) {
-                    log.warn("Orphan BU_ROLE task {} has missing roleIds/businessUnitId; skip repair", t.getId());
-                    continue;
-                }
-                LinkedHashSet<String> users = new LinkedHashSet<>();
-                for (String rid : roleIds) {
-                    if (!adminCenterClient.isEligibleRole(buId.trim(), rid.trim())) {
-                        log.warn("Orphan BU_ROLE task {} role {} not eligible for bu {}; skip repair",
-                                t.getId(), rid, buId);
-                        users.clear();
-                        break;
-                    }
-                    List<String> chunk = adminCenterClient.getUsersByBusinessUnitAndRole(buId.trim(), rid.trim());
-                    if (chunk != null) {
-                        for (String uid : chunk) {
-                            if (uid != null && !uid.isBlank()) {
-                                users.add(uid.trim());
-                            }
-                        }
-                    }
-                }
-                if (users.isEmpty()) {
-                    log.warn("Orphan BU_ROLE task {} resolved no users for bu={} roleIds={}", t.getId(), buId, roleIds);
-                    continue;
-                }
-                List<String> userList = new ArrayList<>(users);
-                if (userList.size() == 1) {
-                    taskService.setAssignee(t.getId(), userList.get(0));
-                    log.info("Repaired orphan BU_ROLE task {} with direct assignee {}", t.getId(), userList.get(0));
-                } else {
-                    for (String uid : userList) {
-                        taskService.addCandidateUser(t.getId(), uid);
-                    }
-                    log.info("Repaired orphan BU_ROLE task {} with {} candidate users", t.getId(), userList.size());
-                }
-                clearAssignmentFailureTrace(t.getId());
+                restoreBuRoleClaimPool(t);
             } catch (AdminCenterUnavailableException ex) {
                 // 服务不可用时继续逐条重试只会放大对 admin-center 的压力，中止本轮，等下一轮限频窗口。
                 log.error("admin-center unavailable during orphan BU_ROLE repair; aborting this run: {}",
@@ -169,6 +107,87 @@ public class TaskOrphanRepairService {
                 log.warn("Repair orphan BU_ROLE task {} failed: {}", t.getId(), ex.getMessage());
             }
         }
+    }
+
+    /**
+     * Put an unassigned BU Role task back in the claim pool. Never {@code setAssignee}, even for a
+     * single eligible member — that path made Unclaim look successful then immediately re-hold the
+     * row (and hid the task from Unclaim All, which only sees candidate-pool tasks).
+     * Aligns with {@code TaskAssigneeResolver#toClaimPoolResult}.
+     */
+    void restoreBuRoleClaimPool(Task t) {
+        if (t == null || !StringUtils.hasText(t.getId())) {
+            return;
+        }
+        if (hasCandidateIdentityLink(t)) {
+            return;
+        }
+        List<String> userList = resolveBuRolePoolUserIds(t);
+        if (userList.isEmpty()) {
+            return;
+        }
+        for (String uid : userList) {
+            taskService.addCandidateUser(t.getId(), uid);
+        }
+        log.info("Restored BU_ROLE claim pool for task {} with {} candidate users", t.getId(), userList.size());
+        clearAssignmentFailureTrace(t.getId());
+    }
+
+    private boolean hasCandidateIdentityLink(Task t) {
+        List<IdentityLink> links = taskService.getIdentityLinksForTask(t.getId());
+        if (links == null) {
+            return false;
+        }
+        for (IdentityLink l : links) {
+            if ("candidate".equals(l.getType())
+                    && ((l.getUserId() != null && !l.getUserId().isBlank())
+                    || (l.getGroupId() != null && !l.getGroupId().isBlank()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> resolveBuRolePoolUserIds(Task t) {
+        String pdId = t.getProcessDefinitionId();
+        String defKey = t.getTaskDefinitionKey();
+        String at = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeType");
+        if (at == null || at.isBlank()) {
+            return List.of();
+        }
+        String u = at.trim().toUpperCase(Locale.ROOT);
+        if (!"BU_ROLE".equals(u) && !"FIXED_BU_ROLE".equals(u)) {
+            return List.of();
+        }
+        String roleId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleId");
+        String roleIdsRaw = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleIds");
+        String buId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "businessUnitId");
+        List<String> roleIds = AssigneeRoleIdsSupport.parseRoleIds(roleIdsRaw, roleId);
+        if (roleIds.isEmpty() || buId == null || buId.isBlank()) {
+            log.warn("Orphan BU_ROLE task {} has missing roleIds/businessUnitId; skip repair", t.getId());
+            return List.of();
+        }
+        LinkedHashSet<String> users = new LinkedHashSet<>();
+        for (String rid : roleIds) {
+            if (!adminCenterClient.isEligibleRole(buId.trim(), rid.trim())) {
+                log.warn("Orphan BU_ROLE task {} role {} not eligible for bu {}; skip repair",
+                        t.getId(), rid, buId);
+                return List.of();
+            }
+            List<String> chunk = adminCenterClient.getUsersByBusinessUnitAndRole(buId.trim(), rid.trim());
+            if (chunk != null) {
+                for (String uid : chunk) {
+                    if (uid != null && !uid.isBlank()) {
+                        users.add(uid.trim());
+                    }
+                }
+            }
+        }
+        if (users.isEmpty()) {
+            log.warn("Orphan BU_ROLE task {} resolved no users for bu={} roleIds={}", t.getId(), buId, roleIds);
+            return List.of();
+        }
+        return new ArrayList<>(users);
     }
 
     /**

@@ -20,4 +20,7 @@ public class UserBusinessUnitRoleAssignRequest {
     
     @NotBlank(message = "角色ID不能为空")
     private String roleId;
+
+    /** MEMBER (default) or LEADER. */
+    private String membershipType;
 }

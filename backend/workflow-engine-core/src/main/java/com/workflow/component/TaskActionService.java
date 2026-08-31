@@ -1,6 +1,5 @@
 package com.workflow.component;
 
-import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.request.TaskAssignmentRequest;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.request.TaskDelegationRequest;
@@ -27,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -49,13 +49,13 @@ public class TaskActionService {
     private UserPermissionService userPermissionService;
 
     @Autowired
-    private AdminCenterClient adminCenterClient;
-
-    @Autowired
     private NotificationDispatchHelper notificationDispatchHelper;
 
     @Autowired
     private I18nService i18nService;
+
+    @Autowired
+    private TaskClaimSupport taskClaimSupport;
 
     // ==================== Public Action Methods ====================
 
@@ -170,130 +170,13 @@ public class TaskActionService {
     }
 
     public TaskAssignmentResult claimTask(String taskId, TaskClaimRequest request) {
-        try {
-            validateTaskClaimRequest(request);
-
-            Task flowableTask = taskService.createTaskQuery()
-                .taskId(taskId)
-                .singleResult();
-
-            if (flowableTask == null) {
-                throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "Task not found", taskId)));
-            }
-
-            if (flowableTask.getAssignee() != null && !flowableTask.getAssignee().isEmpty()) {
-                throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "Task already claimed", taskId)));
-            }
-
-            Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId);
-
-            if (extendedTaskInfoOpt.isPresent()) {
-                ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
-
-                validateClaimPermission(extendedTaskInfo, request.getClaimedBy());
-
-                if (extendedTaskInfo.isCompleted()) {
-                    throw new WorkflowValidationException(Collections.singletonList(
-                        new WorkflowValidationException.ValidationError(
-                            "taskId", "Task already completed, cannot claim", taskId)));
-                }
-
-                extendedTaskInfo.claimTask(request.getClaimedBy());
-                extendedTaskInfoRepository.save(extendedTaskInfo);
-
-                publishTaskClaimEvent(extendedTaskInfo, request);
-            }
-
-            taskService.claim(taskId, request.getClaimedBy());
-
-            return TaskAssignmentResult.success(
-                taskId,
-                AssignmentType.USER,
-                request.getClaimedBy(),
-                request.getClaimedBy(),
-                "Task claimed successfully");
-
-        } catch (WorkflowValidationException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new WorkflowBusinessException("TASK_CLAIM_ERROR",
-                "Task claim failed: " + e.getMessage(), e);
-        }
+        validateTaskClaimRequest(request);
+        return taskClaimSupport.claimTask(taskId, request);
     }
 
     public TaskAssignmentResult unclaimTask(String taskId, String userId) {
-        try {
-            validateUserId(userId);
-
-            Task flowableTask = taskService.createTaskQuery()
-                .taskId(taskId)
-                .singleResult();
-
-            if (flowableTask == null) {
-                throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "Task not found", taskId)));
-            }
-
-            String assignee = flowableTask.getAssignee();
-            if (assignee == null || assignee.isEmpty()) {
-                throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "Task not claimed", taskId)));
-            }
-            if (!engineActorMatchesPortalUser(assignee, userId)) {
-                throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "userId", "Only assignee can unclaim", userId)));
-            }
-
-            Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId);
-
-            AssignmentType resultType = AssignmentType.CANDIDATE_USERS;
-            String resultTarget = null;
-
-            if (extendedTaskInfoOpt.isPresent()) {
-                ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
-                if (extendedTaskInfo.isCompleted()) {
-                    throw new WorkflowValidationException(Collections.singletonList(
-                        new WorkflowValidationException.ValidationError(
-                            "taskId", "Task already completed, cannot unclaim", taskId)));
-                }
-                if (extendedTaskInfo.isClaimed() && extendedTaskInfo.getClaimedBy() != null
-                        && !engineActorMatchesPortalUser(extendedTaskInfo.getClaimedBy(), userId)) {
-                    throw new WorkflowValidationException(Collections.singletonList(
-                        new WorkflowValidationException.ValidationError(
-                            "userId", "Only the claimer can unclaim", userId)));
-                }
-                if (extendedTaskInfo.isClaimed()) {
-                    extendedTaskInfo.unclaimTask();
-                    extendedTaskInfoRepository.save(extendedTaskInfo);
-                }
-                resultType = extendedTaskInfo.getAssignmentType();
-                resultTarget = extendedTaskInfo.getAssignmentTarget();
-            }
-
-            taskService.unclaim(taskId);
-
-            return TaskAssignmentResult.success(
-                taskId,
-                resultType,
-                resultTarget,
-                userId,
-                "Task unclaimed successfully");
-
-        } catch (WorkflowValidationException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new WorkflowBusinessException("TASK_UNCLAIM_ERROR",
-                "Task unclaim failed: " + e.getMessage(), e);
-        }
+        validateUserId(userId);
+        return taskClaimSupport.unclaimTask(taskId, userId);
     }
 
     public TaskAssignmentResult transferTask(String taskId, String fromUserId, String toUserId, String reason) {
@@ -441,25 +324,6 @@ public class TaskActionService {
         }
     }
 
-    private void validateClaimPermission(ExtendedTaskInfo task, String claimedBy) {
-        if (task.getAssignmentType() == AssignmentType.USER) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError(
-                    "taskId", "Directly assigned tasks cannot be claimed", task.getTaskId())));
-        }
-
-        boolean hasPermission = userPermissionService.hasTaskPermission(
-                claimedBy,
-                task.getAssignmentType(),
-                task.getAssignmentTarget());
-
-        if (!hasPermission) {
-            throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError(
-                    "claimedBy", "User does not have permission to claim this task", claimedBy)));
-        }
-    }
-
     void validateCompletePermission(ExtendedTaskInfo task, String userId) {
         String currentAssignee = task.getCurrentAssignee();
 
@@ -485,32 +349,7 @@ public class TaskActionService {
     }
 
     boolean engineActorMatchesPortalUser(String engineSideActor, String portalUserId) {
-        if (!StringUtils.hasText(engineSideActor) || !StringUtils.hasText(portalUserId)) {
-            return false;
-        }
-        String a = engineSideActor.trim();
-        String p = portalUserId.trim();
-        if (a.equals(p)) {
-            return true;
-        }
-        try {
-            Map<String, Object> info = adminCenterClient.getUserInfo(p);
-            if (info != null) {
-                Object id = info.get("id");
-                if (id != null && a.equals(id.toString().trim())) {
-                    return true;
-                }
-                Object username = info.get("username");
-                if (username != null && a.equals(username.toString().trim())) {
-                    return true;
-                }
-            }
-        } catch (Exception e) {
-            // FALLBACK(external): 身份比对失败降级为不匹配（保守方向:拒绝而非放行），
-            // 含 AdminCenterUnavailableException。
-            log.debug("engineActorMatchesPortalUser: {}", e.getMessage());
-        }
-        return false;
+        return taskClaimSupport.engineActorMatchesPortalUser(engineSideActor, portalUserId);
     }
 
     private void validateTaskAssignmentRequest(TaskAssignmentRequest request) {
@@ -604,12 +443,6 @@ public class TaskActionService {
                                 : "").trim(),
                 taskLink(task.getTaskId()),
                 "workflow-engine");
-    }
-
-    private void publishTaskClaimEvent(ExtendedTaskInfo task, TaskClaimRequest request) {
-        log.info("Task claim event: taskId={}, claimedBy={}",
-                task.getTaskId(), request.getClaimedBy());
-        // Claimer is the operator; skip self-notification to avoid noise
     }
 
     static String taskLink(String taskId) {

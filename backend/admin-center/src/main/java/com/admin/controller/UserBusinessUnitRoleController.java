@@ -76,7 +76,8 @@ public class UserBusinessUnitRoleController {
         String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         userBusinessUnitRoleManagerComponent.assign(
-                userId, request.getBusinessUnitId(), request.getRoleId(), operatedBy);
+                userId, request.getBusinessUnitId(), request.getRoleId(), operatedBy,
+                request.getMembershipType());
         return ResponseEntity.ok().build();
     }
     

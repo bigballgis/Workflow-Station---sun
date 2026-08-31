@@ -44,6 +44,7 @@ public final class TodoTaskColumnSpec {
                 ListColumnMeta.of("createTime", "task.createTime", Kind.DATETIME),
                 ListColumnMeta.of("processDefinitionName", "task.processName", Kind.TEXT),
                 ListColumnMeta.of("initiatorName", "task.initiator", Kind.TEXT),
+                ListColumnMeta.of("assigneeName", "task.claimedBy", Kind.TEXT),
                 ListColumnMeta.withOptions("priority", "task.priority", Kind.ENUM, priorityOptions()),
                 ListColumnMeta.of("dueDate", "task.dueDate", Kind.DATETIME)
         );
@@ -52,9 +53,9 @@ public final class TodoTaskColumnSpec {
     private static List<ListColumnMeta.Option> assignmentOptions() {
         return List.of(
                 new ListColumnMeta.Option("USER", "task.user"),
-                new ListColumnMeta.Option("CANDIDATE_USERS", "task.candidateUsers"),
-                new ListColumnMeta.Option("VIRTUAL_GROUP", "task.virtualGroup"),
-                new ListColumnMeta.Option("DEPT_ROLE", "task.deptRole")
+                new ListColumnMeta.Option("BU_ROLE", "task.buRole"),
+                new ListColumnMeta.Option("DEPT_ROLE", "task.deptRole"),
+                new ListColumnMeta.Option("CANDIDATE_USERS", "task.candidateUsers")
         );
     }
 

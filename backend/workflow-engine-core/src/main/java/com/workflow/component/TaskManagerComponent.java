@@ -79,6 +79,12 @@ public class TaskManagerComponent {
                 userId, groupIds, deptRoles, page, size, activeBusinessUnitId, criteria);
     }
 
+    public TaskListResult getUserClaimPoolTasks(String userId, int page, int size,
+                                                String activeBusinessUnitId,
+                                                com.workflow.dto.request.EngineTaskListCriteria criteria) {
+        return taskQueryService.getUserClaimPoolTasks(userId, page, size, activeBusinessUnitId, criteria);
+    }
+
     public TaskListResult.TaskInfo getTaskInfo(String taskId) {
         return taskQueryService.getTaskInfo(taskId);
     }

@@ -8,12 +8,27 @@ import { queryTodoTasks } from '@/api/task'
 vi.mock('@/api/task', () => ({
   queryTodoTasks: vi.fn(),
   batchUrgeTasks: vi.fn(),
+  claimBatch: vi.fn(),
+  unclaimBatch: vi.fn(),
+  claimTask: vi.fn(),
+  unclaimTask: vi.fn(),
 }))
 
 vi.mock('@/stores/pendingTask', () => ({
   usePendingTaskStore: () => ({
     syncCountFromListTotal: vi.fn(),
   }),
+}))
+
+const preferenceMocks = vi.hoisted(() => ({
+  autoClaimOnOpen: false,
+  saving: false,
+  load: vi.fn().mockResolvedValue(undefined),
+  setAutoClaimOnOpen: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/stores/userPreference', () => ({
+  useUserPreferenceStore: () => preferenceMocks,
 }))
 
 vi.mock('vue-router', () => ({
@@ -53,9 +68,15 @@ function mountPage() {
           normal: 'Normal',
           low: 'Low',
           user: 'User',
+          buRole: 'BU + role',
           virtualGroup: 'Virtual Group',
           deptRole: 'Dept Role',
           delegated: 'Delegated',
+          claimAll: 'Claim all',
+          unclaimAll: 'Unclaim all',
+          autoClaimOnOpen: 'Auto-claim on open',
+          todoGuideLinkAria: 'Open To Do guideline',
+          action: 'Action',
           requestId: 'Request ID',
           functionUnit: 'Function Unit',
           taskName: 'Task Name',
@@ -89,6 +110,10 @@ function mountPage() {
           inheritAttrs: false,
           template: '<button v-bind="$attrs" @click="$emit(\'click\')"><slot /></button>',
         },
+        'el-switch': {
+          inheritAttrs: false,
+          template: '<button v-bind="$attrs" type="button" />',
+        },
         'el-link': true,
         'el-tag': true,
         'el-icon': true,
@@ -97,6 +122,8 @@ function mountPage() {
         'el-dropdown-item': { template: '<div><slot /></div>' },
         ListFilterDialog: true,
         ListPagination: true,
+        PortalHelpLink: true,
+        TodoClaimRowActions: true,
       },
     },
   })
@@ -104,7 +131,9 @@ function mountPage() {
 
 describe('To Do shared list', () => {
   beforeEach(() => {
+    sessionStorage.clear()
     api.mockReset()
+    preferenceMocks.load.mockClear()
     api.mockResolvedValue({
       data: {
         columns: [
@@ -144,6 +173,10 @@ describe('To Do shared list', () => {
     expect(headers).toHaveLength(5)
     expect(headers.every((h) => h.find('.list-col-header').exists())).toBe(true)
     expect(w.get('[data-test="todo-reset-btn"]').text()).toContain('Reset')
+    expect(w.get('[data-test="todo-claim-all-btn"]').text()).toContain('Claim all')
+    expect(w.get('[data-test="todo-unclaim-all-btn"]').text()).toContain('Unclaim all')
+    expect(w.get('[data-test="todo-auto-claim-switch"]').exists()).toBe(true)
+    expect(preferenceMocks.load).toHaveBeenCalled()
   })
 
   it('sends trimmed keyword and resets to page 1', async () => {
@@ -190,5 +223,53 @@ describe('To Do shared list', () => {
     expect(body).not.toHaveProperty('keyword')
     expect(body).not.toHaveProperty('assignmentTypes')
     expect(body).not.toHaveProperty('priorities')
+  })
+
+  it('is named Tasks so PortalLayout keep-alive can cache the list', () => {
+    const w = mountPage()
+    expect(w.vm.$.type.name).toBe('Tasks')
+    w.unmount()
+  })
+
+  it('restores toolbar query after remount so returning from a task keeps search', async () => {
+    const first = mountPage()
+    await flushPromises()
+    const toolbar = first.getComponent(TodoListToolbar)
+    await toolbar.vm.$emit('update:assignmentTypes', ['USER'])
+    await toolbar.vm.$emit('update:priorities', ['HIGH'])
+    await toolbar.vm.$emit('update:keyword', '请假')
+    await toolbar.vm.$emit('search')
+    await flushPromises()
+    first.unmount()
+
+    api.mockClear()
+    const second = mountPage()
+    await flushPromises()
+    expect((second.get('[data-test="todo-search"]').element as HTMLInputElement).value).toBe('请假')
+    expect(api.mock.calls[0][0]).toMatchObject({
+      keyword: '请假',
+      assignmentTypes: ['USER'],
+      priorities: ['HIGH'],
+    })
+    second.unmount()
+  })
+
+  it('does not restore toolbar query after Reset then remount', async () => {
+    const first = mountPage()
+    await flushPromises()
+    const toolbar = first.getComponent(TodoListToolbar)
+    await toolbar.vm.$emit('update:keyword', '请假')
+    await toolbar.vm.$emit('search')
+    await flushPromises()
+    await first.get('[data-test="todo-reset-btn"]').trigger('click')
+    await flushPromises()
+    first.unmount()
+
+    api.mockClear()
+    const second = mountPage()
+    await flushPromises()
+    expect((second.get('[data-test="todo-search"]').element as HTMLInputElement).value).toBe('')
+    expect(api.mock.calls[0][0]).not.toHaveProperty('keyword')
+    second.unmount()
   })
 })

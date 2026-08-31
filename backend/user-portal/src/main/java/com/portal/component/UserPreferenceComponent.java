@@ -66,6 +66,9 @@ public class UserPreferenceComponent {
         if (preference.getPageSize() != null) {
             existing.setPageSize(preference.getPageSize());
         }
+        if (preference.getAutoClaimOnOpen() != null) {
+            existing.setAutoClaimOnOpen(preference.getAutoClaimOnOpen());
+        }
 
         return userPreferenceRepository.save(existing);
     }
@@ -143,6 +146,7 @@ public class UserPreferenceComponent {
                 .timezone("Asia/Shanghai")
                 .dateFormat("YYYY-MM-DD")
                 .pageSize(20)
+                .autoClaimOnOpen(Boolean.FALSE)
                 .build();
         return userPreferenceRepository.save(preference);
     }

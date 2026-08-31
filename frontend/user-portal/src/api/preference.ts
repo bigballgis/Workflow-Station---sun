@@ -11,6 +11,7 @@ export interface UserPreference {
   timezone: string
   dateFormat: string
   pageSize: number
+  autoClaimOnOpen?: boolean
 }
 
 export interface DashboardLayout {

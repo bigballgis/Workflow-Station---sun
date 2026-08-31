@@ -21,10 +21,25 @@ export interface FormAutoSaveOptions {
   autoSaving: Ref<boolean>
   /** External ref for lastAutoSaveTime — set after successful save */
   lastAutoSaveTime: Ref<Date | null>
+  /**
+   * Copy pending right-panel edits (Validate / props) onto the live canvas rule
+   * before snapshotting. Auto-save polls getRule(), which otherwise misses
+   * Validation+ rows that have not been blurred/emitted yet.
+   */
+  flushPendingCanvasEdits?: () => void
+  /**
+   * Designer whose getRule()/getOption() feed the poll snapshot. Defaults to
+   * designerRef (main canvas). Pass the active tab instance so sub-table
+   * Form Design Validation+ edits are detected.
+   */
+  getPollDesigner?: () => { getRule?: () => unknown[]; getOption?: () => Record<string, unknown> } | null | undefined
 }
 
 export function useFormAutoSave(options: FormAutoSaveOptions) {
-  const { selectedForm, designerRef, handleSaveForm, relationViewState, t, autoSaving } = options
+  const {
+    selectedForm, designerRef, handleSaveForm, relationViewState, t, autoSaving,
+    flushPendingCanvasEdits, getPollDesigner,
+  } = options
 
   // --- State ---
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -82,13 +97,19 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
     lastDesignerState.value = ''
   }
 
+  function resolvePollDesigner() {
+    return getPollDesigner?.() ?? designerRef.value
+  }
+
   function buildDesignerPollSnapshot(): string {
-    const rawRule = stripFormCreateRulesDisabledDeep(designerRef.value?.getRule() || [])
+    flushPendingCanvasEdits?.()
+    const designer = resolvePollDesigner()
+    const rawRule = stripFormCreateRulesDisabledDeep(designer?.getRule?.() || [])
     prepareFormCreateRulesForPersist(rawRule)
-    const options = serializeFormCreateOptionsForPersist(
-      designerRef.value?.getOption?.() as Record<string, unknown> | undefined,
+    const formOptions = serializeFormCreateOptionsForPersist(
+      designer?.getOption?.() as Record<string, unknown> | undefined,
     )
-    return JSON.stringify({ rule: rawRule, options })
+    return JSON.stringify({ rule: rawRule, options: formOptions })
   }
 
   function setupAutoSavePolling() {

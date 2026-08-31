@@ -80,6 +80,16 @@
         :is-completed="isCompletedTask"
       />
 
+      <!-- Section 1b: BU Role claim state (claim / unclaim / held by a colleague) -->
+      <TaskClaimBanner
+        v-if="!isCompletedTask"
+        :task="taskInfo"
+        :submitting="claimSubmitting"
+        @claim="handleClaimTask"
+        @unclaim="handleUnclaimTask"
+        @force-unclaim="handleForceUnclaimTask"
+      />
+
       <div
         v-if="detailUiPhase === 1"
         class="section form-section"
@@ -412,6 +422,7 @@
       <!-- Section 5: Action buttons (hidden for completed tasks) -->
       <TaskActionBar
         :is-completed-task="isCompletedTask"
+        :claim-locked="claimLocked"
         :show-implicit-save-action="showImplicitSaveAction"
         :saving-task-form="savingTaskForm"
         :actions="taskInfo.actions"
@@ -506,10 +517,12 @@ import MiFillDialog from '@/components/tasks/MiFillDialog.vue'
 import TaskSnapshotSection from '@/components/tasks/TaskSnapshotSection.vue'
 import TaskHistorySection from '@/components/tasks/TaskHistorySection.vue'
 import TaskActionBar from '@/components/tasks/TaskActionBar.vue'
+import TaskClaimBanner from '@/components/tasks/TaskClaimBanner.vue'
 import { useTaskForm } from '@/composables/tasks/useTaskForm'
 import { useBpmnParser } from '@/composables/tasks/useBpmnParser'
 import { useTaskDisplay } from '@/composables/tasks/useTaskDisplay'
 import { useTaskActions } from '@/composables/tasks/useTaskActions'
+import { useTaskClaimActions } from '@/composables/tasks/useTaskClaimActions'
 import { useCustomActions } from '@/composables/tasks/useCustomActions'
 import { clearBpmnParseCache } from '@/utils/bpmnParseCache'
 import { reconcilePortalWorkspaceSession } from '@/api/auth'
@@ -851,6 +864,35 @@ const {
   submitFormPopup,
   handleFormPopupSubTableUpdate,
 } = customActions
+
+/** BU Role pool request held by somebody else (or by nobody yet): view only, no action bar. */
+const claimLocked = computed(
+  () => !!taskInfo.value?.claimPoolTask && !taskInfo.value?.claimedByCurrentUser,
+)
+const claimSubmitting = ref(false)
+const { claim: claimHeld, unclaim: unclaimHeld, forceUnclaim: forceUnclaimHeld } = useTaskClaimActions({
+  reload: loadTaskDetail,
+  submitting: claimSubmitting,
+})
+
+function handleClaimTask() {
+  return claimHeld(effectiveTaskId.value)
+}
+
+function handleUnclaimTask() {
+  const task = taskInfo.value
+  return unclaimHeld(effectiveTaskId.value, task?.assignmentType ?? '', task?.assignee ?? '')
+}
+
+function handleForceUnclaimTask() {
+  const task = taskInfo.value
+  return forceUnclaimHeld(
+    effectiveTaskId.value,
+    task?.assignmentType ?? '',
+    task?.assignee ?? '',
+    task?.assigneeName,
+  )
+}
 
 // display helpers moved to useTaskDisplay composable
 // action handlers moved to useTaskActions composable

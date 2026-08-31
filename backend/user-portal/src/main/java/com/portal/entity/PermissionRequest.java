@@ -107,6 +107,11 @@ public class PermissionRequest {
     @Column(name = "business_unit_name", length = 200)
     private String businessUnitName;
 
+    /** MEMBER (default) or LEADER for BUSINESS_UNIT_JOIN. */
+    @Column(name = "membership_type", length = 16)
+    @Builder.Default
+    private String membershipType = "MEMBER";
+
     // ========== 旧字段（已废弃，保留兼容） ==========
     
     /** 旧版权限范围（JSONB）。用 JsonNode 承载，避免库内非字符串数组等 JSON 导致加载失败。 */

@@ -30,6 +30,14 @@
         </template>
       </el-table-column>
       <el-table-column
+        :label="t('permission.membershipType')"
+        width="120"
+      >
+        <template #default="{ row }">
+          {{ row.membershipType === 'LEADER' ? t('permission.leader') : t('permission.member') }}
+        </template>
+      </el-table-column>
+      <el-table-column
         :label="t('permission.assignedAt')"
         width="180"
       >

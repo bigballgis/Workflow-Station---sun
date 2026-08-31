@@ -7,8 +7,9 @@ import { useI18n } from 'vue-i18n'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
-import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
+import { businessUnitApi, type BusinessUnit, type RoleLeaderGroup } from '@/api/businessUnit'
 import { roleApi, type Role } from '@/api/role'
+import { unwrapApiData } from '@/utils/apiResponse'
 
 export function useBusinessUnitRoles(businessUnit: Ref<BusinessUnit | null>) {
   const { t } = useI18n()
@@ -16,6 +17,7 @@ export function useBusinessUnitRoles(businessUnit: Ref<BusinessUnit | null>) {
 
   const loading = ref(false)
   const boundRoles = ref<any[]>([])
+  const roleLeaders = ref<Record<string, string>>({})
   const allRoles = ref<Role[]>([])
   const selectedRoleId = ref('')
 
@@ -28,12 +30,27 @@ export function useBusinessUnitRoles(businessUnit: Ref<BusinessUnit | null>) {
     if (!businessUnit.value) return
     loading.value = true
     try {
-      const [roles, bound] = await Promise.all([
+      const [roles, bound, leaders] = await Promise.all([
         roleApi.list({ size: 9999 }).then(r => r.content),
-        businessUnitApi.getBoundRoles(businessUnit.value.id)
+        businessUnitApi.getBoundRoles(businessUnit.value.id),
+        // FALLBACK(ux): leaders column is informational; missing leaders must not block eligible-role editing
+        businessUnitApi.getRoleLeaders(businessUnit.value.id)
+          .then((body) => {
+            const list = unwrapApiData<RoleLeaderGroup[]>(body)
+            return Array.isArray(list) ? list : []
+          })
+          .catch(() => [] as RoleLeaderGroup[]),
       ])
       allRoles.value = roles
       boundRoles.value = bound
+      const map: Record<string, string> = {}
+      for (const group of leaders) {
+        const names = (group.leaders || [])
+          .map(u => u.userFullName || u.userName || u.userId)
+          .filter(Boolean)
+        map[group.roleId] = names.length ? names.join(', ') : ''
+      }
+      roleLeaders.value = map
     } catch {
       notifyError(terr(AppErrorCode.BUSINESS_UNIT_OPERATION_FAILED))
     } finally {
@@ -66,5 +83,5 @@ export function useBusinessUnitRoles(businessUnit: Ref<BusinessUnit | null>) {
     }
   }
 
-  return { loading, boundRoles, allRoles, availableRoles, selectedRoleId, fetchRoles, bindRole, unbindRole }
+  return { loading, boundRoles, allRoles, availableRoles, selectedRoleId, roleLeaders, fetchRoles, bindRole, unbindRole }
 }

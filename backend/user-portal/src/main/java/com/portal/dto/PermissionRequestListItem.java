@@ -28,6 +28,7 @@ public class PermissionRequestListItem {
     private String targetId;
     private String targetName;
     private List<String> roleNames;
+    private String membershipType;
     private String reason;
     private String status;
     private String approverId;

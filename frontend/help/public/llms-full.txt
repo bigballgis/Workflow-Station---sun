@@ -49,6 +49,14 @@ Every enabled monitor template must be bound before Deploy. Bound templates cann
 
 Related: /help/email-send#connection , /help/computed-fields
 
+## To Do — claim pool (/help/up-tasks-to-claim)
+
+To Do lists direct assignments and business-unit role requests (free, held by you, held by a colleague) on one page. Claim before edit. Claim all (top right) confirms once then claims every free request in batches of 100. Unclaim all releases only your holds; it never force-unclaims a colleague. Auto-claim on open (To Do and User Profile, stored with the account, default off) claims a free role request when you click its Request ID on To Do only — not Home, notifications, or Completed Tasks. Assignment Type uses a distinct colour per category; the filter no longer includes Virtual Group (use BU + role). /tasks/to-claim redirects here.
+
+Order: open To Do → Claim, Claim all, or Unclaim all → edit and submit.
+
+Leader of that role, the business-unit Approver, and SYS_ADMIN can Force Unclaim someone else’s hold (confirm first). Member cannot. Apply Permission on User Profile Setup chooses Member or Leader for that BU+Role.
+
 ## Delegate a task (/help/task-delegate)
 
 You are Current Assignee. Delegate this one open task. You stay the assignee. Someone else can complete it on your behalf.
@@ -64,3 +72,4 @@ Specified BU and Role: pick Business Unit then Role (both required; Role disable
 Unclaimed pool: Delegate is hidden until someone is assigned.
 
 Failures: Please select user; Please select both business unit and role; cannot delegate to yourself; completed tasks cannot be delegated.
+

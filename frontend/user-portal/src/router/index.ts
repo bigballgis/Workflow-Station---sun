@@ -51,6 +51,10 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.tasks', icon: 'List' }
       },
       {
+        path: 'tasks/to-claim',
+        redirect: '/tasks',
+      },
+      {
         path: 'tasks/completed',
         name: 'CompletedTasks',
         component: () => import('@/views/tasks/completed.vue'),

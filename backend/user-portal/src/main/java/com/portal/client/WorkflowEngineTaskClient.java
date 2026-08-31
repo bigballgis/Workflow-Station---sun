@@ -68,6 +68,38 @@ public class WorkflowEngineTaskClient {
     }
 
     /**
+     * Queries the claim pool visible to the user: candidate tasks including ones another member
+     * already claimed, so "Tasks to Claim" can show who is holding a request.
+     */
+    public Optional<Map<String, Object>> getUserClaimPoolTasks(String userId, int page, int size) {
+        if (!engine.isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            UriComponentsBuilder ub = UriComponentsBuilder.fromHttpUrl(engine.engineUrl() + "/api/v1/tasks/claim-pool")
+                    .queryParam("userId", userId)
+                    .queryParam("page", page)
+                    .queryParam("size", size);
+            SecurityContextUtils.getCurrentActiveBusinessUnitId()
+                    .filter(id -> id != null && !id.isBlank())
+                    .ifPresent(bu -> ub.queryParam("activeBusinessUnitId", bu));
+            String url = ub.encode().build().toUriString();
+
+            ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
+                url, HttpMethod.GET, engine.authorizedGetEntity(),
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
+            }
+        } catch (Exception e) {
+            // FALLBACK(external): engine HTTP failure is not an empty pool. Caller must throw on empty Optional.
+            log.warn("Failed to get claim pool tasks from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Queries tasks for process instance
      */
     public Optional<Map<String, Object>> getProcessInstanceTasks(String processInstanceId) {

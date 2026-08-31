@@ -131,6 +131,7 @@ public class UserPortalMembershipService {
             row.put("roleId", u.getRoleId());
             row.put("roleName", r != null ? r.getName() : null);
             row.put("roleCode", r != null ? r.getCode() : null);
+            row.put("membershipType", u.getMembershipType() != null ? u.getMembershipType() : "MEMBER");
             row.put("assignedAt", u.getCreatedAt());
             row.put("createdAt", u.getCreatedAt());
             out.add(row);

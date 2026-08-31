@@ -51,6 +51,7 @@ export function useApplyPermission(t: TFn, deps: UseApplyPermissionDeps) {
     beneficiaryUserId: '' as string,
     businessUnitId: '',
     roleId: '',
+    membershipType: 'MEMBER' as string,
     reason: ''
   })
 
@@ -129,6 +130,7 @@ export function useApplyPermission(t: TFn, deps: UseApplyPermissionDeps) {
     applyForm.beneficiaryUserId = ''
     applyForm.businessUnitId = ''
     applyForm.roleId = ''
+    applyForm.membershipType = 'MEMBER'
     applyForm.reason = ''
     beneficiaryOptions.value = []
     eligibleRoles.value = []
@@ -163,6 +165,7 @@ export function useApplyPermission(t: TFn, deps: UseApplyPermissionDeps) {
       const payload: Record<string, unknown> = {
         businessUnitId: applyForm.businessUnitId,
         roleIds: [applyForm.roleId],
+        membershipType: applyForm.membershipType || 'MEMBER',
         reason: applyForm.reason.trim()
       }
       if (applyForm.beneficiaryUserId) {

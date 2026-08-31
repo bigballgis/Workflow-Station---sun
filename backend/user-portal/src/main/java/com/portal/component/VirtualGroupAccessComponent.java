@@ -8,6 +8,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import com.platform.common.constant.PlatformConstants;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.common.util.SafeUrlInput;
 import com.platform.security.util.SecurityContextUtils;
@@ -155,10 +156,7 @@ public class VirtualGroupAccessComponent {
                 requestBody.put("reason", reason);
             }
             
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, mutationHeaders());
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
@@ -407,10 +405,7 @@ public class VirtualGroupAccessComponent {
                 requestBody.put("reason", reason);
             }
             
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, mutationHeaders());
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
@@ -431,20 +426,18 @@ public class VirtualGroupAccessComponent {
      * 为用户在指定业务单元下分配业务角色（Eligible Role 绑定）
      */
     public boolean assignUserBusinessUnitRole(String userId, String businessUnitId, String roleId) {
+        return assignUserBusinessUnitRole(userId, businessUnitId, roleId, com.platform.security.ubr.UbrMembershipType.MEMBER);
+    }
+
+    public boolean assignUserBusinessUnitRole(String userId, String businessUnitId, String roleId, String membershipType) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/business-unit-roles";
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("businessUnitId", businessUnitId);
             requestBody.put("roleId", roleId);
+            requestBody.put("membershipType", com.platform.security.ubr.UbrMembershipType.normalize(membershipType));
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            SecurityContextUtils.getCurrentUserId().ifPresent(id -> headers.set("X-User-Id", id));
-            SecurityContextUtils.getCurrentUsername().ifPresent(name -> headers.set("X-Username", name));
-            if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
-                headers.set(com.platform.common.constant.PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
-            }
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, mutationHeaders());
 
             ResponseEntity<Void> response = restTemplate.exchange(
                     url,
@@ -575,7 +568,8 @@ public class VirtualGroupAccessComponent {
     public boolean removeUserFromVirtualGroup(String userId, String groupId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + SafeUrlInput.requirePathToken(groupId) + "/members/" + SafeUrlInput.requirePathToken(userId);
-            ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.DELETE, null, Void.class);
+            ResponseEntity<Void> response = restTemplate.exchange(
+                    url, HttpMethod.DELETE, new HttpEntity<>(mutationHeaders()), Void.class);
             return response.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
             log.error("Failed to remove user {} from virtual group {}: {}", userId, groupId, e.getMessage());
@@ -643,7 +637,8 @@ public class VirtualGroupAccessComponent {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + SafeUrlInput.requirePathToken(userId) + "/business-unit-roles/"
                     + SafeUrlInput.requirePathToken(businessUnitId) + "/" + SafeUrlInput.requirePathToken(roleId);
-            ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.DELETE, null, Void.class);
+            ResponseEntity<Void> response = restTemplate.exchange(
+                    url, HttpMethod.DELETE, new HttpEntity<>(mutationHeaders()), Void.class);
             return response.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
             log.error("Failed to remove BU role: user={}, bu={}, role={}: {}",
@@ -659,9 +654,7 @@ public class VirtualGroupAccessComponent {
     public boolean exitBusinessUnit(String userId, String businessUnitId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/exit/business-units/" + SafeUrlInput.requirePathToken(businessUnitId) + "/users/" + SafeUrlInput.requirePathToken(userId);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(), headers);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(), mutationHeaders());
             ResponseEntity<Void> response = restTemplate.exchange(
                     url,
                     HttpMethod.POST,
@@ -691,5 +684,20 @@ public class VirtualGroupAccessComponent {
             log.error("Failed to check if user {} is any approver: {}", userId, e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * C-3 headers so admin-center honors the call as a first-party write
+     * ({@code OrganizationMutationAccessInterceptor} otherwise denies empty-role principals).
+     */
+    private HttpHeaders mutationHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        SecurityContextUtils.getCurrentUserId().ifPresent(id -> headers.set(PlatformConstants.HEADER_USER_ID, id));
+        SecurityContextUtils.getCurrentUsername().ifPresent(name -> headers.set("X-Username", name));
+        if (serviceInternalToken != null && !serviceInternalToken.isBlank()) {
+            headers.set(PlatformConstants.HEADER_SERVICE_TOKEN, serviceInternalToken);
+        }
+        return headers;
     }
 }

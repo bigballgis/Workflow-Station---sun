@@ -50,6 +50,11 @@ public class TaskInfo {
     private String bpmnBusinessUnitId;
 
     /**
+     * BPMN extension roleIds / roleId (claim-pool Leader matching).
+     */
+    private List<String> bpmnRoleIds;
+
+    /**
      * MI 按角色分派信号（引擎从 ExtendedTaskInfo.extendedProperties 透出）：
      * miAssigneeMode=role 表示该 MI 子任务按角色分派（共享认领池），据此做 workspace 可见性收敛
      * （role 分派仅在用户切到该 role 的 workspace 才可见）；miRoleCode/miBusinessUnitCode 为分派角色/BU code。
@@ -161,4 +166,26 @@ public class TaskInfo {
     /** 是否为多实例子任务（前端据此隐藏 Action 列和 Detail 链接） */
     @Builder.Default
     private boolean multiInstanceSubTask = false;
+
+    /**
+     * BU Role 认领池任务（Tasks to Claim）：该 role 下成员需先 Claim 才能编辑，避免多人并行覆盖。
+     * 由 {@code TaskPermissionEvaluator#annotateClaimState} 填充，不来自引擎。
+     */
+    @Builder.Default
+    private boolean claimPoolTask = false;
+
+    /** 认领池任务已被当前用户 Claim（可编辑、可 Unclaim）；被他人 Claim 时为 false 且只读。 */
+    @Builder.Default
+    private boolean claimedByCurrentUser = false;
+
+    /** 当前用户可以认领（认领池任务 + 本人在候选池 + 尚未被任何人 Claim）。 */
+    @Builder.Default
+    private boolean claimable = false;
+
+    /**
+     * Leader / BU Approver / SYS_ADMIN may force-unclaim a hold that is not theirs.
+     * Filled by {@code ClaimForceUnclaimAnnotator} after claim flags.
+     */
+    @Builder.Default
+    private boolean canForceUnclaim = false;
 }

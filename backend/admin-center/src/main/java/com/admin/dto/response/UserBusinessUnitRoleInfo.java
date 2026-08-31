@@ -26,6 +26,7 @@ public class UserBusinessUnitRoleInfo {
     private String roleId;
     private String roleName;
     private String roleCode;
+    private String membershipType;
     private Instant createdAt;
     
     public static UserBusinessUnitRoleInfo fromEntity(UserBusinessUnitRole entity,
@@ -37,6 +38,7 @@ public class UserBusinessUnitRoleInfo {
                 .userId(entity.getUserId())
                 .businessUnitId(entity.getBusinessUnitId())
                 .roleId(entity.getRoleId())
+                .membershipType(entity.getMembershipType() != null ? entity.getMembershipType() : "MEMBER")
                 .createdAt(entity.getCreatedAt() != null ? 
                     entity.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant() : null)
                 .build();

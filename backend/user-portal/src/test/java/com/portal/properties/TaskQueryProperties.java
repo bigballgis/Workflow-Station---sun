@@ -1,10 +1,17 @@
 package com.portal.properties;
 
 import com.portal.client.WorkflowEngineClient;
+import com.portal.component.ClaimForceUnclaimAnnotator;
+import com.portal.component.CompletedTaskListQueryComponent;
 import com.portal.component.DelegatedTaskQueryComponent;
-import com.portal.component.MiParticipantEnrichmentComponent;
+import com.portal.component.EngineVisibleTaskFetcher;
+import com.portal.component.MineTaskListCache;
+import com.portal.component.MineTaskScanner;
+import com.portal.component.TaskDetailQueryComponent;
 import com.portal.component.TaskHistoryComponent;
+import com.portal.component.TaskPermissionEvaluator;
 import com.portal.component.TaskQueryComponent;
+import com.portal.component.TodoListQueryComponent;
 import com.portal.component.VirtualGroupAccessComponent;
 import com.portal.component.WorkspaceTaskFilterComponent;
 import com.portal.dto.PageResponse;
@@ -25,7 +32,6 @@ import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -81,19 +87,30 @@ class TaskQueryProperties {
         MockitoAnnotations.openMocks(this);
         com.portal.component.RequestIdEnricher requestIdEnricher =
             org.mockito.Mockito.mock(com.portal.component.RequestIdEnricher.class);
+        WorkspaceTaskFilterComponent workspaceFilter = new WorkspaceTaskFilterComponent(
+                workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository);
+        EngineVisibleTaskFetcher engineFetcher = new EngineVisibleTaskFetcher(
+                workflowEngineClient, processInstanceRepository, workspaceFilter);
+        MineTaskListCache mineCache = new MineTaskListCache();
+        TaskPermissionEvaluator permissionEvaluator =
+                new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient, workspaceFilter);
+        ClaimForceUnclaimAnnotator claimAnnotator =
+                org.mockito.Mockito.mock(ClaimForceUnclaimAnnotator.class);
+        MineTaskScanner mineScanner = new MineTaskScanner(
+                mineCache, engineFetcher, requestIdEnricher, permissionEvaluator, claimAnnotator,
+                workspaceFilter, processInstanceRepository);
         taskQueryComponent = new TaskQueryComponent(
-            processInstanceRepository,
             workflowEngineClient,
-            new com.portal.component.EngineSubTableHydrator(workflowEngineClient),
-            taskActionService,
             new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
-            new WorkspaceTaskFilterComponent(
-                workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository),
-            new MiParticipantEnrichmentComponent(jdbcTemplate),
             new TaskHistoryComponent(workflowEngineClient, processHistoryRepository),
-            requestIdEnricher
+            requestIdEnricher,
+            org.mockito.Mockito.mock(CompletedTaskListQueryComponent.class),
+            mineScanner,
+            engineFetcher,
+            org.mockito.Mockito.mock(TaskDetailQueryComponent.class),
+            org.mockito.Mockito.mock(TodoListQueryComponent.class),
+            mineCache
         );
-        ReflectionTestUtils.setField(taskQueryComponent, "taskQueryExecutor", (java.util.concurrent.Executor) Runnable::run);
         random = new Random();
         
         // 默认 Flowable 引擎可用

@@ -115,6 +115,14 @@ export interface TaskInfo {
   actions?: TaskActionInfo[]
   /** Whether this is a multi-instance sub-task */
   multiInstanceSubTask?: boolean
+  /** BU Role claim pool row: must be claimed before it can be edited or submitted. */
+  claimPoolTask?: boolean
+  /** Claim pool row currently held by the signed-in user (editable, can be unclaimed). */
+  claimedByCurrentUser?: boolean
+  /** Claim pool row free to claim by the signed-in user. */
+  claimable?: boolean
+  /** Leader / BU Approver / SYS_ADMIN may release someone else's hold. */
+  canForceUnclaim?: boolean
 }
 
 export interface PageResponse<T> {
@@ -202,16 +210,50 @@ export function getTaskStatistics() {
   return request.get<{ data: TaskStatistics }>('/tasks/statistics')
 }
 
-// Claim task
+export interface ClaimBatchResponse {
+  claimed: number
+  skipped: number
+  failed: number
+  remaining: number
+  attemptedTaskIds: string[]
+}
+
+export function claimBatch(excludeTaskIds: string[]) {
+  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
+    skipGlobalErrorHandler: true,
+  }
+  return request.post<{ data: ClaimBatchResponse }>(
+    '/tasks/claim-batch',
+    { excludeTaskIds },
+    config,
+  )
+}
+
+export function unclaimBatch(excludeTaskIds: string[]) {
+  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
+    skipGlobalErrorHandler: true,
+  }
+  return request.post<{ data: ClaimBatchResponse }>(
+    '/tasks/unclaim-batch',
+    { excludeTaskIds },
+    config,
+  )
+}
+
 export function claimTask(taskId: string) {
-  return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/claim`)
+  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
+    skipGlobalErrorHandler: true,
+  }
+  return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/claim`, null, config)
 }
 
 // Unclaim task
 export function unclaimTask(taskId: string, originalAssignmentType: string, originalAssignee: string) {
-  return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/unclaim`, null, {
-    params: { originalAssignmentType, originalAssignee }
-  })
+  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
+    skipGlobalErrorHandler: true,
+    params: { originalAssignmentType, originalAssignee },
+  }
+  return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/unclaim`, null, config)
 }
 
 // Complete task
@@ -258,6 +300,11 @@ export function queryCompletedTasks(params: CompletedTaskQueryRequest) {
 
 export function queryTodoTasks(params: TodoTaskQueryRequest) {
   return request.post<{ data: PortalListPage<TaskInfo> }>('/tasks/todo/query', params)
+}
+
+/** BU Role claim pool: rows the whole role can see, including ones a colleague already holds. */
+export function queryToClaimTasks(params: TodoTaskQueryRequest) {
+  return request.post<{ data: PortalListPage<TaskInfo> }>('/tasks/to-claim/query', params)
 }
 
 // Assign a user to a sub-table row

@@ -1396,6 +1396,10 @@ const { formatAutoSaveTime, scheduleAutoSave, setupAutoSavePolling, cleanupAutoS
   t,
   autoSaving,
   lastAutoSaveTime,
+  flushPendingCanvasEdits: () => {
+    flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
+  },
+  getPollDesigner: () => getActiveDesignerRef() ?? designerRef.value,
 })
 
 // ── Link Form columns available to sub-table list views ─────────────────────
