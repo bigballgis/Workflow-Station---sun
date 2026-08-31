@@ -76,7 +76,9 @@ describe('Delegations shared list', () => {
     const last = rulesApi.mock.calls[rulesApi.mock.calls.length - 1][0]
     expect(last.page).toBe(0)
     expect(last.filters).toEqual([{ field: 'delegateId', operator: 'eq', value: 'u1' }])
-  }, 15000)
+    // 超时统一由 vitest.config.ts 的 testTimeout 控制（60s）。此处曾硬编码 15000，
+    // 会覆盖全局配置，在覆盖率插桩下反而更容易超时。
+  })
 
   it('gives Action a fixed width and paints suspend/delete buttons on ACTIVE rows', async () => {
     rulesApi.mockResolvedValue({

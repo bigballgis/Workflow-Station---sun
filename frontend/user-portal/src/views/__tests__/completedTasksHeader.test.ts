@@ -108,4 +108,6 @@ describe('completed tasks — shared list header', () => {
     expect(fields[1]).toBe('processDefinitionName')
     expect(fields[2]).toBe('taskName')
   })
-}, 20_000)
+  // 超时统一由 vitest.config.ts 的 testTimeout 控制（60s）。此处曾在 describe 上
+  // 硬编码 20_000，会覆盖全局配置，在覆盖率插桩下反而更容易超时。
+})

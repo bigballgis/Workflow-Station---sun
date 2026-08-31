@@ -69,3 +69,35 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+      # 硬门禁：三个 app 的 vite build 实测均通过（2026-08-28），所以这里直接卡死。
+      # 此前 CI 只跑 pnpm test，一个能让构建失败的改动可以全绿合入。
+      - name: Build
+        run: pnpm build
+
+      # 棘轮门禁：typecheck / lint 脚本三个 app 早就有，但从未接进 CI，
+      # 于是 tsconfig 的 strict: true 在 PR 上只是装饰。实测存量太大，
+      # 直接硬卡会让每个 PR 都红（typecheck 579、eslint errors 2571），
+      # 一次性清零又会长期阻塞主干 —— 所以冻结基线、只禁新增。
+      # 基线在 frontend/scripts/baseline.json，修好问题后往下调。
+      - name: Typecheck (baseline ratchet)
+        run: node ../scripts/check-baseline.mjs typecheck ${{ matrix.app }}
+
+      - name: Lint (baseline ratchet)
+        run: node ../scripts/check-baseline.mjs lint ${{ matrix.app }}
+
+      # 覆盖率只归档、不设门禁 —— 目的是让覆盖率**下降**可见，而不是卡阈值。
+      # continue-on-error 仅用于这一步：报告生成失败不该让整条 PR 红，
+      # 真正的测试结论已经由上面的 `pnpm test` 给出了。
+      - name: Coverage report
+        continue-on-error: true
+        run: pnpm test:coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.app }}
+          path: frontend/${{ matrix.app }}/coverage
+          retention-days: 14
+          if-no-files-found: ignore

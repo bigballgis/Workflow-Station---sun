@@ -273,6 +273,30 @@
                     </includes>
                 </configuration>
             </plugin>
+            <!-- 覆盖率报告。本模块的 parent 是 spring-boot-starter-parent 而非根聚合 pom，
+                 拿不到根 pom 的 <plugins> 声明，所以必须在此显式声明版本与执行。
+                 （根 pom 只有 2/8 个模块继承 —— 见架构审计「三套 parent 策略」一条。）
+                 与根 pom 一致：只出报告，不设阈值。 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

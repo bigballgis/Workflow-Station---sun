@@ -119,5 +119,7 @@ describe('PermissionRequestSharedList', () => {
     )
     expect(actionCol).toBeTruthy()
     expect(Number(actionCol!.props('width'))).toBe(180)
-  }, 15000)
+    // 超时统一由 vitest.config.ts 的 testTimeout 控制（60s）。此处曾硬编码 15000，
+    // 会覆盖全局配置，在覆盖率插桩下反而更容易超时。
+  })
 })

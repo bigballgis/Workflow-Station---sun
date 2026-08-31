@@ -1,0 +1,67 @@
+name: MI regression (nightly)
+
+# MI / 多实例子表回归套件此前对 CI **完全不可见**：
+# frontend/scripts/ 下约 60 个 verify-*.mjs 与 MI 回归套件全靠人手工跑，
+# 唯一约束是 .github/pull_request_template.md 里的一个勾选框。
+# 而项目规则（performance-change-safety）把它当作触达 MI 热路径时的关键防线 ——
+# 一条"关键防线"如果只靠勾选框维持，等于没有。
+#
+# 这里先把**单元相位**接进来跑 nightly：
+#   - 只跑 vitest.mi-regression.config.ts 列出的 MI 用例，不需要任何外部依赖；
+#   - 不卡 PR，避免给存量红的分支再加一道门（DW 当前有既存失败）；
+#   - 失败即产生一条可见的 nightly 记录，而不是无人知晓。
+#
+# 刻意**不**跑 Playwright 相位：run-mi-regression.mjs 的第二阶段要求
+# localhost:3000 上有跑起来的 portal 栈（见该脚本 Phase 2/2 的说明），
+# 在 runner 上需要完整 docker compose 环境，属于另一件事，不在本次范围。
+# 待 stack-in-CI 就绪后，把这里换成完整的 `pnpm regression:mi`。
+
+on:
+  schedule:
+    # 每日 UTC 18:00 = 次日 02:00 (Asia/Shanghai)，避开工作时间
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: mi-regression-nightly
+  cancel-in-progress: false
+
+jobs:
+  mi-unit:
+    name: MI regression (unit phase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend/user-portal
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/user-portal/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run MI regression suite
+        run: pnpm run test:regression:mi
+
+      - name: Upload results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mi-regression-failure
+          path: frontend/user-portal/coverage
+          retention-days: 7
+          if-no-files-found: ignore

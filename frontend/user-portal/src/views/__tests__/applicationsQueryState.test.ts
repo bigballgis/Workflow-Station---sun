@@ -132,7 +132,9 @@ describe('my requests — shared list query state', () => {
     expect(api.queryMyApplications.mock.calls.length).toBe(callsBefore)
     expect(api.getDraftList).toHaveBeenCalled()
   })
-}, 20_000)
+  // 超时统一由 vitest.config.ts 的 testTimeout 控制（60s）。此处曾在 describe 上
+  // 硬编码 20_000，会覆盖全局配置，在覆盖率插桩下反而更容易超时。
+})
 
 describe('my requests — ?status= deep link from the dashboard figures', () => {
   it('opens the Running tab and filters the first query when status=RUNNING', async () => {

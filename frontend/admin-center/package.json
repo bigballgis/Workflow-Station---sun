@@ -15,6 +15,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts",
     "lint:fix": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix"
   },
@@ -42,6 +43,7 @@
     "@types/dompurify": "^3.0.5",
     "@types/node": "^20.10.5",
     "@vitejs/plugin-vue": "^4.5.2",
+    "@vitest/coverage-v8": "2.0.0",
     "@vue/test-utils": "^2.4.3",
     "eslint": "^9.39.4",
     "eslint-plugin-vue": "^10.9.1",
