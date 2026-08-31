@@ -9,7 +9,12 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
   createI18n: () => ({ global: { t: (key: string) => key } }),
 }))
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+// The view reads ?status= so the dashboard's MY REQUESTS figures can deep-link a tab.
+const routeQuery: Record<string, string> = {}
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: routeQuery }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}))
 vi.mock('@/api/process', () => ({
   processApi: {
     queryMyApplications: vi.fn(),
@@ -47,6 +52,7 @@ async function mountPage() {
 beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
+  for (const key of Object.keys(routeQuery)) delete routeQuery[key]
   api.queryMyApplications.mockResolvedValue({
     data: { columns: COLUMNS, content: [], totalElements: 0, page: 0, size: 20 },
   } as never)
@@ -135,3 +141,33 @@ describe('my requests — shared list query state', () => {
     expect(api.getDraftList).toHaveBeenCalled()
   })
 }, 20_000)
+
+describe('my requests — ?status= deep link from the dashboard figures', () => {
+  it('opens the Running tab and filters the first query when status=RUNNING', async () => {
+    routeQuery.status = 'RUNNING'
+    const w = await mountPage()
+    expect(lastRequest().status).toBe('RUNNING')
+    expect(w.find('.el-tabs__item.is-active').text()).toContain('application.running')
+  })
+
+  it('opens the Completed tab when status=COMPLETED', async () => {
+    routeQuery.status = 'COMPLETED'
+    const w = await mountPage()
+    expect(lastRequest().status).toBe('COMPLETED')
+    expect(w.find('.el-tabs__item.is-active').text()).toContain('application.completed')
+  })
+
+  it('falls back to All for an unknown status instead of querying it', async () => {
+    routeQuery.status = 'bogus'
+    const w = await mountPage()
+    expect(lastRequest().status).toBeUndefined()
+    expect(w.find('.el-tabs__item.is-active').text()).toContain('common.all')
+  })
+
+  it('opens Drafts without calling the paged query when status=DRAFT', async () => {
+    routeQuery.status = 'DRAFT'
+    await mountPage()
+    expect(api.queryMyApplications).not.toHaveBeenCalled()
+    expect(api.getDraftList).toHaveBeenCalled()
+  })
+})

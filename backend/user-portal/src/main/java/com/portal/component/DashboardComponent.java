@@ -11,6 +11,7 @@ import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TeamRequestsResponse;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.BusinessUnitRepository;
+import com.portal.repository.ProcessDraftRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.UserBusinessUnitRepository;
 import com.portal.service.UserDisplayNameResolver;
@@ -50,7 +51,9 @@ public class DashboardComponent {
     private final BusinessUnitRepository businessUnitRepository;
     private final UserBusinessUnitRepository userBusinessUnitRepository;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final ProcessDraftRepository processDraftRepository;
     private final UserDisplayNameResolver userDisplayNameResolver;
+    private final RequestIdEnricher requestIdEnricher;
 
     /**
      * 聚合扇出线程池（独立于 taskQueryExecutor）。团队聚合分支在任务体内再调 {@code queryTasks}
@@ -397,12 +400,22 @@ public class DashboardComponent {
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         Map<String, String> assigneeNames = userDisplayNameResolver.resolveBatch(assigneeKeys);
 
+        // Request ID 与 My Requests 走同一条路：本页的功能单元编码先批量解析一次主表配置，
+        // 再逐行拼接。实例已整条加载，variables 就在内存里，这里不额外查库。
+        Set<String> functionUnitCodes = pageContent.stream()
+                .map(ProcessInstance::getFunctionUnitCode)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        RequestIdEnricher.SpecCache requestIdSpecs = requestIdEnricher.resolveSpecs(functionUnitCodes);
+
         List<TeamRequestsResponse.TeamRequestItem> items = pageContent.stream()
                 .map(pi -> {
                     String displayAssignee = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
                             pi.getCurrentAssignee(), pi.getCandidateUsers(), assigneeNames);
                     return TeamRequestsResponse.TeamRequestItem.builder()
                         .id(pi.getId())
+                        .requestId(requestIdEnricher.buildRequestId(
+                                requestIdSpecs, pi.getFunctionUnitCode(), pi.getVariables()))
                         .processDefinitionName(pi.getProcessDefinitionName())
                         .businessKey(pi.getBusinessKey())
                         .startUserName(pi.getStartUserName())
@@ -450,10 +463,13 @@ public class DashboardComponent {
     }
 
     /**
-     * Returns process overview
+     * Returns process overview.
+     * <p>Draft count is portal-local (up_process_drafts) — the engine knows nothing about
+     * drafts, so it is counted here and survives an engine statistics failure.
      */
     @SuppressWarnings("unchecked")
     public DashboardOverview.ProcessOverview getProcessOverview(String userId) {
+        long draftCount = processDraftRepository.countByUserId(userId);
         // Load real data from workflow-engine-core
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getProcessStatistics(userId);
@@ -484,6 +500,7 @@ public class DashboardComponent {
                         .initiatedCount(initiatedCount)
                         .inProgressCount(inProgressCount)
                         .completedThisMonthCount(completedThisMonthCount)
+                        .draftCount(draftCount)
                         .approvalRate(approvalRate)
                         .typeDistribution(typeDistribution)
                         .build();
@@ -497,6 +514,7 @@ public class DashboardComponent {
                 .initiatedCount(0L)
                 .inProgressCount(0L)
                 .completedThisMonthCount(0L)
+                .draftCount(draftCount)
                 .approvalRate(1.0)
                 .typeDistribution(new HashMap<>())
                 .build();

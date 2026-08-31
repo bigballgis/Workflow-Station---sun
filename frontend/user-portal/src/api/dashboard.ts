@@ -16,16 +16,9 @@ export interface ProcessOverview {
   initiatedCount: number
   inProgressCount: number
   completedThisMonthCount: number
+  draftCount: number
   approvalRate: number
   typeDistribution: Record<string, number>
-}
-
-export interface PerformanceOverview {
-  efficiencyScore: number
-  qualityScore: number
-  collaborationScore: number
-  monthlyRank: number
-  totalUsers: number
 }
 
 export interface RecentTask {
@@ -52,7 +45,6 @@ export interface RecentProcess {
 export interface DashboardOverview {
   taskOverview: TaskOverview
   processOverview: ProcessOverview
-  performanceOverview: PerformanceOverview
   recentTasks: RecentTask[]
   recentProcesses: RecentProcess[]
 }
@@ -70,11 +62,6 @@ export function getTaskOverview() {
 // 获取流程概览
 export function getProcessOverview() {
   return request.get<{ data: ProcessOverview }>('/dashboard/process-overview')
-}
-
-// 获取个人绩效
-export function getPerformanceOverview() {
-  return request.get<{ data: PerformanceOverview }>('/dashboard/performance')
 }
 
 export interface TaskTrendData {
@@ -101,6 +88,8 @@ export function getProcessStatisticsData() {
 
 export interface TeamRequestItem {
   id: string
+  /** 主表配置的人类可读单号；主表未配置 Request ID 时为 null。 */
+  requestId?: string | null
   processDefinitionName: string
   businessKey?: string
   startUserName: string

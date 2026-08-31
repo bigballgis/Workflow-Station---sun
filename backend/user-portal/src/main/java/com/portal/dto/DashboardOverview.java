@@ -68,6 +68,8 @@ public class DashboardOverview {
         private Long inProgressCount;
         /** 本月完成数 */
         private Long completedThisMonthCount;
+        /** 草稿箱数量（portal 侧 up_process_drafts，与引擎统计无关） */
+        private Long draftCount;
         /** 审批通过率 */
         private Double approvalRate;
         /** 流程类型分布 */
