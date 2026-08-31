@@ -2942,3 +2942,19 @@
     验证：delegationsSharedList / PermissionRequestSharedList / listViewportStack；
     verify-shared-list-column-layout Permissions 可滚、Delegations 按钮 69×24。
 
+- id: "1577"
+  status: fixed
+  fixed_at: "2026-08-31"
+  severity: major
+  category: bug
+  summary: "Dead to-claim.vue called missing usePortalListGrid grouping APIs"
+  file: "frontend/user-portal/src/views/tasks/to-claim.vue"
+  note: |
+    根因：To Claim 已并入 To Do（/tasks/to-claim 只做 redirect），但 to-claim.vue
+    仍从 usePortalListGrid 解构 groupBy/applyGroup/spanMethod/leftoverWidth 等 7 个
+    不存在的成员；首屏 :span-method 就会 TypeError。
+    修复：删除死页面、queryToClaimTasks、POST /tasks/to-claim/query、
+    ToClaimTaskColumnSpec 及页级 i18n；认领仍走 To Do。旧书签 redirect 保留。
+    验证：ClaimBatch/UnclaimBatch/TodoTaskColumnSpec + portal vitest；compose
+    user-portal / user-portal-frontend healthy。
+

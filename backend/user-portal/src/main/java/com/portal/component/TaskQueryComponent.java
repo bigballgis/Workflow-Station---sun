@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Mine task query facade. To Do / Tasks to Claim live in {@link TodoListQueryComponent};
+ * Mine task query facade. To Do lives in {@link TodoListQueryComponent};
  * detail in {@link TaskDetailQueryComponent}; engine pages in {@link EngineVisibleTaskFetcher}.
  */
 @Slf4j
@@ -34,7 +34,6 @@ import java.util.Optional;
 public class TaskQueryComponent {
 
     static final String TODO_LIST_KEY = "todo-tasks";
-    static final String TO_CLAIM_LIST_KEY = "to-claim-tasks";
 
     private final WorkflowEngineClient workflowEngineClient;
     private final DelegatedTaskQueryComponent delegatedTaskQueryComponent;
@@ -87,10 +86,6 @@ public class TaskQueryComponent {
                 elapsedMs, elapsedMs, 0L);
         return new PortalListPage<>(TodoTaskColumnSpec.columns(), page.getContent(),
                 request.page(), request.size(), total);
-    }
-
-    public PortalListPage<TaskInfo> queryToClaimList(String userId, TodoTaskQueryRequest request) {
-        return todoListQueryComponent.queryToClaimList(userId, request);
     }
 
     public List<TaskInfo> listClaimPoolTasks(String userId) {

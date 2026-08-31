@@ -91,9 +91,14 @@ export function useTaskClaimActions(options: {
     emptyKey: string,
     doneKey: string,
     post: (exclude: string[]) => Promise<{ data?: BatchSlice }>,
+    confirmParams?: Record<string, number>,
   ): Promise<void> {
     try {
-      await ElMessageBox.confirm(t(confirmKey), t(titleKey), { type: 'warning' })
+      await ElMessageBox.confirm(
+        confirmParams ? t(confirmKey, confirmParams) : t(confirmKey),
+        t(titleKey),
+        { type: 'warning' },
+      )
     } catch {
       return
     }
@@ -124,7 +129,7 @@ export function useTaskClaimActions(options: {
       'task.claimAll',
       'task.claimAllEmpty',
       'task.claimAllDone',
-      (exclude) => claimBatch(exclude) as Promise<{ data?: BatchSlice }>,
+      (exclude) => claimBatch({ excludeTaskIds: exclude }) as Promise<{ data?: BatchSlice }>,
     )
   }
 
@@ -134,7 +139,57 @@ export function useTaskClaimActions(options: {
       'task.unclaimAll',
       'task.unclaimAllEmpty',
       'task.unclaimAllDone',
-      (exclude) => unclaimBatch(exclude) as Promise<{ data?: BatchSlice }>,
+      (exclude) => unclaimBatch({ excludeTaskIds: exclude }) as Promise<{ data?: BatchSlice }>,
+    )
+  }
+
+  function runSelectedBatch(
+    includeTaskIds: string[],
+    selectedCount: number,
+    emptyKey: string,
+    confirmKey: string,
+    titleKey: string,
+    doneKey: string,
+    post: (ids: string[], exclude: string[]) => Promise<{ data?: BatchSlice }>,
+  ): Promise<void> {
+    const ids = includeTaskIds.filter((id) => typeof id === 'string' && id.trim() !== '')
+    if (ids.length === 0) {
+      ElMessage.success(t(emptyKey))
+      return Promise.resolve()
+    }
+    return runConfirmedBatch(
+      confirmKey,
+      titleKey,
+      emptyKey,
+      doneKey,
+      (exclude) => post(ids, exclude),
+      { eligible: ids.length, selected: selectedCount },
+    )
+  }
+
+  function claimSelected(includeTaskIds: string[], selectedCount: number): Promise<void> {
+    return runSelectedBatch(
+      includeTaskIds,
+      selectedCount,
+      'task.claimSelectedEmpty',
+      'task.claimSelectedConfirm',
+      'task.claim',
+      'task.claimAllDone',
+      (ids, exclude) =>
+        claimBatch({ excludeTaskIds: exclude, includeTaskIds: ids }) as Promise<{ data?: BatchSlice }>,
+    )
+  }
+
+  function unclaimSelected(includeTaskIds: string[], selectedCount: number): Promise<void> {
+    return runSelectedBatch(
+      includeTaskIds,
+      selectedCount,
+      'task.unclaimSelectedEmpty',
+      'task.unclaimSelectedConfirm',
+      'task.unclaim',
+      'task.unclaimAllDone',
+      (ids, exclude) =>
+        unclaimBatch({ excludeTaskIds: exclude, includeTaskIds: ids }) as Promise<{ data?: BatchSlice }>,
     )
   }
 
@@ -160,7 +215,16 @@ export function useTaskClaimActions(options: {
     }
   }
 
-  return { claim, unclaim, forceUnclaim, claimAll, unclaimAll, prepareTodoOpen }
+  return {
+    claim,
+    unclaim,
+    forceUnclaim,
+    claimAll,
+    unclaimAll,
+    claimSelected,
+    unclaimSelected,
+    prepareTodoOpen,
+  }
 }
 
 async function runBatchLoop(

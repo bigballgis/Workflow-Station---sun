@@ -1,4 +1,4 @@
-import { ref, reactive, onMounted, onActivated } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -72,11 +72,12 @@ export function useTodoTasksPage() {
     }
   }
 
-  const { claim, unclaim, forceUnclaim, claimAll, unclaimAll, prepareTodoOpen } = useTaskClaimActions({
-    reload: loadTasks,
-    actingTaskId,
-    submitting: claimAllBusy,
-  })
+  const { claim, unclaim, forceUnclaim, claimAll, unclaimAll, claimSelected, unclaimSelected, prepareTodoOpen } =
+    useTaskClaimActions({
+      reload: loadTasks,
+      actingTaskId,
+      submitting: claimAllBusy,
+    })
 
   function todoQueryBody(): TodoTaskQueryRequest {
     const body: TodoTaskQueryRequest = { ...grid.buildQuery() }
@@ -138,6 +139,23 @@ export function useTodoTasksPage() {
 
   const handleSelectionChange = (selection: TaskInfo[]) => {
     selectedTasks.value = selection
+  }
+
+  const selectedClaimableIds = computed(() =>
+    selectedTasks.value.flatMap((task) => (task.claimable && task.taskId ? [task.taskId] : [])),
+  )
+
+  const selectedHeldIds = computed(() =>
+    selectedTasks.value.flatMap((task) =>
+      task.claimedByCurrentUser && task.taskId ? [task.taskId] : []),
+  )
+
+  function handleClaimSelected() {
+    return claimSelected(selectedClaimableIds.value, selectedTasks.value.length)
+  }
+
+  function handleUnclaimSelected() {
+    return unclaimSelected(selectedHeldIds.value, selectedTasks.value.length)
   }
 
   const viewTask = async (task: TaskInfo) => {
@@ -218,6 +236,8 @@ export function useTodoTasksPage() {
     preferenceStore,
     loading,
     selectedTasks,
+    selectedClaimableIds,
+    selectedHeldIds,
     filterForm,
     ...grid,
     actionDialogVisible,
@@ -240,6 +260,8 @@ export function useTodoTasksPage() {
     handleForceUnclaim,
     handleClaimAll: claimAll,
     handleUnclaimAll: unclaimAll,
+    handleClaimSelected,
+    handleUnclaimSelected,
     onAutoClaimChange,
     handleBatchUrge,
     submitAction,

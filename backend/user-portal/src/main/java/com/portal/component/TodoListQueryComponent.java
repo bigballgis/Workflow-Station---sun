@@ -7,13 +7,11 @@ import com.portal.dto.PortalListPage;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TodoTaskQueryRequest;
-import com.portal.exception.PortalException;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.util.BuRolePoolTasks;
 import com.portal.util.ListQuerySupport;
 import com.portal.util.TaskInfoListOps;
 import com.portal.util.TaskInfoQueryFilters;
-import com.portal.util.ToClaimTaskColumnSpec;
 import com.portal.util.TodoListUnion;
 import com.portal.util.TodoTaskColumnSpec;
 import com.portal.util.WithdrawnProcessIds;
@@ -30,7 +28,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Shared-list To Do and Tasks to Claim, plus Claim All / Unclaim All pool scans.
+ * Shared-list To Do, plus Claim All / Unclaim All pool scans.
  */
 @Slf4j
 @Component
@@ -79,45 +77,6 @@ public class TodoListQueryComponent {
         String portalUsername = SecurityContextUtils.getCurrentUsername().orElse(null);
         taskPermissionEvaluator.annotateClaimState(merged, userId, portalUsername);
         return merged;
-    }
-
-    public PortalListPage<TaskInfo> queryToClaimList(String userId, TodoTaskQueryRequest request) {
-        if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
-        }
-        if (userId == null || userId.isBlank()) {
-            throw new PortalException("401", "Authenticated user id is required for task query");
-        }
-        long started = System.nanoTime();
-
-        List<ListColumnFilter> filters = new ArrayList<>(request.filters());
-        if (!request.priorities().isEmpty()) {
-            filters.add(new ListColumnFilter("priority", "in", String.join(",", request.priorities()), null));
-        }
-        TaskQueryRequest adapted = TaskQueryRequest.builder()
-                .userId(userId)
-                .page(request.page())
-                .size(request.size())
-                .filters(filters)
-                .sortBy(request.sortField())
-                .sortDirection(request.sortDirection())
-                .keyword(request.keyword())
-                .build();
-
-        List<TaskInfo> poolTasks = fetchAllClaimPoolTasksPaged(userId);
-        maybeEnrichRequestIds(poolTasks, adapted);
-        List<TaskInfo> filtered = TaskInfoQueryFilters.apply(poolTasks, adapted);
-        filtered = TaskInfoListOps.applySorting(filtered, adapted);
-
-        List<TaskInfo> paged = new ArrayList<>(
-                TaskInfoListOps.pageOf(filtered, request.page(), request.size()));
-        requestIdEnricher.enrichTaskRequestIds(paged);
-        EngineTaskMapper.clearTaskVariablesForList(paged);
-
-        ListQuerySupport.logIfSlow(log, TaskQueryComponent.TO_CLAIM_LIST_KEY, request.page(), request.size(),
-                filtered.size(), started);
-        return new PortalListPage<>(ToClaimTaskColumnSpec.columns(), paged,
-                request.page(), request.size(), filtered.size());
     }
 
     static TaskQueryRequest toTaskQuery(String userId, TodoTaskQueryRequest request) {

@@ -72,14 +72,6 @@ public class TaskController {
         return ApiResponse.success(taskQueryComponent.queryTodoList(userId, request));
     }
 
-    @Operation(summary = "Query Tasks to Claim list (BU Role pool, shared list chrome)")
-    @PostMapping("/to-claim/query")
-    public ApiResponse<PortalListPage<TaskInfo>> queryToClaimTasks(
-            @CurrentUserId String userId,
-            @RequestBody @Valid TodoTaskQueryRequest request) {
-        return ApiResponse.success(taskQueryComponent.queryToClaimList(userId, request));
-    }
-
     @Operation(summary = "Get task detail")
     @GetMapping("/{taskId}")
     public ApiResponse<TaskInfo> getTaskDetail(

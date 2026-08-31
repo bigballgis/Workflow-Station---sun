@@ -218,24 +218,35 @@ export interface ClaimBatchResponse {
   attemptedTaskIds: string[]
 }
 
-export function claimBatch(excludeTaskIds: string[]) {
+export interface ClaimBatchRequest {
+  excludeTaskIds?: string[]
+  includeTaskIds?: string[]
+}
+
+export function claimBatch(body: ClaimBatchRequest = {}) {
   const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
     skipGlobalErrorHandler: true,
   }
   return request.post<{ data: ClaimBatchResponse }>(
     '/tasks/claim-batch',
-    { excludeTaskIds },
+    {
+      excludeTaskIds: body.excludeTaskIds ?? [],
+      includeTaskIds: body.includeTaskIds ?? [],
+    },
     config,
   )
 }
 
-export function unclaimBatch(excludeTaskIds: string[]) {
+export function unclaimBatch(body: ClaimBatchRequest = {}) {
   const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
     skipGlobalErrorHandler: true,
   }
   return request.post<{ data: ClaimBatchResponse }>(
     '/tasks/unclaim-batch',
-    { excludeTaskIds },
+    {
+      excludeTaskIds: body.excludeTaskIds ?? [],
+      includeTaskIds: body.includeTaskIds ?? [],
+    },
     config,
   )
 }
@@ -300,11 +311,6 @@ export function queryCompletedTasks(params: CompletedTaskQueryRequest) {
 
 export function queryTodoTasks(params: TodoTaskQueryRequest) {
   return request.post<{ data: PortalListPage<TaskInfo> }>('/tasks/todo/query', params)
-}
-
-/** BU Role claim pool: rows the whole role can see, including ones a colleague already holds. */
-export function queryToClaimTasks(params: TodoTaskQueryRequest) {
-  return request.post<{ data: PortalListPage<TaskInfo> }>('/tasks/to-claim/query', params)
 }
 
 // Assign a user to a sub-table row

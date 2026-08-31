@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Unclaim All: one HTTP slice of at most {@link ClaimBatchComponent#BATCH_LIMIT} To Do rows
@@ -29,14 +28,10 @@ public class UnclaimBatchComponent {
             throw new PortalException("401", "Authenticated user id is required");
         }
         taskQueryComponent.invalidateMineTaskListCache();
-        Set<String> exclude = ClaimBatchComponent.boundedExclude(request);
-        List<TaskInfo> heldByMe = new ArrayList<>();
-        for (TaskInfo task : taskQueryComponent.listMergedTodoTasks(userId)) {
-            if (task != null && task.isClaimedByCurrentUser() && task.getTaskId() != null
-                    && !exclude.contains(task.getTaskId())) {
-                heldByMe.add(task);
-            }
-        }
+        List<TaskInfo> heldByMe = ClaimBatchComponent.filterEligible(
+                taskQueryComponent.listMergedTodoTasks(userId),
+                task -> task.isClaimedByCurrentUser(),
+                request);
         int take = Math.min(ClaimBatchComponent.BATCH_LIMIT, heldByMe.size());
         int unclaimed = 0;
         int skipped = 0;

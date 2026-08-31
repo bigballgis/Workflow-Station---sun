@@ -35,6 +35,8 @@ const sections: GuideSection[] = [
       { code: 'Claim all', hintKey: 'upTasksToClaimGuide.claimAllSample' },
       { code: 'Unclaim', hintKey: 'upTasksToClaimGuide.unclaimSample' },
       { code: 'Unclaim all', hintKey: 'upTasksToClaimGuide.unclaimAllSample' },
+      { code: 'N selected · Claim', hintKey: 'upTasksToClaimGuide.claimSelectedSample' },
+      { code: 'N selected · Unclaim', hintKey: 'upTasksToClaimGuide.unclaimSelectedSample' },
       { code: 'Claimed By', hintKey: 'upTasksToClaimGuide.claimedBySample' },
     ],
   },
