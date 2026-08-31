@@ -33,6 +33,7 @@ const sections: GuideSection[] = [
     samples: [
       { code: 'Specified user', hintKey: 'taskDelegateGuide.userRadioSample' },
       { code: 'Target User', hintKey: 'taskDelegateGuide.userFieldSample' },
+      { code: 'Click to search', hintKey: 'taskDelegateGuide.userSearchSample' },
     ],
   },
   {

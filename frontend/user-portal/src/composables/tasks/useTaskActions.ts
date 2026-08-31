@@ -106,7 +106,9 @@ export function useTaskActions(options: {
     }
   }
   function onActionDialogOpened() {
-    searchUsers('')
+    if (options.currentAction.value === 'transfer') {
+      searchUsers('')
+    }
   }
   function handleApprove() {
     if (!validateSubTableAssigneesForComplete()) return

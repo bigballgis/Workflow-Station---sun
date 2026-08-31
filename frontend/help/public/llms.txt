@@ -11,7 +11,7 @@ Do not invent UI labels. Ground answers in these articles and the screenshots un
 - /help/email-send — Send email (Connections #connection, Email Templates #template, Send Task #send-task)
 - /help/email-monitor — Email Monitor (inbound connection, monitor template, Start Event binding)
 - /help/up-tasks-to-claim — To Do: claim pool on the same list; Claim all; selection-bar Claim/Unclaim; Unclaim all (own holds); auto-claim on open (default off); Leader / Approver / SYS_ADMIN force unclaim
-- /help/task-delegate — Delegate a task (User Portal To Do; specified user or BU+Role; does not change Current Assignee)
+- /help/task-delegate — Delegate a task (User Portal To Do; specified user lookup or BU+Role; does not change Current Assignee)
 
 ## Figures
 

@@ -290,9 +290,10 @@ export default {
     openSample: 'button on the task action bar',
     userTitle: 'Specified user',
     userBody:
-      'Tick Specified user. Pick Target User, then Confirm. You stay Current Assignee. An extra line reads Delegated to that person. They see On behalf of you. You can still complete the task yourself.',
+      'Tick Specified user. Click Target User (placeholder Click to search). A table lists Username, Display Name, Full Name, Email, and Employee ID; scroll sideways if the columns do not fit. Type to search those fields on the server, pick a row, then Confirm. You stay Current Assignee. An extra line reads Delegated to that person. They see On behalf of you. You can still complete the task yourself.',
     userRadioSample: 'first choice under Delegate to',
     userFieldSample: 'person who will complete on your behalf',
+    userSearchSample: 'placeholder on Target User; type to search',
     buTitle: 'Specified BU and Role',
     buBody:
       'Tick Specified BU and Role. Pick Business Unit, then Role. Role stays disabled until a unit is selected. Both are required. People see and complete the task only when the header workspace is that same Business unit and Role pair. Switching workspace hides it. System Administrator does not see every delegated task. There is no Claim step after this kind of delegate.',
