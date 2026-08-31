@@ -20,6 +20,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,14 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 public class EngineVisibleTaskFetcher {
+
+    /**
+     * Upper bound on the orphaned-task fallback in
+     * {@link #mergeTasksFromRunningProcessInstancesForUser}, which costs one engine HTTP call per
+     * RUNNING instance. Well above a normal user's open-request count; it only stops pathological
+     * accounts from stalling the To Do list.
+     */
+    private static final int MAX_ORPHAN_MERGE_INSTANCES = 50;
 
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessInstanceRepository processInstanceRepository;
@@ -153,13 +162,25 @@ public class EngineVisibleTaskFetcher {
         if (running.isEmpty()) {
             return;
         }
+        List<ProcessInstance> scanned = running;
+        if (running.size() > MAX_ORPHAN_MERGE_INSTANCES) {
+            scanned = running.stream()
+                    .sorted(Comparator.comparing(
+                            ProcessInstance::getStartTime,
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .limit(MAX_ORPHAN_MERGE_INSTANCES)
+                    .toList();
+            log.warn("Orphan task merge capped at {} of {} RUNNING instance(s) for user {}; "
+                    + "older instances skipped to protect list latency",
+                    MAX_ORPHAN_MERGE_INSTANCES, running.size(), userId);
+        }
         log.info("Flowable user-task query was empty; merging from {} RUNNING process instance(s) for user {}",
-                running.size(), userId);
+                scanned.size(), userId);
         Set<String> seen = allTasks.stream()
                 .map(TaskInfo::getTaskId)
                 .filter(Objects::nonNull)
                 .collect(java.util.stream.Collectors.toCollection(HashSet::new));
-        for (ProcessInstance pi : running) {
+        for (ProcessInstance pi : scanned) {
             String pid = pi.getId();
             if (pid == null || pid.isBlank()) {
                 continue;
