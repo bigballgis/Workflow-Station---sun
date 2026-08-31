@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "存量问题基线 —— 由 scripts/check-baseline.mjs 读取，规则是「只降不升」。",
+    "这些数字不是目标，是当前欠债的记录。修好问题后调低对应数字锁住改进；",
+    "任何调高都意味着放行了新引入的问题，评审时应当拒绝。",
+    "首次测量于 2026-08-28，环境 node 22 / pnpm 9.15.9。",
+    "typecheck = vue-tsc --noEmit 的 'error TSxxxx' 计数。",
+    "lint = eslint 的 errorCount 合计（不含 warning）。",
+    "",
+    "2026-08-30 rebase 到 PR #127 后的处理经过：",
+    "用 worktree 单独测了 #127 之前的提交，按「错误集合」做 diff（不是比数字）——",
+    "干净基线其实是 347（此前记的 358 是带着未提交改动测的，不准）；#127 后是 379，",
+    "新增 43 条、消失 11 条。逐条分类后：噪音类已修（union 漏成员、element-plus",
+    "prop 类型、测试 mock），user-portal 回到 348，即只比干净基线多 1 个文件的 2 条。",
+    "",
+    "剩余 13 条**故意不修**，因为它们不是类型噪音而是 PR #127 的真 bug，",
+    "修它们要动业务代码，超出本次「CI 基础设施」的范围（已另行报告）：",
+    "  - views/tasks/to-claim.vue 9 条：从 usePortalListGrid 解构了 7 个该 composable",
+    "    根本没有的成员（applyGroup/groupBy/spanMethod/...），还传了不存在的",
+    "    defaultWidthOf 选项。后果：点 Reset 会 TypeError（groupBy.value 读 undefined），",
+    "    分组、leftover 宽度列、span-method 全是死的。",
+    "  - views/tasks/index.vue 2 条：模板引用了从未定义的 currentAction。",
+    "    后果不崩但错渲染：undefined !== 'urge' 恒真，Urge 弹窗里也会显示 Target User。",
+    "  - useApplicationDetail{Loaders,SubTaskDialog} 2 条：DerivedColumn.type 是宽松",
+    "    string，收窄成 ColumnType 会把不兼容推到一串内部函数，属真重构，不在本次范围。",
+    "这三项修掉后，对应数字应当下调。",
+    "",
+    "已知既存失败（与本次改动无关，已用 git stash 对照验证）：",
+    "developer-workstation 的 pnpm test 有 4 个文件 / 6 个用例失败 —— ",
+    "i18n-no-chinese-comments、customModdleRoundTrip(4)、AiPanel、FunctionUnitReadOnlyActions。",
+    "这些在把本次三个改动文件 stash 掉后同样失败，属于分支上的既有红。",
+    "本次未修，因为修它们要动 DW 业务代码，超出「无业务影响」的范围。",
+    "user-portal 与 admin-center 当前全绿（167 文件/1309 用例、10 文件/39 用例）。"
+  ],
+  "typecheck": {
+    "user-portal": 348,
+    "admin-center": 110,
+    "developer-workstation": 115
+  },
+  "lint": {
+    "user-portal": 1445,
+    "admin-center": 112,
+    "developer-workstation": 1014
+  }
+}

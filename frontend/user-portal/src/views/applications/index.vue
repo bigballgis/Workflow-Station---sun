@@ -263,7 +263,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
@@ -286,9 +286,19 @@ interface DraftRow {
 }
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 
-const activeTab = ref('all')
+const TAB_NAMES = ['all', 'RUNNING', 'COMPLETED', 'WITHDRAWN', 'REJECTED', 'DRAFT']
+
+/** Dashboard's MY REQUESTS figures deep-link here as ?status=RUNNING / COMPLETED. */
+function tabFromQuery(): string {
+  const raw = route.query.status
+  const value = Array.isArray(raw) ? raw[0] : raw
+  return typeof value === 'string' && TAB_NAMES.includes(value) ? value : 'all'
+}
+
+const activeTab = ref(tabFromQuery())
 const loading = ref(true)
 const draftList = ref<DraftRow[]>([])
 const draftCount = ref(0)
@@ -415,6 +425,9 @@ function onFilterClear() {
 }
 
 const handleTabChange = () => {
+  // Keep ?status= in step with the visible tab, so a refresh or a shared link reopens it.
+  const status = activeTab.value === 'all' ? undefined : activeTab.value
+  void router.replace({ path: '/my-applications', query: status ? { status } : {} })
   resetPage()
   if (activeTab.value === 'DRAFT') {
     loadDrafts()
@@ -484,7 +497,7 @@ const handleWithdraw = async (row: ProcessInstance) => {
 }
 
 onMounted(() => {
-  void loadApplications()
+  void (activeTab.value === 'DRAFT' ? loadDrafts() : loadApplications())
   void loadDraftCount().catch((error: unknown) => {
     if (!(error as { response?: unknown })?.response) {
       ElMessage.error(error instanceof Error ? error.message : t('application.loadDraftsFailed'))

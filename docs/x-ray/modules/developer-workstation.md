@@ -80,7 +80,7 @@ Table/field CRUD → `POST/PUT/DELETE .../tables[/{id}]`; DDL preview `GET .../t
 Drag-drop form layout; `GET/PUT .../forms/{id}`, `/form-create-config`, `/validate`; bindings CRUD `.../forms/{id}/bindings`; copy/copy-to-task. `HermesEventConfig`/`HermesFnConfig` = client-only JS/hook editors (CodeMirror), zero backend calls. Sub-table field config, FK/PK metadata, link-form components integrated here.
 
 ### Actions tab — `ActionDesigner.vue`
-Create/Edit/Test/Delete actions → `POST/PUT/DELETE .../actions[/{id}]`, `POST .../actions/{id}/test`; Save Binding rewrites BPMN action bindings then `POST .../process`. Action types: API_CALL/FORM_POPUP/PROCESS_SUBMIT/CUSTOM_SCRIPT/APPROVE/REJECT/TRANSFER/DELEGATE/ROLLBACK/DRAFT/WITHDRAW/COMPOSITE. **`availableRoles` dropdown is hardcoded empty `ref([])`** (UI-degraded).
+Create/Edit/Test/Delete actions → `POST/PUT/DELETE .../actions[/{id}]`, `POST .../actions/{id}/test`; Save Binding rewrites BPMN action bindings then `POST .../process`. Action types: API_CALL/FORM_POPUP/PROCESS_SUBMIT/CUSTOM_SCRIPT/APPROVE/REJECT/TRANSFER/DELEGATE/URGE/ROLLBACK/DRAFT/WITHDRAW/COMPOSITE. **`availableRoles` dropdown is hardcoded empty `ref([])`** (UI-degraded).
 
 ### Decisions — `DecisionList.vue` + `DecisionDesigner.vue` (dmn-js)
 List/Create/Delete → `decisionApi`; DecisionDesigner load/validate/save → `GET/PUT .../decisions/{id}`, `/validate`. **Falls back to `DEFAULT_DMN_XML` on any load error.** `decisionApi.getModel/updateModel` (`.../model`) defined but **unused**.

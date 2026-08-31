@@ -112,7 +112,7 @@
             </el-radio-group>
             <PortalHelpLink
               path="/up-tasks-to-claim#leader"
-              :aria-label="t('permission.applyLeaderGuideLinkAria')"
+              :ariaLabel="t('permission.applyLeaderGuideLinkAria')"
               test-id="apply-leader-guide-link"
             />
           </div>

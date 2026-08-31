@@ -12,6 +12,8 @@ public enum ActionType {
     TRANSFER,
     /** 默认动作 - 委托 */
     DELEGATE,
+    /** 默认动作 - 催办 */
+    URGE,
     /** 默认动作 - 回退 */
     ROLLBACK,
     /** 默认动作 - 撤回 */

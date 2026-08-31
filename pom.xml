@@ -66,6 +66,7 @@
         <!-- Plugins -->
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.2.3</maven-surefire-plugin.version>
+        <jacoco-plugin.version>0.8.12</jacoco-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -339,8 +340,41 @@
                         </includes>
                     </configuration>
                 </plugin>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco-plugin.version}</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+
+        <plugins>
+            <!-- 覆盖率：只出报告，不设阈值。
+                 此前 10 个 pom 里没有任何覆盖率工具，一个 PR 加 500 行零测试代码
+                 没有任何机制能看出来。这里的目的不是提高覆盖率数字，而是让覆盖率
+                 **下降**变得可见 —— 所以刻意不配 jacoco:check：一上来就卡阈值，
+                 实际结果往往是有人去加 @Disabled 而不是补测试。
+                 待基线稳定、且 Testcontainers 集成测试补齐后，再考虑加 check。 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 
     <profiles>

@@ -47,7 +47,10 @@ function collapseActiveNames(field: FormField): string[] {
   return initial
 }
 
-function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
+// el-collapse 的 update:model-value 实际给的是 CollapseModelValue
+// （Array<string | number>，折叠面板 name 可以是数字）。原签名只写 string | string[]，
+// 函数体本来就用 String() 归一化了两种情况，这里只是把签名对齐真实入参。
+function onCollapseActiveChange(fieldKey: string, names: string | number | Array<string | number>) {
   collapseActiveByKey.value[fieldKey] = Array.isArray(names) ? names.map(String) : [String(names)]
 }
 </script>

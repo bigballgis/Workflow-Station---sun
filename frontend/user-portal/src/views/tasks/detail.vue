@@ -15,13 +15,6 @@
       >
         {{ getPriorityLabel(taskInfo.priority) }}
       </el-tag>
-      <el-tag
-        v-if="taskInfo.isOverdue"
-        type="danger"
-        size="small"
-      >
-        {{ t('task.overdue') }}
-      </el-tag>
     </div>
 
     <!-- Loading state -->
@@ -441,9 +434,6 @@
         @custom-action="handleCustomAction"
         @approve="handleApprove"
         @reject="handleReject"
-        @delegate="handleDelegate"
-        @transfer="handleTransfer"
-        @urge="handleUrge"
       />
     </div>
 
@@ -853,6 +843,8 @@ const customActions = useCustomActions({
   resolveFormPopupContent: popupHelpers.resolveFormPopupContent,
   preparePopupContext: popupHelpers.preparePopupContext,
   onDelegate: handleDelegate,
+  onTransfer: handleTransfer,
+  onUrge: handleUrge,
 })
 const {
   formPopupVisible,
@@ -1051,10 +1043,6 @@ onBeforeUnmount(() => {
         gap: 12px;
       }
     }
-  }
-  
-  .overdue {
-    color: var(--error-red, #f56c6c);
   }
 }
 </style>

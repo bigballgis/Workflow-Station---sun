@@ -34,6 +34,8 @@ public class TeamRequestsResponse {
     @AllArgsConstructor
     public static class TeamRequestItem {
         private String id;
+        /** 主表配置的人类可读单号(如 ATM-DC-PW-000018);主表未配置 Request ID 时为 null。 */
+        private String requestId;
         private String processDefinitionName;
         private String businessKey;
         private String startUserName;

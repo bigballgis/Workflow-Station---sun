@@ -5,7 +5,7 @@
         {{ t('permission.title') }}
         <PortalHelpLink
           path="/up-tasks-to-claim#leader"
-          :aria-label="t('permission.applyLeaderGuideLinkAria')"
+          :ariaLabel="t('permission.applyLeaderGuideLinkAria')"
           test-id="profile-leader-guide-link"
         />
       </h1>

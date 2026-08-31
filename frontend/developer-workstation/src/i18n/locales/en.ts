@@ -898,6 +898,7 @@ export default {
     reject: 'Reject',
     transfer: 'Transfer',
     delegate: 'Delegate',
+    urge: 'Urge',
     rollback: 'Rollback',
     withdraw: 'Withdraw',
     draft: 'Draft',

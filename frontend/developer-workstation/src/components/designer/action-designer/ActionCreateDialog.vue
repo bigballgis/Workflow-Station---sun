@@ -37,6 +37,10 @@
               value="DELEGATE"
             />
             <el-option
+              :label="$t('action.urge')"
+              value="URGE"
+            />
+            <el-option
               :label="$t('action.rollback')"
               value="ROLLBACK"
             />

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+// ElMessageBox.confirm 的声明返回 MessageBoxData，但确认时实际 resolve 的就是
+// 字符串 'confirm'（被测代码正是按这个值走分支）。这里断言的是运行时事实，
+// 不是把类型糊过去 —— 改成别的值会让用例失去意义。
+import type { MessageBoxData } from 'element-plus'
 
 const { claimTask, unclaimTask, claimBatch, unclaimBatch } = vi.hoisted(() => ({
   claimTask: vi.fn(),
@@ -90,7 +94,7 @@ describe('useTaskClaimActions', () => {
   })
 
   it('force-unclaims after confirm', async () => {
-    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as unknown as MessageBoxData)
     unclaimTask.mockResolvedValue({})
     const reload = vi.fn().mockResolvedValue(undefined)
     const { forceUnclaim } = useTaskClaimActions({ reload })
@@ -103,7 +107,7 @@ describe('useTaskClaimActions', () => {
   })
 
   it('claimAll confirms once then loops batches until remaining is 0', async () => {
-    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as unknown as MessageBoxData)
     claimBatch
       .mockResolvedValueOnce({
         data: { claimed: 100, skipped: 0, failed: 0, remaining: 20, attemptedTaskIds: ['a'] },
@@ -134,7 +138,7 @@ describe('useTaskClaimActions', () => {
   })
 
   it('unclaimAll confirms once then loops batches until remaining is 0', async () => {
-    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm' as unknown as MessageBoxData)
     unclaimBatch
       .mockResolvedValueOnce({
         data: { claimed: 100, skipped: 0, failed: 0, remaining: 5, attemptedTaskIds: ['h1'] },

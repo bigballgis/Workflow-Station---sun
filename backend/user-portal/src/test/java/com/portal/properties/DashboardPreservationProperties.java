@@ -68,7 +68,9 @@ class DashboardPreservationProperties {
         ProcessInstanceRepository processInstanceRepository = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
                 businessUnitRepository, userBusinessUnitRepository, processInstanceRepository,
-                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
+                Mockito.mock(com.portal.repository.ProcessDraftRepository.class),
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class),
+                Mockito.mock(com.portal.component.RequestIdEnricher.class));
 
         ReflectionTestUtils.setField(dashboardComponent, "aggregationExecutor",
                 (java.util.concurrent.Executor) Runnable::run);
@@ -148,7 +150,9 @@ class DashboardPreservationProperties {
         ProcessInstanceRepository processInstanceRepository = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
                 businessUnitRepository, userBusinessUnitRepository, processInstanceRepository,
-                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
+                Mockito.mock(com.portal.repository.ProcessDraftRepository.class),
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class),
+                Mockito.mock(com.portal.component.RequestIdEnricher.class));
 
         Map<String, Object> statsData = new HashMap<>();
         statsData.put("initiatedCount", initiatedCount);
@@ -199,7 +203,9 @@ class DashboardPreservationProperties {
         ProcessInstanceRepository processInstanceRepository1 = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
                 businessUnitRepository1, userBusinessUnitRepository1, processInstanceRepository1,
-                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
+                Mockito.mock(com.portal.repository.ProcessDraftRepository.class),
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class),
+                Mockito.mock(com.portal.component.RequestIdEnricher.class));
 
         when(workflowEngineClient.getProcessStatistics(eq(userId)))
                 .thenThrow(new RuntimeException("Engine unavailable"));
@@ -241,7 +247,9 @@ class DashboardPreservationProperties {
         ProcessInstanceRepository processInstanceRepository2 = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
                 businessUnitRepository2, userBusinessUnitRepository2, processInstanceRepository2,
-                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
+                Mockito.mock(com.portal.repository.ProcessDraftRepository.class),
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class),
+                Mockito.mock(com.portal.component.RequestIdEnricher.class));
 
         // Act
         DashboardOverview.PerformanceOverview perfOverview = dashboardComponent.getPerformanceOverview(userId);
@@ -295,7 +303,9 @@ class DashboardPreservationProperties {
         ProcessInstanceRepository processInstanceRepository3 = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
                 businessUnitRepository3, userBusinessUnitRepository3, processInstanceRepository3,
-                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
+                Mockito.mock(com.portal.repository.ProcessDraftRepository.class),
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class),
+                Mockito.mock(com.portal.component.RequestIdEnricher.class));
 
         // Generate expected tasks
         List<TaskInfo> expectedTasks = new ArrayList<>();

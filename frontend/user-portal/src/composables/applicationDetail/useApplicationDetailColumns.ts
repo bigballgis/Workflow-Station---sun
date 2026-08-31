@@ -20,6 +20,9 @@ import { stampCannotDownloadProp, cannotDownloadFieldKeysFromForms } from '@/uti
 type DerivedColumn = {
   field: string
   label: string
+  // 保持宽松的 string：这里的列来自 any/关联表字段定义等松散来源，
+  // 收窄成 ColumnType 会把不兼容一路推到 deriveColumnsFromBinding 等内部函数，
+  // 属于真正的重构而非类型噪音清理。相关 2 条 TS2322 暂留在基线里。
   type?: string
   required?: boolean
   options?: Array<{ label: string; value: any }>

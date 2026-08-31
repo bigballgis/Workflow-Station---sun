@@ -111,6 +111,30 @@ jobs:
       - name: Test developer-workstation
         run: mvn $MAVEN_ARGS test -pl backend/developer-workstation $EXCLUDES $REDIS_OVERRIDE
 
+      # 容器化持久层测试（*IT）。默认的 `mvn test` **不会**跑它们 ——
+      # surefire 的 includes 只收 *Test/*Tests/*Properties，所以本地没装 docker
+      # 的开发机不受影响；这里用 -Dtest 显式点名。
+      #
+      # 为什么值得单独一步：此前三个模块的 pom 都声明了 testcontainers 依赖，
+      # 却没有一个测试文件用过它 —— JPA 映射、FK 级联、唯一约束、JSONB 往返全部零覆盖，
+      # 改坏一个列映射整套测试照样全绿。GitHub runner 自带 docker，跑得起来。
+      - name: Container integration tests (real PostgreSQL)
+        run: >-
+          mvn $MAVEN_ARGS test -pl backend/admin-center
+          -Dtest='*ContainerIT' -DfailIfNoTests=false
+          $REDIS_OVERRIDE
+
+      # 覆盖率报告：只归档，不设阈值。目的是让覆盖率**下降**变得可见 ——
+      # 此前 10 个 pom 没有任何覆盖率工具，一个 PR 加 500 行零测试代码看不出来。
+      - name: Upload JaCoCo reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-reports
+          path: '**/target/site/jacoco/**'
+          retention-days: 14
+          if-no-files-found: ignore
+
       # 失败时把 surefire 报告捞出来 —— 日志里只有摘要，具体哪个断言炸了要看报告。
       - name: Upload surefire reports on failure
         if: failure()

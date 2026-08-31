@@ -37,6 +37,7 @@ export function useActionList(options: UseActionListOptions) {
       REJECT: t('action.reject'),
       TRANSFER: t('action.transfer'),
       DELEGATE: t('action.delegate'),
+      URGE: t('action.urge'),
       ROLLBACK: t('action.rollback'),
       WITHDRAW: t('action.withdraw'),
       DRAFT: t('action.draft'),

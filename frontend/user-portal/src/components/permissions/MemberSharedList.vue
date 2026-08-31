@@ -9,7 +9,7 @@
         :style="gridInnerStyle"
       >
         <el-table
-          v-loading="loading"
+          v-loading="loading === true"
           :data="pageRows"
           stripe
           :fit="false"

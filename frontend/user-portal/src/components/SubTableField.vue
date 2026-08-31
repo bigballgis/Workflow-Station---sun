@@ -37,7 +37,7 @@
 
     <div class="sub-table-scroll-wrapper">
       <el-table
-        v-loading="loading"
+        v-loading="loading === true"
         :data="rows"
         size="small"
         border

@@ -448,6 +448,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | `REJECT` | 审批操作 | 拒绝 |
 | `TRANSFER` | 审批操作 | 转办 |
 | `DELEGATE` | 审批操作 | 委托 |
+| `URGE` | 审批操作 | 催办 |
 | `ROLLBACK` | 审批操作 | 回退 |
 | `WITHDRAW` | 审批操作 | 撤回 |
 | `CANCEL` | 审批操作 | 取消 |

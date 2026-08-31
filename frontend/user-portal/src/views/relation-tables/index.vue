@@ -627,9 +627,11 @@ const fetchTables = async () => {
     tables.value = res.data
     // Honor a drill-down from Views: ?tableId=<id>&search=<value> preselects that table + filter.
     const queryTableId = route.query.tableId != null ? Number(route.query.tableId) : null
+    // Selection must stay inside the Function Unit scope the route asked for. Falling back to
+    // tables[0] here put an out-of-scope table in the grid while the panel listed none of it.
     const target = queryTableId != null && tables.value.some(t => t.id === queryTableId)
       ? queryTableId
-      : (filteredTables.value.length > 0 ? filteredTables.value[0].id : (tables.value.length > 0 ? tables.value[0].id : null))
+      : filteredTables.value[0]?.id ?? null
     if (!selectedTableId.value && target != null) {
       selectedTableId.value = target
       if (queryTableId === target && typeof route.query.search === 'string') {
@@ -724,6 +726,30 @@ const handleSelectTable = (index: string) => {
   fetchFieldDefs()
   fetchData()
 }
+
+/**
+ * Every Function Unit scope shares one route record (`relation-tables/:functionUnitCode?`),
+ * so switching scope in the nav sidebar reuses this component — onMounted/fetchTables never
+ * runs again. Without re-selecting here the grid keeps rendering the table picked under the
+ * previous scope, including when the new scope holds no table at all (panel says "no tables
+ * available" while the grid still shows the old rows).
+ */
+watch(
+  () => route.params.functionUnitCode,
+  () => {
+    const next = filteredTables.value[0]?.id ?? null
+    if (next === selectedTableId.value) return
+    if (next == null) {
+      selectedTableId.value = null
+      resetTableState()
+      fieldDefs.value = []
+      dataRows.value = []
+      totalElements.value = 0
+      return
+    }
+    handleSelectTable(String(next))
+  }
+)
 
 /** A new keyword changes the result set, so the old page number no longer addresses anything. */
 const handleSearch = () => {

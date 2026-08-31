@@ -13,6 +13,9 @@ function mountActionBar(overrides: { isCompletedTask?: boolean; claimLocked?: bo
       showImplicitSaveAction: true,
       savingTaskForm: false,
       actions: null,
+      // TaskActionBar 的必填 prop，此前漏传（组件里按它决定是否渲染 Delegate）。
+      // 本用例只关心 claim 锁定，故给 false 保持既有行为。
+      canDelegate: false,
       getButtonType: () => 'primary',
       getIconComponent: () => h('span'),
       getActionLabel: () => 'action',

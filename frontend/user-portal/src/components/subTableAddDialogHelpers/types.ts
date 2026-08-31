@@ -1,5 +1,12 @@
 export type ColumnType =
   | 'text'
+  // form-create 画布里文本控件的原始类型名。FieldRenderer / displayValue 都把它
+  // 与 'text' 同等对待（见 FieldRenderer.vue 的 `type === 'text' || === 'input'`），
+  // 但此前没进 union，于是那些比较被 TS 判为「无重叠」。是 union 不全，不是比较多余。
+  | 'input'
+  // Link Form 列。运行时长期存在（SubTableField 靠它选渲染分支、
+  // formRendererSubTableBindings 靠它收集绑定 id），同样漏在 union 外。
+  | 'linkForm'
   | 'textarea'
   | 'number'
   | 'select'
@@ -80,6 +87,17 @@ export interface DialogColumn {
     checkStrictly?: boolean
     nodeKey?: string
     labelProps?: { label?: string; children?: string }
+    // 以下几个 SubTableAddDialog 模板里实际在用，但此前没声明，于是落到下面的
+    // `[key: string]: unknown` 上 —— 绑到 el-* 的具名 prop 时就成了 unknown/{}。
+    // 补声明即可，运行时读的还是同一个字段。
+    showAlpha?: boolean
+    showCheckbox?: boolean
+    showBackfillView?: boolean
+    allowHalf?: boolean
+    step?: number
+    leftTitle?: string
+    rightTitle?: string
+    cascaderProps?: Record<string, unknown>
     [key: string]: unknown
   }
 }
