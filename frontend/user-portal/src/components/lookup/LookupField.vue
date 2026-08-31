@@ -75,14 +75,18 @@
         class="lookup-dropdown lookup-dropdown--floating"
         :style="dropdownStyle"
       >
-        <el-table
-          v-loading="loading"
-          :data="filteredResults"
-          size="small"
-          highlight-current-row
-          max-height="260"
-          @row-click="handleSelect"
+        <div
+          class="lookup-dropdown-table-wrap"
+          :style="{ minWidth: `${tableContentWidth}px` }"
         >
+          <el-table
+            v-loading="loading"
+            :data="filteredResults"
+            size="small"
+            highlight-current-row
+            max-height="260"
+            @row-click="handleSelect"
+          >
           <el-table-column
             v-if="multiple"
             width="40"
@@ -103,7 +107,8 @@
             :min-width="col.width || 120"
             show-overflow-tooltip
           />
-        </el-table>
+          </el-table>
+        </div>
       </div>
     </Teleport>
   </div>
@@ -111,10 +116,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { debounce } from 'lodash-es'
 import { useZIndex } from 'element-plus'
 import { Close, Check } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
 import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
+import { useLookupFieldRows } from './useLookupFieldRows'
 import {
   getLookupSelectedDisplayFieldFromProps,
   resolveLookupCellTagText,
@@ -144,6 +151,10 @@ const props = defineProps<{
   readonly?: boolean
   /** Multi-select: value is an array of PKs; multiple tags; dropdown toggles rows. */
   multiple?: boolean
+  /** Cap first-open / remote-search rows. Unset = page through the full table (form lookup). */
+  prefetchLimit?: number
+  /** When true, keyword hits the server instead of filtering already-loaded rows. */
+  remoteFilter?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -163,33 +174,70 @@ const searchKeyword = ref('')
 const selectedRow = ref<Record<string, any> | null>(null)
 // Multi-select: the picked rows (order preserved). modelValue is an array of their PKs.
 const selectedRows = ref<Record<string, any>[]>([])
-const allRows = ref<Record<string, any>[]>([])
-const loading = ref(false)
-const dataLoaded = ref(false)
 const loadedViewFields = ref<LookupViewField[]>([])
+const { allRows, loading, loadInitial, searchRemote, resetRows } = useLookupFieldRows({
+  tableId: () => props.tableId,
+  searchFields: () => props.searchFields || [],
+  displayField: () => props.displayField || '',
+  filterConditions: () => props.filterConditions || [],
+  prefetchLimit: () => props.prefetchLimit,
+  remoteFilter: () => !!props.remoteFilter,
+})
+
+const scheduleRemoteSearch = debounce((keyword: string) => {
+  void searchRemote(keyword)
+}, 300)
 
 // Use prop viewFields if provided, otherwise use loaded ones
 const effectiveViewFields = computed(() =>
   props.viewFields?.length ? props.viewFields : loadedViewFields.value
 )
 
+function labelForField(fieldName: string): string {
+  const vf = effectiveViewFields.value.find(v => v.fieldName === fieldName)
+  const label = vf?.displayLabel?.trim()
+  return label || fieldName
+}
+
+function widthForField(fieldName: string): number | undefined {
+  return effectiveViewFields.value.find(v => v.fieldName === fieldName)?.columnWidth
+}
+
 const visibleColumns = computed(() => {
   // 1. Use displayFields (from lookup config "Display Fields") — matches developer-workstation LookupPreview
   if (props.displayFields && props.displayFields.length > 0) {
-    return props.displayFields.map(f => ({ prop: f, label: f, width: undefined as number | undefined }))
+    return props.displayFields.map(f => ({
+      prop: f,
+      label: labelForField(f),
+      width: widthForField(f),
+    }))
   }
   // 2. Fallback: searchFields
   if (props.searchFields?.length > 0) {
-    return props.searchFields.map(f => ({ prop: f, label: f, width: undefined as number | undefined }))
+    return props.searchFields.map(f => ({
+      prop: f,
+      label: labelForField(f),
+      width: widthForField(f),
+    }))
   }
   // 3. Fallback: displayField
   const cols = new Set<string>()
   if (props.displayField) cols.add(props.displayField)
-  return Array.from(cols).map(f => ({ prop: f, label: f, width: undefined as number | undefined }))
+  return Array.from(cols).map(f => ({
+    prop: f,
+    label: labelForField(f),
+    width: widthForField(f),
+  }))
 })
 
-// Client-side filtering on the loaded data
+const tableContentWidth = computed(() => {
+  const cols = visibleColumns.value.reduce((sum, col) => sum + (col.width || 120), 0)
+  return cols + (props.multiple ? 40 : 0)
+})
+
+// Client-side filtering on the loaded data (form lookup). Delegate uses remoteFilter.
 const filteredResults = computed(() => {
+  if (props.remoteFilter) return allRows.value
   const kw = searchKeyword.value?.trim().toLowerCase()
   if (!kw) return allRows.value
 
@@ -202,52 +250,18 @@ const filteredResults = computed(() => {
   })
 })
 
-// Server caps each page at 200; page through until exhausted so the dropdown
-// holds the full table. The hard stop only guards against runaway tables.
-const LOOKUP_PAGE_SIZE = 200
-const LOOKUP_MAX_ROWS = 10000
-
-async function fetchAllLookupRows(): Promise<Record<string, any>[]> {
-  const rows: Record<string, any>[] = []
-  for (let offset = 0; offset < LOOKUP_MAX_ROWS; offset += LOOKUP_PAGE_SIZE) {
-    const res = await relationTableApi.searchForLookup(props.tableId, {
-      keyword: '',
-      searchFields: props.searchFields || [],
-      displayField: props.displayField || '',
-      filterConditions: props.filterConditions || [],
-      limit: LOOKUP_PAGE_SIZE,
-      offset
-    })
-    const batch = res.data || []
-    rows.push(...batch)
-    if (batch.length < LOOKUP_PAGE_SIZE) return rows
-  }
-  console.warn(`[LookupField] table ${props.tableId} exceeds ${LOOKUP_MAX_ROWS} rows; dropdown truncated`)
-  return rows
-}
-
 async function loadAllData() {
-  if (!props.tableId || dataLoaded.value) return
-  loading.value = true
-  try {
-    // Load data and view fields in parallel
-    const [dataRows, vfRes] = await Promise.all([
-      fetchAllLookupRows(),
-      (!effectiveViewFields.value.length)
-        ? relationTableApi.getViewFields(props.tableId)
-        : Promise.resolve({ data: [] })
-    ])
-    allRows.value = dataRows
-    if (vfRes.data?.length) {
-      loadedViewFields.value = vfRes.data as LookupViewField[]
-      emit('viewFieldsLoaded', loadedViewFields.value)
-    }
-    dataLoaded.value = true
-  } catch (e) {
-    console.error('[LookupField] load error:', e)
-    allRows.value = []
-  } finally {
-    loading.value = false
+  if (!props.tableId) return
+  const vfPromise = !effectiveViewFields.value.length
+    ? relationTableApi.getViewFields(props.tableId)
+    : Promise.resolve({ data: [] as LookupViewField[] })
+  const [, vfRes] = await Promise.all([
+    loadInitial(),
+    vfPromise.catch(() => ({ data: [] as LookupViewField[] })),
+  ])
+  if (vfRes.data?.length) {
+    loadedViewFields.value = vfRes.data as LookupViewField[]
+    emit('viewFieldsLoaded', loadedViewFields.value)
   }
 }
 
@@ -365,6 +379,7 @@ function removeSelectedAt(i: number) {
 function handleClear() {
   searchKeyword.value = ''
   selectedRow.value = null
+  if (props.remoteFilter) resetRows()
   emit('update:modelValue', null)
   emit('clear')
 }
@@ -547,11 +562,15 @@ watch(
 watch(
   () => [props.tableId, props.searchFields, props.displayField, props.filterConditions],
   () => {
-    allRows.value = []
-    dataLoaded.value = false
+    resetRows()
   },
   { deep: true }
 )
+
+watch(searchKeyword, (kw) => {
+  if (!props.remoteFilter || !dropdownVisible.value || selectedRow.value) return
+  scheduleRemoteSearch(kw)
+})
 
 watch(
   () => [
@@ -605,12 +624,13 @@ onMounted(() => {
   }
 })
 onBeforeUnmount(() => {
+  scheduleRemoteSearch.cancel()
   document.removeEventListener('mousedown', onClickOutside)
   window.removeEventListener('scroll', onViewportChange, true)
   window.removeEventListener('resize', onViewportChange)
 })
 
-defineExpose({ effectiveViewFields })
+defineExpose({ effectiveViewFields, handleFocus, visibleColumns })
 </script>
 
 <style lang="scss" scoped>
@@ -719,6 +739,31 @@ defineExpose({ effectiveViewFields })
   border: 1px solid #dcdfe6;
   border-radius: 4px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  overflow-x: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #909399 #ebeef5;
+
+  &::-webkit-scrollbar {
+    -webkit-appearance: none;
+    height: 10px;
+    background: #ebeef5;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #909399;
+    border-radius: 4px;
+  }
+
+  .el-table {
+    min-width: 100%;
+  }
+
+  // Override ws-theme uppercase so labels stay "Display Name" / 显示名.
+  thead th.el-table__cell .cell {
+    text-transform: none;
+    letter-spacing: normal;
+  }
 
   .lookup-check {
     color: var(--el-color-primary, #409eff);

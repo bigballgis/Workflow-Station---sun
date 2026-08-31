@@ -106,7 +106,9 @@ export function useTaskActions(options: {
     }
   }
   function onActionDialogOpened() {
-    // User picker is LookupField on sys_users and loads on click.
+    if (options.currentAction.value === 'transfer') {
+      searchUsers('')
+    }
   }
   function handleApprove() {
     if (!validateSubTableAssigneesForComplete()) return

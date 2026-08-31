@@ -338,6 +338,13 @@ export default {
     transferTo: '转办给',
     selectUser: '请选择用户',
     clickToSearchUser: '点击搜索用户',
+    userLookupCol: {
+      username: '用户名',
+      display_name: '显示名',
+      full_name: '姓名',
+      email: '邮箱',
+      employee_id: '工号',
+    },
     selectUserRequired: '请选择转办用户',
     searchUserFailed: '搜索用户失败',
     reason: '原因',

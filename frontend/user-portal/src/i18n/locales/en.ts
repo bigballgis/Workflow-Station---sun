@@ -338,6 +338,13 @@ export default {
     transferTo: 'Transfer To',
     selectUser: 'Please select user',
     clickToSearchUser: 'Click to search',
+    userLookupCol: {
+      username: 'Username',
+      display_name: 'Display Name',
+      full_name: 'Full Name',
+      email: 'Email',
+      employee_id: 'Employee ID',
+    },
     selectUserRequired: 'Please select user',
     searchUserFailed: 'Failed to search users',
     reason: 'Reason',

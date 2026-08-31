@@ -40,7 +40,7 @@
         </el-radio-group>
       </el-form-item>
       <el-form-item
-        v-show="showUserSelect"
+        v-if="showDelegateUserLookup"
         :label="$t('task.targetUser')"
       >
         <div
@@ -53,14 +53,34 @@
             :search-fields="SYSTEM_USER_SEARCH_FIELDS"
             display-field="display_name"
             :display-fields="SYSTEM_USER_DISPLAY_FIELDS"
-            :view-fields="SYSTEM_USER_VIEW_FIELDS"
+            :view-fields="systemUserViewFields"
             selected-display-field="display_name"
+            :prefetch-limit="DELEGATE_USER_LOOKUP_PAGE_SIZE"
+            :remote-filter="true"
             :placeholder="$t('task.clickToSearchUser')"
             @update:model-value="onUserLookupModelUpdate"
             @select="onUserLookupSelect"
             @clear="onUserLookupClear"
           />
         </div>
+      </el-form-item>
+      <el-form-item
+        v-if="showTransferUserSelect"
+        :label="$t('task.targetUser')"
+      >
+        <el-select
+          v-model="formData.targetUserId"
+          :placeholder="$t('task.selectUser')"
+          :teleported="false"
+          style="width: 100%;"
+        >
+          <el-option
+            v-for="user in userOptions"
+            :key="user.id"
+            :label="$t('task.userOptionFormat', { name: user.name, username: user.username })"
+            :value="user.id"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item
         v-if="showBuRoleSelect"
@@ -154,14 +174,10 @@ const SYSTEM_USER_DISPLAY_FIELDS = [
   'username',
   'display_name',
   'full_name',
+  'email',
   'employee_id',
 ]
-const SYSTEM_USER_VIEW_FIELDS = SYSTEM_USER_DISPLAY_FIELDS.map((fieldName, sortOrder) => ({
-  fieldName,
-  displayLabel: fieldName,
-  sortOrder,
-  visible: true,
-}))
+const DELEGATE_USER_LOOKUP_PAGE_SIZE = 200
 
 interface UserOption {
   id: string | number
@@ -194,6 +210,14 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const systemUserViewFields = computed(() =>
+  SYSTEM_USER_DISPLAY_FIELDS.map((fieldName, sortOrder) => ({
+    fieldName,
+    displayLabel: t(`task.userLookupCol.${fieldName}`),
+    sortOrder,
+    visible: true,
+  })),
+)
 const visible = ref(props.modelValue)
 const buTree = ref<BusinessUnit[]>([])
 const buIdToCode = ref<Record<string, string>>({})
@@ -213,11 +237,9 @@ const buCascaderProps = {
 
 const isDelegateBuRole = computed(() =>
   props.currentAction === 'delegate' && (props.formData.targetType || 'USER') === 'BU_ROLE')
-const showUserSelect = computed(() => {
-  if (props.currentAction === 'urge') return false
-  if (props.currentAction === 'delegate') return !isDelegateBuRole.value
-  return true
-})
+const showDelegateUserLookup = computed(() =>
+  props.currentAction === 'delegate' && !isDelegateBuRole.value)
+const showTransferUserSelect = computed(() => props.currentAction === 'transfer')
 const showBuRoleSelect = computed(() => isDelegateBuRole.value)
 
 watch(() => props.modelValue, (val) => {
