@@ -44,7 +44,7 @@
             :model-value="inlineSubFormModel(item.binding.bindingId)"
             locale="en"
             :rule="visiblePreviewRules(item.binding.rule || [])"
-            :option="effectivePreviewOption"
+            :option="inlineSubFormPreviewOption(item.binding.option)"
             @update:model-value="(v: Record<string, any>) => setInlineSubFormModel(item.binding.bindingId, v)"
           />
         </template>
@@ -283,6 +283,18 @@ function setInlineSubFormModel(bindingId: number, value: Record<string, any>) {
   rows[0] = { ...(rows[0] ?? {}), ...(value ?? {}) }
   next[id] = rows
   emit('update:previewTableRows', next)
+}
+
+/**
+ * Sub-form Form Events (onChange / onMounted / …) live on the bound table's option,
+ * not the host form's previewOption. Reusing effectivePreviewOption made those scripts
+ * no-ops. Keep My Request preview disabled the same way the host option wrapper does.
+ */
+function inlineSubFormPreviewOption(option: unknown): Record<string, unknown> {
+  const base = option && typeof option === 'object' ? { ...(option as Record<string, unknown>) } : {}
+  if (!isMyRequestsPreview.value) return base
+  const form = base.form && typeof base.form === 'object' ? { ...(base.form as Record<string, unknown>) } : {}
+  return { ...base, form: { ...form, disabled: true } }
 }
 
 const parentCascade = inject(PREVIEW_LOOKUP_CASCADE_KEY, null)

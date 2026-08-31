@@ -387,6 +387,8 @@ function onNestedParentRowPatch(patch: Record<string, unknown>) {
         :host-primary-table-id="hostPrimaryTableId ?? null"
         :visited-inline-sub-form-binding-ids="nextVisitedInlineSubFormBindingIds(field._bindingId)"
         :field-permissions="fieldPermissions"
+        :form-options="resolveBinding(field._bindingId)!.formOptions"
+        :dialog-columns="resolveBinding(field._bindingId)!.dialogColumns"
         style="margin-bottom: 16px;"
         @update:row="(row: Record<string, any>) => inlineSubForm.handleInlineSubFormUpdate(field, row)"
       />

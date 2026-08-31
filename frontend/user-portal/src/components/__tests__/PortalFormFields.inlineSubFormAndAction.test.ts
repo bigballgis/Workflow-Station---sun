@@ -128,4 +128,49 @@ describe('PortalFormFields — inlineSubForm dispatch and ACTION binding-type wi
     expect(stub.exists()).toBe(true)
     expect(stub.props('fieldPermissions')).toEqual({ '99:name': 'READONLY' })
   })
+
+  it('threads the bound sub-form formOptions and dialogColumns so field/Form JS can run', async () => {
+    const formOptions = { onChange: '$FNX:\napi.hidden(true, "name")' }
+    const dialogColumns = [{ field: 'name', label: 'Name' }]
+    const fields: FormField[] = [
+      { key: 'inlineWidget', type: 'inlineSubForm', _bindingId: 99, span: 24 } as unknown as FormField,
+    ]
+    const wrapper = mount(PortalFormFields, {
+      props: {
+        fields,
+        model: {},
+        editable: true,
+        subTableBindings: [
+          {
+            bindingId: 99,
+            tableName: 'other_sub_table',
+            columns: [],
+            formFields: [{ key: 'name', label: 'Name', type: 'text' }],
+            formOptions,
+            dialogColumns,
+            data: [{ id: 1, name: 'hello' }],
+            bindingMode: 'EDITABLE',
+          },
+        ],
+      },
+      global: {
+        stubs: {
+          ...globalStubs,
+          SubTableInlineForm: {
+            name: 'SubTableInlineForm',
+            props: ['formOptions', 'dialogColumns'],
+            template: '<div class="stub-inline-sub-form" />',
+          },
+        },
+      },
+    })
+    await wrapper.vm.$nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await wrapper.vm.$nextTick()
+
+    const stub = wrapper.findComponent({ name: 'SubTableInlineForm' })
+    expect(stub.exists()).toBe(true)
+    expect(stub.props('formOptions')).toEqual(formOptions)
+    expect(stub.props('dialogColumns')).toEqual(dialogColumns)
+  })
 })
