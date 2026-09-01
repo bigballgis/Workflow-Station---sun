@@ -9,6 +9,8 @@ import com.developer.entity.FieldDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.MainTableViewAccess;
 import com.developer.entity.MainTableViewConfig;
+import com.developer.entity.SubTableViewConfig;
+import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.MainTableViewField;
 import com.developer.enums.MainTableViewAccessTargetType;
@@ -19,6 +21,7 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.MainTableViewAccessRepository;
 import com.developer.repository.MainTableViewConfigRepository;
+import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.MainTableViewService;
 import com.developer.util.MainTableViewAccessRulesValidator;
@@ -34,6 +37,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +47,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     private static final String DEFAULT_VIEW_NAME = "Main view";
 
     private final MainTableViewConfigRepository viewConfigRepository;
+    private final SubTableViewConfigRepository subTableViewConfigRepository;
     private final MainTableViewAccessRepository mainTableViewAccessRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -187,35 +193,27 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         if (changes == null || changes.isEmpty()) {
             return;
         }
-        List<MainTableViewConfig> views = viewConfigRepository.findByMainTableIdWithFields(tableId);
-        if (views.isEmpty()) {
-            return;
-        }
         Map<String, FieldLabelChange> byOldName = new HashMap<>();
         for (FieldLabelChange c : changes) {
             if (c.oldFieldName() != null && !c.oldFieldName().isBlank()) {
                 byOldName.put(c.oldFieldName(), c);
             }
         }
+        if (byOldName.isEmpty()) {
+            return;
+        }
+
+        // MAIN table views (View Design).
         List<MainTableViewConfig> dirty = new ArrayList<>();
-        for (MainTableViewConfig view : views) {
+        for (MainTableViewConfig view : viewConfigRepository.findByMainTableIdWithFields(tableId)) {
             boolean changed = false;
             for (MainTableViewField vf : view.getViewFields()) {
                 FieldLabelChange c = byOldName.get(vf.getFieldName());
                 if (c == null) {
                     continue;
                 }
-                // Refresh the column label only when it still matches the OLD display name (or the old
-                // field name when no label was set) — preserves labels the developer customized by hand.
-                String oldLabelDefault = c.oldDisplayName() != null ? c.oldDisplayName() : c.oldFieldName();
-                if (java.util.Objects.equals(vf.getDisplayLabel(), oldLabelDefault)
-                        || vf.getDisplayLabel() == null
-                        || vf.getDisplayLabel().isBlank()) {
-                    vf.setDisplayLabel(c.newDisplayName() != null ? c.newDisplayName() : c.newFieldName());
-                    changed = true;
-                }
-                if (c.newFieldName() != null && !c.newFieldName().equals(vf.getFieldName())) {
-                    vf.setFieldName(c.newFieldName());
+                if (applyRenameToViewColumn(c, vf::getDisplayLabel, vf::setDisplayLabel,
+                        vf::getFieldName, vf::setFieldName)) {
                     changed = true;
                 }
             }
@@ -226,6 +224,60 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         if (!dirty.isEmpty()) {
             viewConfigRepository.saveAll(dirty);
         }
+
+        // SUB table list views — same rename, different entity. Previously missed entirely, which left
+        // the sub-table list column bound to a field name the row data no longer carries (Portal "-").
+        List<SubTableViewConfig> subDirty = new ArrayList<>();
+        for (SubTableViewConfig view : subTableViewConfigRepository.findByBindingTableIdWithFields(tableId)) {
+            boolean changed = false;
+            for (SubTableViewField vf : view.getViewFields()) {
+                FieldLabelChange c = byOldName.get(vf.getFieldName());
+                if (c == null) {
+                    continue;
+                }
+                if (applyRenameToViewColumn(c, vf::getDisplayLabel, vf::setDisplayLabel,
+                        vf::getFieldName, vf::setFieldName)) {
+                    changed = true;
+                }
+            }
+            if (changed) {
+                subDirty.add(view);
+            }
+        }
+        if (!subDirty.isEmpty()) {
+            subTableViewConfigRepository.saveAll(subDirty);
+        }
+    }
+
+    /**
+     * Applies one field rename to a single view column (MAIN or SUB — the two entities carry the same
+     * two properties). The label is refreshed only while it still equals the OLD default (old display
+     * name, else old field name), so a label the developer typed by hand survives the rename.
+     *
+     * @return whether the column was mutated
+     */
+    private static boolean applyRenameToViewColumn(FieldLabelChange c,
+                                                   Supplier<String> getLabel,
+                                                   Consumer<String> setLabel,
+                                                   Supplier<String> getFieldName,
+                                                   Consumer<String> setFieldName) {
+        boolean changed = false;
+        String currentLabel = getLabel.get();
+        String oldLabelDefault = c.oldDisplayName() != null ? c.oldDisplayName() : c.oldFieldName();
+        if (java.util.Objects.equals(currentLabel, oldLabelDefault)
+                || currentLabel == null
+                || currentLabel.isBlank()) {
+            String nextLabel = c.newDisplayName() != null ? c.newDisplayName() : c.newFieldName();
+            if (!java.util.Objects.equals(currentLabel, nextLabel)) {
+                setLabel.accept(nextLabel);
+                changed = true;
+            }
+        }
+        if (c.newFieldName() != null && !c.newFieldName().equals(getFieldName.get())) {
+            setFieldName.accept(c.newFieldName());
+            changed = true;
+        }
+        return changed;
     }
 
     @Override

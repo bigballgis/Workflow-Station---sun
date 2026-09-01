@@ -8,6 +8,7 @@ import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
+import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.DataType;
@@ -236,11 +237,13 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         List<FormConfigFieldRenamer.FieldChange> changes = computeFieldChanges(originals, request.getFields());
         if (!changes.isEmpty()) {
             propagateFieldChangesToForms(functionUnitId, saved, changes);
-            // Also refresh View Design column field names + labels for this table's views.
+            // Also refresh View Design column field names + labels for this table's views
+            // (MAIN table views AND SUB table list views).
             mainTableViewService.propagateFieldChangesToViews(saved.getId(), changes.stream()
                     .map(c -> new MainTableViewService.FieldLabelChange(
                             c.oldFieldName(), c.newFieldName(), c.oldDisplayName(), c.newDisplayName()))
                     .toList());
+            propagateFieldRenamesToBindingForeignKeys(saved.getId(), changes);
         }
 
         fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);
@@ -254,6 +257,41 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         // Reload with fields to ensure consistent state for serialization
         return tableDefinitionRepository.findByIdWithFields(saved.getId())
                 .orElse(saved);
+    }
+
+    /**
+     * Within the transaction: rewrite {@code dw_form_table_bindings.foreign_key_field} on every binding
+     * to this table whose FK names a field that was just renamed.
+     *
+     * <p>The FK field name is stored as free text on the binding, not as a reference to
+     * {@code dw_field_definitions}, so a rename leaves it dangling. That silently breaks both the
+     * Portal's FK drill-down (which resolves the column by this name) and MI sub-table scoping.
+     */
+    private void propagateFieldRenamesToBindingForeignKeys(
+            Long tableId, List<FormConfigFieldRenamer.FieldChange> changes) {
+        Map<String, String> renamedByOldName = new java.util.LinkedHashMap<>();
+        for (FormConfigFieldRenamer.FieldChange c : changes) {
+            if (c.fieldNameChanged() && c.oldFieldName() != null && !c.oldFieldName().isBlank()
+                    && c.newFieldName() != null && !c.newFieldName().isBlank()) {
+                renamedByOldName.put(c.oldFieldName(), c.newFieldName());
+            }
+        }
+        if (renamedByOldName.isEmpty()) {
+            return;
+        }
+        List<FormTableBinding> dirty = new ArrayList<>();
+        for (FormTableBinding binding : formTableBindingRepository.findByTableId(tableId)) {
+            String newName = renamedByOldName.get(binding.getForeignKeyField());
+            if (newName != null) {
+                binding.setForeignKeyField(newName);
+                dirty.add(binding);
+            }
+        }
+        if (!dirty.isEmpty()) {
+            formTableBindingRepository.saveAll(dirty);
+            log.info("Propagated field rename(s) on table {} to {} binding foreign_key_field(s)",
+                    tableId, dirty.size());
+        }
     }
 
     /** Within the transaction: scan every form in the FunctionUnit and propagate field deltas into rule.field/title/props/validate + fieldPermissions. */

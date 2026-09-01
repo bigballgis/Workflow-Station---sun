@@ -36,8 +36,17 @@ import java.util.Objects;
  * <ul>
  *   <li>Top-level {@code configJson.rule} (recursive {@code children});</li>
  *   <li>For SUB/RELATED bindings to the edited table only, recurse {@code configJson.subForms[bindingId].rule}
- *       so unrelated sub-forms with same field labels stay untouched.</li>
+ *       so unrelated sub-forms with same field labels stay untouched;</li>
+ *   <li>For those same bindings, {@code configJson.subListViews[bindingId].columns[].fieldName} — the
+ *       sub-table LIST columns, which live outside {@code rule}/{@code subForms} and were previously
+ *       missed: a rename left the column bound to a field name no longer present in the row data, so
+ *       the Portal rendered "-" for it while every other column kept working.</li>
  * </ul>
+ *
+ * <p>Field renames must additionally reach two places outside form {@code configJson}, handled by the
+ * caller ({@code TableDesignComponentImpl#update}): {@code MainTableViewField} and
+ * {@code SubTableViewField} rows (View Design columns), and each SUB binding's
+ * {@code foreign_key_field} when it names the renamed field.
  */
 @Slf4j
 public final class FormConfigFieldRenamer {
@@ -149,6 +158,24 @@ public final class FormConfigFieldRenamer {
             }
         }
 
+        // 3b) Sub-table LIST VIEW columns — subListViews[bindingId].columns[].fieldName, for the same
+        // SUB/RELATED/ACTION bindings that point at this table. These columns are NOT part of `rule`
+        // or `subForms`, so without this step a renamed field leaves the list column pointing at the
+        // old name while the row data carries the new one, and the Portal renders "-" for that column.
+        Object subListViewsRaw = next.get("subListViews");
+        if (subListViewsRaw instanceof Map<?, ?> subListViews) {
+            for (FormTableBinding b : safeBindings(form)) {
+                BindingType t = b.getBindingType();
+                if (t != BindingType.SUB && t != BindingType.RELATED && t != BindingType.ACTION) continue;
+                if (b.getTable() == null || !Objects.equals(b.getTable().getId(), tableId)) continue;
+                Object view = lookup(subListViews, b.getId());
+                if (view instanceof Map<?, ?> viewMap
+                        && renameSubListViewColumns(viewMap.get("columns"), byOldFieldName)) {
+                    changed = true;
+                }
+            }
+        }
+
         // 3) fieldPermissions (task form) remapped by fieldName for main-table bindings only.
         if (appliesToMain) {
             Map<String, String> perms = form.getFieldPermissions();
@@ -172,6 +199,55 @@ public final class FormConfigFieldRenamer {
         if (changed) {
             // Re-assign root configJson so Hibernate definitely detects the dirty JSON column.
             form.setConfigJson(next);
+        }
+        return changed;
+    }
+
+    /**
+     * Rewrites {@code fieldName} (and, when untouched by the developer, {@code displayName}) on each
+     * column of one {@code subListViews[bindingId].columns} array.
+     *
+     * <p>Label handling mirrors {@code MainTableViewServiceImpl.propagateFieldChangesToViews}: the
+     * label is only refreshed while it still equals the OLD default (old display name, or the old
+     * field name when none was set), so a label the developer typed by hand survives the rename.
+     *
+     * @return whether any column was mutated
+     */
+    @SuppressWarnings("unchecked")
+    private static boolean renameSubListViewColumns(Object columnsRaw, Map<String, FieldChange> byOldFieldName) {
+        if (!(columnsRaw instanceof List<?> columns)) {
+            return false;
+        }
+        boolean changed = false;
+        for (Object colRaw : columns) {
+            if (!(colRaw instanceof Map<?, ?> colMap)) {
+                continue;
+            }
+            Map<String, Object> col = (Map<String, Object>) colMap;
+            Object fieldNameVal = col.get("fieldName");
+            if (!(fieldNameVal instanceof String oldFieldName)) {
+                continue;
+            }
+            FieldChange c = byOldFieldName.get(oldFieldName);
+            if (c == null) {
+                continue;
+            }
+            if (c.displayNameChanged() || c.fieldNameChanged()) {
+                String oldLabelDefault = !isBlank(c.oldDisplayName()) ? c.oldDisplayName() : c.oldFieldName();
+                Object curLabel = col.get("displayName");
+                if (curLabel == null || (curLabel instanceof String s && (s.isBlank() || s.equals(oldLabelDefault)))) {
+                    String nextLabel = !isBlank(c.newDisplayName()) ? c.newDisplayName() : c.newFieldName();
+                    if (nextLabel != null && !Objects.equals(curLabel, nextLabel)) {
+                        col.put("displayName", nextLabel);
+                        changed = true;
+                    }
+                }
+            }
+            // Rewrite the key last so the label comparison above still sees the pre-rename state.
+            if (c.fieldNameChanged()) {
+                col.put("fieldName", c.newFieldName());
+                changed = true;
+            }
         }
         return changed;
     }
